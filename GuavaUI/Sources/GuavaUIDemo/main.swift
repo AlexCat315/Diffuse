@@ -1100,6 +1100,8 @@ var activeTextScale: Float = 0
 var didInstallRoot = false
 var didPresentBootClear = false
 var demoRenderedFrameCount = 0
+var demoFrameAttemptCount = 0
+var demoSurfaceWasUnavailable = false
 nonisolated(unsafe) var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
 nonisolated(unsafe) var hudTickFrameCount: Int = 0
 nonisolated(unsafe) var hudRenderFrameCount: Int = 0
@@ -1517,6 +1519,7 @@ host.onFrame = { native in
     }
 
     var timing = TimingTrace(label: "[timing] demo.frame.main")
+    demoFrameAttemptCount += 1
     let nextFrameIndex = demoRenderedFrameCount + 1
 
     let previousScale = activeTextScale
@@ -1588,18 +1591,20 @@ host.onFrame = { native in
             presentMs: 0,
             totalMs: (devToolsFrameEnd - devToolsFrameStart) * 1_000,
             nodeCount: demoNodeCount(root),
-            batchCount: drawList.batches.count
+            batchCount: drawList.batches.count,
+            presented: false
         )
         devTools?.notifyFrameFinished()
-        if nextFrameIndex <= 5 || didAtlasUpload || didPreviewUpload {
+        if !demoSurfaceWasUnavailable || didAtlasUpload || didPreviewUpload {
             print(timing.summary(extra: [
-                "frameAttempt=\(nextFrameIndex)",
+                "frameAttempt=\(demoFrameAttemptCount)",
                 "layoutUpdated=\(didLayout)",
                 "atlasUploaded=\(didAtlasUpload)",
                 "previewUploaded=\(didPreviewUpload)",
                 "retry=surfaceUnavailable",
             ]))
         }
+        demoSurfaceWasUnavailable = true
         return false
     }
     timing.mark("acquireSurface")
@@ -1654,16 +1659,18 @@ host.onFrame = { native in
             hudRenderFrameCount = 0
             hudTickFrameCount = 0
         }
-        if shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
+        if demoSurfaceWasUnavailable || shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
                                         didAtlasUpload: didAtlasUpload,
                                         didPreviewUpload: didPreviewUpload) {
             print(timing.summary(extra: [
                 "frame=\(demoRenderedFrameCount)",
+                "surfaceRecovered=\(demoSurfaceWasUnavailable)",
                 "layoutUpdated=\(didLayout)",
                 "atlasUploaded=\(didAtlasUpload)",
                 "previewUploaded=\(didPreviewUpload)",
             ]))
         }
+        demoSurfaceWasUnavailable = false
         if let tools = devTools {
             tools.timing.record(
                 layoutMs: (devToolsLayoutEnd - devToolsLayoutStart) * 1_000,

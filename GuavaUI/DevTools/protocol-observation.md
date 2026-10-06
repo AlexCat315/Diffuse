@@ -92,6 +92,14 @@ clears them. Drawing/layout subscriptions do not force extra application frames.
 The client coalesces tree/timeline DOM updates to animation frames and keeps
 unchanged state watch controls attached while frames arrive.
 
+Native `timing.frame` now includes optional `presented`: true means the host
+submitted/presented the swapchain frame, false means the surface was unavailable,
+and absence means an older host. It does not measure GPU completion or display
+visibility. Skipped frames still publish CPU work, State observations and timeline
+events. The Inspector labels reciprocal CPU time `cpuThroughputFPS`, rather than
+display FPS. Unavailable surfaces retry at display cadence while retaining dirty
+work; the demo logs transitions instead of every retry.
+
 ## Source breakpoints
 
 **Add breakpoint** uses the same validated VS Code/Cursor source path mapping as
@@ -107,13 +115,15 @@ ambiguous query fields, checks local document bounds and avoids duplicate line
 breakpoints. Source-bearing nodes also have **Add Source Breakpoint** in their
 VS Code tree context menu. Build/reload the companion extension before using the
 link. A breakpoint may stay pending until the existing debug adapter resolves it.
+The editor registers a line breakpoint: exact Swift source columns may precede
+all executable DWARF locations and otherwise remain unresolved in LLDB. Source
+navigation still reveals the original column.
 
-Implemented and verified here: source navigation, the editor breakpoint API
-handoff with mocked VS Code API tests, and source breakpoint resolution in a
-separate command-line LLDB run. End-to-end breakpoint resolution in a live
-VS Code/Cursor Swift/LLDB session has not been verified. The Inspector does not
-launch/attach a debugger or expose pause, stepping, stacks or debugger variables.
-Reuse the workspace's existing native Swift debug configurations for those
-operations. Browser Wasm source debugging needs a separate integration with a
-tool that understands Swift/Wasm debug information; this handoff does not provide
-Wasm debugging.
+The companion extension's `npm run test:debug` verifies its source-node command
+in a real VS Code Swift/LLDB DAP session: pending and runtime component breakpoints,
+deduplication, pause, single step, call stacks and variable scopes. It launches a
+diagnostic process only in the isolated test; the product does not launch/attach
+a debugger or expose execution controls. Reuse the application's existing native
+Swift debug configurations. The OS URI dispatch and Cursor session are not part
+of this test. Browser Wasm source debugging still needs a separate tool integration
+that understands Swift/Wasm debug information.

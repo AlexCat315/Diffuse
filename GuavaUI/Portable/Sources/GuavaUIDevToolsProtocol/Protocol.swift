@@ -392,13 +392,17 @@ public struct MirrorInputPayload: Codable, Sendable {
 
 public struct TimingFramePayload: Codable, Sendable {
     public var frame: UInt64
-    /// Time spent on layout this frame, in milliseconds.
+    /// Time spent on recomposition this frame, in milliseconds.
     public var recompositionMs: Double?
+    /// Time spent on layout this frame, in milliseconds.
     public var layoutMs: Double
     /// Time spent encoding the draw list this frame, in milliseconds.
     public var drawMs: Double
     /// Time spent submitting commands and presenting this frame, in ms.
     public var presentMs: Double
+    /// Whether the host submitted/presented this frame. Nil for older hosts.
+    /// This does not measure completion or compositor visibility.
+    public var presented: Bool?
     /// Total wall-clock duration of this frame, in milliseconds.
     public var totalMs: Double
     /// Number of nodes in the scene graph this frame.
@@ -413,8 +417,10 @@ public struct TimingFramePayload: Codable, Sendable {
                 totalMs: Double,
                 nodeCount: Int,
                 batchCount: Int,
-                recompositionMs: Double? = nil) {
+                recompositionMs: Double? = nil,
+                presented: Bool? = nil) {
         self.recompositionMs = recompositionMs
+        self.presented = presented
         self.frame = frame
         self.layoutMs = layoutMs
         self.drawMs = drawMs

@@ -56,3 +56,47 @@ def native_observation_checks(page, screenshot=None):
     assert not page.locator("#registeredStates input").first.is_checked()
     assert page.locator("#startTimeline").is_enabled()
     print("Observation: opt-in values, live State writes, scope filter, CPU timeline, stop/export, breakpoint URI and disconnect cleanup passed", flush=True)
+
+
+def wasm_observation_checks(page, inspector):
+    frame = page.locator("#inspector").element_handle().content_frame()
+    baseline = page.evaluate("({count:guavaDebug.snapshot.count, dark:guavaDebug.snapshot.dark, note:guavaDebug.snapshot.note})")
+    inspector.locator("#registeredStates").filter(has_text="count").wait_for()
+    assert frame.evaluate("observation.registered.map(s=>s.name).sort().join(',')") == "count,dark"
+    assert frame.evaluate("observation.values.size") == 0
+    inspector.locator("#registeredStates label").filter(has_text="count").locator("input").check()
+    frame.wait_for_function("observation.values.size === 1")
+    inspector.locator("#startTimeline").click()
+    frame.wait_for_function("observation.recording && !observation.pending")
+    page.locator("#increment").click()
+    frame.wait_for_function("n => [...observation.values.values()][0]?.summary === String(n)", arg=baseline["count"] + 1)
+    card = page.evaluate("inspectedNode('counter.card').id")
+    frame.evaluate("id=>selectNode(findNode(state.tree,id))", card)
+    inspector.locator("#paddingLeft").fill("32")
+    frame.wait_for_function("['component','recomposition','layout','draw'].every(p=>observation.events.some(e=>e.phase===p))")
+    assert frame.evaluate("observation.events.every(e=>Number.isFinite(e.startMs)&&Number.isFinite(e.durationMs)&&e.startMs>=0&&e.durationMs>=0)")
+    inspector.locator("#timelinePhase").select_option("component")
+    inspector.locator("#timelineEvents button").first.click()
+    inspector.locator("#stateSelectedOnly").check()
+    assert inspector.locator("#registeredStates input").count() == 2
+    assert inspector.locator("#addSourceBreakpoint").get_attribute("href").startswith("vscode://guava.guavaui-devtools/breakpoint?")
+    inspector.locator("#stopTimeline").click()
+    frame.wait_for_function("!observation.recording && !observation.pending")
+    captured = frame.evaluate("observation.events.length")
+    page.locator("#increment").click()
+    frame.wait_for_function("n => [...observation.values.values()][0]?.summary === String(n)", arg=baseline["count"] + 2)
+    assert frame.evaluate("observation.events.length") == captured
+    with page.expect_download() as pending:
+        inspector.locator("#exportTimeline").click()
+    trace = json.loads(open(pending.value.path()).read())
+    assert len(trace["traceEvents"]) == captured
+    assert all(e["ph"] == "X" and isinstance(e["tid"], int) for e in trace["traceEvents"])
+    inspector.locator("#disconnect").click()
+    frame.wait_for_function("observation.events.length===0 && observation.registered.length===0")
+    inspector.locator("#connect").click()
+    frame.wait_for_function("observation.registered.length===2")
+    assert not inspector.locator("#registeredStates input").first.is_checked()
+    assert inspector.locator("#startTimeline").is_enabled()
+    page.evaluate("s=>guavaDebug.request({type:'state.restore',id:994,payload:{count:String(s.count),dark:String(s.dark),note:s.note}})", baseline)
+    page.wait_for_function("s=>guavaDebug.snapshot.count===s.count && guavaDebug.snapshot.note===s.note", arg=baseline)
+    print("Wasm observation: explicit/private State, real updates, all CPU stages, component navigation, trace export, stop and reconnect cleanup passed", flush=True)

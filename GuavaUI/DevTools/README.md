@@ -141,11 +141,17 @@ that extension to enable its URI handler and node-tree context command. See
 [observation protocol](protocol-observation.md) for registration APIs, lifecycle,
 wire messages and bounds.
 
-This implements source navigation and an editor breakpoint API handoff for native
-Swift. A live VS Code/Cursor Swift/LLDB debug session has not been tested end to
-end; launch/attach, pause, stepping, stacks and debugger variables remain with
-the existing editor debugger. Wasm source debugging requires a separate tool
-integration that supports Swift/Wasm debug information.
+The extension adds line breakpoints and reveals the original source column.
+Its source-node command has been verified in a real VS Code Swift/LLDB DAP
+session, including pending/live breakpoint hits, pause, step, stacks and variable
+scopes. Cursor and OS URI dispatch still need separate acceptance. Launch/attach
+and execution control remain with the editor debugger. Wasm source debugging
+requires a separate tool integration that supports Swift/Wasm debug information.
+
+Native timing distinguishes submitted and skipped swapchain frames. A locked or
+occluded window can skip presentation while State observations, CPU timeline and
+offscreen mirror continue. Failed frames retain dirty work and retry at display
+cadence. `cpuThroughputFPS` is a CPU work estimate, not measured display FPS.
 
 Run the native Inspector acceptance suite without a Wasm SDK or GPU:
 
@@ -154,6 +160,7 @@ swift build --package-path GuavaUI/Portable --product GuavaUIDevToolsProbe
 python3 GuavaUI/Browser/verify.py --native-only
 ```
 
-The Python runner needs Playwright and Chromium. It exercises real WebSocket
+The Python runner needs the [Python requirements](../Browser/requirements-dev.txt)
+and Chromium. It exercises real WebSocket
 source/profile, picking/styles, selected state values, timeline start/stop/export,
 breakpoint URLs and disconnect/reconnect cleanup.

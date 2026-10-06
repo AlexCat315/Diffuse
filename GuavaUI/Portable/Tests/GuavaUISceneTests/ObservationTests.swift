@@ -88,3 +88,16 @@ func timelineIsBoundedAndNewCapturesKeepSequenceIdentity() {
     #expect(session.validate(DevToolsEnvelope(type: "state.subscribe", payload: DevToolsCodec.json(StateWatchPayload(ids: ["a"])))) == nil)
     #expect(session.validate(DevToolsEnvelope(type: "timeline.subscribe", payload: .string("bad"))) != nil)
 }
+
+@Test
+func timingPresentationIsAdditiveAndDistinguishesSkippedWork() throws {
+    let previous = #"{"frame":1,"layoutMs":1,"drawMs":2,"presentMs":0,"totalMs":3,"nodeCount":2,"batchCount":1}"#
+    let old = try JSONDecoder().decode(TimingFramePayload.self, from: Data(previous.utf8))
+    #expect(old.presented == nil && old.recompositionMs == nil)
+    var skipped = old
+    skipped.presented = false
+    let wire = DevToolsCodec.json(skipped)
+    #expect(DevToolsCodec.decode(TimingFramePayload.self, wire)?.presented == false)
+    skipped.presented = true
+    #expect(DevToolsCodec.decode(TimingFramePayload.self, DevToolsCodec.json(skipped))?.presented == true)
+}
