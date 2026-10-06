@@ -1,0 +1,32 @@
+name: Swift maintainability
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Engine/Sources/**'
+      - 'Editor/Sources/**'
+      - 'GuavaUI/Sources/**'
+      - 'scripts/check-swift-maintainability.py'
+      - 'scripts/test-swift-maintainability.py'
+      - 'scripts/swift-maintainability-baseline.json'
+      - '.github/workflows/ci-swift-maintainability.yml'
+  pull_request:
+    paths:
+      - 'Engine/Sources/**'
+      - 'Editor/Sources/**'
+      - 'GuavaUI/Sources/**'
+      - 'scripts/check-swift-maintainability.py'
+      - 'scripts/test-swift-maintainability.py'
+      - 'scripts/swift-maintainability-baseline.json'
+      - '.github/workflows/ci-swift-maintainability.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check type and initializer size
+        run: |
+          python3 scripts/test-swift-maintainability.py
+          python3 scripts/check-swift-maintainability.py

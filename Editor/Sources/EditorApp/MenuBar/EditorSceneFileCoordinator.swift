@@ -5,7 +5,7 @@ import GuavaUIApp
 enum EditorSceneFileCoordinator {
     static func requestOpen(app: EditorApplication) {
         guard EditorSceneAuthoringPolicy.canEditScene(
-            during: app.store.state.playbackState
+            during: app.store.state.timing.playbackState
         ) else {
             app.logConsole("Stop simulation before opening another scene", severity: .warning)
             return

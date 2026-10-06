@@ -69,7 +69,7 @@ struct EditorProjectToolsTests {
         let cube = try #require(app.scene.spawnEntity(template: .cube))
         app.store.dispatch(.setSelectedEntity(cube))
         app.submitDeleteSelectedEntityIntent()
-        #expect(app.store.state.pendingConfirmationRequest != nil)
+        #expect(app.store.state.assistant.pendingConfirmationRequest != nil)
         await #expect(throws: EditorProjectToolError.self) { _ = try await call(app, "save_scene") }
         app.skipPendingConfirmation()
         _ = try await call(app, "set_playback_state", ["state": "playing"])

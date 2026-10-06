@@ -34,14 +34,14 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
 
     func testPendingApprovalAndEnabledStateAreNeverRestoredFromCoding() throws {
         let summary = makeSummary()
-        let state = EditorState(
-            pluginManagement: EditorPluginManagementState(
+        let state = EditorState {
+            $0.assistant.pluginManagement = EditorPluginManagementState(
                 phase: .awaitingAuthorization,
                 candidate: summary,
                 enabled: [summary],
                 message: "approve me"
             )
-        )
+        }
 
         let data = try JSONEncoder().encode(state)
         let object = try XCTUnwrap(
@@ -50,7 +50,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
         XCTAssertNil(object["pluginManagement"])
 
         let restored = try JSONDecoder().decode(EditorState.self, from: data)
-        XCTAssertEqual(restored.pluginManagement, .idle)
+        XCTAssertEqual(restored.assistant.pluginManagement, .idle)
     }
 
     func testStorePublishesPluginManagementChanges() {

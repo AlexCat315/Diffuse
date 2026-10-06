@@ -31,7 +31,12 @@ struct SwiftScriptCompilerDriver: DynamicScriptCompiling {
 protocol DynamicScriptLibraryLoading: Sendable {
     func loadFactory(scriptID: String,
                      libraryPath: String) throws -> @Sendable () -> Script
+    func definition(scriptID: String) -> ScriptDefinition
     func unload(scriptID: String)
+}
+
+extension DynamicScriptLibraryLoading {
+    func definition(scriptID: String) -> ScriptDefinition { ScriptDefinition() }
 }
 
 extension SwiftScriptLoader: DynamicScriptLibraryLoading {}
@@ -134,6 +139,7 @@ actor DynamicScriptBuildCoordinator {
                     return .superseded
                 }
 
+                let definition = loader.definition(scriptID: scriptID)
                 let nextIdentifiers = Set([scriptID] + legacyIdentifiers)
                 let previousIdentifiers = registeredIdentifiers[scriptID] ?? []
                 let didRegister = await MainActor.run {
@@ -144,7 +150,7 @@ actor DynamicScriptBuildCoordinator {
                         scriptRuntime.unregister(named: identifier)
                     }
                     for identifier in nextIdentifiers {
-                        scriptRuntime.register(named: identifier, factory)
+                        scriptRuntime.register(named: identifier, definition: definition, factory)
                     }
                     return true
                 }

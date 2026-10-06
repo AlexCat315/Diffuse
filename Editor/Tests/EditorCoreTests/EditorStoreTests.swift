@@ -14,10 +14,10 @@ struct EditorStoreTests {
         store.dispatch(.setGamePreviewFocused(true))
         let data = try JSONEncoder().encode(store.state)
         let decoded = try JSONDecoder().decode(EditorState.self, from: data)
-        #expect(decoded.operations.isEmpty)
-        #expect(decoded.scriptNavigation == nil)
-        #expect(decoded.viewportMode == .scene)
-        #expect(!decoded.gamePreviewFocused)
+        #expect(decoded.navigation.operations.isEmpty)
+        #expect(decoded.navigation.scriptNavigation == nil)
+        #expect(decoded.viewport.mode == .scene)
+        #expect(!decoded.viewport.gamePreviewFocused)
     }
 
     @Test("compiler errors retain a clickable source line even without a language service")
@@ -40,7 +40,9 @@ struct EditorStoreTests {
 
     @Test("No-op actions do not notify subscribers")
     func noOpActionsDoNotNotifySubscribers() {
-        let store = EditorStore(state: EditorState(connected: true))
+        let store = EditorStore(state: EditorState {
+            $0.timing.connected = true
+        })
         var notifications = 0
         _ = store.subscribe { _ in notifications += 1 }
 
@@ -65,8 +67,10 @@ struct EditorStoreTests {
 
     @Test("recovered autosaves stay dirty until an explicit save")
     func recoveredAutosaveDirtyState() {
-        let store = EditorStore(state: EditorState(sceneRevision: 12,
-                                                   lastSavedSceneRevision: 12))
+        let store = EditorStore(state: EditorState {
+            $0.document.sceneRevision = 12
+            $0.document.lastSavedSceneRevision = 12
+        })
         #expect(!store.sceneDirty)
 
         store.dispatch(.setSceneRecoveryPending(true))
@@ -91,18 +95,20 @@ struct EditorStoreTests {
         #expect(store.latestConsoleEntry?.message == "Built project")
     }
 
-    @Test("Selection primary modifier behavior decodes legacy command key")
-    func primaryModifierBehaviorDecodesLegacyCommandKey() throws {
-        let data = Data(#"{"cmdSelectBehavior":"toggle"}"#.utf8)
+    @Test("Selection primary modifier behavior decodes grouped state")
+    func primaryModifierBehaviorDecodesGroupedState() throws {
+        let data = Data(#"{"selection":{"primarySelectBehavior":"toggle"}}"#.utf8)
 
         let state = try JSONDecoder().decode(EditorState.self, from: data)
 
-        #expect(state.primarySelectBehavior == .toggle)
+        #expect(state.selection.primarySelectBehavior == .toggle)
     }
 
     @Test("Selection primary modifier behavior encodes platform-neutral key")
     func primaryModifierBehaviorEncodesPlatformNeutralKey() throws {
-        let state = EditorState(primarySelectBehavior: .toggle)
+        let state = EditorState {
+            $0.selection.primarySelectBehavior = .toggle
+        }
 
         let data = try JSONEncoder().encode(state)
         let json = String(decoding: data, as: UTF8.self)
@@ -111,15 +117,15 @@ struct EditorStoreTests {
         #expect(!json.contains("cmdSelectBehavior"))
     }
 
-    @Test("Capability settings default when decoding legacy state")
-    func capabilitySettingsDefaultWhenDecodingLegacyState() throws {
-        let data = Data(#"{"connected":true}"#.utf8)
+    @Test("Unspecified editor groups use their own defaults")
+    func unspecifiedGroupsUseDefaults() throws {
+        let data = Data(#"{"timing":{"connected":true}}"#.utf8)
 
         let state = try JSONDecoder().decode(EditorState.self, from: data)
 
-        #expect(state.capabilitySettings == .default)
-        #expect(state.physicsDebugOverlayOptions == .all)
-        #expect(state.physicsDebugOverlayScope == .selected)
+        #expect(state.assistant.capabilitySettings == .default)
+        #expect(state.viewport.physicsDebugOverlayOptions == .all)
+        #expect(state.viewport.physicsDebugOverlayScope == .selected)
     }
 
     @Test("physics debug overlay options and scope persist and notify subscribers")
@@ -137,8 +143,8 @@ struct EditorStoreTests {
         #expect(notifications == 2)
         let data = try JSONEncoder().encode(store.state)
         let restored = try JSONDecoder().decode(EditorState.self, from: data)
-        #expect(restored.physicsDebugOverlayOptions == options)
-        #expect(restored.physicsDebugOverlayScope == .scene)
+        #expect(restored.viewport.physicsDebugOverlayOptions == options)
+        #expect(restored.viewport.physicsDebugOverlayScope == .scene)
     }
 
     @Test("Capability settings notify subscribers")
@@ -195,18 +201,20 @@ struct EditorStoreTests {
 
     @Test("Frame stats history is transient editor state")
     func frameStatsHistoryIsTransient() throws {
-        let state = EditorState(frameStatsHistory: [
+        let state = EditorState {
+            $0.timing.frameStatsHistory = [
             EditorFrameStatsHistorySample(sampleIndex: 1,
                                           frameIndex: 10,
                                           stats: EditorFrameStats(frameSeconds: 0.016)),
-        ])
+        ]
+        }
 
         let data = try JSONEncoder().encode(state)
         let json = String(decoding: data, as: UTF8.self)
         let decoded = try JSONDecoder().decode(EditorState.self, from: data)
 
         #expect(!json.contains("frameStatsHistory"))
-        #expect(decoded.frameStatsHistory.isEmpty)
+        #expect(decoded.timing.frameStatsHistory.isEmpty)
     }
 
     @Test("Particle diagnostics maintain a bounded transient history")
@@ -259,6 +267,6 @@ struct EditorStoreTests {
         let decoded = try JSONDecoder().decode(EditorState.self, from: data)
 
         #expect(!json.contains("particleDiagnosticsHistory"))
-        #expect(decoded.particleDiagnosticsHistory.isEmpty)
+        #expect(decoded.timing.particleDiagnosticsHistory.isEmpty)
     }
 }

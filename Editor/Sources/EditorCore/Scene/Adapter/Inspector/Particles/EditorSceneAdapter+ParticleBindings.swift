@@ -106,11 +106,11 @@ extension EditorSceneAdapter {
 
     func particleMaxBinding(for entity: EntityID) -> Binding<Float> {
         Binding(
-            get: { [self] in Float(scene.component(ParticleEmitter.self, for: entity)?.maxParticles ?? 0) },
+            get: { [self] in Float(scene.component(ParticleEmitter.self, for: entity)?.settings.emission.maxParticles ?? 0) },
             set: { [self] next in
                 let value = max(0, Int(next.rounded()))
-                guard scene.component(ParticleEmitter.self, for: entity)?.maxParticles != value else { return }
-                updateParticleEmitter(entity, summary: "Update max particles") { $0.maxParticles = value }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.emission.maxParticles != value else { return }
+                updateParticleEmitter(entity, summary: "Update max particles") { $0.settings.emission.maxParticles = value }
             }
         )
     }
@@ -147,52 +147,52 @@ extension EditorSceneAdapter {
 
     func particleShapeBinding(for entity: EntityID) -> Binding<ParticleEmissionShape> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.emissionShape ?? .sphere },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.shape.emissionShape ?? .sphere },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.emissionShape != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle emission shape") { $0.emissionShape = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.shape.emissionShape != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle emission shape") { $0.settings.shape.emissionShape = next }
             }
         )
     }
 
     func particleBoxExtentsBinding(for entity: EntityID, axis: Int) -> Binding<Float> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.boxHalfExtents[axis] ?? 0 },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.shape.boxHalfExtents[axis] ?? 0 },
             set: { [self] next in
                 let value = max(0, next)
-                guard scene.component(ParticleEmitter.self, for: entity)?.boxHalfExtents[axis] != value else { return }
-                updateParticleEmitter(entity, summary: "Update particle box extents") { $0.boxHalfExtents[axis] = value }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.shape.boxHalfExtents[axis] != value else { return }
+                updateParticleEmitter(entity, summary: "Update particle box extents") { $0.settings.shape.boxHalfExtents[axis] = value }
             }
         )
     }
 
     func particleCollisionModeBinding(for entity: EntityID) -> Binding<ParticleCollisionMode> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.collisionMode ?? .none },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.collision.collisionMode ?? .none },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.collisionMode != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle collision mode") { $0.collisionMode = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.collision.collisionMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle collision mode") { $0.settings.collision.collisionMode = next }
             }
         )
     }
 
     func particleForceModeBinding(for entity: EntityID) -> Binding<ParticleForceMode> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.forceMode ?? .none },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceMode ?? .none },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.forceMode != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle force mode") { $0.forceMode = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle force mode") { $0.settings.forces.forceMode = next }
             }
         )
     }
 
     func particleVectorFieldModeBinding(for entity: EntityID) -> Binding<ParticleVectorFieldMode> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.vectorFieldMode ?? .none },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldMode ?? .none },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.vectorFieldMode != next else { return }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle vector field mode") {
-                    $0.vectorFieldMode = next
+                    $0.settings.forces.vectorFieldMode = next
                 }
             }
         )
@@ -200,22 +200,22 @@ extension EditorSceneAdapter {
 
     func particleSubEmitterTriggerBinding(for entity: EntityID) -> Binding<ParticleSubEmitterTrigger> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.subEmitterTrigger ?? .none },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyTrigger ?? .none },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.subEmitterTrigger != next else { return }
-                updateParticleEmitter(entity, summary: "Update sub-emitter trigger") { $0.subEmitterTrigger = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyTrigger != next else { return }
+                updateParticleEmitter(entity, summary: "Update sub-emitter trigger") { $0.settings.subEmitters.legacyTrigger = next }
             }
         )
     }
 
     func particleSubEmittersBinding(for entity: EntityID) -> Binding<[ParticleSubEmitter]> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.subEmitters ?? [] },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.rules ?? [] },
             set: { [self] next in
                 let sanitized = next.map(sanitizedParticleSubEmitter)
-                guard scene.component(ParticleEmitter.self, for: entity)?.subEmitters != sanitized else { return }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.rules != sanitized else { return }
                 updateParticleEmitter(entity, summary: "Update particle sub-emitters") {
-                    $0.subEmitters = sanitized
+                    $0.settings.subEmitters.rules = sanitized
                 }
             }
         )
@@ -251,21 +251,21 @@ extension EditorSceneAdapter {
 
     func particleSimulationSpaceBinding(for entity: EntityID) -> Binding<ParticleSimulationSpace> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.simulationSpace ?? .local },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationSpace ?? .local },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.simulationSpace != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle simulation space") { $0.simulationSpace = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationSpace != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle simulation space") { $0.settings.gpuSimulation.simulationSpace = next }
             }
         )
     }
 
     func particleSimulationBackendBinding(for entity: EntityID) -> Binding<ParticleSimulationBackend> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.simulationBackend ?? .cpu },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationBackend ?? .cpu },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.simulationBackend != next else { return }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationBackend != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle simulation backend") {
-                    $0.simulationBackend = next
+                    $0.settings.gpuSimulation.simulationBackend = next
                 }
             }
         )
@@ -285,30 +285,30 @@ extension EditorSceneAdapter {
 
     func particleBlendModeBinding(for entity: EntityID) -> Binding<ParticleBlendMode> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.blendMode ?? .alpha },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.blendMode ?? .alpha },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.blendMode != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle blend mode") { $0.blendMode = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.blendMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle blend mode") { $0.settings.appearance.blendMode = next }
             }
         )
     }
 
     func particleRenderModeBinding(for entity: EntityID) -> Binding<ParticleRenderMode> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.renderMode ?? .billboard },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderMode ?? .billboard },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.renderMode != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle render mode") { $0.renderMode = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle render mode") { $0.settings.renderer.renderMode = next }
             }
         )
     }
 
     func particleSortModeBinding(for entity: EntityID) -> Binding<ParticleSortMode> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.sortMode ?? .distanceDescending },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.sortMode ?? .distanceDescending },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.sortMode != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle sort mode") { $0.sortMode = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.sortMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle sort mode") { $0.settings.renderer.sortMode = next }
             }
         )
     }
@@ -319,13 +319,13 @@ extension EditorSceneAdapter {
         Binding(
             get: {
                 [self] in scene.component(ParticleEmitter.self,
-                                           for: entity)?.textureSheetPlaybackMode ?? .automatic
+                                           for: entity)?.settings.textureSheet.playbackMode ?? .automatic
             },
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self,
-                                      for: entity)?.textureSheetPlaybackMode != next else { return }
+                                      for: entity)?.settings.textureSheet.playbackMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update texture sheet playback") {
-                    $0.textureSheetPlaybackMode = next
+                    $0.settings.textureSheet.playbackMode = next
                 }
             }
         )
@@ -333,21 +333,21 @@ extension EditorSceneAdapter {
 
     func particleRenderAlignmentBinding(for entity: EntityID) -> Binding<ParticleRenderAlignment> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.renderAlignment ?? .billboard },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderAlignment ?? .billboard },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.renderAlignment != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle render alignment") { $0.renderAlignment = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderAlignment != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle render alignment") { $0.settings.renderer.renderAlignment = next }
             }
         )
     }
 
     func particleRenderBoundsModeBinding(for entity: EntityID) -> Binding<ParticleRenderBoundsMode> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.renderBoundsMode ?? .disabled },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderBoundsMode ?? .disabled },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.renderBoundsMode != next else { return }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderBoundsMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle render bounds mode") {
-                    $0.renderBoundsMode = next
+                    $0.settings.renderer.renderBoundsMode = next
                 }
             }
         )
@@ -357,7 +357,7 @@ extension EditorSceneAdapter {
         Binding(
             get: { [self] in
                 guard let emitter = scene.component(ParticleEmitter.self, for: entity) else { return nil }
-                if let assetID = emitter.textureAssetID,
+                if let assetID = emitter.settings.textureSheet.textureAssetID,
                    let asset = EditorAssetCatalog.asset(for: assetID) {
                     return EditorInspectorAssetRef(id: asset.id,
                                                    name: asset.name,
@@ -365,9 +365,9 @@ extension EditorSceneAdapter {
                                                    kind: asset.kind.sceneKindLabel,
                                                    previewPath: asset.kind.isTexture ? asset.absolutePath : nil)
                 }
-                if let texturePath = emitter.texturePath, !texturePath.isEmpty {
+                if let texturePath = emitter.settings.textureSheet.texturePath, !texturePath.isEmpty {
                     let url = URL(fileURLWithPath: texturePath)
-                    return EditorInspectorAssetRef(id: emitter.textureAssetID ?? texturePath,
+                    return EditorInspectorAssetRef(id: emitter.settings.textureSheet.textureAssetID ?? texturePath,
                                                    name: url.deletingPathExtension().lastPathComponent,
                                                    subtitle: texturePath,
                                                    kind: ImportableAssetKind.png.sceneKindLabel,
@@ -391,10 +391,10 @@ extension EditorSceneAdapter {
                 } else {
                     resolved = (nil, nil)
                 }
-                guard current.textureAssetID != resolved.assetID || current.texturePath != resolved.path else { return }
+                guard current.settings.textureSheet.textureAssetID != resolved.assetID || current.settings.textureSheet.texturePath != resolved.path else { return }
                 updateParticleEmitter(entity, summary: "Update particle texture") {
-                    $0.textureAssetID = resolved.assetID
-                    $0.texturePath = resolved.path
+                    $0.settings.textureSheet.textureAssetID = resolved.assetID
+                    $0.settings.textureSheet.texturePath = resolved.path
                 }
             }
         )
@@ -402,10 +402,10 @@ extension EditorSceneAdapter {
 
     func particleGravityBinding(for entity: EntityID, axis: Int) -> Binding<Float> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.gravity[axis] ?? 0 },
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.settings.forces.gravity[axis] ?? 0 },
             set: { [self] next in
-                guard scene.component(ParticleEmitter.self, for: entity)?.gravity[axis] != next else { return }
-                updateParticleEmitter(entity, summary: "Update particle gravity") { $0.gravity[axis] = next }
+                guard scene.component(ParticleEmitter.self, for: entity)?.settings.forces.gravity[axis] != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle gravity") { $0.settings.forces.gravity[axis] = next }
             }
         )
     }
@@ -414,7 +414,7 @@ extension EditorSceneAdapter {
         Binding(
             get: { [self] in
                 let c = scene.component(ParticleEmitter.self, for: entity)
-                    .map { isStart ? $0.subEmitterStartColor : $0.subEmitterEndColor }
+                    .map { isStart ? $0.settings.subEmitters.legacyStartColor : $0.settings.subEmitters.legacyEndColor }
                     ?? SIMD4<Float>(1, 1, 1, 1)
                 return Color(r: c.x, g: c.y, b: c.z, a: c.w)
             },
@@ -422,10 +422,10 @@ extension EditorSceneAdapter {
                 let v = SIMD4<Float>(max(0, min(1, next.r)), max(0, min(1, next.g)),
                                      max(0, min(1, next.b)), max(0, min(1, next.a)))
                 let current = scene.component(ParticleEmitter.self, for: entity)
-                    .map { isStart ? $0.subEmitterStartColor : $0.subEmitterEndColor }
+                    .map { isStart ? $0.settings.subEmitters.legacyStartColor : $0.settings.subEmitters.legacyEndColor }
                 guard current != v else { return }
                 updateParticleEmitter(entity, summary: "Update sub-emitter color") {
-                    if isStart { $0.subEmitterStartColor = v } else { $0.subEmitterEndColor = v }
+                    if isStart { $0.settings.subEmitters.legacyStartColor = v } else { $0.settings.subEmitters.legacyEndColor = v }
                 }
             }
         )
@@ -435,17 +435,17 @@ extension EditorSceneAdapter {
         Binding(
             get: { [self] in
                 let c = scene.component(ParticleEmitter.self, for: entity)
-                    .map { isStart ? $0.startColor : $0.endColor } ?? SIMD4<Float>(1, 1, 1, 1)
+                    .map { isStart ? $0.settings.appearance.startColor : $0.settings.appearance.endColor } ?? SIMD4<Float>(1, 1, 1, 1)
                 return Color(r: c.x, g: c.y, b: c.z, a: c.w)
             },
             set: { [self] next in
                 let v = SIMD4<Float>(max(0, min(1, next.r)), max(0, min(1, next.g)),
                                      max(0, min(1, next.b)), max(0, min(1, next.a)))
                 let current = scene.component(ParticleEmitter.self, for: entity)
-                    .map { isStart ? $0.startColor : $0.endColor }
+                    .map { isStart ? $0.settings.appearance.startColor : $0.settings.appearance.endColor }
                 guard current != v else { return }
                 updateParticleEmitter(entity, summary: "Update particle color") {
-                    if isStart { $0.startColor = v } else { $0.endColor = v }
+                    if isStart { $0.settings.appearance.startColor = v } else { $0.settings.appearance.endColor = v }
                 }
             }
         )

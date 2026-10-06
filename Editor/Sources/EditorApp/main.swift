@@ -16,14 +16,14 @@ private final class HeadlessEditorDriver {
     init(app: EditorApplication) { self.app = app }
 
     func approvePendingPreview() {
-        if let request = app.store.state.pendingConfirmationRequest,
+        if let request = app.store.state.assistant.pendingConfirmationRequest,
            request.questions.allSatisfy({ $0.severity != .destructive }) {
             app.acceptPendingConfirmation()
         }
     }
 
     func tick() {
-        guard app.store.state.playbackState == .playing else { return }
+        guard app.store.state.timing.playbackState == .playing else { return }
         frameIndex &+= 1
         app.scene.tickScene(deltaTime: 1.0 / 60.0, frameIndex: frameIndex, inputEvents: [], drivesAudio: false)
     }

@@ -139,7 +139,7 @@ public final class EditorApplication: @unchecked Sendable {
         let initialSnapshot = SceneSemanticEncoder().encode(
             scene.scene,
             selectedEntityID: initialSelectedEntityID,
-            workspaceMode: store.state.workspaceMode.rawValue,
+            workspaceMode: store.state.workspace.mode.rawValue,
             localeIdentifier: nil
         )
         var initialWorldView = WorldView()
@@ -253,7 +253,7 @@ public final class EditorApplication: @unchecked Sendable {
 
         // Propagate initial workflow context, observation bus, and context memory to Session.
         if let initialSession {
-            let ctx = Self.workflowContext(for: store.state.workspaceMode,
+            let ctx = Self.workflowContext(for: store.state.workspace.mode,
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore
@@ -269,10 +269,10 @@ public final class EditorApplication: @unchecked Sendable {
         restoreAndObserveViewportSnapSettings()
 
         // Keep Session's WorkflowContext in sync when the user switches workspace mode.
-        var lastObservedMode: EditorWorkspaceMode = store.state.workspaceMode
+        var lastObservedMode: EditorWorkspaceMode = store.state.workspace.mode
         workspaceModeToken = store.subscribe { [weak self] s in
             guard let self else { return }
-            let newMode = s.state.workspaceMode
+            let newMode = s.state.workspace.mode
             guard newMode != lastObservedMode, let sess = self.session else { return }
             lastObservedMode = newMode
             let ctx = Self.workflowContext(for: newMode,
@@ -293,8 +293,8 @@ public final class EditorApplication: @unchecked Sendable {
         // 默认启用离屏渲染，让引擎渲染到一个 viewport 纹理交给编辑器显示。
         // 不开启 viewportResolve 时 UI 会一直停在 "Waiting for first render packet"。
         queueTrackedRenderSettings(makeViewportRenderSettings(
-            shadowsEnabled: store.state.viewportShadowsEnabled,
-            shadingMode: store.state.viewportShadingMode))
+            shadowsEnabled: store.state.shadows.enabled,
+            shadingMode: store.state.viewport.shadingMode))
         store.dispatch(.setConnected(true))
         logConsole("Editor connected to runtime")
     }
@@ -305,7 +305,7 @@ public final class EditorApplication: @unchecked Sendable {
         let simulationDelta = min(max(deltaTime, 0), 0.25)
         let didUpdateStats = recordAndDispatchFrameStats(deltaTime: deltaTime,
                                                          simulationDelta: simulationDelta)
-        store.dispatch(.tickFrame(store.state.frameIndex &+ 1))
+        store.dispatch(.tickFrame(store.state.timing.frameIndex &+ 1))
         let inputEvents = pendingViewportEvents
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)
@@ -313,8 +313,8 @@ public final class EditorApplication: @unchecked Sendable {
         let viewportInput = EditorViewportInputController.shared
         let continuousViewportInteractionActive = viewportInput.isContinuousSceneInteractionActive
         let shouldAdvanceSceneSimulation =
-            (state.viewportRealtimeEnabled && state.playbackState == .stopped)
-                || state.playbackState == .playing
+            (state.viewport.realtimeEnabled && state.timing.playbackState == .stopped)
+                || state.timing.playbackState == .playing
         if viewportInput.hasFreelookMovementInput {
             driveContinuousViewportCamera(deltaTime: simulationDelta)
         }
@@ -323,18 +323,18 @@ public final class EditorApplication: @unchecked Sendable {
             shouldAdvanceSceneSimulation || sceneRevisionBeforePreparation != lastPreparedSceneRevision
         if shouldPrepareSceneForRender {
             scene.tickScene(deltaTime: shouldAdvanceSceneSimulation ? simulationDelta : 0,
-                            frameIndex: state.frameIndex,
+                            frameIndex: state.timing.frameIndex,
                             inputEvents: inputEvents,
-                            drivesAudio: state.playbackState == .playing)
+                            drivesAudio: state.timing.playbackState == .playing)
             lastPreparedSceneRevision = scene.revision
         }
 
         let drawableSize = effectiveViewportDrawableSize()
         let jointPalettes = scene.currentJointPaletteMap()
         let wantsContinuousFrames = EditorViewportFrameDrive.wantsContinuousFrames(
-            viewportRealtimeEnabled: state.viewportRealtimeEnabled,
-            playbackState: state.playbackState,
-            sceneHasActiveParticles: state.viewportRealtimeEnabled && scene.hasActiveParticles(),
+            viewportRealtimeEnabled: state.viewport.realtimeEnabled,
+            playbackState: state.timing.playbackState,
+            sceneHasActiveParticles: state.viewport.realtimeEnabled && scene.hasActiveParticles(),
             continuousViewportInteractionActive: continuousViewportInteractionActive
         )
         let renderViewport = renderGate.shouldRender(
@@ -360,7 +360,7 @@ public final class EditorApplication: @unchecked Sendable {
                 renderSceneOverride: scene.currentRenderScene(),
                 sceneSnapshotOverride: scene.currentSceneSnapshot(),
                 jointPaletteOverride: jointPalettes,
-                inGameCanvasOverride: state.viewportMode == .game && state.gamePreviewHUDEnabled
+                inGameCanvasOverride: state.viewport.mode == .game && state.viewport.gamePreviewHUDEnabled
                     ? scene.currentInGameCanvas() : InGameCanvas(),
                 particleFeedbackHandler: scene.makeParticleSimulationFeedbackHandler()
             )
@@ -452,7 +452,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public var isSceneAuthoringEnabled: Bool {
-        store.state.playbackState == .stopped && scene.isAuthoringEnabled
+        store.state.timing.playbackState == .stopped && scene.isAuthoringEnabled
     }
 
     public func setDisplayInvalidationHandler(_ handler: (() -> Void)?) {

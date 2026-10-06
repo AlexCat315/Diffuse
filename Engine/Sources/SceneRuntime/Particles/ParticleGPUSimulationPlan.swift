@@ -30,10 +30,10 @@ public struct ParticleGPUSimulationPlan: Sendable, Equatable {
     public var unsupportedReasons: [ParticleGPUSimulationUnsupportedReason]
 
     public init(emitter: ParticleEmitter) {
-        self.backend = emitter.simulationBackend
-        self.particleCapacity = max(0, emitter.maxParticles)
+        self.backend = emitter.settings.gpuSimulation.simulationBackend
+        self.particleCapacity = max(0, emitter.settings.emission.maxParticles)
         self.workgroupSize = min(
-            max(1, emitter.gpuSimulationWorkgroupSize),
+            max(1, emitter.settings.gpuSimulation.workgroupSize),
             Self.maximumWorkgroupSize
         )
         self.dispatchWorkgroups = particleCapacity > 0
@@ -41,7 +41,7 @@ public struct ParticleGPUSimulationPlan: Sendable, Equatable {
             : 0
 
         var reasons: [ParticleGPUSimulationUnsupportedReason] = []
-        if emitter.simulationBackend == .cpu {
+        if emitter.settings.gpuSimulation.simulationBackend == .cpu {
             reasons.append(.backendCPU)
         }
         if particleCapacity == 0 {
@@ -49,11 +49,11 @@ public struct ParticleGPUSimulationPlan: Sendable, Equatable {
         }
         self.unsupportedReasons = reasons
 
-        if emitter.simulationBackend == .cpu {
+        if emitter.settings.gpuSimulation.simulationBackend == .cpu {
             self.status = .disabled
         } else if reasons.isEmpty {
             self.status = .supported
-        } else if emitter.simulationBackend == .gpuRequired {
+        } else if emitter.settings.gpuSimulation.simulationBackend == .gpuRequired {
             self.status = .requiredButUnsupported
         } else {
             self.status = .fallbackToCPU

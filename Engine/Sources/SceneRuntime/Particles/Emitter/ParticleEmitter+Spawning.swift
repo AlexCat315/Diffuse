@@ -65,25 +65,25 @@ extension ParticleEmitter {
                                 recordSpawned: Bool = true,
                                 budget: inout ParticleSpawnBudget) -> ParticleSpawnResult {
         let requested = max(0, count)
-        guard requested > 0, maxParticles > 0 else {
+        guard requested > 0, settings.emission.maxParticles > 0 else {
             return ParticleSpawnResult(requested: requested,
                                        spawned: 0,
                                        capacityLimitedCount: requested)
         }
         let budgetGrant = budget.grant(requested)
-        let liveLimit = min(maxParticles, max(0, maxLiveParticles ?? maxParticles))
+        let liveLimit = min(settings.emission.maxParticles, max(0, maxLiveParticles ?? settings.emission.maxParticles))
         let room = liveLimit - runtime.particles.count
         let n = min(budgetGrant.granted, max(0, room))
         for _ in 0..<n {
             let sample = makeSpawnSample()
-            let localPosition = originOffset + sample.offset
-            let localVelocity = startVelocity + sample.velocityJitter
+            let localPosition = settings.shape.originOffset + sample.offset
+            let localVelocity = settings.velocity.startVelocity + sample.velocityJitter
             let spawnTransform = worldTransform ?? matrix_identity_float4x4
             let inheritedVelocity = inheritedSpawnVelocity(inheritedWorldVelocity,
                                                            spawnTransform: spawnTransform)
             let position: SIMD3<Float>
             let velocity: SIMD3<Float>
-            switch simulationSpace {
+            switch settings.gpuSimulation.simulationSpace {
             case .local:
                 position = localPosition
                 velocity = localVelocity + inheritedVelocity
@@ -134,16 +134,16 @@ extension ParticleEmitter {
 
     private mutating func makeSpawnSample() -> ParticleSpawnSample {
         let offset = spawnOffset()
-        let jitter = SIMD3<Float>(nextSigned() * velocityRandomness.x,
-                                  nextSigned() * velocityRandomness.y,
-                                  nextSigned() * velocityRandomness.z)
+        let jitter = SIMD3<Float>(nextSigned() * settings.velocity.velocityRandomness.x,
+                                  nextSigned() * settings.velocity.velocityRandomness.y,
+                                  nextSigned() * settings.velocity.velocityRandomness.z)
         return ParticleSpawnSample(
             offset: offset,
             velocityJitter: jitter,
-            lifetime: max(0.0001, lifetime + nextSigned() * lifetimeRandomness),
-            sizeScale: max(0, 1 + nextSigned() * sizeRandomness),
-            rotation: startRotation + nextSigned() * rotationRandomness,
-            angularVelocity: angularVelocity + nextSigned() * angularVelocityRandomness,
+            lifetime: max(0.0001, settings.appearance.lifetime + nextSigned() * settings.appearance.lifetimeRandomness),
+            sizeScale: max(0, 1 + nextSigned() * settings.appearance.sizeRandomness),
+            rotation: settings.appearance.startRotation + nextSigned() * settings.appearance.rotationRandomness,
+            angularVelocity: settings.appearance.angularVelocity + nextSigned() * settings.appearance.angularVelocityRandomness,
             textureFrameSeed: textureFrameSeedSnapshot()
         )
     }
@@ -153,7 +153,7 @@ extension ParticleEmitter {
                                                    survivorsCount: Int,
                                                    pending: inout [Particle],
                                                    budget: inout ParticleSpawnBudget) -> ParticleSpawnResult {
-        guard maxParticles > 0 else {
+        guard settings.emission.maxParticles > 0 else {
             return ParticleSpawnResult(requested: 0, spawned: 0)
         }
         var result = ParticleSpawnResult(requested: 0, spawned: 0)
@@ -167,7 +167,7 @@ extension ParticleEmitter {
                                          budget: &budget)
             )
         }
-        for (index, rule) in subEmitters.enumerated() where rule.trigger == trigger {
+        for (index, rule) in settings.subEmitters.rules.enumerated() where rule.trigger == trigger {
             result.include(
                 spawnSubEmitterParticles(rule,
                                          appearanceIndex: UInt16(clamping: index + 2),
@@ -193,7 +193,7 @@ extension ParticleEmitter {
             return ParticleSpawnResult(requested: 0, spawned: 0)
         }
 
-        let room = maxParticles - survivorsCount - pending.count
+        let room = settings.emission.maxParticles - survivorsCount - pending.count
         guard room > 0 else {
             return ParticleSpawnResult(requested: rule.burstCount,
                                        spawned: 0,
@@ -213,8 +213,8 @@ extension ParticleEmitter {
                                     + source.velocity * rule.inheritVelocity,
                                  lifetime: rule.lifetime,
                                  sizeScale: 1,
-                                 rotation: startRotation + nextSigned() * rotationRandomness,
-                                 angularVelocity: angularVelocity + nextSigned() * angularVelocityRandomness,
+                                 rotation: settings.appearance.startRotation + nextSigned() * settings.appearance.rotationRandomness,
+                                 angularVelocity: settings.appearance.angularVelocity + nextSigned() * settings.appearance.angularVelocityRandomness,
                                  generation: childGeneration,
                                  appearanceIndex: appearanceIndex,
                                  textureFrameSeed: textureFrameSeedSnapshot())
@@ -231,7 +231,7 @@ extension ParticleEmitter {
         guard !eventParticles.isEmpty else {
             return ParticleSpawnResult(requested: 0, spawned: 0)
         }
-        let room = maxParticles - runtime.particles.count
+        let room = settings.emission.maxParticles - runtime.particles.count
         guard room > 0 else {
             return ParticleSpawnResult(requested: eventParticles.count,
                                        spawned: 0,
@@ -253,7 +253,7 @@ extension ParticleEmitter {
                                                 maxLiveParticles: Int? = nil,
                                                 budget: inout ParticleSpawnBudget) -> ParticleSpawnResult {
         defer { runtime.previousEmitterPosition = current }
-        guard distanceEmissionRate > 0,
+        guard settings.emission.distanceEmissionRate > 0,
               rateMultiplier > 0,
               let previous else {
             return ParticleSpawnResult(requested: 0, spawned: 0)
@@ -264,14 +264,14 @@ extension ParticleEmitter {
             return ParticleSpawnResult(requested: 0, spawned: 0)
         }
 
-        runtime.distanceEmissionAccumulator += distance * distanceEmissionRate * rateMultiplier
+        runtime.distanceEmissionAccumulator += distance * settings.emission.distanceEmissionRate * rateMultiplier
         let toSpawn = Int(runtime.distanceEmissionAccumulator)
         guard toSpawn > 0 else {
             return ParticleSpawnResult(requested: 0, spawned: 0)
         }
         runtime.distanceEmissionAccumulator -= Float(toSpawn)
 
-        switch simulationSpace {
+        switch settings.gpuSimulation.simulationSpace {
         case .local:
             return spawn(toSpawn,
                          worldTransform: worldTransform,
@@ -280,7 +280,7 @@ extension ParticleEmitter {
                          budget: &budget)
         case .world:
             let budgetGrant = budget.grant(toSpawn)
-            let liveLimit = min(maxParticles, max(0, maxLiveParticles ?? maxParticles))
+            let liveLimit = min(settings.emission.maxParticles, max(0, maxLiveParticles ?? settings.emission.maxParticles))
             let accepted = min(budgetGrant.granted, max(0, liveLimit - runtime.particles.count))
             var result = ParticleSpawnResult(
                 requested: toSpawn,
@@ -309,7 +309,7 @@ extension ParticleEmitter {
     func inheritedEmitterVelocity(from previous: SIMD3<Float>?,
                                           to current: SIMD3<Float>,
                                           deltaTime: Float) -> SIMD3<Float> {
-        guard velocityInheritance > 0,
+        guard settings.velocity.velocityInheritance > 0,
               let previous,
               deltaTime > 0.0001
         else { return .zero }
@@ -318,17 +318,17 @@ extension ParticleEmitter {
 
     private func inheritedSpawnVelocity(_ worldVelocity: SIMD3<Float>,
                                         spawnTransform: simd_float4x4) -> SIMD3<Float> {
-        guard velocityInheritance > 0 else { return .zero }
-        switch simulationSpace {
+        guard settings.velocity.velocityInheritance > 0 else { return .zero }
+        switch settings.gpuSimulation.simulationSpace {
         case .local:
-            return Self.transformDirection(worldVelocity, by: simd_inverse(spawnTransform)) * velocityInheritance
+            return Self.transformDirection(worldVelocity, by: simd_inverse(spawnTransform)) * settings.velocity.velocityInheritance
         case .world:
-            return worldVelocity * velocityInheritance
+            return worldVelocity * settings.velocity.velocityInheritance
         }
     }
 
     func distanceEmitterPosition(worldTransform: simd_float4x4?) -> SIMD3<Float> {
-        Self.transformPoint(originOffset, by: worldTransform ?? matrix_identity_float4x4)
+        Self.transformPoint(settings.shape.originOffset, by: worldTransform ?? matrix_identity_float4x4)
     }
 
     private static func transformPoint(_ point: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
@@ -349,20 +349,20 @@ extension ParticleEmitter {
     }
 
     var legacySubEmitterRule: ParticleSubEmitter? {
-        guard subEmitterTrigger != .none,
-              subEmitterBurstCount > 0
+        guard settings.subEmitters.legacyTrigger != .none,
+              settings.subEmitters.legacyBurstCount > 0
         else { return nil }
-        return ParticleSubEmitter(trigger: subEmitterTrigger,
-                                  burstCount: subEmitterBurstCount,
-                                  probability: subEmitterProbability,
-                                  maxDepth: subEmitterMaxDepth,
-                                  inheritVelocity: subEmitterInheritVelocity,
-                                  lifetime: subEmitterLifetime,
-                                  startVelocity: subEmitterStartVelocity,
-                                  velocityRandomness: subEmitterVelocityRandomness,
-                                  startSize: subEmitterStartSize,
-                                  endSize: subEmitterEndSize,
-                                  startColor: subEmitterStartColor,
-                                  endColor: subEmitterEndColor)
+        return ParticleSubEmitter(trigger: settings.subEmitters.legacyTrigger,
+                                  burstCount: settings.subEmitters.legacyBurstCount,
+                                  probability: settings.subEmitters.legacyProbability,
+                                  maxDepth: settings.subEmitters.legacyMaxDepth,
+                                  inheritVelocity: settings.subEmitters.legacyInheritVelocity,
+                                  lifetime: settings.subEmitters.legacyLifetime,
+                                  startVelocity: settings.subEmitters.legacyStartVelocity,
+                                  velocityRandomness: settings.subEmitters.legacyVelocityRandomness,
+                                  startSize: settings.subEmitters.legacyStartSize,
+                                  endSize: settings.subEmitters.legacyEndSize,
+                                  startColor: settings.subEmitters.legacyStartColor,
+                                  endColor: settings.subEmitters.legacyEndColor)
     }
 }

@@ -15,9 +15,9 @@ extension ParticleEmitter {
     mutating func nextSigned() -> Float { nextUnit() * 2 - 1 }
 
     mutating func spawnOffset() -> SIMD3<Float> {
-        switch emissionShape {
+        switch settings.shape.emissionShape {
         case .sphere:
-            return randomInSphere() * spawnRadius
+            return randomInSphere() * settings.shape.spawnRadius
         case .box:
             return randomInBox()
         case .cone:
@@ -26,7 +26,7 @@ extension ParticleEmitter {
     }
 
     private mutating func randomInSphere() -> SIMD3<Float> {
-        guard spawnRadius > 0 else { return .zero }
+        guard settings.shape.spawnRadius > 0 else { return .zero }
         // Rejection sampling keeps the distribution uniform inside the unit sphere.
         for _ in 0..<8 {
             let v = SIMD3<Float>(nextSigned(), nextSigned(), nextSigned())
@@ -37,18 +37,18 @@ extension ParticleEmitter {
 
     private mutating func randomInBox() -> SIMD3<Float> {
         SIMD3<Float>(
-            nextSigned() * boxHalfExtents.x,
-            nextSigned() * boxHalfExtents.y,
-            nextSigned() * boxHalfExtents.z
+            nextSigned() * settings.shape.boxHalfExtents.x,
+            nextSigned() * settings.shape.boxHalfExtents.y,
+            nextSigned() * settings.shape.boxHalfExtents.z
         )
     }
 
     private mutating func randomInCone() -> SIMD3<Float> {
-        guard coneRadius > 0, coneHeight > 0 else { return .zero }
-        let axis = normalizedOrDefault(startVelocity, SIMD3<Float>(0, 1, 0))
+        guard settings.shape.coneRadius > 0, settings.shape.coneHeight > 0 else { return .zero }
+        let axis = normalizedOrDefault(settings.velocity.startVelocity, SIMD3<Float>(0, 1, 0))
         let basis = coneBasis(axis: axis)
-        let height = coneHeight * cbrt(nextUnit())
-        let diskRadius = coneRadius * (height / coneHeight) * sqrt(nextUnit())
+        let height = settings.shape.coneHeight * cbrt(nextUnit())
+        let diskRadius = settings.shape.coneRadius * (height / settings.shape.coneHeight) * sqrt(nextUnit())
         let angle = nextUnit() * 2 * Float.pi
         return axis * height
             + basis.tangent * (cos(angle) * diskRadius)

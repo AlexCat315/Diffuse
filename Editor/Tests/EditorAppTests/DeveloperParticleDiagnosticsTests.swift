@@ -190,8 +190,10 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("authoring diagnostics report GPU-required blockers")
     func authoringDiagnosticsReportGPURequiredBlockers() {
-        let emitter = ParticleEmitter(maxParticles: 0,
-                                      simulationBackend: .gpuRequired)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 0
+            $0.gpuSimulation.simulationBackend = .gpuRequired
+        })
         let issue = ParticleModuleIssue(moduleID: "gpuSimulation",
                                         severity: .error,
                                         code: "gpuRequiredButUnsupported",
@@ -212,8 +214,10 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("authoring diagnostics explain GPU fallback reasons")
     func authoringDiagnosticsExplainGPUFallbackReasons() {
-        let emitter = ParticleEmitter(maxParticles: 0,
-                                      simulationBackend: .gpuIfSupported)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 0
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        })
 
         let summary = makeDeveloperParticleAuthoringDiagnosticSummary(
             gpuPlan: emitter.gpuSimulationPlan,
@@ -229,9 +233,11 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("authoring diagnostics summarize ready GPU dispatch")
     func authoringDiagnosticsSummarizeReadyGPUDispatch() {
-        let emitter = ParticleEmitter(maxParticles: 512,
-                                      simulationBackend: .gpuIfSupported,
-                                      gpuSimulationWorkgroupSize: 128)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 512
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 128
+        })
 
         let summary = makeDeveloperParticleAuthoringDiagnosticSummary(
             gpuPlan: emitter.gpuSimulationPlan,

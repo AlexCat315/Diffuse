@@ -3,9 +3,11 @@ public struct EditorPresentationState: Hashable, Codable, Sendable {
     public private(set) var language: EditorLanguage
     public private(set) var revision: UInt64
 
-    public init(themeMode: EditorThemeMode = .dark,
-                language: EditorLanguage = .system,
-                revision: UInt64 = 0) {
+    public init(
+        themeMode: EditorThemeMode = .dark,
+        language: EditorLanguage = .system,
+        revision: UInt64 = 0
+    ) {
         self.themeMode = themeMode
         self.language = language
         self.revision = revision

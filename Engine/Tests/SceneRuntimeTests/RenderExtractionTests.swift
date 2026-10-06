@@ -227,23 +227,23 @@ struct RenderExtractionTests {
             // No motion / no continuous emission: the manually emitted particle
             // stays at the emitter origin so the world transform is the only thing
             // moving it (deterministic with tick deltaTime == 0).
-            var emitter = ParticleEmitter(
-                isEmitting: false,
-                emissionRate: 0,
-                maxParticles: 16,
-                lifetime: 100,
-                spawnRadius: 0,
-                startVelocity: .zero,
-                velocityRandomness: .zero,
-                gravity: .zero,
-                startSize: 0.5,
-                endSize: 0.5,
-                startRotation: z < -10 ? 0.75 : 0.25,
-                blendMode: z < -10 ? .additive : .alpha,
-                textureSheetColumns: 2,
-                textureSheetRows: 2,
-                textureSheetFrameCount: 4
-            )
+            var emitter = ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 16
+                $0.appearance.lifetime = 100
+                $0.shape.spawnRadius = 0
+                $0.velocity.startVelocity = .zero
+                $0.velocity.velocityRandomness = .zero
+                $0.forces.gravity = .zero
+                $0.appearance.startSize = 0.5
+                $0.appearance.endSize = 0.5
+                $0.appearance.startRotation = z < -10 ? 0.75 : 0.25
+                $0.appearance.blendMode = z < -10 ? .additive : .alpha
+                $0.textureSheet.columns = 2
+                $0.textureSheet.rows = 2
+                $0.textureSheet.frameCount = 4
+            })
             emitter.emit(1)
             emitter.advance(deltaTime: 50)
             _ = runtime.setComponent(emitter, for: entity)
@@ -301,18 +301,20 @@ struct RenderExtractionTests {
 
             let entity = runtime.createEntity()
             _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
-            var emitter = ParticleEmitter(isEmitting: false,
-                                          emissionRate: 0,
-                                          maxParticles: 8,
-                                          lifetime: 10,
-                                          spawnRadius: 0,
-                                          startVelocity: .zero,
-                                          velocityRandomness: .zero,
-                                          gravity: .zero,
-                                          simulationSpace: .world,
-                                          startSize: 0.5,
-                                          endSize: 0.5,
-                                          sortMode: sortMode)
+            var emitter = ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 8
+                $0.appearance.lifetime = 10
+                $0.shape.spawnRadius = 0
+                $0.velocity.startVelocity = .zero
+                $0.velocity.velocityRandomness = .zero
+                $0.forces.gravity = .zero
+                $0.gpuSimulation.simulationSpace = .world
+                $0.appearance.startSize = 0.5
+                $0.appearance.endSize = 0.5
+                $0.renderer.sortMode = sortMode
+            })
 
             var oldTransform = matrix_identity_float4x4
             oldTransform.columns.3 = SIMD4<Float>(0, 0, -5, 1)
@@ -346,31 +348,35 @@ struct RenderExtractionTests {
 
         let lowPriorityNear = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -5)), for: lowPriorityNear)
-        var nearEmitter = ParticleEmitter(isEmitting: false,
-                                          emissionRate: 0,
-                                          maxParticles: 4,
-                                          lifetime: 10,
-                                          spawnRadius: 0,
-                                          startVelocity: .zero,
-                                          gravity: .zero,
-                                          startSize: 0.5,
-                                          endSize: 0.5,
-                                          renderSortPriority: -5)
+        var nearEmitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 0.5
+            $0.appearance.endSize = 0.5
+            $0.renderer.renderSortPriority = -5
+        })
         nearEmitter.emit(1)
         _ = runtime.setComponent(nearEmitter, for: lowPriorityNear)
 
         let highPriorityFar = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -20)), for: highPriorityFar)
-        var farEmitter = ParticleEmitter(isEmitting: false,
-                                         emissionRate: 0,
-                                         maxParticles: 4,
-                                         lifetime: 10,
-                                         spawnRadius: 0,
-                                         startVelocity: .zero,
-                                         gravity: .zero,
-                                         startSize: 0.5,
-                                         endSize: 0.5,
-                                         renderSortPriority: 5)
+        var farEmitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 0.5
+            $0.appearance.endSize = 0.5
+            $0.renderer.renderSortPriority = 5
+        })
         farEmitter.emit(1)
         _ = runtime.setComponent(farEmitter, for: highPriorityFar)
 
@@ -396,59 +402,61 @@ struct RenderExtractionTests {
                                                 endSize: 0.15,
                                                 startColor: SIMD4<Float>(0.2, 0.4, 0.6, 1),
                                                 endColor: SIMD4<Float>(0.8, 0.6, 0.4, 0))
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      simulationSpeed: 1.75,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 10,
-                                      subEmitterStartSize: 0.5,
-                                      subEmitterEndSize: 0.1,
-                                      subEmitterStartColor: SIMD4<Float>(0, 1, 0, 1),
-                                      subEmitterEndColor: SIMD4<Float>(0, 1, 1, 0),
-                                      subEmitters: [ruleAppearance],
-                                      spawnRadius: 0,
-                                      startVelocity: SIMD3<Float>(1, 2, 3),
-                                      gravity: SIMD3<Float>(0, -4, 0),
-                                      noiseStrength: 1.5,
-                                      noiseScale: 0.75,
-                                      noiseSpeed: 0.25,
-                                      forceMode: .radial,
-                                      forceCenter: SIMD3<Float>(1, 2, 3),
-                                      forceAxis: SIMD3<Float>(0, 1, 0),
-                                      forceRadius: 12,
-                                      forceStrength: -4,
-                                      forceFalloff: 2,
-                                      vectorFieldMode: .curl,
-                                      vectorFieldDirection: SIMD3<Float>(1, 0, 0),
-                                      vectorFieldStrength: 2,
-                                      vectorFieldScale: 0.5,
-                                      vectorFieldScrollSpeed: 3,
-                                      collisionMode: .worldPlane,
-                                      simulationBackend: .gpuIfSupported,
-                                      gpuSimulationWorkgroupSize: 64,
-                                      collisionPlaneY: -1,
-                                      collisionRestitution: 0.7,
-                                      collisionDamping: 0.2,
-                                      startSize: 0.25,
-                                      endSize: 2,
-                                      sizeCurve: .easeIn,
-                                      startColor: SIMD4<Float>(1, 0, 0, 0.25),
-                                      endColor: SIMD4<Float>(0, 0, 1, 1),
-                                      colorCurve: .easeOut,
-                                      sortMode: .oldestFirst,
-                                      renderSortPriority: 9,
-                                      renderAlignment: .velocity,
-                                      velocityStretchScale: 0.25,
-                                      velocityStretchMax: 3,
-                                      textureAssetID: "spark.texture",
-                                      texturePath: " smoke.png ",
-                                      textureSheetColumns: 4,
-                                      textureSheetRows: 2,
-                                      textureSheetFrameCount: 7,
-                                      textureSheetFrameRate: 12,
-                                      textureSheetPlaybackMode: .loop,
-                                      textureSheetStartFrame: 3,
-                                      textureSheetFrameRandomness: 2)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.simulationSpeed = 1.75
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.subEmitters.legacyStartSize = 0.5
+            $0.subEmitters.legacyEndSize = 0.1
+            $0.subEmitters.legacyStartColor = SIMD4<Float>(0, 1, 0, 1)
+            $0.subEmitters.legacyEndColor = SIMD4<Float>(0, 1, 1, 0)
+            $0.subEmitters.rules = [ruleAppearance]
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = SIMD3<Float>(1, 2, 3)
+            $0.forces.gravity = SIMD3<Float>(0, -4, 0)
+            $0.forces.noiseStrength = 1.5
+            $0.forces.noiseScale = 0.75
+            $0.forces.noiseSpeed = 0.25
+            $0.forces.forceMode = .radial
+            $0.forces.forceCenter = SIMD3<Float>(1, 2, 3)
+            $0.forces.forceAxis = SIMD3<Float>(0, 1, 0)
+            $0.forces.forceRadius = 12
+            $0.forces.forceStrength = -4
+            $0.forces.forceFalloff = 2
+            $0.forces.vectorFieldMode = .curl
+            $0.forces.vectorFieldDirection = SIMD3<Float>(1, 0, 0)
+            $0.forces.vectorFieldStrength = 2
+            $0.forces.vectorFieldScale = 0.5
+            $0.forces.vectorFieldScrollSpeed = 3
+            $0.collision.collisionMode = .worldPlane
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+            $0.collision.collisionPlaneY = -1
+            $0.collision.collisionRestitution = 0.7
+            $0.collision.collisionDamping = 0.2
+            $0.appearance.startSize = 0.25
+            $0.appearance.endSize = 2
+            $0.appearance.sizeCurve = .easeIn
+            $0.appearance.startColor = SIMD4<Float>(1, 0, 0, 0.25)
+            $0.appearance.endColor = SIMD4<Float>(0, 0, 1, 1)
+            $0.appearance.colorCurve = .easeOut
+            $0.renderer.sortMode = .oldestFirst
+            $0.renderer.renderSortPriority = 9
+            $0.renderer.renderAlignment = .velocity
+            $0.renderer.velocityStretchScale = 0.25
+            $0.renderer.velocityStretchMax = 3
+            $0.textureSheet.textureAssetID = "spark.texture"
+            $0.textureSheet.texturePath = " smoke.png "
+            $0.textureSheet.columns = 4
+            $0.textureSheet.rows = 2
+            $0.textureSheet.frameCount = 7
+            $0.textureSheet.frameRate = 12
+            $0.textureSheet.playbackMode = .loop
+            $0.textureSheet.startFrame = 3
+            $0.textureSheet.frameRandomness = 2
+        })
         emitter.emit(2)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -468,7 +476,7 @@ struct RenderExtractionTests {
         #expect(batch.noiseStrength == 1.5)
         #expect(batch.noiseScale == 0.75)
         #expect(batch.noiseSpeed == 0.25)
-        #expect(batch.noiseSeed == emitter.seed)
+        #expect(batch.noiseSeed == emitter.settings.emission.seed)
         #expect(batch.vectorFieldMode == .curl)
         #expect(batch.vectorFieldDirection == SIMD3<Float>(1, 0, 0))
         #expect(batch.vectorFieldStrength == 2)
@@ -532,29 +540,33 @@ struct RenderExtractionTests {
 
         let highPriority = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -12)), for: highPriority)
-        var highEmitter = ParticleEmitter(isEmitting: false,
-                                          emissionRate: 0,
-                                          maxParticles: 8,
-                                          lifetime: 10,
-                                          spawnRadius: 0,
-                                          startVelocity: .zero,
-                                          gravity: .zero,
-                                          simulationBackend: .gpuIfSupported,
-                                          renderSortPriority: 20)
+        var highEmitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.renderer.renderSortPriority = 20
+        })
         highEmitter.emit(1)
         _ = runtime.setComponent(highEmitter, for: highPriority)
 
         let lowPriority = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: lowPriority)
-        var lowEmitter = ParticleEmitter(isEmitting: false,
-                                         emissionRate: 0,
-                                         maxParticles: 8,
-                                         lifetime: 10,
-                                         spawnRadius: 0,
-                                         startVelocity: .zero,
-                                         gravity: .zero,
-                                         simulationBackend: .gpuIfSupported,
-                                         renderSortPriority: -20)
+        var lowEmitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.renderer.renderSortPriority = -20
+        })
         lowEmitter.emit(1)
         _ = runtime.setComponent(lowEmitter, for: lowPriority)
 
@@ -575,14 +587,16 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 10,
-                                      subEmitterTrigger: .death,
-                                      subEmitterBurstCount: 2,
-                                      gravity: .zero,
-                                      simulationBackend: .gpuIfSupported)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.subEmitters.legacyTrigger = .death
+            $0.subEmitters.legacyBurstCount = 2
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -609,13 +623,15 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
-        var emitter = ParticleEmitter(emissionRate: 10,
-                                      maxParticles: 8,
-                                      lifetime: 10,
-                                      spawnRadius: 0,
-                                      startVelocity: SIMD3<Float>(0, 1, 0),
-                                      gravity: .zero,
-                                      simulationBackend: .gpuIfSupported)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = SIMD3<Float>(0, 1, 0)
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -644,14 +660,16 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
-        let emitter = ParticleEmitter(emissionRate: 0,
-                                      distanceEmissionRate: 4,
-                                      maxParticles: 8,
-                                      lifetime: 10,
-                                      spawnRadius: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      simulationBackend: .gpuIfSupported)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 4
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        })
         _ = runtime.setComponent(emitter, for: entity)
 
         _ = runtime.tick(deltaTime: 0.01)
@@ -685,14 +703,16 @@ struct RenderExtractionTests {
         func makeEmitter(z: Float) {
             let entity = runtime.createEntity()
             _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, z)), for: entity)
-            var emitter = ParticleEmitter(isEmitting: false,
-                                          emissionRate: 0,
-                                          maxParticles: 4,
-                                          lifetime: 10,
-                                          spawnRadius: 0,
-                                          startVelocity: .zero,
-                                          gravity: .zero,
-                                          maxRenderDistance: 10)
+            var emitter = ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 4
+                $0.appearance.lifetime = 10
+                $0.shape.spawnRadius = 0
+                $0.velocity.startVelocity = .zero
+                $0.forces.gravity = .zero
+                $0.renderer.maxRenderDistance = 10
+            })
             emitter.emit(1)
             _ = runtime.setComponent(emitter, for: entity)
         }
@@ -719,17 +739,19 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -15)), for: entity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 4,
-                                      lifetime: 10,
-                                      spawnRadius: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      startColor: SIMD4<Float>(1, 1, 1, 0.8),
-                                      endColor: SIMD4<Float>(1, 1, 1, 0.8),
-                                      maxRenderDistance: 20,
-                                      renderDistanceFadeRange: 10)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.appearance.startColor = SIMD4<Float>(1, 1, 1, 0.8)
+            $0.appearance.endColor = SIMD4<Float>(1, 1, 1, 0.8)
+            $0.renderer.maxRenderDistance = 20
+            $0.renderer.renderDistanceFadeRange = 10
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -751,14 +773,16 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -5)), for: entity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      maxRenderedParticles: 2,
-                                      lifetime: 10,
-                                      spawnRadius: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.emission.maxRenderedParticles = 2
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         emitter.emit(5)
         #expect(emitter.aliveCount == 5)
         _ = runtime.setComponent(emitter, for: entity)
@@ -785,16 +809,18 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -15)), for: entity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 16,
-                                      lifetime: 10,
-                                      spawnRadius: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      renderLODStartDistance: 5,
-                                      renderLODEndDistance: 25,
-                                      renderLODMinParticleScale: 0.25)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 16
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.renderer.renderLODStartDistance = 5
+            $0.renderer.renderLODEndDistance = 25
+            $0.renderer.renderLODMinParticleScale = 0.25
+        })
         emitter.emit(8)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -821,14 +847,17 @@ struct RenderExtractionTests {
         func makeEmitter(position: SIMD3<Float>) {
             let entity = runtime.createEntity()
             _ = runtime.setLocalTransform(LocalTransform(translation: position), for: entity)
-            var emitter = ParticleEmitter(isEmitting: false,
-                                          emissionRate: 0,
-                                          maxParticles: 4,
-                                          lifetime: 10,
-                                          spawnRadius: 0,
-                                          startVelocity: .zero,
-                                          gravity: .zero,
-                                          renderBoundsRadius: 1)
+            var emitter = ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 4
+                $0.appearance.lifetime = 10
+                $0.shape.spawnRadius = 0
+                $0.velocity.startVelocity = .zero
+                $0.forces.gravity = .zero
+                $0.renderer.renderBoundsRadius = 1
+                $0.renderer.renderBoundsMode = $0.renderer.renderBoundsRadius > 0 ? .manual : .disabled
+            })
             emitter.emit(1)
             _ = runtime.setComponent(emitter, for: entity)
         }
@@ -860,14 +889,17 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(6, 0, -10)), for: entity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 4,
-                                      lifetime: 10,
-                                      spawnRadius: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      renderBoundsRadius: 1)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.renderer.renderBoundsRadius = 1
+            $0.renderer.renderBoundsMode = $0.renderer.renderBoundsRadius > 0 ? .manual : .disabled
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -889,15 +921,17 @@ struct RenderExtractionTests {
         func makeEmitter(position: SIMD3<Float>) {
             let entity = runtime.createEntity()
             _ = runtime.setLocalTransform(LocalTransform(translation: position), for: entity)
-            var emitter = ParticleEmitter(isEmitting: false,
-                                          emissionRate: 0,
-                                          maxParticles: 4,
-                                          lifetime: 1,
-                                          spawnRadius: 0,
-                                          startVelocity: .zero,
-                                          gravity: .zero,
-                                          startSize: 1,
-                                          renderBoundsMode: .automatic)
+            var emitter = ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 4
+                $0.appearance.lifetime = 1
+                $0.shape.spawnRadius = 0
+                $0.velocity.startVelocity = .zero
+                $0.forces.gravity = .zero
+                $0.appearance.startSize = 1
+                $0.renderer.renderBoundsMode = .automatic
+            })
             emitter.emit(1)
             _ = runtime.setComponent(emitter, for: entity)
         }
@@ -922,22 +956,24 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(8, 0, -10)), for: entity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 4,
-                                      lifetime: 1,
-                                      spawnRadius: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      simulationBackend: .gpuIfSupported,
-                                      startSize: 1,
-                                      endSize: 2,
-                                      sizeCurve: .keyframes([
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 1
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.appearance.startSize = 1
+            $0.appearance.endSize = 2
+            $0.appearance.sizeCurve = .keyframes([
                                         ParticleCurveKeyframe(time: 0, value: 0),
                                         ParticleCurveKeyframe(time: 0.5, value: 40),
                                         ParticleCurveKeyframe(time: 1, value: 1),
-                                      ]),
-                                      renderBoundsMode: .automatic)
+                                      ])
+            $0.renderer.renderBoundsMode = .automatic
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -962,14 +998,17 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(20, 0, -10)), for: entity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 4,
-                                      lifetime: 10,
-                                      spawnRadius: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      renderBoundsRadius: 0)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.renderer.renderBoundsRadius = 0
+            $0.renderer.renderBoundsMode = $0.renderer.renderBoundsRadius > 0 ? .manual : .disabled
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -990,23 +1029,23 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -10)), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 4,
-            lifetime: 10,
-            spawnRadius: 0,
-            startVelocity: SIMD3<Float>(1, 0, 0),
-            gravity: .zero,
-            startSize: 2,
-            endSize: 2,
-            startColor: SIMD4<Float>(1, 1, 1, 1),
-            endColor: SIMD4<Float>(1, 1, 1, 1),
-            trailLength: 1,
-            trailSegments: 2,
-            trailEndSizeScale: 0.5,
-            trailEndAlphaScale: 0
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = SIMD3<Float>(1, 0, 0)
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 2
+            $0.appearance.endSize = 2
+            $0.appearance.startColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.appearance.endColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.trails.trailLength = 1
+            $0.trails.trailSegments = 2
+            $0.trails.trailEndSizeScale = 0.5
+            $0.trails.trailEndAlphaScale = 0
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -1039,20 +1078,20 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 4,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero,
-            simulationSpace: .world,
-            startSize: 0.5,
-            endSize: 0.5,
-            startColor: SIMD4<Float>(1, 0, 0, 1),
-            endColor: SIMD4<Float>(1, 0, 0, 1),
-            renderMode: .ribbon
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+            $0.appearance.startSize = 0.5
+            $0.appearance.endSize = 0.5
+            $0.appearance.startColor = SIMD4<Float>(1, 0, 0, 1)
+            $0.appearance.endColor = SIMD4<Float>(1, 0, 0, 1)
+            $0.renderer.renderMode = .ribbon
+        })
         var first = matrix_identity_float4x4
         first.columns.3 = SIMD4<Float>(0, 0, -5, 1)
         var second = matrix_identity_float4x4
@@ -1094,26 +1133,26 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 8,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero,
-            simulationSpace: .world,
-            startSize: 1,
-            endSize: 1,
-            startColor: SIMD4<Float>(0.25, 0.5, 1, 1),
-            endColor: SIMD4<Float>(0.25, 0.5, 1, 1),
-            renderMode: .ribbon,
-            ribbonWidthScale: 2,
-            ribbonTailWidthScale: 0.5,
-            ribbonTailAlphaScale: 0.25,
-            ribbonMaxSegmentLength: 4,
-            ribbonTextureTiling: 2,
-            ribbonTextureOffset: 0.25
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+            $0.appearance.startSize = 1
+            $0.appearance.endSize = 1
+            $0.appearance.startColor = SIMD4<Float>(0.25, 0.5, 1, 1)
+            $0.appearance.endColor = SIMD4<Float>(0.25, 0.5, 1, 1)
+            $0.renderer.renderMode = .ribbon
+            $0.trails.ribbonWidthScale = 2
+            $0.trails.ribbonTailWidthScale = 0.5
+            $0.trails.ribbonTailAlphaScale = 0.25
+            $0.trails.ribbonMaxSegmentLength = 4
+            $0.trails.ribbonTextureTiling = 2
+            $0.trails.ribbonTextureOffset = 0.25
+        })
 
         for x in [Float(0), 1, 3, 10] {
             var transform = matrix_identity_float4x4
@@ -1156,22 +1195,22 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 4,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero,
-            simulationSpace: .world,
-            startSize: 1,
-            endSize: 1,
-            startColor: SIMD4<Float>(1, 1, 1, 1),
-            endColor: SIMD4<Float>(1, 1, 1, 1),
-            renderMode: .ribbon,
-            ribbonJoinOverlapScale: 0.5,
-            ribbonTextureTiling: 1
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+            $0.appearance.startSize = 1
+            $0.appearance.endSize = 1
+            $0.appearance.startColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.appearance.endColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.renderer.renderMode = .ribbon
+            $0.trails.ribbonJoinOverlapScale = 0.5
+            $0.trails.ribbonTextureTiling = 1
+        })
 
         for point in [SIMD3<Float>(0, 0, -5), SIMD3<Float>(2, 0, -5), SIMD3<Float>(2, 2, -5)] {
             var transform = matrix_identity_float4x4
@@ -1210,23 +1249,23 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 6,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero,
-            simulationSpace: .world,
-            startSize: 1,
-            endSize: 1,
-            startColor: SIMD4<Float>(1, 1, 1, 1),
-            endColor: SIMD4<Float>(1, 1, 1, 1),
-            renderMode: .ribbon,
-            ribbonMaxSegmentLength: 4,
-            ribbonSmoothingSegments: 2,
-            ribbonTextureTiling: 1
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 6
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+            $0.appearance.startSize = 1
+            $0.appearance.endSize = 1
+            $0.appearance.startColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.appearance.endColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.renderer.renderMode = .ribbon
+            $0.trails.ribbonMaxSegmentLength = 4
+            $0.trails.ribbonSmoothingSegments = 2
+            $0.trails.ribbonTextureTiling = 1
+        })
 
         for point in [
             SIMD3<Float>(0, 0, -5),
@@ -1263,19 +1302,19 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -10)), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 4,
-            lifetime: 10,
-            startVelocity: SIMD3<Float>(1, 0, 0),
-            gravity: .zero,
-            simulationBackend: .gpuIfSupported,
-            trailLength: 1,
-            trailSegments: 2,
-            trailEndSizeScale: 0.5,
-            trailEndAlphaScale: 0
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = SIMD3<Float>(1, 0, 0)
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.trails.trailLength = 1
+            $0.trails.trailSegments = 2
+            $0.trails.trailEndSizeScale = 0.5
+            $0.trails.trailEndAlphaScale = 0
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -1313,16 +1352,16 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -10)), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 4,
-            lifetime: 10,
-            gravity: .zero,
-            simulationBackend: .gpuIfSupported,
-            maxRenderDistance: 12,
-            renderDistanceFadeRange: 4
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.renderer.maxRenderDistance = 12
+            $0.renderer.renderDistanceFadeRange = 4
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -1343,18 +1382,18 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -20)), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 6,
-            maxRenderedParticles: 4,
-            lifetime: 10,
-            gravity: .zero,
-            simulationBackend: .gpuIfSupported,
-            renderLODStartDistance: 10,
-            renderLODEndDistance: 30,
-            renderLODMinParticleScale: 0.25
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 6
+            $0.emission.maxRenderedParticles = 4
+            $0.appearance.lifetime = 10
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.renderer.renderLODStartDistance = 10
+            $0.renderer.renderLODEndDistance = 30
+            $0.renderer.renderLODMinParticleScale = 0.25
+        })
         emitter.emit(6)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -1395,15 +1434,15 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -40)), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 4,
-            lifetime: 10,
-            gravity: .zero,
-            simulationBackend: .gpuIfSupported,
-            maxRenderDistance: 10
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.renderer.maxRenderDistance = 10
+        })
         emitter.emit(2)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -1433,17 +1472,17 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -5)), for: entity)
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 4,
-            lifetime: 10,
-            startVelocity: SIMD3<Float>(2, 0, 0),
-            gravity: .zero,
-            renderAlignment: .velocity,
-            velocityStretchScale: 0.5,
-            velocityStretchMax: 1.5
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = SIMD3<Float>(2, 0, 0)
+            $0.forces.gravity = .zero
+            $0.renderer.renderAlignment = .velocity
+            $0.renderer.velocityStretchScale = 0.5
+            $0.renderer.velocityStretchMax = 1.5
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -1461,18 +1500,18 @@ struct RenderExtractionTests {
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 5, 0)), for: entity)
 
-        var emitter = ParticleEmitter(
-            isEmitting: false,
-            emissionRate: 0,
-            maxParticles: 1,
-            lifetime: 100,
-            startVelocity: .zero,
-            gravity: SIMD3<Float>(0, -10, 0),
-            collisionMode: .worldPlane,
-            collisionPlaneY: 0,
-            collisionRestitution: 0.5,
-            collisionDamping: 0
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 1
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = SIMD3<Float>(0, -10, 0)
+            $0.collision.collisionMode = .worldPlane
+            $0.collision.collisionPlaneY = 0
+            $0.collision.collisionRestitution = 0.5
+            $0.collision.collisionDamping = 0
+        })
         emitter.emit(1)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -1497,13 +1536,15 @@ struct RenderExtractionTests {
 
         let emitterEntity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(10, 0, 0)), for: emitterEntity)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 2,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      simulationSpace: .world)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 2
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
         var spawnTransform = matrix_identity_float4x4
         spawnTransform.columns.3 = SIMD4<Float>(2, 0, 0, 1)
         emitter.emit(1, worldTransform: spawnTransform)
