@@ -76,6 +76,14 @@ public final class DevTools {
         server.selectionClearHandler = { @MainActor [weak self] in
             self?.handleSelection(id: nil)
         }
+        server.inspectionHandler = { @MainActor request in scene.editor.handle(request) }
+        server.inspectionResetHandler = { @MainActor in scene.editor.reset() }
+        scene.editor.onChange = { [weak self] in
+            MainActor.assumeIsolated {
+                self?.onSelectionChanged?()
+                self?.notifyTreeChanged()
+            }
+        }
 
         wireMirror()
         wireState()
@@ -83,7 +91,7 @@ public final class DevTools {
 
     public func start() throws {
         guard config.enabled else { return }
-        var capabilities = ["tree", "select", "log", "timing"]
+        var capabilities = ["tree", "select", "log", "timing", "inspect", "style"]
         if frameTap != nil { capabilities.append("mirror") }
         if stateCheckpointProvider != nil, stateRestoreHandler != nil || stateRestoreResultHandler != nil {
             capabilities.append("state")
@@ -104,6 +112,7 @@ public final class DevTools {
     public func stop() {
         frameTap?.stop()
         server.stop()
+        scene.editor.reset()
         unwireSinks()
     }
 
@@ -144,7 +153,7 @@ public final class DevTools {
 
     /// id of the most recently selected node, for hosts that want to
     /// draw an overlay. The host is expected to drive the actual highlight.
-    public private(set) var selectedNodeID: String?
+    public var selectedNodeID: String? { scene.editor.selectedNode.map { String($0.id.rawValue) } }
 
     /// Window-space frame for the selected node, if it still exists.
     public var selectedNodeAbsoluteFrame: CGRect? {
@@ -156,9 +165,11 @@ public final class DevTools {
     }
 
     private func handleSelection(id: String?) {
-        selectedNodeID = id.flatMap { scene.find(id: $0) == nil ? nil : $0 }
-        onSelectionChanged?()
+        scene.editor.select(id)
     }
+
+    public func interceptInput(_ event: InputEvent) -> Bool { scene.editor.intercept(event) }
+    public func drawInspectionOverlay(into list: DrawList) { scene.editor.drawOverlay(into: list) }
 
     private func wireSinks() {
         // Capture the server reference rather than self. `stop()` clears all

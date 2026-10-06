@@ -11,6 +11,13 @@ private enum LayoutStyleValue: Equatable {
     case auto
 }
 
+public struct LayoutInsets: Equatable, Sendable {
+    public var top, right, bottom, left: Float
+    public init(top: Float, right: Float, bottom: Float, left: Float) {
+        self.top = top; self.right = right; self.bottom = bottom; self.left = left
+    }
+}
+
 /// Wraps a `YGNodeRef` and owns its lifetime.
 ///
 /// Create a `LayoutNode` for every `Node` that participates in flexbox layout,
@@ -39,6 +46,35 @@ public final class LayoutNode: @unchecked Sendable {
     private var positionStyles: [Edge: LayoutStyleValue] = [:]
     private var marginStyles: [Edge: LayoutStyleValue] = [:]
     private var paddingStyles: [Edge: LayoutStyleValue] = [:]
+    /// Temporary physical-edge override; authored points/percent/logical edges
+    /// continue updating underneath it during composition.
+    public var debugPadding: LayoutInsets? {
+        didSet { if oldValue != debugPadding { applyPaddingStyles(); markLayoutDirtyHint() } }
+    }
+    public var resolvedPadding: LayoutInsets { readInsets { YGNodeLayoutGetPadding(ygNode, $0) } }
+    public var resolvedMargin: LayoutInsets { readInsets { YGNodeLayoutGetMargin(ygNode, $0) } }
+    public var resolvedBorder: LayoutInsets { readInsets { YGNodeLayoutGetBorder(ygNode, $0) } }
+    private func readInsets(_ get: (YGEdge) -> Float) -> LayoutInsets {
+        LayoutInsets(top: get(.top), right: get(.right), bottom: get(.bottom), left: get(.left))
+    }
+    private func applyPaddingStyles() {
+        for edge: Edge in [.all, .horizontal, .vertical, .start, .end, .left, .top, .right, .bottom] {
+            YGNodeStyleSetPadding(ygNode, edge.ygValue, .nan)
+        }
+        if let p = debugPadding {
+            for (edge, value): (Edge, Float) in [(.top, p.top), (.right, p.right), (.bottom, p.bottom), (.left, p.left)] {
+                YGNodeStyleSetPadding(ygNode, edge.ygValue, value)
+            }
+        } else {
+            for (edge, value) in paddingStyles {
+                switch value {
+                case .points(let v): YGNodeStyleSetPadding(ygNode, edge.ygValue, v)
+                case .percent(let v): YGNodeStyleSetPaddingPercent(ygNode, edge.ygValue, v)
+                case .auto: break
+                }
+            }
+        }
+    }
     private var borderStyles: [Edge: Float] = [:]
     private var gapStyles: [Gutter: LayoutStyleValue] = [:]
 
@@ -351,14 +387,14 @@ public final class LayoutNode: @unchecked Sendable {
     public func setPadding(_ value: Float, edge: Edge = .all) {
         guard paddingStyles[edge] != .points(value) else { return }
         paddingStyles[edge] = .points(value)
-        YGNodeStyleSetPadding(ygNode, edge.ygValue, value)
+        if debugPadding == nil { YGNodeStyleSetPadding(ygNode, edge.ygValue, value) }
         markLayoutDirtyHint()
     }
 
     public func setPaddingPercent(_ value: Float, edge: Edge = .all) {
         guard paddingStyles[edge] != .percent(value) else { return }
         paddingStyles[edge] = .percent(value)
-        YGNodeStyleSetPaddingPercent(ygNode, edge.ygValue, value)
+        if debugPadding == nil { YGNodeStyleSetPaddingPercent(ygNode, edge.ygValue, value) }
         markLayoutDirtyHint()
     }
 

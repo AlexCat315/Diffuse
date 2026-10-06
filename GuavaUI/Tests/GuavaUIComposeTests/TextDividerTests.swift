@@ -125,6 +125,31 @@ struct TextDividerTests {
         }
     }
 
+    @Test("Diagnostic text tint and padding paint immediately and clear to app values")
+    func debugTextStyles() throws {
+        try GlobalTestLock.locked {
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 16, lineHeight: 20)
+            defer { TextEnvironmentHolder.current = nil }
+            let tree = NodeTree(), graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root: Text("Hello", color: .black)); graph.computeLayout(width: 200, height: 100)
+            let root = try #require(tree.root), text = try #require(root.children.first)
+            let baseline = DrawList(); NodeRenderer().render(root: root, into: baseline)
+            #expect(!baseline.vertices.isEmpty && baseline.vertices.allSatisfy { $0.color == Color.black.rgba8 })
+            text.debugForegroundColor = .white
+            text.layoutNode?.debugPadding = LayoutInsets(top: 8, right: 0, bottom: 0, left: 12)
+            graph.computeLayoutIfNeeded(width: 200, height: 100)
+            let edited = DrawList(); NodeRenderer().render(root: root, into: edited)
+            #expect(edited.vertices.allSatisfy { $0.color == Color.white.rgba8 })
+            #expect(edited.vertices.first?.posX == baseline.vertices.first!.posX + 12)
+            #expect(edited.vertices.first?.posY == baseline.vertices.first!.posY + 8)
+            text.debugForegroundColor = nil; text.layoutNode?.debugPadding = nil
+            graph.computeLayoutIfNeeded(width: 200, height: 100)
+            let cleared = DrawList(); NodeRenderer().render(root: root, into: cleared)
+            #expect(cleared.vertices.allSatisfy { $0.color == Color.black.rgba8 })
+            #expect(cleared.vertices.first?.posX == baseline.vertices.first?.posX)
+        }
+    }
+
     @Test("Font modifier changes measured text size")
     func fontChangesMeasurement() {
         GlobalTestLock.locked {

@@ -32,6 +32,10 @@ public final class PlatformWindowSession {
         get { dispatcher.eventSink }
         set { dispatcher.eventSink = newValue }
     }
+    public var inputInterceptor: ((InputEvent) -> Bool)? {
+        get { dispatcher.eventInterceptor }
+        set { dispatcher.eventInterceptor = newValue }
+    }
 
     public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
@@ -75,8 +79,7 @@ public final class PlatformWindowSession {
     /// pointer / keyboard events from the mirror viewport.
     public func injectEvent(_ event: InputEvent) {
         withCurrent {
-            dispatcher.dispatch(event)
-            onEvent?(event)
+            if dispatcher.dispatch(event) { onEvent?(event) }
         }
         needsDisplay = true
     }
@@ -428,10 +431,9 @@ public final class SDL3PlatformHost: PlatformHost {
             for routed in shell.pollWindowEvents() {
                 guard let session = sessions[routed.windowID] else { continue }
                 session.withCurrent {
-                    session.dispatcher.dispatch(routed.event)
-                    session.onEvent?(routed.event)
-                    if routed.windowID == mainWindowID {
-                        onEvent?(routed.event)
+                    if session.dispatcher.dispatch(routed.event) {
+                        session.onEvent?(routed.event)
+                        if routed.windowID == mainWindowID { onEvent?(routed.event) }
                     }
                 }
                 // Focus, caret position, and IME anchor geometry are updated
