@@ -152,6 +152,13 @@ Native timing distinguishes submitted and skipped swapchain frames. A locked or
 occluded window can skip presentation while State observations, CPU timeline and
 offscreen mirror continue. Failed frames retain dirty work and retry at display
 cadence. `cpuThroughputFPS` is a CPU work estimate, not measured display FPS.
+The macOS SDL loop flushes pending Core Animation transactions before drawable
+acquisition. Unlocked native window display, State/layout updates, CPU timeline,
+Metal mirror and pointer input have passed
+`verify_native_demo.py --require-presented`; the check requires submitted frames
+after each update.
+Native window zoom and restore have also passed visual acceptance; the demo now
+reallocates its MSAA target when the drawable dimensions change.
 
 Run the native Inspector acceptance suite without a Wasm SDK or GPU:
 

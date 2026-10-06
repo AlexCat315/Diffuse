@@ -220,7 +220,11 @@ def main():
                 executable = os.environ.get("GUAVA_CHROMIUM")
                 strict_gpu = options.require_webgpu or options.require_hardware_gpu
                 flags = ["--no-sandbox", "--enable-unsafe-webgpu"]
-                if not strict_gpu:
+                if strict_gpu:
+                    # Headless Chromium otherwise forces software rendering,
+                    # even when a working native GPU is available.
+                    flags.append("--enable-gpu")
+                else:
                     flags.append("--use-angle=swiftshader")
                 flags.extend(json.loads(os.environ.get("GUAVA_CHROMIUM_ARGS", "[]")))
                 browser = playwright.chromium.launch(executable_path=executable, headless=True, args=flags)
