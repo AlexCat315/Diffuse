@@ -1,3 +1,4 @@
+import GuavaUICore
 import CFreeType
 
 /// Rasterizes glyphs with FreeType and packs them into an alpha-only texture atlas.
@@ -49,35 +50,12 @@ public final class FontAtlas {
     }
 
     /// Metrics and atlas location for a single rasterized glyph.
-    public struct GlyphInfo {
-        public let glyphIndex: UInt32
-        public let width: Float
-        public let height: Float
-        public let bearingX: Float
-        public let bearingY: Float
-        public let advance: Float
-        /// UV coordinates in the atlas (normalized 0..1).
-        public let uvMinX: Float
-        public let uvMinY: Float
-        public let uvMaxX: Float
-        public let uvMaxY: Float
-    }
+    public typealias GlyphInfo = GuavaUICore.GlyphAtlasInfo
 
     /// Glyph metrics sufficient for layout without forcing bitmap generation.
-    public struct GlyphMetrics {
-        public let glyphIndex: UInt32
-        public let width: Float
-        public let height: Float
-        public let bearingX: Float
-        public let bearingY: Float
-        public let advance: Float
-    }
+    public typealias GlyphMetrics = GuavaUICore.GlyphMetrics
 
-    public struct LineMetrics {
-        public let ascent: Float
-        public let descent: Float
-        public let lineHeight: Float
-    }
+    public typealias LineMetrics = GuavaUICore.GlyphLineMetrics
 
     public struct DirtyRegion {
         public let x: Int
@@ -444,3 +422,5 @@ public final class FontAtlas {
         )
     }
 }
+
+extension FontAtlas: GlyphMetricsProvider {}

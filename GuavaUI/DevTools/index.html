@@ -67,9 +67,20 @@
           <div>
             <button id="captureState" disabled>Capture</button>
             <button id="restoreState" disabled>Restore</button>
+            <button id="diffState" disabled>Diff</button>
           </div>
         </div>
         <textarea id="stateSnapshot" class="stateSnapshot" spellcheck="false" placeholder="Captured host state appears here."></textarea>
+        <pre id="stateDiff" class="details empty">Capture a checkpoint, change state, then Diff.</pre>
+        <div class="paneHeader">
+          <span>Input recording</span>
+          <div>
+            <button id="recordInput" disabled>Record</button>
+            <button id="stopRecording" disabled>Stop</button>
+            <button id="replayInput" disabled>Replay</button>
+          </div>
+        </div>
+        <textarea id="inputRecording" class="stateSnapshot" spellcheck="false" placeholder="Recorded inputs appear here. Replay restores the initial checkpoint."></textarea>
       </aside>
     </section>
 

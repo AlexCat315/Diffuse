@@ -130,3 +130,6 @@ examples/*/.guava/observation/
 examples/*/.guava/edit_log.jsonl
 examples/*/.guava/context-memory/
 examples/*/Scripts/.guava/
+
+# Versioned local Wasm development builds
+GuavaUI/Browser/.dev-builds/

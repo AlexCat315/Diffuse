@@ -6,6 +6,7 @@ import Foundation
 #endif
 import GuavaUIRuntime
 @testable import GuavaUICompose
+@testable import GuavaUIComposeCore
 
 /// Phase 4 acceptance: the Node tree and its Render mirror stay in lockstep
 /// across add / remove / reorder, because the reconciler is the single path

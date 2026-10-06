@@ -6,6 +6,7 @@ import Foundation
 #endif
 import GuavaUIRuntime
 @testable import GuavaUICompose
+@testable import GuavaUIComposeCore
 
 // MARK: - Test primitive that records identity-stable side data
 

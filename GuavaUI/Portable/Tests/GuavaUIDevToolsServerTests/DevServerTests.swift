@@ -147,3 +147,51 @@ func unmaskedClientFramesAreRejected() throws {
     #expect(close.opcode == .connectionClose)
     #expect(close.data.readInteger(as: UInt16.self) == 1002)
 }
+
+@Test @MainActor
+func stateDiffRestoreResultAndRecordingOwnership() async throws {
+    let transport = TestTransport()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    var value = "2"
+    var stops = 0
+    var replays = 0
+    server.stateCheckpointHandler = { ["count": value] }
+    server.stateRestoreResultHandler = { state in
+        guard let next = state["count"], let integer = Int(next), integer >= 0 else { return false }
+        value = next; return true
+    }
+    server.recordingStartHandler = { true }
+    server.recordingStopHandler = { stops += 1; return InputRecording(initialState: ["count":"2"]) }
+    server.recordingReplayHandler = { recording in replays += 1; value = recording.initialState["count"]!; return true }
+    try server.start(); defer { server.stop() }
+    let owner = TestConnection()
+    let other = TestConnection()
+    transport.onEvent?(.connected(owner)); _ = try await receive("hello", from: owner)
+    transport.onEvent?(.connected(other)); _ = try await receive("hello", from: other)
+    try transport.request("state.diff", payload: .object(["count":.string("1")]), connection: owner)
+    let difference = try await receive("state.diff.ok", from: owner)
+    #expect(DevToolsCodec.decode(StateDifference.self, difference.payload)?.changed["count"]?.after == "2")
+    try transport.request("state.restore", payload: .object(["count":.string("-1")]), connection: owner)
+    _ = try await receive("state.restore.err", from: owner)
+    #expect(value == "2")
+    try transport.request("input.record.start", connection: owner)
+    _ = try await receive("input.record.start.ok", from: owner)
+    try transport.request("input.record.stop", connection: other)
+    _ = try await receive("input.record.stop.err", from: other)
+    #expect(stops == 0)
+    try transport.request("select.clear", connection: owner)
+    _ = try await receive("select.clear.ok", from: owner)
+    #expect(stops == 0)
+    try transport.request("input.record.stop", connection: owner)
+    let recording = try await receive("input.record.stop.ok", from: owner)
+    #expect(stops == 1)
+    try transport.request("input.replay", payload: recording.payload, connection: owner)
+    _ = try await receive("input.replay.ok", from: owner)
+    #expect(replays == 1)
+    try transport.request("input.record.start", connection: owner)
+    _ = try await receive("input.record.start.ok", from: owner)
+    transport.onEvent?(.disconnected(owner))
+    let deadline = ContinuousClock.now + .seconds(3)
+    while stops < 2, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(stops == 2)
+}

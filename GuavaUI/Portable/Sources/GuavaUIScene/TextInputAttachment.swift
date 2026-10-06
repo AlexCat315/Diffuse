@@ -1,0 +1,42 @@
+import GuavaUICore
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+import Foundation
+import GuavaPlatformCore
+
+/// Shared attachment keys for focused text-input primitives.
+public typealias TextInputAreaResolver = (Node, CGPoint) -> TextInputArea?
+public typealias TextInputFocusChangeHandler = (Bool) -> Void
+public typealias TextInputEditingChangeHandler = (Bool) -> Void
+
+public enum TextEditCommand: Sendable {
+    case undo, redo
+}
+
+/// Connects platform menu commands to the same history used by text shortcuts.
+public struct TextEditActions {
+    public let canPerform: (TextEditCommand) -> Bool
+    public let perform: (TextEditCommand) -> Void
+
+    public init(canPerform: @escaping (TextEditCommand) -> Bool,
+                perform: @escaping (TextEditCommand) -> Void) {
+        self.canPerform = canPerform
+        self.perform = perform
+    }
+}
+
+public enum TextInputAttachmentKey {
+    /// `Node.attachments` entry carrying the current focused text input area.
+    public static let area = "__text_input_area"
+    /// `Node.attachments` entry carrying a commit-phase resolver that maps a
+    /// laid-out node into the platform IME anchor rect.
+    public static let areaResolver = "__text_input_area_resolver"
+    /// `Node.attachments` entry carrying a focus change sink owned by the host
+    /// view state rather than the draw path.
+    public static let focusChangeHandler = "__text_input_focus_change_handler"
+    /// `Node.attachments` entry carrying the current editing/composition state
+    /// sink owned by the host view state.
+    public static let editingChangeHandler = "__text_input_editing_change_handler"
+    public static let editActions = "__text_input_edit_actions"
+}
