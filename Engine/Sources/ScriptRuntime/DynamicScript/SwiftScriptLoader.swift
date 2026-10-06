@@ -10,7 +10,7 @@ import WinSDK
 /// Loads compiled Swift script dynamic libraries (`.dylib`/`.so`/`.dll`)
 /// into the engine process and extracts the `Script` they produce.
 ///
-/// The compiler-generated shim exports a single C function:
+/// The compiler-generated shim exports authoring metadata and a C factory:
 ///
 /// ```
 /// @_cdecl("guavaCreateScript")
@@ -45,6 +45,7 @@ public final class SwiftScriptLoader: @unchecked Sendable {
     }
 
     private var loadedLibraries: [String: LoadedLibrary] = [:]
+    private var definitions: [String: ScriptDefinition] = [:]
 
     public init() {}
 
@@ -69,7 +70,15 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         typealias CreateScriptFn = @convention(c) (UnsafeMutableRawPointer) -> Void
         let createScript = unsafeBitCast(symbol, to: CreateScriptFn.self)
         let library = LoadedLibrary(handle: handle)
+        // Read metadata without constructing or starting a behavior instance.
+        guard let definitionSymbol = lookupSymbol(handle: handle, name: "guavaScriptDefinition") else {
+            throw ScriptLoadError.symbolNotFound("guavaScriptDefinition")
+        }
+        var definition = ScriptDefinition()
+        let readDefinition = unsafeBitCast(definitionSymbol, to: CreateScriptFn.self)
+        withUnsafeMutablePointer(to: &definition) { readDefinition(UnsafeMutableRawPointer($0)) }
         loadedLibraries[scriptID] = library
+        definitions[scriptID] = definition
 
         return { [library] in
             var script = Script()
@@ -82,13 +91,19 @@ public final class SwiftScriptLoader: @unchecked Sendable {
 
     /// Removes the current generation by ID. Its Swift image stays mapped
     /// because the runtime can still consult its metadata.
+    public func definition(scriptID: String) -> ScriptDefinition {
+        definitions[scriptID] ?? ScriptDefinition()
+    }
+
     public func unload(scriptID: String) {
         loadedLibraries.removeValue(forKey: scriptID)
+        definitions.removeValue(forKey: scriptID)
     }
 
     /// Removes every current generation while preserving registered Swift images.
     public func unloadAll() {
         loadedLibraries.removeAll()
+        definitions.removeAll()
     }
 
     deinit {

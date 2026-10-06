@@ -21,8 +21,8 @@ enum EditorCommandSearch {
 
     static func commands(app: EditorApplication) -> [EditorPaletteCommand] {
         let state = app.store.state
-        let canEdit = state.playbackState == .stopped
-        let canSelect = canEdit && !state.selectedEntityIDs.isEmpty
+        let canEdit = state.timing.playbackState == .stopped
+        let canSelect = canEdit && !state.selection.selectedEntityIDs.isEmpty
         func entry(_ id: String, _ title: String, _ key: String = "", _ keywords: String = "",
                    _ command: EditorMenuCommand, enabled: Bool = true) -> EditorPaletteCommand {
             .init(id: id, title: L(title), shortcut: key.isEmpty ? "" : primaryKey + key,
@@ -41,8 +41,8 @@ enum EditorCommandSearch {
             entry("assets.show", "Content Browser", "", "assets 资源浏览器", .showAssets),
             entry("scripts.show", "Scripts", "5", "code script 编程脚本", .showScripts),
             entry("problems.show", "Problems", "", "errors diagnostics 问题诊断错误", .showProblems),
-            entry("project.build", "Build Project", "B", "export build 导出构建", .buildProject, enabled: state.workspaceMode.isGameWorkspace),
-            entry("project.run", "Build and Run", "R", "export run 构建运行", .buildAndRun, enabled: state.workspaceMode.isGameWorkspace),
+            entry("project.build", "Build Project", "B", "export build 导出构建", .buildProject, enabled: state.workspace.mode.isGameWorkspace),
+            entry("project.run", "Build and Run", "R", "export run 构建运行", .buildAndRun, enabled: state.workspace.mode.isGameWorkspace),
             entry("layout.save", "Save Layout", "", "layout workspace 保存布局", .saveLayout),
             entry("layout.reset", "Reset Layout", "0", "layout workspace 重置布局", .resetLayout),
             entry("layout.restore", "Restore Panels", "", "maximize restore 恢复面板", .restorePanels),
@@ -59,7 +59,7 @@ enum EditorCommandSearch {
         for (playback, title) in [(PlaybackState.playing, "Play"), (.paused, "Pause"), (.stopped, "Stop")] {
             commands.append(entry("playback." + playback.rawValue, title, "", "game preview 游戏试玩",
                 .setPlaybackState(playback),
-                enabled: state.workspaceMode.isGameWorkspace && state.playbackState.canTransition(to: playback)))
+                enabled: state.workspace.mode.isGameWorkspace && state.timing.playbackState.canTransition(to: playback)))
         }
         return commands
     }

@@ -38,8 +38,8 @@ struct EditorAIRequestPolicyTests {
         defer { application.shutdown() }
 
         #expect(application.submitNaturalLanguageIntent("keep this draft") == false)
-        #expect(application.store.state.chatMessages.isEmpty)
-        #expect(application.store.state.aiStatusMessage == "No AI provider configured.")
+        #expect(application.store.state.assistant.chatMessages.isEmpty)
+        #expect(application.store.state.assistant.aiStatusMessage == "No AI provider configured.")
     }
 
     @Test("human commands cannot accidentally dismiss an AI confirmation")
@@ -61,8 +61,8 @@ struct EditorAIRequestPolicyTests {
 
         application.submitSpawnEntityIntent(label: "Blocked", position: .zero)
 
-        #expect(application.store.state.pendingConfirmationRequest == request)
-        #expect(application.store.state.aiStatusMessage
+        #expect(application.store.state.assistant.pendingConfirmationRequest == request)
+        #expect(application.store.state.assistant.aiStatusMessage
             == EditorAIRequestPolicy.pendingConfirmationMessage)
     }
 
@@ -75,7 +75,7 @@ struct EditorAIRequestPolicyTests {
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
-        let entityID = try #require(application.store.state.selectedEntityID)
+        let entityID = try #require(application.store.state.selection.selectedEntityID)
         let originalName = try #require(application.scene.entitySummary(id: entityID)?.name)
         application.scene.setEntityLocked(true, entityIDs: [entityID])
         let lockedRevision = application.scene.revision
@@ -84,7 +84,7 @@ struct EditorAIRequestPolicyTests {
 
         #expect(application.scene.entitySummary(id: entityID)?.name == originalName)
         #expect(application.scene.revision == lockedRevision)
-        #expect(application.store.state.aiStatusMessage?
+        #expect(application.store.state.assistant.aiStatusMessage?
             .localizedCaseInsensitiveContains("locked") == true)
     }
 
@@ -97,22 +97,22 @@ struct EditorAIRequestPolicyTests {
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
-        let entityID = try #require(application.store.state.selectedEntityID)
+        let entityID = try #require(application.store.state.selection.selectedEntityID)
 
         application.submitDeleteSelectedEntityIntent()
-        #expect(application.store.state.pendingConfirmationRequest != nil)
+        #expect(application.store.state.assistant.pendingConfirmationRequest != nil)
         application.scene.setEntityLocked(true, entityIDs: [entityID])
 
         application.acceptPendingConfirmation()
 
         #expect(application.scene.entitySummary(id: entityID) != nil)
-        #expect(application.store.state.pendingConfirmationRequest != nil)
-        #expect(application.store.state.aiStatusMessage?
+        #expect(application.store.state.assistant.pendingConfirmationRequest != nil)
+        #expect(application.store.state.assistant.aiStatusMessage?
             .localizedCaseInsensitiveContains("locked") == true)
 
         application.skipPendingConfirmation()
 
-        #expect(application.store.state.pendingConfirmationRequest == nil)
+        #expect(application.store.state.assistant.pendingConfirmationRequest == nil)
         #expect(application.scene.entitySummary(id: entityID) != nil)
     }
 
@@ -125,13 +125,13 @@ struct EditorAIRequestPolicyTests {
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
-        let entityID = try #require(application.store.state.selectedEntityID)
+        let entityID = try #require(application.store.state.selection.selectedEntityID)
         let originalName = try #require(application.scene.entitySummary(id: entityID)?.name)
 
         application.applyPlaybackState(.playing)
         #expect(!application.submitNaturalLanguageIntent("keep this runtime draft"))
-        #expect(application.store.state.chatMessages.isEmpty)
-        #expect(application.store.state.aiStatusMessage?
+        #expect(application.store.state.assistant.chatMessages.isEmpty)
+        #expect(application.store.state.assistant.aiStatusMessage?
             .localizedCaseInsensitiveContains("stop simulation") == true)
         application.submitRenameSelectedEntityIntent(name: "Runtime Rename")
         #expect(application.scene.entitySummary(id: entityID)?.name == originalName)

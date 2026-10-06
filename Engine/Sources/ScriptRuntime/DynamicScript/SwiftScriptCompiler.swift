@@ -340,6 +340,12 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     private static let generatedEntryPointSource = """
     import ScriptRuntime
 
+    @_cdecl("guavaScriptDefinition")
+    public func guavaScriptDefinition(_ output: UnsafeMutableRawPointer) {
+        let definition = (GameScript.self as? any ScriptAuthoring.Type)?.definition ?? ScriptDefinition()
+        output.assumingMemoryBound(to: ScriptDefinition.self).pointee = definition
+    }
+
     @_cdecl("guavaCreateScript")
     public func guavaCreateScript(_ output: UnsafeMutableRawPointer) {
         output.assumingMemoryBound(to: Script.self).pointee = Script(behavior: GameScript.self)

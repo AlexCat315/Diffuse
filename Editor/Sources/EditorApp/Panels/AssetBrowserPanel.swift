@@ -120,12 +120,18 @@ struct AssetBrowserPanel: View {
                     Divider()
                 }
 
-                content(allAssets: allAssets,
-                        listing: listing,
-                        isSearching: isSearching,
-                        visibleAssetIDs: visibleAssetIDs)
+                if hasWorkflowDetails {
+                    ScrollView(.vertical, scrollbarGutter: .stable) {
+                        assetWorkflowDetails(allAssets).frame(width: .percent(100))
+                    }.flex().debugName("asset-workflow-scroll")
+                } else {
+                    content(allAssets: allAssets,
+                            listing: listing,
+                            isSearching: isSearching,
+                            visibleAssetIDs: visibleAssetIDs)
+                }
 
-                if !selectedAssets.isEmpty {
+                if !selectedAssets.isEmpty && !hasWorkflowDetails {
                     Divider()
                     AssetSelectionBar(
                         assets: selectedAssets,
@@ -141,10 +147,9 @@ struct AssetBrowserPanel: View {
                 Row(alignment: .center, spacing: 6) {
                     Button(L("Missing Resources"), isSelected: showsMissingResources) {
                         showsMissingResources.toggle()
-                    }.buttonStyle(.ghost).controlSize(.small)
+                    }.buttonStyle(.ghost).controlSize(.small).debugName("asset-missing-resources")
                     Spacer(minLength: 0)
                 }.padding(horizontal: 6, vertical: 2)
-                assetWorkflowDetails(allAssets)
             }
             .frame(minWidth: 240)
         }
@@ -161,24 +166,19 @@ struct AssetBrowserPanel: View {
                          isSearching: Bool,
                          visibleAssetIDs: [String]) -> some View {
         if allAssets.isEmpty {
-            AssetBrowserEmptyState(projectDirectory: app.projectDirectory,
-                                   onImport: { importAssets() })
-                .flex()
+            ScrollView(.vertical, scrollbarGutter: .stable) {
+                AssetBrowserEmptyState(projectDirectory: app.projectDirectory,
+                                       onImport: { importAssets() })
+                    .frame(width: .percent(100))
+            }.flex().debugName("asset-empty-scroll")
         } else if listing.folders.isEmpty && listing.assets.isEmpty {
             if isSearching {
-                AssetBrowserPlaceholder(title: L("No matching assets"),
-                                        subtitle: "\"\(trimmedQuery)\"")
-                    .flex()
+                placeholder(title: L("No matching assets"), subtitle: "\"\(trimmedQuery)\"")
             } else if categoryFilter != .all {
-                AssetBrowserPlaceholder(
-                    title: L("No matching assets"),
-                    subtitle: categoryFilter == .meshes ? L("Meshes") : L("Textures")
-                )
-                    .flex()
+                placeholder(title: L("No matching assets"),
+                            subtitle: categoryFilter == .meshes ? L("Meshes") : L("Textures"))
             } else {
-                AssetBrowserPlaceholder(title: L("This folder is empty"),
-                                        subtitle: currentFolder)
-                    .flex()
+                placeholder(title: L("This folder is empty"), subtitle: currentFolder)
             }
         } else {
             if viewMode == .list {
@@ -214,6 +214,12 @@ struct AssetBrowserPanel: View {
         }
     }
 
+    private func placeholder(title: String, subtitle: String) -> some View {
+        ScrollView(.vertical, scrollbarGutter: .stable) {
+            AssetBrowserPlaceholder(title: title, subtitle: subtitle).frame(width: .percent(100))
+        }.flex()
+    }
+
     private func gridAsset(_ asset: EditorAsset, visibleIDs: [String], visibleAssets: [EditorAsset]) -> AnyView {
         AnyView(AssetTile(asset: asset, app: app,
                                       isSelected: selection.selectedIDs.contains(asset.id),
@@ -241,7 +247,7 @@ struct AssetBrowserPanel: View {
                 referenceLocations = app.assetReferences(target); showsReferences = true
             })),
             .item(MenuItem(id: "asset-add", title: L("Add to Scene"),
-                           isEnabled: assets.contains { $0.kind.isMesh } && app.store.state.playbackState == .stopped,
+                           isEnabled: assets.contains { $0.kind.isMesh } && app.store.state.timing.playbackState == .stopped,
                            action: { _ = app.spawnAssets(assets) })),
             .item(MenuItem(id: "asset-reveal", title: L("Reveal"), action: { revealAssets(assets) })),
             .item(MenuItem(id: "copy-path", title: L("Copy Path"), action: {
@@ -324,15 +330,34 @@ struct AssetBrowserPanel: View {
         }
     }
 
+    private var hasWorkflowDetails: Bool {
+        editingAsset != nil || previewAssetID != nil || showsReferences
+            || missingPath != nil || referenceFilePath != nil || showsMissingResources
+    }
+
+    private func closeWorkflowDetails() {
+        editingAsset = nil
+        previewAssetID = nil
+        showsReferences = false
+        missingPath = nil
+        referenceFilePath = nil
+        showsMissingResources = false
+    }
+
     private func assetWorkflowDetails(_ assets: [EditorAsset]) -> some View {
-        Column(alignment: .leading, spacing: 6) {
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
+            Row(alignment: .center, spacing: 6) {
+                Spacer(minLength: 0)
+                Button(L("Close"), action: closeWorkflowDetails).buttonStyle(.ghost)
+                    .debugName("asset-workflow-close")
+            }
             if let asset = editingAsset {
                 Text(L("Rename or Move: project-relative destination")).font(.caption).foregroundColor(.onSurfaceVariant)
-                Row(alignment: .center, spacing: 6) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 6) {
                     TextField(L("New project-relative path"), text: $assetEditPath,
                         focusRequestID: "asset-path-" + asset.id, onSubmit: {
                             if app.relocateAsset(asset, to: assetEditPath) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
-                        }).flex()
+                        }).frame(minWidth: 160).flex()
                     Button(L("Apply")) {
                         if app.relocateAsset(asset, to: assetEditPath) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
                     }.buttonStyle(.primary)
@@ -340,7 +365,7 @@ struct AssetBrowserPanel: View {
                 }
             }
             if let asset = assets.first(where: { $0.id == previewAssetID }) {
-                Row(alignment: .center, spacing: 8) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                     AssetThumbnail(asset: asset).frame(width: 144, height: 120)
                     Column(alignment: .leading, spacing: 4) {
                         Text(asset.name, lineLimit: 1).font(.label)
@@ -349,7 +374,7 @@ struct AssetBrowserPanel: View {
                             referenceLocations = app.assetReferences(asset); showsReferences = true
                         }.buttonStyle(.ghost)
                         Button(L("Rename / Move"), isEnabled: app.store.playbackState == .stopped) { beginRelocation(asset) }.buttonStyle(.ghost)
-                    }.flex()
+                    }.frame(minWidth: 160).flex()
                     Button(L("Close")) { previewAssetID = nil }.buttonStyle(.ghost)
                 }
             }
@@ -358,14 +383,12 @@ struct AssetBrowserPanel: View {
                     Text("\(L("References")) \(referenceLocations.count)").font(.label).flex()
                     Button(L("Close")) { showsReferences = false }.buttonStyle(.ghost)
                 }
-                ScrollView(.vertical) {
-                    Column(alignment: .leading, spacing: 2) {
-                        referenceLocations.map { reference in
-                            Button(reference.label) { app.navigateToIssue(reference.target) }.buttonStyle(.ghost)
-                        }
-                        if referenceLocations.isEmpty { Text(L("No references found")).font(.caption) }
+                Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                    referenceLocations.map { reference in
+                        Button(reference.label) { app.navigateToIssue(reference.target) }.buttonStyle(.ghost)
                     }
-                }.frame(maxHeight: 110)
+                    if referenceLocations.isEmpty { Text(L("No references found")).font(.caption) }
+                }
             }
             if let missingPath {
                 Row(alignment: .center, spacing: 6) {
@@ -383,14 +406,12 @@ struct AssetBrowserPanel: View {
             }
             if showsMissingResources {
                 let paths = app.missingAssetPaths()
-                ScrollView(.vertical) {
-                    Column(alignment: .leading, spacing: 2) {
-                        paths.map { path in
-                            Button(path) { missingPath = path }.buttonStyle(.ghost)
-                        }
-                        if paths.isEmpty { Text(L("No missing resources")).font(.caption).foregroundColor(.onSurfaceVariant) }
+                Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                    paths.map { path in
+                        Button(path) { missingPath = path }.buttonStyle(.ghost)
                     }
-                }.frame(maxHeight: 110)
+                    if paths.isEmpty { Text(L("No missing resources")).font(.caption).foregroundColor(.onSurfaceVariant) }
+                }
             }
         }.padding(6)
     }
@@ -1138,7 +1159,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
         let onActivate = self.onActivate
         let capture = PointerCaptureHolder.current
         let isDragEnabled = asset.kind.isMesh
-            && app.store.state.playbackState == .stopped
+            && app.store.state.timing.playbackState == .stopped
         AssetBrowserFocusRegistry.register(assetID: asset.id, node: node)
 
         registry.setPointer(node, route: InputHandlerRoute(role: .drag,
@@ -1158,7 +1179,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
             case .up:
                 // Only resolve a drop if a drag actually began; a plain click
                 // just selects (handled on .down) without spawning anything.
-                if app.store.state.activeAssetDrag != nil {
+                if app.store.state.navigation.activeAssetDrag != nil {
                     _ = app.handleAssetDrop(at: event.x, cursorY: event.y)
                 }
                 AssetDragGesture.pending = nil
@@ -1192,7 +1213,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
                                                        priority: .capture,
                                                        debugName: "asset.drag")) { event, _ in
             // Esc cancels an in-progress drag without spawning.
-            if app.store.state.activeAssetDrag != nil,
+            if app.store.state.navigation.activeAssetDrag != nil,
                event.scancode == ComposeScancode.escape {
                 app.store.dispatch(.endAssetDrag)
                 AssetDragGesture.pending = nil

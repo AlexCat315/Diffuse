@@ -3,39 +3,39 @@ import SIMDCompat
 
 extension ParticleEmitter {
     public func effectiveRenderBoundsRadius() -> Float {
-        switch renderBoundsMode {
+        switch settings.renderer.renderBoundsMode {
         case .disabled:
             return 0
         case .manual:
-            return max(0, renderBoundsRadius)
+            return max(0, settings.renderer.renderBoundsRadius)
         case .automatic:
             return estimatedRenderBoundsRadius()
         }
     }
 
     public func renderLODScale(cameraDistance: Float) -> Float {
-        guard renderLODEndDistance > renderLODStartDistance else {
+        guard settings.renderer.renderLODEndDistance > settings.renderer.renderLODStartDistance else {
             return 1
         }
-        let t = simd_clamp((max(0, cameraDistance) - renderLODStartDistance)
-                           / (renderLODEndDistance - renderLODStartDistance), 0, 1)
-        return 1 + (renderLODMinParticleScale - 1) * t
+        let t = simd_clamp((max(0, cameraDistance) - settings.renderer.renderLODStartDistance)
+                           / (settings.renderer.renderLODEndDistance - settings.renderer.renderLODStartDistance), 0, 1)
+        return 1 + (settings.renderer.renderLODMinParticleScale - 1) * t
     }
 
     public func effectiveMaxRenderedParticles(cameraDistance: Float, liveParticleCount: Int) -> Int {
         let liveCount = max(0, liveParticleCount)
         guard liveCount > 0 else { return 0 }
-        let baseLimit = maxRenderedParticles > 0 ? min(maxRenderedParticles, liveCount) : liveCount
+        let baseLimit = settings.emission.maxRenderedParticles > 0 ? min(settings.emission.maxRenderedParticles, liveCount) : liveCount
         let scale = renderLODScale(cameraDistance: cameraDistance)
         guard scale > 0 else { return 0 }
         return min(baseLimit, max(1, Int(ceil(Float(baseLimit) * scale))))
     }
 
     public func estimatedRenderBoundsRadius() -> Float {
-        let primaryLifetime = max(0.0001, lifetime + lifetimeRandomness)
+        let primaryLifetime = max(0.0001, settings.appearance.lifetime + settings.appearance.lifetimeRandomness)
         let spawnExtent = estimatedSpawnExtent()
-        let primaryVelocity = estimatedVelocityMagnitude(startVelocity: startVelocity,
-                                                         randomness: velocityRandomness)
+        let primaryVelocity = estimatedVelocityMagnitude(startVelocity: settings.velocity.startVelocity,
+                                                         randomness: settings.velocity.velocityRandomness)
         let acceleration = estimatedAccelerationMagnitude()
         let primaryTravel = estimatedTravelDistance(lifetime: primaryLifetime,
                                                     velocityMagnitude: primaryVelocity,
@@ -43,23 +43,23 @@ extension ParticleEmitter {
         let childTravel = estimatedSubEmitterExpansion(accelerationMagnitude: acceleration)
         let billboardRadius = estimatedBillboardRadius(velocityMagnitude: max(primaryVelocity, childTravel.velocity))
         let forceExtent: Float
-        if forceMode != .none, forceRadius > 0 {
-            forceExtent = simd_length(forceCenter) + forceRadius
+        if settings.forces.forceMode != .none, settings.forces.forceRadius > 0 {
+            forceExtent = simd_length(settings.forces.forceCenter) + settings.forces.forceRadius
         } else {
             forceExtent = 0
         }
         let radius = spawnExtent + primaryTravel + childTravel.distance + billboardRadius + forceExtent
-        return radius.isFinite ? max(0, radius) : max(0, renderBoundsRadius)
+        return radius.isFinite ? max(0, radius) : max(0, settings.renderer.renderBoundsRadius)
     }
 
     private func estimatedSpawnExtent() -> Float {
-        switch emissionShape {
+        switch settings.shape.emissionShape {
         case .sphere:
-            return spawnRadius
+            return settings.shape.spawnRadius
         case .box:
-            return simd_length(boxHalfExtents)
+            return simd_length(settings.shape.boxHalfExtents)
         case .cone:
-            return sqrt(coneRadius * coneRadius + coneHeight * coneHeight)
+            return sqrt(settings.shape.coneRadius * settings.shape.coneRadius + settings.shape.coneHeight * settings.shape.coneHeight)
         }
     }
 
@@ -69,7 +69,7 @@ extension ParticleEmitter {
     }
 
     private func estimatedAccelerationMagnitude() -> Float {
-        simd_length(gravity) + noiseStrength + abs(forceStrength) + abs(vectorFieldStrength)
+        simd_length(settings.forces.gravity) + settings.forces.noiseStrength + abs(settings.forces.forceStrength) + abs(settings.forces.vectorFieldStrength)
     }
 
     private func estimatedTravelDistance(lifetime: Float,
@@ -89,7 +89,7 @@ extension ParticleEmitter {
                                           maxDistance: &maxDistance,
                                           maxVelocity: &maxVelocity)
         }
-        for rule in subEmitters {
+        for rule in settings.subEmitters.rules {
             accumulateSubEmitterExpansion(rule: rule,
                                           accelerationMagnitude: accelerationMagnitude,
                                           maxDistance: &maxDistance,
@@ -99,24 +99,24 @@ extension ParticleEmitter {
     }
 
     private func estimatedBillboardRadius(velocityMagnitude: Float) -> Float {
-        var size = estimatedMaximumParticleSize(startSize: startSize, endSize: endSize)
-        size = max(size, estimatedMaximumParticleSize(startSize: subEmitterStartSize,
-                                                      endSize: subEmitterEndSize))
-        for rule in subEmitters {
+        var size = estimatedMaximumParticleSize(startSize: settings.appearance.startSize, endSize: settings.appearance.endSize)
+        size = max(size, estimatedMaximumParticleSize(startSize: settings.subEmitters.legacyStartSize,
+                                                      endSize: settings.subEmitters.legacyEndSize))
+        for rule in settings.subEmitters.rules {
             size = max(size, estimatedMaximumParticleSize(startSize: rule.startSize,
                                                           endSize: rule.endSize))
         }
-        let sizeScale = max(0, 1 + sizeRandomness)
-        let stretch = renderAlignment == .velocity
-            ? min(velocityStretchMax, max(1, 1 + velocityMagnitude * velocityStretchScale))
+        let sizeScale = max(0, 1 + settings.appearance.sizeRandomness)
+        let stretch = settings.renderer.renderAlignment == .velocity
+            ? min(settings.renderer.velocityStretchMax, max(1, 1 + velocityMagnitude * settings.renderer.velocityStretchScale))
             : 1
         let billboardRadius = max(0, size) * sizeScale * max(1, stretch) * 0.70710678
-        let trailRadius = trailLength > 0 ? velocityMagnitude * trailLength : 0
+        let trailRadius = settings.trails.trailLength > 0 ? velocityMagnitude * settings.trails.trailLength : 0
         return billboardRadius + trailRadius
     }
 
     private func estimatedMaximumParticleSize(startSize: Float, endSize: Float) -> Float {
-        let range = sizeCurve.conservativeValueRange()
+        let range = settings.appearance.sizeCurve.conservativeValueRange()
         let delta = endSize - startSize
         return max(0,
                    startSize + delta * range.min,

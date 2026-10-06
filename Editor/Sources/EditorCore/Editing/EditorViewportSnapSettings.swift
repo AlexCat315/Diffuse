@@ -10,12 +10,12 @@ public struct EditorViewportSnapSettings: Codable, Sendable, Equatable {
     public var scaleStep: Float
 
     public init(state: EditorState) {
-        translateEnabled = state.translateSnapEnabled
-        rotateEnabled = state.rotateSnapEnabled
-        scaleEnabled = state.scaleSnapEnabled
-        translateStep = EditorState.sanitizedTranslateSnapStep(state.translateSnapStep)
-        rotateStepDegrees = EditorState.sanitizedRotateSnapStep(state.rotateSnapStepDegrees)
-        scaleStep = EditorState.sanitizedScaleSnapStep(state.scaleSnapStep)
+        translateEnabled = state.snapping.translateSnapEnabled
+        rotateEnabled = state.snapping.rotateSnapEnabled
+        scaleEnabled = state.snapping.scaleSnapEnabled
+        translateStep = EditorState.sanitizedTranslateSnapStep(state.snapping.translateSnapStep)
+        rotateStepDegrees = EditorState.sanitizedRotateSnapStep(state.snapping.rotateSnapStepDegrees)
+        scaleStep = EditorState.sanitizedScaleSnapStep(state.snapping.scaleSnapStep)
     }
 
     func restore(in store: EditorStore) {

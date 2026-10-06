@@ -8,7 +8,7 @@ import ScriptRuntime
 import SIMDCompat
 
 public struct EditorSceneManifest: Codable, Sendable, Equatable {
-    public static let currentSchemaVersion = 5
+    public static let currentSchemaVersion = 6
     public let schemaVersion: Int
     public let revision: UInt64
     public let entityCount: Int
@@ -19,8 +19,7 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
     public let particleScalabilityPolicy: EditorSceneManifestParticleScalabilityPolicy?
     public let projectAssetCount: Int?
     public let lastModifiedAt: String?
-    /// Editor-only hierarchy locks. Optional so schema-v5 scenes written by
-    /// older Editor builds remain decodable without a migration.
+    /// Editor-only hierarchy locks.
     public let lockedEntityIDs: [UInt64]?
     public let roots: [EditorSceneManifestNode]
 

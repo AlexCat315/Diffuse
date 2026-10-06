@@ -38,14 +38,18 @@ public enum EditorIssueTarget: Codable, Sendable, Equatable, Hashable {
     case entity(id: UInt64)
     case file(path: String)
 
-    static func unresolvedBindingTarget(_ descriptions: [String], in manifest: EditorSceneManifest) -> EditorIssueTarget? {
+    static func unresolvedBindingTarget(_ descriptions: [String], in manifest: EditorSceneManifest)
+        -> EditorIssueTarget?
+    {
         let descriptions = Set(descriptions)
         func find(_ nodes: [EditorSceneManifestNode]) -> EditorIssueTarget? {
             for node in nodes {
                 if (node.script?.bindings ?? []).contains(where: { binding in
                     let reference = binding.identifier ?? "handle #\(binding.script)"
                     return binding.isEnabled && descriptions.contains("\(node.name): \(reference)")
-                }) { return .entity(id: node.id) }
+                }) {
+                    return .entity(id: node.id)
+                }
                 if let target = find(node.children) { return target }
             }
             return nil
@@ -57,10 +61,11 @@ public enum EditorIssueTarget: Codable, Sendable, Equatable, Hashable {
         let name = NSRegularExpression.escapedPattern(for: sourceURL.lastPathComponent)
         let pattern = "(?:^|\\n)[^\\n]*" + name + ":([0-9]+):([0-9]+):\\s*error:"
         if let regex = try? NSRegularExpression(pattern: pattern),
-           let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
-           let lineRange = Range(match.range(at: 1), in: output),
-           let columnRange = Range(match.range(at: 2), in: output),
-           let line = Int(output[lineRange]), let column = Int(output[columnRange]) {
+            let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
+            let lineRange = Range(match.range(at: 1), in: output),
+            let columnRange = Range(match.range(at: 2), in: output),
+            let line = Int(output[lineRange]), let column = Int(output[columnRange])
+        {
             return .script(id: scriptID, line: max(0, line - 1), column: max(0, column - 1))
         }
         return .script(id: scriptID, line: 0, column: 0)
@@ -85,12 +90,20 @@ public struct EditorOperation: Identifiable, Sendable, Equatable {
     public var nextStep: String?
     public var target: EditorIssueTarget?
 
-    public init(id: String = UUID().uuidString, kind: EditorOperationKind,
-                status: EditorOperationStatus = .running, message: String,
-                completed: Int = 0, total: Int = 0, nextStep: String? = nil,
-                target: EditorIssueTarget? = nil) {
-        self.id = id; self.kind = kind; self.status = status; self.message = message
-        self.completed = completed; self.total = total; self.nextStep = nextStep; self.target = target
+    public init(
+        id: String = UUID().uuidString, kind: EditorOperationKind,
+        status: EditorOperationStatus = .running, message: String,
+        completed: Int = 0, total: Int = 0, nextStep: String? = nil,
+        target: EditorIssueTarget? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.status = status
+        self.message = message
+        self.completed = completed
+        self.total = total
+        self.nextStep = nextStep
+        self.target = target
     }
 }
 
@@ -101,7 +114,9 @@ public struct EditorScriptNavigationRequest: Equatable, Sendable {
     public let column: Int
 
     public init(scriptID: String, line: Int = 0, column: Int = 0) {
-        id = UUID(); self.scriptID = scriptID
-        self.line = max(0, line); self.column = max(0, column)
+        id = UUID()
+        self.scriptID = scriptID
+        self.line = max(0, line)
+        self.column = max(0, column)
     }
 }

@@ -34,7 +34,7 @@ extension EditorApplication {
     }
 
     public func submitRenameSelectedEntityIntent(name: String) {
-        guard let selected = store.state.selectedEntityID,
+        guard let selected = store.state.selection.selectedEntityID,
               scene.entitySummary(id: selected) != nil
         else {
             store.dispatch(.setAIStatusMessage("Select an entity before renaming it."))
@@ -56,7 +56,7 @@ extension EditorApplication {
     }
 
     public func submitDuplicateSelectedEntityIntent() {
-        guard let selected = store.state.selectedEntityID,
+        guard let selected = store.state.selection.selectedEntityID,
               scene.entitySummary(id: selected) != nil
         else {
             store.dispatch(.setAIStatusMessage("Select an entity before duplicating it."))
@@ -71,7 +71,7 @@ extension EditorApplication {
     }
 
     public func submitDeleteSelectedEntityIntent() {
-        guard let selected = store.state.selectedEntityID,
+        guard let selected = store.state.selection.selectedEntityID,
               scene.entitySummary(id: selected) != nil
         else {
             store.dispatch(.setAIStatusMessage("Select an entity before deleting it."))
@@ -85,7 +85,7 @@ extension EditorApplication {
     }
 
     public func submitSetTransformIntent(translation: SIMD3<Float>) {
-        guard let selected = store.state.selectedEntityID,
+        guard let selected = store.state.selection.selectedEntityID,
               entityID(from: selected) != nil
         else {
             store.dispatch(.setAIStatusMessage("Select an entity before setting its transform."))
@@ -133,7 +133,7 @@ extension EditorApplication {
 
     private func makeIntentTransactionBuildContext() -> IntentTransactionBuildContext {
         IntentTransactionBuildContext(sceneRuntime: scene.scene,
-                                      selectedEntityID: store.state.selectedEntityID,
+                                      selectedEntityID: store.state.selection.selectedEntityID,
                                       defaultSpawnMeshIndex: defaultSpawnMeshIndex())
     }
 
@@ -141,8 +141,8 @@ extension EditorApplication {
                                                  defaultConfidence: Double = 1.0,
                                                  defaultEvidence: [IntentEvidence] = []) -> CapabilityInvocationContext {
         CapabilityInvocationContext(sceneRuntime: scene.scene,
-                                    selectedEntityID: store.state.selectedEntityID,
-                                    isSceneEditable: store.state.playbackState == .stopped,
+                                    selectedEntityID: store.state.selection.selectedEntityID,
+                                    isSceneEditable: store.state.timing.playbackState == .stopped,
                                     defaultSource: defaultSource,
                                     defaultConfidence: defaultConfidence,
                                     defaultEvidence: defaultEvidence)
@@ -239,14 +239,14 @@ extension EditorApplication {
             return
         }
         guard let applyResult else { return }
-        if let selected = store.state.selectedEntityID,
+        if let selected = store.state.selection.selectedEntityID,
            applyResult.deletedEntityIDs.contains(selected) {
             store.dispatch(.setSelectedEntity(nil))
         }
     }
 
     private func defaultSpawnMeshIndex() -> Int {
-        guard let entity = entityID(from: store.state.selectedEntityID),
+        guard let entity = entityID(from: store.state.selection.selectedEntityID),
               let mesh = scene.scene.component(RenderMeshComponent.self, for: entity)
         else {
             return 0

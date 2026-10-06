@@ -25,7 +25,7 @@ extension EditorApplication {
     public var canRedo: Bool { scene.canRedoEdit }
 
     public func undo() {
-        guard store.state.playbackState == .stopped else {
+        guard store.state.timing.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before undoing scene edits.")
             return
         }
@@ -36,7 +36,7 @@ extension EditorApplication {
     }
 
     public func redo() {
-        guard store.state.playbackState == .stopped else {
+        guard store.state.timing.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before redoing scene edits.")
             return
         }
@@ -52,7 +52,7 @@ extension EditorApplication {
     }
 
     private func validateSelectionAfterHistoryNavigation() {
-        let selectedID = store.state.selectedEntityID
+        let selectedID = store.state.selection.selectedEntityID
         if scene.entitySummary(id: selectedID) == nil {
             store.dispatch(.setSelectedEntity(scene.roots.first?.id))
         }

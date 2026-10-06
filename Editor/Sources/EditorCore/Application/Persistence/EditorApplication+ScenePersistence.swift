@@ -64,18 +64,18 @@ extension EditorApplication {
         revision: UInt64,
         usedPlaySnapshot: Bool
     ) {
-        if store.state.playbackState != .stopped,
+        if store.state.timing.playbackState != .stopped,
            let physicsPlaySnapshot {
             let snapshotAdapter = EditorSceneAdapter()
             snapshotAdapter.scene = physicsPlaySnapshot
             return (
-                snapshotAdapter.manifest(selectedEntityID: store.state.selectedEntityID),
+                snapshotAdapter.manifest(selectedEntityID: store.state.selection.selectedEntityID),
                 snapshotAdapter.revision,
                 true
             )
         }
         return (
-            scene.manifest(selectedEntityID: store.state.selectedEntityID),
+            scene.manifest(selectedEntityID: store.state.selection.selectedEntityID),
             scene.revision,
             false
         )
@@ -131,7 +131,7 @@ extension EditorApplication {
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
             recoverySuppressedRevision = nil
-            lastEditorAutosavedRevision = store.state.sceneRevision
+            lastEditorAutosavedRevision = store.state.document.sceneRevision
             editorAutosaveElapsed = 0
             logConsole("Recovered autosaved scene",
                        severity: .warning,
@@ -156,7 +156,7 @@ extension EditorApplication {
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
             recoverySuppressedRevision = nil
-            lastEditorAutosavedRevision = store.state.sceneRevision
+            lastEditorAutosavedRevision = store.state.document.sceneRevision
             editorAutosaveElapsed = 0
 
             let recoveredManifest = scene.manifest(selectedEntityID: result.selectedEntityID)
@@ -186,7 +186,7 @@ extension EditorApplication {
     /// file and suppresses shutdown autosave for this exact scene revision.
     public func discardAutosavedScene() {
         store.dispatch(.setSceneRecoveryPending(false))
-        recoverySuppressedRevision = store.state.sceneRevision
+        recoverySuppressedRevision = store.state.document.sceneRevision
         editorAutosaveElapsed = 0
         lastEditorAutosavedRevision = nil
         do {
@@ -228,7 +228,7 @@ extension EditorApplication {
             guard result.error == nil else { throw result.error! }
             reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
-            store.dispatch(.markSceneSaved(store.state.sceneRevision))
+            store.dispatch(.markSceneSaved(store.state.document.sceneRevision))
             store.dispatch(.setSceneRecoveryPending(false))
             recoverySuppressedRevision = nil
             if clearRecoveryOnSuccess {
@@ -253,9 +253,9 @@ extension EditorApplication {
     }
 
     func autosaveSceneIfNeeded(elapsed: Double, force: Bool = false) {
-        guard store.state.playbackState == .stopped,
+        guard store.state.timing.playbackState == .stopped,
               hasUnsavedSceneChanges,
-              recoverySuppressedRevision != store.state.sceneRevision else {
+              recoverySuppressedRevision != store.state.document.sceneRevision else {
             if !hasUnsavedSceneChanges {
                 editorAutosaveElapsed = 0
             }
@@ -263,14 +263,14 @@ extension EditorApplication {
         }
         editorAutosaveElapsed += min(max(elapsed, 0), Self.editorAutosaveInterval)
         guard force || editorAutosaveElapsed >= Self.editorAutosaveInterval,
-              lastEditorAutosavedRevision != store.state.sceneRevision else { return }
+              lastEditorAutosavedRevision != store.state.document.sceneRevision else { return }
         do {
             let document = GameSaveDocument(
                 slot: GameSaveDocument.autoSaveSlot,
-                manifest: scene.manifest(selectedEntityID: store.state.selectedEntityID)
+                manifest: scene.manifest(selectedEntityID: store.state.selection.selectedEntityID)
             )
             try document.write(to: editorAutosaveURL)
-            lastEditorAutosavedRevision = store.state.sceneRevision
+            lastEditorAutosavedRevision = store.state.document.sceneRevision
             editorAutosaveElapsed = 0
             logConsole("Autosaved scene recovery snapshot",
                        detail: editorAutosaveURL.lastPathComponent)

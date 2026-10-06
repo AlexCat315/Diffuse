@@ -71,20 +71,20 @@ struct EditorViewportResolutionTests {
     @Test("Reducer sanitizes the render scale percent and toggles downscale")
     func reducerHandlesRenderScaleActions() {
         var state = EditorState()
-        #expect(state.viewportRenderScalePercent == 100)
-        #expect(!state.viewportInteractionDownscaleEnabled)
+        #expect(state.viewport.renderScalePercent == 100)
+        #expect(!state.viewport.interactionDownscaleEnabled)
 
         EditorReducer.reduce(state: &state, action: .setViewportRenderScalePercent(75))
-        #expect(state.viewportRenderScalePercent == 75)
+        #expect(state.viewport.renderScalePercent == 75)
 
         EditorReducer.reduce(state: &state, action: .setViewportRenderScalePercent(9999))
-        #expect(state.viewportRenderScalePercent == 200)
+        #expect(state.viewport.renderScalePercent == 200)
 
         EditorReducer.reduce(state: &state, action: .setViewportRenderScalePercent(1))
-        #expect(state.viewportRenderScalePercent == 25)
+        #expect(state.viewport.renderScalePercent == 25)
 
         EditorReducer.reduce(state: &state, action: .setViewportInteractionDownscale(true))
-        #expect(state.viewportInteractionDownscaleEnabled)
+        #expect(state.viewport.interactionDownscaleEnabled)
     }
 
     @Test("Render scale settings survive a state codable round trip")
@@ -96,8 +96,8 @@ struct EditorViewportResolutionTests {
         let data = try JSONEncoder().encode(state)
         let decoded = try JSONDecoder().decode(EditorState.self, from: data)
 
-        #expect(decoded.viewportRenderScalePercent == 50)
-        #expect(decoded.viewportInteractionDownscaleEnabled)
+        #expect(decoded.viewport.renderScalePercent == 50)
+        #expect(decoded.viewport.interactionDownscaleEnabled)
     }
 
     @Test("Camera and gizmo drags count as continuous scene interaction, clicks do not")

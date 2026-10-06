@@ -162,7 +162,12 @@ enum EditorRootViewFactory {
                             title: localizedPanelTitle(for: "inspector"),
                             preferredSlot: .trailing,
                             iconAssetKey: "panel.inspector") {
-                InspectorPanel(store: app.store, scene: app.scene)
+                InspectorPanel(store: app.store, scene: app.scene, scriptWorkspace: app.scriptWorkspace) { identifier in
+                    guard let file = app.scriptWorkspace.snapshot.documents.first(where: {
+                        $0.file.identifier == identifier || $0.file.legacyIdentifiers.contains(identifier)
+                    })?.file else { return }
+                    app.navigateToIssue(.script(id: file.identifier, line: 1, column: 1))
+                }
             },
             PanelDescriptor(id: "viewport",
                             title: localizedPanelTitle(for: "viewport"),

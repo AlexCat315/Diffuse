@@ -69,11 +69,11 @@ enum EditorCommandDispatcher {
         case .redo:
             app.redo()
         case .duplicateSelection:
-            guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.playbackState) else {
+            guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.timing.playbackState) else {
                 app.logConsole("Stop simulation before duplicating entities", severity: .warning)
                 return
             }
-            guard let selected = store.state.selectedEntityID else {
+            guard let selected = store.state.selection.selectedEntityID else {
                 app.logConsole("Nothing to duplicate", severity: .warning)
                 return
             }
@@ -87,11 +87,11 @@ enum EditorCommandDispatcher {
                 app.logConsole("Could not duplicate selection", severity: .error)
             }
         case .deleteSelection:
-            guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.playbackState) else {
+            guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.timing.playbackState) else {
                 app.logConsole("Stop simulation before deleting entities", severity: .warning)
                 return
             }
-            let selectedIDs = store.state.selectedEntityIDs
+            let selectedIDs = store.state.selection.selectedEntityIDs
             guard !selectedIDs.isEmpty else {
                 app.logConsole("Nothing to delete", severity: .warning)
                 return
@@ -106,21 +106,21 @@ enum EditorCommandDispatcher {
                 app.logConsole("Could not delete selection", severity: .error)
             }
         case let .setWorkspaceMode(next):
-            guard store.state.workspaceMode != next else { return }
+            guard store.state.workspace.mode != next else { return }
             if !next.isGameWorkspace { app.setViewportMode(.scene) }
-            let previousMode = store.state.workspaceMode
-            let previousPreset = store.state.activeLayoutPreset
+            let previousMode = store.state.workspace.mode
+            let previousPreset = store.state.workspace.layoutPreset
             EditorRootViewFactory.saveWorkspaceLayout(controller, for: previousMode, preset: previousPreset)
             store.dispatch(.setWorkspaceMode(next))
-            let nextPreset = store.state.activeLayoutPreset
+            let nextPreset = store.state.workspace.layoutPreset
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: nextPreset, registry: registry)
             saveShellState(app)
         case let .setLayoutPreset(nextPreset):
             let mode = nextPreset.mode
-            guard nextPreset != store.state.activeLayoutPreset
-                    || mode != store.state.workspaceMode else { return }
-            let previousMode = store.state.workspaceMode
-            let previousPreset = store.state.activeLayoutPreset
+            guard nextPreset != store.state.workspace.layoutPreset
+                    || mode != store.state.workspace.mode else { return }
+            let previousMode = store.state.workspace.mode
+            let previousPreset = store.state.workspace.layoutPreset
             EditorRootViewFactory.saveWorkspaceLayout(controller,
                                                        for: previousMode,
                                                        preset: previousPreset)
@@ -132,8 +132,8 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: mode, preset: nextPreset, registry: registry)
             saveShellState(app)
         case .resetLayout:
-            let mode = store.state.workspaceMode
-            let preset = store.state.activeLayoutPreset
+            let mode = store.state.workspace.mode
+            let preset = store.state.workspace.layoutPreset
             EditorRootViewFactory.resetLayout(into: controller, for: mode, preset: preset, registry: registry)
             EditorRootViewFactory.saveWorkspaceLayout(controller, for: mode, preset: preset)
             saveShellState(app)
@@ -144,12 +144,12 @@ enum EditorCommandDispatcher {
                 return
             }
             EditorRootViewFactory.saveWorkspaceLayout(controller,
-                                                       for: store.state.workspaceMode,
-                                                       preset: store.state.activeLayoutPreset)
+                                                       for: store.state.workspace.mode,
+                                                       preset: store.state.workspace.layoutPreset)
         case .showScripts:
             EditorRootViewFactory.activatePanel("scripts", in: controller)
         case let .setPlaybackState(next):
-            guard EditorPlaybackCommandPolicy.canTransition(from: store.state.playbackState,
+            guard EditorPlaybackCommandPolicy.canTransition(from: store.state.timing.playbackState,
                                                             to: next) else { return }
             app.applyPlaybackState(next)
         case .openSettings:
@@ -199,13 +199,13 @@ enum EditorCommandDispatcher {
 
     private static func saveShellState(_ app: EditorApplication) {
         let state = app.store.state
-        EditorRootViewFactory.saveShellState(mode: state.workspaceMode,
-                                             preset: state.activeLayoutPreset,
+        EditorRootViewFactory.saveShellState(mode: state.workspace.mode,
+                                             preset: state.workspace.layoutPreset,
                                              themeMode: state.themeMode,
                                              language: state.language,
                                              vsyncMode: state.vsyncMode,
-                                             primarySelectBehavior: state.primarySelectBehavior,
-                                             aiSettings: state.aiSettings,
-                                             capabilitySettings: state.capabilitySettings)
+                                             primarySelectBehavior: state.selection.primarySelectBehavior,
+                                             aiSettings: state.assistant.aiSettings,
+                                             capabilitySettings: state.assistant.capabilitySettings)
     }
 }

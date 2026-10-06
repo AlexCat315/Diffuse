@@ -28,10 +28,22 @@ extension EditorSceneAdapter {
                                             presentation: field.presentation,
                                             isMixed: batch.isMixed, mixedAxes: batch.mixedAxes,
                                             applyPrimaryValue: batch.canApplyPrimary(value)
-                                                ? { batch.applyPrimaryValue() } : nil)
+                                                ? { batch.applyPrimaryValue() } : nil, group: field.group)
             }
             guard !fields.isEmpty else { return nil }
-            return EditorInspectorSection(id: section.id, title: section.title, fields: fields)
+            let groups = section.groups.filter { group in
+                let identifiers = matches.compactMap { match -> String? in
+                    guard case let .stringOptions(binding, _)? = match.fields.first(where: { $0.id == group.selectorFieldID })?.value else { return nil }
+                    return binding.wrappedValue
+                }
+                return identifiers.count == ids.count && Set(identifiers).count == 1
+            }
+            if section.id == "scripts", !section.groups.isEmpty, groups.isEmpty {
+                return EditorInspectorSection(id: section.id, title: section.title, fields: [
+                    EditorInspectorField(id: "script-mixed", label: L("Scripts"), value: .readOnly(L("Different script behaviors")))
+                ])
+            }
+            return EditorInspectorSection(id: section.id, title: section.title, fields: fields, groups: groups)
         }
     }
 }

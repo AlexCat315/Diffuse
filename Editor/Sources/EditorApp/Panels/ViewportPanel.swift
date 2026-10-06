@@ -206,14 +206,14 @@ struct ViewportPanel: View {
                 app.enqueueViewportInput(event)
                 return
             }
-            let mode = app.store.state.gizmoMode
+            let mode = app.store.state.viewport.gizmoMode
             if (mode == .translate || mode == .rotate || mode == .scale),
-               app.store.state.selectedEntityID != nil,
+               app.store.state.selection.selectedEntityID != nil,
                let drag = EditorGizmoController.shared.beginDrag(
                    cursorX: button.x, cursorY: button.y)
             {
                 let targets = captureGizmoGroupTargets(primary: drag.entityID,
-                                                       selectedIDs: app.store.state.selectedEntityIDs)
+                                                       selectedIDs: app.store.state.selection.selectedEntityIDs)
                 if !targets.isEmpty {
                     viewport.gizmoGroupTargets = targets
                     scene.beginInteractiveEditHistoryGroup()
@@ -224,7 +224,7 @@ struct ViewportPanel: View {
                     return
                 }
                 EditorGizmoController.shared.clearDrag()
-                if app.store.state.selectedEntityIDs.contains(where: {
+                if app.store.state.selection.selectedEntityIDs.contains(where: {
                     scene.isEntityLocked($0)
                 }) {
                     app.logConsole("Cannot transform a selection containing locked entities",
@@ -292,8 +292,8 @@ struct ViewportPanel: View {
                 app.enqueueViewportInput(event)
                 return
             case .pendingClick:
-                if app.store.state.gizmoMode == .boxSelect,
-                   app.store.state.activeAssetDrag == nil,
+                if app.store.state.viewport.gizmoMode == .boxSelect,
+                   app.store.state.navigation.activeAssetDrag == nil,
                    let down = viewport.leftDownAt
                 {
                     let dx = motion.x - down.x
@@ -355,9 +355,9 @@ struct ViewportPanel: View {
                 {
                     let rect = normalizedRect(from: start, to: current)
                     let picked = scene.pickEntities(in: rect, frame: frame)
-                    let baseSelection = app.store.state.selectedEntityIDs
+                    let baseSelection = app.store.state.selection.selectedEntityIDs
                     let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
-                    let primaryModifierBehavior = app.store.state.primarySelectBehavior
+                    let primaryModifierBehavior = app.store.state.selection.primarySelectBehavior
                     let merged = EditorSelectionReducer.merge(base: baseSelection,
                                                               picked: picked,
                                                               modifiers: modifiers,
@@ -368,7 +368,7 @@ struct ViewportPanel: View {
                 app.enqueueViewportInput(event)
                 return
             case .pendingClick(.left):
-                if app.store.state.activeAssetDrag != nil {
+                if app.store.state.navigation.activeAssetDrag != nil {
                     _ = app.handleAssetDrop(at: button.x, cursorY: button.y)
                     viewport.endPointerSession()
                     app.enqueueViewportInput(event)
@@ -385,8 +385,8 @@ struct ViewportPanel: View {
                                                       cursorY: button.y,
                                                       in: frame)
                         let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
-                        let primaryModifierBehavior = app.store.state.primarySelectBehavior
-                        let merged = EditorSelectionReducer.mergeSingle(base: app.store.state.selectedEntityIDs,
+                        let primaryModifierBehavior = app.store.state.selection.primarySelectBehavior
+                        let merged = EditorSelectionReducer.mergeSingle(base: app.store.state.selection.selectedEntityIDs,
                                                                         picked: picked,
                                                                         modifiers: modifiers,
                                                                         primaryModifierBehavior: primaryModifierBehavior)
@@ -443,9 +443,9 @@ struct ViewportPanel: View {
             }
             if let mode = EditorViewportToolShortcutPolicy.mode(for: key) {
                 if EditorSceneAuthoringPolicy.canEditScene(
-                    during: app.store.state.playbackState
+                    during: app.store.state.timing.playbackState
                 ) {
-                    if app.store.state.gizmoMode != mode {
+                    if app.store.state.viewport.gizmoMode != mode {
                         app.store.dispatch(.setGizmoMode(mode))
                     }
                     return
@@ -473,7 +473,7 @@ struct ViewportPanel: View {
     private func handleEditingShortcut(_ key: KeyEvent) -> Bool {
         switch EditorViewportEditingShortcutPolicy.command(for: key) {
         case .frameSelection:
-            let selectedIDs = app.store.state.selectedEntityIDs
+            let selectedIDs = app.store.state.selection.selectedEntityIDs
             guard !selectedIDs.isEmpty else { return false }
             let surface = app.currentViewportSurfaceState()
             scene.frameEntities(selectedIDs,
@@ -481,9 +481,9 @@ struct ViewportPanel: View {
             return true
         case .deleteSelection:
             guard EditorSceneAuthoringPolicy.canEditScene(
-                during: app.store.state.playbackState
+                during: app.store.state.timing.playbackState
             ) else { return false }
-            let selectedIDs = app.store.state.selectedEntityIDs
+            let selectedIDs = app.store.state.selection.selectedEntityIDs
             guard !selectedIDs.isEmpty else { return false }
             guard selectedIDs.allSatisfy({ !scene.isEntityLocked($0) }) else {
                 app.logConsole("Cannot delete locked entities", severity: .warning)
