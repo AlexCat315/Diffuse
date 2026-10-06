@@ -35,7 +35,7 @@ public struct SharedCounterView: View {
     public var body: some View {
         let foreground = dark ? Color(red: 241, green: 245, blue: 249) : Color(red: 22, green: 35, blue: 56)
         let background = dark ? Color(red: 20, green: 29, blue: 45) : Color(red: 244, green: 247, blue: 252)
-        return Box(direction: .column, alignItems: .stretch, spacing: 12) {
+        Box(direction: .column, alignItems: .stretch, spacing: 12) {
             DemoLabel("GuavaUI · Swift in your browser", size: 22, color: foreground, height: 36)
             DemoLabel("Shared Compose · ViewGraph · Yoga", size: 14, color: foreground, height: 24)
             Box(direction: .column, alignItems: .stretch, spacing: 8) {

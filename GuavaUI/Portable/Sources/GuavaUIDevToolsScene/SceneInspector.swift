@@ -91,8 +91,9 @@ public final class SceneInspector: @unchecked Sendable {
         return nil
     }
 
-    private func summarise(_ node: Node) -> NodeSummary {
+    private func summarise(_ node: Node, ownerScopeID: String? = nil) -> NodeSummary {
         let absoluteFrame = node.absoluteFrame
+        let owner = node.recompositionMetrics != nil ? String(node.id.rawValue) : ownerScopeID
         return NodeSummary(
             id: Self.identifier(for: node),
             viewTag: node.viewTag,
@@ -112,7 +113,7 @@ public final class SceneInspector: @unchecked Sendable {
                 hasBackground: node.backgroundColor != nil,
                 hasBorder: node.borderColor != nil && node.borderWidth > 0
             ),
-            children: node.children.map { summarise($0) },
+            children: node.children.map { summarise($0, ownerScopeID: owner) },
             elementID: String(node.id.rawValue),
             layout: node.layoutNode.map { ln in
                 let p = ln.resolvedPadding, b = ln.resolvedBorder
@@ -125,7 +126,13 @@ public final class SceneInspector: @unchecked Sendable {
             },
             style: NodeStyleInfo(backgroundColor: SceneEditor.hex(node.backgroundColor), foregroundColor: SceneEditor.hex(node.inheritedForegroundColor),
                 overrides: [("padding", node.layoutNode?.debugPadding != nil), ("backgroundColor", node.debugBackgroundColor != nil),
-                            ("foregroundColor", node.debugForegroundColor != nil)].filter { $0.1 }.map { $0.0 })
+                            ("foregroundColor", node.debugForegroundColor != nil)].filter { $0.1 }.map { $0.0 }),
+            source: node.sourceLocation.map { SourceLocationPayload(fileID: $0.fileID, filePath: $0.filePath, line: $0.line, column: $0.column) },
+            ownerScopeID: owner,
+            recomposition: node.recompositionMetrics.map { m in
+                RecompositionPayload(count: m.count, initialMs: m.initialMs, lastMs: m.lastMs, totalMs: m.totalMs, maxMs: m.maxMs,
+                    reasons: m.lastReasons.map { RecompositionReasonPayload(kind: $0.kind, detail: $0.detail, originScopeID: $0.originScope.map(String.init)) })
+            }
         )
     }
 

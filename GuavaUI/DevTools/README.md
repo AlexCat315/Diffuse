@@ -48,6 +48,48 @@ Native `Text` and the shared demo honor foreground/padding; custom paint callbac
 must read effective node styles. See [inspection protocol](protocol-inspection.md)
 for messages, lifecycle, limits and custom host integration.
 
+## Source location and component recomposition
+
+Select a component in the app/tree, then use **Source & recomposition → Open
+source** to open the recorded Swift expression in VS Code or Cursor. For a
+remote/CI build, expand **Editor path mapping** and enter the build-machine
+repository prefix and your local repository prefix. POSIX and Windows absolute
+paths, spaces and Unicode are supported. Preferences stay in this browser.
+Your OS/browser must have the chosen editor's URI handler installed.
+
+`ViewBuilder` automatically captures `#fileID`, `#filePath`, `#line` and `#column`
+for view expressions. These wrappers add no scene nodes and preserve keyed
+reconciliation. Bodies with an explicit `return`, manually assembled child lists,
+and explicitly declared concrete `Body` types may bypass automatic capture;
+use `.sourceLocation()` at the component's creation site when exact coordinates
+matter (for example, `ConcreteBodyView().sourceLocation()`).
+`graph.install(root:)` also records its call site as a root fallback. If a node
+has no coordinates, the Inspector labels the nearest ancestor location explicitly.
+Locations refer to the compiled source version; rebuild after moving code.
+
+The selected node's **owning user component** shows recomposition count, last,
+average, total and maximum time, plus a separate initial-mount time. Causes include
+named `@State` writes, observable registrar keys, dynamic properties, parent scope
+updates and changed CompositionLocal providers. Cause links select the originating
+parent component. Same-scope queued writes coalesce and retain at most 16 distinct
+causes; actual parent-driven body evaluations are also counted. Only property/key
+names are recorded, not state values. Temporary style edits and viewport layout
+changes do not count as body recomposition.
+
+Expand **All components** to sort by count, total or last duration and select a
+row. **Reset statistics** clears counters, update durations and causes for live
+components, preserving initial-mount times, app state and style undo history.
+Removed components disappear and new instances start fresh. Measurements use a
+monotonic clock around body evaluation plus reconciliation; layout/GPU paint is
+excluded, and parent durations include child work, so rows must not be summed as
+frame time. Profiling is lightweight and enabled by default; custom hosts may set
+`graph.tracksRecomposition = false` before installation.
+
+Native and Wasm hosts publish identical additive snapshot fields. See
+[component analysis protocol](protocol-analysis.md). Editor jumps construct a
+client-side `vscode://file`/`cursor://file` link; the runtime never reads a source
+file or executes an editor command.
+
 The [Wasm prototype](../Browser/README.md) embeds the same client and uses
 `browser://guava` over a same-origin MessageChannel. This transport requires the
 Inspector to be embedded in its browser host.

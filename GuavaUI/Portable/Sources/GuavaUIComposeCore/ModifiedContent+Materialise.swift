@@ -95,7 +95,10 @@ extension ModifiedContent: _AnyModifiedContent {
             // storage). Skipping the recursion strands descendants on
             // captures of storage that `ViewScope.replaceView` has already
             // swapped out — controls keep writing into dead state.
-            _ = scopeApply._applyScope(node: node)
+            let changed = scopeApply._applyScope(node: node)
+            let previous = graph.environmentReasons
+            if changed { graph.environmentReasons.append(.init(kind: "environment", detail: "CompositionLocal", originScope: graph.activeRecompositionScope)) }
+            defer { graph.environmentReasons = previous }
             graph.reconcileChildren(parent: node,
                                     layoutParent: layoutParent,
                                     newViews: [content])

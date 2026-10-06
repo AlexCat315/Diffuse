@@ -32,7 +32,8 @@ function inspectionControls() {
 function syncInspection(info) {
   if (!info) return;
   state.inspection = info;
-  state.selectedId = info.selectedID ?? null;
+  if (state.pendingSelectionId === info.selectedID) state.pendingSelectionId = null;
+  if (!state.pendingSelectionId) state.selectedId = info.selectedID ?? null;
   inspectionControls();
   renderTree();
   renderDetails(findNode(state.tree, state.selectedId));
@@ -105,6 +106,7 @@ function editColor(name) {
 }
 document.addEventListener("DOMContentLoaded", () => {
   inspectEl("pickNode").addEventListener("click", () => {
+    state.pendingSelectionId = null;
     send(state.inspection?.picking ? "inspect.pick.stop" : "inspect.pick.start");
     inspectionMessage("Click a component in the app or mirror. Escape cancels.");
   });
