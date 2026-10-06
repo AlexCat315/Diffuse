@@ -62,6 +62,10 @@ swift build --package-path Editor    # 编辑器（运行: swift run GuavaEditor
 swift build --package-path guava-mcp # MCP 服务（运行: swift run GuavaMCP）
 ```
 
+GuavaUI 的[跨平台调试服务与共享核心](GuavaUI/Portable/README.md)可独立构建和测试，
+无需原生图形依赖；[浏览器 Wasm 原型](GuavaUI/Browser/README.md)提供 WebGPU 预览、
+节点检查和状态恢复。
+
 ---
 
 ## 第三方依赖
