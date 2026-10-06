@@ -2,6 +2,7 @@
 
 浏览器和桌面现在运行同一份 `SharedCounterView` Compose 源码，以及真实的
 ViewGraph、节点树、Yoga 布局、输入分发、State/Binding 和 DrawList。
+FreeType/HarfBuzz 字体管线也已共用，浏览器文字绘制为真实的图集字形四边形。
 Inspector 读取真实节点和失效记录，支持状态检查点、状态差异、输入录制和回放。
 
 ## 构建与运行
@@ -10,6 +11,7 @@ Inspector 读取真实节点和失效记录，支持状态检查点、状态差�
 
 ```bash
 swift sdk install https://download.swift.org/swift-6.4.0-release/wasm-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_wasm.artifactbundle.tar.gz --checksum f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d
+git submodule update --init GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
 
 cd GuavaUI/Browser
 npm ci
@@ -18,8 +20,10 @@ npm run serve
 ```
 
 打开 <http://127.0.0.1:8080>。在 macOS/Linux 主机编译；`dist/` 包含浏览器运行
-依赖，无需运行时 CDN。Yoga 的 Wasm C++ 编译禁用异常，因为当前 WASI SDK 不提供
-C++ 异常展开运行时。原生构建仍沿用原来的编译设置。
+依赖，无需运行时 CDN。主机还需 CMake、Ninja、Python 3，以及 Swift 工具链里的
+clang/clang++/llvm-ar。`build_fonts.py` 增量构建现有子模块，不修改上游源码。
+Yoga/HarfBuzz 禁用 C++ 异常；FreeType 字体校验使用 SDK 的 `libsetjmp` 和 Wasm
+异常处理指令，因此浏览器需支持 Wasm exception handling。原生编译设置不受影响。
 
 用 `GUAVA_WASM_CONFIGURATION=release npm run build` 生成优化构建并移除 DWARF；默认 debug
 构建带 DWARF。`GUAVA_WASM_SDK` 可以指定另一对匹配的编译器和 SDK，
@@ -48,6 +52,7 @@ GUAVA_DEVTOOLS=1 swift run --package-path GuavaUI GuavaUIDemo --shared-counter
 | --- | --- |
 | `Engine/PlatformCore` | 输入事件、光标、窗口 ID，输入事件可 Codable |
 | `GuavaUICore` | State/Binding、颜色、DrawList、顶点、WGSL、字体值及字形布局 |
+| `GuavaUIText` | FreeType FontAtlas、HarfBuzz TextShaper、FontCollection 字素回退 |
 | `GuavaUIScene` | Node/RenderTree、Yoga、Recomposer、动画、焦点、捕获和事件分发 |
 | `GuavaUIComposeCore` | View/ViewBuilder、ViewGraph、CompositionLocal、Box/Row/Column |
 | `GuavaUIDevToolsScene` | 从实际节点树生成 Inspector 快照 |
@@ -56,10 +61,18 @@ GUAVA_DEVTOOLS=1 swift run --package-path GuavaUI GuavaUIDemo --shared-counter
 桌面 Runtime/Compose/DevTools 继续导出这些类型。浏览器不编译 SDL、SwiftNIO
 socket、引擎视口或 GPU 原生依赖。完整的主题控件库仍在桌面 Compose 模块中。
 
-文字由宿主绘制：桌面使用现有 FreeType/HarfBuzz 字体管线，浏览器目前使用 Canvas
-字体。字形布局与字体度量接口已拆到共享核心，FreeType/HarfBuzz 的 Wasm 构建、
-字体加载、图集上传和字体 fallback 是下一阶段，尚未接入浏览器。
-Canvas2D 回退的三角形颜色插值也不完全等同于 GPU 光栅化。
+浏览器字体从 `dist/fonts/` 加载到 Swift 拥有的内存，按字素选择完整覆盖的字体，再按
+字体/脚本分段交给 HarfBuzz。中文、阿拉伯文连写、天城文重排和单色 Emoji 均走这条
+管线。字体与许可证见 [Text/Fonts](../Text/Fonts/README.md)，约 21 MiB。
+字体加载失败会明确显示错误；未覆盖字符显示主字体的缺字形。
+
+R8 图集缓存按字体、字号和像素比例区分，只导出脏矩形。WebGPU 上传到真实的
+2048×2048 字体纹理，Canvas2D 则裁剪、着色同一图集；不调用 Canvas `fillText`。
+图集满时重置并重绘整帧。快照的 `atlasFull` 表示单帧仍超出容量，届时需要更大图集
+或分页。Canvas2D 三角形颜色插值仍不完全等同于 GPU 光栅化。
+
+目前支持脚本分段的自动方向，但没有完整的 Unicode 段落双向算法；混合 LTR/RTL
+段落仍需 bidi/itemization。彩色 Emoji、完整文本选择/编辑与跨平台字体发现尚未移植。
 
 ## 输入与调试
 
@@ -82,7 +95,8 @@ TCP。桌面 Inspector 连接 `ws://127.0.0.1:9229/`。两者使用同一套消�
 - 树快照包含实际布局、渲染和输入清单；状态写入标注真实 Compose scope。
   帧样本分别测量布局和绘制，浏览器 GPU 呈现时间仍为零。
 
-控制台 `guavaDebug.snapshot` 查看当前帧，`guavaDebug.request(...)` 发送调试请求。
+控制台 `guavaDebug.snapshot` 查看当前帧与字形/UTF-8 cluster/字体 ID，
+`guavaDebug.gpuInfo` 查看适配器，`guavaDebug.request(...)` 发送调试请求。
 C ABI 缓冲区仅在下一次对应更新前有效，JavaScript 会先复制再调用其他 Wasm 导出。
 Swift 源码断点需要支持 Swift 的 DWARF 调试扩展和源码映射；此处未提供完整 Swift
 调试器，可参考 [Swift Wasm 调试说明](https://book.swiftwasm.org/getting-started/debugging.html)。
@@ -102,6 +116,7 @@ npm run dev
 
 ```bash
 swift test --package-path GuavaUI/Portable
+swift test --package-path GuavaUI/Text # 先构建原生字体依赖，见 ../Text/README.md
 swift build --package-path GuavaUI/Portable
 cd GuavaUI/Browser
 python3 -m pip install -r requirements-dev.txt
@@ -111,15 +126,25 @@ npm run verify
 npm run verify:dev
 ```
 
-浏览器脚本检查实际画面像素、输入、真实节点、失效追踪、状态差异、录制回放、
+浏览器脚本在 1×/2× 比例检查实际图集文字和几何像素、输入、真实节点、失效追踪、状态差异、录制回放、
 Inspector 重连、缩放和原生 WebSocket。文字检查包含中文/Emoji 与合成的浏览器 IME
-事件，真实操作系统输入法仍需人工验收。开发脚本验证真实 Swift 编译、错误恢复与状态保留，
+事件，以及 Latin 连字、阿拉伯文、天城文和字体回退；真实操作系统输入法仍需人工验收。
+开发脚本验证真实 Swift 编译、错误恢复与状态保留，
 会临时修改宿主源码并在退出时还原。
 
-`python3 verify.py --require-webgpu` 强制 GPU 验收，`--skip-native` 只验证浏览器；
-`GUAVA_CHROMIUM` 可以指定 Chromium 路径。CI 覆盖 Linux/Windows Portable 和 Linux
-浏览器流程，构建产物作为可下载的 artifact 上传。
+`python3 verify.py --require-webgpu` 强制 WebGPU 像素验收；
+`--require-hardware-gpu` 还拒绝软件适配器，严格模式不会强制 SwiftShader。
+`--skip-native` 只验证浏览器，`--screenshot` 在严格模式保存 WebGPU 画面。
+`GUAVA_CHROMIUM` 指定 Chromium 路径，`GUAVA_CHROMIUM_ARGS` 是附加启动参数的 JSON 数组。
+CI 覆盖共享字体、Linux/Windows Portable 和浏览器流程，并上传构建产物。
 
-本次 Linux/Swift 6.4.0 的完整桌面测试集与 Portable 测试、Canvas2D、真实 WebSocket
-及开发重载检查通过。云环境 Chromium 在独立 WebGPU 清屏示例中同样会丢失设备或
-呈现透明画布，**真实 WebGPU 画面的严格像素验收仍待可用 GPU 环境完成**。
+仓库还提供手动触发的 `GuavaUI hardware WebGPU acceptance` 工作流。配置带
+`self-hosted, linux, x64, guava-webgpu` 标签、可用物理 GPU/驱动、Chromium 系统依赖及
+CMake/Ninja/Python/Node 的 runner 后，从 Actions 手动运行，它会严格检查适配器和
+文字/几何像素，保存日志与 WebGPU 截图。当前云容器没有 `/dev/dri`，不能完成物理 GPU 验收。
+
+本次 Linux/Swift 6.4.0 的完整桌面测试集、7 项字体集成测试、Portable、1×/2× 图集像素
+和真实 WebSocket 检查通过。物理 GPU 预检得到 `vendor=google`、
+`architecture=swiftshader`、`isFallbackAdapter=true`、`lost=true`，严格硬件验收按预期拒绝
+该环境；**真实 WebGPU 画面的严格像素验收仍待可用 GPU 环境完成**。
+开发重载与 debug/release Wasm 构建也已验证通过。

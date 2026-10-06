@@ -4,7 +4,8 @@ These packages share real desktop implementations with Swift/Wasm without SDL,
 GPU drivers or native font libraries. Scene and Compose targets use Yoga C++.
 
 - `GuavaUICore`: State/Binding, color, DrawList, WGSL, font values, glyph metrics
-  and text layout. Native font rasterization stays in Runtime.
+  and text layout. FreeType/HarfBuzz live in the separate [Text](../Text/README.md)
+  package, which Runtime re-exports and the browser also uses.
 - `GuavaUIScene`: Node/RenderTree, Yoga layout, recomposition, animation,
   hit testing, focus, pointer capture and input dispatch.
 - `GuavaUIComposeCore`: View/ViewBuilder, ViewGraph, CompositionLocal and boxes/stacks.

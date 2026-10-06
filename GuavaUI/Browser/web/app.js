@@ -9,6 +9,23 @@ const status = document.querySelector("#status");
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 let wasm, renderer, lastFrame, scheduled = false, inspectorPort;
+const atlas = { width: 0, height: 0, pixels: null, revision: 0, update: null };
+
+function updateAtlas(frame) {
+  if (atlas.width !== frame.atlasWidth || atlas.height !== frame.atlasHeight) {
+    atlas.width = frame.atlasWidth; atlas.height = frame.atlasHeight;
+    atlas.pixels = new Uint8Array(atlas.width * atlas.height);
+  }
+  atlas.update = frame.atlasUpdate;
+  if (!atlas.update) return;
+  const [x, y, width, height] = atlas.update;
+  const pixels = readBytes(wasm.guava_atlas(), wasm.guava_atlas_size());
+  if (pixels.length !== width * height) throw new Error("Invalid font atlas update");
+  for (let row = 0; row < height; row++) {
+    atlas.pixels.set(pixels.subarray(row * width, (row + 1) * width), (y + row) * atlas.width + x);
+  }
+  atlas.revision++;
+}
 
 function findNode(node, name) {
   if (!node) return;
@@ -40,8 +57,10 @@ function schedule() {
   requestAnimationFrame(() => {
     scheduled = false;
     const width = surface.clientWidth, height = surface.clientHeight;
+    wasm.guava_set_scale(window.devicePixelRatio || 1);
     wasm.guava_render(width, height);
     lastFrame = readJSON(wasm.guava_snapshot(), wasm.guava_snapshot_size());
+    updateAtlas(lastFrame);
     const vertices = readBytes(wasm.guava_vertices(), wasm.guava_vertex_bytes());
     const indexCount = wasm.guava_index_count();
     const indices = new Uint32Array(readBytes(wasm.guava_indices(), indexCount * 4).buffer);
@@ -53,36 +72,20 @@ function schedule() {
       renderer = makeCanvasRenderer();
       renderer.draw(lastFrame, vertices, indices);
     }
-    drawLabels(lastFrame);
     if (lastFrame.focused === "counter.note") {
       const frame = findNode(lastFrame.tree.root, "counter.note")?.absoluteFrame;
       if (frame) {
         const rect = surface.getBoundingClientRect();
-        const measure = document.querySelector("#labels").getContext("2d"); measure.font="16px system-ui,sans-serif";
-        textInput.style.left = `${rect.left + frame.x + Math.min(frame.w - 20, 16 + measure.measureText(lastFrame.note).width)}px`;
+        textInput.style.left = `${rect.left + frame.x + Math.min(frame.w - 20, 16 + lastFrame.noteWidth)}px`;
         textInput.style.top = `${rect.top + frame.y + 12}px`;
         textInput.style.height = "24px";
       }
       if (document.activeElement === surface) textInput.focus({preventScroll:true});
     }
-    document.querySelector("#stats").textContent = `count=${lastFrame.count} · ${lastFrame.vertices} vertices · ${lastFrame.indices} indices · ${lastFrame.batches.length} batches`;
+    document.querySelector("#stats").textContent = `count=${lastFrame.count} · ${lastFrame.vertices} vertices · ${lastFrame.batches.length} batches · ${lastFrame.fontCount} fonts · FreeType/HarfBuzz`;
     wasm.guava_events();
     for (const event of response()) post(event);
   });
-}
-
-function drawLabels(frame) {
-  const canvas = document.querySelector("#labels");
-  const ratio = window.devicePixelRatio || 1;
-  canvas.width = Math.round(surface.clientWidth * ratio);
-  canvas.height = Math.round(surface.clientHeight * ratio);
-  const context = canvas.getContext("2d");
-  context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  for (const label of frame.labels) {
-    context.font = `${label.size}px system-ui,sans-serif`;
-    context.fillStyle = label.color;
-    context.fillText(label.text, label.x, label.y);
-  }
 }
 
 async function makeRenderer(shader) {
@@ -129,10 +132,25 @@ async function makeRenderer(shader) {
       { binding: 0, resource: { buffer: uniform } }, { binding: 1, resource: texture.createView() },
       { binding: 2, resource: device.createSampler({ magFilter: "linear", minFilter: "linear" }) },
     ] });
+    const fontTexture = device.createTexture({ size: [2048, 2048], format: "r8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    const fontBindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+      { binding: 0, resource: { buffer: uniform } }, { binding: 1, resource: fontTexture.createView() },
+      { binding: 2, resource: device.createSampler({ magFilter: "linear", minFilter: "linear" }) },
+    ] });
+    let atlasRevision = -1;
     let vertexBuffer, indexBuffer, vertexCapacity = 0, indexCapacity = 0;
     status.textContent = "Swift Wasm · WebGPU";
     // Keep the GPU resources alive for the renderer's lifetime.
     return { backend: "webgpu", gpu, adapter, device, get lost() { return deviceLost; }, draw(frame, vertices, indices) {
+      if (atlasRevision !== atlas.revision) {
+        const update = atlasRevision < 0 ? [0, 0, atlas.width, atlas.height] : atlas.update;
+        if (update) {
+          const [x, y, width, height] = update;
+          device.queue.writeTexture({ texture: fontTexture, origin: [x, y] },
+            atlas.pixels.subarray(y * atlas.width + x), { bytesPerRow: atlas.width }, [width, height]);
+        }
+        atlasRevision = atlas.revision;
+      }
       const ratio = window.devicePixelRatio || 1;
       canvas.width = Math.max(1, Math.round(surface.clientWidth * ratio));
       canvas.height = Math.max(1, Math.round(surface.clientHeight * ratio));
@@ -152,6 +170,7 @@ async function makeRenderer(shader) {
       pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup);
       pass.setVertexBuffer(0, vertexBuffer); pass.setIndexBuffer(indexBuffer, "uint32");
       for (const batch of frame.batches) {
+        pass.setBindGroup(0, batch.textureID === 1 ? fontBindGroup : bindGroup);
         const clip = batch.clip || [0, 0, frame.width, frame.height];
         const x = Math.max(0, Math.floor(clip[0] * ratio)), y = Math.max(0, Math.floor(clip[1] * ratio));
         const right = Math.min(canvas.width, Math.ceil((clip[0] + clip[2]) * ratio));
@@ -174,7 +193,40 @@ function makeCanvasRenderer() {
     document.querySelector("#gpu").hidden = true;
     const canvas = document.querySelector("#fallback"); canvas.hidden = false;
     status.textContent = "Swift Wasm · Canvas2D fallback";
+    const alphaCanvas = document.createElement("canvas");
+    const tinted = new Map();
+    let atlasRevision = -1;
+    function fontSource(color) {
+      if (!tinted.has(color)) {
+        // Bound the cache; these are alpha textures tinted by vertex RGBA.
+        if (tinted.size >= 8) tinted.delete(tinted.keys().next().value);
+        const source = document.createElement("canvas");
+        source.width = atlas.width; source.height = atlas.height;
+        const context = source.getContext("2d");
+        context.fillStyle = `rgb(${color & 255},${(color >>> 8) & 255},${(color >>> 16) & 255})`;
+        context.fillRect(0, 0, source.width, source.height);
+        context.globalCompositeOperation = "destination-in";
+        context.drawImage(alphaCanvas, 0, 0);
+        tinted.set(color, source);
+      }
+      return tinted.get(color);
+    }
     return { backend: "canvas2d", draw(frame, vertices, indices) {
+      if (atlasRevision !== atlas.revision) {
+        const update = atlasRevision < 0 ? [0, 0, atlas.width, atlas.height] : atlas.update;
+        if (atlasRevision < 0) { alphaCanvas.width = atlas.width; alphaCanvas.height = atlas.height; }
+        if (update) {
+          const [x, y, width, height] = update;
+          const data = new ImageData(width, height);
+          for (let row = 0; row < height; row++) for (let col = 0; col < width; col++) {
+            const offset = (row * width + col) * 4;
+            data.data[offset] = data.data[offset + 1] = data.data[offset + 2] = 255;
+            data.data[offset + 3] = Math.round(255 * Math.pow(atlas.pixels[(y + row) * atlas.width + x + col] / 255, 0.75));
+          }
+          alphaCanvas.getContext("2d").putImageData(data, x, y);
+        }
+        tinted.clear(); atlasRevision = atlas.revision;
+      }
       const ratio = window.devicePixelRatio || 1;
       canvas.width = Math.round(surface.clientWidth * ratio); canvas.height = Math.round(surface.clientHeight * ratio);
       const context = canvas.getContext("2d"); context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -182,6 +234,22 @@ function makeCanvasRenderer() {
       for (const batch of frame.batches) {
         context.save();
         if (batch.clip) { context.beginPath(); context.rect(...batch.clip); context.clip(); }
+        if (batch.textureID === 1) {
+          // DrawList.addGlyphQuad emits two triangles per rectangular glyph.
+          // Consume their positions and atlas UVs without invoking Canvas fonts.
+          for (let i = batch.offset; i < batch.offset + batch.count; i += 6) {
+            const a = indices[i] * 20, b = indices[i + 2] * 20;
+            const x = data.getFloat32(a, true), y = data.getFloat32(a + 4, true);
+            const width = data.getFloat32(b, true) - x, height = data.getFloat32(b + 4, true) - y;
+            const u = data.getFloat32(a + 8, true) * atlas.width, v = data.getFloat32(a + 12, true) * atlas.height;
+            const sourceWidth = data.getFloat32(b + 8, true) * atlas.width - u;
+            const sourceHeight = data.getFloat32(b + 12, true) * atlas.height - v;
+            const color = data.getUint32(a + 16, true);
+            context.globalAlpha = (color >>> 24) / 255;
+            context.drawImage(fontSource(color), u, v, sourceWidth, sourceHeight, x, y, width, height);
+          }
+          context.restore(); continue;
+        }
         let pathColor;
         for (let i = batch.offset; i < batch.offset + batch.count; i += 3) {
           const start = indices[i] * 20;
@@ -211,8 +279,21 @@ try {
   const module = await WebAssembly.compile(await (await fetch("./guava.wasm")).arrayBuffer());
   const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi.wasiImport });
   wasi.initialize(instance); wasm = instance.exports;
+  for (const font of ["NotoSans.ttf", "NotoSansCJKsc.otf", "NotoSansArabic.ttf", "NotoSansDevanagari.ttf", "NotoEmoji.ttf"]) {
+    const result = await fetch(`./fonts/${font}`);
+    if (!result.ok) throw new Error(`Cannot load font ${font}: HTTP ${result.status}`);
+    const bytes = new Uint8Array(await result.arrayBuffer());
+    const pointer = wasm.guava_font_alloc(bytes.length);
+    if (!pointer) throw new Error(`Font exceeds the 32 MiB limit: ${font}`);
+    try {
+      new Uint8Array(wasm.memory.buffer, pointer >>> 0, bytes.length).set(bytes);
+      if (!wasm.guava_font_load(pointer, bytes.length)) throw new Error(`Invalid font: ${font}`);
+    } finally { wasm.guava_free(pointer); }
+  }
   // The first call initializes Swift's lazily-created shared prototype.
   wasm.guava_render(surface.clientWidth, surface.clientHeight);
+  // Preserve the initial full/dirty upload before the next render marks it clean.
+  updateAtlas(readJSON(wasm.guava_snapshot(), wasm.guava_snapshot_size()));
   renderer = await makeRenderer(decoder.decode(readBytes(wasm.guava_shader(), wasm.guava_shader_size())));
   if (renderer.lost) {
     if (new URLSearchParams(location.search).get("renderer") === "webgpu") throw new Error("WebGPU device lost during initialization");
@@ -299,7 +380,15 @@ try {
   const ready = () => document.querySelector("#inspector").contentWindow.postMessage({ type: "guava.devtools.ready" }, location.origin);
   document.querySelector("#inspector").addEventListener("load", ready);
   ready();
-  window.guavaDebug = { get snapshot() { return lastFrame; }, get backend() { return renderer.backend; }, request(envelope) { const result = dispatch(envelope); schedule(); return result; } };
+  window.guavaDebug = {
+    get snapshot() { return lastFrame; }, get backend() { return renderer.backend; },
+    get gpuInfo() {
+      const info = renderer.adapter?.info;
+      return info ? { vendor: info.vendor, architecture: info.architecture, device: info.device,
+        description: info.description, isFallbackAdapter: info.isFallbackAdapter, lost: renderer.lost } : null;
+    },
+    request(envelope) { const result = dispatch(envelope); schedule(); return result; },
+  };
   try {
     const saved = sessionStorage.getItem("guava.dev.checkpoint");
     if (saved) {
