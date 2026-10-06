@@ -19,8 +19,8 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-def preview_checks(browser, base_url, renderer, screenshot=None):
-    page = browser.new_page(viewport={"width": 1280, "height": 1100})
+def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
+    page = browser.new_page(viewport={"width": 1280, "height": 1100}, device_scale_factor=scale)
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     query = f"?renderer={renderer}" if renderer else ""
@@ -35,10 +35,24 @@ def preview_checks(browser, base_url, renderer, screenshot=None):
         const canvas = document.createElement('canvas');
         canvas.width=source.width; canvas.height=source.height;
         const context=canvas.getContext('2d'); context.drawImage(source,0,0);
-        const p=context.getImageData(60,260,1,1).data;
+        const ratio=source.width/guavaDebug.snapshot.width;
+        const p=context.getImageData(Math.round(60*ratio),Math.round(260*ratio),1,1).data;
         return p[3]>200 && p[2]>p[0]+50;
     }"""
     page.wait_for_function(pixel_check, timeout=10000)
+    assert page.evaluate("guavaDebug.snapshot.fontCount") == 5
+    # Check ink inside the title. This catches lost initial atlas uploads and
+    # prevents the old Canvas system-font overlay from satisfying the test.
+    assert page.locator("#labels").count() == 0
+    page.wait_for_function("""() => {
+        const source=document.querySelector(guavaDebug.backend==='webgpu'?'#gpu':'#fallback');
+        const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
+        const c=canvas.getContext('2d');c.drawImage(source,0,0);
+        const ratio=source.width/guavaDebug.snapshot.width;
+        const p=c.getImageData(Math.ceil(24*ratio),Math.ceil(24*ratio),Math.floor(400*ratio),Math.floor(36*ratio)).data;
+        let ink=0;for(let i=0;i<p.length;i+=4)if(p[i]<80&&p[i+1]<100&&p[i+2]<140&&p[i+3]>200)ink++;
+        return ink>100;
+    }""", timeout=10000)
     page.locator("#surface").click(position={"x": 60, "y": 260})
     page.wait_for_function("guavaDebug.snapshot.count === 1")
     page.locator("#increment").click()
@@ -109,7 +123,39 @@ def preview_checks(browser, base_url, renderer, screenshot=None):
         input.dispatchEvent(new CompositionEvent('compositionupdate',{data:'中文'}));
     }""")
     page.wait_for_function("guavaDebug.snapshot.labels.some(l=>l.text==='你好中文')")
+    page.wait_for_function("""() => {
+        const snapshot=guavaDebug.snapshot;
+        function find(n){if(n.debugName==='counter.note')return n;for(const c of n.children){const r=find(c);if(r)return r;}}
+        const frame=find(snapshot.tree.root).absoluteFrame;
+        const left=document.querySelector('#surface').getBoundingClientRect().left;
+        const expected=left+frame.x+Math.min(frame.w-20,16+snapshot.noteWidth);
+        return snapshot.noteWidth>40 && Math.abs(parseFloat(document.querySelector('#textInput').style.left)-expected)<1;
+    }""")
     page.evaluate("document.querySelector('#textInput').dispatchEvent(new CompositionEvent('compositionend',{data:'中文'}))")
+    page.wait_for_function("guavaDebug.snapshot.note === '你好中文'")
+    for text, font_id in [("office", 1), ("你好中文", 2), ("سلام", 3), ("कि", 1), ("🙂", 5)]:
+        page.evaluate("text => guavaDebug.request({type:'state.restore',id:94,payload:{count:'2',dark:'true',note:text}})", text)
+        page.wait_for_function("text => guavaDebug.snapshot.note === text", arg=text)
+        label = page.evaluate("text => guavaDebug.snapshot.labels.find(l=>l.text===text)", text)
+        assert label["glyphs"] and all(label["glyphs"]), label
+        assert font_id in label["fontIDs"], label
+        if text == "office":
+            assert len(label["glyphs"]) < len(text), label
+        if text == "سلام":
+            assert label["clusters"][0] > label["clusters"][-1], label
+        if text == "कि":
+            assert len(label["glyphs"]) == 2 and set(label["clusters"]) == {0}, label
+        page.wait_for_function("""text => {
+            const label=guavaDebug.snapshot.labels.find(l=>l.text===text);
+            const source=document.querySelector(guavaDebug.backend==='webgpu'?'#gpu':'#fallback');
+            const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
+            const c=canvas.getContext('2d');c.drawImage(source,0,0);
+            const ratio=source.width/guavaDebug.snapshot.width;
+            const p=c.getImageData(Math.round(label.x*ratio),Math.round(label.y*ratio),Math.ceil(label.width*ratio),Math.ceil(label.size*1.4*ratio)).data;
+            let ink=0;for(let i=0;i<p.length;i+=4)if(p[i]>180&&p[i+1]>180&&p[i+2]>180&&p[i+3]>200)ink++;
+            return ink>8;
+        }""", arg=text, timeout=10000)
+    page.evaluate("guavaDebug.request({type:'state.restore',id:95,payload:{count:'2',dark:'true',note:'你好中文'}})")
     page.wait_for_function("guavaDebug.snapshot.note === '你好中文'")
     inspector.locator("#disconnect").click()
     inspector.locator("#connect").click()
@@ -122,7 +168,7 @@ def preview_checks(browser, base_url, renderer, screenshot=None):
         page.set_viewport_size({"width": 1280, "height": 1100})
         page.wait_for_function("guavaDebug.snapshot.width > 600")
         page.screenshot(path=screenshot, full_page=True)
-    print(f"Wasm {page.evaluate('guavaDebug.backend')}: pixels, real Compose/Yoga, keyboard, Unicode/IME, state diff, input replay, Inspector and resize passed", flush=True)
+    print(f"Wasm {page.evaluate('guavaDebug.backend')} ({scale}x): pixels, font atlas/fallback, Latin ligatures, Arabic, Devanagari, emoji, Compose/Yoga, Unicode/IME, DevTools and resize passed", flush=True)
     page.close()
 
 
@@ -148,6 +194,7 @@ def native_checks(browser, base_url, native_port):
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--require-webgpu", action="store_true")
+    args.add_argument("--require-hardware-gpu", action="store_true", help="Also reject software/fallback adapters")
     args.add_argument("--skip-native", action="store_true")
     args.add_argument("--screenshot")
     options = args.parse_args()
@@ -177,12 +224,27 @@ def main():
                         time.sleep(0.05)
             with sync_playwright() as playwright:
                 executable = os.environ.get("GUAVA_CHROMIUM")
-                browser = playwright.chromium.launch(executable_path=executable, headless=True,
-                    args=["--no-sandbox", "--enable-unsafe-webgpu", "--use-angle=swiftshader"])
+                strict_gpu = options.require_webgpu or options.require_hardware_gpu
+                flags = ["--no-sandbox", "--enable-unsafe-webgpu"]
+                if not strict_gpu:
+                    flags.append("--use-angle=swiftshader")
+                flags.extend(json.loads(os.environ.get("GUAVA_CHROMIUM_ARGS", "[]")))
+                browser = playwright.chromium.launch(executable_path=executable, headless=True, args=flags)
                 try:
                     base_url = f"http://127.0.0.1:{server.server_port}/"
-                    preview_checks(browser, base_url, "canvas2d", options.screenshot)
-                    preview_checks(browser, base_url, "webgpu" if options.require_webgpu else None)
+                    preview_checks(browser, base_url, "canvas2d", None if strict_gpu else options.screenshot)
+                    if options.require_hardware_gpu:
+                        page = browser.new_page()
+                        page.goto(base_url + "?renderer=webgpu", wait_until="networkidle")
+                        page.wait_for_function("window.guavaDebug?.snapshot != null", timeout=30000)
+                        info = page.evaluate("guavaDebug.gpuInfo")
+                        assert info and info.get("isFallbackAdapter") is False and not info["lost"], info
+                        adapter_name = " ".join(str(info.get(key, "")) for key in ("vendor", "architecture", "device", "description")).lower()
+                        assert not any(name in adapter_name for name in ("swiftshader", "llvmpipe", "lavapipe", "software", "warp")), info
+                        print("Hardware WebGPU adapter:", json.dumps(info), flush=True)
+                        page.close()
+                    preview_checks(browser, base_url, "webgpu" if strict_gpu else None,
+                                   options.screenshot if strict_gpu else None, scale=2)
                     if native:
                         native_checks(browser, base_url, native_port)
                 finally:

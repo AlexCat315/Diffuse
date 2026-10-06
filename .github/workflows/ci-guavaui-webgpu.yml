@@ -1,0 +1,44 @@
+name: GuavaUI hardware WebGPU acceptance
+
+on:
+  workflow_dispatch:
+
+# Opt-in: this runner must have a working physical GPU, its Linux drivers,
+# Chromium dependencies, CMake/Ninja, Python and Node. Cloud CI stays separate.
+jobs:
+  hardware-webgpu:
+    runs-on: [self-hosted, linux, x64, guava-webgpu]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
+      - name: Install matching Wasm SDK
+        shell: bash
+        run: |
+          installed_sdks="$(swift sdk list)"
+          if [[ "$installed_sdks" != *"swift-6.4.0-RELEASE_wasm"* ]]; then
+            swift sdk install https://download.swift.org/swift-6.4.0-release/wasm-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_wasm.artifactbundle.tar.gz --checksum f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d
+          fi
+      - name: Build and verify physical GPU pixels
+        working-directory: GuavaUI/Browser
+        shell: bash
+        run: |
+          npm ci
+          npm run build
+          python3 -m venv "$RUNNER_TEMP/guava-browser-python"
+          source "$RUNNER_TEMP/guava-browser-python/bin/activate"
+          python3 -m pip install -r requirements-dev.txt
+          python3 -m playwright install chromium
+          python3 verify.py --require-hardware-gpu --skip-native --screenshot "$RUNNER_TEMP/webgpu.png" 2>&1 | tee "$RUNNER_TEMP/webgpu.log"
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guavaui-hardware-webgpu
+          path: |
+            ${{ runner.temp }}/webgpu.png
+            ${{ runner.temp }}/webgpu.log
