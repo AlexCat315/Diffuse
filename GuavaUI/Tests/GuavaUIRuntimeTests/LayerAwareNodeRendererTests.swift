@@ -97,6 +97,23 @@ struct LayerAwareNodeRendererTests {
         #expect(second.indices.count == first.indices.count)
     }
 
+    @Test("Temporary backgrounds invalidate cached layers and restore latest authored values")
+    func debugStylesInvalidateCachedLayer() {
+        let t = Tree(), renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: t.render, into: DrawList())
+        t.b.debugBackgroundColor = .white
+        var list = DrawList()
+        renderer.render(tree: t.render, into: list)
+        #expect(list.vertices.contains { $0.color == Color.white.rgba8 })
+        t.b.backgroundColor = .black
+        list = DrawList(); renderer.render(tree: t.render, into: list)
+        #expect(list.vertices.contains { $0.color == Color.white.rgba8 })
+        t.b.debugBackgroundColor = nil
+        list = DrawList(); renderer.render(tree: t.render, into: list)
+        #expect(list.vertices.contains { $0.color == Color.black.rgba8 })
+        #expect(!list.vertices.contains { $0.color == Color.white.rgba8 })
+    }
+
     @Test("paint changes invalidate retained caches even before dirty flags are flushed")
     func changesBetweenUnflushedPasses() {
         let t = Tree()

@@ -19,6 +19,7 @@ const state = {
   logEntries: [],
   timingFrames: [],
   recording: false,
+  inspection: null,
 };
 
 const el = {
@@ -192,6 +193,7 @@ function handleEnvelope(env) {
     case "tree.delta":
       state.snapshot = env.payload ?? null;
       state.tree = env.payload?.root ?? null;
+      if (env.payload?.inspection) syncInspection(env.payload.inspection);
       syncSelection();
       renderTree();
       renderRuntime(env.payload);
@@ -237,6 +239,10 @@ function handleEnvelope(env) {
       setMirrorInactive("Stopped.");
       break;
     default:
+      if (env.type?.startsWith("inspect.")) {
+        if (env.type.endsWith(".ok")) syncInspection(env.payload);
+        else if (env.type.endsWith(".err")) inspectionMessage(env.payload?.message ?? "Request failed", true);
+      }
       if (env.type?.endsWith(".err")) {
         if (env.type.startsWith("mirror.")) {
           setMirrorInactive(env.payload?.message ?? "Mirror request failed.");
@@ -292,6 +298,7 @@ function selectNode(node) {
 }
 
 function renderDetails(node) {
+  renderInspection(node);
   if (!node) {
     el.details.className = "details empty";
     el.details.textContent = "Select a node in the tree.";
@@ -476,6 +483,7 @@ function installMirrorInput() {
     const point = mirrorPoint(event);
     if (!point) return;
     state.lastPointer = point;
+    if (state.inspection?.picking) { send("inspect.hover", point, false); return; }
     const scale = mirrorScale();
     sendInput({
       kind: "pointerMove",
@@ -490,6 +498,10 @@ function installMirrorInput() {
   el.mirror.addEventListener("pointerdown", (event) => {
     const point = mirrorPoint(event);
     if (!point) return;
+    if (state.inspection?.picking) {
+      state.pickedPointer = event.pointerId;
+      send("inspect.pick", point); event.preventDefault(); return;
+    }
     state.pointerDown = true;
     state.pointerButton = event.button;
     state.lastPointer = point;
@@ -507,6 +519,7 @@ function installMirrorInput() {
   });
 
   el.mirror.addEventListener("pointerup", (event) => {
+    if (state.pickedPointer === event.pointerId) { state.pickedPointer = null; event.preventDefault(); return; }
     const point = mirrorPoint(event);
     if (!point && !state.lastPointer) return;
     state.pointerDown = false;
@@ -540,6 +553,7 @@ function installMirrorInput() {
 
   el.mirror.addEventListener("keydown", (event) => {
     if (!state.connected) return;
+    if (state.inspection?.picking) { if (event.code === "Escape") send("inspect.pick.stop"); event.preventDefault(); return; }
     if (event.code) state.pressedKeys.set(event.code, keyCode(event));
     sendInput({
       kind: "keyDown",
@@ -735,6 +749,7 @@ function compactTag(tag) {
 }
 
 function setControls(enabled) {
+  inspectionControls();
   el.connect.disabled = enabled;
   el.disconnect.disabled = !enabled;
   el.refreshTree.disabled = !enabled || !hasCapability("tree");
@@ -770,6 +785,7 @@ function clearSessionViews() {
   state.tree = null;
   state.snapshot = null;
   state.selectedId = null;
+  state.inspection = null;
   state.timingFrames = [];
   el.treeCount.textContent = "";
   el.tree.className = "tree empty";

@@ -122,10 +122,17 @@ public final class Node: @unchecked Sendable {
 
     // MARK: - Visual (Phase 6.3)
 
-    /// Solid background fill. `nil` = transparent (no fill emitted).
+    private var authoredBackgroundColor: Color?
+    /// Diagnostic override. Clearing it reveals the latest authored style.
+    public var debugBackgroundColor: Color? {
+        didSet { if oldValue != debugBackgroundColor { markRenderDirty(reason: .styleSet(field: "debugBackgroundColor")) } }
+    }
+    /// Solid background fill. Writes update the app style beneath an override.
     public var backgroundColor: Color? {
-        didSet {
-            if oldValue != backgroundColor {
+        get { debugBackgroundColor ?? authoredBackgroundColor }
+        set {
+            if authoredBackgroundColor != newValue {
+                authoredBackgroundColor = newValue
                 markRenderDirty(reason: .styleSet(field: "backgroundColor"))
             }
         }
@@ -198,10 +205,22 @@ public final class Node: @unchecked Sendable {
         }
     }
 
-    /// Foreground tint. Used by Text and tinted Image. `nil` = renderer default.
-    public var foregroundColor: Color? {
+    private var authoredForegroundColor: Color?
+    /// Diagnostic tint override, including inherited foreground invalidation.
+    public var debugForegroundColor: Color? {
         didSet {
-            if oldValue != foregroundColor {
+            if oldValue != debugForegroundColor {
+                markRenderDirty(reason: .styleSet(field: "debugForegroundColor"))
+                invalidateInheritedForeground()
+            }
+        }
+    }
+    /// Foreground tint. Writes update the app style beneath an override.
+    public var foregroundColor: Color? {
+        get { debugForegroundColor ?? authoredForegroundColor }
+        set {
+            if authoredForegroundColor != newValue {
+                authoredForegroundColor = newValue
                 markRenderDirty(reason: .styleSet(field: "foregroundColor"))
                 invalidateInheritedForeground()
             }

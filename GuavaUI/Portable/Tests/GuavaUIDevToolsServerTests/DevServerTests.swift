@@ -33,6 +33,17 @@ private final class TestTransport: DevToolsTransport, @unchecked Sendable {
 
 private enum Timeout: Error { case waitingForMessage }
 
+private final class HostInbox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var operations: [@MainActor () -> Void] = []
+    func add(_ operation: @escaping @MainActor () -> Void) { lock.withLock { operations.append(operation) } }
+    var count: Int { lock.withLock { operations.count } }
+    @MainActor func drain(reversed: Bool = false) {
+        let pending = lock.withLock { let values = operations; operations.removeAll(); return values }
+        for operation in reversed ? pending.reversed() : pending { operation() }
+    }
+}
+
 @MainActor
 private func receive(_ type: String, from connection: TestConnection) async throws -> DevToolsEnvelope {
     let deadline = ContinuousClock.now + .seconds(3)
@@ -194,4 +205,37 @@ func stateDiffRestoreResultAndRecordingOwnership() async throws {
     let deadline = ContinuousClock.now + .seconds(3)
     while stops < 2, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
     #expect(stops == 2)
+}
+
+@Test @MainActor
+func temporaryInspectionIsExclusiveAndDisconnectCleansOnlyItsLease() async throws {
+    let transport = TestTransport(), inbox = HostInbox()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    var applied = 0, resets = 0
+    server.hostMainExecutor = { inbox.add($0) }
+    server.inspectionHandler = { request in applied += 1; return DevToolsEnvelope(type: request.type + ".ok", id: request.id) }
+    server.inspectionResetHandler = { resets += 1 }
+    try server.start(); defer { server.stop(); inbox.drain() }
+    let owner = TestConnection(), other = TestConnection()
+    transport.onEvent?(.connected(owner)); _ = try await receive("hello", from: owner)
+    transport.onEvent?(.connected(other)); _ = try await receive("hello", from: other)
+    try transport.request("inspect.pick.start", connection: owner)
+    try transport.request("inspect.pick.start", connection: other)
+    let busy = try await receive("inspect.pick.start.err", from: other)
+    #expect(busy.payload?.objectValue?["code"]?.stringValue == "busy")
+    inbox.drain(); _ = try await receive("inspect.pick.start.ok", from: owner)
+    #expect(applied == 1 && resets == 0)
+    // Queue a style command then disconnect before the main thread runs it.
+    try transport.request("inspect.style.undo", connection: owner)
+    transport.onEvent?(.disconnected(owner))
+    try transport.request("inspect.pick.start", connection: other)
+    let deadline = ContinuousClock.now + .seconds(3)
+    while inbox.count < 4, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(inbox.count == 4)
+    // Simulate MainActor task reordering: a new lease runs before old cleanup.
+    inbox.drain(reversed: true)
+    _ = try await receive("inspect.pick.start.ok", from: other)
+    #expect(applied == 2 && resets == 1)
+    server.stop(); inbox.drain()
+    #expect(resets == 2)
 }
