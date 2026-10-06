@@ -58,13 +58,14 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
         let node = Node()
         node.isHitTestable = true
         node.isFocusable = true
+        node.automaticallyFocusOnPointerDown = false
         node.clipsToBounds = true
         return node
     }
 
     public func _updateNode(_ node: Node) {
         let snap = self
-        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { (focused: Bool) in
+        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { (focused: Bool) -> Void in
             snap.onFocusChanged?(focused)
         }
         // A standalone game owns the initial keyboard target. Embedded editor
@@ -82,17 +83,16 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             registry.setPointer(node, route: .viewport) { event, pointerPhase, eventPhase in
                 guard eventPhase == .target else { return .ignored }
                 if pointerPhase == .down {
-                    let bounds = node.absoluteFrame
-                    let fitted = ViewportPresentationGeometry.fit(
-                        ViewportScreenFrame(x: Float(bounds.minX), y: Float(bounds.minY),
-                                            width: Float(bounds.width), height: Float(bounds.height)),
-                        aspectRatio: snap.contentAspectRatio)
-                    guard event.x >= fitted.x, event.y >= fitted.y,
-                          event.x < fitted.x + fitted.width, event.y < fitted.y + fitted.height else { return .ignored }
+                    guard snap.imageFrame(in: node).contains(x: event.x, y: event.y) else {
+                        if FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
+                        return .ignored
+                    }
                     FocusChainHolder.current?.focus(node)
                     PointerCaptureHolder.current?.acquire(node)
                     snap.onInputEvent?(.mouseButtonDown(event))
                 } else {
+                    guard PointerCaptureHolder.current?.target === node
+                        || snap.imageFrame(in: node).contains(x: event.x, y: event.y) else { return .ignored }
                     snap.onInputEvent?(.mouseButtonUp(event))
                     if PointerCaptureHolder.current?.target === node {
                         PointerCaptureHolder.current?.release()
@@ -102,11 +102,15 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             }
             registry.setMotion(node, route: .viewport) { event, phase in
                 guard phase == .target else { return .ignored }
+                guard PointerCaptureHolder.current?.target === node
+                    || snap.imageFrame(in: node).contains(x: event.x, y: event.y) else { return .ignored }
                 snap.onInputEvent?(.mouseMotion(event))
                 return .handled
             }
             registry.setWheel(node, route: .viewport) { event, phase in
                 guard phase == .target else { return .ignored }
+                if let x = event.mouseX, let y = event.mouseY,
+                   !snap.imageFrame(in: node).contains(x: x, y: y) { return .ignored }
                 snap.onInputEvent?(.mouseWheel(event))
                 return .handled
             }
@@ -182,6 +186,14 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
     private struct DrawIdentity: Equatable {
         let surface: ViewportSurfaceState
         let aspectRatio: Float?
+    }
+
+    private func imageFrame(in node: Node) -> ViewportScreenFrame {
+        let bounds = node.absoluteFrame
+        return ViewportPresentationGeometry.fit(
+            ViewportScreenFrame(x: Float(bounds.minX), y: Float(bounds.minY),
+                                width: Float(bounds.width), height: Float(bounds.height)),
+            aspectRatio: contentAspectRatio)
     }
 
     /// The viewport owns raw keys (camera, game input) while focused, but
