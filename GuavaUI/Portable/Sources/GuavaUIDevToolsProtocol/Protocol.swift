@@ -153,6 +153,8 @@ public struct NodeSummary: Codable, Sendable {
     /// Stable runtime ElementID, encoded as decimal string. Optional so
     /// older clients keep working.
     public var elementID: String?
+    public var layout: NodeLayoutInfo?
+    public var style: NodeStyleInfo?
 
     public init(id: String,
                 viewTag: String? = nil,
@@ -166,7 +168,9 @@ public struct NodeSummary: Codable, Sendable {
                 semanticRole: String? = nil,
                 flags: NodeFlags,
                 children: [NodeSummary],
-                elementID: String? = nil) {
+                elementID: String? = nil,
+                layout: NodeLayoutInfo? = nil,
+                style: NodeStyleInfo? = nil) {
         self.id = id
         self.viewTag = viewTag
         self.debugName = debugName
@@ -180,6 +184,7 @@ public struct NodeSummary: Codable, Sendable {
         self.flags = flags
         self.children = children
         self.elementID = elementID
+        self.layout = layout; self.style = style
     }
 }
 
@@ -195,15 +200,18 @@ public struct TreeSnapshotPayload: Codable, Sendable {
     /// surfaces the focusable / hit-testable populations so DevTools can
     /// audit interaction coverage without poking back at the live tree.
     public var inputInventory: InputInventoryPayload?
+    public var inspection: InspectionState?
 
     public init(root: NodeSummary? = nil,
                 invalidations: [InvalidationRecord]? = nil,
                 renderInventory: RenderInventoryPayload? = nil,
-                inputInventory: InputInventoryPayload? = nil) {
+                inputInventory: InputInventoryPayload? = nil,
+                inspection: InspectionState? = nil) {
         self.root = root
         self.invalidations = invalidations
         self.renderInventory = renderInventory
         self.inputInventory = inputInventory
+        self.inspection = inspection
     }
 }
 

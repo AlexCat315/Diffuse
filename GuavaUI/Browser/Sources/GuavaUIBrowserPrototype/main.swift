@@ -87,7 +87,6 @@ private final class BrowserPrototype {
     let fonts = FontCollection()
     var rasterScale: Float = 1
     var frame: Frame?
-    var selected: String?
     let session = DevToolsSession()
     let recorder = InputRecorder()
     var frameNumber: UInt64 = 0
@@ -96,6 +95,7 @@ private final class BrowserPrototype {
 
     init() {
         dispatcher.eventSink = { [weak self] event in self?.recorder.record(event) }
+        dispatcher.eventInterceptor = { [weak self] event in self?.inspector.editor.intercept(event) ?? false }
         context.withCurrent { graph.install(root: counter) }
         UIShader.wgsl.utf8.withContiguousStorageIfAvailable { bytes in
             shaderBuffer.replace(UnsafeRawBufferPointer(bytes))
@@ -116,11 +116,12 @@ private final class BrowserPrototype {
             func walk(_ node: Node) {
                 if let text = node.attachments[SharedDemoText.attachment] as? DemoText {
                     let f = node.absoluteFrame
-                    let c = text.color
+                    let c = node.inheritedForegroundColor ?? text.color
                     let preedit = node.attachments["preedit"] as? String ?? ""
                     let string = node.attachments[LayoutDebugAttachmentKey.debugName] as? String == "counter.note" && !preedit.isEmpty ? counter.note + preedit : text.text
-                    let x = Float(f.minX) + text.inset
-                    let y = Float(f.minY) + (Float(f.height) - text.size * 1.4) / 2
+                    let p = node.layoutNode?.resolvedPadding
+                    let x = Float(f.minX) + text.inset + (p?.left ?? 0)
+                    let y = Float(f.minY) + (p?.top ?? 0) + (Float(f.height) - (p?.top ?? 0) - (p?.bottom ?? 0) - text.size * 1.4) / 2
                     // Install a node painter so glyphs follow the same ordering
                     // and inherited clipping as the rest of the render tree.
                     fonts.configure(size: text.size, rasterScale: rasterScale)
@@ -128,7 +129,7 @@ private final class BrowserPrototype {
                     let textWidth = glyphs.reduce(Float(0)) { $0 + $1.xAdvance }
                     if node.attachments[LayoutDebugAttachmentKey.debugName] as? String == "counter.note",
                        !counter.note.isEmpty || !preedit.isEmpty { noteWidth = textWidth }
-                    labels.append(Label(text: string, x: Float(f.minX) + text.inset,
+                    labels.append(Label(text: string, x: x,
                                         y: y, size: text.size, color: "rgba(\(Int(c.r * 255)),\(Int(c.g * 255)),\(Int(c.b * 255)),\(c.a))",
                                         width: textWidth, glyphs: glyphs.map(\.glyphID), clusters: glyphs.map(\.cluster), fontIDs: glyphs.map(\.fontID)))
                     node.draw = { [weak self] list, _ in
@@ -150,6 +151,7 @@ private final class BrowserPrototype {
                 NodeRenderer().render(root: root, into: drawList)
             }
             tree.flush()
+            inspector.editor.drawOverlay(into: drawList)
         }
         let upload = fonts.atlas.dirtyUploadPayload()
         if let upload { upload.pixels.withUnsafeBytes { atlasBuffer.replace($0) } }
@@ -203,9 +205,7 @@ private final class BrowserPrototype {
     }
 
     func select(_ id: String?) {
-        if let selected, let node = inspector.find(id: selected) { node.borderColor = nil; node.borderWidth = 0 }
-        selected = id
-        if let id, let node = inspector.find(id: id) { node.borderColor = Color(red: 250, green: 180, blue: 40); node.borderWidth = 3 }
+        inspector.editor.select(id)
     }
 
     private func json<T: Encodable>(_ value: T) -> JSONValue {
@@ -215,7 +215,7 @@ private final class BrowserPrototype {
     func hello() {
         responseBuffer.encode(DevToolsEnvelope(type: "hello", payload: json(HelloPayload(
             host: HelloHostInfo(pid: 0, appTitle: "GuavaUI Wasm prototype", platform: "WebAssembly"),
-            capabilities: ["tree", "select", "timing", "state", "recording"]))))
+            capabilities: ["tree", "select", "timing", "state", "recording", "inspect", "style"]))))
     }
 
     func dispatch(_ bytes: UnsafeRawBufferPointer) {
@@ -224,6 +224,7 @@ private final class BrowserPrototype {
             return
         }
         if let error = session.validate(request) { responseBuffer.encode(error); return }
+        if request.type.hasPrefix("inspect.") { responseBuffer.encode(inspector.editor.handle(request)); return }
         var response = DevToolsEnvelope(type: request.type + ".ok", id: request.id)
         func fail(_ message: String) { response.type = request.type + ".err"; response.payload = json(ErrorPayload(code: "bad_request", message: message)) }
         switch request.type {
@@ -272,7 +273,7 @@ private final class BrowserPrototype {
                     }
                 }
             } else { fail("Invalid recording state") }
-        case "bye": session.reset(); _ = recorder.stop(); select(nil)
+        case "bye": session.reset(); _ = recorder.stop(); inspector.editor.reset()
         default: fail("Unsupported browser prototype message")
         }
         if response.type.hasSuffix(".ok"), response.payload == nil, request.id == nil {

@@ -30,7 +30,23 @@ and omit the unavailable mirror capability.
 
 For a headless connection test, run
 `swift run --package-path GuavaUI/Portable GuavaUIDevToolsProbe` from the repository
-root. It serves a synthetic diagnostic tree without GPU dependencies.
+root. It serves a real Node/Yoga diagnostic tree without GPU dependencies.
+
+## Pick, inspect layout, edit styles
+
+Click **Pick component**, then click a component in the actual application or
+mirror. Picking includes noninteractive text and consumes the click before app
+handlers. Escape cancels. The selection path lets you move to a parent container.
+The layout panel shows margin, border, padding, content dimensions and flex rules.
+Edit the four padding edges or background/foreground color fields to see a live
+layout/repaint. Hex colors accept alpha; color swatches choose opaque colors.
+
+**Undo / Redo**, **Clear selected**, **Clear all**, and per-property Reset control
+temporary overrides. App recomposition preserves them; clearing restores current
+app styles. Disconnect/stop discards overrides and history. Changes stay in memory.
+Native `Text` and the shared demo honor foreground/padding; custom paint callbacks
+must read effective node styles. See [inspection protocol](protocol-inspection.md)
+for messages, lifecycle, limits and custom host integration.
 
 The [Wasm prototype](../Browser/README.md) embeds the same client and uses
 `browser://guava` over a same-origin MessageChannel. This transport requires the

@@ -12,6 +12,7 @@ import threading
 import time
 
 from playwright.sync_api import sync_playwright
+from verify_inspection import inspection_checks, native_inspection_checks
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -66,7 +67,7 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
     }""")
     selected = page.evaluate("id => guavaDebug.request({type:'select.node',id:91,payload:{id}})", node_id)
     assert selected["type"] == "select.node.ok"
-    page.wait_for_function("id => { function find(n) { if(n.id===id) return n.flags.hasBorder; return n.children.some(find); } return find(guavaDebug.snapshot.tree.root); }", arg=node_id)
+    page.wait_for_function("id => { function find(n) { if(n.id===id) return n.elementID===guavaDebug.snapshot.tree.inspection.selectedID && !n.flags.hasBorder; return n.children.some(find); } return find(guavaDebug.snapshot.tree.root); }", arg=node_id)
     page.locator("#surface").focus()
     page.keyboard.press("Enter")
     page.wait_for_function("guavaDebug.snapshot.count === 3")
@@ -157,6 +158,7 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
         }""", arg=text, timeout=10000)
     page.evaluate("guavaDebug.request({type:'state.restore',id:95,payload:{count:'2',dark:'true',note:'你好中文'}})")
     page.wait_for_function("guavaDebug.snapshot.note === '你好中文'")
+    inspection_checks(page, inspector)
     inspector.locator("#disconnect").click()
     inspector.locator("#connect").click()
     inspector.locator("#status").filter(has_text="Connected").wait_for()
@@ -167,6 +169,8 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
     if screenshot:
         page.set_viewport_size({"width": 1280, "height": 1100})
         page.wait_for_function("guavaDebug.snapshot.width > 600")
+        inspector.locator("#tree .treeNode").filter(has_text="counter.card").click()
+        page.wait_for_function("guavaDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.card').elementID")
         page.screenshot(path=screenshot, full_page=True)
     print(f"Wasm {page.evaluate('guavaDebug.backend')} ({scale}x): pixels, font atlas/fallback, Latin ligatures, Arabic, Devanagari, emoji, Compose/Yoga, Unicode/IME, DevTools and resize passed", flush=True)
     page.close()
@@ -184,10 +188,11 @@ def native_checks(browser, base_url, native_port):
     page.locator("#restoreState").click()
     page.locator("#captureState").click()
     page.wait_for_function("document.querySelector('#stateSnapshot').value.includes('12')")
+    native_inspection_checks(page)
     page.locator("#disconnect").click()
     page.locator("#connect").click()
     page.locator("#status").filter(has_text="Connected").wait_for()
-    print("Native WebSocket: hello, tree, state restore and reconnect passed", flush=True)
+    print("Native WebSocket: hello, tree, state restore, picking, editable styles, undo/redo, disconnect cleanup and reconnect passed", flush=True)
     page.close()
 
 

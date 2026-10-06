@@ -249,6 +249,9 @@ public final class AppRuntime {
 
         host.onInit = { [weak self] native, w, h in
             guard let self else { return }
+            self.host.mainSession?.inputInterceptor = { [weak self] event in
+                MainActor.assumeIsolated { self?.devTools?.interceptInput(event) ?? false }
+            }
             do {
                 try self.handleInit(native: native, widthPx: w, heightPx: h, rootView: rootView)
             } catch {
@@ -795,43 +798,10 @@ public final class AppRuntime {
     }
 
     private func drawDevToolsOverlay(into list: DrawList) {
-        guard let frame = devTools?.selectedNodeAbsoluteFrame else { return }
-        let x = Float(frame.origin.x)
-        let y = Float(frame.origin.y)
-        let width = Float(frame.size.width)
-        let height = Float(frame.size.height)
-        guard width > 0, height > 0 else { return }
-
-        let rect = UIRect(x: x, y: y, width: width, height: height)
-        list.addRect(rect, color: Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x20))
-
-        let stroke = Color(red: 0x72, green: 0xB4, blue: 0xFF, alpha: 0xF0)
-        let shadow = Color(r: 0, g: 0, b: 0, a: 0.45)
-        drawFrame(rect, thickness: 4, color: shadow, into: list)
-        drawFrame(rect, thickness: 2, color: stroke, into: list)
-    }
-
-    private func drawFrame(_ rect: UIRect,
-                           thickness: Float,
-                           color: Color,
-                           into list: DrawList) {
-        let half = thickness * 0.5
-        list.addLine(fromX: rect.minX, fromY: rect.minY + half,
-                     toX: rect.maxX, toY: rect.minY + half,
-                     thickness: thickness, color: color)
-        list.addLine(fromX: rect.maxX - half, fromY: rect.minY,
-                     toX: rect.maxX - half, toY: rect.maxY,
-                     thickness: thickness, color: color)
-        list.addLine(fromX: rect.maxX, fromY: rect.maxY - half,
-                     toX: rect.minX, toY: rect.maxY - half,
-                     thickness: thickness, color: color)
-        list.addLine(fromX: rect.minX + half, fromY: rect.maxY,
-                     toX: rect.minX + half, toY: rect.minY,
-                     thickness: thickness, color: color)
+        devTools?.drawInspectionOverlay(into: list)
     }
 
     // MARK: - Text environment
-
     private func configureTextEnvironment(scale requestedScale: Float) {
         let scale = max(1, requestedScale)
         guard atlas == nil || abs(scale - activeTextScale) >= 0.01 else { return }
