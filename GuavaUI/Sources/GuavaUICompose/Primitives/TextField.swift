@@ -68,6 +68,9 @@ public struct TextField: View {
     /// This is intended for transient inline editors (for example, F2 rename)
     /// where the input must be immediately keyboard-ready after insertion.
     public let focusRequestID: AnyHashable?
+    /// One-shot source navigation. Indices count Swift Characters, like the editor.
+    public let caretRequestID: AnyHashable?
+    public let caretRequestIndex: Int?
     public let onSubmit: (() -> Void)?
     /// Gives composite controls first refusal for domain-specific keys.
     public let onKeyDown: ((KeyEvent) -> Bool)?
@@ -110,6 +113,8 @@ public struct TextField: View {
                 prepend: String? = nil,
                 append: String? = nil,
                 focusRequestID: AnyHashable? = nil,
+                caretRequestID: AnyHashable? = nil,
+                caretRequestIndex: Int? = nil,
                 onSubmit: (() -> Void)? = nil,
                 onKeyDown: ((KeyEvent) -> Bool)? = nil,
                 onCancel: (() -> Void)? = nil,
@@ -145,6 +150,8 @@ public struct TextField: View {
         self.prepend = prepend
         self.append = append
         self.focusRequestID = focusRequestID
+        self.caretRequestID = caretRequestID
+        self.caretRequestIndex = caretRequestIndex
         self.onSubmit = onSubmit
         self.onKeyDown = onKeyDown
         self.onCancel = onCancel
@@ -360,6 +367,15 @@ public struct TextField: View {
             node.attachments[Self.focusRequestIDKey] = focusRequestID
             state.selectionAnchor = 0
             state.cursorIndex = text.wrappedValue.count
+            recordCaretActivity(state)
+            FocusChainHolder.current?.focus(node)
+        }
+
+        if let caretRequestID, let caretRequestIndex,
+           node.attachments["__textfield_caret_request_id"] as? AnyHashable != caretRequestID {
+            node.attachments["__textfield_caret_request_id"] = caretRequestID
+            state.selectionAnchor = nil
+            state.cursorIndex = max(0, min(text.wrappedValue.count, caretRequestIndex))
             recordCaretActivity(state)
             FocusChainHolder.current?.focus(node)
         }

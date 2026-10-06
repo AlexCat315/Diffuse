@@ -7,7 +7,6 @@ import GuavaUIRuntime
 struct EditorOutputPanel: View {
     let app: EditorApplication
     private var workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
-    @State private var selection = OutputTab.logs
 
     init(app: EditorApplication) {
         self.app = app
@@ -16,27 +15,40 @@ struct EditorOutputPanel: View {
 
     var body: some View {
         let snapshot = workspace.wrappedValue
-        let count = snapshot.documents.reduce(0) { $0 + $1.diagnostics.count }
-        TabView(selection: $selection, tabs: [
-            TabItem(L("Logs"), id: OutputTab.logs) { ConsolePanel(store: app.store) },
-            TabItem("\(L("Problems")) \(count)", id: OutputTab.problems) {
-                problems(snapshot.documents)
+        let failures = app.store.consoleEntries.filter { $0.severity == .error || $0.severity == .warning }
+        let count = snapshot.documents.reduce(0) { $0 + $1.diagnostics.count } + failures.count
+        TabView(selection: Binding(get: { app.store.outputTab }, set: { app.store.dispatch(.setOutputTab($0)) }), tabs: [
+            TabItem(L("Logs"), id: EditorOutputTab.logs) {
+                ConsolePanel(store: app.store, onNavigate: app.navigateToIssue)
             },
-            TabItem(L("Build Output"), id: OutputTab.build) {
+            TabItem("\(L("Problems")) \(count)", id: EditorOutputTab.problems) {
+                problems(snapshot.documents, failures: failures)
+            },
+            TabItem(L("Build Output"), id: EditorOutputTab.build) {
                 buildOutput(snapshot.selectedDocument)
             },
         ])
         .frame(minWidth: 0, minHeight: 0)
     }
 
-    private func problems(_ documents: [ScriptWorkspaceDocument]) -> some View {
+    private func problems(_ documents: [ScriptWorkspaceDocument], failures: [EditorConsoleEntry]) -> some View {
         let withProblems = documents.filter { !$0.diagnostics.isEmpty }
         return ScrollView(.vertical, scrollbarGutter: .stable) {
-            if withProblems.isEmpty {
+            if withProblems.isEmpty && failures.isEmpty {
                 EditorPanelEmptyState(L("No problems detected"))
             } else {
                 Box(direction: .column, alignItems: .stretch, spacing: 8) {
                     withProblems.map { documentProblems($0) }
+                    failures.map { entry in
+                        AnyView(Column(alignment: .leading, spacing: 4) {
+                            Text(L(entry.message)).font(.label).foregroundColor(entry.severity == .error ? .error : .warning)
+                            if let detail = entry.detail { Text(detail).font(.caption).foregroundColor(.onSurfaceVariant) }
+                            if let nextStep = entry.nextStep { Text(L(nextStep)).font(.caption).foregroundColor(.warning) }
+                            if let target = entry.target {
+                                Button(L("Go to source")) { app.navigateToIssue(target) }.buttonStyle(.ghost)
+                            }
+                        }.padding(8))
+                    }
                 }
                 .padding(8)
             }
@@ -50,7 +62,10 @@ struct EditorOutputPanel: View {
                 .font(.label).foregroundColor(.onSurfaceVariant)
                 .padding(horizontal: 8, vertical: 4)
             document.diagnostics.map { diagnostic in
-                AnyView(Button(action: { _ = app.scriptWorkspace.select(scriptID: document.file.identifier) }) {
+                AnyView(Button(action: {
+                    app.navigateToIssue(.script(id: document.file.identifier,
+                        line: diagnostic.startLine, column: diagnostic.startCharacter))
+                }) {
                     ScriptDiagnosticRow(diagnostic: diagnostic)
                 }.buttonStyle(.plain))
             }
@@ -82,8 +97,6 @@ struct EditorOutputPanel: View {
         .background(.surfaceSunken)
     }
 }
-
-private enum OutputTab: Hashable { case logs, problems, build }
 
 private struct OutputTextFieldStyle: TextFieldStyle {
     func makeBody(configuration: TextFieldStyleConfiguration) -> some View {

@@ -118,10 +118,14 @@ enum EditorRootViewFactory {
     }
 
     static func activatePanel(_ id: PanelID, in controller: WorkspaceController) {
+        if let maximized = controller.maximizedPanelID, maximized != id {
+            _ = controller.dispatch(.restoreMaximized)
+        }
         if controller.document.groupContaining(panelID: id) == nil {
             _ = controller.dispatch(.reopenPanel(id))
         }
         guard let group = controller.document.groupContaining(panelID: id) else { return }
+        if group.isCollapsed { _ = controller.dispatch(.expand(group.id)) }
         _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: id))
     }
 
@@ -165,7 +169,7 @@ enum EditorRootViewFactory {
                             closable: false,
                             preferredSlot: .center,
                             iconAssetKey: "panel.viewport") {
-                ViewportPanel(app: app, scene: app.scene)
+                EditorViewportWorkspacePanel(app: app)
             },
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
@@ -197,6 +201,11 @@ enum EditorRootViewFactory {
                             iconAssetKey: "panel.render-pipeline") {
                 RenderPipelinePanel(app: app)
             },
+            PanelDescriptor(id: "animation", title: L("Animation"), preferredSlot: .bottom,
+                            iconAssetKey: "panel.animation") {
+                InspectorPanel(store: app.store, scene: app.scene,
+                               sectionFilter: ["animation-player", "animation-graph-player"])
+            },
             PanelDescriptor(id: "developer-tools",
                             title: localizedPanelTitle(for: "developer-tools"),
                             preferredSlot: .bottom,
@@ -226,6 +235,7 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.intent-input", panelIcon("ai-intent"))
         WorkspacePanelIconCatalog.register("panel.confirmation-host", panelIcon("confirmations"))
         WorkspacePanelIconCatalog.register("panel.render-pipeline", panelIcon("render"))
+        WorkspacePanelIconCatalog.register("panel.animation", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
         WorkspacePanelIconCatalog.register("panel.profiler", panelIcon("profiler"))
         WorkspacePanelIconCatalog.register("panel.scripts", panelIcon("script"))
@@ -324,6 +334,8 @@ enum EditorRootViewFactory {
             return L("Profiler")
         case "scripts":
             return L("Scripts")
+        case "animation":
+            return L("Animation")
         default:
             return id
         }
@@ -577,6 +589,15 @@ enum EditorWorkspaceDefaults {
                                                  "developer-tools"],
                                         activePanelID: defaultBottomPanelID(for: preset))
         ]
+        if panels["animation"] != nil { groups["bottom"]?.panels.append("animation") }
+        if mode == .scripting {
+            groups["center"]?.activePanelID = "scripts"
+            groups["bottom"]?.activePanelID = "console"
+        } else if mode == .animation, panels["animation"] != nil {
+            groups["bottom"]?.activePanelID = "animation"
+        } else if !mode.isGameWorkspace {
+            groups["bottom"]?.activePanelID = "render-pipeline"
+        }
         let centerLayout: WorkspaceLayoutNode
         if preset == .levelWorkbench {
             groups["center"] = WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport")
@@ -600,6 +621,8 @@ enum EditorWorkspaceDefaults {
 
     private static func defaultFractions(for preset: EditorLayoutPreset) -> WorkspaceSplitFractions {
         switch preset {
+        case .scriptingDefault:
+            return WorkspaceSplitFractions(leading: 0.14, centerTrailing: 0.85, topBottom: 0.72)
         case .levelWorkbench:
             return WorkspaceSplitFractions(leading: 0.16, centerTrailing: 0.75, topBottom: 0.68)
         case .levelDefault:
@@ -619,6 +642,7 @@ enum EditorWorkspaceDefaults {
 
     private static func defaultBottomPanelID(for preset: EditorLayoutPreset) -> WorkspacePanelID {
         switch preset {
+        case .scriptingDefault: return "console"
         case .levelWorkbench:
             return "developer-tools"
         case .levelDefault, .levelCinematics:

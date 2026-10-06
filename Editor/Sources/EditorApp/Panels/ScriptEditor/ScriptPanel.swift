@@ -234,6 +234,9 @@ struct ScriptPanel: View {
                                      app.scriptWorkspace.updateSelectedSource(text)
                                  },
                                  editHistory: history(for: selectedScript.identifier),
+                                 navigation: app.store.scriptNavigation.flatMap {
+                                     $0.scriptID == selectedScript.identifier ? $0 : nil
+                                 },
                                  onHover: requestHover,
                                  onHoverEnd: cancelHover)
                     .id(selectedScript.identifier)

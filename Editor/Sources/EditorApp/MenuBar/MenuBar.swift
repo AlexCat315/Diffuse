@@ -1,6 +1,13 @@
 import EditorCore
 
 enum EditorMenuCommand {
+    case showCommandPalette
+    case showSceneSettings
+    case showAssets
+    case showProblems
+    case maximizePanel(String)
+    case restorePanels
+    case saveLayout
     case closeProject
     case newScene
     case openScene

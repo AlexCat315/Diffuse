@@ -104,3 +104,9 @@
 "The bundled example project is missing. Reinstall the editor." = "内置示例缺失，请重新安装编辑器。";
 "Close the current project before opening another project." = "请先关闭当前项目，再打开其他项目。";
 "The project's .guava folder must not be a symbolic link." = "项目的 .guava 文件夹不能是符号链接。";
+
+/* Editor productivity workflows */
+"Project export failed" = "项目导出失败";
+"Exporting project…" = "正在导出项目…";
+"Mixed value" = "混合值";
+"Project exported" = "项目已导出";

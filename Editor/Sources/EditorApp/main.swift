@@ -145,13 +145,17 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         onTick: { dt in
             context.tick(deltaTime: dt)
             if let bundle = context.bundle {
-                // HUD 布局用视口的逻辑尺寸；光栅化按窗口 content scale。
-                let scale = max(1, ContentScaleHolder.current)
+                // Fixed game resolutions simulate the same HUD pixel layout
+                // across desktop content scales; Fit Window uses logical points.
+                let store = bundle.app.store
+                let fixed = store.viewportMode == .game ? store.gamePreviewResolution.size : nil
+                let scale = fixed == nil ? max(1, ContentScaleHolder.current) : 1
                 let frame = EditorViewportDropTarget.frame
-                let logicalW = Int((frame?.width ?? 1280).rounded())
-                let logicalH = Int((frame?.height ?? 720).rounded())
+                let logicalW = fixed.map { Int($0.width) } ?? Int((frame?.width ?? 1280).rounded())
+                let logicalH = fixed.map { Int($0.height) } ?? Int((frame?.height ?? 720).rounded())
                 inGameUIHost.tick(width: logicalW, height: logicalH, contentScale: scale,
-                                  canvas: bundle.app.scene.currentInGameCanvas())
+                                  canvas: store.viewportMode == .game && store.gamePreviewHUDEnabled
+                                    ? bundle.app.scene.currentInGameCanvas() : InGameCanvas())
             }
         },
         onDisplayReady: { display in
