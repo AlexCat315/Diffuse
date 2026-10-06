@@ -13,6 +13,8 @@ import urllib.parse
 
 ROOT = Path(__file__).resolve().parent
 WATCH = [ROOT / "Sources", ROOT / "web", ROOT.parent / "Portable/Sources",
+         ROOT.parent / "Text/Sources", ROOT.parent / "Text/Fonts", ROOT.parent / "Text/Package.swift",
+         ROOT / "build_fonts.py",
          ROOT.parent / "DevTools", ROOT.parents[1] / "Engine/PlatformCore",
          ROOT / "Package.swift", ROOT.parent / "Portable/Package.swift", ROOT / "build.sh"]
 

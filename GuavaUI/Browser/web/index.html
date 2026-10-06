@@ -13,11 +13,11 @@
     <section class="preview">
       <div class="heading"><h1>A shared core, running in your browser.</h1><p>Interact with the canvas, then inspect its tree or capture and restore state below.</p></div>
       <div id="surface" tabindex="0" aria-label="GuavaUI counter preview">
-        <canvas id="gpu"></canvas><canvas id="fallback" hidden></canvas><canvas id="labels"></canvas>
+        <canvas id="gpu"></canvas><canvas id="fallback" hidden></canvas>
       </div>
       <p id="stats"></p>
       <div class="keyboard"><button id="increment">Increment</button><button id="reset">Reset</button><button id="theme">Toggle theme</button><span>Keyboard and screen reader controls for the canvas.</span></div>
-      <p class="scope">This preview runs the same Compose counter, ViewGraph, Yoga, input dispatcher, DrawList and WGSL as the desktop demo. Browser fonts draw the labels. Inspect state changes or record and replay input below.</p>
+      <p class="scope">This preview shares Compose, Yoga, FreeType/HarfBuzz, DrawList and WGSL with the desktop demo. Text uses the Wasm font atlas, including Chinese, Arabic, Devanagari and monochrome emoji. Inspect state changes or record and replay input below.</p>
     </section>
     <section class="inspector"><h2>GuavaUI Inspector</h2><iframe id="inspector" title="GuavaUI DevTools" src="./devtools/index.html?transport=browser"></iframe></section>
   </main>
