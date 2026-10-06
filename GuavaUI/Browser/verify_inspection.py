@@ -19,6 +19,18 @@ def inspection_checks(page, inspector):
     page.wait_for_function("guavaDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.value').elementID")
     assert page.evaluate("inspectedNode('counter.value').flags.hitTestable") is False
     inspector.locator("#selectionPath button").filter(has_text="counter.card").click()
+    frame = page.locator("#inspector").element_handle().content_frame()
+    # A delayed snapshot from before selection must not erase a focused draft
+    # or cancel the edit timer while the new selection is awaiting confirmation.
+    frame.evaluate("""() => {
+      const node=findNode(state.tree,state.selectedId), previous=node.children[0];
+      state.pendingSelectionId=state.selectedId;
+      const input=document.querySelector('#paddingLeft'); input.focus();input.value='31';
+      syncInspection({...state.inspection,selectedID:previous.elementID});
+      if(state.selectedId!==node.elementID || input.value!=='31') throw Error('Stale selection erased draft');
+      syncInspection({...state.inspection,selectedID:node.elementID});
+    }""")
+    profile_before = frame.evaluate("findNode(state.tree,findNode(state.tree,state.selectedId).ownerScopeID).recomposition.count")
     inspector.locator("#paddingLeft").fill("32")
     page.wait_for_function("inspectedNode('counter.card').layout.padding.left === 32")
     assert page.evaluate("inspectedNode('counter.value').absoluteFrame.x-inspectedNode('counter.card').absoluteFrame.x") == 32
@@ -42,6 +54,7 @@ def inspection_checks(page, inspector):
       let green=0;for(let i=0;i<p.length;i+=4)if(p[i]<80&&p[i+1]>180&&p[i+2]<80)green++;
       return green>50;
     }""")
+    assert frame.evaluate("findNode(state.tree,findNode(state.tree,state.selectedId).ownerScopeID).recomposition.count") == profile_before
     # Composition retains debug values; clearing restores the latest theme.
     page.locator("#theme").click()
     page.wait_for_function("guavaDebug.snapshot.dark === false && inspectedNode('counter.card').layout.padding.left === 32")

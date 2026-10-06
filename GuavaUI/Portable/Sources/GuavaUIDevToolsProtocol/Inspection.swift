@@ -39,7 +39,7 @@ public struct InspectionState: Codable, Sendable {
 
 public enum InspectionValidation {
     public static let commands: Set<String> = ["inspect.pick.start", "inspect.pick.stop", "inspect.hover", "inspect.pick",
-        "inspect.style.set", "inspect.style.undo", "inspect.style.redo", "inspect.style.clear", "inspect.style.clearAll"]
+        "inspect.style.set", "inspect.style.undo", "inspect.style.redo", "inspect.style.clear", "inspect.style.clearAll", "inspect.recomposition.reset"]
     public static func validID(_ value: JSONValue?) -> Bool {
         guard let s = value?.stringValue else { return false }
         return !s.isEmpty && s.utf8.count <= 128

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GuavaUI DevTools</title>
-  <link rel="stylesheet" href="./styles.css?v=0.3">
+  <link rel="stylesheet" href="./styles.css?v=0.4">
 </head>
 <body>
   <main class="shell">
@@ -55,6 +55,24 @@
           <span>Selection</span>
         </div>
         <div id="selectionPath" class="selectionPath"></div>
+        <section class="analysisPanel">
+          <strong>Source &amp; recomposition</strong>
+          <div id="sourceLocation" class="sourceLocation">Select a component to locate its source.</div>
+          <div class="sourceActions"><select id="sourceEditor" aria-label="Editor"><option value="vscode">VS Code</option><option value="cursor">Cursor</option></select><a id="openSource" aria-disabled="true">Open source</a></div>
+          <details><summary>Editor path mapping</summary>
+            <label>Build path prefix<input id="sourceBuildRoot" placeholder="/build/Guava-Engine" spellcheck="false"></label>
+            <label>Local path prefix<input id="sourceLocalRoot" placeholder="/Users/me/Guava-Engine" spellcheck="false"></label>
+            <p class="panelStatus">Map paths when the app was built on another machine. Preferences stay in this browser.</p>
+          </details>
+          <button id="recompositionOwner" hidden></button>
+          <pre id="recompositionStats" class="analysisStats">No component selected.</pre>
+          <div id="recompositionReasons" class="analysisReasons"></div>
+          <details><summary>All components · <span id="recompositionCount">0</span></summary>
+            <div class="editActions"><select id="recompositionSort" aria-label="Sort components"><option value="totalMs">Total time</option><option value="count">Recomposition count</option><option value="lastMs">Last time</option></select><button id="resetRecomposition" disabled>Reset statistics</button></div>
+            <div id="recompositionTable" class="recompositionTable"></div>
+            <p class="panelStatus">Body + reconciliation, excluding layout and paint. Parent time includes children; rows overlap. Initial mount is separate.</p>
+          </details>
+        </section>
         <section id="inspectionPanel" class="inspectionPanel">
           <div class="editActions">
             <button id="undoStyle" disabled>Undo</button><button id="redoStyle" disabled>Redo</button>
@@ -129,7 +147,8 @@
   </main>
 
   <script src="./browser-connection.js"></script>
-  <script src="./inspection.js?v=0.3"></script>
-  <script src="./app.js?v=0.3"></script>
+  <script src="./inspection.js?v=0.4"></script>
+  <script src="./analysis.js?v=0.4"></script>
+  <script src="./app.js?v=0.4"></script>
 </body>
 </html>

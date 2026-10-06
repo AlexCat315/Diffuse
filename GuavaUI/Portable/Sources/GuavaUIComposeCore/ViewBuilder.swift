@@ -7,6 +7,19 @@
 /// - `for-in`       → `[View]` via `buildArray`
 @resultBuilder
 public enum ViewBuilder {
+    public static func buildExpression<Content: View>(_ content: Content,
+        fileID: StaticString = #fileID, filePath: StaticString = #filePath,
+        line: UInt = #line, column: UInt = #column) -> _SourceLocatedView<Content> {
+        _SourceLocatedView(content: content, location: .init(fileID: String(describing: fileID),
+            filePath: String(describing: filePath), line: line, column: column))
+    }
+
+    /// Preserve explicitly declared concrete Body types. Opaque bodies retain
+    /// the metadata wrapper; a concrete body can still be marked at its call site.
+    @_disfavoredOverload
+    public static func buildBlock<Content: View>(_ content: _SourceLocatedView<Content>) -> Content {
+        content.content
+    }
 
     // MARK: - Block (variadic via parameter packs)
 

@@ -7,7 +7,7 @@ import Foundation
 /// 1. A `@State` write fires `StateStorage.onChange`.
 /// 2. The owning scope calls `recomposer.invalidate(scopeID:body:)` on the
 ///    `Recomposer` instance owned by the host.
-/// 3. A second call with the same `scopeID` in the same frame is dropped.
+/// 3. Further calls with the same `scopeID` coalesce, retaining distinct causes.
 /// 4. The platform host calls `recomposer.commitAll()` at frame start,
 ///    executing pending recomposes and any child-scope recomposes they queue
 ///    before layout/draw for that frame.
@@ -18,7 +18,8 @@ public final class Recomposer: @unchecked Sendable {
 
     private struct PendingScope {
         let id: ObjectIdentifier
-        let body: () -> Void
+        let body: ([RecompositionReason]) -> Void
+        var reasons: [RecompositionReason]
         /// Animation captured at write time. Re-established by `commitAll`
         /// before invoking `body` so modifier `apply` paths observe the same
         /// animation that the user authored at the call site.
@@ -36,18 +37,34 @@ public final class Recomposer: @unchecked Sendable {
 
     /// Schedule a recompose for `scopeID`.
     ///
-    /// If `scopeID` is already queued for this frame the call is a no-op,
-    /// so each scope recomposes at most once per frame regardless of how many
-    /// state writes occur. `animation` defaults to `nil`; when non-nil,
+    /// If `scopeID` is already queued the first body/animation is retained.
+    /// Queued callbacks commit at most once per frame regardless of how many
+    /// state writes occur (parent reconciliation can also evaluate child bodies).
+    /// `animation` defaults to `nil`; when non-nil,
     /// `commitAll` installs it as the active animation context for the
     /// duration of `body`.
     public func invalidate(scopeID: ObjectIdentifier,
                            animation: Animation? = nil,
                            body: @escaping () -> Void) {
+        invalidateTracked(scopeID: scopeID, animation: animation, reason: .init(kind: "manual")) { _ in body() }
+    }
+
+    /// Preserve up to 16 distinct causes while keeping existing scheduling and
+    /// first-animation semantics. Self-invalidations retain next-frame causes.
+    public func invalidateTracked(scopeID: ObjectIdentifier,
+                                  animation: Animation? = nil,
+                                  reason: RecompositionReason,
+                                  body: @escaping ([RecompositionReason]) -> Void) {
         lock.withLock {
-            guard pendingByID[scopeID] == nil else { return }
+            if var queued = pendingByID[scopeID] {
+                if queued.reasons.count < 16 && !queued.reasons.contains(reason) {
+                    queued.reasons.append(reason); pendingByID[scopeID] = queued
+                }
+                return
+            }
             pendingByID[scopeID] = PendingScope(id: scopeID,
                                                 body: body,
+                                                reasons: [reason],
                                                 animation: animation)
             pendingOrder.append(scopeID)
         }
@@ -83,7 +100,7 @@ public final class Recomposer: @unchecked Sendable {
             didCommit = true
             committedIDs.insert(scope.id)
             ActiveAnimationContext.with(scope.animation) {
-                scope.body()
+                scope.body(scope.reasons)
             }
         }
 

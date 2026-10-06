@@ -30,10 +30,12 @@ struct ViewBuilderTests {
         #expect(v is EmptyView)
     }
 
-    @Test("Single-element block returns the element")
+    @Test("Single-element block retains the expression with source coordinates")
     func singleBlock() {
         @ViewBuilder var v: some View { _DebugNode(label: "x") }
-        #expect(v is _DebugNode)
+        let located = v as? _AnySourceLocatedView
+        #expect(located?._sourceContent is _DebugNode)
+        #expect(located?._sourceLocation.fileID == #fileID)
     }
 
     @Test("Variadic block produces TupleView")
@@ -66,6 +68,7 @@ struct ViewBuilderTests {
         let t = make(true) as! any _StructuralView
         #expect(t._expanded.count == 1)
         let arr = t._expanded
-        #expect((arr.first as? _DebugNode)?.label == "T")
+        let located = arr.first as? _AnySourceLocatedView
+        #expect((located?._sourceContent as? _DebugNode)?.label == "T")
     }
 }
