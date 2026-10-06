@@ -4,6 +4,7 @@ import GuavaUISharedDemo
 import GuavaUIDevToolsScene
 import GuavaUICore
 import GuavaUIDevToolsProtocol
+import GuavaUIText
 
 private struct Label: Codable {
     var text: String
@@ -11,11 +12,16 @@ private struct Label: Codable {
     var y: Float
     var size: Float
     var color: String
+    var width: Float
+    var glyphs: [UInt32]
+    var clusters: [UInt32]
+    var fontIDs: [Int]
 }
 
 private struct Batch: Codable {
     var offset: UInt32
     var count: UInt32
+    var textureID: UInt32
     var clip: [Float]?
 }
 
@@ -23,6 +29,7 @@ private struct Frame: Codable {
     var count: Int
     var dark: Bool
     var note: String
+    var noteWidth: Float
     var focused: String?
     var width: Float
     var height: Float
@@ -31,6 +38,11 @@ private struct Frame: Codable {
     var batches: [Batch]
     var labels: [Label]
     var tree: TreeSnapshotPayload
+    var fontCount: Int
+    var atlasWidth: Int
+    var atlasHeight: Int
+    var atlasUpdate: [Int]?
+    var atlasFull: Bool
 }
 
 /// Buffers have explicit lifetimes across the Swift/JavaScript boundary.
@@ -71,6 +83,9 @@ private final class BrowserPrototype {
     let snapshotBuffer = ExportBuffer()
     let responseBuffer = ExportBuffer()
     let shaderBuffer = ExportBuffer()
+    let atlasBuffer = ExportBuffer()
+    let fonts = FontCollection()
+    var rasterScale: Float = 1
     var frame: Frame?
     var selected: String?
     let session = DevToolsSession()
@@ -92,34 +107,64 @@ private final class BrowserPrototype {
         let width = rawWidth.isFinite ? max(280, min(4096, rawWidth)) : 640
         let height = rawHeight.isFinite ? max(360, min(4096, rawHeight)) : 460
         var labels = [Label]()
+        var noteWidth: Float = 0
         context.withCurrent {
             recomposer.commitAll()
             graph.computeLayoutIfNeeded(width: width, height: height)
             layoutMilliseconds = max(0, (Date().timeIntervalSince1970 - startedAt) * 1000)
             drawList.reset()
-            if let root = tree.root { NodeRenderer().render(root: root, into: drawList) }
             func walk(_ node: Node) {
                 if let text = node.attachments[SharedDemoText.attachment] as? DemoText {
                     let f = node.absoluteFrame
                     let c = text.color
                     let preedit = node.attachments["preedit"] as? String ?? ""
                     let string = node.attachments[LayoutDebugAttachmentKey.debugName] as? String == "counter.note" && !preedit.isEmpty ? counter.note + preedit : text.text
+                    let x = Float(f.minX) + text.inset
+                    let y = Float(f.minY) + (Float(f.height) - text.size * 1.4) / 2
+                    // Install a node painter so glyphs follow the same ordering
+                    // and inherited clipping as the rest of the render tree.
+                    fonts.configure(size: text.size, rasterScale: rasterScale)
+                    let glyphs = fonts.shape(string)
+                    let textWidth = glyphs.reduce(Float(0)) { $0 + $1.xAdvance }
+                    if node.attachments[LayoutDebugAttachmentKey.debugName] as? String == "counter.note",
+                       !counter.note.isEmpty || !preedit.isEmpty { noteWidth = textWidth }
                     labels.append(Label(text: string, x: Float(f.minX) + text.inset,
-                                        y: Float(f.minY) + (Float(f.height) + text.size) / 2 - 3,
-                                        size: text.size, color: "rgba(\(Int(c.r * 255)),\(Int(c.g * 255)),\(Int(c.b * 255)),\(c.a))"))
+                                        y: y, size: text.size, color: "rgba(\(Int(c.r * 255)),\(Int(c.g * 255)),\(Int(c.b * 255)),\(c.a))",
+                                        width: textWidth, glyphs: glyphs.map(\.glyphID), clusters: glyphs.map(\.cluster), fontIDs: glyphs.map(\.fontID)))
+                    node.draw = { [weak self] list, _ in
+                        guard let self else { return }
+                        list.pushClip(UIRect(x: Float(f.minX), y: Float(f.minY), width: Float(f.width), height: Float(f.height)))
+                        self.fonts.draw(string, size: text.size, rasterScale: self.rasterScale, into: list, x: x, y: y, color: c)
+                        list.popClip()
+                    }
                 }
                 for child in node.children { walk(child) }
             }
             if let root = tree.root { walk(root) }
+            if let root = tree.root { NodeRenderer().render(root: root, into: drawList) }
+            if fonts.atlas.isFull, let root = tree.root {
+                // Old, unused glyphs must not starve newly typed characters.
+                // Redraw the whole frame because resetting invalidates every UV.
+                fonts.atlas.reset()
+                drawList.reset()
+                NodeRenderer().render(root: root, into: drawList)
+            }
             tree.flush()
         }
-        frame = Frame(count: count, dark: dark, note: counter.note,
+        let upload = fonts.atlas.dirtyUploadPayload()
+        if let upload { upload.pixels.withUnsafeBytes { atlasBuffer.replace($0) } }
+        else { atlasBuffer.replace(UnsafeRawBufferPointer(start: nil, count: 0)) }
+        fonts.atlas.markClean()
+        frame = Frame(count: count, dark: dark, note: counter.note, noteWidth: noteWidth,
                       focused: context.focusChain.focused?.attachments[LayoutDebugAttachmentKey.debugName] as? String, width: width, height: height,
                       vertices: drawList.vertices.count, indices: drawList.indices.count,
                       batches: drawList.batches.map { batch in
-                          Batch(offset: batch.indexOffset, count: batch.indexCount,
+                          Batch(offset: batch.indexOffset, count: batch.indexCount, textureID: batch.textureID,
                                 clip: batch.scissor.map { [$0.x, $0.y, $0.width, $0.height] })
-                      }, labels: labels, tree: inspector.snapshot())
+                      }, labels: labels, tree: inspector.snapshot(), fontCount: fonts.fontCount,
+                      atlasWidth: fonts.atlas.atlasWidth, atlasHeight: fonts.atlas.atlasHeight,
+                      atlasUpdate: upload.map { [$0.region.x, $0.region.y, $0.region.width, $0.region.height] },
+                      atlasFull: fonts.atlas.isFull)
         drawList.vertices.withUnsafeBytes { vertexBuffer.replace($0) }
         drawList.indices.withUnsafeBytes { indexBuffer.replace($0) }
         snapshotBuffer.encode(frame!)
@@ -254,6 +299,19 @@ private final class BrowserPrototype {
 nonisolated(unsafe) private let app = BrowserPrototype()
 
 @_cdecl("guava_render") public func guavaRender(_ width: Float, _ height: Float) { app.render(width: width, height: height) }
+@_cdecl("guava_set_scale") public func guavaSetScale(_ scale: Float) {
+    if scale.isFinite { app.rasterScale = max(1, min(4, scale)) }
+}
+@_cdecl("guava_font_alloc") public func guavaFontAlloc(_ count: Int32) -> UnsafeMutableRawPointer? {
+    guard count > 0, count <= 32 * 1024 * 1024 else { return nil }
+    return .allocate(byteCount: Int(count), alignment: 4)
+}
+@_cdecl("guava_font_load") public func guavaFontLoad(_ pointer: UnsafePointer<UInt8>, _ count: Int32) -> Int32 {
+    guard count > 0, count <= 32 * 1024 * 1024, app.fonts.fontCount < 8 else { return 0 }
+    return Int32(app.fonts.append(bytes: Array(UnsafeBufferPointer(start: pointer, count: Int(count)))) ?? 0)
+}
+@_cdecl("guava_atlas") public func guavaAtlas() -> UnsafeMutableRawPointer { app.atlasBuffer.pointer }
+@_cdecl("guava_atlas_size") public func guavaAtlasSize() -> Int32 { Int32(app.atlasBuffer.count) }
 @_cdecl("guava_pointer") public func guavaPointer(_ kind: Int32, _ x: Float, _ y: Float) { app.pointer(kind: kind, x: x, y: y) }
 @_cdecl("guava_key") public func guavaKey(_ code: UInt32, _ modifiers: UInt32, _ down: Int32, _ repeated: Int32) { app.key(code, modifiers: UInt16(truncatingIfNeeded: modifiers), down: down != 0, repeated: repeated != 0) }
 @_cdecl("guava_text") public func guavaText(_ pointer: UnsafeRawPointer, _ count: Int32, _ editing: Int32) {

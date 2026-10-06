@@ -16,23 +16,10 @@ let package = Package(
     dependencies: [
         .package(path: "../Engine"),
         .package(path: "Portable"),
+        .package(path: "Text"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     ],
     targets: [
-        // MARK: - Native deps (built by GuavaUI/third-party/CMakeLists.txt)
-        .binaryTarget(
-            name: "CFreeType",
-            path: "vendor/CFreeType.artifactbundle"
-        ),
-        .binaryTarget(
-            name: "CHarfBuzz",
-            path: "vendor/CHarfBuzz.artifactbundle"
-        ),
-
-        // MARK: - Yoga C bridge
-        // Wraps the yoga SPM source package with a flat module map so that
-        // GuavaUIRuntime can use `import CYoga` and access all YG* symbols.
-
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。
         // 依赖 Engine 的渲染抽象（RHIWGPU、PlatformShell、EngineKernel）。
@@ -42,8 +29,9 @@ let package = Package(
                 .product(name: "GuavaUICore", package: "Portable"),
                 .product(name: "CYoga", package: "Portable"),
                 .product(name: "GuavaUIScene", package: "Portable"),
-                "CFreeType",
-                "CHarfBuzz",
+                .product(name: "GuavaUIText", package: "Text"),
+                .product(name: "CFreeType", package: "Text"),
+                .product(name: "CHarfBuzz", package: "Text"),
                 "GuavaUIBundledFonts",
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
