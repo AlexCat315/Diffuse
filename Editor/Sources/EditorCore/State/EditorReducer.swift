@@ -257,6 +257,7 @@ public enum EditorReducer {
         case let .setOutputTab(tab):
             state.output.outputTab = tab
         case let .setViewportMode(mode):
+            guard state.viewport.mode != mode else { return }
             state.viewport.mode = mode
             state.viewport.gamePreviewFocused = false
         case let .setGamePreviewResolution(resolution):

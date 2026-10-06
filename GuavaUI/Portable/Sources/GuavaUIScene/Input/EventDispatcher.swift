@@ -114,7 +114,9 @@ public final class EventDispatcher {
         // clicked control or blur an editor when clicking the canvas.
         if event.button == .left, focusChain.focused === previousFocus {
             let target = hit.path.reversed().first { $0.isFocusable && $0.acceptsSubtreeInput }
-            focusChain.focus(target, visible: false)
+            if target?.automaticallyFocusOnPointerDown != false {
+                focusChain.focus(target, visible: false)
+            }
         }
     }
 
