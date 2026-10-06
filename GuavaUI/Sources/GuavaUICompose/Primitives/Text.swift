@@ -252,21 +252,22 @@ public struct Text: _PrimitiveView {
             let resolvedFont = env.resolvedFont(fontOverride)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
+            let padding = node.layoutNode?.resolvedPadding
             let result = Text.cachedLayout(
                 env: env,
                 layout: node.layoutNode,
                 text: snapshot.string,
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
-                maxWidth: snapshot.resolvedMaxWidth(Float(node.frame.width)),
+                maxWidth: snapshot.resolvedMaxWidth(max(0, Float(node.frame.width) - (padding?.left ?? 0) - (padding?.right ?? 0))),
                 alignment: snapshot.alignment
             )
             // Composite button labels and other containers supply inherited
             // foregrounds; standalone text falls back to the active theme.
-            let baseColor = snapshot.color ?? node.inheritedForegroundColor ?? node.theme.colors.onSurface
+            let baseColor = node.debugForegroundColor ?? snapshot.color ?? node.inheritedForegroundColor ?? node.theme.colors.onSurface
             let drawColor = baseColor.multipliedAlpha(node.opacity)
             list.addText(result,
-                         origin: (Float(origin.x), Float(origin.y)),
+                         origin: (Float(origin.x) + (padding?.left ?? 0), Float(origin.y) + (padding?.top ?? 0)),
                          color: drawColor,
                          textureID: env.atlasTextureID,
                          atlas: env.atlas)

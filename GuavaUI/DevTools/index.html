@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GuavaUI DevTools</title>
-  <link rel="stylesheet" href="./styles.css?v=0.2">
+  <link rel="stylesheet" href="./styles.css?v=0.3">
 </head>
 <body>
   <main class="shell">
@@ -17,6 +17,7 @@
         <span>Endpoint</span>
         <input id="endpoint" value="ws://127.0.0.1:9229/" spellcheck="false">
       </label>
+      <button id="pickNode" disabled aria-pressed="false" title="Pick a component in the app or mirror; Escape cancels">Pick component</button>
       <button id="connect">Connect</button>
       <button id="disconnect" disabled>Disconnect</button>
     </header>
@@ -53,7 +54,30 @@
         <div class="paneHeader">
           <span>Selection</span>
         </div>
-        <pre id="details" class="details empty">Select a node in the tree.</pre>
+        <div id="selectionPath" class="selectionPath"></div>
+        <section id="inspectionPanel" class="inspectionPanel">
+          <div class="editActions">
+            <button id="undoStyle" disabled>Undo</button><button id="redoStyle" disabled>Redo</button>
+            <button id="clearStyle" disabled>Clear selected</button><button id="clearAllStyles" disabled>Clear all</button>
+          </div>
+          <div id="overrideStatus" class="panelStatus">Temporary styles · disconnected</div>
+          <div id="boxModel" class="boxModel empty">Select a layout box to inspect its dimensions.</div>
+          <div id="layoutFacts" class="layoutFacts"></div>
+          <fieldset id="styleFields" disabled>
+            <legend>Temporary styles</legend>
+            <div class="paddingFields">
+              <label>Top <input id="paddingTop" type="number" min="0" max="4096" step="1"></label>
+              <label>Right <input id="paddingRight" type="number" min="0" max="4096" step="1"></label>
+              <label>Bottom <input id="paddingBottom" type="number" min="0" max="4096" step="1"></label>
+              <label>Left <input id="paddingLeft" type="number" min="0" max="4096" step="1"></label>
+            </div>
+            <div class="colorField"><label for="backgroundColor">Background</label><input id="backgroundSwatch" type="color" aria-label="Background color"><input id="backgroundColor" placeholder="#RRGGBB[AA]" spellcheck="false"><button id="resetBackground" title="Remove background override">Reset</button></div>
+            <div class="colorField"><label for="foregroundColor">Foreground</label><input id="foregroundSwatch" type="color" aria-label="Foreground color"><input id="foregroundColor" placeholder="#RRGGBB[AA]" spellcheck="false"><button id="resetForeground" title="Remove foreground override">Reset</button></div>
+            <button id="resetPadding">Reset padding override</button>
+          </fieldset>
+          <div id="styleMessage" class="styleMessage" role="status" aria-live="polite"></div>
+        </section>
+        <details><summary>Node data</summary><pre id="details" class="details empty">Select a node in the tree.</pre></details>
         <div class="paneHeader">
           <span>Runtime</span>
         </div>
@@ -105,6 +129,7 @@
   </main>
 
   <script src="./browser-connection.js"></script>
-  <script src="./app.js?v=0.2"></script>
+  <script src="./inspection.js?v=0.3"></script>
+  <script src="./app.js?v=0.3"></script>
 </body>
 </html>

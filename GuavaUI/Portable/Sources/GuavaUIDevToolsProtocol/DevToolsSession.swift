@@ -17,6 +17,9 @@ public final class DevToolsSession {
 
     /// Shared validation before either host applies a command to its scene.
     public func validate(_ request: DevToolsEnvelope) -> DevToolsEnvelope? {
+        if request.type.hasPrefix("inspect.") {
+            return InspectionValidation.error(request).map { Self.error(request, code: "bad_request", message: $0) }
+        }
         let message: String?
         switch request.type {
         case "select.node":

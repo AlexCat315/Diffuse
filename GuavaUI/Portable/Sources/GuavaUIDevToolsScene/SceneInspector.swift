@@ -16,6 +16,7 @@ public final class SceneInspector: @unchecked Sendable {
     }
 
     private let tree: NodeTree
+    public let editor: SceneEditor
     /// Optional log to attach to snapshots. Populated by the host so DevTools
     /// can show recent dirty-propagation events alongside the tree.
     public var invalidationLog: InvalidationLog?
@@ -27,6 +28,7 @@ public final class SceneInspector: @unchecked Sendable {
                 invalidationLog: InvalidationLog? = nil,
                 renderTree: RenderTree? = nil) {
         self.tree = tree
+        self.editor = SceneEditor(tree: tree)
         self.invalidationLog = invalidationLog
         self.renderTree = renderTree
     }
@@ -34,6 +36,7 @@ public final class SceneInspector: @unchecked Sendable {
     /// Capture a snapshot of the current scene. Must run on the same actor
     /// that mutates the tree (i.e. the main actor in AppRuntime).
     public func snapshot() -> TreeSnapshotPayload {
+        let inspection = editor.state
         let invalidations = invalidationLog?.snapshot(limit: 64).map(Self.encode(reason:))
         let inventory = renderTree.map { tree -> RenderInventoryPayload in
             RenderInventoryPayload(
@@ -62,12 +65,12 @@ public final class SceneInspector: @unchecked Sendable {
             return TreeSnapshotPayload(root: nil,
                                        invalidations: invalidations,
                                        renderInventory: inventory,
-                                       inputInventory: inputInventoryPayload)
+                                       inputInventory: inputInventoryPayload, inspection: inspection)
         }
         return TreeSnapshotPayload(root: summarise(root),
                                    invalidations: invalidations,
                                    renderInventory: inventory,
-                                   inputInventory: inputInventoryPayload)
+                                   inputInventory: inputInventoryPayload, inspection: inspection)
     }
 
     /// Find a node previously reported in a snapshot. Returns nil if the id
@@ -110,8 +113,24 @@ public final class SceneInspector: @unchecked Sendable {
                 hasBorder: node.borderColor != nil && node.borderWidth > 0
             ),
             children: node.children.map { summarise($0) },
-            elementID: String(node.id.rawValue)
+            elementID: String(node.id.rawValue),
+            layout: node.layoutNode.map { ln in
+                let p = ln.resolvedPadding, b = ln.resolvedBorder
+                return NodeLayoutInfo(padding: Self.insets(p), margin: Self.insets(ln.resolvedMargin), border: Self.insets(b),
+                    contentWidth: max(0, Double(node.frame.width) - Double(p.left + p.right + b.left + b.right)),
+                    contentHeight: max(0, Double(node.frame.height) - Double(p.top + p.bottom + b.top + b.bottom)),
+                    direction: String(describing: ln.direction), flexDirection: String(describing: ln.flexDirection),
+                    justifyContent: String(describing: ln.justifyContent), alignItems: String(describing: ln.alignItems),
+                    flexGrow: Double(ln.flexGrow), flexShrink: Double(ln.flexShrink))
+            },
+            style: NodeStyleInfo(backgroundColor: SceneEditor.hex(node.backgroundColor), foregroundColor: SceneEditor.hex(node.inheritedForegroundColor),
+                overrides: [("padding", node.layoutNode?.debugPadding != nil), ("backgroundColor", node.debugBackgroundColor != nil),
+                            ("foregroundColor", node.debugForegroundColor != nil)].filter { $0.1 }.map { $0.0 })
         )
+    }
+
+    private static func insets(_ p: LayoutInsets) -> InspectionInsets {
+        InspectionInsets(top: Double(p.top), right: Double(p.right), bottom: Double(p.bottom), left: Double(p.left))
     }
 
     private static func encode(frame: CGRect) -> NodeFrame {

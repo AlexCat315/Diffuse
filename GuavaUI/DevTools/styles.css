@@ -369,3 +369,30 @@ textarea {
 .detailsPane { display:block; overflow-y:auto; }
 .detailsPane .details { min-height:48px; max-height:180px; overflow:auto; margin:0; padding:10px; }
 .detailsPane .stateSnapshot { display:block; width:calc(100% - 16px); min-height:100px; height:120px; }
+
+.inspectionPanel { padding:10px; font-size:12px; }
+.selectionPath { display:flex; flex-wrap:wrap; gap:4px; padding:8px; }
+.selectionPath button { height:24px; font-size:11px; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.editActions { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px; }
+.editActions button { padding:0 7px; font-size:12px; }
+.inspectionPanel .panelStatus { margin:0; line-height:1.5; }
+.boxModel { margin:12px 0; font:11px/1.5 ui-monospace, monospace; text-align:center; }
+.boxModel span { display:block; }
+.boxMargin { background:#614930; border:1px dashed #a58452; padding:5px; }
+.boxBorder { background:#6a623d; padding:5px; border:1px solid #bcb070; }
+.boxPadding { background:#344f3c; padding:5px; border:1px dashed #6ecd7e; }
+.boxContent { background:#253c58; border:1px solid #629fe6; padding:8px 3px; }
+.layoutFacts { color:var(--muted); line-height:1.5; margin-bottom:10px; }
+#styleFields { border:1px solid var(--line); border-radius:6px; padding:10px; margin:0; min-width:0; }
+#styleFields legend { color:var(--muted); }
+.paddingFields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin-bottom:12px; }
+.paddingFields label { display:grid; gap:4px; }
+.paddingFields input { min-width:0; width:100%; padding:5px; }
+.colorField { display:grid; grid-template-columns:70px 28px minmax(60px,1fr) auto; align-items:center; gap:5px; margin:8px 0; }
+.colorField input { min-width:0; width:100%; height:28px; padding:3px; font-size:11px; }
+.colorField button { padding:0 6px; font-size:11px; }
+.styleMessage { color:var(--muted); margin-top:8px; min-height:32px; line-height:1.5; }
+.styleMessage.error { color:var(--error); }
+#pickNode[aria-pressed="true"] { border-color:#fab428; color:#fab428; }
+.detailsPane > details { border-bottom:1px solid var(--line); }
+.detailsPane > details > summary { cursor:pointer; color:var(--muted); padding:8px 10px; font-size:12px; }
