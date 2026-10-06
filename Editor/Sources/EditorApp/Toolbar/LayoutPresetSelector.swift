@@ -1,108 +1,28 @@
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
-import Foundation
 
 struct LayoutPresetSelector: View {
     let workspaceMode: EditorWorkspaceMode
     let activePreset: EditorLayoutPreset
     let onSelectPreset: (EditorLayoutPreset) -> Void
-    @State private var isPresented: Bool = false
-
-    init(workspaceMode: EditorWorkspaceMode,
-         activePreset: EditorLayoutPreset,
-         onSelectPreset: @escaping (EditorLayoutPreset) -> Void) {
-        self.workspaceMode = workspaceMode
-        self.activePreset = activePreset
-        self.onSelectPreset = onSelectPreset
-        _isPresented = State(wrappedValue: false)
-    }
+    @State private var isPresented = false
 
     var body: some View {
-        Popover(isPresented: $isPresented,
-                width: 132) {
+        Popover(isPresented: $isPresented, width: 200) {
             Row(alignment: .center, spacing: 6) {
-                Text(L("Preset"))
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceVariant)
-
-                Text(shortLabel(for: activePreset))
-                    .font(.caption)
-                    .foregroundColor(.onSurface)
-
+                Text(L("Layout")).font(.caption).foregroundColor(.onSurfaceVariant)
+                Text(L(activePreset.title)).font(.caption).foregroundColor(.onSurface)
                 Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 6)
-            .background(.surfaceSunken)
-            .cornerRadius(4)
+            .background(.surfaceSunken).cornerRadius(4)
         } content: {
-            Menu(menuEntries,
-                 width: 132,
-                 maxVisibleRows: 6,
-                 onItemActivated: {
-                isPresented = false
-            })
-        }
-    }
-
-    private var menuEntries: [MenuEntry] {
-        switch workspaceMode {
-        case .scripting:
-            return [.item(MenuItem(id: "scripting-default", title: L("Script Development"),
-                isSelected: true, action: { onSelectPreset(.scriptingDefault) }))]
-        case .level:
-            return [
-                .item(MenuItem(id: "level-workbench",
-                               title: L("Workbench"),
-                               isSelected: activePreset == .levelWorkbench,
-                               action: { onSelectPreset(.levelWorkbench) })),
-                .item(MenuItem(id: "level-default",
-                               title: L("Default"),
-                               isSelected: activePreset == .levelDefault,
-                               action: { onSelectPreset(.levelDefault) })),
-                .item(MenuItem(id: "level-cine",
-                               title: L("Cine"),
-                               isSelected: activePreset == .levelCinematics,
-                               action: { onSelectPreset(.levelCinematics) })),
-            ]
-        case .modeling:
-            return [
-                .item(MenuItem(id: "modeling-default",
-                               title: L("Default"),
-                               isSelected: activePreset == .modelingDefault,
-                               action: { onSelectPreset(.modelingDefault) })),
-                .item(MenuItem(id: "modeling-sculpt",
-                               title: L("Sculpt"),
-                               isSelected: activePreset == .modelingSculpt,
-                               action: { onSelectPreset(.modelingSculpt) })),
-            ]
-        case .animation:
-            return [
-                .item(MenuItem(id: "animation-default",
-                               title: L("Default"),
-                               isSelected: activePreset == .animationDefault,
-                               action: { onSelectPreset(.animationDefault) })),
-                .item(MenuItem(id: "animation-seq",
-                               title: L("Seq"),
-                               isSelected: activePreset == .animationSequencer,
-                               action: { onSelectPreset(.animationSequencer) })),
-            ]
-        }
-    }
-
-    private func shortLabel(for preset: EditorLayoutPreset) -> String {
-        switch preset {
-        case .scriptingDefault: return L("Script Development")
-        case .levelWorkbench:
-            return L("Workbench")
-        case .levelDefault, .modelingDefault, .animationDefault:
-            return L("Default")
-        case .levelCinematics:
-            return L("Cine")
-        case .modelingSculpt:
-            return L("Sculpt")
-        case .animationSequencer:
-            return L("Seq")
+            Menu(EditorLayoutPreset.presets(for: workspaceMode).map { preset in
+                .item(MenuItem(id: preset.rawValue, title: L(preset.title),
+                               isSelected: activePreset == preset,
+                               action: { onSelectPreset(preset) }))
+            }, width: 200, maxVisibleRows: 6, onItemActivated: { isPresented = false })
         }
     }
 }

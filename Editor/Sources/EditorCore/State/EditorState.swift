@@ -29,10 +29,10 @@ public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
     public var isGameWorkspace: Bool { self == .level || self == .scripting }
     public var title: String {
         switch self {
-        case .level: "Game Engine · Level Editing"
-        case .scripting: "Game Engine · Script Development"
-        case .modeling: "3D Film Engine · Modeling and Rendering"
-        case .animation: "3D Film Engine · Animation"
+        case .level: "Level Editing"
+        case .scripting: "Script Development"
+        case .modeling: "Models and Rendering"
+        case .animation: "Animation Editing"
         }
     }
 }
@@ -61,21 +61,21 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public var title: String {
         switch self {
-        case .scriptingDefault: return "Game: Scripting"
+        case .scriptingDefault: return "Code and Console"
         case .levelWorkbench:
-            return "Level: Workbench"
+            return "Scene and Scripts"
         case .levelDefault:
-            return "Level: Default"
+            return "Scene and Assets"
         case .levelCinematics:
-            return "Level: Cinematics"
+            return "Animation and Rendering"
         case .modelingDefault:
-            return "Modeling: Default"
+            return "Assets and Rendering"
         case .modelingSculpt:
-            return "Modeling: Sculpt"
+            return "Viewport Focus"
         case .animationDefault:
-            return "Animation: Default"
+            return "Viewport and Animation"
         case .animationSequencer:
-            return "Animation: Sequencer"
+            return "Animation Details"
         }
     }
 
@@ -96,7 +96,7 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
         switch mode {
         case .scripting: return [.scriptingDefault]
         case .level:
-            return [.levelWorkbench, .levelDefault, .levelCinematics]
+            return [.levelDefault, .levelWorkbench, .levelCinematics]
         case .modeling:
             return [.modelingDefault, .modelingSculpt]
         case .animation:
