@@ -6,15 +6,34 @@ import GuavaUIRuntime
 import GuavaUIApp
 import GuavaUIWorkspace
 
+/// Owns the window-sized animation layer; the centered barrier is absolute
+/// and cannot give an intrinsically sized animation host its height.
+struct CommandPalettePresentation: View {
+    let app: EditorApplication
+    let controller: WorkspaceController
+    let registry: PanelRegistry
+    let availableHeight: Float
+
+    var body: some View {
+        AnimatedVisibility(isVisible: app.store.commandPaletteVisible,
+                           transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
+            CommandPaletteOverlay(app: app, controller: controller, registry: registry,
+                                  availableHeight: availableHeight)
+        }.frame(width: .percent(100), height: .percent(100))
+    }
+}
+
 /// Local commands and quick-open work independently of AI provider settings.
 struct CommandPaletteOverlay: View {
     let app: EditorApplication
     let controller: WorkspaceController
     let registry: PanelRegistry
+    var availableHeight: Float = 720
     @State private var aiMode = false
     @State private var aiInput = ""
     @State private var selectedIndex = 0
     @State private var resultsOffset = CGPoint.zero
+    private var resultsHeight: Float { max(80, min(320, availableHeight - 168)) }
 
     private struct ResultItem {
         let id: String
@@ -29,7 +48,7 @@ struct CommandPaletteOverlay: View {
     var body: some View {
         let matches = results()
         ModalBarrier(onBackgroundTap: dismiss) {
-            Column(alignment: .leading, spacing: 0) {
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 6) {
                     Button(L("Commands and Resources"), isSelected: !aiMode) { aiMode = false }.buttonStyle(.tab)
                     Button(L("AI Intent"), isSelected: aiMode) { aiMode = true }.buttonStyle(.tab)
@@ -63,7 +82,7 @@ struct CommandPaletteOverlay: View {
                                 select(max(0, selectedIndex - 1)); return true
                             }
                             return false
-                        }, onCancel: dismiss).padding(12)
+                        }, onCancel: dismiss).padding(12).debugName("command-palette-search")
                     Divider()
                     ScrollView(.vertical, scrollbarGutter: .stable, scrollOffset: $resultsOffset) {
                         Column(alignment: .leading, spacing: 2) {
@@ -83,8 +102,8 @@ struct CommandPaletteOverlay: View {
                                     }.padding(horizontal: 10, vertical: 6)
                                 }.buttonStyle(.ghost).frame(width: .percent(100)).frame(height: 56))
                             }
-                        }.padding(4)
-                    }.frame(height: 320)
+                        }.padding(4).frame(width: .percent(100))
+                    }.frame(height: resultsHeight).debugName("command-palette-results")
                 }
                 Divider()
                 Text(L("↑ ↓ to select · Enter to run · Escape to close"))
@@ -92,6 +111,7 @@ struct CommandPaletteOverlay: View {
             }
             .frame(width: .percent(92), maxWidth: 580)
             .background(.surfaceFloating).cornerRadius(10).border(.border, width: 1)
+            .debugName("command-palette-card")
         }
     }
 
@@ -141,7 +161,9 @@ struct CommandPaletteOverlay: View {
         selectedIndex = index
         let top = CGFloat(index * 58 + 4)
         if top < resultsOffset.y { resultsOffset.y = top }
-        else if top + 56 > resultsOffset.y + 320 { resultsOffset.y = top + 56 - 320 }
+        else if top + 56 > resultsOffset.y + CGFloat(resultsHeight) {
+            resultsOffset.y = top + 56 - CGFloat(resultsHeight)
+        }
     }
 
     private func submitAI() {

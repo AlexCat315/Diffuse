@@ -9,8 +9,8 @@ struct EditorViewportWorkspacePanel: View {
 
     var body: some View {
         StoreScope(app.store) { store in
-            Column(alignment: .leading, spacing: 0) {
-                Row(alignment: .center, spacing: 8) {
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                     Button(L("Scene Editing"), isSelected: store.viewportMode == .scene) { app.setViewportMode(.scene) }
                         .buttonStyle(.tab)
                     if store.workspaceMode.isGameWorkspace {
@@ -42,7 +42,7 @@ private struct GamePreviewPanel: View {
     var body: some View {
         let store = app.store
         let _ = store.viewportSurfaceRevision
-        Column(alignment: .leading, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 8) {
                 Text(store.playbackState == .stopped ? L("Preview stopped")
                     : (store.gamePreviewFocused ? L("Game has input focus · Esc to release") : L("Click the game image to focus input")))
@@ -69,7 +69,7 @@ private struct GamePreviewPanel: View {
                     guard store.playbackState == .playing, store.gamePreviewFocused else { return }
                     if let frame = EditorViewportDropTarget.frame {
                         app.enqueueViewportInput(EditorGamePreviewInput.map(event, frame: frame,
-                            resolution: store.gamePreviewResolution.size))
+                            resolution: store.gamePreviewResolution.size ?? app.viewportDrawableSize))
                     } else { app.enqueueViewportInput(event) }
                 },
                 onDrawableSizeChange: app.setViewportDrawableSize,
