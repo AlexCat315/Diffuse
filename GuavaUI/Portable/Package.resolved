@@ -1,5 +1,5 @@
 {
-  "originHash" : "a710e195aaf34e51927c9d7fe880a5badd6e833c6f7ef6ac8a8e14ff01f5f813",
+  "originHash" : "58c183e2eb8b1293e4d5e974f3802f008ef3668e78e250e1703275ad1d48c62a",
   "pins" : [
     {
       "identity" : "swift-atomics",
@@ -44,6 +44,15 @@
       "state" : {
         "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
         "version" : "1.8.1"
+      }
+    },
+    {
+      "identity" : "yoga",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/facebook/yoga.git",
+      "state" : {
+        "revision" : "042f5013152eb81c1552dec945b88f7b95ca350f",
+        "version" : "3.2.1"
       }
     }
   ],

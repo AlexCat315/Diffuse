@@ -46,9 +46,24 @@ def preview_checks(browser, base_url, renderer, screenshot=None):
     rejected = page.evaluate("guavaDebug.request({type:'state.restore',id:90,payload:{count:-1,dark:'true'}})")
     assert rejected["type"] == "state.restore.err" and rejected["id"] == 90
     assert page.evaluate("guavaDebug.snapshot.count") == 2
-    selected = page.evaluate("guavaDebug.request({type:'select.node',id:91,payload:{id:'2'}})")
+    node_id = page.evaluate("""() => {
+        function find(n) { if(n.debugName==='counter.increment') return n; for(const c of n.children) {const r=find(c); if(r) return r;} }
+        return find(guavaDebug.snapshot.tree.root).id;
+    }""")
+    selected = page.evaluate("id => guavaDebug.request({type:'select.node',id:91,payload:{id}})", node_id)
     assert selected["type"] == "select.node.ok"
-    page.wait_for_function("guavaDebug.snapshot.tree.root.children.find(n=>n.id==='2').flags.hasBorder")
+    page.wait_for_function("id => { function find(n) { if(n.id===id) return n.flags.hasBorder; return n.children.some(find); } return find(guavaDebug.snapshot.tree.root); }", arg=node_id)
+    page.locator("#surface").focus()
+    page.keyboard.press("Enter")
+    page.wait_for_function("guavaDebug.snapshot.count === 3")
+    page.keyboard.press("Tab")
+    page.keyboard.press("Space")
+    page.wait_for_function("guavaDebug.snapshot.count === 0")
+    page.locator("#increment").click()
+    page.locator("#increment").click()
+    page.wait_for_function("guavaDebug.snapshot.count === 2")
+    assert page.evaluate("guavaDebug.snapshot.tree.inputInventory.nodeCount") > 5
+    assert page.evaluate("guavaDebug.snapshot.tree.invalidations.some(i => i.source.startsWith('stateWrite'))")
     page.locator("#theme").click()
     page.wait_for_function("guavaDebug.snapshot.dark === true")
     inspector = page.frame_locator("#inspector")
@@ -57,11 +72,45 @@ def preview_checks(browser, base_url, renderer, screenshot=None):
     inspector.locator("#captureState").click()
     page.wait_for_function("document.querySelector('#inspector').contentDocument.querySelector('#stateSnapshot').value.includes('true')")
     captured = json.loads(inspector.locator("#stateSnapshot").input_value())
-    assert captured == {"count": "2", "dark": "true"}
+    assert captured == {"count": "2", "dark": "true", "note":""}
     page.locator("#reset").click()
     page.wait_for_function("guavaDebug.snapshot.count === 0")
+    inspector.locator("#diffState").click()
+    inspector.locator("#stateDiff").filter(has_text='"after": "0"').wait_for()
     inspector.locator("#restoreState").click()
     page.wait_for_function("guavaDebug.snapshot.count === 2")
+    inspector.locator("#recordInput").click()
+    inspector.locator("#stopRecording").wait_for(state="visible")
+    page.wait_for_function("!document.querySelector('#inspector').contentDocument.querySelector('#stopRecording').disabled")
+    page.locator("#increment").click()
+    page.wait_for_function("guavaDebug.snapshot.count === 3")
+    inspector.locator("#stopRecording").click()
+    page.wait_for_function("document.querySelector('#inspector').contentDocument.querySelector('#inputRecording').value.includes('mouseButtonUp')")
+    recording = json.loads(inspector.locator("#inputRecording").input_value())
+    assert recording["initialState"] == {"count":"2", "dark":"true", "note":""}
+    page.locator("#reset").click()
+    page.wait_for_function("guavaDebug.snapshot.count === 0")
+    inspector.locator("#replayInput").click()
+    page.wait_for_function("guavaDebug.snapshot.count === 3")
+    malformed = dict(recording, version=99)
+    assert page.evaluate("r => guavaDebug.request({type:'input.replay', id:92, payload:r}).type", malformed) == "input.replay.err"
+    assert page.evaluate("guavaDebug.snapshot.count") == 3
+    page.evaluate("guavaDebug.request({type:'state.restore',id:93,payload:{count:'2',dark:'true'}})")
+    page.wait_for_function("guavaDebug.snapshot.count === 2")
+    page.locator("#surface").click(position={"x":60,"y":380})
+    page.wait_for_function("document.activeElement.id === 'textInput'")
+    page.keyboard.insert_text("你好🙂")
+    page.wait_for_function("guavaDebug.snapshot.note === '你好🙂'")
+    page.keyboard.press("Backspace")
+    page.wait_for_function("guavaDebug.snapshot.note === '你好'")
+    page.evaluate("""() => {
+        const input=document.querySelector('#textInput');
+        input.dispatchEvent(new CompositionEvent('compositionstart',{data:''}));
+        input.dispatchEvent(new CompositionEvent('compositionupdate',{data:'中文'}));
+    }""")
+    page.wait_for_function("guavaDebug.snapshot.labels.some(l=>l.text==='你好中文')")
+    page.evaluate("document.querySelector('#textInput').dispatchEvent(new CompositionEvent('compositionend',{data:'中文'}))")
+    page.wait_for_function("guavaDebug.snapshot.note === '你好中文'")
     inspector.locator("#disconnect").click()
     inspector.locator("#connect").click()
     inspector.locator("#status").filter(has_text="Connected").wait_for()
@@ -71,8 +120,9 @@ def preview_checks(browser, base_url, renderer, screenshot=None):
     assert not errors, errors
     if screenshot:
         page.set_viewport_size({"width": 1280, "height": 1100})
+        page.wait_for_function("guavaDebug.snapshot.width > 600")
         page.screenshot(path=screenshot, full_page=True)
-    print(f"Wasm {page.evaluate('guavaDebug.backend')}: pixels, pointer input, state, Inspector, reconnect and resize passed", flush=True)
+    print(f"Wasm {page.evaluate('guavaDebug.backend')}: pixels, real Compose/Yoga, keyboard, Unicode/IME, state diff, input replay, Inspector and resize passed", flush=True)
     page.close()
 
 
@@ -131,8 +181,8 @@ def main():
                     args=["--no-sandbox", "--enable-unsafe-webgpu", "--use-angle=swiftshader"])
                 try:
                     base_url = f"http://127.0.0.1:{server.server_port}/"
-                    preview_checks(browser, base_url, "canvas2d")
-                    preview_checks(browser, base_url, "webgpu" if options.require_webgpu else None, options.screenshot)
+                    preview_checks(browser, base_url, "canvas2d", options.screenshot)
+                    preview_checks(browser, base_url, "webgpu" if options.require_webgpu else None)
                     if native:
                         native_checks(browser, base_url, native_port)
                 finally:

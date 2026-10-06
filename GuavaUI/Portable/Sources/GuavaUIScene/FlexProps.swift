@@ -1,0 +1,238 @@
+import GuavaUICore
+import CYoga
+
+// On non-Apple platforms C enums lack NS_ENUM, so Swift doesn't strip
+// the YGFlexDirection* prefix. These extensions restore dot-notation.
+#if !canImport(Darwin)
+public extension YGFlexDirection {
+    static let row           = YGFlexDirectionRow
+    static let rowReverse    = YGFlexDirectionRowReverse
+    static let column        = YGFlexDirectionColumn
+    static let columnReverse = YGFlexDirectionColumnReverse
+}
+public extension YGAlign {
+    static let auto         = YGAlignAuto
+    static let flexStart    = YGAlignFlexStart
+    static let center       = YGAlignCenter
+    static let flexEnd      = YGAlignFlexEnd
+    static let stretch      = YGAlignStretch
+    static let baseline     = YGAlignBaseline
+    static let spaceBetween = YGAlignSpaceBetween
+    static let spaceAround  = YGAlignSpaceAround
+    static let spaceEvenly  = YGAlignSpaceEvenly
+}
+public extension YGJustify {
+    static let flexStart    = YGJustifyFlexStart
+    static let center       = YGJustifyCenter
+    static let flexEnd      = YGJustifyFlexEnd
+    static let spaceBetween = YGJustifySpaceBetween
+    static let spaceAround  = YGJustifySpaceAround
+    static let spaceEvenly  = YGJustifySpaceEvenly
+}
+public extension YGEdge {
+    static let left       = YGEdgeLeft
+    static let top        = YGEdgeTop
+    static let right      = YGEdgeRight
+    static let bottom     = YGEdgeBottom
+    static let start      = YGEdgeStart
+    static let end        = YGEdgeEnd
+    static let horizontal = YGEdgeHorizontal
+    static let vertical   = YGEdgeVertical
+    static let all        = YGEdgeAll
+}
+public extension YGDirection {
+    static let inherit = YGDirectionInherit
+    static let LTR     = YGDirectionLTR
+    static let RTL     = YGDirectionRTL
+}
+public extension YGPositionType {
+    static let `static` = YGPositionTypeStatic
+    static let relative = YGPositionTypeRelative
+    static let absolute = YGPositionTypeAbsolute
+}
+public extension YGWrap {
+    static let noWrap      = YGWrapNoWrap
+    static let wrap        = YGWrapWrap
+    static let wrapReverse = YGWrapWrapReverse
+}
+public extension YGOverflow {
+    static let visible = YGOverflowVisible
+    static let hidden  = YGOverflowHidden
+}
+public extension YGDisplay {
+    static let flex     = YGDisplayFlex
+    static let none     = YGDisplayNone
+    static let contents = YGDisplayContents
+}
+public extension YGGutter {
+    static let column = YGGutterColumn
+    static let row    = YGGutterRow
+    static let all    = YGGutterAll
+}
+public extension YGBoxSizing {
+    static let borderBox  = YGBoxSizingBorderBox
+    static let contentBox = YGBoxSizingContentBox
+}
+public extension YGMeasureMode {
+    static let undefined = YGMeasureModeUndefined
+    static let exactly   = YGMeasureModeExactly
+    static let atMost    = YGMeasureModeAtMost
+}
+#endif
+
+/// Flex layout direction (maps to `YGFlexDirection`).
+public enum FlexDirection: Hashable {
+    case row, rowReverse, column, columnReverse
+
+    var ygValue: YGFlexDirection {
+        switch self {
+        case .row:           return .row
+        case .rowReverse:    return .rowReverse
+        case .column:        return .column
+        case .columnReverse: return .columnReverse
+        }
+    }
+}
+
+/// Cross-axis alignment (maps to `YGAlign`).
+public enum Align: Hashable {
+    case auto, flexStart, center, flexEnd, stretch, baseline, spaceBetween, spaceAround, spaceEvenly
+
+    var ygValue: YGAlign {
+        switch self {
+        case .auto:         return .auto
+        case .flexStart:    return .flexStart
+        case .center:       return .center
+        case .flexEnd:      return .flexEnd
+        case .stretch:      return .stretch
+        case .baseline:     return .baseline
+        case .spaceBetween: return .spaceBetween
+        case .spaceAround:  return .spaceAround
+        case .spaceEvenly:  return .spaceEvenly
+        }
+    }
+}
+
+/// Main-axis alignment (maps to `YGJustify`).
+public enum Justify: Hashable {
+    case flexStart, center, flexEnd, spaceBetween, spaceAround, spaceEvenly
+
+    var ygValue: YGJustify {
+        switch self {
+        case .flexStart:    return .flexStart
+        case .center:       return .center
+        case .flexEnd:      return .flexEnd
+        case .spaceBetween: return .spaceBetween
+        case .spaceAround:  return .spaceAround
+        case .spaceEvenly:  return .spaceEvenly
+        }
+    }
+}
+
+/// Box edge selector (maps to `YGEdge`).
+public enum Edge: Hashable {
+    case left, top, right, bottom, start, end, horizontal, vertical, all
+
+    var ygValue: YGEdge {
+        switch self {
+        case .left:       return .left
+        case .top:        return .top
+        case .right:      return .right
+        case .bottom:     return .bottom
+        case .start:      return .start
+        case .end:        return .end
+        case .horizontal: return .horizontal
+        case .vertical:   return .vertical
+        case .all:        return .all
+        }
+    }
+}
+
+/// Text/layout direction (maps to `YGDirection`).
+public enum Direction: Hashable {
+    case inherit, ltr, rtl
+
+    var ygValue: YGDirection {
+        switch self {
+        case .inherit: return .inherit
+        case .ltr:     return .LTR
+        case .rtl:     return .RTL
+        }
+    }
+}
+
+/// Position type (maps to `YGPositionType`).
+public enum PositionType: Hashable {
+    case `static`, relative, absolute
+
+    var ygValue: YGPositionType {
+        switch self {
+        case .static:   return .`static`
+        case .relative: return .relative
+        case .absolute: return .absolute
+        }
+    }
+}
+
+/// Flex wrap (maps to `YGWrap`).
+public enum Wrap: Hashable {
+    case noWrap, wrap, wrapReverse
+
+    var ygValue: YGWrap {
+        switch self {
+        case .noWrap:      return .noWrap
+        case .wrap:        return .wrap
+        case .wrapReverse: return .wrapReverse
+        }
+    }
+}
+
+/// Overflow behavior (maps to `YGOverflow`).
+public enum Overflow: Hashable {
+    case visible, hidden
+
+    var ygValue: YGOverflow {
+        switch self {
+        case .visible: return .visible
+        case .hidden:  return .hidden
+        }
+    }
+}
+
+/// Display type (maps to `YGDisplay`).
+public enum Display: Hashable {
+    case flex, none, contents
+
+    var ygValue: YGDisplay {
+        switch self {
+        case .flex:     return .flex
+        case .none:     return .none
+        case .contents: return .contents
+        }
+    }
+}
+
+/// Gutter (gap) axis selector (maps to `YGGutter`).
+public enum Gutter: Hashable {
+    case column, row, all
+
+    var ygValue: YGGutter {
+        switch self {
+        case .column: return .column
+        case .row:    return .row
+        case .all:    return .all
+        }
+    }
+}
+
+/// Box sizing model (maps to `YGBoxSizing`).
+public enum BoxSizing: Hashable {
+    case borderBox, contentBox
+
+    var ygValue: YGBoxSizing {
+        switch self {
+        case .borderBox:  return .borderBox
+        case .contentBox: return .contentBox
+        }
+    }
+}
