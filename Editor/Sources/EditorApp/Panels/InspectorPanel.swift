@@ -12,14 +12,19 @@ struct InspectorPanel: View {
     let store: EditorStore
     let scene: EditorSceneAdapter
     private let sectionFilter: Set<String>?
+    private var scripts: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>?
+    private let onOpenScript: ((String) -> Void)?
     private let sessionState: InspectorPanelSessionState
     @State private var searchText: String
     @State private var expandedAdvancedFieldIDs: Set<String>
 
-    init(store: EditorStore, scene: EditorSceneAdapter, sectionFilter: Set<String>? = nil) {
+    init(store: EditorStore, scene: EditorSceneAdapter, sectionFilter: Set<String>? = nil,
+         scriptWorkspace: ScriptWorkspaceModel? = nil, onOpenScript: ((String) -> Void)? = nil) {
         self.store = store
         self.scene = scene
         self.sectionFilter = sectionFilter
+        self.scripts = scriptWorkspace.map { Observed(\.snapshot, on: $0) }
+        self.onOpenScript = onOpenScript
         let sessionState = InspectorPanelSessionRegistry.state(for: store,
             scope: sectionFilter?.sorted().joined(separator: ",") ?? "inspector")
         self.sessionState = sessionState
@@ -31,6 +36,7 @@ struct InspectorPanel: View {
         StoreScope(store) { store in
             let _ = store.sceneRevision
             let _ = store.uiRefreshRevision
+            let _ = scripts?.wrappedValue
             let selectedEntityID = store.selectedEntityID
             let selectedEntityIDs = store.selectedEntityIDs.isEmpty
                 ? Set(selectedEntityID.map { [$0] } ?? []) : store.selectedEntityIDs
@@ -169,14 +175,17 @@ struct InspectorPanel: View {
 
     private func setSections(_ sections: [EditorInspectorSection], collapsed: Bool) {
         let advancedIDs = Set(sections.flatMap { section in
-            section.fields.filter { $0.presentation == .advanced }.map { "\(section.id)/\($0.id)" }
+            section.fields.filter { $0.presentation == .advanced }.map { field in
+                let owner = section.groups.first { $0.fieldIDs.contains(field.id) }?.id ?? section.id
+                return "\(owner)/\(field.id)"
+            }
         })
         var next = expandedAdvancedFieldIDs
         if collapsed { next.subtract(advancedIDs) } else { next.formUnion(advancedIDs) }
         sessionState.expandedAdvancedFieldIDs = next
         expandedAdvancedFieldIDs = next
         store.dispatch(.setInspectorSectionsCollapsed(
-            ids: Set(sections.map(\.id)),
+            ids: Set(sections.flatMap { [$0.id] + $0.groups.map(\.id) }),
             isCollapsed: collapsed
         ))
     }
@@ -279,7 +288,7 @@ struct InspectorPanel: View {
 
         var body: some View {
             NumberField(value: binding,
-                        decimals: 2,
+                        decimals: step == 1 ? 0 : 2,
                         size: .small,
                         minValue: minValue,
                         maxValue: maxValue,
@@ -541,8 +550,13 @@ struct InspectorPanel: View {
             let fieldID = "\(sectionID)/\(field.id)"
             let value = propertyValue(field, identity: "\(identity)/\(fieldID)", isEditable: isEditable)
             let expansion = Binding<Bool>(
-                get: { !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || expandedAdvancedFieldIDs.contains(fieldID) },
+                get: {
+                    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let directlyMatches = field.label.range(of: query, options: .caseInsensitive) != nil
+                        || field.value.readOnlyDescription.range(of: query, options: .caseInsensitive) != nil
+                    return (!query.isEmpty && (!sectionID.hasPrefix("scripts/") || directlyMatches))
+                        || expandedAdvancedFieldIDs.contains(fieldID)
+                },
                 set: { expanded in
                     var next = expandedAdvancedFieldIDs
                     if expanded { next.insert(fieldID) } else { next.remove(fieldID) }
@@ -566,6 +580,59 @@ struct InspectorPanel: View {
 
         return sections.flatMap { section -> [PropertyGridSection] in
             let startsCollapsed = collapsedIDs.contains(section.id)
+            if section.id == "scripts" {
+                let children = section.groups.map { group -> PropertyGridSection in
+                    let fields = group.fieldIDs.compactMap { id in section.fields.first { $0.id == id } }
+                    let enabled = section.fields.first { $0.id == group.enabledFieldID }
+                    let leading: AnyView?
+                    if case let .bool(binding)? = enabled?.value {
+                        leading = AnyView(Checkbox(isOn: binding, isEnabled: isEditable)
+                            .debugName("inspector-script-enabled-\(group.id)"))
+                    } else { leading = nil }
+                    let document = scripts?.wrappedValue.documents.first { document in
+                        document.file.identifier == group.sourceIdentifier
+                            || document.file.legacyIdentifiers.contains(group.sourceIdentifier ?? "")
+                    }
+                    var rows: [PropertyGridRow] = []
+                    var previousGroup: String?
+                    for field in fields {
+                        if let propertyGroup = field.group, propertyGroup != previousGroup {
+                            rows.append(PropertyGridRow(id: "group-\(propertyGroup)", label: "", rowHeight: 22,
+                                                        layout: .fullWidth, sizing: .intrinsic) {
+                                Text(propertyGroup).font(.caption).foregroundColor(.onSurfaceVariant)
+                            })
+                        }
+                        previousGroup = field.group
+                        if field.id.hasSuffix("-issues") || field.id.hasSuffix("-interface"),
+                           case .readOnly(let message) = field.value {
+                            rows.append(PropertyGridRow(id: field.id, label: "", layout: .fullWidth, sizing: .intrinsic) {
+                                Text(message, lineLimit: 3).font(.caption)
+                                    .foregroundColor(field.id.hasSuffix("-issues") ? .warning : .onSurfaceMuted)
+                                    .debugName("inspector-script-message-\(group.id)/\(field.id)")
+                            })
+                        } else {
+                            rows.append(row(for: field, sectionID: group.id))
+                        }
+                    }
+                    return PropertyGridSection(id: group.id, title: group.title,
+                        rows: rows,
+                        isCollapsible: true, startsCollapsed: startsCollapsed,
+                        headerLeading: leading,
+                        headerTrailing: AnyView(InspectorScriptHeaderActions(group: group, fields: section.fields,
+                            document: document, isEditable: isEditable, isPaused: store.playbackState == .paused, onOpenScript: onOpenScript)),
+                        showsRowCount: false)
+                }
+                let emptyFields = section.groups.isEmpty ? section.fields.filter { $0.id != "script-add" } : []
+                let footer = AnyView(InspectorScriptAddButton(options: scene.availableScriptOptions,
+                    isEnabled: isEditable && store.selectedEntityIDs.count <= 1) { identifier in
+                        guard let id = store.selectedEntityID else { return }
+                        _ = scene.addScriptBinding(to: id, identifier: identifier)
+                    })
+                return [PropertyGridSection(id: section.id, title: section.title,
+                    rows: emptyFields.map { row(for: $0, sectionID: section.id) },
+                    isCollapsible: true, startsCollapsed: startsCollapsed, children: children,
+                    footer: footer, badge: String(section.groups.count), showsRowCount: false)]
+            }
             if section.id == "particle-emitter" {
                 return InspectorParticlePropertyLayout.sections(
                     for: section,
@@ -670,7 +737,7 @@ struct InspectorPanel: View {
                                      labels: JsonFieldLabels(format: L("Format"), revert: L("Revert"),
                                                              valid: L("Valid JSON"), empty: L("Empty saves as {}"),
                                                              expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel")))
-                .id(identity))
+                .id(identity).debugName("inspector-json-\(identity)"))
         case let .lightType(binding):
             return AnyView(InspectorLightTypeValue(binding: binding))
         case let .physicsSimulationMode(binding):
@@ -785,17 +852,24 @@ enum InspectorSectionFilter {
                 return section
             }
 
+            let matchingGroups = section.groups.filter { $0.title.range(of: needle, options: .caseInsensitive) != nil }
+            let groupFields = Set(matchingGroups.flatMap { $0.fieldIDs + [$0.enabledFieldID, $0.statusFieldID, $0.selectorFieldID] + $0.actionFieldIDs })
             let fields = section.fields.filter {
-                $0.label.range(of: needle, options: .caseInsensitive) != nil
+                groupFields.contains($0.id) || $0.label.range(of: needle, options: .caseInsensitive) != nil
                     || $0.value.readOnlyDescription.range(
                         of: needle,
                         options: .caseInsensitive
                     ) != nil
             }
             guard !fields.isEmpty else { return nil }
-            return EditorInspectorSection(id: section.id,
-                                          title: section.title,
-                                          fields: fields)
+            let visibleIDs = Set(fields.map(\.id))
+            let groups = section.groups.filter { group in
+                matchingGroups.contains { $0.id == group.id } || group.fieldIDs.contains { visibleIDs.contains($0) }
+                    || visibleIDs.contains(group.selectorFieldID) || visibleIDs.contains(group.statusFieldID)
+            }
+            let controlIDs = Set(groups.flatMap { [$0.enabledFieldID, $0.statusFieldID, $0.selectorFieldID] + $0.actionFieldIDs })
+            let controls = section.fields.filter { controlIDs.contains($0.id) && !visibleIDs.contains($0.id) }
+            return EditorInspectorSection(id: section.id, title: section.title, fields: fields + controls, groups: groups)
         }
     }
 }

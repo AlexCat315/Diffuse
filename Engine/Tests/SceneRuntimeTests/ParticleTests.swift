@@ -8,12 +8,14 @@ struct ParticleTests {
 
     @Test("clearing an emitter preserves authoring and the next random sample")
     func clearPreservesConfigurationAndRandomStream() {
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      maxParticles: 16,
-                                      lifetime: 5,
-                                      spawnRadius: 2,
-                                      velocityRandomness: SIMD3<Float>(1, 2, 3),
-                                      seed: 73)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 16
+            $0.appearance.lifetime = 5
+            $0.shape.spawnRadius = 2
+            $0.velocity.velocityRandomness = SIMD3<Float>(1, 2, 3)
+            $0.emission.seed = 73
+        })
         emitter.emit(2)
         emitter.advance(deltaTime: 0.1)
         let configuration = emitter.moduleStack
@@ -35,12 +37,14 @@ struct ParticleTests {
 
     @Test("module-based initialization creates an independent seeded simulation")
     func moduleInitializationStartsFreshSimulation() {
-        var source = ParticleEmitter(emissionRate: 0,
-                                     maxParticles: 16,
-                                     lifetime: 5,
-                                     spawnRadius: 2,
-                                     velocityRandomness: SIMD3<Float>(1, 2, 3),
-                                     seed: 73)
+        var source = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 16
+            $0.appearance.lifetime = 5
+            $0.shape.spawnRadius = 2
+            $0.velocity.velocityRandomness = SIMD3<Float>(1, 2, 3)
+            $0.emission.seed = 73
+        })
         let configuration = source.moduleStack
         source.emit(3)
         var restored = ParticleEmitter(moduleStack: configuration)
@@ -55,65 +59,67 @@ struct ParticleTests {
         #expect(source.aliveCount == 3)
     }
 
-    @Test("module stack mirrors and applies legacy emitter configuration")
-    func moduleStackMirrorsAndAppliesLegacyEmitterConfiguration() throws {
-        let emitter = ParticleEmitter(looping: false,
-                                      duration: 4,
-                                      emissionRate: 12,
-                                      distanceEmissionRate: 3,
-                                      burstCount: 2,
-                                      maxParticles: 128,
-                                      maxSpawnedParticlesPerFrame: 16,
-                                      maxRenderedParticles: 32,
-                                      lifetime: 1.5,
-                                      subEmitters: [
+    @Test("module stack mirrors and applies grouped emitter configuration")
+    func moduleStackMirrorsAndAppliesGroupedEmitterConfiguration() throws {
+        let emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = false
+            $0.emission.duration = 4
+            $0.emission.emissionRate = 12
+            $0.emission.distanceEmissionRate = 3
+            $0.emission.burstCount = 2
+            $0.emission.maxParticles = 128
+            $0.emission.maxSpawnedParticlesPerFrame = 16
+            $0.emission.maxRenderedParticles = 32
+            $0.appearance.lifetime = 1.5
+            $0.subEmitters.rules = [
                                           ParticleSubEmitter(trigger: .death,
                                                              burstCount: 2,
                                                              lifetime: 0.4,
                                                              startVelocity: SIMD3<Float>(1, 0, 0)),
-                                      ],
-                                      originOffset: SIMD3<Float>(0.5, 1, -0.5),
-                                      spawnRadius: 2,
-                                      emissionShape: .cone,
-                                      coneRadius: 0.75,
-                                      coneHeight: 3,
-                                      startVelocity: SIMD3<Float>(1, 2, 3),
-                                      velocityRandomness: SIMD3<Float>(0.1, 0.2, 0.3),
-                                      velocityInheritance: 0.5,
-                                      gravity: SIMD3<Float>(0, -2, 0),
-                                      noiseStrength: 1.25,
-                                      forceMode: .radial,
-                                      forceRadius: 4,
-                                      forceStrength: 6,
-                                      vectorFieldMode: .curl,
-                                      vectorFieldStrength: 2,
-                                      collisionMode: .worldPlane,
-                                      simulationSpace: .world,
-                                      simulationBackend: .gpuIfSupported,
-                                      gpuSimulationWorkgroupSize: 128,
-                                      collisionRestitution: 0.8,
-                                      collisionDamping: 0.2,
-                                      startSize: 0.5,
-                                      endSize: 0.1,
-                                      sizeRandomness: 0.3,
-                                      blendMode: .additive,
-                                      renderMode: .ribbon,
-                                      sortMode: .youngestFirst,
-                                      renderAlignment: .velocity,
-                                      velocityStretchScale: 0.4,
-                                      maxRenderDistance: 80,
-                                      textureAssetID: "texture-smoke",
-                                      texturePath: "/tmp/smoke.png",
-                                      textureSheetColumns: 4,
-                                      textureSheetRows: 2,
-                                      textureSheetFrameCount: 7,
-                                      textureSheetFrameRate: 12,
-                                      textureSheetPlaybackMode: .loop,
-                                      textureSheetStartFrame: 3,
-                                      textureSheetFrameRandomness: 2,
-                                      trailLength: 0.75,
-                                      trailSegments: 5,
-                                      seed: 987_654_321)
+                                      ]
+            $0.shape.originOffset = SIMD3<Float>(0.5, 1, -0.5)
+            $0.shape.spawnRadius = 2
+            $0.shape.emissionShape = .cone
+            $0.shape.coneRadius = 0.75
+            $0.shape.coneHeight = 3
+            $0.velocity.startVelocity = SIMD3<Float>(1, 2, 3)
+            $0.velocity.velocityRandomness = SIMD3<Float>(0.1, 0.2, 0.3)
+            $0.velocity.velocityInheritance = 0.5
+            $0.forces.gravity = SIMD3<Float>(0, -2, 0)
+            $0.forces.noiseStrength = 1.25
+            $0.forces.forceMode = .radial
+            $0.forces.forceRadius = 4
+            $0.forces.forceStrength = 6
+            $0.forces.vectorFieldMode = .curl
+            $0.forces.vectorFieldStrength = 2
+            $0.collision.collisionMode = .worldPlane
+            $0.gpuSimulation.simulationSpace = .world
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 128
+            $0.collision.collisionRestitution = 0.8
+            $0.collision.collisionDamping = 0.2
+            $0.appearance.startSize = 0.5
+            $0.appearance.endSize = 0.1
+            $0.appearance.sizeRandomness = 0.3
+            $0.appearance.blendMode = .additive
+            $0.renderer.renderMode = .ribbon
+            $0.renderer.sortMode = .youngestFirst
+            $0.renderer.renderAlignment = .velocity
+            $0.renderer.velocityStretchScale = 0.4
+            $0.renderer.maxRenderDistance = 80
+            $0.textureSheet.textureAssetID = "texture-smoke"
+            $0.textureSheet.texturePath = "/tmp/smoke.png"
+            $0.textureSheet.columns = 4
+            $0.textureSheet.rows = 2
+            $0.textureSheet.frameCount = 7
+            $0.textureSheet.frameRate = 12
+            $0.textureSheet.playbackMode = .loop
+            $0.textureSheet.startFrame = 3
+            $0.textureSheet.frameRandomness = 2
+            $0.trails.trailLength = 0.75
+            $0.trails.trailSegments = 5
+            $0.emission.seed = 987_654_321
+        })
 
         var stack = emitter.moduleStack
 
@@ -192,24 +198,26 @@ struct ParticleTests {
         var applied = ParticleEmitter()
         applied.apply(stack)
 
-        #expect(applied.emissionRate == 0)
-        #expect(applied.maxParticles == 0)
-        #expect(applied.maxSpawnedParticlesPerFrame == 0)
-        #expect(applied.seed == 42)
-        #expect(applied.collisionRestitution == 1)
-        #expect(applied.collisionDamping == 0)
-        #expect(applied.textureAssetID == nil)
-        #expect(applied.textureSheetColumns == 1)
-        #expect(applied.textureSheetRows == 1)
-        #expect(applied.textureSheetFrameCount == 1)
-        #expect(applied.textureSheetPlaybackMode == .singleFrame)
-        #expect(applied.textureSheetFrameRandomness == 0)
-        #expect(applied.gpuSimulationWorkgroupSize == 1)
+        #expect(applied.settings.emission.emissionRate == 0)
+        #expect(applied.settings.emission.maxParticles == 0)
+        #expect(applied.settings.emission.maxSpawnedParticlesPerFrame == 0)
+        #expect(applied.settings.emission.seed == 42)
+        #expect(applied.settings.collision.collisionRestitution == 1)
+        #expect(applied.settings.collision.collisionDamping == 0)
+        #expect(applied.settings.textureSheet.textureAssetID == nil)
+        #expect(applied.settings.textureSheet.columns == 1)
+        #expect(applied.settings.textureSheet.rows == 1)
+        #expect(applied.settings.textureSheet.frameCount == 1)
+        #expect(applied.settings.textureSheet.playbackMode == .singleFrame)
+        #expect(applied.settings.textureSheet.frameRandomness == 0)
+        #expect(applied.settings.gpuSimulation.workgroupSize == 1)
     }
 
     @Test("module stack preserves disabled authored settings while rebasing enabled modules")
     func moduleStackPreservesDisabledAuthoredSettingsWhileRebasingEnabledModules() throws {
-        var emitter = ParticleEmitter(gravity: SIMD3<Float>(0, -9.81, 0))
+        var emitter = ParticleEmitter(settings: .init {
+            $0.forces.gravity = SIMD3<Float>(0, -9.81, 0)
+        })
         var stack = emitter.moduleStack
         let forcesIndex = try #require(stack.modules.firstIndex { $0.id == "forces" })
         stack.modules[forcesIndex].isEnabled = false
@@ -221,8 +229,8 @@ struct ParticleTests {
         }
 
         emitter.apply(stack)
-        emitter.emissionRate = 24
-        emitter.gravity = SIMD3<Float>(1, 2, 3)
+        emitter.settings.emission.emissionRate = 24
+        emitter.settings.forces.gravity = SIMD3<Float>(1, 2, 3)
 
         let rebased = emitter.moduleStack
         let emission = try #require(rebased.modules.first { $0.id == "emission" })
@@ -242,13 +250,15 @@ struct ParticleTests {
 
     @Test("module stack applies seed and reseeds the random stream")
     func moduleStackAppliesSeedAndReseedsRandomStream() throws {
-        var applied = ParticleEmitter(emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 1,
-                                      spawnRadius: 2,
-                                      sizeRandomness: 0.5,
-                                      textureSheetFrameRandomness: 3,
-                                      seed: 1)
+        var applied = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 1
+            $0.shape.spawnRadius = 2
+            $0.appearance.sizeRandomness = 0.5
+            $0.textureSheet.frameRandomness = 3
+            $0.emission.seed = 1
+        })
         var stack = applied.moduleStack
         try editModule(&stack, id: "emission") { settings in
             guard case var .emission(module) = settings else { return }
@@ -256,18 +266,20 @@ struct ParticleTests {
             settings = .emission(module)
         }
 
-        var expected = ParticleEmitter(emissionRate: 0,
-                                       maxParticles: 8,
-                                       lifetime: 1,
-                                       spawnRadius: 2,
-                                       sizeRandomness: 0.5,
-                                       textureSheetFrameRandomness: 3,
-                                       seed: 77)
+        var expected = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 1
+            $0.shape.spawnRadius = 2
+            $0.appearance.sizeRandomness = 0.5
+            $0.textureSheet.frameRandomness = 3
+            $0.emission.seed = 77
+        })
         applied.apply(stack)
         applied.emit(4)
         expected.emit(4)
 
-        #expect(applied.seed == 77)
+        #expect(applied.settings.emission.seed == 77)
         #expect(applied.particles == expected.particles)
     }
 
@@ -294,10 +306,12 @@ struct ParticleTests {
 
     @Test("module stack validation reports authoring issues before runtime clamping")
     func moduleStackValidationReportsAuthoringIssues() throws {
-        var emitter = ParticleEmitter(emissionRate: 8,
-                                      maxParticles: 64,
-                                      lifetime: 1,
-                                      simulationBackend: .gpuRequired)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 8
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 1
+            $0.gpuSimulation.simulationBackend = .gpuRequired
+        })
         var stack = emitter.moduleStack
         try editModule(&stack, id: "emission") { settings in
             guard case var .emission(module) = settings else { return }
@@ -566,30 +580,39 @@ struct ParticleTests {
 
     @Test("continuous emission spawns at the configured rate")
     func continuousEmission() {
-        var emitter = ParticleEmitter(emissionRate: 10, maxParticles: 1000, lifetime: 1000,
-                                      startVelocity: .zero, gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 1000
+            $0.appearance.lifetime = 1000
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         for _ in 0..<10 { emitter.advance(deltaTime: 0.1) } // 10 * (10/s * 0.1s) = 10
         #expect(emitter.aliveCount == 10)
     }
 
     @Test("simulation speed scales particle aging and emission")
     func simulationSpeedScalesAgingAndEmission() {
-        var slow = ParticleEmitter(simulationSpeed: 0.5,
-                                   emissionRate: 10,
-                                   maxParticles: 100,
-                                   lifetime: 100,
-                                   startVelocity: .zero,
-                                   gravity: .zero)
+        var slow = ParticleEmitter(settings: .init {
+            $0.emission.simulationSpeed = 0.5
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         slow.advance(deltaTime: 1)
         #expect(slow.aliveCount == 5)
         #expect(slow.lastFrameStats.simulatedDeltaTime == 0.5)
 
-        var fast = ParticleEmitter(simulationSpeed: 2,
-                                   emissionRate: 10,
-                                   maxParticles: 100,
-                                   lifetime: 100,
-                                   startVelocity: .zero,
-                                   gravity: .zero)
+        var fast = ParticleEmitter(settings: .init {
+            $0.emission.simulationSpeed = 2
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         fast.advance(deltaTime: 1)
         #expect(fast.aliveCount == 20)
         #expect(fast.lastFrameStats.simulatedDeltaTime == 2)
@@ -597,13 +620,15 @@ struct ParticleTests {
 
     @Test("zero simulation speed pauses particle aging and distance emission")
     func zeroSimulationSpeedPausesParticles() {
-        var emitter = ParticleEmitter(simulationSpeed: 0,
-                                      emissionRate: 0,
-                                      distanceEmissionRate: 10,
-                                      maxParticles: 100,
-                                      lifetime: 10,
-                                      startVelocity: SIMD3<Float>(1, 0, 0),
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.simulationSpeed = 0
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = SIMD3<Float>(1, 0, 0)
+            $0.forces.gravity = .zero
+        })
         emitter.emit(1)
         var start = matrix_identity_float4x4
         start.columns.3 = SIMD4<Float>(0, 0, 0, 1)
@@ -622,11 +647,13 @@ struct ParticleTests {
 
     @Test("frame spawned particles track accepted advance emissions")
     func frameSpawnedParticlesTrackAcceptedAdvanceEmissions() {
-        var emitter = ParticleEmitter(emissionRate: 10,
-                                      maxParticles: 1,
-                                      lifetime: 100,
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 1
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
 
         emitter.advance(deltaTime: 0.2)
 
@@ -635,7 +662,7 @@ struct ParticleTests {
         #expect(emitter.lastFrameStats.capacityLimitedSpawnCount == 1)
         #expect(emitter.lastFrameSpawnedParticles.count == 1)
 
-        emitter.isEmitting = false
+        emitter.settings.emission.isEmitting = false
         emitter.advance(deltaTime: 0.1)
 
         #expect(emitter.aliveCount == 1)
@@ -645,12 +672,14 @@ struct ParticleTests {
 
     @Test("per-frame spawn budget throttles continuous emission")
     func perFrameSpawnBudgetThrottlesContinuousEmission() {
-        var emitter = ParticleEmitter(emissionRate: 100,
-                                      maxParticles: 100,
-                                      maxSpawnedParticlesPerFrame: 3,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 100
+            $0.emission.maxParticles = 100
+            $0.emission.maxSpawnedParticlesPerFrame = 3
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
 
         emitter.advance(deltaTime: 0.1)
 
@@ -673,19 +702,21 @@ struct ParticleTests {
 
     @Test("per-frame spawn budget throttles event sub-emitters")
     func perFrameSpawnBudgetThrottlesEventSubEmitters() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      distanceEmissionRate: 100,
-                                      maxParticles: 100,
-                                      maxSpawnedParticlesPerFrame: 2,
-                                      lifetime: 0.1,
-                                      subEmitterTrigger: .death,
-                                      subEmitterBurstCount: 4,
-                                      subEmitterMaxDepth: 1,
-                                      subEmitterLifetime: 1,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      simulationSpace: .world)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 100
+            $0.emission.maxParticles = 100
+            $0.emission.maxSpawnedParticlesPerFrame = 2
+            $0.appearance.lifetime = 0.1
+            $0.subEmitters.legacyTrigger = .death
+            $0.subEmitters.legacyBurstCount = 4
+            $0.subEmitters.legacyMaxDepth = 1
+            $0.subEmitters.legacyLifetime = 1
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.2)
 
@@ -701,9 +732,15 @@ struct ParticleTests {
 
     @Test("scheduled bursts spawn particles at configured intervals")
     func scheduledBursts() {
-        var emitter = ParticleEmitter(emissionRate: 0, burstCount: 3, burstInterval: 0.5,
-                                      maxParticles: 100, lifetime: 100,
-                                      startVelocity: .zero, gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.burstCount = 3
+            $0.emission.burstInterval = 0.5
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         emitter.advance(deltaTime: 0.49)
         #expect(emitter.aliveCount == 0)
         emitter.advance(deltaTime: 0.01)
@@ -718,13 +755,15 @@ struct ParticleTests {
         start.columns.3 = SIMD4<Float>(0, 0, 0, 1)
         var moved = matrix_identity_float4x4
         moved.columns.3 = SIMD4<Float>(1, 0, 0, 1)
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      distanceEmissionRate: 4,
-                                      maxParticles: 16,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      simulationSpace: .world)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 4
+            $0.emission.maxParticles = 16
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
 
         emitter.advance(deltaTime: 0.1, worldTransform: start)
         #expect(emitter.aliveCount == 0)
@@ -738,13 +777,15 @@ struct ParticleTests {
     func distanceEmissionAccumulator() {
         var start = matrix_identity_float4x4
         var moved = matrix_identity_float4x4
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      distanceEmissionRate: 2,
-                                      maxParticles: 16,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      simulationSpace: .world)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 2
+            $0.emission.maxParticles = 16
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
 
         emitter.advance(deltaTime: 0.1, worldTransform: start)
         moved.columns.3 = SIMD4<Float>(0.25, 0, 0, 1)
@@ -761,14 +802,16 @@ struct ParticleTests {
         let start = matrix_identity_float4x4
         var moved = matrix_identity_float4x4
         moved.columns.3 = SIMD4<Float>(1, 0, 0, 1)
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      distanceEmissionRate: 10,
-                                      maxParticles: 100,
-                                      maxSpawnedParticlesPerFrame: 3,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      simulationSpace: .world)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.emission.maxSpawnedParticlesPerFrame = 3
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
 
         emitter.advance(deltaTime: 0.1, worldTransform: start)
         emitter.advance(deltaTime: 0.1, worldTransform: moved)
@@ -789,14 +832,16 @@ struct ParticleTests {
         let start = matrix_identity_float4x4
         var moved = matrix_identity_float4x4
         moved.columns.3 = SIMD4<Float>(2, 0, 0, 1)
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      distanceEmissionRate: 1,
-                                      maxParticles: 8,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      velocityInheritance: 0.5,
-                                      gravity: .zero,
-                                      simulationSpace: .world)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 1
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.velocity.velocityInheritance = 0.5
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
 
         emitter.advance(deltaTime: 1, worldTransform: start)
         emitter.advance(deltaTime: 1, worldTransform: moved)
@@ -807,9 +852,15 @@ struct ParticleTests {
 
     @Test("non-looping duration stops new emissions")
     func nonLoopingDurationStopsEmission() {
-        var emitter = ParticleEmitter(looping: false, duration: 0.5,
-                                      emissionRate: 10, maxParticles: 100, lifetime: 100,
-                                      startVelocity: .zero, gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = false
+            $0.emission.duration = 0.5
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         emitter.advance(deltaTime: 0.5)
         #expect(emitter.aliveCount == 5)
         emitter.advance(deltaTime: 1.0)
@@ -822,13 +873,15 @@ struct ParticleTests {
 
     @Test("non-looping emitter reports inactive once duration is exhausted")
     func nonLoopingEmitterReportsInactiveAfterDuration() {
-        var emitter = ParticleEmitter(looping: false,
-                                      duration: 0.25,
-                                      emissionRate: 4,
-                                      maxParticles: 8,
-                                      lifetime: 0.1,
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = false
+            $0.emission.duration = 0.25
+            $0.emission.emissionRate = 4
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 0.1
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
 
         #expect(emitter.isEmissionActive)
         emitter.advance(deltaTime: 0.25)
@@ -845,11 +898,13 @@ struct ParticleTests {
 
     @Test("looping emitter remains active after duration wraps")
     func loopingEmitterRemainsActiveAfterDurationWraps() {
-        var emitter = ParticleEmitter(looping: true,
-                                      duration: 0.25,
-                                      emissionRate: 0,
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = true
+            $0.emission.duration = 0.25
+            $0.emission.emissionRate = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
 
         emitter.advance(deltaTime: 2)
 
@@ -858,7 +913,11 @@ struct ParticleTests {
 
     @Test("particles are culled once they exceed their lifetime")
     func lifetimeCulling() {
-        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 0.5, gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 0.5
+            $0.forces.gravity = .zero
+        })
         emitter.emit(3)
         #expect(emitter.aliveCount == 3)
         emitter.advance(deltaTime: 0.6) // age 0.6 > lifetime 0.5
@@ -867,22 +926,24 @@ struct ParticleTests {
 
     @Test("death sub-emitter spawns child particles with independent appearance")
     func deathSubEmitter() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 0.5,
-                                      subEmitterTrigger: .death,
-                                      subEmitterBurstCount: 2,
-                                      subEmitterMaxDepth: 1,
-                                      subEmitterLifetime: 2,
-                                      subEmitterStartVelocity: SIMD3<Float>(1, 0, 0),
-                                      subEmitterVelocityRandomness: .zero,
-                                      subEmitterStartSize: 0.25,
-                                      subEmitterEndSize: 0.25,
-                                      subEmitterStartColor: SIMD4<Float>(1, 0, 0, 1),
-                                      subEmitterEndColor: SIMD4<Float>(1, 0, 0, 1),
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 0.5
+            $0.subEmitters.legacyTrigger = .death
+            $0.subEmitters.legacyBurstCount = 2
+            $0.subEmitters.legacyMaxDepth = 1
+            $0.subEmitters.legacyLifetime = 2
+            $0.subEmitters.legacyStartVelocity = SIMD3<Float>(1, 0, 0)
+            $0.subEmitters.legacyVelocityRandomness = .zero
+            $0.subEmitters.legacyStartSize = 0.25
+            $0.subEmitters.legacyEndSize = 0.25
+            $0.subEmitters.legacyStartColor = SIMD4<Float>(1, 0, 0, 1)
+            $0.subEmitters.legacyEndColor = SIMD4<Float>(1, 0, 0, 1)
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.6)
 
@@ -910,11 +971,12 @@ struct ParticleTests {
 
     @Test("multiple death sub-emitter rules spawn independent child appearances")
     func multipleDeathSubEmitters() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 0.5,
-                                      subEmitters: [
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 0.5
+            $0.subEmitters.rules = [
                                           ParticleSubEmitter(trigger: .death,
                                                              burstCount: 1,
                                                              lifetime: 2,
@@ -931,9 +993,10 @@ struct ParticleTests {
                                                              endSize: 0.4,
                                                              startColor: SIMD4<Float>(0, 0, 1, 1),
                                                              endColor: SIMD4<Float>(0, 0, 1, 1)),
-                                      ],
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+                                      ]
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.6)
 
@@ -952,21 +1015,23 @@ struct ParticleTests {
 
     @Test("collision sub-emitter spawns child particles at the collision point")
     func collisionSubEmitter() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 10,
-                                      subEmitterTrigger: .collision,
-                                      subEmitterBurstCount: 1,
-                                      subEmitterLifetime: 2,
-                                      subEmitterStartVelocity: SIMD3<Float>(2, 0, 0),
-                                      subEmitterVelocityRandomness: .zero,
-                                      originOffset: SIMD3<Float>(0, 0.5, 0),
-                                      startVelocity: SIMD3<Float>(0, -1, 0),
-                                      gravity: .zero,
-                                      collisionMode: .localPlane,
-                                      collisionPlaneY: 0,
-                                      collisionRestitution: 0.5)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.subEmitters.legacyTrigger = .collision
+            $0.subEmitters.legacyBurstCount = 1
+            $0.subEmitters.legacyLifetime = 2
+            $0.subEmitters.legacyStartVelocity = SIMD3<Float>(2, 0, 0)
+            $0.subEmitters.legacyVelocityRandomness = .zero
+            $0.shape.originOffset = SIMD3<Float>(0, 0.5, 0)
+            $0.velocity.startVelocity = SIMD3<Float>(0, -1, 0)
+            $0.forces.gravity = .zero
+            $0.collision.collisionMode = .localPlane
+            $0.collision.collisionPlaneY = 0
+            $0.collision.collisionRestitution = 0.5
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 1)
 
@@ -987,11 +1052,12 @@ struct ParticleTests {
 
     @Test("external simulation events drive sub-emitter spawning")
     func externalSimulationEventsDriveSubEmitters() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 10,
-                                      subEmitters: [
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 10
+            $0.subEmitters.rules = [
                                           ParticleSubEmitter(trigger: .death,
                                                              burstCount: 2,
                                                              maxDepth: 2,
@@ -1003,9 +1069,10 @@ struct ParticleTests {
                                                              endSize: 0.1,
                                                              startColor: SIMD4<Float>(1, 0, 0, 1),
                                                              endColor: SIMD4<Float>(1, 1, 0, 0.5)),
-                                      ],
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+                                      ]
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         let sourceEvent = ParticleEvent(trigger: .death,
                                         position: SIMD3<Float>(2, 3, 4),
                                         velocity: SIMD3<Float>(0, 2, 0),
@@ -1036,16 +1103,18 @@ struct ParticleTests {
 
     @Test("external simulation event bridge clears stale frame output")
     func externalSimulationEventBridgeClearsStaleOutput() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 4,
-                                      subEmitterTrigger: .collision,
-                                      subEmitterBurstCount: 1,
-                                      subEmitterLifetime: 1,
-                                      subEmitterStartVelocity: SIMD3<Float>(0, 1, 0),
-                                      subEmitterVelocityRandomness: .zero,
-                                      startVelocity: .zero,
-                                      gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.subEmitters.legacyTrigger = .collision
+            $0.subEmitters.legacyBurstCount = 1
+            $0.subEmitters.legacyLifetime = 1
+            $0.subEmitters.legacyStartVelocity = SIMD3<Float>(0, 1, 0)
+            $0.subEmitters.legacyVelocityRandomness = .zero
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
         let sourceEvent = ParticleEvent(trigger: .collision,
                                         position: .zero,
                                         velocity: .zero,
@@ -1068,18 +1137,20 @@ struct ParticleTests {
 
     @Test("GPU event sub-emitters defer CPU spawning until external simulation feedback")
     func gpuEventSubEmittersDeferToExternalSimulationEvents() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 8,
-                                      lifetime: 0.5,
-                                      subEmitterTrigger: .death,
-                                      subEmitterBurstCount: 2,
-                                      subEmitterMaxDepth: 1,
-                                      subEmitterLifetime: 2,
-                                      subEmitterStartVelocity: SIMD3<Float>(1, 0, 0),
-                                      subEmitterVelocityRandomness: .zero,
-                                      gravity: .zero,
-                                      simulationBackend: .gpuIfSupported)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 8
+            $0.appearance.lifetime = 0.5
+            $0.subEmitters.legacyTrigger = .death
+            $0.subEmitters.legacyBurstCount = 2
+            $0.subEmitters.legacyMaxDepth = 1
+            $0.subEmitters.legacyLifetime = 2
+            $0.subEmitters.legacyStartVelocity = SIMD3<Float>(1, 0, 0)
+            $0.subEmitters.legacyVelocityRandomness = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        })
         #expect(emitter.gpuSimulationPlan.usesGPU)
 
         emitter.emit(1)
@@ -1109,19 +1180,21 @@ struct ParticleTests {
 
     @Test("CPU backend keeps CPU-owned event sub-emitter spawning")
     func cpuBackendKeepsCPUOwnedEventSubEmitterSpawning() {
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      distanceEmissionRate: 1,
-                                      maxParticles: 4,
-                                      lifetime: 0.5,
-                                      subEmitterTrigger: .death,
-                                      subEmitterBurstCount: 1,
-                                      subEmitterMaxDepth: 1,
-                                      subEmitterLifetime: 2,
-                                      subEmitterStartVelocity: .zero,
-                                      subEmitterVelocityRandomness: .zero,
-                                      gravity: .zero,
-                                      simulationBackend: .cpu)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 1
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 0.5
+            $0.subEmitters.legacyTrigger = .death
+            $0.subEmitters.legacyBurstCount = 1
+            $0.subEmitters.legacyMaxDepth = 1
+            $0.subEmitters.legacyLifetime = 2
+            $0.subEmitters.legacyStartVelocity = .zero
+            $0.subEmitters.legacyVelocityRandomness = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .cpu
+        })
         #expect(emitter.gpuSimulationPlan.status == .disabled)
         #expect(!emitter.gpuSimulationPlan.usesGPU)
 
@@ -1140,15 +1213,17 @@ struct ParticleTests {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
         _ = scene.setComponent(
-            ParticleEmitter(isEmitting: false,
-                            emissionRate: 0,
-                            maxParticles: 1,
-                            subEmitterTrigger: .death,
-                            subEmitterBurstCount: 2,
-                            subEmitterLifetime: 2,
-                            subEmitterStartVelocity: .zero,
-                            subEmitterVelocityRandomness: .zero,
-                            gravity: .zero),
+            ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 1
+                $0.subEmitters.legacyTrigger = .death
+                $0.subEmitters.legacyBurstCount = 2
+                $0.subEmitters.legacyLifetime = 2
+                $0.subEmitters.legacyStartVelocity = .zero
+                $0.subEmitters.legacyVelocityRandomness = .zero
+                $0.forces.gravity = .zero
+            }),
             for: entity
         )
         let empty = scene.createEntity()
@@ -1207,7 +1282,10 @@ struct ParticleTests {
     func sceneRuntimeMergesGPUParticleReadbackStatsIntoFrameStats() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
-        _ = scene.setComponent(ParticleEmitter(emissionRate: 2, maxParticles: 8), for: entity)
+        _ = scene.setComponent(ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 2
+            $0.emission.maxParticles = 8
+        }), for: entity)
         _ = scene.tick(deltaTime: 1)
 
         scene.applyParticleSimulationReadbackStats(
@@ -1234,9 +1312,13 @@ struct ParticleTests {
 
     @Test("gravity and velocity integrate with semi-implicit Euler")
     func motionIntegration() {
-        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
-                                      spawnRadius: 0, startVelocity: .zero,
-                                      gravity: SIMD3<Float>(0, -10, 0))
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 100
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = SIMD3<Float>(0, -10, 0)
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 1)
         let p = emitter.particles[0]
@@ -1246,15 +1328,17 @@ struct ParticleTests {
 
     @Test("radial force accelerates particles away from the force center")
     func radialForce() {
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      lifetime: 10,
-                                      originOffset: SIMD3<Float>(1, 0, 0),
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      forceMode: .radial,
-                                      forceRadius: 0,
-                                      forceStrength: 2,
-                                      forceFalloff: 0)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 10
+            $0.shape.originOffset = SIMD3<Float>(1, 0, 0)
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.forces.forceMode = .radial
+            $0.forces.forceRadius = 0
+            $0.forces.forceStrength = 2
+            $0.forces.forceFalloff = 0
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 1)
 
@@ -1265,16 +1349,18 @@ struct ParticleTests {
 
     @Test("vortex force accelerates particles around the configured axis")
     func vortexForce() {
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      lifetime: 10,
-                                      originOffset: SIMD3<Float>(1, 0, 0),
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      forceMode: .vortex,
-                                      forceAxis: SIMD3<Float>(0, 1, 0),
-                                      forceRadius: 0,
-                                      forceStrength: 3,
-                                      forceFalloff: 0)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 10
+            $0.shape.originOffset = SIMD3<Float>(1, 0, 0)
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.forces.forceMode = .vortex
+            $0.forces.forceAxis = SIMD3<Float>(0, 1, 0)
+            $0.forces.forceRadius = 0
+            $0.forces.forceStrength = 3
+            $0.forces.forceFalloff = 0
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 1)
 
@@ -1285,13 +1371,15 @@ struct ParticleTests {
 
     @Test("uniform vector field accelerates particles in the configured direction")
     func uniformVectorField() {
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      vectorFieldMode: .uniform,
-                                      vectorFieldDirection: SIMD3<Float>(2, 0, 0),
-                                      vectorFieldStrength: 4)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.forces.vectorFieldMode = .uniform
+            $0.forces.vectorFieldDirection = SIMD3<Float>(2, 0, 0)
+            $0.forces.vectorFieldStrength = 4
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.5)
 
@@ -1304,11 +1392,13 @@ struct ParticleTests {
 
     @Test("GPU simulation plan reports dispatch shape and unsupported module fallbacks")
     func gpuSimulationPlan() {
-        let supported = ParticleEmitter(emissionRate: 10,
-                                        maxParticles: 130,
-                                        lifetime: 10,
-                                        simulationBackend: .gpuIfSupported,
-                                        gpuSimulationWorkgroupSize: 64)
+        let supported = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 130
+            $0.appearance.lifetime = 10
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        })
         let supportedPlan = supported.gpuSimulationPlan
         #expect(supportedPlan.status == .supported)
         #expect(supportedPlan.usesGPU)
@@ -1317,112 +1407,132 @@ struct ParticleTests {
         #expect(supportedPlan.dispatchWorkgroups == 3)
         #expect(supportedPlan.unsupportedReasons.isEmpty)
 
-        let clamped = ParticleEmitter(emissionRate: 10,
-                                      maxParticles: 513,
-                                      lifetime: 10,
-                                      simulationBackend: .gpuIfSupported,
-                                      gpuSimulationWorkgroupSize: 512)
+        let clamped = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 513
+            $0.appearance.lifetime = 10
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 512
+        })
         let clampedPlan = clamped.gpuSimulationPlan
         #expect(clampedPlan.status == .supported)
         #expect(clampedPlan.workgroupSize == ParticleGPUSimulationPlan.maximumWorkgroupSize)
         #expect(clampedPlan.dispatchWorkgroups == 3)
 
-        let distanceEmission = ParticleEmitter(emissionRate: 0,
-                                               distanceEmissionRate: 2,
-                                               maxParticles: 64,
-                                               lifetime: 10,
-                                               simulationBackend: .gpuIfSupported)
+        let distanceEmission = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 2
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        })
         let distanceEmissionPlan = distanceEmission.gpuSimulationPlan
         #expect(distanceEmissionPlan.status == .supported)
         #expect(distanceEmissionPlan.usesGPU)
         #expect(distanceEmissionPlan.unsupportedReasons.isEmpty)
 
-        let complexFallback = ParticleEmitter(emissionRate: 10,
-                                              maxParticles: 64,
-                                              lifetime: 10,
-                                              noiseStrength: 1,
-                                              forceMode: .radial,
-                                              forceStrength: 2,
-                                              vectorFieldMode: .uniform,
-                                              vectorFieldStrength: 3,
-                                              collisionMode: .localPlane,
-                                              simulationBackend: .gpuIfSupported,
-                                              angularVelocity: 0.25)
+        let complexFallback = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.forces.noiseStrength = 1
+            $0.forces.forceMode = .radial
+            $0.forces.forceStrength = 2
+            $0.forces.vectorFieldMode = .uniform
+            $0.forces.vectorFieldStrength = 3
+            $0.collision.collisionMode = .localPlane
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.appearance.angularVelocity = 0.25
+        })
         let complexFallbackPlan = complexFallback.gpuSimulationPlan
         #expect(complexFallbackPlan.status == .supported)
         #expect(complexFallbackPlan.usesGPU)
         #expect(complexFallbackPlan.unsupportedReasons.isEmpty)
 
-        let noisePlan = ParticleEmitter(emissionRate: 10,
-                                        maxParticles: 64,
-                                        lifetime: 10,
-                                        noiseStrength: 2,
-                                        noiseScale: 3,
-                                        noiseSpeed: 0.5,
-                                        simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        let noisePlan = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.forces.noiseStrength = 2
+            $0.forces.noiseScale = 3
+            $0.forces.noiseSpeed = 0.5
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        }).gpuSimulationPlan
         #expect(noisePlan.status == .supported)
         #expect(noisePlan.usesGPU)
 
-        let forcePlan = ParticleEmitter(emissionRate: 10,
-                                        maxParticles: 64,
-                                        lifetime: 10,
-                                        forceMode: .vortex,
-                                        forceAxis: SIMD3<Float>(0, 1, 0),
-                                        forceRadius: 8,
-                                        forceStrength: -3,
-                                        forceFalloff: 2,
-                                        simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        let forcePlan = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.forces.forceMode = .vortex
+            $0.forces.forceAxis = SIMD3<Float>(0, 1, 0)
+            $0.forces.forceRadius = 8
+            $0.forces.forceStrength = -3
+            $0.forces.forceFalloff = 2
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        }).gpuSimulationPlan
         #expect(forcePlan.status == .supported)
         #expect(forcePlan.usesGPU)
 
-        let uniformVectorFieldPlan = ParticleEmitter(emissionRate: 10,
-                                                     maxParticles: 64,
-                                                     lifetime: 10,
-                                                     vectorFieldMode: .uniform,
-                                                     vectorFieldDirection: SIMD3<Float>(2, 0, 0),
-                                                     vectorFieldStrength: 4,
-                                                     simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        let uniformVectorFieldPlan = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.forces.vectorFieldMode = .uniform
+            $0.forces.vectorFieldDirection = SIMD3<Float>(2, 0, 0)
+            $0.forces.vectorFieldStrength = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        }).gpuSimulationPlan
         #expect(uniformVectorFieldPlan.status == .supported)
         #expect(uniformVectorFieldPlan.usesGPU)
 
-        let angularVelocityPlan = ParticleEmitter(emissionRate: 10,
-                                                  maxParticles: 64,
-                                                  lifetime: 10,
-                                                  simulationBackend: .gpuIfSupported,
-                                                  angularVelocity: 0.25,
-                                                  angularVelocityRandomness: 0.1).gpuSimulationPlan
+        let angularVelocityPlan = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.appearance.angularVelocity = 0.25
+            $0.appearance.angularVelocityRandomness = 0.1
+        }).gpuSimulationPlan
         #expect(angularVelocityPlan.status == .supported)
         #expect(angularVelocityPlan.usesGPU)
 
-        let planeCollisionPlan = ParticleEmitter(emissionRate: 10,
-                                                 maxParticles: 64,
-                                                 lifetime: 10,
-                                                 collisionMode: .worldPlane,
-                                                 simulationBackend: .gpuIfSupported,
-                                                 collisionPlaneY: -1,
-                                                 collisionRestitution: 0.25,
-                                                 collisionDamping: 0.5).gpuSimulationPlan
+        let planeCollisionPlan = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.collision.collisionMode = .worldPlane
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.collision.collisionPlaneY = -1
+            $0.collision.collisionRestitution = 0.25
+            $0.collision.collisionDamping = 0.5
+        }).gpuSimulationPlan
         #expect(planeCollisionPlan.status == .supported)
         #expect(planeCollisionPlan.usesGPU)
 
-        let required = ParticleEmitter(emissionRate: 10,
-                                       maxParticles: 64,
-                                       lifetime: 10,
-                                       subEmitterTrigger: .death,
-                                       subEmitterBurstCount: 1,
-                                       simulationBackend: .gpuRequired)
+        let required = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.subEmitters.legacyTrigger = .death
+            $0.subEmitters.legacyBurstCount = 1
+            $0.gpuSimulation.simulationBackend = .gpuRequired
+        })
         let requiredPlan = required.gpuSimulationPlan
         #expect(requiredPlan.status == .supported)
         #expect(requiredPlan.usesGPU)
         #expect(requiredPlan.unsupportedReasons.isEmpty)
 
-        let collisionEventRequired = ParticleEmitter(emissionRate: 10,
-                                                     maxParticles: 64,
-                                                     lifetime: 10,
-                                                     subEmitterTrigger: .collision,
-                                                     subEmitterBurstCount: 1,
-                                                     collisionMode: .worldPlane,
-                                                     simulationBackend: .gpuRequired).gpuSimulationPlan
+        let collisionEventRequired = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.subEmitters.legacyTrigger = .collision
+            $0.subEmitters.legacyBurstCount = 1
+            $0.collision.collisionMode = .worldPlane
+            $0.gpuSimulation.simulationBackend = .gpuRequired
+        }).gpuSimulationPlan
         #expect(collisionEventRequired.status == .supported)
         #expect(collisionEventRequired.usesGPU)
         #expect(collisionEventRequired.unsupportedReasons.isEmpty)
@@ -1430,7 +1540,12 @@ struct ParticleTests {
 
     @Test("maxParticles caps the live pool")
     func maxParticlesCap() {
-        var emitter = ParticleEmitter(emissionRate: 10_000, maxParticles: 5, lifetime: 1000, gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10_000
+            $0.emission.maxParticles = 5
+            $0.appearance.lifetime = 1000
+            $0.forces.gravity = .zero
+        })
         for _ in 0..<10 { emitter.advance(deltaTime: 0.1) }
         #expect(emitter.aliveCount == 5)
         emitter.emit(100)
@@ -1440,10 +1555,15 @@ struct ParticleTests {
     @Test("identical seeds produce identical simulations")
     func deterministicWithSeed() {
         func run() -> [Particle] {
-            var e = ParticleEmitter(emissionRate: 50, maxParticles: 64, lifetime: 5,
-                                    spawnRadius: 1,
-                                    velocityRandomness: SIMD3<Float>(2, 2, 2),
-                                    gravity: SIMD3<Float>(0, -9.81, 0), seed: 42)
+            var e = ParticleEmitter(settings: .init {
+                $0.emission.emissionRate = 50
+                $0.emission.maxParticles = 64
+                $0.appearance.lifetime = 5
+                $0.shape.spawnRadius = 1
+                $0.velocity.velocityRandomness = SIMD3<Float>(2, 2, 2)
+                $0.forces.gravity = SIMD3<Float>(0, -9.81, 0)
+                $0.emission.seed = 42
+            })
             for _ in 0..<20 { e.advance(deltaTime: 1.0 / 60.0) }
             return e.particles
         }
@@ -1452,11 +1572,16 @@ struct ParticleTests {
 
     @Test("box emission spawns within configured half extents")
     func boxEmissionShape() {
-        var emitter = ParticleEmitter(emissionRate: 0, maxParticles: 64, lifetime: 10,
-                                      emissionShape: .box,
-                                      boxHalfExtents: SIMD3<Float>(2, 3, 4),
-                                      startVelocity: .zero, gravity: .zero,
-                                      seed: 7)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.shape.emissionShape = .box
+            $0.shape.boxHalfExtents = SIMD3<Float>(2, 3, 4)
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.emission.seed = 7
+        })
         emitter.emit(32)
 
         #expect(emitter.aliveCount == 32)
@@ -1469,11 +1594,17 @@ struct ParticleTests {
 
     @Test("cone emission spawns inside cone volume oriented by start velocity")
     func coneEmissionShape() {
-        var emitter = ParticleEmitter(emissionRate: 0, maxParticles: 64, lifetime: 10,
-                                      emissionShape: .cone,
-                                      coneRadius: 2, coneHeight: 5,
-                                      startVelocity: SIMD3<Float>(0, 1, 0),
-                                      gravity: .zero, seed: 11)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 64
+            $0.appearance.lifetime = 10
+            $0.shape.emissionShape = .cone
+            $0.shape.coneRadius = 2
+            $0.shape.coneHeight = 5
+            $0.velocity.startVelocity = SIMD3<Float>(0, 1, 0)
+            $0.forces.gravity = .zero
+            $0.emission.seed = 11
+        })
         emitter.emit(32)
 
         #expect(emitter.aliveCount == 32)
@@ -1488,13 +1619,16 @@ struct ParticleTests {
 
     @Test("local plane collision bounces particles and damps tangent velocity")
     func localPlaneCollision() {
-        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
-                                      startVelocity: SIMD3<Float>(4, 0, 0),
-                                      gravity: SIMD3<Float>(0, -10, 0),
-                                      collisionMode: .localPlane,
-                                      collisionPlaneY: 0,
-                                      collisionRestitution: 0.5,
-                                      collisionDamping: 0.25)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = SIMD3<Float>(4, 0, 0)
+            $0.forces.gravity = SIMD3<Float>(0, -10, 0)
+            $0.collision.collisionMode = .localPlane
+            $0.collision.collisionPlaneY = 0
+            $0.collision.collisionRestitution = 0.5
+            $0.collision.collisionDamping = 0.25
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 1)
 
@@ -1512,13 +1646,16 @@ struct ParticleTests {
         worldMatrix.columns.3 = SIMD4<Float>(0, 5, 0, 1)
         _ = scene.setComponent(WorldTransform(matrix: worldMatrix), for: entity)
 
-        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
-                                      startVelocity: SIMD3<Float>(4, 0, 0),
-                                      gravity: SIMD3<Float>(0, -10, 0),
-                                      collisionMode: .worldPlane,
-                                      collisionPlaneY: 0,
-                                      collisionRestitution: 0.5,
-                                      collisionDamping: 0.25)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 100
+            $0.velocity.startVelocity = SIMD3<Float>(4, 0, 0)
+            $0.forces.gravity = SIMD3<Float>(0, -10, 0)
+            $0.collision.collisionMode = .worldPlane
+            $0.collision.collisionPlaneY = 0
+            $0.collision.collisionRestitution = 0.5
+            $0.collision.collisionDamping = 0.25
+        })
         emitter.emit(1)
         _ = scene.setComponent(emitter, for: entity)
 
@@ -1532,9 +1669,13 @@ struct ParticleTests {
 
     @Test("isEmitting=false stops new spawns but still ages live particles")
     func stoppedEmitterStillAges() {
-        var emitter = ParticleEmitter(emissionRate: 100, lifetime: 0.5, gravity: .zero)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 100
+            $0.appearance.lifetime = 0.5
+            $0.forces.gravity = .zero
+        })
         emitter.emit(4)
-        emitter.isEmitting = false
+        emitter.settings.emission.isEmitting = false
         #expect(emitter.aliveCount == 4)
         emitter.advance(deltaTime: 0.6)
         #expect(emitter.aliveCount == 0) // aged out, none replaced
@@ -1542,10 +1683,15 @@ struct ParticleTests {
 
     @Test("appearance lerps from start to end across lifetime")
     func appearanceGradient() {
-        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 1, gravity: .zero,
-                                      startSize: 2, endSize: 0,
-                                      startColor: SIMD4<Float>(1, 1, 1, 1),
-                                      endColor: SIMD4<Float>(1, 1, 1, 0))
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 1
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 2
+            $0.appearance.endSize = 0
+            $0.appearance.startColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.appearance.endColor = SIMD4<Float>(1, 1, 1, 0)
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.5) // halfway through life
         let p = emitter.particles[0]
@@ -1555,11 +1701,17 @@ struct ParticleTests {
 
     @Test("appearance curves remap normalized age for size and color")
     func appearanceCurves() {
-        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 1, gravity: .zero,
-                                      startSize: 0, endSize: 1, sizeCurve: .easeIn,
-                                      startColor: SIMD4<Float>(1, 1, 1, 0),
-                                      endColor: SIMD4<Float>(1, 1, 1, 1),
-                                      colorCurve: .easeOut)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 1
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 0
+            $0.appearance.endSize = 1
+            $0.appearance.sizeCurve = .easeIn
+            $0.appearance.startColor = SIMD4<Float>(1, 1, 1, 0)
+            $0.appearance.endColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.appearance.colorCurve = .easeOut
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.5)
 
@@ -1571,14 +1723,16 @@ struct ParticleTests {
     @Test("size randomness applies stable per-particle scales")
     func sizeRandomness() {
         func run() -> [Particle] {
-            var emitter = ParticleEmitter(emissionRate: 0,
-                                          maxParticles: 8,
-                                          lifetime: 1,
-                                          gravity: .zero,
-                                          startSize: 2,
-                                          endSize: 2,
-                                          sizeRandomness: 0.5,
-                                          seed: 99)
+            var emitter = ParticleEmitter(settings: .init {
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 8
+                $0.appearance.lifetime = 1
+                $0.forces.gravity = .zero
+                $0.appearance.startSize = 2
+                $0.appearance.endSize = 2
+                $0.appearance.sizeRandomness = 0.5
+                $0.emission.seed = 99
+            })
             emitter.emit(4)
             emitter.advance(deltaTime: 0.25)
             return emitter.particles
@@ -1592,13 +1746,15 @@ struct ParticleTests {
 
     @Test("particle rotation integrates angular velocity")
     func particleRotation() {
-        var emitter = ParticleEmitter(emissionRate: 0,
-                                      maxParticles: 4,
-                                      lifetime: 10,
-                                      startVelocity: .zero,
-                                      gravity: .zero,
-                                      startRotation: 0.25,
-                                      angularVelocity: 2)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.appearance.startRotation = 0.25
+            $0.appearance.angularVelocity = 2
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.5)
 
@@ -1611,14 +1767,16 @@ struct ParticleTests {
     func worldSimulationSpaceStoresWorldParticles() {
         var transform = matrix_identity_float4x4
         transform.columns.3 = SIMD4<Float>(10, 0, 0, 1)
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 4,
-                                      lifetime: 10,
-                                      originOffset: SIMD3<Float>(1, 0, 0),
-                                      startVelocity: SIMD3<Float>(0, 2, 0),
-                                      gravity: .zero,
-                                      simulationSpace: .world)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 4
+            $0.appearance.lifetime = 10
+            $0.shape.originOffset = SIMD3<Float>(1, 0, 0)
+            $0.velocity.startVelocity = SIMD3<Float>(0, 2, 0)
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
         emitter.emit(1, worldTransform: transform)
 
         #expect(emitter.particles.count == 1)
@@ -1635,13 +1793,15 @@ struct ParticleTests {
         _ = scene.setLocalTransform(LocalTransform(translation: SIMD3<Float>(4, 0, 0)), for: entity)
         scene.propagateTransforms()
         _ = scene.setComponent(
-            ParticleEmitter(isEmitting: false,
-                            emissionRate: 0,
-                            maxParticles: 2,
-                            lifetime: 10,
-                            startVelocity: .zero,
-                            gravity: .zero,
-                            simulationSpace: .world),
+            ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 2
+                $0.appearance.lifetime = 10
+                $0.velocity.startVelocity = .zero
+                $0.forces.gravity = .zero
+                $0.gpuSimulation.simulationSpace = .world
+            }),
             for: entity
         )
 
@@ -1652,24 +1812,24 @@ struct ParticleTests {
 
     @Test("keyframe curves linearly interpolate sorted keys")
     func appearanceKeyframeCurves() {
-        var emitter = ParticleEmitter(
-            emissionRate: 0,
-            lifetime: 1,
-            gravity: .zero,
-            startSize: 0,
-            endSize: 10,
-            sizeCurve: .keyframes([
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 1
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 0
+            $0.appearance.endSize = 10
+            $0.appearance.sizeCurve = .keyframes([
                 ParticleCurveKeyframe(time: 1, value: 0),
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 0.5, value: 1),
-            ]),
-            startColor: SIMD4<Float>(1, 1, 1, 0),
-            endColor: SIMD4<Float>(1, 1, 1, 1),
-            colorCurve: .keyframes([
+            ])
+            $0.appearance.startColor = SIMD4<Float>(1, 1, 1, 0)
+            $0.appearance.endColor = SIMD4<Float>(1, 1, 1, 1)
+            $0.appearance.colorCurve = .keyframes([
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 0.5),
             ])
-        )
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 0.25)
 
@@ -1710,19 +1870,19 @@ struct ParticleTests {
 
     @Test("emission rate curve modulates continuous spawn rate over emitter duration")
     func emissionRateCurveModulatesContinuousEmission() {
-        var emitter = ParticleEmitter(
-            looping: false,
-            duration: 2,
-            emissionRate: 10,
-            emissionRateCurve: .keyframes([
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = false
+            $0.emission.duration = 2
+            $0.emission.emissionRate = 10
+            $0.emission.emissionRateCurve = .keyframes([
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 2),
-            ]),
-            maxParticles: 100,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero
-        )
+            ])
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
 
         emitter.advance(deltaTime: 1)
         #expect(emitter.aliveCount == 5)
@@ -1732,19 +1892,19 @@ struct ParticleTests {
 
     @Test("looping emission curves are averaged across long frames")
     func loopingEmissionCurvesAreAveragedAcrossLongFrames() {
-        var emitter = ParticleEmitter(
-            looping: true,
-            duration: 1,
-            emissionRate: 10,
-            emissionRateCurve: .keyframes([
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = true
+            $0.emission.duration = 1
+            $0.emission.emissionRate = 10
+            $0.emission.emissionRateCurve = .keyframes([
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 2),
-            ]),
-            maxParticles: 100,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero
-        )
+            ])
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
 
         emitter.advance(deltaTime: 2)
 
@@ -1755,21 +1915,21 @@ struct ParticleTests {
 
     @Test("distance emission rate curve modulates movement-based spawn rate")
     func distanceEmissionRateCurveModulatesDistanceEmission() {
-        var emitter = ParticleEmitter(
-            looping: false,
-            duration: 2,
-            emissionRate: 0,
-            distanceEmissionRate: 10,
-            distanceEmissionRateCurve: .keyframes([
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = false
+            $0.emission.duration = 2
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 10
+            $0.emission.distanceEmissionRateCurve = .keyframes([
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 2),
-            ]),
-            maxParticles: 100,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero,
-            simulationSpace: .world
-        )
+            ])
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
         var transform = matrix_identity_float4x4
 
         emitter.advance(deltaTime: 0.01, worldTransform: transform)
@@ -1783,21 +1943,21 @@ struct ParticleTests {
 
     @Test("looping distance emission curves are averaged across long frames")
     func loopingDistanceEmissionCurvesAreAveragedAcrossLongFrames() {
-        var emitter = ParticleEmitter(
-            looping: true,
-            duration: 1,
-            emissionRate: 0,
-            distanceEmissionRate: 10,
-            distanceEmissionRateCurve: .keyframes([
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.looping = true
+            $0.emission.duration = 1
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 10
+            $0.emission.distanceEmissionRateCurve = .keyframes([
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 2),
-            ]),
-            maxParticles: 100,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero,
-            simulationSpace: .world
-        )
+            ])
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationSpace = .world
+        })
         var transform = matrix_identity_float4x4
 
         emitter.advance(deltaTime: 0.01, worldTransform: transform)
@@ -1811,15 +1971,15 @@ struct ParticleTests {
 
     @Test("prewarm simulates once before the first active tick")
     func prewarmSimulatesBeforeFirstTick() {
-        var emitter = ParticleEmitter(
-            prewarmTime: 1,
-            prewarmStep: 0.5,
-            emissionRate: 10,
-            maxParticles: 100,
-            lifetime: 10,
-            startVelocity: .zero,
-            gravity: .zero
-        )
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.prewarmTime = 1
+            $0.emission.prewarmStep = 0.5
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+        })
 
         emitter.advance(deltaTime: 0.1)
         #expect(emitter.aliveCount == 11)
@@ -1833,23 +1993,27 @@ struct ParticleTests {
 
     @Test("texture sheet UV rect advances over lifetime or frame rate")
     func textureSheetUVRect() {
-        var lifetimeEmitter = ParticleEmitter(emissionRate: 0,
-                                              lifetime: 1,
-                                              gravity: .zero,
-                                              textureSheetColumns: 2,
-                                              textureSheetRows: 2,
-                                              textureSheetFrameCount: 4)
+        var lifetimeEmitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 1
+            $0.forces.gravity = .zero
+            $0.textureSheet.columns = 2
+            $0.textureSheet.rows = 2
+            $0.textureSheet.frameCount = 4
+        })
         lifetimeEmitter.emit(1)
         lifetimeEmitter.advance(deltaTime: 0.5)
         #expect(lifetimeEmitter.textureUVRect(for: lifetimeEmitter.particles[0]) == SIMD4<Float>(0, 0.5, 0.5, 0.5))
 
-        var rateEmitter = ParticleEmitter(emissionRate: 0,
-                                          lifetime: 10,
-                                          gravity: .zero,
-                                          textureSheetColumns: 4,
-                                          textureSheetRows: 1,
-                                          textureSheetFrameCount: 4,
-                                          textureSheetFrameRate: 2)
+        var rateEmitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 10
+            $0.forces.gravity = .zero
+            $0.textureSheet.columns = 4
+            $0.textureSheet.rows = 1
+            $0.textureSheet.frameCount = 4
+            $0.textureSheet.frameRate = 2
+        })
         rateEmitter.emit(1)
         rateEmitter.advance(deltaTime: 1.5)
         #expect(rateEmitter.textureUVRect(for: rateEmitter.particles[0]) == SIMD4<Float>(0.75, 0, 0.25, 1))
@@ -1863,72 +2027,82 @@ struct ParticleTests {
                                 lifetime: 10,
                                 textureFrameSeed: 5)
 
-        let playOnce = ParticleEmitter(textureSheetColumns: 4,
-                                       textureSheetRows: 2,
-                                       textureSheetFrameCount: 3,
-                                       textureSheetFrameRate: 2,
-                                       textureSheetPlaybackMode: .playOnce,
-                                       textureSheetStartFrame: 2)
+        let playOnce = ParticleEmitter(settings: .init {
+            $0.textureSheet.columns = 4
+            $0.textureSheet.rows = 2
+            $0.textureSheet.frameCount = 3
+            $0.textureSheet.frameRate = 2
+            $0.textureSheet.playbackMode = .playOnce
+            $0.textureSheet.startFrame = 2
+        })
         #expect(playOnce.textureSheetFrameIndex(for: particle) == 4)
         #expect(playOnce.textureUVRect(for: particle) == SIMD4<Float>(0, 0.5, 0.25, 0.5))
 
-        let loop = ParticleEmitter(textureSheetColumns: 4,
-                                   textureSheetRows: 2,
-                                   textureSheetFrameCount: 3,
-                                   textureSheetFrameRate: 2,
-                                   textureSheetPlaybackMode: .loop,
-                                   textureSheetStartFrame: 2)
+        let loop = ParticleEmitter(settings: .init {
+            $0.textureSheet.columns = 4
+            $0.textureSheet.rows = 2
+            $0.textureSheet.frameCount = 3
+            $0.textureSheet.frameRate = 2
+            $0.textureSheet.playbackMode = .loop
+            $0.textureSheet.startFrame = 2
+        })
         #expect(loop.textureSheetFrameIndex(for: particle) == 3)
         #expect(loop.textureUVRect(for: particle) == SIMD4<Float>(0.75, 0, 0.25, 0.5))
 
-        let randomSingleFrame = ParticleEmitter(textureSheetColumns: 4,
-                                                textureSheetRows: 2,
-                                                textureSheetFrameCount: 3,
-                                                textureSheetPlaybackMode: .singleFrame,
-                                                textureSheetStartFrame: 2,
-                                                textureSheetFrameRandomness: 2)
+        let randomSingleFrame = ParticleEmitter(settings: .init {
+            $0.textureSheet.columns = 4
+            $0.textureSheet.rows = 2
+            $0.textureSheet.frameCount = 3
+            $0.textureSheet.playbackMode = .singleFrame
+            $0.textureSheet.startFrame = 2
+            $0.textureSheet.frameRandomness = 2
+        })
         #expect(randomSingleFrame.textureSheetFrameIndex(for: particle) == 4)
     }
 
     @Test("trail configuration is sanitized at construction")
     func trailConfigurationSanitizes() {
-        let emitter = ParticleEmitter(ribbonWidthScale: -1,
-                                      ribbonTailWidthScale: -0.5,
-                                      ribbonTailAlphaScale: 2,
-                                      ribbonMaxSegmentLength: -4,
-                                      ribbonJoinOverlapScale: -1,
-                                      ribbonSmoothingSegments: -2,
-                                      ribbonTextureTiling: -2,
-                                      ribbonTextureOffset: -0.25,
-                                      trailLength: -1,
-                                      trailSegments: -4,
-                                      trailEndSizeScale: -0.5,
-                                      trailEndAlphaScale: 2)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.trails.ribbonWidthScale = -1
+            $0.trails.ribbonTailWidthScale = -0.5
+            $0.trails.ribbonTailAlphaScale = 2
+            $0.trails.ribbonMaxSegmentLength = -4
+            $0.trails.ribbonJoinOverlapScale = -1
+            $0.trails.ribbonSmoothingSegments = -2
+            $0.trails.ribbonTextureTiling = -2
+            $0.trails.ribbonTextureOffset = -0.25
+            $0.trails.trailLength = -1
+            $0.trails.trailSegments = -4
+            $0.trails.trailEndSizeScale = -0.5
+            $0.trails.trailEndAlphaScale = 2
+        })
 
-        #expect(emitter.trailLength == 0)
-        #expect(emitter.trailSegments == 0)
-        #expect(emitter.trailEndSizeScale == 0)
-        #expect(emitter.trailEndAlphaScale == 1)
-        #expect(emitter.ribbonWidthScale == 0)
-        #expect(emitter.ribbonTailWidthScale == 0)
-        #expect(emitter.ribbonTailAlphaScale == 1)
-        #expect(emitter.ribbonMaxSegmentLength == 0)
-        #expect(emitter.ribbonJoinOverlapScale == 0)
-        #expect(emitter.ribbonSmoothingSegments == 1)
-        #expect(emitter.ribbonTextureTiling == 0)
-        #expect(emitter.ribbonTextureOffset == -0.25)
+        #expect(emitter.settings.trails.trailLength == 0)
+        #expect(emitter.settings.trails.trailSegments == 0)
+        #expect(emitter.settings.trails.trailEndSizeScale == 0)
+        #expect(emitter.settings.trails.trailEndAlphaScale == 1)
+        #expect(emitter.settings.trails.ribbonWidthScale == 0)
+        #expect(emitter.settings.trails.ribbonTailWidthScale == 0)
+        #expect(emitter.settings.trails.ribbonTailAlphaScale == 1)
+        #expect(emitter.settings.trails.ribbonMaxSegmentLength == 0)
+        #expect(emitter.settings.trails.ribbonJoinOverlapScale == 0)
+        #expect(emitter.settings.trails.ribbonSmoothingSegments == 1)
+        #expect(emitter.settings.trails.ribbonTextureTiling == 0)
+        #expect(emitter.settings.trails.ribbonTextureOffset == -0.25)
     }
 
     @Test("automatic render bounds estimate covers configured motion and billboard size")
     func automaticRenderBoundsEstimate() {
-        let emitter = ParticleEmitter(lifetime: 2,
-                                      spawnRadius: 1,
-                                      startVelocity: SIMD3<Float>(2, 0, 0),
-                                      velocityRandomness: .zero,
-                                      gravity: .zero,
-                                      startSize: 2,
-                                      endSize: 1,
-                                      renderBoundsMode: .automatic)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.appearance.lifetime = 2
+            $0.shape.spawnRadius = 1
+            $0.velocity.startVelocity = SIMD3<Float>(2, 0, 0)
+            $0.velocity.velocityRandomness = .zero
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 2
+            $0.appearance.endSize = 1
+            $0.renderer.renderBoundsMode = .automatic
+        })
 
         let estimated = emitter.estimatedRenderBoundsRadius()
 
@@ -1938,43 +2112,52 @@ struct ParticleTests {
 
     @Test("automatic render bounds estimate includes size curve keyframe overshoot")
     func automaticRenderBoundsEstimateIncludesSizeCurveOvershoot() {
-        let baseline = ParticleEmitter(lifetime: 1,
-                                       spawnRadius: 0,
-                                       startVelocity: .zero,
-                                       gravity: .zero,
-                                       startSize: 1,
-                                       endSize: 2,
-                                       renderBoundsMode: .automatic)
-        let oversized = ParticleEmitter(lifetime: 1,
-                                        spawnRadius: 0,
-                                        startVelocity: .zero,
-                                        gravity: .zero,
-                                        startSize: 1,
-                                        endSize: 2,
-                                        sizeCurve: .keyframes([
+        let baseline = ParticleEmitter(settings: .init {
+            $0.appearance.lifetime = 1
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 1
+            $0.appearance.endSize = 2
+            $0.renderer.renderBoundsMode = .automatic
+        })
+        let oversized = ParticleEmitter(settings: .init {
+            $0.appearance.lifetime = 1
+            $0.shape.spawnRadius = 0
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.appearance.startSize = 1
+            $0.appearance.endSize = 2
+            $0.appearance.sizeCurve = .keyframes([
                                             ParticleCurveKeyframe(time: 0, value: 0),
                                             ParticleCurveKeyframe(time: 0.5, value: 40),
                                             ParticleCurveKeyframe(time: 1, value: 1),
-                                        ]),
-                                        renderBoundsMode: .automatic)
+                                        ])
+            $0.renderer.renderBoundsMode = .automatic
+        })
 
         #expect(oversized.estimatedRenderBoundsRadius() > baseline.estimatedRenderBoundsRadius() * 10)
     }
 
     @Test("manual render bounds preserve legacy radius behavior")
     func manualRenderBoundsPreserveLegacyRadius() {
-        let emitter = ParticleEmitter(renderBoundsRadius: 12)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.renderer.renderBoundsRadius = 12
+            $0.renderer.renderBoundsMode = $0.renderer.renderBoundsRadius > 0 ? .manual : .disabled
+        })
 
-        #expect(emitter.renderBoundsMode == .manual)
+        #expect(emitter.settings.renderer.renderBoundsMode == .manual)
         #expect(emitter.effectiveRenderBoundsRadius() == 12)
     }
 
     @Test("render LOD scales particle submission budget by camera distance")
     func renderLODScalesSubmissionBudget() {
-        let emitter = ParticleEmitter(maxRenderedParticles: 100,
-                                      renderLODStartDistance: 10,
-                                      renderLODEndDistance: 30,
-                                      renderLODMinParticleScale: 0.25)
+        let emitter = ParticleEmitter(settings: .init {
+            $0.emission.maxRenderedParticles = 100
+            $0.renderer.renderLODStartDistance = 10
+            $0.renderer.renderLODEndDistance = 30
+            $0.renderer.renderLODMinParticleScale = 0.25
+        })
 
         #expect(emitter.renderLODScale(cameraDistance: 0) == 1)
         #expect(emitter.renderLODScale(cameraDistance: 30) == 0.25)
@@ -1986,29 +2169,35 @@ struct ParticleTests {
 
     @Test("advance options scale continuous, burst, distance emission, and live cap")
     func advanceOptionsScaleEmission() {
-        var continuous = ParticleEmitter(emissionRate: 10,
-                                         maxParticles: 100,
-                                         lifetime: 100,
-                                         gravity: .zero)
+        var continuous = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        })
         continuous.advance(deltaTime: 1, options: ParticleAdvanceOptions(emissionScale: 0.5))
         #expect(continuous.aliveCount == 5)
 
-        var burst = ParticleEmitter(emissionRate: 0,
-                                    burstCount: 3,
-                                    burstInterval: 1,
-                                    maxParticles: 100,
-                                    lifetime: 100,
-                                    gravity: .zero)
+        var burst = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.burstCount = 3
+            $0.emission.burstInterval = 1
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        })
         burst.advance(deltaTime: 1, options: ParticleAdvanceOptions(burstScale: 0.5))
         #expect(burst.aliveCount == 1)
         burst.advance(deltaTime: 1, options: ParticleAdvanceOptions(burstScale: 0.5))
         #expect(burst.aliveCount == 3)
 
-        var distance = ParticleEmitter(emissionRate: 0,
-                                       distanceEmissionRate: 10,
-                                       maxParticles: 100,
-                                       lifetime: 100,
-                                       gravity: .zero)
+        var distance = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.emission.distanceEmissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        })
         distance.advance(deltaTime: 0.01, worldTransform: matrix_identity_float4x4)
         var moved = matrix_identity_float4x4
         moved.columns.3.x = 1
@@ -2017,10 +2206,12 @@ struct ParticleTests {
                          options: ParticleAdvanceOptions(distanceEmissionScale: 0.25))
         #expect(distance.aliveCount == 2)
 
-        var capped = ParticleEmitter(emissionRate: 100,
-                                     maxParticles: 10,
-                                     lifetime: 100,
-                                     gravity: .zero)
+        var capped = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 100
+            $0.emission.maxParticles = 10
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        })
         capped.advance(deltaTime: 1, options: ParticleAdvanceOptions(maxLiveParticleScale: 0.5))
         #expect(capped.aliveCount == 5)
     }
@@ -2031,10 +2222,12 @@ struct ParticleTests {
         scene.setResource(ParticleScalabilityResource(emissionScale: 0.25,
                                                       maxLiveParticleScale: 0.5))
         let entity = scene.createEntity()
-        _ = scene.setComponent(ParticleEmitter(emissionRate: 20,
-                                               maxParticles: 100,
-                                               lifetime: 100,
-                                               gravity: .zero),
+        _ = scene.setComponent(ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 20
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        }),
                                for: entity)
 
         _ = scene.tick(deltaTime: 1)
@@ -2044,10 +2237,12 @@ struct ParticleTests {
 
     @Test("emitter frame stats report spawn, expire, collision, and capacity pressure")
     func emitterFrameStatsReportSimulationWork() {
-        var capped = ParticleEmitter(emissionRate: 10,
-                                     maxParticles: 5,
-                                     lifetime: 0.5,
-                                     gravity: .zero)
+        var capped = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 5
+            $0.appearance.lifetime = 0.5
+            $0.forces.gravity = .zero
+        })
         capped.advance(deltaTime: 1)
         #expect(capped.lastFrameStats.continuousSpawnedCount == 5)
         #expect(capped.lastFrameStats.capacityLimitedSpawnCount == 5)
@@ -2060,18 +2255,20 @@ struct ParticleTests {
         #expect(capped.lastFrameStats.capacityLimitedSpawnCount == 5)
         #expect(capped.lastFrameStats.liveParticleCount == 5)
 
-        var collision = ParticleEmitter(isEmitting: false,
-                                        emissionRate: 0,
-                                        maxParticles: 3,
-                                        lifetime: 10,
-                                        subEmitterTrigger: .collision,
-                                        subEmitterBurstCount: 5,
-                                        subEmitterLifetime: 2,
-                                        originOffset: SIMD3<Float>(0, 0.5, 0),
-                                        startVelocity: SIMD3<Float>(0, -1, 0),
-                                        gravity: .zero,
-                                        collisionMode: .localPlane,
-                                        collisionPlaneY: 0)
+        var collision = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 3
+            $0.appearance.lifetime = 10
+            $0.subEmitters.legacyTrigger = .collision
+            $0.subEmitters.legacyBurstCount = 5
+            $0.subEmitters.legacyLifetime = 2
+            $0.shape.originOffset = SIMD3<Float>(0, 0.5, 0)
+            $0.velocity.startVelocity = SIMD3<Float>(0, -1, 0)
+            $0.forces.gravity = .zero
+            $0.collision.collisionMode = .localPlane
+            $0.collision.collisionPlaneY = 0
+        })
         collision.emit(1)
         collision.advance(deltaTime: 1)
         #expect(collision.lastFrameStats.collisionCount == 1)
@@ -2085,15 +2282,19 @@ struct ParticleTests {
         var scene = SceneRuntime()
         let a = scene.createEntity()
         let b = scene.createEntity()
-        _ = scene.setComponent(ParticleEmitter(emissionRate: 10,
-                                               maxParticles: 100,
-                                               lifetime: 100,
-                                               gravity: .zero),
+        _ = scene.setComponent(ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        }),
                                for: a)
-        _ = scene.setComponent(ParticleEmitter(emissionRate: 4,
-                                               maxParticles: 100,
-                                               lifetime: 100,
-                                               gravity: .zero),
+        _ = scene.setComponent(ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 4
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        }),
                                for: b)
 
         _ = scene.tick(deltaTime: 1)
@@ -2120,10 +2321,12 @@ struct ParticleTests {
                                                             pressureStep: 0.5,
                                                             recoveryStep: 0.1))
         let entity = scene.createEntity()
-        _ = scene.setComponent(ParticleEmitter(emissionRate: 40,
-                                               maxParticles: 100,
-                                               lifetime: 100,
-                                               gravity: .zero),
+        _ = scene.setComponent(ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 40
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 100
+            $0.forces.gravity = .zero
+        }),
                                for: entity)
 
         _ = scene.tick(deltaTime: 1)
@@ -2310,10 +2513,16 @@ struct ParticleTests {
 
     @Test("noise force deterministically accelerates particles")
     func noiseForce() {
-        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 10,
-                                      startVelocity: .zero, gravity: .zero,
-                                      noiseStrength: 2, noiseScale: 1, noiseSpeed: 0,
-                                      seed: 0)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 0
+            $0.appearance.lifetime = 10
+            $0.velocity.startVelocity = .zero
+            $0.forces.gravity = .zero
+            $0.forces.noiseStrength = 2
+            $0.forces.noiseScale = 1
+            $0.forces.noiseSpeed = 0
+            $0.emission.seed = 0
+        })
         emitter.emit(1)
         emitter.advance(deltaTime: 1)
 
@@ -2332,7 +2541,12 @@ struct ParticleTests {
         var scene = SceneRuntime()
         let a = scene.createEntity()
         let b = scene.createEntity()
-        var e = ParticleEmitter(emissionRate: 10, maxParticles: 100, lifetime: 1000, gravity: .zero)
+        var e = ParticleEmitter(settings: .init {
+            $0.emission.emissionRate = 10
+            $0.emission.maxParticles = 100
+            $0.appearance.lifetime = 1000
+            $0.forces.gravity = .zero
+        })
         e.emit(2)
         _ = scene.setComponent(e, for: a)
         _ = scene.setComponent(e, for: b)
@@ -2349,7 +2563,12 @@ struct ParticleTests {
         let emitterEntity = scene.createEntity()
         let emptyEntity = scene.createEntity()
         _ = scene.setComponent(
-            ParticleEmitter(emissionRate: 0, maxParticles: 5, lifetime: 10, gravity: .zero),
+            ParticleEmitter(settings: .init {
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 5
+                $0.appearance.lifetime = 10
+                $0.forces.gravity = .zero
+            }),
             for: emitterEntity
         )
 

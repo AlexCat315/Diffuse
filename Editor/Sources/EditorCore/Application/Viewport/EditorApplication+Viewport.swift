@@ -21,6 +21,7 @@ import SIMDCompat
 extension EditorApplication {
     public func setViewportMode(_ mode: EditorViewportMode) {
         guard mode == .scene || store.workspaceMode.isGameWorkspace else { return }
+        guard mode != store.viewportMode else { return }
         EditorViewportInputController.shared.reset()
         if mode == .scene, store.playbackState != .stopped { applyPlaybackState(.stopped) }
         store.dispatch(.setViewportMode(mode))
@@ -71,32 +72,32 @@ extension EditorApplication {
 
     func effectiveViewportDrawableSize() -> RenderDrawableSize {
         let state = store.state
-        if state.viewportMode == .game { return state.gamePreviewResolution.size ?? _viewportDrawableSize }
-        let interacting = state.viewportInteractionDownscaleEnabled
+        if state.viewport.mode == .game { return state.viewport.gamePreviewResolution.size ?? _viewportDrawableSize }
+        let interacting = state.viewport.interactionDownscaleEnabled
             && EditorViewportInputController.shared.isContinuousSceneInteractionActive
         return EditorViewportResolution.effectiveSize(
             presentation: _viewportDrawableSize,
-            renderScalePercent: state.viewportRenderScalePercent,
+            renderScalePercent: state.viewport.renderScalePercent,
             interactionDownscaleActive: interacting
         )
     }
 
     public func setViewportRenderScalePercent(_ percent: Int) {
         let sanitized = EditorState.sanitizedRenderScalePercent(percent)
-        guard store.state.viewportRenderScalePercent != sanitized else { return }
+        guard store.state.viewport.renderScalePercent != sanitized else { return }
         store.dispatch(.setViewportRenderScalePercent(sanitized))
         logConsole("Viewport render scale \(sanitized)%")
     }
 
     public func setViewportInteractionDownscaleEnabled(_ enabled: Bool) {
-        guard store.state.viewportInteractionDownscaleEnabled != enabled else { return }
+        guard store.state.viewport.interactionDownscaleEnabled != enabled else { return }
         store.dispatch(.setViewportInteractionDownscale(enabled))
         logConsole(enabled ? "Viewport interaction downscale enabled"
                            : "Viewport interaction downscale disabled")
     }
 
     public func setViewportRealtimeEnabled(_ enabled: Bool) {
-        guard store.state.viewportRealtimeEnabled != enabled else { return }
+        guard store.state.viewport.realtimeEnabled != enabled else { return }
         store.dispatch(.setViewportRealtime(enabled))
         logConsole(enabled ? "Viewport realtime rendering enabled"
                            : "Viewport renders on demand")
@@ -120,7 +121,7 @@ extension EditorApplication {
     /// 落在视口矩形内则生成实体，否则只是清掉拖动状态。
     @discardableResult
     public func handleAssetDrop(at cursorX: Float, cursorY: Float) -> Bool {
-        guard let payload = store.state.activeAssetDrag else { return false }
+        guard let payload = store.state.navigation.activeAssetDrag else { return false }
         defer { store.dispatch(.endAssetDrag) }
         let payloadAsset = EditorAssetCatalog.asset(for: payload.assetID)
         let dropPayload = AssetDropPayload(id: payload.assetID,
@@ -170,7 +171,7 @@ extension EditorApplication {
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
         var settings = settings
-        settings.enableEditorGrid = store.state.viewportGridEnabled
+        settings.enableEditorGrid = store.state.viewport.gridEnabled
         settings.editorGridSpacing = viewportGridSpacing
         queueTrackedRenderSettings(settings)
     }
@@ -184,17 +185,17 @@ extension EditorApplication {
     }
 
     public func setViewportShadowsEnabled(_ enabled: Bool) {
-        if store.state.viewportShadowsEnabled != enabled {
+        if store.state.shadows.enabled != enabled {
             store.dispatch(.setViewportShadowsEnabled(enabled))
         }
         queueTrackedRenderSettings(makeViewportRenderSettings(
             shadowsEnabled: enabled,
-            shadingMode: store.state.viewportShadingMode))
+            shadingMode: store.state.viewport.shadingMode))
         logConsole(enabled ? "Viewport shadows enabled" : "Viewport shadows disabled")
     }
 
     public func setViewportGridEnabled(_ enabled: Bool) {
-        guard store.state.viewportGridEnabled != enabled else { return }
+        guard store.state.viewport.gridEnabled != enabled else { return }
         store.dispatch(.setViewportGridEnabled(enabled))
         var settings = lastQueuedRenderSettings
         settings.enableEditorGrid = enabled
@@ -203,7 +204,7 @@ extension EditorApplication {
     }
 
     private var viewportGridSpacing: Float {
-        store.state.translateSnapEnabled ? store.state.translateSnapStep : 1
+        store.state.snapping.translateSnapEnabled ? store.state.snapping.translateSnapStep : 1
     }
 
     func restoreAndObserveViewportSnapSettings() {
@@ -236,11 +237,11 @@ extension EditorApplication {
     /// Switches the viewport shading / debug-view mode and re-queues render
     /// settings so the mesh shader updates its G-buffer visualization.
     public func setViewportShadingMode(_ mode: EditorViewportShadingMode) {
-        if store.state.viewportShadingMode != mode {
+        if store.state.viewport.shadingMode != mode {
             store.dispatch(.setViewportShadingMode(mode))
         }
         queueTrackedRenderSettings(makeViewportRenderSettings(
-            shadowsEnabled: store.state.viewportShadowsEnabled,
+            shadowsEnabled: store.state.shadows.enabled,
             shadingMode: mode))
     }
 
@@ -253,13 +254,13 @@ extension EditorApplication {
             debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
             shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
             enableOffscreenViewport: true,
-            enableEditorGrid: store.state.viewportGridEnabled && store.state.viewportMode == .scene,
+            enableEditorGrid: store.state.viewport.gridEnabled && store.state.viewport.mode == .scene,
             editorGridSpacing: viewportGridSpacing
         )
     }
 
     public func currentSelectedEntityTranslation() -> SIMD3<Float>? {
-        guard let entity = entityID(from: store.state.selectedEntityID) else {
+        guard let entity = entityID(from: store.state.selection.selectedEntityID) else {
             return nil
         }
         return scene.scene.localTransform(for: entity)?.translation

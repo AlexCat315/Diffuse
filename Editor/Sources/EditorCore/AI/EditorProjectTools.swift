@@ -56,10 +56,10 @@ extension EditorApplication {
         let args = (try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:])
             .filter { !($0.value is NSNull) }
         if !definition.readOnly {
-            guard store.state.pendingConfirmationRequest == nil else {
+            guard store.state.assistant.pendingConfirmationRequest == nil else {
                 throw EditorProjectToolError(EditorAIRequestPolicy.pendingConfirmationMessage)
             }
-            if name != "set_playback_state", store.state.playbackState != .stopped {
+            if name != "set_playback_state", store.state.timing.playbackState != .stopped {
                 throw EditorProjectToolError("Stop simulation before changing project files or outputs.")
             }
             guard !projectToolBuildInProgress else {
@@ -74,12 +74,12 @@ extension EditorApplication {
                 "project_directory": projectDirectory,
                 "scene_revision": scene.revision,
                 "entity_count": scene.manifest().entityCount,
-                "playback_state": store.state.playbackState.rawValue,
-                "pending_confirmation": store.state.pendingConfirmationRequest != nil,
+                "playback_state": store.state.timing.playbackState.rawValue,
+                "pending_confirmation": store.state.assistant.pendingConfirmationRequest != nil,
                 "script_build_in_progress": projectToolBuildInProgress,
                 "script_execution_trusted": dynamicScriptManager.projectTrustState.allowsExecution,
-                "ai_provider": store.state.aiSettings.provider.rawValue,
-                "ai_credential_available": AIKeychain.hasKey(for: store.state.aiSettings.provider),
+                "ai_provider": store.state.assistant.aiSettings.provider.rawValue,
+                "ai_credential_available": AIKeychain.hasKey(for: store.state.assistant.aiSettings.provider),
                 "script_sdk_available": !ProjectScriptBuildConfiguration.discover(
                     for: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
                 ).engineModulePaths.isEmpty,
@@ -181,9 +181,9 @@ extension EditorApplication {
                 throw EditorProjectToolError("Invalid playback state.")
             }
             applyPlaybackState(state)
-            result["state"] = store.state.playbackState.rawValue
+            result["state"] = store.state.timing.playbackState.rawValue
         case "get_console_messages":
-            result["messages"] = store.state.consoleEntries.suffix(args["limit"] as? Int ?? 20).map {
+            result["messages"] = store.state.output.consoleEntries.suffix(args["limit"] as? Int ?? 20).map {
                 ["severity": $0.severity.rawValue, "message": $0.message, "detail": String(($0.detail ?? "").suffix(8192))]
             }
         default: throw EditorProjectToolError("Unknown project tool: \(name)")
@@ -221,7 +221,7 @@ extension EditorApplication {
     }
 
     private func projectOutputError(_ fallback: String) -> EditorProjectToolError {
-        EditorProjectToolError(store.state.consoleEntries.last(where: { $0.severity == .error })?.detail ?? fallback)
+        EditorProjectToolError(store.state.output.consoleEntries.last(where: { $0.severity == .error })?.detail ?? fallback)
     }
 
     private static let gameplayScriptingAPI = """

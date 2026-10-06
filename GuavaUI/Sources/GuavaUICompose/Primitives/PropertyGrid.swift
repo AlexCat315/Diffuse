@@ -50,6 +50,12 @@ public struct PropertyGridSection: Identifiable {
     public let id: String
     public let title: String
     public let rows: [PropertyGridRow]
+    public let children: [PropertyGridSection]
+    public let headerLeading: AnyView?
+    public let headerTrailing: AnyView?
+    public let footer: AnyView?
+    public let badge: String?
+    public let showsRowCount: Bool
     /// When `true`, the header renders a collapse chevron and rows can be
     /// hidden by clicking it. `false` disables the affordance entirely.
     public let isCollapsible: Bool
@@ -60,10 +66,22 @@ public struct PropertyGridSection: Identifiable {
                 title: String,
                 rows: [PropertyGridRow],
                 isCollapsible: Bool = false,
-                startsCollapsed: Bool = false) {
+                startsCollapsed: Bool = false,
+                children: [PropertyGridSection] = [],
+                headerLeading: AnyView? = nil,
+                headerTrailing: AnyView? = nil,
+                footer: AnyView? = nil,
+                badge: String? = nil,
+                showsRowCount: Bool = true) {
         self.id = id
         self.title = title
         self.rows = rows
+        self.children = children
+        self.headerLeading = headerLeading
+        self.headerTrailing = headerTrailing
+        self.footer = footer
+        self.badge = badge
+        self.showsRowCount = showsRowCount
         self.isCollapsible = isCollapsible
         self.startsCollapsed = startsCollapsed
     }
@@ -190,43 +208,44 @@ private struct _StatefulPropertyGrid: View {
     }
 
     private func sectionView(_ section: PropertyGridSection,
-                              isCollapsed: Bool) -> some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            Button(role: .normal,
-                   isEnabled: section.isCollapsible,
-                   action: {
-                let current = isSectionCollapsed(section)
-                let next = !current
-                collapsed[section.id] = next
-                grid.onSectionCollapseChanged?(section.id, next)
-            }) {
-                Row(alignment: .center, spacing: 6) {
-                    if section.isCollapsible {
-                        Icon(isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown,
-                             size: 12,
-                             color: .onSurfaceVariant)
+                              isCollapsed: Bool) -> AnyView {
+        AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Row(alignment: .center, spacing: 4) {
+                if let leading = section.headerLeading { leading }
+                Button(role: .normal, isEnabled: section.isCollapsible, action: {
+                    let next = !isSectionCollapsed(section)
+                    collapsed[section.id] = next
+                    grid.onSectionCollapseChanged?(section.id, next)
+                }) {
+                    Row(alignment: .center, spacing: 6) {
+                        if section.isCollapsible {
+                            Icon(isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown,
+                                 size: 12, color: .onSurfaceVariant)
+                        }
+                        Text(section.title).lineLimit(1).font(.label).foregroundColor(.onSurface)
+                            .flex(1, shrink: 1, basis: 0)
+                        if let badge = section.badge {
+                            Text(badge).font(.caption).foregroundColor(.onSurfaceMuted)
+                        } else if section.showsRowCount && !section.rows.isEmpty {
+                            Text("\(section.rows.count)").font(.caption).foregroundColor(.onSurfaceMuted)
+                        }
                     }
-                    Text(section.title)
-                        .font(.label)
-                        .foregroundColor(.onSurface)
-                        .flex()
-                    if !section.rows.isEmpty {
-                        Text("\(section.rows.count)")
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                    }
+                    .frame(minWidth: 0)
+                    .flex(1, shrink: 1, basis: 0)
                 }
-                .padding(horizontal: 8, vertical: 3)
-                .frame(height: 26)
-                .flex()
+                .buttonStyle(.plain)
+                .frame(height: 26, minWidth: 0)
+                .flex(1, shrink: 1, basis: 0)
+                .debugName("property-section-header-\(section.id)")
+                if let trailing = section.headerTrailing { trailing }
             }
-            .buttonStyle(.plain)
-            .frame(height: 26)
+            .padding(horizontal: 8, vertical: 3)
+            .frame(height: section.headerLeading == nil && section.headerTrailing == nil ? 26 : 32, minWidth: 0)
             .background(.surfaceVariant.opacity(0.65))
 
             AnimatedVisibility(isVisible: !isCollapsed) {
                 Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
-                    if section.rows.isEmpty {
+                    if section.rows.isEmpty && section.children.isEmpty && section.footer == nil {
                         Text(grid.emptyText)
                             .font(.caption)
                             .foregroundColor(.onSurfaceMuted)
@@ -234,13 +253,22 @@ private struct _StatefulPropertyGrid: View {
                     } else {
                         rowViews(section.rows, sectionID: section.id)
                     }
+                    childViews(section.children)
+                    if let footer = section.footer { footer.padding(horizontal: 6, vertical: 4) }
                 }
                 .padding(horizontal: 2, vertical: 3)
                 .background(.surfaceSunken)
             }
         }
         .background(.surfaceSunken)
-        .cornerRadius(4)
+        .cornerRadius(4))
+    }
+
+    private func childViews(_ sections: [PropertyGridSection]) -> [AnyView] {
+        sections.map { section in
+            AnyView(sectionView(section, isCollapsed: isSectionCollapsed(section))
+                .id(section.id).padding(horizontal: 4, vertical: 2))
+        }
     }
 
     private func isSectionCollapsed(_ section: PropertyGridSection) -> Bool {

@@ -70,7 +70,7 @@ struct ViewportNavigationControlsTests {
             settle()
             try WorkbenchUITestSupport.activate("viewport-snap-translate-toggle", in: graph.tree.root, registry: registry)
             settle()
-            #expect(store.state.translateSnapEnabled)
+            #expect(store.state.snapping.translateSnapEnabled)
             for (id, text) in [("translate", "0.125"), ("rotate", "15"), ("scale", "0.02")] {
                 let subtree = try WorkbenchUITestSupport.named("viewport-snap-\(id)-step", in: graph.tree.root)
                 let field = try #require(WorkbenchUITestSupport.firstNode(subtree) { registry.handlers(for: $0).text != nil })
@@ -85,10 +85,10 @@ struct ViewportNavigationControlsTests {
                 settle()
                 #expect(field.absoluteFrame.width > 40)
             }
-            #expect(store.state.translateSnapStep == 0.125)
-            #expect(store.state.rotateSnapStepDegrees == 15)
-            #expect(store.state.scaleSnapStep == 0.02)
-            #expect(!store.state.rotateSnapEnabled && !store.state.scaleSnapEnabled)
+            #expect(store.state.snapping.translateSnapStep == 0.125)
+            #expect(store.state.snapping.rotateSnapStepDegrees == 15)
+            #expect(store.state.snapping.scaleSnapStep == 0.02)
+            #expect(!store.state.snapping.rotateSnapEnabled && !store.state.snapping.scaleSnapEnabled)
             dispatcher.dispatch(.keyDown(KeyEvent(scancode: ComposeScancode.escape, keycode: 0, modifiers: [], isRepeat: false)))
             settle()
             #expect(portals.entries.isEmpty)

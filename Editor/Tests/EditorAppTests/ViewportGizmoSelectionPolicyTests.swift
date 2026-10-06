@@ -109,11 +109,11 @@ struct ViewportKeyRoutingPolicyTests {
     func boxSelectionModePersists() throws {
         var state = EditorState()
         EditorReducer.reduce(state: &state, action: .setGizmoMode(.boxSelect))
-        #expect(state.gizmoMode == .boxSelect)
+        #expect(state.viewport.gizmoMode == .boxSelect)
 
         let data = try JSONEncoder().encode(state)
         let restored = try JSONDecoder().decode(EditorState.self, from: data)
-        #expect(restored.gizmoMode == .boxSelect)
+        #expect(restored.viewport.gizmoMode == .boxSelect)
     }
 }
 

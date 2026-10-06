@@ -68,7 +68,7 @@ private func decodeJSONValue<T: Decodable>(_ value: Any?, as type: T.Type) -> T?
 // MARK: - Scene save/load
 
 public enum SceneSerializer {
-    private static let currentVersion = 2
+    private static let currentVersion = 3
 
     enum SerializationPurpose {
         case authored
@@ -1692,332 +1692,29 @@ public enum SceneSerializer {
 
     /// Serializes a particle emitter's configuration only — the live particle pool is
     /// transient runtime state and is not persisted.
-    private static func serializeParticleEmitter(_ c: ParticleEmitter) -> [String: Any] {
-        var d: [String: Any] = [
-            "isEmitting": c.isEmitting,
-            "looping": c.looping,
-            "duration": c.duration,
-            "simulationSpeed": c.simulationSpeed,
-            "prewarmTime": c.prewarmTime,
-            "prewarmStep": c.prewarmStep,
-            "emissionRate": c.emissionRate,
-            "emissionRateCurve": serializeParticleCurve(c.emissionRateCurve),
-            "distanceEmissionRate": c.distanceEmissionRate,
-            "distanceEmissionRateCurve": serializeParticleCurve(c.distanceEmissionRateCurve),
-            "burstCount": c.burstCount,
-            "burstInterval": c.burstInterval,
-            "maxParticles": c.maxParticles,
-            "maxSpawnedParticlesPerFrame": c.maxSpawnedParticlesPerFrame,
-            "maxRenderedParticles": c.maxRenderedParticles,
-            "lifetime": c.lifetime,
-            "lifetimeRandomness": c.lifetimeRandomness,
-            "subEmitterTrigger": c.subEmitterTrigger.rawValue,
-            "subEmitterBurstCount": c.subEmitterBurstCount,
-            "subEmitterProbability": c.subEmitterProbability,
-            "subEmitterMaxDepth": c.subEmitterMaxDepth,
-            "subEmitterInheritVelocity": c.subEmitterInheritVelocity,
-            "subEmitterLifetime": c.subEmitterLifetime,
-            "subEmitterStartVelocity": vec3ToJSON(c.subEmitterStartVelocity),
-            "subEmitterVelocityRandomness": vec3ToJSON(c.subEmitterVelocityRandomness),
-            "subEmitterStartSize": c.subEmitterStartSize,
-            "subEmitterEndSize": c.subEmitterEndSize,
-            "subEmitterStartColor": vec4ToJSON(c.subEmitterStartColor),
-            "subEmitterEndColor": vec4ToJSON(c.subEmitterEndColor),
-            "subEmitters": c.subEmitters.map(serializeParticleSubEmitter),
-            "originOffset": vec3ToJSON(c.originOffset),
-            "spawnRadius": c.spawnRadius,
-            "emissionShape": c.emissionShape.rawValue,
-            "boxHalfExtents": vec3ToJSON(c.boxHalfExtents),
-            "coneRadius": c.coneRadius,
-            "coneHeight": c.coneHeight,
-            "startVelocity": vec3ToJSON(c.startVelocity),
-            "velocityRandomness": vec3ToJSON(c.velocityRandomness),
-            "velocityInheritance": c.velocityInheritance,
-            "gravity": vec3ToJSON(c.gravity),
-            "noiseStrength": c.noiseStrength,
-            "noiseScale": c.noiseScale,
-            "noiseSpeed": c.noiseSpeed,
-            "forceMode": c.forceMode.rawValue,
-            "forceCenter": vec3ToJSON(c.forceCenter),
-            "forceAxis": vec3ToJSON(c.forceAxis),
-            "forceRadius": c.forceRadius,
-            "forceStrength": c.forceStrength,
-            "forceFalloff": c.forceFalloff,
-            "vectorFieldMode": c.vectorFieldMode.rawValue,
-            "vectorFieldDirection": vec3ToJSON(c.vectorFieldDirection),
-            "vectorFieldStrength": c.vectorFieldStrength,
-            "vectorFieldScale": c.vectorFieldScale,
-            "vectorFieldScrollSpeed": c.vectorFieldScrollSpeed,
-            "collisionMode": c.collisionMode.rawValue,
-            "simulationSpace": c.simulationSpace.rawValue,
-            "simulationBackend": c.simulationBackend.rawValue,
-            "gpuSimulationWorkgroupSize": c.gpuSimulationWorkgroupSize,
-            "collisionPlaneY": c.collisionPlaneY,
-            "collisionRestitution": c.collisionRestitution,
-            "collisionDamping": c.collisionDamping,
-            "startSize": c.startSize,
-            "endSize": c.endSize,
-            "sizeRandomness": c.sizeRandomness,
-            "startRotation": c.startRotation,
-            "rotationRandomness": c.rotationRandomness,
-            "angularVelocity": c.angularVelocity,
-            "angularVelocityRandomness": c.angularVelocityRandomness,
-            "sizeCurve": serializeParticleCurve(c.sizeCurve),
-            "startColor": vec4ToJSON(c.startColor),
-            "endColor": vec4ToJSON(c.endColor),
-            "colorCurve": serializeParticleCurve(c.colorCurve),
-            "blendMode": c.blendMode.rawValue,
-            "renderMode": c.renderMode.rawValue,
-            "sortMode": c.sortMode.rawValue,
-            "renderSortPriority": c.renderSortPriority,
-            "ribbonWidthScale": c.ribbonWidthScale,
-            "ribbonTailWidthScale": c.ribbonTailWidthScale,
-            "ribbonTailAlphaScale": c.ribbonTailAlphaScale,
-            "ribbonMaxSegmentLength": c.ribbonMaxSegmentLength,
-            "ribbonJoinOverlapScale": c.ribbonJoinOverlapScale,
-            "ribbonSmoothingSegments": c.ribbonSmoothingSegments,
-            "ribbonTextureTiling": c.ribbonTextureTiling,
-            "ribbonTextureOffset": c.ribbonTextureOffset,
-            "renderAlignment": c.renderAlignment.rawValue,
-            "velocityStretchScale": c.velocityStretchScale,
-            "velocityStretchMax": c.velocityStretchMax,
-            "maxRenderDistance": c.maxRenderDistance,
-            "renderDistanceFadeRange": c.renderDistanceFadeRange,
-            "renderLODStartDistance": c.renderLODStartDistance,
-            "renderLODEndDistance": c.renderLODEndDistance,
-            "renderLODMinParticleScale": c.renderLODMinParticleScale,
-            "renderBoundsMode": c.renderBoundsMode.rawValue,
-            "renderBoundsRadius": c.renderBoundsRadius,
-            "textureSheetColumns": c.textureSheetColumns,
-            "textureSheetRows": c.textureSheetRows,
-            "textureSheetFrameCount": c.textureSheetFrameCount,
-            "textureSheetFrameRate": c.textureSheetFrameRate,
-            "textureSheetPlaybackMode": c.textureSheetPlaybackMode.rawValue,
-            "textureSheetStartFrame": c.textureSheetStartFrame,
-            "textureSheetFrameRandomness": c.textureSheetFrameRandomness,
-            "trailLength": c.trailLength,
-            "trailSegments": c.trailSegments,
-            "trailEndSizeScale": c.trailEndSizeScale,
-            "trailEndAlphaScale": c.trailEndAlphaScale,
-            "seed": Int(bitPattern: UInt(c.seed)),
-        ]
-        if let textureAssetID = c.textureAssetID {
-            d["textureAssetID"] = textureAssetID
-        }
-        if let texturePath = c.texturePath {
-            d["texturePath"] = texturePath
-        }
-        if let moduleStack = encodeJSONValue(c.moduleStack) {
-            d["moduleStack"] = moduleStack
-        }
-        return d
+    private static func serializeParticleEmitter(_ emitter: ParticleEmitter) -> [String: Any] {
+        var record: [String: Any] = [:]
+        record["settings"] = encodeJSONValue(emitter.settings)
+        record["moduleStack"] = encodeJSONValue(emitter.moduleStack)
+        return record
     }
 
-    private static func deserializeParticleEmitter(_ d: [String: Any]) -> ParticleEmitter {
-        let renderBoundsRadius = jsonToFloat(d["renderBoundsRadius"]) ?? 0
-        let renderBoundsMode = ParticleRenderBoundsMode(rawValue: jsonToString(d["renderBoundsMode"]) ?? "")
-            ?? (renderBoundsRadius > 0 ? .manual : .disabled)
-        var emitter = ParticleEmitter(
-            isEmitting: jsonToBool(d["isEmitting"]) ?? true,
-            looping: jsonToBool(d["looping"]) ?? true,
-            duration: jsonToFloat(d["duration"]) ?? 0,
-            simulationSpeed: jsonToFloat(d["simulationSpeed"]) ?? 1,
-            prewarmTime: jsonToFloat(d["prewarmTime"]) ?? 0,
-            prewarmStep: jsonToFloat(d["prewarmStep"]) ?? (1.0 / 30.0),
-            emissionRate: jsonToFloat(d["emissionRate"]) ?? 10,
-            emissionRateCurve: deserializeParticleCurve(d["emissionRateCurve"], default: .constant(1)),
-            distanceEmissionRate: jsonToFloat(d["distanceEmissionRate"]) ?? 0,
-            distanceEmissionRateCurve: deserializeParticleCurve(d["distanceEmissionRateCurve"], default: .constant(1)),
-            burstCount: jsonToInt(d["burstCount"]) ?? 0,
-            burstInterval: jsonToFloat(d["burstInterval"]) ?? 0,
-            maxParticles: jsonToInt(d["maxParticles"]) ?? 256,
-            maxSpawnedParticlesPerFrame: jsonToInt(d["maxSpawnedParticlesPerFrame"]) ?? 0,
-            maxRenderedParticles: jsonToInt(d["maxRenderedParticles"]) ?? 0,
-            lifetime: jsonToFloat(d["lifetime"]) ?? 2,
-            lifetimeRandomness: jsonToFloat(d["lifetimeRandomness"]) ?? 0,
-            subEmitterTrigger: ParticleSubEmitterTrigger(rawValue: jsonToString(d["subEmitterTrigger"]) ?? "none") ?? .none,
-            subEmitterBurstCount: jsonToInt(d["subEmitterBurstCount"]) ?? 0,
-            subEmitterProbability: jsonToFloat(d["subEmitterProbability"]) ?? 1,
-            subEmitterMaxDepth: jsonToInt(d["subEmitterMaxDepth"]) ?? 1,
-            subEmitterInheritVelocity: jsonToFloat(d["subEmitterInheritVelocity"]) ?? 0,
-            subEmitterLifetime: jsonToFloat(d["subEmitterLifetime"]) ?? 0.5,
-            subEmitterStartVelocity: jsonToFloatArray(d["subEmitterStartVelocity"]).flatMap(jsonToVec3) ?? .zero,
-            subEmitterVelocityRandomness: jsonToFloatArray(d["subEmitterVelocityRandomness"]).flatMap(jsonToVec3) ?? .zero,
-            subEmitterStartSize: jsonToFloat(d["subEmitterStartSize"]) ?? 0.25,
-            subEmitterEndSize: jsonToFloat(d["subEmitterEndSize"]) ?? 0,
-            subEmitterStartColor: jsonToFloatArray(d["subEmitterStartColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 1),
-            subEmitterEndColor: jsonToFloatArray(d["subEmitterEndColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 0),
-            subEmitters: jsonToArray(d["subEmitters"])?.compactMap {
-                jsonToDict($0).map(deserializeParticleSubEmitter)
-            } ?? [],
-            originOffset: jsonToFloatArray(d["originOffset"]).flatMap(jsonToVec3) ?? .zero,
-            spawnRadius: jsonToFloat(d["spawnRadius"]) ?? 0,
-            emissionShape: ParticleEmissionShape(rawValue: jsonToString(d["emissionShape"]) ?? "sphere") ?? .sphere,
-            boxHalfExtents: jsonToFloatArray(d["boxHalfExtents"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0.5, 0.5, 0.5),
-            coneRadius: jsonToFloat(d["coneRadius"]) ?? 0.5,
-            coneHeight: jsonToFloat(d["coneHeight"]) ?? 1,
-            startVelocity: jsonToFloatArray(d["startVelocity"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
-            velocityRandomness: jsonToFloatArray(d["velocityRandomness"]).flatMap(jsonToVec3) ?? .zero,
-            velocityInheritance: jsonToFloat(d["velocityInheritance"]) ?? 0,
-            gravity: jsonToFloatArray(d["gravity"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, -9.81, 0),
-            noiseStrength: jsonToFloat(d["noiseStrength"]) ?? 0,
-            noiseScale: jsonToFloat(d["noiseScale"]) ?? 1,
-            noiseSpeed: jsonToFloat(d["noiseSpeed"]) ?? 1,
-            forceMode: ParticleForceMode(rawValue: jsonToString(d["forceMode"]) ?? "none") ?? .none,
-            forceCenter: jsonToFloatArray(d["forceCenter"]).flatMap(jsonToVec3) ?? .zero,
-            forceAxis: jsonToFloatArray(d["forceAxis"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
-            forceRadius: jsonToFloat(d["forceRadius"]) ?? 0,
-            forceStrength: jsonToFloat(d["forceStrength"]) ?? 0,
-            forceFalloff: jsonToFloat(d["forceFalloff"]) ?? 1,
-            vectorFieldMode: ParticleVectorFieldMode(rawValue: jsonToString(d["vectorFieldMode"]) ?? "none") ?? .none,
-            vectorFieldDirection: jsonToFloatArray(d["vectorFieldDirection"]).flatMap(jsonToVec3)
-                ?? SIMD3<Float>(0, 1, 0),
-            vectorFieldStrength: jsonToFloat(d["vectorFieldStrength"]) ?? 0,
-            vectorFieldScale: jsonToFloat(d["vectorFieldScale"]) ?? 1,
-            vectorFieldScrollSpeed: jsonToFloat(d["vectorFieldScrollSpeed"]) ?? 0,
-            collisionMode: ParticleCollisionMode(rawValue: jsonToString(d["collisionMode"]) ?? "none") ?? .none,
-            simulationSpace: ParticleSimulationSpace(rawValue: jsonToString(d["simulationSpace"]) ?? "local") ?? .local,
-            simulationBackend: ParticleSimulationBackend(rawValue: jsonToString(d["simulationBackend"]) ?? "cpu") ?? .cpu,
-            gpuSimulationWorkgroupSize: jsonToInt(d["gpuSimulationWorkgroupSize"]) ?? 64,
-            collisionPlaneY: jsonToFloat(d["collisionPlaneY"]) ?? 0,
-            collisionRestitution: jsonToFloat(d["collisionRestitution"]) ?? 0.5,
-            collisionDamping: jsonToFloat(d["collisionDamping"]) ?? 0,
-            startSize: jsonToFloat(d["startSize"]) ?? 1,
-            endSize: jsonToFloat(d["endSize"]) ?? 0,
-            sizeRandomness: jsonToFloat(d["sizeRandomness"]) ?? 0,
-            startRotation: jsonToFloat(d["startRotation"]) ?? 0,
-            rotationRandomness: jsonToFloat(d["rotationRandomness"]) ?? 0,
-            angularVelocity: jsonToFloat(d["angularVelocity"]) ?? 0,
-            angularVelocityRandomness: jsonToFloat(d["angularVelocityRandomness"]) ?? 0,
-            sizeCurve: deserializeParticleCurve(d["sizeCurve"]),
-            startColor: jsonToFloatArray(d["startColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 1),
-            endColor: jsonToFloatArray(d["endColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 0),
-            colorCurve: deserializeParticleCurve(d["colorCurve"]),
-            blendMode: ParticleBlendMode(rawValue: jsonToString(d["blendMode"]) ?? "alpha") ?? .alpha,
-            renderMode: ParticleRenderMode(rawValue: jsonToString(d["renderMode"]) ?? "billboard") ?? .billboard,
-            sortMode: ParticleSortMode(rawValue: jsonToString(d["sortMode"]) ?? "distanceDescending") ?? .distanceDescending,
-            renderSortPriority: jsonToInt(d["renderSortPriority"]) ?? 0,
-            ribbonWidthScale: jsonToFloat(d["ribbonWidthScale"]) ?? 1,
-            ribbonTailWidthScale: jsonToFloat(d["ribbonTailWidthScale"]) ?? 1,
-            ribbonTailAlphaScale: jsonToFloat(d["ribbonTailAlphaScale"]) ?? 1,
-            ribbonMaxSegmentLength: jsonToFloat(d["ribbonMaxSegmentLength"]) ?? 0,
-            ribbonJoinOverlapScale: jsonToFloat(d["ribbonJoinOverlapScale"]) ?? 0,
-            ribbonSmoothingSegments: jsonToInt(d["ribbonSmoothingSegments"]) ?? 1,
-            ribbonTextureTiling: jsonToFloat(d["ribbonTextureTiling"]) ?? 0,
-            ribbonTextureOffset: jsonToFloat(d["ribbonTextureOffset"]) ?? 0,
-            renderAlignment: ParticleRenderAlignment(rawValue: jsonToString(d["renderAlignment"]) ?? "billboard") ?? .billboard,
-            velocityStretchScale: jsonToFloat(d["velocityStretchScale"]) ?? 0,
-            velocityStretchMax: jsonToFloat(d["velocityStretchMax"]) ?? 8,
-            maxRenderDistance: jsonToFloat(d["maxRenderDistance"]) ?? 0,
-            renderDistanceFadeRange: jsonToFloat(d["renderDistanceFadeRange"]) ?? 0,
-            renderLODStartDistance: jsonToFloat(d["renderLODStartDistance"]) ?? 0,
-            renderLODEndDistance: jsonToFloat(d["renderLODEndDistance"]) ?? 0,
-            renderLODMinParticleScale: jsonToFloat(d["renderLODMinParticleScale"]) ?? 1,
-            renderBoundsMode: renderBoundsMode,
-            renderBoundsRadius: renderBoundsRadius,
-            textureAssetID: jsonToString(d["textureAssetID"]),
-            texturePath: jsonToString(d["texturePath"]),
-            textureSheetColumns: jsonToInt(d["textureSheetColumns"]) ?? 1,
-            textureSheetRows: jsonToInt(d["textureSheetRows"]) ?? 1,
-            textureSheetFrameCount: jsonToInt(d["textureSheetFrameCount"]) ?? 1,
-            textureSheetFrameRate: jsonToFloat(d["textureSheetFrameRate"]) ?? 0,
-            textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode(
-                rawValue: jsonToString(d["textureSheetPlaybackMode"]) ?? "automatic"
-            ) ?? .automatic,
-            textureSheetStartFrame: jsonToInt(d["textureSheetStartFrame"]) ?? 0,
-            textureSheetFrameRandomness: jsonToInt(d["textureSheetFrameRandomness"]) ?? 0,
-            trailLength: jsonToFloat(d["trailLength"]) ?? 0,
-            trailSegments: jsonToInt(d["trailSegments"]) ?? 0,
-            trailEndSizeScale: jsonToFloat(d["trailEndSizeScale"]) ?? 0.5,
-            trailEndAlphaScale: jsonToFloat(d["trailEndAlphaScale"]) ?? 0,
-            seed: UInt64(bitPattern: Int64(jsonToInt(d["seed"]) ?? 0))
-        )
-        if let moduleStack = decodeJSONValue(d["moduleStack"], as: ParticleModuleStack.self) {
+    private static func deserializeParticleEmitter(_ record: [String: Any]) -> ParticleEmitter {
+        let settings = decodeJSONValue(record["settings"], as: ParticleEmitterSettings.self) ?? .init()
+        var emitter = ParticleEmitter(settings: settings)
+        if let moduleStack = decodeJSONValue(record["moduleStack"], as: ParticleModuleStack.self) {
             emitter.apply(moduleStack)
         }
         return emitter
     }
 
-    private static func serializeParticleSubEmitter(_ c: ParticleSubEmitter) -> [String: Any] {
-        [
-            "trigger": c.trigger.rawValue,
-            "burstCount": c.burstCount,
-            "probability": c.probability,
-            "maxDepth": c.maxDepth,
-            "inheritVelocity": c.inheritVelocity,
-            "lifetime": c.lifetime,
-            "startVelocity": vec3ToJSON(c.startVelocity),
-            "velocityRandomness": vec3ToJSON(c.velocityRandomness),
-            "startSize": c.startSize,
-            "endSize": c.endSize,
-            "startColor": vec4ToJSON(c.startColor),
-            "endColor": vec4ToJSON(c.endColor),
-        ]
-    }
 
-    private static func deserializeParticleSubEmitter(_ d: [String: Any]) -> ParticleSubEmitter {
-        ParticleSubEmitter(
-            trigger: ParticleSubEmitterTrigger(rawValue: jsonToString(d["trigger"]) ?? "none") ?? .none,
-            burstCount: jsonToInt(d["burstCount"]) ?? 0,
-            probability: jsonToFloat(d["probability"]) ?? 1,
-            maxDepth: jsonToInt(d["maxDepth"]) ?? 1,
-            inheritVelocity: jsonToFloat(d["inheritVelocity"]) ?? 0,
-            lifetime: jsonToFloat(d["lifetime"]) ?? 0.5,
-            startVelocity: jsonToFloatArray(d["startVelocity"]).flatMap(jsonToVec3) ?? .zero,
-            velocityRandomness: jsonToFloatArray(d["velocityRandomness"]).flatMap(jsonToVec3) ?? .zero,
-            startSize: jsonToFloat(d["startSize"]) ?? 0.25,
-            endSize: jsonToFloat(d["endSize"]) ?? 0,
-            startColor: jsonToFloatArray(d["startColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 1),
-            endColor: jsonToFloatArray(d["endColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 0)
-        )
-    }
 
-    private static func serializeParticleCurve(_ curve: ParticleCurve) -> Any {
-        switch curve {
-        case .constant(let value):
-            return [
-                "type": curve.rawValue,
-                "value": value,
-            ]
-        case .linear, .easeIn, .easeOut, .easeInOut:
-            return curve.rawValue
-        case .keyframes(let keyframes):
-            return [
-                "type": curve.rawValue,
-                "keyframes": keyframes.map {
-                    [
-                        "time": $0.time,
-                        "value": $0.value,
-                    ]
-                },
-            ]
-        }
-    }
 
-    private static func deserializeParticleCurve(_ value: Any?, default defaultCurve: ParticleCurve = .linear) -> ParticleCurve {
-        if let raw = jsonToString(value) {
-            return ParticleCurve(rawValue: raw) ?? defaultCurve
-        }
-        guard let dict = jsonToDict(value) else {
-            return defaultCurve
-        }
-        let type = jsonToString(dict["type"]) ?? "linear"
-        if type == "constant" {
-            return .constant(jsonToFloat(dict["value"]) ?? 1)
-        }
-        guard type == "keyframes" else {
-            return ParticleCurve(rawValue: type) ?? defaultCurve
-        }
-        let keyframes = (dict["keyframes"] as? [[String: Any]] ?? []).compactMap { frame -> ParticleCurveKeyframe? in
-            guard let time = jsonToFloat(frame["time"]),
-                  let value = jsonToFloat(frame["value"])
-            else {
-                return nil
-            }
-            return ParticleCurveKeyframe(time: time, value: value)
-        }
-        return .keyframes(keyframes)
-    }
+
+
+
+
 }
 
 public enum SceneSerializerError: Error {

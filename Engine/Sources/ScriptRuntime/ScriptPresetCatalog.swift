@@ -22,7 +22,7 @@ public extension ScriptRuntime {
     func registerPreset(_ preset: ScriptPresetKind,
                         named identifier: String,
                         defaultParametersJSON: String = "{}") -> ScriptHandle {
-        register(named: identifier, defaultParametersJSON: defaultParametersJSON) {
+        register(named: identifier, defaultParametersJSON: defaultParametersJSON, definition: preset.definition) {
             switch preset {
             case .rotator:
                 return .rotator()

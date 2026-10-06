@@ -5,11 +5,39 @@ public struct EditorInspectorSection {
     public let id: String
     public let title: String
     public let fields: [EditorInspectorField]
+    public let groups: [EditorInspectorFieldGroup]
 
-    public init(id: String, title: String, fields: [EditorInspectorField]) {
+    public init(id: String, title: String, fields: [EditorInspectorField], groups: [EditorInspectorFieldGroup] = []) {
         self.id = id
         self.title = title
         self.fields = fields
+        self.groups = groups
+    }
+}
+
+/// Presentation of one behavior instance. Fields remain the canonical bindings;
+/// the group identifies which belong in its header, menu and property form.
+public struct EditorInspectorFieldGroup {
+    public let id: String
+    public let title: String
+    public let fieldIDs: [String]
+    public let enabledFieldID: String
+    public let statusFieldID: String
+    public let selectorFieldID: String
+    public let actionFieldIDs: [String]
+    public let sourceIdentifier: String?
+
+    public init(id: String, title: String, fieldIDs: [String], enabledFieldID: String,
+                statusFieldID: String, selectorFieldID: String, actionFieldIDs: [String],
+                sourceIdentifier: String? = nil) {
+        self.id = id
+        self.title = title
+        self.fieldIDs = fieldIDs
+        self.enabledFieldID = enabledFieldID
+        self.statusFieldID = statusFieldID
+        self.selectorFieldID = selectorFieldID
+        self.actionFieldIDs = actionFieldIDs
+        self.sourceIdentifier = sourceIdentifier
     }
 }
 
@@ -24,6 +52,7 @@ public struct EditorInspectorField {
     public let label: String
     public let value: EditorInspectorFieldValue
     public let presentation: EditorInspectorFieldPresentation
+    public let group: String?
     public let isMixed: Bool
     public let mixedAxes: Set<String>
     public let applyPrimaryValue: (() -> Void)?
@@ -31,11 +60,12 @@ public struct EditorInspectorField {
     public init(id: String, label: String, value: EditorInspectorFieldValue,
                 presentation: EditorInspectorFieldPresentation = .standard,
                 isMixed: Bool = false, mixedAxes: Set<String> = [],
-                applyPrimaryValue: (() -> Void)? = nil) {
+                applyPrimaryValue: (() -> Void)? = nil, group: String? = nil) {
         self.id = id
         self.label = label
         self.value = value
         self.presentation = presentation
+        self.group = group
         self.isMixed = isMixed
         self.mixedAxes = mixedAxes
         self.applyPrimaryValue = applyPrimaryValue

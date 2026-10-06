@@ -5,7 +5,23 @@ import ScriptRuntime
 import SIMDCompat
 
 /// Crystal Rush: a complete tiny game using Guava's real input, scene and HUD.
-struct GameScript: ScriptBehavior {
+struct GameScript: ScriptBehavior, ScriptAuthoring {
+    static var definition: ScriptDefinition {
+        ScriptDefinition(properties: [
+            ScriptProperty("title", label: "Game Title", group: "Game Rules", defaultValue: .string("Crystal Rush")),
+            ScriptProperty("duration", label: "Round Duration", group: "Game Rules", defaultValue: .number(50), minimum: 1, maximum: 3600),
+            ScriptProperty("startingHearts", label: "Starting Hearts", group: "Game Rules", defaultValue: .integer(3), minimum: 1, maximum: 20),
+            ScriptProperty("startMode", label: "Start Mode", group: "Game Rules", defaultValue: .string("ready"), options: [
+                ScriptPropertyOption("ready", label: "Wait for Input"), ScriptPropertyOption("playing", label: "Start Immediately"),
+            ]),
+            ScriptProperty("moveSpeed", label: "Move Speed", group: "Movement", defaultValue: .number(4.5), minimum: 0, maximum: 50),
+            ScriptProperty("sprintSpeed", label: "Sprint Speed", group: "Movement", defaultValue: .number(7), minimum: 0, maximum: 50),
+        ])
+    }
+
+    private var spawnedEntities: [EntityID] = []
+    private var roundDuration: Float = 50
+    private var startingHearts = 3
     private var player: EntityID?
     private var gems: [EntityID] = []
     private var enemies: [EntityID] = []
@@ -21,6 +37,10 @@ struct GameScript: ScriptBehavior {
     ]
 
     mutating func onStart(_ context: ScriptContext) {
+        roundDuration = context.floatParameter("duration") ?? 50
+        startingHearts = Int(context.doubleParameter("startingHearts") ?? 3)
+        remaining = roundDuration
+        hearts = startingHearts
         var input = InputActionMap.guavaDefault
         input.bind("start", to: .key(Scancode.space))
         input.bind("restart", to: .key(Scancode.r))
@@ -28,11 +48,17 @@ struct GameScript: ScriptBehavior {
         context.setResource(input)
 
         let camera = context.createEntity(named: "Camera", transform: LocalTransform(translation: SIMD3(0, 19, 18)))
+        spawnedEntities.append(camera)
+        _ = context.setParent(context.entity, for: camera)
         context.setComponent(CameraComponent(target: SIMD3(0, 0, 0), fovYRadians: .pi / 3.5, near: 0.1, far: 100), for: camera)
         let sun = context.createEntity(named: "Sun", transform: LocalTransform(
             rotation: simd_quatf(angle: -.pi / 3, axis: SIMD3(1, 0, 0))))
+        spawnedEntities.append(sun)
+        _ = context.setParent(context.entity, for: sun)
         context.setComponent(LightComponent(type: .directional, intensity: 3, castShadows: true), for: sun)
         let fill = context.createEntity(named: "Fill", transform: LocalTransform(translation: SIMD3(0, 7, 0)))
+        spawnedEntities.append(fill)
+        _ = context.setParent(context.entity, for: fill)
         context.setComponent(LightComponent(type: .point, color: SIMD3(0.25, 0.55, 1), intensity: 55, range: 28), for: fill)
 
         _ = cube(context, "Arena", at: SIMD3(0, -0.2, 0), scale: SIMD3(18, 0.3, 14), color: SIMD3(0.035, 0.055, 0.1))
@@ -83,7 +109,8 @@ struct GameScript: ScriptBehavior {
             var movement = SIMD3<Float>(context.input.axis("move_x"), 0, -context.input.axis("move_y"))
             let magnitude = simd_length(movement)
             if magnitude > 1 { movement /= magnitude }
-            let speed: Float = context.input.isHeld("sprint") ? 7 : 4.5
+            let speed = context.input.isHeld("sprint")
+                ? (context.floatParameter("sprintSpeed") ?? 7) : (context.floatParameter("moveSpeed") ?? 4.5)
             transform.translation += movement * speed * dt
             transform.translation.x = max(-8.25, min(8.25, transform.translation.x))
             transform.translation.z = max(-6.25, min(6.25, transform.translation.z))
@@ -110,14 +137,19 @@ struct GameScript: ScriptBehavior {
         drawHUD(context)
         let position = player.flatMap { context.localTransform(of: $0)?.translation } ?? .zero
         context.reportState([
-            "game": "Crystal Rush", "phase": phase, "score": "\(collected.count)", "target": "8",
+            "game": context.stringParameter("title") ?? "Crystal Rush", "phase": phase, "score": "\(collected.count)", "target": "8",
             "hearts": "\(hearts)", "remaining_seconds": String(format: "%.2f", remaining),
             "player_x": "\(position.x)", "player_z": "\(position.z)",
         ])
     }
 
+    mutating func onDestroy(_ context: ScriptContext) {
+        for entity in spawnedEntities { context.destroyEntity(entity) }
+        spawnedEntities.removeAll()
+    }
+
     private mutating func restart(_ context: ScriptContext) {
-        phase = "playing"; collected = []; hearts = 3; remaining = 50; elapsed = 0; invulnerability = 0
+        phase = "playing"; collected = []; hearts = startingHearts; remaining = roundDuration; elapsed = 0; invulnerability = 0
         if let player { context.setLocalTransform(LocalTransform(translation: SIMD3(0, 0.6, 0), scale: SIMD3(0.8, 1.1, 0.8)), for: player) }
         for gem in gems {
             if var mesh = context.component(RenderMeshComponent.self, for: gem) {
@@ -155,10 +187,10 @@ struct GameScript: ScriptBehavior {
             let muted = InGameUIColor(r: 0.6, g: 0.72, b: 0.85)
             let cyan = InGameUIColor(r: 0.35, g: 0.88, b: 1)
             canvas.rect(x: 24, y: 24, w: 346, h: 136, color: InGameUIColor(r: 0.015, g: 0.025, b: 0.06, a: 0.94), cornerRadius: 14)
-            canvas.label("CRYSTAL RUSH", x: 42, y: 38, fontSize: 24, color: cyan)
+            canvas.label(context.stringParameter("title") ?? "Crystal Rush", x: 42, y: 38, fontSize: 24, color: cyan)
             canvas.label("晶体 \(collected.count) / 8    生命 \(String(repeating: "♥", count: max(0, hearts)))", x: 42, y: 76, fontSize: 20)
             canvas.label("剩余时间  \(Int(ceil(remaining))) 秒", x: 42, y: 108, fontSize: 15, color: muted)
-            canvas.progressBar(x: 42, y: 140, w: 308, h: 5, value: remaining, maxValue: 50, fillColor: cyan)
+            canvas.progressBar(x: 42, y: 140, w: 308, h: 5, value: remaining, maxValue: roundDuration, fillColor: cyan)
             canvas.rect(x: 24, y: 172, w: 346, h: 66, color: InGameUIColor(r: 0.015, g: 0.025, b: 0.06, a: 0.85), cornerRadius: 10)
             canvas.label("WASD 移动  ·  Shift 加速", x: 42, y: 185, fontSize: 16, color: muted)
             canvas.label("收集绿色晶体，避开红色守卫  ·  R 重开", x: 42, y: 208, fontSize: 14, color: muted)
@@ -166,16 +198,18 @@ struct GameScript: ScriptBehavior {
                 canvas.rect(x: 24, y: 254, w: 346, h: 152, color: InGameUIColor(r: 0.015, g: 0.035, b: 0.08, a: 0.96), cornerRadius: 14)
                 let title = phase == "ready" ? "准备好了吗？" : (phase == "won" ? "全部收集！你赢了" : "挑战结束")
                 canvas.label(title, x: 42, y: 278, fontSize: 28, color: phase == "lost" ? .red : cyan)
-                canvas.label(phase == "ready" ? "50 秒内收集 8 块晶体。" : "最终成绩：\(collected.count) / 8 块晶体", x: 42, y: 322, fontSize: 18)
+                canvas.label(phase == "ready" ? "\(Int(roundDuration)) 秒内收集 8 块晶体。" : "最终成绩：\(collected.count) / 8 块晶体", x: 42, y: 322, fontSize: 18)
                 canvas.label(phase == "ready" ? "按空格开始" : "按 R 再玩一次", x: 42, y: 363, fontSize: 20, color: cyan)
             }
         }
     }
 
     @discardableResult
-    private func cube(_ context: ScriptContext, _ name: String, at position: SIMD3<Float>,
+    private mutating func cube(_ context: ScriptContext, _ name: String, at position: SIMD3<Float>,
                       scale: SIMD3<Float>, color: SIMD3<Float>, glow: SIMD3<Float> = .zero) -> EntityID {
         let entity = context.createEntity(named: name, transform: LocalTransform(translation: position, scale: scale))
+        spawnedEntities.append(entity)
+        _ = context.setParent(context.entity, for: entity)
         context.setComponent(RenderMeshComponent(meshIndex: 0, colorTint: color), for: entity)
         context.setComponent(RenderMaterialComponent(roughnessFactor: 0.72, emissiveFactor: glow), for: entity)
         return entity

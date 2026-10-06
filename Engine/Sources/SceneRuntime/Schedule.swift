@@ -1134,58 +1134,58 @@ public struct RuntimeWorldSchedule {
                     plan: plan,
                     particles: persistedParticles,
                     spawnParticles: spawnParticles,
-                    simulationSpeed: emitter.simulationSpeed,
-                    gravity: emitter.gravity,
-                    noiseStrength: emitter.noiseStrength,
-                    noiseScale: emitter.noiseScale,
-                    noiseSpeed: emitter.noiseSpeed,
-                    noiseSeed: emitter.seed,
-                    vectorFieldMode: emitter.vectorFieldMode,
-                    vectorFieldDirection: emitter.vectorFieldDirection,
-                    vectorFieldStrength: emitter.vectorFieldStrength,
-                    vectorFieldScale: emitter.vectorFieldScale,
-                    vectorFieldScrollSpeed: emitter.vectorFieldScrollSpeed,
-                    forceMode: emitter.forceMode,
-                    forceCenter: emitter.forceCenter,
-                    forceAxis: emitter.forceAxis,
-                    forceRadius: emitter.forceRadius,
-                    forceStrength: emitter.forceStrength,
-                    forceFalloff: emitter.forceFalloff,
-                    collisionMode: emitter.collisionMode,
-                    collisionPlaneY: emitter.collisionPlaneY,
-                    collisionRestitution: emitter.collisionRestitution,
-                    collisionDamping: emitter.collisionDamping,
+                    simulationSpeed: emitter.settings.emission.simulationSpeed,
+                    gravity: emitter.settings.forces.gravity,
+                    noiseStrength: emitter.settings.forces.noiseStrength,
+                    noiseScale: emitter.settings.forces.noiseScale,
+                    noiseSpeed: emitter.settings.forces.noiseSpeed,
+                    noiseSeed: emitter.settings.emission.seed,
+                    vectorFieldMode: emitter.settings.forces.vectorFieldMode,
+                    vectorFieldDirection: emitter.settings.forces.vectorFieldDirection,
+                    vectorFieldStrength: emitter.settings.forces.vectorFieldStrength,
+                    vectorFieldScale: emitter.settings.forces.vectorFieldScale,
+                    vectorFieldScrollSpeed: emitter.settings.forces.vectorFieldScrollSpeed,
+                    forceMode: emitter.settings.forces.forceMode,
+                    forceCenter: emitter.settings.forces.forceCenter,
+                    forceAxis: emitter.settings.forces.forceAxis,
+                    forceRadius: emitter.settings.forces.forceRadius,
+                    forceStrength: emitter.settings.forces.forceStrength,
+                    forceFalloff: emitter.settings.forces.forceFalloff,
+                    collisionMode: emitter.settings.collision.collisionMode,
+                    collisionPlaneY: emitter.settings.collision.collisionPlaneY,
+                    collisionRestitution: emitter.settings.collision.collisionRestitution,
+                    collisionDamping: emitter.settings.collision.collisionDamping,
                     renderOnGPU: renderOnGPU,
-                    worldTransform: emitter.simulationSpace == .local ? toWorld : matrix_identity_float4x4,
+                    worldTransform: emitter.settings.gpuSimulation.simulationSpace == .local ? toWorld : matrix_identity_float4x4,
                     uvRect: SIMD4<Float>(0, 0, 1, 1),
-                    textureSheetColumns: emitter.textureSheetColumns,
-                    textureSheetRows: emitter.textureSheetRows,
-                    textureSheetFrameCount: emitter.textureSheetFrameCount,
-                    textureSheetFrameRate: emitter.textureSheetFrameRate,
-                    textureSheetPlaybackMode: emitter.textureSheetPlaybackMode,
-                    textureSheetStartFrame: emitter.textureSheetStartFrame,
-                    textureSheetFrameRandomness: emitter.textureSheetFrameRandomness,
-                    startSize: emitter.startSize,
-                    endSize: emitter.endSize,
-                    sizeCurve: emitter.sizeCurve,
-                    startColor: emitter.startColor,
-                    endColor: emitter.endColor,
-                    colorCurve: emitter.colorCurve,
+                    textureSheetColumns: emitter.settings.textureSheet.columns,
+                    textureSheetRows: emitter.settings.textureSheet.rows,
+                    textureSheetFrameCount: emitter.settings.textureSheet.frameCount,
+                    textureSheetFrameRate: emitter.settings.textureSheet.frameRate,
+                    textureSheetPlaybackMode: emitter.settings.textureSheet.playbackMode,
+                    textureSheetStartFrame: emitter.settings.textureSheet.startFrame,
+                    textureSheetFrameRandomness: emitter.settings.textureSheet.frameRandomness,
+                    startSize: emitter.settings.appearance.startSize,
+                    endSize: emitter.settings.appearance.endSize,
+                    sizeCurve: emitter.settings.appearance.sizeCurve,
+                    startColor: emitter.settings.appearance.startColor,
+                    endColor: emitter.settings.appearance.endColor,
+                    colorCurve: emitter.settings.appearance.colorCurve,
                     usesAuthoredAppearance: true,
                     appearancePalette: renderParticleAppearancePalette(for: emitter),
-                    blendMode: emitter.blendMode,
-                    texturePath: emitter.texturePath,
-                    renderAlignment: emitter.renderAlignment,
-                    velocityStretchScale: emitter.velocityStretchScale,
-                    velocityStretchMax: emitter.velocityStretchMax,
-                    sortMode: emitter.sortMode,
-                    renderSortPriority: emitter.renderSortPriority,
+                    blendMode: emitter.settings.appearance.blendMode,
+                    texturePath: emitter.settings.textureSheet.texturePath,
+                    renderAlignment: emitter.settings.renderer.renderAlignment,
+                    velocityStretchScale: emitter.settings.renderer.velocityStretchScale,
+                    velocityStretchMax: emitter.settings.renderer.velocityStretchMax,
+                    sortMode: emitter.settings.renderer.sortMode,
+                    renderSortPriority: emitter.settings.renderer.renderSortPriority,
                     renderParticleLimit: renderParticleLimit,
                     renderAlphaScale: renderAlphaScale,
-                    trailLength: emitter.trailLength,
-                    trailSegments: emitter.trailSegments,
-                    trailEndSizeScale: emitter.trailEndSizeScale,
-                    trailEndAlphaScale: emitter.trailEndAlphaScale
+                    trailLength: emitter.settings.trails.trailLength,
+                    trailSegments: emitter.settings.trails.trailSegments,
+                    trailEndSizeScale: emitter.settings.trails.trailEndSizeScale,
+                    trailEndAlphaScale: emitter.settings.trails.trailEndAlphaScale
                 )
             )
         }
@@ -1200,16 +1200,16 @@ public struct RuntimeWorldSchedule {
 
     private func renderParticleAppearancePalette(for emitter: ParticleEmitter) -> [RenderParticleAppearance] {
         var palette = [
-            RenderParticleAppearance(startSize: emitter.startSize,
-                                     endSize: emitter.endSize,
-                                     startColor: emitter.startColor,
-                                     endColor: emitter.endColor),
-            RenderParticleAppearance(startSize: emitter.subEmitterStartSize,
-                                     endSize: emitter.subEmitterEndSize,
-                                     startColor: emitter.subEmitterStartColor,
-                                     endColor: emitter.subEmitterEndColor),
+            RenderParticleAppearance(startSize: emitter.settings.appearance.startSize,
+                                     endSize: emitter.settings.appearance.endSize,
+                                     startColor: emitter.settings.appearance.startColor,
+                                     endColor: emitter.settings.appearance.endColor),
+            RenderParticleAppearance(startSize: emitter.settings.subEmitters.legacyStartSize,
+                                     endSize: emitter.settings.subEmitters.legacyEndSize,
+                                     startColor: emitter.settings.subEmitters.legacyStartColor,
+                                     endColor: emitter.settings.subEmitters.legacyEndColor),
         ]
-        palette.append(contentsOf: emitter.subEmitters.map {
+        palette.append(contentsOf: emitter.settings.subEmitters.rules.map {
             RenderParticleAppearance(startSize: $0.startSize,
                                      endSize: $0.endSize,
                                      startColor: $0.startColor,
@@ -1220,9 +1220,9 @@ public struct RuntimeWorldSchedule {
 
     private func canRenderEmitterParticlesOnGPU(_ emitter: ParticleEmitter) -> Bool {
         guard emitter.gpuSimulationPlan.usesGPU else { return false }
-        guard emitter.renderMode == .billboard else { return false }
-        guard emitter.renderAlignment == .billboard || emitter.renderAlignment == .velocity else { return false }
-        guard emitter.textureAssetID == nil || emitter.texturePath != nil else { return false }
+        guard emitter.settings.renderer.renderMode == .billboard else { return false }
+        guard emitter.settings.renderer.renderAlignment == .billboard || emitter.settings.renderer.renderAlignment == .velocity else { return false }
+        guard emitter.settings.textureSheet.textureAssetID == nil || emitter.settings.textureSheet.texturePath != nil else { return false }
         return true
     }
 
@@ -1271,7 +1271,7 @@ public struct RuntimeWorldSchedule {
                                                         cameraDistance: cameraDistance)
             sourceParticleCount += emitter.particles.count
             submittedSourceParticleCount += sourceParticles.count
-            if emitter.renderMode == .ribbon {
+            if emitter.settings.renderer.renderMode == .ribbon {
                 appendRibbonParticles(sourceParticles,
                                       emitter: emitter,
                                       toWorld: toWorld,
@@ -1281,7 +1281,7 @@ public struct RuntimeWorldSchedule {
                                       to: &sortableParticles)
                 continue
             }
-            let trailSegments = emitter.trailLength > 0 ? emitter.trailSegments : 0
+            let trailSegments = emitter.settings.trails.trailLength > 0 ? emitter.settings.trails.trailSegments : 0
             sortableParticles.reserveCapacity(sortableParticles.count + sourceParticles.count * (1 + trailSegments))
             for particle in sourceParticles {
                 let sample = renderParticleSample(for: particle,
@@ -1299,8 +1299,8 @@ public struct RuntimeWorldSchedule {
                     uvRect: uvRect,
                     alignmentAxis: alignment.axis,
                     stretch: alignment.stretch,
-                    blendMode: emitter.blendMode,
-                    texturePath: emitter.texturePath
+                    blendMode: emitter.settings.appearance.blendMode,
+                    texturePath: emitter.settings.textureSheet.texturePath
                 )
                 appendSortableParticle(base,
                                        emitter: emitter,
@@ -1351,8 +1351,8 @@ public struct RuntimeWorldSchedule {
         result.append(
             SortableRenderParticle(
                 particle: particle,
-                sortMode: emitter.sortMode,
-                sortPriority: emitter.renderSortPriority,
+                sortMode: emitter.settings.renderer.sortMode,
+                sortPriority: emitter.settings.renderer.renderSortPriority,
                 distanceSquared: simd_length_squared(particle.position - cameraEye),
                 age: max(0, age),
                 sourceOrder: nextSourceOrder
@@ -1444,7 +1444,7 @@ public struct RuntimeWorldSchedule {
         guard radius > 0 else {
             return true
         }
-        let center = Self.transformPoint(emitter.originOffset, by: toWorld)
+        let center = Self.transformPoint(emitter.settings.shape.originOffset, by: toWorld)
         let basis = cameraBasis(for: camera)
         let offset = center - camera.eye
         let forwardDistance = simd_dot(offset, basis.forward)
@@ -1492,26 +1492,26 @@ public struct RuntimeWorldSchedule {
         toWorld: simd_float4x4,
         cameraEye: SIMD3<Float>
     ) -> Float {
-        guard emitter.maxRenderDistance > 0 else {
+        guard emitter.settings.renderer.maxRenderDistance > 0 else {
             return 1
         }
-        let origin = Self.transformPoint(emitter.originOffset, by: toWorld)
+        let origin = Self.transformPoint(emitter.settings.shape.originOffset, by: toWorld)
         let distance = simd_length(origin - cameraEye)
-        guard distance <= emitter.maxRenderDistance else {
+        guard distance <= emitter.settings.renderer.maxRenderDistance else {
             return 0
         }
-        guard emitter.renderDistanceFadeRange > 0 else {
+        guard emitter.settings.renderer.renderDistanceFadeRange > 0 else {
             return 1
         }
-        let fadeRange = min(emitter.renderDistanceFadeRange, emitter.maxRenderDistance)
+        let fadeRange = min(emitter.settings.renderer.renderDistanceFadeRange, emitter.settings.renderer.maxRenderDistance)
         guard fadeRange > 0.0001 else {
             return 1
         }
-        let fadeStart = emitter.maxRenderDistance - fadeRange
+        let fadeStart = emitter.settings.renderer.maxRenderDistance - fadeRange
         guard distance > fadeStart else {
             return 1
         }
-        return simd_clamp((emitter.maxRenderDistance - distance) / fadeRange, 0, 1)
+        return simd_clamp((emitter.settings.renderer.maxRenderDistance - distance) / fadeRange, 0, 1)
     }
 
     private func emitterCameraDistance(
@@ -1519,7 +1519,7 @@ public struct RuntimeWorldSchedule {
         toWorld: simd_float4x4,
         cameraEye: SIMD3<Float>
     ) -> Float {
-        let origin = Self.transformPoint(emitter.originOffset, by: toWorld)
+        let origin = Self.transformPoint(emitter.settings.shape.originOffset, by: toWorld)
         return simd_length(origin - cameraEye)
     }
 
@@ -1532,20 +1532,20 @@ public struct RuntimeWorldSchedule {
         nextSourceOrder: inout Int,
         to result: inout [SortableRenderParticle]
     ) {
-        guard emitter.trailLength > 0,
-              emitter.trailSegments > 0,
+        guard emitter.settings.trails.trailLength > 0,
+              emitter.settings.trails.trailSegments > 0,
               particle.size > 0
         else { return }
 
         let speed = simd_length(worldVelocity)
         guard speed > 0.0001 else { return }
 
-        let segmentCount = emitter.trailSegments
-        let step = worldVelocity * (emitter.trailLength / Float(segmentCount))
+        let segmentCount = emitter.settings.trails.trailSegments
+        let step = worldVelocity * (emitter.settings.trails.trailLength / Float(segmentCount))
         for index in 1...segmentCount {
             let t = Float(index) / Float(segmentCount)
-            let sizeScale = 1 + (emitter.trailEndSizeScale - 1) * t
-            let alphaScale = 1 + (emitter.trailEndAlphaScale - 1) * t
+            let sizeScale = 1 + (emitter.settings.trails.trailEndSizeScale - 1) * t
+            let alphaScale = 1 + (emitter.settings.trails.trailEndAlphaScale - 1) * t
             var color = base.color
             color.w *= alphaScale
             appendSortableParticle(
@@ -1591,9 +1591,9 @@ public struct RuntimeWorldSchedule {
         let segmentCount = max(1, segmentLengths.count)
         let controlPoints = samples.enumerated().map { index, pair in
             let tailNormalized = 1 - simd_clamp(Float(index) / Float(segmentCount), 0, 1)
-            let widthScale = emitter.ribbonWidthScale
-                * (1 + (emitter.ribbonTailWidthScale - 1) * tailNormalized)
-            let alphaScale = 1 + (emitter.ribbonTailAlphaScale - 1) * tailNormalized
+            let widthScale = emitter.settings.trails.ribbonWidthScale
+                * (1 + (emitter.settings.trails.ribbonTailWidthScale - 1) * tailNormalized)
+            let alphaScale = 1 + (emitter.settings.trails.ribbonTailAlphaScale - 1) * tailNormalized
             var color = pair.particle.color
             color.w *= distanceFade * alphaScale
             return RibbonControlPoint(
@@ -1604,7 +1604,7 @@ public struct RuntimeWorldSchedule {
             )
         }
 
-        let subdivisions = emitter.ribbonSmoothingSegments
+        let subdivisions = emitter.settings.trails.ribbonSmoothingSegments
         var drafts: [RibbonRenderSegment] = []
         drafts.reserveCapacity(max(0, segmentLengths.count * subdivisions))
         var ribbonDistance: Float = 0
@@ -1659,8 +1659,8 @@ public struct RuntimeWorldSchedule {
                         endColor: endColor,
                         sortAge: sortAge,
                         uvRect: emitter.textureUVRect(for: controlPoints[index].particle),
-                        textureVOffset: emitter.ribbonTextureOffset + ribbonDistance * emitter.ribbonTextureTiling,
-                        textureVScale: subLength * emitter.ribbonTextureTiling,
+                        textureVOffset: emitter.settings.trails.ribbonTextureOffset + ribbonDistance * emitter.settings.trails.ribbonTextureTiling,
+                        textureVScale: subLength * emitter.settings.trails.ribbonTextureTiling,
                         runID: runID
                     )
                 )
@@ -1706,8 +1706,8 @@ public struct RuntimeWorldSchedule {
                     shape: .ribbonSegment,
                     textureVOffset: draft.textureVOffset,
                     textureVScale: draft.textureVScale,
-                    blendMode: emitter.blendMode,
-                    texturePath: emitter.texturePath
+                    blendMode: emitter.settings.appearance.blendMode,
+                    texturePath: emitter.settings.textureSheet.texturePath
                 ),
                 emitter: emitter,
                 cameraEye: cameraEye,
@@ -1726,7 +1726,7 @@ public struct RuntimeWorldSchedule {
         runIDs: [Int],
         emitter: ParticleEmitter
     ) -> Float {
-        guard emitter.ribbonJoinOverlapScale > 0,
+        guard emitter.settings.trails.ribbonJoinOverlapScale > 0,
               segmentLengths.indices.contains(segmentIndex),
               segmentLengths.indices.contains(neighborIndex),
               runIDs.indices.contains(segmentIndex),
@@ -1736,7 +1736,7 @@ public struct RuntimeWorldSchedule {
         let length = segmentLengths[segmentIndex]
         let neighborLength = segmentLengths[neighborIndex]
         guard length > 0.0001, neighborLength > 0.0001 else { return 0 }
-        return min(width * emitter.ribbonJoinOverlapScale,
+        return min(width * emitter.settings.trails.ribbonJoinOverlapScale,
                    length * 0.5,
                    neighborLength * 0.5)
     }
@@ -1803,8 +1803,8 @@ public struct RuntimeWorldSchedule {
 
     private func isRenderableRibbonSegment(_ length: Float, emitter: ParticleEmitter) -> Bool {
         guard length > 0.0001 else { return false }
-        if emitter.ribbonMaxSegmentLength > 0,
-           length > emitter.ribbonMaxSegmentLength {
+        if emitter.settings.trails.ribbonMaxSegmentLength > 0,
+           length > emitter.settings.trails.ribbonMaxSegmentLength {
             return false
         }
         return true
@@ -1812,22 +1812,22 @@ public struct RuntimeWorldSchedule {
 
     private func renderAlignment(for emitter: ParticleEmitter,
                                  worldVelocity: SIMD3<Float>) -> (axis: SIMD3<Float>, stretch: Float) {
-        guard emitter.renderAlignment == .velocity else {
+        guard emitter.settings.renderer.renderAlignment == .velocity else {
             return (.zero, 1)
         }
         let speed = simd_length(worldVelocity)
         guard speed > 0.0001 else {
             return (.zero, 1)
         }
-        let stretch = min(emitter.velocityStretchMax,
-                          max(1, 1 + speed * emitter.velocityStretchScale))
+        let stretch = min(emitter.settings.renderer.velocityStretchMax,
+                          max(1, 1 + speed * emitter.settings.renderer.velocityStretchScale))
         return (worldVelocity / speed, stretch)
     }
 
     private func renderParticleSample(for particle: Particle,
                                       emitter: ParticleEmitter,
                                       toWorld: simd_float4x4) -> RenderParticleSample {
-        switch emitter.simulationSpace {
+        switch emitter.settings.gpuSimulation.simulationSpace {
         case .local:
             let worldPosition = Self.transformPoint(particle.position, by: toWorld)
             let worldVelocity = Self.transformDirection(particle.velocity, by: toWorld)

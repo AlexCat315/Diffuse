@@ -365,7 +365,7 @@ struct HierarchyPanel: View {
                                    roots: [EditorSceneNode]) {
         guard let destination = HierarchyPanelModel.searchDestination(
             in: matchingIDs,
-            currentID: store.state.selectedEntityID,
+            currentID: store.state.selection.selectedEntityID,
             direction: direction
         ) else { return }
         store.dispatch(.setSelectedEntity(destination))
@@ -418,7 +418,7 @@ struct HierarchyPanel: View {
             log("Cannot duplicate locked entities", severity: .warning)
             return
         }
-        let primarySource = store.state.selectedEntityID
+        let primarySource = store.state.selection.selectedEntityID
         let orderedSources = selectedIDs.sorted()
         guard let duplicatedIDs = scene.duplicateEntities(selectedIDs),
               duplicatedIDs.count == orderedSources.count else {
@@ -456,7 +456,7 @@ struct HierarchyPanel: View {
     }
 
     private func framePrimarySelection() {
-        let selectedIDs = store.state.selectedEntityIDs
+        let selectedIDs = store.state.selection.selectedEntityIDs
         guard !selectedIDs.isEmpty else { return }
         scene.frameEntities(selectedIDs)
     }
@@ -549,7 +549,7 @@ struct HierarchyPanel: View {
         guard event.modifiers.isEmpty else { return false }
         switch event.scancode {
         case Scancode.f2:
-            beginRename(entityID: store.state.selectedEntityID,
+            beginRename(entityID: store.state.selection.selectedEntityID,
                         selectedIDs: selectedIDs,
                         isAuthoringEnabled: isAuthoringEnabled)
             return true

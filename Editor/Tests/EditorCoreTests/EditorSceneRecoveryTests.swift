@@ -24,13 +24,13 @@ struct EditorSceneRecoveryTests {
         defer { app.shutdown() }
         let opened = try #require(app.openSceneManifest(at: sceneURL))
         #expect(opened.entityCount == authored.manifest().entityCount)
-        #expect(app.scene.entitySummary(id: app.store.state.selectedEntityID)?.name == "Cube")
+        #expect(app.scene.entitySummary(id: app.store.state.selection.selectedEntityID)?.name == "Cube")
 
         app.scene.setEntityLocalTranslation(cubeID, to: SIMD3<Float>(1, 2, 3))
         #expect(app.hasUnsavedSceneChanges)
         app.requestOpenSceneManifest(at: sceneURL)
-        #expect(app.store.state.pendingCloseRequest?.action == .openScene)
-        #expect(app.store.state.pendingCloseRequest?.documentPath == sceneURL.path)
+        #expect(app.store.state.document.pendingCloseRequest?.action == .openScene)
+        #expect(app.store.state.document.pendingCloseRequest?.documentPath == sceneURL.path)
     }
 
     @Test("corrupt scene recovery is quarantined with a diagnostic")
@@ -59,7 +59,7 @@ struct EditorSceneRecoveryTests {
             $0.lastPathComponent.hasPrefix("slot-255.corrupt-") && $0.pathExtension == "json"
         })
         #expect(try Data(contentsOf: quarantinedURL) == corruptPayload)
-        #expect(app.store.state.consoleEntries.contains {
+        #expect(app.store.state.output.consoleEntries.contains {
             $0.message == "Failed to restore autosaved scene"
                 && $0.severity == .warning
                 && ($0.detail?.contains(quarantinedURL.lastPathComponent) ?? false)
@@ -80,7 +80,7 @@ struct EditorSceneRecoveryTests {
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
 
         #expect(!FileManager.default.fileExists(atPath: memoryURL.path))
-        #expect(app.store.state.consoleEntries.contains {
+        #expect(app.store.state.output.consoleEntries.contains {
             $0.message == "Recovered AI context memory storage" && $0.severity == .warning
         })
 
@@ -137,13 +137,13 @@ struct EditorSceneRecoveryTests {
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
         let restoredManifest = try #require(app.restoreProjectSceneAtLaunch())
-        let restoredID = try #require(app.store.state.selectedEntityID)
+        let restoredID = try #require(app.store.state.selection.selectedEntityID)
         let autosaveURL = GameSaveDocument.url(slot: GameSaveDocument.autoSaveSlot,
                                                projectDirectory: project.path)
 
         #expect(restoredManifest.selectedEntityID != nil)
         #expect(app.scene.entityLocalTranslation(restoredID) == recoveredPosition)
-        #expect(app.store.state.sceneRecoveryPending)
+        #expect(app.store.state.document.sceneRecoveryPending)
         #expect(FileManager.default.fileExists(atPath: autosaveURL.path))
         #expect(!FileManager.default.fileExists(atPath: snapshotURL.path))
     }
@@ -192,7 +192,7 @@ struct EditorSceneRecoveryTests {
         let restored = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { restored.shutdown() }
         let recoveredManifest = restored.restoreProjectSceneAtLaunch()
-        let restoredID = try #require(restored.store.state.selectedEntityID)
+        let restoredID = try #require(restored.store.state.selection.selectedEntityID)
         #expect(recoveredManifest != nil)
         #expect(restored.scene.entityLocalTranslation(restoredID) == edited)
         #expect(restored.hasUnsavedSceneChanges == true)

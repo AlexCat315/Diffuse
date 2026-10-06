@@ -11,6 +11,7 @@ struct EditorRootView: View {
     let controller: WorkspaceController
     let registry: PanelRegistry
     @State private var windowWidth: Float = 1280
+    @State private var windowHeight: Float = 720
 
     var body: some View {
         StoreScope(app.store) { store in
@@ -84,12 +85,11 @@ struct EditorRootView: View {
                            height: .percent(100),
                            minWidth: 0,
                            minHeight: 0)
-                    .modifier(EditorWindowWidthObserver(width: $windowWidth))
+                    .modifier(EditorWindowSizeObserver(width: $windowWidth, height: $windowHeight))
                 } portals: {
                     PortalHost()
-                    AnimatedVisibility(isVisible: store.commandPaletteVisible, transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
-                        CommandPaletteOverlay(app: app, controller: controller, registry: registry)
-                    }
+                    CommandPalettePresentation(app: app, controller: controller, registry: registry,
+                                               availableHeight: windowHeight)
                     if let pendingClose = store.pendingCloseRequest {
                         UnsavedChangesDialog(app: app, request: pendingClose)
                     }
@@ -99,12 +99,15 @@ struct EditorRootView: View {
     }
 }
 
-private struct EditorWindowWidthObserver: ViewModifier {
+private struct EditorWindowSizeObserver: ViewModifier {
     let width: Binding<Float>
+    let height: Binding<Float>
     func apply(node: Node) {
         node.layoutDidUpdate = { node in
             let next = Float(node.frame.width)
             if next > 0, abs(width.wrappedValue - next) > 1 { width.wrappedValue = next }
+            let nextHeight = Float(node.frame.height)
+            if nextHeight > 0, abs(height.wrappedValue - nextHeight) > 1 { height.wrappedValue = nextHeight }
         }
     }
 }
@@ -124,7 +127,7 @@ private struct EditorCallbacks {
             let s = app.store
             return EditorShortcutHandler.handle(
                 key,
-                playbackState: s.state.playbackState,
+                playbackState: s.state.timing.playbackState,
                 commandPaletteVisible: commandPaletteVisible,
                 setPlaybackState: { next in
                     EditorCommandDispatcher.handle(.setPlaybackState(next),

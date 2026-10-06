@@ -29,7 +29,9 @@ struct EditorAssetFileWorkflowTests {
         try write("{\"assetID\":\"Content/old/model.gltf\",\"absolutePath\":\"\(source.path)\"}", to: scene)
         let script = root.appendingPathComponent("Scripts/Spawn.swift")
         try write(#"let asset = "Content/old/model.gltf""#, to: script)
-        #expect(Set(EditorAssetFileWorkflow.referenceFiles(to: source, within: root)) == [scene, script])
+        let references = EditorAssetFileWorkflow.referenceFiles(to: source, within: root)
+            .map { $0.resolvingSymlinksInPath() }
+        #expect(Set(references) == Set([scene, script].map { $0.resolvingSymlinksInPath() }))
 
         _ = try EditorAssetFileWorkflow.relocate(from: source, to: destination, within: root)
 

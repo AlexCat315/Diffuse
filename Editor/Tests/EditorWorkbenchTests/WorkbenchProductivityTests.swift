@@ -13,7 +13,9 @@ struct WorkbenchProductivityTests {
         let scene = EditorSceneAdapter(seedPreviewScene: false)
         let entity = try #require(scene.spawnEntity(template: .pointLight))
         #expect(scene.addComponent(.animationPlayer, to: entity))
-        let store = EditorStore(state: EditorState(selectedEntityID: entity))
+        let store = EditorStore(state: EditorState {
+            $0.selection.selectedEntityID = entity
+        })
         store.dispatch(.setInspectorSceneSettingsVisible(true))
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: InspectorPanel(store: store, scene: scene,

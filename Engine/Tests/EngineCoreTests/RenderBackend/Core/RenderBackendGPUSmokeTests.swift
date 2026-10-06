@@ -644,11 +644,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 130,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 130
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let resources = try #require(try renderer.ensureParticleSimulationResources(for: plan))
         #expect(resources.capacity >= plan.particleCapacity)
         #expect(resources.workgroupSize == 64)
@@ -674,11 +674,11 @@ struct RenderBackendGPUSmokeTests {
         #expect(emitterBResources.capacity == emitterAResources.capacity)
         #expect(emitterBResources.workgroupSize == emitterAResources.workgroupSize)
 
-        let largerWorkgroupPlan = ParticleEmitter(
-            maxParticles: 130,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 128
-        ).gpuSimulationPlan
+        let largerWorkgroupPlan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 130
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 128
+        }).gpuSimulationPlan
         let largerWorkgroupResources = try #require(
             try renderer.ensureParticleSimulationResources(for: largerWorkgroupPlan)
         )
@@ -692,7 +692,9 @@ struct RenderBackendGPUSmokeTests {
         #expect(renderer.particleSimulationResourcesByEmitter[emitterA.rawValue]?.workgroupSize == 128)
         #expect(renderer.particleSimulationResourcesByEmitter[emitterB.rawValue]?.workgroupSize == 64)
 
-        let cpuPlan = ParticleEmitter(simulationBackend: .cpu).gpuSimulationPlan
+        let cpuPlan = ParticleEmitter(settings: .init {
+            $0.gpuSimulation.simulationBackend = .cpu
+        }).gpuSimulationPlan
         #expect(try renderer.ensureParticleSimulationResources(for: cpuPlan) == nil)
     }
 
@@ -720,12 +722,12 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            collisionMode: .worldPlane,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.collision.collisionMode = .worldPlane
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let particle = Particle(
             position: SIMD3<Float>(0, 0, 0),
             velocity: SIMD3<Float>(1, 2, 3),
@@ -877,11 +879,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 2,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 2
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let existing = Particle(
             position: SIMD3<Float>(0, 0, 0),
             velocity: .zero,
@@ -996,11 +998,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let aliveA = Particle(
             position: SIMD3<Float>(1, 0, 0),
             velocity: SIMD3<Float>(0, 1, 0),
@@ -1127,11 +1129,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let emitter = EntityID(index: 77, generation: 1)
         let staleCPUState = Particle(
             position: SIMD3<Float>(0, 0, 0),
@@ -1222,11 +1224,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let emitter = EntityID(index: 78, generation: 1)
         let resident = Particle(
             position: SIMD3<Float>(1, 0, 0),
@@ -1329,11 +1331,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let particle = Particle(
             position: SIMD3<Float>(0, 0, 0),
             velocity: SIMD3<Float>(2, 0, 0),
@@ -1421,11 +1423,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let particle = Particle(
             position: .zero,
             velocity: .zero,
@@ -1500,11 +1502,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let ruleParticle = Particle(
             position: .zero,
             velocity: .zero,
@@ -1604,11 +1606,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let particle = Particle(
             position: .zero,
             velocity: .zero,
@@ -1691,11 +1693,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 1,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 1
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let scene = RenderScene(
             camera: .fallbackPerspective,
             particleSimulationBatches: [
@@ -1767,11 +1769,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let particles = (0..<4).map { index in
             Particle(
                 position: SIMD3<Float>(Float(index), 0, 0),
@@ -1849,11 +1851,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let particles = (0..<4).map { index in
             Particle(
                 position: SIMD3<Float>(Float(index), 0, 0),
@@ -1926,11 +1928,11 @@ struct RenderBackendGPUSmokeTests {
 
         renderer.initialize()
 
-        let plan = ParticleEmitter(
-            maxParticles: 4,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 4
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         let particles = [
             Particle(
                 position: SIMD3<Float>(0, 0, -3),
@@ -2226,8 +2228,10 @@ struct RenderBackendGPUSmokeTests {
         renderer.initialize()
 
         let emitter = EntityID(index: 9, generation: 1)
-        let plan = ParticleEmitter(maxParticles: 1,
-                                   simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 1
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        }).gpuSimulationPlan
         let scene = RenderScene(
             camera: RenderCamera(
                 eye: SIMD3<Float>(0, 0, 3),
@@ -2316,22 +2320,24 @@ struct RenderBackendGPUSmokeTests {
 
         var runtime = SceneRuntime()
         let emitterEntity = runtime.createEntity()
-        var emitter = ParticleEmitter(isEmitting: false,
-                                      emissionRate: 0,
-                                      maxParticles: 6,
-                                      lifetime: 10,
-                                      subEmitterTrigger: .death,
-                                      subEmitterBurstCount: 2,
-                                      subEmitterMaxDepth: 2,
-                                      subEmitterLifetime: 2,
-                                      subEmitterStartVelocity: SIMD3<Float>(0, 1, 0),
-                                      subEmitterVelocityRandomness: .zero,
-                                      subEmitterStartSize: 0.5,
-                                      subEmitterEndSize: 0.25,
-                                      subEmitterStartColor: SIMD4<Float>(1, 0, 0, 1),
-                                      subEmitterEndColor: SIMD4<Float>(1, 0, 0, 0.25),
-                                      gravity: .zero,
-                                      simulationBackend: .gpuIfSupported)
+        var emitter = ParticleEmitter(settings: .init {
+            $0.emission.isEmitting = false
+            $0.emission.emissionRate = 0
+            $0.emission.maxParticles = 6
+            $0.appearance.lifetime = 10
+            $0.subEmitters.legacyTrigger = .death
+            $0.subEmitters.legacyBurstCount = 2
+            $0.subEmitters.legacyMaxDepth = 2
+            $0.subEmitters.legacyLifetime = 2
+            $0.subEmitters.legacyStartVelocity = SIMD3<Float>(0, 1, 0)
+            $0.subEmitters.legacyVelocityRandomness = .zero
+            $0.subEmitters.legacyStartSize = 0.5
+            $0.subEmitters.legacyEndSize = 0.25
+            $0.subEmitters.legacyStartColor = SIMD4<Float>(1, 0, 0, 1)
+            $0.subEmitters.legacyEndColor = SIMD4<Float>(1, 0, 0, 0.25)
+            $0.forces.gravity = .zero
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+        })
         #expect(emitter.gpuSimulationPlan.usesGPU)
         _ = runtime.setComponent(emitter, for: emitterEntity)
 
@@ -2968,11 +2974,11 @@ struct RenderBackendGPUSmokeTests {
     }
 
     private static func makeParticleSimulationScene() -> RenderScene {
-        let plan = ParticleEmitter(
-            maxParticles: 3,
-            simulationBackend: .gpuIfSupported,
-            gpuSimulationWorkgroupSize: 64
-        ).gpuSimulationPlan
+        let plan = ParticleEmitter(settings: .init {
+            $0.emission.maxParticles = 3
+            $0.gpuSimulation.simulationBackend = .gpuIfSupported
+            $0.gpuSimulation.workgroupSize = 64
+        }).gpuSimulationPlan
         return RenderScene(
             camera: RenderCamera(
                 eye: SIMD3<Float>(0, 0, 3.2),

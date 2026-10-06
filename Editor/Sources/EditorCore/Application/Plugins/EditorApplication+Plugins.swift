@@ -239,11 +239,11 @@ extension EditorApplication {
         do {
             try await disablePlugin(id: pluginID)
             publishPluginManagement(phase: .idle,
-                                    candidate: store.state.pluginManagement.candidate,
+                                    candidate: store.state.assistant.pluginManagement.candidate,
                                     message: "Disabled plugin '\(pluginID)'.")
         } catch {
             publishPluginManagement(phase: .failed,
-                                    candidate: store.state.pluginManagement.candidate,
+                                    candidate: store.state.assistant.pluginManagement.candidate,
                                     message: Self.pluginManagementErrorMessage(error))
         }
     }
@@ -260,7 +260,7 @@ extension EditorApplication {
                                     message: "Revoked authorization for plugin '\(pluginID)'.")
         } catch {
             publishPluginManagement(phase: .failed,
-                                    candidate: store.state.pluginManagement.candidate,
+                                    candidate: store.state.assistant.pluginManagement.candidate,
                                     message: Self.pluginManagementErrorMessage(error))
         }
     }
@@ -332,7 +332,7 @@ extension EditorApplication {
         await pendingAISetupTask?.value
         pendingAISetupTask = nil
         pluginCapabilityExecutor = executor
-        let settings = store.state.capabilitySettings
+        let settings = store.state.assistant.capabilitySettings
         intentCoordinator.configureCapabilityPlanner(
             Self.makeCapabilityInvocationPlanner(for: settings,
                                                  pluginCapabilityExecutor: executor)
@@ -351,7 +351,7 @@ extension EditorApplication {
         await oldSession?.cancelActiveRun()
         let world = await aiWorldContext.snapshot()
         let nextSession = Self.makeSession(
-            for: store.state.aiSettings,
+            for: store.state.assistant.aiSettings,
             initialWorldView: world,
             pluginCapabilityExecutor: executor,
             pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider()
@@ -362,7 +362,7 @@ extension EditorApplication {
             await nextSession.setObservationBus(observationBus)
             await nextSession.setContextMemory(contextMemoryStore)
             await nextSession.setWorkflowContext(Self.workflowContext(
-                for: store.state.workspaceMode,
+                for: store.state.workspace.mode,
                 scriptEntries: scene.scriptCatalogEntries
             ))
         }
@@ -409,14 +409,14 @@ extension EditorApplication {
         if imports.contains(.sceneQuery) {
             let snapshot = SceneSemanticEncoder().encode(
                 scene.scene,
-                selectedEntityID: store.state.selectedEntityID,
-                workspaceMode: store.state.workspaceMode.rawValue,
+                selectedEntityID: store.state.selection.selectedEntityID,
+                workspaceMode: store.state.workspace.mode.rawValue,
                 localeIdentifier: nil
             )
             scenePayload = try encoder.encode(snapshot)
         }
         if imports.contains(.selectionQuery) {
-            let selected = store.state.selectedEntityID.map { ["scene:\($0)"] } ?? []
+            let selected = store.state.selection.selectedEntityID.map { ["scene:\($0)"] } ?? []
             selectionPayload = try JSONSerialization.data(
                 withJSONObject: ["selected": selected],
                 options: [.sortedKeys]

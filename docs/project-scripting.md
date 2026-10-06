@@ -13,7 +13,7 @@ kind: doc
 
 Guava 场景中的脚本绑定使用稳定字符串 ID，而不是仅在当前进程有效的数字句柄。Editor 和 GuavaPlayer 都会加载项目下的 `Scripts/scripts.json`，运行期间每秒检查一次文件变化；有效变更会替换脚本实例并依次触发旧实例的 `onDestroy` 与新实例的 `onStart`。
 
-不创建配置文件也可以直接在 Inspector 的 **Add Component → Script** 中使用内置脚本。每个绑定可选择脚本、启用或禁用、填写 JSON 参数，并可增删多个绑定。缺失 ID 会在 Inspector 显示为 `Missing script`，同时写入 Editor Console 或 GuavaPlayer 标准错误。
+不创建配置文件也可以直接在 Inspector 的 **Add Component → Script** 中使用内置脚本。每个绑定以独立的行为分组显示，可启用或禁用、打开源码、恢复默认值和移除。点击 **Add Script** 选择要挂载的行为。声明的属性显示为对应类型的控件；原始 JSON 位于折叠的高级参数中。缺失 ID 会在 Inspector 显示为 `Missing script`，同时写入 Editor Console 或 GuavaPlayer 标准错误。
 
 ## 项目目录
 
@@ -75,6 +75,38 @@ struct GameScript: ScriptBehavior {
 Editor 启动及场景重载时会重新编译这些源文件，并将其加入 Inspector 的脚本选择列表。项目必须先在 Scripts 面板中被明确标记为可信，才允许编译和运行原生脚本；项目文件不能自行授予信任。`Scripts/scripts.json` 仍用于声明式 preset 和默认参数。
 
 每个文件定义一个 `GameScript: ScriptBehavior` 类型即可。Editor 会生成动态库入口并为每个实体绑定创建独立实例。Editor 需要能在 `PATH` 中找到 Swift 编译器 `swiftc`。
+
+## 声明可编辑的行为属性
+
+Swift 脚本可以同时遵循 `ScriptAuthoring`，通过静态 `definition` 声明可配置属性。构建并加载后，Inspector 为各绑定生成有类型的表单；数字范围、枚举选项、属性分组和默认值都来自同一份定义。
+
+```swift
+import ScriptRuntime
+
+struct GameScript: ScriptBehavior, ScriptAuthoring {
+  static var definition: ScriptDefinition {
+    ScriptDefinition(properties: [
+      ScriptProperty("speed", label: "Speed", group: "Movement",
+                     defaultValue: .number(5), minimum: 0, maximum: 20),
+      ScriptProperty("mode", label: "Mode", defaultValue: .string("walk"),
+                     options: [ScriptPropertyOption("walk"), ScriptPropertyOption("run")]),
+    ])
+  }
+
+  mutating func onUpdate(_ context: ScriptContext) {
+    let speed = context.floatParameter("speed") ?? 5
+    _ = speed * Float(context.deltaTime)
+  }
+}
+```
+
+默认值依次被项目目录的 `defaultParameters` 和各场景绑定的属性覆盖。场景只保存覆盖值；恢复默认值会清除该绑定的覆盖。定义支持字符串、浮点数、整数、布尔值、三维向量和实体引用。编辑属性沿用场景事务，可以撤销、重做和保存。高级 JSON 中的未知键、错误类型、越界数字或无效枚举会显示参数问题；运行时对无效的已声明属性使用默认值。未声明属性的旧脚本仍可使用高级 JSON，旧场景无需迁移。
+
+属性定义从动态库的独立元数据入口读取，不会为了显示 Inspector 而启动脚本或创建行为实例。尚未构建、源码尚未应用、等待热重载和运行中的状态分别显示。源码入口会定位对应的项目脚本。
+
+原生宿主使用 `runtime.register(behavior: MyBehavior.self, named: "game.my-behavior")` 注册有 authoring 定义的行为；回调工厂可以通过 `register(named:definition:_:)` 显式传入定义。动态库必须包含工厂和属性元数据两个入口；更新引擎后重新构建脚本产物。不声明属性的行为会导出空定义。
+
+CrystalRush 示例公开游戏标题、回合时长、初始生命、启动模式、移动速度和冲刺速度。这些属性参与实际玩法与 HUD；运行时创建的对象归属 Game Controller，并在行为销毁时清理，避免热重载遗留重复场景对象。
 
 ## 导出自定义玩法
 
