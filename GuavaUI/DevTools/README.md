@@ -2,6 +2,10 @@
 
 Minimal standalone client for the in-process `GuavaUIDevTools` WebSocket server.
 
+The server uses SwiftNIO on macOS, Linux and Windows. Protocol dispatch and
+socket transport live in the independent [Portable package](../Portable/README.md).
+The previous Network.framework-only server and non-Apple no-op were removed.
+
 1. Start a GuavaUI app with DevTools enabled:
 
    ```bash
@@ -19,6 +23,18 @@ stable `elementID`, which the host uses to draw a runtime overlay.
 
 Tree, log, timing, and mirror streams are opt-in per connection. Disconnecting
 also releases pressed input and clears the runtime selection overlay.
+
+Frame mirroring currently requires the macOS ImageIO encoder. Linux/Windows
+hosts advertise tree, selection, log, timing and configured state providers,
+and omit the unavailable mirror capability.
+
+For a headless connection test, run
+`swift run --package-path GuavaUI/Portable GuavaUIDevToolsProbe` from the repository
+root. It serves a synthetic diagnostic tree without GPU dependencies.
+
+The [Wasm prototype](../Browser/README.md) embeds the same client and uses
+`browser://guava` over a same-origin MessageChannel. This transport requires the
+Inspector to be embedded in its browser host.
 
 By default DevTools installs the process-wide swift-log tap. If the host already
 calls `LoggingSystem.bootstrap`, configure DevTools with
