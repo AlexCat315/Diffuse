@@ -335,8 +335,11 @@ struct MultiWindowSmokeTests {
     @MainActor
     @Test("Failed frame callbacks keep the window pending for retry")
     func failedFrameCallbacksRetry() throws {
-        let shell = MockShell(eventBatches: [[], [], []])
+        let shell = MockShell(eventBatches: [[], [], [], []])
         let host = SDL3PlatformHost(shellFactory: { shell })
+        var time: Double = 0
+        host.frameClock = { time }
+        shell.onPoll = { time += 0.01 }
 
         let tree = NodeTree()
         let session = try host.openWindow(title: "A", tree: tree)
@@ -352,6 +355,28 @@ struct MultiWindowSmokeTests {
         host.run()
 
         #expect(frameAttempts == 2)
+        #expect(shell.waitTimeouts.contains { $0 > 0.005 })
+    }
+
+    @MainActor
+    @Test("Unavailable surfaces preserve dirty work and throttle repeated attempts")
+    func unavailableSurfaceWaitsForRetryDeadline() throws {
+        let shell = MockShell(eventBatches: [[], [], [], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        var time: Double = 0
+        host.frameClock = { time }
+        shell.onPoll = { time += 0.002 }
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "Occluded", tree: tree)
+        tree.root = Node()
+        tree.root?.markRenderDirty()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        var attempts = 0
+        session.onFrame = { _ in attempts += 1; return false }
+        host.run()
+        #expect(attempts == 1)
+        #expect(tree.hasRenderUpdates)
+        #expect(shell.waitTimeouts.allSatisfy { $0 >= 0.01 })
     }
 
     @MainActor

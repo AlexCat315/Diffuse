@@ -14,7 +14,8 @@ import time
 from playwright.sync_api import sync_playwright
 from verify_inspection import inspection_checks, native_inspection_checks
 from verify_analysis import analysis_checks, native_analysis_checks
-from verify_observation import native_observation_checks
+from verify_observation import native_observation_checks, wasm_observation_checks
+from verify_pixels import wait_pixels
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -32,30 +33,12 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
     if renderer == "webgpu":
         assert page.evaluate("guavaDebug.backend") == "webgpu"
     # A working API alone does not prove that any geometry was drawn.
-    pixel_check = """() => {
-        const gpu = guavaDebug.backend === 'webgpu';
-        const source = document.querySelector(gpu ? '#gpu' : '#fallback');
-        const canvas = document.createElement('canvas');
-        canvas.width=source.width; canvas.height=source.height;
-        const context=canvas.getContext('2d'); context.drawImage(source,0,0);
-        const ratio=source.width/guavaDebug.snapshot.width;
-        const p=context.getImageData(Math.round(60*ratio),Math.round(260*ratio),1,1).data;
-        return p[3]>200 && p[2]>p[0]+50;
-    }"""
-    page.wait_for_function(pixel_check, timeout=10000)
+    wait_pixels(page, [60, 260, 1, 1], lambda pixels: any(a > 200 and b > r + 50 for r, g, b, a in pixels))
     assert page.evaluate("guavaDebug.snapshot.fontCount") == 5
     # Check ink inside the title. This catches lost initial atlas uploads and
     # prevents the old Canvas system-font overlay from satisfying the test.
     assert page.locator("#labels").count() == 0
-    page.wait_for_function("""() => {
-        const source=document.querySelector(guavaDebug.backend==='webgpu'?'#gpu':'#fallback');
-        const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
-        const c=canvas.getContext('2d');c.drawImage(source,0,0);
-        const ratio=source.width/guavaDebug.snapshot.width;
-        const p=c.getImageData(Math.ceil(24*ratio),Math.ceil(24*ratio),Math.floor(400*ratio),Math.floor(36*ratio)).data;
-        let ink=0;for(let i=0;i<p.length;i+=4)if(p[i]<80&&p[i+1]<100&&p[i+2]<140&&p[i+3]>200)ink++;
-        return ink>100;
-    }""", timeout=10000)
+    wait_pixels(page, [24, 24, 400, 36], lambda pixels: sum(r < 80 and g < 100 and b < 140 and a > 200 for r, g, b, a in pixels) > 100)
     page.locator("#surface").click(position={"x": 60, "y": 260})
     page.wait_for_function("guavaDebug.snapshot.count === 1")
     page.locator("#increment").click()
@@ -148,20 +131,13 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
             assert label["clusters"][0] > label["clusters"][-1], label
         if text == "कि":
             assert len(label["glyphs"]) == 2 and set(label["clusters"]) == {0}, label
-        page.wait_for_function("""text => {
-            const label=guavaDebug.snapshot.labels.find(l=>l.text===text);
-            const source=document.querySelector(guavaDebug.backend==='webgpu'?'#gpu':'#fallback');
-            const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
-            const c=canvas.getContext('2d');c.drawImage(source,0,0);
-            const ratio=source.width/guavaDebug.snapshot.width;
-            const p=c.getImageData(Math.round(label.x*ratio),Math.round(label.y*ratio),Math.ceil(label.width*ratio),Math.ceil(label.size*1.4*ratio)).data;
-            let ink=0;for(let i=0;i<p.length;i+=4)if(p[i]>180&&p[i+1]>180&&p[i+2]>180&&p[i+3]>200)ink++;
-            return ink>8;
-        }""", arg=text, timeout=10000)
+        wait_pixels(page, [label["x"], label["y"], label["width"], label["size"] * 1.4],
+                    lambda pixels: sum(r > 180 and g > 180 and b > 180 and a > 200 for r, g, b, a in pixels) > 8)
     page.evaluate("guavaDebug.request({type:'state.restore',id:95,payload:{count:'2',dark:'true',note:'你好中文'}})")
     page.wait_for_function("guavaDebug.snapshot.note === '你好中文'")
     analysis_checks(page, inspector)
     inspection_checks(page, inspector)
+    wasm_observation_checks(page, inspector)
     inspector.locator("#disconnect").click()
     inspector.locator("#connect").click()
     inspector.locator("#status").filter(has_text="Connected").wait_for()
@@ -212,12 +188,14 @@ def main():
     args.add_argument("--require-hardware-gpu", action="store_true", help="Also reject software/fallback adapters")
     args.add_argument("--skip-native", action="store_true")
     args.add_argument("--native-only", action="store_true", help="Verify the real WebSocket Inspector without a Wasm SDK or GPU")
+    args.add_argument("--dist", default="dist", help="Browser build directory, relative to Browser/ or absolute")
     args.add_argument("--screenshot")
     options = args.parse_args()
     root = Path(__file__).resolve().parent
-    if not options.native_only and not (root / "dist/guava.wasm").is_file():
+    dist = (root / options.dist).resolve()
+    if not options.native_only and not (dist / "guava.wasm").is_file():
         raise SystemExit("Run npm ci and npm run build first")
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(root.parent if options.native_only else root / "dist")))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(root.parent if options.native_only else dist)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     native = None
     with tempfile.TemporaryFile(mode="w+") as log:

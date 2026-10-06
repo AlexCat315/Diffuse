@@ -18,6 +18,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--endpoint", default="ws://127.0.0.1:9229/")
     parser.add_argument("--screenshot")
+    parser.add_argument("--require-presented", action="store_true", help="Require primary window submission; unlock and show the native window first")
     options = parser.parse_args()
     client = Path(__file__).resolve().parent.parent / "DevTools"
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(client)))
@@ -27,6 +28,7 @@ def main():
             browser = playwright.chromium.launch(headless=True, args=["--no-sandbox", "--use-angle=swiftshader"])
             page = browser.new_page(viewport={"width": 1600, "height": 1000})
             errors = []
+            baseline = None
             page.on("pageerror", lambda error: errors.append(str(error)))
             try:
                 page.goto(f"http://127.0.0.1:{server.server_port}/")
@@ -36,7 +38,16 @@ def main():
                 assert page.evaluate("observation.registered.map(s=>s.name).sort().join(',')") == "count,dark"
                 page.locator("#registeredStates label").filter(has_text="count").locator("input").check()
                 page.wait_for_function("observation.values.size === 1")
+                page.wait_for_function("state.timingFrames.some(f=>typeof f.presented==='boolean')")
+                timing = json.loads(page.locator("#timing").inner_text())
+                assert timing["presentation"] in ("submitted", "skipped"), timing
+                assert "cpuThroughputFPS" in timing and "fps" not in timing, timing
                 initial = page.evaluate("Number([...observation.values.values()][0].summary)")
+                page.locator("#captureState").click()
+                page.wait_for_function("document.querySelector('#stateSnapshot').value.includes('count')")
+                baseline = json.loads(page.locator("#stateSnapshot").input_value())
+                if options.require_presented:
+                    page.wait_for_function("state.timingFrames.some(f=>f.presented===true)", timeout=15000)
                 page.locator("#startTimeline").click()
                 page.wait_for_function("observation.recording")
                 page.locator("#stateSnapshot").fill(json.dumps({"count": str(initial + 1), "dark": "false", "note": ""}))
@@ -53,6 +64,14 @@ def main():
                 page.wait_for_function("['component','recomposition','layout','draw'].every(p=>observation.events.some(e=>e.phase===p))")
                 page.locator("#startMirror").click()
                 page.wait_for_function("state.mirrorFrame != null && document.querySelector('#mirrorImage').naturalWidth > 0", timeout=15000)
+                page.wait_for_function("""() => {
+                    const image=document.querySelector('#mirrorImage'), frame=demoNode('counter.increment').absoluteFrame;
+                    const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+                    const context=canvas.getContext('2d');context.drawImage(image,0,0);
+                    const rx=image.naturalWidth/state.mirrorFrame.logicalWidth, ry=image.naturalHeight/state.mirrorFrame.logicalHeight;
+                    const pixel=context.getImageData(Math.round((frame.x+12)*rx),Math.round((frame.y+frame.h/2)*ry),1,1).data;
+                    return pixel[3]>200 && pixel[2]>150 && pixel[2]>pixel[0]+50;
+                }""", timeout=15000)
                 frame = page.evaluate("demoNode('counter.increment').absoluteFrame")
                 mirror = page.locator("#mirrorImage").bounding_box()
                 logical = page.evaluate("({w:state.mirrorFrame.logicalWidth,h:state.mirrorFrame.logicalHeight})")
@@ -63,8 +82,12 @@ def main():
                     page.locator("#startTimeline").scroll_into_view_if_needed()
                     page.screenshot(path=options.screenshot)
                 assert not errors, errors
-                print("Native Demo: explicit fields, stable watch controls, live State, actual Yoga/draw/commit spans, Metal mirror pixels and remote pointer input passed", flush=True)
+                print("Native Demo: explicit fields, live State, presentation status, CPU throughput, actual Yoga/draw/commit spans, Metal mirror pixels and remote pointer input passed", flush=True)
             finally:
+                if baseline is not None and page.evaluate("state.connected"):
+                    page.locator("#stateSnapshot").fill(json.dumps(baseline))
+                    page.locator("#restoreState").click()
+                    page.wait_for_function("count=>[...observation.values.values()][0]?.summary===count", arg=baseline["count"])
                 page.evaluate("if(state.connected) {send('mirror.stop');send('timeline.unsubscribe');disconnect();}")
                 browser.close()
     finally:

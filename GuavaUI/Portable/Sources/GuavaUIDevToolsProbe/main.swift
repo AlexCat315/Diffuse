@@ -6,7 +6,9 @@ import GuavaUIComposeCore
 
 private struct ProbeComponent: View {
     @State(expose: true) var count = 0
-    var body: some View { EmptyView() }
+    var body: some View {
+        Box { EmptyView() }.debugName("probe.value.\(count)")
+    }
 }
 
 /// Headless diagnostic host: exercises the real server without GPU dependencies.

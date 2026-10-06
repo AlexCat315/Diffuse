@@ -671,6 +671,17 @@ public final class AppRuntime {
                 heightPx: drawableH,
                 logical: (Float(logicalW), Float(logicalH))
             )
+            let frameEnd = TimingTrace.now()
+            devTools?.timing.record(
+                layoutMs: (layoutEnd - layoutStart) * 1000,
+                drawMs: (drawEnd - layoutEnd) * 1000,
+                presentMs: 0,
+                totalMs: (frameEnd - frameStart) * 1000,
+                nodeCount: countNodes(root),
+                batchCount: drawList.batches.count,
+                presented: false
+            )
+            devTools?.notifyFrameFinished()
             host.requestDisplay()
             return false
         }
