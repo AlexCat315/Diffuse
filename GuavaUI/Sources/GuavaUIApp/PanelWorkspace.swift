@@ -8,15 +8,17 @@ import GuavaUIWorkspace
 public struct PanelWorkspace: View {
     public let controller: WorkspaceController
     public let registry: PanelRegistry
+    public let compact: Bool
 
     public init(controller: WorkspaceController,
-                registry: PanelRegistry) {
+                registry: PanelRegistry, compact: Bool = false) {
         self.controller = controller
         self.registry = registry
+        self.compact = compact
     }
 
     public var body: some View {
-        WorkspaceView(controller: controller) { [registry] key in
+        WorkspaceView(controller: controller, compact: compact) { [registry] key in
             registry.make(key)
         }
     }

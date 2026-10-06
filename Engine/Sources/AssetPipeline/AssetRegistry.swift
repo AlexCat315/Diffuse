@@ -113,6 +113,13 @@ public final class AssetRegistry: @unchecked Sendable {
 
     public init() {}
 
+    /// Preserve GPU mesh slots when a project file is renamed or moved.
+    public func relocateAssetPath(from oldPath: String, to newPath: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        if let index = pathIndex.removeValue(forKey: oldPath) { pathIndex[newPath] = index }
+    }
+
     @discardableResult
     public func loadProject(at rootPath: String,
                             preferredMeshIndices: [String: Int] = [:]) throws -> [AssetRegistryEntry] {

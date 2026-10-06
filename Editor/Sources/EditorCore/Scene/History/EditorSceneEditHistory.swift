@@ -18,6 +18,15 @@ final class EditorSceneEditHistory {
     var canUndo: Bool { !undoScenes.isEmpty }
     var canRedo: Bool { !redoScenes.isEmpty }
 
+    /// A file relocation changes identities in every snapshot. Undoing a
+    /// transform must not bring back a resource path that no longer exists.
+    func remapScenes(_ update: (inout SceneRuntime) -> Void) {
+        if currentScene != nil { update(&currentScene!) }
+        for index in undoScenes.indices { update(&undoScenes[index]) }
+        for index in redoScenes.indices { update(&redoScenes[index]) }
+        if groupStartScene != nil { update(&groupStartScene!) }
+    }
+
     func recordRevisionChange(to scene: SceneRuntime, recordHistory: Bool) {
         if recordHistory, groupDepth == 0, let previous = currentScene {
             record(previous, replacingWith: scene)

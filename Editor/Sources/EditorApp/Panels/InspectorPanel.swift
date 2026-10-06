@@ -11,15 +11,17 @@ import SceneRuntime
 struct InspectorPanel: View {
     let store: EditorStore
     let scene: EditorSceneAdapter
+    private let sectionFilter: Set<String>?
     private let sessionState: InspectorPanelSessionState
     @State private var searchText: String
     @State private var expandedAdvancedFieldIDs: Set<String>
-    @State private var showsSceneSettings = false
 
-    init(store: EditorStore, scene: EditorSceneAdapter) {
+    init(store: EditorStore, scene: EditorSceneAdapter, sectionFilter: Set<String>? = nil) {
         self.store = store
         self.scene = scene
-        let sessionState = InspectorPanelSessionRegistry.state(for: store)
+        self.sectionFilter = sectionFilter
+        let sessionState = InspectorPanelSessionRegistry.state(for: store,
+            scope: sectionFilter?.sorted().joined(separator: ",") ?? "inspector")
         self.sessionState = sessionState
         _searchText = State(wrappedValue: sessionState.searchText)
         _expandedAdvancedFieldIDs = State(wrappedValue: sessionState.expandedAdvancedFieldIDs)
@@ -30,12 +32,15 @@ struct InspectorPanel: View {
             let _ = store.sceneRevision
             let _ = store.uiRefreshRevision
             let selectedEntityID = store.selectedEntityID
-            let selectedEntityIDs = store.selectedEntityIDs
+            let selectedEntityIDs = store.selectedEntityIDs.isEmpty
+                ? Set(selectedEntityID.map { [$0] } ?? []) : store.selectedEntityIDs
             let entity = scene.entitySummary(id: selectedEntityID)
-            let allSections = scene.inspectorSections(for: selectedEntityID)
+            let showingSceneSettings = sectionFilter == nil && (store.inspectorSceneSettingsVisible || entity == nil)
+            let allSections = showingSceneSettings ? scene.sceneSettingsSections()
+                : scene.inspectorSections(for: selectedEntityIDs, primaryID: selectedEntityID)
             let globalIDs: Set<String> = ["physics-settings", "particle-scalability"]
             let sections = allSections.filter {
-                globalIDs.contains($0.id) == showsSceneSettings
+                globalIDs.contains($0.id) == showingSceneSettings && (sectionFilter?.contains($0.id) ?? true)
             }.map(InspectorSectionPresentation.presentedSection).sorted {
                 Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
             }
@@ -48,8 +53,8 @@ struct InspectorPanel: View {
                 during: store.playbackState
             )
             let canEditSelection = isAuthoringEnabled
-                && selectedEntityIDs.count == 1
-                && selectedEntityID.map { !scene.isEntityLocked($0) } == true
+                && (showingSceneSettings || (!selectedEntityIDs.isEmpty
+                    && selectedEntityIDs.allSatisfy { !scene.isEntityLocked($0) }))
             let searchBinding = Binding<String>(
                 get: { searchText },
                 set: updateSearchText
@@ -62,16 +67,23 @@ struct InspectorPanel: View {
                                               selectionCount: selectedEntityIDs.count,
                                               isLocked: scene.isEntityLocked(entity.id),
                                               isAuthoringEnabled: isAuthoringEnabled)
+                }
 
+                if sectionFilter == nil {
                     Row(alignment: .center, spacing: 0) {
-                        Button(L("Entity"), isSelected: !showsSceneSettings) { showsSceneSettings = false }
+                        Button(L("Entity"), isEnabled: entity != nil, isSelected: !showingSceneSettings) {
+                            store.dispatch(.setInspectorSceneSettingsVisible(false))
+                        }
                             .buttonStyle(.tab)
-                        Button(L("Scene Settings"), isSelected: showsSceneSettings) { showsSceneSettings = true }
+                        Button(L("Scene Settings"), isSelected: showingSceneSettings) {
+                            store.dispatch(.setInspectorSceneSettingsVisible(true))
+                        }
                             .buttonStyle(.tab)
                         Spacer(minLength: 0)
                     }
 
                     Divider()
+                }
 
                     EditorPanelSearchBar(
                         L("Search Properties"),
@@ -94,7 +106,9 @@ struct InspectorPanel: View {
                     if filteredSections.isEmpty {
                         EditorPanelEmptyState(
                             L("No matching properties"),
-                            detail: trimmedSearchText.isEmpty ? nil : "\"\(trimmedSearchText)\""
+                            detail: trimmedSearchText.isEmpty
+                                ? (sectionFilter == nil ? nil : L("Select an entity with an animation component."))
+                                : "\"\(trimmedSearchText)\""
                         )
                         .flex()
                     } else {
@@ -102,7 +116,8 @@ struct InspectorPanel: View {
                                                       collapsedIDs: trimmedSearchText.isEmpty
                                                         ? collapsedIDs
                                                         : [],
-                                                      entityID: selectedEntityID,
+                                                      identity: showingSceneSettings ? "scene"
+                                                        : selectedEntityIDs.sorted().map(String.init).joined(separator: ","),
                                                       isEditable: canEditSelection),
                                      labelWidth: 84,
                                      minValueWidth: 132,
@@ -118,17 +133,17 @@ struct InspectorPanel: View {
                         })
                             .flex()
                     }
+                if let entity, !showingSceneSettings, sectionFilter == nil {
                     Divider()
                     ComponentActionsBar(store: store,
                                         scene: scene,
                                         entityIDs: selectedEntityIDs.isEmpty ? [entity.id] : selectedEntityIDs,
-                                        isAuthoringEnabled: isAuthoringEnabled && !showsSceneSettings)
-                } else {
-                    EditorPanelEmptyState(
-                        L("No selection"),
-                        detail: L("Select an entity in Hierarchy to inspect SceneRuntime components.")
-                    )
-                    .flex()
+                                        isAuthoringEnabled: isAuthoringEnabled)
+                }
+                if let entity, sectionFilter != nil, !scene.componentKinds(on: entity.id).contains(.animationPlayer) {
+                    Button(L("Add Animation Player"), isEnabled: canEditSelection) {
+                        _ = scene.addComponent(.animationPlayer, to: selectedEntityIDs.isEmpty ? [entity.id] : selectedEntityIDs)
+                    }.buttonStyle(.ghost).padding(6)
                 }
             }
             .frame(minWidth: 0, minHeight: 0)
@@ -214,7 +229,7 @@ struct InspectorPanel: View {
                 }
 
                 if selectionCount > 1 {
-                    Text(L("Properties show the primary selection read-only; component actions apply to all selected entities."))
+                    Text(L("Edit common properties for all selected entities. Different values show Mixed value."))
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                 }
@@ -260,6 +275,7 @@ struct InspectorPanel: View {
         let minValue: Float?
         let maxValue: Float?
         let step: Float?
+        var isMixed = false
 
         var body: some View {
             NumberField(value: binding,
@@ -268,7 +284,8 @@ struct InspectorPanel: View {
                         minValue: minValue,
                         maxValue: maxValue,
                         step: step,
-                        showsStepper: false)
+                        showsStepper: false,
+                        mixedValueLabel: isMixed ? L("Mixed value") : nil)
                 .frame(minWidth: 96)
                 .flex()
         }
@@ -277,11 +294,13 @@ struct InspectorPanel: View {
     private struct InspectorTextValue: View {
         let identity: String
         let binding: Binding<String>
+        var isMixed = false
 
         var body: some View {
             // Draft-while-editing: model normalization (empty entity name →
             // fallback, clip lookups) must not rewrite the text mid-edit.
-            CommitOnBlurTextField(identity: identity, text: binding, size: .small)
+            CommitOnBlurTextField(identity: identity, text: binding, size: .small,
+                                 mixedValueLabel: isMixed ? L("Mixed value") : nil)
                 .flex()
                 .clipped()
         }
@@ -342,9 +361,11 @@ struct InspectorPanel: View {
         let x: Binding<Float>
         let y: Binding<Float>
         let z: Binding<Float>
+        var mixedAxes: Set<String> = []
 
         var body: some View {
-            Vec3Field(x: x, y: y, z: z, decimals: 2, size: .small)
+            Vec3Field(x: x, y: y, z: z, decimals: 2, size: .small,
+                      mixedAxes: mixedAxes, mixedValueLabel: L("Mixed value"))
                 .flex(1, shrink: 1, basis: 0)
                 .clipped()
         }
@@ -513,15 +534,12 @@ struct InspectorPanel: View {
 
     private func propertySections(_ sections: [EditorInspectorSection],
                                   collapsedIDs: Set<String>,
-                                  entityID: UInt64?,
+                                  identity: String,
                                   isEditable: Bool) -> [PropertyGridSection] {
         func row(for field: EditorInspectorField, sectionID: String) -> PropertyGridRow {
             let isAdvanced = field.presentation == .advanced
             let fieldID = "\(sectionID)/\(field.id)"
-            let value = isEditable
-                ? AnyView(fieldView(field.value,
-                                    identity: "\(entityID.map(String.init) ?? "none")/\(fieldID)"))
-                : AnyView(InspectorReadOnlyValue(text: field.value.readOnlyDescription))
+            let value = propertyValue(field, identity: "\(identity)/\(fieldID)", isEditable: isEditable)
             let expansion = Binding<Bool>(
                 get: { !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     || expandedAdvancedFieldIDs.contains(fieldID) },
@@ -569,13 +587,62 @@ struct InspectorPanel: View {
         }
     }
 
+    private func propertyValue(_ field: EditorInspectorField, identity: String,
+                               isEditable: Bool) -> AnyView {
+        guard isEditable else {
+            return AnyView(InspectorReadOnlyValue(text: field.isMixed
+                ? L("Mixed value") : field.value.readOnlyDescription))
+        }
+        switch field.value {
+        case .text, .number, .constrainedNumber, .vector3, .readOnly:
+            return AnyView(fieldView(field.value, identity: identity,
+                                     isMixed: field.isMixed, mixedAxes: field.mixedAxes))
+        default:
+            if field.isMixed {
+                return AnyView(InspectorMixedValue(applyPrimaryValue: field.applyPrimaryValue) {
+                    fieldView(field.value, identity: identity)
+                })
+            }
+            return AnyView(fieldView(field.value, identity: identity))
+        }
+    }
+
+    private struct InspectorMixedValue<Content: View>: View {
+        @State private var isPresented = false
+        let applyPrimaryValue: (() -> Void)?
+        let content: () -> Content
+
+        var body: some View {
+            Popover(isPresented: $isPresented, width: 300) {
+                Row(alignment: .center, spacing: 4) {
+                    Text(L("Mixed value")).font(.caption).foregroundColor(.onSurfaceVariant).flex()
+                    Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                }
+                .padding(horizontal: 6, vertical: 4)
+                .background(.surfaceSunken)
+            } content: {
+                Column(alignment: .leading, spacing: 8) {
+                    Text(L("Apply to all selected entities")).font(.caption).foregroundColor(.onSurfaceVariant)
+                    content()
+                    if let applyPrimaryValue {
+                        Button(L("Use primary value for all")) {
+                            applyPrimaryValue(); isPresented = false
+                        }.buttonStyle(.ghost)
+                    }
+                }
+                .padding(8)
+            }
+        }
+    }
+
     private func fieldView(_ value: EditorInspectorFieldValue,
-                           identity: String) -> some View {
+                           identity: String, isMixed: Bool = false,
+                           mixedAxes: Set<String> = []) -> some View {
         switch value {
         case let .readOnly(text):
             return AnyView(InspectorReadOnlyValue(text: text))
         case let .text(binding):
-            return AnyView(InspectorTextValue(identity: identity, binding: binding))
+            return AnyView(InspectorTextValue(identity: identity, binding: binding, isMixed: isMixed))
         case let .stringOptions(binding, options):
             return AnyView(InspectorStringOptionsValue(binding: binding, options: options))
         case let .action(title, isDestructive, action):
@@ -588,14 +655,14 @@ struct InspectorPanel: View {
             return AnyView(InspectorNumberValue(binding: binding,
                                                 minValue: nil,
                                                 maxValue: nil,
-                                                step: nil))
+                                               step: nil, isMixed: isMixed))
         case let .constrainedNumber(binding, min, max, step, _):
             return AnyView(InspectorNumberValue(binding: binding,
                                                 minValue: min,
                                                 maxValue: max,
-                                                step: step))
+                                               step: step, isMixed: isMixed))
         case let .vector3(x, y, z):
-            return AnyView(InspectorVectorValue(x: x, y: y, z: z))
+            return AnyView(InspectorVectorValue(x: x, y: y, z: z, mixedAxes: mixedAxes))
         case let .color(binding):
             return AnyView(InspectorColorValue(binding: binding))
         case let .json(binding, minHeight):
@@ -769,12 +836,13 @@ private final class InspectorPanelSessionState {
 }
 
 private enum InspectorPanelSessionRegistry {
+    private struct Key: Hashable { let store: ObjectIdentifier; let scope: String }
     nonisolated(unsafe) private static var states: [
-        ObjectIdentifier: InspectorPanelSessionState
+        Key: InspectorPanelSessionState
     ] = [:]
 
-    static func state(for store: EditorStore) -> InspectorPanelSessionState {
-        let key = ObjectIdentifier(store)
+    static func state(for store: EditorStore, scope: String = "inspector") -> InspectorPanelSessionState {
+        let key = Key(store: ObjectIdentifier(store), scope: scope)
         if let existing = states[key] {
             return existing
         }

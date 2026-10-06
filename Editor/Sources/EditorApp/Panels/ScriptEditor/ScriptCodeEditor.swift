@@ -14,6 +14,7 @@ struct ScriptCodeEditor: View {
     let caretLabel: Binding<String>
     let onChange: (String) -> Void
     var editHistory: TextEditHistory? = nil
+    var navigation: EditorScriptNavigationRequest? = nil
     /// Pointer rests on a character worth documenting.
     let onHover: (TextFieldHoverAnchor) -> Void
     /// Pointer left the field; any pending popup must go away.
@@ -36,6 +37,11 @@ struct ScriptCodeEditor: View {
                     lineNumberColor: theme.colors.onSurfaceMuted,
                     lineNumberGutterColor: theme.colors.surface,
                     syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
+                    caretRequestID: navigation.map { AnyHashable($0.id) },
+                    caretRequestIndex: navigation.map {
+                        ScriptSourceCoordinates.characterIndex(in: text,
+                            at: ScriptLanguagePosition(line: $0.line, character: $0.column))
+                    },
                     onChange: onChange,
                     onHoverChange: { anchor in handleHover(anchor) },
                     onCaretChange: { state in handleCaret(state, in: source.wrappedValue) },

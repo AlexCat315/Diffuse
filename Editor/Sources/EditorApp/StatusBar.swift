@@ -8,9 +8,12 @@ import Foundation
 struct EditorStatusBar: View {
     let store: EditorStore
     let showsScriptInfo: Bool
+    let onShowProblems: () -> Void
     private var workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
-    init(store: EditorStore, scriptWorkspace: ScriptWorkspaceModel, showsScriptInfo: Bool) {
+    init(store: EditorStore, scriptWorkspace: ScriptWorkspaceModel, showsScriptInfo: Bool,
+         onShowProblems: @escaping () -> Void = {}) {
         self.store = store; self.showsScriptInfo = showsScriptInfo
+        self.onShowProblems = onShowProblems
         workspace = Observed(\.snapshot, on: scriptWorkspace)
     }
 
@@ -52,12 +55,13 @@ struct EditorStatusBar: View {
 
             // Status message can be long (AI output, console entries); cap
             // width and clip so it never pushes other items off screen.
-            Box {
+            Button(action: onShowProblems) {
                 Text(statusText)
                     .lineLimit(1)
                     .font(.caption)
                     .foregroundColor(statusColor)
             }
+            .buttonStyle(.plain)
             .frame(maxWidth: 260)
             .flex(0, shrink: 1)
             .clipped()
@@ -71,16 +75,24 @@ struct EditorStatusBar: View {
     // left-side connection indicator whenever the latest log was
     // "connected".)
     private var statusText: String {
+        let building = workspace.wrappedValue.documents.filter { $0.buildState.isBuilding }
+        if !building.isEmpty { return "\(L("Compiling scripts…")) \(building.count)" }
+        if let operation = store.operations.last(where: { $0.status == .running }) {
+            let progress = operation.total > 0 ? " \(operation.completed)/\(operation.total)" : ""
+            return L(operation.message) + progress
+        }
         if let message = store.aiStatusMessage {
             return message
         }
         if let latest = store.latestConsoleEntry, latest.severity != .info {
-            return latest.message
+            return L(latest.message)
         }
         return L("Ready")
     }
 
     private var statusColor: SemanticColorRef {
+        if workspace.wrappedValue.documents.contains(where: { $0.buildState.isBuilding }) ||
+           store.operations.contains(where: { $0.status == .running }) { return .accent }
         guard store.aiStatusMessage == nil,
               let latest = store.latestConsoleEntry,
               latest.severity != .info else {

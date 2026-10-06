@@ -4,6 +4,17 @@ import Testing
 
 @Suite("EditorMenuModel")
 struct EditorMenuModelTests {
+    @Test("film workspaces expose rendering tools without enabling game playback or game builds")
+    func filmTransport() {
+        for mode in [EditorWorkspaceMode.modeling, .animation] {
+            for action in actions(make(workspace: mode)) {
+                switch action.command {
+                case .setPlaybackState, .buildProject, .buildAndRun: #expect(!action.isEnabled)
+                default: break
+                }
+            }
+        }
+    }
 
     private func actions(_ model: EditorMenuModel) -> [EditorApplicationMenuAction] {
         model.menus.flatMap { menu in

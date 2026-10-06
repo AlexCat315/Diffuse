@@ -26,9 +26,13 @@ extension EditorApplication {
     public func applyPlaybackState(_ next: PlaybackState) {
         let current = store.state.playbackState
         guard current.canTransition(to: next) else { return }
+        guard next == .stopped || store.workspaceMode.isGameWorkspace else { return }
+        EditorViewportInputController.shared.reset()
+        enqueueViewportInput(.windowFocusLost)
 
         switch next {
         case .playing:
+            store.dispatch(.setViewportMode(.game))
             if physicsPlaySnapshot == nil {
                 scene.scriptRuntime.reset()
                 physicsPlaySnapshot = scene.scene
@@ -56,6 +60,7 @@ extension EditorApplication {
             logConsole("Physics simulation paused")
 
         case .stopped:
+            store.dispatch(.setViewportMode(.scene))
             scene.scriptRuntime.isGameplayExecutionEnabled = false
             scene.scriptRuntime.stop(in: &scene.scene)
             AudioEngine.shared.resetPlaybackState()
@@ -88,5 +93,7 @@ extension EditorApplication {
             store.dispatch(.setPlaybackState(.stopped))
             logConsole("Physics simulation stopped")
         }
+        queueTrackedRenderSettings(makeViewportRenderSettings(shadowsEnabled: store.viewportShadowsEnabled,
+                                                               shadingMode: store.viewportShadingMode))
     }
 }

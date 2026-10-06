@@ -15,6 +15,8 @@ public struct Vec3Field: View {
     public let minValue: Float?
     public let maxValue: Float?
     public let step: Float?
+    public let mixedAxes: Set<String>
+    public let mixedValueLabel: String
 
     public init(x: Binding<Float>,
                 y: Binding<Float>,
@@ -24,7 +26,9 @@ public struct Vec3Field: View {
                 isEnabled: Bool = true,
                 minValue: Float? = nil,
                 maxValue: Float? = nil,
-                step: Float? = nil) {
+                step: Float? = nil,
+                mixedAxes: Set<String> = [],
+                mixedValueLabel: String = "Mixed value") {
         self.x = x
         self.y = y
         self.z = z
@@ -34,6 +38,8 @@ public struct Vec3Field: View {
         self.minValue = minValue
         self.maxValue = maxValue
         self.step = step
+        self.mixedAxes = mixedAxes
+        self.mixedValueLabel = mixedValueLabel
     }
 
     public var body: some View {
@@ -46,7 +52,8 @@ public struct Vec3Field: View {
                           isEnabled: isEnabled,
                           minValue: minValue,
                           maxValue: maxValue,
-                          step: step)
+                          step: step,
+                          mixedValueLabel: mixedAxes.contains("x") ? mixedValueLabel : nil)
                 .flex(1, shrink: 1, basis: 0)
 
             Vec3AxisField(label: "Y",
@@ -57,7 +64,8 @@ public struct Vec3Field: View {
                           isEnabled: isEnabled,
                           minValue: minValue,
                           maxValue: maxValue,
-                          step: step)
+                          step: step,
+                          mixedValueLabel: mixedAxes.contains("y") ? mixedValueLabel : nil)
                 .flex(1, shrink: 1, basis: 0)
 
             Vec3AxisField(label: "Z",
@@ -68,7 +76,8 @@ public struct Vec3Field: View {
                           isEnabled: isEnabled,
                           minValue: minValue,
                           maxValue: maxValue,
-                          step: step)
+                          step: step,
+                          mixedValueLabel: mixedAxes.contains("z") ? mixedValueLabel : nil)
                 .flex(1, shrink: 1, basis: 0)
         }
         .clipped()
@@ -85,6 +94,7 @@ private struct Vec3AxisField: View {
     let minValue: Float?
     let maxValue: Float?
     let step: Float?
+    let mixedValueLabel: String?
 
     var body: some View {
         Row(alignment: .center, spacing: 0) {
@@ -102,7 +112,8 @@ private struct Vec3AxisField: View {
                         isEnabled: isEnabled,
                         minValue: minValue,
                         maxValue: maxValue,
-                        step: step)
+                        step: step,
+                        mixedValueLabel: mixedValueLabel)
                 .frame(height: fieldHeight)
                 .flex(1, shrink: 1, basis: 0)
                 .clipped()
