@@ -92,6 +92,8 @@ private final class BrowserPrototype {
     var frameNumber: UInt64 = 0
     var renderMilliseconds: Double = 0
     var layoutMilliseconds: Double = 0
+    var recompositionMilliseconds: Double = 0
+    var lastObservation: StateObservationPayload?
 
     init() {
         dispatcher.eventSink = { [weak self] event in self?.recorder.record(event) }
@@ -103,15 +105,21 @@ private final class BrowserPrototype {
     }
 
     func render(width rawWidth: Float, height rawHeight: Float) {
-        let startedAt = Date().timeIntervalSince1970
+        let startedAt = ContinuousClock.now
+        func elapsed() -> Double {
+            let parts = startedAt.duration(to: .now).components
+            return Double(parts.seconds) * 1000 + Double(parts.attoseconds) / 1e15
+        }
         let width = rawWidth.isFinite ? max(280, min(4096, rawWidth)) : 640
         let height = rawHeight.isFinite ? max(360, min(4096, rawHeight)) : 460
         var labels = [Label]()
         var noteWidth: Float = 0
         context.withCurrent {
             recomposer.commitAll()
+            recompositionMilliseconds = elapsed()
             graph.computeLayoutIfNeeded(width: width, height: height)
-            layoutMilliseconds = max(0, (Date().timeIntervalSince1970 - startedAt) * 1000)
+            layoutMilliseconds = max(0, elapsed() - recompositionMilliseconds)
+            let drawTrace = tree.timeline.begin()
             drawList.reset()
             func walk(_ node: Node) {
                 if let text = node.attachments[SharedDemoText.attachment] as? DemoText {
@@ -152,6 +160,8 @@ private final class BrowserPrototype {
             }
             tree.flush()
             inspector.editor.drawOverlay(into: drawList)
+            tree.timeline.end(drawTrace, phase: "draw", name: "Shape text and encode draw list")
+            renderMilliseconds = max(0, elapsed() - recompositionMilliseconds - layoutMilliseconds)
         }
         let upload = fonts.atlas.dirtyUploadPayload()
         if let upload { upload.pixels.withUnsafeBytes { atlasBuffer.replace($0) } }
@@ -171,7 +181,6 @@ private final class BrowserPrototype {
         drawList.indices.withUnsafeBytes { indexBuffer.replace($0) }
         snapshotBuffer.encode(frame!)
         frameNumber &+= 1
-        renderMilliseconds = max(0, (Date().timeIntervalSince1970 - startedAt) * 1000) - layoutMilliseconds
     }
 
     func pointer(kind: Int32, x: Float, y: Float) {
@@ -215,7 +224,7 @@ private final class BrowserPrototype {
     func hello() {
         responseBuffer.encode(DevToolsEnvelope(type: "hello", payload: json(HelloPayload(
             host: HelloHostInfo(pid: 0, appTitle: "GuavaUI Wasm prototype", platform: "WebAssembly"),
-            capabilities: ["tree", "select", "timing", "state", "recording", "inspect", "style", "source", "recomposition"]))))
+            capabilities: ["tree", "select", "timing", "state", "recording", "inspect", "style", "source", "recomposition", "state.observe", "timeline"]))))
     }
 
     func dispatch(_ bytes: UnsafeRawBufferPointer) {
@@ -229,6 +238,16 @@ private final class BrowserPrototype {
         func fail(_ message: String) { response.type = request.type + ".err"; response.payload = json(ErrorPayload(code: "bad_request", message: message)) }
         switch request.type {
         case "hello.ack": break
+        case "state.list": response.payload = json(graph.stateRegistry.observation(ids: []))
+        case "state.subscribe":
+            session.watchedStateIDs = DevToolsCodec.decode(StateWatchPayload.self, request.payload)!.ids
+            session.set(.state, enabled: true)
+            lastObservation = graph.stateRegistry.observation(ids: session.watchedStateIDs)
+            response.payload = json(lastObservation!)
+        case "state.unsubscribe": session.set(.state, enabled: false); session.watchedStateIDs = []; lastObservation = nil
+        case "timeline.subscribe":
+            session.set(.timeline, enabled: true); session.timelineSequence = 0; tree.timeline.setEnabled(true)
+        case "timeline.unsubscribe": session.set(.timeline, enabled: false); tree.timeline.setEnabled(false)
         case "tree.subscribe":
             session.set(.tree, enabled: true)
             response.type = "tree.snapshot"; response.payload = json(frame!.tree)
@@ -273,7 +292,7 @@ private final class BrowserPrototype {
                     }
                 }
             } else { fail("Invalid recording state") }
-        case "bye": session.reset(); _ = recorder.stop(); inspector.editor.reset()
+        case "bye": session.reset(); tree.timeline.setEnabled(false); lastObservation = nil; _ = recorder.stop(); inspector.editor.reset()
         default: fail("Unsupported browser prototype message")
         }
         if response.type.hasSuffix(".ok"), response.payload == nil, request.id == nil {
@@ -283,13 +302,27 @@ private final class BrowserPrototype {
 
     func events() {
         var messages = [DevToolsEnvelope]()
+        if session.subscriptions.contains(.state) {
+            let observed = graph.stateRegistry.observation(ids: session.watchedStateIDs)
+            if observed != lastObservation {
+                lastObservation = observed
+                messages.append(DevToolsEnvelope(type: "state.observation", payload: json(observed)))
+            }
+        }
+        if session.subscriptions.contains(.timeline) {
+            let snapshot = tree.timeline.snapshot(after: session.timelineSequence)
+            if let last = snapshot.events.last {
+                session.timelineSequence = last.sequence
+                messages.append(DevToolsEnvelope(type: "timeline.events", payload: json(snapshot)))
+            }
+        }
         if session.subscriptions.contains(.tree), let frame {
             messages.append(DevToolsEnvelope(type: "tree.delta", payload: json(frame.tree)))
         }
         if session.subscriptions.contains(.timing), let frame {
             messages.append(DevToolsEnvelope(type: "timing.frame", payload: json(TimingFramePayload(
-                frame: frameNumber, layoutMs: layoutMilliseconds, drawMs: renderMilliseconds, presentMs: 0, totalMs: layoutMilliseconds + renderMilliseconds,
-                nodeCount: frame.tree.inputInventory?.nodeCount ?? 0, batchCount: frame.batches.count))))
+                frame: frameNumber, layoutMs: layoutMilliseconds, drawMs: renderMilliseconds, presentMs: 0, totalMs: recompositionMilliseconds + layoutMilliseconds + renderMilliseconds,
+                nodeCount: frame.tree.inputInventory?.nodeCount ?? 0, batchCount: frame.batches.count, recompositionMs: recompositionMilliseconds))))
         }
         responseBuffer.encode(messages)
     }

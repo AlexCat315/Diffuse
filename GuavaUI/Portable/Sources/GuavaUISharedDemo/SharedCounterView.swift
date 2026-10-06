@@ -17,8 +17,8 @@ public enum SharedDemoText {
 }
 
 public struct SharedCounterView: View {
-    @State public var count = 0
-    @State public var dark = false
+    @State(expose: true) public var count = 0
+    @State(expose: true) public var dark = false
     @State public var note = ""
 
     public init() {}

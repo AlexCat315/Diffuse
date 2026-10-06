@@ -33,6 +33,8 @@ private final class TestTransport: DevToolsTransport, @unchecked Sendable {
 
 private enum Timeout: Error { case waitingForMessage }
 
+@MainActor private final class ObservationTestValue { var number = "1" }
+
 private final class HostInbox: @unchecked Sendable {
     private let lock = NSLock()
     private var operations: [@MainActor () -> Void] = []
@@ -238,4 +240,43 @@ func temporaryInspectionIsExclusiveAndDisconnectCleansOnlyItsLease() async throw
     #expect(applied == 2 && resets == 1)
     server.stop(); inbox.drain()
     #expect(resets == 2)
+}
+
+@Test @MainActor
+func observationStreamsAreIndependentAndTimelineStopsAfterLastDisconnect() async throws {
+    let transport = TestTransport(), one = TestConnection(), two = TestConnection()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    var reads = [[String]](), capture = false
+    let value = ObservationTestValue()
+    server.stateObservationProvider = { ids in
+        reads.append(ids)
+        return StateObservationPayload(registered: [RegisteredStatePayload(id: "count", name: "count", valueType: "Int")],
+            values: ids.contains("count") ? [ObservedStatePayload(id: "count", summary: value.number, truncated: false)] : [])
+    }
+    server.timelineCaptureHandler = { capture = $0 }
+    server.timelineProvider = { _ in TimelineSnapshotPayload(events: [TimelineEventPayload(sequence: 1, phase: "draw", name: "Draw", scopeID: nil, startMs: 1, durationMs: 2)]) }
+    try server.start(); defer { server.stop() }
+    server.broadcastObservations(); #expect(reads.isEmpty && !capture)
+    transport.onEvent?(.connected(one)); _ = try await receive("hello", from: one)
+    transport.onEvent?(.connected(two)); _ = try await receive("hello", from: two)
+    try transport.request("state.list", connection: one)
+    let metadata = try await receive("state.list.ok", from: one)
+    #expect(DevToolsCodec.decode(StateObservationPayload.self, metadata.payload)?.values.isEmpty == true && reads == [[]])
+    try transport.request("state.subscribe", payload: DevToolsCodec.json(StateWatchPayload(ids: ["count"])), connection: one)
+    _ = try await receive("state.subscribe.ok", from: one)
+    value.number = "2"; server.broadcastObservations()
+    let updated = try await receive("state.observation", from: one)
+    #expect(DevToolsCodec.decode(StateObservationPayload.self, updated.payload)?.values.first?.summary == "2")
+    #expect(two.take().isEmpty)
+    try transport.request("state.unsubscribe", connection: one); _ = try await receive("state.unsubscribe.ok", from: one)
+    let readCount = reads.count; server.broadcastObservations(); #expect(reads.count == readCount)
+    try transport.request("timeline.subscribe", connection: one); _ = try await receive("timeline.events", from: one)
+    try transport.request("timeline.subscribe", connection: two); _ = try await receive("timeline.events", from: two)
+    #expect(capture)
+    try transport.request("timeline.unsubscribe", connection: one); _ = try await receive("timeline.unsubscribe.ok", from: one)
+    try await Task.sleep(for: .milliseconds(20)); #expect(capture)
+    transport.onEvent?(.disconnected(two))
+    let deadline = ContinuousClock.now + .seconds(3)
+    while capture && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(!capture)
 }

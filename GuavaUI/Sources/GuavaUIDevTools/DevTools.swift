@@ -1,4 +1,5 @@
 import GuavaUIDevToolsProtocol
+import GuavaUIDevToolsScene
 import Foundation
 import Logging
 import RHIWGPU
@@ -22,7 +23,13 @@ public final class DevTools {
 
     /// Frame timing publisher; the host calls `record(...)` once per frame.
     public let timing = TimingPublisher()
+    public var stateRegistry: StateRegistry? {
+        didSet {
+            server.stateObservationProvider = stateRegistry.map { registry in { @MainActor ids in registry.observation(ids: ids) } }
+        }
+    }
 
+    private let timeline: PerformanceTimeline
     private var frameTap: FrameTap?
     private let frameTapSink = FrameTap.Sink()
 
@@ -62,6 +69,7 @@ public final class DevTools {
                 renderTree: RenderTree? = nil,
                 logSink: LogTap.Sink = LogTap.Sink()) {
         self.config = config
+        self.timeline = tree.timeline
         self.server = DevServer(config: config)
         self.logSink = logSink
         self.scene = SceneInspector(tree: tree,
@@ -87,11 +95,14 @@ public final class DevTools {
 
         wireMirror()
         wireState()
+        server.timelineProvider = { @MainActor [weak tree] after in tree?.timeline.snapshot(after: after) ?? TimelineSnapshotPayload(events: []) }
+        server.timelineCaptureHandler = { @MainActor [weak tree] in tree?.timeline.setEnabled($0) }
     }
 
     public func start() throws {
         guard config.enabled else { return }
-        var capabilities = ["tree", "select", "log", "timing", "inspect", "style", "source", "recomposition"]
+        var capabilities = ["tree", "select", "log", "timing", "inspect", "style", "source", "recomposition", "timeline"]
+        if stateRegistry != nil { capabilities.append("state.observe") }
         if frameTap != nil { capabilities.append("mirror") }
         if stateCheckpointProvider != nil, stateRestoreHandler != nil || stateRestoreResultHandler != nil {
             capabilities.append("state")
@@ -110,6 +121,7 @@ public final class DevTools {
     }
 
     public func stop() {
+        timeline.setEnabled(false)
         frameTap?.stop()
         server.stop()
         scene.editor.reset()
@@ -149,7 +161,9 @@ public final class DevTools {
     /// whose synchronous platform loop does not drain DispatchQueue.main.
     public func notifyTreeChanged() {
         server.broadcastTreeDelta()
+        server.broadcastObservations()
     }
+    public func notifyFrameFinished() { server.broadcastObservations() }
 
     /// id of the most recently selected node, for hosts that want to
     /// draw an overlay. The host is expected to drive the actual highlight.

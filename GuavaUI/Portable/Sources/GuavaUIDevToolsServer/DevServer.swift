@@ -80,6 +80,7 @@ public final class DevServer: @unchecked Sendable {
         let connection: any DevToolsConnection
         let session = DevToolsSession()
         var subscriptions: Set<Subscription> { session.subscriptions }
+        var lastState: StateObservationPayload?
     }
 
     private let config: DevToolsConfig
@@ -113,6 +114,9 @@ public final class DevServer: @unchecked Sendable {
     public var recordingStopHandler: (@MainActor () -> InputRecording?)?
     public var recordingReplayHandler: (@MainActor (InputRecording) -> Bool)?
     public var snapshotProvider: SceneSnapshotProvider?
+    public var stateObservationProvider: (@MainActor ([String]) -> StateObservationPayload)?
+    public var timelineProvider: (@MainActor (UInt64) -> TimelineSnapshotPayload)?
+    public var timelineCaptureHandler: (@MainActor (Bool) -> Void)?
 
     /// Provided by AppRuntime; called on the main actor when the client
     /// asks to highlight a node.
@@ -186,6 +190,7 @@ public final class DevServer: @unchecked Sendable {
             return (selection, mirror, recording, inspection)
         }
         transport.stop()
+        if timelineCaptureHandler != nil { runOnHostMain { [weak self] in self?.syncTimelineCapture() } }
         if cleanup.0 || cleanup.1 || cleanup.2 || cleanup.3 != nil {
             runOnHostMain { [weak self] in
                 if cleanup.0, let self, self.onQueueSync({ self.selectionOwner == nil }) { self.selectionClearHandler?() }
@@ -223,6 +228,44 @@ public final class DevServer: @unchecked Sendable {
         guard hasSubscribers(for: .timing) else { return }
         let env = DevToolsEnvelope(type: "timing.frame", payload: encodeJSON(frame))
         send(env, toSubscribersOf: .timing)
+    }
+
+    /// Read only requested summaries on the scene thread. Streams remain opt-in
+    /// and unchanged state snapshots are suppressed independently per client.
+    @MainActor public func broadcastObservations() {
+        let watchers = onQueueSync {
+            clients.values.filter { $0.subscriptions.contains(.state) }.map { ($0.connection, $0.session.watchedStateIDs) }
+        }
+        for (connection, ids) in watchers {
+            guard let snapshot = stateObservationProvider?(ids) else { continue }
+            queue.async { [weak self] in
+                guard let self, var client = self.clients[ObjectIdentifier(connection)],
+                      client.subscriptions.contains(.state), client.session.watchedStateIDs == ids,
+                      client.lastState != snapshot else { return }
+                client.lastState = snapshot; self.clients[ObjectIdentifier(connection)] = client
+                self.send(DevToolsEnvelope(type: "state.observation", payload: encodeJSON(snapshot)), on: connection)
+            }
+        }
+        let cursor = onQueueSync { clients.values.filter { $0.subscriptions.contains(.timeline) }.map { $0.session.timelineSequence }.min() }
+        guard let cursor, let snapshot = timelineProvider?(cursor) else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            for client in self.clients.values where client.subscriptions.contains(.timeline) {
+                self.sendTimeline(snapshot, to: client.connection)
+            }
+        }
+    }
+
+    @MainActor private func syncTimelineCapture() {
+        timelineCaptureHandler?(hasSubscribers(for: .timeline))
+    }
+    private func sendTimeline(_ snapshot: TimelineSnapshotPayload, to connection: any DevToolsConnection, id: Int? = nil) {
+        guard let client = clients[ObjectIdentifier(connection)], client.subscriptions.contains(.timeline) else { return }
+        let events = snapshot.events.filter { $0.sequence > client.session.timelineSequence }
+        if let last = events.last { client.session.timelineSequence = last.sequence }
+        guard id != nil || !events.isEmpty else { return }
+        send(DevToolsEnvelope(type: "timeline.events", id: id,
+            payload: encodeJSON(TimelineSnapshotPayload(events: events, dropped: snapshot.dropped))), on: connection)
     }
 
     public func broadcastMirrorFrame(_ frame: MirrorFramePayload) {
@@ -271,6 +314,40 @@ public final class DevServer: @unchecked Sendable {
             return
         }
         switch env.type {
+        case "state.list", "state.subscribe":
+            guard stateObservationProvider != nil else {
+                sendError(for: env, on: conn, code: "unsupported", message: "Host has no state registry"); return
+            }
+            let ids = env.type == "state.subscribe" ? DevToolsCodec.decode(StateWatchPayload.self, env.payload)!.ids : []
+            if env.type == "state.subscribe" {
+                client.session.watchedStateIDs = ids
+                setSubscription(.state, enabled: true, for: conn)
+            }
+            runOnHostMain { [weak self] in
+                guard let self, self.onQueueSync({ self.clients[ObjectIdentifier(conn)] != nil }),
+                      let snapshot = self.stateObservationProvider?(ids) else { return }
+                self.send(DevToolsEnvelope(type: env.type + ".ok", id: env.id, payload: encodeJSON(snapshot)), on: conn)
+            }
+        case "state.unsubscribe":
+            client.session.watchedStateIDs = []
+            setSubscription(.state, enabled: false, for: conn)
+            sendOK(for: env, on: conn)
+        case "timeline.subscribe":
+            guard timelineProvider != nil, timelineCaptureHandler != nil else {
+                sendError(for: env, on: conn, code: "unsupported", message: "Host has no timeline recorder"); return
+            }
+            client.session.timelineSequence = 0
+            setSubscription(.timeline, enabled: true, for: conn)
+            runOnHostMain { [weak self] in
+                guard let self else { return }
+                self.syncTimelineCapture()
+                guard let snapshot = self.timelineProvider?(0) else { return }
+                self.queue.async { self.sendTimeline(snapshot, to: conn, id: env.id) }
+            }
+        case "timeline.unsubscribe":
+            setSubscription(.timeline, enabled: false, for: conn)
+            runOnHostMain { [weak self] in self?.syncTimelineCapture() }
+            sendOK(for: env, on: conn)
         case "hello.ack":
             // Nothing to do — capabilities negotiation is one-way for now.
             break
@@ -565,7 +642,11 @@ public final class DevServer: @unchecked Sendable {
 
     private func removeClient(_ connection: any DevToolsConnection) {
         let key = ObjectIdentifier(connection)
-        let wasMirroring = clients.removeValue(forKey: key)?.subscriptions.contains(.mirror) == true
+        let removed = clients.removeValue(forKey: key)
+        let wasMirroring = removed?.subscriptions.contains(.mirror) == true
+        if removed?.subscriptions.contains(.timeline) == true {
+            runOnHostMain { [weak self] in self?.syncTimelineCapture() }
+        }
         if inspectionOwner == key {
             let lease = inspectionLease!
             inspectionOwner = nil; inspectionLease = nil

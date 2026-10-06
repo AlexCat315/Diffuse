@@ -41,6 +41,14 @@ function editorSourceURL(source, editor, buildRoot = "", localRoot = "") {
   const encoded = path.split("/").map((part, i) => i === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)).join("/");
   return `${editor}://file${encoded.startsWith("/") ? "" : "/"}${encoded}:${source.line}:${source.column}`;
 }
+function breakpointSourceURL(source, editor, buildRoot = "", localRoot = "") {
+  const uri = editorSourceURL(source, editor, buildRoot, localRoot);
+  if (!uri) return null;
+  const encodedPath = uri.slice(`${editor}://file`.length).replace(/:\d+:\d+$/, "");
+  let path = decodeURIComponent(encodedPath);
+  if (/^\/[A-Za-z]:\//.test(path)) path = path.slice(1);
+  return `${editor}://guava.guavaui-devtools/breakpoint?file=${encodeURIComponent(path)}&line=${source.line}&column=${source.column}`;
+}
 function renderSourceAnalysis(node) {
   const sourceNode = sourceForNode(node), source = sourceNode?.source;
   const label = analysisEl("sourceLocation"), link = analysisEl("openSource");
@@ -52,6 +60,12 @@ function renderSourceAnalysis(node) {
   if (url) link.href = url; else link.removeAttribute("href");
   link.setAttribute("aria-disabled", String(!url));
   link.title = url ?? "Select source coordinates and provide valid absolute path prefixes, if needed.";
+  const breakpoint = analysisEl("addSourceBreakpoint");
+  const breakpointURL = breakpointSourceURL(source, analysisEl("sourceEditor").value,
+    analysisEl("sourceBuildRoot").value.trim(), analysisEl("sourceLocalRoot").value.trim());
+  if (breakpointURL) breakpoint.href = breakpointURL; else breakpoint.removeAttribute("href");
+  breakpoint.setAttribute("aria-disabled", String(!breakpointURL));
+  breakpoint.title = "Requires the GuavaUI DevTools extension. Adds a source breakpoint to the editor's existing Swift/LLDB debugger.";
   const owner = node?.ownerScopeID ? findNode(state.tree, node.ownerScopeID) : null;
   const metrics = owner?.recomposition, button = analysisEl("recompositionOwner");
   button.hidden = !owner;
