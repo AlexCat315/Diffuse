@@ -17,7 +17,6 @@ let package = Package(
         .package(path: "../Engine"),
         .package(path: "Portable"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
-        .package(url: "https://github.com/facebook/yoga.git", from: "3.2.1"),
     ],
     targets: [
         // MARK: - Native deps (built by GuavaUI/third-party/CMakeLists.txt)
@@ -33,12 +32,6 @@ let package = Package(
         // MARK: - Yoga C bridge
         // Wraps the yoga SPM source package with a flat module map so that
         // GuavaUIRuntime can use `import CYoga` and access all YG* symbols.
-        .target(
-            name: "CYoga",
-            dependencies: [.product(name: "yoga", package: "yoga")],
-            path: "Sources/Bridge/CYoga",
-            publicHeadersPath: "include"
-        ),
 
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。
@@ -47,7 +40,8 @@ let package = Package(
             name: "GuavaUIRuntime",
             dependencies: [
                 .product(name: "GuavaUICore", package: "Portable"),
-                "CYoga",
+                .product(name: "CYoga", package: "Portable"),
+                .product(name: "GuavaUIScene", package: "Portable"),
                 "CFreeType",
                 "CHarfBuzz",
                 "GuavaUIBundledFonts",
@@ -71,6 +65,7 @@ let package = Package(
         .target(
             name: "GuavaUICompose",
             dependencies: ["GuavaUIRuntime",
+                           .product(name: "GuavaUIComposeCore", package: "Portable"),
                            .product(name: "EngineKernel", package: "Engine"),
                            .product(name: "RenderBackend", package: "Engine")],
             resources: [
@@ -130,6 +125,7 @@ let package = Package(
             name: "GuavaUIDevTools",
             dependencies: [
                 .product(name: "GuavaUIDevToolsServer", package: "Portable"),
+                .product(name: "GuavaUIDevToolsScene", package: "Portable"),
                 .product(name: "GuavaUIDevToolsProtocol", package: "Portable"),
                 "GuavaUIRuntime",
                 .product(name: "EngineKernel", package: "Engine"),
@@ -142,6 +138,7 @@ let package = Package(
         .executableTarget(
             name: "GuavaUIDemo",
             dependencies: [
+                .product(name: "GuavaUISharedDemo", package: "Portable"),
                 "GuavaUIRuntime",
                 "GuavaUICompose",
                 "GuavaUIWorkspace",
@@ -154,6 +151,7 @@ let package = Package(
         .testTarget(
             name: "GuavaUIRuntimeTests",
             dependencies: [
+                .product(name: "GuavaUIScene", package: "Portable"),
                 "GuavaUIRuntime",
                 "GuavaUIBundledFonts",
                 .product(name: "PlatformShell", package: "Engine"),
@@ -162,6 +160,7 @@ let package = Package(
         .testTarget(
             name: "GuavaUIComposeTests",
             dependencies: [
+                .product(name: "GuavaUIComposeCore", package: "Portable"),
                 "GuavaUICompose",
                 "GuavaUIRuntime",
                 "GuavaUIBundledFonts",

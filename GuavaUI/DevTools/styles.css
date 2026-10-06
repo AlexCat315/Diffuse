@@ -364,3 +364,8 @@ textarea {
 /* Browser hosts show the live canvas above their embedded Inspector. */
 .browserHost .mainPane { display: none; }
 .browserHost .workspace { grid-template-columns: minmax(240px, 1fr) minmax(300px, 1fr); }
+
+/* Diagnostic sections retain readable heights as new tools are added. */
+.detailsPane { display:block; overflow-y:auto; }
+.detailsPane .details { min-height:48px; max-height:180px; overflow:auto; margin:0; padding:10px; }
+.detailsPane .stateSnapshot { display:block; width:calc(100% - 16px); min-height:100px; height:120px; }

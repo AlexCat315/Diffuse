@@ -75,16 +75,11 @@ public typealias HostMainExecutor = (@escaping @MainActor () -> Void) -> Void
 /// AppConfig carries a non-nil DevToolsConfig.
 public final class DevServer: @unchecked Sendable {
 
-    private enum Subscription: Hashable {
-        case tree
-        case log
-        case timing
-        case mirror
-    }
-
+    private typealias Subscription = DevToolsSubscription
     private struct Client {
         let connection: any DevToolsConnection
-        var subscriptions: Set<Subscription> = []
+        let session = DevToolsSession()
+        var subscriptions: Set<Subscription> { session.subscriptions }
     }
 
     private let config: DevToolsConfig
@@ -99,6 +94,7 @@ public final class DevServer: @unchecked Sendable {
     /// Access only from `queue`. Keeping the connection and its subscriptions
     /// together prevents stale subscription state after disconnects.
     private var clients: [ObjectIdentifier: Client] = [:]
+    private var recordingOwner: ObjectIdentifier?
     private var selectionOwner: ObjectIdentifier?
 
     /// Capabilities announced in `hello`. DevTools configures this before
@@ -107,6 +103,10 @@ public final class DevServer: @unchecked Sendable {
 
     /// Provided by AppRuntime; called on the main actor to build a
     /// snapshot when a tree request arrives.
+    public var stateRestoreResultHandler: (@MainActor ([String: String]) -> Bool)?
+    public var recordingStartHandler: (@MainActor () -> Bool)?
+    public var recordingStopHandler: (@MainActor () -> InputRecording?)?
+    public var recordingReplayHandler: (@MainActor (InputRecording) -> Bool)?
     public var snapshotProvider: SceneSnapshotProvider?
 
     /// Provided by AppRuntime; called on the main actor when the client
@@ -167,20 +167,23 @@ public final class DevServer: @unchecked Sendable {
     }
 
     public func stop() {
-        let cleanup = onQueueSync { () -> (Bool, Bool) in
+        let cleanup = onQueueSync { () -> (Bool, Bool, Bool) in
             generation &+= 1
             isStarted = false
             let selection = selectionOwner != nil
             let mirror = clients.values.contains { $0.subscriptions.contains(.mirror) }
+            let recording = recordingOwner != nil
             clients.removeAll()
             selectionOwner = nil
-            return (selection, mirror)
+            recordingOwner = nil
+            return (selection, mirror, recording)
         }
         transport.stop()
-        if cleanup.0 || cleanup.1 {
+        if cleanup.0 || cleanup.1 || cleanup.2 {
             runOnHostMain { [weak self] in
                 if cleanup.0 { self?.selectionClearHandler?() }
                 if cleanup.1 { self?.mirrorStopHandler?() }
+                if cleanup.2 { _ = self?.recordingStopHandler?() }
             }
         }
     }
@@ -238,6 +241,8 @@ public final class DevServer: @unchecked Sendable {
             log("DevServer JSON decode failed: \(error)")
             return
         }
+        guard let client = clients[ObjectIdentifier(conn)] else { return }
+        if let error = client.session.validate(env) { send(error, on: conn); return }
         switch env.type {
         case "hello.ack":
             // Nothing to do — capabilities negotiation is one-way for now.
@@ -281,9 +286,7 @@ public final class DevServer: @unchecked Sendable {
             let key = ObjectIdentifier(conn)
             if selectionOwner == key {
                 selectionOwner = nil
-                runOnHostMain { [weak self] in
-                    self?.selectionClearHandler?()
-                }
+                runOnHostMain { [weak self] in self?.selectionClearHandler?() }
             }
             sendOK(for: env, on: conn)
 
@@ -377,9 +380,57 @@ public final class DevServer: @unchecked Sendable {
             }
             let snapshot = object.compactMapValues(\.stringValue)
             runOnHostMain { [weak self] in
-                self?.stateRestoreHandler?(snapshot)
+                guard let self else { return }
+                if let restore = self.stateRestoreResultHandler {
+                    if restore(snapshot) { self.sendOK(for: env, on: conn) }
+                    else { self.sendError(for: env, on: conn, code: "bad_request", message: "Host rejected checkpoint state") }
+                } else { self.stateRestoreHandler?(snapshot); self.sendOK(for: env, on: conn) }
             }
-            sendOK(for: env, on: conn)
+
+        case "state.diff":
+            let before = DevToolsSession.state(env.payload)!
+            runOnHostMain { [weak self] in
+                guard let self else { return }
+                let diff = StateDifference(before: before, after: self.stateCheckpointHandler?() ?? [:])
+                self.send(DevToolsEnvelope(type: "state.diff.ok", id: env.id, payload: DevToolsCodec.json(diff)), on: conn)
+            }
+
+        case "input.record.start":
+            guard recordingOwner == nil, recordingStartHandler != nil else {
+                sendError(for: env, on: conn, code: "invalid_state", message: "Recording unavailable or already active"); return
+            }
+            recordingOwner = ObjectIdentifier(conn)
+            runOnHostMain { [weak self] in
+                guard let self else { return }
+                if self.recordingStartHandler?() == true { self.sendOK(for: env, on: conn) }
+                else {
+                    self.queue.async { self.recordingOwner = nil }
+                    self.sendError(for: env, on: conn, code: "invalid_state", message: "Host could not start recording")
+                }
+            }
+
+        case "input.record.stop":
+            guard recordingOwner == ObjectIdentifier(conn) else {
+                sendError(for: env, on: conn, code: "invalid_state", message: "This connection does not own a recording"); return
+            }
+            recordingOwner = nil
+            runOnHostMain { [weak self] in
+                guard let self else { return }
+                if let recording = self.recordingStopHandler?() {
+                    self.send(DevToolsEnvelope(type: "input.record.stop.ok", id: env.id, payload: DevToolsCodec.json(recording)), on: conn)
+                } else { self.sendError(for: env, on: conn, code: "invalid_state", message: "No recording") }
+            }
+
+        case "input.replay":
+            guard recordingOwner == nil, recordingReplayHandler != nil else {
+                sendError(for: env, on: conn, code: "invalid_state", message: "Stop recording before replaying"); return
+            }
+            let recording = DevToolsCodec.decode(InputRecording.self, env.payload)!
+            runOnHostMain { [weak self] in
+                guard let self else { return }
+                if self.recordingReplayHandler?(recording) == true { self.sendOK(for: env, on: conn) }
+                else { self.sendError(for: env, on: conn, code: "bad_request", message: "Host rejected recording state") }
+            }
 
         default:
             sendError(
@@ -407,8 +458,7 @@ public final class DevServer: @unchecked Sendable {
     }
 
     private func sendOK(for request: DevToolsEnvelope, on conn: any DevToolsConnection) {
-        guard let id = request.id else { return }
-        let env = DevToolsEnvelope(type: request.type + ".ok", id: id, payload: nil)
+        guard let env = DevToolsSession.ok(request) else { return }
         send(env, on: conn)
     }
 
@@ -464,15 +514,8 @@ public final class DevServer: @unchecked Sendable {
                                  enabled: Bool,
                                  for connection: any DevToolsConnection) -> Bool {
         let key = ObjectIdentifier(connection)
-        guard var client = clients[key] else { return false }
-        let changed: Bool
-        if enabled {
-            changed = client.subscriptions.insert(subscription).inserted
-        } else {
-            changed = client.subscriptions.remove(subscription) != nil
-        }
-        clients[key] = client
-        return changed
+        guard let client = clients[key] else { return false }
+        return client.session.set(subscription, enabled: enabled)
     }
 
     private func hasSubscribers(for subscription: Subscription) -> Bool {
@@ -489,6 +532,10 @@ public final class DevServer: @unchecked Sendable {
     private func removeClient(_ connection: any DevToolsConnection) {
         let key = ObjectIdentifier(connection)
         let wasMirroring = clients.removeValue(forKey: key)?.subscriptions.contains(.mirror) == true
+        if recordingOwner == key {
+            recordingOwner = nil
+            runOnHostMain { [weak self] in _ = self?.recordingStopHandler?() }
+        }
         if selectionOwner == key {
             selectionOwner = nil
             runOnHostMain { [weak self] in

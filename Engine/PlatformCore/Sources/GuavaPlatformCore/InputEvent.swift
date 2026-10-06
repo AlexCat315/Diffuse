@@ -1,0 +1,242 @@
+import Foundation
+
+// MARK: - Keyboard
+
+public struct KeyModifiers: Codable, OptionSet, Sendable, Hashable {
+    public let rawValue: UInt16
+    public init(rawValue: UInt16) { self.rawValue = rawValue }
+
+    public static let lshift = KeyModifiers(rawValue: 1 << 0)
+    public static let rshift = KeyModifiers(rawValue: 1 << 1)
+    public static let lctrl  = KeyModifiers(rawValue: 1 << 2)
+    public static let rctrl  = KeyModifiers(rawValue: 1 << 3)
+    public static let lalt   = KeyModifiers(rawValue: 1 << 4)
+    public static let ralt   = KeyModifiers(rawValue: 1 << 5)
+    public static let lgui   = KeyModifiers(rawValue: 1 << 6)
+    public static let rgui   = KeyModifiers(rawValue: 1 << 7)
+
+    public static let shift: KeyModifiers = [.lshift, .rshift]
+    public static let ctrl:  KeyModifiers = [.lctrl, .rctrl]
+    public static let alt:   KeyModifiers = [.lalt, .ralt]
+    public static let gui:   KeyModifiers = [.lgui, .rgui]
+
+    /// "Either side held" checks. `contains(.gui)` is a superset test on the
+    /// two-bit group — it only matches when BOTH left and right keys are
+    /// down — so chord handling must use these instead.
+    public var hasShift: Bool { !isDisjoint(with: .shift) }
+    public var hasCtrl:  Bool { !isDisjoint(with: .ctrl) }
+    public var hasAlt:   Bool { !isDisjoint(with: .alt) }
+    public var hasGui:   Bool { !isDisjoint(with: .gui) }
+}
+
+public struct KeyEvent: Codable, Sendable {
+    public var scancode: UInt32
+    public var keycode: UInt32
+    public var modifiers: KeyModifiers
+    public var isRepeat: Bool
+
+    public init(scancode: UInt32, keycode: UInt32, modifiers: KeyModifiers, isRepeat: Bool) {
+        self.scancode = scancode
+        self.keycode = keycode
+        self.modifiers = modifiers
+        self.isRepeat = isRepeat
+    }
+}
+
+public struct TextEditingEvent: Codable, Sendable, Equatable {
+    public var text: String
+    public var start: Int32
+    public var length: Int32
+
+    public init(text: String, start: Int32, length: Int32) {
+        self.text = text
+        self.start = start
+        self.length = length
+    }
+}
+
+public struct TextInputArea: Codable, Sendable, Equatable {
+    public var x: Float
+    public var y: Float
+    public var width: Float
+    public var height: Float
+    public var cursorX: Float
+
+    public init(x: Float, y: Float, width: Float, height: Float, cursorX: Float) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.cursorX = cursorX
+    }
+}
+
+// MARK: - Mouse
+
+public enum MouseButton: UInt8, Codable, Sendable, Hashable {
+    case left   = 1
+    case middle = 2
+    case right  = 3
+    case x1     = 4
+    case x2     = 5
+}
+
+public struct MouseMotionEvent: Codable, Sendable {
+    public var x: Float
+    public var y: Float
+    public var deltaX: Float
+    public var deltaY: Float
+
+    public init(x: Float, y: Float, deltaX: Float, deltaY: Float) {
+        self.x = x; self.y = y; self.deltaX = deltaX; self.deltaY = deltaY
+    }
+}
+
+public struct MouseButtonEvent: Codable, Sendable {
+    public var button: MouseButton
+    public var x: Float
+    public var y: Float
+    public var clicks: UInt8
+    public var modifiers: KeyModifiers
+
+    public init(button: MouseButton,
+                x: Float,
+                y: Float,
+                clicks: UInt8,
+                modifiers: KeyModifiers = []) {
+        self.button = button
+        self.x = x
+        self.y = y
+        self.clicks = clicks
+        self.modifiers = modifiers
+    }
+
+    public init(button: MouseButton,
+                x: Float,
+                y: Float,
+                clicks: UInt8) {
+        self.init(button: button,
+                  x: x,
+                  y: y,
+                  clicks: clicks,
+                  modifiers: [])
+    }
+}
+
+public struct MouseWheelEvent: Codable, Sendable {
+    /// Horizontal wheel delta. Positive/negative sign preserves the platform
+    /// event source, including any OS or driver scroll-direction preference.
+    public var x: Float
+    /// Vertical wheel delta. Positive/negative sign preserves the platform
+    /// event source, including any OS or driver scroll-direction preference.
+    public var y: Float
+    /// Optional cursor position in window-local logical coordinates at the
+    /// moment the wheel event was produced.
+    public var mouseX: Float?
+    public var mouseY: Float?
+
+    public init(x: Float, y: Float, mouseX: Float? = nil, mouseY: Float? = nil) {
+        self.x = x
+        self.y = y
+        self.mouseX = mouseX
+        self.mouseY = mouseY
+    }
+}
+
+// MARK: - Input Event
+
+public enum InputEvent: Codable, Sendable {
+    case keyDown(KeyEvent)
+    case keyUp(KeyEvent)
+
+    /// IME / OS-composed text. The string is decoded UTF-8 from SDL3 and may
+    /// contain multiple grapheme clusters per event (e.g. dead-key composed
+    /// accents or pasted text).
+    case textInput(String)
+
+    /// Active IME preedit text and its selection range within the composition.
+    case textEditing(TextEditingEvent)
+
+    case mouseMotion(MouseMotionEvent)
+    case mouseButtonDown(MouseButtonEvent)
+    case mouseButtonUp(MouseButtonEvent)
+    case mouseWheel(MouseWheelEvent)
+
+    case gamepadButtonDown(GamepadButtonEvent)
+    case gamepadButtonUp(GamepadButtonEvent)
+    case gamepadAxisMotion(GamepadAxisEvent)
+    case gamepadAdded(UInt32)
+    case gamepadRemoved(UInt32)
+
+    case windowFocusGained
+    case windowFocusLost
+    case windowMinimized
+    case windowRestored
+    case windowOccluded
+    case windowExposed
+    case windowResized(width: Int32, height: Int32)
+    case windowPixelSizeChanged(width: Int32, height: Int32)
+}
+
+// MARK: - Gamepad
+
+public enum GamepadButton: UInt8, Codable, Sendable, Hashable, CaseIterable {
+    case south       = 0  // A / Cross
+    case east        = 1  // B / Circle
+    case west        = 2  // X / Square
+    case north       = 3  // Y / Triangle
+    case back        = 4
+    case guide       = 5
+    case start       = 6
+    case leftStick   = 7
+    case rightStick  = 8
+    case leftShoulder  = 9
+    case rightShoulder = 10
+    case dpadUp      = 11
+    case dpadDown    = 12
+    case dpadLeft    = 13
+    case dpadRight   = 14
+}
+
+public enum GamepadAxis: UInt8, Codable, Sendable, Hashable, CaseIterable {
+    case leftX        = 0
+    case leftY        = 1
+    case rightX       = 2
+    case rightY       = 3
+    case leftTrigger  = 4
+    case rightTrigger = 5
+}
+
+public struct GamepadButtonEvent: Codable, Sendable, Hashable {
+    public var gamepadID: UInt32
+    public var button: GamepadButton
+
+    public init(gamepadID: UInt32, button: GamepadButton) {
+        self.gamepadID = gamepadID
+        self.button = button
+    }
+}
+
+public struct GamepadAxisEvent: Codable, Sendable, Hashable {
+    public var gamepadID: UInt32
+    public var axis: GamepadAxis
+    /// Normalized to [-1, 1] for sticks, [0, 1] for triggers.
+    public var value: Float
+
+    public init(gamepadID: UInt32, axis: GamepadAxis, value: Float) {
+        self.gamepadID = gamepadID
+        self.axis = axis
+        self.value = value
+    }
+}
+
+/// Input event tagged with the native window it belongs to.
+public struct WindowInputEvent: Codable, Sendable {
+    public var windowID: WindowID
+    public var event: InputEvent
+
+    public init(windowID: WindowID, event: InputEvent) {
+        self.windowID = windowID
+        self.event = event
+    }
+}

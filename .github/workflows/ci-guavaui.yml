@@ -53,6 +53,7 @@ jobs:
           swift build --target GuavaUIWorkspace
           swift build --target GuavaUIDevTools
           swift build --target GuavaUIApp
+          swift build --product GuavaUIDemo
 
       - name: Run tests
         working-directory: GuavaUI
@@ -71,7 +72,7 @@ jobs:
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
           swift-version: '6.4.0'
-      - name: Test shared core and WebSocket service
+      - name: Test shared Compose scene and WebSocket service
         run: swift test --package-path GuavaUI/Portable
 
   browser:
@@ -97,3 +98,10 @@ jobs:
           python3 -m pip install -r requirements-dev.txt
           python3 -m playwright install --with-deps chromium
           npm run verify
+          npm run verify:dev
+
+      - name: Upload browser prototype
+        uses: actions/upload-artifact@v4
+        with:
+          name: guavaui-browser
+          path: GuavaUI/Browser/dist
