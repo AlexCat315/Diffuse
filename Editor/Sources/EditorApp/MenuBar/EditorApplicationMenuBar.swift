@@ -55,7 +55,7 @@ struct EditorApplicationMenuBar: View {
         )
 
         return AnyView(Popover(isPresented: isPresented,
-                               width: 220) {
+                               width: 240) {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 Text(menu.title)
                     .font(.body)
@@ -67,8 +67,8 @@ struct EditorApplicationMenuBar: View {
                 .cornerRadius(4)
         } content: {
             Menu(entries(for: menu),
-                 width: 220,
-                 maxVisibleRows: 12,
+                 width: 240,
+                 maxVisibleRows: 16,
                  onItemActivated: {
                 openMenuIndex = nil
             })

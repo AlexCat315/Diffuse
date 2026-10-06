@@ -43,12 +43,18 @@ enum EditorCommandDispatcher {
         case .showProblems:
             store.dispatch(.setOutputTab(.problems))
             EditorRootViewFactory.activatePanel("console", in: controller)
+        case let .showPanel(id):
+            if id == "inspector" { store.dispatch(.setInspectorSceneSettingsVisible(false)) }
+            EditorRootViewFactory.activatePanel(PanelID(rawValue: id), in: controller)
         case let .maximizePanel(id):
             let panelID = PanelID(rawValue: id)
             EditorRootViewFactory.activatePanel(panelID, in: controller)
             _ = controller.dispatch(.toggleMaximize(panelID))
         case .restorePanels:
             _ = controller.dispatch(.restoreMaximized)
+            for group in controller.document.groups.values where group.isCollapsed {
+                _ = controller.dispatch(.expand(group.id))
+            }
         case .saveLayout:
             EditorRootViewFactory.saveWorkspaceLayout(controller, for: store.workspaceMode,
                                                       preset: store.activeLayoutPreset)
@@ -117,8 +123,6 @@ enum EditorCommandDispatcher {
             saveShellState(app)
         case let .setLayoutPreset(nextPreset):
             let mode = nextPreset.mode
-            guard nextPreset != store.state.workspace.layoutPreset
-                    || mode != store.state.workspace.mode else { return }
             let previousMode = store.state.workspace.mode
             let previousPreset = store.state.workspace.layoutPreset
             EditorRootViewFactory.saveWorkspaceLayout(controller,
@@ -129,7 +133,9 @@ enum EditorCommandDispatcher {
                 store.dispatch(.setWorkspaceMode(mode))
             }
             store.dispatch(.setActiveLayoutPreset(nextPreset))
-            EditorRootViewFactory.loadLayoutPreset(into: controller, for: mode, preset: nextPreset, registry: registry)
+            // A named preset applies its built-in arrangement. Loading the
+            // saved custom dock here could make unrelated presets identical.
+            EditorRootViewFactory.resetLayout(into: controller, for: mode, preset: nextPreset, registry: registry)
             saveShellState(app)
         case .resetLayout:
             let mode = store.state.workspace.mode

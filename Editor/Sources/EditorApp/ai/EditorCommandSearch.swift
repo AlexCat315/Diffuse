@@ -61,6 +61,10 @@ enum EditorCommandSearch {
                 .setPlaybackState(playback),
                 enabled: state.workspace.mode.isGameWorkspace && state.timing.playbackState.canTransition(to: playback)))
         }
+        for preset in EditorLayoutPreset.presets(for: state.workspace.mode) {
+            commands.append(entry("layout." + preset.rawValue, preset.title, "", "layout 布局",
+                                  .setLayoutPreset(preset)))
+        }
         return commands
     }
 
