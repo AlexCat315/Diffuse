@@ -1,0 +1,13 @@
+{
+  "name": "guavaui-browser-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash build.sh",
+    "serve": "python3 -m http.server 8080 --bind 127.0.0.1 --directory dist",
+    "verify": "python3 verify.py"
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.4.2"
+  }
+}

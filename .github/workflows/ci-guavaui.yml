@@ -59,3 +59,41 @@ jobs:
         # Run every test target, including GuavaUIAppTests, and automatically
         # cover future targets without requiring workflow edits.
         run: swift test
+
+  portable:
+    name: Portable DevTools (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
+      - name: Test shared core and WebSocket service
+        run: swift test --package-path GuavaUI/Portable
+
+  browser:
+    name: Wasm browser prototype
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install matching Wasm SDK
+        run: swift sdk install https://download.swift.org/swift-6.4.0-release/wasm-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_wasm.artifactbundle.tar.gz --checksum f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d
+      - name: Build native diagnostic host
+        run: swift build --package-path GuavaUI/Portable
+      - name: Build Wasm and run browser checks
+        working-directory: GuavaUI/Browser
+        run: |
+          npm ci
+          npm run build
+          python3 -m pip install -r requirements-dev.txt
+          python3 -m playwright install --with-deps chromium
+          npm run verify

@@ -15,8 +15,8 @@
 ///   group 0, binding 0: uniform { viewport: vec2<f32> } — screen size in pixels
 ///   group 0, binding 1: 2D texture (alpha font atlas, or RGBA color image)
 ///   group 0, binding 2: sampler chosen per texture kind
-enum UIShader {
-    static let wgsl: String = """
+public enum UIShader {
+    public static let wgsl: String = """
     struct Uniforms {
         viewport: vec2<f32>,
         // 1.0 when the render target is sRGB (gamma-correct path); 0.0 for
@@ -78,18 +78,21 @@ enum UIShader {
         // u >= 20 → alpha-mask image. Source alpha is coverage; tint is RGB.
         if (in.uv.x >= 20.0) {
             let real_uv = vec2<f32>(in.uv.x - 20.0, in.uv.y);
-            let s = textureSample(atlas_tex, atlas_sampler, real_uv);
+            let s = textureSampleLevel(atlas_tex, atlas_sampler, real_uv, 0.0);
             return vec4<f32>(rgb, in.color.a * s.a);
         }
         // u >= 10 → RGBA color image tinted by `color` (icons, the 3D viewport).
         if (in.uv.x >= 10.0) {
             let real_uv = vec2<f32>(in.uv.x - 10.0, in.uv.y);
-            let s = textureSample(atlas_tex, atlas_sampler, real_uv);
+            let s = textureSampleLevel(atlas_tex, atlas_sampler, real_uv, 0.0);
             let stex = select(s.rgb, srgb_to_linear(s.rgb), is_srgb);
             return vec4<f32>(rgb * stex, in.color.a * s.a);
         }
         // Otherwise: alpha-only font glyph.
-        let a = textureSample(atlas_tex, atlas_sampler, in.uv).r;
+        // UI atlas/image textures use level zero. Explicit LOD also avoids
+        // implicit derivatives inside the per-primitive sentinel branches,
+        // which browser WebGPU rejects as non-uniform control flow.
+        let a = textureSampleLevel(atlas_tex, atlas_sampler, in.uv, 0.0).r;
         // Pure linear-light blending makes glyph stems look too THIN (which is
         // why DirectWrite/ClearType apply a "text gamma" rather than blending
         // in pure linear). On sRGB targets we remap the coverage so the linear

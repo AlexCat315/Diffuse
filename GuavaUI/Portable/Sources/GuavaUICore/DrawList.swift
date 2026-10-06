@@ -83,7 +83,7 @@ public final class DrawList {
 
     /// Apply a container's alpha to descendant geometry, including cached
     /// child layers. Local painters already apply their own node's opacity.
-    func multiplyOpacity(fromVertexIndex start: Int, by opacity: Float) {
+    public func multiplyOpacity(fromVertexIndex start: Int, by opacity: Float) {
         let alpha = max(0, min(1, opacity))
         guard alpha < 1 else { return }
         for index in start..<vertices.count {
@@ -120,7 +120,7 @@ public final class DrawList {
     /// existing scissor rectangles. This is used for unclipped leaf layers
     /// moving beneath an unchanged parent clip, such as text while scrolling.
     /// The caller must ensure every scissor comes from the stationary parent.
-    func append(_ other: DrawList,
+    public func append(_ other: DrawList,
                 vertexTranslationX: Float,
                 vertexTranslationY: Float) {
         if vertices.isEmpty,
@@ -390,50 +390,6 @@ public final class DrawList {
         indices.append(baseVertex + 1)
         indices.append(baseVertex + 2)
         recordIndices(at: baseIndex, count: 3, textureID: .none)
-    }
-
-    /// Append a fully laid-out text result. The atlas texture must be registered
-    /// with the renderer under `textureID`.
-    public func addText(
-        _ layout: TextLayoutResult,
-        origin: (x: Float, y: Float),
-        color: Color,
-        textureID: TextureID,
-        atlas: FontAtlas? = nil,
-        colorForGlyph: ((PositionedGlyph) -> Color?)? = nil
-    ) {
-        for line in layout.lines {
-            for glyph in line.glyphs {
-                let info = glyph.atlasInfo ?? atlas?.rasterizeGlyph(
-                    glyphIndex: glyph.glyphID,
-                    fontID: glyph.fontID
-                )
-                guard let info, info.width > 0, info.height > 0 else { continue }
-                let dx = snappedTextPixel(origin.x + glyph.x + info.bearingX)
-                let dy = snappedTextPixel(origin.y + glyph.y - info.bearingY)
-                addGlyphQuad(
-                    x: dx, y: dy,
-                    width: info.width, height: info.height,
-                    uvMinX: info.uvMinX, uvMinY: info.uvMinY,
-                    uvMaxX: info.uvMaxX, uvMaxY: info.uvMaxY,
-                    color: colorForGlyph?(glyph) ?? color, textureID: textureID
-                )
-            }
-        }
-    }
-    // MARK: - Internal
-
-    private func snappedTextPixel(_ value: Float) -> Float {
-        // Snap to a whole *physical* pixel. The draw list is in logical
-        // coordinates that the renderer scales by `ContentScaleHolder.current`
-        // to physical pixels; rounding in logical space lands glyphs on
-        // half-physical-pixels at fractional scales (e.g. 10→15 but 11→16.5 at
-        // 1.5×), so bilinear atlas sampling smears them. The glyph quad size is
-        // already an exact physical-pixel count, so a physical-aligned origin
-        // makes the atlas map 1:1 to the screen and stay crisp on HiDPI.
-        let scale = ContentScaleHolder.current
-        guard scale.isFinite, scale > 0 else { return value.rounded() }
-        return (value * scale).rounded() / scale
     }
 
     private func appendQuad(_ v0: UIVertex, _ v1: UIVertex, _ v2: UIVertex, _ v3: UIVertex, textureID: TextureID) {
