@@ -746,6 +746,12 @@ public final class SDL3Shell: Shell {
         if windows.isEmpty {
             tearDownSDLIfNeeded()
         }
+        #if os(macOS)
+        // SDL drives its own loop instead of NSApplication.run(). Commit
+        // implicit layer changes before the renderer checks window visibility
+        // and acquires a Metal drawable, including after creation or resize.
+        CATransaction.flush()
+        #endif
         return collected
     }
 

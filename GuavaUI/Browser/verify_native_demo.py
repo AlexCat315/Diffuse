@@ -46,21 +46,32 @@ def main():
                 page.locator("#captureState").click()
                 page.wait_for_function("document.querySelector('#stateSnapshot').value.includes('count')")
                 baseline = json.loads(page.locator("#stateSnapshot").input_value())
-                if options.require_presented:
-                    page.wait_for_function("state.timingFrames.some(f=>f.presented===true)", timeout=15000)
+                def last_frame():
+                    return page.evaluate("state.timingFrames.at(-1)?.frame ?? 0")
+
+                def require_submission(after=0):
+                    if options.require_presented:
+                        page.wait_for_function("after => { const frame=state.timingFrames.at(-1); return frame?.presented===true && frame.frame>after; }",
+                                               arg=after, timeout=15000)
+
+                require_submission()
                 page.locator("#startTimeline").click()
                 page.wait_for_function("observation.recording")
                 page.locator("#stateSnapshot").fill(json.dumps({"count": str(initial + 1), "dark": "false", "note": ""}))
+                before_state = last_frame()
                 page.locator("#restoreState").click()
                 page.wait_for_function("count => [...observation.values.values()][0]?.summary === String(count)", arg=initial + 1)
+                require_submission(before_state)
                 # This shared view has fixed boxes; State alone may legitimately
                 # skip clean Yoga passes. Change padding to require real layout.
                 page.evaluate("""window.demoNode = name => {
                     function find(n) { if(n.debugName===name) return n; for(const c of n.children??[]) {const found=find(c);if(found)return found;} }
                     return find(state.tree);
                 }; selectNode(demoNode('counter.card'));""")
+                before_layout = last_frame()
                 page.locator("#paddingLeft").fill("32")
                 page.wait_for_function("demoNode('counter.card').layout.padding.left === 32")
+                require_submission(before_layout)
                 page.wait_for_function("['component','recomposition','layout','draw'].every(p=>observation.events.some(e=>e.phase===p))")
                 page.locator("#startMirror").click()
                 page.wait_for_function("state.mirrorFrame != null && document.querySelector('#mirrorImage').naturalWidth > 0", timeout=15000)
@@ -75,13 +86,17 @@ def main():
                 frame = page.evaluate("demoNode('counter.increment').absoluteFrame")
                 mirror = page.locator("#mirrorImage").bounding_box()
                 logical = page.evaluate("({w:state.mirrorFrame.logicalWidth,h:state.mirrorFrame.logicalHeight})")
+                before_pointer = last_frame()
                 page.mouse.click(mirror["x"] + (frame["x"] + frame["w"] / 2) / logical["w"] * mirror["width"],
                                  mirror["y"] + (frame["y"] + frame["h"] / 2) / logical["h"] * mirror["height"])
                 page.wait_for_function("count => [...observation.values.values()][0]?.summary === String(count)", arg=initial + 2)
+                require_submission(before_pointer)
                 if options.screenshot:
                     page.locator("#startTimeline").scroll_into_view_if_needed()
                     page.screenshot(path=options.screenshot)
                 assert not errors, errors
+                if options.require_presented:
+                    print("Native primary surface: submitted frames after State, layout and pointer changes passed", flush=True)
                 print("Native Demo: explicit fields, live State, presentation status, CPU throughput, actual Yoga/draw/commit spans, Metal mirror pixels and remote pointer input passed", flush=True)
             finally:
                 if baseline is not None and page.evaluate("state.connected"):
