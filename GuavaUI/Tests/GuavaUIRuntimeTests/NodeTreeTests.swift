@@ -1,5 +1,6 @@
 import Testing
 @testable import GuavaUIRuntime
+@testable import GuavaUIScene
 
 @Suite("NodeTree")
 struct NodeTreeTests {
