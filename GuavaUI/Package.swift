@@ -15,6 +15,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Engine"),
+        .package(path: "Portable"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
         .package(url: "https://github.com/facebook/yoga.git", from: "3.2.1"),
     ],
@@ -45,6 +46,7 @@ let package = Package(
         .target(
             name: "GuavaUIRuntime",
             dependencies: [
+                .product(name: "GuavaUICore", package: "Portable"),
                 "CYoga",
                 "CFreeType",
                 "CHarfBuzz",
@@ -122,11 +124,13 @@ let package = Package(
         ),
 
         // MARK: - DevTools
-        // 进程内 WebSocket 调试服务器。基于 Network.framework，无第三方依赖。
+        // 进程内跨平台 WebSocket 调试服务器。传输和协议位于 Portable 包。
         // 仅依赖 GuavaUIRuntime 的只读快照接口，opt-in。
         .target(
             name: "GuavaUIDevTools",
             dependencies: [
+                .product(name: "GuavaUIDevToolsServer", package: "Portable"),
+                .product(name: "GuavaUIDevToolsProtocol", package: "Portable"),
                 "GuavaUIRuntime",
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),

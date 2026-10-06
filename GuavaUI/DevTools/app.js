@@ -76,7 +76,7 @@ function connect() {
 
   let ws;
   try {
-    ws = new WebSocket(url);
+    ws = url === "browser://guava" ? new window.GuavaBrowserConnection() : new WebSocket(url);
   } catch (error) {
     setStatus("Invalid Endpoint", false);
     appendLog({ level: "error", label: "client", message: String(error) });
@@ -143,6 +143,19 @@ function sendInput(payload) {
   // Input is a high-frequency notification stream; request IDs would make
   // the server emit an unnecessary acknowledgement for every pointer move.
   send("mirror.input", payload, false);
+}
+
+// The browser host announces readiness after its Wasm reactor is initialized.
+// Waiting for that announcement avoids racing a large debug module download.
+if (new URLSearchParams(location.search).get("transport") === "browser") {
+  document.body.classList.add("browserHost");
+  el.endpoint.value = "browser://guava";
+  el.endpoint.readOnly = true;
+  window.addEventListener("message", (event) => {
+    if (event.origin === location.origin && event.source === window.parent &&
+        event.data?.type === "guava.devtools.ready" && !state.ws) connect();
+  });
+  window.parent.postMessage({ type: "guava.devtools.probe" }, location.origin);
 }
 
 function handleEnvelope(env) {

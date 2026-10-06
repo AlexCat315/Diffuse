@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GuavaUI · Browser prototype</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header><strong>GuavaUI</strong><span>Swift / WebAssembly prototype</span><span id="status">Loading Wasm…</span></header>
+  <main>
+    <section class="preview">
+      <div class="heading"><h1>A shared core, running in your browser.</h1><p>Interact with the canvas, then inspect its tree or capture and restore state below.</p></div>
+      <div id="surface" tabindex="0" aria-label="GuavaUI counter preview">
+        <canvas id="gpu"></canvas><canvas id="fallback" hidden></canvas><canvas id="labels"></canvas>
+      </div>
+      <p id="stats"></p>
+      <div class="keyboard"><button id="increment">Increment</button><button id="reset">Reset</button><button id="theme">Toggle theme</button><span>Keyboard and screen reader controls for the canvas.</span></div>
+      <p class="scope">This prototype shares the desktop State, Binding, DrawList and WGSL implementations. Browser fonts draw the labels. The complete Compose, Yoga and FreeType runtime is the next porting stage.</p>
+    </section>
+    <section class="inspector"><h2>GuavaUI Inspector</h2><iframe id="inspector" title="GuavaUI DevTools" src="./devtools/index.html?transport=browser"></iframe></section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

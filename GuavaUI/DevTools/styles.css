@@ -360,3 +360,7 @@ textarea {
 .empty {
   color: var(--muted);
 }
+
+/* Browser hosts show the live canvas above their embedded Inspector. */
+.browserHost .mainPane { display: none; }
+.browserHost .workspace { grid-template-columns: minmax(240px, 1fr) minmax(300px, 1fr); }

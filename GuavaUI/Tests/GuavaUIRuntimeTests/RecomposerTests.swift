@@ -141,8 +141,8 @@ struct RecomposerTests {
         let state = State(wrappedValue: 0)
         var recomposeCount = 0
 
-        let id = ObjectIdentifier(state._storage)
-        state._storage.onChange = {
+        let id = state._storageIdentity
+        state._setOnChange {
             r.invalidate(scopeID: id) { recomposeCount += 1 }
         }
 
@@ -161,7 +161,7 @@ struct RecomposerTests {
     func bindingFiresOnChange() {
         let state = State(wrappedValue: "hello")
         var fired = false
-        state._storage.onChange = { fired = true }
+        state._setOnChange { fired = true }
 
         let binding = state.projectedValue
         binding.wrappedValue = "world"
