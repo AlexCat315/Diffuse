@@ -799,7 +799,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("missing gravity field")
         }
 
-        #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.gravity.y == -3)
+        #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.gravity.y == -3)
         let rebasedStack = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
         let rebasedForces = try #require(rebasedStack.modules.first { $0.id == "forces" })
         #expect(!rebasedForces.isEnabled)
@@ -868,7 +868,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected renderer module settings")
         }
         binding.wrappedValue = stack
-        #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderMode == .ribbon)
+        #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderMode == .ribbon)
 
         var stored = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
         #expect(stored.moduleSettingsDifferFromDefault("renderer"))
@@ -878,9 +878,9 @@ struct EditorInspectorSectionsTests {
         let resetEmitter = try #require(adapter.scene.component(ParticleEmitter.self, for: entity))
         let resetStack = resetEmitter.moduleStack
         let resetRenderer = try #require(resetStack.modules.first { $0.id == "renderer" })
-        #expect(resetEmitter.renderMode == .billboard)
-        #expect(resetEmitter.renderSortPriority == 0)
-        #expect(resetEmitter.renderBoundsMode == .disabled)
+        #expect(resetEmitter.settings.renderer.renderMode == .billboard)
+        #expect(resetEmitter.settings.renderer.renderSortPriority == 0)
+        #expect(resetEmitter.settings.renderer.renderBoundsMode == .disabled)
         #expect(resetRenderer.isExpanded)
         #expect(!resetStack.moduleSettingsDifferFromDefault("renderer"))
     }
@@ -1100,100 +1100,100 @@ struct EditorInspectorSectionsTests {
         binding.wrappedValue = stack
 
         let emitter = try #require(adapter.scene.component(ParticleEmitter.self, for: entity))
-        #expect(emitter.emissionRate == 77)
-        #expect(emitter.maxParticles == 512)
-        #expect(emitter.maxSpawnedParticlesPerFrame == 96)
-        #expect(emitter.simulationSpeed == 1.75)
-        #expect(emitter.distanceEmissionRate == 9)
-        #expect(emitter.emissionRateCurve == .easeInOut)
-        #expect(emitter.distanceEmissionRateCurve == .keyframes([
+        #expect(emitter.settings.emission.emissionRate == 77)
+        #expect(emitter.settings.emission.maxParticles == 512)
+        #expect(emitter.settings.emission.maxSpawnedParticlesPerFrame == 96)
+        #expect(emitter.settings.emission.simulationSpeed == 1.75)
+        #expect(emitter.settings.emission.distanceEmissionRate == 9)
+        #expect(emitter.settings.emission.emissionRateCurve == .easeInOut)
+        #expect(emitter.settings.emission.distanceEmissionRateCurve == .keyframes([
             ParticleCurveKeyframe(time: 0, value: 0.25),
             ParticleCurveKeyframe(time: 1, value: 1.5),
         ]))
-        #expect(emitter.burstInterval == 0.25)
-        #expect(emitter.seed == 123_456_789)
-        #expect(emitter.emissionShape == .cone)
-        #expect(emitter.originOffset == SIMD3<Float>(0.5, 1.5, -2.5))
-        #expect(emitter.spawnRadius == 2.25)
-        #expect(emitter.boxHalfExtents == SIMD3<Float>(4, 5, 6))
-        #expect(emitter.coneRadius == 3.5)
-        #expect(emitter.coneHeight == 7)
-        #expect(emitter.forceMode == .radial)
-        #expect(emitter.vectorFieldMode == .curl)
-        #expect(emitter.gravity == SIMD3<Float>(1, -4, 2))
-        #expect(emitter.noiseStrength == 2.5)
-        #expect(emitter.noiseScale == 1.75)
-        #expect(emitter.noiseSpeed == 0.6)
-        #expect(emitter.forceCenter == SIMD3<Float>(3, 4, 5))
-        #expect(emitter.forceRadius == 11)
-        #expect(emitter.forceFalloff == 1.5)
-        #expect(emitter.vectorFieldStrength == 8.5)
-        #expect(emitter.vectorFieldScale == 3)
-        #expect(emitter.vectorFieldScrollSpeed == 0.75)
-        #expect(emitter.startVelocity == SIMD3<Float>(1, 2, 3))
-        #expect(emitter.velocityRandomness == SIMD3<Float>(0.25, 0.5, 0.75))
-        #expect(emitter.velocityInheritance == 0.4)
-        #expect(emitter.collisionMode == .worldPlane)
-        #expect(emitter.collisionPlaneY == -2)
-        #expect(emitter.collisionRestitution == 0.8)
-        #expect(emitter.collisionDamping == 0.35)
-        #expect(emitter.blendMode == .additive)
-        #expect(emitter.lifetime == 2.5)
-        #expect(emitter.lifetimeRandomness == 0.4)
-        #expect(emitter.startSize == 1.2)
-        #expect(emitter.endSize == 0.3)
-        #expect(emitter.sizeRandomness == 0.25)
-        #expect(emitter.sizeCurve == .easeOut)
-        #expect(emitter.startColor == SIMD4<Float>(0.9, 0.25, 0.1, 0.8))
-        #expect(emitter.endColor == SIMD4<Float>(0.1, 0.35, 1, 0.2))
-        #expect(emitter.colorCurve == .keyframes([
+        #expect(emitter.settings.emission.burstInterval == 0.25)
+        #expect(emitter.settings.emission.seed == 123_456_789)
+        #expect(emitter.settings.shape.emissionShape == .cone)
+        #expect(emitter.settings.shape.originOffset == SIMD3<Float>(0.5, 1.5, -2.5))
+        #expect(emitter.settings.shape.spawnRadius == 2.25)
+        #expect(emitter.settings.shape.boxHalfExtents == SIMD3<Float>(4, 5, 6))
+        #expect(emitter.settings.shape.coneRadius == 3.5)
+        #expect(emitter.settings.shape.coneHeight == 7)
+        #expect(emitter.settings.forces.forceMode == .radial)
+        #expect(emitter.settings.forces.vectorFieldMode == .curl)
+        #expect(emitter.settings.forces.gravity == SIMD3<Float>(1, -4, 2))
+        #expect(emitter.settings.forces.noiseStrength == 2.5)
+        #expect(emitter.settings.forces.noiseScale == 1.75)
+        #expect(emitter.settings.forces.noiseSpeed == 0.6)
+        #expect(emitter.settings.forces.forceCenter == SIMD3<Float>(3, 4, 5))
+        #expect(emitter.settings.forces.forceRadius == 11)
+        #expect(emitter.settings.forces.forceFalloff == 1.5)
+        #expect(emitter.settings.forces.vectorFieldStrength == 8.5)
+        #expect(emitter.settings.forces.vectorFieldScale == 3)
+        #expect(emitter.settings.forces.vectorFieldScrollSpeed == 0.75)
+        #expect(emitter.settings.velocity.startVelocity == SIMD3<Float>(1, 2, 3))
+        #expect(emitter.settings.velocity.velocityRandomness == SIMD3<Float>(0.25, 0.5, 0.75))
+        #expect(emitter.settings.velocity.velocityInheritance == 0.4)
+        #expect(emitter.settings.collision.collisionMode == .worldPlane)
+        #expect(emitter.settings.collision.collisionPlaneY == -2)
+        #expect(emitter.settings.collision.collisionRestitution == 0.8)
+        #expect(emitter.settings.collision.collisionDamping == 0.35)
+        #expect(emitter.settings.appearance.blendMode == .additive)
+        #expect(emitter.settings.appearance.lifetime == 2.5)
+        #expect(emitter.settings.appearance.lifetimeRandomness == 0.4)
+        #expect(emitter.settings.appearance.startSize == 1.2)
+        #expect(emitter.settings.appearance.endSize == 0.3)
+        #expect(emitter.settings.appearance.sizeRandomness == 0.25)
+        #expect(emitter.settings.appearance.sizeCurve == .easeOut)
+        #expect(emitter.settings.appearance.startColor == SIMD4<Float>(0.9, 0.25, 0.1, 0.8))
+        #expect(emitter.settings.appearance.endColor == SIMD4<Float>(0.1, 0.35, 1, 0.2))
+        #expect(emitter.settings.appearance.colorCurve == .keyframes([
             ParticleCurveKeyframe(time: 0, value: 0),
             ParticleCurveKeyframe(time: 0.65, value: 0.9),
             ParticleCurveKeyframe(time: 1, value: 1),
         ]))
-        #expect(emitter.startRotation == 15)
-        #expect(emitter.rotationRandomness == 45)
-        #expect(emitter.angularVelocity == 120)
-        #expect(emitter.angularVelocityRandomness == 30)
-        #expect(emitter.textureSheetPlaybackMode == .loop)
-        #expect(emitter.textureSheetFrameRate == 24)
-        #expect(emitter.textureSheetColumns == 4)
-        #expect(emitter.textureSheetRows == 2)
-        #expect(emitter.textureSheetFrameCount == 8)
-        #expect(emitter.textureSheetStartFrame == 2)
-        #expect(emitter.textureSheetFrameRandomness == 3)
-        #expect(emitter.renderMode == .ribbon)
-        #expect(emitter.sortMode == .oldestFirst)
-        #expect(emitter.renderSortPriority == 12)
-        #expect(emitter.renderAlignment == .velocity)
-        #expect(emitter.renderBoundsMode == .manual)
-        #expect(emitter.maxRenderDistance == 123)
-        #expect(emitter.renderDistanceFadeRange == 9)
-        #expect(emitter.renderLODStartDistance == 30)
-        #expect(emitter.renderLODEndDistance == 120)
-        #expect(emitter.renderLODMinParticleScale == 0.35)
-        #expect(emitter.renderBoundsRadius == 42)
-        #expect(emitter.velocityStretchScale == 0.5)
-        #expect(emitter.velocityStretchMax == 9)
-        #expect(emitter.trailLength == 1.25)
-        #expect(emitter.trailSegments == 7)
-        #expect(emitter.trailEndAlphaScale == 0.3)
-        #expect(emitter.trailEndSizeScale == 0.45)
-        #expect(emitter.ribbonWidthScale == 1.6)
-        #expect(emitter.ribbonTailWidthScale == 0.2)
-        #expect(emitter.ribbonTailAlphaScale == 0.4)
-        #expect(emitter.ribbonMaxSegmentLength == 5)
-        #expect(emitter.ribbonJoinOverlapScale == 0.15)
-        #expect(emitter.ribbonSmoothingSegments == 4)
-        #expect(emitter.ribbonTextureTiling == 4)
-        #expect(emitter.ribbonTextureOffset == 0.75)
-        #expect(emitter.subEmitterTrigger == .collision)
-        #expect(emitter.subEmitterBurstCount == 3)
-        #expect(emitter.subEmitterProbability == 0.6)
-        #expect(emitter.subEmitterMaxDepth == 2)
-        #expect(emitter.subEmitterInheritVelocity == 0.25)
-        #expect(emitter.subEmitterLifetime == 1.75)
-        #expect(emitter.subEmitters == [
+        #expect(emitter.settings.appearance.startRotation == 15)
+        #expect(emitter.settings.appearance.rotationRandomness == 45)
+        #expect(emitter.settings.appearance.angularVelocity == 120)
+        #expect(emitter.settings.appearance.angularVelocityRandomness == 30)
+        #expect(emitter.settings.textureSheet.playbackMode == .loop)
+        #expect(emitter.settings.textureSheet.frameRate == 24)
+        #expect(emitter.settings.textureSheet.columns == 4)
+        #expect(emitter.settings.textureSheet.rows == 2)
+        #expect(emitter.settings.textureSheet.frameCount == 8)
+        #expect(emitter.settings.textureSheet.startFrame == 2)
+        #expect(emitter.settings.textureSheet.frameRandomness == 3)
+        #expect(emitter.settings.renderer.renderMode == .ribbon)
+        #expect(emitter.settings.renderer.sortMode == .oldestFirst)
+        #expect(emitter.settings.renderer.renderSortPriority == 12)
+        #expect(emitter.settings.renderer.renderAlignment == .velocity)
+        #expect(emitter.settings.renderer.renderBoundsMode == .manual)
+        #expect(emitter.settings.renderer.maxRenderDistance == 123)
+        #expect(emitter.settings.renderer.renderDistanceFadeRange == 9)
+        #expect(emitter.settings.renderer.renderLODStartDistance == 30)
+        #expect(emitter.settings.renderer.renderLODEndDistance == 120)
+        #expect(emitter.settings.renderer.renderLODMinParticleScale == 0.35)
+        #expect(emitter.settings.renderer.renderBoundsRadius == 42)
+        #expect(emitter.settings.renderer.velocityStretchScale == 0.5)
+        #expect(emitter.settings.renderer.velocityStretchMax == 9)
+        #expect(emitter.settings.trails.trailLength == 1.25)
+        #expect(emitter.settings.trails.trailSegments == 7)
+        #expect(emitter.settings.trails.trailEndAlphaScale == 0.3)
+        #expect(emitter.settings.trails.trailEndSizeScale == 0.45)
+        #expect(emitter.settings.trails.ribbonWidthScale == 1.6)
+        #expect(emitter.settings.trails.ribbonTailWidthScale == 0.2)
+        #expect(emitter.settings.trails.ribbonTailAlphaScale == 0.4)
+        #expect(emitter.settings.trails.ribbonMaxSegmentLength == 5)
+        #expect(emitter.settings.trails.ribbonJoinOverlapScale == 0.15)
+        #expect(emitter.settings.trails.ribbonSmoothingSegments == 4)
+        #expect(emitter.settings.trails.ribbonTextureTiling == 4)
+        #expect(emitter.settings.trails.ribbonTextureOffset == 0.75)
+        #expect(emitter.settings.subEmitters.legacyTrigger == .collision)
+        #expect(emitter.settings.subEmitters.legacyBurstCount == 3)
+        #expect(emitter.settings.subEmitters.legacyProbability == 0.6)
+        #expect(emitter.settings.subEmitters.legacyMaxDepth == 2)
+        #expect(emitter.settings.subEmitters.legacyInheritVelocity == 0.25)
+        #expect(emitter.settings.subEmitters.legacyLifetime == 1.75)
+        #expect(emitter.settings.subEmitters.rules == [
             ParticleSubEmitter(trigger: .death,
                                burstCount: 5,
                                probability: 0.75,
@@ -1207,9 +1207,9 @@ struct EditorInspectorSectionsTests {
                                startColor: SIMD4<Float>(1, 0.5, 0.25, 1),
                                endColor: SIMD4<Float>(1, 0.1, 0, 0)),
         ])
-        #expect(emitter.simulationSpace == .world)
-        #expect(emitter.simulationBackend == .gpuIfSupported)
-        #expect(emitter.gpuSimulationWorkgroupSize == 96)
+        #expect(emitter.settings.gpuSimulation.simulationSpace == .world)
+        #expect(emitter.settings.gpuSimulation.simulationBackend == .gpuIfSupported)
+        #expect(emitter.settings.gpuSimulation.workgroupSize == 96)
 
         let storedStack = emitter.moduleStack
         #expect(storedStack.modules.first { $0.id == "emission" }?.isExpanded == true)
@@ -1276,74 +1276,74 @@ struct EditorInspectorSectionsTests {
         if case let .constrainedNumber(rate, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-rate") {
             rate.wrappedValue = 42
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.emissionRate == 42)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.emissionRate == 42)
         } else { Issue.record("missing rate field") }
 
         if case let .particleCurve(rateCurve) =
             field(adapter, id, section: "particle-emitter", field: "particle-rate-curve") {
             rateCurve.wrappedValue = .constant(1.5)
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.emissionRateCurve == .constant(1.5))
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.emissionRateCurve == .constant(1.5))
         } else { Issue.record("missing rate curve field") }
 
         if case let .constrainedNumber(duration, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-duration") {
             duration.wrappedValue = 2.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.duration == 2.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.duration == 2.5)
         } else { Issue.record("missing duration field") }
 
         if case let .constrainedNumber(speed, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-simulation-speed") {
             speed.wrappedValue = 0.25
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.simulationSpeed == 0.25)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.simulationSpeed == 0.25)
         } else { Issue.record("missing speed field") }
 
         if case let .constrainedNumber(prewarm, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-prewarm-time") {
             prewarm.wrappedValue = 1.25
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.prewarmTime == 1.25)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.prewarmTime == 1.25)
         } else { Issue.record("missing prewarm field") }
 
         if case let .constrainedNumber(prewarmStep, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-prewarm-step") {
             prewarmStep.wrappedValue = 0.05
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.prewarmStep == 0.05)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.prewarmStep == 0.05)
         } else { Issue.record("missing prewarm step field") }
 
         if case let .constrainedNumber(maxP, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-max") {
             maxP.wrappedValue = 128
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.maxParticles == 128)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.maxParticles == 128)
         } else { Issue.record("missing max field") }
 
         if case let .constrainedNumber(maxSpawned, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-max-spawned-per-frame") {
             maxSpawned.wrappedValue = 48
             #expect(adapter.scene.component(ParticleEmitter.self,
-                                            for: entity)?.maxSpawnedParticlesPerFrame == 48)
+                                            for: entity)?.settings.emission.maxSpawnedParticlesPerFrame == 48)
         } else { Issue.record("missing max spawned per frame field") }
 
         if case let .constrainedNumber(maxRendered, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-max-rendered") {
             maxRendered.wrappedValue = 64
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.maxRenderedParticles == 64)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.maxRenderedParticles == 64)
         } else { Issue.record("missing max rendered field") }
 
         if case let .constrainedNumber(burstCount, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-burst-count") {
             burstCount.wrappedValue = 4.8
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.burstCount == 5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.burstCount == 5)
         } else { Issue.record("missing burst count field") }
 
         if case let .constrainedNumber(burstInterval, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-burst-interval") {
             burstInterval.wrappedValue = 0.25
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.burstInterval == 0.25)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.burstInterval == 0.25)
         } else { Issue.record("missing burst interval field") }
 
         if case let .constrainedNumber(distanceRate, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-distance-rate") {
             distanceRate.wrappedValue = 12
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.distanceEmissionRate == 12)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.distanceEmissionRate == 12)
         } else { Issue.record("missing distance emission field") }
 
         if case let .particleCurve(distanceRateCurve) =
@@ -1352,7 +1352,7 @@ struct EditorInspectorSectionsTests {
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 2),
             ])
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.distanceEmissionRateCurve == .keyframes([
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.distanceEmissionRateCurve == .keyframes([
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 2),
             ]))
@@ -1361,49 +1361,49 @@ struct EditorInspectorSectionsTests {
         if case let .particleSubEmitterTrigger(trigger) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-trigger") {
             trigger.wrappedValue = .collision
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterTrigger == .collision)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyTrigger == .collision)
         } else { Issue.record("missing sub-emitter trigger field") }
 
         if case let .constrainedNumber(subCount, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-burst") {
             subCount.wrappedValue = 3.8
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterBurstCount == 4)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyBurstCount == 4)
         } else { Issue.record("missing sub-emitter count field") }
 
         if case let .constrainedNumber(subChance, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-probability") {
             subChance.wrappedValue = 0.75
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterProbability == 0.75)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyProbability == 0.75)
         } else { Issue.record("missing sub-emitter chance field") }
 
         if case let .constrainedNumber(subDepth, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-depth") {
             subDepth.wrappedValue = 2.2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterMaxDepth == 2)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyMaxDepth == 2)
         } else { Issue.record("missing sub-emitter depth field") }
 
         if case let .constrainedNumber(subInherit, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-inherit") {
             subInherit.wrappedValue = 0.45
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterInheritVelocity == 0.45)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyInheritVelocity == 0.45)
         } else { Issue.record("missing sub-emitter inherit field") }
 
         if case let .constrainedNumber(subLifetime, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-lifetime") {
             subLifetime.wrappedValue = 0.6
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterLifetime == 0.6)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyLifetime == 0.6)
         } else { Issue.record("missing sub-emitter lifetime field") }
 
         if case let .constrainedNumber(subStartSize, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-start-size") {
             subStartSize.wrappedValue = 0.2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterStartSize == 0.2)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyStartSize == 0.2)
         } else { Issue.record("missing sub-emitter start size field") }
 
         if case let .constrainedNumber(subEndSize, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-end-size") {
             subEndSize.wrappedValue = 0.05
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterEndSize == 0.05)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyEndSize == 0.05)
         } else { Issue.record("missing sub-emitter end size field") }
 
         if case let .particleSubEmitters(subEmitters) =
@@ -1436,9 +1436,9 @@ struct EditorInspectorSectionsTests {
                                    startColor: SIMD4<Float>(0.2, 0.4, 1, 1),
                                    endColor: SIMD4<Float>(0.2, 0.4, 1, 0)),
             ]
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitters.count == 2)
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitters[0].trigger == .death)
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitters[1].trigger == .collision)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.rules.count == 2)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.rules[0].trigger == .death)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.rules[1].trigger == .collision)
 
             var edited = subEmitters.wrappedValue
             edited[0].burstCount = -3
@@ -1451,7 +1451,7 @@ struct EditorInspectorSectionsTests {
             edited.removeLast()
             subEmitters.wrappedValue = edited
 
-            let stored = adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitters
+            let stored = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.rules
             #expect(stored?.count == 1)
             #expect(stored?[0].burstCount == 0)
             #expect(stored?[0].probability == 1)
@@ -1462,102 +1462,102 @@ struct EditorInspectorSectionsTests {
             #expect(stored?[0].endSize == 0)
 
             subEmitters.wrappedValue = []
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitters.isEmpty == true)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.rules.isEmpty == true)
         } else { Issue.record("missing particle sub-emitters field") }
 
         if case let .constrainedNumber(sheetColumns, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-columns") {
             sheetColumns.wrappedValue = 4
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetColumns == 4)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.columns == 4)
         } else { Issue.record("missing texture sheet columns field") }
 
         if case let .constrainedNumber(sheetRows, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-rows") {
             sheetRows.wrappedValue = 2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetRows == 2)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.rows == 2)
         } else { Issue.record("missing texture sheet rows field") }
 
         if case let .constrainedNumber(sheetFrames, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-frames") {
             sheetFrames.wrappedValue = 7.2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetFrameCount == 7)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.frameCount == 7)
         } else { Issue.record("missing texture sheet frame field") }
 
         if case let .constrainedNumber(sheetFPS, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-fps") {
             sheetFPS.wrappedValue = 12
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetFrameRate == 12)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.frameRate == 12)
         } else { Issue.record("missing texture sheet fps field") }
 
         if case let .particleTextureSheetPlaybackMode(playback) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-playback") {
             playback.wrappedValue = .loop
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetPlaybackMode == .loop)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.playbackMode == .loop)
         } else { Issue.record("missing texture sheet playback field") }
 
         if case let .constrainedNumber(sheetStart, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-start-frame") {
             sheetStart.wrappedValue = 3.2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetStartFrame == 3)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.startFrame == 3)
         } else { Issue.record("missing texture sheet start frame field") }
 
         if case let .constrainedNumber(sheetRandom, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-random") {
             sheetRandom.wrappedValue = 2.9
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetFrameRandomness == 3)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.frameRandomness == 3)
         } else { Issue.record("missing texture sheet random field") }
 
         if case let .constrainedNumber(trailLength, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-trail-length") {
             trailLength.wrappedValue = 0.75
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.trailLength == 0.75)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.trails.trailLength == 0.75)
         } else { Issue.record("missing trail length field") }
 
         if case let .constrainedNumber(trailSegments, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-trail-segments") {
             trailSegments.wrappedValue = 6.2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.trailSegments == 6)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.trails.trailSegments == 6)
         } else { Issue.record("missing trail segments field") }
 
         if case let .constrainedNumber(trailEndSize, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-trail-end-size") {
             trailEndSize.wrappedValue = 0.35
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.trailEndSizeScale == 0.35)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.trails.trailEndSizeScale == 0.35)
         } else { Issue.record("missing trail end size field") }
 
         if case let .constrainedNumber(trailEndAlpha, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-trail-end-alpha") {
             trailEndAlpha.wrappedValue = 0.2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.trailEndAlphaScale == 0.2)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.trails.trailEndAlphaScale == 0.2)
         } else { Issue.record("missing trail end alpha field") }
 
         if case let .bool(emitting) = field(adapter, id, section: "particle-emitter", field: "particle-emitting") {
             emitting.wrappedValue = false
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.isEmitting == false)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.isEmitting == false)
         } else { Issue.record("missing emitting field") }
 
         if case let .particleEmissionShape(shape) =
             field(adapter, id, section: "particle-emitter", field: "particle-shape") {
             shape.wrappedValue = .cone
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.emissionShape == .cone)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.shape.emissionShape == .cone)
         } else { Issue.record("missing shape field") }
 
         if case let .particleCollisionMode(mode) =
             field(adapter, id, section: "particle-emitter", field: "particle-collision-mode") {
             mode.wrappedValue = .worldPlane
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionMode == .worldPlane)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.collision.collisionMode == .worldPlane)
         } else { Issue.record("missing collision mode field") }
 
         if case let .particleSimulationSpace(space) =
             field(adapter, id, section: "particle-emitter", field: "particle-simulation-space") {
             space.wrappedValue = .world
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.simulationSpace == .world)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationSpace == .world)
         } else { Issue.record("missing simulation space field") }
 
         if case let .particleSimulationBackend(backend) =
             field(adapter, id, section: "particle-emitter", field: "particle-simulation-backend") {
             backend.wrappedValue = .gpuRequired
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.simulationBackend == .gpuRequired)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationBackend == .gpuRequired)
         } else { Issue.record("missing simulation backend field") }
 
         if case let .constrainedNumber(workgroupSize, minimum, maximum, _, _) =
@@ -1565,7 +1565,7 @@ struct EditorInspectorSectionsTests {
             #expect(minimum == 1)
             #expect(maximum == Float(ParticleGPUSimulationPlan.maximumWorkgroupSize))
             workgroupSize.wrappedValue = 128
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.gpuSimulationWorkgroupSize == 128)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.workgroupSize == 128)
         } else { Issue.record("missing GPU workgroup field") }
 
         if case let .readOnly(gpuStatus) =
@@ -1576,55 +1576,55 @@ struct EditorInspectorSectionsTests {
         if case let .constrainedNumber(restitution, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-collision-restitution") {
             restitution.wrappedValue = 0.7
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionRestitution == 0.7)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.collision.collisionRestitution == 0.7)
         } else { Issue.record("missing restitution field") }
 
         if case let .constrainedNumber(noiseStrength, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-noise-strength") {
             noiseStrength.wrappedValue = 1.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.noiseStrength == 1.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.noiseStrength == 1.5)
         } else { Issue.record("missing noise strength field") }
 
         if case let .constrainedNumber(noiseScale, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-noise-scale") {
             noiseScale.wrappedValue = 2.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.noiseScale == 2.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.noiseScale == 2.5)
         } else { Issue.record("missing noise scale field") }
 
         if case let .constrainedNumber(noiseSpeed, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-noise-speed") {
             noiseSpeed.wrappedValue = 0.75
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.noiseSpeed == 0.75)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.noiseSpeed == 0.75)
         } else { Issue.record("missing noise speed field") }
 
         if case let .particleForceMode(forceMode) =
             field(adapter, id, section: "particle-emitter", field: "particle-force-mode") {
             forceMode.wrappedValue = .vortex
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.forceMode == .vortex)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceMode == .vortex)
         } else { Issue.record("missing force mode field") }
 
         if case let .constrainedNumber(forceRadius, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-force-radius") {
             forceRadius.wrappedValue = 12
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.forceRadius == 12)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceRadius == 12)
         } else { Issue.record("missing force radius field") }
 
         if case let .constrainedNumber(forceStrength, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-force-strength") {
             forceStrength.wrappedValue = -3.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.forceStrength == -3.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceStrength == -3.5)
         } else { Issue.record("missing force strength field") }
 
         if case let .constrainedNumber(forceFalloff, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-force-falloff") {
             forceFalloff.wrappedValue = 2.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.forceFalloff == 2.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceFalloff == 2.5)
         } else { Issue.record("missing force falloff field") }
 
         if case let .particleVectorFieldMode(vectorFieldMode) =
             field(adapter, id, section: "particle-emitter", field: "particle-vector-field-mode") {
             vectorFieldMode.wrappedValue = .curl
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.vectorFieldMode == .curl)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldMode == .curl)
         } else { Issue.record("missing vector field mode field") }
 
         if case let .vector3(x, y, z) =
@@ -1632,26 +1632,26 @@ struct EditorInspectorSectionsTests {
             x.wrappedValue = 0
             y.wrappedValue = 0
             z.wrappedValue = 1
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.vectorFieldDirection
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldDirection
                     == SIMD3<Float>(0, 0, 1))
         } else { Issue.record("missing vector field direction field") }
 
         if case let .constrainedNumber(vectorFieldStrength, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-vector-field-strength") {
             vectorFieldStrength.wrappedValue = 6.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.vectorFieldStrength == 6.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldStrength == 6.5)
         } else { Issue.record("missing vector field strength field") }
 
         if case let .constrainedNumber(vectorFieldScale, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-vector-field-scale") {
             vectorFieldScale.wrappedValue = 2.25
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.vectorFieldScale == 2.25)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldScale == 2.25)
         } else { Issue.record("missing vector field scale field") }
 
         if case let .constrainedNumber(vectorFieldScroll, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-vector-field-scroll") {
             vectorFieldScroll.wrappedValue = 0.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.vectorFieldScrollSpeed == 0.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldScrollSpeed == 0.5)
         } else { Issue.record("missing vector field scroll field") }
 
         if case let .particleCurve(sizeCurve) =
@@ -1660,7 +1660,7 @@ struct EditorInspectorSectionsTests {
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 1),
             ])
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.sizeCurve == .keyframes([
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.sizeCurve == .keyframes([
                 ParticleCurveKeyframe(time: 0, value: 0),
                 ParticleCurveKeyframe(time: 1, value: 1),
             ]))
@@ -1669,109 +1669,109 @@ struct EditorInspectorSectionsTests {
         if case let .constrainedNumber(sizeRandomness, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-size-randomness") {
             sizeRandomness.wrappedValue = 0.3
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.sizeRandomness == 0.3)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.sizeRandomness == 0.3)
         } else { Issue.record("missing size randomness field") }
 
         if case let .constrainedNumber(rotation, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-rotation") {
             rotation.wrappedValue = 0.4
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.startRotation == 0.4)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.startRotation == 0.4)
         } else { Issue.record("missing rotation field") }
 
         if case let .constrainedNumber(rotationRandom, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-rotation-randomness") {
             rotationRandom.wrappedValue = 0.2
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.rotationRandomness == 0.2)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.rotationRandomness == 0.2)
         } else { Issue.record("missing rotation randomness field") }
 
         if case let .constrainedNumber(spin, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-angular-velocity") {
             spin.wrappedValue = 1.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.angularVelocity == 1.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.angularVelocity == 1.5)
         } else { Issue.record("missing angular velocity field") }
 
         if case let .constrainedNumber(spinRandom, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-angular-velocity-randomness") {
             spinRandom.wrappedValue = 0.75
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.angularVelocityRandomness == 0.75)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.angularVelocityRandomness == 0.75)
         } else { Issue.record("missing angular velocity randomness field") }
 
         if case let .constrainedNumber(velocityInheritance, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-velocity-inheritance") {
             velocityInheritance.wrappedValue = 0.4
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.velocityInheritance == 0.4)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.velocity.velocityInheritance == 0.4)
         } else { Issue.record("missing velocity inheritance field") }
 
         if case let .particleCurve(colorCurve) =
             field(adapter, id, section: "particle-emitter", field: "particle-color-curve") {
             colorCurve.wrappedValue = .easeOut
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.colorCurve == .easeOut)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.colorCurve == .easeOut)
         } else { Issue.record("missing color curve field") }
 
         if case let .particleBlendMode(blendMode) =
             field(adapter, id, section: "particle-emitter", field: "particle-blend-mode") {
             blendMode.wrappedValue = .additive
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.blendMode == .additive)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.blendMode == .additive)
         } else { Issue.record("missing blend mode field") }
 
         if case let .particleRenderAlignment(alignment) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-alignment") {
             alignment.wrappedValue = .velocity
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderAlignment == .velocity)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderAlignment == .velocity)
         } else { Issue.record("missing render alignment field") }
 
         if case let .constrainedNumber(velocityStretch, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-velocity-stretch-scale") {
             velocityStretch.wrappedValue = 0.5
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.velocityStretchScale == 0.5)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.velocityStretchScale == 0.5)
         } else { Issue.record("missing velocity stretch field") }
 
         if case let .constrainedNumber(maxStretch, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-velocity-stretch-max") {
             maxStretch.wrappedValue = 6
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.velocityStretchMax == 6)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.velocityStretchMax == 6)
         } else { Issue.record("missing max stretch field") }
 
         if case let .constrainedNumber(maxRenderDistance, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-max-render-distance") {
             maxRenderDistance.wrappedValue = 120
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.maxRenderDistance == 120)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.maxRenderDistance == 120)
         } else { Issue.record("missing max render distance field") }
 
         if case let .constrainedNumber(distanceFade, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-distance-fade") {
             distanceFade.wrappedValue = 24
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderDistanceFadeRange == 24)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderDistanceFadeRange == 24)
         } else { Issue.record("missing render distance fade field") }
 
         if case let .constrainedNumber(lodStart, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-lod-start") {
             lodStart.wrappedValue = 40
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderLODStartDistance == 40)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderLODStartDistance == 40)
         } else { Issue.record("missing render LOD start field") }
 
         if case let .constrainedNumber(lodEnd, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-lod-end") {
             lodEnd.wrappedValue = 120
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderLODEndDistance == 120)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderLODEndDistance == 120)
         } else { Issue.record("missing render LOD end field") }
 
         if case let .constrainedNumber(lodScale, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-lod-min-scale") {
             lodScale.wrappedValue = 0.3
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderLODMinParticleScale == 0.3)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderLODMinParticleScale == 0.3)
         } else { Issue.record("missing render LOD scale field") }
 
         if case let .particleRenderBoundsMode(boundsMode) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-bounds-mode") {
             boundsMode.wrappedValue = .automatic
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderBoundsMode == .automatic)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderBoundsMode == .automatic)
         } else { Issue.record("missing render bounds mode field") }
 
         if case let .constrainedNumber(boundsRadius, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-bounds-radius") {
             boundsRadius.wrappedValue = 48
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderBoundsRadius == 48)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderBoundsRadius == 48)
         } else { Issue.record("missing render bounds radius field") }
 
         if case let .readOnly(estimate) =
@@ -1786,11 +1786,11 @@ struct EditorInspectorSectionsTests {
                                                                 name: "smoke",
                                                                 subtitle: "/tmp/particle-smoke.png",
                                                                 kind: "Texture")
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureAssetID == "Assets/Textures/smoke.png")
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.texturePath == "/tmp/particle-smoke.png")
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.textureAssetID == "Assets/Textures/smoke.png")
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.texturePath == "/tmp/particle-smoke.png")
             textureAsset.wrappedValue = nil
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureAssetID == nil)
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.texturePath == nil)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.textureAssetID == nil)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.texturePath == nil)
         } else { Issue.record("missing particle texture asset field") }
     }
 
@@ -1806,7 +1806,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected gravity vector3"); return
         }
         gx.wrappedValue = 1; gy.wrappedValue = -20; gz.wrappedValue = 3
-        let g = adapter.scene.component(ParticleEmitter.self, for: entity)?.gravity
+        let g = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.gravity
         #expect(g == SIMD3<Float>(1, -20, 3))
 
         guard case let .vector3(bx, by, bz) =
@@ -1814,7 +1814,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected box extents vector3"); return
         }
         bx.wrappedValue = 2; by.wrappedValue = 3; bz.wrappedValue = 4
-        let box = adapter.scene.component(ParticleEmitter.self, for: entity)?.boxHalfExtents
+        let box = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.shape.boxHalfExtents
         #expect(box == SIMD3<Float>(2, 3, 4))
 
         guard case let .vector3(fcx, fcy, fcz) =
@@ -1822,7 +1822,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected force center vector3"); return
         }
         fcx.wrappedValue = 1; fcy.wrappedValue = 2; fcz.wrappedValue = 3
-        let center = adapter.scene.component(ParticleEmitter.self, for: entity)?.forceCenter
+        let center = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceCenter
         #expect(center == SIMD3<Float>(1, 2, 3))
 
         guard case let .vector3(fax, fay, faz) =
@@ -1830,7 +1830,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected force axis vector3"); return
         }
         fax.wrappedValue = 0; fay.wrappedValue = 1; faz.wrappedValue = 0
-        let axis = adapter.scene.component(ParticleEmitter.self, for: entity)?.forceAxis
+        let axis = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceAxis
         #expect(axis == SIMD3<Float>(0, 1, 0))
 
         guard case let .vector3(svx, svy, svz) =
@@ -1838,7 +1838,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected sub-emitter velocity vector3"); return
         }
         svx.wrappedValue = 1; svy.wrappedValue = 2; svz.wrappedValue = 3
-        let subVelocity = adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterStartVelocity
+        let subVelocity = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyStartVelocity
         #expect(subVelocity == SIMD3<Float>(1, 2, 3))
 
         guard case let .vector3(srx, sry, srz) =
@@ -1846,7 +1846,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected sub-emitter velocity random vector3"); return
         }
         srx.wrappedValue = 0.1; sry.wrappedValue = 0.2; srz.wrappedValue = 0.3
-        let subRandom = adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterVelocityRandomness
+        let subRandom = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyVelocityRandomness
         #expect(subRandom == SIMD3<Float>(0.1, 0.2, 0.3))
 
         guard case let .color(subStart) =
@@ -1854,7 +1854,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected sub-emitter start color"); return
         }
         subStart.wrappedValue = Color(r: 1, g: 0.5, b: 0, a: 1)
-        let subStartColor = adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterStartColor
+        let subStartColor = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyStartColor
         #expect(subStartColor == SIMD4<Float>(1, 0.5, 0, 1))
 
         guard case let .color(subEnd) =
@@ -1862,7 +1862,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected sub-emitter end color"); return
         }
         subEnd.wrappedValue = Color(r: 1, g: 0, b: 0, a: 0)
-        let subEndColor = adapter.scene.component(ParticleEmitter.self, for: entity)?.subEmitterEndColor
+        let subEndColor = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyEndColor
         #expect(subEndColor == SIMD4<Float>(1, 0, 0, 0))
 
         guard case let .color(start) =
@@ -1870,7 +1870,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected start color"); return
         }
         start.wrappedValue = Color(r: 1, g: 0, b: 0, a: 1)
-        let c = adapter.scene.component(ParticleEmitter.self, for: entity)?.startColor
+        let c = adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.startColor
         #expect(c == SIMD4<Float>(1, 0, 0, 1))
     }
 }

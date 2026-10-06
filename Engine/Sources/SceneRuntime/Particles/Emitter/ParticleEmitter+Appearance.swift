@@ -4,8 +4,8 @@ import SIMDCompat
 extension ParticleEmitter {
     /// UV rect for a particle's current texture sheet frame: x, y, width, height.
     public func textureUVRect(for particle: Particle) -> SIMD4<Float> {
-        let columns = max(1, textureSheetColumns)
-        let rows = max(1, textureSheetRows)
+        let columns = max(1, settings.textureSheet.columns)
+        let rows = max(1, settings.textureSheet.rows)
         let maxFrames = max(1, columns * rows)
         let frameIndex = textureSheetFrameIndex(for: particle, maxFrames: maxFrames)
         let column = frameIndex % columns
@@ -21,42 +21,42 @@ extension ParticleEmitter {
     }
 
     public func textureSheetFrameIndex(for particle: Particle) -> Int {
-        let columns = max(1, textureSheetColumns)
-        let rows = max(1, textureSheetRows)
+        let columns = max(1, settings.textureSheet.columns)
+        let rows = max(1, settings.textureSheet.rows)
         return textureSheetFrameIndex(for: particle, maxFrames: max(1, columns * rows))
     }
 
     private func textureSheetFrameIndex(for particle: Particle, maxFrames: Int) -> Int {
         let safeMaxFrames = max(1, maxFrames)
-        let startFrame = min(max(0, textureSheetStartFrame), safeMaxFrames - 1)
-        let safeFrameCount = min(max(1, textureSheetFrameCount), safeMaxFrames - startFrame)
-        let randomRange = max(0, min(textureSheetFrameRandomness, safeFrameCount - 1))
+        let startFrame = min(max(0, settings.textureSheet.startFrame), safeMaxFrames - 1)
+        let safeFrameCount = min(max(1, settings.textureSheet.frameCount), safeMaxFrames - startFrame)
+        let randomRange = max(0, min(settings.textureSheet.frameRandomness, safeFrameCount - 1))
         let randomOffset = randomRange > 0
             ? Int(particle.textureFrameSeed % UInt16(randomRange + 1))
             : 0
         let firstFrame = min(safeFrameCount - 1, randomOffset)
 
         let advancedFrame: Int
-        switch textureSheetPlaybackMode {
+        switch settings.textureSheet.playbackMode {
         case .automatic:
-            if textureSheetFrameRate > 0 {
-                advancedFrame = Int(floor(max(0, particle.age) * textureSheetFrameRate))
+            if settings.textureSheet.frameRate > 0 {
+                advancedFrame = Int(floor(max(0, particle.age) * settings.textureSheet.frameRate))
             } else {
                 advancedFrame = Int(floor(particle.normalizedAge * Float(safeFrameCount)))
             }
         case .lifetime:
             advancedFrame = Int(floor(particle.normalizedAge * Float(safeFrameCount)))
         case .playOnce:
-            let rate = textureSheetFrameRate > 0 ? textureSheetFrameRate : Float(safeFrameCount)
+            let rate = settings.textureSheet.frameRate > 0 ? settings.textureSheet.frameRate : Float(safeFrameCount)
             advancedFrame = Int(floor(max(0, particle.age) * rate))
         case .loop:
-            let rate = textureSheetFrameRate > 0 ? textureSheetFrameRate : Float(safeFrameCount)
+            let rate = settings.textureSheet.frameRate > 0 ? settings.textureSheet.frameRate : Float(safeFrameCount)
             advancedFrame = Int(floor(max(0, particle.age) * rate)) % safeFrameCount
         case .singleFrame:
             advancedFrame = 0
         }
 
-        switch textureSheetPlaybackMode {
+        switch settings.textureSheet.playbackMode {
         case .loop:
             return startFrame + ((firstFrame + max(0, advancedFrame)) % safeFrameCount)
         case .singleFrame:
@@ -75,8 +75,8 @@ extension ParticleEmitter {
 
     func refreshAppearance(_ p: inout Particle) {
         let t = p.normalizedAge
-        let sizeT = sizeCurve.evaluate(at: t)
-        let colorT = colorCurve.evaluate(at: t)
+        let sizeT = settings.appearance.sizeCurve.evaluate(at: t)
+        let colorT = settings.appearance.colorCurve.evaluate(at: t)
         let appearance = appearance(for: p)
         p.size = (appearance.startSize + (appearance.endSize - appearance.startSize) * sizeT) * p.sizeScale
         p.color = appearance.startColor + (appearance.endColor - appearance.startColor) * colorT
@@ -84,29 +84,29 @@ extension ParticleEmitter {
 
     private func appearance(for particle: Particle) -> ParticleAppearance {
         guard particle.appearanceIndex > 0 else {
-            return ParticleAppearance(startSize: startSize,
-                                      endSize: endSize,
-                                      startColor: startColor,
-                                      endColor: endColor)
+            return ParticleAppearance(startSize: settings.appearance.startSize,
+                                      endSize: settings.appearance.endSize,
+                                      startColor: settings.appearance.startColor,
+                                      endColor: settings.appearance.endColor)
         }
         if particle.appearanceIndex == 1 {
-            return ParticleAppearance(startSize: subEmitterStartSize,
-                                      endSize: subEmitterEndSize,
-                                      startColor: subEmitterStartColor,
-                                      endColor: subEmitterEndColor)
+            return ParticleAppearance(startSize: settings.subEmitters.legacyStartSize,
+                                      endSize: settings.subEmitters.legacyEndSize,
+                                      startColor: settings.subEmitters.legacyStartColor,
+                                      endColor: settings.subEmitters.legacyEndColor)
         }
         let ruleIndex = Int(particle.appearanceIndex) - 2
-        if subEmitters.indices.contains(ruleIndex) {
-            let rule = subEmitters[ruleIndex]
+        if settings.subEmitters.rules.indices.contains(ruleIndex) {
+            let rule = settings.subEmitters.rules[ruleIndex]
             return ParticleAppearance(startSize: rule.startSize,
                                       endSize: rule.endSize,
                                       startColor: rule.startColor,
                                       endColor: rule.endColor)
         }
-        return ParticleAppearance(startSize: subEmitterStartSize,
-                                  endSize: subEmitterEndSize,
-                                  startColor: subEmitterStartColor,
-                                  endColor: subEmitterEndColor)
+        return ParticleAppearance(startSize: settings.subEmitters.legacyStartSize,
+                                  endSize: settings.subEmitters.legacyEndSize,
+                                  startColor: settings.subEmitters.legacyStartColor,
+                                  endColor: settings.subEmitters.legacyEndColor)
     }
 
     func textureFrameSeedSnapshot() -> UInt16 {

@@ -88,7 +88,10 @@ struct GameProjectScriptLoaderTests {
         import SceneRuntime
         import ScriptRuntime
         import SIMDCompat
-        struct GameScript: ScriptBehavior {
+        struct GameScript: ScriptBehavior, ScriptAuthoring {
+            static var definition: ScriptDefinition {
+                ScriptDefinition(properties: [ScriptProperty("speed", defaultValue: .number(2))])
+            }
             private var updates: Float = 0
             mutating func onStart(_ context: ScriptContext) {
                 context.createEntity(named: "Spawned")
@@ -101,8 +104,8 @@ struct GameProjectScriptLoaderTests {
         """)
         let script = try #require(manager.scanScriptFiles().first)
         let alias = try #require(script.legacyIdentifiers.first)
-        let component = ScriptComponent(bindings: [ScriptBinding(identifier: script.identifier, parametersJSON: #"{"speed":2}"#),
-                                                   ScriptBinding(identifier: alias, parametersJSON: #"{"speed":2}"#)])
+        let component = ScriptComponent(bindings: [ScriptBinding(identifier: script.identifier),
+                                                   ScriptBinding(identifier: alias, parametersJSON: #"{"speed":3}"#)])
         let node = EditorSceneManifestNode(id: 1, name: "Player", kind: "empty",
                                            script: EditorSceneManifestScript(component))
         let scene = EditorSceneManifest(revision: 0, entityCount: 1, roots: [node])
@@ -139,7 +142,7 @@ struct GameProjectScriptLoaderTests {
         #expect(app.compiledScriptCount == 1)
         #expect(app.scene.manifest().entityCount == 3)
         let entity = try #require(app.scene.scene.entities(with: ScriptComponent.self).first)
-        #expect(app.scene.scene.localTransform(for: entity)?.translation.x == 12)
+        #expect(app.scene.scene.localTransform(for: entity)?.translation.x == 15)
 
         #if os(macOS)
         let sign = Process()

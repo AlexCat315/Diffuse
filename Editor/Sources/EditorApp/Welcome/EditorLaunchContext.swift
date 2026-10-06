@@ -75,8 +75,8 @@ final class EditorLaunchContext: @unchecked Sendable {
 
         let registry = EditorRootViewFactory.makeRegistry(app: app)
         let controller = EditorRootViewFactory.makeController(
-            for: app.store.state.workspaceMode,
-            preset: app.store.state.activeLayoutPreset,
+            for: app.store.state.workspace.mode,
+            preset: app.store.state.workspace.layoutPreset,
             registry: registry
         )
 
@@ -118,28 +118,28 @@ final class EditorLaunchContext: @unchecked Sendable {
         guard let bundle else { return }
         let app = bundle.app
         let state = app.store.state
-        shellState = .init(workspaceMode: state.workspaceMode,
-                           activeLayoutPreset: state.activeLayoutPreset,
+        shellState = .init(workspaceMode: state.workspace.mode,
+                           activeLayoutPreset: state.workspace.layoutPreset,
                            themeMode: state.themeMode,
                            language: state.language,
                            vsyncMode: state.vsyncMode,
-                           primarySelectBehavior: state.primarySelectBehavior,
-                           aiSettings: state.aiSettings,
-                           capabilitySettings: state.capabilitySettings)
+                           primarySelectBehavior: state.selection.primarySelectBehavior,
+                           aiSettings: state.assistant.aiSettings,
+                           capabilitySettings: state.assistant.capabilitySettings)
         EditorRootViewFactory.saveShellState(
-            mode: state.workspaceMode,
-            preset: state.activeLayoutPreset,
+            mode: state.workspace.mode,
+            preset: state.workspace.layoutPreset,
             themeMode: state.themeMode,
             language: state.language,
             vsyncMode: state.vsyncMode,
-            primarySelectBehavior: state.primarySelectBehavior,
-            aiSettings: state.aiSettings,
-            capabilitySettings: state.capabilitySettings
+            primarySelectBehavior: state.selection.primarySelectBehavior,
+            aiSettings: state.assistant.aiSettings,
+            capabilitySettings: state.assistant.capabilitySettings
         )
         EditorRootViewFactory.saveWorkspaceLayout(
             bundle.controller,
-            for: state.workspaceMode,
-            preset: state.activeLayoutPreset
+            for: state.workspace.mode,
+            preset: state.workspace.layoutPreset
         )
         if let token = shellPreferenceToken {
             app.store.unsubscribe(token)
@@ -259,12 +259,12 @@ final class EditorLaunchContext: @unchecked Sendable {
                                    display: AppDisplayHandle,
                                    force: Bool = false) {
         let store = app.store.state
-        let next = NativeMenuState(workspaceMode: store.workspaceMode,
-                                   layoutPreset: store.activeLayoutPreset,
-                                   playbackState: store.playbackState,
+        let next = NativeMenuState(workspaceMode: store.workspace.mode,
+                                   layoutPreset: store.workspace.layoutPreset,
+                                   playbackState: store.timing.playbackState,
                                    canUndo: app.canUndo,
                                    canRedo: app.canRedo,
-                                   hasSelection: !store.selectedEntityIDs.isEmpty,
+                                   hasSelection: !store.selection.selectedEntityIDs.isEmpty,
                                    language: store.language)
         guard force || next != nativeMenuState else { return }
         nativeMenuState = next
@@ -301,20 +301,20 @@ final class EditorLaunchContext: @unchecked Sendable {
                 EditorRootViewFactory.localizePanelTitles(in: registry)
                 EditorRootViewFactory.saveWorkspaceLayout(
                     controller,
-                    for: store.state.workspaceMode,
-                    preset: store.state.activeLayoutPreset
+                    for: store.state.workspace.mode,
+                    preset: store.state.workspace.layoutPreset
                 )
             }
             lastPrefs = next
             EditorRootViewFactory.saveShellState(
-                mode: store.state.workspaceMode,
-                preset: store.state.activeLayoutPreset,
+                mode: store.state.workspace.mode,
+                preset: store.state.workspace.layoutPreset,
                 themeMode: store.state.themeMode,
                 language: store.state.language,
                 vsyncMode: store.state.vsyncMode,
-                primarySelectBehavior: store.state.primarySelectBehavior,
-                aiSettings: store.state.aiSettings,
-                capabilitySettings: store.state.capabilitySettings
+                primarySelectBehavior: store.state.selection.primarySelectBehavior,
+                aiSettings: store.state.assistant.aiSettings,
+                capabilitySettings: store.state.assistant.capabilitySettings
             )
             app.requestDisplayRefresh()
         }
@@ -340,8 +340,8 @@ final class EditorLaunchContext: @unchecked Sendable {
             guard !Task.isCancelled, let self, let app, let controller else { return }
             let state = app.store.state
             EditorRootViewFactory.saveWorkspaceLayout(controller,
-                                                       for: state.workspaceMode,
-                                                       preset: state.activeLayoutPreset)
+                                                       for: state.workspace.mode,
+                                                       preset: state.workspace.layoutPreset)
             self.workspacePersistenceTask = nil
         }
     }
@@ -358,8 +358,8 @@ final class EditorLaunchContext: @unchecked Sendable {
         (store.state.themeMode,
          store.state.language,
          store.state.vsyncMode,
-         store.state.primarySelectBehavior,
-         store.state.capabilitySettings)
+         store.state.selection.primarySelectBehavior,
+         store.state.assistant.capabilitySettings)
     }
 }
 

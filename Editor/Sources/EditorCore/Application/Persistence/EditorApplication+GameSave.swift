@@ -27,7 +27,7 @@ extension EditorApplication {
     public func saveGameState(slot: Int = 0) -> URL? {
         do {
             let url = GameSaveDocument.url(slot: slot, projectDirectory: projectDirectory)
-            let manifest = scene.manifest(selectedEntityID: store.state.selectedEntityID)
+            let manifest = scene.manifest(selectedEntityID: store.state.selection.selectedEntityID)
             let doc = GameSaveDocument(slot: slot, manifest: manifest)
             try doc.write(to: url)
             logConsole("Game state saved", detail: "slot \(slot) → \(url.lastPathComponent)")
@@ -82,7 +82,7 @@ extension EditorApplication {
                                                     withIntermediateDirectories: true)
             let tmpAdapter = EditorSceneAdapter()
             tmpAdapter.scene = snapshot
-            let manifest = tmpAdapter.manifest(selectedEntityID: store.state.selectedEntityID)
+            let manifest = tmpAdapter.manifest(selectedEntityID: store.state.selection.selectedEntityID)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(manifest)

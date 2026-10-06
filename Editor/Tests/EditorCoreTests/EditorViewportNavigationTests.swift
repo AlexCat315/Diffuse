@@ -75,7 +75,10 @@ struct EditorViewportNavigationTests {
         #expect(drag.axis == .x)
         let matrix = try #require(controller.updateDrag(cursorX: 513, cursorY: 300))
         #expect(abs(matrix.columns.3.x - 0.63) < 1e-4)
-        let state = EditorState(translateSnapEnabled: true, translateSnapStep: 0.25)
+        let state = EditorState {
+            $0.snapping.translateSnapEnabled = true
+            $0.snapping.translateSnapStep = 0.25
+        }
         let snapped = EditorTransformSnapping.apply(matrix, mode: .translate, state: state)
         #expect(snapped.columns.3.x == 0.75)
     }
@@ -127,8 +130,12 @@ struct EditorViewportNavigationTests {
         matrix.columns.1 *= 1.44
         matrix.columns.2 *= 0.84
         matrix.columns.3 = SIMD4<Float>(3, -2, 5, 1)
-        let state = EditorState(rotateSnapEnabled: true, scaleSnapEnabled: true,
-                                rotateSnapStepDegrees: 15, scaleSnapStep: 0.2)
+        let state = EditorState {
+            $0.snapping.rotateSnapEnabled = true
+            $0.snapping.scaleSnapEnabled = true
+            $0.snapping.rotateSnapStepDegrees = 15
+            $0.snapping.scaleSnapStep = 0.2
+        }
         let rotated = EditorTransformSnapping.apply(matrix, mode: .rotate, state: state)
         #expect(abs(atan2f(rotated.columns.0.y, rotated.columns.0.x) - .pi / 12) < 1e-4)
         #expect(rotated.columns.3 == matrix.columns.3)
@@ -141,20 +148,26 @@ struct EditorViewportNavigationTests {
         #expect(EditorTransformSnapping.apply(matrix, mode: .scale, state: EditorState()) == matrix)
     }
 
-    @Test("snap steps round-trip, support legacy state, and reject invalid values")
-    func snapStateCompatibility() throws {
-        var state = EditorState(translateSnapStep: 0.125, rotateSnapStepDegrees: 30, scaleSnapStep: 0.01)
+    @Test("snap steps round-trip, default missing fields, and reject invalid values")
+    func snapStateValidation() throws {
+        var state = EditorState {
+            $0.snapping.translateSnapStep = 0.125
+            $0.snapping.rotateSnapStepDegrees = 30
+            $0.snapping.scaleSnapStep = 0.01
+        }
         let data = try JSONEncoder().encode(state)
         let restored = try JSONDecoder().decode(EditorState.self, from: data)
-        #expect(restored.translateSnapStep == 0.125 && restored.rotateSnapStepDegrees == 30 && restored.scaleSnapStep == 0.01)
-        var legacy = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        for key in ["translateSnapStep", "rotateSnapStepDegrees", "scaleSnapStep"] { legacy.removeValue(forKey: key) }
-        let old = try JSONDecoder().decode(EditorState.self, from: JSONSerialization.data(withJSONObject: legacy))
-        #expect(old.translateSnapStep == 0.5 && old.rotateSnapStepDegrees == 5 && old.scaleSnapStep == 0.05)
+        #expect(restored.snapping.translateSnapStep == 0.125 && restored.snapping.rotateSnapStepDegrees == 30 && restored.snapping.scaleSnapStep == 0.01)
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var snapping = try #require(object["snapping"] as? [String: Any])
+        for key in ["translateSnapStep", "rotateSnapStepDegrees", "scaleSnapStep"] { snapping.removeValue(forKey: key) }
+        object["snapping"] = snapping
+        let defaults = try JSONDecoder().decode(EditorState.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(defaults.snapping.translateSnapStep == 0.5 && defaults.snapping.rotateSnapStepDegrees == 5 && defaults.snapping.scaleSnapStep == 0.05)
         EditorReducer.reduce(state: &state, action: .setTranslateSnapStep(.nan))
         EditorReducer.reduce(state: &state, action: .setRotateSnapStepDegrees(500))
         EditorReducer.reduce(state: &state, action: .setScaleSnapStep(0.0001))
-        #expect(state.translateSnapStep == 0.5 && state.rotateSnapStepDegrees == 180 && state.scaleSnapStep == 0.001)
+        #expect(state.snapping.translateSnapStep == 0.5 && state.snapping.rotateSnapStepDegrees == 180 && state.snapping.scaleSnapStep == 0.001)
     }
 
     @Test("snap settings persist per project and grid changes request a display refresh")

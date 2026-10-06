@@ -154,7 +154,7 @@ struct ScriptPanel: View {
         let (label, color): (String, SemanticColorRef) = {
             if isDirty { return (L("Modified"), .warning) }
             switch selectedDocument?.buildState ?? .idle {
-            case .idle: return (L("Ready"), .onSurfaceMuted)
+            case .idle: return (L("Not Built"), .onSurfaceMuted)
             case .building: return (L("Building"), .accent)
             case .succeeded: return (L("Built"), .success)
             case .cancelled: return (L("Cancelled"), .onSurfaceMuted)
@@ -524,15 +524,18 @@ private struct ScriptFileRow: View {
     let isSelected: Bool
     let action: () -> Void
 
-    private var statusColor: SemanticColorRef {
-        if document.externalChange.requiresResolution { return .warning }
-        if document.isDirty { return .warning }
+    private var sourceStatus: (label: String, color: SemanticColorRef) {
+        if document.externalChange.requiresResolution { return (L("Source Changed"), .warning) }
+        if document.isDirty { return (L("Modified"), .warning) }
         switch document.buildState {
-        case .succeeded: return .success
-        case .failed: return .error
-        case .building: return .accent
-        case .blocked: return .warning
-        case .idle, .cancelled: return .onSurfaceMuted
+        case .succeeded:
+            return document.loadedRevision == document.editRevision
+                ? (L("Built"), .success) : (L("Not Applied"), .warning)
+        case .failed: return (L("Build failed"), .error)
+        case .building: return (L("Building"), .accent)
+        case .blocked: return (L("Restricted"), .warning)
+        case .idle: return (L("Not Built"), .onSurfaceMuted)
+        case .cancelled: return (L("Cancelled"), .onSurfaceMuted)
         }
     }
 
@@ -541,7 +544,7 @@ private struct ScriptFileRow: View {
             Row(alignment: .center, spacing: 8) {
                 Box { EmptyView() }
                     .frame(width: 6, height: 6)
-                    .background(statusColor)
+                    .background(sourceStatus.color)
                     .cornerRadius(3)
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
                     Text("S")
@@ -560,9 +563,9 @@ private struct ScriptFileRow: View {
                             .font(.caption)
                             .foregroundColor(.onSurfaceMuted)
                     }
-                    Text("asset:\(document.file.assetID.shortDescription)", lineLimit: 1)
-                        .font(.mono)
-                        .foregroundColor(.onSurfaceMuted)
+                    Text(sourceStatus.label, lineLimit: 1)
+                        .font(.caption)
+                        .foregroundColor(sourceStatus.color)
                 }
                 .flex(1, shrink: 1)
                 Spacer(minLength: 0)

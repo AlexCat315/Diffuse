@@ -81,113 +81,113 @@ public enum EditorReducer {
     public static func reduce(state: inout EditorState, action: EditorAction) {
         switch action {
         case let .setConnected(value):
-            state.connected = value
+            state.timing.connected = value
         case let .setSelectedEntity(value):
-            state.selectedEntityID = value
+            state.selection.selectedEntityID = value
             if let entityID = value {
-                state.selectedEntityIDs = [entityID]
+                state.selection.selectedEntityIDs = [entityID]
             } else {
-                state.selectedEntityIDs.removeAll(keepingCapacity: false)
+                state.selection.selectedEntityIDs.removeAll(keepingCapacity: false)
             }
 
         case let .setPrimarySelectedEntity(value):
-            state.selectedEntityID = value
+            state.selection.selectedEntityID = value
             if let entityID = value {
-                if !state.selectedEntityIDs.contains(entityID) {
-                    state.selectedEntityIDs = [entityID]
+                if !state.selection.selectedEntityIDs.contains(entityID) {
+                    state.selection.selectedEntityIDs = [entityID]
                 }
             } else {
-                state.selectedEntityIDs.removeAll(keepingCapacity: false)
+                state.selection.selectedEntityIDs.removeAll(keepingCapacity: false)
             }
 
         case let .setSelectedEntities(entityIDs):
-            state.selectedEntityIDs = entityIDs
-            if let current = state.selectedEntityID,
+            state.selection.selectedEntityIDs = entityIDs
+            if let current = state.selection.selectedEntityID,
                entityIDs.contains(current) {
-                state.selectedEntityID = current
+                state.selection.selectedEntityID = current
             } else {
-                state.selectedEntityID = entityIDs.sorted().first
+                state.selection.selectedEntityID = entityIDs.sorted().first
             }
         case let .setPlaybackState(value):
-            state.playbackState = value
+            state.timing.playbackState = value
         case let .setWorkspaceMode(mode):
-            state.workspaceMode = mode
-            state.activeLayoutPreset = .default(for: mode)
+            state.workspace.mode = mode
+            state.workspace.layoutPreset = .default(for: mode)
         case let .setActiveLayoutPreset(preset):
-            if preset.mode == state.workspaceMode {
-                state.activeLayoutPreset = preset
+            if preset.mode == state.workspace.mode {
+                state.workspace.layoutPreset = preset
             }
         case let .setSceneRevision(value):
-            state.sceneRevision = value
+            state.document.sceneRevision = value
         case let .markSceneSaved(revision):
-            state.lastSavedSceneRevision = revision
-            state.sceneRecoveryPending = false
+            state.document.lastSavedSceneRevision = revision
+            state.document.sceneRecoveryPending = false
         case .markSceneUnsaved:
             // A new empty document can have the same revision as the previous saved document.
-            state.lastSavedSceneRevision = state.sceneRevision &- 1
+            state.document.lastSavedSceneRevision = state.document.sceneRevision &- 1
         case let .setSceneRecoveryPending(pending):
-            state.sceneRecoveryPending = pending
+            state.document.sceneRecoveryPending = pending
         case let .requestClose(request):
-            state.pendingCloseRequest = request
+            state.document.pendingCloseRequest = request
         case .dismissCloseRequest:
-            state.pendingCloseRequest = nil
+            state.document.pendingCloseRequest = nil
         case let .tickFrame(n):
-            state.frameIndex = n
+            state.timing.frameIndex = n
         case let .setWindowFocused(value):
-            state.windowFocused = value
+            state.window.focused = value
         case let .setWindowMinimized(value):
-            state.windowMinimized = value
+            state.window.minimized = value
         case let .setWindowOccluded(value):
-            state.windowOccluded = value
+            state.window.occluded = value
         case let .setGizmoMode(value):
-            state.gizmoMode = value
+            state.viewport.gizmoMode = value
 
         case let .setGizmoSpace(space):
-            state.gizmoSpace = space
+            state.viewport.gizmoSpace = space
 
         case let .setViewportShadingMode(mode):
-            state.viewportShadingMode = mode
+            state.viewport.shadingMode = mode
 
         case let .setViewportShadowsEnabled(enabled):
-            state.viewportShadowsEnabled = enabled
+            state.shadows.enabled = enabled
 
         case let .setViewportGridEnabled(enabled):
-            state.viewportGridEnabled = enabled
+            state.viewport.gridEnabled = enabled
 
         case let .setViewportRenderScalePercent(percent):
-            state.viewportRenderScalePercent = EditorState.sanitizedRenderScalePercent(percent)
+            state.viewport.renderScalePercent = EditorState.sanitizedRenderScalePercent(percent)
 
         case let .setViewportInteractionDownscale(enabled):
-            state.viewportInteractionDownscaleEnabled = enabled
+            state.viewport.interactionDownscaleEnabled = enabled
 
         case let .setViewportRealtime(enabled):
-            state.viewportRealtimeEnabled = enabled
+            state.viewport.realtimeEnabled = enabled
 
         case let .setPhysicsDebugOverlayOptions(options):
-            state.physicsDebugOverlayOptions = options.intersection(.all)
+            state.viewport.physicsDebugOverlayOptions = options.intersection(.all)
 
         case let .setPhysicsDebugOverlayScope(scope):
-            state.physicsDebugOverlayScope = scope
+            state.viewport.physicsDebugOverlayScope = scope
 
         case let .setTranslateSnapEnabled(enabled):
-            state.translateSnapEnabled = enabled
+            state.snapping.translateSnapEnabled = enabled
 
         case let .setRotateSnapEnabled(enabled):
-            state.rotateSnapEnabled = enabled
+            state.snapping.rotateSnapEnabled = enabled
 
         case let .setScaleSnapEnabled(enabled):
-            state.scaleSnapEnabled = enabled
+            state.snapping.scaleSnapEnabled = enabled
 
         case .viewportCameraChanged:
-            state.viewportCameraRevision &+= 1
+            state.viewport.cameraRevision &+= 1
         case let .setTranslateSnapStep(step):
-            state.translateSnapStep = EditorState.sanitizedTranslateSnapStep(step)
+            state.snapping.translateSnapStep = EditorState.sanitizedTranslateSnapStep(step)
         case let .setRotateSnapStepDegrees(step):
-            state.rotateSnapStepDegrees = EditorState.sanitizedRotateSnapStep(step)
+            state.snapping.rotateSnapStepDegrees = EditorState.sanitizedRotateSnapStep(step)
         case let .setScaleSnapStep(step):
-            state.scaleSnapStep = EditorState.sanitizedScaleSnapStep(step)
+            state.snapping.scaleSnapStep = EditorState.sanitizedScaleSnapStep(step)
         case let .setPrimarySelectBehavior(behavior):
-            state.primarySelectBehavior = behavior
+            state.selection.primarySelectBehavior = behavior
         case let .setThemeMode(mode):
             state.presentation.setThemeMode(mode)
         case let .setLanguage(language):
@@ -197,97 +197,97 @@ public enum EditorReducer {
         case let .setVSyncMode(mode):
             state.vsyncMode = mode
         case let .beginAssetDrag(payload):
-            state.activeAssetDrag = payload
+            state.navigation.activeAssetDrag = payload
         case let .updateAssetDragCursor(x, y):
-            if state.activeAssetDrag != nil {
-                state.activeAssetDrag?.cursorX = x
-                state.activeAssetDrag?.cursorY = y
+            if state.navigation.activeAssetDrag != nil {
+                state.navigation.activeAssetDrag?.cursorX = x
+                state.navigation.activeAssetDrag?.cursorY = y
             }
         case .endAssetDrag:
-            state.activeAssetDrag = nil
+            state.navigation.activeAssetDrag = nil
         case let .setInspectorSectionCollapsed(id, isCollapsed):
             if isCollapsed {
-                state.inspectorCollapsedSectionIDs.insert(id)
+                state.selection.inspectorCollapsedSectionIDs.insert(id)
             } else {
-                state.inspectorCollapsedSectionIDs.remove(id)
+                state.selection.inspectorCollapsedSectionIDs.remove(id)
             }
         case let .setInspectorSectionsCollapsed(ids, isCollapsed):
             if isCollapsed {
-                state.inspectorCollapsedSectionIDs.formUnion(ids)
+                state.selection.inspectorCollapsedSectionIDs.formUnion(ids)
             } else {
-                state.inspectorCollapsedSectionIDs.subtract(ids)
+                state.selection.inspectorCollapsedSectionIDs.subtract(ids)
             }
         case let .setPendingConfirmationRequest(request):
-            state.pendingConfirmationRequest = request
+            state.assistant.pendingConfirmationRequest = request
         case let .setAISettings(settings):
-            state.aiSettings = settings
+            state.assistant.aiSettings = settings
         case let .setCapabilitySettings(settings):
-            state.capabilitySettings = settings
+            state.assistant.capabilitySettings = settings
         case let .setPluginManagementState(pluginManagement):
-            state.pluginManagement = pluginManagement
+            state.assistant.pluginManagement = pluginManagement
         case let .setAIStatusMessage(message):
-            state.aiStatusMessage = message
+            state.assistant.aiStatusMessage = message
         case let .setAIWarnings(warnings):
-            state.aiWarnings = warnings
+            state.assistant.aiWarnings = warnings
         case let .appendChatMessage(message):
-            state.chatMessages.append(message)
+            state.assistant.chatMessages.append(message)
         case let .updateChatMessage(id, assistantState):
-            if let idx = state.chatMessages.firstIndex(where: { $0.id == id }) {
-                state.chatMessages[idx].assistantState = assistantState
+            if let idx = state.assistant.chatMessages.firstIndex(where: { $0.id == id }) {
+                state.assistant.chatMessages[idx].assistantState = assistantState
             }
         case .clearChatHistory:
-            state.chatMessages.removeAll()
+            state.assistant.chatMessages.removeAll()
         case let .setOperation(operation):
-            state.operations.removeAll { $0.id == operation.id }
-            state.operations.append(operation)
-            if state.operations.count > 30 {
-                if let oldest = state.operations.firstIndex(where: { $0.status != .running }) {
-                    state.operations.remove(at: oldest)
+            state.navigation.operations.removeAll { $0.id == operation.id }
+            state.navigation.operations.append(operation)
+            if state.navigation.operations.count > 30 {
+                if let oldest = state.navigation.operations.firstIndex(where: { $0.status != .running }) {
+                    state.navigation.operations.remove(at: oldest)
                 }
             }
         case let .navigateToScript(request):
-            state.scriptNavigation = request
+            state.navigation.scriptNavigation = request
         case let .navigateToAsset(id):
-            state.assetNavigationID = id
-            state.assetNavigationRevision &+= 1
+            state.navigation.assetNavigationID = id
+            state.navigation.assetNavigationRevision &+= 1
         case let .setInspectorSceneSettingsVisible(visible):
-            state.inspectorSceneSettingsVisible = visible
+            state.selection.inspectorSceneSettingsVisible = visible
         case let .setCommandPaletteQuery(query):
-            state.commandPaletteQuery = query
+            state.navigation.commandPaletteQuery = query
         case let .setOutputTab(tab):
-            state.outputTab = tab
+            state.output.outputTab = tab
         case let .setViewportMode(mode):
-            state.viewportMode = mode
-            state.gamePreviewFocused = false
+            state.viewport.mode = mode
+            state.viewport.gamePreviewFocused = false
         case let .setGamePreviewResolution(resolution):
-            state.gamePreviewResolution = resolution
+            state.viewport.gamePreviewResolution = resolution
         case let .setGamePreviewHUDEnabled(enabled):
-            state.gamePreviewHUDEnabled = enabled
+            state.viewport.gamePreviewHUDEnabled = enabled
         case let .setGamePreviewFocused(focused):
-            state.gamePreviewFocused = focused
+            state.viewport.gamePreviewFocused = focused
         case let .appendConsoleMessage(message, severity, detail, target, nextStep):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
-            state.consoleEntries.append(
-                EditorConsoleEntry(id: state.nextConsoleEntryID,
+            state.output.consoleEntries.append(
+                EditorConsoleEntry(id: state.output.nextConsoleEntryID,
                                    severity: severity,
                                    message: trimmed,
                                    detail: detail, target: target, nextStep: nextStep)
             )
-            state.nextConsoleEntryID &+= 1
-            if state.consoleEntries.count > 200 {
-                state.consoleEntries.removeFirst(state.consoleEntries.count - 200)
+            state.output.nextConsoleEntryID &+= 1
+            if state.output.consoleEntries.count > 200 {
+                state.output.consoleEntries.removeFirst(state.output.consoleEntries.count - 200)
             }
         case .clearConsole:
-            state.consoleEntries.removeAll(keepingCapacity: false)
+            state.output.consoleEntries.removeAll(keepingCapacity: false)
         case let .setCommandPaletteVisible(visible):
-            state.commandPaletteVisible = visible
+            state.navigation.commandPaletteVisible = visible
         case .frameTimingUpdated:
-            state.frameTimingRevision &+= 1
+            state.timing.frameTimingRevision &+= 1
         case .viewportSurfaceUpdated:
-            state.viewportSurfaceRevision &+= 1
+            state.viewport.surfaceRevision &+= 1
         case let .updateFrameStats(stats):
-            state.frameStats = stats
+            state.timing.frameStats = stats
             state.appendFrameStatsHistory(stats)
         case let .updateParticleDiagnostics(sample):
             state.appendParticleDiagnosticsHistory(sample)

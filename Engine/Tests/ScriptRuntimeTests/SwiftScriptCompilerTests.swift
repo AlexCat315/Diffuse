@@ -141,12 +141,15 @@ struct SwiftScriptCompilerTests {
         import SceneRuntime
         import ScriptRuntime
         import SIMDCompat
-        struct GameScript: ScriptBehavior {
+        struct GameScript: ScriptBehavior, ScriptAuthoring {
+            static var definition: ScriptDefinition {
+                ScriptDefinition(properties: [ScriptProperty("step", defaultValue: .number(1), minimum: 0)])
+            }
             private var updateCount = 0
 
             mutating func onUpdate(_ context: ScriptContext) {
                 updateCount += 1
-                _ = context.translate(by: SIMD3<Float>(Float(updateCount), 0, 0))
+                _ = context.translate(by: SIMD3<Float>(Float(updateCount) * (context.floatParameter("step") ?? 0), 0, 0))
             }
         }
         """.write(to: sourceURL, atomically: true, encoding: .utf8)
@@ -163,9 +166,10 @@ struct SwiftScriptCompilerTests {
 
         let loader = SwiftScriptLoader()
         let scripts = ScriptRuntime()
-        let handle = scripts.register(named: "engine-script",
-                          try loader.loadFactory(scriptID: "engine-script",
-                                     libraryPath: result.outputPath))
+        let factory = try loader.loadFactory(scriptID: "engine-script", libraryPath: result.outputPath)
+        let definition = loader.definition(scriptID: "engine-script")
+        #expect(definition.properties.first?.key == "step")
+        let handle = scripts.register(named: "engine-script", definition: definition, factory)
         loader.unload(scriptID: "engine-script")
 
         var runtime = SceneRuntime()
@@ -175,13 +179,32 @@ struct SwiftScriptCompilerTests {
         _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: firstEntity)
         _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: secondEntity)
         _ = runtime.setComponent(ScriptComponent(handle), for: firstEntity)
-        _ = runtime.setComponent(ScriptComponent(handle), for: secondEntity)
+        _ = runtime.setComponent(ScriptComponent(ScriptBinding(handle, parametersJSON: #"{"step":2}"#)), for: secondEntity)
         _ = runtime.tick(deltaTime: 0.1)
         _ = runtime.tick(deltaTime: 0.1)
 
         #expect(runtime.localTransform(for: firstEntity)?.translation == SIMD3<Float>(3, 0, 0))
-        #expect(runtime.localTransform(for: secondEntity)?.translation == SIMD3<Float>(3, 0, 0))
+        #expect(runtime.localTransform(for: secondEntity)?.translation == SIMD3<Float>(6, 0, 0))
         loader.unload(scriptID: "engine-script")
+
+        let runtimeOnlySource = testDirectory.appendingPathComponent("RuntimeOnly.swift")
+        try """
+        import ScriptRuntime
+        import SIMDCompat
+        struct GameScript: ScriptBehavior {
+            mutating func onUpdate(_ context: ScriptContext) {
+                context.translate(by: SIMD3<Float>(1, 0, 0))
+            }
+        }
+        """.write(to: runtimeOnlySource, atomically: true, encoding: .utf8)
+        let runtimeOnlyResult = try compiler.compile(sourcePath: runtimeOnlySource.path, scriptID: "runtime-only")
+        let runtimeOnlyFactory = try loader.loadFactory(scriptID: "runtime-only", libraryPath: runtimeOnlyResult.outputPath)
+        #expect(loader.definition(scriptID: "runtime-only").properties.isEmpty)
+        let runtimeOnlyHandle = scripts.register(named: "runtime-only", definition: loader.definition(scriptID: "runtime-only"), runtimeOnlyFactory)
+        let runtimeOnlyEntity = runtime.createEntity()
+        _ = runtime.setComponent(ScriptComponent(runtimeOnlyHandle), for: runtimeOnlyEntity)
+        _ = runtime.tick(deltaTime: 0.1)
+        #expect(runtime.localTransform(for: runtimeOnlyEntity)?.translation == SIMD3<Float>(1, 0, 0))
     }
 }
 #endif

@@ -53,7 +53,7 @@ extension EditorApplication {
         )
         if oldSession != nil || newSession != nil {
             let worldContext = self.aiWorldContext
-            let ctx = Self.workflowContext(for: store.state.workspaceMode,
+            let ctx = Self.workflowContext(for: store.state.workspace.mode,
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = self.observationBus
             let mem = self.contextMemoryStore
@@ -87,7 +87,7 @@ extension EditorApplication {
     @discardableResult
     public func clearAIKey() -> Bool {
         do {
-            try AIKeychain.delete(provider: store.state.aiSettings.provider)
+            try AIKeychain.delete(provider: store.state.assistant.aiSettings.provider)
         } catch {
             logConsole("AI credentials could not be removed",
                        severity: .error,
@@ -104,7 +104,7 @@ extension EditorApplication {
         session = nil
         store.dispatch(.clearChatHistory)
         pendingAssistantMessageID = nil
-        var settings = store.state.aiSettings
+        var settings = store.state.assistant.aiSettings
         settings.provider = .none
         store.dispatch(.setAISettings(settings))
         return true
@@ -119,13 +119,13 @@ extension EditorApplication {
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
     public func hasStoredAIKey(for provider: EditorAIProvider? = nil) -> Bool {
-        AIKeychain.hasKey(for: provider ?? store.state.aiSettings.provider)
+        AIKeychain.hasKey(for: provider ?? store.state.assistant.aiSettings.provider)
     }
 
     public func aiCredentialSource(
         for provider: EditorAIProvider? = nil
     ) -> AICredentialSource? {
-        AIKeychain.credentialSource(for: provider ?? store.state.aiSettings.provider)
+        AIKeychain.credentialSource(for: provider ?? store.state.assistant.aiSettings.provider)
     }
 
     static func workflowContext(

@@ -202,14 +202,6 @@ public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable, Hashable {
         self == .enabled
     }
 
-    public init(legacyFrameRateLimitRawValue rawValue: String) {
-        switch rawValue {
-        case "disabled":
-            self = .disabled
-        default:
-            self = .enabled
-        }
-    }
 }
 
 public enum EditorConsoleSeverity: String, Codable, Sendable, CaseIterable, Hashable {
@@ -284,412 +276,87 @@ public struct EditorState: Codable, Sendable {
     public static let maxFrameStatsHistorySamples = 240
     public static let maxParticleDiagnosticsHistorySamples = 240
 
-    public var connected: Bool
-    public var selectedEntityID: UInt64?
-    public var selectedEntityIDs: Set<UInt64>
-    public var playbackState: PlaybackState
-    public var workspaceMode: EditorWorkspaceMode
-    public var activeLayoutPreset: EditorLayoutPreset
-    public var sceneRevision: UInt64
-    /// `sceneRevision` captured at the last manifest save/load. The scene is
-    /// "dirty" (unsaved edits) whenever the two diverge.
-    public var lastSavedSceneRevision: UInt64
-    /// Ephemeral flag for an autosave restored over the last explicit save.
-    /// Kept out of Codable storage; the recovery document is the authority.
-    public var sceneRecoveryPending: Bool
-    /// A vetoed OS close/quit waiting on the user's save decision. Non-nil
-    /// shows the unsaved-changes dialog; `windowID == nil` means app quit.
-    public var pendingCloseRequest: EditorPendingCloseRequest?
-    public var frameIndex: UInt64
-    public var frameTimingRevision: UInt64
-    public var frameStats: EditorFrameStats
-    public var frameStatsHistory: [EditorFrameStatsHistorySample]
-    public var particleDiagnosticsHistory: [EditorParticleDiagnosticsSample]
-    public var viewportSurfaceRevision: UInt64
-    /// Session camera navigation is independent of the saved scene revision.
-    public var viewportCameraRevision: UInt64 = 0
-    public var windowFocused: Bool
-    public var windowMinimized: Bool
-    public var windowOccluded: Bool
-    public var gizmoMode: EditorGizmoMode
-    public var gizmoSpace: EditorGizmoSpace
-    public var viewportShadingMode: EditorViewportShadingMode
-    public var viewportShadowsEnabled: Bool
-    public var viewportGridEnabled: Bool
-    public var viewportShadowMapResolution: UInt32
-    public var viewportMaxShadowedDirectionalLights: Int
-    public var viewportDirectionalCascadeCount: Int
-    public var viewportDirectionalCascadeSplitLambda: Float
-    public var viewportShadowDebugMode: EditorViewportShadowDebugMode
-    /// Screen-percentage style render scale for the 3D viewport (100 = native
-    /// pixels). The presentation size stays fixed; the engine renders
-    /// `presentation × percent/100` and the composite quad rescales.
-    public var viewportRenderScalePercent: Int
-    /// Temporarily halve the render resolution during camera / gizmo drags.
-    public var viewportInteractionDownscaleEnabled: Bool
-    /// Escape hatch for on-demand viewport rendering: render every tick even
-    /// when no packet input changed (Unreal's per-viewport "Realtime").
-    public var viewportRealtimeEnabled: Bool
-    public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions
-    public var physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope
-    public var translateSnapEnabled: Bool
-    public var rotateSnapEnabled: Bool
-    public var scaleSnapEnabled: Bool
-    public var translateSnapStep: Float
-    public var rotateSnapStepDegrees: Float
-    public var scaleSnapStep: Float
-    public var primarySelectBehavior: SelectionPrimaryModifierBehavior
-    public var presentation: EditorPresentationState
-    public var vsyncMode: EditorVSyncMode
-    public var activeAssetDrag: EditorAssetDragPayload?
-    public var inspectorCollapsedSectionIDs: Set<String>
-    public var pendingConfirmationRequest: ConfirmationRequestBatch?
-    public var aiSettings: EditorAISettings
-    public var capabilitySettings: EditorCapabilitySettings
-    /// Ephemeral UI state. It is deliberately omitted from Codable storage so
-    /// a project file can never restore a pending approval or enabled binding.
-    public var pluginManagement: EditorPluginManagementState
-    public var aiStatusMessage: String?
-    public var aiWarnings: [String]
-    public var chatMessages: [AIChatMessage]
-    public var consoleEntries: [EditorConsoleEntry]
-    public var nextConsoleEntryID: UInt64
-    public var commandPaletteVisible: Bool
-    // Session work and navigation must not be replayed when loading a project.
-    public var operations: [EditorOperation] = []
-    public var scriptNavigation: EditorScriptNavigationRequest? = nil
-    public var assetNavigationID: String? = nil
-    public var assetNavigationRevision: UInt64 = 0
-    public var inspectorSceneSettingsVisible = false
-    public var commandPaletteQuery = ""
-    public var outputTab: EditorOutputTab = .logs
-    public var viewportMode: EditorViewportMode = .scene
-    public var gamePreviewResolution: EditorGamePreviewResolution = .hd720
-    public var gamePreviewHUDEnabled = true
-    public var gamePreviewFocused = false
+    public var selection = EditorSelectionState()
+    public var document = EditorDocumentState()
+    public var timing = EditorTimingState()
+    public var workspace = EditorWorkspaceState()
+    public var window = EditorWindowState()
+    public var viewport = EditorViewportState()
+    public var shadows = EditorShadowsState()
+    public var snapping = EditorSnappingState()
+    public var assistant = EditorAssistantState()
+    public var output = EditorOutputState()
+    public var navigation = EditorNavigationState()
+    public var presentation = EditorPresentationState(themeMode: .dark, language: .system, revision: 0)
+    public var vsyncMode: EditorVSyncMode = .enabled
 
-    public init(
-        connected: Bool = false,
-        selectedEntityID: UInt64? = nil,
-        selectedEntityIDs: Set<UInt64> = [],
-        playbackState: PlaybackState = .stopped,
-        workspaceMode: EditorWorkspaceMode = .level,
-        activeLayoutPreset: EditorLayoutPreset = .levelDefault,
-        sceneRevision: UInt64 = 0,
-        lastSavedSceneRevision: UInt64 = 0,
-        sceneRecoveryPending: Bool = false,
-        pendingCloseRequest: EditorPendingCloseRequest? = nil,
-        frameIndex: UInt64 = 0,
-        frameTimingRevision: UInt64 = 0,
-        frameStats: EditorFrameStats = .init(),
-        frameStatsHistory: [EditorFrameStatsHistorySample] = [],
-        particleDiagnosticsHistory: [EditorParticleDiagnosticsSample] = [],
-        viewportSurfaceRevision: UInt64 = 0,
-        windowFocused: Bool = true,
-        windowMinimized: Bool = false,
-        windowOccluded: Bool = false,
-        gizmoMode: EditorGizmoMode = .translate,
-        gizmoSpace: EditorGizmoSpace = .local,
-        viewportShadingMode: EditorViewportShadingMode = .lit,
-        viewportShadowsEnabled: Bool = true,
-        viewportGridEnabled: Bool = true,
-        viewportShadowMapResolution: UInt32 = 1024,
-        viewportMaxShadowedDirectionalLights: Int = 1,
-        viewportDirectionalCascadeCount: Int = 1,
-        viewportDirectionalCascadeSplitLambda: Float = 0.55,
-        viewportShadowDebugMode: EditorViewportShadowDebugMode = .off,
-        viewportRenderScalePercent: Int = 100,
-        viewportInteractionDownscaleEnabled: Bool = false,
-        viewportRealtimeEnabled: Bool = false,
-        physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions = .all,
-        physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope = .selected,
-        translateSnapEnabled: Bool = false,
-        rotateSnapEnabled: Bool = false,
-        scaleSnapEnabled: Bool = false,
-        translateSnapStep: Float = 0.5,
-        rotateSnapStepDegrees: Float = 5,
-        scaleSnapStep: Float = 0.05,
-        primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
-        themeMode: EditorThemeMode = .dark,
-        language: EditorLanguage = .system,
-        vsyncMode: EditorVSyncMode = .enabled,
-        uiRefreshRevision: UInt64 = 0,
-        activeAssetDrag: EditorAssetDragPayload? = nil,
-        inspectorCollapsedSectionIDs: Set<String> = [],
-        pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
-        aiSettings: EditorAISettings = .default,
-        capabilitySettings: EditorCapabilitySettings = .default,
-        pluginManagement: EditorPluginManagementState = .idle,
-        aiStatusMessage: String? = nil,
-        aiWarnings: [String] = [],
-        chatMessages: [AIChatMessage] = [],
-        consoleEntries: [EditorConsoleEntry] = [],
-        nextConsoleEntryID: UInt64 = 1,
-        commandPaletteVisible: Bool = false
-    ) {
-        self.connected = connected
-        self.selectedEntityID = selectedEntityID
-        self.selectedEntityIDs = selectedEntityIDs
-        self.playbackState = playbackState
-        self.workspaceMode = workspaceMode
-        self.activeLayoutPreset = activeLayoutPreset
-        self.sceneRevision = sceneRevision
-        self.lastSavedSceneRevision = lastSavedSceneRevision
-        self.sceneRecoveryPending = sceneRecoveryPending
-        self.pendingCloseRequest = pendingCloseRequest
-        self.frameTimingRevision = frameTimingRevision
-        self.viewportSurfaceRevision = viewportSurfaceRevision
-        self.windowFocused = windowFocused
-        self.windowMinimized = windowMinimized
-        self.windowOccluded = windowOccluded
-        self.gizmoMode = gizmoMode
-        self.gizmoSpace = gizmoSpace
-        self.viewportShadingMode = viewportShadingMode
-        self.viewportShadowsEnabled = viewportShadowsEnabled
-        self.viewportGridEnabled = viewportGridEnabled
-        self.viewportShadowMapResolution = Self.sanitizedShadowMapResolution(viewportShadowMapResolution)
-        self.viewportMaxShadowedDirectionalLights = Self.sanitizedMaxShadowedDirectionalLights(viewportMaxShadowedDirectionalLights)
-        self.viewportDirectionalCascadeCount = Self.sanitizedDirectionalCascadeCount(viewportDirectionalCascadeCount)
-        self.viewportDirectionalCascadeSplitLambda = Self.sanitizedDirectionalCascadeSplitLambda(viewportDirectionalCascadeSplitLambda)
-        self.viewportShadowDebugMode = viewportShadowDebugMode
-        self.viewportRenderScalePercent = Self.sanitizedRenderScalePercent(viewportRenderScalePercent)
-        self.viewportInteractionDownscaleEnabled = viewportInteractionDownscaleEnabled
-        self.viewportRealtimeEnabled = viewportRealtimeEnabled
-        self.physicsDebugOverlayOptions = physicsDebugOverlayOptions.intersection(.all)
-        self.physicsDebugOverlayScope = physicsDebugOverlayScope
-        self.translateSnapEnabled = translateSnapEnabled
-        self.rotateSnapEnabled = rotateSnapEnabled
-        self.scaleSnapEnabled = scaleSnapEnabled
-        self.translateSnapStep = Self.sanitizedTranslateSnapStep(translateSnapStep)
-        self.rotateSnapStepDegrees = Self.sanitizedRotateSnapStep(rotateSnapStepDegrees)
-        self.scaleSnapStep = Self.sanitizedScaleSnapStep(scaleSnapStep)
-        self.primarySelectBehavior = primarySelectBehavior
-        self.presentation = EditorPresentationState(themeMode: themeMode,
-                                                    language: language,
-                                                    revision: uiRefreshRevision)
-        self.vsyncMode = vsyncMode
-        self.activeAssetDrag = activeAssetDrag
-        self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
-        self.pendingConfirmationRequest = pendingConfirmationRequest
-        self.aiSettings = aiSettings
-        self.capabilitySettings = capabilitySettings
-        self.pluginManagement = pluginManagement
-        self.aiStatusMessage = aiStatusMessage
-        self.aiWarnings = aiWarnings
-        self.chatMessages = chatMessages
-        self.consoleEntries = consoleEntries
-        self.nextConsoleEntryID = max(nextConsoleEntryID, (consoleEntries.map(\.id).max() ?? 0) &+ 1)
-        self.frameIndex = frameIndex
-        self.frameStats = frameStats
-        self.frameStatsHistory = Array(frameStatsHistory.suffix(Self.maxFrameStatsHistorySamples))
-        self.particleDiagnosticsHistory = Array(
-            particleDiagnosticsHistory.suffix(Self.maxParticleDiagnosticsHistorySamples)
-        )
-        self.commandPaletteVisible = commandPaletteVisible
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+        normalize()
     }
 
-    public var shouldRender: Bool {
-        !windowMinimized && !windowOccluded
+    private mutating func normalize() {
+        timing.normalize()
+        viewport.normalize()
+        shadows.normalize()
+        snapping.normalize()
+        output.normalize()
     }
 
-    public var sceneDirty: Bool {
-        sceneRecoveryPending || sceneRevision != lastSavedSceneRevision
-    }
-
-    public var themeMode: EditorThemeMode {
-        presentation.themeMode
-    }
-
-    public var language: EditorLanguage {
-        presentation.language
-    }
-
-    public var uiRefreshRevision: UInt64 {
-        presentation.revision
-    }
+    public var shouldRender: Bool { !window.minimized && !window.occluded }
+    public var sceneDirty: Bool { document.sceneRecoveryPending || document.sceneRevision != document.lastSavedSceneRevision }
+    public var themeMode: EditorThemeMode { presentation.themeMode }
+    public var language: EditorLanguage { presentation.language }
+    public var uiRefreshRevision: UInt64 { presentation.revision }
 
     private enum CodingKeys: String, CodingKey {
-        case connected
-        case selectedEntityID
-        case selectedEntityIDs
-        case playbackState
-        case workspaceMode
-        case activeLayoutPreset
-        case sceneRevision
-        case frameIndex
-        case frameTimingRevision
-        case frameStats
-        case viewportSurfaceRevision
-        case windowFocused
-        case windowMinimized
-        case windowOccluded
-        case gizmoMode
-        case gizmoSpace
-        case viewportShadingMode
-        case viewportShadowsEnabled
-        case viewportGridEnabled
-        case viewportShadowMapResolution
-        case viewportMaxShadowedDirectionalLights
-        case viewportDirectionalCascadeCount
-        case viewportDirectionalCascadeSplitLambda
-        case viewportShadowDebugMode
-        case viewportRenderScalePercent
-        case viewportInteractionDownscaleEnabled
-        case viewportRealtimeEnabled
-        case physicsDebugOverlayOptions
-        case physicsDebugOverlayScope
-        case translateSnapEnabled
-        case rotateSnapEnabled
-        case scaleSnapEnabled
-        case translateSnapStep
-        case rotateSnapStepDegrees
-        case scaleSnapStep
-        case primarySelectBehavior
-        case presentation
-        case themeMode
-        case language
-        case uiRefreshRevision
-        case vsyncMode
-        case activeAssetDrag
-        case inspectorCollapsedSectionIDs
-        case pendingConfirmationRequest
-        case capabilitySettings
-        case aiStatusMessage
-        case aiWarnings
-        case consoleEntries
-        case nextConsoleEntryID
-    }
-
-    private enum LegacyCodingKeys: String, CodingKey {
-        case cmdSelectBehavior
+        case selection
+        case document
+        case timing
+        case workspace
+        case window
+        case viewport
+        case shadows
+        case snapping
+        case assistant
+        case output
+        case navigation
+        case presentation, vsyncMode
     }
 
     public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
-        let decodedPresentation = try c.decodeIfPresent(EditorPresentationState.self, forKey: .presentation)
-        let legacyThemeMode = try c.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode)
-        let legacyLanguage = try c.decodeIfPresent(EditorLanguage.self, forKey: .language)
-        let legacyRevision = try c.decodeIfPresent(UInt64.self, forKey: .uiRefreshRevision)
-        let decodedPrimarySelectBehavior = try c.decodeIfPresent(
-            SelectionPrimaryModifierBehavior.self,
-            forKey: .primarySelectBehavior
-        )
-        let legacyPrimarySelectBehavior = try legacy.decodeIfPresent(
-            SelectionPrimaryModifierBehavior.self,
-            forKey: .cmdSelectBehavior
-        )
-
-        self.init(
-            connected: try c.decodeIfPresent(Bool.self, forKey: .connected) ?? false,
-            selectedEntityID: try c.decodeIfPresent(UInt64.self, forKey: .selectedEntityID),
-            selectedEntityIDs: try c.decodeIfPresent(Set<UInt64>.self, forKey: .selectedEntityIDs) ?? [],
-            playbackState: try c.decodeIfPresent(PlaybackState.self, forKey: .playbackState) ?? .stopped,
-            workspaceMode: try c.decodeIfPresent(EditorWorkspaceMode.self, forKey: .workspaceMode) ?? .level,
-            activeLayoutPreset: try c.decodeIfPresent(EditorLayoutPreset.self, forKey: .activeLayoutPreset) ?? .levelDefault,
-            sceneRevision: try c.decodeIfPresent(UInt64.self, forKey: .sceneRevision) ?? 0,
-            frameIndex: try c.decodeIfPresent(UInt64.self, forKey: .frameIndex) ?? 0,
-            frameTimingRevision: try c.decodeIfPresent(UInt64.self, forKey: .frameTimingRevision) ?? 0,
-            frameStats: try c.decodeIfPresent(EditorFrameStats.self, forKey: .frameStats) ?? .init(),
-            viewportSurfaceRevision: try c.decodeIfPresent(UInt64.self, forKey: .viewportSurfaceRevision) ?? 0,
-            windowFocused: try c.decodeIfPresent(Bool.self, forKey: .windowFocused) ?? true,
-            windowMinimized: try c.decodeIfPresent(Bool.self, forKey: .windowMinimized) ?? false,
-            windowOccluded: try c.decodeIfPresent(Bool.self, forKey: .windowOccluded) ?? false,
-            gizmoMode: try c.decodeIfPresent(EditorGizmoMode.self, forKey: .gizmoMode) ?? .translate,
-            gizmoSpace: try c.decodeIfPresent(EditorGizmoSpace.self, forKey: .gizmoSpace) ?? .local,
-            viewportShadingMode: try c.decodeIfPresent(EditorViewportShadingMode.self, forKey: .viewportShadingMode) ?? .lit,
-            viewportShadowsEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportShadowsEnabled) ?? true,
-            viewportGridEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportGridEnabled) ?? true,
-            viewportShadowMapResolution: try c.decodeIfPresent(UInt32.self, forKey: .viewportShadowMapResolution) ?? 1024,
-            viewportMaxShadowedDirectionalLights: try c.decodeIfPresent(Int.self, forKey: .viewportMaxShadowedDirectionalLights) ?? 1,
-            viewportDirectionalCascadeCount: try c.decodeIfPresent(Int.self, forKey: .viewportDirectionalCascadeCount) ?? 1,
-            viewportDirectionalCascadeSplitLambda: try c.decodeIfPresent(Float.self, forKey: .viewportDirectionalCascadeSplitLambda) ?? 0.55,
-            viewportShadowDebugMode: try c.decodeIfPresent(EditorViewportShadowDebugMode.self, forKey: .viewportShadowDebugMode) ?? .off,
-            viewportRenderScalePercent: try c.decodeIfPresent(Int.self, forKey: .viewportRenderScalePercent) ?? 100,
-            viewportInteractionDownscaleEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportInteractionDownscaleEnabled) ?? false,
-            viewportRealtimeEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportRealtimeEnabled) ?? false,
-            physicsDebugOverlayOptions: try c.decodeIfPresent(
-                EditorPhysicsDebugOverlayOptions.self,
-                forKey: .physicsDebugOverlayOptions
-            ) ?? .all,
-            physicsDebugOverlayScope: try c.decodeIfPresent(
-                EditorPhysicsDebugOverlayScope.self,
-                forKey: .physicsDebugOverlayScope
-            ) ?? .selected,
-            translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
-            rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
-            scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
-            translateSnapStep: try c.decodeIfPresent(Float.self, forKey: .translateSnapStep) ?? 0.5,
-            rotateSnapStepDegrees: try c.decodeIfPresent(Float.self, forKey: .rotateSnapStepDegrees) ?? 5,
-            scaleSnapStep: try c.decodeIfPresent(Float.self, forKey: .scaleSnapStep) ?? 0.05,
-            primarySelectBehavior: decodedPrimarySelectBehavior ?? legacyPrimarySelectBehavior ?? .subtract,
-            themeMode: decodedPresentation?.themeMode ?? legacyThemeMode ?? .dark,
-            language: decodedPresentation?.language ?? legacyLanguage ?? .system,
-            vsyncMode: try c.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) ?? .enabled,
-            uiRefreshRevision: decodedPresentation?.revision ?? legacyRevision ?? 0,
-            activeAssetDrag: try c.decodeIfPresent(EditorAssetDragPayload.self, forKey: .activeAssetDrag),
-            inspectorCollapsedSectionIDs: try c.decodeIfPresent(Set<String>.self, forKey: .inspectorCollapsedSectionIDs) ?? [],
-            pendingConfirmationRequest: try c.decodeIfPresent(ConfirmationRequestBatch.self, forKey: .pendingConfirmationRequest),
-            capabilitySettings: try c.decodeIfPresent(EditorCapabilitySettings.self,
-                                                       forKey: .capabilitySettings) ?? .default,
-            aiStatusMessage: try c.decodeIfPresent(String.self, forKey: .aiStatusMessage),
-            aiWarnings: try c.decodeIfPresent([String].self, forKey: .aiWarnings) ?? [],
-            consoleEntries: try c.decodeIfPresent([EditorConsoleEntry].self, forKey: .consoleEntries) ?? [],
-            nextConsoleEntryID: try c.decodeIfPresent(UInt64.self, forKey: .nextConsoleEntryID) ?? 1
-        )
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        selection = try container.decodeIfPresent(EditorSelectionState.self, forKey: .selection) ?? selection
+        document = try container.decodeIfPresent(EditorDocumentState.self, forKey: .document) ?? document
+        timing = try container.decodeIfPresent(EditorTimingState.self, forKey: .timing) ?? timing
+        workspace = try container.decodeIfPresent(EditorWorkspaceState.self, forKey: .workspace) ?? workspace
+        window = try container.decodeIfPresent(EditorWindowState.self, forKey: .window) ?? window
+        viewport = try container.decodeIfPresent(EditorViewportState.self, forKey: .viewport) ?? viewport
+        shadows = try container.decodeIfPresent(EditorShadowsState.self, forKey: .shadows) ?? shadows
+        snapping = try container.decodeIfPresent(EditorSnappingState.self, forKey: .snapping) ?? snapping
+        assistant = try container.decodeIfPresent(EditorAssistantState.self, forKey: .assistant) ?? assistant
+        output = try container.decodeIfPresent(EditorOutputState.self, forKey: .output) ?? output
+        navigation = try container.decodeIfPresent(EditorNavigationState.self, forKey: .navigation) ?? navigation
+        presentation = try container.decodeIfPresent(EditorPresentationState.self, forKey: .presentation) ?? presentation
+        vsyncMode = try container.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) ?? vsyncMode
+        normalize()
     }
 
     public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(connected, forKey: .connected)
-        try c.encodeIfPresent(selectedEntityID, forKey: .selectedEntityID)
-        try c.encode(selectedEntityIDs, forKey: .selectedEntityIDs)
-        try c.encode(playbackState, forKey: .playbackState)
-        try c.encode(workspaceMode, forKey: .workspaceMode)
-        try c.encode(activeLayoutPreset, forKey: .activeLayoutPreset)
-        try c.encode(sceneRevision, forKey: .sceneRevision)
-        try c.encode(frameIndex, forKey: .frameIndex)
-        try c.encode(frameTimingRevision, forKey: .frameTimingRevision)
-        try c.encode(frameStats, forKey: .frameStats)
-        try c.encode(viewportSurfaceRevision, forKey: .viewportSurfaceRevision)
-        try c.encode(windowFocused, forKey: .windowFocused)
-        try c.encode(windowMinimized, forKey: .windowMinimized)
-        try c.encode(windowOccluded, forKey: .windowOccluded)
-        try c.encode(gizmoMode, forKey: .gizmoMode)
-        try c.encode(gizmoSpace, forKey: .gizmoSpace)
-        try c.encode(viewportShadingMode, forKey: .viewportShadingMode)
-        try c.encode(viewportShadowsEnabled, forKey: .viewportShadowsEnabled)
-        try c.encode(viewportGridEnabled, forKey: .viewportGridEnabled)
-        try c.encode(viewportShadowMapResolution, forKey: .viewportShadowMapResolution)
-        try c.encode(viewportMaxShadowedDirectionalLights, forKey: .viewportMaxShadowedDirectionalLights)
-        try c.encode(viewportDirectionalCascadeCount, forKey: .viewportDirectionalCascadeCount)
-        try c.encode(viewportDirectionalCascadeSplitLambda, forKey: .viewportDirectionalCascadeSplitLambda)
-        try c.encode(viewportShadowDebugMode, forKey: .viewportShadowDebugMode)
-        try c.encode(viewportRenderScalePercent, forKey: .viewportRenderScalePercent)
-        try c.encode(viewportInteractionDownscaleEnabled, forKey: .viewportInteractionDownscaleEnabled)
-        try c.encode(viewportRealtimeEnabled, forKey: .viewportRealtimeEnabled)
-        try c.encode(physicsDebugOverlayOptions, forKey: .physicsDebugOverlayOptions)
-        try c.encode(physicsDebugOverlayScope, forKey: .physicsDebugOverlayScope)
-        try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
-        try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
-        try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
-        try c.encode(translateSnapStep, forKey: .translateSnapStep)
-        try c.encode(rotateSnapStepDegrees, forKey: .rotateSnapStepDegrees)
-        try c.encode(scaleSnapStep, forKey: .scaleSnapStep)
-        try c.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
-        try c.encode(presentation, forKey: .presentation)
-        try c.encode(themeMode, forKey: .themeMode)
-        try c.encode(language, forKey: .language)
-        try c.encode(uiRefreshRevision, forKey: .uiRefreshRevision)
-        try c.encode(vsyncMode, forKey: .vsyncMode)
-        try c.encodeIfPresent(activeAssetDrag, forKey: .activeAssetDrag)
-        try c.encode(inspectorCollapsedSectionIDs, forKey: .inspectorCollapsedSectionIDs)
-        try c.encodeIfPresent(pendingConfirmationRequest, forKey: .pendingConfirmationRequest)
-        try c.encode(capabilitySettings, forKey: .capabilitySettings)
-        try c.encodeIfPresent(aiStatusMessage, forKey: .aiStatusMessage)
-        try c.encode(aiWarnings, forKey: .aiWarnings)
-        try c.encode(consoleEntries, forKey: .consoleEntries)
-        try c.encode(nextConsoleEntryID, forKey: .nextConsoleEntryID)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(selection, forKey: .selection)
+        try container.encode(document, forKey: .document)
+        try container.encode(timing, forKey: .timing)
+        try container.encode(workspace, forKey: .workspace)
+        try container.encode(window, forKey: .window)
+        try container.encode(viewport, forKey: .viewport)
+        try container.encode(shadows, forKey: .shadows)
+        try container.encode(snapping, forKey: .snapping)
+        try container.encode(assistant, forKey: .assistant)
+        try container.encode(output, forKey: .output)
+        try container.encode(navigation, forKey: .navigation)
+        try container.encode(presentation, forKey: .presentation)
+        try container.encode(vsyncMode, forKey: .vsyncMode)
     }
 
     public static func sanitizedShadowMapResolution(_ value: UInt32) -> UInt32 {
@@ -713,22 +380,22 @@ public struct EditorState: Codable, Sendable {
     }
 
     mutating func appendFrameStatsHistory(_ stats: EditorFrameStats) {
-        let sampleIndex = (frameStatsHistory.last?.sampleIndex ?? 0) &+ 1
-        frameStatsHistory.append(
+        let sampleIndex = (timing.frameStatsHistory.last?.sampleIndex ?? 0) &+ 1
+        timing.frameStatsHistory.append(
             EditorFrameStatsHistorySample(sampleIndex: sampleIndex,
-                                          frameIndex: frameIndex,
+                                          frameIndex: timing.frameIndex,
                                           stats: stats)
         )
-        if frameStatsHistory.count > Self.maxFrameStatsHistorySamples {
-            frameStatsHistory.removeFirst(frameStatsHistory.count - Self.maxFrameStatsHistorySamples)
+        if timing.frameStatsHistory.count > Self.maxFrameStatsHistorySamples {
+            timing.frameStatsHistory.removeFirst(timing.frameStatsHistory.count - Self.maxFrameStatsHistorySamples)
         }
     }
 
     mutating func appendParticleDiagnosticsHistory(_ sample: EditorParticleDiagnosticsSample) {
-        particleDiagnosticsHistory.append(sample)
-        if particleDiagnosticsHistory.count > Self.maxParticleDiagnosticsHistorySamples {
-            particleDiagnosticsHistory.removeFirst(
-                particleDiagnosticsHistory.count - Self.maxParticleDiagnosticsHistorySamples
+        timing.particleDiagnosticsHistory.append(sample)
+        if timing.particleDiagnosticsHistory.count > Self.maxParticleDiagnosticsHistorySamples {
+            timing.particleDiagnosticsHistory.removeFirst(
+                timing.particleDiagnosticsHistory.count - Self.maxParticleDiagnosticsHistorySamples
             )
         }
     }

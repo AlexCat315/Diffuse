@@ -34,7 +34,7 @@ extension EditorApplication {
         }
 
         if let rejection = EditorAIRequestPolicy.rejectionMessage(
-            hasPendingConfirmation: store.state.pendingConfirmationRequest != nil,
+            hasPendingConfirmation: store.state.assistant.pendingConfirmationRequest != nil,
             requestInFlight: activeAIRequestID != nil
         ) {
             store.dispatch(.setAIStatusMessage(rejection))
@@ -46,7 +46,7 @@ extension EditorApplication {
             return true
         }
 
-        let message = store.state.aiSettings.provider == .none
+        let message = store.state.assistant.aiSettings.provider == .none
             ? "No AI provider configured."
             : "The configured AI provider has no usable credential."
         store.dispatch(.setAIStatusMessage(message))
@@ -179,7 +179,7 @@ extension EditorApplication {
     @discardableResult
     func runPlanTransaction(_ transaction: TransactionIR,
                                     capabilityContext: CapabilityInvocationContext? = nil) throws -> CapabilityInvocationResult {
-        guard store.state.pendingConfirmationRequest == nil else {
+        guard store.state.assistant.pendingConfirmationRequest == nil else {
             throw EditorPlanSubmissionError.pendingConfirmation
         }
         let targetEntityIDs = referencedExistingEntityIDs(in: transaction)
@@ -239,7 +239,7 @@ extension EditorApplication {
     }
 
     public func resolvePendingConfirmation(pickedOptionIDsByQuestionID selections: [String: String]) {
-        guard let request = store.state.pendingConfirmationRequest,
+        guard let request = store.state.assistant.pendingConfirmationRequest,
               !request.questions.isEmpty else {
             store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
             return
@@ -292,7 +292,7 @@ extension EditorApplication {
     }
 
     public func resolvePendingConfirmation(pickedOptionID: String) {
-        guard let request = store.state.pendingConfirmationRequest else {
+        guard let request = store.state.assistant.pendingConfirmationRequest else {
             store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
             return
         }
@@ -304,7 +304,7 @@ extension EditorApplication {
     }
 
     public func acceptPendingConfirmation() {
-        guard let request = store.state.pendingConfirmationRequest else {
+        guard let request = store.state.assistant.pendingConfirmationRequest else {
             store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
             return
         }
@@ -316,7 +316,7 @@ extension EditorApplication {
     }
 
     public func skipPendingConfirmation() {
-        guard let request = store.state.pendingConfirmationRequest else {
+        guard let request = store.state.assistant.pendingConfirmationRequest else {
             store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
             return
         }

@@ -40,7 +40,7 @@ extension EditorApplication {
     /// every created entity. Invalid batches are rejected before any mutation.
     @discardableResult
     public func spawnAssets(_ assets: [EditorAsset], at position: SIMD3<Float> = .zero) -> [UInt64]? {
-        guard store.state.playbackState == .stopped else {
+        guard store.state.timing.playbackState == .stopped else {
             logConsole("Stop simulation before adding assets to the scene", severity: .warning)
             return nil
         }
