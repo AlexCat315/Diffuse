@@ -43,40 +43,45 @@ struct EditorMenuModel {
                 .separator,
                 action(L("Settings"), key: ",", command: .openSettings),
             ]),
-            EditorApplicationMenu(title: L("Window"), items: [
-                action(L("Command Palette"), key: "p", modifiers: [.primary, .shift], command: .showCommandPalette),
-                action(L("Scene Settings"), key: "", command: .showSceneSettings),
+            EditorApplicationMenu(title: L("Workspace"), items: [
                 action(L(EditorWorkspaceMode.level.title), key: "1", selected: workspaceMode == .level,
                        command: .setWorkspaceMode(.level)),
-                action(L(EditorWorkspaceMode.scripting.title), key: "4", selected: workspaceMode == .scripting,
-                       command: .setWorkspaceMode(.scripting)),
                 action(L(EditorWorkspaceMode.modeling.title), key: "2", selected: workspaceMode == .modeling,
                        command: .setWorkspaceMode(.modeling)),
                 action(L(EditorWorkspaceMode.animation.title), key: "3", selected: workspaceMode == .animation,
                        command: .setWorkspaceMode(.animation)),
+                action(L(EditorWorkspaceMode.scripting.title), key: "4", selected: workspaceMode == .scripting,
+                       command: .setWorkspaceMode(.scripting)),
+            ]),
+            EditorApplicationMenu(title: L("Layout"), items:
+                EditorLayoutPreset.presets(for: workspaceMode).map { preset in
+                    action(L(preset.title), key: "", selected: activeLayoutPreset == preset,
+                           command: .setLayoutPreset(preset))
+                } + [
+                    .separator,
+                    action(L("Save Layout"), key: "", command: .saveLayout),
+                    action(L("Reset Layout"), key: "", command: .resetLayout),
+                    .separator,
+                    action(L("Maximize Viewport"), key: "", command: .maximizePanel("viewport")),
+                    action(L("Restore Panels"), key: "", command: .restorePanels),
+                ]),
+            EditorApplicationMenu(title: L("Window"), items: [
+                action(L("Command Palette"), key: "p", modifiers: [.primary, .shift], command: .showCommandPalette),
                 .separator,
-                action(presetTitle(.levelWorkbench), key: "", selected: activeLayoutPreset == .levelWorkbench,
-                       command: .setLayoutPreset(.levelWorkbench)),
-                action(presetTitle(.levelDefault), key: "", selected: activeLayoutPreset == .levelDefault,
-                       command: .setLayoutPreset(.levelDefault)),
-                action(presetTitle(.levelCinematics), key: "", selected: activeLayoutPreset == .levelCinematics,
-                       command: .setLayoutPreset(.levelCinematics)),
-                action(presetTitle(.modelingDefault), key: "", selected: activeLayoutPreset == .modelingDefault,
-                       command: .setLayoutPreset(.modelingDefault)),
-                action(presetTitle(.modelingSculpt), key: "", selected: activeLayoutPreset == .modelingSculpt,
-                       command: .setLayoutPreset(.modelingSculpt)),
-                action(presetTitle(.animationDefault), key: "", selected: activeLayoutPreset == .animationDefault,
-                       command: .setLayoutPreset(.animationDefault)),
-                action(presetTitle(.animationSequencer), key: "", selected: activeLayoutPreset == .animationSequencer,
-                       command: .setLayoutPreset(.animationSequencer)),
+                action(L("Viewport"), key: "", command: .showPanel("viewport")),
+                action(L("Hierarchy"), key: "", command: .showPanel("hierarchy")),
+                action(L("Inspector"), key: "", command: .showPanel("inspector")),
+                action(L("Scene Settings"), key: "", command: .showSceneSettings),
+                action(L("Assets"), key: "", command: .showAssets),
+                action(L("Scripts"), key: "5", command: .showScripts),
+                action(L("Console"), key: "", command: .showPanel("console")),
+                action(L("Animation"), key: "", command: .showPanel("animation")),
+                action(L("Render Pipeline"), key: "", command: .showPanel("render-pipeline")),
+                action(L("Developer Tools"), key: "", command: .showPanel("developer-tools")),
+                action(L("AI"), key: "", command: .showPanel("intent-input")),
                 .separator,
-                  action(L("Scripts"), key: "5", command: .showScripts),
                 action(L("Reopen Closed Panel"), key: "t", modifiers: [.primary, .shift],
                        command: .reopenClosedPanel),
-                action(L("Reset Layout"), key: "", command: .resetLayout),
-                action(L("Save Layout"), key: "", command: .saveLayout),
-                action(L("Maximize Viewport"), key: "", command: .maximizePanel("viewport")),
-                action(L("Restore Panels"), key: "", command: .restorePanels),
             ]),
             EditorApplicationMenu(title: L("Tools"), items: [
                 action(L("Play"), key: "",
@@ -123,25 +128,6 @@ struct EditorMenuModel {
                                             command: command))
     }
 
-    private static func presetTitle(_ preset: EditorLayoutPreset) -> String {
-        switch preset {
-        case .scriptingDefault: return L("Game: Scripting")
-        case .levelWorkbench:
-            return L("Level: Workbench")
-        case .levelDefault:
-            return L("Level: Default")
-        case .levelCinematics:
-            return L("Level: Cinematics")
-        case .modelingDefault:
-            return L("Modeling: Default")
-        case .modelingSculpt:
-            return L("Modeling: Sculpt")
-        case .animationDefault:
-            return L("Animation: Default")
-        case .animationSequencer:
-            return L("Animation: Sequencer")
-        }
-    }
 }
 
 struct EditorApplicationMenu {
