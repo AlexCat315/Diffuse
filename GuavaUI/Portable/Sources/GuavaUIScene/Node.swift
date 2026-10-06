@@ -21,6 +21,8 @@ public final class Node: @unchecked Sendable {
     /// snapshots and invalidation events. Future phases key state, layout,
     /// render and input data off this id rather than `ObjectIdentifier`.
     public let id: ElementID
+    public var sourceLocation: ComponentSourceLocation?
+    public var recompositionMetrics: ComponentRecompositionMetrics?
 
     // MARK: - Tree links
 

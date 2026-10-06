@@ -215,7 +215,7 @@ private final class BrowserPrototype {
     func hello() {
         responseBuffer.encode(DevToolsEnvelope(type: "hello", payload: json(HelloPayload(
             host: HelloHostInfo(pid: 0, appTitle: "GuavaUI Wasm prototype", platform: "WebAssembly"),
-            capabilities: ["tree", "select", "timing", "state", "recording", "inspect", "style"]))))
+            capabilities: ["tree", "select", "timing", "state", "recording", "inspect", "style", "source", "recomposition"]))))
     }
 
     func dispatch(_ bytes: UnsafeRawBufferPointer) {

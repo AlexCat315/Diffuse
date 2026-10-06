@@ -70,6 +70,10 @@ public final class ViewGraph {
     /// Active user-view scopes keyed by their anchor node identity.
     /// Strong reference keeps the rebuild closure alive while the anchor lives.
     internal var scopes: [ObjectIdentifier: ViewScope] = [:]
+    /// Lightweight diagnostics; hosts may disable timing/count collection.
+    public var tracksRecomposition = true
+    internal var activeRecompositionScope: UInt64?
+    internal var environmentReasons: [RecompositionReason] = []
 
     private var lastLayoutSize: (width: Float, height: Float)?
 
@@ -83,11 +87,15 @@ public final class ViewGraph {
     // MARK: - Install
 
     /// Build the initial node tree from `root` and assign it to `tree.root`.
-    public func install<V: View>(root: V) {
+    public func install<V: View>(root: V, fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath, line: UInt = #line, column: UInt = #column) {
         let rootNode = Node()
         tree.root = rootNode
         layoutOf[ObjectIdentifier(rootNode)] = layoutRoot
-        _ = materialise(root, into: rootNode, layoutParent: layoutRoot)
+        let nodes = materialise(root, into: rootNode, layoutParent: layoutRoot)
+        for node in nodes where node.sourceLocation == nil {
+            node.sourceLocation = .init(fileID: String(describing: fileID), filePath: String(describing: filePath), line: line, column: column)
+        }
         renderTree.install(rootNode: rootNode)
     }
 
@@ -222,6 +230,9 @@ public final class ViewGraph {
         var current: any View = view
         var key: AnyHashable? = nil
         while true {
+            if let sourced = current as? _AnySourceLocatedView {
+                current = sourced._sourceContent; continue
+            }
             if let identified = current as? _AnyIdentifiedView {
                 // Outermost id wins — `Foo.id(a).id(b)` resolves to `b`.
                 if key == nil { key = identified._id }
@@ -253,6 +264,13 @@ public final class ViewGraph {
     static func flattenSlots(_ views: [any View]) -> [any View] {
         var out: [any View] = []
         for v in views {
+            if let sourced = v as? _AnySourceLocatedView {
+                out.append(contentsOf: flattenSlots([sourced._sourceContent]).map {
+                    if $0 is _AnySourceLocatedView && !sourced._sourceLocation.explicit { return $0 }
+                    return ErasedSourceLocatedView(_sourceContent: $0, _sourceLocation: sourced._sourceLocation) as any View
+                })
+                continue
+            }
             if v is EmptyView { continue }
             if let any = v as? AnyView {
                 out.append(contentsOf: flattenSlots([any.storage]))
@@ -426,6 +444,12 @@ public final class ViewGraph {
     /// then recurse into its children. Caller has already verified that
     /// `node.viewTag == slotTag(view)`.
     func updateInPlace(node: Node, view: any View, layoutParent: LayoutNode?) {
+        if let sourced = view as? _AnySourceLocatedView {
+            node.sourceLocation = nil
+            updateInPlace(node: node, view: sourced._sourceContent, layoutParent: layoutParent)
+            if node.sourceLocation == nil || sourced._sourceLocation.explicit { node.sourceLocation = sourced._sourceLocation }
+            return
+        }
         if let identified = view as? _AnyIdentifiedView {
             updateInPlace(node: node, view: identified._content, layoutParent: layoutParent)
             node.key = identified._id
@@ -456,7 +480,7 @@ public final class ViewGraph {
         // existing scope keeps its previously-wired storage so state survives.
         if let scope = scopes[ObjectIdentifier(node)] {
             scope.replaceView(with: view)
-            scope.recompose()
+            scope.recompose(reasons: [.init(kind: "parent", originScope: activeRecompositionScope)] + environmentReasons)
         }
     }
 
@@ -501,6 +525,13 @@ public final class ViewGraph {
     public func materialise(_ view: any View,
                             into parent: Node,
                             layoutParent: LayoutNode? = nil) -> [Node] {
+        if let sourced = view as? _AnySourceLocatedView {
+            let nodes = materialise(sourced._sourceContent, into: parent, layoutParent: layoutParent)
+            for node in nodes where node.sourceLocation == nil || sourced._sourceLocation.explicit {
+                node.sourceLocation = sourced._sourceLocation
+            }
+            return nodes
+        }
         // 1. Empty
         if view is EmptyView { return [] }
 
@@ -631,6 +662,7 @@ final class ViewScope {
     var view: any View
     weak var layoutParent: LayoutNode?
     weak var invalidationLog: InvalidationLog?
+    private var installed = false
 
     init(graph: ViewGraph, anchor: Node, view: any View, layoutParent: LayoutNode?) {
         self.graph = graph
@@ -642,12 +674,15 @@ final class ViewScope {
 
     /// Wire state observers and materialise the body for the first time.
     func install() {
+        installed = true
         wireDynamicProperties()
         materialiseBody()
     }
 
     func uninstall() {
+        installed = false
         unwireDynamicProperties()
+        if let anchor { ObservableStateTracking.removeScope(id: ObjectIdentifier(anchor)) }
     }
 
     /// Discover `@State` / other `DynamicProperty` members and route their
@@ -656,24 +691,28 @@ final class ViewScope {
         guard let graph = graph, let anchor = anchor else { return }
         let scopeID = ObjectIdentifier(anchor)
 
-        for stateBox in dynamicPropertyBoxes(in: view) {
+        for child in Mirror(reflecting: view).children {
+            guard let stateBox = child.value as? _StateErased else { continue }
+            let field = child.label.map { $0.hasPrefix("_") ? String($0.dropFirst()) : $0 }
+            let kind = stateBox._diagnosticKind
             // `@State` adds a `_storage` member to the State struct; we identify
             // a `State<T>` by trying a bridging via its `_setOnChange` method.
             // Because State is generic we can't pattern match cleanly — call
             // through the runtime helper.
             stateBox._wire(invalidate: { [weak self, weak graph] in
-                guard let self, let graph else { return }
+                guard let self, let graph, self.installed else { return }
                 // Capture the animation context at write time. The
                 // recomposer stores the animation alongside the body and
                 // re-establishes it before invoking the body in
                 // `commitAll`.
                 self.recordStateWrite()
                 let capturedAnim = ActiveAnimationContext.current
-                graph.recomposer.invalidate(
+                graph.recomposer.invalidateTracked(
                     scopeID: scopeID,
-                    animation: capturedAnim
-                ) { [weak self] in
-                    self?.recompose()
+                    animation: capturedAnim,
+                    reason: .init(kind: kind, detail: field)
+                ) { [weak self] reasons in
+                    self?.recompose(reasons: reasons)
                 }
             })
         }
@@ -694,12 +733,17 @@ final class ViewScope {
     /// Re-evaluate body and reconcile against the existing anchor children.
     /// Nodes whose `viewTag` matches the new body at the same index are
     /// preserved (along with anything in `Node.attachments`).
-    func recompose() {
-        guard let anchor = anchor, let graph = graph else { return }
+    func recompose(reasons: [RecompositionReason] = [.init(kind: "manual")]) {
+        guard installed, let anchor = anchor, let graph = graph else { return }
+        let start = ContinuousClock.now
+        let previous = graph.activeRecompositionScope
+        graph.activeRecompositionScope = anchor.id.rawValue
+        defer { graph.activeRecompositionScope = previous }
         let body = trackedBody(scopeID: ObjectIdentifier(anchor))
         graph.reconcileChildren(parent: anchor,
                                 layoutParent: layoutParent,
                                 newViews: [body])
+        recordTiming(start: start, initial: false, reasons: reasons)
     }
 
     /// Swap in a new view value while keeping previously-wired `@State`
@@ -730,13 +774,33 @@ final class ViewScope {
 
     private func materialiseBody() {
         guard let graph = graph, let anchor = anchor else { return }
+        let start = ContinuousClock.now
+        let previous = graph.activeRecompositionScope
+        graph.activeRecompositionScope = anchor.id.rawValue
+        defer { graph.activeRecompositionScope = previous }
         let body = trackedBody(scopeID: ObjectIdentifier(anchor))
         _ = graph.materialise(body, into: anchor, layoutParent: layoutParent)
+        recordTiming(start: start, initial: true, reasons: [])
+    }
+
+    private func recordTiming(start: ContinuousClock.Instant, initial: Bool, reasons: [RecompositionReason]) {
+        guard let graph, graph.tracksRecomposition, let anchor else { return }
+        let duration = start.duration(to: .now).components
+        let ms = Double(duration.seconds) * 1000 + Double(duration.attoseconds) / 1e15
+        var metrics = anchor.recompositionMetrics ?? ComponentRecompositionMetrics()
+        metrics.record(milliseconds: ms, initial: initial, reasons: reasons)
+        anchor.recompositionMetrics = metrics
+        // Publish diagnostics even when evaluating body produces identical nodes.
+        if !initial {
+            let causedByWrite = reasons.contains { ["state", "observable", "dynamicProperty"].contains($0.kind) }
+            anchor.markRenderDirty(reason: causedByWrite ? .stateWrite(scope: anchor.id.rawValue) : .unknown)
+        }
     }
 
     private func trackedBody(scopeID: ObjectIdentifier) -> any View {
         ObservableStateTracking.withScope(id: scopeID,
-                                          invalidate: makeInvalidation(scopeID: scopeID)) {
+                                          invalidate: { [weak self] in self?.schedule(reason: .init(kind: "observable")) },
+                                          invalidateTracked: { [weak self] reason in self?.schedule(reason: reason) }) {
             if isMaterialisedDirectly(view) {
                 return view
             }
@@ -756,6 +820,7 @@ final class ViewScope {
             || view is any _AnyModifiedContent
             || view is any _StructuralView
             || view is _AnyIdentifiedView
+            || view is _AnySourceLocatedView
     }
 
     private func recordStateWrite() {
@@ -763,17 +828,16 @@ final class ViewScope {
         invalidationLog?.record(DirtyReason(target: anchor.id, source: .stateWrite(scope: anchor.id.rawValue), phase: .layout))
     }
 
-    private func makeInvalidation(scopeID: ObjectIdentifier) -> () -> Void {
-        { [weak self, weak graph] in
-            guard let self, let graph else { return }
-            self.recordStateWrite()
-            let capturedAnim = ActiveAnimationContext.current
-            graph.recomposer.invalidate(
-                scopeID: scopeID,
-                animation: capturedAnim
-            ) { [weak self] in
-                self?.recompose()
-            }
+    private func schedule(reason: RecompositionReason) {
+        guard installed, let graph, let anchor else { return }
+        recordStateWrite()
+        let capturedAnim = ActiveAnimationContext.current
+        graph.recomposer.invalidateTracked(
+            scopeID: ObjectIdentifier(anchor),
+            animation: capturedAnim,
+            reason: reason
+        ) { [weak self] reasons in
+            self?.recompose(reasons: reasons)
         }
     }
 
@@ -823,6 +887,7 @@ fileprivate struct UnkeyedSlotQueue {
 /// Existential helper so `ViewScope` can wire state observers without knowing
 /// the concrete value type of every `@State`.
 public protocol _StateErased {
+    var _diagnosticKind: String { get }
     func _wire(invalidate: @escaping () -> Void)
     func _unwire()
     /// Copy the runtime value out of `other` into self's backing storage.
@@ -831,10 +896,12 @@ public protocol _StateErased {
 }
 
 public extension _StateErased {
+    var _diagnosticKind: String { "dynamicProperty" }
     func _unwire() {}
 }
 
 extension State: _StateErased {
+    public var _diagnosticKind: String { "state" }
     public func _wire(invalidate: @escaping () -> Void) {
         _setOnChange(invalidate)
     }
