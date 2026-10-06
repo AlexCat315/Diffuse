@@ -35,6 +35,11 @@ public final class DevTools {
     public var stateCheckpointProvider: (() -> [String: String])?
 
     /// Restores application state from a previously-captured checkpoint.
+    public var inputRecordingStart: (() -> Bool)?
+    public var inputRecordingStop: (() -> InputRecording?)?
+    public var inputReplay: ((InputRecording) -> Bool)?
+
+    public var stateRestoreResultHandler: (([String: String]) -> Bool)?
     public var stateRestoreHandler: (([String: String]) -> Void)?
 
     /// `true` between `mirror.start` and `mirror.stop`. AppRuntime can poll
@@ -80,8 +85,11 @@ public final class DevTools {
         guard config.enabled else { return }
         var capabilities = ["tree", "select", "log", "timing"]
         if frameTap != nil { capabilities.append("mirror") }
-        if stateCheckpointProvider != nil, stateRestoreHandler != nil {
+        if stateCheckpointProvider != nil, stateRestoreHandler != nil || stateRestoreResultHandler != nil {
             capabilities.append("state")
+        }
+        if inputRecordingStart != nil, inputRecordingStop != nil, inputReplay != nil {
+            capabilities.append("recording")
         }
         server.advertisedCapabilities = capabilities
         wireSinks()
@@ -187,6 +195,14 @@ public final class DevTools {
     }
 
     private func wireState() {
+        server.stateRestoreResultHandler = { @MainActor [weak self] values in
+            guard let self else { return false }
+            if let restore = self.stateRestoreResultHandler { return restore(values) }
+            self.stateRestoreHandler?(values); return true
+        }
+        server.recordingStartHandler = { @MainActor [weak self] in self?.inputRecordingStart?() ?? false }
+        server.recordingStopHandler = { @MainActor [weak self] in self?.inputRecordingStop?() }
+        server.recordingReplayHandler = { @MainActor [weak self] recording in self?.inputReplay?(recording) ?? false }
         server.stateCheckpointHandler = { @MainActor [weak self] in
             self?.stateCheckpointProvider?() ?? [:]
         }

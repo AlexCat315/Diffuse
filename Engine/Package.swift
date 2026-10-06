@@ -66,6 +66,7 @@ let package = Package(
         .executable(name: "GuavaPluginHost", targets: ["GuavaPluginHost"]),
     ],
     dependencies: [
+        .package(path: "PlatformCore"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     ],
     targets: [
@@ -214,7 +215,7 @@ let package = Package(
         .target(name: "SIMDCompat"),
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
-        .target(name: "EngineKernel"),
+        .target(name: "EngineKernel", dependencies: [.product(name: "GuavaPlatformCore", package: "PlatformCore")]),
         .target(name: "EngineMath", dependencies: ["SIMDCompat"]),
 
         // MARK: - Rendering
@@ -230,6 +231,7 @@ let package = Package(
         .target(
             name: "PlatformShell",
             dependencies: [
+                .product(name: "GuavaPlatformCore", package: "PlatformCore"),
                 "CSDL3",
                 "EngineKernel",
                 .product(name: "Logging", package: "swift-log"),

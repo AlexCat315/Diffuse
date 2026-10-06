@@ -43,3 +43,23 @@ calls `LoggingSystem.bootstrap`, configure DevTools with
 The default endpoint is loopback-only. Binding to `0.0.0.0` or `::` exposes
 remote input and state restore to the local network; only do this on a trusted
 development network.
+
+
+## Shared Compose and reproducible input
+
+The [Wasm host](../Browser/README.md) and desktop `GuavaUIDemo --shared-counter`
+run one Compose source with real ViewGraph, Yoga and input dispatch. Their Inspector
+supports Capture/Restore/Diff and Record/Stop/Replay. `state.diff` accepts the baseline
+string dictionary and returns `{added, removed, changed: {key: {before, after}}}`.
+The tree invalidation log attributes State writes to their Compose scope.
+
+Input recordings use version 1 with `initialState`, optional `focusTarget`, `events`
+(`milliseconds`, Codable `event`) and `truncated`. Replay restores initial state and
+focus, then dispatches events in order with composition/layout between events. It does
+not reproduce wall-clock delays. The limits are 4096 events and 768 KiB. Native recording is owned by
+one connection and is stopped on disconnect. Hosts provide `inputRecordingStart`,
+`inputRecordingStop`, `inputReplay` callbacks and observe input with the window
+session's `inputObserver`; controls are enabled only with capability `recording`.
+
+Browser development reloads use `npm run dev`; successful complete builds restore
+checkpoints, and compile failures keep the previous page usable with an error overlay.

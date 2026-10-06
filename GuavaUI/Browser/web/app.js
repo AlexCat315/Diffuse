@@ -1,10 +1,20 @@
 import { WASI, File, OpenFile, ConsoleStdout } from "./wasi/index.js";
 
 const surface = document.querySelector("#surface");
+const textInput = document.createElement("textarea");
+textInput.id = "textInput"; textInput.setAttribute("aria-label", "Counter note input");
+textInput.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none";
+textInput.tabIndex = -1; document.body.append(textInput);
 const status = document.querySelector("#status");
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 let wasm, renderer, lastFrame, scheduled = false, inspectorPort;
+
+function findNode(node, name) {
+  if (!node) return;
+  if (node.debugName === name) return node;
+  for (const child of node.children) { const found = findNode(child, name); if (found) return found; }
+}
 
 function readBytes(pointer, size) {
   // Copy before another Wasm call can grow memory or replace an export buffer.
@@ -22,7 +32,7 @@ function dispatch(envelope) {
     return response();
   } finally { wasm.guava_free(pointer); }
 }
-function post(envelope) { inspectorPort?.postMessage({ kind: "message", data: JSON.stringify(envelope) }); }
+function post(envelope) { if (!envelope) return; inspectorPort?.postMessage({ kind: "message", data: JSON.stringify(envelope) }); }
 
 function schedule() {
   if (scheduled) return;
@@ -44,6 +54,17 @@ function schedule() {
       renderer.draw(lastFrame, vertices, indices);
     }
     drawLabels(lastFrame);
+    if (lastFrame.focused === "counter.note") {
+      const frame = findNode(lastFrame.tree.root, "counter.note")?.absoluteFrame;
+      if (frame) {
+        const rect = surface.getBoundingClientRect();
+        const measure = document.querySelector("#labels").getContext("2d"); measure.font="16px system-ui,sans-serif";
+        textInput.style.left = `${rect.left + frame.x + Math.min(frame.w - 20, 16 + measure.measureText(lastFrame.note).width)}px`;
+        textInput.style.top = `${rect.top + frame.y + 12}px`;
+        textInput.style.height = "24px";
+      }
+      if (document.activeElement === surface) textInput.focus({preventScroll:true});
+    }
     document.querySelector("#stats").textContent = `count=${lastFrame.count} · ${lastFrame.vertices} vertices · ${lastFrame.indices} indices · ${lastFrame.batches.length} batches`;
     wasm.guava_events();
     for (const event of response()) post(event);
@@ -161,17 +182,25 @@ function makeCanvasRenderer() {
       for (const batch of frame.batches) {
         context.save();
         if (batch.clip) { context.beginPath(); context.rect(...batch.clip); context.clip(); }
+        let pathColor;
         for (let i = batch.offset; i < batch.offset + batch.count; i += 3) {
           const start = indices[i] * 20;
           const color = data.getUint32(start + 16, true);
-          context.fillStyle = `rgba(${color & 255},${(color >>> 8) & 255},${(color >>> 16) & 255},${(color >>> 24) / 255})`;
-          context.beginPath();
+          // Merge opaque triangles so shared internal edges have no AA seams.
+          // Translucent triangles keep their original source-over ordering.
+          if (pathColor !== color || (color >>> 24) !== 255) {
+            if (pathColor !== undefined) context.fill();
+            context.beginPath();
+            context.fillStyle = `rgba(${color & 255},${(color >>> 8) & 255},${(color >>> 16) & 255},${(color >>> 24) / 255})`;
+            pathColor = color;
+          }
           for (let j = 0; j < 3; j++) {
             const p = indices[i + j] * 20, x = data.getFloat32(p, true), y = data.getFloat32(p + 4, true);
             if (j === 0) context.moveTo(x, y); else context.lineTo(x, y);
           }
-          context.closePath(); context.fill();
+          context.closePath();
         }
+        if (pathColor !== undefined) context.fill();
         context.restore();
       }
     } };
@@ -189,16 +218,60 @@ try {
     if (new URLSearchParams(location.search).get("renderer") === "webgpu") throw new Error("WebGPU device lost during initialization");
     renderer = makeCanvasRenderer();
   }
-  for (const [id, x, y] of [["increment", 40, 260], ["reset", () => surface.clientWidth - 40, 260], ["theme", 40, 320]]) {
-    document.getElementById(id).addEventListener("click", () => { wasm.guava_pointer(1, typeof x === "function" ? x() : x, y); schedule(); });
+  for (const id of ["increment", "reset", "theme"]) {
+    document.getElementById(id).addEventListener("click", () => {
+      const rect = findNode(lastFrame?.tree.root, `counter.${id}`)?.absoluteFrame;
+      if (rect) wasm.guava_pointer(3, rect.x + rect.w / 2, rect.y + rect.h / 2);
+      schedule();
+    });
   }
-  surface.addEventListener("pointermove", (event) => {
-    const rect = surface.getBoundingClientRect(); wasm.guava_pointer(0, event.clientX - rect.left, event.clientY - rect.top); schedule();
-  });
+  surface.tabIndex = 0;
+  const point = event => { const rect = surface.getBoundingClientRect(); return [event.clientX - rect.left, event.clientY - rect.top]; };
+  surface.addEventListener("pointermove", event => { wasm.guava_pointer(0, ...point(event)); schedule(); });
   surface.addEventListener("pointerleave", () => { wasm.guava_pointer(0, -1, -1); schedule(); });
-  surface.addEventListener("pointerdown", (event) => {
+  surface.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
-    const rect = surface.getBoundingClientRect(); wasm.guava_pointer(1, event.clientX - rect.left, event.clientY - rect.top); schedule();
+    surface.focus({preventScroll:true}); surface.setPointerCapture(event.pointerId);
+    wasm.guava_pointer(1, ...point(event)); schedule();
+  });
+  surface.addEventListener("pointerup", event => {
+    if (event.button !== 0) return;
+    wasm.guava_pointer(2, ...point(event));
+    if (surface.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
+    schedule();
+  });
+  surface.addEventListener("pointercancel", () => { wasm.guava_pointer(2, -1, -1); schedule(); });
+  function sendText(string, editing = false) {
+    const bytes = encoder.encode(string);
+    const pointer = wasm.guava_alloc(Math.max(1, bytes.length));
+    if (!pointer) return;
+    try {
+      new Uint8Array(wasm.memory.buffer, pointer >>> 0, bytes.length).set(bytes);
+      wasm.guava_text(pointer, bytes.length, editing ? 1 : 0); schedule();
+    } finally { wasm.guava_free(pointer); }
+  }
+  let composing = false, skipCompositionInput = false;
+  textInput.addEventListener("compositionstart", () => { composing = true; });
+  textInput.addEventListener("compositionupdate", event => sendText(event.data, true));
+  textInput.addEventListener("compositionend", event => {
+    composing = false; sendText(event.data); textInput.value = "";
+    skipCompositionInput = true; setTimeout(() => { skipCompositionInput = false; }, 0);
+  });
+  textInput.addEventListener("input", event => {
+    if (composing || event.isComposing || skipCompositionInput) return;
+    sendText(event.data ?? textInput.value); textInput.value = "";
+  });
+  textInput.addEventListener("blur", () => { if (composing) sendText("", true); composing = false; textInput.value = ""; });
+  const codes = { Enter:40, Escape:41, Backspace:42, Tab:43, Space:44, ArrowRight:79, ArrowLeft:80, ArrowDown:81, ArrowUp:82 };
+  for (const target of [surface, textInput]) for (const name of ["keydown", "keyup"]) target.addEventListener(name, event => {
+    if (composing || event.isComposing) return;
+    const code = codes[event.code];
+    if (!code) return;
+    event.preventDefault();
+    const modifiers = (event.shiftKey ? 1 : 0) | (event.ctrlKey ? 4 : 0) | (event.altKey ? 16 : 0) | (event.metaKey ? 64 : 0);
+    wasm.guava_key(code, modifiers, name === "keydown" ? 1 : 0, event.repeat ? 1 : 0);
+    if (target === textInput && code === 43) surface.focus({preventScroll:true});
+    schedule();
   });
   new ResizeObserver(schedule).observe(surface);
   window.addEventListener("message", (event) => {
@@ -227,5 +300,31 @@ try {
   document.querySelector("#inspector").addEventListener("load", ready);
   ready();
   window.guavaDebug = { get snapshot() { return lastFrame; }, get backend() { return renderer.backend; }, request(envelope) { const result = dispatch(envelope); schedule(); return result; } };
+  try {
+    const saved = sessionStorage.getItem("guava.dev.checkpoint");
+    if (saved) {
+      const restored = dispatch({type:"state.restore", id:0, payload:JSON.parse(saved)});
+      if (restored.type.endsWith(".err")) console.warn("Previous development state could not be restored", restored.payload);
+      sessionStorage.removeItem("guava.dev.checkpoint");
+    }
+  } catch (error) { console.warn("Development state restore failed", error); }
+  fetch("./dev-mode.json").then(result => result.ok ? result.json() : null).then(mode => {
+    if (!mode?.enabled) return;
+    const events = new EventSource("/__guava_events");
+    events.onopen = () => { window.guavaDevConnected = true; };
+    const overlay = document.createElement("pre");
+    overlay.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:45vh;overflow:auto;background:#251b22;color:#ffe0e5;padding:16px;z-index:1000;white-space:pre-wrap";
+    overlay.hidden = true; document.body.append(overlay);
+    events.onmessage = event => {
+      const message = JSON.parse(event.data);
+      if (message.type === "building") { overlay.textContent="Compiling Swift…"; overlay.hidden=false; }
+      if (message.type === "error") { overlay.textContent=message.message; overlay.hidden=false; }
+      if (message.type === "ready") {
+        const checkpoint = dispatch({type:"state.checkpoint",id:0}).payload;
+        sessionStorage.setItem("guava.dev.checkpoint", JSON.stringify(checkpoint));
+        location.assign("/" + location.search);
+      }
+    };
+  }).catch(error => console.warn("Development reload unavailable", error));
   schedule();
 } catch (error) { status.textContent = "Prototype failed to load"; console.error(error); document.querySelector("#stats").textContent = String(error); }

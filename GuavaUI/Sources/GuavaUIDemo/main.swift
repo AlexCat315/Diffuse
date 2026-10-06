@@ -2,6 +2,7 @@ import Foundation
 import CardBattleRuntime
 import GuavaUIRuntime
 import GuavaUICompose
+import GuavaUISharedDemo
 import GuavaUIWorkspace
 import GuavaUIDevTools
 import PlatformShell
@@ -1075,6 +1076,9 @@ if let config = demoDevToolsConfig, config.autoInstallLogTap {
 
 let tree = NodeTree()
 let host = SDL3PlatformHost(title: "GuavaUI — Phase 7.5")
+let sharedCounter = SharedCounterView()
+let sharedRecorder = InputRecorder()
+let usesSharedCounter = CommandLine.arguments.contains("--shared-counter")
 let graph = ViewGraph(tree: tree, recomposer: host.recomposer)
 InteractionRegistryHolder.current = host.interactions
 FocusChainHolder.current = host.focusChain
@@ -1206,6 +1210,37 @@ if let config = demoDevToolsConfig {
             MainActor.assumeIsolated {
                 operation()
             }
+        }
+    }
+    if usesSharedCounter {
+        tools.stateCheckpointProvider = { sharedCounter.checkpoint }
+        tools.stateRestoreResultHandler = { values in sharedCounter.restore(values) }
+        tools.inputRecordingStart = {
+            guard let session = host.mainSession, !sharedRecorder.isRecording else { return false }
+            sharedRecorder.start(state: sharedCounter.checkpoint, focusTarget: session.focusChain.focused?.attachments[LayoutDebugAttachmentKey.debugName] as? String)
+            return true
+        }
+        tools.inputRecordingStop = { sharedRecorder.stop() }
+        tools.inputReplay = { recording in
+            guard !sharedRecorder.isRecording, recording.isValid, let session = host.mainSession,
+                  sharedCounter.restore(recording.initialState) else { return false }
+            session.pointerCapture.release()
+            session.withCurrent {
+                session.recomposer.commitAll()
+                graph.computeLayoutIfNeeded(width: Float(session.logicalSize.width), height: Float(session.logicalSize.height))
+                func find(_ node: Node, name: String) -> Node? {
+                    if node.attachments[LayoutDebugAttachmentKey.debugName] as? String == name { return node }
+                    for child in node.children { if let found = find(child, name: name) { return found } }
+                    return nil
+                }
+                session.focusChain.focus(recording.focusTarget.flatMap { name in tree.root.flatMap { find($0, name: name) } })
+                for input in recording.events {
+                    session.injectEvent(input.event)
+                    session.recomposer.commitAll()
+                    graph.computeLayoutIfNeeded(width: Float(session.logicalSize.width), height: Float(session.logicalSize.height))
+                }
+            }
+            session.requestDisplay(); return true
         }
     }
     tools.inputDelivery = { event in
@@ -1395,6 +1430,9 @@ func appendPerformanceHUD(to list: DrawList) {
 }
 
 host.onInit = { native, w, h in
+    if usesSharedCounter {
+        host.mainSession?.inputObserver = { event in MainActor.assumeIsolated { sharedRecorder.record(event) } }
+    }
     drawableW = w; drawableH = h
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
     let presentMode: GPUPresentMode = DemoVSyncHolder.enabled ? .fifo : .immediate
@@ -1423,7 +1461,14 @@ host.onInit = { native, w, h in
         prewarmDemoTextGlyphs()
         timing.mark("glyphPrewarm")
         if !didInstallRoot {
-            graph.install(root: RootView())
+            if usesSharedCounter {
+                graph.install(root: sharedCounter.compositionLocal(SharedDemoText.painter, { text, list, origin in
+                    guard let env = TextEnvironmentHolder.current else { return }
+                    let result = env.cachedLayout(text: text.text, font: .system(size: text.size), lineHeight: text.size * 1.3)
+                    list.addText(result, origin: (Float(origin.x) + text.inset, Float(origin.y)), color: text.color,
+                                 textureID: env.atlasTextureID, atlas: env.atlas)
+                }))
+            } else { graph.install(root: RootView()) }
             timing.mark("installRoot")
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
             timing.mark("firstLayout")

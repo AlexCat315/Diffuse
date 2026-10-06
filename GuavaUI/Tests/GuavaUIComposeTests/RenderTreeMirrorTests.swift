@@ -6,6 +6,7 @@ import Foundation
 #endif
 import GuavaUIRuntime
 @testable import GuavaUICompose
+@testable import GuavaUIComposeCore
 
 /// Phase 4a foundation tests.
 ///
