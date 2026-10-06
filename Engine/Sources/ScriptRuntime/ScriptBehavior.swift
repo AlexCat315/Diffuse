@@ -9,6 +9,11 @@ public protocol ScriptBehavior: Sendable {
     mutating func onDestroy(_ context: ScriptContext)
 }
 
+/// Optional property contract, independent of the executable lifecycle.
+public protocol ScriptAuthoring {
+    static var definition: ScriptDefinition { get }
+}
+
 public extension ScriptBehavior {
     mutating func onStart(_ context: ScriptContext) {}
     mutating func onPrePhysics(_ context: ScriptContext) {}

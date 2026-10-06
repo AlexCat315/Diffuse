@@ -124,7 +124,7 @@ private struct EditorCallbacks {
             let s = app.store
             return EditorShortcutHandler.handle(
                 key,
-                playbackState: s.state.playbackState,
+                playbackState: s.state.timing.playbackState,
                 commandPaletteVisible: commandPaletteVisible,
                 setPlaybackState: { next in
                     EditorCommandDispatcher.handle(.setPlaybackState(next),

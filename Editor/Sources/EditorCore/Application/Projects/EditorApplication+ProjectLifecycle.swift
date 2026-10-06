@@ -46,7 +46,7 @@ extension EditorApplication {
     }
 
     public func requestCloseProject() {
-        if store.state.playbackState != .stopped { applyPlaybackState(.stopped) }
+        if store.state.timing.playbackState != .stopped { applyPlaybackState(.stopped) }
         guard !hasUnsavedSceneChanges && !scriptWorkspace.snapshot.documents.contains(where: \.isDirty) else {
             store.dispatch(.requestClose(EditorPendingCloseRequest(action: .closeProject)))
             return
@@ -57,7 +57,7 @@ extension EditorApplication {
     public func closeProject() { closeProjectHandler?() }
 
     public func requestNewScene() {
-        guard store.state.playbackState == .stopped else {
+        guard store.state.timing.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before creating a new scene.")
             return
         }
@@ -69,7 +69,7 @@ extension EditorApplication {
     }
 
     public func requestOpenSceneManifest() {
-        guard store.state.playbackState == .stopped else {
+        guard store.state.timing.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before opening another scene.")
             return
         }
@@ -83,7 +83,7 @@ extension EditorApplication {
     /// Opens a scene chosen by the user, deferring the actual load behind the
     /// unsaved-changes confirmation when necessary.
     public func requestOpenSceneManifest(at url: URL) {
-        guard store.state.playbackState == .stopped else {
+        guard store.state.timing.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before opening another scene.")
             return
         }

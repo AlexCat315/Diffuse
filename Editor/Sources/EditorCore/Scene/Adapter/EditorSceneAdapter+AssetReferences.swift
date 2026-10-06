@@ -11,7 +11,7 @@ extension EditorSceneAdapter {
             if scene.component(RenderMeshComponent.self, for: entity)?.assetID == assetID { ids.insert(entity.rawValue) }
         }
         for entity in scene.entities(with: ParticleEmitter.self) {
-            if scene.component(ParticleEmitter.self, for: entity)?.textureAssetID == assetID { ids.insert(entity.rawValue) }
+            if scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.textureAssetID == assetID { ids.insert(entity.rawValue) }
         }
         return ids.sorted()
     }
@@ -23,7 +23,7 @@ extension EditorSceneAdapter {
                !FileManager.default.fileExists(atPath: asset.absolutePath) { paths.insert(asset.absolutePath) }
         }
         for entity in scene.entities(with: ParticleEmitter.self) {
-            if let path = scene.component(ParticleEmitter.self, for: entity)?.texturePath,
+            if let path = scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.texturePath,
                !FileManager.default.fileExists(atPath: path) { paths.insert(path) }
         }
         return paths.sorted()
@@ -43,8 +43,8 @@ extension EditorSceneAdapter {
                 runtime.updateComponent(RenderMeshComponent.self, for: entity) { $0.assetID = asset.id; $0.meshIndex = asset.meshIndex }
             }
             for entity in runtime.entities(with: ParticleEmitter.self) {
-                guard runtime.component(ParticleEmitter.self, for: entity)?.textureAssetID == oldID else { continue }
-                runtime.updateComponent(ParticleEmitter.self, for: entity) { $0.textureAssetID = asset.id; $0.texturePath = asset.absolutePath }
+                guard runtime.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.textureAssetID == oldID else { continue }
+                runtime.updateComponent(ParticleEmitter.self, for: entity) { $0.settings.textureSheet.textureAssetID = asset.id; $0.settings.textureSheet.texturePath = asset.absolutePath }
             }
         }
         update(&scene)

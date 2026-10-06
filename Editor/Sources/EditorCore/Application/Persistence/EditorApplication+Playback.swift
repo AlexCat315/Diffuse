@@ -24,7 +24,7 @@ extension EditorApplication {
     /// - On `.paused`: freezes physics (mode → off) without restoring the scene.
     /// - On `.stopped`: restores the pre-play scene snapshot and disables physics.
     public func applyPlaybackState(_ next: PlaybackState) {
-        let current = store.state.playbackState
+        let current = store.state.timing.playbackState
         guard current.canTransition(to: next) else { return }
         guard next == .stopped || store.workspaceMode.isGameWorkspace else { return }
         EditorViewportInputController.shared.reset()
@@ -36,7 +36,7 @@ extension EditorApplication {
             if physicsPlaySnapshot == nil {
                 scene.scriptRuntime.reset()
                 physicsPlaySnapshot = scene.scene
-                physicsPlayAuthoringRevision = store.state.sceneRevision
+                physicsPlayAuthoringRevision = store.state.document.sceneRevision
                 persistPhysicsPlaySnapshot()
             }
             scene.setAuthoringEnabled(false)

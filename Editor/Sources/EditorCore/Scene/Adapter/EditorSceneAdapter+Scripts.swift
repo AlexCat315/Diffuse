@@ -51,16 +51,24 @@ extension EditorSceneAdapter {
         return catalogOptions + dynamicOptions
     }
 
-    public func registerDynamicScriptOption(identifier: String, displayName: String) {
+    public func registerDynamicScriptOption(identifier: String, displayName: String, legacyIdentifiers: [String] = []) {
         dynamicScriptDisplayNames[identifier] = displayName
+        for alias in legacyIdentifiers { dynamicScriptAliases[alias] = identifier }
     }
 
     public func unregisterDynamicScriptOption(identifier: String) {
         dynamicScriptDisplayNames.removeValue(forKey: identifier)
+        dynamicScriptAliases = dynamicScriptAliases.filter { $0.value != identifier }
     }
 
-    public func setDynamicScriptOptions(_ options: [String: String]) {
+    public func setDynamicScriptOptions(_ options: [String: String], aliases: [String: String] = [:]) {
         dynamicScriptDisplayNames = options
+        dynamicScriptAliases = aliases.filter { options[$0.value] != nil }
+    }
+
+    func dynamicScriptSourceIdentifier(for identifier: String) -> String? {
+        let canonical = dynamicScriptAliases[identifier] ?? identifier
+        return dynamicScriptDisplayNames[canonical] == nil ? nil : canonical
     }
 
     public func isScriptIdentifierAvailable(_ identifier: String) -> Bool {
@@ -68,12 +76,12 @@ extension EditorSceneAdapter {
     }
 
     @discardableResult
-    public func addScriptBinding(to rawID: UInt64) -> Bool {
+    public func addScriptBinding(to rawID: UInt64, identifier: String? = nil) -> Bool {
         guard isAuthoringEnabled,
               !isEntityLocked(rawID),
               let entity = scriptEntity(rawID) else { return false }
         var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings ?? []
-        bindings.append(ScriptBinding(identifier: defaultScriptIdentifier))
+        bindings.append(ScriptBinding(identifier: identifier ?? defaultScriptIdentifier))
         return applySceneTransaction(intentVerb: "scene.add_script_binding",
                                      summary: "Add script binding",
                                      targetRawIDs: [rawID],

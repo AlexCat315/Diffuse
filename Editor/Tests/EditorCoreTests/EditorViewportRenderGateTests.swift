@@ -170,12 +170,12 @@ struct EditorViewportRenderGateTests {
     @Test("Realtime toggle reducer and codable round trip")
     func realtimeStatePlumbing() throws {
         var state = EditorState()
-        #expect(!state.viewportRealtimeEnabled)
+        #expect(!state.viewport.realtimeEnabled)
         EditorReducer.reduce(state: &state, action: .setViewportRealtime(true))
-        #expect(state.viewportRealtimeEnabled)
+        #expect(state.viewport.realtimeEnabled)
 
         let data = try JSONEncoder().encode(state)
         let decoded = try JSONDecoder().decode(EditorState.self, from: data)
-        #expect(decoded.viewportRealtimeEnabled)
+        #expect(decoded.viewport.realtimeEnabled)
     }
 }

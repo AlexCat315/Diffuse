@@ -51,7 +51,7 @@ extension EditorApplication {
         case "get_ai_entity":
             return mcpGetAIEntity(params: params)
         case "get_selection":
-            let ref = store.state.selectedEntityID.map { "scene:\($0)" }
+            let ref = store.state.selection.selectedEntityID.map { "scene:\($0)" }
             return ["ok": true, "selectedRef": ref as Any]
         case "find_entities":
             return mcpFindEntities(params: params)
@@ -188,7 +188,7 @@ extension EditorApplication {
                 case "scene.get_entities":
                     return mcpGetScene()
                 case "scene.get_selection":
-                    let ref = store.state.selectedEntityID.map { "scene:\($0)" }
+                    let ref = store.state.selection.selectedEntityID.map { "scene:\($0)" }
                     return ["ok": true, "selectedRef": ref as Any]
                 case "scene.find_entities":
                     return mcpFindEntities(params: arguments)
@@ -345,8 +345,8 @@ extension EditorApplication {
     private func mcpGetScene() -> [String: Any] {
         let snapshot = SceneSemanticEncoder().encode(
             scene.scene,
-            selectedEntityID: store.state.selectedEntityID,
-            workspaceMode: store.state.workspaceMode.rawValue,
+            selectedEntityID: store.state.selection.selectedEntityID,
+            workspaceMode: store.state.workspace.mode.rawValue,
             localeIdentifier: nil
         )
         let enc = JSONEncoder()
@@ -370,8 +370,8 @@ extension EditorApplication {
 
         let snapshot = SceneSemanticEncoder().encode(
             scene.scene,
-            selectedEntityID: store.state.selectedEntityID,
-            workspaceMode: store.state.workspaceMode.rawValue,
+            selectedEntityID: store.state.selection.selectedEntityID,
+            workspaceMode: store.state.workspace.mode.rawValue,
             localeIdentifier: nil
         )
         var matches: [(entity: SceneSemanticSnapshot.Entity, distance: Double?)] = []
@@ -433,7 +433,7 @@ extension EditorApplication {
     }
 
     private func mcpGetAIEntity(params: [String: Any]) -> [String: Any] {
-        let targetRef = (params["entity_id"] as? String) ?? store.state.selectedEntityID.map { "scene:\($0)" }
+        let targetRef = (params["entity_id"] as? String) ?? store.state.selection.selectedEntityID.map { "scene:\($0)" }
         guard let targetRef, !targetRef.isEmpty else {
             return ["ok": false, "error": "missing target entity; pass entity_id or select an entity"]
         }

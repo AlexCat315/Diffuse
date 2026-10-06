@@ -9,19 +9,19 @@ public enum EditorTransformSnapping {
         var result = matrix
         switch mode {
         case .translate:
-            guard state.translateSnapEnabled else { return result }
-            let step = EditorState.sanitizedTranslateSnapStep(state.translateSnapStep)
+            guard state.snapping.translateSnapEnabled else { return result }
+            let step = EditorState.sanitizedTranslateSnapStep(state.snapping.translateSnapStep)
             result.columns.3.x = quantize(result.columns.3.x, step: step)
             result.columns.3.y = quantize(result.columns.3.y, step: step)
             result.columns.3.z = quantize(result.columns.3.z, step: step)
             return result
         case .rotate:
-            guard state.rotateSnapEnabled else { return result }
-            let snapped = snapRotation(result, stepDegrees: EditorState.sanitizedRotateSnapStep(state.rotateSnapStepDegrees))
+            guard state.snapping.rotateSnapEnabled else { return result }
+            let snapped = snapRotation(result, stepDegrees: EditorState.sanitizedRotateSnapStep(state.snapping.rotateSnapStepDegrees))
             return snapped
         case .scale:
-            guard state.scaleSnapEnabled else { return result }
-            let snapped = snapScale(result, step: EditorState.sanitizedScaleSnapStep(state.scaleSnapStep), minScale: 0.001)
+            guard state.snapping.scaleSnapEnabled else { return result }
+            let snapped = snapScale(result, step: EditorState.sanitizedScaleSnapStep(state.snapping.scaleSnapStep), minScale: 0.001)
             return snapped
         }
     }

@@ -6,6 +6,7 @@ private struct RegisteredScript: Sendable {
     var name: String?
     var generation: UInt64
     var defaultParametersJSON: String
+    var definition: ScriptDefinition
     var makeScript: @Sendable () -> Script
 }
 
@@ -18,6 +19,9 @@ private struct ActiveScriptInstance: Sendable {
     var registrationHandle: ScriptHandle
     var registrationGeneration: UInt64
     var script: Script
+    var parametersJSON: String
+    var defaultParametersJSON: String
+    var definition: ScriptDefinition
 }
 
 public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
@@ -48,13 +52,16 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
     @discardableResult
     public func register(named name: String? = nil,
                          defaultParametersJSON: String = "{}",
+                         definition: ScriptDefinition = ScriptDefinition(),
                          _ build: @escaping @Sendable () -> Script) -> ScriptHandle {
+        let defaultParametersJSON = definition.defaultParametersJSON(overriding: defaultParametersJSON)
         let normalizedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let normalizedName, !normalizedName.isEmpty,
            let existingHandle = handlesByName[normalizedName],
            var existing = registeredScripts[existingHandle] {
             existing.generation &+= 1
             existing.defaultParametersJSON = defaultParametersJSON
+            existing.definition = definition
             existing.makeScript = build
             registeredScripts[existingHandle] = existing
             return existingHandle
@@ -66,11 +73,43 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
         registeredScripts[handle] = RegisteredScript(name: storedName,
                                                      generation: 1,
                                                      defaultParametersJSON: defaultParametersJSON,
+                                                     definition: definition,
                                                      makeScript: build)
         if let storedName {
             handlesByName[storedName] = handle
         }
         return handle
+    }
+
+    @discardableResult
+    public func register<Behavior: ScriptBehavior>(behavior: Behavior.Type,
+                                                   named name: String? = nil,
+                                                   defaultParametersJSON: String = "{}") -> ScriptHandle {
+        let definition = (behavior as? any ScriptAuthoring.Type)?.definition ?? ScriptDefinition()
+        return register(named: name, defaultParametersJSON: defaultParametersJSON, definition: definition) {
+            Script(behavior: behavior)
+        }
+    }
+
+    public func definition(for binding: ScriptBinding) -> ScriptDefinition? {
+        resolve(binding)?.1.definition
+    }
+
+    public func defaultParameters(for binding: ScriptBinding) -> [String: Any] {
+        guard let registered = resolve(binding)?.1 else { return [:] }
+        return registered.definition.resolvedParameters(defaultsJSON: registered.defaultParametersJSON)
+    }
+
+    public func needsReload(_ binding: ScriptBinding, on entity: EntityID) -> Bool {
+        guard binding.isEnabled, let (handle, registration) = resolve(binding),
+              let instance = activeInstances[ScriptInstanceKey(entity: entity, binding: binding.id)] else { return false }
+        return instance.registrationHandle != handle || instance.registrationGeneration != registration.generation
+    }
+
+    public func isActive(_ binding: ScriptBinding, on entity: EntityID) -> Bool {
+        guard binding.isEnabled, let (handle, registration) = resolve(binding),
+              let instance = activeInstances[ScriptInstanceKey(entity: entity, binding: binding.id)] else { return false }
+        return instance.registrationHandle == handle && instance.registrationGeneration == registration.generation
     }
 
     public func handle(named name: String) -> ScriptHandle? {
@@ -121,10 +160,10 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
         }) {
             guard let instance = instances[key] else { continue }
             let binding = context.component(ScriptComponent.self, for: key.entity)?.bindings.first { $0.id == key.binding }
-            let registered = registeredScripts[instance.registrationHandle]
             let scriptContext = ScriptContext(phaseContext: context, entity: key.entity, deltaTime: 0,
-                                               parametersJSON: binding?.parametersJSON ?? "{}",
-                                               defaultParametersJSON: registered?.defaultParametersJSON ?? "{}")
+                                               parametersJSON: binding?.parametersJSON ?? instance.parametersJSON,
+                                               defaultParametersJSON: instance.defaultParametersJSON,
+                                               definition: instance.definition)
             invoke(\.onDestroyHandler, script: instance.script, context: scriptContext)
         }
         inputProcessor.reset()
@@ -156,7 +195,10 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
             let scriptContext = ScriptContext(
                 phaseContext: context,
                 entity: key.entity,
-                deltaTime: context.deltaTimeSeconds
+                deltaTime: context.deltaTimeSeconds,
+                parametersJSON: instance.parametersJSON,
+                defaultParametersJSON: instance.defaultParametersJSON,
+                definition: instance.definition
             )
             invoke(\.onDestroyHandler, script: instance.script, context: scriptContext)
         }
@@ -184,21 +226,31 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
                     entity: entity,
                     deltaTime: context.deltaTimeSeconds,
                     parametersJSON: binding.parametersJSON,
-                    defaultParametersJSON: registered.defaultParametersJSON
+                    defaultParametersJSON: registered.defaultParametersJSON,
+                    definition: registered.definition
                 )
                 var instance = activeInstances[key]
                 if instance?.registrationHandle != handle
                     || instance?.registrationGeneration != registered.generation {
-                    invoke(\.onDestroyHandler, script: instance?.script, context: scriptContext)
+                    if let previous = instance {
+                        let destroyContext = ScriptContext(phaseContext: context, entity: entity,
+                            deltaTime: context.deltaTimeSeconds, parametersJSON: previous.parametersJSON,
+                            defaultParametersJSON: previous.defaultParametersJSON, definition: previous.definition)
+                        invoke(\.onDestroyHandler, script: previous.script, context: destroyContext)
+                    }
                     let replacement = ActiveScriptInstance(
                         registrationHandle: handle,
                         registrationGeneration: registered.generation,
-                        script: registered.makeScript()
+                        script: registered.makeScript(),
+                        parametersJSON: binding.parametersJSON,
+                        defaultParametersJSON: registered.defaultParametersJSON,
+                        definition: registered.definition
                     )
                     invoke(\.onStartHandler, script: replacement.script, context: scriptContext)
                     activeInstances[key] = replacement
                     instance = replacement
                 }
+                activeInstances[key]?.parametersJSON = binding.parametersJSON
                 guard let script = instance?.script else { continue }
                 switch phase {
                 case .prePhysics:

@@ -241,7 +241,7 @@ struct AssetBrowserPanel: View {
                 referenceLocations = app.assetReferences(target); showsReferences = true
             })),
             .item(MenuItem(id: "asset-add", title: L("Add to Scene"),
-                           isEnabled: assets.contains { $0.kind.isMesh } && app.store.state.playbackState == .stopped,
+                           isEnabled: assets.contains { $0.kind.isMesh } && app.store.state.timing.playbackState == .stopped,
                            action: { _ = app.spawnAssets(assets) })),
             .item(MenuItem(id: "asset-reveal", title: L("Reveal"), action: { revealAssets(assets) })),
             .item(MenuItem(id: "copy-path", title: L("Copy Path"), action: {
@@ -1138,7 +1138,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
         let onActivate = self.onActivate
         let capture = PointerCaptureHolder.current
         let isDragEnabled = asset.kind.isMesh
-            && app.store.state.playbackState == .stopped
+            && app.store.state.timing.playbackState == .stopped
         AssetBrowserFocusRegistry.register(assetID: asset.id, node: node)
 
         registry.setPointer(node, route: InputHandlerRoute(role: .drag,
@@ -1158,7 +1158,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
             case .up:
                 // Only resolve a drop if a drag actually began; a plain click
                 // just selects (handled on .down) without spawning anything.
-                if app.store.state.activeAssetDrag != nil {
+                if app.store.state.navigation.activeAssetDrag != nil {
                     _ = app.handleAssetDrop(at: event.x, cursorY: event.y)
                 }
                 AssetDragGesture.pending = nil
@@ -1192,7 +1192,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
                                                        priority: .capture,
                                                        debugName: "asset.drag")) { event, _ in
             // Esc cancels an in-progress drag without spawning.
-            if app.store.state.activeAssetDrag != nil,
+            if app.store.state.navigation.activeAssetDrag != nil,
                event.scancode == ComposeScancode.escape {
                 app.store.dispatch(.endAssetDrag)
                 AssetDragGesture.pending = nil

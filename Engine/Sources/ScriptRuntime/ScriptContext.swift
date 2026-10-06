@@ -1,4 +1,4 @@
-﻿import EngineKernel
+import EngineKernel
 import Foundation
 import SceneRuntime
 import SIMDCompat
@@ -13,14 +13,12 @@ public final class ScriptContext {
     public let parametersJSON: String
 
     private let defaultParametersJSON: String
+    private let definition: ScriptDefinition
 
     /// Decoded JSON dictionary from `parametersJSON`, cached on first access.
     public var parameters: [String: Any] {
         if let cached = _cachedParameters { return cached }
-        var merged = Self.decodeParameters(defaultParametersJSON)
-        for (key, value) in Self.decodeParameters(parametersJSON) {
-            merged[key] = value
-        }
+        let merged = definition.resolvedParameters(defaultsJSON: defaultParametersJSON, overridesJSON: parametersJSON)
         _cachedParameters = merged
         return merged
     }
@@ -31,19 +29,14 @@ public final class ScriptContext {
          entity: EntityID,
          deltaTime: Double,
          parametersJSON: String = "{}",
-         defaultParametersJSON: String = "{}") {
+         defaultParametersJSON: String = "{}",
+         definition: ScriptDefinition = ScriptDefinition()) {
         self.phaseContext = phaseContext
         self.entity = entity
         self.deltaTime = deltaTime
         self.parametersJSON = parametersJSON
         self.defaultParametersJSON = defaultParametersJSON
-    }
-
-    private static func decodeParameters(_ json: String) -> [String: Any] {
-        guard let data = json.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [:] }
-        return object
+        self.definition = definition
     }
 
     public func floatParameter(_ name: String) -> Float? {
