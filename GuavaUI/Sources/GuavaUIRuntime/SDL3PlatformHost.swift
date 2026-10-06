@@ -27,6 +27,12 @@ public final class PlatformWindowSession {
     public var pointerCapture: PointerCapture { inputContext.pointerCapture }
     public var focusChain: FocusChain { inputContext.focusChain }
 
+    /// Scene-thread observation of both native and injected input.
+    public var inputObserver: ((InputEvent) -> Void)? {
+        get { dispatcher.eventSink }
+        set { dispatcher.eventSink = newValue }
+    }
+
     public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?

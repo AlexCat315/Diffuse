@@ -6,7 +6,10 @@ let package = Package(
     dependencies: [.package(path: "../Portable")],
     targets: [
         .executableTarget(name: "GuavaUIBrowserPrototype", dependencies: [
+            .product(name: "GuavaUISharedDemo", package: "Portable"),
             .product(name: "GuavaUICore", package: "Portable"),
+            .product(name: "GuavaUIComposeCore", package: "Portable"),
+            .product(name: "GuavaUIDevToolsScene", package: "Portable"),
             .product(name: "GuavaUIDevToolsProtocol", package: "Portable"),
         ]),
     ]

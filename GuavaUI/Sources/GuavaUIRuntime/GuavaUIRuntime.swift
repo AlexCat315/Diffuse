@@ -6,15 +6,6 @@
 @_exported import GuavaUICore
 
 // Preserve the desktop API while using the same implementations on Wasm.
-public typealias Color = GuavaUICore.Color
-public typealias UIVertex = GuavaUICore.UIVertex
-public typealias UIRect = GuavaUICore.UIRect
-public typealias DrawList = GuavaUICore.DrawList
-public typealias DrawBatch = GuavaUICore.DrawBatch
-public typealias TextureID = GuavaUICore.TextureID
-public typealias State<Value> = GuavaUICore.State<Value>
-public typealias Binding<Value> = GuavaUICore.Binding<Value>
-public typealias DynamicProperty = GuavaUICore.DynamicProperty
 typealias UIShader = GuavaUICore.UIShader
 
 public enum GuavaUIRuntime {

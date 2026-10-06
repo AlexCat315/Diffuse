@@ -18,6 +18,7 @@ const state = {
   pressedKeys: new Map(),
   logEntries: [],
   timingFrames: [],
+  recording: false,
 };
 
 const el = {
@@ -48,6 +49,12 @@ const el = {
   captureState: document.getElementById("captureState"),
   restoreState: document.getElementById("restoreState"),
   stateSnapshot: document.getElementById("stateSnapshot"),
+  diffState: document.getElementById("diffState"),
+  stateDiff: document.getElementById("stateDiff"),
+  recordInput: document.getElementById("recordInput"),
+  stopRecording: document.getElementById("stopRecording"),
+  replayInput: document.getElementById("replayInput"),
+  inputRecording: document.getElementById("inputRecording"),
 };
 
 el.connect.addEventListener("click", connect);
@@ -61,6 +68,14 @@ el.startMirror.addEventListener("click", startMirror);
 el.stopMirror.addEventListener("click", stopMirror);
 el.captureState.addEventListener("click", () => send("state.checkpoint"));
 el.restoreState.addEventListener("click", restoreState);
+el.diffState.addEventListener("click", () => sendJSON("state.diff", el.stateSnapshot.value));
+el.recordInput.addEventListener("click", () => send("input.record.start"));
+el.stopRecording.addEventListener("click", () => send("input.record.stop"));
+el.replayInput.addEventListener("click", () => sendJSON("input.replay", el.inputRecording.value));
+function sendJSON(type, text) {
+  try { send(type, JSON.parse(text)); }
+  catch (error) { appendLog({level:"error", label:"client", message:String(error)}); }
+}
 el.logLevel.addEventListener("change", renderLog);
 el.logSearch.addEventListener("input", renderLog);
 el.clearLog.addEventListener("click", () => {
@@ -190,6 +205,20 @@ function handleEnvelope(env) {
     case "state.checkpoint.ok":
       el.stateSnapshot.value = JSON.stringify(env.payload ?? {}, null, 2);
       appendLog({ level: "info", label: "state", message: "Checkpoint captured." });
+      break;
+    case "state.diff.ok":
+      el.stateDiff.className = "details";
+      el.stateDiff.textContent = JSON.stringify(env.payload, null, 2);
+      break;
+    case "input.record.start.ok":
+      state.recording = true; setControls(state.connected);
+      break;
+    case "input.record.stop.ok":
+      state.recording = false; setControls(state.connected);
+      el.inputRecording.value = JSON.stringify(env.payload, null, 2);
+      break;
+    case "input.replay.ok":
+      appendLog({level:"info", label:"input", message:"Replay completed from initial checkpoint."});
       break;
     case "state.restore.ok":
       appendLog({ level: "info", label: "state", message: "Checkpoint restore requested." });
@@ -713,6 +742,10 @@ function setControls(enabled) {
   el.stopMirror.disabled = !enabled || !hasCapability("mirror") || !state.mirrorActive;
   el.captureState.disabled = !enabled || !hasCapability("state");
   el.restoreState.disabled = !enabled || !hasCapability("state");
+  el.diffState.disabled = !enabled || !hasCapability("state");
+  el.recordInput.disabled = !enabled || !hasCapability("recording") || state.recording;
+  el.stopRecording.disabled = !enabled || !hasCapability("recording") || !state.recording;
+  el.replayInput.disabled = !enabled || !hasCapability("recording") || state.recording;
 }
 
 function setStatus(text, connected) {
@@ -733,6 +766,7 @@ function hasCapability(name) {
 }
 
 function clearSessionViews() {
+  state.recording = false;
   state.tree = null;
   state.snapshot = null;
   state.selectedId = null;
