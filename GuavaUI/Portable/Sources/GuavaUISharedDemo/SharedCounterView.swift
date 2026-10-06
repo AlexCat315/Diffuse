@@ -2,7 +2,7 @@ import Foundation
 import GuavaUIComposeCore
 
 /// One Compose source used by both SDL and browser hosts. Text painting is the
-/// host boundary: native uses the font atlas, the browser uses Canvas text.
+/// host boundary: both hosts can shape text into their shared font atlas.
 public struct DemoText: Sendable {
     public var text: String
     public var size: Float
