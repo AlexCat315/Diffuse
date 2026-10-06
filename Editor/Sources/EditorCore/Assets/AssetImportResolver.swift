@@ -36,14 +36,17 @@ public enum AssetImportResolver {
     /// dependencies follow. Duplicate, embedded (`data:`), remote (`http(s)`)
     /// and path-escaping references are dropped. Files that don't exist on disk
     /// are still listed (the caller decides how to report them) so resolution
-    /// never throws.
-    public static func resolve(_ source: URL) -> [ResolvedFile] {
+    /// never throws. For an existing project asset, `projectRoot` also allows
+    /// parent-relative dependencies that remain inside that project.
+    public static func resolve(_ source: URL, projectRoot: URL? = nil) -> [ResolvedFile] {
+        let projectRoot = projectRoot.flatMap { ProjectFilePath.isDescendant(source, of: $0) ? $0 : nil }
         var files: [ResolvedFile] = []
         var seenSources = Set<String>()
 
         @discardableResult
         func add(source: URL, relativePath: String) -> Bool {
-            guard let rel = sanitizedRelativePath(relativePath) else { return false }
+            guard let rel = normalizedRelativePath(relativePath, allowParents: projectRoot != nil) else { return false }
+            if let projectRoot, !ProjectFilePath.isDescendant(source, of: projectRoot) { return false }
             guard seenSources.insert(source.resolvingSymlinksInPath().path).inserted else { return false }
             files.append(ResolvedFile(source: source, relativePath: rel))
             return true
@@ -54,7 +57,7 @@ public enum AssetImportResolver {
         switch source.pathExtension.lowercased() {
         case "gltf":
             for uri in gltfReferencedURIs(source) {
-                if let dep = referenced(uri, from: source, destinationDir: "") {
+                if let dep = referenced(uri, from: source, destinationDir: "", projectRoot: projectRoot) {
                     add(source: dep.source, relativePath: dep.relativePath)
                 }
             }
@@ -62,11 +65,11 @@ public enum AssetImportResolver {
             // .obj → mtllib(.mtl) → map_* textures, each resolved relative to
             // the file that references it (the .mtl may live in a subfolder).
             for mtlName in objMaterialLibraryNames(source) {
-                guard let mtl = referenced(mtlName, from: source, destinationDir: "") else { continue }
+                guard let mtl = referenced(mtlName, from: source, destinationDir: "", projectRoot: projectRoot) else { continue }
                 guard add(source: mtl.source, relativePath: mtl.relativePath) else { continue }
                 let mtlDir = parentDirectory(of: mtl.relativePath)
                 for texName in mtlTextureNames(mtl.source) {
-                    if let tex = referenced(texName, from: mtl.source, destinationDir: mtlDir) {
+                    if let tex = referenced(texName, from: mtl.source, destinationDir: mtlDir, projectRoot: projectRoot) {
                         add(source: tex.source, relativePath: tex.relativePath)
                     }
                 }
@@ -141,7 +144,8 @@ public enum AssetImportResolver {
     /// destination-relative path that keeps the reference intact.
     private static func referenced(_ uri: String,
                                    from referencingFile: URL,
-                                   destinationDir: String) -> (source: URL, relativePath: String)? {
+                                   destinationDir: String,
+                                   projectRoot: URL?) -> (source: URL, relativePath: String)? {
         let trimmed = uri.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
         guard !trimmed.isEmpty,
@@ -151,13 +155,14 @@ public enum AssetImportResolver {
         else { return nil }
         let decoded = (trimmed.removingPercentEncoding ?? trimmed)
             .replacingOccurrences(of: "\\", with: "/")
-        guard let relativeToReferencer = sanitizedRelativePath(decoded) else { return nil }
+        guard let relativeToReferencer = normalizedRelativePath(decoded, allowParents: projectRoot != nil) else { return nil }
         let source = referencingFile.deletingLastPathComponent()
-            .appendingPathComponent(relativeToReferencer)
+            .appendingPathComponent(relativeToReferencer).standardizedFileURL
+        if let projectRoot, !ProjectFilePath.isDescendant(source, of: projectRoot) { return nil }
         let destination = destinationDir.isEmpty
             ? relativeToReferencer
             : destinationDir + "/" + relativeToReferencer
-        guard let relativePath = sanitizedRelativePath(destination) else { return nil }
+        guard let relativePath = normalizedRelativePath(destination, allowParents: projectRoot != nil) else { return nil }
         return (source, relativePath)
     }
 
@@ -169,6 +174,10 @@ public enum AssetImportResolver {
     /// Normalizes a relative path and rejects anything that would escape the
     /// destination folder (absolute paths, drive letters, `..` segments).
     public static func sanitizedRelativePath(_ path: String) -> String? {
+        normalizedRelativePath(path, allowParents: false)
+    }
+
+    private static func normalizedRelativePath(_ path: String, allowParents: Bool) -> String? {
         let portablePath = path.replacingOccurrences(of: "\\", with: "/")
         guard !portablePath.isEmpty,
               !portablePath.hasPrefix("/"),
@@ -178,7 +187,12 @@ public enum AssetImportResolver {
         var components: [Substring] = []
         for component in portablePath.split(separator: "/", omittingEmptySubsequences: true) {
             if component == "." { continue }
-            guard component != ".." else { return nil }
+            if component == ".." {
+                guard allowParents else { return nil }
+                if let last = components.last, last != ".." { components.removeLast() }
+                else { components.append(component) }
+                continue
+            }
             components.append(component)
         }
         guard !components.isEmpty else { return nil }

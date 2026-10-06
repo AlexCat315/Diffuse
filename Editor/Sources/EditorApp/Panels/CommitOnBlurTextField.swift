@@ -13,6 +13,8 @@ struct CommitOnBlurTextField: View {
     let identity: String
     let text: Binding<String>
     var size: TextField.Size = .regular
+    var mixedValueLabel: String? = nil
+    @State private var draftChanged = false
 
     @State private var draft: String = ""
     @State private var editingIdentity: String? = nil
@@ -21,19 +23,22 @@ struct CommitOnBlurTextField: View {
 
     var body: some View {
         let fieldBinding = Binding<String>(
-            get: { isEditing ? draft : text.wrappedValue },
+            get: { isEditing ? draft : (mixedValueLabel == nil ? text.wrappedValue : "") },
             set: { next in
                 // Self-arming: the first keystroke after a Return-commit (focus
                 // retained, editing cleared) re-enters draft mode.
                 if editingIdentity != identity { editingIdentity = identity }
                 if draft != next { draft = next }
+                draftChanged = true
             }
         )
-        TextField(text: fieldBinding,
+        TextField(mixedValueLabel ?? "", text: fieldBinding,
                   size: size,
                   onSubmit: { commit() },
                   onFocus: {
-                      if draft != text.wrappedValue { draft = text.wrappedValue }
+                      let initial = mixedValueLabel == nil ? text.wrappedValue : ""
+                      if draft != initial { draft = initial }
+                      draftChanged = false
                       if editingIdentity != identity { editingIdentity = identity }
                   },
                   onBlur: { commit() })
@@ -42,7 +47,9 @@ struct CommitOnBlurTextField: View {
     private func commit() {
         guard isEditing else { return }
         editingIdentity = nil
-        if text.wrappedValue != draft {
+        guard draftChanged else { return }
+        draftChanged = false
+        if mixedValueLabel != nil || text.wrappedValue != draft {
             text.wrappedValue = draft
         }
     }

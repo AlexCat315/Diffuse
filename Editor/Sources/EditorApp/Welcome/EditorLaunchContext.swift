@@ -80,6 +80,10 @@ final class EditorLaunchContext: @unchecked Sendable {
             registry: registry
         )
 
+        app.setActivatePanelHandler { [weak controller] id in
+            guard let controller else { return }
+            EditorRootViewFactory.activatePanel(PanelID(rawValue: id), in: controller)
+        }
         subscribeShellPreferences(app: app, controller: controller, registry: registry)
         subscribeWorkspacePersistence(app: app, controller: controller)
         subscribeNativeMenu(app: app, controller: controller, registry: registry)

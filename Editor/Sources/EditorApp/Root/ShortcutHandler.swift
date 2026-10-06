@@ -22,7 +22,8 @@ enum EditorShortcutHandler {
                        openCommandPalette: () -> Void,
                        closeCommandPalette: () -> Void,
                        undo: () -> Void,
-                       redo: () -> Void) -> Bool {
+                       redo: () -> Void,
+                       openResourceSearch: (() -> Void)? = nil) -> Bool {
         guard !key.isRepeat else { return false }
 
         // Escape — highest priority: dismiss any overlay first.
@@ -70,6 +71,11 @@ enum EditorShortcutHandler {
         case Scancode.k:
             openCommandPalette()
             return true
+        case Scancode.p:
+            if key.modifiers.hasShift { openCommandPalette() }
+            else if let openResourceSearch { openResourceSearch() }
+            else { openCommandPalette() }
+            return true
         case Scancode.n:
             newScene()
             return true
@@ -91,6 +97,9 @@ enum EditorShortcutHandler {
             return true
         case Scancode.digit3:
             setWorkspaceMode(.animation)
+            return true
+        case Scancode.digit4:
+            setWorkspaceMode(.scripting)
             return true
         case Scancode.return, Scancode.keypadEnter:
             // Enter belongs to the palette's text field while it is open.

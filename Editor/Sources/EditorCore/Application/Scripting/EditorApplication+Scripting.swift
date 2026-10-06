@@ -76,7 +76,9 @@ extension EditorApplication {
                     if case let .failed(message) = status {
                         self.logConsole("Failed to compile dynamic script",
                                         severity: .error,
-                                        detail: "\(file.displayName): \(message)")
+                                        detail: "\(file.displayName): \(message)",
+                                        target: .compilerDiagnostic(scriptID: file.identifier, sourceURL: file.url, output: message),
+                                        nextStep: "Open the script, fix the reported errors, then Save and Compile.")
                     }
                 },
                 completion: { [weak self] in

@@ -57,6 +57,7 @@ public final class EditorApplication: @unchecked Sendable {
     var closeProjectHandler: (() -> Void)?
     private let ownsBackend: Bool
     var displayInvalidationHandler: (() -> Void)?
+    var activatePanelHandler: ((String) -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     var session: Session?
     var pendingAISetupTask: Task<Void, Never>?
@@ -65,6 +66,7 @@ public final class EditorApplication: @unchecked Sendable {
     var activeAIRequestTask: Task<Void, Never>?
     var projectToolBuildInProgress = false
     var isShuttingDown = false
+    public var isActive: Bool { !isShuttingDown }
     var pendingSessionProposal: Proposal?
     var pendingAssistantMessageID: String?
     /// Existing scene entities referenced by the plan currently awaiting approval.
@@ -180,6 +182,11 @@ public final class EditorApplication: @unchecked Sendable {
             onScriptDeleted: { file in
                 scene.unregisterDynamicScriptOption(identifier: file.identifier)
                 store.dispatch(.forceUIRefresh)
+            },
+            onBuildFailed: { file, message in
+                store.dispatch(.appendConsoleMessage("Script compilation failed", severity: .error,
+                    detail: message, target: .compilerDiagnostic(scriptID: file.identifier, sourceURL: file.url, output: message),
+                    nextStep: "Open the script, fix the reported errors, then Save and Compile."))
             }
         )
         self.observationBus = observationBus
@@ -222,7 +229,10 @@ public final class EditorApplication: @unchecked Sendable {
             }
         }
         scene.onTransactionError = { [weak self] message in
-            self?.logConsole("Scene edit failed", severity: .error, detail: message)
+            guard let self else { return }
+            self.logConsole("Scene edit failed", severity: .error, detail: message,
+                target: self.store.selectedEntityID.map { .entity(id: $0) },
+                nextStep: "Stop playback, check the entity lock and property value, then retry.")
         }
         store.dispatch(.setSceneRevision(scene.revision))
         store.dispatch(.markSceneSaved(scene.revision))
@@ -350,7 +360,8 @@ public final class EditorApplication: @unchecked Sendable {
                 renderSceneOverride: scene.currentRenderScene(),
                 sceneSnapshotOverride: scene.currentSceneSnapshot(),
                 jointPaletteOverride: jointPalettes,
-                inGameCanvasOverride: scene.currentInGameCanvas(),
+                inGameCanvasOverride: state.viewportMode == .game && state.gamePreviewHUDEnabled
+                    ? scene.currentInGameCanvas() : InGameCanvas(),
                 particleFeedbackHandler: scene.makeParticleSimulationFeedbackHandler()
             )
         }
@@ -454,8 +465,10 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func logConsole(_ message: String,
                            severity: EditorConsoleSeverity = .info,
-                           detail: String? = nil) {
-        store.dispatch(.appendConsoleMessage(message, severity: severity, detail: detail))
+                           detail: String? = nil, target: EditorIssueTarget? = nil,
+                           nextStep: String? = nil) {
+        store.dispatch(.appendConsoleMessage(message, severity: severity, detail: detail,
+                                             target: target, nextStep: nextStep))
     }
 
     public func setVSyncModeHandler(_ handler: ((EditorVSyncMode) -> Void)?) {
