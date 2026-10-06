@@ -69,6 +69,7 @@ public final class EditorStore: @unchecked Sendable {
         case consoleEntries
         case commandPaletteVisible
         case scriptCaretLabel
+        case workbench
     }
 
     private var scriptCaretLabels: [String: String] = [:]
@@ -149,6 +150,10 @@ public final class EditorStore: @unchecked Sendable {
         }
 
         switch action {
+        case .setOperation, .navigateToScript, .navigateToAsset, .setInspectorSceneSettingsVisible, .setCommandPaletteQuery, .setOutputTab:
+            keys.insert(.workbench)
+        case .setViewportMode, .setGamePreviewResolution, .setGamePreviewHUDEnabled, .setGamePreviewFocused:
+            keys.insert(.workbench)
         case .tickFrame:
             mark(.frameIndex, old.frameIndex, new.frameIndex)
         case .setConnected:
@@ -297,6 +302,17 @@ extension EditorStore: _ObservableObject {
 }
 
 extension EditorStore {
+    public var operations: [EditorOperation] { read(.workbench, storage.operations) }
+    public var scriptNavigation: EditorScriptNavigationRequest? { read(.workbench, storage.scriptNavigation) }
+    public var assetNavigationID: String? { read(.workbench, storage.assetNavigationID) }
+    public var assetNavigationRevision: UInt64 { read(.workbench, storage.assetNavigationRevision) }
+    public var inspectorSceneSettingsVisible: Bool { read(.workbench, storage.inspectorSceneSettingsVisible) }
+    public var commandPaletteQuery: String { read(.workbench, storage.commandPaletteQuery) }
+    public var outputTab: EditorOutputTab { read(.workbench, storage.outputTab) }
+    public var viewportMode: EditorViewportMode { read(.workbench, storage.viewportMode) }
+    public var gamePreviewResolution: EditorGamePreviewResolution { read(.workbench, storage.gamePreviewResolution) }
+    public var gamePreviewHUDEnabled: Bool { read(.workbench, storage.gamePreviewHUDEnabled) }
+    public var gamePreviewFocused: Bool { read(.workbench, storage.gamePreviewFocused) }
     public var connected: Bool { read(.connected, storage.connected) }
     public var selectedEntityID: UInt64? { read(.selectedEntityID, storage.selectedEntityID) }
     public var selectedEntityIDs: Set<UInt64> { read(.selectedEntityIDs, storage.selectedEntityIDs) }

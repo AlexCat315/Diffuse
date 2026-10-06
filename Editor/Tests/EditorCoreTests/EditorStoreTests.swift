@@ -1,9 +1,43 @@
-import EditorCore
+@testable import EditorCore
 import Foundation
+import ScriptRuntime
 import Testing
 
 @Suite("EditorStore")
 struct EditorStoreTests {
+    @Test("workbench navigation and running operations are not replayed from persisted state")
+    func transientWorkbenchState() throws {
+        let store = EditorStore()
+        store.dispatch(.setOperation(.init(kind: .importing, message: "Importing")))
+        store.dispatch(.navigateToScript(.init(scriptID: "Player", line: 3, column: 6)))
+        store.dispatch(.setViewportMode(.game))
+        store.dispatch(.setGamePreviewFocused(true))
+        let data = try JSONEncoder().encode(store.state)
+        let decoded = try JSONDecoder().decode(EditorState.self, from: data)
+        #expect(decoded.operations.isEmpty)
+        #expect(decoded.scriptNavigation == nil)
+        #expect(decoded.viewportMode == .scene)
+        #expect(!decoded.gamePreviewFocused)
+    }
+
+    @Test("compiler errors retain a clickable source line even without a language service")
+    func compilerDiagnosticTarget() {
+        let target = EditorIssueTarget.compilerDiagnostic(scriptID: "Player",
+            sourceURL: URL(fileURLWithPath: "/project/Scripts/Player.swift"),
+            output: "/project/Scripts/Player.swift:19:7: error: cannot find 'missing' in scope\n")
+        #expect(target == .script(id: "Player", line: 18, column: 6))
+    }
+
+    @Test("unresolved export bindings locate the nested entity that needs repair")
+    func unresolvedBindingTarget() {
+        let child = EditorSceneManifestNode(id: 42, name: "Player: Main", kind: "empty",
+            script: EditorSceneManifestScript(ScriptComponent(ScriptBinding(identifier: "game.missing"))))
+        let root = EditorSceneManifestNode(id: 1, name: "Root", kind: "empty", children: [child])
+        let manifest = EditorSceneManifest(revision: 0, entityCount: 2, roots: [root])
+        #expect(EditorIssueTarget.unresolvedBindingTarget(["Player: Main: game.missing"], in: manifest) == .entity(id: 42))
+        #expect(EditorIssueTarget.unresolvedBindingTarget(["Unknown: game.missing"], in: manifest) == nil)
+    }
+
     @Test("No-op actions do not notify subscribers")
     func noOpActionsDoNotNotifySubscribers() {
         let store = EditorStore(state: EditorState(connected: true))

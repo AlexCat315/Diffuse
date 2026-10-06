@@ -55,7 +55,18 @@ public enum EditorAction: Sendable {
     case appendChatMessage(AIChatMessage)
     case updateChatMessage(id: String, assistantState: AIChatMessage.AssistantState)
     case clearChatHistory
-    case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil)
+    case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil,
+                              target: EditorIssueTarget? = nil, nextStep: String? = nil)
+    case setOperation(EditorOperation)
+    case navigateToScript(EditorScriptNavigationRequest)
+    case navigateToAsset(String?)
+    case setInspectorSceneSettingsVisible(Bool)
+    case setCommandPaletteQuery(String)
+    case setOutputTab(EditorOutputTab)
+    case setViewportMode(EditorViewportMode)
+    case setGamePreviewResolution(EditorGamePreviewResolution)
+    case setGamePreviewHUDEnabled(Bool)
+    case setGamePreviewFocused(Bool)
     case clearConsole
     case setCommandPaletteVisible(Bool)
     case frameTimingUpdated
@@ -226,14 +237,42 @@ public enum EditorReducer {
             }
         case .clearChatHistory:
             state.chatMessages.removeAll()
-        case let .appendConsoleMessage(message, severity, detail):
+        case let .setOperation(operation):
+            state.operations.removeAll { $0.id == operation.id }
+            state.operations.append(operation)
+            if state.operations.count > 30 {
+                if let oldest = state.operations.firstIndex(where: { $0.status != .running }) {
+                    state.operations.remove(at: oldest)
+                }
+            }
+        case let .navigateToScript(request):
+            state.scriptNavigation = request
+        case let .navigateToAsset(id):
+            state.assetNavigationID = id
+            state.assetNavigationRevision &+= 1
+        case let .setInspectorSceneSettingsVisible(visible):
+            state.inspectorSceneSettingsVisible = visible
+        case let .setCommandPaletteQuery(query):
+            state.commandPaletteQuery = query
+        case let .setOutputTab(tab):
+            state.outputTab = tab
+        case let .setViewportMode(mode):
+            state.viewportMode = mode
+            state.gamePreviewFocused = false
+        case let .setGamePreviewResolution(resolution):
+            state.gamePreviewResolution = resolution
+        case let .setGamePreviewHUDEnabled(enabled):
+            state.gamePreviewHUDEnabled = enabled
+        case let .setGamePreviewFocused(focused):
+            state.gamePreviewFocused = focused
+        case let .appendConsoleMessage(message, severity, detail, target, nextStep):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             state.consoleEntries.append(
                 EditorConsoleEntry(id: state.nextConsoleEntryID,
                                    severity: severity,
                                    message: trimmed,
-                                   detail: detail)
+                                   detail: detail, target: target, nextStep: nextStep)
             )
             state.nextConsoleEntryID &+= 1
             if state.consoleEntries.count > 200 {

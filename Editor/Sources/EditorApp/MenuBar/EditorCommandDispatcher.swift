@@ -25,14 +25,34 @@ enum EditorCommandDispatcher {
     static func handle(_ command: EditorMenuCommand,
                        app: EditorApplication,
                        controller: WorkspaceController,
-                       registry: PanelRegistry) {
+                       registry: PanelRegistry, fromCommandPalette: Bool = false) {
         let focus = FocusChainHolder.current
-        if case .undo = command, focus?.performTextEdit(.undo) == true { return }
-        if case .redo = command, focus?.performTextEdit(.redo) == true { return }
-        guard focus?.modalRoot == nil else { return }
+        if !fromCommandPalette, case .undo = command, focus?.performTextEdit(.undo) == true { return }
+        if !fromCommandPalette, case .redo = command, focus?.performTextEdit(.redo) == true { return }
+        guard fromCommandPalette || focus?.modalRoot == nil else { return }
         let store = app.store
 
         switch command {
+        case .showCommandPalette:
+            store.dispatch(.setCommandPaletteVisible(true))
+        case .showSceneSettings:
+            store.dispatch(.setInspectorSceneSettingsVisible(true))
+            EditorRootViewFactory.activatePanel("inspector", in: controller)
+        case .showAssets:
+            EditorRootViewFactory.activatePanel("assets", in: controller)
+        case .showProblems:
+            store.dispatch(.setOutputTab(.problems))
+            EditorRootViewFactory.activatePanel("console", in: controller)
+        case let .maximizePanel(id):
+            let panelID = PanelID(rawValue: id)
+            EditorRootViewFactory.activatePanel(panelID, in: controller)
+            _ = controller.dispatch(.toggleMaximize(panelID))
+        case .restorePanels:
+            _ = controller.dispatch(.restoreMaximized)
+        case .saveLayout:
+            EditorRootViewFactory.saveWorkspaceLayout(controller, for: store.workspaceMode,
+                                                      preset: store.activeLayoutPreset)
+            app.logConsole("Workspace layout saved")
         case .closeProject:
             app.requestCloseProject()
         case .newScene:
@@ -87,6 +107,7 @@ enum EditorCommandDispatcher {
             }
         case let .setWorkspaceMode(next):
             guard store.state.workspaceMode != next else { return }
+            if !next.isGameWorkspace { app.setViewportMode(.scene) }
             let previousMode = store.state.workspaceMode
             let previousPreset = store.state.activeLayoutPreset
             EditorRootViewFactory.saveWorkspaceLayout(controller, for: previousMode, preset: previousPreset)
@@ -104,6 +125,7 @@ enum EditorCommandDispatcher {
                                                        for: previousMode,
                                                        preset: previousPreset)
             if mode != previousMode {
+                if !mode.isGameWorkspace { app.setViewportMode(.scene) }
                 store.dispatch(.setWorkspaceMode(mode))
             }
             store.dispatch(.setActiveLayoutPreset(nextPreset))
@@ -135,11 +157,11 @@ enum EditorCommandDispatcher {
         case .toggleTheme:
             store.dispatch(.setThemeMode(store.state.themeMode == .dark ? .light : .dark))
         case .buildProject:
-            _ = app.exportProject()
+            guard store.workspaceMode.isGameWorkspace else { return }
+            app.requestProjectExport()
         case .buildAndRun:
-            if let output = app.exportProject() {
-                _ = app.runExportedProject(at: output)
-            }
+            guard store.workspaceMode.isGameWorkspace else { return }
+            app.requestProjectExport(runAfterExport: true)
         case .openDocumentation:
             openDocumentation(app: app)
         case .about:

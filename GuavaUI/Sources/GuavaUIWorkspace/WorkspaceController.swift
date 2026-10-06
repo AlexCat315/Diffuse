@@ -77,6 +77,8 @@ public struct WorkspaceHitTarget: Sendable, Equatable {
 }
 
 public enum WorkspaceCommand: Sendable, Equatable {
+    case toggleMaximize(WorkspacePanelID)
+    case restoreMaximized
     case replaceDocument(WorkspaceDocument)
     case collapse(WorkspaceTabGroupID)
     case expand(WorkspaceTabGroupID)
@@ -125,6 +127,8 @@ public final class WorkspaceController: @unchecked Sendable {
     }
 
     public private(set) var document: WorkspaceDocument
+    public private(set) var maximizedPanelID: WorkspacePanelID?
+    public private(set) var focusedPanelID: WorkspacePanelID?
     public private(set) var version: UInt64 = 0
 
     private var subscribers: [SubscriptionToken: (WorkspaceController) -> Void] = [:]
@@ -132,6 +136,7 @@ public final class WorkspaceController: @unchecked Sendable {
 
     public init(document: WorkspaceDocument) {
         self.document = document
+        focusedPanelID = activeCenterPanel()
     }
 
     public func subscribe(_ handler: @escaping (WorkspaceController) -> Void) -> SubscriptionToken {
@@ -152,7 +157,14 @@ public final class WorkspaceController: @unchecked Sendable {
         guard result.didChange || before != document else {
             return .unchanged
         }
+        if let panelID = maximizedPanelID, document.groupContaining(panelID: panelID) == nil {
+            maximizedPanelID = nil
+        }
+        if let panelID = focusedPanelID, document.groupContaining(panelID: panelID) == nil {
+            focusedPanelID = nil
+        }
         version &+= 1
+        if let panelID = result.focusPanelID { focusedPanelID = panelID }
         notifyChange()
         return result
     }
@@ -163,8 +175,17 @@ public final class WorkspaceController: @unchecked Sendable {
 
     private func apply(_ command: WorkspaceCommand) -> WorkspaceTransactionResult {
         switch command {
+        case let .toggleMaximize(panelID):
+            guard document.groupContaining(panelID: panelID) != nil else { return .unchanged }
+            maximizedPanelID = maximizedPanelID == panelID ? nil : panelID
+            return WorkspaceTransactionResult(didChange: true, changedSlots: [], focusPanelID: panelID, persistenceDirty: false)
+        case .restoreMaximized:
+            guard maximizedPanelID != nil else { return .unchanged }
+            maximizedPanelID = nil
+            return WorkspaceTransactionResult(didChange: true, changedSlots: [], focusPanelID: nil, persistenceDirty: false)
         case .replaceDocument(let next):
-            guard document != next else { return .unchanged }
+            guard document != next || maximizedPanelID != nil else { return .unchanged }
+            maximizedPanelID = nil
             document = next
             return WorkspaceTransactionResult(didChange: true,
                                               changedSlots: Set(document.slots.keys),
@@ -180,15 +201,16 @@ public final class WorkspaceController: @unchecked Sendable {
         case .setActivePanel(let groupID, let panelID):
             guard var group = document.groups[groupID],
                   group.panels.contains(panelID),
-                  group.activePanelID != panelID else {
+                  (group.activePanelID != panelID || focusedPanelID != panelID) else {
                 return .unchanged
             }
+            let documentChanged = group.activePanelID != panelID
             group.activePanelID = panelID
             document.groups[groupID] = group
             return WorkspaceTransactionResult(didChange: true,
-                                              changedSlots: [document.slotContaining(groupID: groupID)].compactSet(),
+                                              changedSlots: documentChanged ? [document.slotContaining(groupID: groupID)].compactSet() : [],
                                               focusPanelID: panelID,
-                                              persistenceDirty: true)
+                                              persistenceDirty: documentChanged)
         case .reorderPanel(let panelID, let groupID, let index):
             return reorderPanel(panelID, in: groupID, toIndex: index)
         case .movePanel(let panelID, let target):

@@ -44,11 +44,15 @@ struct EditorMenuModel {
                 action(L("Settings"), key: ",", command: .openSettings),
             ]),
             EditorApplicationMenu(title: L("Window"), items: [
-                action(L("Workspace: Level"), key: "", selected: workspaceMode == .level,
+                action(L("Command Palette"), key: "p", modifiers: [.primary, .shift], command: .showCommandPalette),
+                action(L("Scene Settings"), key: "", command: .showSceneSettings),
+                action(L(EditorWorkspaceMode.level.title), key: "1", selected: workspaceMode == .level,
                        command: .setWorkspaceMode(.level)),
-                action(L("Workspace: Modeling"), key: "", selected: workspaceMode == .modeling,
+                action(L(EditorWorkspaceMode.scripting.title), key: "4", selected: workspaceMode == .scripting,
+                       command: .setWorkspaceMode(.scripting)),
+                action(L(EditorWorkspaceMode.modeling.title), key: "2", selected: workspaceMode == .modeling,
                        command: .setWorkspaceMode(.modeling)),
-                action(L("Workspace: Animation"), key: "", selected: workspaceMode == .animation,
+                action(L(EditorWorkspaceMode.animation.title), key: "3", selected: workspaceMode == .animation,
                        command: .setWorkspaceMode(.animation)),
                 .separator,
                 action(presetTitle(.levelWorkbench), key: "", selected: activeLayoutPreset == .levelWorkbench,
@@ -70,20 +74,23 @@ struct EditorMenuModel {
                 action(L("Reopen Closed Panel"), key: "t", modifiers: [.primary, .shift],
                        command: .reopenClosedPanel),
                 action(L("Reset Layout"), key: "", command: .resetLayout),
+                action(L("Save Layout"), key: "", command: .saveLayout),
+                action(L("Maximize Viewport"), key: "", command: .maximizePanel("viewport")),
+                action(L("Restore Panels"), key: "", command: .restorePanels),
             ]),
             EditorApplicationMenu(title: L("Tools"), items: [
                 action(L("Play"), key: "",
-                       enabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                       enabled: workspaceMode.isGameWorkspace && EditorPlaybackCommandPolicy.canTransition(from: playbackState,
                                                                           to: .playing),
                        selected: playbackState == .playing,
                        command: .setPlaybackState(.playing)),
                 action(L("Pause"), key: "",
-                       enabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                       enabled: workspaceMode.isGameWorkspace && EditorPlaybackCommandPolicy.canTransition(from: playbackState,
                                                                           to: .paused),
                        selected: playbackState == .paused,
                        command: .setPlaybackState(.paused)),
                 action(L("Stop"), key: "",
-                       enabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                       enabled: workspaceMode.isGameWorkspace && EditorPlaybackCommandPolicy.canTransition(from: playbackState,
                                                                           to: .stopped),
                        selected: playbackState == .stopped,
                        command: .setPlaybackState(.stopped)),
@@ -91,8 +98,8 @@ struct EditorMenuModel {
                 action(L("Toggle Theme"), key: "", command: .toggleTheme),
             ]),
             EditorApplicationMenu(title: L("Build"), items: [
-                action(L("Build Project"), key: "b", command: .buildProject),
-                action(L("Build and Run"), key: "r", command: .buildAndRun),
+                action(L("Build Project"), key: "b", enabled: workspaceMode.isGameWorkspace, command: .buildProject),
+                action(L("Build and Run"), key: "r", enabled: workspaceMode.isGameWorkspace, command: .buildAndRun),
             ]),
             EditorApplicationMenu(title: L("Help"), items: [
                 action(L("Documentation"), key: "", command: .openDocumentation),
@@ -118,6 +125,7 @@ struct EditorMenuModel {
 
     private static func presetTitle(_ preset: EditorLayoutPreset) -> String {
         switch preset {
+        case .scriptingDefault: return L("Game: Scripting")
         case .levelWorkbench:
             return L("Level: Workbench")
         case .levelDefault:
