@@ -396,3 +396,19 @@ textarea {
 #pickNode[aria-pressed="true"] { border-color:#fab428; color:#fab428; }
 .detailsPane > details { border-bottom:1px solid var(--line); }
 .detailsPane > details > summary { cursor:pointer; color:var(--muted); padding:8px 10px; font-size:12px; }
+/* Source coordinates and component diagnostics share the selection sidebar. */
+.analysisPanel { padding: 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.sourceLocation { margin: 8px 0; overflow-wrap: anywhere; font-family: monospace; }
+.sourceActions { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.sourceActions a { color: #64b5ff; }
+.sourceActions a[aria-disabled="true"] { color: #8794a8; pointer-events: none; }
+.analysisPanel details { margin: 8px 0; }
+.analysisPanel details label { display: block; margin: 8px 0; }
+.analysisPanel details label input { width: 100%; margin-top: 4px; }
+.analysisStats { font: 11px/1.7 monospace; white-space: pre-wrap; }
+.analysisReasons { overflow-wrap: anywhere; line-height: 1.8; }
+.analysisReasons button { padding: 1px 4px; font-size: 11px; }
+.recompositionTable { display: grid; gap: 4px; }
+.recompositionRow { display: flex; justify-content: space-between; gap: 8px; text-align: left; }
+.recompositionRow span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.recompositionRow span:last-child { white-space: nowrap; font-size: 10px; }

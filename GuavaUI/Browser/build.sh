@@ -16,7 +16,7 @@ flags=()
 for symbol in "${exports[@]}"; do flags+=(-Xlinker "--export=$symbol"); done
 if [[ "$configuration" == "release" ]]; then flags+=(-Xlinker --strip-debug); fi
 
-swift build --build-system native --swift-sdk "$sdk" -c "$configuration" \
+swift build --build-system native --disable-build-manifest-caching --swift-sdk "$sdk" -c "$configuration" \
   --product GuavaUIBrowserPrototype -Xcxx -fno-exceptions -Xswiftc -static-stdlib \
   -Xcc -mexception-handling -Xlinker -lsetjmp \
   -Xswiftc -Xclang-linker -Xswiftc -mexec-model=reactor "${flags[@]}"
@@ -29,5 +29,5 @@ cp "$bin_path/GuavaUIBrowserPrototype.wasm" "$output/guava.wasm"
 cp web/* "$output/"
 cp node_modules/@bjorn3/browser_wasi_shim/dist/* "$output/wasi/"
 cp node_modules/@bjorn3/browser_wasi_shim/LICENSE-* "$output/wasi/"
-cp ../DevTools/index.html ../DevTools/app.js ../DevTools/styles.css ../DevTools/browser-connection.js ../DevTools/inspection.js "$output/devtools/"
+cp ../DevTools/index.html ../DevTools/app.js ../DevTools/styles.css ../DevTools/browser-connection.js ../DevTools/inspection.js ../DevTools/analysis.js "$output/devtools/"
 printf 'Browser prototype built: npm run serve, then open http://127.0.0.1:8080\n'

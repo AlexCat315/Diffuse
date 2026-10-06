@@ -4,11 +4,14 @@ import Foundation
 public struct ObservableStateScope {
     public let id: ObjectIdentifier
     public let invalidate: () -> Void
+    public let invalidateTracked: ((RecompositionReason) -> Void)?
 
     public init(id: ObjectIdentifier,
-                invalidate: @escaping () -> Void) {
+                invalidate: @escaping () -> Void,
+                invalidateTracked: ((RecompositionReason) -> Void)? = nil) {
         self.id = id
         self.invalidate = invalidate
+        self.invalidateTracked = invalidateTracked
     }
 }
 
@@ -53,10 +56,11 @@ public enum ObservableStateTracking {
     @discardableResult
     public static func withScope<R>(id: ObjectIdentifier,
                                     invalidate: @escaping () -> Void,
+                                    invalidateTracked: ((RecompositionReason) -> Void)? = nil,
                                     _ body: () throws -> R) rethrows -> R {
         clearDependencies(for: id)
         let stack = stackBox
-        stack.stack.append(ObservableStateScope(id: id, invalidate: invalidate))
+        stack.stack.append(ObservableStateScope(id: id, invalidate: invalidate, invalidateTracked: invalidateTracked))
         defer { _ = stack.stack.popLast() }
         return try body()
     }
@@ -79,6 +83,7 @@ public final class ObservableStateRegistrar: @unchecked Sendable {
     private struct Observer {
         var id: ObjectIdentifier
         var invalidate: () -> Void
+        var invalidateTracked: ((RecompositionReason) -> Void)?
     }
 
     private let lock = NSLock()
@@ -96,7 +101,7 @@ public final class ObservableStateRegistrar: @unchecked Sendable {
         }
         lock.withLock {
             observersByKey[key, default: [:]][scope.id] = Observer(id: scope.id,
-                                                                    invalidate: scope.invalidate)
+                                                                    invalidate: scope.invalidate, invalidateTracked: scope.invalidateTracked)
             keysByScope[scope.id, default: []].insert(key)
         }
     }
@@ -107,7 +112,8 @@ public final class ObservableStateRegistrar: @unchecked Sendable {
             return Array(keyed.values)
         }
         for observer in observers {
-            observer.invalidate()
+            if let tracked = observer.invalidateTracked { tracked(.init(kind: "observable", detail: String(describing: key))) }
+            else { observer.invalidate() }
         }
     }
 
@@ -122,7 +128,8 @@ public final class ObservableStateRegistrar: @unchecked Sendable {
             return Array(byScope.values)
         }
         for observer in observers {
-            observer.invalidate()
+            if let tracked = observer.invalidateTracked { tracked(.init(kind: "observable", detail: "all fields")) }
+            else { observer.invalidate() }
         }
     }
 

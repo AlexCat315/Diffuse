@@ -39,7 +39,7 @@ struct StyleSkeletonTests {
             content: AnyView(EmptyView()), placeholder: "",
             isFocused: false, isEditing: false, isError: false, isEnabled: true,
             theme: .defaultDark))
-        #expect(body is Text)
+        #expect((body as? _AnySourceLocatedView)?._sourceContent is Text)
     } }
 
     @Test("PanelStyleEnvironment defaults to DefaultPanelStyle")
