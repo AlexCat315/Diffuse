@@ -13,6 +13,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 from verify_inspection import inspection_checks, native_inspection_checks
+from verify_analysis import analysis_checks, native_analysis_checks
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -158,6 +159,7 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
         }""", arg=text, timeout=10000)
     page.evaluate("guavaDebug.request({type:'state.restore',id:95,payload:{count:'2',dark:'true',note:'你好中文'}})")
     page.wait_for_function("guavaDebug.snapshot.note === '你好中文'")
+    analysis_checks(page, inspector)
     inspection_checks(page, inspector)
     inspector.locator("#disconnect").click()
     inspector.locator("#connect").click()
@@ -188,6 +190,7 @@ def native_checks(browser, base_url, native_port):
     page.locator("#restoreState").click()
     page.locator("#captureState").click()
     page.wait_for_function("document.querySelector('#stateSnapshot').value.includes('12')")
+    native_analysis_checks(page)
     native_inspection_checks(page)
     page.locator("#disconnect").click()
     page.locator("#connect").click()

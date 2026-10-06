@@ -6,6 +6,7 @@ private final class TokenBox {
 
 @propertyWrapper
 public struct Observed<Object: AnyObject & _ObservableObject, Value: Equatable>: DynamicProperty, _StateErased {
+    public var _diagnosticKind: String { "observable" }
     @State private var _value: Value
     private let object: Object
     private let keyPath: KeyPath<Object, Value>

@@ -155,6 +155,9 @@ public struct NodeSummary: Codable, Sendable {
     public var elementID: String?
     public var layout: NodeLayoutInfo?
     public var style: NodeStyleInfo?
+    public var source: SourceLocationPayload?
+    public var ownerScopeID: String?
+    public var recomposition: RecompositionPayload?
 
     public init(id: String,
                 viewTag: String? = nil,
@@ -170,7 +173,10 @@ public struct NodeSummary: Codable, Sendable {
                 children: [NodeSummary],
                 elementID: String? = nil,
                 layout: NodeLayoutInfo? = nil,
-                style: NodeStyleInfo? = nil) {
+                style: NodeStyleInfo? = nil,
+                source: SourceLocationPayload? = nil,
+                ownerScopeID: String? = nil,
+                recomposition: RecompositionPayload? = nil) {
         self.id = id
         self.viewTag = viewTag
         self.debugName = debugName
@@ -185,6 +191,7 @@ public struct NodeSummary: Codable, Sendable {
         self.children = children
         self.elementID = elementID
         self.layout = layout; self.style = style
+        self.source = source; self.ownerScopeID = ownerScopeID; self.recomposition = recomposition
     }
 }
 

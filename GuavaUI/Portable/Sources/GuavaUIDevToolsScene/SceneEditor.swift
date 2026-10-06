@@ -122,6 +122,12 @@ public final class SceneEditor: @unchecked Sendable {
             guard next.count <= 256 else { return DevToolsSession.error(request, code: "limit", message: "At most 256 nodes may have temporary styles") }
             commit(next)
         case "inspect.style.clearAll": commit([:])
+        case "inspect.recomposition.reset":
+            func resetMetrics(_ node: Node) {
+                node.recompositionMetrics?.reset()
+                for child in node.children { resetMetrics(child) }
+            }
+            if let root = tree.root { resetMetrics(root) }
         case "inspect.style.undo":
             if let previous = undo.popLast() { redo.append(overrides); apply(previous) }
         case "inspect.style.redo":
