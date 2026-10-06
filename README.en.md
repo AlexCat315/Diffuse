@@ -136,6 +136,10 @@ swift build --package-path Editor   # editor (run: swift run GuavaEditor)
 swift build --package-path guava-mcp # MCP server (run: swift run GuavaMCP)
 ```
 
+GuavaUI's [portable core and DevTools server](GuavaUI/Portable/README.md) build and
+test without native graphics dependencies. The [Wasm browser prototype](GuavaUI/Browser/README.md)
+provides a WebGPU preview, node inspection and state checkpoints.
+
 ---
 
 ## Vendored Dependencies

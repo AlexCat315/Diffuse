@@ -1,25 +1,6 @@
+import GuavaUIDevToolsProtocol
 import Foundation
 import Logging
-
-/// Adds the GuavaUI DevTools log message types to the wire schema.
-public extension DevToolsProtocol {
-    enum LogLevel: String, Codable, Sendable {
-        case trace, debug, info, notice, warning, error, critical
-    }
-}
-
-public struct LogEntryPayload: Codable {
-    public var level: String
-    public var label: String
-    public var message: String
-    public var metadata: [String: String]?
-    public var source: String
-    public var file: String
-    public var function: String
-    public var line: UInt
-    /// Seconds since 1970, with millisecond precision.
-    public var timestamp: Double
-}
 
 /// `LogHandler` that broadcasts every log record to attached DevTools clients.
 ///
