@@ -80,6 +80,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
           swift-version: '6.4.0'
@@ -95,6 +97,8 @@ jobs:
         run: |
           npm ci
           npm run build
+          python3 -m venv "$RUNNER_TEMP/guava-browser-python"
+          source "$RUNNER_TEMP/guava-browser-python/bin/activate"
           python3 -m pip install -r requirements-dev.txt
           python3 -m playwright install --with-deps chromium
           npm run verify
@@ -105,3 +109,21 @@ jobs:
         with:
           name: guavaui-browser
           path: GuavaUI/Browser/dist
+
+  text:
+    name: Shared FreeType/HarfBuzz
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
+      - name: Build native font dependencies
+        run: |
+          cmake -S GuavaUI/third-party -B GuavaUI/build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build GuavaUI/build/native --parallel 4
+          cmake --install GuavaUI/build/native --prefix "$RUNNER_TEMP/guava-font-install"
+      - name: Test memory lifetime, fallback, shaping, atlas updates and HiDPI
+        run: swift test --package-path GuavaUI/Text
