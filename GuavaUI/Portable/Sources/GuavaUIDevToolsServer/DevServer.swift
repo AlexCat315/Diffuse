@@ -85,10 +85,15 @@ public final class DevServer: @unchecked Sendable {
 
     private let config: DevToolsConfig
     private let queue = DispatchQueue(label: "guava.devtools.server")
+    private let treeEncoder = TreeEncodingWorker()
     private let queueKey = DispatchSpecificKey<Void>()
     private let transport: any DevToolsTransport
     private var isStarted = false
     private var generation: UInt64 = 0
+    // Access only from queue. Keep one encoding in flight and one pending
+    // notification; capture the latest live tree when the pending work runs.
+    private var treeBroadcastInFlight = false
+    private var treeBroadcastPending = false
 
     /// Actual bound port, including when configured with port zero.
     public var boundPort: UInt16? { transport.boundPort }
@@ -179,6 +184,8 @@ public final class DevServer: @unchecked Sendable {
         let cleanup = onQueueSync { () -> (Bool, Bool, Bool, UUID?) in
             generation &+= 1
             isStarted = false
+            treeBroadcastInFlight = false
+            treeBroadcastPending = false
             let selection = selectionOwner != nil
             let mirror = clients.values.contains { $0.subscriptions.contains(.mirror) }
             let recording = recordingOwner != nil
@@ -203,19 +210,43 @@ public final class DevServer: @unchecked Sendable {
 
     deinit { transport.stop() }
 
-    /// Push a `tree.delta` to every connected client. Safe to call from
-    /// the main actor; encoding happens synchronously.
+    /// Capture on the scene thread, then encode once on a dedicated worker.
+    /// Bursts coalesce into a trailing snapshot, including in idle hosts.
     @MainActor
     public func broadcastTreeDelta() {
         // A snapshot walks the complete live tree, so do not pay that cost
         // merely because DevTools is enabled.
-        guard hasSubscribers(for: .tree) else { return }
-        guard let snapshot = snapshotProvider?() else { return }
-        let env = DevToolsEnvelope(
-            type: "tree.delta",
-            payload: encodeJSON(snapshot)
-        )
-        send(env, toSubscribersOf: .tree)
+        let epoch: UInt64? = onQueueSync {
+            guard clients.values.contains(where: { $0.subscriptions.contains(.tree) }) else { return nil }
+            guard !treeBroadcastInFlight else { treeBroadcastPending = true; return nil }
+            treeBroadcastInFlight = true
+            return generation
+        }
+        guard let epoch else { return }
+        guard let snapshot = snapshotProvider?() else {
+            onQueueSync { treeBroadcastInFlight = false }
+            return
+        }
+        encodeTree(snapshot, type: "tree.delta") { [weak self] data in
+            guard let self else { return }
+            self.queue.async { [weak self] in
+                guard let self, self.generation == epoch else { return }
+                if let data {
+                    for client in self.clients.values where client.subscriptions.contains(.tree) {
+                        client.connection.send(text: data)
+                    }
+                }
+                // Bound full-tree traffic to 10 Hz without losing the final
+                // change when the editor stops rendering after an input.
+                self.queue.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    guard let self, self.generation == epoch else { return }
+                    self.treeBroadcastInFlight = false
+                    let pending = self.treeBroadcastPending
+                    self.treeBroadcastPending = false
+                    if pending { self.runOnHostMain { [weak self] in self?.broadcastTreeDelta() } }
+                }
+            }
+        }
     }
 
     public func broadcastLog(_ entry: LogEntryPayload) {
@@ -354,15 +385,18 @@ public final class DevServer: @unchecked Sendable {
 
         case "tree.subscribe":
             setSubscription(.tree, enabled: true, for: conn)
+            let epoch = generation
             runOnHostMain { [weak self] in
-                guard let self else { return }
+                guard let self, self.onQueueSync({ self.generation == epoch && self.isSubscribed(.tree, connection: conn) }) else { return }
                 let snap = self.snapshotProvider?() ?? TreeSnapshotPayload(root: nil)
-                let response = DevToolsEnvelope(
-                    type: "tree.snapshot",
-                    id: env.id,
-                    payload: encodeJSON(snap)
-                )
-                self.send(response, on: conn)
+                self.encodeTree(snap, type: "tree.snapshot", id: env.id) { [weak self] data in
+                    guard let self, let data else { return }
+                    self.queue.async { [weak self] in
+                        guard let self, self.generation == epoch,
+                              self.isSubscribed(.tree, connection: conn) else { return }
+                        conn.send(text: data)
+                    }
+                }
             }
 
         case "tree.unsubscribe":
@@ -554,6 +588,26 @@ public final class DevServer: @unchecked Sendable {
     }
 
     // MARK: - Send helpers
+
+    private func encodeTree(_ snapshot: TreeSnapshotPayload, type: String, id: Int? = nil,
+                            completion: @escaping @Sendable (Data?) -> Void) {
+        treeEncoder.submit { [weak self] in
+            // The wire schema is unchanged. Going through JSONValue would
+            // decode the entire recursive tree before encoding it again.
+            let envelope = TreeEnvelope(type: type, id: id, payload: snapshot)
+            do { completion(try JSONEncoder().encode(envelope)) }
+            catch {
+                self?.log("Unable to encode \(type): \(error)")
+                completion(nil)
+            }
+        }
+    }
+
+    private struct TreeEnvelope: Encodable {
+        let type: String
+        let id: Int?
+        let payload: TreeSnapshotPayload
+    }
 
     private func sendHello(to conn: any DevToolsConnection) {
         let payload = HelloPayload(

@@ -24,6 +24,22 @@ stable `elementID`, which the host uses to draw a runtime overlay.
 Tree, log, timing, and mirror streams are opt-in per connection. Disconnecting
 also releases pressed input and clears the runtime selection overlay.
 
+Desktop tree snapshots are captured on the scene thread and encoded once on a
+dedicated background worker. Full-tree updates are limited to at most 10 Hz;
+bursts keep one pending notification and capture the latest tree after the active
+update, including the last change before the app becomes idle. Unsubscribed
+clients do not cause tree capture. Timing, state and input requests use the
+separate server queue and do not wait for tree JSON encoding.
+
+The loaded Editor has also passed connection acceptance with 1,036 nodes and
+approximately 1.1 MB per snapshot: continuous temporary layout edits, final idle
+update delivery, layout/draw/component timeline, mirror output, and three
+disconnect/reconnect cycles. The connection regression previously spent about
+2.3 seconds per frame parsing tree JSON on the main thread. In the same test
+scene after the fix, 21 selection/style requests had a median response time of
+23 ms and a maximum of 61 ms. These are local debug-build acceptance results,
+not a display FPS guarantee.
+
 Frame mirroring currently requires the macOS ImageIO encoder. Linux/Windows
 hosts advertise tree, selection, log, timing and configured state providers,
 and omit the unavailable mirror capability.

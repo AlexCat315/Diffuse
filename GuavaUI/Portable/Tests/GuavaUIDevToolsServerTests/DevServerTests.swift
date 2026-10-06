@@ -11,6 +11,9 @@ private final class TestConnection: DevToolsConnection, @unchecked Sendable {
     private var messages: [Data] = []
     func send(text: Data) { lock.withLock { messages.append(text) } }
     func close() {}
+    func takeNextData() -> Data? {
+        lock.withLock { messages.isEmpty ? nil : messages.removeFirst() }
+    }
     func take() -> [DevToolsEnvelope] {
         lock.withLock {
             defer { messages.removeAll() }
@@ -34,6 +37,10 @@ private final class TestTransport: DevToolsTransport, @unchecked Sendable {
 private enum Timeout: Error { case waitingForMessage }
 
 @MainActor private final class ObservationTestValue { var number = "1" }
+@MainActor private final class TreeTestRevision {
+    var captures = 0
+    var name = "initial"
+}
 
 private final class HostInbox: @unchecked Sendable {
     private let lock = NSLock()
@@ -54,6 +61,110 @@ private func receive(_ type: String, from connection: TestConnection) async thro
         try await Task.sleep(for: .milliseconds(5))
     }
     throw Timeout.waitingForMessage
+}
+
+private struct TreeWireMessage: Decodable {
+    let type: String
+    let id: Int?
+    let payload: TreeSnapshotPayload
+}
+
+@MainActor
+private func receiveTree(_ type: String, from connection: TestConnection) async throws -> TreeWireMessage {
+    let deadline = ContinuousClock.now + .seconds(3)
+    while ContinuousClock.now < deadline {
+        if let data = connection.takeNextData() {
+            if let message = try? JSONDecoder().decode(TreeWireMessage.self, from: data), message.type == type { return message }
+        }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    throw Timeout.waitingForMessage
+}
+
+@Test @MainActor
+func largeTreeBroadcastCoalescesBurstsAndDeliversFinalIdleChange() async throws {
+    let transport = TestTransport(), connection = TestConnection()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    let flags = NodeFlags(hitTestable: true, focusable: false, clipsToBounds: false, hasBackground: true, hasBorder: false)
+    let children = (0..<1_036).map { index in
+        NodeSummary(id: String(index), viewTag: "EditorPanel", frame: NodeFrame(x: 1, y: 2, w: 3, h: 4),
+                    flags: flags, children: [], elementID: String(index),
+                    source: SourceLocationPayload(fileID: "Editor/Panel.swift", filePath: "/project/Panel.swift", line: index + 1, column: 2))
+    }
+    let revision = TreeTestRevision()
+    server.snapshotProvider = {
+        revision.captures += 1
+        return TreeSnapshotPayload(root: NodeSummary(id: "root", debugName: revision.name,
+            frame: NodeFrame(x: 0, y: 0, w: 1280, h: 720), flags: flags, children: children))
+    }
+    try server.start(); defer { server.stop() }
+    transport.onEvent?(.connected(connection)); _ = try await receive("hello", from: connection)
+    try transport.request("tree.subscribe", connection: connection)
+    let initial = try await receiveTree("tree.snapshot", from: connection)
+    #expect(initial.id == 1 && initial.payload.root?.children.count == 1_036)
+    #expect(initial.payload.root?.children.last?.source?.line == 1_036)
+    revision.name = "first"
+    server.broadcastTreeDelta()
+    for index in 0..<100 { revision.name = "change.\(index)"; server.broadcastTreeDelta() }
+    // The burst does not capture or queue 100 full snapshots on the UI thread.
+    #expect(revision.captures == 2)
+    let first = try await receiveTree("tree.delta", from: connection)
+    #expect(first.id == nil && first.payload.root?.debugName == "first")
+    // No further render or broadcast is needed to deliver the last change.
+    let final = try await receiveTree("tree.delta", from: connection)
+    #expect(final.payload.root?.debugName == "change.99" && revision.captures == 3)
+    try transport.request("tree.unsubscribe", connection: connection)
+    _ = try await receive("tree.unsubscribe.ok", from: connection)
+    server.broadcastTreeDelta()
+    #expect(revision.captures == 3)
+}
+
+@Test @MainActor
+func deeplyNestedEditorTreeEncodesOffTheSceneThread() async throws {
+    let transport = TestTransport(), connection = TestConnection()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    let flags = NodeFlags(hitTestable: false, focusable: false, clipsToBounds: false, hasBackground: false, hasBorder: false)
+    var root = NodeSummary(id: "leaf", frame: NodeFrame(x: 0, y: 0, w: 1, h: 1), flags: flags, children: [])
+    for index in 0..<128 {
+        root = NodeSummary(id: "wrapper.\(index)", frame: NodeFrame(x: 0, y: 0, w: 1, h: 1), flags: flags, children: [root])
+    }
+    let snapshot = TreeSnapshotPayload(root: root)
+    server.snapshotProvider = { snapshot }
+    try server.start(); defer { server.stop() }
+    transport.onEvent?(.connected(connection)); _ = try await receive("hello", from: connection)
+    try transport.request("tree.subscribe", connection: connection)
+    let initial = try await receiveTree("tree.snapshot", from: connection)
+    var node = try #require(initial.payload.root)
+    for _ in 0..<128 { node = try #require(node.children.first) }
+    #expect(node.id == "leaf")
+    server.broadcastTreeDelta()
+    let update = try await receiveTree("tree.delta", from: connection)
+    #expect(update.payload.root?.id == root.id)
+}
+
+@Test @MainActor
+func staleTreeSubscribeCannotCaptureAfterServerRestart() async throws {
+    let transport = TestTransport(), inbox = HostInbox(), old = TestConnection(), current = TestConnection()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    var captures = 0
+    server.hostMainExecutor = { inbox.add($0) }
+    server.snapshotProvider = { captures += 1; return TreeSnapshotPayload(root: nil) }
+    try server.start(); defer { server.stop() }
+    transport.onEvent?(.connected(old)); _ = try await receive("hello", from: old)
+    try transport.request("tree.subscribe", connection: old)
+    let deadline = ContinuousClock.now + .seconds(3)
+    while inbox.count == 0, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(inbox.count == 1)
+    server.stop(); try server.start()
+    transport.onEvent?(.connected(current)); _ = try await receive("hello", from: current)
+    inbox.drain()
+    #expect(captures == 0 && old.take().isEmpty)
+    try transport.request("tree.subscribe", connection: current)
+    let nextDeadline = ContinuousClock.now + .seconds(3)
+    while inbox.count == 0, ContinuousClock.now < nextDeadline { try await Task.sleep(for: .milliseconds(5)) }
+    inbox.drain()
+    _ = try await receiveTree("tree.snapshot", from: current)
+    #expect(captures == 1)
 }
 
 @Test @MainActor
