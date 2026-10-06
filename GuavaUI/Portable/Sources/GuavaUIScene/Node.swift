@@ -112,6 +112,10 @@ public final class Node: @unchecked Sendable {
     /// When true, this node may receive keyboard focus (FocusChain consideration).
     public var isFocusable: Bool = false
 
+    /// Controls that choose focus from their own pointer geometry can disable
+    /// the dispatcher's fallback focus (for example, a letterboxed viewport).
+    public var automaticallyFocusOnPointerDown: Bool = true
+
     /// When true, hit-testing rejects child hits that fall outside this node's frame.
     /// Also a hint to the renderer (Phase 6.3 `.clip()` modifier).
     public var clipsToBounds: Bool = false {

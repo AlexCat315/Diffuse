@@ -1619,71 +1619,71 @@ public struct TransactionExecutor {
             case let .setParticleEmitter(entityID, emitter):
                 let ref = "scene:\(entityID)"
                 events.append(.entityAuthoredChanged(ref: ref, property: "particlePrewarmTime",
-                    value: .float(emitter.prewarmTime)))
+                    value: .float(emitter.settings.emission.prewarmTime)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particlePrewarmStep",
-                    value: .float(emitter.prewarmStep)))
+                    value: .float(emitter.settings.emission.prewarmStep)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRate",
-                    value: .float(emitter.emissionRate)))
+                    value: .float(emitter.settings.emission.emissionRate)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRateCurve",
-                    value: .string(Self.particleCurveSummary(emitter.emissionRateCurve))))
+                    value: .string(Self.particleCurveSummary(emitter.settings.emission.emissionRateCurve))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleDistanceEmissionRate",
-                    value: .float(emitter.distanceEmissionRate)))
+                    value: .float(emitter.settings.emission.distanceEmissionRate)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleDistanceEmissionRateCurve",
-                    value: .string(Self.particleCurveSummary(emitter.distanceEmissionRateCurve))))
+                    value: .string(Self.particleCurveSummary(emitter.settings.emission.distanceEmissionRateCurve))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleMaxParticles",
-                    value: .float(Float(emitter.maxParticles))))
+                    value: .float(Float(emitter.settings.emission.maxParticles))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterTrigger",
-                    value: .string(emitter.subEmitterTrigger.rawValue)))
+                    value: .string(emitter.settings.subEmitters.legacyTrigger.rawValue)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterBurstCount",
-                    value: .float(Float(emitter.subEmitterBurstCount))))
+                    value: .float(Float(emitter.settings.subEmitters.legacyBurstCount))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterProbability",
-                    value: .float(emitter.subEmitterProbability)))
+                    value: .float(emitter.settings.subEmitters.legacyProbability)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterMaxDepth",
-                    value: .float(Float(emitter.subEmitterMaxDepth))))
+                    value: .float(Float(emitter.settings.subEmitters.legacyMaxDepth))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterInheritVelocity",
-                    value: .float(emitter.subEmitterInheritVelocity)))
+                    value: .float(emitter.settings.subEmitters.legacyInheritVelocity)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterLifetime",
-                    value: .float(emitter.subEmitterLifetime)))
+                    value: .float(emitter.settings.subEmitters.legacyLifetime)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterStartVelocity",
-                    value: .vec3(emitter.subEmitterStartVelocity.x,
-                                 emitter.subEmitterStartVelocity.y,
-                                 emitter.subEmitterStartVelocity.z)))
+                    value: .vec3(emitter.settings.subEmitters.legacyStartVelocity.x,
+                                 emitter.settings.subEmitters.legacyStartVelocity.y,
+                                 emitter.settings.subEmitters.legacyStartVelocity.z)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterVelocityRandomness",
-                    value: .vec3(emitter.subEmitterVelocityRandomness.x,
-                                 emitter.subEmitterVelocityRandomness.y,
-                                 emitter.subEmitterVelocityRandomness.z)))
+                    value: .vec3(emitter.settings.subEmitters.legacyVelocityRandomness.x,
+                                 emitter.settings.subEmitters.legacyVelocityRandomness.y,
+                                 emitter.settings.subEmitters.legacyVelocityRandomness.z)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterStartSize",
-                    value: .float(emitter.subEmitterStartSize)))
+                    value: .float(emitter.settings.subEmitters.legacyStartSize)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterEndSize",
-                    value: .float(emitter.subEmitterEndSize)))
+                    value: .float(emitter.settings.subEmitters.legacyEndSize)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmitting",
-                    value: .bool(emitter.isEmitting)))
+                    value: .bool(emitter.settings.emission.isEmitting)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSimulationSpace",
-                    value: .string(emitter.simulationSpace.rawValue)))
+                    value: .string(emitter.settings.gpuSimulation.simulationSpace.rawValue)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleVelocityInheritance",
-                    value: .float(emitter.velocityInheritance)))
+                    value: .float(emitter.settings.velocity.velocityInheritance)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleForceMode",
-                    value: .string(emitter.forceMode.rawValue)))
+                    value: .string(emitter.settings.forces.forceMode.rawValue)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleForceCenter",
-                    value: .vec3(emitter.forceCenter.x, emitter.forceCenter.y, emitter.forceCenter.z)))
+                    value: .vec3(emitter.settings.forces.forceCenter.x, emitter.settings.forces.forceCenter.y, emitter.settings.forces.forceCenter.z)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleForceAxis",
-                    value: .vec3(emitter.forceAxis.x, emitter.forceAxis.y, emitter.forceAxis.z)))
+                    value: .vec3(emitter.settings.forces.forceAxis.x, emitter.settings.forces.forceAxis.y, emitter.settings.forces.forceAxis.z)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleForceRadius",
-                    value: .float(emitter.forceRadius)))
+                    value: .float(emitter.settings.forces.forceRadius)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleForceStrength",
-                    value: .float(emitter.forceStrength)))
+                    value: .float(emitter.settings.forces.forceStrength)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleForceFalloff",
-                    value: .float(emitter.forceFalloff)))
+                    value: .float(emitter.settings.forces.forceFalloff)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleRenderAlignment",
-                    value: .string(emitter.renderAlignment.rawValue)))
+                    value: .string(emitter.settings.renderer.renderAlignment.rawValue)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleVelocityStretchScale",
-                    value: .float(emitter.velocityStretchScale)))
+                    value: .float(emitter.settings.renderer.velocityStretchScale)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleTextureSheetFrameCount",
-                    value: .float(Float(emitter.textureSheetFrameCount))))
+                    value: .float(Float(emitter.settings.textureSheet.frameCount))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleTrailLength",
-                    value: .float(emitter.trailLength)))
+                    value: .float(emitter.settings.trails.trailLength)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleTrailSegments",
-                    value: .float(Float(emitter.trailSegments))))
+                    value: .float(Float(emitter.settings.trails.trailSegments))))
 
             case let .setConstraintEnabled(entityID, value):
                 events.append(.entityAuthoredChanged(

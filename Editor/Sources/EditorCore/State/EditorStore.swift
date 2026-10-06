@@ -155,76 +155,76 @@ public final class EditorStore: @unchecked Sendable {
         case .setViewportMode, .setGamePreviewResolution, .setGamePreviewHUDEnabled, .setGamePreviewFocused:
             keys.insert(.workbench)
         case .tickFrame:
-            mark(.frameIndex, old.frameIndex, new.frameIndex)
+            mark(.frameIndex, old.timing.frameIndex, new.timing.frameIndex)
         case .setConnected:
-            mark(.connected, old.connected, new.connected)
+            mark(.connected, old.timing.connected, new.timing.connected)
         case .setSelectedEntity, .setPrimarySelectedEntity, .setSelectedEntities:
-            mark(.selectedEntityID, old.selectedEntityID, new.selectedEntityID)
-            mark(.selectedEntityIDs, old.selectedEntityIDs, new.selectedEntityIDs)
+            mark(.selectedEntityID, old.selection.selectedEntityID, new.selection.selectedEntityID)
+            mark(.selectedEntityIDs, old.selection.selectedEntityIDs, new.selection.selectedEntityIDs)
         case .setPlaybackState:
-            mark(.playbackState, old.playbackState, new.playbackState)
+            mark(.playbackState, old.timing.playbackState, new.timing.playbackState)
         case .setWorkspaceMode:
-            mark(.workspaceMode, old.workspaceMode, new.workspaceMode)
-            mark(.activeLayoutPreset, old.activeLayoutPreset, new.activeLayoutPreset)
+            mark(.workspaceMode, old.workspace.mode, new.workspace.mode)
+            mark(.activeLayoutPreset, old.workspace.layoutPreset, new.workspace.layoutPreset)
         case .setActiveLayoutPreset:
-            mark(.activeLayoutPreset, old.activeLayoutPreset, new.activeLayoutPreset)
+            mark(.activeLayoutPreset, old.workspace.layoutPreset, new.workspace.layoutPreset)
         case .setSceneRevision:
-            mark(.sceneRevision, old.sceneRevision, new.sceneRevision)
+            mark(.sceneRevision, old.document.sceneRevision, new.document.sceneRevision)
         case .markSceneSaved, .markSceneUnsaved:
-            mark(.lastSavedSceneRevision, old.lastSavedSceneRevision, new.lastSavedSceneRevision)
-            mark(.sceneRecoveryPending, old.sceneRecoveryPending, new.sceneRecoveryPending)
+            mark(.lastSavedSceneRevision, old.document.lastSavedSceneRevision, new.document.lastSavedSceneRevision)
+            mark(.sceneRecoveryPending, old.document.sceneRecoveryPending, new.document.sceneRecoveryPending)
         case .setSceneRecoveryPending:
-            mark(.sceneRecoveryPending, old.sceneRecoveryPending, new.sceneRecoveryPending)
+            mark(.sceneRecoveryPending, old.document.sceneRecoveryPending, new.document.sceneRecoveryPending)
         case .requestClose, .dismissCloseRequest:
-            mark(.pendingCloseRequest, old.pendingCloseRequest, new.pendingCloseRequest)
+            mark(.pendingCloseRequest, old.document.pendingCloseRequest, new.document.pendingCloseRequest)
         case .setWindowFocused:
-            mark(.windowFocused, old.windowFocused, new.windowFocused)
+            mark(.windowFocused, old.window.focused, new.window.focused)
         case .setWindowMinimized:
-            mark(.windowMinimized, old.windowMinimized, new.windowMinimized)
+            mark(.windowMinimized, old.window.minimized, new.window.minimized)
         case .setWindowOccluded:
-            mark(.windowOccluded, old.windowOccluded, new.windowOccluded)
+            mark(.windowOccluded, old.window.occluded, new.window.occluded)
         case .setGizmoMode:
-            mark(.gizmoMode, old.gizmoMode, new.gizmoMode)
+            mark(.gizmoMode, old.viewport.gizmoMode, new.viewport.gizmoMode)
         case .setGizmoSpace:
-            mark(.gizmoSpace, old.gizmoSpace, new.gizmoSpace)
+            mark(.gizmoSpace, old.viewport.gizmoSpace, new.viewport.gizmoSpace)
         case .setViewportShadingMode:
-            mark(.viewportShadingMode, old.viewportShadingMode, new.viewportShadingMode)
+            mark(.viewportShadingMode, old.viewport.shadingMode, new.viewport.shadingMode)
         case .setViewportShadowsEnabled:
-            mark(.viewportShadowsEnabled, old.viewportShadowsEnabled, new.viewportShadowsEnabled)
+            mark(.viewportShadowsEnabled, old.shadows.enabled, new.shadows.enabled)
         case .setViewportGridEnabled:
-            mark(.viewportGridEnabled, old.viewportGridEnabled, new.viewportGridEnabled)
+            mark(.viewportGridEnabled, old.viewport.gridEnabled, new.viewport.gridEnabled)
         case .setViewportRenderScalePercent:
-            mark(.viewportRenderScalePercent, old.viewportRenderScalePercent, new.viewportRenderScalePercent)
+            mark(.viewportRenderScalePercent, old.viewport.renderScalePercent, new.viewport.renderScalePercent)
         case .setViewportInteractionDownscale:
             mark(.viewportInteractionDownscaleEnabled,
-                 old.viewportInteractionDownscaleEnabled,
-                 new.viewportInteractionDownscaleEnabled)
+                 old.viewport.interactionDownscaleEnabled,
+                 new.viewport.interactionDownscaleEnabled)
         case .setViewportRealtime:
-            mark(.viewportRealtimeEnabled, old.viewportRealtimeEnabled, new.viewportRealtimeEnabled)
+            mark(.viewportRealtimeEnabled, old.viewport.realtimeEnabled, new.viewport.realtimeEnabled)
         case .setPhysicsDebugOverlayOptions:
             mark(.physicsDebugOverlayOptions,
-                 old.physicsDebugOverlayOptions,
-                 new.physicsDebugOverlayOptions)
+                 old.viewport.physicsDebugOverlayOptions,
+                 new.viewport.physicsDebugOverlayOptions)
         case .setPhysicsDebugOverlayScope:
             mark(.physicsDebugOverlayScope,
-                 old.physicsDebugOverlayScope,
-                 new.physicsDebugOverlayScope)
+                 old.viewport.physicsDebugOverlayScope,
+                 new.viewport.physicsDebugOverlayScope)
         case .setTranslateSnapEnabled:
-            mark(.translateSnapEnabled, old.translateSnapEnabled, new.translateSnapEnabled)
+            mark(.translateSnapEnabled, old.snapping.translateSnapEnabled, new.snapping.translateSnapEnabled)
         case .setRotateSnapEnabled:
-            mark(.rotateSnapEnabled, old.rotateSnapEnabled, new.rotateSnapEnabled)
+            mark(.rotateSnapEnabled, old.snapping.rotateSnapEnabled, new.snapping.rotateSnapEnabled)
         case .setScaleSnapEnabled:
-            mark(.scaleSnapEnabled, old.scaleSnapEnabled, new.scaleSnapEnabled)
+            mark(.scaleSnapEnabled, old.snapping.scaleSnapEnabled, new.snapping.scaleSnapEnabled)
         case .viewportCameraChanged:
-            mark(.viewportCameraRevision, old.viewportCameraRevision, new.viewportCameraRevision)
+            mark(.viewportCameraRevision, old.viewport.cameraRevision, new.viewport.cameraRevision)
         case .setTranslateSnapStep:
-            mark(.translateSnapStep, old.translateSnapStep, new.translateSnapStep)
+            mark(.translateSnapStep, old.snapping.translateSnapStep, new.snapping.translateSnapStep)
         case .setRotateSnapStepDegrees:
-            mark(.rotateSnapStepDegrees, old.rotateSnapStepDegrees, new.rotateSnapStepDegrees)
+            mark(.rotateSnapStepDegrees, old.snapping.rotateSnapStepDegrees, new.snapping.rotateSnapStepDegrees)
         case .setScaleSnapStep:
-            mark(.scaleSnapStep, old.scaleSnapStep, new.scaleSnapStep)
+            mark(.scaleSnapStep, old.snapping.scaleSnapStep, new.snapping.scaleSnapStep)
         case .setPrimarySelectBehavior:
-            mark(.primarySelectBehavior, old.primarySelectBehavior, new.primarySelectBehavior)
+            mark(.primarySelectBehavior, old.selection.primarySelectBehavior, new.selection.primarySelectBehavior)
         case .setThemeMode:
             mark(.presentation, old.presentation, new.presentation)
             mark(.themeMode, old.themeMode, new.themeMode)
@@ -239,44 +239,44 @@ public final class EditorStore: @unchecked Sendable {
         case .setVSyncMode:
             mark(.vsyncMode, old.vsyncMode, new.vsyncMode)
         case .beginAssetDrag, .endAssetDrag:
-            mark(.activeAssetDrag, old.activeAssetDrag, new.activeAssetDrag)
+            mark(.activeAssetDrag, old.navigation.activeAssetDrag, new.navigation.activeAssetDrag)
         case .updateAssetDragCursor:
             break
         case .setInspectorSectionCollapsed, .setInspectorSectionsCollapsed:
             mark(.inspectorCollapsedSectionIDs,
-                 old.inspectorCollapsedSectionIDs,
-                 new.inspectorCollapsedSectionIDs)
+                 old.selection.inspectorCollapsedSectionIDs,
+                 new.selection.inspectorCollapsedSectionIDs)
         case .setPendingConfirmationRequest:
             mark(.pendingConfirmationRequest,
-                 old.pendingConfirmationRequest,
-                 new.pendingConfirmationRequest)
+                 old.assistant.pendingConfirmationRequest,
+                 new.assistant.pendingConfirmationRequest)
         case .setAISettings:
-            mark(.aiSettings, old.aiSettings, new.aiSettings)
+            mark(.aiSettings, old.assistant.aiSettings, new.assistant.aiSettings)
         case .setCapabilitySettings:
-            mark(.capabilitySettings, old.capabilitySettings, new.capabilitySettings)
+            mark(.capabilitySettings, old.assistant.capabilitySettings, new.assistant.capabilitySettings)
         case .setPluginManagementState:
-            mark(.pluginManagement, old.pluginManagement, new.pluginManagement)
+            mark(.pluginManagement, old.assistant.pluginManagement, new.assistant.pluginManagement)
         case .setAIStatusMessage:
-            mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
+            mark(.aiStatusMessage, old.assistant.aiStatusMessage, new.assistant.aiStatusMessage)
         case .setAIWarnings:
-            mark(.aiWarnings, old.aiWarnings, new.aiWarnings)
+            mark(.aiWarnings, old.assistant.aiWarnings, new.assistant.aiWarnings)
         case .appendChatMessage, .updateChatMessage, .clearChatHistory:
-            mark(.chatMessages, old.chatMessages, new.chatMessages)
+            mark(.chatMessages, old.assistant.chatMessages, new.assistant.chatMessages)
         case .appendConsoleMessage, .clearConsole:
-            mark(.consoleEntries, old.consoleEntries, new.consoleEntries)
+            mark(.consoleEntries, old.output.consoleEntries, new.output.consoleEntries)
         case .setCommandPaletteVisible:
-            mark(.commandPaletteVisible, old.commandPaletteVisible, new.commandPaletteVisible)
+            mark(.commandPaletteVisible, old.navigation.commandPaletteVisible, new.navigation.commandPaletteVisible)
         case .frameTimingUpdated:
-            mark(.frameTimingRevision, old.frameTimingRevision, new.frameTimingRevision)
+            mark(.frameTimingRevision, old.timing.frameTimingRevision, new.timing.frameTimingRevision)
         case .viewportSurfaceUpdated:
-            mark(.viewportSurfaceRevision, old.viewportSurfaceRevision, new.viewportSurfaceRevision)
+            mark(.viewportSurfaceRevision, old.viewport.surfaceRevision, new.viewport.surfaceRevision)
         case .updateFrameStats:
-            mark(.frameStats, old.frameStats, new.frameStats)
-            mark(.frameStatsHistory, old.frameStatsHistory, new.frameStatsHistory)
+            mark(.frameStats, old.timing.frameStats, new.timing.frameStats)
+            mark(.frameStatsHistory, old.timing.frameStatsHistory, new.timing.frameStatsHistory)
         case .updateParticleDiagnostics:
             mark(.particleDiagnosticsHistory,
-                 old.particleDiagnosticsHistory,
-                 new.particleDiagnosticsHistory)
+                 old.timing.particleDiagnosticsHistory,
+                 new.timing.particleDiagnosticsHistory)
         }
 
         if old.shouldRender != new.shouldRender {
@@ -302,90 +302,90 @@ extension EditorStore: _ObservableObject {
 }
 
 extension EditorStore {
-    public var operations: [EditorOperation] { read(.workbench, storage.operations) }
-    public var scriptNavigation: EditorScriptNavigationRequest? { read(.workbench, storage.scriptNavigation) }
-    public var assetNavigationID: String? { read(.workbench, storage.assetNavigationID) }
-    public var assetNavigationRevision: UInt64 { read(.workbench, storage.assetNavigationRevision) }
-    public var inspectorSceneSettingsVisible: Bool { read(.workbench, storage.inspectorSceneSettingsVisible) }
-    public var commandPaletteQuery: String { read(.workbench, storage.commandPaletteQuery) }
-    public var outputTab: EditorOutputTab { read(.workbench, storage.outputTab) }
-    public var viewportMode: EditorViewportMode { read(.workbench, storage.viewportMode) }
-    public var gamePreviewResolution: EditorGamePreviewResolution { read(.workbench, storage.gamePreviewResolution) }
-    public var gamePreviewHUDEnabled: Bool { read(.workbench, storage.gamePreviewHUDEnabled) }
-    public var gamePreviewFocused: Bool { read(.workbench, storage.gamePreviewFocused) }
-    public var connected: Bool { read(.connected, storage.connected) }
-    public var selectedEntityID: UInt64? { read(.selectedEntityID, storage.selectedEntityID) }
-    public var selectedEntityIDs: Set<UInt64> { read(.selectedEntityIDs, storage.selectedEntityIDs) }
-    public var selectedEntityIDsCount: Int { read(.selectedEntityIDs, storage.selectedEntityIDs.count) }
-    public var sceneRevision: UInt64 { read(.sceneRevision, storage.sceneRevision) }
-    public var lastSavedSceneRevision: UInt64 { read(.lastSavedSceneRevision, storage.lastSavedSceneRevision) }
-    public var sceneRecoveryPending: Bool { read(.sceneRecoveryPending, storage.sceneRecoveryPending) }
+    public var operations: [EditorOperation] { read(.workbench, storage.navigation.operations) }
+    public var scriptNavigation: EditorScriptNavigationRequest? { read(.workbench, storage.navigation.scriptNavigation) }
+    public var assetNavigationID: String? { read(.workbench, storage.navigation.assetNavigationID) }
+    public var assetNavigationRevision: UInt64 { read(.workbench, storage.navigation.assetNavigationRevision) }
+    public var inspectorSceneSettingsVisible: Bool { read(.workbench, storage.selection.inspectorSceneSettingsVisible) }
+    public var commandPaletteQuery: String { read(.workbench, storage.navigation.commandPaletteQuery) }
+    public var outputTab: EditorOutputTab { read(.workbench, storage.output.outputTab) }
+    public var viewportMode: EditorViewportMode { read(.workbench, storage.viewport.mode) }
+    public var gamePreviewResolution: EditorGamePreviewResolution { read(.workbench, storage.viewport.gamePreviewResolution) }
+    public var gamePreviewHUDEnabled: Bool { read(.workbench, storage.viewport.gamePreviewHUDEnabled) }
+    public var gamePreviewFocused: Bool { read(.workbench, storage.viewport.gamePreviewFocused) }
+    public var connected: Bool { read(.connected, storage.timing.connected) }
+    public var selectedEntityID: UInt64? { read(.selectedEntityID, storage.selection.selectedEntityID) }
+    public var selectedEntityIDs: Set<UInt64> { read(.selectedEntityIDs, storage.selection.selectedEntityIDs) }
+    public var selectedEntityIDsCount: Int { read(.selectedEntityIDs, storage.selection.selectedEntityIDs.count) }
+    public var sceneRevision: UInt64 { read(.sceneRevision, storage.document.sceneRevision) }
+    public var lastSavedSceneRevision: UInt64 { read(.lastSavedSceneRevision, storage.document.lastSavedSceneRevision) }
+    public var sceneRecoveryPending: Bool { read(.sceneRecoveryPending, storage.document.sceneRecoveryPending) }
     /// Unsaved scene edits or a recovered autosave exist.
     public var sceneDirty: Bool { sceneRecoveryPending || sceneRevision != lastSavedSceneRevision }
-    public var pendingCloseRequest: EditorPendingCloseRequest? { read(.pendingCloseRequest, storage.pendingCloseRequest) }
-    public var frameIndex: UInt64 { read(.frameIndex, storage.frameIndex) }
-    public var frameTimingRevision: UInt64 { read(.frameTimingRevision, storage.frameTimingRevision) }
-    public var frameStats: EditorFrameStats { read(.frameStats, storage.frameStats) }
-    public var frameStatsHistory: [EditorFrameStatsHistorySample] { read(.frameStatsHistory, storage.frameStatsHistory) }
+    public var pendingCloseRequest: EditorPendingCloseRequest? { read(.pendingCloseRequest, storage.document.pendingCloseRequest) }
+    public var frameIndex: UInt64 { read(.frameIndex, storage.timing.frameIndex) }
+    public var frameTimingRevision: UInt64 { read(.frameTimingRevision, storage.timing.frameTimingRevision) }
+    public var frameStats: EditorFrameStats { read(.frameStats, storage.timing.frameStats) }
+    public var frameStatsHistory: [EditorFrameStatsHistorySample] { read(.frameStatsHistory, storage.timing.frameStatsHistory) }
     public var particleDiagnosticsHistory: [EditorParticleDiagnosticsSample] {
-        read(.particleDiagnosticsHistory, storage.particleDiagnosticsHistory)
+        read(.particleDiagnosticsHistory, storage.timing.particleDiagnosticsHistory)
     }
-    public var viewportSurfaceRevision: UInt64 { read(.viewportSurfaceRevision, storage.viewportSurfaceRevision) }
-    public var viewportCameraRevision: UInt64 { read(.viewportCameraRevision, storage.viewportCameraRevision) }
-    public var windowFocused: Bool { read(.windowFocused, storage.windowFocused) }
-    public var windowMinimized: Bool { read(.windowMinimized, storage.windowMinimized) }
-    public var windowOccluded: Bool { read(.windowOccluded, storage.windowOccluded) }
+    public var viewportSurfaceRevision: UInt64 { read(.viewportSurfaceRevision, storage.viewport.surfaceRevision) }
+    public var viewportCameraRevision: UInt64 { read(.viewportCameraRevision, storage.viewport.cameraRevision) }
+    public var windowFocused: Bool { read(.windowFocused, storage.window.focused) }
+    public var windowMinimized: Bool { read(.windowMinimized, storage.window.minimized) }
+    public var windowOccluded: Bool { read(.windowOccluded, storage.window.occluded) }
     public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
-    public var aiSettings: EditorAISettings { read(.aiSettings, storage.aiSettings) }
-    public var capabilitySettings: EditorCapabilitySettings { read(.capabilitySettings, storage.capabilitySettings) }
+    public var aiSettings: EditorAISettings { read(.aiSettings, storage.assistant.aiSettings) }
+    public var capabilitySettings: EditorCapabilitySettings { read(.capabilitySettings, storage.assistant.capabilitySettings) }
     public var pluginManagement: EditorPluginManagementState {
-        read(.pluginManagement, storage.pluginManagement)
+        read(.pluginManagement, storage.assistant.pluginManagement)
     }
-    public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
-    public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
-    public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.consoleEntries) }
-    public var latestConsoleEntry: EditorConsoleEntry? { read(.consoleEntries, storage.consoleEntries.last) }
-    public var playbackState: PlaybackState { read(.playbackState, storage.playbackState) }
-    public var workspaceMode: EditorWorkspaceMode { read(.workspaceMode, storage.workspaceMode) }
-    public var activeLayoutPreset: EditorLayoutPreset { read(.activeLayoutPreset, storage.activeLayoutPreset) }
-    public var gizmoMode: EditorGizmoMode { read(.gizmoMode, storage.gizmoMode) }
-    public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.gizmoSpace) }
-    public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewportShadingMode) }
-    public var viewportShadowsEnabled: Bool { read(.viewportShadowsEnabled, storage.viewportShadowsEnabled) }
-    public var viewportGridEnabled: Bool { read(.viewportGridEnabled, storage.viewportGridEnabled) }
-    public var viewportRenderScalePercent: Int { read(.viewportRenderScalePercent, storage.viewportRenderScalePercent) }
+    public var aiStatusMessage: String? { read(.aiStatusMessage, storage.assistant.aiStatusMessage) }
+    public var aiWarnings: [String] { read(.aiWarnings, storage.assistant.aiWarnings) }
+    public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.output.consoleEntries) }
+    public var latestConsoleEntry: EditorConsoleEntry? { read(.consoleEntries, storage.output.consoleEntries.last) }
+    public var playbackState: PlaybackState { read(.playbackState, storage.timing.playbackState) }
+    public var workspaceMode: EditorWorkspaceMode { read(.workspaceMode, storage.workspace.mode) }
+    public var activeLayoutPreset: EditorLayoutPreset { read(.activeLayoutPreset, storage.workspace.layoutPreset) }
+    public var gizmoMode: EditorGizmoMode { read(.gizmoMode, storage.viewport.gizmoMode) }
+    public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.viewport.gizmoSpace) }
+    public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewport.shadingMode) }
+    public var viewportShadowsEnabled: Bool { read(.viewportShadowsEnabled, storage.shadows.enabled) }
+    public var viewportGridEnabled: Bool { read(.viewportGridEnabled, storage.viewport.gridEnabled) }
+    public var viewportRenderScalePercent: Int { read(.viewportRenderScalePercent, storage.viewport.renderScalePercent) }
     public var viewportInteractionDownscaleEnabled: Bool {
-        read(.viewportInteractionDownscaleEnabled, storage.viewportInteractionDownscaleEnabled)
+        read(.viewportInteractionDownscaleEnabled, storage.viewport.interactionDownscaleEnabled)
     }
     public var viewportRealtimeEnabled: Bool {
-        read(.viewportRealtimeEnabled, storage.viewportRealtimeEnabled)
+        read(.viewportRealtimeEnabled, storage.viewport.realtimeEnabled)
     }
     public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions {
-        read(.physicsDebugOverlayOptions, storage.physicsDebugOverlayOptions)
+        read(.physicsDebugOverlayOptions, storage.viewport.physicsDebugOverlayOptions)
     }
     public var physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope {
-        read(.physicsDebugOverlayScope, storage.physicsDebugOverlayScope)
+        read(.physicsDebugOverlayScope, storage.viewport.physicsDebugOverlayScope)
     }
-    public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
-    public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
-    public var scaleSnapEnabled: Bool { read(.scaleSnapEnabled, storage.scaleSnapEnabled) }
-    public var translateSnapStep: Float { read(.translateSnapStep, storage.translateSnapStep) }
-    public var rotateSnapStepDegrees: Float { read(.rotateSnapStepDegrees, storage.rotateSnapStepDegrees) }
-    public var scaleSnapStep: Float { read(.scaleSnapStep, storage.scaleSnapStep) }
-    public var primarySelectBehavior: SelectionPrimaryModifierBehavior { read(.primarySelectBehavior, storage.primarySelectBehavior) }
+    public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.snapping.translateSnapEnabled) }
+    public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.snapping.rotateSnapEnabled) }
+    public var scaleSnapEnabled: Bool { read(.scaleSnapEnabled, storage.snapping.scaleSnapEnabled) }
+    public var translateSnapStep: Float { read(.translateSnapStep, storage.snapping.translateSnapStep) }
+    public var rotateSnapStepDegrees: Float { read(.rotateSnapStepDegrees, storage.snapping.rotateSnapStepDegrees) }
+    public var scaleSnapStep: Float { read(.scaleSnapStep, storage.snapping.scaleSnapStep) }
+    public var primarySelectBehavior: SelectionPrimaryModifierBehavior { read(.primarySelectBehavior, storage.selection.primarySelectBehavior) }
     public var presentation: EditorPresentationState { read(.presentation, storage.presentation) }
     public var presentationRevision: UInt64 { read(.uiRefreshRevision, storage.presentation.revision) }
     public var themeMode: EditorThemeMode { read(.themeMode, storage.themeMode) }
     public var language: EditorLanguage { read(.language, storage.language) }
     public var uiRefreshRevision: UInt64 { read(.uiRefreshRevision, storage.uiRefreshRevision) }
     public var vsyncMode: EditorVSyncMode { read(.vsyncMode, storage.vsyncMode) }
-    public var activeAssetDrag: EditorAssetDragPayload? { read(.activeAssetDrag, storage.activeAssetDrag) }
+    public var activeAssetDrag: EditorAssetDragPayload? { read(.activeAssetDrag, storage.navigation.activeAssetDrag) }
     public var inspectorCollapsedSectionIDs: Set<String> {
-        read(.inspectorCollapsedSectionIDs, storage.inspectorCollapsedSectionIDs)
+        read(.inspectorCollapsedSectionIDs, storage.selection.inspectorCollapsedSectionIDs)
     }
     public var pendingConfirmationRequest: ConfirmationRequestBatch? {
-        read(.pendingConfirmationRequest, storage.pendingConfirmationRequest)
+        read(.pendingConfirmationRequest, storage.assistant.pendingConfirmationRequest)
     }
-    public var commandPaletteVisible: Bool { read(.commandPaletteVisible, storage.commandPaletteVisible) }
-    public var chatMessages: [AIChatMessage] { read(.chatMessages, storage.chatMessages) }
+    public var commandPaletteVisible: Bool { read(.commandPaletteVisible, storage.navigation.commandPaletteVisible) }
+    public var chatMessages: [AIChatMessage] { read(.chatMessages, storage.assistant.chatMessages) }
 }

@@ -16,12 +16,12 @@ struct ViewportInvalidationTests {
         app.setDisplayInvalidationHandler { displayRequests += 1 }
         let sceneRevision = app.scene.revision
         app.setViewportGridEnabled(false)
-        #expect(!app.store.state.viewportGridEnabled)
+        #expect(!app.store.state.viewport.gridEnabled)
         #expect(displayRequests == 1)
         app.setViewportGridEnabled(false)
         #expect(displayRequests == 1)
         app.setViewportGridEnabled(true)
-        #expect(app.store.state.viewportGridEnabled)
+        #expect(app.store.state.viewport.gridEnabled)
         #expect(displayRequests == 2)
         #expect(app.scene.revision == sceneRevision)
     }

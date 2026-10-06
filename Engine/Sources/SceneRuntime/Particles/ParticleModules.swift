@@ -38,47 +38,47 @@ public struct ParticleModuleStack: Codable, Sendable, Equatable {
             ParticleEmitterModule(id: "emission",
                                   stage: .spawn,
                                   displayName: "Emission",
-                                  settings: .emission(ParticleEmissionModule(emitter))),
+                                  settings: .emission(emitter.settings.emission)),
             ParticleEmitterModule(id: "shape",
                                   stage: .spawn,
                                   displayName: "Shape",
-                                  settings: .shape(ParticleShapeModule(emitter))),
+                                  settings: .shape(emitter.settings.shape)),
             ParticleEmitterModule(id: "velocity",
                                   stage: .initialize,
                                   displayName: "Velocity",
-                                  settings: .velocity(ParticleVelocityModule(emitter))),
+                                  settings: .velocity(emitter.settings.velocity)),
             ParticleEmitterModule(id: "forces",
                                   stage: .update,
                                   displayName: "Forces",
-                                  settings: .forces(ParticleForcesModule(emitter))),
+                                  settings: .forces(emitter.settings.forces)),
             ParticleEmitterModule(id: "collision",
                                   stage: .update,
                                   displayName: "Collision",
-                                  settings: .collision(ParticleCollisionModule(emitter))),
+                                  settings: .collision(emitter.settings.collision)),
             ParticleEmitterModule(id: "appearance",
                                   stage: .initialize,
                                   displayName: "Appearance",
-                                  settings: .appearance(ParticleAppearanceModule(emitter))),
+                                  settings: .appearance(emitter.settings.appearance)),
             ParticleEmitterModule(id: "textureSheet",
                                   stage: .render,
                                   displayName: "Texture Sheet",
-                                  settings: .textureSheet(ParticleTextureSheetModule(emitter))),
+                                  settings: .textureSheet(emitter.settings.textureSheet)),
             ParticleEmitterModule(id: "renderer",
                                   stage: .render,
                                   displayName: "Renderer",
-                                  settings: .renderer(ParticleRendererModule(emitter))),
+                                  settings: .renderer(emitter.settings.renderer)),
             ParticleEmitterModule(id: "trails",
                                   stage: .render,
                                   displayName: "Trails",
-                                  settings: .trails(ParticleTrailsModule(emitter))),
+                                  settings: .trails(emitter.settings.trails)),
             ParticleEmitterModule(id: "subEmitters",
                                   stage: .event,
                                   displayName: "Sub-Emitters",
-                                  settings: .subEmitters(ParticleSubEmittersModule(emitter))),
+                                  settings: .subEmitters(emitter.settings.subEmitters)),
             ParticleEmitterModule(id: "gpuSimulation",
                                   stage: .simulation,
                                   displayName: "GPU Simulation",
-                                  settings: .gpuSimulation(ParticleGPUSimulationModule(emitter))),
+                                  settings: .gpuSimulation(emitter.settings.gpuSimulation)),
         ])
     }
 
@@ -383,40 +383,25 @@ public enum ParticleEmitterModuleSettings: Codable, Sendable, Equatable {
 }
 
 public struct ParticleEmissionModule: Codable, Sendable, Equatable {
-    public var isEmitting: Bool
-    public var looping: Bool
-    public var duration: Float
-    public var simulationSpeed: Float
-    public var prewarmTime: Float
-    public var prewarmStep: Float
-    public var emissionRate: Float
-    public var emissionRateCurve: ParticleCurve
-    public var distanceEmissionRate: Float
-    public var distanceEmissionRateCurve: ParticleCurve
-    public var burstCount: Int
-    public var burstInterval: Float
-    public var maxParticles: Int
-    public var maxSpawnedParticlesPerFrame: Int
-    public var maxRenderedParticles: Int
-    public var seed: UInt64
+    public var isEmitting: Bool = true
+    public var looping: Bool = true
+    public var duration: Float = 0
+    public var simulationSpeed: Float = 1
+    public var prewarmTime: Float = 0
+    public var prewarmStep: Float = 1.0 / 30.0
+    public var emissionRate: Float = 10
+    public var emissionRateCurve: ParticleCurve = .constant(1)
+    public var distanceEmissionRate: Float = 0
+    public var distanceEmissionRateCurve: ParticleCurve = .constant(1)
+    public var burstCount: Int = 0
+    public var burstInterval: Float = 0
+    public var maxParticles: Int = 256
+    public var maxSpawnedParticlesPerFrame: Int = 0
+    public var maxRenderedParticles: Int = 0
+    public var seed: UInt64 = 0x9E3779B9
 
-    public init(_ emitter: ParticleEmitter) {
-        self.isEmitting = emitter.isEmitting
-        self.looping = emitter.looping
-        self.duration = emitter.duration
-        self.simulationSpeed = emitter.simulationSpeed
-        self.prewarmTime = emitter.prewarmTime
-        self.prewarmStep = emitter.prewarmStep
-        self.emissionRate = emitter.emissionRate
-        self.emissionRateCurve = emitter.emissionRateCurve
-        self.distanceEmissionRate = emitter.distanceEmissionRate
-        self.distanceEmissionRateCurve = emitter.distanceEmissionRateCurve
-        self.burstCount = emitter.burstCount
-        self.burstInterval = emitter.burstInterval
-        self.maxParticles = emitter.maxParticles
-        self.maxSpawnedParticlesPerFrame = emitter.maxSpawnedParticlesPerFrame
-        self.maxRenderedParticles = emitter.maxRenderedParticles
-        self.seed = emitter.seed
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -440,196 +425,361 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        isEmitting = try container.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? true
-        looping = try container.decodeIfPresent(Bool.self, forKey: .looping) ?? true
-        duration = try container.decodeIfPresent(Float.self, forKey: .duration) ?? 0
-        simulationSpeed = try container.decodeIfPresent(Float.self, forKey: .simulationSpeed) ?? 1
-        prewarmTime = try container.decodeIfPresent(Float.self, forKey: .prewarmTime) ?? 0
-        prewarmStep = try container.decodeIfPresent(Float.self, forKey: .prewarmStep) ?? (1.0 / 30.0)
-        emissionRate = try container.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
-        emissionRateCurve = try container.decodeIfPresent(ParticleCurve.self, forKey: .emissionRateCurve) ?? .constant(1)
-        distanceEmissionRate = try container.decodeIfPresent(Float.self, forKey: .distanceEmissionRate) ?? 0
-        distanceEmissionRateCurve = try container.decodeIfPresent(ParticleCurve.self,
-                                                                  forKey: .distanceEmissionRateCurve) ?? .constant(1)
-        burstCount = try container.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
-        burstInterval = try container.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
-        maxParticles = try container.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
-        maxSpawnedParticlesPerFrame = try container.decodeIfPresent(
-            Int.self,
-            forKey: .maxSpawnedParticlesPerFrame
-        ) ?? 0
-        maxRenderedParticles = try container.decodeIfPresent(Int.self, forKey: .maxRenderedParticles) ?? 0
-        seed = try container.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
+        isEmitting = try container.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? isEmitting
+        looping = try container.decodeIfPresent(Bool.self, forKey: .looping) ?? looping
+        duration = try container.decodeIfPresent(Float.self, forKey: .duration) ?? duration
+        simulationSpeed = try container.decodeIfPresent(Float.self, forKey: .simulationSpeed) ?? simulationSpeed
+        prewarmTime = try container.decodeIfPresent(Float.self, forKey: .prewarmTime) ?? prewarmTime
+        prewarmStep = try container.decodeIfPresent(Float.self, forKey: .prewarmStep) ?? prewarmStep
+        emissionRate = try container.decodeIfPresent(Float.self, forKey: .emissionRate) ?? emissionRate
+        emissionRateCurve =
+            try container.decodeIfPresent(ParticleCurve.self, forKey: .emissionRateCurve) ?? emissionRateCurve
+        distanceEmissionRate =
+            try container.decodeIfPresent(Float.self, forKey: .distanceEmissionRate) ?? distanceEmissionRate
+        distanceEmissionRateCurve =
+            try container.decodeIfPresent(ParticleCurve.self, forKey: .distanceEmissionRateCurve)
+            ?? distanceEmissionRateCurve
+        burstCount = try container.decodeIfPresent(Int.self, forKey: .burstCount) ?? burstCount
+        burstInterval = try container.decodeIfPresent(Float.self, forKey: .burstInterval) ?? burstInterval
+        maxParticles = try container.decodeIfPresent(Int.self, forKey: .maxParticles) ?? maxParticles
+        maxSpawnedParticlesPerFrame =
+            try container.decodeIfPresent(Int.self, forKey: .maxSpawnedParticlesPerFrame) ?? maxSpawnedParticlesPerFrame
+        maxRenderedParticles =
+            try container.decodeIfPresent(Int.self, forKey: .maxRenderedParticles) ?? maxRenderedParticles
+        seed = try container.decodeIfPresent(UInt64.self, forKey: .seed) ?? seed
+    }
+
+    mutating func normalize() {
+        duration = max(0, duration)
+        simulationSpeed = max(0, simulationSpeed)
+        prewarmTime = max(0, prewarmTime)
+        prewarmStep = max(1.0 / 240.0, prewarmStep)
+        emissionRate = max(0, emissionRate)
+        distanceEmissionRate = max(0, distanceEmissionRate)
+        burstCount = max(0, burstCount)
+        burstInterval = max(0, burstInterval)
+        maxParticles = max(0, maxParticles)
+        maxSpawnedParticlesPerFrame = max(0, maxSpawnedParticlesPerFrame)
+        maxRenderedParticles = max(0, maxRenderedParticles)
     }
 }
 
 public struct ParticleShapeModule: Codable, Sendable, Equatable {
-    public var originOffset: SIMD3<Float>
-    public var spawnRadius: Float
-    public var emissionShape: ParticleEmissionShape
-    public var boxHalfExtents: SIMD3<Float>
-    public var coneRadius: Float
-    public var coneHeight: Float
+    public var originOffset: SIMD3<Float> = .zero
+    public var spawnRadius: Float = 0
+    public var emissionShape: ParticleEmissionShape = .sphere
+    public var boxHalfExtents: SIMD3<Float> = SIMD3<Float>(0.5, 0.5, 0.5)
+    public var coneRadius: Float = 0.5
+    public var coneHeight: Float = 1
 
-    public init(_ emitter: ParticleEmitter) {
-        self.originOffset = emitter.originOffset
-        self.spawnRadius = emitter.spawnRadius
-        self.emissionShape = emitter.emissionShape
-        self.boxHalfExtents = emitter.boxHalfExtents
-        self.coneRadius = emitter.coneRadius
-        self.coneHeight = emitter.coneHeight
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case originOffset
+        case spawnRadius
+        case emissionShape
+        case boxHalfExtents
+        case coneRadius
+        case coneHeight
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        originOffset = try container.decodeIfPresent(SIMD3<Float>.self, forKey: .originOffset) ?? originOffset
+        spawnRadius = try container.decodeIfPresent(Float.self, forKey: .spawnRadius) ?? spawnRadius
+        emissionShape =
+            try container.decodeIfPresent(ParticleEmissionShape.self, forKey: .emissionShape) ?? emissionShape
+        boxHalfExtents = try container.decodeIfPresent(SIMD3<Float>.self, forKey: .boxHalfExtents) ?? boxHalfExtents
+        coneRadius = try container.decodeIfPresent(Float.self, forKey: .coneRadius) ?? coneRadius
+        coneHeight = try container.decodeIfPresent(Float.self, forKey: .coneHeight) ?? coneHeight
+    }
+
+    mutating func normalize() {
+        spawnRadius = max(0, spawnRadius)
+        boxHalfExtents = SIMD3<Float>(
+            max(0, boxHalfExtents.x),
+            max(0, boxHalfExtents.y),
+            max(0, boxHalfExtents.z)
+        )
+        coneRadius = max(0, coneRadius)
+        coneHeight = max(0, coneHeight)
     }
 }
 
 public struct ParticleVelocityModule: Codable, Sendable, Equatable {
-    public var startVelocity: SIMD3<Float>
-    public var velocityRandomness: SIMD3<Float>
-    public var velocityInheritance: Float
+    public var startVelocity: SIMD3<Float> = SIMD3<Float>(0, 1, 0)
+    public var velocityRandomness: SIMD3<Float> = .zero
+    public var velocityInheritance: Float = 0
 
-    public init(_ emitter: ParticleEmitter) {
-        self.startVelocity = emitter.startVelocity
-        self.velocityRandomness = emitter.velocityRandomness
-        self.velocityInheritance = emitter.velocityInheritance
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case startVelocity
+        case velocityRandomness
+        case velocityInheritance
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        startVelocity = try container.decodeIfPresent(SIMD3<Float>.self, forKey: .startVelocity) ?? startVelocity
+        velocityRandomness =
+            try container.decodeIfPresent(SIMD3<Float>.self, forKey: .velocityRandomness) ?? velocityRandomness
+        velocityInheritance =
+            try container.decodeIfPresent(Float.self, forKey: .velocityInheritance) ?? velocityInheritance
+    }
+
+    mutating func normalize() {
+        velocityInheritance = max(0, velocityInheritance)
     }
 }
 
 public struct ParticleForcesModule: Codable, Sendable, Equatable {
-    public var gravity: SIMD3<Float>
-    public var noiseStrength: Float
-    public var noiseScale: Float
-    public var noiseSpeed: Float
-    public var forceMode: ParticleForceMode
-    public var forceCenter: SIMD3<Float>
-    public var forceAxis: SIMD3<Float>
-    public var forceRadius: Float
-    public var forceStrength: Float
-    public var forceFalloff: Float
-    public var vectorFieldMode: ParticleVectorFieldMode
-    public var vectorFieldDirection: SIMD3<Float>
-    public var vectorFieldStrength: Float
-    public var vectorFieldScale: Float
-    public var vectorFieldScrollSpeed: Float
+    public var gravity: SIMD3<Float> = SIMD3<Float>(0, -9.81, 0)
+    public var noiseStrength: Float = 0
+    public var noiseScale: Float = 1
+    public var noiseSpeed: Float = 1
+    public var forceMode: ParticleForceMode = .none
+    public var forceCenter: SIMD3<Float> = .zero
+    public var forceAxis: SIMD3<Float> = SIMD3<Float>(0, 1, 0)
+    public var forceRadius: Float = 0
+    public var forceStrength: Float = 0
+    public var forceFalloff: Float = 1
+    public var vectorFieldMode: ParticleVectorFieldMode = .none
+    public var vectorFieldDirection: SIMD3<Float> = SIMD3<Float>(0, 1, 0)
+    public var vectorFieldStrength: Float = 0
+    public var vectorFieldScale: Float = 1
+    public var vectorFieldScrollSpeed: Float = 0
 
-    public init(_ emitter: ParticleEmitter) {
-        self.gravity = emitter.gravity
-        self.noiseStrength = emitter.noiseStrength
-        self.noiseScale = emitter.noiseScale
-        self.noiseSpeed = emitter.noiseSpeed
-        self.forceMode = emitter.forceMode
-        self.forceCenter = emitter.forceCenter
-        self.forceAxis = emitter.forceAxis
-        self.forceRadius = emitter.forceRadius
-        self.forceStrength = emitter.forceStrength
-        self.forceFalloff = emitter.forceFalloff
-        self.vectorFieldMode = emitter.vectorFieldMode
-        self.vectorFieldDirection = emitter.vectorFieldDirection
-        self.vectorFieldStrength = emitter.vectorFieldStrength
-        self.vectorFieldScale = emitter.vectorFieldScale
-        self.vectorFieldScrollSpeed = emitter.vectorFieldScrollSpeed
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case gravity
+        case noiseStrength
+        case noiseScale
+        case noiseSpeed
+        case forceMode
+        case forceCenter
+        case forceAxis
+        case forceRadius
+        case forceStrength
+        case forceFalloff
+        case vectorFieldMode
+        case vectorFieldDirection
+        case vectorFieldStrength
+        case vectorFieldScale
+        case vectorFieldScrollSpeed
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        gravity = try container.decodeIfPresent(SIMD3<Float>.self, forKey: .gravity) ?? gravity
+        noiseStrength = try container.decodeIfPresent(Float.self, forKey: .noiseStrength) ?? noiseStrength
+        noiseScale = try container.decodeIfPresent(Float.self, forKey: .noiseScale) ?? noiseScale
+        noiseSpeed = try container.decodeIfPresent(Float.self, forKey: .noiseSpeed) ?? noiseSpeed
+        forceMode = try container.decodeIfPresent(ParticleForceMode.self, forKey: .forceMode) ?? forceMode
+        forceCenter = try container.decodeIfPresent(SIMD3<Float>.self, forKey: .forceCenter) ?? forceCenter
+        forceAxis = try container.decodeIfPresent(SIMD3<Float>.self, forKey: .forceAxis) ?? forceAxis
+        forceRadius = try container.decodeIfPresent(Float.self, forKey: .forceRadius) ?? forceRadius
+        forceStrength = try container.decodeIfPresent(Float.self, forKey: .forceStrength) ?? forceStrength
+        forceFalloff = try container.decodeIfPresent(Float.self, forKey: .forceFalloff) ?? forceFalloff
+        vectorFieldMode =
+            try container.decodeIfPresent(ParticleVectorFieldMode.self, forKey: .vectorFieldMode) ?? vectorFieldMode
+        vectorFieldDirection =
+            try container.decodeIfPresent(SIMD3<Float>.self, forKey: .vectorFieldDirection) ?? vectorFieldDirection
+        vectorFieldStrength =
+            try container.decodeIfPresent(Float.self, forKey: .vectorFieldStrength) ?? vectorFieldStrength
+        vectorFieldScale = try container.decodeIfPresent(Float.self, forKey: .vectorFieldScale) ?? vectorFieldScale
+        vectorFieldScrollSpeed =
+            try container.decodeIfPresent(Float.self, forKey: .vectorFieldScrollSpeed) ?? vectorFieldScrollSpeed
+    }
+
+    mutating func normalize() {
+        noiseStrength = max(0, noiseStrength)
+        noiseScale = max(0.0001, noiseScale)
+        noiseSpeed = max(0, noiseSpeed)
+        forceRadius = max(0, forceRadius)
+        forceFalloff = max(0, forceFalloff)
+        vectorFieldScale = max(0.0001, vectorFieldScale)
+        vectorFieldScrollSpeed = max(0, vectorFieldScrollSpeed)
     }
 }
 
 public struct ParticleCollisionModule: Codable, Sendable, Equatable {
-    public var collisionMode: ParticleCollisionMode
-    public var collisionPlaneY: Float
-    public var collisionRestitution: Float
-    public var collisionDamping: Float
+    public var collisionMode: ParticleCollisionMode = .none
+    public var collisionPlaneY: Float = 0
+    public var collisionRestitution: Float = 0.5
+    public var collisionDamping: Float = 0
 
-    public init(_ emitter: ParticleEmitter) {
-        self.collisionMode = emitter.collisionMode
-        self.collisionPlaneY = emitter.collisionPlaneY
-        self.collisionRestitution = emitter.collisionRestitution
-        self.collisionDamping = emitter.collisionDamping
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case collisionMode
+        case collisionPlaneY
+        case collisionRestitution
+        case collisionDamping
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        collisionMode =
+            try container.decodeIfPresent(ParticleCollisionMode.self, forKey: .collisionMode) ?? collisionMode
+        collisionPlaneY = try container.decodeIfPresent(Float.self, forKey: .collisionPlaneY) ?? collisionPlaneY
+        collisionRestitution =
+            try container.decodeIfPresent(Float.self, forKey: .collisionRestitution) ?? collisionRestitution
+        collisionDamping = try container.decodeIfPresent(Float.self, forKey: .collisionDamping) ?? collisionDamping
+    }
+
+    mutating func normalize() {
+        collisionRestitution = simd_clamp(collisionRestitution, 0, 1)
+        collisionDamping = simd_clamp(collisionDamping, 0, 1)
     }
 }
 
 public struct ParticleAppearanceModule: Codable, Sendable, Equatable {
-    public var lifetime: Float
-    public var lifetimeRandomness: Float
-    public var startSize: Float
-    public var endSize: Float
-    public var sizeRandomness: Float
-    public var startRotation: Float
-    public var rotationRandomness: Float
-    public var angularVelocity: Float
-    public var angularVelocityRandomness: Float
-    public var sizeCurve: ParticleCurve
-    public var startColor: SIMD4<Float>
-    public var endColor: SIMD4<Float>
-    public var colorCurve: ParticleCurve
-    public var blendMode: ParticleBlendMode
+    public var lifetime: Float = 2
+    public var lifetimeRandomness: Float = 0
+    public var startSize: Float = 1
+    public var endSize: Float = 0
+    public var sizeRandomness: Float = 0
+    public var startRotation: Float = 0
+    public var rotationRandomness: Float = 0
+    public var angularVelocity: Float = 0
+    public var angularVelocityRandomness: Float = 0
+    public var sizeCurve: ParticleCurve = .linear
+    public var startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)
+    public var endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0)
+    public var colorCurve: ParticleCurve = .linear
+    public var blendMode: ParticleBlendMode = .alpha
 
-    public init(_ emitter: ParticleEmitter) {
-        self.lifetime = emitter.lifetime
-        self.lifetimeRandomness = emitter.lifetimeRandomness
-        self.startSize = emitter.startSize
-        self.endSize = emitter.endSize
-        self.sizeRandomness = emitter.sizeRandomness
-        self.startRotation = emitter.startRotation
-        self.rotationRandomness = emitter.rotationRandomness
-        self.angularVelocity = emitter.angularVelocity
-        self.angularVelocityRandomness = emitter.angularVelocityRandomness
-        self.sizeCurve = emitter.sizeCurve
-        self.startColor = emitter.startColor
-        self.endColor = emitter.endColor
-        self.colorCurve = emitter.colorCurve
-        self.blendMode = emitter.blendMode
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case lifetime
+        case lifetimeRandomness
+        case startSize
+        case endSize
+        case sizeRandomness
+        case startRotation
+        case rotationRandomness
+        case angularVelocity
+        case angularVelocityRandomness
+        case sizeCurve
+        case startColor
+        case endColor
+        case colorCurve
+        case blendMode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lifetime = try container.decodeIfPresent(Float.self, forKey: .lifetime) ?? lifetime
+        lifetimeRandomness =
+            try container.decodeIfPresent(Float.self, forKey: .lifetimeRandomness) ?? lifetimeRandomness
+        startSize = try container.decodeIfPresent(Float.self, forKey: .startSize) ?? startSize
+        endSize = try container.decodeIfPresent(Float.self, forKey: .endSize) ?? endSize
+        sizeRandomness = try container.decodeIfPresent(Float.self, forKey: .sizeRandomness) ?? sizeRandomness
+        startRotation = try container.decodeIfPresent(Float.self, forKey: .startRotation) ?? startRotation
+        rotationRandomness =
+            try container.decodeIfPresent(Float.self, forKey: .rotationRandomness) ?? rotationRandomness
+        angularVelocity = try container.decodeIfPresent(Float.self, forKey: .angularVelocity) ?? angularVelocity
+        angularVelocityRandomness =
+            try container.decodeIfPresent(Float.self, forKey: .angularVelocityRandomness) ?? angularVelocityRandomness
+        sizeCurve = try container.decodeIfPresent(ParticleCurve.self, forKey: .sizeCurve) ?? sizeCurve
+        startColor = try container.decodeIfPresent(SIMD4<Float>.self, forKey: .startColor) ?? startColor
+        endColor = try container.decodeIfPresent(SIMD4<Float>.self, forKey: .endColor) ?? endColor
+        colorCurve = try container.decodeIfPresent(ParticleCurve.self, forKey: .colorCurve) ?? colorCurve
+        blendMode = try container.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? blendMode
+    }
+
+    mutating func normalize() {
+        lifetime = max(0, lifetime)
+        lifetimeRandomness = max(0, lifetimeRandomness)
+        sizeRandomness = max(0, sizeRandomness)
+        rotationRandomness = max(0, rotationRandomness)
+        angularVelocityRandomness = max(0, angularVelocityRandomness)
     }
 }
 
 public struct ParticleTextureSheetModule: Codable, Sendable, Equatable {
-    public var textureAssetID: String?
-    public var texturePath: String?
-    public var columns: Int
-    public var rows: Int
-    public var frameCount: Int
-    public var frameRate: Float
-    public var playbackMode: ParticleTextureSheetPlaybackMode
-    public var startFrame: Int
-    public var frameRandomness: Int
+    public var textureAssetID: String? = nil
+    public var texturePath: String? = nil
+    public var columns: Int = 1
+    public var rows: Int = 1
+    public var frameCount: Int = 1
+    public var frameRate: Float = 0
+    public var playbackMode: ParticleTextureSheetPlaybackMode = .automatic
+    public var startFrame: Int = 0
+    public var frameRandomness: Int = 0
 
-    public init(_ emitter: ParticleEmitter) {
-        self.textureAssetID = emitter.textureAssetID
-        self.texturePath = emitter.texturePath
-        self.columns = emitter.textureSheetColumns
-        self.rows = emitter.textureSheetRows
-        self.frameCount = emitter.textureSheetFrameCount
-        self.frameRate = emitter.textureSheetFrameRate
-        self.playbackMode = emitter.textureSheetPlaybackMode
-        self.startFrame = emitter.textureSheetStartFrame
-        self.frameRandomness = emitter.textureSheetFrameRandomness
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case textureAssetID
+        case texturePath
+        case columns
+        case rows
+        case frameCount
+        case frameRate
+        case playbackMode
+        case startFrame
+        case frameRandomness
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        textureAssetID = try container.decodeIfPresent(String.self, forKey: .textureAssetID)
+        texturePath = try container.decodeIfPresent(String.self, forKey: .texturePath)
+        columns = try container.decodeIfPresent(Int.self, forKey: .columns) ?? columns
+        rows = try container.decodeIfPresent(Int.self, forKey: .rows) ?? rows
+        frameCount = try container.decodeIfPresent(Int.self, forKey: .frameCount) ?? frameCount
+        frameRate = try container.decodeIfPresent(Float.self, forKey: .frameRate) ?? frameRate
+        playbackMode =
+            try container.decodeIfPresent(ParticleTextureSheetPlaybackMode.self, forKey: .playbackMode) ?? playbackMode
+        startFrame = try container.decodeIfPresent(Int.self, forKey: .startFrame) ?? startFrame
+        frameRandomness = try container.decodeIfPresent(Int.self, forKey: .frameRandomness) ?? frameRandomness
+    }
+
+    mutating func normalize() {
+        textureAssetID = textureAssetID?.isEmpty == true ? nil : textureAssetID
+        texturePath = texturePath?.isEmpty == true ? nil : texturePath
+        columns = max(1, columns)
+        rows = max(1, rows)
+        frameCount = max(1, frameCount)
+        frameRate = max(0, frameRate)
+        startFrame = max(0, startFrame)
+        frameRandomness = max(0, frameRandomness)
     }
 }
 
 public struct ParticleRendererModule: Codable, Sendable, Equatable {
-    public var renderMode: ParticleRenderMode
-    public var sortMode: ParticleSortMode
-    public var renderSortPriority: Int
-    public var renderAlignment: ParticleRenderAlignment
-    public var velocityStretchScale: Float
-    public var velocityStretchMax: Float
-    public var maxRenderDistance: Float
-    public var renderDistanceFadeRange: Float
-    public var renderLODStartDistance: Float
-    public var renderLODEndDistance: Float
-    public var renderLODMinParticleScale: Float
-    public var renderBoundsMode: ParticleRenderBoundsMode
-    public var renderBoundsRadius: Float
+    public var renderMode: ParticleRenderMode = .billboard
+    public var sortMode: ParticleSortMode = .distanceDescending
+    public var renderSortPriority: Int = 0
+    public var renderAlignment: ParticleRenderAlignment = .billboard
+    public var velocityStretchScale: Float = 0
+    public var velocityStretchMax: Float = 8
+    public var maxRenderDistance: Float = 0
+    public var renderDistanceFadeRange: Float = 0
+    public var renderLODStartDistance: Float = 0
+    public var renderLODEndDistance: Float = 0
+    public var renderLODMinParticleScale: Float = 1
+    public var renderBoundsMode: ParticleRenderBoundsMode = .disabled
+    public var renderBoundsRadius: Float = 0
 
-    public init(_ emitter: ParticleEmitter) {
-        self.renderMode = emitter.renderMode
-        self.sortMode = emitter.sortMode
-        self.renderSortPriority = emitter.renderSortPriority
-        self.renderAlignment = emitter.renderAlignment
-        self.velocityStretchScale = emitter.velocityStretchScale
-        self.velocityStretchMax = emitter.velocityStretchMax
-        self.maxRenderDistance = emitter.maxRenderDistance
-        self.renderDistanceFadeRange = emitter.renderDistanceFadeRange
-        self.renderLODStartDistance = emitter.renderLODStartDistance
-        self.renderLODEndDistance = emitter.renderLODEndDistance
-        self.renderLODMinParticleScale = emitter.renderLODMinParticleScale
-        self.renderBoundsMode = emitter.renderBoundsMode
-        self.renderBoundsRadius = emitter.renderBoundsRadius
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -650,93 +800,225 @@ public struct ParticleRendererModule: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        renderMode = try container.decodeIfPresent(ParticleRenderMode.self, forKey: .renderMode) ?? .billboard
-        sortMode = try container.decodeIfPresent(ParticleSortMode.self, forKey: .sortMode) ?? .distanceDescending
-        renderSortPriority = try container.decodeIfPresent(Int.self, forKey: .renderSortPriority) ?? 0
-        renderAlignment = try container.decodeIfPresent(ParticleRenderAlignment.self, forKey: .renderAlignment) ?? .billboard
-        velocityStretchScale = try container.decodeIfPresent(Float.self, forKey: .velocityStretchScale) ?? 0
-        velocityStretchMax = try container.decodeIfPresent(Float.self, forKey: .velocityStretchMax) ?? 8
-        maxRenderDistance = try container.decodeIfPresent(Float.self, forKey: .maxRenderDistance) ?? 0
-        renderDistanceFadeRange = try container.decodeIfPresent(Float.self, forKey: .renderDistanceFadeRange) ?? 0
-        renderLODStartDistance = try container.decodeIfPresent(Float.self, forKey: .renderLODStartDistance) ?? 0
-        renderLODEndDistance = try container.decodeIfPresent(Float.self, forKey: .renderLODEndDistance) ?? 0
-        renderLODMinParticleScale = try container.decodeIfPresent(Float.self, forKey: .renderLODMinParticleScale) ?? 1
-        renderBoundsMode = try container.decodeIfPresent(ParticleRenderBoundsMode.self, forKey: .renderBoundsMode) ?? .disabled
-        renderBoundsRadius = try container.decodeIfPresent(Float.self, forKey: .renderBoundsRadius) ?? 0
+        renderMode = try container.decodeIfPresent(ParticleRenderMode.self, forKey: .renderMode) ?? renderMode
+        sortMode = try container.decodeIfPresent(ParticleSortMode.self, forKey: .sortMode) ?? sortMode
+        renderSortPriority = try container.decodeIfPresent(Int.self, forKey: .renderSortPriority) ?? renderSortPriority
+        renderAlignment =
+            try container.decodeIfPresent(ParticleRenderAlignment.self, forKey: .renderAlignment) ?? renderAlignment
+        velocityStretchScale =
+            try container.decodeIfPresent(Float.self, forKey: .velocityStretchScale) ?? velocityStretchScale
+        velocityStretchMax =
+            try container.decodeIfPresent(Float.self, forKey: .velocityStretchMax) ?? velocityStretchMax
+        maxRenderDistance = try container.decodeIfPresent(Float.self, forKey: .maxRenderDistance) ?? maxRenderDistance
+        renderDistanceFadeRange =
+            try container.decodeIfPresent(Float.self, forKey: .renderDistanceFadeRange) ?? renderDistanceFadeRange
+        renderLODStartDistance =
+            try container.decodeIfPresent(Float.self, forKey: .renderLODStartDistance) ?? renderLODStartDistance
+        renderLODEndDistance =
+            try container.decodeIfPresent(Float.self, forKey: .renderLODEndDistance) ?? renderLODEndDistance
+        renderLODMinParticleScale =
+            try container.decodeIfPresent(Float.self, forKey: .renderLODMinParticleScale) ?? renderLODMinParticleScale
+        renderBoundsMode =
+            try container.decodeIfPresent(ParticleRenderBoundsMode.self, forKey: .renderBoundsMode) ?? renderBoundsMode
+        renderBoundsRadius =
+            try container.decodeIfPresent(Float.self, forKey: .renderBoundsRadius) ?? renderBoundsRadius
+    }
+
+    mutating func normalize() {
+        velocityStretchScale = max(0, velocityStretchScale)
+        velocityStretchMax = max(1, velocityStretchMax)
+        maxRenderDistance = max(0, maxRenderDistance)
+        renderDistanceFadeRange = max(0, renderDistanceFadeRange)
+        renderLODStartDistance = max(0, renderLODStartDistance)
+        renderLODEndDistance = max(0, renderLODEndDistance)
+        renderLODMinParticleScale = simd_clamp(renderLODMinParticleScale, 0, 1)
+        renderBoundsRadius = max(0, renderBoundsRadius)
     }
 }
 
 public struct ParticleTrailsModule: Codable, Sendable, Equatable {
-    public var ribbonWidthScale: Float
-    public var ribbonTailWidthScale: Float
-    public var ribbonTailAlphaScale: Float
-    public var ribbonMaxSegmentLength: Float
-    public var ribbonJoinOverlapScale: Float
-    public var ribbonSmoothingSegments: Int
-    public var ribbonTextureTiling: Float
-    public var ribbonTextureOffset: Float
-    public var trailLength: Float
-    public var trailSegments: Int
-    public var trailEndSizeScale: Float
-    public var trailEndAlphaScale: Float
+    public var ribbonWidthScale: Float = 1
+    public var ribbonTailWidthScale: Float = 1
+    public var ribbonTailAlphaScale: Float = 1
+    public var ribbonMaxSegmentLength: Float = 0
+    public var ribbonJoinOverlapScale: Float = 0
+    public var ribbonSmoothingSegments: Int = 1
+    public var ribbonTextureTiling: Float = 0
+    public var ribbonTextureOffset: Float = 0
+    public var trailLength: Float = 0
+    public var trailSegments: Int = 0
+    public var trailEndSizeScale: Float = 0.5
+    public var trailEndAlphaScale: Float = 0
 
-    public init(_ emitter: ParticleEmitter) {
-        self.ribbonWidthScale = emitter.ribbonWidthScale
-        self.ribbonTailWidthScale = emitter.ribbonTailWidthScale
-        self.ribbonTailAlphaScale = emitter.ribbonTailAlphaScale
-        self.ribbonMaxSegmentLength = emitter.ribbonMaxSegmentLength
-        self.ribbonJoinOverlapScale = emitter.ribbonJoinOverlapScale
-        self.ribbonSmoothingSegments = emitter.ribbonSmoothingSegments
-        self.ribbonTextureTiling = emitter.ribbonTextureTiling
-        self.ribbonTextureOffset = emitter.ribbonTextureOffset
-        self.trailLength = emitter.trailLength
-        self.trailSegments = emitter.trailSegments
-        self.trailEndSizeScale = emitter.trailEndSizeScale
-        self.trailEndAlphaScale = emitter.trailEndAlphaScale
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case ribbonWidthScale
+        case ribbonTailWidthScale
+        case ribbonTailAlphaScale
+        case ribbonMaxSegmentLength
+        case ribbonJoinOverlapScale
+        case ribbonSmoothingSegments
+        case ribbonTextureTiling
+        case ribbonTextureOffset
+        case trailLength
+        case trailSegments
+        case trailEndSizeScale
+        case trailEndAlphaScale
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ribbonWidthScale = try container.decodeIfPresent(Float.self, forKey: .ribbonWidthScale) ?? ribbonWidthScale
+        ribbonTailWidthScale =
+            try container.decodeIfPresent(Float.self, forKey: .ribbonTailWidthScale) ?? ribbonTailWidthScale
+        ribbonTailAlphaScale =
+            try container.decodeIfPresent(Float.self, forKey: .ribbonTailAlphaScale) ?? ribbonTailAlphaScale
+        ribbonMaxSegmentLength =
+            try container.decodeIfPresent(Float.self, forKey: .ribbonMaxSegmentLength) ?? ribbonMaxSegmentLength
+        ribbonJoinOverlapScale =
+            try container.decodeIfPresent(Float.self, forKey: .ribbonJoinOverlapScale) ?? ribbonJoinOverlapScale
+        ribbonSmoothingSegments =
+            try container.decodeIfPresent(Int.self, forKey: .ribbonSmoothingSegments) ?? ribbonSmoothingSegments
+        ribbonTextureTiling =
+            try container.decodeIfPresent(Float.self, forKey: .ribbonTextureTiling) ?? ribbonTextureTiling
+        ribbonTextureOffset =
+            try container.decodeIfPresent(Float.self, forKey: .ribbonTextureOffset) ?? ribbonTextureOffset
+        trailLength = try container.decodeIfPresent(Float.self, forKey: .trailLength) ?? trailLength
+        trailSegments = try container.decodeIfPresent(Int.self, forKey: .trailSegments) ?? trailSegments
+        trailEndSizeScale = try container.decodeIfPresent(Float.self, forKey: .trailEndSizeScale) ?? trailEndSizeScale
+        trailEndAlphaScale =
+            try container.decodeIfPresent(Float.self, forKey: .trailEndAlphaScale) ?? trailEndAlphaScale
+    }
+
+    mutating func normalize() {
+        ribbonWidthScale = max(0, ribbonWidthScale)
+        ribbonTailWidthScale = max(0, ribbonTailWidthScale)
+        ribbonTailAlphaScale = simd_clamp(ribbonTailAlphaScale, 0, 1)
+        ribbonMaxSegmentLength = max(0, ribbonMaxSegmentLength)
+        ribbonJoinOverlapScale = max(0, ribbonJoinOverlapScale)
+        ribbonSmoothingSegments = min(16, max(1, ribbonSmoothingSegments))
+        ribbonTextureTiling = max(0, ribbonTextureTiling)
+        trailLength = max(0, trailLength)
+        trailSegments = max(0, trailSegments)
+        trailEndSizeScale = max(0, trailEndSizeScale)
+        trailEndAlphaScale = simd_clamp(trailEndAlphaScale, 0, 1)
     }
 }
 
 public struct ParticleSubEmittersModule: Codable, Sendable, Equatable {
-    public var legacyTrigger: ParticleSubEmitterTrigger
-    public var legacyBurstCount: Int
-    public var legacyProbability: Float
-    public var legacyMaxDepth: Int
-    public var legacyInheritVelocity: Float
-    public var legacyLifetime: Float
-    public var legacyStartVelocity: SIMD3<Float>
-    public var legacyVelocityRandomness: SIMD3<Float>
-    public var legacyStartSize: Float
-    public var legacyEndSize: Float
-    public var legacyStartColor: SIMD4<Float>
-    public var legacyEndColor: SIMD4<Float>
-    public var rules: [ParticleSubEmitter]
+    public var legacyTrigger: ParticleSubEmitterTrigger = .none
+    public var legacyBurstCount: Int = 0
+    public var legacyProbability: Float = 1
+    public var legacyMaxDepth: Int = 1
+    public var legacyInheritVelocity: Float = 0
+    public var legacyLifetime: Float = 0.5
+    public var legacyStartVelocity: SIMD3<Float> = .zero
+    public var legacyVelocityRandomness: SIMD3<Float> = .zero
+    public var legacyStartSize: Float = 0.25
+    public var legacyEndSize: Float = 0
+    public var legacyStartColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)
+    public var legacyEndColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0)
+    public var rules: [ParticleSubEmitter] = []
 
-    public init(_ emitter: ParticleEmitter) {
-        self.legacyTrigger = emitter.subEmitterTrigger
-        self.legacyBurstCount = emitter.subEmitterBurstCount
-        self.legacyProbability = emitter.subEmitterProbability
-        self.legacyMaxDepth = emitter.subEmitterMaxDepth
-        self.legacyInheritVelocity = emitter.subEmitterInheritVelocity
-        self.legacyLifetime = emitter.subEmitterLifetime
-        self.legacyStartVelocity = emitter.subEmitterStartVelocity
-        self.legacyVelocityRandomness = emitter.subEmitterVelocityRandomness
-        self.legacyStartSize = emitter.subEmitterStartSize
-        self.legacyEndSize = emitter.subEmitterEndSize
-        self.legacyStartColor = emitter.subEmitterStartColor
-        self.legacyEndColor = emitter.subEmitterEndColor
-        self.rules = emitter.subEmitters
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case legacyTrigger
+        case legacyBurstCount
+        case legacyProbability
+        case legacyMaxDepth
+        case legacyInheritVelocity
+        case legacyLifetime
+        case legacyStartVelocity
+        case legacyVelocityRandomness
+        case legacyStartSize
+        case legacyEndSize
+        case legacyStartColor
+        case legacyEndColor
+        case rules
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        legacyTrigger =
+            try container.decodeIfPresent(ParticleSubEmitterTrigger.self, forKey: .legacyTrigger) ?? legacyTrigger
+        legacyBurstCount = try container.decodeIfPresent(Int.self, forKey: .legacyBurstCount) ?? legacyBurstCount
+        legacyProbability = try container.decodeIfPresent(Float.self, forKey: .legacyProbability) ?? legacyProbability
+        legacyMaxDepth = try container.decodeIfPresent(Int.self, forKey: .legacyMaxDepth) ?? legacyMaxDepth
+        legacyInheritVelocity =
+            try container.decodeIfPresent(Float.self, forKey: .legacyInheritVelocity) ?? legacyInheritVelocity
+        legacyLifetime = try container.decodeIfPresent(Float.self, forKey: .legacyLifetime) ?? legacyLifetime
+        legacyStartVelocity =
+            try container.decodeIfPresent(SIMD3<Float>.self, forKey: .legacyStartVelocity) ?? legacyStartVelocity
+        legacyVelocityRandomness =
+            try container.decodeIfPresent(SIMD3<Float>.self, forKey: .legacyVelocityRandomness)
+            ?? legacyVelocityRandomness
+        legacyStartSize = try container.decodeIfPresent(Float.self, forKey: .legacyStartSize) ?? legacyStartSize
+        legacyEndSize = try container.decodeIfPresent(Float.self, forKey: .legacyEndSize) ?? legacyEndSize
+        legacyStartColor =
+            try container.decodeIfPresent(SIMD4<Float>.self, forKey: .legacyStartColor) ?? legacyStartColor
+        legacyEndColor = try container.decodeIfPresent(SIMD4<Float>.self, forKey: .legacyEndColor) ?? legacyEndColor
+        rules = try container.decodeIfPresent([ParticleSubEmitter].self, forKey: .rules) ?? rules
+    }
+
+    mutating func normalize() {
+        legacyBurstCount = max(0, legacyBurstCount)
+        legacyProbability = simd_clamp(legacyProbability, 0, 1)
+        legacyMaxDepth = max(0, legacyMaxDepth)
+        legacyInheritVelocity = max(0, legacyInheritVelocity)
+        legacyLifetime = max(0.0001, legacyLifetime)
+        legacyStartSize = max(0, legacyStartSize)
+        legacyEndSize = max(0, legacyEndSize)
+        rules = rules.map {
+            ParticleSubEmitter(
+                trigger: $0.trigger,
+                burstCount: $0.burstCount,
+                probability: $0.probability,
+                maxDepth: $0.maxDepth,
+                inheritVelocity: $0.inheritVelocity,
+                lifetime: $0.lifetime,
+                startVelocity: $0.startVelocity,
+                velocityRandomness: $0.velocityRandomness,
+                startSize: $0.startSize,
+                endSize: $0.endSize,
+                startColor: $0.startColor,
+                endColor: $0.endColor)
+        }
     }
 }
 
 public struct ParticleGPUSimulationModule: Codable, Sendable, Equatable {
-    public var simulationSpace: ParticleSimulationSpace
-    public var simulationBackend: ParticleSimulationBackend
-    public var workgroupSize: Int
+    public var simulationSpace: ParticleSimulationSpace = .local
+    public var simulationBackend: ParticleSimulationBackend = .cpu
+    public var workgroupSize: Int = 64
 
-    public init(_ emitter: ParticleEmitter) {
-        self.simulationSpace = emitter.simulationSpace
-        self.simulationBackend = emitter.simulationBackend
-        self.workgroupSize = emitter.gpuSimulationWorkgroupSize
+    public init(_ configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case simulationSpace
+        case simulationBackend
+        case workgroupSize
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        simulationSpace =
+            try container.decodeIfPresent(ParticleSimulationSpace.self, forKey: .simulationSpace) ?? simulationSpace
+        simulationBackend =
+            try container.decodeIfPresent(ParticleSimulationBackend.self, forKey: .simulationBackend)
+            ?? simulationBackend
+        workgroupSize = try container.decodeIfPresent(Int.self, forKey: .workgroupSize) ?? workgroupSize
+    }
+
+    mutating func normalize() {
+        workgroupSize = max(1, workgroupSize)
     }
 }
 
@@ -1325,146 +1607,44 @@ public extension ParticleEmitter {
     mutating func apply(_ moduleStack: ParticleModuleStack) {
         for module in moduleStack.modules where module.isEnabled {
             switch module.settings {
-            case let .emission(settings):
-                isEmitting = settings.isEmitting
-                looping = settings.looping
-                duration = max(0, settings.duration)
-                simulationSpeed = max(0, settings.simulationSpeed)
-                prewarmTime = max(0, settings.prewarmTime)
-                prewarmStep = max(1.0 / 240.0, settings.prewarmStep)
-                emissionRate = max(0, settings.emissionRate)
-                emissionRateCurve = settings.emissionRateCurve
-                distanceEmissionRate = max(0, settings.distanceEmissionRate)
-                distanceEmissionRateCurve = settings.distanceEmissionRateCurve
-                burstCount = max(0, settings.burstCount)
-                burstInterval = max(0, settings.burstInterval)
-                maxParticles = max(0, settings.maxParticles)
-                maxSpawnedParticlesPerFrame = max(0, settings.maxSpawnedParticlesPerFrame)
-                maxRenderedParticles = max(0, settings.maxRenderedParticles)
-                if seed != settings.seed {
-                    reseed(settings.seed)
+            case let .emission(moduleSettings):
+                if settings.emission.seed != moduleSettings.seed {
+                    reseed(moduleSettings.seed)
                 }
-            case let .shape(settings):
-                originOffset = settings.originOffset
-                spawnRadius = max(0, settings.spawnRadius)
-                emissionShape = settings.emissionShape
-                boxHalfExtents = SIMD3<Float>(
-                    max(0, settings.boxHalfExtents.x),
-                    max(0, settings.boxHalfExtents.y),
-                    max(0, settings.boxHalfExtents.z)
-                )
-                coneRadius = max(0, settings.coneRadius)
-                coneHeight = max(0, settings.coneHeight)
-            case let .velocity(settings):
-                startVelocity = settings.startVelocity
-                velocityRandomness = settings.velocityRandomness
-                velocityInheritance = max(0, settings.velocityInheritance)
-            case let .forces(settings):
-                gravity = settings.gravity
-                noiseStrength = max(0, settings.noiseStrength)
-                noiseScale = max(0.0001, settings.noiseScale)
-                noiseSpeed = max(0, settings.noiseSpeed)
-                forceMode = settings.forceMode
-                forceCenter = settings.forceCenter
-                forceAxis = settings.forceAxis
-                forceRadius = max(0, settings.forceRadius)
-                forceStrength = settings.forceStrength
-                forceFalloff = max(0, settings.forceFalloff)
-                vectorFieldMode = settings.vectorFieldMode
-                vectorFieldDirection = settings.vectorFieldDirection
-                vectorFieldStrength = settings.vectorFieldStrength
-                vectorFieldScale = max(0.0001, settings.vectorFieldScale)
-                vectorFieldScrollSpeed = max(0, settings.vectorFieldScrollSpeed)
-            case let .collision(settings):
-                collisionMode = settings.collisionMode
-                collisionPlaneY = settings.collisionPlaneY
-                collisionRestitution = simd_clamp(settings.collisionRestitution, 0, 1)
-                collisionDamping = simd_clamp(settings.collisionDamping, 0, 1)
-            case let .appearance(settings):
-                lifetime = max(0, settings.lifetime)
-                lifetimeRandomness = max(0, settings.lifetimeRandomness)
-                startSize = settings.startSize
-                endSize = settings.endSize
-                sizeRandomness = max(0, settings.sizeRandomness)
-                startRotation = settings.startRotation
-                rotationRandomness = max(0, settings.rotationRandomness)
-                angularVelocity = settings.angularVelocity
-                angularVelocityRandomness = max(0, settings.angularVelocityRandomness)
-                sizeCurve = settings.sizeCurve
-                startColor = settings.startColor
-                endColor = settings.endColor
-                colorCurve = settings.colorCurve
-                blendMode = settings.blendMode
-            case let .textureSheet(settings):
-                textureAssetID = settings.textureAssetID?.isEmpty == true ? nil : settings.textureAssetID
-                texturePath = settings.texturePath?.isEmpty == true ? nil : settings.texturePath
-                textureSheetColumns = max(1, settings.columns)
-                textureSheetRows = max(1, settings.rows)
-                textureSheetFrameCount = max(1, settings.frameCount)
-                textureSheetFrameRate = max(0, settings.frameRate)
-                textureSheetPlaybackMode = settings.playbackMode
-                textureSheetStartFrame = max(0, settings.startFrame)
-                textureSheetFrameRandomness = max(0, settings.frameRandomness)
-            case let .renderer(settings):
-                renderMode = settings.renderMode
-                sortMode = settings.sortMode
-                renderSortPriority = settings.renderSortPriority
-                renderAlignment = settings.renderAlignment
-                velocityStretchScale = max(0, settings.velocityStretchScale)
-                velocityStretchMax = max(1, settings.velocityStretchMax)
-                maxRenderDistance = max(0, settings.maxRenderDistance)
-                renderDistanceFadeRange = max(0, settings.renderDistanceFadeRange)
-                renderLODStartDistance = max(0, settings.renderLODStartDistance)
-                renderLODEndDistance = max(0, settings.renderLODEndDistance)
-                renderLODMinParticleScale = simd_clamp(settings.renderLODMinParticleScale, 0, 1)
-                renderBoundsMode = settings.renderBoundsMode
-                renderBoundsRadius = max(0, settings.renderBoundsRadius)
-            case let .trails(settings):
-                ribbonWidthScale = max(0, settings.ribbonWidthScale)
-                ribbonTailWidthScale = max(0, settings.ribbonTailWidthScale)
-                ribbonTailAlphaScale = simd_clamp(settings.ribbonTailAlphaScale, 0, 1)
-                ribbonMaxSegmentLength = max(0, settings.ribbonMaxSegmentLength)
-                ribbonJoinOverlapScale = max(0, settings.ribbonJoinOverlapScale)
-                ribbonSmoothingSegments = min(16, max(1, settings.ribbonSmoothingSegments))
-                ribbonTextureTiling = max(0, settings.ribbonTextureTiling)
-                ribbonTextureOffset = settings.ribbonTextureOffset
-                trailLength = max(0, settings.trailLength)
-                trailSegments = max(0, settings.trailSegments)
-                trailEndSizeScale = max(0, settings.trailEndSizeScale)
-                trailEndAlphaScale = simd_clamp(settings.trailEndAlphaScale, 0, 1)
-            case let .subEmitters(settings):
-                subEmitterTrigger = settings.legacyTrigger
-                subEmitterBurstCount = max(0, settings.legacyBurstCount)
-                subEmitterProbability = simd_clamp(settings.legacyProbability, 0, 1)
-                subEmitterMaxDepth = max(0, settings.legacyMaxDepth)
-                subEmitterInheritVelocity = max(0, settings.legacyInheritVelocity)
-                subEmitterLifetime = max(0.0001, settings.legacyLifetime)
-                subEmitterStartVelocity = settings.legacyStartVelocity
-                subEmitterVelocityRandomness = settings.legacyVelocityRandomness
-                subEmitterStartSize = max(0, settings.legacyStartSize)
-                subEmitterEndSize = max(0, settings.legacyEndSize)
-                subEmitterStartColor = settings.legacyStartColor
-                subEmitterEndColor = settings.legacyEndColor
-                subEmitters = settings.rules.map {
-                    ParticleSubEmitter(trigger: $0.trigger,
-                                       burstCount: $0.burstCount,
-                                       probability: $0.probability,
-                                       maxDepth: $0.maxDepth,
-                                       inheritVelocity: $0.inheritVelocity,
-                                       lifetime: $0.lifetime,
-                                       startVelocity: $0.startVelocity,
-                                       velocityRandomness: $0.velocityRandomness,
-                                       startSize: $0.startSize,
-                                       endSize: $0.endSize,
-                                       startColor: $0.startColor,
-                                       endColor: $0.endColor)
-                }
-            case let .gpuSimulation(settings):
-                simulationSpace = settings.simulationSpace
-                simulationBackend = settings.simulationBackend
-                gpuSimulationWorkgroupSize = max(1, settings.workgroupSize)
+                settings.emission = moduleSettings
+                settings.emission.normalize()
+            case let .shape(moduleSettings):
+                settings.shape = moduleSettings
+                settings.shape.normalize()
+            case let .velocity(moduleSettings):
+                settings.velocity = moduleSettings
+                settings.velocity.normalize()
+            case let .forces(moduleSettings):
+                settings.forces = moduleSettings
+                settings.forces.normalize()
+            case let .collision(moduleSettings):
+                settings.collision = moduleSettings
+                settings.collision.normalize()
+            case let .appearance(moduleSettings):
+                settings.appearance = moduleSettings
+                settings.appearance.normalize()
+            case let .textureSheet(moduleSettings):
+                settings.textureSheet = moduleSettings
+                settings.textureSheet.normalize()
+            case let .renderer(moduleSettings):
+                settings.renderer = moduleSettings
+                settings.renderer.normalize()
+            case let .trails(moduleSettings):
+                settings.trails = moduleSettings
+                settings.trails.normalize()
+            case let .subEmitters(moduleSettings):
+                settings.subEmitters = moduleSettings
+                settings.subEmitters.normalize()
+            case let .gpuSimulation(moduleSettings):
+                settings.gpuSimulation = moduleSettings
+                settings.gpuSimulation.normalize()
             }
         }
-        authoredModuleStack = ParticleModuleStack(emitter: self, preserving: moduleStack)
+        authoredModuleStack = moduleStack
     }
 }

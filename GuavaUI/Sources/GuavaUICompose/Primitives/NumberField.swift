@@ -70,6 +70,7 @@ private struct _StatefulNumberField: View {
 
     @State var draft: String = ""
     @State var isEditing: Bool = false
+    @State var draftChanged: Bool = false
 
     var body: some View {
         let committed = field.mixedValueLabel == nil
@@ -78,7 +79,7 @@ private struct _StatefulNumberField: View {
             field.mixedValueLabel ?? "",
             text: Binding(
                 get: { isEditing ? draft : committed },
-                set: { draft = $0 }
+                set: { draft = $0; draftChanged = true }
             ),
             size: field.size,
             disabled: !field.isEnabled,
@@ -95,6 +96,7 @@ private struct _StatefulNumberField: View {
             onFocus: {
                 if !isEditing {
                     draft = committed
+                    draftChanged = false
                     isEditing = true
                 }
             },
@@ -133,6 +135,8 @@ private struct _StatefulNumberField: View {
     }
 
     private func commitDraft() {
+        guard draftChanged else { return }
+        draftChanged = false
         if let parsed = NumberField.parse(draft) {
             let next = normalized(parsed)
             if field.mixedValueLabel != nil || field.value.wrappedValue != next {
@@ -161,6 +165,7 @@ private struct _StatefulNumberField: View {
             field.value.wrappedValue = next
         }
         draft = NumberField.format(next, decimals: field.decimals)
+        draftChanged = false
     }
 
     private var resolvedStep: Float {

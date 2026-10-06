@@ -68,7 +68,7 @@ public final class GameProjectScriptLoader {
         }
         for (entry, factory) in factories {
             for identifier in [entry.identifier] + entry.legacyIdentifiers {
-                runtime.register(named: identifier, factory)
+                runtime.register(named: identifier, definition: loader.definition(scriptID: entry.identifier), factory)
             }
         }
         return manifest.entries

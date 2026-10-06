@@ -56,10 +56,12 @@ extension EditorApplication {
         do {
             let files = try dynamicScriptManager.scanScriptFiles()
             var options: [String: String] = [:]
+            var aliases: [String: String] = [:]
             for file in files {
                 options[file.identifier] = file.displayName
+                for alias in file.legacyIdentifiers { aliases[alias] = file.identifier }
             }
-            scene.setDynamicScriptOptions(options)
+            scene.setDynamicScriptOptions(options, aliases: aliases)
             store.dispatch(.forceUIRefresh)
             scriptWorkspace.markAllBuildsStarted()
 
@@ -103,7 +105,7 @@ extension EditorApplication {
             let report = scene.applyProjectScriptCatalog(catalog)
             store.dispatch(.forceUIRefresh)
             if let session {
-                let context = Self.workflowContext(for: store.state.workspaceMode,
+                let context = Self.workflowContext(for: store.state.workspace.mode,
                                                    scriptEntries: catalog.entries)
                 let previousTask = pendingAISetupTask
                 pendingAISetupTask = Task {

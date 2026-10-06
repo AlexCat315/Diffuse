@@ -141,19 +141,21 @@ struct SimulationThreadTests {
         var initialScene = SceneRuntime()
         let emitterEntity = initialScene.createEntity()
         _ = initialScene.setComponent(
-            ParticleEmitter(isEmitting: false,
-                            emissionRate: 0,
-                            maxParticles: 4,
-                            subEmitterTrigger: .death,
-                            subEmitterBurstCount: 1,
-                            subEmitterLifetime: 2,
-                            subEmitterStartVelocity: .zero,
-                            subEmitterVelocityRandomness: .zero,
-                            subEmitterStartSize: 0.5,
-                            subEmitterEndSize: 0.5,
-                            subEmitterStartColor: SIMD4<Float>(1, 0, 0, 1),
-                            subEmitterEndColor: SIMD4<Float>(1, 0, 0, 1),
-                            gravity: .zero),
+            ParticleEmitter(settings: .init {
+                $0.emission.isEmitting = false
+                $0.emission.emissionRate = 0
+                $0.emission.maxParticles = 4
+                $0.subEmitters.legacyTrigger = .death
+                $0.subEmitters.legacyBurstCount = 1
+                $0.subEmitters.legacyLifetime = 2
+                $0.subEmitters.legacyStartVelocity = .zero
+                $0.subEmitters.legacyVelocityRandomness = .zero
+                $0.subEmitters.legacyStartSize = 0.5
+                $0.subEmitters.legacyEndSize = 0.5
+                $0.subEmitters.legacyStartColor = SIMD4<Float>(1, 0, 0, 1)
+                $0.subEmitters.legacyEndColor = SIMD4<Float>(1, 0, 0, 1)
+                $0.forces.gravity = .zero
+            }),
             for: emitterEntity
         )
         let ring = RingBuffer<RenderPacket>()

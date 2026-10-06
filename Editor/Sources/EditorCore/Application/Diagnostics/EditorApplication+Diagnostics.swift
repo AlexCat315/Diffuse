@@ -44,7 +44,7 @@ extension EditorApplication {
     }
 
     public func currentFrameStats() -> EditorFrameStats {
-        store.state.frameStats
+        store.state.timing.frameStats
     }
 
     func makeParticleDiagnosticsSample() -> EditorParticleDiagnosticsSample {
@@ -52,10 +52,10 @@ extension EditorApplication {
         let eventReport = scene.currentParticleSimulationEventApplyReport()
         let renderSummary = scene.currentRenderScene().particleSummary
         let renderStats = engine.currentRenderStats()
-        let nextSampleIndex = (store.state.particleDiagnosticsHistory.last?.sampleIndex ?? 0) &+ 1
+        let nextSampleIndex = (store.state.timing.particleDiagnosticsHistory.last?.sampleIndex ?? 0) &+ 1
         return EditorParticleDiagnosticsSample(
             sampleIndex: nextSampleIndex,
-            frameIndex: store.state.frameIndex,
+            frameIndex: store.state.timing.frameIndex,
             simulatedDeltaTime: stats.simulatedDeltaTime,
             emitterCount: stats.emitterCount,
             activeEmitterCount: stats.activeEmitterCount,

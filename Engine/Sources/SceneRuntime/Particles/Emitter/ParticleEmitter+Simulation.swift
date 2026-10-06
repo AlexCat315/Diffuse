@@ -9,13 +9,13 @@ extension ParticleEmitter {
     /// emission controls. Non-looping emitters become inactive once `duration`
     /// is exhausted, even if `isEmitting` remains enabled for authoring.
     public var isEmissionActive: Bool {
-        guard isEmitting else { return false }
-        guard duration > 0 else { return true }
-        return looping || runtime.emitterAge < duration
+        guard settings.emission.isEmitting else { return false }
+        guard settings.emission.duration > 0 else { return true }
+        return settings.emission.looping || runtime.emitterAge < settings.emission.duration
     }
 
     public mutating func reseed(_ newSeed: UInt64) {
-        seed = newSeed
+        settings.emission.seed = newSeed
         runtime.rngState = newSeed
     }
 
@@ -31,7 +31,7 @@ extension ParticleEmitter {
                                  options: ParticleAdvanceOptions = .default) {
         guard deltaTime > 0 else { return }
         runPrewarmIfNeeded(worldTransform: worldTransform, options: options)
-        let scaledDeltaTime = Float(deltaTime) * max(0, simulationSpeed)
+        let scaledDeltaTime = Float(deltaTime) * max(0, settings.emission.simulationSpeed)
         guard scaledDeltaTime > 0 else {
             runtime.lastFrameSpawnedParticles.removeAll(keepingCapacity: true)
             runtime.lastFrameEvents.removeAll(keepingCapacity: true)
@@ -40,8 +40,8 @@ extension ParticleEmitter {
                 simulatedDeltaTime: 0,
                 startingLiveParticleCount: runtime.particles.count,
                 liveParticleCount: runtime.particles.count,
-                maxParticleCount: maxParticles,
-                liveParticleLimit: options.liveParticleLimit(configuredMaxParticles: maxParticles)
+                maxParticleCount: settings.emission.maxParticles,
+                liveParticleLimit: options.liveParticleLimit(configuredMaxParticles: settings.emission.maxParticles)
             )
             return
         }
@@ -54,14 +54,14 @@ extension ParticleEmitter {
         guard dt > 0 else { return }
         runtime.lastFrameSpawnedParticles.removeAll(keepingCapacity: true)
         runtime.lastFrameEvents.removeAll(keepingCapacity: true)
-        let liveParticleLimit = options.liveParticleLimit(configuredMaxParticles: maxParticles)
+        let liveParticleLimit = options.liveParticleLimit(configuredMaxParticles: settings.emission.maxParticles)
         var frameStats = ParticleEmitterFrameStats(
             simulatedDeltaTime: dt,
             startingLiveParticleCount: runtime.particles.count,
             liveParticleCount: runtime.particles.count,
-            maxParticleCount: maxParticles,
+            maxParticleCount: settings.emission.maxParticles,
             liveParticleLimit: liveParticleLimit,
-            spawnBudgetLimit: maxSpawnedParticlesPerFrame
+            spawnBudgetLimit: settings.emission.maxSpawnedParticlesPerFrame
         )
         let currentEmitterPosition = distanceEmitterPosition(worldTransform: worldTransform)
         let inheritedWorldVelocity = inheritedEmitterVelocity(
@@ -69,19 +69,19 @@ extension ParticleEmitter {
             to: currentEmitterPosition,
             deltaTime: dt
         )
-        let collisionContext = simulationSpace == .local
+        let collisionContext = settings.gpuSimulation.simulationSpace == .local
             ? makeCollisionContext(worldTransform: worldTransform)
             : nil
         let defersEventSubEmittersToExternalSimulation = hasEventSubEmitterRules
             && gpuSimulationPlan.usesGPU
-        var spawnBudget = ParticleSpawnBudget(limit: maxSpawnedParticlesPerFrame)
+        var spawnBudget = ParticleSpawnBudget(limit: settings.emission.maxSpawnedParticlesPerFrame)
 
         var survivors: [Particle] = []
         var eventParticles: [Particle] = []
         var eventSubEmitterSpawnResult = ParticleSpawnResult(requested: 0, spawned: 0)
         survivors.reserveCapacity(runtime.particles.count)
         for var p in runtime.particles {
-            p.velocity += gravity * dt
+            p.velocity += settings.forces.gravity * dt
             p.velocity += noiseForce(position: p.position, age: p.age) * dt
             p.velocity += forceAcceleration(position: p.position) * dt
             p.velocity += vectorFieldAcceleration(position: p.position, age: p.age) * dt
@@ -128,7 +128,7 @@ extension ParticleEmitter {
         frameStats.spawnBudgetLimitedCount += eventSubEmitterSpawnResult.spawnBudgetLimitedCount
             + eventSpawnResult.spawnBudgetLimitedCount
 
-        guard isEmitting else {
+        guard settings.emission.isEmitting else {
             runtime.previousEmitterPosition = currentEmitterPosition
             frameStats.liveParticleCount = runtime.particles.count
             frameStats.spawnBudgetConsumedCount = spawnBudget.consumedCount
@@ -143,10 +143,10 @@ extension ParticleEmitter {
             runtime.lastFrameStats = frameStats
             return
         }
-        let emissionRateMultiplier = emissionStep.averageMultiplier(for: emissionRateCurve)
+        let emissionRateMultiplier = emissionStep.averageMultiplier(for: settings.emission.emissionRateCurve)
         let scaledEmissionRateMultiplier = emissionRateMultiplier * options.emissionScale
-        if emissionRate > 0, scaledEmissionRateMultiplier > 0 {
-            runtime.emissionAccumulator += emissionRate * scaledEmissionRateMultiplier * emissionStep.delta
+        if settings.emission.emissionRate > 0, scaledEmissionRateMultiplier > 0 {
+            runtime.emissionAccumulator += settings.emission.emissionRate * scaledEmissionRateMultiplier * emissionStep.delta
             let toSpawn = Int(runtime.emissionAccumulator)
             if toSpawn > 0 {
                 runtime.emissionAccumulator -= Float(toSpawn)
@@ -161,12 +161,12 @@ extension ParticleEmitter {
                 frameStats.spawnBudgetLimitedCount += spawnResult.spawnBudgetLimitedCount
             }
         }
-        if burstCount > 0, burstInterval > 0 {
+        if settings.emission.burstCount > 0, settings.emission.burstInterval > 0 {
             runtime.burstAccumulator += emissionStep.delta
-            let bursts = Int(runtime.burstAccumulator / burstInterval)
+            let bursts = Int(runtime.burstAccumulator / settings.emission.burstInterval)
             if bursts > 0 {
-                runtime.burstAccumulator -= Float(bursts) * burstInterval
-                runtime.burstSpawnAccumulator += Float(bursts * burstCount) * options.burstScale
+                runtime.burstAccumulator -= Float(bursts) * settings.emission.burstInterval
+                runtime.burstSpawnAccumulator += Float(bursts * settings.emission.burstCount) * options.burstScale
                 let toSpawn = Int(runtime.burstSpawnAccumulator)
                 if toSpawn > 0 {
                     runtime.burstSpawnAccumulator -= Float(toSpawn)
@@ -182,7 +182,7 @@ extension ParticleEmitter {
                 }
             }
         }
-        let distanceRateMultiplier = emissionStep.averageMultiplier(for: distanceEmissionRateCurve)
+        let distanceRateMultiplier = emissionStep.averageMultiplier(for: settings.emission.distanceEmissionRateCurve)
         let distanceSpawnResult = spawnDistanceEmission(
             from: runtime.previousEmitterPosition,
             to: currentEmitterPosition,
@@ -221,9 +221,9 @@ extension ParticleEmitter {
         var frameStats = ParticleEmitterFrameStats(
             startingLiveParticleCount: runtime.particles.count,
             liveParticleCount: runtime.particles.count,
-            maxParticleCount: maxParticles,
-            liveParticleLimit: maxParticles,
-            spawnBudgetLimit: maxSpawnedParticlesPerFrame
+            maxParticleCount: settings.emission.maxParticles,
+            liveParticleLimit: settings.emission.maxParticles,
+            spawnBudgetLimit: settings.emission.maxSpawnedParticlesPerFrame
         )
         guard !events.isEmpty else {
             runtime.lastFrameStats = frameStats
@@ -232,7 +232,7 @@ extension ParticleEmitter {
 
         var eventParticles: [Particle] = []
         var eventSubEmitterSpawnResult = ParticleSpawnResult(requested: 0, spawned: 0)
-        var spawnBudget = ParticleSpawnBudget(limit: maxSpawnedParticlesPerFrame)
+        var spawnBudget = ParticleSpawnBudget(limit: settings.emission.maxSpawnedParticlesPerFrame)
         eventParticles.reserveCapacity(events.count)
         for event in events where event.trigger != .none {
             let source = sourceParticle(from: event)
@@ -285,15 +285,15 @@ extension ParticleEmitter {
     private mutating func runPrewarmIfNeeded(worldTransform: simd_float4x4?,
                                              options: ParticleAdvanceOptions) {
         guard !runtime.hasPrewarmed,
-              isEmitting,
-              prewarmTime > 0,
-              maxParticles > 0
+              settings.emission.isEmitting,
+              settings.emission.prewarmTime > 0,
+              settings.emission.maxParticles > 0
         else { return }
 
         runtime.hasPrewarmed = true
         runtime.previousEmitterPosition = distanceEmitterPosition(worldTransform: worldTransform)
-        var remaining = prewarmTime
-        let step = min(max(1.0 / 240.0, prewarmStep), prewarmTime)
+        var remaining = settings.emission.prewarmTime
+        let step = min(max(1.0 / 240.0, settings.emission.prewarmStep), settings.emission.prewarmTime)
         while remaining > 0.0001 {
             let dt = min(step, remaining)
             advanceStep(deltaTime: dt, worldTransform: worldTransform, options: options)
@@ -342,7 +342,7 @@ extension ParticleEmitter {
     }
 
     private mutating func activeEmissionStep(_ dt: Float) -> ActiveEmissionStep {
-        guard duration > 0 else {
+        guard settings.emission.duration > 0 else {
             return ActiveEmissionStep(delta: dt,
                                       normalizedAge: 1,
                                       startAge: 0,
@@ -350,28 +350,28 @@ extension ParticleEmitter {
                                       looping: false)
         }
         let startAge = runtime.emitterAge
-        if looping {
-            runtime.emitterAge = (runtime.emitterAge + dt).truncatingRemainder(dividingBy: duration)
-            let sampleAge = (startAge + dt * 0.5).truncatingRemainder(dividingBy: duration)
+        if settings.emission.looping {
+            runtime.emitterAge = (runtime.emitterAge + dt).truncatingRemainder(dividingBy: settings.emission.duration)
+            let sampleAge = (startAge + dt * 0.5).truncatingRemainder(dividingBy: settings.emission.duration)
             return ActiveEmissionStep(delta: dt,
-                                      normalizedAge: simd_clamp(sampleAge / duration, 0, 1),
+                                      normalizedAge: simd_clamp(sampleAge / settings.emission.duration, 0, 1),
                                       startAge: startAge,
-                                      duration: duration,
+                                      duration: settings.emission.duration,
                                       looping: true)
         }
 
-        let remaining = max(0, duration - runtime.emitterAge)
+        let remaining = max(0, settings.emission.duration - runtime.emitterAge)
         let activeDelta = min(dt, remaining)
         runtime.emitterAge += dt
         let sampleAge = startAge + activeDelta * 0.5
         return ActiveEmissionStep(delta: activeDelta,
-                                  normalizedAge: simd_clamp(sampleAge / duration, 0, 1),
+                                  normalizedAge: simd_clamp(sampleAge / settings.emission.duration, 0, 1),
                                   startAge: startAge,
-                                  duration: duration,
+                                  duration: settings.emission.duration,
                                   looping: false)
     }
 
     fileprivate var hasEventSubEmitterRules: Bool {
-        legacySubEmitterRule != nil || subEmitters.contains(where: \.isActive)
+        legacySubEmitterRule != nil || settings.subEmitters.rules.contains(where: \.isActive)
     }
 }
