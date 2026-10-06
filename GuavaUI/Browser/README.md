@@ -161,7 +161,8 @@ Inspector 重连、缩放和原生 WebSocket。文字检查包含中文/Emoji �
 会临时修改宿主源码并在退出时还原。
 
 `python3 verify.py --require-webgpu` 强制 WebGPU 像素验收；
-`--require-hardware-gpu` 还拒绝软件适配器，严格模式不会强制 SwiftShader。
+`--require-hardware-gpu` 还拒绝软件适配器，严格模式使用 `--enable-gpu` 允许无头
+Chromium 选择硬件 GPU；默认无头模式会强制软件渲染。
 `--skip-native` 只验证浏览器，`--screenshot` 在严格模式保存 WebGPU 画面。
 `--dist .build/release-preview` 可对指定 release 构建目录执行相同验收。
 `GUAVA_CHROMIUM` 指定 Chromium 路径，`GUAVA_CHROMIUM_ARGS` 是附加启动参数的 JSON 数组。
@@ -177,7 +178,8 @@ CMake/Ninja/Python/Node 的 runner 后，从 Actions 手动运行，它会严格
 `architecture=swiftshader`、`isFallbackAdapter=true`、`lost=true`，严格硬件验收按预期拒绝
 该环境。macOS 上已通过 Canvas2D 1× 与 WebGPU/SwiftShader 2× 的实际呈现像素和
 状态观察/时间线验收，debug/release Wasm 均运行同一套检查；
-**物理 GPU 的严格验收仍待可用桌面环境完成**。
+解锁桌面后也通过 Apple Metal 3 硬件 WebGPU 2× 的严格验收，适配器报告
+`isFallbackAdapter=false`、`lost=false`。
 开发重载与 debug/release Wasm 构建也已验证通过。
 
 The shared Inspector also supports explicitly exposed State summaries and an
@@ -197,4 +199,9 @@ GuavaUI GuavaUIDemo --shared-counter` from the repository root, then
 actual padding-driven Yoga layout, CPU timeline spans, Metal mirror pixels and
 remote pointer input. The app remains running after the check.
 The check restores the original checkpoint. Add `--require-presented` to require
-primary swapchain submission; unlock the Mac and show the native window first.
+primary swapchain submission after State, layout and pointer changes; unlock the
+Mac and show the native window first. The macOS SDL event loop commits pending
+Core Animation transactions before drawable acquisition, preventing a newly
+created or resized window from remaining blank.
+Native window zoom and restore also passed visual acceptance after fixing the
+MSAA target size cache to track its allocation independently of the viewport.

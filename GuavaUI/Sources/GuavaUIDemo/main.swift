@@ -1271,6 +1271,7 @@ var logicalW: UInt32 = 0
 var logicalH: UInt32 = 0
 var msaaColorTexture: GPUTexture?
 var msaaColorView: GPUTextureView?
+var msaaTargetSize: (width: UInt32, height: UInt32)?
 
 @MainActor
 func appendDevToolsSelectionOverlay(to list: DrawList) {
@@ -1286,13 +1287,14 @@ func ensureDemoMSAATarget(width: UInt32, height: UInt32) throws {
     guard demoMSAASampleCount > 1 else {
         msaaColorTexture = nil
         msaaColorView = nil
+        msaaTargetSize = nil
         return
     }
 
     if msaaColorTexture != nil,
        msaaColorView != nil,
-       drawableW == width,
-       drawableH == height {
+       msaaTargetSize?.width == width,
+       msaaTargetSize?.height == height {
         return
     }
 
@@ -1305,8 +1307,10 @@ func ensureDemoMSAATarget(width: UInt32, height: UInt32) throws {
         depthOrLayers: 1,
         sampleCount: demoMSAASampleCount
     )
+    let view = try texture.createView()
     msaaColorTexture = texture
-    msaaColorView = try texture.createView()
+    msaaColorView = view
+    msaaTargetSize = (width, height)
 }
 
 @MainActor
@@ -1611,11 +1615,9 @@ host.onFrame = { native in
 
     do {
         let encoder = try backend.createCommandEncoder()
-        // Ensure MSAA target matches the current drawable size.
-        // The swapchain may report a different size than what was used to configure the surface.
-        if msaaColorTexture == nil || drawableW == 0 || drawableH == 0 {
-            try ensureDemoMSAATarget(width: drawableW, height: drawableH)
-        }
+        // Compare against the allocated target, since onResize has already
+        // updated drawableW/drawableH before the target is recreated.
+        try ensureDemoMSAATarget(width: drawableW, height: drawableH)
         let passColorView = msaaColorView ?? frame.view
         let passResolveView = msaaColorView == nil ? nil : frame.view
         let pass = try encoder.beginRenderPass(
