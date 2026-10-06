@@ -1271,27 +1271,7 @@ var msaaColorView: GPUTextureView?
 
 @MainActor
 func appendDevToolsSelectionOverlay(to list: DrawList) {
-    guard let frame = devTools?.selectedNodeAbsoluteFrame,
-          frame.width > 0,
-          frame.height > 0 else { return }
-    let rect = UIRect(x: Float(frame.origin.x),
-                      y: Float(frame.origin.y),
-                      width: Float(frame.width),
-                      height: Float(frame.height))
-    list.addRect(rect, color: Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x20))
-    let stroke = Color(red: 0x72, green: 0xB4, blue: 0xFF, alpha: 0xF0)
-    list.addLine(fromX: rect.minX, fromY: rect.minY,
-                 toX: rect.maxX, toY: rect.minY,
-                 thickness: 2, color: stroke)
-    list.addLine(fromX: rect.maxX, fromY: rect.minY,
-                 toX: rect.maxX, toY: rect.maxY,
-                 thickness: 2, color: stroke)
-    list.addLine(fromX: rect.maxX, fromY: rect.maxY,
-                 toX: rect.minX, toY: rect.maxY,
-                 thickness: 2, color: stroke)
-    list.addLine(fromX: rect.minX, fromY: rect.maxY,
-                 toX: rect.minX, toY: rect.minY,
-                 thickness: 2, color: stroke)
+    devTools?.drawInspectionOverlay(into: list)
 }
 
 func demoNodeCount(_ node: Node) -> Int {
@@ -1430,6 +1410,7 @@ func appendPerformanceHUD(to list: DrawList) {
 }
 
 host.onInit = { native, w, h in
+    host.mainSession?.inputInterceptor = { event in MainActor.assumeIsolated { devTools?.interceptInput(event) ?? false } }
     if usesSharedCounter {
         host.mainSession?.inputObserver = { event in MainActor.assumeIsolated { sharedRecorder.record(event) } }
     }

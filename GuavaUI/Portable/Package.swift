@@ -42,7 +42,7 @@ let package = Package(
             .product(name: "Logging", package: "swift-log"),
         ]),
         .executableTarget(name: "GuavaUIDevToolsProbe", dependencies: [
-            "GuavaUIDevToolsServer", "GuavaUIDevToolsProtocol",
+            "GuavaUIDevToolsServer", "GuavaUIDevToolsScene", "GuavaUIComposeCore",
         ]),
         .testTarget(name: "GuavaUIDevToolsServerTests", dependencies: [
             "GuavaUIDevToolsServer", "GuavaUIDevToolsProtocol",

@@ -85,7 +85,12 @@ private struct DemoLabel: _PrimitiveView {
 private func installText(_ text: DemoText, on node: Node) {
     node.attachments[SharedDemoText.attachment] = text
     let painter = node.compositionValue(of: SharedDemoText.painter)
-    node.draw = { list, origin in painter?(text, list, origin) }
+    node.draw = { [weak node] list, origin in
+        var painted = text
+        painted.color = node?.inheritedForegroundColor ?? text.color
+        let p = node?.layoutNode?.resolvedPadding
+        painter?(painted, list, CGPoint(x: origin.x + CGFloat(p?.left ?? 0), y: origin.y + CGFloat(p?.top ?? 0)))
+    }
 }
 
 private struct DemoButton: _PrimitiveView {

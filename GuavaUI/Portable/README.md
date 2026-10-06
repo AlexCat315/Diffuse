@@ -10,12 +10,13 @@ GPU drivers or native font libraries. Scene and Compose targets use Yoga C++.
   hit testing, focus, pointer capture and input dispatch.
 - `GuavaUIComposeCore`: View/ViewBuilder, ViewGraph, CompositionLocal and boxes/stacks.
 - `GuavaUISharedDemo`: one Compose counter and text-input source for both hosts.
-- `GuavaUIDevToolsScene`: actual SceneInspector, with stable element identifiers.
+- `GuavaUIDevToolsScene`: actual SceneInspector, stable identifiers, visual picking,
+  layout/style snapshots and bounded undoable temporary styles.
 - `GuavaUIDevToolsProtocol`: wire types, session validation/subscriptions,
   state differences and bounded Codable input recordings.
 - `GuavaUIDevToolsServer`: shared requests and injectable transport. The default
   SwiftNIO WebSocket transport supports macOS, Linux and Windows.
-- `GuavaUIDevToolsProbe`: headless synthetic scene/state provider for server checks.
+- `GuavaUIDevToolsProbe`: headless real Node/Yoga scene and state provider for server checks.
 
 Pure platform input types live in `Engine/PlatformCore`. Desktop EngineKernel,
 PlatformShell, Runtime, Compose and DevTools re-export their shared implementations.
@@ -35,6 +36,8 @@ WebSocket messages are bounded to 1 MiB. Fragmented text, ping/pong and writer
 backpressure are supported. Streams remain opt-in per connection. Disconnecting
 clears that connection's selection/recording; the last mirror disconnect stops capture.
 Native callbacks use the UI-thread scheduler, including synchronous SDL loops.
+Temporary styles use an exclusive connection lease, are preserved across composition,
+and are discarded on disconnect/stop. See the [inspection protocol](../DevTools/protocol-inspection.md).
 Hosts can supply `stateRestoreResultHandler` to acknowledge only validated restores.
 Input recording/replay requires host callbacks and advertises a separate `recording`
 capability; timestamps are metadata and replay currently delivers events in order.
