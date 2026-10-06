@@ -4,6 +4,33 @@ import Testing
 
 @Suite("EditorMenuModel")
 struct EditorMenuModelTests {
+    @Test("workspace, layout and panel commands are separated and layouts belong to the active workspace")
+    func menuOrganization() throws {
+        for mode in [EditorWorkspaceMode.level, .modeling, .animation, .scripting] {
+            let preset = EditorLayoutPreset.default(for: mode)
+            let model = make(workspace: mode, preset: preset)
+            let workspace = try #require(model.menus.first { $0.title == L("Workspace") })
+            let layout = try #require(model.menus.first { $0.title == L("Layout") })
+            let window = try #require(model.menus.first { $0.title == L("Window") })
+            let workspaceActions = actions(EditorMenuModel(menus: [workspace]))
+            #expect(workspaceActions.map(\.keyEquivalent) == ["1", "2", "3", "4"])
+            #expect(workspaceActions.filter(\.isSelected).count == 1)
+            let layoutActions = actions(EditorMenuModel(menus: [layout]))
+            let presets = layoutActions.compactMap { action -> EditorLayoutPreset? in
+                if case let .setLayoutPreset(preset) = action.command { return preset }
+                return nil
+            }
+            #expect(presets == EditorLayoutPreset.presets(for: mode))
+            #expect(layoutActions.filter(\.isSelected).count == 1)
+            for action in actions(EditorMenuModel(menus: [window])) {
+                switch action.command {
+                case .setWorkspaceMode, .setLayoutPreset: Issue.record("Window mixes workspace and panel commands")
+                default: break
+                }
+            }
+        }
+    }
+
     @Test("film workspaces expose rendering tools without enabling game playback or game builds")
     func filmTransport() {
         for mode in [EditorWorkspaceMode.modeling, .animation] {
