@@ -6,6 +6,7 @@ const state = {
   tree: null,
   snapshot: null,
   selectedId: null,
+  pendingSelectionId: null,
   treeQuery: "",
   mirrorActive: false,
   mirrorFrame: null,
@@ -197,6 +198,7 @@ function handleEnvelope(env) {
       syncSelection();
       renderTree();
       renderRuntime(env.payload);
+      renderRecompositionTable();
       break;
     case "log.entry":
       appendLog(env.payload);
@@ -239,6 +241,11 @@ function handleEnvelope(env) {
       setMirrorInactive("Stopped.");
       break;
     default:
+      if (env.type === "select.node.err") {
+        state.pendingSelectionId = null; syncInspection(state.inspection);
+      } else if (env.type === "select.node.ok" && !hasCapability("inspect")) {
+        state.pendingSelectionId = null;
+      }
       if (env.type?.startsWith("inspect.")) {
         if (env.type.endsWith(".ok")) syncInspection(env.payload);
         else if (env.type.endsWith(".err")) inspectionMessage(env.payload?.message ?? "Request failed", true);
@@ -292,6 +299,7 @@ function renderNode(parent, node, depth) {
 
 function selectNode(node) {
   state.selectedId = nodeId(node);
+  state.pendingSelectionId = state.selectedId;
   send("select.node", { id: state.selectedId });
   renderTree();
   renderDetails(node);
@@ -299,6 +307,7 @@ function selectNode(node) {
 
 function renderDetails(node) {
   renderInspection(node);
+  renderSourceAnalysis(node);
   if (!node) {
     el.details.className = "details empty";
     el.details.textContent = "Select a node in the tree.";
@@ -702,6 +711,7 @@ function syncSelection() {
     renderDetails(selected);
   } else {
     state.selectedId = null;
+    state.pendingSelectionId = null;
     renderDetails(null);
   }
 }
@@ -744,7 +754,7 @@ function nodeBadge(node) {
 
 function compactTag(tag) {
   if (!tag) return "";
-  const parts = String(tag).split(".");
+  const parts = String(tag).split("<", 1)[0].split(".");
   return parts[parts.length - 1];
 }
 
@@ -786,6 +796,8 @@ function clearSessionViews() {
   state.snapshot = null;
   state.selectedId = null;
   state.inspection = null;
+  state.pendingSelectionId = null;
+  renderRecompositionTable();
   state.timingFrames = [];
   el.treeCount.textContent = "";
   el.tree.className = "tree empty";

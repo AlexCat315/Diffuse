@@ -109,6 +109,15 @@ C ABI 缓冲区仅在下一次对应更新前有效，JavaScript 会先复制再
 Swift 源码断点需要支持 Swift 的 DWARF 调试扩展和源码映射；此处未提供完整 Swift
 调试器，可参考 [Swift Wasm 调试说明](https://book.swiftwasm.org/getting-started/debugging.html)。
 
+Inspector 的 **Source & recomposition** 现在记录 ViewBuilder 表达式的 Swift 文件、
+行列号，支持 **Open source** 跳转 VS Code/Cursor；远端构建可在 **Editor path mapping**
+配置构建路径和本地路径前缀。它显示所属用户组件的真实重组次数、最近/平均/累计/最大耗时，
+以及 State 属性名、可观察字段、父组件和 CompositionLocal 更新原因。
+**All components** 支持排序、选择组件和 **Reset statistics**；首次挂载单列，临时样式编辑
+与布局变化不计为 body 重组。耗时包含子组件协调，不包含 Yoga/GPU，不应把父子行相加。
+显式 `return` 或具体 Body 类型可能不自动捕获，使用 `.sourceLocation()` 补充准确位置。
+详见 [源码与重组说明](../DevTools/README.md#source-location-and-component-recomposition)。
+
 ## 开发重载
 
 ```bash
@@ -139,6 +148,8 @@ Inspector 重连、缩放和原生 WebSocket。文字检查包含中文/Emoji �
 事件，以及 Latin 连字、阿拉伯文、天城文和字体回退；真实操作系统输入法仍需人工验收。
 新增验收覆盖实际画面拾取、非交互文字、布局移动与修改后的真实颜色像素、重组保留、
 撤销/重做、清除及断开恢复，也通过真实原生 WebSocket 验证同一套编辑面板。
+分析验收覆盖准确 Swift 表达式行号、编辑器链接、Unicode/Windows 远端路径映射、
+真实 State 重组次数/原因/耗时和统计重置；原生 WebSocket 使用真实 Compose scope 验证。
 开发脚本验证真实 Swift 编译、错误恢复与状态保留，
 会临时修改宿主源码并在退出时还原。
 

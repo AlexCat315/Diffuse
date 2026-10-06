@@ -91,7 +91,7 @@ public final class DevTools {
 
     public func start() throws {
         guard config.enabled else { return }
-        var capabilities = ["tree", "select", "log", "timing", "inspect", "style"]
+        var capabilities = ["tree", "select", "log", "timing", "inspect", "style", "source", "recomposition"]
         if frameTap != nil { capabilities.append("mirror") }
         if stateCheckpointProvider != nil, stateRestoreHandler != nil || stateRestoreResultHandler != nil {
             capabilities.append("state")
