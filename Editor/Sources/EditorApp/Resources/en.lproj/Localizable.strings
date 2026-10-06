@@ -710,3 +710,19 @@
 "Asset files were copied but the catalog could not reload" = "Asset files were copied but the catalog could not reload";
 "Unsupported format — import models or textures" = "Unsupported format — import models or textures";
 "Use primary value for all" = "Use primary value for all";
+
+/* Workspace menus and layout arrangements */
+"Workspace" = "Workspace";
+"Layout" = "Layout";
+"Level Editing" = "Level Editing";
+"Script Development" = "Script Development";
+"Models and Rendering" = "Models and Rendering";
+"Animation Editing" = "Animation Editing";
+"Code and Console" = "Code and Console";
+"Scene and Scripts" = "Scene and Scripts";
+"Scene and Assets" = "Scene and Assets";
+"Animation and Rendering" = "Animation and Rendering";
+"Assets and Rendering" = "Assets and Rendering";
+"Viewport Focus" = "Viewport Focus";
+"Viewport and Animation" = "Viewport and Animation";
+"Animation Details" = "Animation Details";

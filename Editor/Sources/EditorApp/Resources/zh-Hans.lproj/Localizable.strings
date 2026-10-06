@@ -767,3 +767,19 @@
 "Asset files were copied but the catalog could not reload" = "资源文件已复制，但无法重新加载资源列表";
 "Unsupported format — import models or textures" = "不支持此格式，请导入模型或纹理";
 "Use primary value for all" = "将主选实体的值应用到全部";
+
+/* Workspace menus and layout arrangements */
+"Workspace" = "工作区";
+"Layout" = "布局";
+"Level Editing" = "关卡编辑";
+"Script Development" = "脚本开发";
+"Models and Rendering" = "模型与渲染";
+"Animation Editing" = "动画编辑";
+"Code and Console" = "代码与控制台";
+"Scene and Scripts" = "场景与脚本";
+"Scene and Assets" = "场景与资源";
+"Animation and Rendering" = "动画与渲染";
+"Assets and Rendering" = "资源与渲染";
+"Viewport Focus" = "视口优先";
+"Viewport and Animation" = "视口与动画";
+"Animation Details" = "动画属性";
