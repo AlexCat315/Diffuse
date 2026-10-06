@@ -26,6 +26,8 @@ public struct ViewportScreenFrame: Equatable, Sendable {
 public struct ViewportHost<Overlay: View>: _PrimitiveView {
     public let surface: ViewportSurfaceState
     public let automaticallyFocus: Bool
+    public let contentAspectRatio: Float?
+    public let onFocusChanged: ((Bool) -> Void)?
     public let onInputEvent: ((InputEvent) -> Void)?
     public let onDrawableSizeChange: ((RenderDrawableSize) -> Void)?
     public let onScreenFrameChange: ((ViewportScreenFrame) -> Void)?
@@ -34,6 +36,8 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
     public init(surface: ViewportSurfaceState,
                 automaticallyFocus: Bool = false,
+                contentAspectRatio: Float? = nil,
+                onFocusChanged: ((Bool) -> Void)? = nil,
                 onInputEvent: ((InputEvent) -> Void)? = nil,
                 onDrawableSizeChange: ((RenderDrawableSize) -> Void)? = nil,
                 onScreenFrameChange: ((ViewportScreenFrame) -> Void)? = nil,
@@ -41,6 +45,8 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                 @ViewBuilder overlay: () -> Overlay) {
         self.surface = surface
         self.automaticallyFocus = automaticallyFocus
+        self.contentAspectRatio = contentAspectRatio
+        self.onFocusChanged = onFocusChanged
         self.onInputEvent = onInputEvent
         self.onDrawableSizeChange = onDrawableSizeChange
         self.onScreenFrameChange = onScreenFrameChange
@@ -58,6 +64,9 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let snap = self
+        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { (focused: Bool) in
+            snap.onFocusChanged?(focused)
+        }
         // A standalone game owns the initial keyboard target. Embedded editor
         // viewports retain click-to-focus and never take another control's focus.
         if snap.automaticallyFocus, node.attachments["__viewport_initial_focus"] == nil,
@@ -73,6 +82,13 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             registry.setPointer(node, route: .viewport) { event, pointerPhase, eventPhase in
                 guard eventPhase == .target else { return .ignored }
                 if pointerPhase == .down {
+                    let bounds = node.absoluteFrame
+                    let fitted = ViewportPresentationGeometry.fit(
+                        ViewportScreenFrame(x: Float(bounds.minX), y: Float(bounds.minY),
+                                            width: Float(bounds.width), height: Float(bounds.height)),
+                        aspectRatio: snap.contentAspectRatio)
+                    guard event.x >= fitted.x, event.y >= fitted.y,
+                          event.x < fitted.x + fitted.width, event.y < fitted.y + fitted.height else { return .ignored }
                     FocusChainHolder.current?.focus(node)
                     PointerCaptureHolder.current?.acquire(node)
                     snap.onInputEvent?(.mouseButtonDown(event))
@@ -112,13 +128,17 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             }
         }
 
-        node.updateDraw(identity: snap.surface) { list, origin in
+        node.updateDraw(identity: DrawIdentity(surface: snap.surface, aspectRatio: snap.contentAspectRatio)) { list, origin in
             // Report the drawable in physical pixels: the layout frame is in
             // logical points, so honor the window's content scale or the
             // scene renders at 1/scale² resolution and gets upscaled blurry.
             let scale = CGFloat(max(1, ContentScaleHolder.current))
-            let width = UInt32(max(Int((node.frame.width * scale).rounded()), 1))
-            let height = UInt32(max(Int((node.frame.height * scale).rounded()), 1))
+            let screenFrame = ViewportPresentationGeometry.fit(
+                ViewportScreenFrame(x: Float(origin.x), y: Float(origin.y),
+                    width: Float(node.frame.width), height: Float(node.frame.height)),
+                aspectRatio: snap.contentAspectRatio)
+            let width = UInt32(max(Int((CGFloat(screenFrame.width) * scale).rounded()), 1))
+            let height = UInt32(max(Int((CGFloat(screenFrame.height) * scale).rounded()), 1))
             let drawableSize = RenderDrawableSize(width: width, height: height)
             let key = "__viewport_host_drawable_size"
             let previous = node.attachments[key] as? RenderDrawableSize
@@ -127,11 +147,6 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                 snap.onDrawableSizeChange?(drawableSize)
             }
 
-            let frame = node.frame
-            let screenFrame = ViewportScreenFrame(x: Float(origin.x),
-                                                  y: Float(origin.y),
-                                                  width: Float(frame.width),
-                                                  height: Float(frame.height))
             let frameKey = "__viewport_host_screen_frame"
             let previousFrame = node.attachments[frameKey] as? ViewportScreenFrame
             if previousFrame != screenFrame {
@@ -148,10 +163,8 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                 return
             }
 
-            let rect = UIRect(x: Float(origin.x),
-                              y: Float(origin.y),
-                              width: Float(frame.width),
-                              height: Float(frame.height))
+            let rect = UIRect(x: screenFrame.x, y: screenFrame.y,
+                              width: screenFrame.width, height: screenFrame.height)
             // The engine renders into the top-left sub-region of a grow-only
             // allocated texture; crop to the used extent.
             let uvMax: (x: Float, y: Float) = (
@@ -164,6 +177,11 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
             snap.onDrawOverlay?(list, screenFrame)
         }
+    }
+
+    private struct DrawIdentity: Equatable {
+        let surface: ViewportSurfaceState
+        let aspectRatio: Float?
     }
 
     /// The viewport owns raw keys (camera, game input) while focused, but
@@ -183,6 +201,18 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
     public var _children: [any View] {
         [overlay]
+    }
+}
+
+public enum ViewportPresentationGeometry {
+    public static func fit(_ frame: ViewportScreenFrame, aspectRatio: Float?) -> ViewportScreenFrame {
+        guard let aspectRatio, aspectRatio.isFinite, aspectRatio > 0,
+              frame.width > 0, frame.height > 0 else { return frame }
+        let width = min(frame.width, frame.height * aspectRatio)
+        let height = width / aspectRatio
+        return ViewportScreenFrame(x: frame.x + (frame.width - width) / 2,
+                                   y: frame.y + (frame.height - height) / 2,
+                                   width: width, height: height)
     }
 }
 

@@ -8,6 +8,10 @@ import ScriptRuntime
 import SIMDCompat
 
 extension EditorSceneAdapter {
+    public func sceneSettingsSections() -> [EditorInspectorSection] {
+        [physicsSettingsSection(), particleScalabilitySection()]
+    }
+
     public func inspectorSections(for rawID: UInt64?) -> [EditorInspectorSection] {
         guard let entity = entity(from: rawID), scene.contains(entity) else {
             return []

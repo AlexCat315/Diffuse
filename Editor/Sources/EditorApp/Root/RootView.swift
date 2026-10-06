@@ -10,6 +10,7 @@ struct EditorRootView: View {
     let app: EditorApplication
     let controller: WorkspaceController
     let registry: PanelRegistry
+    @State private var windowWidth: Float = 1280
 
     var body: some View {
         StoreScope(app.store) { store in
@@ -33,10 +34,19 @@ struct EditorRootView: View {
                                 )
 
                                 Spacer(minLength: 12)
-                                EditorPlaybackToolbar(state: store.playbackState,
+                                if windowWidth >= 1050 {
+                                    Text(L(store.workspaceMode.title)).font(.caption).foregroundColor(.onSurfaceVariant)
+                                }
+                                if store.workspaceMode.isGameWorkspace {
+                                    EditorPlaybackToolbar(state: store.playbackState,
                                                       onCommand: cb.handleMenuCommand)
+                                } else {
+                                    Button(L("Render Pipeline")) { EditorRootViewFactory.activatePanel("render-pipeline", in: controller) }
+                                        .buttonStyle(.ghost)
+                                }
                                 Spacer(minLength: 12)
 
+                                if windowWidth >= 760 {
                                 LayoutPresetSelector(
                                     workspaceMode: store.workspaceMode,
                                     activePreset: store.activeLayoutPreset,
@@ -44,6 +54,7 @@ struct EditorRootView: View {
                                         cb.handleMenuCommand(.setLayoutPreset(preset))
                                     }
                                 )
+                                }
                             }
                         }
 
@@ -52,7 +63,7 @@ struct EditorRootView: View {
                         // workspace, and the rounded panel slabs carry the
                         // structure.
                         PanelWorkspace(controller: controller,
-                                       registry: registry)
+                                       registry: registry, compact: windowWidth < 1000)
                             .flex()
                             .frame(minWidth: 0, minHeight: 0)
                             .workspaceTheme(WorkspaceTheme(splitDividerThickness: 5))
@@ -61,7 +72,11 @@ struct EditorRootView: View {
                             .debugName("editor-workspace")
 
                         EditorStatusBar(store: store, scriptWorkspace: app.scriptWorkspace,
-                                        showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed })
+                                        showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed },
+                                        onShowProblems: {
+                                            store.dispatch(.setOutputTab(.problems))
+                                            EditorRootViewFactory.activatePanel("console", in: controller)
+                                        })
                     }
                     .background(.background)
                     .flex()
@@ -69,16 +84,27 @@ struct EditorRootView: View {
                            height: .percent(100),
                            minWidth: 0,
                            minHeight: 0)
+                    .modifier(EditorWindowWidthObserver(width: $windowWidth))
                 } portals: {
                     PortalHost()
                     AnimatedVisibility(isVisible: store.commandPaletteVisible, transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
-                        CommandPaletteOverlay(app: app)
+                        CommandPaletteOverlay(app: app, controller: controller, registry: registry)
                     }
                     if let pendingClose = store.pendingCloseRequest {
                         UnsavedChangesDialog(app: app, request: pendingClose)
                     }
                 }
             }
+        }
+    }
+}
+
+private struct EditorWindowWidthObserver: ViewModifier {
+    let width: Binding<Float>
+    func apply(node: Node) {
+        node.layoutDidUpdate = { node in
+            let next = Float(node.frame.width)
+            if next > 0, abs(width.wrappedValue - next) > 1 { width.wrappedValue = next }
         }
     }
 }
@@ -157,13 +183,20 @@ private struct EditorCallbacks {
                                                    controller: controller,
                                                    registry: registry)
                 },
-                openCommandPalette: { s.dispatch(.setCommandPaletteVisible(true)) },
+                openCommandPalette: {
+                    s.dispatch(.setCommandPaletteQuery(">"))
+                    s.dispatch(.setCommandPaletteVisible(true))
+                },
                 closeCommandPalette: { s.dispatch(.setCommandPaletteVisible(false)) },
                 undo: {
                     EditorCommandDispatcher.handle(.undo, app: app, controller: controller, registry: registry)
                 },
                 redo: {
                     EditorCommandDispatcher.handle(.redo, app: app, controller: controller, registry: registry)
+                },
+                openResourceSearch: {
+                    s.dispatch(.setCommandPaletteQuery("@"))
+                    s.dispatch(.setCommandPaletteVisible(true))
                 }
             )
         }

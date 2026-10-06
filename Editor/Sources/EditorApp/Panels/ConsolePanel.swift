@@ -8,14 +8,16 @@ import GuavaUIRuntime
 /// stay visible, and zero-result states explain why the list is empty.
 struct ConsolePanel: View {
     let store: EditorStore
+    var onNavigate: ((EditorIssueTarget) -> Void)? = nil
     @State private var searchText: String = ""
     @State private var enabledSeverities: Set<EditorConsoleSeverity> = Set(EditorConsoleSeverity.allCases)
     @State private var selectedEntryID: UInt64? = nil
     @State private var followsLatest: Bool = true
     @State private var copyStatus: String? = nil
 
-    init(store: EditorStore) {
+    init(store: EditorStore, onNavigate: ((EditorIssueTarget) -> Void)? = nil) {
         self.store = store
+        self.onNavigate = onNavigate
         _searchText = State(wrappedValue: "")
         _enabledSeverities = State(wrappedValue: Set(EditorConsoleSeverity.allCases))
     }
@@ -126,13 +128,23 @@ struct ConsolePanel: View {
             } else {
                 ScrollView(.vertical, scrollbarGutter: .stable) {
                     Column(alignment: .leading, spacing: 1) {
-                        for entry in visibleEntries.suffix(200) {
+                        visibleEntries.suffix(200).map { entry in
+                            AnyView(Column(alignment: .leading, spacing: 2) {
                             ConsoleEntryRow(entry: entry,
                                             isSelected: selectedEntryID == entry.id,
                                             onSelect: {
                                                 selectedEntryID = entry.id
                                                 copyStatus = nil
                                             })
+                            if let nextStep = entry.nextStep, selectedEntryID == entry.id {
+                                Text(L(nextStep)).font(.caption).foregroundColor(.warning)
+                                    .padding(horizontal: 4, vertical: 3)
+                            }
+                            if let target = entry.target, let onNavigate {
+                                Button(L("Go to source")) { onNavigate(target) }
+                                    .buttonStyle(.ghost).controlSize(.small)
+                            }
+                            })
                         }
                         ConsoleTailAnchor(entryID: visibleEntries.last?.id,
                                           followsLatest: followsLatest)
@@ -258,7 +270,7 @@ private struct ConsoleEntryRow: View {
                     .frame(width: 44)
 
                 Column(alignment: .leading, spacing: 2) {
-                    Text(entry.message)
+                    Text(L(entry.message))
                         .lineLimit(isSelected ? nil : 1)
                         .font(.caption)
                         .foregroundColor(messageColor)

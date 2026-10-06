@@ -138,21 +138,17 @@ extension EditorApplication {
             scriptSchemas: scriptEntries.map(scriptSchema)
         )
         switch mode {
-        case .level:
+        case .level, .scripting:
             return .game(GameWorkflowContext(levelPhase: .blockout,
                                             gameplayIntent: intent,
                                             targetExperience: "Interactive level editing",
                                             knownConstraints: constraints))
         case .modeling:
-            return .game(GameWorkflowContext(levelPhase: .polish,
-                                            gameplayIntent: intent,
-                                            targetExperience: "Asset creation and modeling",
-                                            knownConstraints: constraints))
+            return .film(FilmWorkflowContext(activeSequenceID: "modeling",
+                                              narrativePhase: .blocking, directorIntent: "Model and render a 3D film scene"))
         case .animation:
-            return .game(GameWorkflowContext(levelPhase: .polish,
-                                            gameplayIntent: intent,
-                                            targetExperience: "Animation authoring",
-                                            knownConstraints: constraints))
+            return .film(FilmWorkflowContext(activeSequenceID: "animation",
+                                              narrativePhase: .blocking, directorIntent: "Animate a 3D film sequence"))
         }
     }
 
