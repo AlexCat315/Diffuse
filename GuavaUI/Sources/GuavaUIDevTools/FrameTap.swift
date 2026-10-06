@@ -1,3 +1,4 @@
+import GuavaUIDevToolsProtocol
 import Foundation
 #if canImport(CoreGraphics)
 import CoreGraphics
@@ -23,6 +24,7 @@ import ImageIO
 /// stalling the host every frame the tap is rate-limited (default 15fps).
 @MainActor
 public final class FrameTap {
+    public static let isSupported = true
 
     public final class Sink: @unchecked Sendable {
         public init() {}
@@ -333,6 +335,7 @@ public final class FrameTap {
 /// Frame mirroring is not supported on these platforms.
 @MainActor
 public final class FrameTap {
+    public static let isSupported = false
     public final class Sink: @unchecked Sendable {
         public init() {}
         public var deliver: ((MirrorFramePayload) -> Void)?

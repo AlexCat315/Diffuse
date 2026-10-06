@@ -1,3 +1,4 @@
+import GuavaUIDevToolsProtocol
 import Foundation
 import Logging
 import RHIWGPU
@@ -108,6 +109,7 @@ public final class DevTools {
     /// Must be called after `WGPUBackend.initialize()` and before the
     /// first `mirrorCapture(...)`.
     public func attachFrameTap(backend: WGPUBackend, renderer: DrawListRenderer) {
+        guard FrameTap.isSupported else { return }
         frameTap = FrameTap(sink: frameTapSink, backend: backend, renderer: renderer)
     }
 
