@@ -5,6 +5,7 @@ enum EditorMenuCommand {
     case showSceneSettings
     case showAssets
     case showProblems
+    case showPanel(String)
     case maximizePanel(String)
     case restorePanels
     case saveLayout
