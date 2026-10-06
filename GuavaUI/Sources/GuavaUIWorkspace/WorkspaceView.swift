@@ -22,13 +22,15 @@ private struct _WorkspaceRailPlan {
 public struct WorkspaceView: View {
     public let controller: WorkspaceController
     public let content: (WorkspacePanelID) -> AnyView
+    public var compact: Bool = false
 
     @State private var version: UInt64 = 0
     @State private var subscriptionIdentity = WorkspaceSubscriptionIdentity()
 
-    public init(controller: WorkspaceController,
+    public init(controller: WorkspaceController, compact: Bool = false,
                 content: @escaping (WorkspacePanelID) -> AnyView) {
         self.controller = controller
+        self.compact = compact
         self.content = content
     }
 
@@ -40,6 +42,15 @@ public struct WorkspaceView: View {
                                                         tag: ObjectIdentifier(subscriptionIdentity),
                                                         bind: bind)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            if let panelID = controller.maximizedPanelID, let panel = document.panels[panelID] {
+                Row(alignment: .center, spacing: 8) {
+                    Text(panel.title).font(.label).flex()
+                    Button("Restore") { _ = controller.dispatch(.restoreMaximized) }.buttonStyle(.ghost)
+                }.padding(6)
+                content(panelID).flex().frame(minWidth: 0, minHeight: 0)
+            } else if compact {
+                _WorkspaceCompactView(document: document, controller: controller, content: content).flex()
+            } else {
             _WorkspaceShell(document: document,
                             controller: controller,
                             content: content)
@@ -48,6 +59,7 @@ public struct WorkspaceView: View {
             _WorkspaceFloatingLayer(document: document,
                                     controller: controller,
                                     content: content)
+            }
         }
             .flex()
             .frame(width: .percent(100),
@@ -58,6 +70,38 @@ public struct WorkspaceView: View {
             .semanticRole("workspace")
             .debugName("workspace")
             .modifier(_WorkspaceDragOverlayModifier())
+    }
+}
+
+private struct _WorkspaceCompactView: View {
+    let document: WorkspaceDocument
+    let controller: WorkspaceController
+    let content: (WorkspacePanelID) -> AnyView
+    @State private var isPresented = false
+
+    var body: some View {
+        let panels = document.panels.values.filter { document.groupContaining(panelID: $0.id) != nil }
+            .sorted { $0.title < $1.title }
+        let selected = controller.focusedPanelID.flatMap { id in panels.first { $0.id == id } }
+            ?? panels.first { $0.id.rawValue == "viewport" } ?? panels.first
+        Column(alignment: .leading, spacing: 0) {
+            if let selected {
+                Popover(isPresented: $isPresented, width: 240) {
+                    Text(selected.title + " ▾").font(.label).padding(8)
+                } content: {
+                    Menu(panels.map { panel in
+                        .item(MenuItem(id: panel.id.rawValue, title: panel.title,
+                            isSelected: panel.id == selected.id, action: {
+                                guard let group = document.groupContaining(panelID: panel.id) else { return }
+                                _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: panel.id))
+                                isPresented = false
+                            }))
+                    }, width: 240)
+                }
+                Divider()
+                content(selected.id).flex().frame(width: .percent(100), minWidth: 0, minHeight: 0)
+            }
+        }.frame(width: .percent(100), minWidth: 0, minHeight: 0)
     }
 }
 
@@ -753,6 +797,11 @@ private struct _WorkspaceTabBar: View {
         Row(alignment: .center, spacing: 0) {
             tabButtons
             Spacer(minLength: 0)
+            if let panelID = group.activePanelID {
+                Button("⛶", tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
+                    .buttonStyle(.ghost).frame(width: 24, height: 24)
+                    .debugName("workspace-maximize-\(group.id.rawValue)")
+            }
             if canCollapse {
                 Button(icon: .resource(WorkspaceIcons.collapse(for: slotID)),
                            size: 12,

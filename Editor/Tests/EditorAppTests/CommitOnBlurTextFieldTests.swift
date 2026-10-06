@@ -28,7 +28,7 @@ struct CommitOnBlurTextFieldTests {
         )
     }
 
-    private func install(_ model: Model) -> Rig? {
+    private func install(_ model: Model, mixed: Bool = false) -> Rig? {
         let registry = InteractionRegistry()
         let focus = FocusChain()
         InteractionRegistryHolder.current = registry
@@ -36,7 +36,8 @@ struct CommitOnBlurTextFieldTests {
 
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
-        graph.install(root: CommitOnBlurTextField(identity: "e1/name", text: makeBinding(model)))
+        graph.install(root: CommitOnBlurTextField(identity: "e1/name", text: makeBinding(model),
+                                                mixedValueLabel: mixed ? "Mixed value" : nil))
 
         guard let node = firstNode(in: tree.root, where: { $0.attachments["__textfield_state"] != nil }),
               let focusHandler = node.attachments[TextInputAttachmentKey.focusChangeHandler]
@@ -114,5 +115,21 @@ struct CommitOnBlurTextFieldTests {
         rig.focusHandler(false)
         #expect(model.writes == 2)
         #expect(model.value == "Boxy")
+    }
+
+    @Test("a mixed field does not commit on focus and blur, but accepts the primary object's value")
+    func mixedDraft() throws {
+        defer { tearDownHolders() }
+        let model = Model()
+        let rig = try #require(install(model, mixed: true))
+        rig.focusHandler(true)
+        rig.focusHandler(false)
+        #expect(model.writes == 0)
+        let handlers = rig.registry.handlers(for: rig.node)
+        rig.focusHandler(true)
+        _ = handlers.text?("Cube", .target)
+        rig.focusHandler(false)
+        #expect(model.writes == 1)
+        #expect(model.value == "Cube")
     }
 }

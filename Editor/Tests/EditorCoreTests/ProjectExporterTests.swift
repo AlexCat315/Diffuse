@@ -171,6 +171,34 @@ struct ProjectExporterTests {
         ))
     }
 
+    @Test("export includes parent-relative buffers and reports missing dependencies without replacing the bundle")
+    func exportParentDependencies() throws {
+        let project = tempDir()
+        defer { try? FileManager.default.removeItem(at: project) }
+        let output = project.appendingPathComponent("export")
+        let model = project.appendingPathComponent("Assets/Models/ship.gltf")
+        let buffer = project.appendingPathComponent("Assets/Shared/ship.bin")
+        try FileManager.default.createDirectory(at: model.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: buffer.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(#"{"buffers":[{"uri":"../Shared/ship.bin","byteLength":4}]}"#.utf8).write(to: model)
+        let contents = Data([0, 1, 2, 3])
+        try contents.write(to: buffer)
+        let asset = EditorAsset(id: "Assets/Models/ship.gltf", name: "ship",
+                                relativePath: "Assets/Models/ship.gltf", absolutePath: model.path,
+                                kind: .gltf, meshIndex: 9)
+        let manifest = EditorSceneAdapter().manifest()
+        _ = try ProjectExporter.export(manifest: manifest, appName: "Demo", assets: [asset],
+                                       sourceProjectDirectory: project, to: output)
+        let exportedBuffer = output.appendingPathComponent("Assets/Shared/ship.bin")
+        #expect(try Data(contentsOf: exportedBuffer) == contents)
+        try FileManager.default.removeItem(at: buffer)
+        #expect(throws: ProjectExporterError.missingAsset(buffer.path)) {
+            try ProjectExporter.export(manifest: manifest, appName: "Demo", assets: [asset],
+                                       sourceProjectDirectory: project, to: output)
+        }
+        #expect(try Data(contentsOf: exportedBuffer) == contents)
+    }
+
     @Test("re-export replaces stale bundle contents")
     func exportReplacesStaleContents() throws {
         let project = tempDir()

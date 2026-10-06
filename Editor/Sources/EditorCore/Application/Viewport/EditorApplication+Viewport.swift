@@ -19,6 +19,28 @@ import Foundation
 import SIMDCompat
 
 extension EditorApplication {
+    public func setViewportMode(_ mode: EditorViewportMode) {
+        guard mode == .scene || store.workspaceMode.isGameWorkspace else { return }
+        EditorViewportInputController.shared.reset()
+        if mode == .scene, store.playbackState != .stopped { applyPlaybackState(.stopped) }
+        store.dispatch(.setViewportMode(mode))
+        scene.setEditorViewportCameraEnabled(mode == .scene)
+        enqueueViewportInput(.windowFocusLost)
+        queueTrackedRenderSettings(makeViewportRenderSettings(shadowsEnabled: store.viewportShadowsEnabled,
+                                                               shadingMode: store.viewportShadingMode))
+        requestDisplayRefresh()
+    }
+
+    public func setGamePreviewResolution(_ resolution: EditorGamePreviewResolution) {
+        store.dispatch(.setGamePreviewResolution(resolution))
+        requestDisplayRefresh()
+    }
+
+    public func setGamePreviewHUDEnabled(_ enabled: Bool) {
+        store.dispatch(.setGamePreviewHUDEnabled(enabled))
+        renderSettingsGeneration &+= 1
+        requestDisplayRefresh()
+    }
     public func enqueueViewportInput(_ event: InputEvent) {
         pendingViewportEvents.append(event)
         displayInvalidationHandler?()
@@ -49,6 +71,7 @@ extension EditorApplication {
 
     func effectiveViewportDrawableSize() -> RenderDrawableSize {
         let state = store.state
+        if state.viewportMode == .game { return state.gamePreviewResolution.size ?? _viewportDrawableSize }
         let interacting = state.viewportInteractionDownscaleEnabled
             && EditorViewportInputController.shared.isContinuousSceneInteractionActive
         return EditorViewportResolution.effectiveSize(
@@ -230,7 +253,7 @@ extension EditorApplication {
             debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
             shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
             enableOffscreenViewport: true,
-            enableEditorGrid: store.state.viewportGridEnabled,
+            enableEditorGrid: store.state.viewportGridEnabled && store.state.viewportMode == .scene,
             editorGridSpacing: viewportGridSpacing
         )
     }

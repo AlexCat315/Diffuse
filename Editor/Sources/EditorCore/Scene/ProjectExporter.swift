@@ -138,7 +138,7 @@ public enum ProjectExporter {
         let save = GameSaveDocument(slot: sceneSlot, manifest: manifest)
         try save.write(to: GameSaveDocument.url(slot: sceneSlot, projectDirectory: stagingDirectory.path))
 
-        try copyAssets(assets, to: stagingDirectory, fileManager: fileManager)
+        try copyAssets(assets, from: sourceProjectDirectory, to: stagingDirectory, fileManager: fileManager)
         var availableScriptIdentifiers = Set(ProjectScriptCatalog.builtIn.entries.map(\.identifier))
         var hasCompiledScripts = false
         if let sourceProjectDirectory {
@@ -446,17 +446,18 @@ public enum ProjectExporter {
     }
 
     private static func copyAssets(_ assets: [EditorAsset],
+                                   from projectRoot: URL?,
                                    to outputDirectory: URL,
                                    fileManager: FileManager) throws {
         var copiedDestinations: [String: String] = [:]
         for asset in assets {
             let source = URL(fileURLWithPath: asset.absolutePath)
             let destinationParent = (asset.relativePath as NSString).deletingLastPathComponent
-            for file in AssetImportResolver.resolve(source) {
+            for file in AssetImportResolver.resolve(source, projectRoot: projectRoot) {
                 guard fileManager.fileExists(atPath: file.source.path) else {
                     throw ProjectExporterError.missingAsset(file.source.path)
                 }
-                let relativePath = destinationParent == "."
+                let relativePath = destinationParent.isEmpty || destinationParent == "."
                     ? file.relativePath
                     : destinationParent + "/" + file.relativePath
                 let destination = try safeDestination(relativePath: relativePath,

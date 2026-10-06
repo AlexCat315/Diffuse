@@ -88,3 +88,9 @@
 "The bundled example project is missing. Reinstall the editor." = "The bundled example project is missing. Reinstall the editor.";
 "Close the current project before opening another project." = "Close the current project before opening another project.";
 "The project's .guava folder must not be a symbolic link." = "The project's .guava folder must not be a symbolic link.";
+
+/* Editor productivity workflows */
+"Project export failed" = "Project export failed";
+"Exporting project…" = "Exporting project…";
+"Mixed value" = "Mixed value";
+"Project exported" = "Project exported";

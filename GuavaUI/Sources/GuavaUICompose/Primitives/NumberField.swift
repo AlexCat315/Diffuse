@@ -12,6 +12,7 @@ public struct NumberField: View {
     public let maxValue: Float?
     public let step: Float?
     public let showsStepper: Bool
+    public let mixedValueLabel: String?
 
     public init(value: Binding<Float>,
                 decimals: Int = 2,
@@ -20,7 +21,8 @@ public struct NumberField: View {
                 minValue: Float? = nil,
                 maxValue: Float? = nil,
                 step: Float? = nil,
-                showsStepper: Bool = false) {
+                showsStepper: Bool = false,
+                mixedValueLabel: String? = nil) {
         self.value = value
         self.decimals = max(0, min(decimals, 6))
         self.size = size
@@ -29,6 +31,7 @@ public struct NumberField: View {
         self.maxValue = maxValue
         self.step = step
         self.showsStepper = showsStepper
+        self.mixedValueLabel = mixedValueLabel
     }
 
     public var body: some View {
@@ -69,8 +72,10 @@ private struct _StatefulNumberField: View {
     @State var isEditing: Bool = false
 
     var body: some View {
-        let committed = NumberField.format(normalized(field.value.wrappedValue), decimals: field.decimals)
+        let committed = field.mixedValueLabel == nil
+            ? NumberField.format(normalized(field.value.wrappedValue), decimals: field.decimals) : ""
         let input = TextField(
+            field.mixedValueLabel ?? "",
             text: Binding(
                 get: { isEditing ? draft : committed },
                 set: { draft = $0 }
@@ -130,7 +135,7 @@ private struct _StatefulNumberField: View {
     private func commitDraft() {
         if let parsed = NumberField.parse(draft) {
             let next = normalized(parsed)
-            if field.value.wrappedValue != next {
+            if field.mixedValueLabel != nil || field.value.wrappedValue != next {
                 field.value.wrappedValue = next
             }
         }

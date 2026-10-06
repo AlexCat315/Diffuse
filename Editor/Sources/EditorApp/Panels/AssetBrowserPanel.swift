@@ -24,6 +24,15 @@ struct AssetBrowserPanel: View {
     /// Relative folder path currently shown ("" == project root). Uses "/" as
     /// separator, matching `AssetRegistryEntry.relativePath`.
     @State private var currentFolder: String = ""
+    @State private var lastNavigationRevision: UInt64 = 0
+    @State private var previewAssetID: String? = nil
+    @State private var editingAsset: EditorAsset? = nil
+    @State private var assetEditPath = ""
+    @State private var referenceLocations: [EditorAssetReferenceLocation] = []
+    @State private var showsReferences = false
+    @State private var missingPath: String? = nil
+    @State private var referenceFilePath: String? = nil
+    @State private var showsMissingResources = false
 
     private func importAssets() {
         EditorAssetImportCoordinator.requestImport(app: app, into: currentFolder)
@@ -64,6 +73,7 @@ struct AssetBrowserPanel: View {
         StoreScope(app.store) { store in
             let _ = store.presentationRevision
             let allAssets = EditorAssetCatalog.entries()
+            let _: Void = applyNavigation(store, assets: allAssets)
             let isSearching = !trimmedQuery.isEmpty
             let categoryAssets = AssetBrowserOrdering.filter(allAssets, category: categoryFilter)
             let unfilteredListing = AssetFolderListing.make(folder: currentFolder, from: allAssets)
@@ -128,6 +138,13 @@ struct AssetBrowserPanel: View {
                         }
                     )
                 }
+                Row(alignment: .center, spacing: 6) {
+                    Button(L("Missing Resources"), isSelected: showsMissingResources) {
+                        showsMissingResources.toggle()
+                    }.buttonStyle(.ghost).controlSize(.small)
+                    Spacer(minLength: 0)
+                }.padding(horizontal: 6, vertical: 2)
+                assetWorkflowDetails(allAssets)
             }
             .frame(minWidth: 240)
         }
@@ -216,6 +233,13 @@ struct AssetBrowserPanel: View {
         let assets = selected.isEmpty ? [target] : selected
         return [
             .item(MenuItem(id: "open", title: L("Open"), action: { activateAsset(target) })),
+            .item(MenuItem(id: "asset-rename", title: L("Rename"), isEnabled: app.store.playbackState == .stopped,
+                action: { beginRelocation(target) })),
+            .item(MenuItem(id: "asset-move", title: L("Move"), isEnabled: app.store.playbackState == .stopped,
+                action: { beginRelocation(target) })),
+            .item(MenuItem(id: "asset-references", title: L("Find References"), action: {
+                referenceLocations = app.assetReferences(target); showsReferences = true
+            })),
             .item(MenuItem(id: "asset-add", title: L("Add to Scene"),
                            isEnabled: assets.contains { $0.kind.isMesh } && app.store.state.playbackState == .stopped,
                            action: { _ = app.spawnAssets(assets) })),
@@ -250,12 +274,133 @@ struct AssetBrowserPanel: View {
     }
 
     private func activateAsset(_ asset: EditorAsset) {
-        guard asset.kind.isMesh, app.store.state.playbackState == .stopped else { return }
-        _ = app.spawnAsset(asset)
+        previewAssetID = asset.id
+    }
+
+    private func applyNavigation(_ store: EditorStore, assets: [EditorAsset]) {
+        guard lastNavigationRevision != store.assetNavigationRevision else { return }
+        lastNavigationRevision = store.assetNavigationRevision
+        guard let id = store.assetNavigationID else { return }
+        searchText = ""; categoryFilter = .all
+        referenceFilePath = nil
+        if let asset = assets.first(where: { $0.id == id || $0.absolutePath == id || $0.relativePath == id }) {
+            currentFolder = (asset.relativePath as NSString).deletingLastPathComponent
+            if currentFolder == "." { currentFolder = "" }
+            var next = AssetBrowserSelectionModel()
+            next.select(asset.id, in: assets.map(\.id), modifiers: [])
+            selection = next; previewAssetID = asset.id; missingPath = nil
+        } else {
+            let root = URL(fileURLWithPath: app.projectDirectory, isDirectory: true)
+            let url = (id as NSString).isAbsolutePath ? URL(fileURLWithPath: id) : root.appendingPathComponent(id)
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+                let folder = isDirectory.boolValue ? url : url.deletingLastPathComponent()
+                if let relative = EditorAssetFileWorkflow.projectRelativePath(folder, within: root) {
+                    currentFolder = relative
+                }
+                missingPath = nil; previewAssetID = nil
+                if !isDirectory.boolValue { referenceFilePath = url.path }
+            } else {
+                missingPath = url.path
+            }
+        }
+    }
+
+    private func beginRelocation(_ asset: EditorAsset) {
+        editingAsset = asset; assetEditPath = asset.relativePath
+    }
+
+    private func repair(_ path: String) {
+        guard let display = AppDisplayHandleHolder.current else { return }
+        MainActor.assumeIsolated {
+            display.requestOpenFile(filters: [(name: L("Replacement Resource"), extensions: [(path as NSString).pathExtension])],
+                                    allowsMultiple: false, defaultPath: app.projectDirectory) { paths in
+                guard let replacement = paths.first else { return }
+                if app.repairMissingAsset(at: path, from: URL(fileURLWithPath: replacement)) {
+                    AssetThumbnailRasterizer.invalidate(); ImageAssetRegistryHolder.current?.clear()
+                    missingPath = nil
+                }
+            }
+        }
+    }
+
+    private func assetWorkflowDetails(_ assets: [EditorAsset]) -> some View {
+        Column(alignment: .leading, spacing: 6) {
+            if let asset = editingAsset {
+                Text(L("Rename or Move: project-relative destination")).font(.caption).foregroundColor(.onSurfaceVariant)
+                Row(alignment: .center, spacing: 6) {
+                    TextField(L("New project-relative path"), text: $assetEditPath,
+                        focusRequestID: "asset-path-" + asset.id, onSubmit: {
+                            if app.relocateAsset(asset, to: assetEditPath) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
+                        }).flex()
+                    Button(L("Apply")) {
+                        if app.relocateAsset(asset, to: assetEditPath) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
+                    }.buttonStyle(.primary)
+                    Button(L("Cancel")) { editingAsset = nil }.buttonStyle(.ghost)
+                }
+            }
+            if let asset = assets.first(where: { $0.id == previewAssetID }) {
+                Row(alignment: .center, spacing: 8) {
+                    AssetThumbnail(asset: asset).frame(width: 144, height: 120)
+                    Column(alignment: .leading, spacing: 4) {
+                        Text(asset.name, lineLimit: 1).font(.label)
+                        Text(asset.relativePath, lineLimit: 2).font(.caption).foregroundColor(.onSurfaceVariant)
+                        Button(L("Find References")) {
+                            referenceLocations = app.assetReferences(asset); showsReferences = true
+                        }.buttonStyle(.ghost)
+                        Button(L("Rename / Move"), isEnabled: app.store.playbackState == .stopped) { beginRelocation(asset) }.buttonStyle(.ghost)
+                    }.flex()
+                    Button(L("Close")) { previewAssetID = nil }.buttonStyle(.ghost)
+                }
+            }
+            if showsReferences {
+                Row(alignment: .center, spacing: 6) {
+                    Text("\(L("References")) \(referenceLocations.count)").font(.label).flex()
+                    Button(L("Close")) { showsReferences = false }.buttonStyle(.ghost)
+                }
+                ScrollView(.vertical) {
+                    Column(alignment: .leading, spacing: 2) {
+                        referenceLocations.map { reference in
+                            Button(reference.label) { app.navigateToIssue(reference.target) }.buttonStyle(.ghost)
+                        }
+                        if referenceLocations.isEmpty { Text(L("No references found")).font(.caption) }
+                    }
+                }.frame(maxHeight: 110)
+            }
+            if let missingPath {
+                Row(alignment: .center, spacing: 6) {
+                    Text(missingPath, lineLimit: 2).font(.caption).foregroundColor(.warning).flex()
+                    Button(L("Repair Missing Resource"), isEnabled: app.store.playbackState == .stopped) { repair(missingPath) }.buttonStyle(.ghost)
+                    Button(L("Close")) { self.missingPath = nil }.buttonStyle(.ghost)
+                }
+            }
+            if let path = referenceFilePath {
+                Row(alignment: .center, spacing: 6) {
+                    Text(path, lineLimit: 2).font(.caption).foregroundColor(.onSurfaceVariant).flex()
+                    Button(L("Reveal in Finder")) { revealPaths([path]) }.buttonStyle(.ghost)
+                    Button(L("Close")) { referenceFilePath = nil }.buttonStyle(.ghost)
+                }
+            }
+            if showsMissingResources {
+                let paths = app.missingAssetPaths()
+                ScrollView(.vertical) {
+                    Column(alignment: .leading, spacing: 2) {
+                        paths.map { path in
+                            Button(path) { missingPath = path }.buttonStyle(.ghost)
+                        }
+                        if paths.isEmpty { Text(L("No missing resources")).font(.caption).foregroundColor(.onSurfaceVariant) }
+                    }
+                }.frame(maxHeight: 110)
+            }
+        }.padding(6)
     }
 
     private func revealAssets(_ assets: [EditorAsset]) {
-        let validPaths = assets.map(\.absolutePath).filter {
+        revealPaths(assets.map(\.absolutePath))
+    }
+
+    private func revealPaths(_ paths: [String]) {
+        let validPaths = paths.filter {
             FileManager.default.fileExists(atPath: $0)
         }
         guard !validPaths.isEmpty else {
@@ -265,8 +410,16 @@ struct AssetBrowserPanel: View {
             return
         }
         let process = Process()
+        #if os(macOS)
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         process.arguments = ["-R"] + validPaths
+        #elseif os(Windows)
+        process.executableURL = URL(fileURLWithPath: "C:/Windows/explorer.exe")
+        process.arguments = ["/select,", validPaths[0]]
+        #else
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xdg-open")
+        process.arguments = [URL(fileURLWithPath: validPaths[0]).deletingLastPathComponent().path]
+        #endif
         do {
             try process.run()
         } catch {

@@ -3,6 +3,10 @@ import Foundation
 /// Compares filesystem locations after resolving existing ancestors, including
 /// Windows short paths and candidates that have not been created yet.
 enum ProjectFilePath {
+    static func isDescendant(_ url: URL, of directory: URL) -> Bool {
+        contains(url, in: directory, includingRoot: false)
+    }
+
     static func canonicalURL(_ url: URL) -> URL {
         resolvedURL(url) ?? url.standardizedFileURL
     }

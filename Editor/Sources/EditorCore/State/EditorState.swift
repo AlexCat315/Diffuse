@@ -22,11 +22,23 @@ public enum PlaybackState: String, Codable, Sendable, Hashable {
 
 public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
     case level
+    case scripting
     case modeling
     case animation
+
+    public var isGameWorkspace: Bool { self == .level || self == .scripting }
+    public var title: String {
+        switch self {
+        case .level: "Game Engine · Level Editing"
+        case .scripting: "Game Engine · Script Development"
+        case .modeling: "3D Film Engine · Modeling and Rendering"
+        case .animation: "3D Film Engine · Animation"
+        }
+    }
 }
 
 public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
+    case scriptingDefault
     case levelWorkbench
     case levelDefault
     case levelCinematics
@@ -37,6 +49,7 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public var mode: EditorWorkspaceMode {
         switch self {
+        case .scriptingDefault: return .scripting
         case .levelWorkbench, .levelDefault, .levelCinematics:
             return .level
         case .modelingDefault, .modelingSculpt:
@@ -48,6 +61,7 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public var title: String {
         switch self {
+        case .scriptingDefault: return "Game: Scripting"
         case .levelWorkbench:
             return "Level: Workbench"
         case .levelDefault:
@@ -68,7 +82,9 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
     public static func `default`(for mode: EditorWorkspaceMode) -> EditorLayoutPreset {
         switch mode {
         case .level:
-            return .levelWorkbench
+            return .levelDefault
+        case .scripting:
+            return .scriptingDefault
         case .modeling:
             return .modelingDefault
         case .animation:
@@ -78,6 +94,7 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public static func presets(for mode: EditorWorkspaceMode) -> [EditorLayoutPreset] {
         switch mode {
+        case .scripting: return [.scriptingDefault]
         case .level:
             return [.levelWorkbench, .levelDefault, .levelCinematics]
         case .modeling:
@@ -206,15 +223,20 @@ public struct EditorConsoleEntry: Identifiable, Codable, Sendable, Equatable, Ha
     public var severity: EditorConsoleSeverity
     public var message: String
     public var detail: String?
+    public var target: EditorIssueTarget?
+    public var nextStep: String?
 
     public init(id: UInt64,
                 severity: EditorConsoleSeverity = .info,
                 message: String,
-                detail: String? = nil) {
+                detail: String? = nil, target: EditorIssueTarget? = nil,
+                nextStep: String? = nil) {
         self.id = id
         self.severity = severity
         self.message = message
         self.detail = detail
+        self.target = target
+        self.nextStep = nextStep
     }
 }
 
@@ -333,6 +355,18 @@ public struct EditorState: Codable, Sendable {
     public var consoleEntries: [EditorConsoleEntry]
     public var nextConsoleEntryID: UInt64
     public var commandPaletteVisible: Bool
+    // Session work and navigation must not be replayed when loading a project.
+    public var operations: [EditorOperation] = []
+    public var scriptNavigation: EditorScriptNavigationRequest? = nil
+    public var assetNavigationID: String? = nil
+    public var assetNavigationRevision: UInt64 = 0
+    public var inspectorSceneSettingsVisible = false
+    public var commandPaletteQuery = ""
+    public var outputTab: EditorOutputTab = .logs
+    public var viewportMode: EditorViewportMode = .scene
+    public var gamePreviewResolution: EditorGamePreviewResolution = .hd720
+    public var gamePreviewHUDEnabled = true
+    public var gamePreviewFocused = false
 
     public init(
         connected: Bool = false,

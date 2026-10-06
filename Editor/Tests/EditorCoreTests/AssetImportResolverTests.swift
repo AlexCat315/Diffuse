@@ -96,6 +96,41 @@ struct AssetImportResolverTests {
         #expect(AssetImportResolver.sanitizedRelativePath("buf.bin") == "buf.bin")
     }
 
+    @Test("project resolution keeps parent dependencies inside the project boundary")
+    func projectParentDependencies() throws {
+        let root = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let project = root.appendingPathComponent("project")
+        let model = project.appendingPathComponent("Models/ship.gltf")
+        write(#"{"buffers":[{"uri":"../Shared/ship.bin"}],"images":[{"uri":"../Shared/missing.png"},{"uri":"../../outside.png"},{"uri":"/etc/passwd"},{"uri":"C:/outside.png"},{"uri":"linked/secret.png"}]}"#, to: model)
+        write("buffer", to: project.appendingPathComponent("Shared/ship.bin"))
+        let external = root.appendingPathComponent("external")
+        write("secret", to: external.appendingPathComponent("secret.png"))
+        #if !os(Windows)
+        try FileManager.default.createSymbolicLink(at: project.appendingPathComponent("Models/linked"),
+                                                   withDestinationURL: external)
+        #else
+        // Windows test runners may lack permission to create directory symlinks.
+        write("", to: project.appendingPathComponent("Models/linked/secret.png"))
+        #endif
+
+        let files = AssetImportResolver.resolve(model, projectRoot: project)
+        #if !os(Windows)
+        #expect(files.map(\.relativePath) == ["ship.gltf", "../Shared/ship.bin", "../Shared/missing.png"])
+        #else
+        #expect(files.map(\.relativePath) == ["ship.gltf", "../Shared/ship.bin", "../Shared/missing.png", "linked/secret.png"])
+        #endif
+        #expect(ProjectFilePath.sameLocation(files[1].source, project.appendingPathComponent("Shared/ship.bin")))
+        #expect(!FileManager.default.fileExists(atPath: files[2].source.path))
+        #expect(!AssetImportResolver.resolve(model).contains { $0.relativePath.hasPrefix("..") })
+
+        let obj = project.appendingPathComponent("Models/ship.obj")
+        write("mtllib ../Materials/ship.mtl", to: obj)
+        write("map_Kd ../Shared/color.png", to: project.appendingPathComponent("Materials/ship.mtl"))
+        #expect(AssetImportResolver.resolve(obj, projectRoot: project).map(\.relativePath)
+                == ["ship.obj", "../Materials/ship.mtl", "../Shared/color.png"])
+    }
+
     @Test("supported-format gate")
     func supportedFormats() {
         #expect(AssetImportResolver.isSupported(URL(fileURLWithPath: "a/model.gltf")))

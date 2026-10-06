@@ -24,13 +24,21 @@ public struct EditorInspectorField {
     public let label: String
     public let value: EditorInspectorFieldValue
     public let presentation: EditorInspectorFieldPresentation
+    public let isMixed: Bool
+    public let mixedAxes: Set<String>
+    public let applyPrimaryValue: (() -> Void)?
 
     public init(id: String, label: String, value: EditorInspectorFieldValue,
-                presentation: EditorInspectorFieldPresentation = .standard) {
+                presentation: EditorInspectorFieldPresentation = .standard,
+                isMixed: Bool = false, mixedAxes: Set<String> = [],
+                applyPrimaryValue: (() -> Void)? = nil) {
         self.id = id
         self.label = label
         self.value = value
         self.presentation = presentation
+        self.isMixed = isMixed
+        self.mixedAxes = mixedAxes
+        self.applyPrimaryValue = applyPrimaryValue
     }
 }
 
