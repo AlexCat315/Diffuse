@@ -35,32 +35,12 @@ struct EditorRootView: View {
                                     onCommand: cb.handleMenuCommand
                                 )
 
-                                Spacer(minLength: 12)
-                                if windowWidth >= 1050 {
-                                    Text(L(store.workspaceMode.title)).font(.caption).foregroundColor(.onSurfaceVariant)
-                                }
-                                if store.workspaceMode.isGameWorkspace {
-                                    EditorPlaybackToolbar(state: store.playbackState,
-                                                      onCommand: cb.handleMenuCommand)
-                                } else {
-                                    Button(L("Render Pipeline")) { cb.handleMenuCommand(.showPanel("render-pipeline")) }
-                                        .buttonStyle(.ghost)
-                                }
-                                Spacer(minLength: 12)
-
-                                if windowWidth >= 760 && store.interactionMode == .manual {
-                                LayoutPresetSelector(
-                                    workspaceMode: store.workspaceMode,
-                                    activePreset: store.activeLayoutPreset,
-                                    onSelectPreset: { preset in
-                                        cb.handleMenuCommand(.setLayoutPreset(preset))
-                                    }
-                                )
-                                }
+                                Spacer(minLength: 0)
                             }
                         }
 
-                        EditorWorkflowBar(mode: store.workspaceMode, interaction: store.interactionMode,
+                        EditorWorkflowBar(workspace: store.workspace,
+                                          playbackState: store.playbackState, width: windowWidth,
                                           onCommand: cb.handleMenuCommand)
 
                         if store.interactionMode == .agent {
