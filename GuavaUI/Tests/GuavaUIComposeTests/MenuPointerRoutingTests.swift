@@ -107,7 +107,7 @@ struct MenuPointerRoutingTests: GuavaUIComposeSerializedSuite {
     func contextSelectionUpdate() throws { try withGraph { graph, dispatcher, _, probe in
         graph.install(root: Harness(probe: probe))
         settle(graph)
-        let row = try #require(nodes(graph.tree.root).first { $0.firstResource(PortalResource.self) != nil })
+        let row = try #require(nodes(graph.tree.root).first { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "context-menu-anchor" })
         click(row.absoluteFrame, button: .right, graph: graph, dispatcher: dispatcher)
         #expect(PortalStoreHolder.current.entries.count == 1)
         let item = try #require(nodes(graph.tree.root).first { $0.attachments["__menu_item_id"] as? AnyHashable == AnyHashable("context-action") })

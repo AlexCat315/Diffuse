@@ -15,7 +15,7 @@ struct EditorPlaybackToolbar: View {
         }
         .padding(horizontal: 4, vertical: 2)
         .background(.surfaceSunken)
-        .cornerRadius(5)
+        .cornerRadius(4)
         .border(.divider, width: 1)
         .debugName("editor-playback-toolbar")
     }
@@ -29,6 +29,6 @@ struct EditorPlaybackToolbar: View {
                tooltip: title) {
             onCommand(.setPlaybackState(target))
         }
-        .buttonStyle(.toolToggle)
+        .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
     }
 }

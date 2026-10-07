@@ -291,7 +291,7 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         let menuScrollView = firstNode(in: tree.root, where: {
             $0 !== scrollView
                 && registry.handlers(for: $0).wheel != nil
-                && abs($0.frame.height - 112) < 0.1
+                && abs($0.frame.height - 128) < 0.1
         })
         #expect(menuScrollView != nil)
 

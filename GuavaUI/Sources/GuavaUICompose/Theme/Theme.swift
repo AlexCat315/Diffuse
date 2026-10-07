@@ -15,6 +15,7 @@ public struct Theme: Sendable {
     public var elevation: ElevationScale
     public var motion: MotionScale
     public var inputs: InputAppearance
+    public var textEmphasis = TextEmphasis()
 
     public init(colors: ColorScheme,
                 typography: Typography,

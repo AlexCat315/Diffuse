@@ -18,7 +18,7 @@ struct AgentWorkbenchView: View {
             default: AnyView(EmptyView())
             }
         }
-        .workspaceTheme(WorkspaceTheme(tabBarHeight: 30, splitDividerThickness: 5))
+        .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 5, animatesLayout: true))
         .debugName("agent-workbench")
     }
 }

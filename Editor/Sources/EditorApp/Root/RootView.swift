@@ -53,7 +53,7 @@ struct EditorRootView: View {
                                            registry: registry, compact: windowWidth < 1000)
                                 .flex()
                                 .frame(minWidth: 0, minHeight: 0)
-                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 30, splitDividerThickness: 5))
+                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 5, animatesLayout: true))
                                 .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
                                 .layoutRole("editor-workspace")
                                 .debugName("editor-workspace")
