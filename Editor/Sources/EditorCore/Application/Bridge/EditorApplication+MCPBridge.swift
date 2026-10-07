@@ -43,6 +43,16 @@ extension EditorApplication {
     }
 
     private func handleMCPAction(_ action: String, params: [String: Any]) -> [String: Any] {
+        var policy = pluginCapabilityExecutor?.exposurePolicy ?? CapabilityExposurePolicy(allowedDomains: ["scene"])
+        let target = EditorAgentTaskTarget(documentID: store.state.document.identity, sceneRevision: store.sceneRevision,
+            workspace: store.workspaceMode, selectedEntityIDs: store.selectedEntityIDs, primaryEntityID: store.selectedEntityID)
+        policy.allowedCapabilityIDs = makeAgentWorkflowScope(target: target).allowedCapabilityIDs
+        let capturedPolicy = policy
+        do {
+            try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                await mcpCapabilitySessions.setWorkflowScope(policy: capturedPolicy, documentID: target.documentID)
+            }
+        } catch { return ["ok": false, "error": String(describing: error)] }
         switch action {
         case "get_scene":
             return mcpGetScene()

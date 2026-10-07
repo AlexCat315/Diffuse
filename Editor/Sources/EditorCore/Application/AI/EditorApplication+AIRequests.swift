@@ -35,7 +35,7 @@ extension EditorApplication {
 
         if let rejection = EditorAIRequestPolicy.rejectionMessage(
             hasPendingConfirmation: store.state.assistant.pendingConfirmationRequest != nil,
-            requestInFlight: activeAIRequestID != nil
+            requestInFlight: agentExecution.requestID != nil
         ) {
             store.dispatch(.setAIStatusMessage(rejection))
             return false
@@ -59,9 +59,15 @@ extension EditorApplication {
         store.dispatch(.setAIStatusMessage("Planning..."))
         store.dispatch(.appendChatMessage(AIChatMessage(role: .user, text: text)))
         let assistantID = UUID().uuidString
-        let requestID = UUID()
-        activeAIRequestID = requestID
-        pendingAssistantMessageID = assistantID
+        let target = EditorAgentTaskTarget(documentID: store.state.document.identity,
+            sceneRevision: store.sceneRevision, workspace: store.workspaceMode,
+            selectedEntityIDs: store.selectedEntityIDs, primaryEntityID: store.selectedEntityID)
+        guard let task = agentTaskService.begin(prompt: text, target: target) else { return }
+        let requestID = task.id
+        let scope = makeAgentWorkflowScope(target: target)
+        store.dispatch(.setAgentTasks(agentTaskService.tasks))
+        agentExecution.requestID = requestID
+        agentExecution.assistantMessageID = assistantID
         store.dispatch(.appendChatMessage(AIChatMessage(id: assistantID,
                                                         role: .assistant,
                                                         text: "",
@@ -72,38 +78,45 @@ extension EditorApplication {
             Task { @MainActor [weak self] in
                 guard let self,
                       !self.isShuttingDown,
-                      self.activeAIRequestID == requestID else { return }
+                      self.agentExecution.requestID == requestID else { return }
                 self.store.dispatch(.updateChatMessage(id: capturedAid,
                                                        assistantState: .streaming(partial)))
             }
         }
 
-        activeAIRequestTask = Task { @MainActor [weak self] in
+        agentExecution.requestTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
-                if self.activeAIRequestID == requestID {
-                    self.activeAIRequestID = nil
-                    self.activeAIRequestTask = nil
+                if self.agentExecution.requestID == requestID {
+                    self.agentExecution.requestID = nil
+                    self.agentExecution.requestTask = nil
                 }
             }
             do {
+                await self.pendingAISetupTask?.value
+                await self.pendingWorldObservationTask?.value
+                try Task.checkCancellation()
+                try self.validateAgentTaskTarget(target)
+                try await session.setWorkflowScope(scope)
                 let proposal = try await session.process(
                     .naturalLanguage(text: text, locale: locale ?? "en"),
                     onProgress: progressHandler
                 )
                 try Task.checkCancellation()
                 guard !self.isShuttingDown,
-                      self.activeAIRequestID == requestID else { return }
+                      self.agentExecution.requestID == requestID else { return }
+                try self.validateAgentTaskTarget(target)
                 let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
 
                 guard !proposal.plan.isEmpty || !proposal.capabilityDrafts.isEmpty else {
                     self.store.dispatch(.setAIStatusMessage("No scene changes."))
-                    if let aid = self.pendingAssistantMessageID {
+                    if let aid = self.agentExecution.assistantMessageID {
                         let reply = proposal.plan.summary.isEmpty ? "No scene changes needed." : proposal.plan.summary
                         self.store.dispatch(.updateChatMessage(id: aid,
                                                                assistantState: .replied(reply)))
-                        self.pendingAssistantMessageID = nil
+                        self.agentExecution.assistantMessageID = nil
                     }
+                    self.updateAgentTask(.completed, summary: proposal.plan.summary)
                     await session.recordOutcome(toolUseID: proposal.toolUseID,
                                                 content: "Acknowledged.",
                                                 proposalID: proposal.id)
@@ -142,13 +155,13 @@ extension EditorApplication {
                     transaction = try SceneEditPlanExecutor().buildTransaction(
                         from: proposal.plan,
                         scene: self.scene.scene,
-                        baseSceneRevision: proposal.baseSceneRevision,
+                        baseSceneRevision: self.scene.revision,
                         approvalPolicy: proposal.approvalPolicy,
                         exposureSnapshot: proposal.capabilityExposureSnapshot
                     )
                 }
                 self.logConsole("AI inference: \(latencyMs)ms", detail: proposal.plan.summary)
-                self.pendingSessionProposal = proposal
+                self.agentExecution.proposal = proposal
                 try self.submitPlanTransaction(
                     transaction,
                     capabilityContext: self.makeCapabilityInvocationContext(
@@ -158,14 +171,17 @@ extension EditorApplication {
                 )
             } catch {
                 guard !self.isShuttingDown,
-                      self.activeAIRequestID == requestID else { return }
+                      self.agentExecution.requestID == requestID else { return }
                 let message = error.localizedDescription
-                self.pendingSessionProposal = nil
+                let phase: EditorAgentTaskPhase = target.matches(documentID: self.store.state.document.identity,
+                    sceneRevision: self.store.sceneRevision) ? .failed : .conflict
+                self.updateAgentTask(phase, summary: message)
+                self.agentExecution.proposal = nil
                 self.store.dispatch(.setAIStatusMessage(message))
-                if let aid = self.pendingAssistantMessageID {
+                if let aid = self.agentExecution.assistantMessageID {
                     self.store.dispatch(.updateChatMessage(id: aid,
                                                            assistantState: .failed(message)))
-                    self.pendingAssistantMessageID = nil
+                    self.agentExecution.assistantMessageID = nil
                 }
             }
         }
@@ -193,7 +209,7 @@ extension EditorApplication {
                                                       executionContext: &context,
                                                       capabilityContext: capabilityContext)
         if result.disposition == .confirmationRequested {
-            pendingConfirmationTargetEntityIDs = targetEntityIDs
+            agentExecution.confirmationTargetEntityIDs = targetEntityIDs
         }
         applyInvocationResult(result, executionContext: &context)
         return result
@@ -270,7 +286,7 @@ extension EditorApplication {
     }
 
     private func resolvePendingConfirmation(_ resolution: ConfirmationResolution) {
-        let lockedEntityIDs = pendingConfirmationTargetEntityIDs
+        let lockedEntityIDs = agentExecution.confirmationTargetEntityIDs
             .filter(scene.isEntityLocked)
             .sorted()
         let acceptsAnyMutation = resolution.answers.contains { $0.outcome == .accepted }
@@ -283,10 +299,14 @@ extension EditorApplication {
         }
         var context = makeExecutionContext()
         do {
+            if acceptsAnyMutation, let target = agentTaskService.activeTask?.target {
+                try validateAgentTaskTarget(target)
+            }
             let result = try intentCoordinator.resolvePlanConfirmation(resolution,
                                                                        executionContext: &context)
             applyInvocationResult(result, executionContext: &context)
         } catch {
+            // Keep review active so the user can discard a stale proposal.
             store.dispatch(.setAIStatusMessage(error.localizedDescription))
         }
     }

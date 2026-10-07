@@ -7,6 +7,53 @@ import XCTest
 @testable import AIRuntime
 
 final class ProjectToolSessionTests: XCTestCase {
+    func testCreationScopeFiltersProviderToolsAndBindsSelectionInEveryProvider() async throws {
+        for format in [SessionAPIFormat.anthropic, .openAICompatible, .openAIResponses] {
+            ProjectURLProtocol.handler = { request in
+                let data = request.httpBody ?? ProjectURLProtocol.readBody(request.httpBodyStream)
+                let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+                let tools = try XCTUnwrap(body["tools"] as? [[String: Any]])
+                let names = tools.compactMap { $0["name"] as? String ?? ($0["function"] as? [String: Any])?["name"] as? String }
+                XCTAssertTrue(names.contains("respond"))
+                XCTAssertTrue(names.contains("save_scene"))
+                XCTAssertFalse(names.contains("write_script"))
+                XCTAssertFalse(names.contains("set_playback_state"))
+                XCTAssertFalse(names.contains("export_project"))
+                let prompt = body["system"] as? String ?? body["instructions"] as? String
+                    ?? (body["messages"] as? [[String: Any]])?.first?["content"] as? String ?? ""
+                XCTAssertTrue(prompt.contains("3D asset creation"))
+                XCTAssertTrue(prompt.contains("scene:42"))
+                XCTAssertFalse(prompt.contains("Currently selected: scene:99"))
+                let args = ["message": "Asset reviewed"]
+                let arguments = String(decoding: try JSONSerialization.data(withJSONObject: args), as: UTF8.self)
+                let output: [String: Any]
+                switch format {
+                case .anthropic:
+                    output = ["content": [["type": "tool_use", "id": "scope", "name": "respond", "input": args]], "stop_reason": "tool_use"]
+                case .openAICompatible:
+                    output = ["choices": [["message": ["tool_calls": [["id": "scope", "type": "function", "function": ["name": "respond", "arguments": arguments]]]], "finish_reason": "tool_calls"]]]
+                case .openAIResponses:
+                    output = ["output": [["type": "function_call", "call_id": "scope", "name": "respond", "arguments": arguments]]]
+                }
+                return try JSONSerialization.data(withJSONObject: output)
+            }
+            defer { ProjectURLProtocol.handler = nil }
+            let transport = URLSessionConfiguration.ephemeral
+            transport.protocolClasses = [ProjectURLProtocol.self]
+            let config = SessionConfig(apiKey: "fixture", model: "fixture", baseURL: URL(string: "https://guava.invalid")!, apiFormat: format)
+            let session = Session(config: config, urlSession: URLSession(configuration: transport))
+            await session.setProjectToolExecutor { _, _ in Data("{}".utf8) }
+            try await session.setWorkflowScope(SessionWorkflowScope {
+                $0.context = .asset(AssetWorkflowContext())
+                $0.allowedProjectToolNames = ["respond", "save_scene"]
+                $0.selectedEntityRefs = ["scene:42"]
+            })
+            await session.observe(selectionChanged: ["scene:99"])
+            let proposal = try await session.process(.naturalLanguage(text: "Review material", locale: "en"))
+            XCTAssertEqual(proposal.plan.summary, "Asset reviewed")
+        }
+    }
+
     func testProjectToolFailuresReturnToModelAndFinishAsAnswerInEveryProvider() async throws {
         for format in [SessionAPIFormat.anthropic, .openAICompatible, .openAIResponses] {
             var requests: [Data] = []
@@ -68,6 +115,17 @@ final class ProjectToolSessionTests: XCTestCase {
 
 private final class ProjectURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: ((URLRequest) throws -> Data)?
+    static func readBody(_ stream: InputStream?) -> Data {
+        guard let stream else { return Data() }
+        stream.open(); defer { stream.close() }
+        var result = Data(); var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            result.append(contentsOf: buffer.prefix(count))
+        }
+        return result
+    }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {

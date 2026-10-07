@@ -141,7 +141,9 @@ extension EditorApplication {
                                                  defaultConfidence: Double = 1.0,
                                                  defaultEvidence: [IntentEvidence] = []) -> CapabilityInvocationContext {
         CapabilityInvocationContext(sceneRuntime: scene.scene,
-                                    selectedEntityID: store.state.selection.selectedEntityID,
+                                    selectedEntityID: defaultSource == .ai
+                                        ? agentTaskService.activeTask?.target.primaryEntityID
+                                        : store.state.selection.selectedEntityID,
                                     isSceneEditable: store.state.timing.playbackState == .stopped,
                                     defaultSource: defaultSource,
                                     defaultConfidence: defaultConfidence,
@@ -157,20 +159,21 @@ extension EditorApplication {
 
         switch result.disposition {
         case .applied:
-            pendingConfirmationTargetEntityIDs.removeAll()
+            if agentExecution.proposal != nil { updateAgentTask(.applied, summary: agentExecution.proposal?.plan.summary ?? "Applied") }
+            agentExecution.confirmationTargetEntityIDs.removeAll()
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings(result.warnings))
             updateSelection(after: result.applyResult)
             store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
-            if let aid = pendingAssistantMessageID {
-                let planSummary = pendingSessionProposal?.plan.summary ?? ""
+            if let aid = agentExecution.assistantMessageID {
+                let planSummary = agentExecution.proposal?.plan.summary ?? ""
                 let appliedSummary = planSummary.isEmpty ? "Applied" : planSummary
                 store.dispatch(.updateChatMessage(id: aid, assistantState: .applied(summary: appliedSummary)))
-                pendingAssistantMessageID = nil
+                agentExecution.assistantMessageID = nil
             }
             if var edit = result.applyResult?.edit {
                 // Enrich provenance with the proposal that generated this edit.
-                if let proposal = pendingSessionProposal {
+                if let proposal = agentExecution.proposal {
                     edit.provenance.proposalID = proposal.id
                     let acceptedStepIDs = (0..<proposal.plan.steps.count).map { "step_\($0)" }
                     if let session {
@@ -182,7 +185,7 @@ extension EditorApplication {
                             )
                         }
                     }
-                    pendingSessionProposal = nil
+                    agentExecution.proposal = nil
                 }
                 do {
                     try editLog.append(edit)
@@ -196,23 +199,25 @@ extension EditorApplication {
                 observeWorldEvents(events)
             }
         case .confirmationRequested:
+            if agentExecution.proposal != nil { updateAgentTask(.awaitingReview, summary: agentExecution.proposal?.plan.summary ?? "") }
             store.dispatch(.setPendingConfirmationRequest(result.confirmationRequest))
             store.dispatch(.setAIWarnings(result.warnings))
             store.dispatch(.setAIStatusMessage("Confirmation required for \(result.transactionID)"))
-            if let aid = pendingAssistantMessageID {
+            if let aid = agentExecution.assistantMessageID {
                 let prompt = result.confirmationRequest?.questions.first?.promptShort ?? "Confirmation required"
                 store.dispatch(.updateChatMessage(id: aid, assistantState: .pendingConfirmation(summary: prompt)))
             }
         case .discarded:
-            pendingConfirmationTargetEntityIDs.removeAll()
+            if agentExecution.proposal != nil { updateAgentTask(.discarded, summary: "Proposal discarded") }
+            agentExecution.confirmationTargetEntityIDs.removeAll()
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings(result.warnings))
             store.dispatch(.setAIStatusMessage("Discarded \(result.transactionID)"))
-            if let aid = pendingAssistantMessageID {
+            if let aid = agentExecution.assistantMessageID {
                 store.dispatch(.updateChatMessage(id: aid, assistantState: .discarded))
-                pendingAssistantMessageID = nil
+                agentExecution.assistantMessageID = nil
             }
-            if let proposal = pendingSessionProposal {
+            if let proposal = agentExecution.proposal {
                 if let session {
                     Task { await session.recordOutcome(
                         toolUseID: proposal.toolUseID,
@@ -220,7 +225,7 @@ extension EditorApplication {
                         proposalID: proposal.id
                     ) }
                 }
-                pendingSessionProposal = nil
+                agentExecution.proposal = nil
             }
         }
     }
