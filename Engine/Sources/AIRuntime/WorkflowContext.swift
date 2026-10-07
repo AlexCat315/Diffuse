@@ -225,11 +225,13 @@ public struct FilmWorkflowContext: Sendable, Equatable, Codable {
 // MARK: - Unified WorkflowContext
 
 public enum WorkflowContext: Sendable, Equatable, Codable {
+    case asset(AssetWorkflowContext)
     case game(GameWorkflowContext)
     case film(FilmWorkflowContext)
 
     var systemPromptSection: String {
         switch self {
+        case let .asset(ctx): return ctx.systemPromptSection
         case let .game(ctx): return ctx.systemPromptSection
         case let .film(ctx): return ctx.systemPromptSection
         }
@@ -241,6 +243,7 @@ public enum WorkflowContext: Sendable, Equatable, Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try c.decode(String.self, forKey: .kind)
         switch kind {
+        case "asset": self = .asset(try c.decode(AssetWorkflowContext.self, forKey: .payload))
         case "game": self = .game(try c.decode(GameWorkflowContext.self, forKey: .payload))
         case "film": self = .film(try c.decode(FilmWorkflowContext.self, forKey: .payload))
         default: throw DecodingError.dataCorruptedError(forKey: .kind, in: c,
@@ -251,6 +254,9 @@ public enum WorkflowContext: Sendable, Equatable, Codable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         switch self {
+        case let .asset(ctx):
+            try c.encode("asset", forKey: .kind)
+            try c.encode(ctx, forKey: .payload)
         case let .game(ctx):
             try c.encode("game", forKey: .kind)
             try c.encode(ctx, forKey: .payload)

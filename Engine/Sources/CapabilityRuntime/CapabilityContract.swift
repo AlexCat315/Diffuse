@@ -202,17 +202,20 @@ public struct CapabilityContract: Codable, Sendable, Equatable {
 public struct CapabilityExposurePolicy: Sendable, Equatable {
     public var activeReleasePhase: CapabilityReleasePhase
     public var allowedDomains: Set<String>?
+    public var allowedCapabilityIDs: Set<String>?
     public var enabledPluginIDs: Set<String>
     public var allowExternalSideEffects: Bool
     public var maximumCapabilities: Int
 
     public init(activeReleasePhase: CapabilityReleasePhase = .stable,
                 allowedDomains: Set<String>? = nil,
+                allowedCapabilityIDs: Set<String>? = nil,
                 enabledPluginIDs: Set<String> = [],
                 allowExternalSideEffects: Bool = false,
                 maximumCapabilities: Int = 16) {
         self.activeReleasePhase = activeReleasePhase
         self.allowedDomains = allowedDomains
+        self.allowedCapabilityIDs = allowedCapabilityIDs
         self.enabledPluginIDs = enabledPluginIDs
         self.allowExternalSideEffects = allowExternalSideEffects
         self.maximumCapabilities = max(1, maximumCapabilities)

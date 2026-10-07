@@ -43,11 +43,11 @@ struct WorkspacePresetRegressionTests {
     func presetFrames() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let registry = registry()
         let expected: [(EditorLayoutPreset, Set<String>)] = [
-            (.levelDefault, ["viewport", "hierarchy", "inspector", "assets"]),
+            (.levelDefault, ["viewport", "hierarchy", "inspector"]),
             (.levelWorkbench, ["viewport", "scripts", "hierarchy", "inspector", "developer-tools"]),
             (.levelCinematics, ["viewport", "hierarchy", "inspector", "animation", "render-pipeline"]),
             (.scriptingDefault, ["scripts", "assets", "inspector", "console"]),
-            (.modelingDefault, ["viewport", "assets", "inspector", "render-pipeline"]),
+            (.modelingDefault, ["viewport", "assets", "inspector"]),
             (.modelingSculpt, ["viewport"]),
             (.animationDefault, ["viewport", "hierarchy", "inspector", "animation"]),
             (.animationSequencer, ["viewport", "hierarchy", "animation", "assets"]),
@@ -56,8 +56,9 @@ struct WorkspacePresetRegressionTests {
             let document = EditorWorkspaceDefaults.makeDocument(mode: preset.mode, preset: preset, registry: registry)
             #expect(document.hasValidLayoutReferences)
             let assigned = document.groups.values.flatMap(\.panels)
-            #expect(assigned.count == registry.count)
-            #expect(Set(assigned) == Set(registry.ids))
+            let allowed = Set(registry.ids.filter { preset.mode.profile.allowsPanel($0.rawValue) })
+            #expect(assigned.count == allowed.count)
+            #expect(Set(assigned) == allowed)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: WorkspaceView(controller: WorkspaceController(document: document)) { registry.make($0) })
             graph.computeLayout(width: 1280, height: 720)

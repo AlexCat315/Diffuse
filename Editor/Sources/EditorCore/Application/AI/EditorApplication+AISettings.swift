@@ -45,7 +45,7 @@ extension EditorApplication {
         store.dispatch(.clearChatHistory)
         let oldSession = session
         cancelActiveAIRequest()
-        pendingAssistantMessageID = nil
+        agentExecution.assistantMessageID = nil
         let newSession = Self.makeSession(
             for: settings,
             pluginCapabilityExecutor: pluginCapabilityExecutor,
@@ -103,7 +103,7 @@ extension EditorApplication {
         }
         session = nil
         store.dispatch(.clearChatHistory)
-        pendingAssistantMessageID = nil
+        agentExecution.assistantMessageID = nil
         var settings = store.state.assistant.aiSettings
         settings.provider = .none
         store.dispatch(.setAISettings(settings))
@@ -111,10 +111,15 @@ extension EditorApplication {
     }
 
     func cancelActiveAIRequest() {
-        activeAIRequestID = nil
-        activeAIRequestTask?.cancel()
-        activeAIRequestTask = nil
-        pendingSessionProposal = nil
+        if agentExecution.proposal != nil, store.pendingConfirmationRequest != nil { skipPendingConfirmation() }
+        if agentTaskService.activeTask != nil { updateAgentTask(.cancelled, summary: "Task cancelled") }
+        if let id = agentExecution.assistantMessageID {
+            store.dispatch(.updateChatMessage(id: id, assistantState: .discarded))
+        }
+        agentExecution.requestID = nil
+        agentExecution.requestTask?.cancel()
+        agentExecution.requestTask = nil
+        agentExecution.proposal = nil
     }
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
@@ -144,8 +149,7 @@ extension EditorApplication {
                                             targetExperience: "Interactive level editing",
                                             knownConstraints: constraints))
         case .modeling:
-            return .film(FilmWorkflowContext(activeSequenceID: "modeling",
-                                              narrativePhase: .blocking, directorIntent: "Model and render a 3D film scene"))
+            return .asset(AssetWorkflowContext())
         case .animation:
             return .film(FilmWorkflowContext(activeSequenceID: "animation",
                                               narrativePhase: .blocking, directorIntent: "Animate a 3D film sequence"))

@@ -52,6 +52,12 @@ extension EditorApplication {
         guard let definition = ProjectToolset.tools.first(where: { $0.name == name }) else {
             throw EditorProjectToolError("Unknown project tool: \(name)")
         }
+        let task = agentTaskService.activeTask
+        let profile = (task?.target.workspace ?? store.workspaceMode).profile
+        guard profile.projectToolNames.contains(name) else {
+            throw EditorProjectToolError("This tool is unavailable in the active authoring workflow.")
+        }
+        if !definition.readOnly, let target = task?.target { try validateAgentTaskTarget(target) }
         try JSONSchemaValidator.validate(data: input, against: definition.schema)
         let args = (try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:])
             .filter { !($0.value is NSNull) }

@@ -9,6 +9,8 @@ public struct EditorAssistantState: Codable, Sendable {
     public var pluginManagement: EditorPluginManagementState = .idle
     public var aiStatusMessage: String? = nil
     public var aiWarnings: [String] = []
+    /// Task sessions are transient and are never restored as running after launch.
+    public var agentTasks: [EditorAgentTask] = []
     public var chatMessages: [AIChatMessage] = []
 
     public init(_ configure: (inout Self) -> Void = { _ in }) {

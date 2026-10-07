@@ -10,6 +10,105 @@ import GuavaUIRuntime
 import GuavaUIWorkspace
 
 final class WorkspaceViewTests: XCTestCase {
+    func testClosingLastPanelAnimatesTheVacatedRegionAndKeepsTheDocumentClosed() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let controller = WorkspaceController(document: Self.makeDocument())
+            let root = AnyView(Self.makeWorkspaceRoot(controller: controller)
+                .workspaceTheme(WorkspaceTheme(animatesLayout: true)))
+            let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 600, root: root)
+            let inspector = rig.node(named: "content-inspector")
+            _ = controller.dispatch(.closePanel("inspector")); rig.pump()
+            XCTAssertNil(controller.document.groupContaining(panelID: "inspector"))
+            XCTAssertTrue(rig.optionalNode(named: "content-inspector") === inspector)
+            XCTAssertFalse(inspector.acceptsSubtreeInput)
+            scheduler.tick(deltaTime: 1); rig.pump()
+            XCTAssertNil(rig.optionalNode(named: "content-inspector"))
+            XCTAssertEqual(rig.frame(named: "workspace-region-center").maxX, 1000, accuracy: 1)
+            XCTAssertEqual(scheduler.activeCount, 0)
+        }
+    }
+
+    func testAnimatedCollapseRetainsPaintDisablesInputAndReclaimsSpace() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let controller = WorkspaceController(document: Self.makeDocument())
+            let root = AnyView(Self.makeWorkspaceRoot(controller: controller)
+                .workspaceTheme(WorkspaceTheme(animatesLayout: true)))
+            let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 600, root: root)
+            let inspector = rig.node(named: "content-inspector")
+            let initial = rig.frame(named: "workspace-region-trailing").width
+            let center = rig.frame(named: "workspace-region-center").width
+            _ = controller.dispatch(.collapse("trailing"))
+            rig.pump()
+            XCTAssertTrue(rig.optionalNode(named: "content-inspector") === inspector)
+            XCTAssertFalse(inspector.acceptsSubtreeInput)
+            XCTAssertEqual(rig.frame(named: "workspace-region-trailing").width, initial, accuracy: 1)
+            scheduler.tick(deltaTime: 0.08)
+            rig.pump()
+            let intermediate = rig.frame(named: "workspace-region-trailing").width
+            XCTAssertGreaterThan(intermediate, 0)
+            XCTAssertLessThan(intermediate, initial)
+            XCTAssertGreaterThan(rig.frame(named: "workspace-region-center").width, center)
+            scheduler.tick(deltaTime: 1)
+            rig.pump()
+            XCTAssertNil(rig.optionalNode(named: "content-inspector"))
+            let rail = rig.frame(named: "workspace-rail-trailing")
+            XCTAssertEqual(rig.frame(named: "workspace-region-center").maxX, rail.minX, accuracy: 1)
+            XCTAssertEqual(scheduler.activeCount, 0)
+        }
+    }
+
+    func testAnimatedCollapseReversalKeepsTheSamePanelAndRestoresLayout() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let controller = WorkspaceController(document: Self.makeDocument())
+            let root = AnyView(Self.makeWorkspaceRoot(controller: controller)
+                .workspaceTheme(WorkspaceTheme(animatesLayout: true)))
+            let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 600, root: root)
+            let inspector = rig.node(named: "content-inspector")
+            let initial = rig.frame(named: "workspace-region-trailing")
+            _ = controller.dispatch(.collapse("trailing")); rig.pump()
+            scheduler.tick(deltaTime: 0.06); rig.pump()
+            let current = rig.frame(named: "workspace-region-trailing")
+            _ = controller.dispatch(.expand("trailing")); rig.pump()
+            XCTAssertEqual(rig.frame(named: "workspace-region-trailing").width, current.width, accuracy: 1)
+            scheduler.tick(deltaTime: 1); rig.pump()
+            XCTAssertTrue(rig.optionalNode(named: "content-inspector") === inspector)
+            XCTAssertTrue(inspector.acceptsSubtreeInput)
+            XCTAssertEqual(rig.frame(named: "workspace-region-trailing").width, initial.width, accuracy: 1)
+            XCTAssertNil(rig.optionalNode(named: "workspace-rail-trailing"))
+            XCTAssertEqual(scheduler.activeCount, 0)
+        }
+    }
+
+    func testCollapsedRailActivatesTheClickedPanel() {
+        let controller = WorkspaceController(document: Self.makeMultiTabDocument())
+        let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 600,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+        _ = controller.dispatch(.collapse("bottom"))
+        rig.pump()
+        rig.click(rig.frame(named: "workspace-restore-bottom-assets").center)
+        XCTAssertEqual(controller.document.groups["bottom"]?.activePanelID, "assets")
+        XCTAssertEqual(controller.document.groups["bottom"]?.isCollapsed, false)
+        XCTAssertNotNil(rig.optionalFrame(named: "content-assets"))
+        _ = controller.dispatch(.collapse("bottom"))
+        rig.pump()
+        rig.click(rig.frame(named: "workspace-restore-bottom-console").center)
+        XCTAssertEqual(controller.document.groups["bottom"]?.activePanelID, "console")
+        XCTAssertNotNil(rig.optionalFrame(named: "content-console"))
+    }
+
+    func testWorkspaceThemeControlsTabBarHeight() {
+        let controller = WorkspaceController(document: Self.makeDocument())
+        let root = AnyView(Self.makeWorkspaceRoot(controller: controller)
+            .workspaceTheme(WorkspaceTheme(tabBarHeight: 38)))
+        let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 600, root: root)
+        let group = rig.frame(named: "workspace-group-center")
+        let content = rig.frame(named: "workspace-panel-viewport")
+        XCTAssertEqual(content.minY - group.minY, 38, accuracy: 0.5)
+    }
+
     func testClickingCollapseButtonCollapsesTrailingWithoutLeavingCenterGap() {
         let rig = makeRig(width: 1000, height: 600)
         let beforeCenter = rig.frame(named: "workspace-region-center")
@@ -89,9 +188,9 @@ final class WorkspaceViewTests: XCTestCase {
         let trailingRail = rig.frame(named: "workspace-rail-trailing")
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
         let centerColumn = rig.frame(named: "workspace-center-column")
-        let leadingRestore = rig.frame(named: "workspace-restore-leading")
-        let trailingRestore = rig.frame(named: "workspace-restore-trailing")
-        let bottomRestore = rig.frame(named: "workspace-restore-bottom")
+        let leadingRestore = rig.frame(named: "workspace-restore-leading-hierarchy")
+        let trailingRestore = rig.frame(named: "workspace-restore-trailing-inspector")
+        let bottomRestore = rig.frame(named: "workspace-restore-bottom-console")
 
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-leading"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
@@ -195,7 +294,7 @@ final class WorkspaceViewTests: XCTestCase {
         let workspace = rig.frame(named: "workspace")
         let statusBar = rig.frame(named: "editor-status-bar")
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
-        let bottomRestore = rig.frame(named: "workspace-restore-bottom")
+        let bottomRestore = rig.frame(named: "workspace-restore-bottom-console")
         let center = rig.frame(named: "workspace-region-center")
         XCTAssertEqual(workspace.maxY, statusBar.minY, accuracy: 1.0)
         XCTAssertEqual(bottomRail.minX, center.minX, accuracy: 0.5)
@@ -255,7 +354,7 @@ final class WorkspaceViewTests: XCTestCase {
                                                                              height: 640))
 
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
-        let bottomRestore = rig.frame(named: "workspace-restore-bottom")
+        let bottomRestore = rig.frame(named: "workspace-restore-bottom-console")
         let statusBar = rig.frame(named: "editor-status-bar")
         let center = rig.frame(named: "workspace-region-center")
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
@@ -340,9 +439,9 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(bottomRail.maxX, centerColumn.maxX, accuracy: 0.5)
         XCTAssertEqual(bottomRail.maxY, collapsedStatusBar.minY, accuracy: 1.0)
 
-        rig.click(rig.frame(named: "workspace-restore-leading").center)
-        rig.click(rig.frame(named: "workspace-restore-trailing").center)
-        rig.click(rig.frame(named: "workspace-restore-bottom").center)
+        rig.click(rig.frame(named: "workspace-restore-leading-hierarchy").center)
+        rig.click(rig.frame(named: "workspace-restore-trailing-inspector").center)
+        rig.click(rig.frame(named: "workspace-restore-bottom-console").center)
 
         let leadingSlot = rig.frame(named: "workspace-region-leading")
         let centerSlot = rig.frame(named: "workspace-region-center")

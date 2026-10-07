@@ -14,6 +14,7 @@ public struct TextFieldStyleConfiguration {
     public let isError: Bool
     public let isEnabled: Bool
     public let theme: Theme
+    public var isHovered = false
 }
 
 /// Equatable interaction snapshot used by built-in text field styles to key

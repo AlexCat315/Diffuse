@@ -12,12 +12,16 @@ struct EditorStoreTests {
         store.dispatch(.navigateToScript(.init(scriptID: "Player", line: 3, column: 6)))
         store.dispatch(.setViewportMode(.game))
         store.dispatch(.setGamePreviewFocused(true))
+        store.dispatch(.setGamePreviewResolution(.portrait))
         let data = try JSONEncoder().encode(store.state)
         let decoded = try JSONDecoder().decode(EditorState.self, from: data)
         #expect(decoded.navigation.operations.isEmpty)
         #expect(decoded.navigation.scriptNavigation == nil)
         #expect(decoded.viewport.mode == .scene)
         #expect(!decoded.viewport.gamePreviewFocused)
+        #expect(decoded.viewport.gamePreviewResolution == .fit)
+        let defaults = try JSONDecoder().decode(EditorViewportState.self, from: Data("{}".utf8))
+        #expect(defaults.gamePreviewResolution == .fit)
     }
 
     @Test("compiler errors retain a clickable source line even without a language service")

@@ -20,6 +20,7 @@ import SIMDCompat
 
 extension EditorApplication {
     public func resetPreviewScene() {
+        beginAgentSceneDocument()
         removeEditorAutosave()
         scene.resetToPreviewScene()
         reloadScriptsAfterSceneReplacement()
@@ -33,6 +34,7 @@ extension EditorApplication {
 
     /// New documents begin empty; preview fixtures are only created explicitly.
     public func createEmptyScene() {
+        beginAgentSceneDocument()
         removeEditorAutosave()
         _ = scene.load(manifest: EditorSceneManifest(revision: 0, entityCount: 0, roots: []))
         reloadScriptsAfterSceneReplacement()

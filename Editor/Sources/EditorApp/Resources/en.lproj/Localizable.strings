@@ -702,6 +702,7 @@
 "Select a valid file of the same format and check its dependencies." = "Select a valid file of the same format and check its dependencies.";
 "Restore the script file, then refresh the script catalog." = "Restore the script file, then refresh the script catalog.";
 "Select an entity with an animation component." = "Select an entity with an animation component.";
+"Select an entity" = "Select an entity";
 "Add Animation Player" = "Add Animation Player";
 "Script compilation failed" = "Script compilation failed";
 "Failed to compile dynamic script" = "Failed to compile dynamic script";
@@ -726,3 +727,39 @@
 "Viewport Focus" = "Viewport Focus";
 "Viewport and Animation" = "Viewport and Animation";
 "Animation Details" = "Animation Details";
+
+"Game Development" = "Game Development";
+
+"3D Creation" = "3D Creation";
+
+"Manual Editing" = "Manual Editing";
+
+"Agent Workbench" = "Agent Workbench";
+
+
+"Task Conversation" = "Task Conversation";
+
+"Tasks" = "Tasks";
+
+"Describe a task in the conversation to begin." = "Describe a task in the conversation to begin.";
+
+"Base Version" = "Base Version";
+
+"Target" = "Target";
+
+"Planning" = "Planning";
+
+"Awaiting Review" = "Awaiting Review";
+
+"Completed" = "Completed";
+
+"Cancelled" = "Cancelled";
+
+"Scene Changed" = "Scene Changed";
+
+"Choose an object in the viewport or Hierarchy to edit its properties." = "Choose an object in the viewport or Hierarchy to edit its properties.";
+
+"Play in current viewport" = "Play in current viewport";
+"Pause game" = "Pause game";
+"Stop and return to editing" = "Stop and return to editing";
+"Return to Inspector" = "Return to Inspector";

@@ -7,6 +7,7 @@ enum EditorWorkspaceDefaults {
     static func makeDocument(mode: EditorWorkspaceMode,
                              preset requestedPreset: EditorLayoutPreset,
                              registry: PanelRegistry) -> WorkspaceDocument {
+        let registry = EditorWorkspacePanelPolicy.registry(for: mode, from: registry)
         let preset = requestedPreset.mode == mode ? requestedPreset : .default(for: mode)
         let panels = Dictionary(uniqueKeysWithValues: registry.descriptors.map { descriptor in
             (descriptor.id, WorkspacePanel(id: descriptor.id, title: descriptor.title,
@@ -20,7 +21,7 @@ enum EditorWorkspaceDefaults {
         if mode == .scripting || mode == .modeling {
             move("assets", to: "leading", groups: &groups, panels: panels)
         }
-        if mode == .scripting, panels["scripts"] != nil { groups["center"]?.activePanelID = "scripts" }
+        if mode == .scripting { move("scripts", to: "center", groups: &groups, panels: panels) }
 
         switch preset {
         case .levelWorkbench where panels["scripts"] != nil:
@@ -47,7 +48,9 @@ enum EditorWorkspaceDefaults {
                 bottom: groups["bottom"]?.panels.isEmpty == false ? bottom : nil),
             layoutTree: center, splitFractions: defaultFractions(for: preset))
         let controller = WorkspaceController(document: document)
-        if preset == .modelingSculpt {
+        if preset == .levelDefault || preset == .modelingDefault {
+            _ = controller.dispatch(.collapse("bottom"))
+        } else if preset == .modelingSculpt {
             for group: WorkspaceTabGroupID in ["leading", "trailing", "bottom"] {
                 _ = controller.dispatch(.collapse(group))
             }
@@ -63,9 +66,9 @@ enum EditorWorkspaceDefaults {
         var groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [:]
         let definitions: [(WorkspaceTabGroupID, [WorkspacePanelID], WorkspacePanelID)] = [
             ("leading", ["hierarchy"], "hierarchy"),
-            ("center", ["viewport", "scripts"], "viewport"),
-            ("trailing", ["inspector", "intent-input"], "inspector"),
-            ("bottom", ["assets", "console", "animation", "render-pipeline", "developer-tools", "confirmation-host"],
+            ("center", ["viewport"], "viewport"),
+            ("trailing", ["inspector"], "inspector"),
+            ("bottom", ["assets", "console", "animation", "render-pipeline", "developer-tools", "confirmation-host", "scripts", "intent-input"],
              defaultBottomPanelID(for: preset)),
         ]
         for (id, panelIDs, active) in definitions {

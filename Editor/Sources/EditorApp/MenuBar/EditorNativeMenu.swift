@@ -7,6 +7,7 @@ enum EditorNativeMenuBuilder {
                      workspaceMode: EditorWorkspaceMode,
                      activeLayoutPreset: EditorLayoutPreset,
                      playbackState: PlaybackState,
+                     interactionMode: EditorInteractionMode = .manual,
                      canUndo: Bool = false,
                      canRedo: Bool = false,
                      hasSelection: Bool = false,
@@ -15,6 +16,7 @@ enum EditorNativeMenuBuilder {
         let model = EditorMenuModel.make(workspaceMode: workspaceMode,
                                          activeLayoutPreset: activeLayoutPreset,
                                          playbackState: playbackState,
+                             interactionMode: interactionMode,
                                          canUndo: canUndo,
                                          canRedo: canRedo,
                                          hasSelection: hasSelection)

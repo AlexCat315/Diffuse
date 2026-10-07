@@ -366,8 +366,8 @@ extension EditorApplication {
                 scriptEntries: scene.scriptCatalogEntries
             ))
         }
-        pendingSessionProposal = nil
-        pendingAssistantMessageID = nil
+        agentExecution.proposal = nil
+        agentExecution.assistantMessageID = nil
         store.dispatch(.clearChatHistory)
     }
 

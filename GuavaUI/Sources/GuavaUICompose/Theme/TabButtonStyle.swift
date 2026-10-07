@@ -9,14 +9,15 @@ public struct TabButtonStyle: ButtonStyle, Hashable {
 
     public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let colors = configuration.theme.colors
-        let fill = configuration.isSelected ? colors.surfaceSunken
+        let fill = configuration.isSelected ? colors.surfaceVariant
             : configuration.isPressed ? colors.stateLayerPressed
             : configuration.isHovered ? colors.stateLayerHover : .clear
         return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 AnyView(configuration.label)
                     .font(.label)
-                    .foregroundColor(configuration.isSelected ? .onSurface : .onSurfaceMuted)
+                    .foregroundColor(!configuration.isEnabled ? .onSurfaceDisabled
+                        : configuration.isSelected ? .onSurface : .onSurfaceVariant)
             }
             .padding(horizontal: 10)
             .frame(height: height - 2)
@@ -27,7 +28,7 @@ public struct TabButtonStyle: ButtonStyle, Hashable {
         }
         .background(fill)
         .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
-        .opacity(configuration.isEnabled ? 1 : 0.5)
+        .animation(.semantic(.fast, in: configuration.theme), value: configuration.interactionKey)
     }
 }
 
