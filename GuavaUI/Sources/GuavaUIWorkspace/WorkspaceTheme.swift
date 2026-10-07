@@ -7,17 +7,20 @@ public struct WorkspaceTheme: Sendable {
     public var tabBarHeight: Float
     public var splitDividerThickness: Float
     public var splitDividerHitSlop: Float
+    public var animatesLayout: Bool
 
     public init(sideRailWidth: Float = 40,
                 bottomRailHeight: Float = 40,
                 tabBarHeight: Float = 34,
                 splitDividerThickness: Float = 8,
-                splitDividerHitSlop: Float = 2) {
+                splitDividerHitSlop: Float = 2,
+                animatesLayout: Bool = false) {
         self.sideRailWidth = sideRailWidth
         self.bottomRailHeight = bottomRailHeight
         self.tabBarHeight = tabBarHeight
         self.splitDividerThickness = splitDividerThickness
         self.splitDividerHitSlop = splitDividerHitSlop
+        self.animatesLayout = animatesLayout
     }
 }
 

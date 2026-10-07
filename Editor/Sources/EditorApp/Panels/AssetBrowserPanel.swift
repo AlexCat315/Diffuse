@@ -892,9 +892,9 @@ private struct AssetTile: View {
             }
             .padding(horizontal: 5, vertical: 6)
             .frame(width: 88)
-            .background(isSelected ? AssetTilePalette.selectionFill : AssetTilePalette.transparent)
+            .background(isSelected ? SemanticColorRef.selection : .surface.opacity(0))
             .cornerRadius(6)
-            .border(isSelected ? AssetTilePalette.selectionStroke : AssetTilePalette.transparent, width: 1)
+            .border(isSelected ? SemanticColorRef.borderStrong : .border.opacity(0), width: 1)
         }
     }
 }
@@ -1015,9 +1015,9 @@ private struct AssetListRow: View {
                     .foregroundColor(.onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 6)
-            .background(isSelected ? AssetTilePalette.selectionFill : AssetTilePalette.transparent)
+            .background(isSelected ? SemanticColorRef.selection : .surface.opacity(0))
             .cornerRadius(3)
-            .border(isSelected ? AssetTilePalette.selectionStroke : AssetTilePalette.transparent, width: 1)
+            .border(isSelected ? SemanticColorRef.borderStrong : .border.opacity(0), width: 1)
         }
     }
 }
@@ -1072,11 +1072,8 @@ private struct AssetBrowserPlaceholder: View {
 // MARK: - Styling helpers
 
 /// Hardcoded selection accents (mirrors `HierarchyTreeRowStyle`'s approach):
-/// a saturated blue reads clearly over both the light and dark surface grays.
+/// neutral thumbnail wells keep mesh previews readable independently of selection.
 private enum AssetTilePalette {
-    static let transparent = Color(r: 0, g: 0, b: 0, a: 0)
-    static let selectionFill = Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0x33)
-    static let selectionStroke = Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0xC8)
     /// Fixed neutral slate backdrop for thumbnails so the clay-shaded mesh reads
     /// the same in light and dark themes (matches how UE/Unity render previews).
     static let thumbnailBackdrop = Color(red: 0x2E, green: 0x31, blue: 0x38)
@@ -1093,14 +1090,7 @@ private extension ImportableAssetKind {
         }
     }
 
-    var tint: SemanticColorRef {
-        switch self {
-        case .gltf, .glb: return .accent
-        case .obj:        return .warning
-        case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
-            return .success
-        }
-    }
+    var tint: SemanticColorRef { .onSurfaceVariant }
 
     var iconName: String {
         isTexture ? "squares-2x2" : "cube"

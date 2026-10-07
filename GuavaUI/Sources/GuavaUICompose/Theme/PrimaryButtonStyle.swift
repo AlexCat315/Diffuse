@@ -18,7 +18,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         BuiltinButtonChrome(kind: .primary,
                             configuration: configuration,
-                            foreground: configuration.isEnabled ? .onAccent : .onSurfaceMuted)
+                            foreground: configuration.isEnabled ? .onAccent : .onSurfaceDisabled)
     }
 }
 
