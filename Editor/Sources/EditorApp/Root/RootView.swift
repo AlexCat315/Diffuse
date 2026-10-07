@@ -12,6 +12,7 @@ struct EditorRootView: View {
     let registry: PanelRegistry
     @State private var windowWidth: Float = 1280
     @State private var windowHeight: Float = 720
+    @State private var agentController = EditorAgentWorkspaceDefaults.makeController()
 
     var body: some View {
         StoreScope(app.store) { store in
@@ -40,11 +41,11 @@ struct EditorRootView: View {
                         }
 
                         EditorWorkflowBar(workspace: store.workspace,
-                                          playbackState: store.playbackState, width: windowWidth,
+                                          playbackState: store.playbackState,
                                           onCommand: cb.handleMenuCommand)
 
                         if store.interactionMode == .agent {
-                            AgentWorkbenchView(app: app, width: windowWidth)
+                            AgentWorkbenchView(app: app, controller: agentController)
                                 .flex().frame(minWidth: 0, minHeight: 0)
                                 .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
                         } else {
@@ -52,7 +53,7 @@ struct EditorRootView: View {
                                            registry: registry, compact: windowWidth < 1000)
                                 .flex()
                                 .frame(minWidth: 0, minHeight: 0)
-                                .workspaceTheme(WorkspaceTheme(splitDividerThickness: 5))
+                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 30, splitDividerThickness: 5))
                                 .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
                                 .layoutRole("editor-workspace")
                                 .debugName("editor-workspace")

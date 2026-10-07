@@ -1600,7 +1600,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Pick")) · Q") {
                     onSelectGizmoMode(.none)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(.toolToggle)
                 Button(icon: .resource(ViewportToolbarIcon.boxSelect.resource),
                        size: 15,
                        isEnabled: isAuthoringEnabled,
@@ -1608,7 +1608,7 @@ private struct ViewportInfoBar: View {
                        tooltip: "\(L("Box Select")) · B") {
                     onSelectGizmoMode(.boxSelect)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(.toolToggle)
                 Button(icon: .resource(ViewportToolbarIcon.translate.resource),
                            size: 15,
                            isEnabled: isAuthoringEnabled,
@@ -1616,7 +1616,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Move")) · W") {
                     onSelectGizmoMode(.translate)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(.toolToggle)
                 Button(icon: .resource(ViewportToolbarIcon.rotate.resource),
                            size: 15,
                            isEnabled: isAuthoringEnabled,
@@ -1624,7 +1624,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Rotate")) · E") {
                     onSelectGizmoMode(.rotate)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(.toolToggle)
                 Button(icon: .resource(ViewportToolbarIcon.scale.resource),
                            size: 15,
                            isEnabled: isAuthoringEnabled,
@@ -1632,7 +1632,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Scale")) · R") {
                     onSelectGizmoMode(.scale)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(.toolToggle)
 
                 ToggleChip(label: gizmoSpace == .local ? L("Local") : L("World"),
                            isActive: gizmoSpace == .local,
@@ -1665,14 +1665,14 @@ private struct ViewportInfoBar: View {
                        isSelected: gridEnabled,
                        tooltip: L("Reference Grid"),
                        action: onToggleGrid)
-                    .buttonStyle(.toggle)
+                    .buttonStyle(.toolToggle)
                 Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
                            size: 15,
                            isSelected: shadowsEnabled,
                            tooltip: L("Shadows")) {
                     onToggleShadows()
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(.toolToggle)
 
                 RenderScaleSelector(percent: renderScalePercent,
                                     interactionDownscaleEnabled: interactionDownscaleEnabled,
@@ -1714,7 +1714,7 @@ private struct ToggleChip: View {
         Button(isEnabled: isEnabled, isSelected: isActive, action: onTap) {
             Text(label, lineLimit: 1)
         }
-        .buttonStyle(.toggle)
+        .buttonStyle(.toolToggle)
     }
 }
 

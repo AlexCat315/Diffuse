@@ -27,18 +27,23 @@ struct WorkbenchProductivityTests {
         let fields = inputs(try #require(graph.tree.root))
         #expect(fields.count == 3)
     } }
-    @Test("scene settings remain editable with no selected or existing entity")
+    @Test("an empty inspector shows object guidance until scene settings are explicitly opened")
     func emptyInspector() throws { try WorkbenchUITestSupport.withEnvironment { registry, _ in
         let scene = EditorSceneAdapter(seedPreviewScene: false)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: InspectorPanel(store: EditorStore(), scene: scene).theme(EditorVisualTheme.make(dark: false)))
+        let store = EditorStore()
+        graph.install(root: InspectorPanel(store: store, scene: scene).theme(EditorVisualTheme.make(dark: false)))
         graph.computeLayout(width: 330, height: 760)
         func inputCount(_ node: Node) -> Int {
             (registry.handlers(for: node).text == nil ? 0 : 1) + node.children.reduce(0) { $0 + inputCount($1) }
         }
         let root = try #require(graph.tree.root)
         #expect(scene.entityCount == 0)
-        #expect(inputCount(root) > 3)
+        #expect(inputCount(root) == 0)
+        store.dispatch(.setInspectorSceneSettingsVisible(true))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 330, height: 760)
+        #expect(inputCount(try #require(graph.tree.root)) > 3)
     } }
 
     @Test("mixed numeric fields preserve the batch on blur and commit a typed primary value once")
