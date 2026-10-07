@@ -12,6 +12,7 @@ struct EditorRootView: View {
     let registry: PanelRegistry
     @State private var windowWidth: Float = 1280
     @State private var windowHeight: Float = 720
+    @State private var agentController = EditorAgentWorkspaceDefaults.makeController()
 
     var body: some View {
         StoreScope(app.store) { store in
@@ -28,49 +29,35 @@ struct EditorRootView: View {
                                     workspaceMode: store.workspaceMode,
                                     activeLayoutPreset: store.activeLayoutPreset,
                                     playbackState: store.playbackState,
+                                    interactionMode: store.interactionMode,
                                     canUndo: TextEditingCommands.canUndo ?? app.canUndo,
                                     canRedo: TextEditingCommands.canRedo ?? app.canRedo,
                                     hasSelection: !store.selectedEntityIDs.isEmpty,
                                     onCommand: cb.handleMenuCommand
                                 )
 
-                                Spacer(minLength: 12)
-                                if windowWidth >= 1050 {
-                                    Text(L(store.workspaceMode.title)).font(.caption).foregroundColor(.onSurfaceVariant)
-                                }
-                                if store.workspaceMode.isGameWorkspace {
-                                    EditorPlaybackToolbar(state: store.playbackState,
-                                                      onCommand: cb.handleMenuCommand)
-                                } else {
-                                    Button(L("Render Pipeline")) { EditorRootViewFactory.activatePanel("render-pipeline", in: controller) }
-                                        .buttonStyle(.ghost)
-                                }
-                                Spacer(minLength: 12)
-
-                                if windowWidth >= 760 {
-                                LayoutPresetSelector(
-                                    workspaceMode: store.workspaceMode,
-                                    activePreset: store.activeLayoutPreset,
-                                    onSelectPreset: { preset in
-                                        cb.handleMenuCommand(.setLayoutPreset(preset))
-                                    }
-                                )
-                                }
+                                Spacer(minLength: 0)
                             }
                         }
 
-                        // Floating-island chrome: no full-width divider — the
-                        // canvas margin separates the title bar from the
-                        // workspace, and the rounded panel slabs carry the
-                        // structure.
-                        PanelWorkspace(controller: controller,
-                                       registry: registry, compact: windowWidth < 1000)
-                            .flex()
-                            .frame(minWidth: 0, minHeight: 0)
-                            .workspaceTheme(WorkspaceTheme(splitDividerThickness: 5))
-                            .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
-                            .layoutRole("editor-workspace")
-                            .debugName("editor-workspace")
+                        EditorWorkflowBar(workspace: store.workspace,
+                                          playbackState: store.playbackState,
+                                          onCommand: cb.handleMenuCommand)
+
+                        if store.interactionMode == .agent {
+                            AgentWorkbenchView(app: app, controller: agentController)
+                                .flex().frame(minWidth: 0, minHeight: 0)
+                                .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
+                        } else {
+                            PanelWorkspace(controller: controller,
+                                           registry: registry, compact: windowWidth < 1000)
+                                .flex()
+                                .frame(minWidth: 0, minHeight: 0)
+                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 5, animatesLayout: true))
+                                .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
+                                .layoutRole("editor-workspace")
+                                .debugName("editor-workspace")
+                        }
 
                         EditorStatusBar(store: store, scriptWorkspace: app.scriptWorkspace,
                                         showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed },

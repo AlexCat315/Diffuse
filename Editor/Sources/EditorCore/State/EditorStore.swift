@@ -18,6 +18,8 @@ public final class EditorStore: @unchecked Sendable {
         case selectedEntityID
         case selectedEntityIDs
         case playbackState
+        case interactionMode
+        case agentTasks
         case workspaceMode
         case activeLayoutPreset
         case sceneRevision
@@ -163,6 +165,12 @@ public final class EditorStore: @unchecked Sendable {
             mark(.selectedEntityIDs, old.selection.selectedEntityIDs, new.selection.selectedEntityIDs)
         case .setPlaybackState:
             mark(.playbackState, old.timing.playbackState, new.timing.playbackState)
+        case .setInteractionMode:
+            mark(.interactionMode, old.workspace.interactionMode, new.workspace.interactionMode)
+        case .setAgentTasks:
+            mark(.agentTasks, old.assistant.agentTasks, new.assistant.agentTasks)
+        case .beginSceneDocument:
+            keys.insert(.state)
         case .setWorkspaceMode:
             mark(.workspaceMode, old.workspace.mode, new.workspace.mode)
             mark(.activeLayoutPreset, old.workspace.layoutPreset, new.workspace.layoutPreset)
@@ -346,8 +354,16 @@ extension EditorStore {
     public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.output.consoleEntries) }
     public var latestConsoleEntry: EditorConsoleEntry? { read(.consoleEntries, storage.output.consoleEntries.last) }
     public var playbackState: PlaybackState { read(.playbackState, storage.timing.playbackState) }
+    public var interactionMode: EditorInteractionMode { read(.interactionMode, storage.workspace.interactionMode) }
+    public var agentTasks: [EditorAgentTask] { read(.agentTasks, storage.assistant.agentTasks) }
     public var workspaceMode: EditorWorkspaceMode { read(.workspaceMode, storage.workspace.mode) }
     public var activeLayoutPreset: EditorLayoutPreset { read(.activeLayoutPreset, storage.workspace.layoutPreset) }
+    public var workspace: EditorWorkspaceState {
+        registrar.access(AnyHashable(ObservationKey.workspaceMode))
+        registrar.access(AnyHashable(ObservationKey.activeLayoutPreset))
+        registrar.access(AnyHashable(ObservationKey.interactionMode))
+        return storage.workspace
+    }
     public var gizmoMode: EditorGizmoMode { read(.gizmoMode, storage.viewport.gizmoMode) }
     public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.viewport.gizmoSpace) }
     public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewport.shadingMode) }

@@ -30,7 +30,9 @@ private struct _ContextMenuHost<Content: View>: _PrimitiveView {
     let content: Content; let entries: [MenuEntry]; let width: Float; let point: CGPoint?
     let onOpen: (CGPoint) -> Void; let onDismiss: () -> Void
     func _makeNode() -> Node {
-        let node = Node(); node.isHitTestable = true; node.addResource(PortalResource()); return node
+        let node = Node(); node.isHitTestable = true; node.addResource(PortalResource())
+        node.attachments[LayoutDebugAttachmentKey.debugName] = "context-menu-anchor"
+        return node
     }
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
@@ -46,9 +48,10 @@ private struct _ContextMenuHost<Content: View>: _PrimitiveView {
             return .handled
         }
         let resource = node.firstResource(PortalResource.self)
-        guard let point else { resource?.unmount(node: node); return }
+        guard let point else { resource?.dismiss(node: node); return }
         resource?.present(in: node.compositionValue(of: PortalStoreEnvironment.key), position: point, width: width,
-                          content: AnyView(_PopupMenu(entries: entries, width: width, onDismiss: onDismiss)))
+                          content: AnyView(_PopupMenu(entries: entries, width: width, onDismiss: onDismiss)),
+                          transition: .opacity.combined(with: .move(edge: .top, distance: 4)))
         resource?.setDismissal(anchor: { .zero }, dismiss: onDismiss)
     }
     var _children: [any View] { [content] }

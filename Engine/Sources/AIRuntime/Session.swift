@@ -78,7 +78,8 @@ public actor Session {
     private let config: SessionConfig
     private let urlSession: URLSession
     private let maxHistoryTurns: Int
-    public private(set) var workflowContext: WorkflowContext?
+    private var workflowScope = SessionWorkflowScope()
+    public var workflowContext: WorkflowContext? { workflowScope.context }
     private var observationBus: ObservationBus?
     private var contextMemory: ContextMemoryStore?
     private var cachedMemoryView: [[String: String]] = []
@@ -122,7 +123,7 @@ public actor Session {
         let resolvedRegistry = pluginCapabilityExecutor?.registry ?? capabilityRegistry
         self.id = id
         self.config = config
-        self.workflowContext = workflowContext
+        self.workflowScope.context = workflowContext
         self.urlSession = urlSession
         self.worldView = initialWorldView
         self.conversationHistory = []
@@ -134,7 +135,8 @@ public actor Session {
     }
 
     public func setWorkflowContext(_ context: WorkflowContext?) async {
-        workflowContext = context
+        guard activeInferenceID == nil else { return }
+        workflowScope.context = context
         let mem = contextMemory
         guard let mem else { return }
         if let ctx = context {
@@ -152,12 +154,19 @@ public actor Session {
         }
     }
 
+    public func setWorkflowScope(_ scope: SessionWorkflowScope) throws {
+        guard activeInferenceID == nil else { throw SessionError.inferenceAlreadyRunning }
+        workflowScope = scope
+    }
+
     public func setProjectToolExecutor(_ executor: ProjectToolset.Executor?) {
         projectToolExecutor = executor
     }
 
     private static func workflowPayload(from ctx: WorkflowContext) -> [String: String] {
         switch ctx {
+        case let .asset(a):
+            return ["kind": "asset", "intent": a.intent]
         case let .game(g):
             var p: [String: String] = [
                 "kind": "game",
@@ -808,7 +817,7 @@ public actor Session {
                              capabilitySnapshot: CapabilityExposureSnapshot? = nil) -> [String: Any] {
         let allMessages = buildMessages() + extraMessages
         let snapshot = capabilitySnapshot ?? initialCapabilitySnapshot()
-        let projectTools = projectToolExecutor == nil ? [] : ProjectToolset.providerDefinitions(format: config.apiFormat)
+        let projectTools = projectToolExecutor == nil ? [] : ProjectToolset.providerDefinitions(format: config.apiFormat, allowedNames: workflowScope.allowedProjectToolNames)
         switch config.apiFormat {
         case .anthropic:
             return [
@@ -954,8 +963,8 @@ public actor Session {
             parts.append(config.assetCatalog.systemPromptSection)
         }
 
-        if !worldView.selectedEntityRefs.isEmpty {
-            parts.append("Currently selected: \(worldView.selectedEntityRefs.joined(separator: ", "))")
+        if !(workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs).isEmpty {
+            parts.append("Currently selected: \((workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs).joined(separator: ", "))")
         }
 
         if let locale = currentLocale, !locale.hasPrefix("en") {
@@ -1055,8 +1064,8 @@ public actor Session {
             prioritized = all.values.sorted { $0.ref < $1.ref }
         } else {
             // Always include selected entities plus their immediate parents and children.
-            var priorityRefs = Set(worldView.selectedEntityRefs)
-            for ref in worldView.selectedEntityRefs {
+            var priorityRefs = Set((workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs))
+            for ref in (workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs) {
                 if let record = all[ref] {
                     if let parent = record.parentRef { priorityRefs.insert(parent) }
                     priorityRefs.formUnion(record.childRefs)
@@ -1330,12 +1339,12 @@ public actor Session {
             "scene.get_selection",
             "scene.find_entities",
         ]
-        let policy = pluginCapabilityExecutor?.exposurePolicy
+        let basePolicy = pluginCapabilityExecutor?.exposurePolicy
             ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
                                         allowedDomains: ["scene"],
                                         maximumCapabilities: 16)
         return capabilityRegistry.exposureSnapshot(
-            policy: policy,
+            policy: workflowScope.restricting(basePolicy),
             sceneRevision: worldView.sceneRevision ?? 0,
             generation: capabilityExposureGeneration,
             preferredCapabilityIDs: Array(coreReadIDs).sorted(),
@@ -1366,6 +1375,9 @@ public actor Session {
             if ["save_scene", "export_project", "set_playback_state"].contains(call.name),
                await capabilityDraftStore.hasPendingDrafts {
                 throw CapabilityDraftError.invalidInput("Submit pending scene drafts for review before saving, exporting or playing.")
+            }
+            guard workflowScope.allowedProjectToolNames?.contains(call.name) ?? true else {
+                throw CapabilityDraftError.unknownTool(call.name)
             }
             let output: Data
             do {
@@ -1415,17 +1427,17 @@ public actor Session {
             let query = call.input["query"] as? String ?? ""
             let domain = call.input["domain"] as? String
             let requestedAccess = (call.input["access"] as? String).flatMap(CapabilityAccess.init(rawValue:))
-            let basePolicy = pluginCapabilityExecutor?.exposurePolicy
+            let unrestrictedPolicy = pluginCapabilityExecutor?.exposurePolicy
                 ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
                                             allowedDomains: ["scene"],
                                             maximumCapabilities: 16)
-            let policy = CapabilityExposurePolicy(
-                activeReleasePhase: basePolicy.activeReleasePhase,
-                allowedDomains: domain.map { [$0] } ?? basePolicy.allowedDomains,
-                enabledPluginIDs: basePolicy.enabledPluginIDs,
-                allowExternalSideEffects: basePolicy.allowExternalSideEffects,
-                maximumCapabilities: 64
-            )
+            let basePolicy = workflowScope.restricting(unrestrictedPolicy)
+            var policy = basePolicy
+            policy.allowedDomains = domain.map { requested in
+                basePolicy.allowedDomains.map { $0.intersection([requested]) } ?? [requested]
+            } ?? basePolicy.allowedDomains
+            policy.maximumCapabilities = 64
+
             let authorities = pluginCapabilityExecutor?.pluginAuthorities ?? [:]
             let candidates = capabilityRegistry.searchContracts(query: query,
                                                                  policy: policy,
@@ -1516,7 +1528,7 @@ public actor Session {
                 case "scene.get_entities":
                     result = entityIndexJSON()
                 case "scene.get_selection":
-                    let object: [String: Any] = ["selected": worldView.selectedEntityRefs]
+                    let object: [String: Any] = ["selected": (workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs)]
                     let data = try JSONSerialization.data(withJSONObject: object,
                                                           options: [.sortedKeys])
                     result = String(data: data, encoding: .utf8) ?? "{}"

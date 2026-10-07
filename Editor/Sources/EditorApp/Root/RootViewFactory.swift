@@ -7,8 +7,7 @@ import Foundation
 
 enum EditorRootViewFactory {
     struct EditorShellState: Codable, Sendable {
-        var workspaceMode: EditorWorkspaceMode
-        var activeLayoutPreset: EditorLayoutPreset
+        var workspace = EditorWorkspaceState()
         var themeMode: EditorThemeMode
         var language: EditorLanguage
         var vsyncMode: EditorVSyncMode
@@ -16,16 +15,14 @@ enum EditorRootViewFactory {
         var aiSettings: EditorAISettings
         var capabilitySettings: EditorCapabilitySettings
 
-        init(workspaceMode: EditorWorkspaceMode,
-             activeLayoutPreset: EditorLayoutPreset,
+        init(workspace: EditorWorkspaceState,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
              primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
              aiSettings: EditorAISettings = .default,
              capabilitySettings: EditorCapabilitySettings = .default) {
-            self.workspaceMode = workspaceMode
-            self.activeLayoutPreset = activeLayoutPreset
+            self.workspace = workspace
             self.themeMode = themeMode
             self.language = language
             self.vsyncMode = vsyncMode
@@ -35,8 +32,7 @@ enum EditorRootViewFactory {
         }
 
         enum CodingKeys: String, CodingKey {
-            case workspaceMode
-            case activeLayoutPreset
+            case workspace
             case themeMode
             case language
             case vsyncMode
@@ -47,8 +43,7 @@ enum EditorRootViewFactory {
 
         func encode(to encoder: Encoder) throws {
             var values = encoder.container(keyedBy: CodingKeys.self)
-            try values.encode(workspaceMode, forKey: .workspaceMode)
-            try values.encode(activeLayoutPreset, forKey: .activeLayoutPreset)
+            try values.encode(workspace, forKey: .workspace)
             try values.encode(themeMode, forKey: .themeMode)
             try values.encode(language, forKey: .language)
             try values.encode(vsyncMode, forKey: .vsyncMode)
@@ -59,9 +54,7 @@ enum EditorRootViewFactory {
 
         init(from decoder: Decoder) throws {
             let values = try decoder.container(keyedBy: CodingKeys.self)
-            workspaceMode = try values.decodeIfPresent(EditorWorkspaceMode.self, forKey: .workspaceMode) ?? .level
-            activeLayoutPreset = try values.decodeIfPresent(EditorLayoutPreset.self, forKey: .activeLayoutPreset)
-                ?? .default(for: workspaceMode)
+            workspace = try values.decodeIfPresent(EditorWorkspaceState.self, forKey: .workspace) ?? workspace
             themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
             vsyncMode = try values.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) ?? .enabled
@@ -81,7 +74,7 @@ enum EditorRootViewFactory {
                                preset: EditorLayoutPreset,
                                registry: PanelRegistry) -> WorkspaceController {
         if let saved = loadSavedWorkspaceDocument(for: mode, preset: preset) {
-            let document = reconciledWorkspaceDocument(saved, registry: registry)
+            let document = reconciledWorkspaceDocument(saved, registry: EditorWorkspacePanelPolicy.registry(for: mode, from: registry))
             if document != saved {
                 saveWorkspaceDocument(document, for: mode, preset: preset)
             }
@@ -100,7 +93,7 @@ enum EditorRootViewFactory {
                                  registry: PanelRegistry) {
         let document: WorkspaceDocument
         if let saved = loadSavedWorkspaceDocument(for: mode, preset: preset) {
-            document = reconciledWorkspaceDocument(saved, registry: registry)
+            document = reconciledWorkspaceDocument(saved, registry: EditorWorkspacePanelPolicy.registry(for: mode, from: registry))
         } else {
             document = EditorWorkspaceDefaults.makeDocument(mode: mode, preset: preset, registry: registry)
         }
@@ -258,8 +251,7 @@ enum EditorRootViewFactory {
                             preset: .levelDefault)
     }
 
-    static func saveShellState(mode: EditorWorkspaceMode,
-                               preset: EditorLayoutPreset,
+    static func saveShellState(workspace: EditorWorkspaceState,
                                themeMode: EditorThemeMode,
                                language: EditorLanguage,
                                vsyncMode: EditorVSyncMode,
@@ -267,8 +259,7 @@ enum EditorRootViewFactory {
                                aiSettings: EditorAISettings = .default,
                                capabilitySettings: EditorCapabilitySettings = .default) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
-        let shell = EditorShellState(workspaceMode: mode,
-                                     activeLayoutPreset: preset,
+        let shell = EditorShellState(workspace: workspace,
                                      themeMode: themeMode,
                                      language: language,
                                      vsyncMode: vsyncMode,
@@ -294,11 +285,7 @@ enum EditorRootViewFactory {
         do {
             let data = try Data(contentsOf: path)
             let decoder = JSONDecoder()
-            var shell = try decoder.decode(EditorShellState.self, from: data)
-            if shell.activeLayoutPreset.mode != shell.workspaceMode {
-                shell.activeLayoutPreset = .default(for: shell.workspaceMode)
-            }
-            return shell
+            return try decoder.decode(EditorShellState.self, from: data)
         } catch {
             quarantinePersistenceFile(at: path,
                                       label: "shell state",

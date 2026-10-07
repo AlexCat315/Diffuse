@@ -17,9 +17,9 @@ struct EditorPanelToolbar<Content: View>: View {
         Row(alignment: .center, spacing: spacing) {
             content
         }
-        .padding(horizontal: 8, vertical: 3)
-        .frame(minHeight: 30)
-        .background(.surface)
+        .padding(horizontal: 8, vertical: 2)
+        .frame(height: 32)
+        .background(.surfaceRaised)
     }
 }
 
@@ -66,7 +66,7 @@ struct EditorPanelSearchBar: View {
         Row(alignment: .center, spacing: 6) {
             TextField(placeholder,
                       text: text,
-                      size: .small,
+                      size: .regular,
                       clearable: true,
                       onSubmit: onSubmit,
                       onCancel: onCancel)
@@ -79,8 +79,9 @@ struct EditorPanelSearchBar: View {
 
             actions
         }
-        .padding(horizontal: 8, vertical: 5)
-        .background(.surface)
+        .padding(horizontal: 8, vertical: 2)
+        .frame(height: 32)
+        .background(.surfaceRaised)
     }
 }
 

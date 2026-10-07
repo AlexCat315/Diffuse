@@ -15,7 +15,7 @@ public struct EditorViewportState: Codable, Sendable {
     public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions = .all
     public var physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope = .selected
     public var mode: EditorViewportMode = .scene
-    public var gamePreviewResolution: EditorGamePreviewResolution = .hd720
+    public var gamePreviewResolution: EditorGamePreviewResolution = .fit
     public var gamePreviewHUDEnabled: Bool = true
     public var gamePreviewFocused: Bool = false
 

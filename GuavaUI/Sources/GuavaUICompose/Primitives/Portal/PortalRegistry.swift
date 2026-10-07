@@ -10,6 +10,7 @@ public struct PortalEntry: Identifiable {
     public var width: Float?
     public var content: AnyView
     public var fillsWindow: Bool = false
+    var isExiting = false
 
     public init(id: String,
                 position: CGPoint,
@@ -41,6 +42,10 @@ public final class PortalStore {
     public init() {}
 
     public var entries: [PortalEntry] {
+        renderedEntries.filter { !$0.isExiting }
+    }
+
+    var renderedEntries: [PortalEntry] {
         presentationOrder.compactMap { storage[$0] }
     }
 
@@ -90,12 +95,19 @@ public final class PortalStore {
 
     func updatePresentation(_ id: String, position: CGPoint, width: Float?, content: AnyView) {
         guard var entry = storage[id] else { return }
-        entry.position = position; entry.width = width; entry.content = content
+        entry.position = position; entry.width = width; entry.content = content; entry.isExiting = false
         storage[id] = entry
         notifyChanged()
     }
 
     public func contains(_ id: String) -> Bool { storage[id] != nil }
+
+    func beginDismissal(_ id: String, content: AnyView) {
+        guard var entry = storage[id], !entry.isExiting else { return }
+        entry.isExiting = true; entry.content = content
+        storage[id] = entry
+        notifyChanged()
+    }
 
     public func unregister(_ id: String) {
         guard storage.removeValue(forKey: id) != nil else { return }
@@ -122,7 +134,7 @@ public final class PortalStore {
     /// Observe the click before normal routing; leave it available to the
     /// underlying control so switching menus works in one click.
     func dismissOutside(_ point: CGPoint) {
-        let openIDs = presentationOrder.filter { dismissals[$0] != nil }
+        let openIDs = presentationOrder.filter { dismissals[$0] != nil && storage[$0]?.isExiting == false }
         guard !openIDs.contains(where: { id in
             dismissals[id]?.anchor().contains(point) == true
                 || slotNodes[id]?.node?.absoluteFrame.contains(point) == true
@@ -208,6 +220,10 @@ public final class PortalStoreAmbient: ScopedAmbient {
 final class PortalResource: NodeResource {
     private(set) var entryID: String?
     private weak var store: PortalStore?
+    private var content: AnyView?
+    private var transition: Transition?
+    private var isDismissing = false
+    private var generation = 0
 
     func mount(node: Node) {}
 
@@ -218,6 +234,8 @@ final class PortalResource: NodeResource {
         }
         entryID = nil
         store = nil
+        content = nil
+        generation &+= 1
     }
 
     /// Register the overlay entry, or update it in place if already live. Re-
@@ -229,7 +247,8 @@ final class PortalResource: NodeResource {
                  position: CGPoint,
                  width: Float?,
                  content: AnyView,
-                 fillsWindow: Bool = false) {
+                 fillsWindow: Bool = false,
+                 transition: Transition? = nil) {
         let current = resolvedStore ?? PortalStoreHolder.current
         if let previous = store, previous !== current, let id = entryID {
             // The owning node moved to a different window's tree (e.g. a panel
@@ -238,14 +257,38 @@ final class PortalResource: NodeResource {
             entryID = nil
         }
         store = current
+        self.content = content
+        self.transition = transition
+        isDismissing = false
+        generation &+= 1
+        let presented = transition.map { effect in
+            AnyView(AnimatedVisibility(isVisible: true, transition: effect, animateOnMount: true) { content })
+        } ?? content
         if let id = entryID, current.contains(id) {
-            current.updatePresentation(id, position: position, width: width, content: content)
+            current.updatePresentation(id, position: position, width: width, content: presented)
         } else {
             entryID = current.register(position: position,
                                        width: width,
-                                       content: content)
+                                       content: presented)
         }
         if let id = entryID { current.configure(id, fillsWindow: fillsWindow) }
+    }
+
+    /// Logical dismissal is immediate. Only noninteractive paint survives the
+    /// short exit; node teardown still unregisters synchronously.
+    func dismiss(node: Node) {
+        guard !isDismissing, let id = entryID, let store else { return }
+        guard let content, let transition else { unmount(node: node); return }
+        isDismissing = true
+        generation &+= 1
+        let expected = generation
+        store.beginDismissal(id, content: AnyView(
+            AnimatedVisibility(isVisible: false, transition: transition, animateOnMount: true,
+                onVisibilitySettled: { [weak self, weak node] visible in
+                    guard !visible, let self, let node, self.generation == expected else { return }
+                    self.unmount(node: node)
+                }) { content }
+        ))
     }
 
     func updatePosition(_ position: CGPoint) {

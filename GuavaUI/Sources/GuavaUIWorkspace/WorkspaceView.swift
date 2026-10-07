@@ -221,60 +221,60 @@ private struct _WorkspaceMainRow: View {
         let weights = WorkspaceShellWeights(document: document,
                                             leadingVisible: leadingVisible,
                                             trailingVisible: trailingVisible)
+        let phase = [leadingVisible, trailingVisible]
         Box(direction: .row, alignItems: .stretch, spacing: 0) {
-            if let leadingRail {
-                _WorkspaceRail(slotID: leadingRail.slot.id,
-                               edgeOverride: leadingRail.slot.edge,
-                               thickness: leadingRail.slot.thickness,
-                               groupsOverride: leadingRail.groups,
-                               document: document,
-                               controller: controller)
-                    .id("workspace-rail-leading")
-            }
-            if leadingVisible {
-                _WorkspaceSideRegion(slotID: .leading,
-                                     document: document,
-                                     controller: controller,
-                                     content: content)
-                    .id("workspace-region-leading")
-                    .flex(weights.leading, shrink: 1, basis: 0)
-                    .frame(minWidth: 0, minHeight: 0)
-                _WorkspaceSplitDivider(splitID: "leading",
-                                       axis: .vertical,
-                                       controller: controller)
-                    .debugName("workspace-split-leading")
-                    .id("workspace-split-leading")
-            }
-            _WorkspaceCenterColumn(document: document,
-                                   controller: controller,
-                                   content: content)
+            WorkspaceRegionTransition(isVisible: leadingRail != nil, horizontal: true,
+                                      sizing: .points(leadingRail?.slot.thickness ?? 40), phase: phase,
+                                      content: AnyView(Box(direction: .column, alignItems: .stretch) {
+                if let leadingRail {
+                    _WorkspaceRail(slotID: leadingRail.slot.id, edgeOverride: leadingRail.slot.edge,
+                                   thickness: leadingRail.slot.thickness, groupsOverride: leadingRail.groups,
+                                   document: document, controller: controller)
+                        .id("workspace-rail-leading")
+                }
+            }))
+            WorkspaceRegionTransition(isVisible: leadingVisible, horizontal: true,
+                                      sizing: .fraction(weights.leading), phase: phase,
+                                      content: AnyView(_WorkspaceSideRegion(slotID: .leading,
+                                          document: document, controller: controller, content: content)
+                                          .flex()
+                                          .frame(minWidth: 0, minHeight: 0)))
+                .id("workspace-region-leading")
+            WorkspaceRegionTransition(isVisible: leadingVisible, horizontal: true,
+                                      sizing: .divider, phase: phase,
+                                      content: AnyView(_WorkspaceSplitDivider(splitID: "leading", axis: .vertical,
+                                          controller: controller).frame(width: .percent(100), height: .percent(100))
+                                          .debugName("workspace-split-leading")))
+                .id("workspace-split-leading")
+            _WorkspaceCenterColumn(document: document, controller: controller, content: content)
                 .debugName("workspace-center-column")
                 .id("workspace-center-column")
                 .flex(weights.center, shrink: 1, basis: 0)
                 .frame(minWidth: 0, minHeight: 0)
-            if trailingVisible {
-                _WorkspaceSplitDivider(splitID: "centerTrailing",
-                                       axis: .vertical,
-                                       controller: controller)
-                    .debugName("workspace-split-centerTrailing")
-                    .id("workspace-split-centerTrailing")
-                _WorkspaceSideRegion(slotID: .trailing,
-                                     document: document,
-                                     controller: controller,
-                                     content: content)
-                    .id("workspace-region-trailing")
-                    .flex(weights.trailing, shrink: 1, basis: 0)
-                    .frame(minWidth: 0, minHeight: 0)
-            }
-            if let trailingRail {
-                _WorkspaceRail(slotID: trailingRail.slot.id,
-                               edgeOverride: trailingRail.slot.edge,
-                               thickness: trailingRail.slot.thickness,
-                               groupsOverride: trailingRail.groups,
-                               document: document,
-                               controller: controller)
-                    .id("workspace-rail-trailing")
-            }
+                .modifier(_WorkspaceLayoutAnimation(phase: phase))
+            WorkspaceRegionTransition(isVisible: trailingVisible, horizontal: true,
+                                      sizing: .divider, phase: phase,
+                                      content: AnyView(_WorkspaceSplitDivider(splitID: "centerTrailing", axis: .vertical,
+                                          controller: controller).frame(width: .percent(100), height: .percent(100))
+                                          .debugName("workspace-split-centerTrailing")))
+                .id("workspace-split-centerTrailing")
+            WorkspaceRegionTransition(isVisible: trailingVisible, horizontal: true,
+                                      sizing: .fraction(weights.trailing), phase: phase,
+                                      content: AnyView(_WorkspaceSideRegion(slotID: .trailing,
+                                          document: document, controller: controller, content: content)
+                                          .flex()
+                                          .frame(minWidth: 0, minHeight: 0)))
+                .id("workspace-region-trailing")
+            WorkspaceRegionTransition(isVisible: trailingRail != nil, horizontal: true,
+                                      sizing: .points(trailingRail?.slot.thickness ?? 40), phase: phase,
+                                      content: AnyView(Box(direction: .column, alignItems: .stretch) {
+                if let trailingRail {
+                    _WorkspaceRail(slotID: trailingRail.slot.id, edgeOverride: trailingRail.slot.edge,
+                                   thickness: trailingRail.slot.thickness, groupsOverride: trailingRail.groups,
+                                   document: document, controller: controller)
+                        .id("workspace-rail-trailing")
+                }
+            }))
         }
         .background(.background)
         .flex()
@@ -517,36 +517,34 @@ private struct _WorkspaceCenterColumn: View {
     var body: some View {
         let bottomVisible = !visibleGroups(in: .bottom, document: document).isEmpty
         let bottomRail = bottomVisible ? nil : railPlan(edge: .bottom, document: document)
+        let phase = [bottomVisible]
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            _WorkspaceSlotView(slotID: .center,
-                                 document: document,
-                                 controller: controller,
-                                 content: content)
-                .flex(bottomVisible ? document.splitFractions.topBottom : 1,
-                      shrink: 1,
-                      basis: 0)
+            _WorkspaceSlotView(slotID: .center, document: document, controller: controller, content: content)
+                .flex(bottomVisible ? document.splitFractions.topBottom : 1, shrink: 1, basis: 0)
                 .frame(minWidth: 0, minHeight: 0)
-            if bottomVisible {
-                _WorkspaceSplitDivider(splitID: "topBottom",
-                                       axis: .horizontal,
-                                       controller: controller)
-                    .debugName("workspace-split-topBottom")
-                    .id("workspace-split-topBottom")
-                _WorkspaceBottomSlot(document: document,
-                                     controller: controller,
-                                     content: content)
-                        .flex(1 - document.splitFractions.topBottom,
-                              shrink: 1,
-                              basis: 0)
-                        .frame(minWidth: 0, minHeight: 0)
-            } else if let bottomRail {
-                Divider()
-                _WorkspaceChromeSlot(slot: bottomRail.slot,
-                                     groupsOverride: bottomRail.groups,
-                                     document: document,
-                                     controller: controller)
-                    .id("workspace-chrome-\(bottomRail.slot.id.rawValue)")
-            }
+                .modifier(_WorkspaceLayoutAnimation(phase: phase))
+            WorkspaceRegionTransition(isVisible: bottomVisible, horizontal: false,
+                                      sizing: .divider, phase: phase,
+                                      content: AnyView(_WorkspaceSplitDivider(splitID: "topBottom", axis: .horizontal,
+                                          controller: controller).frame(width: .percent(100), height: .percent(100))
+                                          .debugName("workspace-split-topBottom")))
+                .id("workspace-split-topBottom")
+            WorkspaceRegionTransition(isVisible: bottomVisible, horizontal: false,
+                                      sizing: .fraction(1 - document.splitFractions.topBottom), phase: phase,
+                                      content: AnyView(_WorkspaceBottomSlot(document: document,
+                                          controller: controller, content: content)
+                                          .flex()
+                                          .frame(minWidth: 0, minHeight: 0)))
+                .id("workspace-bottom-transition")
+            WorkspaceRegionTransition(isVisible: bottomRail != nil, horizontal: false,
+                                      sizing: .points(bottomRail?.slot.thickness ?? 40), phase: phase,
+                                      content: AnyView(Box(direction: .column, alignItems: .stretch) {
+                if let bottomRail {
+                    _WorkspaceChromeSlot(slot: bottomRail.slot, groupsOverride: bottomRail.groups,
+                                         document: document, controller: controller)
+                        .id("workspace-chrome-\(bottomRail.slot.id.rawValue)")
+                }
+            }))
         }
         .flex()
         .frame(minWidth: 0, minHeight: 0)
@@ -762,7 +760,9 @@ private struct _WorkspaceTabGroupView: View {
                     .flex()
             }
         }
-        .background(.surfaceSunken)
+        .background(.surface)
+        .border(.border, width: 1)
+        .surfaceFinish()
         .cornerRadius(6)
         .clipped()
         .frame(minWidth: 0, minHeight: 0)
@@ -798,7 +798,7 @@ private struct _WorkspaceTabBar: View {
             tabButtons
             Spacer(minLength: 0)
             if let panelID = group.activePanelID {
-                Button("⛶", tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
+                Button(icon: .resource(UICommonIcons.expand), size: 12, tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
                     .buttonStyle(.ghost).frame(width: 24, height: 24)
                     .debugName("workspace-maximize-\(group.id.rawValue)")
             }
@@ -815,9 +815,16 @@ private struct _WorkspaceTabBar: View {
             }
         }
         .padding(horizontal: 4, vertical: 0)
-        .background(.surface)
-        .frame(height: 30)
+        .background(.surfaceRaised)
+        .frame(height: 32)
+        .modifier(_WorkspaceTabBarHeight())
         .layoutRole("workspace-tab-bar")
+    }
+}
+
+private struct _WorkspaceTabBarHeight: ViewModifier {
+    func apply(node: Node) {
+        node.layoutNode?.height = max(26, resolveWorkspaceTheme(on: node).tabBarHeight)
     }
 }
 
@@ -1054,7 +1061,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
 /// styles around the state.
 private struct _WorkspaceTabButtonStyle: ButtonStyle {
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        TabButtonStyle(height: 30).makeBody(configuration: configuration)
+        TabButtonStyle(height: 32).makeBody(configuration: configuration)
     }
 }
 
@@ -1406,6 +1413,7 @@ private struct _WorkspaceRail: View {
                 AnyView(_WorkspaceRailButton(slotID: slotID,
                                              isHorizontal: horizontal,
                                              groupID: group.id,
+                                             panelID: item.panelID,
                                              title: item.title,
                                              icon: WorkspacePanelIconCatalog.resolve(item.iconAssetKey),
                                              controller: controller)
@@ -1443,6 +1451,7 @@ private struct _WorkspaceRailButton: View {
     let slotID: WorkspaceSlotID
     let isHorizontal: Bool
     let groupID: WorkspaceTabGroupID
+    let panelID: WorkspacePanelID
     let title: String
     let icon: BundleImageResource?
     let controller: WorkspaceController
@@ -1452,20 +1461,22 @@ private struct _WorkspaceRailButton: View {
         // tooltip carries the title. Text pills are the no-icon fallback only.
         if let icon {
             Button(tooltip: title) {
+                _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: panelID))
                 _ = controller.dispatch(.expand(groupID))
             } label: {
-                Icon(icon, size: 16, color: .white)
+                Icon(icon, size: 16, color: .onSurfaceMuted)
                     .padding(horizontal: 6, vertical: 6)
             }
             .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
-            .debugName("workspace-restore-\(groupID.rawValue)")
+            .debugName("workspace-restore-\(groupID.rawValue)-\(panelID.rawValue)")
         } else if isHorizontal {
             Button(tooltip: title) {
+                _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: panelID))
                 _ = controller.dispatch(.expand(groupID))
             } label: {
                 Row(alignment: .center, spacing: 6) {
-                    Icon(WorkspaceIcons.expandDown, size: 10, color: .white)
+                    Icon(WorkspaceIcons.expandDown, size: 10, color: .onSurfaceMuted)
                     Text(title)
                         .font(.label)
                 }
@@ -1473,16 +1484,17 @@ private struct _WorkspaceRailButton: View {
             }
             .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
-            .debugName("workspace-restore-\(groupID.rawValue)")
+            .debugName("workspace-restore-\(groupID.rawValue)-\(panelID.rawValue)")
         } else {
             Button(tooltip: title) {
+                _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: panelID))
                 _ = controller.dispatch(.expand(groupID))
             } label: {
                 _WorkspaceVerticalTitle(title: title)
             }
             .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
-            .debugName("workspace-restore-\(groupID.rawValue)")
+            .debugName("workspace-restore-\(groupID.rawValue)-\(panelID.rawValue)")
         }
     }
 }

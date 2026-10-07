@@ -3,6 +3,8 @@ import IntentRuntime
 
 /// Owns the editor document state and its persistence defaults.
 public struct EditorDocumentState: Codable, Sendable {
+    /// Transient identity: replacing a document invalidates outstanding task targets.
+    public var identity = UUID()
     public var sceneRevision: UInt64 = 0
     public var lastSavedSceneRevision: UInt64 = 0
     public var sceneRecoveryPending: Bool = false

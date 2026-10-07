@@ -13,8 +13,10 @@ public struct FlexModifier: ViewModifier {
         self.basis = basis
     }
 
-    public func apply(layout: LayoutNode) {
-        layout.flexGrow = grow
+    public func apply(node: Node) {
+        guard let layout = node.layoutNode else { return }
+        node.animatableSet(propertyKey: "__layout.flex.grow", current: layout.flexGrow,
+                           to: grow) { layout.flexGrow = $0 }
         layout.flexShrink = shrink
         if let basis {
             layout.setFlexBasis(basis)

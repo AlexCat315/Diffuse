@@ -82,6 +82,8 @@ extension TextField {
                 return .ignored
             }
             registry.setHover(node) { phase in
+                let onHover = node.attachments["__textfield_chrome_hover"] as? (Bool) -> Void
+                onHover?(phase == .enter)
                 switch phase {
                 case .enter:
                     node.attachments[TextField.scrollbarHoveredKey] = true

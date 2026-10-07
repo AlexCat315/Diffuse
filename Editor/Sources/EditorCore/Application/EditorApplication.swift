@@ -45,7 +45,6 @@ public final class EditorApplication: @unchecked Sendable {
     let perceptionService: PerceptionService
     let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
-    private var workspaceModeToken: EditorStore.SubscriptionToken?
     var snapSettingsToken: EditorStore.SubscriptionToken?
     var pendingViewportEvents: [InputEvent] = []
     var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
@@ -62,16 +61,11 @@ public final class EditorApplication: @unchecked Sendable {
     var session: Session?
     var pendingAISetupTask: Task<Void, Never>?
     var pendingWorldObservationTask: Task<Void, Never>?
-    var activeAIRequestID: UUID?
-    var activeAIRequestTask: Task<Void, Never>?
+    public let agentTaskService = EditorAgentTaskService()
+    var agentExecution = EditorAgentExecution()
     var projectToolBuildInProgress = false
     var isShuttingDown = false
     public var isActive: Bool { !isShuttingDown }
-    var pendingSessionProposal: Proposal?
-    var pendingAssistantMessageID: String?
-    /// Existing scene entities referenced by the plan currently awaiting approval.
-    /// This lets a lock added after preview still prevent the confirmed mutation.
-    var pendingConfirmationTargetEntityIDs: Set<UInt64> = []
     let mcpBridge = MCPBridge()
     let mcpCapabilitySessions = CapabilityExposureSessionStore()
     var pluginHostClient: PluginHostProcessClient?
@@ -268,21 +262,7 @@ public final class EditorApplication: @unchecked Sendable {
 
         restoreAndObserveViewportSnapSettings()
 
-        // Keep Session's WorkflowContext in sync when the user switches workspace mode.
-        var lastObservedMode: EditorWorkspaceMode = store.state.workspace.mode
-        workspaceModeToken = store.subscribe { [weak self] s in
-            guard let self else { return }
-            let newMode = s.state.workspace.mode
-            guard newMode != lastObservedMode, let sess = self.session else { return }
-            lastObservedMode = newMode
-            let ctx = Self.workflowContext(for: newMode,
-                                           scriptEntries: self.scene.scriptCatalogEntries)
-            let previousTask = self.pendingAISetupTask
-            self.pendingAISetupTask = Task {
-                await previousTask?.value
-                await sess.setWorkflowContext(ctx)
-            }
-        }
+
     }
 
     public func bootstrap() {
@@ -423,10 +403,6 @@ public final class EditorApplication: @unchecked Sendable {
         if let eventToken {
             events.unsubscribe(eventToken)
             self.eventToken = nil
-        }
-        if let workspaceModeToken {
-            store.unsubscribe(workspaceModeToken)
-            self.workspaceModeToken = nil
         }
         if let snapSettingsToken {
             store.unsubscribe(snapSettingsToken)

@@ -101,6 +101,7 @@ public struct CapabilityRegistry: Sendable {
             guard descriptor.isAIExposed else { return false }
             if descriptor.access.isWrite && !descriptor.inputSchema.isStrictCapabilityInput { return false }
             if let includedCapabilityIDs, !includedCapabilityIDs.contains(descriptor.verb) { return false }
+            if let ids = policy.allowedCapabilityIDs, !ids.contains(descriptor.verb) { return false }
             guard gate.isAllowed(descriptor) else { return false }
             if let domains = policy.allowedDomains, !domains.contains(descriptor.domain) { return false }
             if descriptor.access == .externalSideEffect && !policy.allowExternalSideEffects { return false }
@@ -141,14 +142,10 @@ public struct CapabilityRegistry: Sendable {
                                 pluginAuthorities: [String: PluginCapabilityAuthority] = [:],
                                 limit: Int = 16) -> [CapabilityContract] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let snapshot = exposureSnapshot(
-            policy: CapabilityExposurePolicy(activeReleasePhase: policy.activeReleasePhase,
-                                             allowedDomains: policy.allowedDomains,
-                                             enabledPluginIDs: policy.enabledPluginIDs,
-                                             allowExternalSideEffects: policy.allowExternalSideEffects,
-                                             maximumCapabilities: max(limit, allVerbs().count)),
-            pluginAuthorities: pluginAuthorities
-        )
+        var searchPolicy = policy
+        searchPolicy.maximumCapabilities = max(limit, allVerbs().count)
+        let snapshot = exposureSnapshot(policy: searchPolicy, pluginAuthorities: pluginAuthorities)
+
         return snapshot.contracts.filter { contract in
             needle.isEmpty
                 || contract.id.lowercased().contains(needle)
