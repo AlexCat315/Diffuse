@@ -42,7 +42,7 @@ struct InspectorPanel: View {
                 ? Set(selectedEntityID.map { [$0] } ?? []) : store.selectedEntityIDs
             let entity = scene.entitySummary(id: selectedEntityID)
             let profile = store.workspaceMode.profile
-            let showingSceneSettings = sectionFilter == nil && (store.inspectorSceneSettingsVisible || (entity == nil && profile.domain == .game))
+            let showingSceneSettings = sectionFilter == nil && store.inspectorSceneSettingsVisible
             let allSections = showingSceneSettings ? scene.sceneSettingsSections()
                 : scene.inspectorSections(for: selectedEntityIDs, primaryID: selectedEntityID)
             let globalIDs: Set<String> = ["physics-settings", "particle-scalability"]
@@ -69,7 +69,7 @@ struct InspectorPanel: View {
             )
 
             Box(direction: .column, alignItems: .stretch) {
-                if let entity {
+                if let entity, !showingSceneSettings {
                     InspectorSelectionSummary(entity: entity,
                                               componentCount: scene.componentKinds(on: entity.id).count,
                                               selectionCount: selectedEntityIDs.count,
@@ -77,22 +77,16 @@ struct InspectorPanel: View {
                                               isAuthoringEnabled: isAuthoringEnabled)
                 }
 
-                if sectionFilter == nil {
-                    Row(alignment: .center, spacing: 0) {
-                        Button(L("Entity"), isEnabled: entity != nil, isSelected: !showingSceneSettings) {
-                            store.dispatch(.setInspectorSceneSettingsVisible(false))
-                        }
-                            .buttonStyle(.tab)
-                        Button(L("Scene Settings"), isSelected: showingSceneSettings) {
-                            store.dispatch(.setInspectorSceneSettingsVisible(true))
-                        }
-                            .buttonStyle(.tab)
-                        Spacer(minLength: 0)
-                    }
-
+                if showingSceneSettings {
+                    Row(alignment: .center, spacing: 6) {
+                        Text(L("Scene Settings")).font(.bodyStrong).flex()
+                        Button(L("Return to Inspector")) { store.dispatch(.setInspectorSceneSettingsVisible(false)) }
+                            .buttonStyle(.ghost)
+                    }.padding(6)
                     Divider()
                 }
 
+                if !sections.isEmpty {
                     EditorPanelSearchBar(
                         L("Search Properties"),
                         text: searchBinding,
@@ -110,37 +104,38 @@ struct InspectorPanel: View {
                     }
 
                     Divider()
+                }
 
-                    if filteredSections.isEmpty {
-                        EditorPanelEmptyState(
-                            entity == nil && !showingSceneSettings ? L("Select an entity") : L("No matching properties"),
-                            detail: trimmedSearchText.isEmpty
-                                ? (sectionFilter == nil ? nil : L("Select an entity with an animation component."))
-                                : "\"\(trimmedSearchText)\""
-                        )
+                if filteredSections.isEmpty {
+                    EditorPanelEmptyState(
+                        entity == nil && !showingSceneSettings ? L("Select an entity") : L("No matching properties"),
+                        detail: trimmedSearchText.isEmpty
+                            ? (sectionFilter == nil ? L("Choose an object in the viewport or Hierarchy to edit its properties.") : L("Select an entity with an animation component."))
+                            : "\"\(trimmedSearchText)\""
+                    )
+                    .flex()
+                } else {
+                    PropertyGrid(propertySections(filteredSections,
+                                                  collapsedIDs: trimmedSearchText.isEmpty
+                                                    ? collapsedIDs
+                                                    : [],
+                                                  identity: showingSceneSettings ? "scene"
+                                                    : selectedEntityIDs.sorted().map(String.init).joined(separator: ","),
+                                                  isEditable: canEditSelection),
+                                 labelWidth: 84,
+                                 minValueWidth: 132,
+                                 rowHeight: 26,
+                                 rowSpacing: 1,
+                                 sectionSpacing: 6,
+                                 contentPadding: 6,
+                                 scrollAxes: .vertical,
+                                 emptyText: L("No properties"),
+                                 collapsedSectionIDs: trimmedSearchText.isEmpty ? collapsedIDs : [],
+                                 onSectionCollapseChanged: { id, isCollapsed in
+                        store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
+                    })
                         .flex()
-                    } else {
-                        PropertyGrid(propertySections(filteredSections,
-                                                      collapsedIDs: trimmedSearchText.isEmpty
-                                                        ? collapsedIDs
-                                                        : [],
-                                                      identity: showingSceneSettings ? "scene"
-                                                        : selectedEntityIDs.sorted().map(String.init).joined(separator: ","),
-                                                      isEditable: canEditSelection),
-                                     labelWidth: 84,
-                                     minValueWidth: 132,
-                                     rowHeight: 26,
-                                     rowSpacing: 1,
-                                     sectionSpacing: 6,
-                                     contentPadding: 6,
-                                     scrollAxes: .vertical,
-                                     emptyText: L("No properties"),
-                                     collapsedSectionIDs: trimmedSearchText.isEmpty ? collapsedIDs : [],
-                                     onSectionCollapseChanged: { id, isCollapsed in
-                            store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
-                        })
-                            .flex()
-                    }
+                }
                 if let entity, !showingSceneSettings, sectionFilter == nil {
                     Divider()
                     ComponentActionsBar(store: store,

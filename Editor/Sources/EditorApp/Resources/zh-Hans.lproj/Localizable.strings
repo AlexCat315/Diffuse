@@ -811,3 +811,10 @@
 "Completed" = "已完成";
 
 "Scene Changed" = "场景已变更";
+
+"Choose an object in the viewport or Hierarchy to edit its properties." = "在视口或层级中选择对象，即可编辑属性。";
+
+"Play in current viewport" = "在当前视口试玩";
+"Pause game" = "暂停游戏";
+"Stop and return to editing" = "停止并返回编辑";
+"Return to Inspector" = "返回对象属性";

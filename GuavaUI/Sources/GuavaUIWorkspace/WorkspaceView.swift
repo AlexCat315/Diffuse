@@ -798,7 +798,7 @@ private struct _WorkspaceTabBar: View {
             tabButtons
             Spacer(minLength: 0)
             if let panelID = group.activePanelID {
-                Button("⛶", tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
+                Button(icon: .resource(UICommonIcons.expand), size: 12, tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
                     .buttonStyle(.ghost).frame(width: 24, height: 24)
                     .debugName("workspace-maximize-\(group.id.rawValue)")
             }
@@ -817,7 +817,14 @@ private struct _WorkspaceTabBar: View {
         .padding(horizontal: 4, vertical: 0)
         .background(.surface)
         .frame(height: 30)
+        .modifier(_WorkspaceTabBarHeight())
         .layoutRole("workspace-tab-bar")
+    }
+}
+
+private struct _WorkspaceTabBarHeight: ViewModifier {
+    func apply(node: Node) {
+        node.layoutNode?.height = max(26, resolveWorkspaceTheme(on: node).tabBarHeight)
     }
 }
 
@@ -1406,6 +1413,7 @@ private struct _WorkspaceRail: View {
                 AnyView(_WorkspaceRailButton(slotID: slotID,
                                              isHorizontal: horizontal,
                                              groupID: group.id,
+                                             panelID: item.panelID,
                                              title: item.title,
                                              icon: WorkspacePanelIconCatalog.resolve(item.iconAssetKey),
                                              controller: controller)
@@ -1443,6 +1451,7 @@ private struct _WorkspaceRailButton: View {
     let slotID: WorkspaceSlotID
     let isHorizontal: Bool
     let groupID: WorkspaceTabGroupID
+    let panelID: WorkspacePanelID
     let title: String
     let icon: BundleImageResource?
     let controller: WorkspaceController
@@ -1452,20 +1461,22 @@ private struct _WorkspaceRailButton: View {
         // tooltip carries the title. Text pills are the no-icon fallback only.
         if let icon {
             Button(tooltip: title) {
+                _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: panelID))
                 _ = controller.dispatch(.expand(groupID))
             } label: {
-                Icon(icon, size: 16, color: .white)
+                Icon(icon, size: 16, color: .onSurfaceMuted)
                     .padding(horizontal: 6, vertical: 6)
             }
             .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
-            .debugName("workspace-restore-\(groupID.rawValue)")
+            .debugName("workspace-restore-\(groupID.rawValue)-\(panelID.rawValue)")
         } else if isHorizontal {
             Button(tooltip: title) {
+                _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: panelID))
                 _ = controller.dispatch(.expand(groupID))
             } label: {
                 Row(alignment: .center, spacing: 6) {
-                    Icon(WorkspaceIcons.expandDown, size: 10, color: .white)
+                    Icon(WorkspaceIcons.expandDown, size: 10, color: .onSurfaceMuted)
                     Text(title)
                         .font(.label)
                 }
@@ -1473,16 +1484,17 @@ private struct _WorkspaceRailButton: View {
             }
             .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
-            .debugName("workspace-restore-\(groupID.rawValue)")
+            .debugName("workspace-restore-\(groupID.rawValue)-\(panelID.rawValue)")
         } else {
             Button(tooltip: title) {
+                _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: panelID))
                 _ = controller.dispatch(.expand(groupID))
             } label: {
                 _WorkspaceVerticalTitle(title: title)
             }
             .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
-            .debugName("workspace-restore-\(groupID.rawValue)")
+            .debugName("workspace-restore-\(groupID.rawValue)-\(panelID.rawValue)")
         }
     }
 }
