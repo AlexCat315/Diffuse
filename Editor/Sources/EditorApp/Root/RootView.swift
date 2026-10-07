@@ -28,6 +28,7 @@ struct EditorRootView: View {
                                     workspaceMode: store.workspaceMode,
                                     activeLayoutPreset: store.activeLayoutPreset,
                                     playbackState: store.playbackState,
+                                    interactionMode: store.interactionMode,
                                     canUndo: TextEditingCommands.canUndo ?? app.canUndo,
                                     canRedo: TextEditingCommands.canRedo ?? app.canRedo,
                                     hasSelection: !store.selectedEntityIDs.isEmpty,
@@ -42,12 +43,12 @@ struct EditorRootView: View {
                                     EditorPlaybackToolbar(state: store.playbackState,
                                                       onCommand: cb.handleMenuCommand)
                                 } else {
-                                    Button(L("Render Pipeline")) { EditorRootViewFactory.activatePanel("render-pipeline", in: controller) }
+                                    Button(L("Render Pipeline")) { cb.handleMenuCommand(.showPanel("render-pipeline")) }
                                         .buttonStyle(.ghost)
                                 }
                                 Spacer(minLength: 12)
 
-                                if windowWidth >= 760 {
+                                if windowWidth >= 760 && store.interactionMode == .manual {
                                 LayoutPresetSelector(
                                     workspaceMode: store.workspaceMode,
                                     activePreset: store.activeLayoutPreset,
@@ -59,18 +60,23 @@ struct EditorRootView: View {
                             }
                         }
 
-                        // Floating-island chrome: no full-width divider — the
-                        // canvas margin separates the title bar from the
-                        // workspace, and the rounded panel slabs carry the
-                        // structure.
-                        PanelWorkspace(controller: controller,
-                                       registry: registry, compact: windowWidth < 1000)
-                            .flex()
-                            .frame(minWidth: 0, minHeight: 0)
-                            .workspaceTheme(WorkspaceTheme(splitDividerThickness: 5))
-                            .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
-                            .layoutRole("editor-workspace")
-                            .debugName("editor-workspace")
+                        EditorWorkflowBar(mode: store.workspaceMode, interaction: store.interactionMode,
+                                          onCommand: cb.handleMenuCommand)
+
+                        if store.interactionMode == .agent {
+                            AgentWorkbenchView(app: app, width: windowWidth)
+                                .flex().frame(minWidth: 0, minHeight: 0)
+                                .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
+                        } else {
+                            PanelWorkspace(controller: controller,
+                                           registry: registry, compact: windowWidth < 1000)
+                                .flex()
+                                .frame(minWidth: 0, minHeight: 0)
+                                .workspaceTheme(WorkspaceTheme(splitDividerThickness: 5))
+                                .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
+                                .layoutRole("editor-workspace")
+                                .debugName("editor-workspace")
+                        }
 
                         EditorStatusBar(store: store, scriptWorkspace: app.scriptWorkspace,
                                         showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed },

@@ -33,7 +33,8 @@ struct ViewportPanel: View {
             let renderScalePercent = store.viewportRenderScalePercent
             let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
             let realtimeEnabled = store.viewportRealtimeEnabled
-            let physicsDebugOptions = store.physicsDebugOverlayOptions
+            let physicsDebugOptions: EditorPhysicsDebugOverlayOptions = store.workspaceMode.profile.features.contains(.simulation)
+                ? store.physicsDebugOverlayOptions : []
             let physicsDebugScope = store.physicsDebugOverlayScope
             let playbackState = store.playbackState
             let selectionContainsLockedEntity = selectedEntityIDs.contains {
@@ -1680,6 +1681,7 @@ private struct ViewportInfoBar: View {
                                     onToggleInteractionDownscale: onToggleInteractionDownscale,
                                     onToggleRealtime: onToggleRealtime)
 
+                if snapStore.workspaceMode.profile.features.contains(.simulation) {
                 PhysicsDebugSelector(
                     options: physicsDebugOptions,
                     scope: physicsDebugScope,
@@ -1687,6 +1689,7 @@ private struct ViewportInfoBar: View {
                     onSetScope: onSetPhysicsDebugScope,
                     compact: true
                 )
+                }
             }
             .padding(3)
             .background(.surfaceFloating)

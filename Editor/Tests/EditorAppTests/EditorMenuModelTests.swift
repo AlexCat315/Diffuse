@@ -13,8 +13,8 @@ struct EditorMenuModelTests {
             let layout = try #require(model.menus.first { $0.title == L("Layout") })
             let window = try #require(model.menus.first { $0.title == L("Window") })
             let workspaceActions = actions(EditorMenuModel(menus: [workspace]))
-            #expect(workspaceActions.map(\.keyEquivalent) == ["1", "2", "3", "4"])
-            #expect(workspaceActions.filter(\.isSelected).count == 1)
+            #expect(workspaceActions.filter { !$0.keyEquivalent.isEmpty }.map(\.keyEquivalent) == ["1", "4", "2", "3"])
+            #expect(workspaceActions.filter(\.isSelected).count == 2)
             let layoutActions = actions(EditorMenuModel(menus: [layout]))
             let presets = layoutActions.compactMap { action -> EditorLayoutPreset? in
                 if case let .setLayoutPreset(preset) = action.command { return preset }

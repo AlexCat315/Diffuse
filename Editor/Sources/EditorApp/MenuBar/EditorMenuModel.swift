@@ -19,11 +19,12 @@ struct EditorMenuModel {
     static func make(workspaceMode: EditorWorkspaceMode,
                      activeLayoutPreset: EditorLayoutPreset,
                      playbackState: PlaybackState,
+                     interactionMode: EditorInteractionMode = .manual,
                      canUndo: Bool = false,
                      canRedo: Bool = false,
                      hasSelection: Bool = false) -> EditorMenuModel {
         let canAuthorScene = EditorSceneAuthoringPolicy.canEditScene(during: playbackState)
-        return EditorMenuModel(menus: [
+        let menus = [
             EditorApplicationMenu(title: L("File"), items: [
                 action(L("New Scene"), key: "n", enabled: canAuthorScene, command: .newScene),
                 action(L("Open Scene..."), key: "o", enabled: canAuthorScene, command: .openScene),
@@ -46,12 +47,16 @@ struct EditorMenuModel {
             EditorApplicationMenu(title: L("Workspace"), items: [
                 action(L(EditorWorkspaceMode.level.title), key: "1", selected: workspaceMode == .level,
                        command: .setWorkspaceMode(.level)),
+                action(L(EditorWorkspaceMode.scripting.title), key: "4", selected: workspaceMode == .scripting,
+                       command: .setWorkspaceMode(.scripting)),
+                .separator,
                 action(L(EditorWorkspaceMode.modeling.title), key: "2", selected: workspaceMode == .modeling,
                        command: .setWorkspaceMode(.modeling)),
                 action(L(EditorWorkspaceMode.animation.title), key: "3", selected: workspaceMode == .animation,
                        command: .setWorkspaceMode(.animation)),
-                action(L(EditorWorkspaceMode.scripting.title), key: "4", selected: workspaceMode == .scripting,
-                       command: .setWorkspaceMode(.scripting)),
+                .separator,
+                action(L("Manual Editing"), key: "", selected: interactionMode == .manual, command: .setInteractionMode(.manual)),
+                action(L("Agent Workbench"), key: "", selected: interactionMode == .agent, command: .setInteractionMode(.agent)),
             ]),
             EditorApplicationMenu(title: L("Layout"), items:
                 EditorLayoutPreset.presets(for: workspaceMode).map { preset in
@@ -111,7 +116,22 @@ struct EditorMenuModel {
                 .separator,
                 action(L("About Guava"), key: "", command: .about),
             ]),
-        ])
+        ]
+        return EditorMenuModel(menus: menus.compactMap { menu in
+            if interactionMode == .agent && menu.title == L("Layout") { return nil }
+            var items: [EditorApplicationMenuItem] = []
+            for item in menu.items {
+                if case .action(let action) = item,
+                   !EditorWorkspaceCommandPolicy.allows(action.command, in: workspaceMode) { continue }
+                if case .separator = item {
+                    guard !items.isEmpty else { continue }
+                    if case .separator = items.last { continue }
+                }
+                items.append(item)
+            }
+            if case .separator = items.last { items.removeLast() }
+            return items.isEmpty ? nil : EditorApplicationMenu(title: menu.title, items: items)
+        })
     }
 
     private static func action(_ title: String,

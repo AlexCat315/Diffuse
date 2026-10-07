@@ -7,6 +7,7 @@ enum EditorWorkspaceDefaults {
     static func makeDocument(mode: EditorWorkspaceMode,
                              preset requestedPreset: EditorLayoutPreset,
                              registry: PanelRegistry) -> WorkspaceDocument {
+        let registry = EditorWorkspacePanelPolicy.registry(for: mode, from: registry)
         let preset = requestedPreset.mode == mode ? requestedPreset : .default(for: mode)
         let panels = Dictionary(uniqueKeysWithValues: registry.descriptors.map { descriptor in
             (descriptor.id, WorkspacePanel(id: descriptor.id, title: descriptor.title,

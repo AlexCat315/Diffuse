@@ -41,12 +41,14 @@ struct InspectorPanel: View {
             let selectedEntityIDs = store.selectedEntityIDs.isEmpty
                 ? Set(selectedEntityID.map { [$0] } ?? []) : store.selectedEntityIDs
             let entity = scene.entitySummary(id: selectedEntityID)
-            let showingSceneSettings = sectionFilter == nil && (store.inspectorSceneSettingsVisible || entity == nil)
+            let profile = store.workspaceMode.profile
+            let showingSceneSettings = sectionFilter == nil && (store.inspectorSceneSettingsVisible || (entity == nil && profile.domain == .game))
             let allSections = showingSceneSettings ? scene.sceneSettingsSections()
                 : scene.inspectorSections(for: selectedEntityIDs, primaryID: selectedEntityID)
             let globalIDs: Set<String> = ["physics-settings", "particle-scalability"]
             let sections = allSections.filter {
-                globalIDs.contains($0.id) == showingSceneSettings && (sectionFilter?.contains($0.id) ?? true)
+                globalIDs.contains($0.id) == showingSceneSettings && profile.allowsInspectorSection($0.id)
+                    && (sectionFilter?.contains($0.id) ?? true)
             }.map(InspectorSectionPresentation.presentedSection).sorted {
                 Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
             }
@@ -111,7 +113,7 @@ struct InspectorPanel: View {
 
                     if filteredSections.isEmpty {
                         EditorPanelEmptyState(
-                            L("No matching properties"),
+                            entity == nil && !showingSceneSettings ? L("Select an entity") : L("No matching properties"),
                             detail: trimmedSearchText.isEmpty
                                 ? (sectionFilter == nil ? nil : L("Select an entity with an animation component."))
                                 : "\"\(trimmedSearchText)\""
@@ -1075,8 +1077,8 @@ private struct ComponentActionsBar: View {
     @State private var isResetPresented: Bool = false
 
     var body: some View {
-        let addableKinds = scene.addableComponentKinds(on: entityIDs)
-        let commonKinds = scene.commonComponentKinds(on: entityIDs)
+        let addableKinds = scene.addableComponentKinds(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
+        let commonKinds = scene.commonComponentKinds(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
         let containsLockedEntity = entityIDs.contains { scene.isEntityLocked($0) }
         let canMutate = isAuthoringEnabled && !containsLockedEntity && !entityIDs.isEmpty
         return Row(alignment: .center, spacing: 6) {
