@@ -22,8 +22,9 @@ struct EditorWorkflowBar: View {
                 }
             }.flex(basis: 0).debugName("editor-interaction-selector")
         }
-        .padding(horizontal: 10, vertical: 4)
-        .background(.surface)
+        .padding(horizontal: 10, vertical: 2)
+        .frame(height: 32)
+        .background(.surfaceRaised)
         .debugName("editor-workflow-bar")
     }
 }

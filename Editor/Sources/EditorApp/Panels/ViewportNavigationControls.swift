@@ -25,9 +25,10 @@ struct ViewportProjectionSelector: View {
                 Text(label, lineLimit: 1).font(.caption)
                 Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
             }
-            .padding(horizontal: 8, vertical: 4)
+            .padding(horizontal: 8)
+            .frame(height: 24)
             .background(.surfaceSunken)
-            .cornerRadius(3)
+            .cornerRadius(4)
         } content: {
             Menu(menuEntries, width: 180, maxVisibleRows: 11,
                  onItemActivated: { isPresented = false })
@@ -87,9 +88,10 @@ struct ViewportSnapSelector: View {
                         .foregroundColor(translate || rotate || scale ? .accent : .onSurface)
                     Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
                 }
-                .padding(horizontal: 8, vertical: 4)
+                .padding(horizontal: 8)
+            .frame(height: 24)
                 .background(.surfaceSunken)
-                .cornerRadius(3)
+                .cornerRadius(4)
             } content: {
                 Column(alignment: .leading, spacing: 8) {
                     Text(L("Snap Steps")).font(.caption).foregroundColor(.onSurfaceMuted)

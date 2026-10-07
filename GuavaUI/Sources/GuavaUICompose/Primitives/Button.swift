@@ -749,7 +749,7 @@ private func builtinButtonChromeValues(state: BuiltinButtonChromeState,
                                      border: border,
                                      borderWidth: borderWidth,
                                      radius: metrics.radius,
-                                     opacity: state.isEnabled ? 1 : (state.isSelected ? 0.75 : 0.55))
+                                     opacity: state.isEnabled || theme.textEmphasis.disabled != nil ? 1 : (state.isSelected ? 0.75 : 0.55))
 }
 
 private func nearestButtonHostAncestor(of node: Node) -> Node? {

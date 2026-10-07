@@ -107,6 +107,7 @@ struct BoolControlHost: _PrimitiveView {
         node.attachments[Self.variantKey] = variant
         node.cursor = isEnabled ? .pointer : .notAllowed
 
+        updateBoolControlAppearance(node, isOn: isOn.wrappedValue, isEnabled: isEnabled)
         let snapshot = self
         node.updateDraw(identity: PaintIdentity(isOn: isOn.wrappedValue,
                                                 isEnabled: isEnabled,
@@ -139,6 +140,7 @@ struct BoolControlHost: _PrimitiveView {
                 guard wasPressed else { return .ignored }
                 isOn.wrappedValue.toggle()
                 node.attachments[Self.onKey] = isOn.wrappedValue
+                updateBoolControlAppearance(node, isOn: isOn.wrappedValue, isEnabled: isEnabled)
                 node.markRenderDirty(reason: .styleSet(field: "boolControlValue"))
                 return .handled
             }
@@ -149,6 +151,7 @@ struct BoolControlHost: _PrimitiveView {
             case Scancode.return, Scancode.space, Scancode.keypadEnter:
                 isOn.wrappedValue.toggle()
                 node.attachments[Self.onKey] = isOn.wrappedValue
+                updateBoolControlAppearance(node, isOn: isOn.wrappedValue, isEnabled: isEnabled)
                 node.markRenderDirty(reason: .styleSet(field: "boolControlValue"))
                 return .handled
             default:
@@ -201,7 +204,8 @@ struct BoolControlHost: _PrimitiveView {
                             color: resolvedFillColor(node: node, colors: colors))
 
         let thumbTravel = trackRect.width - 2 * thumbInset - thumbDiameter
-        let thumbX = trackRect.minX + thumbInset + (isOn.wrappedValue ? thumbTravel : 0)
+        let progress = node.attachments["__bool_visual_progress"] as? Float ?? (isOn.wrappedValue ? 1 : 0)
+        let thumbX = trackRect.minX + thumbInset + thumbTravel * progress
         let thumbRect = UIRect(x: thumbX,
                                y: trackRect.minY + (trackRect.height - thumbDiameter) * 0.5,
                                width: thumbDiameter,
@@ -250,7 +254,8 @@ struct BoolControlHost: _PrimitiveView {
                             radius: 4,
                             color: resolvedFillColor(node: node, colors: colors))
 
-        if isOn.wrappedValue {
+        let checkProgress = node.attachments["__bool_visual_progress"] as? Float ?? (isOn.wrappedValue ? 1 : 0)
+        if checkProgress > 0 {
             let inset = max(3, edge * 0.18)
             let x0 = boxRect.minX + inset
             let y0 = boxRect.minY + edge * 0.55
@@ -258,7 +263,7 @@ struct BoolControlHost: _PrimitiveView {
             let y1 = boxRect.minY + edge - inset
             let x2 = boxRect.minX + edge - inset
             let y2 = boxRect.minY + inset
-            let lineColor = isEnabled ? colors.onAccent : colors.onSurfaceMuted
+            let lineColor = (isEnabled ? colors.onAccent : colors.onSurfaceMuted).multipliedAlpha(checkProgress * node.opacity)
             list.addLine(fromX: x0, fromY: y0,
                          toX: x1, toY: y1,
                          thickness: 2,
@@ -271,6 +276,7 @@ struct BoolControlHost: _PrimitiveView {
     }
 
     private func resolvedFillColor(node: Node, colors: ColorScheme) -> Color {
+        if let fill = node.attachments["__bool_visual_fill"] as? Color { return fill.multipliedAlpha(node.opacity) }
         if !isEnabled {
             return colors.surfaceVariant
         }
@@ -300,5 +306,28 @@ private func setBoolControlInteraction(_ node: Node, key: String, value: Bool) {
     let previous = node.attachments[key] as? Bool
     guard previous != value else { return }
     node.attachments[key] = value
+    updateBoolControlAppearance(node, isOn: node.attachments[BoolControlHost.onKey] as? Bool == true,
+                                isEnabled: node.cursor != .notAllowed)
     node.markRenderDirty(reason: .styleSet(field: key))
+}
+
+private func updateBoolControlAppearance(_ node: Node, isOn: Bool, isEnabled: Bool) {
+    let colors = node.theme.colors
+    let pressed = node.attachments[BoolControlHost.pressedKey] as? Bool == true
+    let hovered = node.attachments[BoolControlHost.hoveredKey] as? Bool == true
+    let base = !isEnabled ? colors.surfaceVariant : isOn ? colors.accent : colors.surfaceVariant
+    let fill = !isEnabled ? base : pressed ? (isOn ? colors.accentPressed : base.composited(over: colors.stateLayerPressed))
+        : hovered ? (isOn ? colors.accentHover : base.composited(over: colors.stateLayerHover)) : base
+    let previous = node.attachments["__bool_visual_progress"] as? Float
+    let apply = { [node] in
+        node.animatableSet(propertyKey: "bool.progress", current: previous ?? (isOn ? 1 : 0), to: Float(isOn ? 1 : 0)) { [weak node] value in
+            node?.attachments["__bool_visual_progress"] = value
+            node?.markRenderDirty(reason: .styleSet(field: "bool.progress"))
+        }
+        node.animatableSet(propertyKey: "bool.fill", current: node.attachments["__bool_visual_fill"] as? Color ?? fill, to: fill) { [weak node] value in
+            node?.attachments["__bool_visual_fill"] = value
+            node?.markRenderDirty(reason: .styleSet(field: "bool.fill"))
+        }
+    }
+    if previous != nil { withAnimation(.semantic(.fast, in: node.theme), apply) } else { apply() }
 }

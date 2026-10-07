@@ -35,6 +35,59 @@ private struct _PopoverProbe: _PrimitiveView {
 
 @Suite("Popover")
 struct PopoverTests: GuavaUIComposeSerializedSuite {
+    @Test("Closing a popover keeps only noninteractive paint until completion")
+    func animatedDismissal() throws { try GlobalTestLock.locked {
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
+        let scheduler = AnimatorScheduler()
+        try AnimatorScheduler.$current.withValue(scheduler) {
+            let harness = ReopenHarness(box: ActionBox())
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            func settle() { while graph.recomposer.commitAll() {}; graph.computeLayout(width: 240, height: 180) }
+            graph.install(root: harness); settle()
+            harness.$isPresented.wrappedValue = true; settle()
+            scheduler.tick(deltaTime: 1); settle()
+            let item = try #require(menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).first?.node)
+            harness.$isPresented.wrappedValue = false; settle()
+            #expect(PortalStoreHolder.current.entries.isEmpty)
+            #expect(PortalStoreHolder.current.renderedEntries.count == 1)
+            #expect(!item.acceptsSubtreeInput)
+            scheduler.tick(deltaTime: 0.08); settle()
+            #expect(!menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).isEmpty)
+            scheduler.tick(deltaTime: 1); settle()
+            #expect(PortalStoreHolder.current.renderedEntries.isEmpty)
+            #expect(menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).isEmpty)
+            #expect(scheduler.activeCount == 0)
+        }
+    } }
+
+    @Test("Reopening during dismissal reverses the same menu without duplicate portals")
+    func animatedDismissalReversal() throws { try GlobalTestLock.locked {
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
+        let scheduler = AnimatorScheduler()
+        try AnimatorScheduler.$current.withValue(scheduler) {
+            let harness = ReopenHarness(box: ActionBox())
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            func settle() { while graph.recomposer.commitAll() {}; graph.computeLayout(width: 240, height: 180) }
+            graph.install(root: harness); settle()
+            harness.$isPresented.wrappedValue = true; settle()
+            scheduler.tick(deltaTime: 1); settle()
+            let item = try #require(menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).first?.node)
+            harness.$isPresented.wrappedValue = false; settle()
+            scheduler.tick(deltaTime: 0.06); settle()
+            harness.$isPresented.wrappedValue = true; settle()
+            scheduler.tick(deltaTime: 1); settle()
+            #expect(PortalStoreHolder.current.entries.count == 1)
+            #expect(PortalStoreHolder.current.renderedEntries.count == 1)
+            #expect(menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).first?.node === item)
+            #expect(item.acceptsSubtreeInput)
+            #expect(scheduler.activeCount == 0)
+        }
+    } }
+
     private final class ActionBox {
         var fired = 0
     }
