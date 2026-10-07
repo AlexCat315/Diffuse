@@ -1,53 +1,60 @@
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
+import GuavaUIWorkspace
 
 /// Task-oriented shell over the same live scene and authoring operations.
 struct AgentWorkbenchView: View {
     let app: EditorApplication
-    let width: Float
+    let controller: WorkspaceController
+
+    var body: some View {
+        WorkspaceView(controller: controller) { panelID in
+            switch panelID.rawValue {
+            case "agent-tasks":
+                AnyView(StoreScope(app.store) { store in AgentTaskList(tasks: store.agentTasks) })
+            case "agent-preview": AnyView(AgentPreviewPanel(app: app))
+            case "agent-conversation": AnyView(AgentConversationPanel(app: app))
+            default: AnyView(EmptyView())
+            }
+        }
+        .workspaceTheme(WorkspaceTheme(tabBarHeight: 30, splitDividerThickness: 5))
+        .debugName("agent-workbench")
+    }
+}
+
+private struct AgentPreviewPanel: View {
+    let app: EditorApplication
 
     var body: some View {
         StoreScope(app.store) { store in
-            Row(alignment: .top, spacing: 6) {
-                if width >= 1100 {
-                    AgentTaskList(tasks: store.agentTasks)
-                        .frame(width: .points(210), height: .percent(100), minWidth: 0, minHeight: 0)
-                }
-                Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                    EditorViewportWorkspacePanel(app: app).flex()
-                        .frame(width: .percent(100), minWidth: 0, minHeight: 0)
-                        .debugName("agent-scene-viewport")
-                    if store.pendingConfirmationRequest != nil {
-                        Divider()
-                        ConfirmationHostPanel(app: app)
-                            .frame(height: 220, minWidth: 0, minHeight: 0)
-                    } else if let task = store.agentTasks.first {
-                        Divider()
-                        AgentTaskSummary(task: task)
-                    }
-                }
-                .flex().frame(height: .percent(100), minWidth: 0, minHeight: 0)
-                .background(.surface).cornerRadius(7).border(.border, width: 1)
-                .debugName("agent-preview")
-
-                Column(alignment: .leading, spacing: 0) {
-                    Row(alignment: .center, spacing: 6) {
-                        Text(L("Task Conversation")).font(.bodyStrong)
-                        Spacer(minLength: 0)
-                        if store.agentTasks.first?.phase == .planning {
-                            Button(L("Cancel")) { app.cancelAgentTask() }.buttonStyle(.ghost)
-                        }
-                    }.padding(10)
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                EditorViewportWorkspacePanel(app: app).flex()
+                    .frame(width: .percent(100), minWidth: 0, minHeight: 0)
+                    .debugName("agent-scene-viewport")
+                if store.pendingConfirmationRequest != nil {
                     Divider()
-                    IntentInputPanel(app: app).flex().frame(minWidth: 0, minHeight: 0)
+                    ConfirmationHostPanel(app: app).frame(height: 220, minWidth: 0, minHeight: 0)
+                } else if let task = store.agentTasks.first {
+                    Divider()
+                    AgentTaskSummary(task: task)
                 }
-                .frame(width: .points(width < 900 ? 280 : 340), height: .percent(100), minWidth: 0, minHeight: 0)
-                .background(.surface).cornerRadius(7).border(.border, width: 1)
-                .debugName("agent-conversation")
-            }
-            .frame(width: .percent(100), height: .percent(100), minWidth: 0, minHeight: 0)
-            .debugName("agent-workbench")
+            }.flex().frame(minWidth: 0, minHeight: 0).debugName("agent-preview")
+        }
+    }
+}
+
+private struct AgentConversationPanel: View {
+    let app: EditorApplication
+
+    var body: some View {
+        StoreScope(app.store) { store in
+            Column(alignment: .leading, spacing: 0) {
+                if store.agentTasks.first?.phase == .planning {
+                    Button(L("Cancel")) { app.cancelAgentTask() }.buttonStyle(.ghost).padding(6)
+                }
+                IntentInputPanel(app: app).flex().frame(minWidth: 0, minHeight: 0)
+            }.flex().frame(minWidth: 0, minHeight: 0).debugName("agent-conversation")
         }
     }
 }
@@ -57,8 +64,6 @@ private struct AgentTaskList: View {
 
     var body: some View {
         Column(alignment: .leading, spacing: 0) {
-            Text(L("Tasks")).font(.bodyStrong).padding(10)
-            Divider()
             ScrollView(.vertical, scrollbarGutter: .stable) {
                 Column(alignment: .leading, spacing: 8) {
                     if tasks.isEmpty {
@@ -70,7 +75,7 @@ private struct AgentTaskList: View {
                 }.padding(6)
             }.flex()
         }
-        .background(.surface).cornerRadius(7).border(.border, width: 1)
+        .flex().frame(minWidth: 0, minHeight: 0)
         .debugName("agent-task-list")
     }
     private func taskRow(_ task: EditorAgentTask) -> some View {

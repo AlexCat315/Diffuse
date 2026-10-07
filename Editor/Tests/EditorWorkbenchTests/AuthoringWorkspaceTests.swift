@@ -7,6 +7,7 @@ import GuavaUIWorkspace
 import Testing
 
 @Suite("Functional authoring shells", .serialized)
+@MainActor
 struct AuthoringWorkspaceTests {
     @Test("Shell persistence round-trips the workspace group and normalizes defaults")
     func shellPersistence() throws {
@@ -49,6 +50,17 @@ struct AuthoringWorkspaceTests {
         #expect(!InspectorWorkspacePolicy.allows(.characterController, in: .animation))
     } }
 
+    @Test("Agent task and conversation panels use independent collapsible docking")
+    func agentDocking() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
+        let controller = EditorAgentWorkspaceDefaults.makeController()
+        #expect(controller.document.groups["leading"]?.isCollapsed == true)
+        _ = controller.dispatch(.expand("leading"))
+        #expect(controller.document.groups["leading"]?.isCollapsed == false)
+        _ = controller.dispatch(.collapse("trailing"))
+        #expect(controller.document.groups["trailing"]?.isCollapsed == true)
+        #expect(controller.document.hasValidLayoutReferences)
+    } }
+
     @Test("Manual and Agent shells preserve document, selection, and custom docking")
     func shellSwitchAndFrames() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -76,11 +88,13 @@ struct AuthoringWorkspaceTests {
         let shell = try #require(frames.first { $0.debugName == "agent-workbench" })
         #expect(shell.absoluteFrame.width >= 1400)
         #expect(shell.absoluteFrame.height >= 750)
-        for name in ["agent-task-list", "agent-preview", "agent-conversation"] {
+        for name in ["agent-preview", "agent-conversation"] {
             let frame = try #require(frames.first { $0.debugName == name })
             #expect(frame.absoluteFrame.width >= 200)
             #expect(frame.absoluteFrame.height >= 700)
         }
+        #expect(!frames.contains { $0.debugName == "agent-task-list" })
+        #expect(frames.contains { $0.debugName == "workspace-restore-leading-agent-tasks" })
         let viewport = try #require(frames.first { $0.debugName == "agent-scene-viewport" })
         #expect(viewport.absoluteFrame.width >= 700)
         #expect(viewport.absoluteFrame.height >= 650)

@@ -9,14 +9,9 @@ struct EditorPlaybackToolbar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 3) {
-            control("play", title: L("Play physics simulation"), target: .playing)
-            control("pause", title: L("Pause physics simulation"), target: .paused)
-            control("stop", title: L("Stop physics simulation"), target: .stopped)
-            Divider(axis: .vertical).frame(width: 1, height: 14)
-            Text(L("Local Runtime"), lineLimit: 1)
-                .font(.caption)
-                .foregroundColor(.onSurfaceVariant)
-                .padding(horizontal: 6)
+            control("play", title: L("Play in current viewport"), target: .playing)
+            control("pause", title: L("Pause game"), target: .paused)
+            control("stop", title: L("Stop and return to editing"), target: .stopped)
         }
         .padding(horizontal: 4, vertical: 2)
         .background(.surfaceSunken)
@@ -34,6 +29,6 @@ struct EditorPlaybackToolbar: View {
                tooltip: title) {
             onCommand(.setPlaybackState(target))
         }
-        .buttonStyle(ToggleButtonStyle(minWidth: 28, height: 24))
+        .buttonStyle(.toolToggle)
     }
 }

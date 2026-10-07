@@ -756,3 +756,10 @@
 "Cancelled" = "Cancelled";
 
 "Scene Changed" = "Scene Changed";
+
+"Choose an object in the viewport or Hierarchy to edit its properties." = "Choose an object in the viewport or Hierarchy to edit its properties.";
+
+"Play in current viewport" = "Play in current viewport";
+"Pause game" = "Pause game";
+"Stop and return to editing" = "Stop and return to editing";
+"Return to Inspector" = "Return to Inspector";
