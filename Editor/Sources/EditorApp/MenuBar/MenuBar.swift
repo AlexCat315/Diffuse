@@ -18,6 +18,7 @@ enum EditorMenuCommand {
     case redo
     case duplicateSelection
     case deleteSelection
+    case setInteractionMode(EditorInteractionMode)
     case setWorkspaceMode(EditorWorkspaceMode)
     case setLayoutPreset(EditorLayoutPreset)
     case resetLayout

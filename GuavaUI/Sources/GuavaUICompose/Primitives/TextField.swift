@@ -257,11 +257,8 @@ public struct TextField: View {
                            onFocusChange: @escaping (Bool) -> Void,
                            onEditingChange: @escaping (Bool) -> Void) {
         node.attachments[Self.surfaceMarkerKey] = true
-        node.backgroundColor = .clear
-        node.cornerRadius = 0
-        node.borderColor = .clear
-        node.borderWidth = 0
-        node.opacity = 1
+        // The owning style controls chrome. Resetting it here makes every
+        // hover/focus recompose restart an interpolation from transparent.
         node.cursor = disabled ? .arrow : .ibeam
         node.isFocusable = !disabled
         node.isHitTestable = !disabled
@@ -640,14 +637,14 @@ public struct TextField: View {
         let current = text.wrappedValue
         let resolvedFont = resolvedFont(node: node, env: env)
         let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
-        let resolvedPlaceholderColor = placeholderColor ?? theme.colors.onSurfaceMuted
+        let resolvedPlaceholderColor = placeholderColor ?? theme.textEmphasis.placeholder ?? theme.colors.onSurfaceMuted
         let resolvedCursorColor = cursorColor ?? theme.colors.onSurface
         let resolvedSelectionColor = selectionColor ?? theme.colors.selection
         let renderState = engine.makeRenderState(current: current, state: state, isFocused: isFocused)
         let renderBaseColor: Color =
             renderState.showsPlaceholder
                 ? resolvedPlaceholderColor
-                : (textColor ?? node.foregroundColor ?? theme.colors.onSurface)
+                : (disabled ? theme.textEmphasis.disabled : nil) ?? textColor ?? node.foregroundColor ?? theme.colors.onSurface
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
 
         let insetX = horizontalInset(theme: theme)

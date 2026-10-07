@@ -9,7 +9,7 @@ public struct SecondaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         BuiltinButtonChrome(kind: .secondary,
                             configuration: configuration,
-                            foreground: .onSurface)
+                            foreground: configuration.isEnabled ? .onSurface : .onSurfaceDisabled)
     }
 }
 

@@ -33,7 +33,8 @@ struct ViewportPanel: View {
             let renderScalePercent = store.viewportRenderScalePercent
             let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
             let realtimeEnabled = store.viewportRealtimeEnabled
-            let physicsDebugOptions = store.physicsDebugOverlayOptions
+            let physicsDebugOptions: EditorPhysicsDebugOverlayOptions = store.workspaceMode.profile.features.contains(.simulation)
+                ? store.physicsDebugOverlayOptions : []
             let physicsDebugScope = store.physicsDebugOverlayScope
             let playbackState = store.playbackState
             let selectionContainsLockedEntity = selectedEntityIDs.contains {
@@ -1599,7 +1600,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Pick")) · Q") {
                     onSelectGizmoMode(.none)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
                 Button(icon: .resource(ViewportToolbarIcon.boxSelect.resource),
                        size: 15,
                        isEnabled: isAuthoringEnabled,
@@ -1607,7 +1608,7 @@ private struct ViewportInfoBar: View {
                        tooltip: "\(L("Box Select")) · B") {
                     onSelectGizmoMode(.boxSelect)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
                 Button(icon: .resource(ViewportToolbarIcon.translate.resource),
                            size: 15,
                            isEnabled: isAuthoringEnabled,
@@ -1615,7 +1616,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Move")) · W") {
                     onSelectGizmoMode(.translate)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
                 Button(icon: .resource(ViewportToolbarIcon.rotate.resource),
                            size: 15,
                            isEnabled: isAuthoringEnabled,
@@ -1623,7 +1624,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Rotate")) · E") {
                     onSelectGizmoMode(.rotate)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
                 Button(icon: .resource(ViewportToolbarIcon.scale.resource),
                            size: 15,
                            isEnabled: isAuthoringEnabled,
@@ -1631,7 +1632,7 @@ private struct ViewportInfoBar: View {
                            tooltip: "\(L("Scale")) · R") {
                     onSelectGizmoMode(.scale)
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
 
                 ToggleChip(label: gizmoSpace == .local ? L("Local") : L("World"),
                            isActive: gizmoSpace == .local,
@@ -1649,6 +1650,7 @@ private struct ViewportInfoBar: View {
             }
             .padding(3)
             .background(.surfaceFloating)
+            .surfaceFinish()
             .cornerRadius(6)
             .border(.divider, width: 1)
 
@@ -1664,14 +1666,14 @@ private struct ViewportInfoBar: View {
                        isSelected: gridEnabled,
                        tooltip: L("Reference Grid"),
                        action: onToggleGrid)
-                    .buttonStyle(.toggle)
+                    .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
                 Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
                            size: 15,
                            isSelected: shadowsEnabled,
                            tooltip: L("Shadows")) {
                     onToggleShadows()
                 }
-                .buttonStyle(.toggle)
+                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
 
                 RenderScaleSelector(percent: renderScalePercent,
                                     interactionDownscaleEnabled: interactionDownscaleEnabled,
@@ -1680,6 +1682,7 @@ private struct ViewportInfoBar: View {
                                     onToggleInteractionDownscale: onToggleInteractionDownscale,
                                     onToggleRealtime: onToggleRealtime)
 
+                if snapStore.workspaceMode.profile.features.contains(.simulation) {
                 PhysicsDebugSelector(
                     options: physicsDebugOptions,
                     scope: physicsDebugScope,
@@ -1687,9 +1690,11 @@ private struct ViewportInfoBar: View {
                     onSetScope: onSetPhysicsDebugScope,
                     compact: true
                 )
+                }
             }
             .padding(3)
             .background(.surfaceFloating)
+            .surfaceFinish()
             .cornerRadius(6)
             .border(.divider, width: 1)
         }
@@ -1711,7 +1716,7 @@ private struct ToggleChip: View {
         Button(isEnabled: isEnabled, isSelected: isActive, action: onTap) {
             Text(label, lineLimit: 1)
         }
-        .buttonStyle(.toggle)
+        .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
     }
 }
 

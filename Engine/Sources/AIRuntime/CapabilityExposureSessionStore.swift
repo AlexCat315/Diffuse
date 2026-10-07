@@ -54,6 +54,7 @@ public actor CapabilityExposureSessionStore {
     private let ttl: TimeInterval
     private var exposurePolicy: CapabilityExposurePolicy
     private var pluginAuthorities: [String: PluginCapabilityAuthority]
+    private var workflowDocumentID: UUID?
     private var generation: UInt64 = 0
     private var sessions: [UUID: Entry] = [:]
 
@@ -85,6 +86,18 @@ public actor CapabilityExposureSessionStore {
         self.exposurePolicy = exposurePolicy
         self.pluginAuthorities = pluginAuthorities
         generation &+= 1
+    }
+
+    /// A workflow or document change invalidates tools and drafts minted under
+    /// the previous authoring context, including equal-revision scene swaps.
+    public func setWorkflowScope(policy: CapabilityExposurePolicy, documentID: UUID) async {
+        guard policy != exposurePolicy || documentID != workflowDocumentID else { return }
+        let previous = sessions
+        sessions.removeAll()
+        exposurePolicy = policy
+        workflowDocumentID = documentID
+        generation &+= 1
+        for entry in previous.values { await entry.drafts.removeAll() }
     }
 
     /// Plugin enablement, authorisation, upgrades, and PluginHost restarts all
@@ -133,14 +146,13 @@ public actor CapabilityExposureSessionStore {
                                  sceneRevision: sceneRevision,
                                  now: now)
 
-        let searchPolicy = CapabilityExposurePolicy(
-            activeReleasePhase: .stable,
-            allowedDomains: domain.map { [$0] } ?? exposurePolicy.allowedDomains,
-            enabledPluginIDs: exposurePolicy.enabledPluginIDs,
-            allowExternalSideEffects: exposurePolicy.allowExternalSideEffects,
-            maximumCapabilities: max(Self.maximumActiveCapabilities,
-                                     registry.allVerbs().count)
-        )
+        var searchPolicy = exposurePolicy
+        searchPolicy.activeReleasePhase = .stable
+        searchPolicy.allowedDomains = domain.map { requested in
+            exposurePolicy.allowedDomains.map { $0.intersection([requested]) } ?? [requested]
+        } ?? exposurePolicy.allowedDomains
+        searchPolicy.maximumCapabilities = max(Self.maximumActiveCapabilities, registry.allVerbs().count)
+
         let candidates = registry.searchContracts(query: query,
                                                   policy: searchPolicy,
                                                   pluginAuthorities: pluginAuthorities,
@@ -156,12 +168,11 @@ public actor CapabilityExposureSessionStore {
         let includedIDs = Set(preferredIDs)
 
         generation &+= 1
+        var activePolicy = exposurePolicy
+        activePolicy.activeReleasePhase = .stable
+        activePolicy.maximumCapabilities = Self.maximumActiveCapabilities
         var expanded = registry.exposureSnapshot(
-            policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
-                                             allowedDomains: exposurePolicy.allowedDomains,
-                                             enabledPluginIDs: exposurePolicy.enabledPluginIDs,
-                                             allowExternalSideEffects: exposurePolicy.allowExternalSideEffects,
-                                             maximumCapabilities: Self.maximumActiveCapabilities),
+            policy: activePolicy,
             sceneRevision: sceneRevision,
             generation: generation,
             preferredCapabilityIDs: preferredIDs,
@@ -301,14 +312,10 @@ public actor CapabilityExposureSessionStore {
         let coreReadIDs: Set<String> = [
             "scene.get_entities", "scene.get_selection", "scene.find_entities",
         ]
+        var initialPolicy = exposurePolicy
+        initialPolicy.maximumCapabilities = Self.maximumActiveCapabilities
         let snapshot = registry.exposureSnapshot(
-            policy: CapabilityExposurePolicy(
-                activeReleasePhase: exposurePolicy.activeReleasePhase,
-                allowedDomains: exposurePolicy.allowedDomains,
-                enabledPluginIDs: exposurePolicy.enabledPluginIDs,
-                allowExternalSideEffects: exposurePolicy.allowExternalSideEffects,
-                maximumCapabilities: Self.maximumActiveCapabilities
-            ),
+            policy: initialPolicy,
             sceneRevision: sceneRevision,
             generation: generation,
             preferredCapabilityIDs: Array(coreReadIDs).sorted(),

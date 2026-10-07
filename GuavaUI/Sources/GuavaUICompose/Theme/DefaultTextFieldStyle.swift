@@ -24,12 +24,12 @@ public struct DefaultTextFieldStyle: TextFieldStyle {
             if !configuration.isEnabled { return inputs.borderDisabled }
             if configuration.isError    { return inputs.borderError }
             if configuration.isFocused  { return inputs.borderFocused }
-            return inputs.borderColor
+            return configuration.isHovered ? inputs.borderHover : inputs.borderColor
         }()
         let borderWidth: Float = configuration.isFocused
             ? inputs.focusRingWidth
             : inputs.borderWidth
-        let alpha: Float = configuration.isEnabled ? 1 : 0.55
+        let alpha: Float = configuration.isEnabled || theme.textEmphasis.disabled != nil ? 1 : 0.55
         let visualKey = _TextFieldVisualKey(background: bg,
                                             border: border,
                                             borderWidth: borderWidth,

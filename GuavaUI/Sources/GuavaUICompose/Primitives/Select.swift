@@ -212,7 +212,7 @@ public struct Menu: View {
     }
 
     public var body: some View {
-        let rowHeight: Float = 28
+        let rowHeight: Float = 32
         let listHeight = Float(maxVisibleRows) * rowHeight
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             ScrollView(.vertical, consumePolicy: .always, scrollbarGutter: .stable) {
@@ -222,8 +222,9 @@ public struct Menu: View {
             .modifier(_MenuWindowBounds())
         }
         .background(.surfaceFloating)
-        .cornerRadius(7)
+        .cornerRadius(6)
         .border(.border, width: 1)
+        .surfaceFinish()
         .ifLet(width) { view, width in
             view.frame(width: width)
         }
@@ -328,22 +329,23 @@ private struct _MenuItemRowHost: _PrimitiveView {
             }
         }
         node.cursor = item.isEnabled ? .pointer : .notAllowed
+        node.attachments["__menu_highlighted"] = isHighlighted
+        node.attachments["__menu_enabled"] = item.isEnabled
+        updateMenuItemFill(node)
         node.updateDraw(identity: PaintIdentity(id: item.id,
                                                 isEnabled: item.isEnabled,
                                                 isSelected: item.isSelected,
                                                 role: item.role,
-                                                isHighlighted: isHighlighted)) { [weak node, item, isHighlighted] list, origin in
+                                                isHighlighted: isHighlighted)) { [weak node] list, origin in
             guard let node,
-                  let background = Self.backgroundColor(for: node,
-                                                        item: item,
-                                                        isHighlighted: isHighlighted) else {
+                  let background = node.attachments["__menu_visual_fill"] as? Color else {
                 return
             }
             let width = max(0, Float(node.frame.width) - 8)
             let rect = UIRect(x: Float(origin.x) + 4,
                               y: Float(origin.y) + 2,
                               width: width,
-                              height: 26)
+                              height: 28)
             list.addRoundedRect(rect,
                                 radius: 5,
                                 color: background.multipliedAlpha(node.opacity))
@@ -405,22 +407,22 @@ private struct _MenuItemRowHost: _PrimitiveView {
         let layout = LayoutNode()
         layout.flexDirection = .column
         layout.alignItems = .stretch
-        layout.height = 34
+        layout.height = 32
         return layout
     }
 
     func _updateLayout(_ layout: LayoutNode) {
         layout.flexDirection = .column
         layout.alignItems = .stretch
-        layout.height = 34
+        layout.height = 32
     }
 
     func _children(for node: Node) -> [any View] {
         let theme = node.theme
-        let titleColor: Color = item.role == .destructive
-            ? theme.colors.error
-            : theme.colors.onSurface
-        let textOpacity: Float = item.isEnabled ? 1 : 0.55
+        let titleColor: Color = !item.isEnabled
+            ? (theme.textEmphasis.disabled ?? theme.colors.onSurfaceMuted)
+            : item.role == .destructive ? theme.colors.error : theme.colors.onSurface
+        let textOpacity: Float = 1
 
         let checkmarkSize: Float = 10
         let row = Row(alignment: .center, spacing: 8) {
@@ -448,22 +450,10 @@ private struct _MenuItemRowHost: _PrimitiveView {
             }
         }
         .padding(horizontal: 12, vertical: 0)
-        .frame(height: 26)
+        .frame(height: 28)
         .padding(horizontal: 4, vertical: 2)
 
         return [row]
-    }
-
-    private static func backgroundColor(for node: Node,
-                                        item: MenuItem,
-                                        isHighlighted: Bool) -> Color? {
-        guard item.isEnabled else { return nil }
-        let isPressed = node.attachments[pressedKey] as? Bool == true
-        let isHovered = node.attachments[hoveredKey] as? Bool == true
-        if isPressed { return node.theme.colors.stateLayerPressed }
-        if isHovered { return node.theme.colors.stateLayerHover }
-        if isHighlighted { return node.theme.colors.stateLayerSelected }
-        return nil
     }
 
     private static let hoveredKey = "__menu_item_hovered"
@@ -472,11 +462,30 @@ private struct _MenuItemRowHost: _PrimitiveView {
     private static let activePressKey = "__menu_item_active_press"
 }
 
+private func updateMenuItemFill(_ node: Node) {
+    let enabled = node.attachments["__menu_enabled"] as? Bool == true
+    let pressed = node.attachments["__menu_item_pressed"] as? Bool == true
+    let hovered = node.attachments["__menu_item_hovered"] as? Bool == true
+    let highlighted = node.attachments["__menu_highlighted"] as? Bool == true
+    let colors = node.theme.colors
+    let fill = !enabled ? Color.clear : pressed ? colors.stateLayerPressed
+        : hovered ? colors.stateLayerHover : highlighted ? colors.stateLayerSelected : .clear
+    let previous = node.attachments["__menu_visual_fill"] as? Color
+    let apply = { [node] in
+        node.animatableSet(propertyKey: "menu.fill", current: previous ?? fill, to: fill) { [weak node] color in
+            node?.attachments["__menu_visual_fill"] = color
+            node?.markRenderDirty(reason: .styleSet(field: "menu.fill"))
+        }
+    }
+    if previous != nil { withAnimation(.semantic(.fast, in: node.theme), apply) } else { apply() }
+}
+
 private func setMenuItemInteraction(_ node: Node, key: String, value: Bool) {
     if node.attachments[key] as? Bool == value {
         return
     }
     node.attachments[key] = value
+    updateMenuItemFill(node)
     node.markRenderDirty(reason: .styleSet(field: key))
 }
 
@@ -548,8 +557,7 @@ public struct Popover<Label: View, Content: View>: View {
             }
             .buttonStyle(.plain)
 
-            if isPresented.wrappedValue {
-                _PopoverOverlayHost(width: width,
+                _PopoverOverlayHost(isPresented: isPresented.wrappedValue, width: width,
                                     placement: placement,
                                     onDismiss: { isPresented.wrappedValue = false },
                                     keyHandler: onKey) {
@@ -558,13 +566,13 @@ public struct Popover<Label: View, Content: View>: View {
                     }
                     .padding(EdgeInsets(top: 2, leading: 0, bottom: 0, trailing: 0))
                 }
-            }
         }
         .zIndex(isPresented.wrappedValue ? 10_000 : 0)
     }
 }
 
 private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
+    let isPresented: Bool
     let width: Float?
     let placement: PopoverPlacement
     let content: Content
@@ -576,11 +584,12 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         let placement: PopoverPlacement
     }
 
-    init(width: Float?,
+    init(isPresented: Bool, width: Float?,
          placement: PopoverPlacement,
          onDismiss: @escaping () -> Void,
          keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
          @ViewBuilder content: () -> Content) {
+        self.isPresented = isPresented
         self.width = width
         self.placement = placement
         self.keyHandler = keyHandler
@@ -599,6 +608,10 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        guard isPresented else {
+            node.firstResource(PortalResource.self)?.dismiss(node: node)
+            return
+        }
         let position = Self.popoverPosition(for: node,
                                             width: width,
                                             placement: placement)
@@ -617,7 +630,7 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
                             if event.scancode == Scancode.escape { onDismiss(); return true }
                             return keyHandler?(event, .target) == .handled
                         }) { content }
-                     }))
+                     }), transition: .opacity.combined(with: .move(edge: .top, distance: 4)))
         node.firstResource(PortalResource.self)?.setDismissal(
             anchor: { [weak node] in node.map { Self.anchorFrame(for: $0) ?? .zero } ?? .zero },
             dismiss: onDismiss
@@ -794,6 +807,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
             }
         }
 
+        ThemeReader { theme in
         Popover(isPresented: $isPresented,
                 isEnabled: select.isEnabled,
                 width: select.width,
@@ -806,14 +820,17 @@ private struct _StatefulSelect<Value: Hashable>: View {
             Row(alignment: .center, spacing: 8) {
                 Text(selectedLabel)
                     .font(.body)
-                    .foregroundColor(select.isEnabled ? .onSurface : .onSurfaceMuted)
+                    .foregroundColor(select.isEnabled ? .onSurface : .onSurfaceDisabled)
                     .flex()
                 Icon(isPresented ? UICommonIcons.chevronUp : UICommonIcons.chevronDown, size: 10, color: .onSurfaceMuted)
             }
-            .padding(horizontal: 8, vertical: 5)
-            .background(.surfaceSunken)
-            .cornerRadius(7)
-            .border(isPresented ? .focusRing : .border, width: isPresented ? 2 : 1)
+            .padding(horizontal: 8)
+            .frame(height: 28)
+            .background(theme.inputs.background)
+            .cornerRadius(theme.inputs.radius)
+            .border(isPresented ? theme.inputs.borderFocused : theme.inputs.borderColor,
+                    width: isPresented ? theme.inputs.focusRingWidth : theme.inputs.borderWidth)
+            .animation(.semantic(.fast, in: theme), value: isPresented)
         }, content: {
             Menu(menuEntries,
                  width: select.width,
@@ -823,6 +840,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
                 isPresented = false
             })
         })
+        }
     }
 
     private var selectedLabel: String {

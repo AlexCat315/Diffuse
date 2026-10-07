@@ -65,7 +65,11 @@ enum EditorCommandSearch {
             commands.append(entry("layout." + preset.rawValue, preset.title, "", "layout 布局",
                                   .setLayoutPreset(preset)))
         }
-        return commands
+        for mode in EditorInteractionMode.allCases {
+            commands.append(entry("interaction." + mode.rawValue, mode.title, "", "agent manual AI 交互方式 手动 智能体",
+                                  .setInteractionMode(mode)))
+        }
+        return commands.filter { EditorWorkspaceCommandPolicy.allows($0.command, in: state.workspace.mode) }
     }
 
     /// Exact and word matches precede subsequence matches. Multi-word queries

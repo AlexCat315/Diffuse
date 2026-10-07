@@ -183,10 +183,10 @@ private struct _StatefulPropertyGrid: View {
         Box(direction: .column, alignItems: .stretch, spacing: 4) {
             Text(grid.emptyText)
                 .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
+                .foregroundColor(.onSurfaceVariant)
         }
         .padding(horizontal: 10, vertical: 12)
-        .background(.surfaceSunken)
+        .background(.surface)
         .cornerRadius(4)
     }
 
@@ -225,9 +225,9 @@ private struct _StatefulPropertyGrid: View {
                         Text(section.title).lineLimit(1).font(.label).foregroundColor(.onSurface)
                             .flex(1, shrink: 1, basis: 0)
                         if let badge = section.badge {
-                            Text(badge).font(.caption).foregroundColor(.onSurfaceMuted)
+                            Text(badge).font(.caption).foregroundColor(.onSurfaceVariant)
                         } else if section.showsRowCount && !section.rows.isEmpty {
-                            Text("\(section.rows.count)").font(.caption).foregroundColor(.onSurfaceMuted)
+                            Text("\(section.rows.count)").font(.caption).foregroundColor(.onSurfaceVariant)
                         }
                     }
                     .frame(minWidth: 0)
@@ -241,14 +241,14 @@ private struct _StatefulPropertyGrid: View {
             }
             .padding(horizontal: 8, vertical: 3)
             .frame(height: section.headerLeading == nil && section.headerTrailing == nil ? 26 : 32, minWidth: 0)
-            .background(.surfaceVariant.opacity(0.65))
+            .background(.surfaceRaised)
 
             AnimatedVisibility(isVisible: !isCollapsed) {
                 Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
                     if section.rows.isEmpty && section.children.isEmpty && section.footer == nil {
                         Text(grid.emptyText)
                             .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
+                            .foregroundColor(.onSurfaceVariant)
                             .padding(horizontal: 8, vertical: 8)
                     } else {
                         rowViews(section.rows, sectionID: section.id)
@@ -257,10 +257,10 @@ private struct _StatefulPropertyGrid: View {
                     if let footer = section.footer { footer.padding(horizontal: 6, vertical: 4) }
                 }
                 .padding(horizontal: 2, vertical: 3)
-                .background(.surfaceSunken)
+                .background(.surface)
             }
         }
-        .background(.surfaceSunken)
+        .background(.surface)
         .cornerRadius(4))
     }
 
@@ -310,7 +310,7 @@ private struct _StatefulPropertyGrid: View {
                 Text(row.label)
                     .lineLimit(1)
                     .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                    .foregroundColor(.onSurfaceVariant)
             }
             .padding(horizontal: 7)
             .frame(width: grid.labelWidth, height: fixedHeight, minHeight: minimumHeight)
@@ -339,7 +339,7 @@ private struct _StatefulPropertyGrid: View {
                 Text(row.label)
                     .lineLimit(1)
                     .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                    .foregroundColor(.onSurfaceVariant)
                     .padding(horizontal: 7)
                     .frame(height: labelHeight)
             }

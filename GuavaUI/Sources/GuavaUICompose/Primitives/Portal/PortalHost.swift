@@ -94,7 +94,7 @@ private struct _PortalHostPrimitive: _PrimitiveView {
     var _children: [any View] {
         _ = revision
         let resolvedStore = store ?? PortalStoreHolder.current
-        return resolvedStore.entries.map { entry in
+        return resolvedStore.renderedEntries.map { entry in
             _PortalEntrySlot(store: resolvedStore, entry: entry)
                 .id(entry.id)
         }
@@ -150,6 +150,8 @@ private struct _PortalEntrySlot: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         store.attachSlotNode(entry.id, node: node)
+        node.allowsHitTesting = !entry.isExiting
+        node.isInteractionEnabled = !entry.isExiting
         node.clipsToBounds = !entry.fillsWindow
         node.layoutDidUpdate = { node in
             guard !entry.fillsWindow else { return }

@@ -127,6 +127,7 @@ extension EditorApplication {
             guard result.error == nil else {
                 throw result.error!
             }
+            beginAgentSceneDocument()
             reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
@@ -152,6 +153,7 @@ extension EditorApplication {
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
+            beginAgentSceneDocument()
             reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
@@ -226,6 +228,7 @@ extension EditorApplication {
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
+            beginAgentSceneDocument()
             reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.markSceneSaved(store.state.document.sceneRevision))

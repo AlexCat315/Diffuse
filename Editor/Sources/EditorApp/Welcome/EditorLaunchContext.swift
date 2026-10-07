@@ -15,6 +15,7 @@ final class EditorLaunchContext: @unchecked Sendable {
     private var workspaceSubscriptionToken: WorkspaceController.SubscriptionToken?
     private var workspacePersistenceTask: Task<Void, Never>?
     private(set) var display: AppDisplayHandle?
+    private var shouldExpandEditorWindow = false
     private var settingsWindowID: WindowID?
     private var nativeMenuState: NativeMenuState?
 
@@ -57,8 +58,9 @@ final class EditorLaunchContext: @unchecked Sendable {
         app.bootstrap()
 
         if let s = shellState {
-            app.store.dispatch(.setWorkspaceMode(s.workspaceMode))
-            app.store.dispatch(.setActiveLayoutPreset(s.activeLayoutPreset))
+            app.store.dispatch(.setInteractionMode(s.workspace.interactionMode))
+            app.store.dispatch(.setWorkspaceMode(s.workspace.mode))
+            app.store.dispatch(.setActiveLayoutPreset(s.workspace.layoutPreset))
             app.store.dispatch(.setThemeMode(s.themeMode))
             app.store.dispatch(.setLanguage(s.language))
             app.store.dispatch(.setVSyncMode(s.vsyncMode))
@@ -88,8 +90,10 @@ final class EditorLaunchContext: @unchecked Sendable {
         subscribeWorkspacePersistence(app: app, controller: controller)
         subscribeNativeMenu(app: app, controller: controller, registry: registry)
         bundle = EditorLaunchBundle(app: app, controller: controller, registry: registry)
+        shouldExpandEditorWindow = true
 
         if let display {
+            expandEditorWindowIfReady()
             wireDisplayHandlers(app: app,
                                 controller: controller,
                                 registry: registry,
@@ -102,6 +106,7 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     @MainActor func wireDisplay(_ display: AppDisplayHandle) {
         self.display = display
+        expandEditorWindowIfReady()
         if let bundle {
             wireDisplayHandlers(app: bundle.app,
                                 controller: bundle.controller,
@@ -111,15 +116,21 @@ final class EditorLaunchContext: @unchecked Sendable {
     }
 
     @MainActor func tick(deltaTime: Double) {
+        expandEditorWindowIfReady()
         bundle?.app.tick(deltaTime: deltaTime)
+    }
+
+    @MainActor private func expandEditorWindowIfReady() {
+        guard shouldExpandEditorWindow, isProjectLoaded, let display, display.mainWindowID != nil else { return }
+        display.maximizeWindow()
+        shouldExpandEditorWindow = false
     }
 
     @MainActor func shutdown() {
         guard let bundle else { return }
         let app = bundle.app
         let state = app.store.state
-        shellState = .init(workspaceMode: state.workspace.mode,
-                           activeLayoutPreset: state.workspace.layoutPreset,
+        shellState = .init(workspace: state.workspace,
                            themeMode: state.themeMode,
                            language: state.language,
                            vsyncMode: state.vsyncMode,
@@ -127,8 +138,7 @@ final class EditorLaunchContext: @unchecked Sendable {
                            aiSettings: state.assistant.aiSettings,
                            capabilitySettings: state.assistant.capabilitySettings)
         EditorRootViewFactory.saveShellState(
-            mode: state.workspace.mode,
-            preset: state.workspace.layoutPreset,
+            workspace: state.workspace,
             themeMode: state.themeMode,
             language: state.language,
             vsyncMode: state.vsyncMode,
@@ -169,7 +179,9 @@ final class EditorLaunchContext: @unchecked Sendable {
             display.closeWindow(settingsWindowID)
         }
         settingsWindowID = nil
+        shouldExpandEditorWindow = false
         shutdown()
+        display?.restoreWindow()
         display?.setWindowCloseInterceptor { _ in true }
         display?.installNativeMenuBar(NativeMenuBar(appName: "GuavaNext Editor", menus: []))
         publisher.send()
@@ -228,6 +240,7 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     private struct NativeMenuState: Equatable {
         var workspaceMode: EditorWorkspaceMode
+        var interactionMode: EditorInteractionMode
         var layoutPreset: EditorLayoutPreset
         var playbackState: PlaybackState
         var canUndo: Bool
@@ -260,6 +273,7 @@ final class EditorLaunchContext: @unchecked Sendable {
                                    force: Bool = false) {
         let store = app.store.state
         let next = NativeMenuState(workspaceMode: store.workspace.mode,
+                                   interactionMode: store.workspace.interactionMode,
                                    layoutPreset: store.workspace.layoutPreset,
                                    playbackState: store.timing.playbackState,
                                    canUndo: app.canUndo,
@@ -275,6 +289,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             workspaceMode: next.workspaceMode,
             activeLayoutPreset: next.layoutPreset,
             playbackState: next.playbackState,
+            interactionMode: next.interactionMode,
             canUndo: next.canUndo,
             canRedo: next.canRedo,
             hasSelection: next.hasSelection,
@@ -307,8 +322,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             }
             lastPrefs = next
             EditorRootViewFactory.saveShellState(
-                mode: store.state.workspace.mode,
-                preset: store.state.workspace.layoutPreset,
+                workspace: store.state.workspace,
                 themeMode: store.state.themeMode,
                 language: store.state.language,
                 vsyncMode: store.state.vsyncMode,

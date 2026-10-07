@@ -31,8 +31,15 @@ enum EditorCommandDispatcher {
         if !fromCommandPalette, case .redo = command, focus?.performTextEdit(.redo) == true { return }
         guard fromCommandPalette || focus?.modalRoot == nil else { return }
         let store = app.store
+        guard EditorWorkspaceCommandPolicy.allows(command, in: store.workspaceMode) else { return }
+        if store.interactionMode == .agent, EditorWorkspaceCommandPolicy.requiresManualSurface(command) {
+            store.dispatch(.setInteractionMode(.manual))
+        }
 
         switch command {
+        case let .setInteractionMode(mode):
+            store.dispatch(.setInteractionMode(mode))
+            saveShellState(app)
         case .showCommandPalette:
             store.dispatch(.setCommandPaletteVisible(true))
         case .showSceneSettings:
@@ -113,7 +120,10 @@ enum EditorCommandDispatcher {
             }
         case let .setWorkspaceMode(next):
             guard store.state.workspace.mode != next else { return }
-            if !next.isGameWorkspace { app.setViewportMode(.scene) }
+            if !next.isGameWorkspace {
+                if store.playbackState != .stopped { app.applyPlaybackState(.stopped) }
+                app.setViewportMode(.scene)
+            }
             let previousMode = store.state.workspace.mode
             let previousPreset = store.state.workspace.layoutPreset
             EditorRootViewFactory.saveWorkspaceLayout(controller, for: previousMode, preset: previousPreset)
@@ -129,7 +139,10 @@ enum EditorCommandDispatcher {
                                                        for: previousMode,
                                                        preset: previousPreset)
             if mode != previousMode {
-                if !mode.isGameWorkspace { app.setViewportMode(.scene) }
+                if !mode.isGameWorkspace {
+                    if store.playbackState != .stopped { app.applyPlaybackState(.stopped) }
+                    app.setViewportMode(.scene)
+                }
                 store.dispatch(.setWorkspaceMode(mode))
             }
             store.dispatch(.setActiveLayoutPreset(nextPreset))
@@ -205,8 +218,7 @@ enum EditorCommandDispatcher {
 
     private static func saveShellState(_ app: EditorApplication) {
         let state = app.store.state
-        EditorRootViewFactory.saveShellState(mode: state.workspace.mode,
-                                             preset: state.workspace.layoutPreset,
+        EditorRootViewFactory.saveShellState(workspace: state.workspace,
                                              themeMode: state.themeMode,
                                              language: state.language,
                                              vsyncMode: state.vsyncMode,

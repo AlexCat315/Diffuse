@@ -33,6 +33,8 @@ public extension SemanticColorRef {
     static let onSurface        = SemanticColorRef { $0.colors.onSurface }
     static let onSurfaceVariant = SemanticColorRef { $0.colors.onSurfaceVariant }
     static let onSurfaceMuted   = SemanticColorRef { $0.colors.onSurfaceMuted }
+    static let onSurfaceDisabled = SemanticColorRef { $0.textEmphasis.disabled ?? $0.colors.onSurfaceMuted }
+    static let placeholder = SemanticColorRef { $0.textEmphasis.placeholder ?? $0.colors.onSurfaceMuted }
 
     static let accent           = SemanticColorRef { $0.colors.accent }
     static let accentHover      = SemanticColorRef { $0.colors.accentHover }

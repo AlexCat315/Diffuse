@@ -3,6 +3,7 @@ import GuavaUIRuntime
 struct _TextFieldInteractionState: Equatable {
     var isFocused: Bool = false
     var isComposing: Bool = false
+    var isHovered: Bool = false
 
     var isEditing: Bool {
         isFocused || isComposing
@@ -17,6 +18,9 @@ struct _StatefulTextField: View {
     var body: some View {
         _TextFieldStyleHost(textField: textField,
                             interactionState: interactionState,
+                            onHoverChange: { hovered in
+                                if interactionState.isHovered != hovered { interactionState.isHovered = hovered }
+                            },
                             onFocusChange: { focused in
                                 if interactionState.isFocused != focused {
                                     interactionState.isFocused = focused
@@ -36,6 +40,7 @@ struct _StatefulTextField: View {
 struct _TextFieldStyleHost: _PrimitiveView {
     let textField: TextField
     let interactionState: _TextFieldInteractionState
+    let onHoverChange: (Bool) -> Void
     let onFocusChange: (Bool) -> Void
     let onEditingChange: (Bool) -> Void
 
@@ -67,6 +72,7 @@ struct _TextFieldStyleHost: _PrimitiveView {
         let configuration = TextFieldStyleConfiguration(
             content: AnyView(_TextFieldSurface(textField: resolvedField,
                                                interactionState: interactionState,
+                                               onHoverChange: onHoverChange,
                                                onFocusChange: onFocusChange,
                                                onEditingChange: onEditingChange)),
             placeholder: textField.placeholder,
@@ -74,7 +80,8 @@ struct _TextFieldStyleHost: _PrimitiveView {
             isEditing: interactionState.isEditing && !textField.disabled,
             isError: false,
             isEnabled: !textField.disabled,
-            theme: node.theme
+            theme: node.theme,
+            isHovered: interactionState.isHovered && !textField.disabled
         )
         return [style.makeBody(configuration)]
     }
@@ -83,6 +90,7 @@ struct _TextFieldStyleHost: _PrimitiveView {
 struct _TextFieldSurface: _PrimitiveView {
     let textField: TextField
     let interactionState: _TextFieldInteractionState
+    let onHoverChange: (Bool) -> Void
     let onFocusChange: (Bool) -> Void
     let onEditingChange: (Bool) -> Void
 
@@ -91,6 +99,7 @@ struct _TextFieldSurface: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.attachments["__textfield_chrome_hover"] = onHoverChange
         textField.updateSurfaceNode(node,
                                     interactionState: interactionState,
                                     onFocusChange: onFocusChange,
