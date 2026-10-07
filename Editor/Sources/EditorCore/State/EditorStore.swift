@@ -358,6 +358,12 @@ extension EditorStore {
     public var agentTasks: [EditorAgentTask] { read(.agentTasks, storage.assistant.agentTasks) }
     public var workspaceMode: EditorWorkspaceMode { read(.workspaceMode, storage.workspace.mode) }
     public var activeLayoutPreset: EditorLayoutPreset { read(.activeLayoutPreset, storage.workspace.layoutPreset) }
+    public var workspace: EditorWorkspaceState {
+        registrar.access(AnyHashable(ObservationKey.workspaceMode))
+        registrar.access(AnyHashable(ObservationKey.activeLayoutPreset))
+        registrar.access(AnyHashable(ObservationKey.interactionMode))
+        return storage.workspace
+    }
     public var gizmoMode: EditorGizmoMode { read(.gizmoMode, storage.viewport.gizmoMode) }
     public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.viewport.gizmoSpace) }
     public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewport.shadingMode) }

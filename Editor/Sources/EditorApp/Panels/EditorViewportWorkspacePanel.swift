@@ -10,22 +10,22 @@ struct EditorViewportWorkspacePanel: View {
     var body: some View {
         StoreScope(app.store) { store in
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
-                    Button(L("Scene Editing"), isSelected: store.viewportMode == .scene) { app.setViewportMode(.scene) }
-                        .buttonStyle(.tab)
-                    if store.workspaceMode.isGameWorkspace {
+                if store.workspaceMode.isGameWorkspace {
+                    Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
+                        Button(L("Scene Editing"), isSelected: store.viewportMode == .scene) { app.setViewportMode(.scene) }
+                            .buttonStyle(.tab)
                         Button(L("Game Preview"), isSelected: store.viewportMode == .game) { app.setViewportMode(.game) }
                             .buttonStyle(.tab)
-                    }
-                    Spacer(minLength: 0)
-                    if store.viewportMode == .game {
-                        EnumField(value: Binding(get: { store.gamePreviewResolution }, set: app.setGamePreviewResolution),
-                                  width: 208, label: { L($0.title) })
-                        Checkbox(isOn: Binding(get: { store.gamePreviewHUDEnabled }, set: app.setGamePreviewHUDEnabled))
-                        Text(L("HUD")).font(.caption)
-                    }
-                }.padding(horizontal: 6, vertical: 4)
-                Divider()
+                        Spacer(minLength: 0)
+                        if store.viewportMode == .game {
+                            EnumField(value: Binding(get: { store.gamePreviewResolution }, set: app.setGamePreviewResolution),
+                                      width: 208, label: { L($0.title) })
+                            Checkbox(isOn: Binding(get: { store.gamePreviewHUDEnabled }, set: app.setGamePreviewHUDEnabled))
+                            Text(L("HUD")).font(.caption)
+                        }
+                    }.padding(horizontal: 6, vertical: 4)
+                    Divider()
+                }
                 if store.viewportMode == .game {
                     GamePreviewPanel(app: app).flex()
                 } else {
