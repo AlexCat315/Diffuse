@@ -759,6 +759,7 @@
 "Select a valid file of the same format and check its dependencies." = "选择相同格式的有效文件，并检查其依赖。";
 "Restore the script file, then refresh the script catalog." = "恢复脚本文件，然后刷新脚本列表。";
 "Select an entity with an animation component." = "请选择带有动画组件的实体。";
+"Select an entity" = "请选择一个实体";
 "Add Animation Player" = "添加动画播放器";
 "Script compilation failed" = "脚本编译失败";
 "Failed to compile dynamic script" = "动态脚本编译失败";
@@ -783,3 +784,31 @@
 "Viewport Focus" = "视口优先";
 "Viewport and Animation" = "视口与动画";
 "Animation Details" = "动画属性";
+
+"Game Development" = "游戏开发";
+
+"3D Creation" = "3D 创作";
+
+"Manual Editing" = "手动编辑";
+
+"Agent Workbench" = "Agent 工作台";
+
+"Scene Preview" = "场景预览";
+
+"Task Conversation" = "任务对话";
+
+"Tasks" = "任务";
+
+"Describe a task in the conversation to begin." = "在对话中描述任务以开始。";
+
+"Base Version" = "基准版本";
+
+"Target" = "目标";
+
+"Planning" = "规划中";
+
+"Awaiting Review" = "等待审阅";
+
+"Completed" = "已完成";
+
+"Scene Changed" = "场景已变更";

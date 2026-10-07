@@ -8,6 +8,9 @@ public enum EditorAction: Sendable {
     case setPrimarySelectedEntity(UInt64?)
     case setSelectedEntities(Set<UInt64>)
     case setPlaybackState(PlaybackState)
+    case setInteractionMode(EditorInteractionMode)
+    case setAgentTasks([EditorAgentTask])
+    case beginSceneDocument
     case setWorkspaceMode(EditorWorkspaceMode)
     case setActiveLayoutPreset(EditorLayoutPreset)
     case setSceneRevision(UInt64)
@@ -110,6 +113,12 @@ public enum EditorReducer {
             }
         case let .setPlaybackState(value):
             state.timing.playbackState = value
+        case let .setInteractionMode(mode):
+            state.workspace.interactionMode = mode
+        case let .setAgentTasks(tasks):
+            state.assistant.agentTasks = tasks
+        case .beginSceneDocument:
+            state.document.identity = UUID()
         case let .setWorkspaceMode(mode):
             state.workspace.mode = mode
             state.workspace.layoutPreset = .default(for: mode)

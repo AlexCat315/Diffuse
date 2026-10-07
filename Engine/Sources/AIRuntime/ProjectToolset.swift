@@ -54,8 +54,8 @@ public enum ProjectToolset {
         (tools + [responseTool]).first { $0.name == name }
     }
 
-    public static func providerDefinitions(format: SessionAPIFormat) -> [[String: Any]] {
-        (tools + [responseTool]).map { tool in
+    public static func providerDefinitions(format: SessionAPIFormat, allowedNames: Set<String>? = nil) -> [[String: Any]] {
+        (tools + [responseTool]).filter { allowedNames?.contains($0.name) ?? true }.map { tool in
             switch format {
             case .anthropic:
                 return ["name": tool.name, "description": tool.description, "input_schema": tool.schema.jsonObject()]

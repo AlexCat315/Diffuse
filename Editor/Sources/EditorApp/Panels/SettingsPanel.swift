@@ -125,8 +125,7 @@ struct SettingsPanel: View {
     }
 
     private func persistShell() {
-        EditorRootViewFactory.saveShellState(mode: store.workspaceMode,
-                                             preset: store.activeLayoutPreset,
+        EditorRootViewFactory.saveShellState(workspace: store.state.workspace,
                                              themeMode: store.themeMode,
                                              language: store.language,
                                              vsyncMode: store.vsyncMode,
