@@ -11,3 +11,5 @@ For first-party Swift code in Engine, Editor, and GuavaUI:
 - Run `python3 scripts/check-swift-maintainability.py` and the affected Swift package tests. Use `--report` to inspect remaining existing debt. The structural check is a guard; review responsibility boundaries as well.
 
 Preserve unrelated working-tree changes. Make API migrations in all first-party callers, tests, and embedded project/script templates.
+
+The project is currently in a phase of rapid development and has not yet reached the official 1.0.0 release; there is no need to maintain backward compatibility, so breaking changes are permissible.
