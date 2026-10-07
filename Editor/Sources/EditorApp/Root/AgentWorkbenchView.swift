@@ -15,12 +15,6 @@ struct AgentWorkbenchView: View {
                         .frame(width: .points(210), height: .percent(100), minWidth: 0, minHeight: 0)
                 }
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                    Row(alignment: .center, spacing: 8) {
-                        Text(L("Scene Preview")).font(.bodyStrong)
-                        Spacer(minLength: 0)
-                        Text(L(store.workspaceMode.title)).font(.caption).foregroundColor(.onSurfaceMuted)
-                    }.padding(10)
-                    Divider()
                     EditorViewportWorkspacePanel(app: app).flex()
                         .frame(width: .percent(100), minWidth: 0, minHeight: 0)
                         .debugName("agent-scene-viewport")
