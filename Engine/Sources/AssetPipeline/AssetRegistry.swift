@@ -110,6 +110,7 @@ public final class AssetRegistry: @unchecked Sendable {
     /// Stable relativePath → meshIndex map; survives across reloads so indices never change for known paths.
     private var pathIndex: [String: Int] = [:]
     private var nextMeshIndex = importedMeshStartIndex
+    private var meshCatalogRevision: UInt64 = 1
 
     public init() {}
 
@@ -251,6 +252,7 @@ public final class AssetRegistry: @unchecked Sendable {
         projectRoot = rootURL.path
         entries = loadedEntries
         meshes = loadedMeshes
+        meshCatalogRevision &+= 1
         pathIndex = currentPathIndex
         nextMeshIndex = currentNextIndex
         lock.unlock()
@@ -269,6 +271,18 @@ public final class AssetRegistry: @unchecked Sendable {
         let value = entries
         lock.unlock()
         return value
+    }
+
+    /// Atomically pairs content with its revision; unchanged frames do not copy
+    /// or hash large meshes. Revisions also cover removal and project resets.
+    public func meshCatalog(since revision: UInt64?) -> MeshAssetCatalog? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard revision != meshCatalogRevision else { return nil }
+        var merged = meshes
+        merged.merge(explicitlyRegisteredMeshes) { _, overlay in overlay }
+        return MeshAssetCatalog(revision: meshCatalogRevision,
+            meshes: merged.values.sorted { $0.meshIndex < $1.meshIndex })
     }
 
     public func registeredMeshes() -> [RegisteredMeshAsset] {
@@ -298,6 +312,7 @@ public final class AssetRegistry: @unchecked Sendable {
 
     public func reset() {
         lock.lock()
+        meshCatalogRevision &+= 1
         projectRoot = nil
         entries.removeAll(keepingCapacity: true)
         meshes.removeAll(keepingCapacity: true)
@@ -311,6 +326,7 @@ public final class AssetRegistry: @unchecked Sendable {
     /// Intended for unit tests that need a pre-built MeshAsset without loading from disk.
     public func registerForTesting(_ mesh: MeshAsset, at meshIndex: Int) {
         lock.lock()
+        meshCatalogRevision &+= 1
         explicitlyRegisteredMeshes[meshIndex] = RegisteredMeshAsset(
             meshIndex: meshIndex,
             assetID: "test:\(meshIndex)",
@@ -324,6 +340,7 @@ public final class AssetRegistry: @unchecked Sendable {
     /// catalog or any other transient registration.
     public func unregisterTestingMesh(at meshIndex: Int) {
         lock.lock()
+        meshCatalogRevision &+= 1
         explicitlyRegisteredMeshes.removeValue(forKey: meshIndex)
         lock.unlock()
     }

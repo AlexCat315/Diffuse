@@ -32,6 +32,33 @@ struct RenderThreadTests {
         #expect(consumer.colorTexture != nil)
         #expect(!consumer.currentViewportSurfaceState().isValid)
     }
+    @Test("RenderThread consumes indexed scene packets through NativeRenderer",
+          .enabled(if: ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1",
+                   "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
+    func nativeSceneRenderPacketIntegration() throws {
+        let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false))
+        let consumer = try NativeRenderer(device: device)
+        let ring = RingBuffer<RenderPacket>()
+        let rendered = DispatchSemaphore(value: 0)
+        let thread = RenderThread(runtime: NoopRuntime(), ringBuffer: ring, consumer: consumer,
+            onFrameRendered: { _ in rendered.signal() })
+        thread.start(); defer { thread.shutdown() }
+        var packet = Self.makePacket(frameIndex: 21)
+        packet.drawableSize = RenderDrawableSize(width: 128, height: 96)
+        packet.renderSettings.stage = .r2MultiObjectDepth
+        packet.renderSettings.debugViewMode = .unlit
+        packet.renderSettings.enableEditorGrid = true
+        ring.publish(packet); thread.requestRender()
+        #expect(rendered.wait(timeout: .now() + 5) == .success)
+        thread.shutdown(); try device.waitUntilIdle()
+        #expect(consumer.lastError == nil)
+        #expect(consumer.lastFrameStats.frameIndex == 21)
+        #expect(consumer.lastFrameStats.passDrawCallCounts[.basePass] == 1)
+        #expect(consumer.lastFrameStats.passDrawCallCounts[.depthPrepass] == 1)
+        #expect(consumer.lastFrameStats.passDrawCallCounts[.editorGrid] == 1)
+        #expect(consumer.lastFrameStats.submittedMeshTriangleCount == 12)
+    }
+
     @Test("RingBuffer returns the latest published payload")
     func ringBufferReturnsLatestPayload() {
         let ring = RingBuffer<Int>()

@@ -67,11 +67,11 @@ struct MeshSurfaceAndVisibilityTests {
             instance(100, 0, entity: skinned), instance(100, 0, meshIndex: slot + 1)])
         let vp = RenderCameraMatrices.make(scene: scene, drawableSize: RenderDrawableSize(width: 128, height: 128)).viewProjection
         let plan = MeshVisibilityPlan.make(scene: scene, viewProjection: vp, settings: .init(),
-            skinnedEntities: [skinned], meshExists: { _ in true })
+            skinnedEntities: [skinned], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in true })
         #expect(plan.visibleIndices == [0, 3, 4])
         #expect(plan.culledCount == 2)
         let unculled = MeshVisibilityPlan.make(scene: scene, viewProjection: vp,
-            settings: RenderSettings(enableFrustumCulling: false), skinnedEntities: [], meshExists: { _ in true })
+            settings: RenderSettings(enableFrustumCulling: false), skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in true })
         #expect(unculled.visibleIndices.count == 5)
     }
 
@@ -84,13 +84,13 @@ struct MeshSurfaceAndVisibilityTests {
         let scene = RenderScene(camera: camera, instances: [instance])
         let vp = RenderCameraMatrices.make(scene: scene, drawableSize: RenderDrawableSize(width: 128, height: 128)).viewProjection
         let plan = MeshVisibilityPlan.make(scene: scene, viewProjection: vp, settings: .init(),
-            skinnedEntities: [], meshExists: { $0 == 101 })
+            skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { $0 == 101 })
         #expect(plan.meshIndices[0] == 101 && plan.lodCount == 1)
         let missing = MeshVisibilityPlan.make(scene: scene, viewProjection: vp, settings: .init(),
-            skinnedEntities: [], meshExists: { _ in false })
+            skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in false })
         #expect(missing.meshIndices[0] == 100)
         let disabled = MeshVisibilityPlan.make(scene: scene, viewProjection: vp,
-            settings: RenderSettings(enableDistanceLOD: false), skinnedEntities: [], meshExists: { _ in true })
+            settings: RenderSettings(enableDistanceLOD: false), skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in true })
         #expect(disabled.meshIndices[0] == 100)
     }
 }

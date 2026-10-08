@@ -67,7 +67,9 @@ extension VulkanBackend {
         }
         withExtendedLifetime(arena) { context.rendering.begin(cmd, &rendering) }
         defer { context.rendering.end(cmd) }
-        var viewport = VkViewport(x: 0, y: 0, width: Float(extent.width), height: Float(extent.height), minDepth: 0, maxDepth: 1)
+        // NativeRHI clip space has +Y up and framebuffer coordinates have +Y down.
+        // Vulkan 1.3 supports the negative-height viewport transform directly.
+        var viewport = VkViewport(x: 0, y: Float(extent.height), width: Float(extent.width), height: -Float(extent.height), minDepth: 0, maxDepth: 1)
         var scissor = rendering.renderArea
         draw.cmdSetViewport(cmd, 0, 1, &viewport)
         draw.cmdSetScissor(cmd, 0, 1, &scissor)
@@ -105,7 +107,7 @@ extension VulkanBackend {
                 draw.cmdBindIndexBuffer(cmd, buffer.buffer, VkDeviceSize(offset), VulkanFormats.vkIndexType(type))
                 indexBound = true
             case .setViewport(let value):
-                viewport = VkViewport(x: Float(value.x), y: Float(value.y), width: Float(value.width), height: Float(value.height),
+                viewport = VkViewport(x: Float(value.x), y: Float(value.y + value.height), width: Float(value.width), height: -Float(value.height),
                                       minDepth: Float(value.minDepth), maxDepth: Float(value.maxDepth))
                 draw.cmdSetViewport(cmd, 0, 1, &viewport)
             case .setScissor(let value):

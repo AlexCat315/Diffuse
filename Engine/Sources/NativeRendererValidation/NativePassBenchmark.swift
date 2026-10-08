@@ -2,35 +2,59 @@ import Foundation
 import NativeRHI
 import RenderBackend
 
-public enum GridPassBenchmark {
+public enum NativePassBenchmark {
     public static func run(arguments: [String]) throws {
-        let options = try GridBenchmarkOptions(arguments: arguments)
+        let options = try PassBenchmarkOptions(arguments: arguments)
         try FileManager.default.createDirectory(at: options.output, withIntermediateDirectories: true)
-        let packet = GridProbeScene.packet(size: options.size)
-        var results: [GridBenchmarkResult] = []
+        let packet = options.scene == .grid ? GridProbeScene.packet(size: options.size) : MeshProbeScene.packet(size: options.size)
+        var results: [PassBenchmarkResult] = []
         var images: [String: Data] = [:]
         for api in options.backends {
             let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
-            let renderer = try NativeGridRenderer(device: device)
+            let render: (Int) throws -> RenderFrameStats
+            let readback: () throws -> Data
+            if options.scene == .grid {
+                let renderer = try NativeGridRenderer(device: device)
+                render = { frame in var p = packet; p.frameIndex = frame; try renderer.renderChecked(packet: p); return renderer.lastFrameStats }
+                readback = {
+                    guard let texture = renderer.colorTexture else { throw RHIError.invalidArgument("benchmark produced no color") }
+                    return try GridImage.readback(device: device, texture: texture, size: options.size)
+                }
+            } else {
+                let renderer = try NativeRenderer(device: device)
+                render = { frame in var p = packet; p.frameIndex = frame; try renderer.renderChecked(packet: p); return renderer.lastFrameStats }
+                readback = {
+                    guard let texture = renderer.colorTexture else { throw RHIError.invalidArgument("benchmark produced no color") }
+                    return try GridImage.readback(device: device, texture: texture, size: options.size)
+                }
+            }
             let result = try measure(name: "native-\(api.rawValue)", device: device.deviceName, options: options,
-                render: { frame in var p = packet; p.frameIndex = frame; try renderer.renderChecked(packet: p); return renderer.lastFrameStats },
-                finish: { try device.waitUntilIdle() })
-            guard let texture = renderer.colorTexture else { throw RHIError.invalidArgument("benchmark produced no color") }
-            images[result.backend] = try GridImage.readback(device: device, texture: texture, size: options.size)
+                render: render, finish: { try device.waitUntilIdle() })
+            images[result.backend] = try readback()
             results.append(result)
             print("\(result.backend): CPU p50 \(String(format: "%.1f", result.cpuFrame.p50Microseconds)) us, completed batch \(String(format: "%.3f", result.completedBatch.p50Microseconds / 1000)) ms/frame")
         }
-        let reference = try WGPUGridReference(size: options.size)
+        let renderReference: (Int) throws -> RenderFrameStats
+        let finishReference: () throws -> Void
+        let readReference: () throws -> Data
+        if options.scene == .grid {
+            let reference = try WGPUGridReference(size: options.size)
+            renderReference = { frame in var p = packet; p.frameIndex = frame; return try reference.render(packet: p) }
+            finishReference = { try reference.finish() }; readReference = { try reference.readback() }
+        } else {
+            let reference = try WGPUSceneReference()
+            renderReference = { frame in var p = packet; p.frameIndex = frame; return try reference.render(packet: p) }
+            finishReference = { try reference.finish() }; readReference = { try reference.readback() }
+        }
         let result = try measure(name: "wgpu-metal", device: "wgpu-native Metal", options: options,
-            render: { frame in var p = packet; p.frameIndex = frame; return try reference.render(packet: p) },
-            finish: { try reference.finish() })
-        let expected = try reference.readback(); images[result.backend] = expected; results.append(result)
+            render: renderReference, finish: finishReference)
+        let expected = try readReference(); images[result.backend] = expected; results.append(result)
         var differences: [String: GridImageDifference] = [:]
         for (name, image) in images {
             try GridImage.writePPM(image, size: options.size, to: options.output.appendingPathComponent("\(name).ppm"))
             if name != result.backend { differences[name] = try GridImage.difference(image, expected) }
         }
-        let report = GridBenchmarkReport(size: options.size, frames: options.frames, warmup: options.warmup,
+        let report = PassBenchmarkReport(scene: options.scene.rawValue, size: options.size, frames: options.frames, warmup: options.warmup,
             repeats: options.repeats, results: results, imageDifferences: differences)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(report).write(to: options.output.appendingPathComponent("report.json"))
@@ -38,12 +62,12 @@ public enum GridPassBenchmark {
         for (name, difference) in differences {
             guard difference.meanAbsoluteChannelError < 0.5,
                   difference.pixelsOverThree < max(1, difference.pixelCount / 100) else {
-                throw RHIError.invalidArgument("\(name) grid differs from WGSL: \(difference)")
+                throw RHIError.invalidArgument("\(name) image differs from WGPU: \(difference)")
             }
         }
     }
-    private static func measure(name: String, device: String, options: GridBenchmarkOptions,
-                                render: (Int) throws -> RenderFrameStats, finish: () throws -> Void) throws -> GridBenchmarkResult {
+    private static func measure(name: String, device: String, options: PassBenchmarkOptions,
+                                render: (Int) throws -> RenderFrameStats, finish: () throws -> Void) throws -> PassBenchmarkResult {
         for frame in 0..<options.warmup { _ = try render(frame); if (frame + 1) % 3 == 0 { try finish() } }
         try finish()
         var frameSamples: [Double] = [], encodeSamples: [Double] = [], submitSamples: [Double] = [], batches: [Double] = []
@@ -59,13 +83,16 @@ public enum GridPassBenchmark {
             if options.frames % 3 != 0 { try finish() }
             batches.append(Double(DispatchTime.now().uptimeNanoseconds - start) / Double(options.frames) / 1000)
         }
-        return GridBenchmarkResult(backend: name, device: device, cpuFrame: GridTimingDistribution(frameSamples),
-            cpuEncode: GridTimingDistribution(encodeSamples), cpuSubmit: GridTimingDistribution(submitSamples),
-            completedBatch: GridTimingDistribution(batches))
+        return PassBenchmarkResult(backend: name, device: device, cpuFrame: PassTimingDistribution(frameSamples),
+            cpuEncode: PassTimingDistribution(encodeSamples), cpuSubmit: PassTimingDistribution(submitSamples),
+            completedBatch: PassTimingDistribution(batches))
     }
 }
 
-private struct GridBenchmarkOptions {
+private enum ProbeScene: String { case grid, mesh }
+
+private struct PassBenchmarkOptions {
+    var scene = ProbeScene.grid
     var size = RenderDrawableSize(width: 1280, height: 720)
     var frames = 180
     var warmup = 30
@@ -73,10 +100,13 @@ private struct GridBenchmarkOptions {
     var backends: [GraphicsAPI] = [.metal, .vulkan]
     var output = URL(fileURLWithPath: "/tmp/guava-native-grid")
     init(arguments: [String]) throws {
-        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --width N --height N --frames N --warmup N --repeats N --backends metal,vulkan --output DIR") }
+        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh --width N --height N --frames N --warmup N --repeats N --backends metal,vulkan --output DIR") }
         for index in stride(from: 0, to: arguments.count, by: 2) {
             let value = arguments[index + 1]
             switch arguments[index] {
+            case "--scene":
+                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid or mesh scene") }
+                self.scene = scene
             case "--output": output = URL(fileURLWithPath: value)
             case "--backends":
                 let names = value.split(separator: ","); backends = try names.map {
@@ -98,7 +128,7 @@ private struct GridBenchmarkOptions {
     }
 }
 
-public struct GridTimingDistribution: Codable {
+public struct PassTimingDistribution: Codable {
     public let p50Microseconds: Double
     public let p95Microseconds: Double
     public let sampleCount: Int
@@ -109,27 +139,29 @@ public struct GridTimingDistribution: Codable {
         p95Microseconds = ordered[max(0, Int(ceil(Double(ordered.count) * 0.95)) - 1)]
     }
 }
-public struct GridBenchmarkResult: Codable {
+public struct PassBenchmarkResult: Codable {
     public let backend: String
     public let device: String
-    public let cpuFrame: GridTimingDistribution
-    public let cpuEncode: GridTimingDistribution
-    public let cpuSubmit: GridTimingDistribution
+    public let cpuFrame: PassTimingDistribution
+    public let cpuEncode: PassTimingDistribution
+    public let cpuSubmit: PassTimingDistribution
     /// Includes explicit GPU completion every three frames. This measures
     /// whole-batch throughput, not GPU timestamp duration or display FPS.
-    public let completedBatch: GridTimingDistribution
+    public let completedBatch: PassTimingDistribution
 }
-private struct GridBenchmarkReport: Encodable {
+private struct PassBenchmarkReport: Encodable {
+    let scene: String
     let size: RenderDrawableSize
     let frames: Int
     let warmup: Int
     let repeats: Int
-    let results: [GridBenchmarkResult]
+    let results: [PassBenchmarkResult]
     let imageDifferences: [String: GridImageDifference]
-    private let environment = GridBenchmarkEnvironment()
-    enum CodingKeys: String, CodingKey { case width, height, frames, warmup, repeats, results, imageDifferences, environment }
+    private let environment = PassBenchmarkEnvironment()
+    enum CodingKeys: String, CodingKey { case scene, width, height, frames, warmup, repeats, results, imageDifferences, environment }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(scene, forKey: .scene)
         try container.encode(size.width, forKey: .width); try container.encode(size.height, forKey: .height)
         try container.encode(frames, forKey: .frames); try container.encode(warmup, forKey: .warmup)
         try container.encode(repeats, forKey: .repeats); try container.encode(results, forKey: .results)
@@ -138,7 +170,7 @@ private struct GridBenchmarkReport: Encodable {
     }
 }
 
-private struct GridBenchmarkEnvironment: Encodable {
+private struct PassBenchmarkEnvironment: Encodable {
     let operatingSystem = ProcessInfo.processInfo.operatingSystemVersionString
     let measuredAt = ISO8601DateFormatter().string(from: Date())
     #if DEBUG

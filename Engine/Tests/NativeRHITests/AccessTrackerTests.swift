@@ -48,10 +48,8 @@ final class AccessTrackerTests: XCTestCase {
 
     func testIndependentReadsProduceNoHazard() {
         var tracker = AccessTracker()
-        tracker.observe(access(buffer, .read), on: .graphics)
-        tracker.observe(access(buffer, .read), on: .graphics)
-        // No writes anywhere → no ordering dependency.
-        XCTAssertTrue(tracker.observedHazards.isEmpty)
+        XCTAssertTrue(tracker.observe(access(buffer, .read), on: .graphics).isEmpty)
+        XCTAssertTrue(tracker.observe(access(buffer, .read), on: .graphics).isEmpty)
     }
 
     func testDifferentResourcesProduceNoHazard() {
@@ -117,13 +115,25 @@ final class AccessTrackerTests: XCTestCase {
         XCTAssertEqual(hazards.first?.destinationStage, .fragment)
     }
 
+    func testReadOnlyFramesKeepOneDependencyPerQueueAndRange() {
+        var tracker = AccessTracker()
+        for _ in 0..<5_000 {
+            XCTAssertTrue(tracker.observe(access(buffer, .read, stage: .vertex), on: .graphics).isEmpty)
+            XCTAssertTrue(tracker.observe(access(buffer, .read, stage: .fragment), on: .graphics).isEmpty)
+        }
+        tracker.observe(access(buffer, .read, stage: .compute), on: .compute)
+        let hazards = tracker.observe(access(buffer, .write), on: .transfer)
+        XCTAssertEqual(hazards.count, 2)
+        XCTAssertEqual(hazards.first { $0.sourceQueue == .graphics }?.sourceStage, [.vertex,.fragment])
+        XCTAssertEqual(hazards.first { $0.sourceQueue == .compute }?.sourceStage, .compute)
+        XCTAssertTrue(hazards.allSatisfy { $0.kind == .writeAfterRead && $0.destinationQueue == .transfer })
+    }
+
     func testResetClearsAllState() {
         var tracker = AccessTracker()
-        tracker.observe(access(texture, .write), on: .graphics)
-        tracker.observe(access(texture, .write), on: .graphics)
-        XCTAssertFalse(tracker.observedHazards.isEmpty)
+        XCTAssertTrue(tracker.observe(access(texture, .write), on: .graphics).isEmpty)
+        XCTAssertFalse(tracker.observe(access(texture, .write), on: .graphics).isEmpty)
         tracker.reset()
-        XCTAssertTrue(tracker.observedHazards.isEmpty)
         let hazards = tracker.observe(access(texture, .write), on: .graphics)
         XCTAssertTrue(hazards.isEmpty)
     }
