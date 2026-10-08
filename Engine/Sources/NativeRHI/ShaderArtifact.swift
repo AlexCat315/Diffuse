@@ -1,6 +1,7 @@
 import Foundation
 
 public struct ReflectedShaderBinding: Codable, Sendable {
+    public var buffer = BufferBindingLayout()
     public var name: String
     public var slot: UInt32
     public var space: UInt32 = 0
@@ -16,6 +17,7 @@ public struct ReflectedShaderBinding: Codable, Sendable {
 public struct ShaderInterface: Codable, Sendable {
     public var threadgroupSize = ThreadgroupSize()
     public var bindings: [ReflectedShaderBinding] = []
+    public var pushConstants: [PushConstantRange] = []
     public init() {}
 }
 
@@ -74,7 +76,9 @@ public struct ShaderArtifact: Codable, Sendable {
         try rhiRequire(Set(bindings.map(\.slot)).count == bindings.count,
                        "reflected resources need distinct RHI binding slots")
         return BindingLayoutDescriptor(entries: bindings.map {
-            BindingLayoutEntry(slot: $0.slot, type: $0.type, stage: stage)
+            var entry = BindingLayoutEntry(slot: $0.slot, type: $0.type, visibility: ShaderVisibility(stage))
+            entry.buffer = $0.buffer
+            return entry
         })
     }
 }

@@ -13,6 +13,8 @@ extension VulkanBackend {
         guard let record = registries.buffers[buffer.id] else {
             throw RHIError.invalidArgument("unknown buffer")
         }
+        try rhiByteRange(offset: offset, size: data.count, capacity: record.size)
+        if data.isEmpty { return }
         if let base = record.allocation.mappedBase {
             base.advanced(by: Int(record.allocation.offset) + offset).copyMemory(
                 from: (data as NSData).bytes, byteCount: data.count)
@@ -23,7 +25,7 @@ extension VulkanBackend {
         staging.pointer.copyMemory(from: (data as NSData).bytes, byteCount: data.count)
 
         var copy = VkBufferCopy()
-        copy.srcOffset = staging.allocation.offset
+        copy.srcOffset = 0
         copy.dstOffset = VkDeviceSize(offset)
         copy.size = VkDeviceSize(data.count)
         try oneShot { cmd in
@@ -35,28 +37,31 @@ extension VulkanBackend {
         guard var record = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("unknown texture")
         }
+        _ = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: record.format,
+            textureWidth: record.width, textureHeight: record.height, capacity: data.count)
         let staging = try makeStagingBuffer(size: data.count)
         defer { destroyStagingBuffer(staging) }
         staging.pointer.copyMemory(from: (data as NSData).bytes, byteCount: data.count)
 
         var region = VkBufferImageCopy()
-        region.bufferOffset = staging.allocation.offset
-        region.bufferRowLength = UInt32(bytesPerRow)
+        region.bufferOffset = 0
+        region.bufferRowLength = UInt32(bytesPerRow / record.format.byteCount)
         region.bufferImageHeight = 0
         region.imageSubresource = VkImageSubresourceLayers(
             aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: 0, baseArrayLayer: 0, layerCount: 1)
         region.imageExtent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
 
         let oldLayout = record.layout
+        let finalLayout = record.usage.contains(.sampled) ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL
         try oneShot { cmd in
-            transition(cmd: cmd, image: record.image, from: oldLayout,
+            transition(cmd: cmd, texture: record, from: oldLayout,
                        to: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             draw.cmdCopyBufferToImage(cmd, staging.buffer, record.image,
                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region)
-            transition(cmd: cmd, image: record.image, from: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       to: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            transition(cmd: cmd, texture: record, from: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       to: finalLayout)
         }
-        record.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        record.layout = finalLayout
         registries.textures[texture.id] = record
     }
 
@@ -65,24 +70,26 @@ extension VulkanBackend {
         guard let record = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("unknown texture")
         }
-        let byteCount = bytesPerRow * height
+        try rhiRequire(record.layout != VK_IMAGE_LAYOUT_UNDEFINED, "cannot read an uninitialized Vulkan texture")
+        let byteCount = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: record.format,
+            textureWidth: record.width, textureHeight: record.height, capacity: destination.count)
         let readback = try makeStagingBuffer(size: byteCount)
         defer { destroyStagingBuffer(readback) }
 
         var region = VkBufferImageCopy()
-        region.bufferOffset = readback.allocation.offset
-        region.bufferRowLength = UInt32(bytesPerRow)
+        region.bufferOffset = 0
+        region.bufferRowLength = UInt32(bytesPerRow / record.format.byteCount)
         region.bufferImageHeight = 0
         region.imageSubresource = VkImageSubresourceLayers(
             aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: 0, baseArrayLayer: 0, layerCount: 1)
         region.imageExtent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
 
         try oneShot { cmd in
-            transition(cmd: cmd, image: record.image, from: record.layout,
+            transition(cmd: cmd, texture: record, from: record.layout,
                        to: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             draw.cmdCopyImageToBuffer(cmd, record.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                       readback.buffer, 1, &region)
-            transition(cmd: cmd, image: record.image, from: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            transition(cmd: cmd, texture: record, from: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                        to: record.layout)
         }
         destination.baseAddress?.copyMemory(from: readback.pointer, byteCount: byteCount)
@@ -129,7 +136,7 @@ extension VulkanBackend {
         if scratchCommandPool == nil {
             var poolInfo = VkCommandPoolCreateInfo()
             poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
-            poolInfo.queueFamilyIndex = context.transferFamily
+            poolInfo.queueFamilyIndex = context.queues.graphics.family
             poolInfo.flags = UInt32(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT.rawValue)
             scratchCommandPool = vkWithOutHandle {
                 context.resources.createCommandPool(context.device, &poolInfo, nil, $0)
@@ -145,7 +152,7 @@ extension VulkanBackend {
         guard let pool = scratchCommandPool, let fence = scratchFence else {
             throw RHIError.outOfMemory
         }
-        _ = draw.resetCommandPool(context.device, pool, 0)
+        try rhiRequire(draw.resetCommandPool(context.device, pool, 0) == VK_SUCCESS, "immediate command pool reset failed")
         var cmd: VkCommandBuffer = vkNull()
         var allocInfo = VkCommandBufferAllocateInfo()
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
@@ -159,22 +166,26 @@ extension VulkanBackend {
         var begin = VkCommandBufferBeginInfo()
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
         begin.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
-        _ = draw.beginCommandBuffer(cmd, &begin)
+        try rhiRequire(draw.beginCommandBuffer(cmd, &begin) == VK_SUCCESS, "immediate command begin failed")
         body(cmd)
-        _ = draw.endCommandBuffer(cmd)
+        try rhiRequire(draw.endCommandBuffer(cmd) == VK_SUCCESS, "immediate command end failed")
 
         var commandBuffers: [VkCommandBuffer?] = [cmd]
         var submit = VkSubmitInfo()
         submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
         submit.commandBufferCount = 1
-        commandBuffers.withUnsafeBufferPointer { submit.pCommandBuffers = $0.baseAddress }
+
         var fenceArr: [VkFence] = [fence]
-        _ = sync.queueSubmit(context.transferQueue, 1, &submit, fence)
-        _ = sync.waitForFences(context.device, 1, &fenceArr, VK_TRUE, UInt64.max)
-        _ = sync.resetFences(context.device, 1, &fenceArr)
+        let result = commandBuffers.withUnsafeBufferPointer { pointer in
+            submit.pCommandBuffers = pointer.baseAddress
+            return sync.queueSubmit(context.queues.graphics.handle, 1, &submit, fence)
+        }
+        guard result == VK_SUCCESS else { throw RHIError.submitFailed("Vulkan immediate transfer submit failed") }
+        try rhiRequire(sync.waitForFences(context.device, 1, &fenceArr, VK_TRUE, UInt64.max) == VK_SUCCESS, "immediate fence wait failed")
+        try rhiRequire(sync.resetFences(context.device, 1, &fenceArr) == VK_SUCCESS, "immediate fence reset failed")
     }
 
-    private func transition(cmd: VkCommandBuffer, image: VkImage,
+    private func transition(cmd: VkCommandBuffer, texture: VulkanTextureRecord,
                             from oldLayout: VkImageLayout,
                             to newLayout: VkImageLayout) {
         var barrier = VkImageMemoryBarrier()
@@ -183,12 +194,14 @@ extension VulkanBackend {
         barrier.newLayout = newLayout
         barrier.srcQueueFamilyIndex = UInt32(VK_QUEUE_FAMILY_IGNORED)
         barrier.dstQueueFamilyIndex = UInt32(VK_QUEUE_FAMILY_IGNORED)
-        barrier.image = image
+        barrier.image = texture.image
         barrier.subresourceRange = VkImageSubresourceRange(
             aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), baseMipLevel: 0,
-            levelCount: 1, baseArrayLayer: 0, layerCount: 1)
-        draw.cmdPipelineBarrier(cmd, UInt32(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT.rawValue),
-                                UInt32(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT.rawValue), 0,
+            levelCount: texture.mipLevels, baseArrayLayer: 0, layerCount: texture.layers)
+        barrier.srcAccessMask = VulkanSynchronization.layoutAccess(oldLayout)
+        barrier.dstAccessMask = VulkanSynchronization.layoutAccess(newLayout)
+        draw.cmdPipelineBarrier(cmd, VulkanSynchronization.stages,
+                                VulkanSynchronization.stages, 0,
                                 0, nil, 0, nil, 1, &barrier)
     }
 }

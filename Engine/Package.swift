@@ -1,6 +1,7 @@
 // swift-tools-version: 6.1
 // GuavaEngine 0.0.9
 import PackageDescription
+import Foundation
 
 #if os(macOS)
 let wasmtimeProducts: [Product] = [
@@ -33,7 +34,7 @@ let wasmtimeTargets: [Target] = []
 // The checked loader artifact supports only macOS arm64. Other hosts can
 // compile the frontend without inheriting an incompatible XCFramework.
 #if os(macOS) && arch(arm64)
-let nativeRHIInteropDependencies: [Target.Dependency] = ["CVulkanHeaders"]
+let nativeRHIInteropDependencies: [Target.Dependency] = ["CVulkanHeaders", "CDX12Bridge"]
 let nativeRHIInteropTargets: [Target] = [
     // Vendored Vulkan loader (dynamic) plus headers, packaged as an
     // xcframework built by scripts/bootstrap-rhi-vulkan.py. The C bridge links the
@@ -54,8 +55,22 @@ let nativeRHIInteropTargets: [Target] = [
         ]
     ),
 ]
+#elseif os(Windows) || os(Linux)
+// Native hosts use the installed Vulkan SDK; set VULKAN_SDK for non-system paths.
+let vulkanSDKRoot = ProcessInfo.processInfo.environment["VULKAN_SDK"]
+let vulkanIncludeFlags = vulkanSDKRoot.map { ["-I", $0 + "/Include", "-I", $0 + "/include"] } ?? []
+let vulkanLibraryFlags = vulkanSDKRoot.map { ["-L", $0 + "/Lib", "-L", $0 + "/lib"] } ?? []
+let nativeRHIInteropDependencies: [Target.Dependency] = ["CVulkanHeaders", "CDX12Bridge"]
+let nativeRHIInteropTargets: [Target] = [
+    .target(name: "CVulkanHeaders", path: "Sources/Bridge/CVulkanHeaders", publicHeadersPath: "include",
+            cSettings: [.unsafeFlags(vulkanIncludeFlags)],
+            linkerSettings: [.unsafeFlags(vulkanLibraryFlags),
+                .linkedLibrary("vulkan-1", .when(platforms: [.windows])),
+                .linkedLibrary("vulkan", .when(platforms: [.linux])),
+                .linkedLibrary("dl", .when(platforms: [.linux]))])
+]
 #else
-let nativeRHIInteropDependencies: [Target.Dependency] = []
+let nativeRHIInteropDependencies: [Target.Dependency] = ["CDX12Bridge"]
 let nativeRHIInteropTargets: [Target] = []
 #endif
 
@@ -101,6 +116,16 @@ let package = Package(
     ],
     targets: [
         // MARK: - C Bridges
+        .target(
+            name: "CDX12Bridge", path: "Sources/Bridge/CDX12Bridge",
+            publicHeadersPath: "include",
+            cxxSettings: [.unsafeFlags(["-fexceptions"])],
+            linkerSettings: [
+                .linkedLibrary("d3d12", .when(platforms: [.windows])),
+                .linkedLibrary("dxgi", .when(platforms: [.windows])),
+                .linkedLibrary("dxguid", .when(platforms: [.windows])),
+            ]
+        ),
         .binaryTarget(
             name: "SDL3",
             path: "vendor/SDL3.artifactbundle"

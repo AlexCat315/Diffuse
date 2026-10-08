@@ -1,7 +1,49 @@
-// CVulkanHeaders — bridge compilation unit.
-//
-// The Vulkan headers are vendored in the linked `vulkan_loader` artifact; this
-// translation unit exists so SwiftPM builds the Clang target with the bundle's
-// header search paths and re-exports the Vulkan C API through the umbrella.
-// It contains no logic.
 #include "CVulkanHeaders.h"
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
+
+void* grhi_vulkan_get_instance_proc_addr(void) { return (void*)vkGetInstanceProcAddr; }
+void* grhi_vulkan_loader_symbol(const char* name) {
+#ifdef _WIN32
+    HMODULE module = GetModuleHandleW(L"vulkan-1.dll");
+    return module ? (void*)GetProcAddress(module, name) : NULL;
+#else
+    return dlsym(RTLD_DEFAULT, name);
+#endif
+}
+
+#include <string.h>
+void grhi_vulkan_pack_instance(void* destination, const float* transform, uint32_t index, uint32_t mask, uint64_t address) {
+    VkAccelerationStructureInstanceKHR instance = {0};
+    memcpy(instance.transform.matrix, transform, sizeof(instance.transform.matrix));
+    instance.instanceCustomIndex = index;
+    instance.mask = mask;
+    instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+    instance.accelerationStructureReference = address;
+    memcpy(destination, &instance, sizeof(instance));
+}
+
+VkResult grhi_vulkan_create_native_surface(VkInstance instance, void* window, void* display, VkSurfaceKHR* surface) {
+#ifdef _WIN32
+    // The extension's stable C layout is kept here to avoid exposing Win32
+    // header macros and handles through the Swift module on other hosts.
+    typedef struct { VkStructureType sType; const void* pNext; VkFlags flags; HINSTANCE hinstance; HWND hwnd; } SurfaceInfo;
+    typedef VkResult (VKAPI_PTR *CreateSurface)(VkInstance, const SurfaceInfo*, const VkAllocationCallbacks*, VkSurfaceKHR*);
+    CreateSurface create = (CreateSurface)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
+    if (!create) return VK_ERROR_EXTENSION_NOT_PRESENT;
+    SurfaceInfo info = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, NULL, 0, GetModuleHandleW(NULL), (HWND)window};
+    return create(instance, &info, NULL, surface);
+#elif defined(__linux__)
+    typedef struct { VkStructureType sType; const void* pNext; VkFlags flags; void* dpy; unsigned long window; } SurfaceInfo;
+    typedef VkResult (VKAPI_PTR *CreateSurface)(VkInstance, const SurfaceInfo*, const VkAllocationCallbacks*, VkSurfaceKHR*);
+    CreateSurface create = (CreateSurface)vkGetInstanceProcAddr(instance, "vkCreateXlibSurfaceKHR");
+    if (!create || !display) return VK_ERROR_EXTENSION_NOT_PRESENT;
+    SurfaceInfo info = {VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR, NULL, 0, display, (unsigned long)(uintptr_t)window};
+    return create(instance, &info, NULL, surface);
+#else
+    return VK_ERROR_EXTENSION_NOT_PRESENT;
+#endif
+}

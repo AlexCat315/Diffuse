@@ -18,7 +18,7 @@ final class AccessTrackerTests: XCTestCase {
     // MARK: Same-state hazards
 
     func testWriteAfterWriteIsDetected() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         // Two consecutive storage writes, state unchanged.
         XCTAssertTrue(tracker.observe(access(buffer, .write), on: .graphics).isEmpty)
         let hazards = tracker.observe(access(buffer, .write), on: .graphics)
@@ -29,7 +29,7 @@ final class AccessTrackerTests: XCTestCase {
     }
 
     func testWriteAfterReadIsDetected() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         XCTAssertTrue(tracker.observe(access(buffer, .read), on: .graphics).isEmpty)
         let hazards = tracker.observe(access(buffer, .write), on: .graphics)
         XCTAssertEqual(hazards.count, 1)
@@ -37,7 +37,7 @@ final class AccessTrackerTests: XCTestCase {
     }
 
     func testReadAfterWriteIsDetected() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         XCTAssertTrue(tracker.observe(access(buffer, .write), on: .compute).isEmpty)
         let hazards = tracker.observe(access(buffer, .read), on: .compute)
         XCTAssertEqual(hazards.count, 1)
@@ -47,7 +47,7 @@ final class AccessTrackerTests: XCTestCase {
     // MARK: Independent accesses
 
     func testIndependentReadsProduceNoHazard() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         tracker.observe(access(buffer, .read), on: .graphics)
         tracker.observe(access(buffer, .read), on: .graphics)
         // No writes anywhere → no ordering dependency.
@@ -55,7 +55,7 @@ final class AccessTrackerTests: XCTestCase {
     }
 
     func testDifferentResourcesProduceNoHazard() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         let other = ResourceRef(kind: .buffer, id: 9)
         tracker.observe(access(buffer, .write), on: .graphics)
         let hazards = tracker.observe(access(other, .write), on: .graphics)
@@ -65,7 +65,7 @@ final class AccessTrackerTests: XCTestCase {
     // MARK: Buffer ranges
 
     func testDisjointRangesProduceNoHazard() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         tracker.observe(
             access(buffer, .write, range: BufferRange(offset: 0, size: 1024)),
             on: .graphics
@@ -78,7 +78,7 @@ final class AccessTrackerTests: XCTestCase {
     }
 
     func testOverlappingRangesProduceHazard() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         tracker.observe(
             access(buffer, .write, range: BufferRange(offset: 0, size: 1024)),
             on: .graphics
@@ -93,7 +93,7 @@ final class AccessTrackerTests: XCTestCase {
     // MARK: Window pruning
 
     func testWriteClearsPriorReadWindow() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         // Read, then a write that becomes the new last write and clears reads.
         tracker.observe(access(buffer, .read), on: .graphics)
         tracker.observe(access(buffer, .write), on: .graphics)
@@ -106,7 +106,7 @@ final class AccessTrackerTests: XCTestCase {
     // MARK: Cross-queue
 
     func testCrossQueueHazardAttributesQueues() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         tracker.observe(access(buffer, .write, stage: .compute), on: .compute)
         let hazards = tracker.observe(access(buffer, .read, stage: .fragment), on: .graphics)
         XCTAssertEqual(hazards.count, 1)
@@ -118,7 +118,7 @@ final class AccessTrackerTests: XCTestCase {
     }
 
     func testResetClearsAllState() {
-        let tracker = AccessTracker()
+        var tracker = AccessTracker()
         tracker.observe(access(texture, .write), on: .graphics)
         tracker.observe(access(texture, .write), on: .graphics)
         XCTAssertFalse(tracker.observedHazards.isEmpty)

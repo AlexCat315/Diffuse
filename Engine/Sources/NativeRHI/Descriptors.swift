@@ -180,15 +180,16 @@ public enum BindingType: String, Codable, Hashable, Sendable {
 }
 
 public struct BindingLayoutEntry: Sendable {
+    public var buffer = BufferBindingLayout()
     public var slot: UInt32
     public var type: BindingType
-    public var stage: ShaderStage
+    public var visibility: ShaderVisibility
     public var arraySize: UInt32
 
-    public init(slot: UInt32, type: BindingType, stage: ShaderStage, arraySize: UInt32 = 1) {
+    public init(slot: UInt32, type: BindingType, visibility: ShaderVisibility, arraySize: UInt32 = 1) {
         self.slot = slot
         self.type = type
-        self.stage = stage
+        self.visibility = visibility
         self.arraySize = arraySize
     }
 }
@@ -259,6 +260,7 @@ public struct BindingSetDescriptor: Sendable {
 
 public struct PipelineLayoutDescriptor: Sendable {
     public var setLayouts: [BindingLayout]
+    public var pushConstants: [PushConstantRange] = []
     public var label: String?
 
     public init(setLayouts: [BindingLayout], label: String? = nil) {
@@ -272,13 +274,13 @@ public struct PipelineLayoutDescriptor: Sendable {
 public struct ResolvedBindingEntry: Sendable {
     public var slot: UInt32
     public var type: BindingType
-    public var stage: ShaderStage
+    public var visibility: ShaderVisibility
     public var resource: BindingResource
 
-    public init(slot: UInt32, type: BindingType, stage: ShaderStage, resource: BindingResource) {
+    public init(slot: UInt32, type: BindingType, visibility: ShaderVisibility, resource: BindingResource) {
         self.slot = slot
         self.type = type
-        self.stage = stage
+        self.visibility = visibility
         self.resource = resource
     }
 }
@@ -309,13 +311,22 @@ public struct RasterizationState: Sendable, Equatable {
     }
 }
 
+/// HLSL input semantic for DXIL. Slang's default user varying mapping uses TEXCOORD.
+public struct VertexSemantic: Sendable {
+    public var name = "TEXCOORD"
+    public var index: UInt32
+    public init(index: UInt32) { self.index = index }
+}
+
 public struct VertexAttribute: Sendable {
+    public var semantic: VertexSemantic
     public var location: UInt32
     public var format: VertexFormat
     public var offset: Int
     public var bufferIndex: UInt32
 
     public init(location: UInt32, format: VertexFormat, offset: Int, bufferIndex: UInt32 = 0) {
+        self.semantic = VertexSemantic(index: location)
         self.location = location
         self.format = format
         self.offset = offset
@@ -414,6 +425,8 @@ public struct ComputePipelineDescriptor: Sendable {
 /// by the caller; the RHI only reads it during `configureSurface`, so it is
 /// safe to carry across the device's lock.
 public struct SurfaceDescriptor: @unchecked Sendable {
+    /// Xlib Display*. On Linux nativeHandle holds the Window integer as a pointer bit pattern.
+    public var display: UnsafeMutableRawPointer? = nil
     public var nativeHandle: UnsafeMutableRawPointer?
     public var width: Int
     public var height: Int

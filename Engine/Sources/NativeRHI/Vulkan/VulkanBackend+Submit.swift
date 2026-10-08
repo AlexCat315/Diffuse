@@ -12,36 +12,37 @@ import Foundation
 /// a new frame (the FrameRing has already confirmed the GPU finished the old one).
 final class VulkanFrame {
     let index: Int
-    let commandPool: VkCommandPool
-    let acquireSemaphore: VkSemaphore
     let uploader: VulkanFrameUploader
+    var commandPools: [UInt32: VkCommandPool] = [:]
+    var acquireSemaphore: VkSemaphore?
 
-    init(index: Int, commandPool: VkCommandPool, acquireSemaphore: VkSemaphore,
-         uploader: VulkanFrameUploader) {
-        self.index = index
-        self.commandPool = commandPool
-        self.acquireSemaphore = acquireSemaphore
-        self.uploader = uploader
+    init(index: Int, uploader: VulkanFrameUploader) {
+        self.index = index; self.uploader = uploader
     }
 }
 
 /// A one-shot worker owns the fence until cleanup and callback finish. Native
 /// handles are immutable here; no registry or queue mutation occurs off-thread.
 private final class VulkanFenceCompletion: @unchecked Sendable {
-    private let context: VulkanContext
+    private let backend: VulkanBackend
+    private var context: VulkanContext { backend.context }
     private let fence: VkFence
+    private let commandPool: VkCommandPool?
     private let completion: () -> Void
 
-    init(context: VulkanContext, fence: VkFence, completion: @escaping () -> Void) {
-        self.context = context
+    init(backend: VulkanBackend, fence: VkFence, commandPool: VkCommandPool? = nil, completion: @escaping () -> Void) {
+        self.backend = backend
         self.fence = fence
+        self.commandPool = commandPool
         self.completion = completion
     }
 
     func wait() {
         var fenceSlot = fence
-        _ = context.sync.waitForFences(context.device, 1, &fenceSlot, VK_TRUE, UInt64.max)
+        let result = context.sync.waitForFences(context.device, 1, &fenceSlot, VK_TRUE, UInt64.max)
+        if result != VK_SUCCESS { backend.submissionStatus.record("vkWaitForFences failed: \(result)") }
         context.sync.destroyFence(context.device, fence, nil)
+        if let commandPool { context.auxiliary.destroyCommandPool(context.device, commandPool, nil) }
         completion()
     }
 }
@@ -70,39 +71,35 @@ final class VulkanFrameUploader: FrameUploader {
 }
 
 extension VulkanBackend {
-    func makeFrameUploader(slot: Int) -> FrameUploader {
-        lock.lock()
-        activeSlot = slot
-        if slot < frames.count {
-            let existing = frames[slot]
-            _ = draw.resetCommandPool(context.device, existing.commandPool, 0)
-            existing.uploader.reset()
-            lock.unlock()
-            return existing.uploader
+    func makeFrameUploader(slot: Int) throws -> FrameUploader {
+        try lock.withLock {
+            try submissionStatus.check()
+            activeSlot = slot
+            if slot < frames.count {
+                let frame = frames[slot]
+                for pool in frame.commandPools.values {
+                    try rhiRequire(draw.resetCommandPool(context.device, pool, 0) == VK_SUCCESS, "vkResetCommandPool failed")
+                }
+                frame.uploader.reset()
+                return frame.uploader
+            }
+            let uploader = VulkanFrameUploader(backend: self) { [context, allocator] capacity in
+                try Self.makeUploadChunk(context: context, allocator: allocator, size: capacity)
+            }
+            frames.append(VulkanFrame(index: slot, uploader: uploader))
+            return uploader
         }
-        let pool = vkWithOutHandle { out in
-            var info = VkCommandPoolCreateInfo()
-            info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
-            info.queueFamilyIndex = context.graphicsFamily
-            info.flags = UInt32(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT.rawValue)
-            context.resources.createCommandPool(context.device, &info, nil, out)
-        }!
-        let semaphore = vkWithOutHandle { out in
-            var info = VkSemaphoreCreateInfo()
-            info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-            context.sync.createSemaphore(context.device, &info, nil, out)
-        }!
-        let uploader = VulkanFrameUploader(backend: self) { [context, allocator] capacity in
-            try Self.makeUploadChunk(context: context, allocator: allocator, size: capacity)
-        }
-        let frame = VulkanFrame(index: slot, commandPool: pool,
-                                acquireSemaphore: semaphore, uploader: uploader)
-        if frames.count <= slot {
-            frames.append(contentsOf: Array(repeating: frame, count: slot - frames.count + 1))
-        }
-        frames[slot] = frame
-        lock.unlock()
-        return uploader
+    }
+
+    private func commandPool(frame: VulkanFrame, family: UInt32) throws -> VkCommandPool {
+        if let existing = frame.commandPools[family] { return existing }
+        var info = VkCommandPoolCreateInfo()
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
+        info.queueFamilyIndex = family
+        info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT.rawValue
+        guard let pool = vkWithOutHandle({ _ = context.resources.createCommandPool(context.device, &info, nil, $0) }) else { throw RHIError.outOfMemory }
+        frame.commandPools[family] = pool
+        return pool
     }
 
     /// Registers a chunk's persistently-mapped VkBuffer as a transient buffer
@@ -121,25 +118,12 @@ extension VulkanBackend {
     }
 
     func submit(_ submit: PlannedSubmit, completion: @escaping () -> Void) throws {
-        // Reject prototype paths before recording anything or updating GPU
-        // state. No accepted command may be silently skipped by this backend.
-        for command in submit.commands {
-            switch command {
-            case .renderPass, .computePass, .accelerationStructureBuild:
-                throw RHIError.unsupportedFeature("Vulkan pass encoding is still a prototype")
-            case .copyPass(let record):
-                for item in record.body {
-                    if case .copyBuffer = item { continue }
-                    throw RHIError.unsupportedFeature("Vulkan recorded texture copies are not implemented")
-                }
-            case .barriers: break
-            }
-        }
-        let queue: VkQueue
+        try submissionStatus.check()
+        let nativeQueue: VulkanQueue
         switch submit.queue {
-        case .graphics: queue = context.graphicsQueue
-        case .compute: queue = context.computeQueue
-        case .transfer: queue = context.transferQueue
+        case .graphics: nativeQueue = context.queues.graphics
+        case .compute: nativeQueue = context.queues.compute
+        case .transfer: nativeQueue = context.queues.transfer
         }
 
         // Per-frame command buffer from this slot's pool.
@@ -147,7 +131,7 @@ extension VulkanBackend {
         var cmd: VkCommandBuffer = vkNull()
         var allocInfo = VkCommandBufferAllocateInfo()
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-        allocInfo.commandPool = frame.commandPool
+        allocInfo.commandPool = try commandPool(frame: frame, family: nativeQueue.family)
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
         allocInfo.commandBufferCount = 1
         guard context.resources.allocateCommandBuffers(context.device, &allocInfo, &cmd) == VK_SUCCESS else {
@@ -160,13 +144,23 @@ extension VulkanBackend {
         guard draw.beginCommandBuffer(cmd, &begin) == VK_SUCCESS else {
             throw RHIError.submitFailed("vkBeginCommandBuffer failed")
         }
-        try encode(cmd: cmd, commands: submit.commands)
+        let previousTextures = registries.textures
+        do {
+            try encode(cmd: cmd, commands: submit.commands)
+        } catch {
+            registries.textures = previousTextures
+            throw error
+        }
+        var queued = false
+        defer { if !queued { registries.textures = previousTextures } }
         guard draw.endCommandBuffer(cmd) == VK_SUCCESS else {
             throw RHIError.submitFailed("vkEndCommandBuffer failed")
         }
 
         // Resolve timeline semaphores (create on first use).
-        let waitTimeline = try submit.waitSemaphores.map { try semaphore(for: $0) }
+        var waitTimeline = try submit.waitSemaphores.map { try semaphore(for: $0) }
+        let consumesAcquire = submit.queue == .graphics && presentation.pendingAcquire
+        if consumesAcquire, let semaphore = frame.acquireSemaphore { waitTimeline.append(TimelineEntry(semaphore: semaphore, value: 0)) }
         let signalTimeline = try submit.signalSemaphores.map { try semaphore(for: $0) }
 
         guard let fence = vkWithOutHandle({ out in
@@ -176,54 +170,86 @@ extension VulkanBackend {
         }) else { throw RHIError.outOfMemory }
 
         let result = withSubmissionInfo(command: cmd, waits: waitTimeline, signals: signalTimeline) {
-            sync.queueSubmit(queue, 1, $0, fence)
+            sync.queueSubmit(nativeQueue.handle, 1, $0, fence)
         }
         guard result == VK_SUCCESS else {
             sync.destroyFence(context.device, fence, nil)
             throw RHIError.submitFailed("vkQueueSubmit failed: \(result)")
         }
 
+        queued = true
+        if consumesAcquire { presentation.pendingAcquire = false }
         // Asynchronous completion: wait on a background thread, then fire the
         // callback. No queue idle on the hot path.
-        let waiter = VulkanFenceCompletion(context: context, fence: fence, completion: completion)
+        let waiter = VulkanFenceCompletion(backend: self, fence: fence, completion: completion)
         DispatchQueue.global().async { waiter.wait() }
     }
 
     // MARK: Swapchain
 
     func acquireSwapchainImage() throws -> SwapchainImage {
-        guard let swapchain = swapchain else {
-            throw RHIError.swapchainAcquireFailed("no swapchain configured")
-        }
+        guard let swapchain, activeSlot < frames.count else { throw RHIError.swapchainAcquireFailed("configure a swapchain and begin a frame first") }
+        try rhiRequire(presentation.acquiredID == nil, "present the acquired image before acquiring another")
         let frame = frames[activeSlot]
-        let result = swapchain.acquire(semaphore: frame.acquireSemaphore, timeout: UInt64.max)
-        if result.result == VK_ERROR_OUT_OF_DATE_KHR || result.result == VK_SUBOPTIMAL_KHR {
+        if frame.acquireSemaphore == nil { frame.acquireSemaphore = try binarySemaphore() }
+        let semaphore = frame.acquireSemaphore!
+        var result = swapchain.acquire(semaphore: semaphore, timeout: UInt64.max)
+        if result.result == VK_ERROR_OUT_OF_DATE_KHR {
             try swapchain.recreate(registries: registries)
-            let retry = swapchain.acquire(semaphore: frame.acquireSemaphore, timeout: UInt64.max)
-            guard retry.result == VK_SUCCESS else {
-                throw RHIError.swapchainAcquireFailed("recreate acquire failed: \(retry.result)")
-            }
-            return makeSwapchainImage(swapchain: swapchain, index: retry.index)
+            result = swapchain.acquire(semaphore: semaphore, timeout: UInt64.max)
         }
-        guard result.result == VK_SUCCESS else {
+        guard result.result == VK_SUCCESS || result.result == VK_SUBOPTIMAL_KHR else {
             throw RHIError.swapchainAcquireFailed("vkAcquireNextImageKHR: \(result.result)")
         }
-        return makeSwapchainImage(swapchain: swapchain, index: result.index)
+        let image = makeSwapchainImage(swapchain: swapchain, index: result.index)
+        presentation.acquiredID = image.texture.id; presentation.pendingAcquire = true
+        return image
     }
 
     func present(_ image: SwapchainImage) throws {
-        guard let swapchain = swapchain else {
-            throw RHIError.presentFailed("no swapchain configured")
+        guard let swapchain, presentation.acquiredID == image.texture.id,
+              let index = swapchain.textureIDs.firstIndex(of: image.texture.id) else { throw RHIError.presentFailed("image was not acquired from this swapchain") }
+        let ready: VkSemaphore
+        if let existing = presentation.ready[image.texture.id] { ready = existing }
+        else { ready = try binarySemaphore(); presentation.ready[image.texture.id] = ready }
+        // Presentation owns an independent pool; a frame slot may complete and
+        // reset its pools before the final transition/present wait has finished.
+        let transient = VulkanFrame(index: -1, uploader: frames[activeSlot].uploader)
+        let pool = try commandPool(frame: transient, family: context.queues.graphics.family)
+        var submitted = false
+        defer { if !submitted { context.auxiliary.destroyCommandPool(context.device, pool, nil) } }
+        var cmd: VkCommandBuffer = vkNull()
+        var allocation = VkCommandBufferAllocateInfo()
+        allocation.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        allocation.commandPool = pool; allocation.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; allocation.commandBufferCount = 1
+        try rhiRequire(context.resources.allocateCommandBuffers(context.device, &allocation, &cmd) == VK_SUCCESS, "present command allocation failed")
+        var begin = VkCommandBufferBeginInfo(); begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        try rhiRequire(draw.beginCommandBuffer(cmd, &begin) == VK_SUCCESS, "present command begin failed")
+        let previous = registries.textures[image.texture.id]!
+        try transitionTexture(cmd: cmd, handle: image.texture, state: .present)
+        defer { if !submitted { registries.textures[image.texture.id] = previous } }
+        try rhiRequire(draw.endCommandBuffer(cmd) == VK_SUCCESS, "present command end failed")
+        guard let fence = vkWithOutHandle({ out in
+            var info = VkFenceCreateInfo(); info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+            _ = sync.createFence(context.device, &info, nil, out)
+        }) else { throw RHIError.outOfMemory }
+        let waits: [TimelineEntry] = presentation.pendingAcquire ? [TimelineEntry(semaphore: frames[activeSlot].acquireSemaphore!, value: 0)] : []
+        let result = withSubmissionInfo(command: cmd, waits: waits, signals: [TimelineEntry(semaphore: ready, value: 0)]) {
+            sync.queueSubmit(context.queues.graphics.handle, 1, $0, fence)
         }
-        let index = swapchain.textureIDs.firstIndex(of: image.texture.id) ?? 0
-        let frame = frames[activeSlot]
-        let result = swapchain.present(queue: context.graphicsQueue,
-                                       semaphore: frame.acquireSemaphore, index: UInt32(index))
-        if result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR {
-            try swapchain.recreate(registries: registries)
-        } else if result != VK_SUCCESS {
-            throw RHIError.presentFailed("vkQueuePresentKHR: \(result)")
-        }
+        guard result == VK_SUCCESS else { sync.destroyFence(context.device, fence, nil); throw RHIError.presentFailed("present transition submit failed: \(result)") }
+        submitted = true; presentation.pendingAcquire = false; presentation.acquiredID = nil
+        let waiter = VulkanFenceCompletion(backend: self, fence: fence, commandPool: pool, completion: {})
+        DispatchQueue.global().async { waiter.wait() }
+        let status = swapchain.present(queue: context.queues.graphics.handle, semaphore: ready, index: UInt32(index))
+        if status == VK_ERROR_OUT_OF_DATE_KHR || status == VK_SUBOPTIMAL_KHR { try swapchain.recreate(registries: registries) }
+        else if status != VK_SUCCESS { throw RHIError.presentFailed("vkQueuePresentKHR: \(status)") }
+    }
+
+    private func binarySemaphore() throws -> VkSemaphore {
+        var info = VkSemaphoreCreateInfo(); info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+        guard let semaphore = vkWithOutHandle({ _ = sync.createSemaphore(context.device, &info, nil, $0) }) else { throw RHIError.outOfMemory }
+        return semaphore
     }
 
     private func makeSwapchainImage(swapchain: VulkanSwapchain, index: UInt32) -> SwapchainImage {
@@ -240,6 +266,7 @@ extension VulkanBackend {
         guard result == VK_SUCCESS else {
             throw RHIError.submitFailed("vkDeviceWaitIdle failed: \(result)")
         }
+        try submissionStatus.check()
     }
 
     // MARK: Timeline semaphores
@@ -305,10 +332,11 @@ extension VulkanBackend {
         typeInfo.initialValue = 0
         var createInfo = VkSemaphoreCreateInfo()
         createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-        createInfo.pNext = withUnsafeMutablePointer(to: &typeInfo) { UnsafeRawPointer($0) }
-        guard let semaphore = vkWithOutHandle({
-            context.sync.createSemaphore(context.device, &createInfo, nil, $0)
-        }) else {
+        let arena = VulkanScratch()
+        createInfo.pNext = UnsafeRawPointer(arena.make(typeInfo))
+        guard let semaphore: VkSemaphore = withExtendedLifetime(arena, { vkWithOutHandle({
+            _ = context.sync.createSemaphore(context.device, &createInfo, nil, $0)
+        }) }) else {
             throw RHIError.outOfMemory
         }
         timelineSemaphores[timeline.id] = semaphore
@@ -323,11 +351,14 @@ extension VulkanBackend {
         var info = VkBufferCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
         info.size = VkDeviceSize(size)
-        info.usage = UInt32(VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue)
-        info.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-        guard let buffer = vkWithOutHandle({
-            context.core.createBuffer(context.device, &info, nil, $0)
-        }) else { throw RHIError.outOfMemory }
+        info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT.rawValue
+        let arena = VulkanScratch()
+        let families = Array(Set([context.queues.graphics.family, context.queues.compute.family, context.queues.transfer.family]))
+        info.sharingMode = families.count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE
+        if families.count > 1 { info.queueFamilyIndexCount = UInt32(families.count); info.pQueueFamilyIndices = arena.store(families) }
+        guard let buffer: VkBuffer = withExtendedLifetime(arena, { vkWithOutHandle({
+            _ = context.core.createBuffer(context.device, &info, nil, $0)
+        }) }) else { throw RHIError.outOfMemory }
         var req = VkMemoryRequirements()
         context.core.getBufferMemoryRequirements(context.device, buffer, &req)
         let allocation = try allocator.allocate(

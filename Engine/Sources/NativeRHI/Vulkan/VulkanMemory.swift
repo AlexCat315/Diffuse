@@ -68,6 +68,11 @@ final class VulkanMemoryAllocator {
                   alignment: VkDeviceSize,
                   memoryTypeBits: UInt32,
                   requiredFlags: VkMemoryPropertyFlags) throws -> VulkanMemoryAllocation {
+        // Buffer/image granularity is an allocation boundary invariant when
+        // linear buffers and optimal images share one VkDeviceMemory block.
+        let granularity = max(1, context.limits.bufferImageGranularity)
+        let alignment = max(alignment, granularity)
+        let size = align(offset: size, alignment: granularity)
         guard let typeIndex = findMemoryType(memoryTypeBits: memoryTypeBits,
                                              requiredFlags: requiredFlags) else {
             throw RHIError.outOfMemory
@@ -80,8 +85,13 @@ final class VulkanMemoryAllocator {
         }
         // Otherwise grow a fresh block.
         let blockSize = max(self.blockSize, align(offset: size, alignment: alignment))
-        let block = try createBlock(size: blockSize, typeIndex: typeIndex,
-                                    hostVisible: (requiredFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue) != 0)
+        var properties = memoryProperties
+        let coherent = withUnsafePointer(to: &properties.memoryTypes) { raw in
+            let flags = UnsafeRawPointer(raw).assumingMemoryBound(to: VkMemoryType.self)[Int(typeIndex)].propertyFlags
+            let required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue
+            return flags & required == required
+        }
+        let block = try createBlock(size: blockSize, typeIndex: typeIndex, hostVisible: coherent)
         blocks.append(block)
         let blockIndex = blocks.count - 1
         guard let region = findFreeRegion(block: block, size: size, alignment: alignment) else {
@@ -95,6 +105,12 @@ final class VulkanMemoryAllocator {
         let block = blocks[allocation.blockIndex]
         block.freeRegions.append((allocation.offset, allocation.size))
         block.freeRegions.sort { $0.offset < $1.offset }
+        var merged: [(offset: VkDeviceSize, size: VkDeviceSize)] = []
+        for region in block.freeRegions {
+            if let previous = merged.last, previous.offset + previous.size == region.offset { merged[merged.count - 1].size += region.size }
+            else { merged.append(region) }
+        }
+        block.freeRegions = merged
     }
 
     /// Unmaps and frees every block. Call only after the device is idle.
@@ -119,8 +135,10 @@ final class VulkanMemoryAllocator {
             let padding = aligned - region.offset
             guard aligned + size <= region.offset + region.size else { continue }
             let remaining = region.size - padding - size
-            block.freeRegions[index] = (aligned + size, remaining)
-            block.freeRegions = block.freeRegions.filter { $0.size > 0 }
+            block.freeRegions.remove(at: index)
+            if padding > 0 { block.freeRegions.append((region.offset, padding)) }
+            if remaining > 0 { block.freeRegions.append((aligned + size, remaining)) }
+            block.freeRegions.sort { $0.offset < $1.offset }
             return (aligned, size)
         }
         return nil
@@ -145,15 +163,25 @@ final class VulkanMemoryAllocator {
         allocInfo.allocationSize = size
         allocInfo.memoryTypeIndex = typeIndex
 
-        guard let memory = vkWithOutHandle({
+        let arena = VulkanScratch()
+        if context.features.accelerationStructures {
+            var flags = VkMemoryAllocateFlagsInfo()
+            flags.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO
+            flags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT.rawValue
+            allocInfo.pNext = UnsafeRawPointer(arena.make(flags))
+        }
+        guard let memory: VkDeviceMemory = withExtendedLifetime(arena, { vkWithOutHandle({
             context.core.allocateMemory(context.device, &allocInfo, nil, $0)
-        }) else {
+        }) }) else {
             throw RHIError.outOfMemory
         }
 
         var mappedBase: UnsafeMutableRawPointer?
         if hostVisible {
-            _ = context.core.mapMemory(context.device, memory, 0, size, 0, &mappedBase)
+            guard context.core.mapMemory(context.device, memory, 0, size, 0, &mappedBase) == VK_SUCCESS else {
+                context.core.freeMemory(context.device, memory, nil)
+                throw RHIError.outOfMemory
+            }
         }
         return VulkanMemoryBlock(memory: memory, size: size,
                                  memoryTypeIndex: typeIndex, mappedBase: mappedBase)

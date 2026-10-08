@@ -8,8 +8,27 @@ import QuartzCore
 extension MetalDevice {
     // MARK: Binding sets
 
+    public func registerBindingLayout(_ handle: BindingLayout, descriptor: BindingLayoutDescriptor) throws {
+        interfaces.bindings[handle.id] = descriptor
+    }
+
+    public func registerPipelineLayout(_ handle: PipelineLayout, descriptor: PipelineLayoutDescriptor) throws {
+        guard descriptor.setLayouts.count <= 1 else {
+            throw RHIError.unsupportedFeature("Metal direct bindings support only set 0")
+        }
+        for range in descriptor.pushConstants {
+            try rhiRequire(range.slot < UInt32(kMetalVertexBufferBaseIndex), "push constant buffer slot is reserved")
+            let entries = descriptor.setLayouts.flatMap { interfaces.bindings[$0.id]?.entries ?? [] }
+            try rhiRequire(!entries.contains { $0.slot == range.slot && $0.visibility.contains(ShaderVisibility(range.stage))
+                && ($0.type == .uniformBuffer || $0.type == .storageBuffer || $0.type == .accelerationStructure) },
+                "push constants overlap a buffer binding")
+        }
+        interfaces.pipelines[handle.id] = descriptor
+    }
+
     public func registerBindingSet(
         _ handle: BindingSet,
+        layout: BindingLayout,
         layoutEntries: [BindingLayoutEntry],
         setEntries: [BindingSetEntry]
     ) throws {
@@ -31,7 +50,7 @@ extension MetalDevice {
             resolved.append(MetalBoundEntry(
                 slot: setEntry.slot,
                 type: layout?.type ?? .texture,
-                stage: layout?.stage ?? .fragment,
+                visibility: layout?.visibility ?? .fragment,
                 resource: setEntry.resource
             ))
         }
@@ -64,9 +83,7 @@ extension MetalDevice {
         guard let mtlBuffer = registries.buffers[buffer.id] else {
             throw RHIError.invalidArgument("uploadBufferData: unknown buffer \(buffer.id)")
         }
-        guard offset >= 0, offset + data.count <= mtlBuffer.length else {
-            throw RHIError.invalidArgument("uploadBufferData: upload exceeds buffer length")
-        }
+        try rhiByteRange(offset: offset, size: data.count, capacity: mtlBuffer.length)
         // Buffers are shared-storage (CPU/GPU coherent on Apple Silicon), so a
         // direct memcpy into contents is safe without a blit sync.
         data.withUnsafeBytes { bytes in
@@ -87,10 +104,11 @@ extension MetalDevice {
         guard let mtlTexture = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("uploadTextureData: unknown texture \(texture.id)")
         }
-        let staging = try sharedStagingBuffer(minimumSize: max(bytesPerRow * height, data.count))
+        let needed = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(mtlTexture.pixelFormat), textureWidth: mtlTexture.width, textureHeight: mtlTexture.height, capacity: data.count)
+        let staging = try sharedStagingBuffer(minimumSize: needed)
         data.withUnsafeBytes { bytes in
             guard let source = bytes.baseAddress else { return }
-            staging.contents().copyMemory(from: source, byteCount: data.count)
+            staging.contents().copyMemory(from: source, byteCount: needed)
         }
 
         // Private (device-local) texture: blit staging -> texture on a one-shot
@@ -114,6 +132,7 @@ extension MetalDevice {
         blit.endEncoding()
         cmdBuffer.commit()
         cmdBuffer.waitUntilCompleted()
+        if let error = cmdBuffer.error { throw RHIError.submitFailed(error.localizedDescription) }
     }
 
     public func readTextureData(
@@ -126,7 +145,7 @@ extension MetalDevice {
         guard let mtlTexture = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("readTextureData: unknown texture \(texture.id)")
         }
-        let needed = bytesPerRow * height
+        let needed = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(mtlTexture.pixelFormat), textureWidth: mtlTexture.width, textureHeight: mtlTexture.height, capacity: destination.count)
         guard destination.count >= needed, let destinationBase = destination.baseAddress else {
             throw RHIError.invalidArgument("readTextureData: destination buffer too small")
         }
@@ -150,6 +169,7 @@ extension MetalDevice {
         blit.endEncoding()
         cmdBuffer.commit()
         cmdBuffer.waitUntilCompleted()
+        if let error = cmdBuffer.error { throw RHIError.submitFailed(error.localizedDescription) }
         destinationBase.copyMemory(from: staging.contents(), byteCount: needed)
     }
 

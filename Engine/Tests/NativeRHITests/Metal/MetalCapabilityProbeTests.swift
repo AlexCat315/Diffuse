@@ -41,7 +41,7 @@ final class MetalCapabilityProbeTests: XCTestCase {
         guard MTLCreateSystemDefaultDevice() != nil else { throw XCTSkip("No Metal device") }
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal]))
         let layout = try device.makeBindingLayout(BindingLayoutDescriptor(entries: [
-            BindingLayoutEntry(slot: 0, type: .storageBuffer, stage: .compute)]))
+            BindingLayoutEntry(slot: 0, type: .storageBuffer, visibility: .compute)]))
         let descriptor = BindingSetDescriptor(entries: [
             BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: Buffer(id: 0)))])
         // Both attempts must fail: a failed backend registration must not be cached.
@@ -53,8 +53,8 @@ final class MetalCapabilityProbeTests: XCTestCase {
         guard MTLCreateSystemDefaultDevice() != nil else { throw XCTSkip("No Metal device") }
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal]))
         XCTAssertThrowsError(try device.makeBindingLayout(BindingLayoutDescriptor(entries: [
-            BindingLayoutEntry(slot: 0, type: .storageBuffer, stage: .compute),
-            BindingLayoutEntry(slot: 0, type: .uniformBuffer, stage: .compute)])))
+            BindingLayoutEntry(slot: 0, type: .storageBuffer, visibility: .compute),
+            BindingLayoutEntry(slot: 0, type: .uniformBuffer, visibility: .compute)])))
         XCTAssertFalse(device.capabilities.meshShading.task)
         XCTAssertThrowsError(try device.makeShaderModule(ShaderModuleDescriptor(
             stage: .task, format: .mslSource, code: Data("unused".utf8), entryPoint: "main")))
