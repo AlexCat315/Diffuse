@@ -12,7 +12,7 @@ Slang 沿用生产的六顶点 quad、旋转 billboard、速度对齐投影、�
 
 Slang 的 SV_InstanceID 在 Metal/SPIR-V/DXIL 为批次内编号，Native shader 用绑定的 batch start 还原 shared-buffer 索引，避免依赖 DX12 SM 6.8 的 StartInstanceLocation。参见 [Slang Metal 语义说明](https://docs.shader-slang.org/en/stable/external/slang/docs/user-guide/a2-02-metal-target-specific.html)。这次对照也发现旧 WGPU device 未请求 `indirect-first-instance`，导致后续非零 firstInstance 批次不绘制；已修复生产 bridge 的必需特性请求。Native Vulkan device 同时检查并启用 `drawIndirectFirstInstance` 和 `shaderDrawParameters`，否则明确报告不支持。
 
-粒子在透明网格之后、Bloom/tonemap 之前绘制；opaque snapshot 复用仍每帧重新处理粒子。非法非有限输入在 beginFrame/资源分配前拒绝。resident GPU simulation 的生成、物理、存活压缩和事件回读现已接入，见 [GPU 模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)。`renderOnGPU` 的排序/appearance/实例转换仍明确拒绝，不能把 GPU 压缩当成完整模拟绘制已经迁移。
+粒子在透明网格之后、Bloom/tonemap 之前绘制；opaque snapshot 复用仍每帧重新处理粒子。非法非有限输入在 beginFrame/资源分配前拒绝。resident GPU simulation 的生成、物理、存活压缩和事件回读现已接入，见 [GPU 模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)。`renderOnGPU` 的排序、appearance/curve、texture-sheet 与 trail/instance 转换也已接入，新增完整绘制对照与性能数据见同一模拟验证记录。
 
 ## 本机验证
 
@@ -59,4 +59,4 @@ Apple M1 本机 Release，验证关闭，30 帧预热、3×180 帧测量：
 
 ## 默认切换前剩余范围
 
-GPU 模拟绘制的 appearance/curves、GPU sorting、texture-sheet playback 和 trail/instance conversion 尚待迁移；resident emitter state、spawn/compact、force/noise/collision、events/readback 和 reset 生命周期已接入，详见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)。Editor/GuavaUI 纹理/命令互操作及 DXIL 产物也仍未完成。默认保持 WGPU；完整功能、画面对照与性能验证通过后再切换默认并移除 WGPU。
+GPU 模拟绘制的 appearance/curves、GPU sorting、texture-sheet playback、trail/instance conversion、resident emitter state、spawn/compact、force/noise/collision、events/readback 和 reset 生命周期已接入，详见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)。Editor/GuavaUI 纹理/命令互操作及 DXIL 产物也仍未完成。默认保持 WGPU；完整功能、画面对照与性能验证通过后再切换默认并移除 WGPU。

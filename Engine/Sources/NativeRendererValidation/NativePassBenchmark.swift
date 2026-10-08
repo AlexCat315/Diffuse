@@ -17,9 +17,11 @@ public enum NativePassBenchmark {
         case .post: packet = PostProbeScene.packet(size: options.size)
         case .stylized: packet = StylizedProbeScene.packet(size: options.size)
         case .particles: packet = ParticleProbeScene.packet(size: options.size)
+        case .simulation: packet = ParticleSimulationProbeScene.packet(size: options.size)
         case .animated: packet = AnimatedProbeScene.packet(size: options.size)
         }
         func framePacket(_ frame: Int) -> RenderPacket {
+            if options.scene == .simulation { return ParticleSimulationProbeScene.packet(size: options.size,frame: frame) }
             if options.scene == .particles { return ParticleProbeScene.packet(size: options.size,frame: frame) }
             if options.scene == .stylized { return StylizedProbeScene.packet(size: options.size,frame: frame) }
             if options.scene == .post { return PostProbeScene.packet(size: options.size,frame: frame) }
@@ -99,12 +101,19 @@ public enum NativePassBenchmark {
                 }
             }
         }
-        if options.scene == .particles {
+        if options.scene == .particles || options.scene == .simulation {
             for native in results where native.backend != result.backend {
                 guard native.particleWork == result.particleWork, native.particleWork.candidates > 0,
                       native.particleWork.indirectDraws > 0,
                       native.passFrames == result.passFrames, native.passDraws == result.passDraws else {
                     throw RHIError.invalidArgument("particle benchmark compute/indirect workloads differ: \(native.backend)")
+                }
+                if options.scene == .simulation {
+                    guard native.simulationWork == result.simulationWork,
+                          native.simulationWork.particles > 0, native.simulationWork.sortPasses > 0,
+                          native.simulationWork.renderInstances > 0 else {
+                        throw RHIError.invalidArgument("resident particle benchmark workloads differ: \(native.backend)")
+                    }
                 }
             }
         }
@@ -132,11 +141,13 @@ public enum NativePassBenchmark {
         var passFrames: [String: Int] = [:], passDraws: [String: Int] = [:]
         var frameSamples: [Double] = [], encodeSamples: [Double] = [], submitSamples: [Double] = [], batches: [Double] = []
         var particleWork = PassParticleWork()
+        var simulationWork = PassParticleSimulationWork()
         for repetition in 0..<options.repeats {
             let start = DispatchTime.now().uptimeNanoseconds
             for frame in 0..<options.frames {
                 let stats = try render(options.warmup + repetition * options.frames + frame)
                 particleWork.add(stats)
+                simulationWork.add(stats)
                 for (kind, draws) in stats.passDrawCallCounts {
                     passFrames[kind.rawValue, default: 0] += 1
                     passDraws[kind.rawValue, default: 0] += draws
@@ -151,11 +162,12 @@ public enum NativePassBenchmark {
         }
         return PassBenchmarkResult(backend: name, device: device, cpuFrame: PassTimingDistribution(frameSamples),
             cpuEncode: PassTimingDistribution(encodeSamples), cpuSubmit: PassTimingDistribution(submitSamples),
-            completedBatch: PassTimingDistribution(batches), passFrames: passFrames, passDraws: passDraws,particleWork: particleWork)
+            completedBatch: PassTimingDistribution(batches), passFrames: passFrames, passDraws: passDraws,
+            particleWork: particleWork,simulationWork: simulationWork)
     }
 }
 
-private enum ProbeScene: String { case grid, mesh, pbr, animated, post, stylized, particles }
+private enum ProbeScene: String { case grid, mesh, pbr, animated, post, stylized, particles, simulation }
 
 private struct PassBenchmarkOptions {
     var scene = ProbeScene.grid
@@ -166,12 +178,12 @@ private struct PassBenchmarkOptions {
     var backends: [GraphicsAPI] = NativeRHI.platformDefaultBackends
     var output = URL(fileURLWithPath: "/tmp/guava-native-grid")
     init(arguments: [String]) throws {
-        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated|post|stylized|particles --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
+        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated|post|stylized|particles|simulation --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
         for index in stride(from: 0, to: arguments.count, by: 2) {
             let value = arguments[index + 1]
             switch arguments[index] {
             case "--scene":
-                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh, pbr, animated, post, stylized or particles scene") }
+                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh, pbr, animated, post, stylized, particles or simulation scene") }
                 self.scene = scene
             case "--output": output = URL(fileURLWithPath: value)
             case "--backends":
@@ -217,6 +229,33 @@ public struct PassBenchmarkResult: Codable {
     public let passFrames: [String: Int]
     public let passDraws: [String: Int]
     public let particleWork: PassParticleWork
+    public let simulationWork: PassParticleSimulationWork
+}
+public struct PassParticleSimulationWork: Codable, Equatable {
+    public private(set) var batches = 0
+    public private(set) var particles = 0
+    public private(set) var simulationWorkgroups = 0
+    public private(set) var sortPasses = 0
+    public private(set) var sortItems = 0
+    public private(set) var sortPaddedItems = 0
+    public private(set) var sortWorkgroups = 0
+    public private(set) var instanceWorkgroups = 0
+    public private(set) var renderInstances = 0
+    public private(set) var eventCapacity = 0
+    public private(set) var eventBytes = 0
+    mutating func add(_ stats: RenderFrameStats) {
+        batches += stats.gpuParticleSimulationBatchCount
+        particles += stats.gpuParticleSimulationParticleCount
+        simulationWorkgroups += stats.gpuParticleSimulationDispatchWorkgroups
+        sortPasses += stats.gpuParticleSortPassCount
+        sortItems += stats.gpuParticleSortItemCount
+        sortPaddedItems += stats.gpuParticleSortPaddedItemCount
+        sortWorkgroups += stats.gpuParticleSortDispatchWorkgroups
+        instanceWorkgroups += stats.gpuParticleInstanceDispatchWorkgroups
+        renderInstances += stats.gpuParticleRenderInstanceCount
+        eventCapacity += stats.gpuParticleSimulationEventCapacity
+        eventBytes += stats.gpuParticleSimulationEventBufferBytes
+    }
 }
 public struct PassParticleWork: Codable, Equatable {
     public private(set) var candidates = 0

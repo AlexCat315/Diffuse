@@ -321,6 +321,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             if packet.scene.particleSimulationBatches.isEmpty {
                 gpuParticleRenderBatches.removeAll(keepingCapacity: true)
                 gpuParticleRenderInstanceCount = 0
+                particleSimulationResourcesByEmitter.removeAll()
+                initializedParticleSimulationEmitterKeys.removeAll()
                 particleSimulationReport = GPUParticleSimulationEncodeReport()
                 particleSimulationEncodeNS = 0
             } else {

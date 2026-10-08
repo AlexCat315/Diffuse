@@ -9,7 +9,9 @@ struct ParticleSpawnUniforms { uint4 params; };
 void particleSpawn(uint3 gid : SV_DispatchThreadID) {
     if (gid.x >= uniforms.params.x) return;
     uint slot, ignored;
-    InterlockedAdd(metadata[0].append_cursor,1,slot);
+    // The cursor stays immutable during this dispatch; finalize publishes the
+    // compacted cursor afterwards. Source order is independent of scheduling.
+    slot = metadata[0].append_cursor+gid.x;
     if (slot >= uniforms.params.y) { InterlockedAdd(metadata[0].dropped_spawn_count,1,ignored); return; }
     particles[slot] = spawn_particles[gid.x];
     InterlockedAdd(metadata[0].spawned_count,1,ignored);

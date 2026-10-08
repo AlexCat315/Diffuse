@@ -39,6 +39,8 @@ def main():
         'particle_simulate': 'particleSimulate', 'particle_spawn_append': 'particleSpawn',
         'particle_state_clear': 'particleClear', 'particle_state_compact': 'particleCompact',
         'particle_metadata_reset': 'particleMetadataReset', 'particle_state_finalize': 'particleFinalize',
+        'particle_sort_prepare': 'particleSortPrepare', 'particle_sort_bitonic': 'particleSortBitonic',
+        'particle_sim_to_instance': 'particleSimToInstance',
     }
     specialized = set(particle_kernels) - {'particle_metadata_reset','particle_state_finalize'}
     programs.extend((name,f'{name}.slang',[('compute',entry)]) for name,entry in particle_kernels.items())

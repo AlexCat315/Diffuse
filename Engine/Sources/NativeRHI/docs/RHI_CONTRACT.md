@@ -4,7 +4,7 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、级联/多光源阴影、HDR 天空与 tonemap 已接入，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。透明/蒙皮/变形网格、r5 post/history/cache、风格化及 CPU 粒子绘制也已通过本机对照。resident GPU 粒子物理与事件迁移见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)；GPU 排序/实例转换与 UI 互操作仍待迁移。
+现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、级联/多光源阴影、HDR 天空与 tonemap 已接入，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。透明/蒙皮/变形网格、r5 post/history/cache、风格化及 CPU 粒子绘制也已通过本机对照。resident GPU 粒子物理与事件迁移见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)；GPU 排序/appearance/实例转换已接入；UI 互操作仍待迁移。
 
 Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上原点、+Y 向下。Vulkan backend 通过负高度 viewport 统一这一约定，shader 不再自行翻转 Y。
 
@@ -103,4 +103,4 @@ Mesh 使用独立 descriptor。Metal 当前无 task；Vulkan 与 DX12 task 根�
 
 BLAS 当前只支持不透明、非索引 float32 xyz 三角形。TLAS 引用已创建的 BLAS，变换为三个 SIMD4 行，默认单位矩阵，mask 默认 0xff。创建分配对象；先 `recordBuild(blas)`，再 `recordBuild(tlas)`，随后执行 compute ray query。RT pipelines、SBT、procedural geometry、AS update 与 compaction 尚未实现。
 
-编辑器网格、静态场景深度/不透明几何 pass 已接入 NativeRHI。接下来迁移其他后处理、透明网格、粒子/动画和编辑器 UI 互操作，验证后切换默认 renderer；原生 Windows / Linux 环境可用后，再验证 DX12 与 Vulkan RT / mesh、独立 queue family。
+编辑器网格、静态场景深度/不透明几何 pass 已接入 NativeRHI。后处理、透明/动画和粒子路径的本机对照已接入，接下来迁移编辑器 UI 互操作并完成性能 gate，验证后切换默认 renderer；原生 Windows / Linux 环境可用后，再验证 DX12 与 Vulkan RT / mesh、独立 queue family。

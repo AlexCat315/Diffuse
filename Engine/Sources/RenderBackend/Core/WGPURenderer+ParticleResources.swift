@@ -5,220 +5,13 @@ import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 
-private let gpuParticleAppearanceCapacity = 64
-private let gpuParticleCurveKeyframeCapacity = 128
-
 private struct GPUParticleCullEncodeResult {
     var storageBuffer: GPUBuffer
     var storageSize: UInt64
     var dispatchWorkgroups: Int
 }
 
-/// Layout matches `ParticleSimToInstanceUniforms` in `particle_sim_to_instance.wgsl`.
-private struct GPUParticleSimulationInstanceUniforms {
-    var worldTransform: simd_float4x4
-    /// x: particle count, y: base render instance, z: source start index, w: appearance count.
-    var params: SIMD4<Float>
-    var uvRect: SIMD4<Float>
-    /// x: columns, y: rows, z: frame count, w: frame rate.
-    var textureSheet: SIMD4<Float>
-    /// x: alignment mode (0 billboard, 1 velocity), y: velocity stretch scale, z: max stretch, w: alpha scale.
-    var renderParams: SIMD4<Float>
-    /// x: trail segments, y: trail length, z: trail end size scale, w: trail end alpha scale.
-    var trailParams: SIMD4<Float>
-    /// x: playback mode, y: start frame, z: random frame range, w: reserved.
-    var textureSheetPlayback: SIMD4<Float>
-    /// x/y reserved, z: size curve mode, w: size curve constant.
-    var appearanceSize: SIMD4<Float>
-    /// Fallback start color for legacy callers without an appearance palette.
-    var appearanceStartColor: SIMD4<Float>
-    /// Fallback end color for legacy callers without an appearance palette.
-    var appearanceEndColor: SIMD4<Float>
-    /// x: color curve mode, y: color curve constant, z/w reserved.
-    var appearanceColorCurve: SIMD4<Float>
-    /// x: size keyframe offset, y: size keyframe count, z: color keyframe offset, w: color keyframe count.
-    var curveKeyframes: SIMD4<Float>
-}
-
-/// Layout matches `ParticleAppearance` in `particle_sim_to_instance.wgsl`.
-private struct GPUParticleAppearance {
-    /// x: start size, y: end size, z/w reserved.
-    var size: SIMD4<Float>
-    var startColor: SIMD4<Float>
-    var endColor: SIMD4<Float>
-}
-
-/// Layout matches `ParticleCurveKeyframe` in `particle_sim_to_instance.wgsl`.
-private struct GPUParticleCurveKeyframe {
-    /// x: normalized time, y: value, z/w reserved.
-    var timeValue: SIMD4<Float>
-}
-
-private struct GPUParticleCurveEncoding {
-    var modeConstant: SIMD2<Float>
-    var keyframeRange: SIMD2<Float>
-}
-
-/// Layout matches `ParticleSortPrepareUniforms` in `particle_sort_prepare.wgsl`.
-private struct GPUParticleSortPrepareUniforms {
-    var worldTransform: simd_float4x4
-    /// x: render particle count, y: source start index, z: sort mode, w: padded sort capacity.
-    var params: SIMD4<Float>
-    /// xyz: camera eye used by distance sort modes.
-    var sortParams: SIMD4<Float>
-}
-
-/// Layout matches `ParticleSortBitonicUniforms` in `particle_sort_bitonic.wgsl`.
-private struct GPUParticleSortBitonicUniforms {
-    /// x: sort capacity, y: bitonic k, z: bitonic j.
-    var params: SIMD4<UInt32>
-}
-
-/// Layout matches `ParticleSortItem` in particle sort WGSL shaders.
-private struct GPUParticleSortItem {
-    var key: Float
-    var index: UInt32
-    var _padding0: UInt32 = 0
-    var _padding1: UInt32 = 0
-}
-
-private struct GPUParticleSimulationSortEncodeReport {
-    var passCount: Int
-    var itemCount: Int
-    var paddedItemCount: Int
-    var dispatchWorkgroups: Int
-}
-
-private struct GPUParticleSimulationInstanceEncodeReport {
-    var renderInstanceCount: Int
-    var instanceDispatchWorkgroups: Int
-    var sortReport: GPUParticleSimulationSortEncodeReport
-}
-
 extension WGPURenderer {
-    private func gpuParticleSortMode(_ mode: ParticleSortMode) -> Float {
-        switch mode {
-        case .distanceDescending:
-            return 0
-        case .distanceAscending:
-            return 1
-        case .oldestFirst:
-            return 2
-        case .youngestFirst:
-            return 3
-        }
-    }
-
-    private func gpuParticleCurve(_ curve: ParticleCurve,
-                                  keyframes: inout [GPUParticleCurveKeyframe]) -> GPUParticleCurveEncoding {
-        switch curve {
-        case .constant(let value):
-            return GPUParticleCurveEncoding(modeConstant: SIMD2<Float>(1, value),
-                                            keyframeRange: .zero)
-        case .linear:
-            return GPUParticleCurveEncoding(modeConstant: SIMD2<Float>(2, 0),
-                                            keyframeRange: .zero)
-        case .easeIn:
-            return GPUParticleCurveEncoding(modeConstant: SIMD2<Float>(3, 0),
-                                            keyframeRange: .zero)
-        case .easeOut:
-            return GPUParticleCurveEncoding(modeConstant: SIMD2<Float>(4, 0),
-                                            keyframeRange: .zero)
-        case .easeInOut:
-            return GPUParticleCurveEncoding(modeConstant: SIMD2<Float>(5, 0),
-                                            keyframeRange: .zero)
-        case .keyframes(let frames):
-            guard !frames.isEmpty else {
-                return GPUParticleCurveEncoding(modeConstant: SIMD2<Float>(2, 0),
-                                                keyframeRange: .zero)
-            }
-            let sorted = frames.enumerated()
-                .sorted {
-                    if $0.element.time == $1.element.time {
-                        return $0.offset < $1.offset
-                    }
-                    return $0.element.time < $1.element.time
-                }
-                .map(\.element)
-            let offset = keyframes.count
-            let remaining = max(0, gpuParticleCurveKeyframeCapacity - offset)
-            guard remaining > 0 else {
-                return GPUParticleCurveEncoding(modeConstant: SIMD2<Float>(0, 0),
-                                                keyframeRange: .zero)
-            }
-            var selected = Array(sorted.prefix(remaining))
-            if sorted.count > remaining,
-               let last = sorted.last,
-               !selected.isEmpty {
-                selected[selected.count - 1] = last
-            }
-            for frame in selected {
-                keyframes.append(
-                    GPUParticleCurveKeyframe(
-                        timeValue: SIMD4<Float>(frame.time, frame.value, 0, 0)
-                    )
-                )
-            }
-            return GPUParticleCurveEncoding(
-                modeConstant: SIMD2<Float>(6, 0),
-                keyframeRange: SIMD2<Float>(Float(offset), Float(selected.count))
-            )
-        }
-    }
-
-    private func gpuParticleAppearances(for batch: RenderParticleSimulationBatch) -> [GPUParticleAppearance] {
-        let fallbackAppearance = RenderParticleAppearance(startSize: batch.startSize,
-                                                         endSize: batch.endSize,
-                                                         startColor: batch.startColor,
-                                                         endColor: batch.endColor)
-        let palette = batch.appearancePalette.isEmpty ? [fallbackAppearance] : batch.appearancePalette
-        var result = [GPUParticleAppearance]()
-        result.reserveCapacity(gpuParticleAppearanceCapacity)
-        for appearance in palette.prefix(gpuParticleAppearanceCapacity) {
-            result.append(
-                GPUParticleAppearance(
-                    size: SIMD4<Float>(appearance.startSize, appearance.endSize, 0, 0),
-                    startColor: appearance.startColor,
-                    endColor: appearance.endColor
-                )
-            )
-        }
-        if result.isEmpty {
-            result.append(
-                GPUParticleAppearance(
-                    size: SIMD4<Float>(fallbackAppearance.startSize, fallbackAppearance.endSize, 0, 0),
-                    startColor: fallbackAppearance.startColor,
-                    endColor: fallbackAppearance.endColor
-                )
-            )
-        }
-        return result
-    }
-
-    private func gpuTextureSheetPlaybackMode(_ mode: ParticleTextureSheetPlaybackMode) -> Float {
-        switch mode {
-        case .automatic:
-            return 0
-        case .lifetime:
-            return 1
-        case .playOnce:
-            return 2
-        case .loop:
-            return 3
-        case .singleFrame:
-            return 4
-        }
-    }
-
-    private func particleSortCapacity(for capacity: Int) -> Int {
-        var value = 1
-        let target = max(1, capacity)
-        while value < target {
-            value <<= 1
-        }
-        return value
-    }
-
     private func makeParticleSortBitonicPasses(
         layout: GPUBindGroupLayout,
         sortItemBuffer: GPUBuffer,
@@ -227,41 +20,35 @@ extension WGPURenderer {
         let uniformSize = UInt64(MemoryLayout<GPUParticleSortBitonicUniforms>.stride)
         let itemBufferSize = UInt64(sortCapacity) * UInt64(MemoryLayout<GPUParticleSortItem>.stride)
         var passes: [GPUParticleSortBitonicPass] = []
-        var k = 2
-        while k <= sortCapacity {
-            var j = k / 2
-            while j > 0 {
-                let uniformBuffer = try backend.createBuffer(size: uniformSize,
-                                                             usage: [.uniform, .copyDst])
-                var uniforms = GPUParticleSortBitonicUniforms(
-                    params: SIMD4<UInt32>(
-                        UInt32(sortCapacity),
-                        UInt32(k),
-                        UInt32(j),
-                        0
-                    )
+        for stage in GPUParticleSortPlan(count: sortCapacity).stages {
+            let uniformBuffer = try backend.createBuffer(size: uniformSize,
+                                                         usage: [.uniform, .copyDst])
+            var uniforms = GPUParticleSortBitonicUniforms(
+                params: SIMD4<UInt32>(
+                    UInt32(sortCapacity),
+                    UInt32(stage.k),
+                    UInt32(stage.j),
+                    0
                 )
-                writeUniform(&uniforms, buffer: uniformBuffer)
-                let bindGroup = try backend.createBindGroup(
-                    layout: layout,
-                    entries: [
-                        GPUBindGroupEntry(binding: 0,
-                                          buffer: uniformBuffer,
-                                          offset: 0,
-                                          size: uniformSize),
-                        GPUBindGroupEntry(binding: 1,
-                                          buffer: sortItemBuffer,
-                                          offset: 0,
-                                          size: itemBufferSize),
-                    ]
-                )
-                passes.append(GPUParticleSortBitonicPass(k: k,
-                                                         j: j,
-                                                         uniformBuffer: uniformBuffer,
-                                                         bindGroup: bindGroup))
-                j /= 2
-            }
-            k *= 2
+            )
+            writeUniform(&uniforms, buffer: uniformBuffer)
+            let bindGroup = try backend.createBindGroup(
+                layout: layout,
+                entries: [
+                    GPUBindGroupEntry(binding: 0,
+                                      buffer: uniformBuffer,
+                                      offset: 0,
+                                      size: uniformSize),
+                    GPUBindGroupEntry(binding: 1,
+                                      buffer: sortItemBuffer,
+                                      offset: 0,
+                                      size: itemBufferSize),
+                ]
+            )
+            passes.append(GPUParticleSortBitonicPass(k: stage.k,
+                                                     j: stage.j,
+                                                     uniformBuffer: uniformBuffer,
+                                                     bindGroup: bindGroup))
         }
         return passes
     }
@@ -454,6 +241,8 @@ extension WGPURenderer {
                 of: "@workgroup_size(64)",
                 with: "@workgroup_size(\(workgroupSize))"
             )
+            .replacingOccurrences(of: "const PARTICLE_WORKGROUP_SIZE: u32 = 64u;",
+                                  with: "const PARTICLE_WORKGROUP_SIZE: u32 = \(workgroupSize)u;")
         let stateCompactModule = try backend.createShaderModule(wgsl: stateCompactShaderSource,
                                                                 label: "particle_state_compact")
         let stateCompactPipeline = try backend.createComputePipeline(shaderModule: stateCompactModule,
@@ -557,7 +346,7 @@ extension WGPURenderer {
         let instanceUniformSize = UInt64(MemoryLayout<GPUParticleSimulationInstanceUniforms>.stride)
         let sortPrepareUniformSize = UInt64(MemoryLayout<GPUParticleSortPrepareUniforms>.stride)
         let sortItemStride = UInt64(MemoryLayout<GPUParticleSortItem>.stride)
-        let sortCapacity = particleSortCapacity(for: capacity)
+        let sortCapacity = GPUParticleSortPlan.capacity(for: capacity)
         let stateStride = UInt64(MemoryLayout<GPUParticleSimulationState>.stride)
         let eventStride = UInt64(MemoryLayout<GPUParticleSimulationEvent>.stride)
         let metadataSize = UInt64(MemoryLayout<GPUParticleSimulationMetadata>.stride)
@@ -574,12 +363,12 @@ extension WGPURenderer {
                                                              usage: [.uniform, .copyDst])
         let appearanceStride = UInt64(MemoryLayout<GPUParticleAppearance>.stride)
         let appearanceBuffer = try backend.createBuffer(
-            size: UInt64(gpuParticleAppearanceCapacity) * appearanceStride,
+            size: UInt64(GPUParticleAppearanceData.appearanceCapacity) * appearanceStride,
             usage: [.storage, .copyDst]
         )
         let curveKeyframeStride = UInt64(MemoryLayout<GPUParticleCurveKeyframe>.stride)
         let curveKeyframeBuffer = try backend.createBuffer(
-            size: UInt64(gpuParticleCurveKeyframeCapacity) * curveKeyframeStride,
+            size: UInt64(GPUParticleAppearanceData.keyframeCapacity) * curveKeyframeStride,
             usage: [.storage, .copyDst]
         )
         let sortPrepareUniformBuffer = try backend.createBuffer(size: sortPrepareUniformSize,
@@ -756,7 +545,7 @@ extension WGPURenderer {
                                       batch: RenderParticleSimulationBatch,
                                       deltaTime: Float,
                                       elapsedTime: Float = 0,
-                                      slot: Int = 0) throws -> GPUParticleSimulationResources? {
+                                      slot: Int = 0) throws -> GPUParticleSimulationEncoding? {
         let plan = batch.plan, particles = batch.particles, spawnParticles = batch.spawnParticles
         let emitterEntity = batch.emitterEntity
         guard let resources = try ensureParticleSimulationResources(for: plan,
@@ -776,7 +565,7 @@ extension WGPURenderer {
         let simulationDispatchCount = shouldUploadPersistedParticles
             ? seededSimulationCount
             : resources.capacity
-        guard simulationDispatchCount > 0 else { return resources }
+        guard simulationDispatchCount > 0 else { return GPUParticleSimulationEncoding(resources: resources,particleCount: 0) }
 
         if shouldUploadPersistedParticles && count > 0 {
             let states = particles.prefix(count).map { GPUParticleSimulationState(particle: $0) }
@@ -883,7 +672,7 @@ extension WGPURenderer {
         let compactPass = try encoder.beginComputePass()
         compactPass.setPipeline(resources.stateCompactPipeline)
         compactPass.setBindGroup(resources.stateCompactBindGroup, index: 0)
-        compactPass.dispatch(x: groups)
+        compactPass.dispatch(x: 1)
         compactPass.end()
 
         let finalizePass = try encoder.beginComputePass()
@@ -899,7 +688,7 @@ extension WGPURenderer {
         if let emitterKey {
             initializedParticleSimulationEmitterKeys.insert(emitterKey)
         }
-        return resources
+        return GPUParticleSimulationEncoding(resources: resources,particleCount: simulationDispatchCount)
     }
 
     func encodeParticleSimulationPrePass(
@@ -912,6 +701,11 @@ extension WGPURenderer {
         var report = GPUParticleSimulationEncodeReport()
         gpuParticleRenderBatches.removeAll(keepingCapacity: true)
         gpuParticleRenderInstanceCount = 0
+        // Every batch in this encoder must write the same allocation. Growing
+        // between conversion passes would discard the earlier batches' output.
+        let requiredInstances = scene.particleSimulationBatches.filter { $0.plan.usesGPU && $0.renderOnGPU && $0.particleCount > 0 }
+            .reduce(max(0,additionalRenderInstanceCapacity)) { $0+$1.renderInstanceCount }
+        if requiredInstances > 0 { try ensureParticleStorageCapacity(count: requiredInstances) }
         var activeEmitterResourceKeys = Set<UInt64>()
         for (slot, batch) in scene.particleSimulationBatches.enumerated() {
             let particleCount = batch.particleCount
@@ -919,24 +713,23 @@ extension WGPURenderer {
             if let emitterEntity = batch.emitterEntity {
                 activeEmitterResourceKeys.insert(emitterEntity.rawValue)
             }
-            let resources = try encodeParticleSimulationPass(encoder: encoder,batch: batch,
+            guard let encoding = try encodeParticleSimulationPass(encoder: encoder,batch: batch,
                 deltaTime: deltaTime * batch.simulationSpeed,elapsedTime: elapsedTime,slot: slot)
-            guard resources != nil else { continue }
-            if let resources {
-                try enqueueParticleSimulationEventReadback(
+            else { continue }
+            let resources = encoding.resources
+            try enqueueParticleSimulationEventReadback(
                     encoder: encoder,
                     resources: resources,
                     slot: slot,
                     emitterEntity: batch.emitterEntity
                 )
-            }
             let workgroupSize = min(
                 max(1, batch.plan.workgroupSize),
                 ParticleGPUSimulationPlan.maximumWorkgroupSize
             )
-            let dispatchGroups = Int(ceil(Float(particleCount) / Float(workgroupSize)))
+            let dispatchGroups = (encoding.particleCount+workgroupSize-1)/workgroupSize
             let instanceReport: GPUParticleSimulationInstanceEncodeReport
-            if batch.renderOnGPU, let resources {
+            if batch.renderOnGPU {
                 instanceReport = try encodeParticleSimulationInstancePass(
                     encoder: encoder,
                     resources: resources,
@@ -960,7 +753,7 @@ extension WGPURenderer {
             }
             let eventStride = MemoryLayout<GPUParticleSimulationEvent>.stride
             report.include(
-                batchParticleCount: particleCount,
+                batchParticleCount: encoding.particleCount,
                 dispatchWorkgroups: dispatchGroups,
                 sortPassCount: instanceReport.sortReport.passCount,
                 sortItemCount: instanceReport.sortReport.itemCount,
@@ -968,8 +761,8 @@ extension WGPURenderer {
                 sortDispatchWorkgroups: instanceReport.sortReport.dispatchWorkgroups,
                 instanceDispatchWorkgroups: instanceReport.instanceDispatchWorkgroups,
                 renderInstanceCount: instanceReport.renderInstanceCount,
-                eventCapacity: resources?.eventCapacity ?? 0,
-                eventBufferBytes: (resources?.eventCapacity ?? 0) * eventStride
+                eventCapacity: resources.eventCapacity,
+                eventBufferBytes: resources.eventCapacity * eventStride
             )
         }
         if !particleSimulationResourcesByEmitter.isEmpty {
@@ -1071,7 +864,7 @@ extension WGPURenderer {
         return metadata.snapshot(slot: request.slot,emitter: request.emitterRawValue,capacity: request.eventCapacity,records: records)
     }
 
-    private func encodeParticleSimulationInstancePass(
+    func encodeParticleSimulationInstancePass(
         encoder: GPUCommandEncoder,
         resources: GPUParticleSimulationResources,
         batch: RenderParticleSimulationBatch,
@@ -1125,78 +918,17 @@ extension WGPURenderer {
             workgroupSize: workgroupSize
         )
 
-        var curveKeyframes = [GPUParticleCurveKeyframe]()
-        curveKeyframes.reserveCapacity(16)
-        let sizeCurve = gpuParticleCurve(batch.sizeCurve, keyframes: &curveKeyframes)
-        let colorCurve = gpuParticleCurve(batch.colorCurve, keyframes: &curveKeyframes)
-        if !curveKeyframes.isEmpty {
-            curveKeyframes.withUnsafeBytes { raw in
-                if let base = raw.baseAddress {
-                    backend.writeBuffer(resources.curveKeyframeBuffer, data: base, size: raw.count)
-                }
+        let appearance = GPUParticleAppearanceData(batch: batch)
+        if !appearance.keyframes.isEmpty {
+            appearance.keyframes.withUnsafeBytes { raw in
+                if let base = raw.baseAddress { backend.writeBuffer(resources.curveKeyframeBuffer,data: base,size: raw.count) }
             }
         }
-        let appearances = gpuParticleAppearances(for: batch)
-        appearances.withUnsafeBytes { raw in
-            if let base = raw.baseAddress {
-                backend.writeBuffer(resources.appearanceBuffer, data: base, size: raw.count)
-            }
+        appearance.appearances.withUnsafeBytes { raw in
+            if let base = raw.baseAddress { backend.writeBuffer(resources.appearanceBuffer,data: base,size: raw.count) }
         }
-        var uniforms = GPUParticleSimulationInstanceUniforms(
-            worldTransform: batch.worldTransform,
-            params: SIMD4<Float>(
-                Float(renderParticleCount),
-                Float(baseInstance),
-                Float(renderParticleStartIndex),
-                Float(appearances.count)
-            ),
-            uvRect: batch.uvRect,
-            textureSheet: SIMD4<Float>(
-                Float(batch.textureSheetColumns),
-                Float(batch.textureSheetRows),
-                Float(batch.textureSheetFrameCount),
-                batch.textureSheetFrameRate
-            ),
-            renderParams: SIMD4<Float>(
-                batch.renderAlignment == .velocity ? 1 : 0,
-                batch.velocityStretchScale,
-                batch.velocityStretchMax,
-                batch.renderAlphaScale
-            ),
-            trailParams: SIMD4<Float>(
-                Float(max(0, batch.trailSegments)),
-                batch.trailLength,
-                batch.trailEndSizeScale,
-                batch.trailEndAlphaScale
-            ),
-            textureSheetPlayback: SIMD4<Float>(
-                gpuTextureSheetPlaybackMode(batch.textureSheetPlaybackMode),
-                Float(batch.textureSheetStartFrame),
-                Float(batch.textureSheetFrameRandomness),
-                0
-            ),
-            appearanceSize: SIMD4<Float>(
-                0,
-                0,
-                sizeCurve.modeConstant.x,
-                sizeCurve.modeConstant.y
-            ),
-            appearanceStartColor: batch.startColor,
-            appearanceEndColor: batch.endColor,
-            appearanceColorCurve: SIMD4<Float>(
-                colorCurve.modeConstant.x,
-                colorCurve.modeConstant.y,
-                batch.usesAuthoredAppearance ? 1 : 0,
-                0
-            ),
-            curveKeyframes: SIMD4<Float>(
-                sizeCurve.keyframeRange.x,
-                sizeCurve.keyframeRange.y,
-                colorCurve.keyframeRange.x,
-                colorCurve.keyframeRange.y
-            )
-        )
-        writeUniform(&uniforms, buffer: resources.instanceUniformBuffer)
+        var uniforms = GPUParticleSimulationInstanceUniforms(batch: batch,baseInstance: baseInstance,appearance: appearance)
+        writeUniform(&uniforms,buffer: resources.instanceUniformBuffer)
 
         let stateStride = UInt64(MemoryLayout<GPUParticleSimulationState>.stride)
         let instanceStride = UInt64(MemoryLayout<GPUParticleInstance>.stride)
@@ -1232,14 +964,14 @@ extension WGPURenderer {
                     binding: 4,
                     buffer: resources.appearanceBuffer,
                     offset: 0,
-                    size: UInt64(gpuParticleAppearanceCapacity)
+                    size: UInt64(GPUParticleAppearanceData.appearanceCapacity)
                         * UInt64(MemoryLayout<GPUParticleAppearance>.stride)
                 ),
                 GPUBindGroupEntry(
                     binding: 5,
                     buffer: resources.curveKeyframeBuffer,
                     offset: 0,
-                    size: UInt64(gpuParticleCurveKeyframeCapacity)
+                    size: UInt64(GPUParticleAppearanceData.keyframeCapacity)
                         * UInt64(MemoryLayout<GPUParticleCurveKeyframe>.stride)
                 ),
             ]
@@ -1284,17 +1016,8 @@ extension WGPURenderer {
                 dispatchWorkgroups: 0
             )
         }
-        let activeSortCapacity = particleSortCapacity(for: renderParticleCount)
-        var uniforms = GPUParticleSortPrepareUniforms(
-            worldTransform: batch.worldTransform,
-            params: SIMD4<Float>(
-                Float(renderParticleCount),
-                Float(renderParticleStartIndex),
-                gpuParticleSortMode(batch.sortMode),
-                Float(activeSortCapacity)
-            ),
-            sortParams: SIMD4<Float>(cameraEye, 0)
-        )
+        let activeSortCapacity = GPUParticleSortPlan.capacity(for: renderParticleCount)
+        var uniforms = GPUParticleSortPrepareUniforms(batch: batch,cameraEye: cameraEye,capacity: activeSortCapacity)
         writeUniform(&uniforms, buffer: resources.sortPrepareUniformBuffer)
 
         let sortGroups = UInt32(max(1, Int(ceil(Float(activeSortCapacity) / Float(workgroupSize)))))
@@ -1458,7 +1181,7 @@ extension WGPURenderer {
 
     /// Grows the particle storage buffer (doubling, min 256) when more particles
     /// arrive than it can hold. Never shrinks.
-    private func ensureParticleStorageCapacity(count: Int) throws {
+    func ensureParticleStorageCapacity(count: Int) throws {
         guard count > particleStorageCapacity || particleStorageBuffer == nil else { return }
         let newCapacity = max(count, max(particleStorageCapacity * 2, 256))
         particleStorageBuffer = try backend.createBuffer(

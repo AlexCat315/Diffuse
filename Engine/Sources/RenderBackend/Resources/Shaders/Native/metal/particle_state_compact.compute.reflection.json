@@ -1283,8 +1283,8 @@
         "kind": "none",
         "parameters": [
           {
-            "name": "gid",
-            "semanticName": "SV_DISPATCHTHREADID",
+            "name": "lane",
+            "semanticName": "SV_GROUPTHREADID",
             "type": {
               "kind": "vector",
               "elementCount": 3,
@@ -1299,8 +1299,8 @@
       },
       "parameters": [
         {
-          "name": "gid",
-          "semanticName": "SV_DISPATCHTHREADID",
+          "name": "lane",
+          "semanticName": "SV_GROUPTHREADID",
           "type": {
             "kind": "vector",
             "elementCount": 3,
