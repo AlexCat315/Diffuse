@@ -1,0 +1,67 @@
+{
+  "stage": "vertex",
+  "format": "spirv",
+  "entryPoint": "postVertex",
+  "code": "AwIjBwAFAQAAACgAQQAAAAAAAAARAAIASxEAABEAAgABAAAADgADAAAAAAABAAAADwAKAAAAAAACAAAAcG9zdFZlcnRleAAAPAAAAEAAAAAWAAAAGAAAAAMAAwALAAAAAQAAAAUACgBAAAAAZW50cnlQb2ludFBhcmFtX3Bvc3RWZXJ0ZXgudXYAAAAFAAUAAgAAAHBvc3RWZXJ0ZXgAAEcABAAWAAAACwAAACoAAABHAAQAGAAAAAsAAABIEQAARwAEADwAAAALAAAAAAAAAEcABABAAAAAHgAAAAAAAAATAAIAAQAAACEAAwADAAAAAQAAABYAAwAGAAAAIAAAABcABAAHAAAABgAAAAQAAAAXAAQACAAAAAYAAAACAAAAFQAEAAsAAAAgAAAAAQAAACsABAALAAAADAAAAAMAAAAcAAQADQAAAAgAAAAMAAAAIAAEAA4AAAAHAAAADQAAACAABAAVAAAAAQAAAAsAAAAVAAQAGgAAACAAAAAAAAAAKwAEAAYAAAAeAAAAAACAvywABQAIAAAAHQAAAB4AAAAeAAAAKwAEAAYAAAAgAAAAAABAQCwABQAIAAAAHwAAACAAAAAeAAAALAAFAAgAAAAhAAAAHgAAACAAAAAsAAYADQAAABwAAAAdAAAAHwAAACEAAAAgAAQAIwAAAAcAAAAIAAAAKwAEAAYAAAAnAAAAAAAAACsABAAGAAAAKAAAAAAAgD8sAAUACAAAADEAAAAnAAAAKAAAACsABAAGAAAAMwAAAAAAAEAsAAUACAAAADIAAAAzAAAAKAAAACwABQAIAAAANAAAACcAAAAeAAAALAAGAA0AAAAwAAAAMQAAADIAAAA0AAAAIAAEADsAAAADAAAABwAAACAABAA/AAAAAwAAAAgAAAA7AAQAFQAAABYAAAABAAAAOwAEABUAAAAYAAAAAQAAADsABAA7AAAAPAAAAAMAAAA7AAQAPwAAAEAAAAADAAAANgAFAAEAAAACAAAAAAAAAAMAAAD4AAIABAAAADsABAAOAAAADwAAAAcAAAA7AAQADgAAABAAAAAHAAAAPQAEAAsAAAAUAAAAFgAAAD0ABAALAAAAFwAAABgAAACCAAUACwAAABkAAAAUAAAAFwAAAHwABAAaAAAAGwAAABkAAAA+AAMADwAAABwAAABBAAUAIwAAACQAAAAPAAAAGwAAAD0ABAAIAAAAJQAAACQAAABQAAYABwAAACYAAAAlAAAAJwAAACgAAAA9AAQACwAAACwAAAAWAAAAPQAEAAsAAAAtAAAAGAAAAIIABQALAAAALgAAACwAAAAtAAAAfAAEABoAAAAvAAAALgAAAD4AAwAQAAAAMAAAAEEABQAjAAAANgAAABAAAAAvAAAAPQAEAAgAAAA3AAAANgAAAD4AAwA8AAAAJgAAAD4AAwBAAAAANwAAAP0AAQA4AAEA",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "postSampler",
+        "slot": 0,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "sceneTexture",
+        "slot": 1,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "secondaryTexture",
+        "slot": 2,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "frame",
+        "slot": 4,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "effect",
+        "slot": 3,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}

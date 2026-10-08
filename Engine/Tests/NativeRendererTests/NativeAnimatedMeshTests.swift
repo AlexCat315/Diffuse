@@ -53,11 +53,12 @@ final class NativeAnimatedMeshTests: XCTestCase {
             }
             if frame == 5 { packet.scene.instances[1].transform.columns.3.z = 3 }
             snapshots.append(try compare(packet,renderer: renderer,reference: reference,label: "transparent-\(frame)"))
-            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass],1)
-            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass],1)
+            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass],renderer.lastFrameUsedOpaqueCache ? nil : 1)
+            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass],renderer.lastFrameUsedOpaqueCache ? nil : 1)
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.transparentMeshes],2)
             XCTAssertEqual(renderer.lastFrameStats.instancedMeshBatchCount,0)
-            if frame >= 2 { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.shadowPass],1) }
+            if frame >= 2 { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.shadowPass],renderer.lastFrameUsedOpaqueCache ? nil : 1) }
+            XCTAssertEqual(renderer.lastFrameUsedOpaqueCache,reference.renderer.lastFrameUsedOpaqueCache)
         }
         XCTAssertEqual(snapshots[0],snapshots[1],"input order cannot change transparent composition")
         XCTAssertEqual(snapshots[5],snapshots[6],"a new frame must clear the previous transparent composition")

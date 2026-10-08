@@ -44,3 +44,11 @@ func rhiTextureSubresourceExtent(_ subresource: TextureSubresource, width: Int, 
         "texture subresource is out of bounds")
     return (max(1, width >> subresource.mipLevel), max(1, height >> subresource.mipLevel))
 }
+
+func rhiColorTextureCopyExtent(width: Int, height: Int,
+    source: (width: Int, height: Int, format: TextureFormat),
+    destination: (width: Int, height: Int, format: TextureFormat)) throws {
+    try rhiRequire(width > 0 && height > 0 && width <= min(source.width,destination.width)
+        && height <= min(source.height,destination.height) && source.format == destination.format
+        && source.format.byteCount > 0 && !source.format.isDepth, "invalid color texture copy extent or format")
+}

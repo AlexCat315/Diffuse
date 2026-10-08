@@ -133,6 +133,8 @@ public enum ComputeCommand: Sendable {
 }
 
 public enum CopyCommand: Sendable {
+    /// Top-left base-level copy between distinct single-sample 2D color textures.
+    case copyTexture(src: Texture, dst: Texture, width: Int, height: Int)
     case copyBuffer(src: Buffer, srcOffset: Int, dst: Buffer, dstOffset: Int, size: Int)
     case copyBufferToTexture(
         buffer: Buffer, offset: Int, bytesPerRow: Int,
@@ -278,6 +280,10 @@ public struct ComputePassEncoder {
 
 public struct CopyPassEncoder {
     fileprivate(set) var body: [CopyCommand] = []
+
+    public mutating func copyTexture(src: Texture, dst: Texture, width: Int, height: Int) {
+        body.append(.copyTexture(src: src, dst: dst, width: width, height: height))
+    }
 
     public mutating func copyBuffer(src: Buffer, srcOffset: Int = 0, dst: Buffer, dstOffset: Int = 0, size: Int) {
         body.append(.copyBuffer(src: src, srcOffset: srcOffset, dst: dst, dstOffset: dstOffset, size: size))

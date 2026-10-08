@@ -31,13 +31,14 @@ final class NativeHDRPasses {
         try grid.encode(packet: packet, color: RenderColorTarget(texture: hdr, loadAction: .load),
             depth: RenderDepthTarget(texture: depth, loadAction: .load), into: commands)
     }
-    func encodeTonemap(size: RenderDrawableSize, hdr: Texture, output: Texture, into commands: CommandBuffer) throws {
-        let toneUniforms = TonemapUniforms(params: SIMD4(1,0.85,0,1))
-        let frame = PostFrameUniforms(uvScaleMax: SIMD4(1,1,(Float(size.width)-0.5)/Float(size.width),(Float(size.height)-0.5)/Float(size.height)))
+    func encodeTonemap(size: RenderDrawableSize, capacity: RenderDrawableSize, hdr: Texture, output: Texture, bloom: Texture? = nil, into commands: CommandBuffer) throws {
+        let toneUniforms = TonemapUniforms(params: SIMD4(1,0.85,bloom == nil ? 0 : 1,1))
+        let frame = PostEffectUniforms.frame(used: size,capacity: capacity)
         try tone.encode(size: size, color: RenderColorTarget(texture: output, loadAction: .clear(SIMD4(0,0,0,1))), entries: [
             BindingSetEntry(slot: 0, resource: .sampler(sampler)), BindingSetEntry(slot: 1, resource: .texture(hdr)),
-            BindingSetEntry(slot: 2, resource: NativeUniformUpload.binding(toneUniforms, device: device)),
-            BindingSetEntry(slot: 3, resource: NativeUniformUpload.binding(frame, device: device))
+            BindingSetEntry(slot: 2, resource: .texture(bloom ?? hdr)),
+            BindingSetEntry(slot: 3, resource: NativeUniformUpload.binding(toneUniforms, device: device)),
+            BindingSetEntry(slot: 4, resource: NativeUniformUpload.binding(frame, device: device))
         ], into: commands)
     }
 }

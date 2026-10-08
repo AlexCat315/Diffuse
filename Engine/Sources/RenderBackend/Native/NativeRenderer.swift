@@ -6,7 +6,7 @@ import SIMDCompat
 
 /// Scene renderer recorded entirely through NativeRHI. The initial migration
 /// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
-/// HDR sky/tonemap, material inspection modes and the grid.
+/// HDR sky/tonemap, r5 post effects, temporal history/cache and the grid.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
@@ -17,7 +17,11 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     private let shadows: NativeShadowPass
     private let hdrPasses: NativeHDRPasses
     private let grid: NativeEditorGridPass
+    private let post: NativePostPasses
+    private var frameState = RenderTemporalState()
+    public var lastFrameUsedOpaqueCache: Bool { frameState.cacheHit }
     private let surface: RenderSurfaceDescriptor?
+    private var configuredSurfaceSize: RenderDrawableSize?
     private var targets: NativeRenderTargets?
     public private(set) var lastFrameStats = RenderFrameStats()
     public private(set) var lastError: String?
@@ -33,6 +37,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         shadows = try NativeShadowPass(device: device)
         hdrPasses = try NativeHDRPasses(device: device)
         grid = try NativeEditorGridPass(device: device)
+        post = try NativePostPasses(device: device)
     }
     deinit { targets?.destroy(device: device) }
     public func initialize() { Logger.renderer.info("NativeRenderer ready (\(device.deviceName))") }
@@ -54,6 +59,10 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         try shadows.ensureTargets(plan: shadowPlan)
         try ensureTargets(size: packet.drawableSize, hdr: hdr)
         guard let targets else { throw RHIError.outOfMemory }
+        if hdr { try post.ensureTargets(size: targets.size) }
+        var nextFrame = frameState
+        nextFrame.prepare(packet: packet,resources: RenderFrameResourceVersion(meshRevision: meshes.revision,postRevision: post.revision,
+            usedSize: packet.drawableSize),hdr: hdr)
         try device.beginFrame()
         defer { device.endFrame() }
         let hasDepth = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r2MultiObjectDepth.rawValue
@@ -74,65 +83,97 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         var passTimes: [RenderPassKind: UInt64] = [:]
         var passDraws: [RenderPassKind: Int] = [:]
         var active: [RenderPassKind] = []
-        if hasDepth {
+        var current = targets.hdr ?? color
+        var bloom: Texture?
+        let planned = RenderFramePlanner.makePlan(settings: packet.renderSettings).passes
+        let passes = RenderFramePlanner.motionRefinedPasses(planned,opaqueMoving: nextFrame.moving)
+        for kind in passes {
+            if nextFrame.cacheHit && RenderPassKind.opaquePasses.contains(kind) { continue }
             let before = DispatchTime.now().uptimeNanoseconds
-            meshPass.encode(draws: opaqueDraws, size: packet.drawableSize, color: nil,
-                depth: RenderDepthTarget(texture: targets.depth, loadAction: .clear(1)), depthOnly: true, into: commands)
-            passTimes[.depthPrepass] = DispatchTime.now().uptimeNanoseconds - before
-            passDraws[.depthPrepass] = opaqueDraws.count; active.append(.depthPrepass)
-        }
-        if !shadowTiles.isEmpty {
-            let before = DispatchTime.now().uptimeNanoseconds
-            shadows.encode(tiles: shadowTiles, plan: shadowPlan, into: commands)
-            passTimes[.shadowPass] = DispatchTime.now().uptimeNanoseconds - before
-            passDraws[.shadowPass] = shadowTiles.reduce(0) { $0 + $1.draws.count }; active.append(.shadowPass)
-        }
-        let sceneColor = targets.hdr ?? color
-        if hdr {
-            let before = DispatchTime.now().uptimeNanoseconds
-            try hdrPasses.encodeSky(packet: packet, matrices: matrices, hdr: sceneColor, depth: targets.depth, into: commands)
-            passTimes[.skybox] = DispatchTime.now().uptimeNanoseconds - before
-            passDraws[.skybox] = 1; active.append(.skybox)
-        }
-        let beforeBase = DispatchTime.now().uptimeNanoseconds
-        meshPass.encode(draws: opaqueDraws, size: packet.drawableSize,
-            color: RenderColorTarget(texture: sceneColor, loadAction: hdr ? .load : .clear(SIMD4(0.05,0.06,0.08,1))),
-            depth: RenderDepthTarget(texture: targets.depth, loadAction: hasDepth ? .load : .clear(1)), depthOnly: false, into: commands)
-        passTimes[.basePass] = DispatchTime.now().uptimeNanoseconds - beforeBase
-        passDraws[.basePass] = opaqueDraws.count; active.append(.basePass)
-        if packet.renderSettings.enableEditorGrid {
-            let before = DispatchTime.now().uptimeNanoseconds
-            if hdr {
-                try hdrPasses.encodeGrid(packet: packet, hdr: sceneColor, depth: targets.depth, into: commands)
-            } else {
-                try grid.encode(packet: packet, color: RenderColorTarget(texture: color, loadAction: .load),
-                    depth: RenderDepthTarget(texture: targets.depth, loadAction: .load), into: commands)
+            var draws = 1
+            switch kind {
+            case .depthPrepass:
+                meshPass.encode(draws: opaqueDraws,size: packet.drawableSize,color: nil,
+                    depth: RenderDepthTarget(texture: targets.depth,loadAction: .clear(1)),depthOnly: true,into: commands)
+                draws = opaqueDraws.count
+            case .shadowPass:
+                guard !shadowTiles.isEmpty else { continue }
+                shadows.encode(tiles: shadowTiles,plan: shadowPlan,into: commands)
+                draws = shadowTiles.reduce(0) { $0 + $1.draws.count }
+            case .skybox:
+                try hdrPasses.encodeSky(packet: packet,matrices: matrices,hdr: current,depth: targets.depth,into: commands)
+            case .basePass:
+                meshPass.encode(draws: opaqueDraws,size: packet.drawableSize,
+                    color: RenderColorTarget(texture: current,loadAction: hdr ? .load : .clear(SIMD4(0.05,0.06,0.08,1))),
+                    depth: RenderDepthTarget(texture: targets.depth,loadAction: hasDepth ? .load : .clear(1)),depthOnly: false,into: commands)
+                draws = opaqueDraws.count
+            case .ssao, .ssr:
+                guard let resources = post.targets else { throw RHIError.outOfMemory }
+                let output = resources.next(after: current)
+                if kind == .ssao {
+                    try post.encode(kind: kind,input: current,secondary: targets.depth,output: output,
+                        uniforms: PostEffectUniforms.ssao(projection: matrices.projection,size: packet.drawableSize),size: packet.drawableSize,into: commands)
+                } else {
+                    try post.encode(kind: kind,input: current,secondary: targets.depth,output: output,
+                        uniforms: PostEffectUniforms.ssr(projection: matrices.projection,size: packet.drawableSize),size: packet.drawableSize,into: commands)
+                }
+                current = output
+            case .editorGrid:
+                if hdr { try hdrPasses.encodeGrid(packet: packet,hdr: current,depth: targets.depth,into: commands) }
+                else {
+                    try grid.encode(packet: packet,color: RenderColorTarget(texture: current,loadAction: .load),
+                        depth: RenderDepthTarget(texture: targets.depth,loadAction: .load),into: commands)
+                }
+            case .taa:
+                guard let resources = post.targets else { throw RHIError.outOfMemory }
+                let output = resources.next(after: current)
+                try post.encode(kind: kind,input: current,secondary: resources.history,output: output,
+                    uniforms: PostEffectUniforms.taa(size: resources.size,historyValid: nextFrame.historyValid),size: packet.drawableSize,into: commands)
+                commands.copyPass { $0.copyTexture(src: output,dst: resources.history,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
+                nextFrame.historyValid = true; current = output
+            case .transparentMeshes:
+                if hdr, let resources = post.targets, let scene = targets.hdr {
+                    if nextFrame.cacheHit {
+                        commands.copyPass { $0.copyTexture(src: resources.snapshot,dst: scene,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
+                        current = scene
+                    } else if nextFrame.canCapture(settings: packet.renderSettings) {
+                        commands.copyPass { $0.copyTexture(src: current,dst: resources.snapshot,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
+                        nextFrame.snapshotValid = true
+                    }
+                }
+                guard !transparentDraws.isEmpty else { continue }
+                meshPass.encode(draws: transparentDraws,size: packet.drawableSize,
+                    color: RenderColorTarget(texture: current,loadAction: .load),
+                    depth: RenderDepthTarget(texture: targets.depth,loadAction: .load),depthOnly: false,into: commands)
+                draws = transparentDraws.count
+            case .bloom:
+                guard let resources = post.targets else { throw RHIError.outOfMemory }
+                let output = resources.next(after: current)
+                try post.encode(kind: kind,input: current,secondary: current,output: output,
+                    uniforms: PostEffectUniforms.bloom(size: resources.size),size: packet.drawableSize,into: commands)
+                bloom = output
+            case .tonemap:
+                let output = packet.renderSettings.enableFXAA ? post.targets?.ldr ?? color : color
+                try hdrPasses.encodeTonemap(size: packet.drawableSize,capacity: targets.size,hdr: current,output: output,bloom: bloom,into: commands)
+            case .fxaa:
+                guard let input = post.targets?.ldr else { throw RHIError.outOfMemory }
+                try post.encode(kind: kind,input: input,secondary: input,output: color,
+                    uniforms: SIMD4<Float>(1/Float(targets.size.width),1/Float(targets.size.height),0,0),size: packet.drawableSize,into: commands)
+            case .particles, .viewportResolve: continue
+            case .outline, .inkPaperPost: throw RHIError.unsupportedFeature("native stylized passes are pending")
             }
-            passTimes[.editorGrid] = DispatchTime.now().uptimeNanoseconds - before
-            passDraws[.editorGrid] = 1; active.append(.editorGrid)
-        }
-        if !transparentDraws.isEmpty {
-            let before = DispatchTime.now().uptimeNanoseconds
-            meshPass.encode(draws: transparentDraws, size: packet.drawableSize,
-                color: RenderColorTarget(texture: sceneColor, loadAction: .load),
-                depth: RenderDepthTarget(texture: targets.depth, loadAction: .load), depthOnly: false, into: commands)
-            passTimes[.transparentMeshes] = DispatchTime.now().uptimeNanoseconds - before
-            passDraws[.transparentMeshes] = transparentDraws.count; active.append(.transparentMeshes)
-        }
-        if hdr {
-            let before = DispatchTime.now().uptimeNanoseconds
-            try hdrPasses.encodeTonemap(size: packet.drawableSize, hdr: sceneColor, output: color, into: commands)
-            passTimes[.tonemap] = DispatchTime.now().uptimeNanoseconds - before
-            passDraws[.tonemap] = 1; active.append(.tonemap)
+            passTimes[kind] = DispatchTime.now().uptimeNanoseconds - before
+            passDraws[kind] = draws; active.append(kind)
         }
         let encoded = DispatchTime.now().uptimeNanoseconds
-        try device.submit(commands); deformables.commit(dynamic)
+        try device.submit(commands); deformables.commit(dynamic); frameState = nextFrame
         if let image { try device.present(image) }
         let end = DispatchTime.now().uptimeNanoseconds
         var stats = RenderFrameStats()
         stats.frameIndex = packet.frameIndex; stats.passCount = active.count; stats.activePasses = active
         stats.drawCallCount = passDraws.values.reduce(0,+); stats.passDrawCallCounts = passDraws; stats.passEncodeNS = passTimes
         stats.cpuPrepareNS = prepareEnd - start; stats.cpuEncodeNS = encoded - prepareEnd
+        stats.cpuPostProcessEncodeNS = [.ssao,.ssr,.taa,.bloom,.tonemap,.fxaa].reduce(0) { $0 + (passTimes[$1] ?? 0) }
         stats.cpuSubmitNS = end - encoded; stats.cpuFrameTotalNS = end - start
         stats.culledMeshInstanceCount = prepared.visibility.culledCount; stats.lodMeshInstanceCount = prepared.visibility.lodCount
         stats.shadowedLightCount = shadowPlan.shadowedLightCount
@@ -152,9 +193,18 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     private func ensureTargets(size: RenderDrawableSize, hdr: Bool) throws {
-        if targets?.size == size && (targets?.hdr != nil) == hdr { return }
-        if let surface { try NativeRenderTargets.configure(device: device, surface: surface, size: size) }
-        let replacement = try NativeRenderTargets.make(device: device, size: size, offscreen: surface == nil, hdr: hdr)
+        if let surface, configuredSurfaceSize != size {
+            try NativeRenderTargets.configure(device: device, surface: surface, size: size)
+            configuredSurfaceSize = size
+        }
+        // Direct swapchain rendering needs matching depth dimensions. HDR and
+        // offscreen targets share the production grow-only viewport policy.
+        let previous = targets?.size ?? RenderDrawableSize(width: 0,height: 0)
+        let postSize = hdr ? post.targets?.size : nil
+        let current = RenderDrawableSize(width: max(previous.width,postSize?.width ?? 0),height: max(previous.height,postSize?.height ?? 0))
+        let capacity = surface != nil && !hdr ? size : ViewportTargetAllocation.grownCapacity(current: current,used: size)
+        if targets?.size == capacity && (targets?.hdr != nil) == hdr { return }
+        let replacement = try NativeRenderTargets.make(device: device, size: capacity, offscreen: surface == nil, hdr: hdr)
         targets?.destroy(device: device); targets = replacement
     }
 }
