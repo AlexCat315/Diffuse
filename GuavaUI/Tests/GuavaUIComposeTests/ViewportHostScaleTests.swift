@@ -34,9 +34,9 @@ struct ViewportHostScaleTests: GuavaUIComposeSerializedSuite {
 
     private final class RecordingBridge: ViewportTextureBridge {
         var registeredSize: (width: UInt32, height: UInt32)?
-        func textureID(surfaceID: UInt64, handle: UInt64, width: UInt32, height: UInt32) -> TextureID? {
-            guard surfaceID != 0, handle != 0, width > 0, height > 0 else { return nil }
-            registeredSize = (width, height)
+        func textureID(for surface: ViewportSurfaceState) -> TextureID? {
+            guard surface.surfaceID != 0, surface.region.isValid else { return nil }
+            registeredSize = (surface.region.capacity.width, surface.region.capacity.height)
             return 10_000
         }
     }
@@ -60,10 +60,7 @@ struct ViewportHostScaleTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
-            ViewportHost(surface: ViewportSurfaceState(surfaceID: 1,
-                                                       handle: 1,
-                                                       width: 200,
-                                                       height: 120),
+            ViewportHost(surface: ViewportSurfaceState(),
                          onDrawableSizeChange: { reported.append($0) })
                 .frame(width: 200, height: 120)
         )
@@ -91,12 +88,9 @@ struct ViewportHostScaleTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
-            ViewportHost(surface: ViewportSurfaceState(surfaceID: 7,
-                                                       handle: 7,
-                                                       width: 300,
-                                                       height: 200,
-                                                       textureWidth: 512,
-                                                       textureHeight: 256))
+            ViewportHost(surface: ViewportSurfaceState(surfaceID: 7, region: ViewportSamplingRegion(
+                size: RenderDrawableSize(width: 300, height: 200),
+                capacity: RenderDrawableSize(width: 512, height: 256))))
                 .frame(width: 200, height: 120)
         )
         graph.computeLayout(width: 200, height: 120)
@@ -114,7 +108,8 @@ struct ViewportHostScaleTests: GuavaUIComposeSerializedSuite {
         let vs = list.vertices.map(\.v)
         let maxU = us.max() ?? -1
         let maxV = vs.max() ?? -1
-        #expect(abs(maxU - 300.0 / 512.0) < 1e-5)
-        #expect(abs(maxV - 200.0 / 256.0) < 1e-5)
+        #expect(abs(maxU - 299.5 / 512.0) < 1e-5)
+        #expect(abs(maxV - 199.5 / 256.0) < 1e-5)
+        #expect(list.batches.count == 1)
     } }
 }

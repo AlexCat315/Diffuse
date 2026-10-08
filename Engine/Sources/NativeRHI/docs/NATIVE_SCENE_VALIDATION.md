@@ -16,7 +16,7 @@ host.queueRenderSettings(settings)
 host.start(renderConsumer: renderer)
 ```
 
-EngineHost/RenderThread 发送原有 RenderPacket，不创建第二套场景模型。NativeRenderer 的可变状态由渲染线程拥有。工具和测试调用 renderChecked，能直接捕获错误；普通 consumer 路径记录 lastError。colorTexture 返回 NativeRHI Texture，可进行原生读回；currentViewportSurfaceState 暂不发布 WGPU 指针。
+EngineHost/RenderThread 发送原有 RenderPacket，不创建第二套场景模型。NativeRenderer 的可变状态由渲染线程拥有。工具和测试调用 renderChecked，能直接捕获错误；普通 consumer 路径记录 lastError。colorTexture 返回借用的 NativeRHI Texture，可进行原生读回；currentViewportSurfaceState 在成功提交后发布持有 TextureResource 的离屏图像与 used/capacity region。UI geometry / snapshot 可长期保留此资源，直接交给同 device 的 NativeDrawListRenderer 采样。窗口 swapchain 图像不作为持久 viewport 发布。详见 [UI/viewport 验证](NATIVE_UI_VALIDATION.md)。
 
 资源由 NativeMeshStore 管理。它读取 AssetRegistry 原子返回的 MeshAssetCatalog，版本不变时无需复制/哈希大网格；重载、替换、删除、reset 都会改变版本。当前版本更新以事务方式重建导入资源，失败保留旧资源，下次可重试；后续可以细化到逐资产版本。稀疏 meshIndex 通过字典管理，内置 cube 和 OBJ fixture 保留在 0/1。可注入独立 AssetRegistry，各 renderer 的裁剪边界取自自己的 GPU 资源目录。
 

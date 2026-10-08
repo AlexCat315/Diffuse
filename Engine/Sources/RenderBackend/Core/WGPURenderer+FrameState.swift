@@ -59,42 +59,7 @@ extension WGPURenderer {
     }
 
     func registerViewportSurface(texture: GPUTexture, size: RenderDrawableSize, textureSize: RenderDrawableSize) {
-        // Keep old texture retainers briefly because UI snapshots can outlive
-        // the frame that published them.
-        if let publishedTextureRetainer,
-           publishedTextureRetainer.takeUnretainedValue() === texture {
-            viewportSurfaceState = ViewportSurfaceState(
-                surfaceID: publishedSurfaceID,
-                handle: publishedSurfaceHandle,
-                width: size.width,
-                height: size.height,
-                textureWidth: textureSize.width,
-                textureHeight: textureSize.height,
-                zeroCopy: true
-            )
-            return
-        }
-
-        if let previous = publishedTextureRetainer {
-            stalePublishedTextureRetainers.append(previous)
-            if stalePublishedTextureRetainers.count > publishedTextureRetainerHistoryLimit {
-                stalePublishedTextureRetainers.removeFirst().release()
-            }
-        }
-        let retained = Unmanaged.passRetained(texture)
-        publishedTextureRetainer = retained
-        nextSurfaceID &+= 1
-        publishedSurfaceID = nextSurfaceID
-        publishedSurfaceHandle = UInt64(UInt(bitPattern: retained.toOpaque()))
-
-        viewportSurfaceState = ViewportSurfaceState(
-            surfaceID: publishedSurfaceID,
-            handle: publishedSurfaceHandle,
-            width: size.width,
-            height: size.height,
-            textureWidth: textureSize.width,
-            textureHeight: textureSize.height,
-            zeroCopy: true
-        )
+        viewportPublication.publish(storage: .wgpu(texture),
+            region: ViewportSamplingRegion(size: size, capacity: textureSize))
     }
 }

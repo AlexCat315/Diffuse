@@ -63,6 +63,8 @@ let package = Package(
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "ImageDecodeBridge", targets: ["CImageDecodeBridge"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
+        // Shared fixtures/readback tools for renderer and UI integration gates.
+        .library(name: "NativeRendererValidation", targets: ["NativeRendererValidation"]),
         .executable(name: "NativeRHIPassProbe", targets: ["NativeRHIPassProbe"]),
         .library(name: "ObservationBus", targets: ["ObservationBus"]),
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),

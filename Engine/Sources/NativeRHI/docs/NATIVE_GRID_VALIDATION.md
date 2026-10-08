@@ -2,7 +2,7 @@
 
 `NativeEditorGridPass` 将现有 editor_grid pass 接入 NativeRHI，复用 `RenderPacket`、`RenderCameraMatrices`、`EditorGridPlane` 和 `EditorGridUniforms`。Slang 与 WGSL 执行相同的平面射线求交、抗锯齿、网格 LOD、轴线颜色和深度计算。两个后端均以一个 fullscreen triangle、相同 BGRA8 / Depth32 单采样目标及 alpha blend 执行。
 
-这是独立 pass 的验证路径：`NativeGridRenderer` 只绘制背景和网格，场景 mesh、光照和后处理仍使用原 renderer。默认 EngineHost 行为保持 WGPURenderer。Native consumer 不把 NativeRHI 句柄伪装成 WGPU `GPUTexture` 指针，`currentViewportSurfaceState()` 返回无效状态；当前可直接呈现到 native window，或读取 NativeRHI 的 offscreen texture。Editor 的 WGPU viewport interop 尚未迁移。
+这是独立 pass 的验证路径：`NativeGridRenderer` 只绘制背景和网格，完整场景已有独立 `NativeRenderer`。默认 EngineHost 行为保持 WGPURenderer。离屏 `currentViewportSurfaceState()` 在成功提交后持有 NativeRHI TextureResource，供同 device 的 Native UI 采样；原生窗口的 swapchain 图像不作为持久 viewport 发布。Editor 的整个窗口宿主尚未切换；可靠资源所有权和 viewport 合成已通过 [Metal UI 集成验证](NATIVE_UI_VALIDATION.md)。
 
 ## 接入
 

@@ -640,6 +640,7 @@ public final class AppRuntime {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
         drawDevToolsOverlay(into: drawList)
+        viewportTextures.prune()
         let drawEnd = TimingTrace.now()
         tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")
 

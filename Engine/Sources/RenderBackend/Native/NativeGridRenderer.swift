@@ -3,23 +3,24 @@ import Logging
 import NativeRHI
 
 /// An isolated RenderPacketConsumer for validating the migrated editor-grid
-/// pass. Scene meshes and post processing still belong to WGPURenderer.
+/// pass. Full scene meshes and post processing belong to NativeRenderer.
 /// This consumer supports native windows and offscreen NativeRHI textures;
-/// it does not publish a WGPU texture pointer through ViewportSurfaceState.
+/// offscreen output is published as an owned NativeRHI image for UI sampling.
 public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
     private let grid: NativeEditorGridPass
     private let surface: RenderSurfaceDescriptor?
     private var targets: NativeRenderTargets?
+    private var viewportPublication = ViewportSurfacePublication()
     public private(set) var lastFrameStats = RenderFrameStats()
     public private(set) var lastError: String?
-    public var colorTexture: Texture? { targets?.color }
+    /// Borrowed handle; a viewport surface owns the output across replacement.
+    public var colorTexture: Texture? { targets?.color?.texture }
 
     public init(device: Device, surface: RenderSurfaceDescriptor? = nil) throws {
         self.device = device; self.surface = surface
         grid = try NativeEditorGridPass(device: device)
     }
-    deinit { if let targets { targets.destroy(device: device) } }
 
     public func initialize() { Logger.renderer.info("NativeRHI editor-grid renderer ready (\(device.deviceName))") }
     public func render(packet: RenderPacket) {
@@ -27,7 +28,7 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         catch { lastError = String(describing: error); Logger.renderer.error("native grid render failed: \(error)") }
     }
     public func currentFrameStats() -> RenderFrameStats { lastFrameStats }
-    public func currentViewportSurfaceState() -> ViewportSurfaceState { .init() }
+    public func currentViewportSurfaceState() -> ViewportSurfaceState { viewportPublication.state }
 
     /// Throwing entry point used by tools/tests so a failed render cannot be
     /// mistaken for a successful frame or a performance sample.
@@ -42,11 +43,11 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         try device.beginFrame()
         defer { device.endFrame() }
         let image = surface == nil ? nil : try device.acquireSwapchainImage()
-        guard let color = image?.texture ?? targets.color else { throw RHIError.swapchainAcquireFailed("no grid color target") }
+        guard let color = image?.texture ?? targets.color?.texture else { throw RHIError.swapchainAcquireFailed("no grid color target") }
         let prepared = DispatchTime.now().uptimeNanoseconds
         let commands = CommandBuffer()
         let colorTarget = RenderColorTarget(texture: color, loadAction: .clear(SIMD4(0.08, 0.10, 0.14, 1)))
-        let depthTarget = RenderDepthTarget(texture: targets.depth, loadAction: .clear(1))
+        let depthTarget = RenderDepthTarget(texture: targets.depth.texture, loadAction: .clear(1))
         if packet.renderSettings.enableEditorGrid {
             try grid.encode(packet: packet, color: colorTarget, depth: depthTarget, into: commands)
         } else {
@@ -54,6 +55,10 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         }
         let encoded = DispatchTime.now().uptimeNanoseconds
         try device.submit(commands)
+        if let output = targets.color {
+            viewportPublication.publish(storage: .native(output),
+                region: ViewportSamplingRegion(size: packet.drawableSize, capacity: targets.size))
+        } else { viewportPublication.clear() }
         if let image { try device.present(image) }
         let submitted = DispatchTime.now().uptimeNanoseconds
         var stats = RenderFrameStats()
@@ -71,7 +76,6 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         if targets?.size == size { return }
         if let surface { try NativeRenderTargets.configure(device: device, surface: surface, size: size) }
         let replacement = try NativeRenderTargets.make(device: device, size: size, offscreen: surface == nil)
-        targets?.destroy(device: device)
         targets = replacement
     }
 }

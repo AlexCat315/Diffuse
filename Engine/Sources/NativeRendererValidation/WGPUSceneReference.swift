@@ -27,23 +27,22 @@ public final class WGPUSceneReference {
     public func finish() throws { try backend.waitUntilIdle() }
     public func readback() throws -> Data {
         let state = renderer.currentViewportSurfaceState()
-        guard state.isValid, let pointer = UnsafeRawPointer(bitPattern: UInt(state.handle)) else {
+        guard state.isValid, case .wgpu(let texture) = state.image?.storage else {
             throw WGPUBackendError.initFailed("scene reference surface missing")
         }
-        let texture = Unmanaged<GPUTexture>.fromOpaque(pointer).takeUnretainedValue()
-        let row = (state.width * 4 + 255) / 256 * 256
-        let buffer = try backend.createBuffer(size: UInt64(row * state.height), usage: [.copyDst, .mapRead])
+        let row = (state.region.size.width * 4 + 255) / 256 * 256
+        let buffer = try backend.createBuffer(size: UInt64(row * state.region.size.height), usage: [.copyDst, .mapRead])
         let encoder = try backend.createCommandEncoder()
         encoder.copyTextureToBuffer(source: texture, destination: buffer, bytesPerRow: row,
-            rowsPerImage: state.height, width: state.width, height: state.height)
+            rowsPerImage: state.region.size.height, width: state.region.size.width, height: state.region.size.height)
         backend.submit(try encoder.finish())
-        try backend.bufferMapSync(buffer, size: UInt64(row * state.height))
+        try backend.bufferMapSync(buffer, size: UInt64(row * state.region.size.height))
         defer { buffer.unmap() }
-        guard let pointer = buffer.getMappedRange(size: UInt64(row * state.height)) else {
+        guard let pointer = buffer.getMappedRange(size: UInt64(row * state.region.size.height)) else {
             throw WGPUBackendError.initFailed("scene reference readback failed")
         }
         var data = Data()
-        for y in 0..<Int(state.height) { data.append(pointer.advanced(by: y * Int(row)).assumingMemoryBound(to: UInt8.self), count: Int(state.width * 4)) }
+        for y in 0..<Int(state.region.size.height) { data.append(pointer.advanced(by: y * Int(row)).assumingMemoryBound(to: UInt8.self), count: Int(state.region.size.width * 4)) }
         return data
     }
 }

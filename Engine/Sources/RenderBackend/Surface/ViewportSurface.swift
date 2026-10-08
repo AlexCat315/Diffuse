@@ -1,44 +1,48 @@
-import Foundation
+import NativeRHI
+
+/// Rendered extent and allocated capacity. Grow-only scene targets are sampled
+/// only inside the used region; padding must never appear in a viewport.
+public struct ViewportSamplingRegion: Sendable, Equatable {
+    public var size = RenderDrawableSize(width: 0, height: 0)
+    public var capacity = RenderDrawableSize(width: 0, height: 0)
+
+    public init() {}
+    public init(size: RenderDrawableSize, capacity: RenderDrawableSize) {
+        self.size = size
+        self.capacity = capacity
+    }
+    public var isValid: Bool {
+        size.width > 0 && size.height > 0 && size.width <= capacity.width && size.height <= capacity.height
+    }
+    public var uvMax: SIMD2<Float> {
+        guard isValid else { return .zero }
+        return SIMD2(Float(size.width) / Float(capacity.width), Float(size.height) / Float(capacity.height))
+    }
+}
 
 public struct ViewportSurfaceState: Sendable, Equatable {
-    /// Monotonically-increasing identifier published by the engine each
-    /// time the underlying offscreen texture is replaced. Stable across
-    /// snapshots and never reused, so consumers can tell new from stale.
-    public var surfaceID: UInt64
-    /// Raw `GPUTexture` opaque pointer kept alive by the engine for as
-    /// long as `surfaceID` is the published one. Consumers reconstruct the
-    /// texture via `Unmanaged<GPUTexture>.fromOpaque(...)`.
-    public var handle: UInt64
-    /// Rendered (used) extent in pixels. May be smaller than the backing
-    /// texture: targets are allocated grow-only so panel resizes don't
-    /// recreate the frame graph every frame.
-    public var width: UInt32
-    public var height: UInt32
-    /// Backing texture extent in pixels. Consumers sampling the surface must
-    /// crop to `width / textureWidth` × `height / textureHeight`.
-    public var textureWidth: UInt32
-    public var textureHeight: UInt32
-    public var zeroCopy: Bool
+    /// Stable while the producer uses the same texture. IDs are local to a
+    /// producer; consumers identify the owned image rather than this number.
+    public var surfaceID: UInt64 = 0
+    public var image: ViewportImage? = nil
+    public var region = ViewportSamplingRegion()
 
-    public init(
-        surfaceID: UInt64 = 0,
-        handle: UInt64 = 0,
-        width: UInt32 = 0,
-        height: UInt32 = 0,
-        textureWidth: UInt32 = 0,
-        textureHeight: UInt32 = 0,
-        zeroCopy: Bool = false
-    ) {
+    public init() {}
+    public init(surfaceID: UInt64, image: ViewportImage? = nil, region: ViewportSamplingRegion) {
         self.surfaceID = surfaceID
-        self.handle = handle
-        self.width = width
-        self.height = height
-        self.textureWidth = textureWidth == 0 ? width : textureWidth
-        self.textureHeight = textureHeight == 0 ? height : textureHeight
-        self.zeroCopy = zeroCopy
+        self.image = image
+        self.region = region
     }
-
     public var isValid: Bool {
-        surfaceID != 0 && handle != 0 && width > 0 && height > 0
+        guard surfaceID != 0, let image, region.isValid else { return false }
+        if case .native(let resource) = image.storage {
+            let descriptor = resource.descriptor
+            return descriptor.dimension == .texture2D && descriptor.sampleCount == 1 && descriptor.usage.contains(.sampled)
+                && descriptor.width == Int(region.capacity.width) && descriptor.height == Int(region.capacity.height)
+        }
+        return true
+    }
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.surfaceID == rhs.surfaceID && lhs.image === rhs.image && lhs.region == rhs.region
     }
 }

@@ -14,7 +14,7 @@
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
     "Engine/Sources/RenderBackend/Core/RenderBackend.swift::WGPURenderer": {
-      "stored_properties": 124,
+      "stored_properties": 118,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
     "Engine/Sources/RenderBackend/Core/RenderBackendResources.swift::GPUParticleSimulationResources": {

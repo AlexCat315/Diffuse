@@ -1,6 +1,6 @@
 # NativeRHI UI 迁移验证
 
-默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI 绘制画面对照已通过；Editor viewport、in-game UI 与主／辅助窗口宿主尚未接入。
+默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI 和生产场景＋ViewportHost 合成对照已通过；整个 Editor 的窗口宿主、in-game UI 与多窗口帧协调尚未切换。
 
 ## 已实现的基础能力
 
@@ -40,6 +40,24 @@
 
 本轮 NativeRHI 101 项 XCTest、NativeRenderer 39 项 XCTest、GuavaUI 全包测试与 shader 工具链 8 项 Python 测试通过。Swift maintainability 检查通过，现有 46 项超限指标未增加。
 
+## 场景 viewport 与快照所有权
+
+`ViewportSurfaceState` 现在直接持有 `ViewportImage`，其中 NativeRHI 使用 `TextureResource`，WGPU 使用强引用 `GPUTexture`；删除裸指针、Unmanaged 重建和固定 32 项的旧纹理保留历史。`ViewportSamplingRegion` 独立描述 used extent / allocation capacity，校验边界并提供 UV 比例。生产 renderer 仅在成功 submit 后发布 surface；Native 离屏 color target 增加 sampled usage，swapchain 图像不作为持久 viewport 发布。
+
+`ViewportTextureRegistry` 为图像 lease 分配独立 TextureID，允许同一个 DrawList 同时使用旧、新纹理，也避免不同 producer 的相同 surfaceID 相互覆盖。registry 弱引用 lease，GPU binding 强引用实际纹理；surface、节点闭包、cached layer 和 `DrawListResources` / `DrawListSnapshot` 持有 lease。无 producer / geometry 快照使用的 slot 在 prune 时移除，录制 token 继续保护尚未提交的资源。Native 注册拒绝跨 device 或 backend 的图片，不需要场景像素的 CPU 传输。
+
+ViewportHost 使用 `addClampedImageQuad`，九个相邻区域合并成一个 draw batch。内部 UV 保持原来的像素映射，边缘保持在有效区域的 texel 中心，避免 resize 后线性放大读取 allocation padding。没有改变 shader / packed vertex ABI。
+
+2026-10-09 Apple M1 Metal 实测：
+
+- 生产 NativeRenderer / WGPURenderer 分别绘制 r3 mesh 与 HDR/SSAO/Bloom/FXAA 场景，经真实 ViewportHost、letterbox、clip 和 UI overlay 合成到 384×256（logical 192×128）。源图像先 192×128，再缩为 64×32，最后 256×96；BGRA unorm / sRGB × 1/4 samples，共 24 组。mesh 合成全部逐像素一致；后处理合成 RGB 平均误差最大 0.015568，>3 的像素最多 275/98304（0.280%），通过平均误差 <0.5 / outliers <1% 门限。
+- 另将完整 WGPU allocation（含 padding）以仅测试使用的 CPU transfer 提供给 Native UI，隔离场景差异：同一源图像的 UI 合成 24 组均满足最大通道差 ≤1。生产 Native viewport 的 UI texture upload 只有首次 white fallback 的 4 字节，不上传场景像素。
+- 使用绿色有效区域、洋红色 padding，覆盖 3×2、1×3、3×1、1×1 used extent、8×8 allocation、非整数 viewport 边界、两种目标格式及 1/4 samples。显示区域的内部全部为绿色，两条路径逐像素一致，padding 不渗色。
+- 原生和 WGPU surface 保留 40 次纹理替换后、renderer 销毁后的首张图像；实际 readback 保持原值。scene shrink 保持资源身份，growth 替换，分配成功但 beginFrame 失败时仍发布上一张成功图像。RenderThread report 跨线程保留同一个 image lease。
+- 两张不同 producer、相同 surfaceID 的红／绿图片，在 snapshot restore 后同时绘制；删除源 surface、CPU list 和 registry bindings 后，frame token 仍能提交正确画面。prune 不产生悬空资源。COW / translated layer append、empty geometry、snapshot channel 和 reset / load 都保留并按时释放 lease。
+
+本阶段 NativeRHI 101 项、NativeRenderer 原有 39 项及新增 4 项 XCTest 通过；GuavaUI、Portable 与 Editor 全包测试通过，并运行了 RenderThread 与生产 WGPU GPU smoke。Swift 结构检查仍为 46 项既有超限指标，WGPURenderer 的 stored property allowance 从 124 收紧到 118。集成误差记录见 [viewport Metal 报告](benchmarks/native-viewport-m1.json)。
+
 Windows/Linux 的 Vulkan 与 Windows 的 DX12 实现及对应测试入口已同步编写，本轮没有在这些平台编译或运行。macOS 不提供 Vulkan／MoltenVK 路径。
 
 ```sh
@@ -72,4 +90,4 @@ GUAVA_NATIVE_UI_BENCHMARK=1 swift test --package-path GuavaUI -c release --jobs 
 
 ## 后续门槛
 
-迁移具有可靠资源所有权的 viewport 纹理桥、in-game UI、主／辅助窗口宿主与多 swapchain 帧协调。补齐 DXIL 生产产物与剩余性能场景；UI 绘制器的独立通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
+继续迁移 in-game UI、主／辅助窗口宿主与多 swapchain 帧协调。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。

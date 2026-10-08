@@ -185,7 +185,7 @@ struct NativeDrawListLifecycleTests {
             case 3: batches[0].indexCount = 4
             default: batches[0].scissor = UIRect(x: .infinity, y: 0, width: 1, height: 1)
             }
-            invalid.load(vertices: vertices, indices: indices, batches: batches)
+            invalid.load(vertices: vertices, indices: indices, batches: batches, resources: valid.resources)
             let commands = CommandBuffer()
             #expect(throws: RHIError.self) {
                 try context.native.record(list: invalid, into: commands, target: RenderColorTarget(texture: output.texture), viewport: viewport)

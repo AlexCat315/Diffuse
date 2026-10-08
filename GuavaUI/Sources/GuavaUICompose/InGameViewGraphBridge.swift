@@ -106,7 +106,8 @@ public final class InGameViewGraphBridge {
             viewportHeight: UInt32(height),
             logicalWidth: Float(width),
             logicalHeight: Float(height),
-            atlasUpdates: atlasUpdates
+            atlasUpdates: atlasUpdates,
+            resources: drawList.resources
         ))
     }
 
