@@ -9,12 +9,19 @@ enum NativePacketValidation {
               packet.drawableSize.height <= ViewportTargetAllocation.maxDimension,
               !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
         guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow,.r5PostProcess].contains(packet.renderSettings.stage),
-              !packet.renderSettings.enableStylizedCharacterShading,
               packet.scene.particles.isEmpty, packet.scene.particleSimulationBatches.isEmpty,
               packet.inGameCanvas.commands.isEmpty else {
-            throw RHIError.unsupportedFeature("native stylized shading, particles and UI migration is pending")
+            throw RHIError.unsupportedFeature("native particles and UI migration is pending")
         }
         let settings = packet.renderSettings
+        let style = settings.stylizedCharacterStyle
+        if settings.enableStylizedCharacterShading {
+            let values = [style.toonThresholds,style.toonLevels,style.inkWashColor,
+                SIMD4(style.paperGrainStrength,style.rimStrength,style.materialBiasStrength,style.outlineWidth)]
+            guard values.allSatisfy({ vector in (0..<4).allSatisfy { vector[$0].isFinite } }) else {
+                throw RHIError.invalidArgument("non-finite stylized input")
+            }
+        }
         guard settings.stage == .r5PostProcess || !(settings.enableSSAO || settings.enableSSR || settings.enableTAA || settings.enableBloom || settings.enableFXAA) else {
             throw RHIError.unsupportedFeature("post effects require the r5 stage")
         }

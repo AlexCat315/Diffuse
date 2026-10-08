@@ -1,0 +1,4138 @@
+{
+  "version": "1.1",
+  "parameters": [
+    {
+      "name": "draw",
+      "binding": {
+        "kind": "constantBuffer",
+        "index": 0
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "DrawUniforms",
+          "fields": [
+            {
+              "name": "mvp",
+              "type": {
+                "kind": "matrix",
+                "rowCount": 4,
+                "columnCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 64,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 64,
+                "elementStride": 0
+              }
+            },
+            {
+              "name": "model",
+              "type": {
+                "kind": "matrix",
+                "rowCount": 4,
+                "columnCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 64,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 64,
+                "size": 64,
+                "elementStride": 0
+              }
+            },
+            {
+              "name": "colorTint",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 128,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "material",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 144,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 160,
+              "alignment": 16
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "DrawUniforms",
+            "fields": [
+              {
+                "name": "mvp",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "model",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 64,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "colorTint",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 128,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "material",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 144,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 160,
+                "alignment": 16
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 160,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "instances",
+      "bindings": [
+        {
+          "kind": "constantBuffer",
+          "index": 1
+        },
+        {
+          "kind": "shaderResource",
+          "index": 0,
+          "count": 0
+        }
+      ],
+      "type": {
+        "kind": "resource",
+        "baseShape": "structuredBuffer",
+        "resultType": {
+          "kind": "struct",
+          "name": "DrawUniforms",
+          "fields": [
+            {
+              "name": "mvp",
+              "type": {
+                "kind": "matrix",
+                "rowCount": 4,
+                "columnCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 64,
+                    "alignment": 4
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 64,
+                "elementStride": 0
+              }
+            },
+            {
+              "name": "model",
+              "type": {
+                "kind": "matrix",
+                "rowCount": 4,
+                "columnCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 64,
+                    "alignment": 4
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 64,
+                "size": 64,
+                "elementStride": 0
+              }
+            },
+            {
+              "name": "colorTint",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 4
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 128,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "material",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 4
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 144,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 160,
+              "alignment": 4
+            }
+          ]
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "meshSampler",
+      "binding": {
+        "kind": "samplerState",
+        "index": 2
+      },
+      "type": {
+        "kind": "samplerState",
+        "sizes": [
+          {
+            "kind": "samplerState",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "baseTexture",
+      "binding": {
+        "kind": "shaderResource",
+        "index": 3
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "texture2D",
+        "resultType": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          }
+        },
+        "sizes": [
+          {
+            "kind": "shaderResource",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "skinParameters",
+      "binding": {
+        "kind": "constantBuffer",
+        "index": 11
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "SkinParameters",
+          "fields": [
+            {
+              "name": "counts",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "uint32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 16,
+              "alignment": 16
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "SkinParameters",
+            "fields": [
+              {
+                "name": "counts",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "uint32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 16
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 16,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "jointPalette",
+      "bindings": [
+        {
+          "kind": "constantBuffer",
+          "index": 12
+        },
+        {
+          "kind": "shaderResource",
+          "index": 0,
+          "count": 0
+        }
+      ],
+      "type": {
+        "kind": "resource",
+        "baseShape": "structuredBuffer",
+        "resultType": {
+          "kind": "struct",
+          "name": "SkinMatrix",
+          "fields": [
+            {
+              "name": "matrix",
+              "type": {
+                "kind": "matrix",
+                "rowCount": 4,
+                "columnCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 64,
+                    "alignment": 4
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 64,
+                "elementStride": 0
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 64,
+              "alignment": 4
+            }
+          ]
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "sceneLights",
+      "binding": {
+        "kind": "constantBuffer",
+        "index": 4
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "SceneLights",
+          "fields": [
+            {
+              "name": "ambientColorIntensity",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "exposureLightCount",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 16,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "lights",
+              "type": {
+                "kind": "array",
+                "elementCount": 8,
+                "elementType": {
+                  "kind": "struct",
+                  "name": "SceneLight",
+                  "fields": [
+                    {
+                      "name": "positionType",
+                      "type": {
+                        "kind": "vector",
+                        "elementCount": 4,
+                        "elementType": {
+                          "kind": "scalar",
+                          "scalarType": "float32"
+                        },
+                        "sizes": [
+                          {
+                            "kind": "uniform",
+                            "value": 16,
+                            "alignment": 16
+                          }
+                        ]
+                      },
+                      "binding": {
+                        "kind": "uniform",
+                        "offset": 0,
+                        "size": 16,
+                        "elementStride": 4
+                      }
+                    },
+                    {
+                      "name": "directionRange",
+                      "type": {
+                        "kind": "vector",
+                        "elementCount": 4,
+                        "elementType": {
+                          "kind": "scalar",
+                          "scalarType": "float32"
+                        },
+                        "sizes": [
+                          {
+                            "kind": "uniform",
+                            "value": 16,
+                            "alignment": 16
+                          }
+                        ]
+                      },
+                      "binding": {
+                        "kind": "uniform",
+                        "offset": 16,
+                        "size": 16,
+                        "elementStride": 4
+                      }
+                    },
+                    {
+                      "name": "colorIntensity",
+                      "type": {
+                        "kind": "vector",
+                        "elementCount": 4,
+                        "elementType": {
+                          "kind": "scalar",
+                          "scalarType": "float32"
+                        },
+                        "sizes": [
+                          {
+                            "kind": "uniform",
+                            "value": 16,
+                            "alignment": 16
+                          }
+                        ]
+                      },
+                      "binding": {
+                        "kind": "uniform",
+                        "offset": 32,
+                        "size": 16,
+                        "elementStride": 4
+                      }
+                    },
+                    {
+                      "name": "spotAngles",
+                      "type": {
+                        "kind": "vector",
+                        "elementCount": 4,
+                        "elementType": {
+                          "kind": "scalar",
+                          "scalarType": "float32"
+                        },
+                        "sizes": [
+                          {
+                            "kind": "uniform",
+                            "value": 16,
+                            "alignment": 16
+                          }
+                        ]
+                      },
+                      "binding": {
+                        "kind": "uniform",
+                        "offset": 48,
+                        "size": 16,
+                        "elementStride": 4
+                      }
+                    }
+                  ],
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "uniformStride": 64,
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 512,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 32,
+                "size": 512,
+                "elementStride": 64
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 544,
+              "alignment": 16
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "SceneLights",
+            "fields": [
+              {
+                "name": "ambientColorIntensity",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "exposureLightCount",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 16,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "lights",
+                "type": {
+                  "kind": "array",
+                  "elementCount": 8,
+                  "elementType": {
+                    "kind": "struct",
+                    "name": "SceneLight",
+                    "fields": [
+                      {
+                        "name": "positionType",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 0,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      },
+                      {
+                        "name": "directionRange",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 16,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      },
+                      {
+                        "name": "colorIntensity",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 32,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      },
+                      {
+                        "name": "spotAngles",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 48,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      }
+                    ],
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 64,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "uniformStride": 64,
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 512,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 32,
+                  "size": 512,
+                  "elementStride": 64
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 544,
+                "alignment": 16
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 544,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "normalTexture",
+      "binding": {
+        "kind": "shaderResource",
+        "index": 5
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "texture2D",
+        "resultType": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          }
+        },
+        "sizes": [
+          {
+            "kind": "shaderResource",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "mrTexture",
+      "binding": {
+        "kind": "shaderResource",
+        "index": 6
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "texture2D",
+        "resultType": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          }
+        },
+        "sizes": [
+          {
+            "kind": "shaderResource",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "shadow",
+      "binding": {
+        "kind": "constantBuffer",
+        "index": 7
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "Shadows",
+          "fields": [
+            {
+              "name": "matrices",
+              "type": {
+                "kind": "array",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "uniformStride": 64,
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 256,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 256,
+                "elementStride": 64
+              }
+            },
+            {
+              "name": "params",
+              "type": {
+                "kind": "array",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "uniformStride": 16,
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 64,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 256,
+                "size": 64,
+                "elementStride": 16
+              }
+            },
+            {
+              "name": "atlasParams",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 320,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "splits",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 336,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "cameraPosition",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 352,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "cameraForward",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 368,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 384,
+              "alignment": 16
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "Shadows",
+            "fields": [
+              {
+                "name": "matrices",
+                "type": {
+                  "kind": "array",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "matrix",
+                    "rowCount": 4,
+                    "columnCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 64,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "uniformStride": 64,
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 256,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 256,
+                  "elementStride": 64
+                }
+              },
+              {
+                "name": "params",
+                "type": {
+                  "kind": "array",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "uniformStride": 16,
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 256,
+                  "size": 64,
+                  "elementStride": 16
+                }
+              },
+              {
+                "name": "atlasParams",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 320,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "splits",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 336,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "cameraPosition",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 352,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "cameraForward",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 368,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 384,
+                "alignment": 16
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 384,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "shadowSampler",
+      "binding": {
+        "kind": "samplerState",
+        "index": 8
+      },
+      "type": {
+        "kind": "samplerState",
+        "sizes": [
+          {
+            "kind": "samplerState",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "shadowTexture",
+      "binding": {
+        "kind": "shaderResource",
+        "index": 9
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "texture2D",
+        "resultType": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          }
+        },
+        "sizes": [
+          {
+            "kind": "shaderResource",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "iblTexture",
+      "binding": {
+        "kind": "shaderResource",
+        "index": 10
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "texture2D",
+        "resultType": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          }
+        },
+        "sizes": [
+          {
+            "kind": "shaderResource",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "style",
+      "binding": {
+        "kind": "constantBuffer",
+        "index": 13
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "StylizedStyle",
+          "fields": [
+            {
+              "name": "toonThresholds",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "toonLevels",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 16,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "inkWashColor",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 32,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "params",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 48,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 64,
+              "alignment": 16
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "StylizedStyle",
+            "fields": [
+              {
+                "name": "toonThresholds",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "toonLevels",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 16,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "inkWashColor",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 32,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "params",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 48,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 64,
+                "alignment": 16
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 64,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    }
+  ],
+  "globalScope": {
+    "kind": "none",
+    "parameters": [
+      {
+        "name": "draw",
+        "binding": {
+          "kind": "constantBuffer",
+          "index": 0
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "DrawUniforms",
+            "fields": [
+              {
+                "name": "mvp",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "model",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 64,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "colorTint",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 128,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "material",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 144,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 160,
+                "alignment": 16
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "constantBuffer",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "DrawUniforms",
+              "fields": [
+                {
+                  "name": "mvp",
+                  "type": {
+                    "kind": "matrix",
+                    "rowCount": 4,
+                    "columnCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 64,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 64,
+                    "elementStride": 0
+                  }
+                },
+                {
+                  "name": "model",
+                  "type": {
+                    "kind": "matrix",
+                    "rowCount": 4,
+                    "columnCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 64,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 64,
+                    "size": 64,
+                    "elementStride": 0
+                  }
+                },
+                {
+                  "name": "colorTint",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 128,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "material",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 144,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 160,
+                  "alignment": 16
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 160,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "instances",
+        "bindings": [
+          {
+            "kind": "constantBuffer",
+            "index": 1
+          },
+          {
+            "kind": "shaderResource",
+            "index": 0,
+            "count": 0
+          }
+        ],
+        "type": {
+          "kind": "resource",
+          "baseShape": "structuredBuffer",
+          "resultType": {
+            "kind": "struct",
+            "name": "DrawUniforms",
+            "fields": [
+              {
+                "name": "mvp",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "model",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 64,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "colorTint",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 128,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "material",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 144,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 160,
+                "alignment": 4
+              }
+            ]
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "meshSampler",
+        "binding": {
+          "kind": "samplerState",
+          "index": 2
+        },
+        "type": {
+          "kind": "samplerState",
+          "sizes": [
+            {
+              "kind": "samplerState",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "baseTexture",
+        "binding": {
+          "kind": "shaderResource",
+          "index": 3
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "texture2D",
+          "resultType": {
+            "kind": "vector",
+            "elementCount": 4,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "float32"
+            }
+          },
+          "sizes": [
+            {
+              "kind": "shaderResource",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "skinParameters",
+        "binding": {
+          "kind": "constantBuffer",
+          "index": 11
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "SkinParameters",
+            "fields": [
+              {
+                "name": "counts",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "uint32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 16
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "constantBuffer",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "SkinParameters",
+              "fields": [
+                {
+                  "name": "counts",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "uint32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 16,
+                  "alignment": 16
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 16,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "jointPalette",
+        "bindings": [
+          {
+            "kind": "constantBuffer",
+            "index": 12
+          },
+          {
+            "kind": "shaderResource",
+            "index": 0,
+            "count": 0
+          }
+        ],
+        "type": {
+          "kind": "resource",
+          "baseShape": "structuredBuffer",
+          "resultType": {
+            "kind": "struct",
+            "name": "SkinMatrix",
+            "fields": [
+              {
+                "name": "matrix",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 64,
+                "alignment": 4
+              }
+            ]
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "sceneLights",
+        "binding": {
+          "kind": "constantBuffer",
+          "index": 4
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "SceneLights",
+            "fields": [
+              {
+                "name": "ambientColorIntensity",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "exposureLightCount",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 16,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "lights",
+                "type": {
+                  "kind": "array",
+                  "elementCount": 8,
+                  "elementType": {
+                    "kind": "struct",
+                    "name": "SceneLight",
+                    "fields": [
+                      {
+                        "name": "positionType",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 0,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      },
+                      {
+                        "name": "directionRange",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 16,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      },
+                      {
+                        "name": "colorIntensity",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 32,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      },
+                      {
+                        "name": "spotAngles",
+                        "type": {
+                          "kind": "vector",
+                          "elementCount": 4,
+                          "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                          },
+                          "sizes": [
+                            {
+                              "kind": "uniform",
+                              "value": 16,
+                              "alignment": 16
+                            }
+                          ]
+                        },
+                        "binding": {
+                          "kind": "uniform",
+                          "offset": 48,
+                          "size": 16,
+                          "elementStride": 4
+                        }
+                      }
+                    ],
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 64,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "uniformStride": 64,
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 512,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 32,
+                  "size": 512,
+                  "elementStride": 64
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 544,
+                "alignment": 16
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "constantBuffer",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "SceneLights",
+              "fields": [
+                {
+                  "name": "ambientColorIntensity",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "exposureLightCount",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 16,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "lights",
+                  "type": {
+                    "kind": "array",
+                    "elementCount": 8,
+                    "elementType": {
+                      "kind": "struct",
+                      "name": "SceneLight",
+                      "fields": [
+                        {
+                          "name": "positionType",
+                          "type": {
+                            "kind": "vector",
+                            "elementCount": 4,
+                            "elementType": {
+                              "kind": "scalar",
+                              "scalarType": "float32"
+                            },
+                            "sizes": [
+                              {
+                                "kind": "uniform",
+                                "value": 16,
+                                "alignment": 16
+                              }
+                            ]
+                          },
+                          "binding": {
+                            "kind": "uniform",
+                            "offset": 0,
+                            "size": 16,
+                            "elementStride": 4
+                          }
+                        },
+                        {
+                          "name": "directionRange",
+                          "type": {
+                            "kind": "vector",
+                            "elementCount": 4,
+                            "elementType": {
+                              "kind": "scalar",
+                              "scalarType": "float32"
+                            },
+                            "sizes": [
+                              {
+                                "kind": "uniform",
+                                "value": 16,
+                                "alignment": 16
+                              }
+                            ]
+                          },
+                          "binding": {
+                            "kind": "uniform",
+                            "offset": 16,
+                            "size": 16,
+                            "elementStride": 4
+                          }
+                        },
+                        {
+                          "name": "colorIntensity",
+                          "type": {
+                            "kind": "vector",
+                            "elementCount": 4,
+                            "elementType": {
+                              "kind": "scalar",
+                              "scalarType": "float32"
+                            },
+                            "sizes": [
+                              {
+                                "kind": "uniform",
+                                "value": 16,
+                                "alignment": 16
+                              }
+                            ]
+                          },
+                          "binding": {
+                            "kind": "uniform",
+                            "offset": 32,
+                            "size": 16,
+                            "elementStride": 4
+                          }
+                        },
+                        {
+                          "name": "spotAngles",
+                          "type": {
+                            "kind": "vector",
+                            "elementCount": 4,
+                            "elementType": {
+                              "kind": "scalar",
+                              "scalarType": "float32"
+                            },
+                            "sizes": [
+                              {
+                                "kind": "uniform",
+                                "value": 16,
+                                "alignment": 16
+                              }
+                            ]
+                          },
+                          "binding": {
+                            "kind": "uniform",
+                            "offset": 48,
+                            "size": 16,
+                            "elementStride": 4
+                          }
+                        }
+                      ],
+                      "sizes": [
+                        {
+                          "kind": "uniform",
+                          "value": 64,
+                          "alignment": 16
+                        }
+                      ]
+                    },
+                    "uniformStride": 64,
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 512,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 32,
+                    "size": 512,
+                    "elementStride": 64
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 544,
+                  "alignment": 16
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 544,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "normalTexture",
+        "binding": {
+          "kind": "shaderResource",
+          "index": 5
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "texture2D",
+          "resultType": {
+            "kind": "vector",
+            "elementCount": 4,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "float32"
+            }
+          },
+          "sizes": [
+            {
+              "kind": "shaderResource",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "mrTexture",
+        "binding": {
+          "kind": "shaderResource",
+          "index": 6
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "texture2D",
+          "resultType": {
+            "kind": "vector",
+            "elementCount": 4,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "float32"
+            }
+          },
+          "sizes": [
+            {
+              "kind": "shaderResource",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "shadow",
+        "binding": {
+          "kind": "constantBuffer",
+          "index": 7
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "Shadows",
+            "fields": [
+              {
+                "name": "matrices",
+                "type": {
+                  "kind": "array",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "matrix",
+                    "rowCount": 4,
+                    "columnCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 64,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "uniformStride": 64,
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 256,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 256,
+                  "elementStride": 64
+                }
+              },
+              {
+                "name": "params",
+                "type": {
+                  "kind": "array",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "uniformStride": 16,
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 256,
+                  "size": 64,
+                  "elementStride": 16
+                }
+              },
+              {
+                "name": "atlasParams",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 320,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "splits",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 336,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "cameraPosition",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 352,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "cameraForward",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 368,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 384,
+                "alignment": 16
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "constantBuffer",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "Shadows",
+              "fields": [
+                {
+                  "name": "matrices",
+                  "type": {
+                    "kind": "array",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "matrix",
+                      "rowCount": 4,
+                      "columnCount": 4,
+                      "elementType": {
+                        "kind": "scalar",
+                        "scalarType": "float32"
+                      },
+                      "sizes": [
+                        {
+                          "kind": "uniform",
+                          "value": 64,
+                          "alignment": 16
+                        }
+                      ]
+                    },
+                    "uniformStride": 64,
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 256,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 256,
+                    "elementStride": 64
+                  }
+                },
+                {
+                  "name": "params",
+                  "type": {
+                    "kind": "array",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "vector",
+                      "elementCount": 4,
+                      "elementType": {
+                        "kind": "scalar",
+                        "scalarType": "float32"
+                      },
+                      "sizes": [
+                        {
+                          "kind": "uniform",
+                          "value": 16,
+                          "alignment": 16
+                        }
+                      ]
+                    },
+                    "uniformStride": 16,
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 64,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 256,
+                    "size": 64,
+                    "elementStride": 16
+                  }
+                },
+                {
+                  "name": "atlasParams",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 320,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "splits",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 336,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "cameraPosition",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 352,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "cameraForward",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 368,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 384,
+                  "alignment": 16
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 384,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "shadowSampler",
+        "binding": {
+          "kind": "samplerState",
+          "index": 8
+        },
+        "type": {
+          "kind": "samplerState",
+          "sizes": [
+            {
+              "kind": "samplerState",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "shadowTexture",
+        "binding": {
+          "kind": "shaderResource",
+          "index": 9
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "texture2D",
+          "resultType": {
+            "kind": "vector",
+            "elementCount": 4,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "float32"
+            }
+          },
+          "sizes": [
+            {
+              "kind": "shaderResource",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "iblTexture",
+        "binding": {
+          "kind": "shaderResource",
+          "index": 10
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "texture2D",
+          "resultType": {
+            "kind": "vector",
+            "elementCount": 4,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "float32"
+            }
+          },
+          "sizes": [
+            {
+              "kind": "shaderResource",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "style",
+        "binding": {
+          "kind": "constantBuffer",
+          "index": 13
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "StylizedStyle",
+            "fields": [
+              {
+                "name": "toonThresholds",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "toonLevels",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 16,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "inkWashColor",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 32,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "params",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 48,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 64,
+                "alignment": 16
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "constantBuffer",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "StylizedStyle",
+              "fields": [
+                {
+                  "name": "toonThresholds",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "toonLevels",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 16,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "inkWashColor",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 32,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "params",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 48,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 64,
+                  "alignment": 16
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 64,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "entryPoints": [
+    {
+      "name": "outlineFragment",
+      "stage": "fragment",
+      "scope": {
+        "kind": "none",
+        "parameters": [
+          {
+            "name": "input",
+            "stage": "fragment",
+            "binding": {
+              "kind": "varyingInput",
+              "index": 0,
+              "count": 8
+            },
+            "type": {
+              "kind": "struct",
+              "name": "VertexOutput",
+              "fields": [
+                {
+                  "name": "position",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": []
+                  },
+                  "semanticName": "SV_POSITION"
+                },
+                {
+                  "name": "color",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 3,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 0
+                  },
+                  "semanticName": "TEXCOORD"
+                },
+                {
+                  "name": "uv",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 2,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 1
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 1
+                },
+                {
+                  "name": "normal",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 3,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 2
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 2
+                },
+                {
+                  "name": "tangent",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 3,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 3
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 3
+                },
+                {
+                  "name": "bitangent",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 3,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 4
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 4
+                },
+                {
+                  "name": "worldPosition",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 3,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 5
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 5
+                },
+                {
+                  "name": "depth",
+                  "type": {
+                    "kind": "scalar",
+                    "scalarType": "float32",
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 6
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 6
+                },
+                {
+                  "name": "materialIndex",
+                  "type": {
+                    "kind": "scalar",
+                    "scalarType": "float32",
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 7
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 7
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "varyingInput",
+                  "value": 8
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "name": "input",
+          "stage": "fragment",
+          "binding": {
+            "kind": "varyingInput",
+            "index": 0,
+            "count": 8
+          },
+          "type": {
+            "kind": "struct",
+            "name": "VertexOutput",
+            "fields": [
+              {
+                "name": "position",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": []
+                },
+                "semanticName": "SV_POSITION"
+              },
+              {
+                "name": "color",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 3,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 0
+                },
+                "semanticName": "TEXCOORD"
+              },
+              {
+                "name": "uv",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 2,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 1
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 1
+              },
+              {
+                "name": "normal",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 3,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 2
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 2
+              },
+              {
+                "name": "tangent",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 3,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 3
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 3
+              },
+              {
+                "name": "bitangent",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 3,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 4
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 4
+              },
+              {
+                "name": "worldPosition",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 3,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 5
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 5
+              },
+              {
+                "name": "depth",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 6
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 6
+              },
+              {
+                "name": "materialIndex",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 7
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 7
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "varyingInput",
+                "value": 8
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "stage": "fragment",
+        "binding": {
+          "kind": "varyingOutput",
+          "index": 0
+        },
+        "semanticName": "SV_TARGET",
+        "type": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          },
+          "sizes": [
+            {
+              "kind": "varyingOutput",
+              "value": 1
+            }
+          ]
+        }
+      },
+      "bindings": [
+        {
+          "name": "draw",
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0,
+            "used": 1
+          }
+        },
+        {
+          "name": "instances",
+          "bindings": [
+            {
+              "kind": "constantBuffer",
+              "index": 1,
+              "used": 0
+            },
+            {
+              "kind": "shaderResource",
+              "index": 0,
+              "count": 0,
+              "used": 0
+            }
+          ]
+        },
+        {
+          "name": "meshSampler",
+          "binding": {
+            "kind": "samplerState",
+            "index": 2,
+            "used": 1
+          }
+        },
+        {
+          "name": "baseTexture",
+          "binding": {
+            "kind": "shaderResource",
+            "index": 3,
+            "used": 1
+          }
+        },
+        {
+          "name": "skinParameters",
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 11,
+            "used": 0
+          }
+        },
+        {
+          "name": "jointPalette",
+          "bindings": [
+            {
+              "kind": "constantBuffer",
+              "index": 12,
+              "used": 0
+            },
+            {
+              "kind": "shaderResource",
+              "index": 0,
+              "count": 0,
+              "used": 0
+            }
+          ]
+        },
+        {
+          "name": "sceneLights",
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 4,
+            "used": 0
+          }
+        },
+        {
+          "name": "normalTexture",
+          "binding": {
+            "kind": "shaderResource",
+            "index": 5,
+            "used": 0
+          }
+        },
+        {
+          "name": "mrTexture",
+          "binding": {
+            "kind": "shaderResource",
+            "index": 6,
+            "used": 0
+          }
+        },
+        {
+          "name": "shadow",
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 7,
+            "used": 0
+          }
+        },
+        {
+          "name": "shadowSampler",
+          "binding": {
+            "kind": "samplerState",
+            "index": 8,
+            "used": 0
+          }
+        },
+        {
+          "name": "shadowTexture",
+          "binding": {
+            "kind": "shaderResource",
+            "index": 9,
+            "used": 0
+          }
+        },
+        {
+          "name": "iblTexture",
+          "binding": {
+            "kind": "shaderResource",
+            "index": 10,
+            "used": 0
+          }
+        },
+        {
+          "name": "style",
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 13,
+            "used": 0
+          }
+        }
+      ]
+    }
+  ],
+  "bindlessSpaceIndex": 1
+}

@@ -12,7 +12,8 @@ final class NativeGridSurfaceTests: XCTestCase {
     @MainActor func testMetalScenePresentsAndResizes() async throws { try scene(.metal) }
     @MainActor func testMetalHDRPresentsAndResizes() async throws { try scene(.metal, hdr: true) }
     @MainActor func testMetalPostPresentsAndResizes() async throws { try scene(.metal, hdr: true, post: true) }
-    @MainActor private func scene(_ api: GraphicsAPI, hdr: Bool = false, post: Bool = false) throws {
+    @MainActor func testMetalStylizedPresentsAndResizes() async throws { try scene(.metal, hdr: true, post: true, stylized: true) }
+    @MainActor private func scene(_ api: GraphicsAPI, hdr: Bool = false, post: Bool = false, stylized: Bool = false) throws {
         _ = NSApplication.shared
         let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 96,height: 96), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false; defer { window.close() }
@@ -26,6 +27,7 @@ final class NativeGridSurfaceTests: XCTestCase {
             var packet = post ? PostProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
                 : hdr ? PBRProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
                 : MeshProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
+            packet.renderSettings.enableStylizedCharacterShading = stylized
             if frame == 1 {
                 packet.renderSettings.enableEditorGrid = true
                 packet.renderSettings.editorGridSpacing = .nan
@@ -38,6 +40,10 @@ final class NativeGridSurfaceTests: XCTestCase {
             if hdr { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.tonemap],1) }
             if post {
                 for kind in [RenderPassKind.ssao,.taa,.bloom,.fxaa] { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[kind],1) }
+            }
+            if stylized {
+                XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.outline],6)
+                XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.inkPaperPost],1)
             }
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], hdr ? 6 : 5)
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass], hdr ? 6 : 5)

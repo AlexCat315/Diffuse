@@ -87,18 +87,7 @@ extension WGPURenderer {
 
     func writeStylizedCharacterUniforms() {
         guard let stylizedCharacterUniformBuffer else { return }
-        let style = activeRenderSettings.stylizedCharacterStyle
-        var uniforms = StylizedCharacterUniforms(
-            toonThresholds: style.toonThresholds,
-            toonLevels: style.toonLevels,
-            inkWashColor: style.inkWashColor,
-            params: SIMD4<Float>(
-                style.paperGrainStrength,
-                style.rimStrength,
-                style.materialBiasStrength,
-                style.outlineWidth
-            )
-        )
+        var uniforms = StylizedCharacterUniforms(style: activeRenderSettings.stylizedCharacterStyle)
         withUnsafeBytes(of: &uniforms) { raw in
             if let base = raw.baseAddress {
                 backend.writeBuffer(stylizedCharacterUniformBuffer,

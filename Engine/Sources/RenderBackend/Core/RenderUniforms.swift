@@ -39,6 +39,10 @@ struct StylizedCharacterUniforms {
     var toonLevels: SIMD4<Float>
     var inkWashColor: SIMD4<Float>
     var params: SIMD4<Float>
+    init(style: StylizedCharacterStyle) {
+        toonThresholds = style.toonThresholds; toonLevels = style.toonLevels; inkWashColor = style.inkWashColor
+        params = SIMD4(style.paperGrainStrength,style.rimStrength,style.materialBiasStrength,style.outlineWidth)
+    }
 }
 
 /// Shared per-frame uniforms for fullscreen post passes. Targets are

@@ -59,4 +59,4 @@ Apple M1 本机 Release，Metal 验证关闭，30 帧预热，3×180 帧测量�
 
 ## 默认切换前剩余范围
 
-EngineHost 默认仍使用 WGPU。粒子、风格化、Editor/GuavaUI 纹理/命令互操作和 DXIL 产物仍须完成。全部功能、画面对照与性能门限完成后再切换默认 renderer，然后移除 WGPU 运行时与参考依赖。
+EngineHost 默认仍使用 WGPU。风格化已在后续阶段迁移，见 [风格化验证](NATIVE_STYLIZED_VALIDATION.md)。粒子、Editor/GuavaUI 纹理/命令互操作和 DXIL 产物仍须完成。全部功能、画面对照与性能门限完成后再切换默认 renderer，然后移除 WGPU 运行时与参考依赖。

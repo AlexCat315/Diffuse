@@ -83,6 +83,7 @@ func mtlTextureUsage(_ usage: TextureUsage) -> MTLTextureUsage {
 
 func mtlVertexFormat(_ format: VertexFormat) -> MTLVertexFormat {
     switch format {
+    case .float: return .float
     case .float2: return .float2
     case .float3: return .float3
     case .float4: return .float4

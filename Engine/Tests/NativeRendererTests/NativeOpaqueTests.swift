@@ -177,6 +177,8 @@ final class NativeOpaqueTests: XCTestCase {
         packet.renderSettings.stage = .r5PostProcess
         try renderer.renderChecked(packet: packet)
         packet.renderSettings.enableStylizedCharacterShading = true
+        try renderer.renderChecked(packet: packet)
+        packet.renderSettings.stylizedCharacterStyle.outlineWidth = .nan
         XCTAssertThrowsError(try renderer.renderChecked(packet: packet))
         packet.renderSettings.enableStylizedCharacterShading = false
         packet.renderSettings.stage = .r3ViewportInterop; try renderer.renderChecked(packet: packet)

@@ -29,7 +29,8 @@ extension DX12Device {
         if let vertex = descriptor.vertexLayout {
             let buffers = try vertex.bufferLayouts.map { try GRHI_VertexBufferLayout(stride: rhiCount($0.stride), per_instance: $0.stepRate == .perInstance ? 1 : 0) }
             let attributes = try vertex.attributes.map { a -> GRHI_VertexAttribute in
-                let format: UInt32 = a.format == .float2 ? 0 : a.format == .float3 ? 1 : 2
+                let format: UInt32
+                switch a.format { case .float2: format = 0; case .float3: format = 1; case .float4: format = 2; case .float: format = 3 }
                 return try GRHI_VertexAttribute(location: a.location, format: format, buffer: a.bufferIndex, offset: rhiCount(a.offset), semantic_index: a.semantic.index, semantic: arena.string(a.semantic.name))
             }
             desc.vertex_buffers = arena.store(buffers); desc.vertex_buffer_count = try rhiCount(buffers.count)

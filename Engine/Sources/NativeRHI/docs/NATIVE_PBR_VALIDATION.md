@@ -52,4 +52,4 @@ GUAVA_WGPU_BACKEND=metal Engine/.build/release/NativeRHIPassProbe \
 
 ## 默认切换前剩余范围
 
-默认 EngineHost 仍使用 WGPU。透明网格与蒙皮/变形已在后续阶段迁移，见 [动画与透明验证](NATIVE_ANIMATION_VALIDATION.md)。NativeRenderer 会明确拒绝尚未支持的粒子和风格化路径；r5 后处理见 [后处理验证](NATIVE_POST_VALIDATION.md)；Editor/GuavaUI 的纹理/命令互操作仍在迁移。上述功能覆盖与画面/性能验证完成后再切换默认 renderer，然后移除 WGPU 运行时和参考依赖。Windows/Linux 原生验证按用户要求暂不作为本轮执行任务。
+默认 EngineHost 仍使用 WGPU。透明网格与蒙皮/变形已在后续阶段迁移，见 [动画与透明验证](NATIVE_ANIMATION_VALIDATION.md)。NativeRenderer 会明确拒绝尚未支持的粒子路径；r5 后处理见 [后处理验证](NATIVE_POST_VALIDATION.md)，风格化见 [风格化验证](NATIVE_STYLIZED_VALIDATION.md)；Editor/GuavaUI 的纹理/命令互操作仍在迁移。上述功能覆盖与画面/性能验证完成后再切换默认 renderer，然后移除 WGPU 运行时和参考依赖。Windows/Linux 原生验证按用户要求暂不作为本轮执行任务。

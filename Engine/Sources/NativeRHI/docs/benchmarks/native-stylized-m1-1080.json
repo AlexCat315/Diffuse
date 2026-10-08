@@ -1,0 +1,135 @@
+{
+  "environment" : {
+    "buildConfiguration" : "release",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-10-08T13:45:03Z",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 180,
+  "height" : 1080,
+  "imageDifferences" : {
+    "native-metal" : {
+      "maximumChannelError" : 37,
+      "meanAbsoluteChannelError" : 0.0015035043724279835,
+      "pixelCount" : 2073600,
+      "pixelsOverThree" : 191
+    }
+  },
+  "repeats" : 3,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 5848.295372222223,
+        "p95Microseconds" : 5848.337272222222,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 29.459,
+        "p95Microseconds" : 63.792,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 842.625,
+        "p95Microseconds" : 1685.583,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 670.375,
+        "p95Microseconds" : 1339.291,
+        "sampleCount" : 540
+      },
+      "device" : "Apple M1",
+      "passDraws" : {
+        "basePass" : 3240,
+        "bloom" : 540,
+        "depthPrepass" : 3240,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inkPaperPost" : 540,
+        "outline" : 3240,
+        "shadowPass" : 9720,
+        "skybox" : 540,
+        "ssao" : 540,
+        "taa" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "passFrames" : {
+        "basePass" : 540,
+        "bloom" : 540,
+        "depthPrepass" : 540,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inkPaperPost" : 540,
+        "outline" : 540,
+        "shadowPass" : 540,
+        "skybox" : 540,
+        "ssao" : 540,
+        "taa" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      }
+    },
+    {
+      "backend" : "wgpu-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 7737.474305555556,
+        "p95Microseconds" : 8480.986577777778,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 188.125,
+        "p95Microseconds" : 268.5,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 885.167,
+        "p95Microseconds" : 1281.792,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 391.375,
+        "p95Microseconds" : 535.584,
+        "sampleCount" : 540
+      },
+      "device" : "wgpu-native metal",
+      "passDraws" : {
+        "basePass" : 3240,
+        "bloom" : 540,
+        "depthPrepass" : 3240,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inkPaperPost" : 540,
+        "outline" : 3240,
+        "shadowPass" : 9720,
+        "skybox" : 540,
+        "ssao" : 540,
+        "taa" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "passFrames" : {
+        "basePass" : 540,
+        "bloom" : 540,
+        "depthPrepass" : 540,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inkPaperPost" : 540,
+        "outline" : 540,
+        "shadowPass" : 540,
+        "skybox" : 540,
+        "ssao" : 540,
+        "taa" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      }
+    }
+  ],
+  "scene" : "stylized",
+  "warmup" : 30,
+  "width" : 1920
+}

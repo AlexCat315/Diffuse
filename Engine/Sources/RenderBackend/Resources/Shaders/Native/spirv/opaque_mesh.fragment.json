@@ -139,6 +139,16 @@
           "readOnly": true,
           "elementStride": 0
         }
+      },
+      {
+        "name": "style",
+        "slot": 13,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
       }
     ],
     "pushConstants": []
