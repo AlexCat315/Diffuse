@@ -126,26 +126,28 @@ struct Hazard: Equatable, Sendable {
 /// Per-resource active access window: the last write plus the reads since it.
 struct AccessTracker {
     private struct Record: Sendable {
-        let kind: AccessKind
         let stage: AccessStage
         let queue: QueueClass
         let range: BufferRange?
     }
 
+    private struct ReadKey: Hashable {
+        let queue: QueueClass
+        let range: BufferRange
+    }
     private struct Memory {
         var lastWrite: Record?
-        var reads: [Record] = []
+        // Repeated read-only frames retain one dependency per queue/range,
+        // unioning stages rather than accumulating the entire access history.
+        var reads: [ReadKey: AccessStage] = [:]
     }
 
     private var memories: [ResourceRef: Memory] = [:]
-    /// All hazards produced since the last `reset` (diagnostic / test surface).
-    private(set) var observedHazards: [Hazard] = []
 
     init() {}
 
     mutating func reset() {
         memories.removeAll(keepingCapacity: true)
-        observedHazards.removeAll(keepingCapacity: true)
     }
 
     mutating func removeResource(_ resource: ResourceRef) {
@@ -169,7 +171,8 @@ struct AccessTracker {
                     sourceStage: write.stage, destinationStage: access.stage,
                     sourceQueue: write.queue, destinationQueue: queue, range: access.range))
             }
-            memory.reads.append(Record(kind: .read, stage: access.stage, queue: queue, range: access.range))
+            let key = ReadKey(queue: queue, range: range)
+            memory.reads[key, default: []].formUnion(access.stage)
 
         case .write:
             if let write = memory.lastWrite, Self.overlaps(write.range, range) {
@@ -178,18 +181,17 @@ struct AccessTracker {
                     sourceStage: write.stage, destinationStage: access.stage,
                     sourceQueue: write.queue, destinationQueue: queue, range: access.range))
             }
-            for read in memory.reads where Self.overlaps(read.range, range) {
+            for (key, stage) in memory.reads where key.range.overlaps(range) {
                 hazards.append(Hazard(
                     resource: access.resource, kind: .writeAfterRead,
-                    sourceStage: read.stage, destinationStage: access.stage,
-                    sourceQueue: read.queue, destinationQueue: queue, range: access.range))
+                    sourceStage: stage, destinationStage: access.stage,
+                    sourceQueue: key.queue, destinationQueue: queue, range: access.range))
             }
-            memory.lastWrite = Record(kind: .write, stage: access.stage, queue: queue, range: access.range)
-            memory.reads = []
+            memory.lastWrite = Record(stage: access.stage, queue: queue, range: access.range)
+            memory.reads.removeAll(keepingCapacity: true)
         }
 
         memories[access.resource] = memory
-        observedHazards.append(contentsOf: hazards)
         return hazards
     }
 

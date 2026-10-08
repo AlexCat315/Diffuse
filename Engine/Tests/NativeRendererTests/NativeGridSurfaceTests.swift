@@ -10,6 +10,33 @@ import NativeRendererValidation
 final class NativeGridSurfaceTests: XCTestCase {
     @MainActor func testMetalRendererPresentsAndResizes() async throws { try render(.metal) }
     @MainActor func testVulkanRendererPresentsAndResizes() async throws { try render(.vulkan) }
+    @MainActor func testMetalScenePresentsAndResizes() async throws { try scene(.metal) }
+    @MainActor func testVulkanScenePresentsAndResizes() async throws { try scene(.vulkan) }
+    @MainActor private func scene(_ api: GraphicsAPI) throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 96,height: 96), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; defer { window.close() }
+        let layer = CAMetalLayer(); layer.device = MTLCreateSystemDefaultDevice(); layer.pixelFormat = .bgra8Unorm
+        let view = try XCTUnwrap(window.contentView); view.wantsLayer = true; view.layer = layer; layer.frame = view.bounds
+        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
+        let renderer = try NativeRenderer(device: device, surface: .metalLayer(Unmanaged.passUnretained(layer).toOpaque()))
+        for frame in 0..<6 {
+            let size: UInt32 = frame < 3 ? 96 : 64
+            layer.drawableSize = CGSize(width: Int(size),height: Int(size))
+            var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
+            if frame == 1 {
+                packet.renderSettings.enableEditorGrid = true
+                packet.renderSettings.editorGridSpacing = .nan
+                for _ in 0..<4 { XCTAssertThrowsError(try renderer.renderChecked(packet: packet)) }
+                packet.renderSettings.editorGridSpacing = 0.5
+                packet.renderSettings.enableEditorGrid = false
+            }
+            try renderer.renderChecked(packet: packet)
+            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], 5)
+            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass], 5)
+        }
+        try device.waitUntilIdle()
+    }
     @MainActor private func render(_ api: GraphicsAPI) throws {
         _ = NSApplication.shared
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 96, height: 96),

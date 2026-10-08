@@ -19,12 +19,18 @@ def main():
     if not args.slangc:
         parser.error('Supply --slangc or SLANGC (Slang 2026.19)')
     shaders = ROOT / 'Engine/Sources/RenderBackend/Resources/Shaders'
+    programs = [
+        ('editor_grid', 'editor_grid.slang', [('vertex', 'gridVertex'), ('fragment', 'gridFragment')]),
+        ('opaque_mesh', 'opaque_mesh.slang', [('vertex', 'meshVertex'), ('fragment', 'meshFragment')]),
+        ('opaque_depth', 'opaque_mesh.slang', [('fragment', 'depthFragment')]),
+    ]
     for target in args.targets:
-        for stage, entry in [('vertex', 'gridVertex'), ('fragment', 'gridFragment')]:
-            output = shaders / f'Native/{target}/editor_grid.{stage}.json'
-            SHADER.compile_shader(shaders / 'Slang/editor_grid.slang', entry, stage, target, output, args.slangc,
-                                  line_directives=False)
-            print(output.relative_to(ROOT))
+        for name, source, stages in programs:
+            for stage, entry in stages:
+                output = shaders / f'Native/{target}/{name}.{stage}.json'
+                SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, target, output, args.slangc,
+                                      line_directives=False)
+                print(output.relative_to(ROOT))
 
 
 if __name__ == '__main__':

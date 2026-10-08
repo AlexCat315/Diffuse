@@ -12,6 +12,7 @@ struct MeshVisibilityPlan {
 
     static func make(scene: RenderScene, viewProjection: simd_float4x4,
                      settings: RenderSettings, skinnedEntities: Set<EntityID>,
+                     meshBounds: (Int) -> (min: SIMD3<Float>, max: SIMD3<Float>)?,
                      meshExists: (Int) -> Bool) -> MeshVisibilityPlan {
         let frustum = Frustum3D(viewProjection: viewProjection)
         let deformables = Dictionary(scene.deformableMeshes.filter(\.isValid).map { ($0.entity, $0) }, uniquingKeysWith: { first, _ in first })
@@ -26,7 +27,7 @@ struct MeshVisibilityPlan {
                 var combined = Bounds3D.empty
                 var known = true
                 for slot in slots {
-                    guard let local = MeshBoundsRegistry.shared.bounds(for: slot) else { known = false; break }
+                    guard let local = meshBounds(slot) else { known = false; break }
                     let center = (local.min + local.max) * 0.5
                     let half = (local.max - local.min) * 0.5
                     let transformed = instance.transform * SIMD4<Float>(center, 1)

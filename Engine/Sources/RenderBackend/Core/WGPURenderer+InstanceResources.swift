@@ -2,13 +2,6 @@ import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 
-struct MeshInstanceUniforms {
-    var mvp: simd_float4x4
-    var model: simd_float4x4
-    var colorTint: SIMD4<Float>
-    var material: SIMD4<Float> = .zero
-}
-
 extension WGPURenderer {
     func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
                               baseColorTextureView: GPUTextureView? = nil,
