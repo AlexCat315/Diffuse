@@ -30,6 +30,35 @@ let wasmtimeProducts: [Product] = []
 let wasmtimeTargets: [Target] = []
 #endif
 
+// The checked loader artifact supports only macOS arm64. Other hosts can
+// compile the frontend without inheriting an incompatible XCFramework.
+#if os(macOS) && arch(arm64)
+let nativeRHIInteropDependencies: [Target.Dependency] = ["CVulkanHeaders"]
+let nativeRHIInteropTargets: [Target] = [
+    // Vendored Vulkan loader (dynamic) plus headers, packaged as an
+    // xcframework built by scripts/bootstrap-rhi-vulkan.py. The C bridge links the
+    // loader at build time; the ICD (MoltenVK) is still discovered at
+    // runtime, and the backend throws when no physical device is present.
+    .binaryTarget(
+        name: "VulkanLoader",
+        path: "vendor/VulkanLoader.xcframework"
+    ),
+    .target(
+        name: "CVulkanHeaders",
+        dependencies: ["VulkanLoader"],
+        path: "Sources/Bridge/CVulkanHeaders",
+        publicHeadersPath: "include",
+        cSettings: [
+            .define("VK_ENABLE_BETA_EXTENSIONS"),
+            .define("VK_USE_PLATFORM_METAL_EXT", .when(platforms: [.macOS])),
+        ]
+    ),
+]
+#else
+let nativeRHIInteropDependencies: [Target.Dependency] = []
+let nativeRHIInteropTargets: [Target] = []
+#endif
+
 let package = Package(
     name: "GuavaEngine",
     platforms: [.macOS(.v13)],
@@ -38,6 +67,7 @@ let package = Package(
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
         .library(name: "EngineMath", targets: ["EngineMath"]),
         .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
+        .library(name: "NativeRHI", targets: ["NativeRHI"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "ImageDecodeBridge", targets: ["CImageDecodeBridge"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
@@ -225,6 +255,14 @@ let package = Package(
                 "CWGPUBridge",
                 .product(name: "Logging", package: "swift-log"),
             ]
+        ),
+
+        // MARK: - Native RHI (Metal implementation and backend foundations)
+        .target(
+            name: "NativeRHI",
+            dependencies: nativeRHIInteropDependencies,
+            path: "Sources/NativeRHI",
+            exclude: ["docs"]
         ),
 
         // MARK: - Platform
@@ -585,12 +623,20 @@ let package = Package(
                 "CinematicRenderer",
             ]
         ),
+        .testTarget(
+            name: "NativeRHITests",
+            dependencies: [
+                "NativeRHI",
+            ],
+            resources: [.copy("Fixtures")]
+        ),
     ],
     cxxLanguageStandard: .cxx17
 )
 
 package.products.append(contentsOf: wasmtimeProducts)
 package.targets.append(contentsOf: wasmtimeTargets)
+package.targets.append(contentsOf: nativeRHIInteropTargets)
 #if os(macOS)
 for targetName in ["GuavaPluginHost", "PluginRuntimeTests"] {
     package.targets.first(where: { $0.name == targetName })?

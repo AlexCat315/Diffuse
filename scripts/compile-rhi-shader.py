@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Compile one entry point offline into NativeRHI's compiler-independent artifact.
+
+The compiler is supplied explicitly, or through SLANGC. No downloads occur here.
+Raw Slang reflection is saved beside the artifact for inspection. Reflection is retained in its target-specific form for binding-layout inspection.
+"""
+import argparse
+import base64
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+SLANG_VERSION = '2026.19'
+
+
+def run(arguments):
+    result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    return result.stdout.strip() or result.stderr.strip()
+
+
+def reflected_bindings(reflection):
+    result = []
+    for parameter in reflection.get('parameters', []):
+        binding = parameter.get('binding', {})
+        type_info = parameter['type']
+        kind = type_info.get('kind')
+        shape = type_info.get('baseShape', '')
+        if kind == 'samplerState':
+            resource_type = 'sampler'
+        elif kind == 'constantBuffer':
+            resource_type = 'uniformBuffer'
+        elif kind == 'resource' and shape in ('structuredBuffer', 'byteAddressBuffer'):
+            resource_type = 'storageBuffer'
+        elif kind == 'resource' and shape.startswith('texture'):
+            resource_type = 'storageTexture' if type_info.get('access') == 'readWrite' else 'texture'
+        elif kind == 'resource' and shape == 'accelerationStructure':
+            resource_type = 'accelerationStructure'
+        else:
+            raise ValueError(f"Unsupported reflected binding {parameter['name']!r}: {kind}/{shape}")
+        if 'index' not in binding:
+            raise ValueError(f"Binding {parameter['name']!r} has no target resource index")
+        result.append({'name': parameter['name'], 'slot': binding['index'],
+                       'space': binding.get('space', 0), 'type': resource_type})
+    slots = [(item['space'], item['slot']) for item in result]
+    if len(slots) != len(set(slots)):
+        raise ValueError('Target bindings overlap; assign distinct slots before using the RHI direct-binding path')
+    return result
+
+
+def compile_shader(source, entry, stage, target, output, compiler, threadgroup_size=None):
+    version = run([compiler, '-version'])
+    if version != SLANG_VERSION:
+        raise ValueError(f'Expected Slang {SLANG_VERSION}, got {version!r}')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='guava-rhi-shader-') as directory:
+        temp = Path(directory)
+        code = temp / {'metal': 'shader.metal', 'spirv': 'shader.spv', 'dxil': 'shader.dxil'}[target]
+        reflection_file = temp / 'reflection.json'
+        run([compiler, str(source.resolve()), '-entry', entry, '-stage', stage,
+             '-target', target, '-o', str(code), '-reflection-json', str(reflection_file)])
+        reflection = json.loads(reflection_file.read_text())
+        entry_reflection = next(item for item in reflection['entryPoints'] if item['name'] == entry)
+        dimensions = entry_reflection.get('threadGroupSize')
+        if stage in ('mesh', 'task') and dimensions is None and threadgroup_size is None:
+            raise ValueError('Slang JSON does not expose mesh/task local size; supply --threadgroup-size X Y Z matching numthreads')
+        if dimensions is not None and threadgroup_size is not None and dimensions != threadgroup_size:
+            raise ValueError('Explicit local size disagrees with compiler reflection')
+        dimensions = dimensions or threadgroup_size or [1, 1, 1]
+        if len(dimensions) != 3 or any(value <= 0 for value in dimensions):
+            raise ValueError('Invalid reflected workgroup size')
+        format_name = {'metal': 'mslSource', 'spirv': 'spirv', 'dxil': 'dxil'}[target]
+        artifact = {
+            'stage': stage, 'format': format_name, 'entryPoint': entry,
+            'code': base64.b64encode(code.read_bytes()).decode('ascii'),
+            'interface': {'threadgroupSize': dict(zip(('x', 'y', 'z'), dimensions)),
+                          'bindings': reflected_bindings(reflection)},
+            'compiler': f'Slang {version}',
+        }
+        # Compilation must finish before an artifact is published.
+        output.with_suffix('.reflection.json').write_text(json.dumps(reflection, indent=2) + '\n')
+        output.write_text(json.dumps(artifact, indent=2) + '\n')
+    return artifact
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('source', type=Path)
+    parser.add_argument('--entry', required=True)
+    parser.add_argument('--stage', choices=['vertex', 'fragment', 'compute', 'task', 'mesh'], required=True)
+    parser.add_argument('--target', choices=['metal', 'spirv', 'dxil'], required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--threadgroup-size', nargs=3, type=int)
+    parser.add_argument('--slangc', default=os.environ.get('SLANGC'))
+    args = parser.parse_args()
+    if not args.slangc:
+        parser.error('Supply --slangc or SLANGC (Slang 2026.19)')
+    try:
+        compile_shader(args.source, args.entry, args.stage, args.target, args.output, args.slangc, args.threadgroup_size)
+    except (RuntimeError, ValueError, OSError, KeyError, StopIteration) as error:
+        parser.exit(1, f'Shader compilation failed: {error}\n')
+    print(args.output)
+
+
+if __name__ == '__main__':
+    main()
