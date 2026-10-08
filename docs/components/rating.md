@@ -42,6 +42,6 @@ Rating("Customer score", value: $score) {
 
 示例在 `GuavaUIGallery/RatingStory.swift`，可用 `swift run --package-path GuavaUI GuavaUIDemo --component Rating` 打开。9 项 Rating 测试和独立画廊交互测试覆盖真实事件派发、半星命中、提交前的帧、捕获取消、配置变化、卸载、键盘、辅助功能、尺寸、SVG 解码及部分填充裁剪。
 
-原生 Retina 窗口已确认明暗主题、12/16/20/28/36pt SVG、半星和 4.25 填充、禁用颜色、键盘步长、Home/End、清空策略、焦点环、辅助功能写入和独立重置。鼠标整星/半星命中、预览不提交、重复清零、内部拖动提交、外部释放取消及只读/禁用忽略输入也已完成原生验收。检查过程中定位并修补了 SDL 的 Cocoa 事件坐标与按钮状态顺序问题；SDK 的新检出应用和重复配置已验证。[Rating 验证](../guava-ui/evidence/rating-native.json)与[平台输入验证](../guava-ui/evidence/sdl-cocoa-input-native.json)记录口径和限制。临时诊断代码已移除。
+原生 Retina 窗口已确认明暗主题、12/16/20/28/36pt SVG、半星和 4.25 填充、禁用颜色、键盘步长、Home/End、清空策略、焦点环、辅助功能写入和独立重置。鼠标整星/半星命中、预览不提交、重复清零、内部拖动提交、外部释放取消及只读/禁用忽略输入也已完成原生验收。[Rating 验证](../guava-ui/evidence/rating-native.json)记录口径和限制。原生点击验收使用的 CUA 坐标仍待后续在输入驱动层稳定复现与修复。
 
 当前边界：水平 LTR 星形布局；未提供 RTL、其他评分图形、触摸专属手势和表单校验集成。
