@@ -32,6 +32,7 @@ struct VertexInput {
     float4 tangent : TEXCOORD4;
     float4 joints : TEXCOORD5;
     float4 weights : TEXCOORD6;
+    float materialIndex : TEXCOORD7;
 };
 struct VertexOutput {
     float4 position : SV_Position;
@@ -42,6 +43,7 @@ struct VertexOutput {
     float3 bitangent : TEXCOORD4;
     float3 worldPosition : TEXCOORD5;
     float depth : TEXCOORD6;
+    float materialIndex : TEXCOORD7;
 };
 float3 safeNormalize(float3 v) { return dot(v,v) > 0.000001 ? v * rsqrt(dot(v,v)) : float3(0,1,0); }
 #ifdef SHADOW_RENDER
@@ -65,6 +67,7 @@ VertexOutput meshVertex(VertexInput input, uint id : SV_InstanceID) {
     output.depth = saturate(output.position.z / max(output.position.w,0.00001));
     output.color = input.color * instance.colorTint.rgb;
     output.uv = input.uv;
+    output.materialIndex = input.materialIndex;
     output.normal = safeNormalize(mul(instance.model, localNormal).xyz);
     output.tangent = safeNormalize(mul(instance.model, localTangent).xyz);
     output.bitangent = cross(output.normal, output.tangent) * input.tangent.w;

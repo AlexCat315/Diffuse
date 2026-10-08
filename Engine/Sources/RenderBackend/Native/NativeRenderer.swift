@@ -6,7 +6,8 @@ import SIMDCompat
 
 /// Scene renderer recorded entirely through NativeRHI. The initial migration
 /// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
-/// HDR sky/tonemap, r5 post effects, temporal history/cache and the grid.
+/// HDR sky/tonemap, stylized materials/outline/paper, r5 post effects, temporal
+/// history/cache and the grid.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
@@ -94,7 +95,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             switch kind {
             case .depthPrepass:
                 meshPass.encode(draws: opaqueDraws,size: packet.drawableSize,color: nil,
-                    depth: RenderDepthTarget(texture: targets.depth,loadAction: .clear(1)),depthOnly: true,into: commands)
+                    depth: RenderDepthTarget(texture: targets.depth,loadAction: .clear(1)),kind: .depth,into: commands)
                 draws = opaqueDraws.count
             case .shadowPass:
                 guard !shadowTiles.isEmpty else { continue }
@@ -105,7 +106,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             case .basePass:
                 meshPass.encode(draws: opaqueDraws,size: packet.drawableSize,
                     color: RenderColorTarget(texture: current,loadAction: hdr ? .load : .clear(SIMD4(0.05,0.06,0.08,1))),
-                    depth: RenderDepthTarget(texture: targets.depth,loadAction: hasDepth ? .load : .clear(1)),depthOnly: false,into: commands)
+                    depth: RenderDepthTarget(texture: targets.depth,loadAction: hasDepth ? .load : .clear(1)),into: commands)
                 draws = opaqueDraws.count
             case .ssao, .ssr:
                 guard let resources = post.targets else { throw RHIError.outOfMemory }
@@ -144,7 +145,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                 guard !transparentDraws.isEmpty else { continue }
                 meshPass.encode(draws: transparentDraws,size: packet.drawableSize,
                     color: RenderColorTarget(texture: current,loadAction: .load),
-                    depth: RenderDepthTarget(texture: targets.depth,loadAction: .load),depthOnly: false,into: commands)
+                    depth: RenderDepthTarget(texture: targets.depth,loadAction: .load),into: commands)
                 draws = transparentDraws.count
             case .bloom:
                 guard let resources = post.targets else { throw RHIError.outOfMemory }
@@ -160,7 +161,17 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                 try post.encode(kind: kind,input: input,secondary: input,output: color,
                     uniforms: SIMD4<Float>(1/Float(targets.size.width),1/Float(targets.size.height),0,0),size: packet.drawableSize,into: commands)
             case .particles, .viewportResolve: continue
-            case .outline, .inkPaperPost: throw RHIError.unsupportedFeature("native stylized passes are pending")
+            case .outline:
+                let outlines = opaqueDraws.filter { $0.outlinePipeline != nil }
+                meshPass.encode(draws: outlines,size: packet.drawableSize,color: RenderColorTarget(texture: current,loadAction: .load),
+                    depth: RenderDepthTarget(texture: targets.depth,loadAction: .load),kind: .outline,into: commands)
+                draws = outlines.count
+            case .inkPaperPost:
+                guard hdr, let resources = post.targets else { continue }
+                let output = resources.next(after: current)
+                try post.encode(kind: kind,input: current,secondary: current,output: output,
+                    uniforms: StylizedCharacterUniforms(style: packet.renderSettings.stylizedCharacterStyle),size: packet.drawableSize,into: commands)
+                current = output
             }
             passTimes[kind] = DispatchTime.now().uptimeNanoseconds - before
             passDraws[kind] = draws; active.append(kind)
@@ -173,7 +184,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         stats.frameIndex = packet.frameIndex; stats.passCount = active.count; stats.activePasses = active
         stats.drawCallCount = passDraws.values.reduce(0,+); stats.passDrawCallCounts = passDraws; stats.passEncodeNS = passTimes
         stats.cpuPrepareNS = prepareEnd - start; stats.cpuEncodeNS = encoded - prepareEnd
-        stats.cpuPostProcessEncodeNS = [.ssao,.ssr,.taa,.bloom,.tonemap,.fxaa].reduce(0) { $0 + (passTimes[$1] ?? 0) }
+        stats.cpuPostProcessEncodeNS = [.inkPaperPost,.ssao,.ssr,.taa,.bloom,.tonemap,.fxaa].reduce(0) { $0 + (passTimes[$1] ?? 0) }
         stats.cpuSubmitNS = end - encoded; stats.cpuFrameTotalNS = end - start
         stats.culledMeshInstanceCount = prepared.visibility.culledCount; stats.lodMeshInstanceCount = prepared.visibility.lodCount
         stats.shadowedLightCount = shadowPlan.shadowedLightCount

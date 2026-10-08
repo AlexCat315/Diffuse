@@ -1601,11 +1601,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             guard draw.key.alphaMode != .blend else { return false }
             // Inverted-hull outlines have no silhouette on a zero-thickness
             // surface; its coplanar back face would paint over the material.
-            if let bounds = MeshBoundsRegistry.shared.bounds(for: draw.key.meshIndex) {
-                let extent = bounds.max - bounds.min
-                if min(extent.x, min(extent.y, extent.z)) <= 1e-7 { return false }
-            }
-            return true
+            return MeshOutlinePolicy.includes(bounds: MeshBoundsRegistry.shared.bounds(for: draw.key.meshIndex))
         }, kind: .outline, hdr: activeRenderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r4LightingPBRShadow.rawValue)
         pass.end()
         return drawCallCount

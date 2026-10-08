@@ -1392,7 +1392,7 @@
             "binding": {
               "kind": "varyingInput",
               "index": 0,
-              "count": 7
+              "count": 8
             },
             "type": {
               "kind": "struct",
@@ -1573,12 +1573,32 @@
                   },
                   "semanticName": "TEXCOORD",
                   "semanticIndex": 6
+                },
+                {
+                  "name": "materialIndex",
+                  "type": {
+                    "kind": "scalar",
+                    "scalarType": "float32",
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 7
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 7
                 }
               ],
               "sizes": [
                 {
                   "kind": "varyingInput",
-                  "value": 7
+                  "value": 8
                 }
               ]
             }
@@ -1601,7 +1621,7 @@
           "binding": {
             "kind": "varyingInput",
             "index": 0,
-            "count": 7
+            "count": 8
           },
           "type": {
             "kind": "struct",
@@ -1782,12 +1802,32 @@
                 },
                 "semanticName": "TEXCOORD",
                 "semanticIndex": 6
+              },
+              {
+                "name": "materialIndex",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 7
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 7
               }
             ],
             "sizes": [
               {
                 "kind": "varyingInput",
-                "value": 7
+                "value": 8
               }
             ]
           }

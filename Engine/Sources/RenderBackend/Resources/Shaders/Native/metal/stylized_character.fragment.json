@@ -1,0 +1,157 @@
+{
+  "stage": "fragment",
+  "format": "mslSource",
+  "entryPoint": "stylizedFragment",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCBfTWF0cml4U3RvcmFnZV9mbG9hdDR4NF9Db2xNYWpvcm5hdHVyYWxfMAp7CiAgICBhcnJheTxmbG9hdDQsIGludCg0KT4gZGF0YV8wOwp9OwoKc3RydWN0IERyYXdVbmlmb3Jtc19uYXR1cmFsXzAKewogICAgX01hdHJpeFN0b3JhZ2VfZmxvYXQ0eDRfQ29sTWFqb3JuYXR1cmFsXzAgbXZwXzA7CiAgICBfTWF0cml4U3RvcmFnZV9mbG9hdDR4NF9Db2xNYWpvcm5hdHVyYWxfMCBtb2RlbF8wOwogICAgZmxvYXQ0IGNvbG9yVGludF8wOwogICAgZmxvYXQ0IG1hdGVyaWFsXzA7Cn07CgpzdHJ1Y3QgU2NlbmVMaWdodF8wCnsKICAgIGZsb2F0NCBwb3NpdGlvblR5cGVfMDsKICAgIGZsb2F0NCBkaXJlY3Rpb25SYW5nZV8wOwogICAgZmxvYXQ0IGNvbG9ySW50ZW5zaXR5XzA7CiAgICBmbG9hdDQgc3BvdEFuZ2xlc18wOwp9OwoKc3RydWN0IFNjZW5lTGlnaHRzXzAKewogICAgZmxvYXQ0IGFtYmllbnRDb2xvckludGVuc2l0eV8wOwogICAgZmxvYXQ0IGV4cG9zdXJlTGlnaHRDb3VudF8wOwogICAgYXJyYXk8U2NlbmVMaWdodF8wLCBpbnQoOCk+IGxpZ2h0c18wOwp9OwoKc3RydWN0IFN0eWxpemVkU3R5bGVfMAp7CiAgICBmbG9hdDQgdG9vblRocmVzaG9sZHNfMDsKICAgIGZsb2F0NCB0b29uTGV2ZWxzXzA7CiAgICBmbG9hdDQgaW5rV2FzaENvbG9yXzA7CiAgICBmbG9hdDQgcGFyYW1zXzA7Cn07CgpzdHJ1Y3QgS2VybmVsQ29udGV4dF8wCnsKICAgIHRleHR1cmUyZDxmbG9hdCwgYWNjZXNzOjpzYW1wbGU+IGJhc2VUZXh0dXJlXzA7CiAgICBzYW1wbGVyIG1lc2hTYW1wbGVyXzA7CiAgICB0ZXh0dXJlMmQ8ZmxvYXQsIGFjY2Vzczo6c2FtcGxlPiBub3JtYWxUZXh0dXJlXzA7CiAgICBEcmF3VW5pZm9ybXNfbmF0dXJhbF8wIGNvbnN0YW50KiBkcmF3XzA7CiAgICBTY2VuZUxpZ2h0c18wIGNvbnN0YW50KiBzY2VuZUxpZ2h0c18wOwogICAgU3R5bGl6ZWRTdHlsZV8wIGNvbnN0YW50KiBzdHlsZV8wOwp9OwoKdm9pZCBjb3ZlcmFnZUFscGhhXzAoZmxvYXQgYWxwaGFfMCwgYm9vbCBmcm9udF8wLCBLZXJuZWxDb250ZXh0XzAgdGhyZWFkKiBrZXJuZWxDb250ZXh0XzApCnsKICAgIGJvb2wgX1MxOwogICAgaWYoIWZyb250XzApCiAgICB7CiAgICAgICAgX1MxID0gKGtlcm5lbENvbnRleHRfMC0+ZHJhd18wLT5tYXRlcmlhbF8wLnopIDwgMC41ZjsKICAgIH0KICAgIGVsc2UKICAgIHsKICAgICAgICBfUzEgPSBmYWxzZTsKICAgIH0KICAgIGlmKF9TMSkKICAgIHsKICAgICAgICBkaXNjYXJkX2ZyYWdtZW50KCk7CiAgICB9CiAgICBpZigoa2VybmVsQ29udGV4dF8wLT5kcmF3XzAtPm1hdGVyaWFsXzAueCkgPiAwLjVmKQogICAgewogICAgICAgIF9TMSA9IChrZXJuZWxDb250ZXh0XzAtPmRyYXdfMC0+bWF0ZXJpYWxfMC54KSA8IDEuNWY7CiAgICB9CiAgICBlbHNlCiAgICB7CiAgICAgICAgX1MxID0gZmFsc2U7CiAgICB9CiAgICBpZihfUzEpCiAgICB7CiAgICAgICAgX1MxID0gYWxwaGFfMCA8IChrZXJuZWxDb250ZXh0XzAtPmRyYXdfMC0+bWF0ZXJpYWxfMC55KTsKICAgIH0KICAgIGVsc2UKICAgIHsKICAgICAgICBfUzEgPSBmYWxzZTsKICAgIH0KICAgIGlmKF9TMSkKICAgIHsKICAgICAgICBkaXNjYXJkX2ZyYWdtZW50KCk7CiAgICB9CiAgICByZXR1cm47Cn0KCmZsb2F0MyBzYWZlTm9ybWFsaXplXzAoZmxvYXQzIHZfMCkKewogICAgZmxvYXQgX1MyID0gZG90KHZfMCwgdl8wKTsKICAgIGZsb2F0MyBfUzM7CiAgICBpZihfUzIgPiA5Ljk5OTk5OTk3NDc1MjQyNzA4ZS0wN2YpCiAgICB7CiAgICAgICAgX1MzID0gdl8wICogZmxvYXQzKHJzcXJ0KF9TMikpIDsKICAgIH0KICAgIGVsc2UKICAgIHsKICAgICAgICBfUzMgPSBmbG9hdDMoMC4wZiwgMS4wZiwgMC4wZik7CiAgICB9CiAgICByZXR1cm4gX1MzOwp9CgpmbG9hdCBzY2VuZUxhbWJlcnRfMChmbG9hdDMgbm9ybWFsXzAsIGZsb2F0MyB3b3JsZF8wLCBLZXJuZWxDb250ZXh0XzAgdGhyZWFkKiBrZXJuZWxDb250ZXh0XzEpCnsKICAgIGZsb2F0IF9TNCA9IGtlcm5lbENvbnRleHRfMS0+c2NlbmVMaWdodHNfMC0+YW1iaWVudENvbG9ySW50ZW5zaXR5XzAudzsKICAgIHVpbnQgX1M1ID0gbWluKHVpbnQoa2VybmVsQ29udGV4dF8xLT5zY2VuZUxpZ2h0c18wLT5leHBvc3VyZUxpZ2h0Q291bnRfMC55KSwgOFUpOwogICAgdWludCBpXzAgPSAwVTsKICAgIGZsb2F0IGxpZ2h0aW5nXzAgPSBfUzQ7CiAgICBmb3IoOzspCiAgICB7CiAgICAgICAgaWYoaV8wIDwgX1M1KQogICAgICAgIHsKICAgICAgICB9CiAgICAgICAgZWxzZQogICAgICAgIHsKICAgICAgICAgICAgYnJlYWs7CiAgICAgICAgfQogICAgICAgIFNjZW5lTGlnaHRfMCBsaWdodF8wID0ga2VybmVsQ29udGV4dF8xLT5zY2VuZUxpZ2h0c18wLT5saWdodHNfMFtpXzBdOwogICAgICAgIGZsb2F0IF9TNiA9IGtlcm5lbENvbnRleHRfMS0+c2NlbmVMaWdodHNfMC0+bGlnaHRzXzBbaV8wXS5wb3NpdGlvblR5cGVfMC53OwogICAgICAgIGZsb2F0IGF0dGVudWF0aW9uXzA7CiAgICAgICAgZmxvYXQzIExfMDsKICAgICAgICBpZihfUzYgPCAwLjVmKQogICAgICAgIHsKICAgICAgICAgICAgTF8wID0gc2FmZU5vcm1hbGl6ZV8wKC0gbGlnaHRfMC5kaXJlY3Rpb25SYW5nZV8wLnh5eik7CiAgICAgICAgICAgIGF0dGVudWF0aW9uXzAgPSAxLjBmOwogICAgICAgIH0KICAgICAgICBlbHNlCiAgICAgICAgewogICAgICAgICAgICBmbG9hdDMgX1M3ID0gbGlnaHRfMC5wb3NpdGlvblR5cGVfMC54eXo7CiAgICAgICAgICAgIGZsb2F0MyBvZmZzZXRfMCA9IF9TNyAtIHdvcmxkXzA7CiAgICAgICAgICAgIGZsb2F0MyBfUzggPSBzYWZlTm9ybWFsaXplXzAob2Zmc2V0XzApOwogICAgICAgICAgICBmbG9hdCBhdHRlbnVhdGlvbl8xID0gcG93KDEuMGYgLSBzYXR1cmF0ZShsZW5ndGgob2Zmc2V0XzApIC8gbWF4KGxpZ2h0XzAuZGlyZWN0aW9uUmFuZ2VfMC53LCAwLjAwMTAwMDAwMDA0NzQ5NzQ1ZikpLCAyLjBmKTsKICAgICAgICAgICAgaWYoX1M2ID49IDEuNWYpCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIGF0dGVudWF0aW9uXzAgPSBhdHRlbnVhdGlvbl8xICogc21vb3Roc3RlcChjb3MobGlnaHRfMC5zcG90QW5nbGVzXzAueSksIGNvcyhsaWdodF8wLnNwb3RBbmdsZXNfMC54KSwgZG90KHNhZmVOb3JtYWxpemVfMChsaWdodF8wLmRpcmVjdGlvblJhbmdlXzAueHl6KSwgc2FmZU5vcm1hbGl6ZV8wKHdvcmxkXzAgLSBfUzcpKSk7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxzZQogICAgICAgICAgICB7CiAgICAgICAgICAgICAgICBhdHRlbnVhdGlvbl8wID0gYXR0ZW51YXRpb25fMTsKICAgICAgICAgICAgfQogICAgICAgICAgICBMXzAgPSBfUzg7CiAgICAgICAgfQogICAgICAgIGZsb2F0IGxpZ2h0aW5nXzEgPSBsaWdodGluZ18wICsgbWF4KGRvdChub3JtYWxfMCwgTF8wKSwgMC4wZikgKiBsaWdodF8wLmNvbG9ySW50ZW5zaXR5XzAudyAqIGF0dGVudWF0aW9uXzA7CiAgICAgICAgaV8wID0gaV8wICsgMVU7CiAgICAgICAgbGlnaHRpbmdfMCA9IGxpZ2h0aW5nXzE7CiAgICB9CiAgICByZXR1cm4gY2xhbXAobGlnaHRpbmdfMCwgMC4wZiwgMS41Zik7Cn0KCmZsb2F0IHRvb25SYW1wXzAoZmxvYXQgdl8xLCBLZXJuZWxDb250ZXh0XzAgdGhyZWFkKiBrZXJuZWxDb250ZXh0XzIpCnsKICAgIGlmKHZfMSA8IChrZXJuZWxDb250ZXh0XzItPnN0eWxlXzAtPnRvb25UaHJlc2hvbGRzXzAueCkpCiAgICB7CiAgICAgICAgcmV0dXJuIGtlcm5lbENvbnRleHRfMi0+c3R5bGVfMC0+dG9vbkxldmVsc18wLng7CiAgICB9CiAgICBpZih2XzEgPCAoa2VybmVsQ29udGV4dF8yLT5zdHlsZV8wLT50b29uVGhyZXNob2xkc18wLnkpKQogICAgewogICAgICAgIHJldHVybiBrZXJuZWxDb250ZXh0XzItPnN0eWxlXzAtPnRvb25MZXZlbHNfMC55OwogICAgfQogICAgcmV0dXJuIGtlcm5lbENvbnRleHRfMi0+c3R5bGVfMC0+dG9vbkxldmVsc18wLno7Cn0KCmZsb2F0IHBhcGVyR3JhaW5fMChmbG9hdDIgdXZfMCkKewogICAgZmxvYXQyIHBfMCA9IGZyYWN0KGZsb2F0Mihkb3QodXZfMCwgZmxvYXQyKDEyNy4wOTk5OTg0NzQxMjEwOTM3NWYsIDMxMS43MDAwMTIyMDcwMzEyNWYpKSwgZG90KHV2XzAsIGZsb2F0MigyNjkuNWYsIDE4My4zMDAwMDMwNTE3NTc4MTI1ZikpKSk7CiAgICByZXR1cm4gZnJhY3Qoc2luKHBfMC54ICsgcF8wLnkpICogNDM3NTguNTQ2ODc1Zik7Cn0KCnN0cnVjdCBwaXhlbE91dHB1dF8wCnsKICAgIGZsb2F0NCBvdXRwdXRfMCBbW2NvbG9yKDApXV07Cn07CgpzdHJ1Y3QgcGl4ZWxJbnB1dF8wCnsKICAgIGZsb2F0MyBjb2xvcl8wIFtbdXNlcihURVhDT09SRCldXTsKICAgIGZsb2F0MiB1dl8xIFtbdXNlcihURVhDT09SRF8xKV1dOwogICAgZmxvYXQzIG5vcm1hbF8xIFtbdXNlcihURVhDT09SRF8yKV1dOwogICAgZmxvYXQzIHRhbmdlbnRfMCBbW3VzZXIoVEVYQ09PUkRfMyldXTsKICAgIGZsb2F0MyBiaXRhbmdlbnRfMCBbW3VzZXIoVEVYQ09PUkRfNCldXTsKICAgIGZsb2F0MyB3b3JsZFBvc2l0aW9uXzAgW1t1c2VyKFRFWENPT1JEXzUpXV07CiAgICBmbG9hdCBkZXB0aF8wIFtbdXNlcihURVhDT09SRF82KV1dOwogICAgZmxvYXQgbWF0ZXJpYWxJbmRleF8wIFtbdXNlcihURVhDT09SRF83KV1dOwp9OwoKW1tmcmFnbWVudF1dIHBpeGVsT3V0cHV0XzAgc3R5bGl6ZWRGcmFnbWVudChwaXhlbElucHV0XzAgX1M5IFtbc3RhZ2VfaW5dXSwgYm9vbCBmcm9udF8xIFtbZnJvbnRfZmFjaW5nXV0sIGZsb2F0NCBwb3NpdGlvbl8wIFtbcG9zaXRpb25dXSwgdGV4dHVyZTJkPGZsb2F0LCBhY2Nlc3M6OnNhbXBsZT4gYmFzZVRleHR1cmVfMSBbW3RleHR1cmUoMyldXSwgc2FtcGxlciBtZXNoU2FtcGxlcl8xIFtbc2FtcGxlcigyKV1dLCB0ZXh0dXJlMmQ8ZmxvYXQsIGFjY2Vzczo6c2FtcGxlPiBub3JtYWxUZXh0dXJlXzEgW1t0ZXh0dXJlKDUpXV0sIERyYXdVbmlmb3Jtc19uYXR1cmFsXzAgY29uc3RhbnQqIGRyYXdfMSBbW2J1ZmZlcigwKV1dLCBTY2VuZUxpZ2h0c18wIGNvbnN0YW50KiBzY2VuZUxpZ2h0c18xIFtbYnVmZmVyKDQpXV0sIFN0eWxpemVkU3R5bGVfMCBjb25zdGFudCogc3R5bGVfMSBbW2J1ZmZlcigxMyldXSkKewogICAgdGhyZWFkIEtlcm5lbENvbnRleHRfMCBrZXJuZWxDb250ZXh0XzM7CiAgICAoJmtlcm5lbENvbnRleHRfMyktPmJhc2VUZXh0dXJlXzAgPSBiYXNlVGV4dHVyZV8xOwogICAgKCZrZXJuZWxDb250ZXh0XzMpLT5tZXNoU2FtcGxlcl8wID0gbWVzaFNhbXBsZXJfMTsKICAgICgma2VybmVsQ29udGV4dF8zKS0+bm9ybWFsVGV4dHVyZV8wID0gbm9ybWFsVGV4dHVyZV8xOwogICAgKCZrZXJuZWxDb250ZXh0XzMpLT5kcmF3XzAgPSBkcmF3XzE7CiAgICAoJmtlcm5lbENvbnRleHRfMyktPnNjZW5lTGlnaHRzXzAgPSBzY2VuZUxpZ2h0c18xOwogICAgKCZrZXJuZWxDb250ZXh0XzMpLT5zdHlsZV8wID0gc3R5bGVfMTsKICAgIGZsb2F0MiBkeF8wID0gZGZkeChfUzkudXZfMSk7CiAgICBmbG9hdDIgZHlfMCA9IGRmZHkoX1M5LnV2XzEpOwogICAgZmxvYXQ0IHRleGVsXzAgPSAoKGJhc2VUZXh0dXJlXzEpLnNhbXBsZSgobWVzaFNhbXBsZXJfMSksIChfUzkudXZfMSksIGdyYWRpZW50MmQoKGR4XzApLCAoZHlfMCkpKSk7CiAgICBmbG9hdDMgdGFuZ2VudE5vcm1hbF8wID0gKChub3JtYWxUZXh0dXJlXzEpLnNhbXBsZSgobWVzaFNhbXBsZXJfMSksIChfUzkudXZfMSksIGdyYWRpZW50MmQoKGR4XzApLCAoZHlfMCkpKSkueHl6ICogZmxvYXQzKDIuMGYpICAtIGZsb2F0MygxLjBmKSA7CiAgICBmbG9hdCBfUzEwID0gdGV4ZWxfMC53OwogICAgY292ZXJhZ2VBbHBoYV8wKF9TMTAgKiBkcmF3XzEtPmNvbG9yVGludF8wLncsIGZyb250XzEsICZrZXJuZWxDb250ZXh0XzMpOwogICAgaW50IF9TMTE7CiAgICBpZihmcm9udF8xKQogICAgewogICAgICAgIF9TMTEgPSBpbnQoMSk7CiAgICB9CiAgICBlbHNlCiAgICB7CiAgICAgICAgX1MxMSA9IGludCgtMSk7CiAgICB9CiAgICBmbG9hdDMgX1MxMiA9IGZsb2F0MyhmbG9hdChfUzExKSkgOwogICAgZmxvYXQzIG5vcm1hbF8yID0gc2FmZU5vcm1hbGl6ZV8wKHNhZmVOb3JtYWxpemVfMChfUzkudGFuZ2VudF8wKSAqIF9TMTIgKiBmbG9hdDModGFuZ2VudE5vcm1hbF8wLngpICArIHNhZmVOb3JtYWxpemVfMChfUzkuYml0YW5nZW50XzApICogX1MxMiAqIGZsb2F0Myh0YW5nZW50Tm9ybWFsXzAueSkgICsgc2FmZU5vcm1hbGl6ZV8wKF9TOS5ub3JtYWxfMSkgKiBfUzEyICogZmxvYXQzKHRhbmdlbnROb3JtYWxfMC56KSApOwogICAgZmxvYXQgX1MxMyA9IHNjZW5lTGFtYmVydF8wKG5vcm1hbF8yLCBfUzkud29ybGRQb3NpdGlvbl8wLCAma2VybmVsQ29udGV4dF8zKTsKICAgIGZsb2F0IF9TMTQgPSB0b29uUmFtcF8wKF9TMTMsICZrZXJuZWxDb250ZXh0XzMpOwogICAgZmxvYXQzIHNoYWRlZF8wID0gbWl4KCgma2VybmVsQ29udGV4dF8zKS0+c3R5bGVfMC0+aW5rV2FzaENvbG9yXzAueHl6LCBfUzkuY29sb3JfMCAqIHRleGVsXzAueHl6LCBmbG9hdDMoMC43Nzk5OTk5NzEzODk3NzA1MWYpICkgKiBmbG9hdDMoKDAuMjgwMDAwMDAxMTkyMDkyOWYgKyBfUzE0ICogMC45MjAwMDAwMTY2ODkzMDA1NGYgKyBzbW9vdGhzdGVwKDAuMzc5OTk5OTk1MjMxNjI4NDJmLCAwLjk0OTk5OTk4ODA3OTA3MTA0ZiwgMS4wZiAtIG1heChub3JtYWxfMi56LCAwLjBmKSkgKiAoJmtlcm5lbENvbnRleHRfMyktPnN0eWxlXzAtPnBhcmFtc18wLnkgKyBmcmFjdChfUzkubWF0ZXJpYWxJbmRleF8wICogMC4xNzI5OTk5OTI5NjY2NTE5MmYpICogKCZrZXJuZWxDb250ZXh0XzMpLT5zdHlsZV8wLT5wYXJhbXNfMC56ICsgKHBhcGVyR3JhaW5fMChfUzkudXZfMSAqIGZsb2F0Mig4My4wZikgKSAtIDAuNWYpICogKCZrZXJuZWxDb250ZXh0XzMpLT5zdHlsZV8wLT5wYXJhbXNfMC54KSkgOwogICAgZmxvYXQgX1MxNTsKICAgIGlmKCgoJmtlcm5lbENvbnRleHRfMyktPmRyYXdfMC0+bWF0ZXJpYWxfMC54KSA+IDEuNWYpCiAgICB7CiAgICAgICAgX1MxNSA9IF9TMTAgKiBkcmF3XzEtPmNvbG9yVGludF8wLnc7CiAgICB9CiAgICBlbHNlCiAgICB7CiAgICAgICAgX1MxNSA9IDEuMGY7CiAgICB9CiAgICBwaXhlbE91dHB1dF8wIF9TMTYgPSB7IGZsb2F0NChzaGFkZWRfMCwgX1MxNSkgfTsKICAgIHJldHVybiBfUzE2Owp9Cgo=",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "draw",
+        "slot": 0,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "instances",
+        "slot": 1,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 160
+        }
+      },
+      {
+        "name": "meshSampler",
+        "slot": 2,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "baseTexture",
+        "slot": 3,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "skinParameters",
+        "slot": 11,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "jointPalette",
+        "slot": 12,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 64
+        }
+      },
+      {
+        "name": "sceneLights",
+        "slot": 4,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "normalTexture",
+        "slot": 5,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "mrTexture",
+        "slot": 6,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadow",
+        "slot": 7,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadowSampler",
+        "slot": 8,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadowTexture",
+        "slot": 9,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "iblTexture",
+        "slot": 10,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "style",
+        "slot": 13,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}

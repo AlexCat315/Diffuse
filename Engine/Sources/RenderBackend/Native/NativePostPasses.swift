@@ -25,7 +25,8 @@ final class NativePostPasses {
         let pipeline: NativeFullscreenPass
         if let existing = pipelines[kind] { pipeline = existing }
         else {
-            pipeline = try NativeFullscreenPass(device: device,shader: kind.rawValue,colorFormat: kind == .fxaa ? .bgra8Unorm : .rgba16Float)
+            pipeline = try NativeFullscreenPass(device: device,shader: kind == .inkPaperPost ? "ink_paper_post" : kind.rawValue,
+                colorFormat: kind == .fxaa ? .bgra8Unorm : .rgba16Float)
             pipelines[kind] = pipeline
         }
         guard let targets else { throw RHIError.outOfMemory }

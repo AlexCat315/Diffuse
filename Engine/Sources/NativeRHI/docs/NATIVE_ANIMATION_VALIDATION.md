@@ -52,4 +52,4 @@ GUAVA_WGPU_BACKEND=metal Engine/.build/release/NativeRHIPassProbe \
 
 ## 默认切换前剩余范围
 
-EngineHost 默认仍使用 WGPU。r5 后处理与历史缓存已在后续阶段迁移，见 [后处理验证](NATIVE_POST_VALIDATION.md)。粒子、风格化着色以及 Editor/GuavaUI 的纹理与命令互操作仍须迁移和验证；DX12 renderer 的 DXIL 产物仍须补齐。完成全部功能覆盖、画面对照和性能门限之后，再切换默认 renderer 并移除 WGPU。
+EngineHost 默认仍使用 WGPU。r5 后处理与历史缓存已在后续阶段迁移，见 [后处理验证](NATIVE_POST_VALIDATION.md)；风格化见 [风格化验证](NATIVE_STYLIZED_VALIDATION.md)。粒子以及 Editor/GuavaUI 的纹理与命令互操作仍须迁移和验证；DX12 renderer 的 DXIL 产物仍须补齐。完成全部功能覆盖、画面对照和性能门限之后，再切换默认 renderer 并移除 WGPU。

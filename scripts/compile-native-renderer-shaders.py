@@ -26,9 +26,11 @@ def main():
         ('skybox', 'skybox.slang', [('vertex', 'skyVertex'), ('fragment', 'skyFragment')]),
         ('tonemap', 'tonemap.slang', [('vertex', 'toneVertex'), ('fragment', 'toneFragment')]),
         ('opaque_depth', 'opaque_mesh.slang', [('fragment', 'depthFragment')]),
+        ('stylized_character', 'stylized_character.slang', [('vertex', 'meshVertex'), ('fragment', 'stylizedFragment')]),
+        ('outline', 'outline.slang', [('vertex', 'outlineVertex'), ('fragment', 'outlineFragment')]),
     ]
     programs.extend((name, f'{name}.slang', [('vertex', 'postVertex'), ('fragment', 'postFragment')])
-                    for name in ['ssao','ssr','taa','bloom','fxaa'])
+                    for name in ['ssao','ssr','taa','bloom','fxaa','ink_paper_post'])
     for target in args.targets:
         for name, source, stages in programs:
             for stage, entry in stages:

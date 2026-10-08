@@ -143,6 +143,7 @@ public enum VertexInputRate: Sendable {
 }
 
 public enum VertexFormat: Sendable {
+    case float
     case float2
     case float3
     case float4
