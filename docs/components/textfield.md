@@ -1,92 +1,81 @@
 # TextField
 
-文本输入。默认单行；传 `axis: .vertical` 时支持显式多行输入。当前实现对包含显式换行的内容会自动增高，最多显示 6 行，超出后在字段内部滚动并显示滚动条。
+`TextField` 绑定不可变 `TextBuffer`，普通输入和代码编辑共用光标、选区、输入法与撤销逻辑。存储、逻辑行索引与 UTF-8/UTF-16 转换由 Rope 负责；绘制只测量可见行及其邻近行。
 
-## Anatomy
+```swift
+@State private var query = TextBuffer.empty
+@State private var source = TextBuffer("let answer = 42\n")
 
+TextField("Search…", text: $query) { input in
+    input.behavior.clearable = true
+    input.events.onSubmit = { search(query.stringValue) }
+}
+
+TextField(text: $source) { input in
+    input.layout.axis = .vertical
+    input.layout.wrapsLines = false
+    input.codeEditing.showsLineNumbers = true
+    input.codeEditing.indentationWidth = 4
+}.font(.mono).frame(width: 640, height: 400)
 ```
-┌──────────────────────────────────┐  ← chrome (surfaceVariant + radius.sm + clipsToBounds)
-│  ┊                            ┊  │
-│  ┊  text or placeholder       ┊  │  ← vertically centered, left-aligned
-│  ┊  cursor│                   ┊  │
-│  ┊                            ┊  │
-└──┊──────────────────────────────┊┘
-    ↑                            ↑
-   spacing.sm inset (left + right)
-```
 
-| 槽位 | 默认值 | Token |
-| ---- | ------ | ----- |
-| chrome.height | 32 | 硬编码 |
-| chrome.cornerRadius | `theme.radius.sm` | 4 |
-| chrome.background | `theme.colors.surfaceVariant` | 每次 `_updateNode` 重算（响应主题切换） |
-| inner inset (left + right) | `theme.spacing.sm` | 8 |
-| label.font | `body` | 14pt 400 |
-| placeholder.color | `onSurfaceMuted` | — |
-| text.color | `onSurface` | 调用方可经 `textColor:` 覆盖 |
-| cursor.color | `onSurface` | — |
-| selection.color | `theme.colors.selection` | — |
-| `clipsToBounds` | `true` | 防文本溢出框外 |
-| cursor (mouse) | `.ibeam` | — |
+## 存储与边界
 
-## States
+- `TextBuffer(_:)` 从文件/程序化字符串建立 Rope；`.stringValue` 是完整文档序列化操作，应放在保存、解析 JSON 或提交 authored settings 的边界。
+- `characterCount`、`utf8Length`、`utf16Length`、`lineCount` 来自缓存指标；行定位与三种坐标转换走树索引。
+- `insert`、`delete`、`replace` 返回共享旧子树的新值。`TextBuffer` 的 `==` 比较修订根身份；`hasSameContents(as:)` 比较精确 UTF-8 内容，跳过共享子树，不需要先物化全文。
+- 光标和选区使用 Swift `Character`；高亮/诊断使用 UTF-8 字节；LSP 使用 UTF-16 列。`parserPoint` 专门按 LF 字节计行，避免 CRLF 与 Tree-sitter 的坐标混淆。
+- `TextEditHistory` 保存旧根、光标、选区，连续输入合并；撤销/重做不复制全文。历史属于编辑会话，不能作为 authored 文档序列化。
 
-| State | 视觉 | 触发 |
-| ----- | ---- | ---- |
-| empty rest | placeholder + chrome | 没有文本、没有焦点 |
-| focused empty | placeholder + 闪烁光标 | 有焦点、没有文本 |
-| focused with text | 文本 + 闪烁光标 | 有焦点、有文本 |
-| selecting | 选区 `selection` 色块 + 抑制光标 | 拖选中 |
-| composing (IME) | 预编辑文本 + 下划线 1px | IME 在合成 |
+## 配置
 
-无 disabled 视觉变体 ——（v1 限制）想要禁用，外层 `.opacity(0.5)` + 不绑 binding。
+| Group | 职责 |
+| --- | --- |
+| `layout` | 水平/垂直输入、软换行、理想宽度、测量时最大行数 |
+| `behavior` | disabled、readonly、secure、clearable、最大字符数 |
+| `decoration` | 控件密度、前后文字槽、计数器和语义颜色 |
+| `codeEditing` | 行号、缩进、共享撤销历史、语法颜色、诊断与补全 |
+| `navigation` | 一次性焦点/光标定位请求 |
+| `events` | 输入、提交、取消、焦点、hover 与选区通知 |
 
-## Behavior
+字体、行高和字距继承主题或显式修饰器。选择区域、光标、输入法下划线和命中测试使用同一套字形 cluster 与行坐标。
 
-- **指针**：单击放置光标（按字符中线判定）；拖动延伸选区；双击选词；三击全选（命中 SDL3 的 `event.clicks`）。
-- **键盘**：方向键 / Home / End / Shift 配合扩展选区，Cmd/Ctrl + A/C/V/X 标准编辑。
-- **IME**：`textEditing` 事件写入 `compositionText` + 下划线指示，`textInput` 提交并清空合成区。
-- **Enter**：单行模式触发 `onSubmit?()`；垂直轴模式插入换行。垂直轴若绑定了 `onSubmit`，使用 Cmd/Ctrl + Enter 提交。
-- **显式多行内容**：字段高度会随换行数自动增加，最多 6 行；超出后内容留在字段内部滚动，滚轮可滚动，右侧显示细滚动条。
-- **TextInputArea**（候选窗定位）：发布到 `node.attachments[TextInputAttachmentKey.area]`，y 位于文本基线行（不是 chrome 顶部）。
-- **撤销 / 重做**：Primary-Z 撤销，Primary-Shift-Z / Ctrl-Y 重做；恢复文本及光标、选区。连续输入合并，粘贴与替换选区作为单次操作。外部替换文本会清除旧历史，避免跨文档撤销。编辑器原生菜单跟随当前文本历史更新；文本获得焦点时，空历史不会回退到场景撤销。
-- **State 持久化**：`FieldState`（光标 / 选区 / IME）挂在 `node.attachments`，跨 recompose 存活。
+## 输入行为
 
-## Authoring rules
+- 单击定位、拖动选择、双击选词；箭头、Shift 扩选；Cmd/Ctrl+A/C/V/X；Option 按词移动/删除。
+- Home/End、Cmd+左右定位当前显示行，软换行末端保留在原行；Ctrl+Home/End、Cmd+上下定位文档首尾。Cmd+Backspace 删除到当前行首，在行首时合并上一行。Page Up/Down 按视口行数移动并保留期望列，Shift 可扩选。
+- 单行 Return 提交；垂直输入 Return 换行，Cmd/Ctrl+Return 提交。Tab/Shift+Tab 可对所选逻辑行缩进/反缩进。
+- IME 预编辑建立局部 Rope 预览，未提交内容不改变文档；候选窗跟随实际光标。
+- 未换行输入在光标超出视口时横向滚动，行号 gutter 和前后装饰保持固定；文本、选区、诊断、补全锚点、IME 与指针命中共享滚动坐标。支持横向滚轮；单行输入也可使用纵向滚轮浏览长文本。
+- readonly 保留复制、选区和滚动；disabled 停止交互并使用禁用样式；secure 对视觉与可访问性值都遮蔽内容。
+- 可访问性全文值按系统请求延迟生成，正常逐帧更新不会序列化整篇文档。
 
-✅ 应当：
+## 代码能力
 
-- `TextField("Search…", text: $text)` —— 默认 chrome 已经是 light/dark 主题安全的
-- 多行输入优先用 `TextField("Notes…", text: $text, axis: .vertical)`，不要自己拦截回车再手拼 `"\n"`
-- 想自定义 chrome 时：`TextField(...).frame(width:140)`（保留默认 chrome）或外层包 background + 自己写 padding（少见）
-- 用 `onSubmit:` 处理 Enter 提交，不要监听 key 事件
+`TextDiagnostics` 是不可变区间索引；`TextDiagnostic` 记录 UTF-8 范围、级别与消息。波浪线仅覆盖可见行，空范围也有指示。颜色跟随主题的 error/warning/accent/muted。
 
-❌ 不应：
+`codeEditing.onRequestCompletion` 收到 `TextCompletionRequest` 与主线程回复闭包。它在光标/输入停顿 300ms 后请求，也支持 Ctrl+Space；弹窗按前缀过滤，Up/Down 选择、Tab/Return 接受、Escape 关闭。替换范围和额外编辑作为单次撤销操作；旧缓冲区、失焦或销毁后的回复不会重新打开弹窗。
 
-- 给 TextField 加 `.padding(...)` —— 会把 chrome 当文本框，inset 会变成 padding 加 inset 双重
-- 给 TextField 加 `.frame(height:)` 强行改高 —— 32pt 是当前定值，要改请去改 token
-- 把 TextField 用作只读文本展示（请用 `Text`）
-- 在 `_updateNode` 内做 "if backgroundColor == nil" 守卫缓存 token —— 主题切换时不会更新
+语法服务更新后应修改 `codeEditing.syntaxRevision`，使已经缓存的绘制立即刷新。Editor 的 Swift 高亮使用后台串行 Tree-sitter worker，合并待处理根并丢弃旧结果；首次解析完成前仍能输入和绘制。
 
-## Known limitations (v1)
+`Tooltip(anchor: .point(...) / .range(...))` 可用于 LSP hover 或诊断消息。浮层脱离内容裁剪，沿窗口边界夹紧，并在下面空间不足时翻到锚点上方。
 
-- 目前只处理显式换行，不做软换行；超长单行内容仍会水平裁剪
-- 没有 placeholder 上浮 / floating-label
-- 没有 disabled / readonly 显式状态
-- 没有 leading / trailing icon 槽位 —— 调用方需要外层 Row 自己拼
+`codeEditing.onRequestHover` 在 F1 时收到当前可见光标的 `TextFieldHoverAnchor`，readonly 同样可查询。生产 `ScriptCodeEditor` 将它与指针 hover 接到真实 LSP；Escape、编辑、滚动、光标移动和失焦会关闭或取消旧 hover。
 
-## References
+## 大文档与限制
 
-| 设计系统 | 对应组件 | 借鉴点 |
-| -------- | -------- | ------ |
-| Material 3 | TextField (filled / outlined) | filled 模式的 surfaceVariant 填充 |
-| Fluent UI v9 | Input | 8px 横向 inset、垂直居中 |
-| Radix Primitives | TextField.Root + TextField.Input | 单行 + 简单字段的最小契约 |
-| Flutter Material | TextFormField | onSubmit 命名、IME 集成思路 |
-| SwiftUI | TextField | 调用形态 `TextField("placeholder", text:)` |
+20 万行的未换行代码编辑器按可见窗口测量，修改一行保留其他行缓存，undo 直接恢复旧根。软换行采用持久化视觉行索引；未访问行的高度暂按一行估计，测量后校正。特别长的单一逻辑行仍会完整测量该行，尚未实现水平字形分段布局。
 
-## File map
+横向内容宽度来自已测量窗口和光标，不为寻找全篇最宽行而扫描文档；滚动条范围会随访问其他行调整。原生 200K 行连续输入 30 秒已验证，详细口径与采样见[验证记录](../guava-ui/code-editor-validation.md)。
 
-- 主体: [GuavaUICompose/Primitives/TextField.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/TextField.swift)
-- Style 协议（Phase 7.5）: [GuavaUICompose/Theme/TextFieldStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/TextFieldStyle.swift)
-- 默认 style: [GuavaUICompose/Theme/DefaultTextFieldStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DefaultTextFieldStyle.swift)
+Tree-sitter 首次解析需要遍历文档，某些编辑也会使语法上下文扩大；后台 worker 保证这些工作不阻塞 UI。当前 completion 使用普通插入文本，未向服务器声明 snippet tab-stop 导航支持。
+
+## 实现位置
+
+- 存储：`TextBuffer.swift`、`RopeStorage.swift`、`RopeEditing.swift`、`RopeLookup.swift`、`RopeDifference.swift`
+- 可见行布局：`TextDocumentLayout.swift`、`TextVisualLineIndex.swift`、`TextFieldLayoutEngine.swift`
+- 输入会话：`TextFieldEditing.swift`、`TextFieldInputController.swift`、`TextEditHistory.swift`
+- 诊断/补全：`TextDiagnostic.swift`、`CompletionPopover.swift`
+- 主题样式：`DefaultTextFieldStyle.swift`、`TextFieldOptions.swift`
+
+`TextBuffer` 的 `==` 比较修订根身份；`hasSameContents(as:)` 比较精确 UTF-8 内容并跳过共享子树。独立加载的相同文本可能需要 O(n)，因此在编辑/保存边界计算并缓存结果，不在每帧调用。Script 工作区缓存 dirty 标志，输入后删除回原文也会恢复 clean，不依赖根身份恰好相同。

@@ -57,6 +57,9 @@ public extension Image {
                   sourcePixelSize: resolved.sourcePixelSize,
                   contentMode: contentMode,
                   renderingMode: renderingMode)
+        if ["svg", "pdf"].contains(URL(fileURLWithPath: path).pathExtension.lowercased()) {
+            vectorSourceURL = URL(fileURLWithPath: path)
+        }
     }
 
     /// Bundle-resource form of `init(file:width:height:tint:)`. This keeps
@@ -103,12 +106,12 @@ public extension Image {
                   renderingMode: renderingMode)
     }
 
-    private struct ResolvedTexture {
+    struct ResolvedTexture {
         let textureID: TextureID
         let sourcePixelSize: (width: Float, height: Float)?
     }
 
-    private static func resolve(path: String, width: Float, height: Float) -> ResolvedTexture {
+    static func resolve(path: String, width: Float, height: Float) -> ResolvedTexture {
         let url = URL(fileURLWithPath: path)
         // Vector formats need an explicit raster size; bitmap formats
         // pass `nil` so the natural resolution is preserved. SVG/PDF are
@@ -117,7 +120,8 @@ public extension Image {
         let ext = url.pathExtension.lowercased()
         let size: (Int, Int)?
         if ext == "svg" || ext == "pdf" {
-            let scale = max(1, ContentScaleHolder.current)
+            let density = ContentScaleHolder.current
+            let scale = density.isFinite ? max(1, density) : 1
             let pxW = max(1, Int((width * scale).rounded()))
             let pxH = max(1, Int((height * scale).rounded()))
             size = (pxW, pxH)

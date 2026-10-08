@@ -102,13 +102,13 @@ struct StatePropagationRegressionTests: GuavaUIComposeSerializedSuite {
 
     struct TextFieldHarness: View {
         @State var flag: Bool = false
-        @State var text: String = ""
+        @State var text: TextBuffer = ""
 
         var body: some View {
             Column {
                 _DebugNode(label: flag ? "yy" : "x")
                 TextField(text: $text)
-                _DebugNode(label: String(repeating: "x", count: text.count))
+                _DebugNode(label: String(repeating: "x", count: text.characterCount))
             }
         }
     }

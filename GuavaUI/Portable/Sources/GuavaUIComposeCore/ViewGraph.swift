@@ -88,9 +88,14 @@ public final class ViewGraph {
 
     // MARK: - Install
 
-    /// Build the initial node tree from `root` and assign it to `tree.root`.
+    /// Install a root, releasing the previous tree's scopes, layout and resources.
     public func install<V: View>(root: V, fileID: StaticString = #fileID,
         filePath: StaticString = #filePath, line: UInt = #line, column: UInt = #column) {
+        if let previous = tree.root {
+            for child in previous.children { tearDown(node: child, parentLayout: layoutRoot) }
+            layoutOf.removeValue(forKey: ObjectIdentifier(previous))
+            renderTree.tearDown(node: previous)
+        }
         let rootNode = Node()
         tree.root = rootNode
         layoutOf[ObjectIdentifier(rootNode)] = layoutRoot

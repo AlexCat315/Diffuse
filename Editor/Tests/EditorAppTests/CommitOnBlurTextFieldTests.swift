@@ -5,6 +5,7 @@ import GuavaUIRuntime
 import Testing
 
 @Suite("CommitOnBlurTextField", .serialized)
+@MainActor
 struct CommitOnBlurTextFieldTests {
     private final class Model {
         var value = "Cube"

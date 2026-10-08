@@ -26,7 +26,9 @@ struct MenuPointerRoutingTests: GuavaUIComposeSerializedSuite {
                     }
                     .id("popover")
                     .flex(0)
-                    Tree([Item(id: 1)], id: \.id, children: { _ in [] }, selection: $selection) { item, _, _, _ in
+                    Tree([Item(id: 1)], id: \.id, children: { _ in [] }, configure: { tree in
+                        tree.selection.primary = $selection
+                    }) { item, _, _, _ in
                         Text("Row").frame(height: 30)
                             .contextMenu(onOpen: { selection = item.id }, entries: {
                                 [.item(MenuItem(id: "context-action", title: "Action") {

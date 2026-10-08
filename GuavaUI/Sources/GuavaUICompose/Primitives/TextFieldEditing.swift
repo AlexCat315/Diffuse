@@ -5,58 +5,68 @@ import EngineKernel
 import GuavaUIRuntime
 
 extension TextField {
-    /// Per-instance editing state. Lives on the captured closures so it
-    /// persists across redraws without recompose.
+    /// Session state belongs to the surface node and survives reconciliation.
+    /// Each group describes one independent editing responsibility.
     final class FieldState {
-        /// Surface node owning this state. Caret/selection changes happen
-        /// outside recompose, so they must invalidate the node's cached layer
-        /// themselves (`LayerAwareNodeRenderer` replays clean layers verbatim).
         weak var hostNode: Node?
-        var history = TextEditHistory()
-        var editDepth = 0
-        var editBefore: TextEditHistory.Snapshot?
-        var editKind: TextEditHistory.Kind = .atomic
-        /// Cursor index measured in `Character` units from the start of `text`.
-        var cursorIndex: Int = 0
-        /// Selection anchor in `Character` units; `nil` means no selection.
-        /// When non-nil, the live selection is `[min(anchor, cursor), max)`.
-        var selectionAnchor: Int? = nil
-        /// Absolute window-space origin captured during the last render pass;
-        /// used to translate pointer events into local coordinates.
-        var lastDrawOrigin: CGPoint = .zero
-        /// True between pointer-down and pointer-up while a drag is active.
-        /// Motion events extend the selection only when this is set.
-        var isDragging: Bool = false
-        /// Active IME preedit string. It is rendered into the field but is not
-        /// committed into `text` until the platform sends `textInput`.
-        var compositionText: String = ""
-        var compositionStart: Int = 0
-        var compositionLength: Int = 0
-        var lastCaretActivity: Double = TimingTrace.now()
-        /// Last x of the trailing-edge clear button hit-target (in window
-        /// coordinates), captured during render. `nil` means no clear icon
-        /// is currently drawn.
-        var clearHitX: Float? = nil
-        /// Preserved horizontal caret target when moving across lines.
-        var preferredCaretX: Float? = nil
-        /// Vertical scroll offset for overflowing multiline content.
-        var scrollOffsetY: Float = 0
-        /// Cached max vertical scroll after the last render.
-        var maxScrollY: Float = 0
-        /// Visible text viewport height after chrome insets.
-        var visibleTextHeight: Float = 0
-        /// Total laid-out content height from the last render.
+        var buffer = TextBuffer.empty
+        var selection = SelectionState()
+        var composition = CompositionState()
+        var scroll = ScrollState()
+        var pointer = PointerState()
+        var transaction = TransactionState()
+        var renderDraft = RenderDraftState()
+        var lastCaretActivity = TimingTrace.now()
+
+        func clearComposition() { composition = CompositionState() }
+    }
+
+    struct SelectionState {
+        var cursorIndex = 0
+        var anchor: Int?
+        var preferredCaretX: Float?
+        var lineEndAffinity = false
+    }
+
+    struct CompositionState {
+        var text = ""
+        var start = 0
+        var length = 0
+        var isActive: Bool { !text.isEmpty }
+    }
+
+    struct RenderDraftState {
+        var placeholder = ""
+        var placeholderBuffer = TextBuffer.empty
+        var preview: CompositionPreview?
+    }
+    struct CompositionPreview {
+        let source: TextBuffer
+        let range: Range<Int>
+        let text: String
+        let buffer: TextBuffer
+    }
+
+    struct ScrollState {
+        var horizontal = HorizontalScrollState()
+        var offsetY: Float = 0
+        var maxY: Float = 0
+        var visibleHeight: Float = 0
         var contentHeight: Float = 0
-        /// Manual scrolling stays put until a caret interaction requests reveal.
         var needsCaretReveal = false
+    }
 
-        func clearComposition() {
-            compositionText = ""
-            compositionStart = 0
-            compositionLength = 0
-        }
+    struct PointerState {
+        var lastDrawOrigin: CGPoint = .zero
+        var isDragging = false
+        var clearHitX: Float?
+    }
 
-        var isComposing: Bool { !compositionText.isEmpty }
+    struct TransactionState {
+        var history = TextEditHistory()
+        var depth = 0
+        var before: TextEditHistory.Snapshot?
+        var kind: TextEditHistory.Kind = .atomic
     }
 
     /// Clamp persisted indices into the current text. `FieldState` outlives
@@ -64,11 +74,13 @@ extension TextField {
     /// switch, formatter, programmatic set); a stale `cursorIndex` past the
     /// new end must never reach `String.index(_:offsetBy:)` math.
     func normalizeIndices(_ state: FieldState) {
-        let count = text.wrappedValue.count
-        state.cursorIndex = clamp(state.cursorIndex, 0, count)
-        if let anchor = state.selectionAnchor {
+        if state.buffer != text.wrappedValue { state.selection.lineEndAffinity = false }
+        state.buffer = text.wrappedValue
+        let count = state.buffer.characterCount
+        state.selection.cursorIndex = clamp(state.selection.cursorIndex, 0, count)
+        if let anchor = state.selection.anchor {
             let bounded = clamp(anchor, 0, count)
-            state.selectionAnchor = bounded == state.cursorIndex ? nil : bounded
+            state.selection.anchor = bounded == state.selection.cursorIndex ? nil : bounded
         }
     }
 
@@ -76,18 +88,16 @@ extension TextField {
     /// `Character` units, or nil when there is no selection. Bounds are
     /// clamped to the current text so stale state can't index out of range.
     func selectionRange(_ state: FieldState) -> Range<Int>? {
-        guard let anchor = state.selectionAnchor, anchor != state.cursorIndex else { return nil }
-        let count = text.wrappedValue.count
-        let lower = clamp(min(anchor, state.cursorIndex), 0, count)
-        let upper = clamp(max(anchor, state.cursorIndex), 0, count)
+        guard let anchor = state.selection.anchor, anchor != state.selection.cursorIndex else { return nil }
+        let count = text.wrappedValue.characterCount
+        let lower = clamp(min(anchor, state.selection.cursorIndex), 0, count)
+        let upper = clamp(max(anchor, state.selection.cursorIndex), 0, count)
         guard lower != upper else { return nil }
         return lower..<upper
     }
 
-    func substring(_ text: String, _ range: Range<Int>) -> String {
-        let lower = text.index(text.startIndex, offsetBy: range.lowerBound)
-        let upper = text.index(text.startIndex, offsetBy: range.upperBound)
-        return String(text[lower..<upper])
+    func substring(_ text: TextBuffer, _ range: Range<Int>) -> String {
+        text.substring(characterRange: range)
     }
 
     /// Delete the active selection (if any). Returns true when a selection
@@ -97,16 +107,14 @@ extension TextField {
         beginEdit(state, kind: .deletion)
         defer { endEdit(state) }
         guard let range = selectionRange(state) else { return false }
-        var currentText = text.wrappedValue
-        let lower = currentText.index(currentText.startIndex, offsetBy: range.lowerBound)
-        let upper = currentText.index(currentText.startIndex, offsetBy: range.upperBound)
-        currentText.removeSubrange(lower..<upper)
+        let startByte = text.wrappedValue.utf8Offset(forCharacterIndex: range.lowerBound)
+        let currentText = text.wrappedValue.delete(characterRange: range)
         text.wrappedValue = currentText
-        state.cursorIndex = range.lowerBound
-        state.selectionAnchor = nil
-        state.preferredCaretX = nil
+        state.selection.cursorIndex = currentText.characterIndex(forUTF8Offset: startByte)
+        state.selection.anchor = nil
+        state.selection.preferredCaretX = nil
         recordCaretActivity(state)
-        onChange?(currentText)
+        events.onChange?(currentText)
         return true
     }
 
@@ -115,26 +123,27 @@ extension TextField {
     /// the inserted text and clear any selection.
     func insertReplacingSelection(_ incoming: String, state: FieldState) {
         let selection = selectionRange(state)
-        let typing = incoming.count == 1 && incoming != "\n" && selection == nil && !state.isComposing
+        let typing = incoming.count == 1 && incoming != "\n" && selection == nil && !state.composition.isActive
         beginEdit(state, kind: typing ? .typing : .atomic)
         defer { endEdit(state) }
         guard !incoming.isEmpty else { return }
-        var currentText = text.wrappedValue
-        let cursor = selection?.lowerBound ?? clamp(state.cursorIndex, 0, currentText.count)
+        let previous = text.wrappedValue
+        let cursor = selection?.lowerBound ?? clamp(state.selection.cursorIndex, 0, previous.characterCount)
         let removed = selection?.count ?? 0
-        let capacity = maxLength.map { max(0, $0 - (currentText.count - removed)) }
+        let capacity = behavior.maxLength.map { max(0, $0 - (previous.characterCount - removed)) }
         let insertion = capacity.map { String(incoming.prefix($0)) } ?? incoming
         guard !insertion.isEmpty else { return }
-        let lower = currentText.index(currentText.startIndex, offsetBy: cursor)
-        let upper = currentText.index(lower, offsetBy: removed)
-        currentText.replaceSubrange(lower..<upper, with: insertion)
+        let startByte = previous.utf8Offset(forCharacterIndex: cursor)
+        let currentText = previous.replace(characterRange: cursor..<(cursor + removed), with: insertion)
         state.clearComposition()
         text.wrappedValue = currentText
-        state.cursorIndex = cursor + insertion.count
-        state.selectionAnchor = nil
-        state.preferredCaretX = nil
+        // Inserting a combining scalar or regional indicator can join adjacent
+        // graphemes. The inserted byte endpoint remains the correct caret.
+        state.selection.cursorIndex = currentText.characterIndex(forUTF8Offset: startByte + insertion.utf8.count)
+        state.selection.anchor = nil
+        state.selection.preferredCaretX = nil
         recordCaretActivity(state)
-        onChange?(currentText)
+        events.onChange?(currentText)
     }
 
     /// Empty the field, fire `onClear`, and reset selection/cursor state.
@@ -144,30 +153,30 @@ extension TextField {
         defer { endEdit(state) }
         guard !text.wrappedValue.isEmpty else { return }
         text.wrappedValue = ""
-        state.cursorIndex = 0
-        state.selectionAnchor = nil
-        state.preferredCaretX = nil
+        state.selection.cursorIndex = 0
+        state.selection.anchor = nil
+        state.selection.preferredCaretX = nil
         state.clearComposition()
         recordCaretActivity(state)
-        onClear?()
-        onChange?("")
+        events.onClear?()
+        events.onChange?("")
     }
 
     /// Move the cursor to `target`. When `extendSelection` is true an anchor
     /// is established (if missing) so the move grows / shrinks a selection;
     /// otherwise any existing selection is collapsed.
     func moveCursor(to target: Int, extendSelection: Bool, state: FieldState) {
-        let count = text.wrappedValue.count
+        let count = text.wrappedValue.characterCount
         let bounded = clamp(target, 0, count)
         if extendSelection {
-            if state.selectionAnchor == nil {
-                state.selectionAnchor = state.cursorIndex
+            if state.selection.anchor == nil {
+                state.selection.anchor = state.selection.cursorIndex
             }
         } else {
-            state.selectionAnchor = nil
+            state.selection.anchor = nil
         }
-        state.cursorIndex = bounded
-        state.preferredCaretX = nil
+        state.selection.cursorIndex = bounded
+        state.selection.preferredCaretX = nil
         recordCaretActivity(state)
     }
 
@@ -175,17 +184,17 @@ extension TextField {
                     extendSelection: Bool,
                     state: FieldState,
                     preferredCaretX: Float?) {
-        let count = text.wrappedValue.count
+        let count = text.wrappedValue.characterCount
         let bounded = clamp(target, 0, count)
         if extendSelection {
-            if state.selectionAnchor == nil {
-                state.selectionAnchor = state.cursorIndex
+            if state.selection.anchor == nil {
+                state.selection.anchor = state.selection.cursorIndex
             }
         } else {
-            state.selectionAnchor = nil
+            state.selection.anchor = nil
         }
-        state.cursorIndex = bounded
-        state.preferredCaretX = preferredCaretX
+        state.selection.cursorIndex = bounded
+        state.selection.preferredCaretX = preferredCaretX
         recordCaretActivity(state)
     }
 
@@ -193,9 +202,13 @@ extension TextField {
     /// phase and invalidate the field's cached render layer so the change is
     /// visible on the very next frame (frames may be event-driven).
     func recordCaretActivity(_ state: FieldState) {
-        state.needsCaretReveal = true
+        state.selection.lineEndAffinity = false
+        state.buffer = text.wrappedValue
+        if let node = state.hostNode { updateAccessibilityValue(on: node, buffer: state.buffer) }
+        state.scroll.needsCaretReveal = true
         state.lastCaretActivity = TimingTrace.now()
         state.hostNode?.markRenderDirty(reason: .styleSet(field: "textFieldCaret"))
         notifyCaretChange(state)
+        state.hostNode?.firstResource(TextCompletionSession.self)?.activity()
     }
 }

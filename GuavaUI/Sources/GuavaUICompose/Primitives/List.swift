@@ -22,19 +22,43 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
         self.data = data
         self.id = id
         self.selection = selection
-        self.rowHeight = rowHeight
-        self.rowSpacing = rowSpacing
+        self.rowHeight = max(1, rowHeight)
+        self.rowSpacing = max(0, rowSpacing)
         self.onActivate = onActivate
         self.rowContent = rowContent
     }
 
     public var body: some View {
-        VirtualStack(data, id: id, rowHeight: rowHeight, spacing: rowSpacing) { element in
+        SelectionKeyHost(onKey: handleKey) {
+        VirtualStack(data, id: id, rowHeight: rowHeight, spacing: rowSpacing,
+                     scrollToIndex: data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
+                        .map { data.distance(from: data.startIndex, to: $0) }) { element in
             let selected = isSelected(element)
             _ListRowHost(isSelected: selected, rowHeight: rowHeight,
                          onActivate: { activate(element) },
                          content: AnyView(rowContent(element, selected)))
         }
+        }
+    }
+
+    private func handleKey(_ event: KeyEvent) -> Bool {
+        guard !data.isEmpty else { return false }
+        let current = data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
+            .map { data.distance(from: data.startIndex, to: $0) }
+        let next: Int
+        switch event.scancode {
+        case Scancode.arrowDown: next = min(data.count - 1, (current ?? -1) + 1)
+        case Scancode.arrowUp: next = max(0, (current ?? data.count) - 1)
+        case Scancode.home: next = 0
+        case Scancode.end: next = data.count - 1
+        case Scancode.return, Scancode.keypadEnter:
+            guard let current else { return false }
+            onActivate?(data[data.index(data.startIndex, offsetBy: current)])
+            return true
+        default: return false
+        }
+        selection.wrappedValue = data[data.index(data.startIndex, offsetBy: next)][keyPath: id]
+        return true
     }
 
     private func isSelected(_ element: Data.Element) -> Bool {
@@ -79,7 +103,16 @@ struct _ListRowHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.accessibility = AccessibilitySemantics(.listItem) { $0.state.isSelected = isSelected; $0.combinesChildren = true }
+        node.accessibilityActions.activate = onActivate
         guard let registry = InteractionRegistryHolder.current else { return }
+        node.cursor = .pointer
+        let applyHover: (Bool) -> Void = { hovered in
+            node.attachments[Self.hoveredKey] = hovered
+            node.backgroundColor = hovered && !isSelected ? node.theme.colors.stateLayerHover : .clear
+        }
+        applyHover(node.attachments[Self.hoveredKey] as? Bool == true)
+        registry.setHover(node) { applyHover($0 == .enter) }
         let captured = onActivate
         registry.setPointer(node) { event, phase, eventPhase in
             // Embedded controls get first refusal before row selection.
@@ -88,11 +121,16 @@ struct _ListRowHost: _PrimitiveView {
             switch phase {
             case .down:
                 node.attachments[Self.pressedKey] = true
+                PointerCaptureHolder.current?.acquire(node)
                 return .handled
             case .up:
                 let was = (node.attachments[Self.pressedKey] as? Bool) ?? false
                 node.attachments[Self.pressedKey] = false
-                if was { captured(); return .handled }
+                if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
+                if was {
+                    if node.absoluteFrame.contains(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))) { captured() }
+                    return .handled
+                }
                 return .ignored
             }
         }
@@ -119,4 +157,5 @@ struct _ListRowHost: _PrimitiveView {
     }
 
     static let pressedKey = "__list_row_pressed"
+    static let hoveredKey = "__list_row_hovered"
 }

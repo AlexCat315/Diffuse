@@ -203,38 +203,38 @@ private struct _StatefulHexField: View {
     let color: Binding<Color>
     let showAlpha: Bool
 
-    @State var draft: String = ""
+    @State var draft = TextBuffer.empty
     @State var isEditing: Bool = false
 
     var body: some View {
         let committed = hexString(from: color.wrappedValue, showAlpha: showAlpha)
+        let committedBuffer = TextBuffer(committed)
         Row(alignment: .center, spacing: 6) {
             Text("HEX")
                 .font(.label)
                 .foregroundColor(.onSurfaceMuted)
-            TextField(
-                text: Binding(
-                    get: { isEditing ? draft : committed },
+            TextField(text: Binding(
+                    get: { isEditing ? draft : committedBuffer },
                     set: { draft = $0 }
-                ),
-                onSubmit: { commitHex() },
-                onFocus: {
+                )) { input in
+                input.events.onSubmit = { commitHex() }
+                input.events.onFocus = {
                     if !isEditing {
-                        draft = committed
+                        draft = committedBuffer
                         isEditing = true
                     }
-                },
-                onBlur: {
+                }
+                input.events.onBlur = {
                     commitHex()
                     isEditing = false
                 }
-            )
+            }
             .flex()
         }
     }
 
     private func commitHex() {
-        if let parsed = parseHex(draft) {
+        if let parsed = parseHex(draft.stringValue) {
             color.wrappedValue = parsed
         }
     }

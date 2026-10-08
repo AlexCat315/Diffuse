@@ -1,6 +1,8 @@
 # GuavaUI 组件设计参考
 
-本目录给每个内置组件一份单独的设计契约。每篇覆盖：
+本目录收录组件设计契约。索引标记仅代表文档存在，不表示组件已达到完整或生产成熟状态。
+
+实现质量、缺失组件与本次重构范围见 [GPUI Kit 对照审计](../guava-ui/gpui-kit-audit.md)，实际示例见 `GuavaUI/Sources/GuavaUIGallery/`。每篇覆盖：
 
 1. **Anatomy** —— ASCII 框图 + 槽位命名
 2. **Sizing** —— 高度 / padding / 最小命中区
@@ -16,24 +18,32 @@
 
 | 组件 | 状态 | 文件 |
 | ---- | ---- | ---- |
-| Button | ✅ | [button.md](button.md) |
-| IconButton | ✅ | [iconbutton.md](iconbutton.md) |
-| Toggle | ✅ | [toggle.md](toggle.md) |
-| Checkbox | ✅ | [checkbox.md](checkbox.md) |
-| TextField | ✅ | [textfield.md](textfield.md) |
-| NumberField | ✅ | [numberfield.md](numberfield.md) |
-| Vec3Field | ✅ | [vec3field.md](vec3field.md) |
-| AssetRefField / AssetDropTarget | ✅ | [assetref.md](assetref.md) |
-| Modal / ContextMenu / TransitionView | ✅ | [interaction.md](interaction.md) |
-| JsonField | ✅ | [jsonfield.md](jsonfield.md) |
-| Slider | ✅ | [slider.md](slider.md) |
-| List / ListRow | ✅ | [list.md](list.md) |
-| Tree / TreeRow | ✅ | [tree.md](tree.md) |
-| Panel | ✅ | [panel.md](panel.md) |
-| SplitView | ✅ | [splitview.md](splitview.md) |
-| ScrollView | ✅ | [scrollview.md](scrollview.md) |
-| Tab | ✅ | [tab.md](tab.md) |
-| Box / Row / Column | ✅ | [layout.md](layout.md) |
+| Button | 文档已写 | [button.md](button.md) |
+| IconButton | 文档已写 | [iconbutton.md](iconbutton.md) |
+| Toggle | 文档已写 | [toggle.md](toggle.md) |
+| Checkbox | 文档已写 | [checkbox.md](checkbox.md) |
+| TextField | 文档已写 | [textfield.md](textfield.md) |
+| Text / Typography / Color glyphs | 实现与验证边界 | [typography.md](typography.md) |
+| NumberField | 文档已写 | [numberfield.md](numberfield.md) |
+| Vec3Field | 文档已写 | [vec3field.md](vec3field.md) |
+| AssetRefField / AssetDropTarget | 文档已写 | [assetref.md](assetref.md) |
+| Modal / ContextMenu / TransitionView | 文档已写 | [interaction.md](interaction.md) |
+| Sheet | 实现与验证边界 | [sheet.md](sheet.md) |
+| Tooltip | 实现与验证边界 | [tooltip.md](tooltip.md) |
+| Menu / ContextMenu / Select | 实现与验证边界 | [menu.md](menu.md) |
+| JsonField | 文档已写 | [jsonfield.md](jsonfield.md) |
+| Slider | 文档已写 | [slider.md](slider.md) |
+| Rating | 实现与验证边界 | [rating.md](rating.md) |
+| List / ListRow | 文档已写 | [list.md](list.md) |
+| DataTable / DataTableModel | 实现与验证边界 | [data-table.md](data-table.md) |
+| Avatar / AvatarGroup | 实现与验证边界 | [avatar.md](avatar.md) |
+| Image / AsyncImage | 实现与验证边界 | [image.md](image.md) |
+| Tree / TreeRow | 文档已写 | [tree.md](tree.md) |
+| Panel | 文档已写 | [panel.md](panel.md) |
+| SplitView | 文档已写 | [splitview.md](splitview.md) |
+| ScrollView | 文档已写 | [scrollview.md](scrollview.md) |
+| Tab | 文档已写 | [tab.md](tab.md) |
+| Box / Row / Column | 文档已写 | [layout.md](layout.md) |
 
 ## 通用约定
 

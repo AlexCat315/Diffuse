@@ -30,7 +30,7 @@ struct CommandPaletteOverlay: View {
     let registry: PanelRegistry
     var availableHeight: Float = 720
     @State private var aiMode = false
-    @State private var aiInput = ""
+    @State private var aiInput: TextBuffer = ""
     @State private var selectedIndex = 0
     @State private var resultsOffset = CGPoint.zero
     private var resultsHeight: Float { max(80, min(320, availableHeight - 168)) }
@@ -57,8 +57,10 @@ struct CommandPaletteOverlay: View {
                 }.padding(horizontal: 10, vertical: 8)
                 Divider()
                 if aiMode {
-                    TextField(L("Describe what you want to do…"), text: $aiInput, onSubmit: submitAI,
-                              onCancel: dismiss).padding(12)
+                    TextField(L("Describe what you want to do…"), text: $aiInput) { input in
+                        input.events.onSubmit = submitAI
+                        input.events.onCancel = dismiss
+                    }.padding(12)
                     if !app.isAIAvailable {
                         Text(L("Set an AI provider in Settings to enable.")).font(.caption).foregroundColor(.warning).padding(12)
                         Button(L("Open Settings")) { dismiss(); app.openSettingsWindow() }.padding(12)
@@ -67,14 +69,16 @@ struct CommandPaletteOverlay: View {
                         AIStatusFeedback(status: app.store.aiStatusMessage, warnings: app.store.aiWarnings).padding(12)
                     }
                 } else {
-                    TextField(L("Search commands or resources (> commands, @ resources)"),
-                        text: Binding(get: { app.store.commandPaletteQuery }, set: {
+                    TextField(L("Search commands or resources (> commands, @ resources)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
                             selectedIndex = 0
                             resultsOffset = .zero
                             app.store.dispatch(.setCommandPaletteQuery($0))
-                        }), focusRequestID: "editor-command-search", onSubmit: {
+                        })) { input in
+                        input.navigation.focusRequestID = "editor-command-search"
+                        input.events.onSubmit = {
                             if !matches.isEmpty { execute(matches[min(selectedIndex, matches.count - 1)]) }
-                        }, onKeyDown: { key in
+                        }
+                        input.events.onKeyDown = { key in
                             if key.scancode == Scancode.arrowDown {
                                 select(min(max(0, matches.count - 1), selectedIndex + 1)); return true
                             }
@@ -82,7 +86,9 @@ struct CommandPaletteOverlay: View {
                                 select(max(0, selectedIndex - 1)); return true
                             }
                             return false
-                        }, onCancel: dismiss).padding(12).debugName("command-palette-search")
+                        }
+                        input.events.onCancel = dismiss
+                    }.padding(12).debugName("command-palette-search")
                     Divider()
                     ScrollView(.vertical, scrollbarGutter: .stable, scrollOffset: $resultsOffset) {
                         Column(alignment: .leading, spacing: 2) {
@@ -116,7 +122,7 @@ struct CommandPaletteOverlay: View {
     }
 
     private func results() -> [ResultItem] {
-        let raw = app.store.commandPaletteQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = app.store.commandPaletteQuery.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let commandsOnly = raw.hasPrefix(">")
         let resourcesOnly = raw.hasPrefix("@")
         let query = commandsOnly || resourcesOnly ? String(raw.dropFirst()).trimmingCharacters(in: .whitespaces) : raw
@@ -167,7 +173,7 @@ struct CommandPaletteOverlay: View {
     }
 
     private func submitAI() {
-        let trimmed = aiInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = aiInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty, app.submitNaturalLanguageIntent(trimmed) { dismiss() }
     }
 

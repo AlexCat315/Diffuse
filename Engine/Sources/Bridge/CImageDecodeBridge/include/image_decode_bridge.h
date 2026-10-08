@@ -23,6 +23,10 @@ bool guava_image_decode_memory(const uint8_t* data,
                                int32_t target_height,
                                GuavaImageDecodeResult* out_result);
 
+/// Read intrinsic dimensions without allocating a decoded bitmap.
+bool guava_image_dimensions_memory(const uint8_t* data, size_t data_size,
+                                   const char* extension, int32_t* width, int32_t* height);
+
 void guava_image_decode_free(GuavaImageDecodeResult* result);
 
 #ifdef __cplusplus

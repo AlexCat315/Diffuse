@@ -15,6 +15,15 @@ private final class PlaybackCallbacks: @unchecked Sendable {
 @Suite("Editor script playback", .serialized)
 @MainActor
 struct EditorScriptPlaybackTests {
+    private func authoredSnapshot(_ manifest: EditorSceneManifest) throws -> Data {
+        let encoded = try JSONEncoder().encode(manifest)
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        // This is an export timestamp, not authored state. Comparing it makes
+        // the lifecycle assertion fail whenever the test crosses a wall-clock second.
+        object.removeValue(forKey: "lastModifiedAt")
+        return try JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+    }
+
     @Test("gameplay starts only in Play, Pause freezes callbacks, and each Play gets a new lifecycle")
     func scriptPlaybackLifecycle() throws {
         let project = FileManager.default.temporaryDirectory.appendingPathComponent("guava-script-playback-\(UUID())")
@@ -56,7 +65,7 @@ struct EditorScriptPlaybackTests {
         #expect(callbacks.values == ["start", "update", "update"])
         app.applyPlaybackState(.stopped)
         #expect(callbacks.values == ["start", "update", "update", "destroy"])
-        #expect(app.scene.manifest() == authored)
+        #expect(try authoredSnapshot(app.scene.manifest()) == authoredSnapshot(authored))
         #expect(!app.hasUnsavedSceneChanges)
         app.tick(deltaTime: 1.0 / 60)
         app.applyPlaybackState(.playing)

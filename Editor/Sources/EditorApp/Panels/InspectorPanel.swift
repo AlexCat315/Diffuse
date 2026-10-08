@@ -15,7 +15,7 @@ struct InspectorPanel: View {
     private var scripts: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>?
     private let onOpenScript: ((String) -> Void)?
     private let sessionState: InspectorPanelSessionState
-    @State private var searchText: String
+    @State private var searchText: TextBuffer
     @State private var expandedAdvancedFieldIDs: Set<String>
 
     init(store: EditorStore, scene: EditorSceneAdapter, sectionFilter: Set<String>? = nil,
@@ -28,7 +28,7 @@ struct InspectorPanel: View {
         let sessionState = InspectorPanelSessionRegistry.state(for: store,
             scope: sectionFilter?.sorted().joined(separator: ",") ?? "inspector")
         self.sessionState = sessionState
-        _searchText = State(wrappedValue: sessionState.searchText)
+        _searchText = State(wrappedValue: TextBuffer(sessionState.searchText))
         _expandedAdvancedFieldIDs = State(wrappedValue: sessionState.expandedAdvancedFieldIDs)
     }
 
@@ -53,7 +53,7 @@ struct InspectorPanel: View {
                 Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
             }
             let collapsedIDs = store.inspectorCollapsedSectionIDs
-            let trimmedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedSearchText = searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             let filteredSections = InspectorSectionFilter.filter(sections, query: trimmedSearchText)
             let totalFieldCount = sections.reduce(0) { $0 + $1.fields.count }
             let visibleFieldCount = filteredSections.reduce(0) { $0 + $1.fields.count }
@@ -63,7 +63,7 @@ struct InspectorPanel: View {
             let canEditSelection = isAuthoringEnabled
                 && (showingSceneSettings || (!selectedEntityIDs.isEmpty
                     && selectedEntityIDs.allSatisfy { !scene.isEntityLocked($0) }))
-            let searchBinding = Binding<String>(
+            let searchBinding = Binding<TextBuffer>(
                 get: { searchText },
                 set: updateSearchText
             )
@@ -165,8 +165,8 @@ struct InspectorPanel: View {
         }
     }
 
-    private func updateSearchText(_ value: String) {
-        sessionState.searchText = value
+    private func updateSearchText(_ value: TextBuffer) {
+        sessionState.searchText = value.stringValue
         searchText = value
     }
 
@@ -548,7 +548,7 @@ struct InspectorPanel: View {
             let value = propertyValue(field, identity: "\(identity)/\(fieldID)", isEditable: isEditable)
             let expansion = Binding<Bool>(
                 get: {
-                    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let query = searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
                     let directlyMatches = field.label.range(of: query, options: .caseInsensitive) != nil
                         || field.value.readOnlyDescription.range(of: query, options: .caseInsensitive) != nil
                     return (!query.isEmpty && (!sectionID.hasPrefix("scripts/") || directlyMatches))
@@ -730,7 +730,7 @@ struct InspectorPanel: View {
         case let .color(binding):
             return AnyView(InspectorColorValue(binding: binding))
         case let .json(binding, minHeight):
-            return AnyView(JsonField(text: binding, minHeight: minHeight,
+            return AnyView(InspectorJSONInput(text: binding, minHeight: minHeight,
                                      labels: JsonFieldLabels(format: L("Format"), revert: L("Revert"),
                                                              valid: L("Valid JSON"), empty: L("Empty saves as {}"),
                                                              expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel")))
@@ -1273,10 +1273,10 @@ private struct InspectorComponentPicker: View {
     let targetCount: Int
     let isPresented: Binding<Bool>
     let onSelect: (EditorComponentKind) -> Void
-    @State private var searchText: String = ""
+    @State private var searchText: TextBuffer = ""
 
     var body: some View {
-        let filteredKinds = InspectorComponentFilter.filter(kinds, query: searchText)
+        let filteredKinds = InspectorComponentFilter.filter(kinds, query: searchText.stringValue)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 6) {
                 Text(action.title)
@@ -1302,7 +1302,7 @@ private struct InspectorComponentPicker: View {
 
             if filteredKinds.isEmpty {
                 EditorPanelEmptyState(L("No matching components"),
-                                      detail: searchText.isEmpty ? nil : "\"\(searchText)\"")
+                                      detail: searchText.isEmpty ? nil : "\"\(searchText.stringValue)\"")
                     .frame(height: 110)
             } else {
                 Menu(menuEntries(for: filteredKinds),

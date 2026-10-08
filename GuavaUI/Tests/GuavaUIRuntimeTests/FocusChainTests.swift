@@ -3,6 +3,22 @@ import Testing
 
 @Suite("FocusChain")
 struct FocusChainTests {
+    @Test("Parent menu columns remain pointer-accessible above a modal, while a newer modal blocks the old hierarchy")
+    func transientColumns() {
+        let tree = Node(), dialog = Node(), parentMenu = Node(), childMenu = Node(), newerDialog = Node()
+        for node in [dialog, parentMenu, childMenu, newerDialog] { tree.addChild(node) }
+        let outside = Node(); tree.addChild(outside)
+        let focus = FocusChain()
+        focus.pushScope(dialog)
+        focus.pushScope(parentMenu, restoresCommands: true)
+        focus.pushScope(childMenu, restoresCommands: true)
+        #expect(focus.permitsInput(dialog) && focus.permitsInput(parentMenu) && focus.permitsInput(childMenu))
+        #expect(!focus.permitsInput(outside))
+        #expect(!focus.permitsKeyboardInput(parentMenu) && focus.permitsKeyboardInput(childMenu))
+        focus.pushScope(newerDialog)
+        #expect(!focus.permitsInput(dialog) && !focus.permitsInput(parentMenu) && !focus.permitsInput(childMenu))
+        #expect(focus.permitsInput(newerDialog))
+    }
 
     private func makeTree() -> (root: Node, focusables: [Node]) {
         // root

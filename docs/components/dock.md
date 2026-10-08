@@ -71,8 +71,8 @@ let decoded = try JSONDecoder().decode(DockLayoutSnapshot.self, from: data)
 controller.load(decoded)
 ```
 
-GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`，
-默认路径 `~/.guava/dock-demo.json`。
+GuavaUIDemo 的 Workspace 示例通过 `Save layout / Restore / Reset` 演示
+`WorkspaceDocument` 的 JSON 编解码与布局恢复；示例保存于当前会话，不写入磁盘。
 
 ## 操作模型
 

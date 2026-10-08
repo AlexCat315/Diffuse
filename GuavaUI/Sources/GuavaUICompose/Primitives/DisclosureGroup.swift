@@ -33,6 +33,7 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
                 .frame(height: 24, minWidth: 0)
                 .flex(1, shrink: 1, basis: 0)
             }
+            .accessibility { $0.state.isExpanded = isExpanded.wrappedValue }
             .buttonStyle(.ghost)
             .controlSize(.small)
             .frame(height: 24)

@@ -1,3 +1,4 @@
+import GuavaUICompose
 import Foundation
 import IntentRuntime
 
@@ -64,7 +65,7 @@ public enum EditorAction: Sendable {
     case navigateToScript(EditorScriptNavigationRequest)
     case navigateToAsset(String?)
     case setInspectorSceneSettingsVisible(Bool)
-    case setCommandPaletteQuery(String)
+    case setCommandPaletteQuery(TextBuffer)
     case setOutputTab(EditorOutputTab)
     case setViewportMode(EditorViewportMode)
     case setGamePreviewResolution(EditorGamePreviewResolution)

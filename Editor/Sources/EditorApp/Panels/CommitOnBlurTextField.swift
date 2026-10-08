@@ -16,14 +16,15 @@ struct CommitOnBlurTextField: View {
     var mixedValueLabel: String? = nil
     @State private var draftChanged = false
 
-    @State private var draft: String = ""
+    @State private var draft = TextBuffer.empty
     @State private var editingIdentity: String? = nil
 
     private var isEditing: Bool { editingIdentity == identity }
 
     var body: some View {
-        let fieldBinding = Binding<String>(
-            get: { isEditing ? draft : (mixedValueLabel == nil ? text.wrappedValue : "") },
+        let initial = TextBuffer(mixedValueLabel == nil ? text.wrappedValue : "")
+        let fieldBinding = Binding<TextBuffer>(
+            get: { isEditing ? draft : initial },
             set: { next in
                 // Self-arming: the first keystroke after a Return-commit (focus
                 // retained, editing cleared) re-enters draft mode.
@@ -32,25 +33,26 @@ struct CommitOnBlurTextField: View {
                 draftChanged = true
             }
         )
-        TextField(mixedValueLabel ?? "", text: fieldBinding,
-                  size: size,
-                  onSubmit: { commit() },
-                  onFocus: {
-                      let initial = mixedValueLabel == nil ? text.wrappedValue : ""
+        TextField(mixedValueLabel ?? "", text: fieldBinding) { input in
+            input.decoration.size = size
+            input.events.onSubmit = { commit() }
+            input.events.onFocus = {
                       if draft != initial { draft = initial }
                       draftChanged = false
                       if editingIdentity != identity { editingIdentity = identity }
-                  },
-                  onBlur: { commit() })
+                  }
+            input.events.onBlur = { commit(endsEditing: true) }
+        }
     }
 
-    private func commit() {
+    private func commit(endsEditing: Bool = false) {
         guard isEditing else { return }
-        editingIdentity = nil
+        if endsEditing { editingIdentity = nil }
         guard draftChanged else { return }
         draftChanged = false
-        if mixedValueLabel != nil || text.wrappedValue != draft {
-            text.wrappedValue = draft
+        if mixedValueLabel != nil || text.wrappedValue != draft.stringValue {
+            text.wrappedValue = draft.stringValue
+            if text.wrappedValue != draft.stringValue { draft = TextBuffer(text.wrappedValue) }
         }
     }
 }

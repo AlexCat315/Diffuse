@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
         .library(name: "GuavaUIApp", targets: ["GuavaUIApp"]),
         .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
+        .library(name: "GuavaUIGallery", targets: ["GuavaUIGallery"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -123,6 +124,11 @@ let package = Package(
         ),
 
         // MARK: - Demo
+        .target(
+            name: "GuavaUIGallery",
+            dependencies: ["GuavaUICompose", "GuavaUIWorkspace"],
+            resources: [.process("Resources")]
+        ),
         .executableTarget(
             name: "GuavaUIDemo",
             dependencies: [
@@ -131,11 +137,12 @@ let package = Package(
                 "GuavaUICompose",
                 "GuavaUIWorkspace",
                 "GuavaUIDevTools",
-                .product(name: "CardBattleRuntime", package: "Engine"),
+                "GuavaUIGallery",
             ]
         ),
 
         // MARK: - Tests
+        .testTarget(name: "GuavaUIGalleryTests", dependencies: ["GuavaUIGallery", "GuavaUICompose"]),
         .testTarget(
             name: "GuavaUIRuntimeTests",
             dependencies: [

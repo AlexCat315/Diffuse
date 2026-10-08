@@ -96,10 +96,8 @@ public final class FontCollection {
                 guard let info = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID, fontID: glyph.fontID),
                       info.width > 0, info.height > 0 else { continue }
                 func snap(_ value: Float) -> Float { (value * self.rasterScale).rounded() / self.rasterScale }
-                list.addGlyphQuad(x: snap(x + glyph.x + info.bearingX), y: snap(y + glyph.y - info.bearingY),
-                                  width: info.width, height: info.height,
-                                  uvMinX: info.uvMinX, uvMinY: info.uvMinY, uvMaxX: info.uvMaxX, uvMaxY: info.uvMaxY,
-                                  color: color, textureID: textureID)
+                list.addAtlasGlyph(info, x: snap(x + glyph.x + info.bearingX), y: snap(y + glyph.y - info.bearingY),
+                                   color: color, textureID: textureID)
             }
         }
         return layout.totalWidth

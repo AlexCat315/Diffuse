@@ -16,6 +16,29 @@ import UniformTypeIdentifiers
 /// surface for missing files and unsupported sources.
 @Suite("ImageDecoder")
 struct ImageDecoderTests {
+    @Test("Vector thumbnails rasterize above their natural dimensions for HiDPI")
+    func vectorThumbnailDensity() throws {
+        let svg = Data("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"16\"><circle cx=\"12\" cy=\"8\" r=\"7\" fill=\"red\"/></svg>".utf8)
+        let image = try ImageDecoder.decodeThumbnail(data: svg, formatHint: "svg", boundingSize: (144, 144))
+        #expect(image.width == 144 && image.height == 96)
+        #expect(throws: ImageDecodeError.self) {
+            try ImageDecoder.decodeThumbnail(data: svg, formatHint: "svg", boundingSize: (144, 144), maximumSourcePixels: 1_000)
+        }
+        #expect(throws: ImageDecodeError.self) {
+            try ImageDecoder.decodeThumbnail(data: svg, formatHint: "svg", boundingSize: (Int.max, 144))
+        }
+    }
+
+    @Test("Thumbnail metadata preserves aspect ratio and rejects oversized sources before allocation")
+    func boundedThumbnail() throws {
+        let source = Data("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"160\"><rect width=\"240\" height=\"160\" fill=\"red\"/></svg>".utf8)
+        let image = try ImageDecoder.decodeThumbnail(data: source, formatHint: "svg", boundingSize: (120, 120))
+        #expect(image.width == 120 && image.height == 80)
+        #expect(image.pixels.count == 120 * 80 * 4)
+        #expect(throws: (any Error).self) {
+            try ImageDecoder.decodeThumbnail(data: source, formatHint: "svg", boundingSize: (120, 120), maximumSourcePixels: 10)
+        }
+    }
 
     /// Encode a 4×3 RGBA8 buffer to a temporary PNG, decode it back via
     /// `ImageDecoder.decode(url:)`, and verify the dimensions plus the

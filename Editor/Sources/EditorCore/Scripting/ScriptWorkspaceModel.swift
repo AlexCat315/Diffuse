@@ -1,5 +1,6 @@
 import Foundation
 import GuavaUIRuntime
+import GuavaUICompose
 
 public enum ScriptDocumentBuildState: Sendable, Equatable {
     case idle
@@ -37,23 +38,28 @@ public enum ScriptLanguageServiceState: Sendable, Equatable {
 
 public struct ScriptWorkspaceDocument: Sendable, Equatable {
     public var file: DynamicScriptManager.ScriptFile
-    public var source: String
-    public var savedSource: String
-    public var editRevision: UInt64
-    public var savedRevision: UInt64
-    public var buildState: ScriptDocumentBuildState
+    public var source: TextBuffer { didSet { refreshDirty() } }
+    public var savedSource: TextBuffer { didSet { refreshDirty() } }
+    public var editRevision: UInt64 = 0
+    public var savedRevision: UInt64 = 0
+    public var buildState: ScriptDocumentBuildState = .idle
     public var loadedRevision: UInt64?
-    public var output: String
-    public var diagnostics: [ScriptLanguageDiagnostic]
-    public var externalChange: ScriptExternalChangeState
+    public var output = ""
+    public var diagnostics: [ScriptLanguageDiagnostic] = []
+    public var externalChange: ScriptExternalChangeState = .none
 
-    public var isDirty: Bool { source != savedSource }
+    public private(set) var isDirty = false
+    public init(file: DynamicScriptManager.ScriptFile, source: TextBuffer) {
+        self.file = file; self.source = source; savedSource = source
+    }
+    private mutating func refreshDirty() { isDirty = !source.hasSameContents(as: savedSource) }
 }
 
 public struct ScriptWorkspaceSnapshot: Sendable, Equatable {
     public var documents: [ScriptWorkspaceDocument]
     public var selectedScriptID: String?
     public var languageServiceState: ScriptLanguageServiceState
+    public var isLanguageServiceMessageDismissed = false
     public var trustState: ScriptProjectTrustState
     public var trustWarning: String?
 
@@ -81,6 +87,8 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     private let onBuildFailed: BuildFailedHandler?
     private let directoryMonitor: ScriptDirectoryMonitor
     private var didStartLanguageService = false
+    private var languageServiceGeneration = UUID()
+    private var languageServiceRevision: UInt64 = 0
     private var languageServiceTask: Task<Void, Never>?
 
     public private(set) var snapshot: ScriptWorkspaceSnapshot
@@ -95,17 +103,8 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         self.onBuildFailed = onBuildFailed
         self.directoryMonitor = ScriptDirectoryMonitor(directoryURL: manager.scriptsDirectoryURL)
         let documents = try manager.scanScriptFiles().map { file in
-            let source = try manager.readSource(at: file.url)
-            return ScriptWorkspaceDocument(file: file,
-                                           source: source,
-                                           savedSource: source,
-                                           editRevision: 0,
-                                           savedRevision: 0,
-                                           buildState: .idle,
-                                           loadedRevision: nil,
-                                           output: "",
-                                           diagnostics: [],
-                                           externalChange: .none)
+            let source = TextBuffer(try manager.readSource(at: file.url))
+            return ScriptWorkspaceDocument(file: file, source: source)
         }
         self.snapshot = ScriptWorkspaceSnapshot(
             documents: documents,
@@ -125,33 +124,53 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     public func shutdown() {
         directoryMonitor.stop()
         for document in snapshot.documents { manager.cancelBuild(scriptID: document.file.identifier) }
-        let previousTask = languageServiceTask
-        previousTask?.cancel()
-        languageServiceTask = Task { [manager, previousTask] in
-            await previousTask?.value
-            await manager.stopLanguageService()
-        }
+        languageServiceGeneration = UUID()
+        didStartLanguageService = false
+        snapshot.languageServiceState = .inactive
+        publish()
+        languageServiceTask?.cancel()
+        // Stop can interrupt initialize; waiting for its task first would keep
+        // the server alive until the 30-second startup timeout.
+        languageServiceTask = Task { [manager] in await manager.stopLanguageService() }
     }
 
     public func startLanguageService() {
         guard !didStartLanguageService, !snapshot.documents.isEmpty else { return }
         didStartLanguageService = true
+        let generation = UUID()
+        languageServiceGeneration = generation
         snapshot.languageServiceState = .starting
+        snapshot.isLanguageServiceMessageDismissed = false
         publish()
         let model = self
         let previousTask = languageServiceTask
-        languageServiceTask = Task { [manager, model, previousTask] in
+        let sources = languageSources
+        languageServiceTask = Task { [manager, model, previousTask, generation] in
             await previousTask?.value
+            guard !Task.isCancelled else { return }
             do {
-                try await manager.startLanguageService { update in
-                    Task { @MainActor in model.applyDiagnostics(update) }
+                try await manager.startLanguageService(sources: sources, onDiagnostics: { update in
+                    Task { @MainActor in
+                        guard model.languageServiceGeneration == generation else { return }
+                        model.applyDiagnostics(update)
+                    }
+                }, onStateChange: { update in
+                    Task { @MainActor in
+                        guard model.languageServiceGeneration == generation else { return }
+                        model.applyLanguageServiceState(update)
+                    }
+                })
+                let current = await MainActor.run {
+                    guard model.languageServiceGeneration == generation else { return [] as [ScriptLanguageSource] }
+                    return model.languageSources
                 }
-                await MainActor.run {
-                    model.snapshot.languageServiceState = .ready
-                    model.publish()
+                for source in current {
+                    try await manager.updateLanguageSource(scriptID: source.file.identifier,
+                                                           text: source.text, revision: source.revision)
                 }
             } catch {
                 await MainActor.run {
+                    guard model.languageServiceGeneration == generation else { return }
                     model.didStartLanguageService = false
                     model.snapshot.languageServiceState = .unavailable(
                         message: error.localizedDescription
@@ -174,15 +193,17 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         return true
     }
 
-    public func updateSelectedSource(_ source: String) {
+    public func updateSelectedSource(_ source: TextBuffer) {
         guard let index = selectedDocumentIndex,
               snapshot.documents[index].source != source else { return }
         snapshot.documents[index].source = source
+        snapshot.documents[index].diagnostics = []
         snapshot.documents[index].editRevision &+= 1
         let scriptID = snapshot.documents[index].file.identifier
         publish()
+        let revision = snapshot.documents[index].editRevision
         Task { [manager] in
-            try? await manager.updateLanguageSource(scriptID: scriptID, text: source)
+            try? await manager.updateLanguageSource(scriptID: scriptID, text: source, revision: revision)
         }
     }
 
@@ -192,7 +213,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         guard snapshot.documents[index].isDirty else { return true }
         do {
             let document = snapshot.documents[index]
-            try manager.writeSource(document.source, at: document.file.url)
+            try manager.writeSource(document.source.stringValue, at: document.file.url)
             snapshot.documents[index].savedSource = document.source
             snapshot.documents[index].savedRevision = document.editRevision
             if reportSuccess {
@@ -222,16 +243,8 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             guard let file = try manager.scriptFile(at: url) else {
                 throw ScriptWorkspaceError.createdScriptMissing(url.path)
             }
-            let document = ScriptWorkspaceDocument(file: file,
-                                                   source: source,
-                                                   savedSource: source,
-                                                   editRevision: 0,
-                                                   savedRevision: 0,
-                                                   buildState: .idle,
-                                                   loadedRevision: nil,
-                                                   output: "",
-                                                   diagnostics: [],
-                                                   externalChange: .none)
+            let buffer = TextBuffer(source)
+            let document = ScriptWorkspaceDocument(file: file, source: buffer)
             snapshot.documents.append(document)
             sortDocuments()
             snapshot.selectedScriptID = file.identifier
@@ -399,7 +412,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
 
     public func dismissLanguageServiceMessage() {
         guard case .unavailable = snapshot.languageServiceState else { return }
-        snapshot.languageServiceState = .inactive
+        snapshot.isLanguageServiceMessageDismissed = true
         publish()
     }
 
@@ -414,7 +427,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                 if useDiskVersion {
                     adoptDiskSource(diskSource, at: index)
                 } else {
-                    try manager.writeSource(document.source, at: document.file.url)
+                    try manager.writeSource(document.source.stringValue, at: document.file.url)
                     snapshot.documents[index].savedSource = document.source
                     snapshot.documents[index].savedRevision = document.editRevision
                     snapshot.documents[index].externalChange = .none
@@ -430,7 +443,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                         at: document.file.url.deletingLastPathComponent(),
                         withIntermediateDirectories: true
                     )
-                    try manager.writeSource(document.source, at: document.file.url)
+                    try manager.writeSource(document.source.stringValue, at: document.file.url)
                     snapshot.documents[index].savedSource = document.source
                     snapshot.documents[index].savedRevision = document.editRevision
                     snapshot.documents[index].externalChange = .none
@@ -457,7 +470,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         guard snapshot.documents[index].isDirty else { return true }
         do {
             let document = snapshot.documents[index]
-            try manager.writeSource(document.source, at: document.file.url)
+            try manager.writeSource(document.source.stringValue, at: document.file.url)
             snapshot.documents[index].savedSource = document.source
             snapshot.documents[index].savedRevision = document.editRevision
             publish()
@@ -500,7 +513,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                     needsLanguageRefresh = true
                 }
                 let diskSource = try manager.readSource(at: diskFile.url)
-                if diskSource != document.savedSource {
+                if diskSource != document.savedSource.stringValue {
                     if document.isDirty {
                         let change = ScriptExternalChangeState.modifiedOnDisk(source: diskSource)
                         if snapshot.documents[index].externalChange != change {
@@ -519,19 +532,10 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             }
 
             for file in diskFiles where !existingIDs.contains(file.identifier) {
-                let source = try manager.readSource(at: file.url)
-                snapshot.documents.append(
-                    ScriptWorkspaceDocument(file: file,
-                                            source: source,
-                                            savedSource: source,
-                                            editRevision: 0,
-                                            savedRevision: 0,
-                                            buildState: .idle,
-                                            loadedRevision: nil,
-                                            output: "Discovered external script \(file.displayName).swift",
-                                            diagnostics: [],
-                                            externalChange: .none)
-                )
+                let source = TextBuffer(try manager.readSource(at: file.url))
+                var document = ScriptWorkspaceDocument(file: file, source: source)
+                document.output = "Discovered external script \(file.displayName).swift"
+                snapshot.documents.append(document)
                 didChange = true
                 needsLanguageRefresh = true
             }
@@ -553,8 +557,9 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
 
     private func adoptDiskSource(_ source: String, at index: Int) {
         guard snapshot.documents.indices.contains(index) else { return }
-        snapshot.documents[index].source = source
-        snapshot.documents[index].savedSource = source
+        let buffer = TextBuffer(source)
+        snapshot.documents[index].source = buffer
+        snapshot.documents[index].savedSource = buffer
         snapshot.documents[index].editRevision &+= 1
         snapshot.documents[index].savedRevision = snapshot.documents[index].editRevision
         snapshot.documents[index].buildState = .idle
@@ -563,22 +568,22 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             "Reloaded external changes in \(snapshot.documents[index].file.displayName).swift"
     }
 
+    private var languageSources: [ScriptLanguageSource] {
+        snapshot.documents.map { document in
+            var source = ScriptLanguageSource(file: document.file, text: document.source)
+            source.revision = document.editRevision
+            return source
+        }
+    }
+
     private func synchronizeLanguageService() {
         if snapshot.documents.isEmpty {
+            languageServiceGeneration = UUID()
+            didStartLanguageService = false
             snapshot.languageServiceState = .inactive
             publish()
-            let model = self
-            let previousTask = languageServiceTask
-            languageServiceTask = Task { [manager, model, previousTask] in
-                await previousTask?.value
-                await manager.stopLanguageService()
-                await MainActor.run {
-                    guard model.snapshot.documents.isEmpty else { return }
-                    model.didStartLanguageService = false
-                    model.snapshot.languageServiceState = .inactive
-                    model.publish()
-                }
-            }
+            languageServiceTask?.cancel()
+            languageServiceTask = Task { [manager] in await manager.stopLanguageService() }
             return
         }
         if !didStartLanguageService, !snapshot.documents.isEmpty {
@@ -587,21 +592,31 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         }
         guard didStartLanguageService else { return }
         snapshot.languageServiceState = .starting
+        snapshot.isLanguageServiceMessageDismissed = false
         publish()
         let model = self
         let previousTask = languageServiceTask
-        languageServiceTask = Task { [manager, model, previousTask] in
+        let sources = languageSources
+        let generation = languageServiceGeneration
+        languageServiceTask = Task { [manager, model, previousTask, generation] in
             await previousTask?.value
+            guard !Task.isCancelled else { return }
             do {
-                try await manager.refreshLanguageWorkspace()
-                await MainActor.run {
+                try await manager.refreshLanguageWorkspace(sources: sources)
+                let current = await MainActor.run {
+                    guard model.languageServiceGeneration == generation else { return [] as [ScriptLanguageSource] }
                     let hasDocuments = !model.snapshot.documents.isEmpty
                     model.didStartLanguageService = hasDocuments
-                    model.snapshot.languageServiceState = hasDocuments ? .ready : .inactive
-                    model.publish()
+                    return model.languageSources
+                }
+                for source in current {
+                    try await manager.updateLanguageSource(scriptID: source.file.identifier,
+                                                           text: source.text, revision: source.revision)
                 }
             } catch {
                 await MainActor.run {
+                    guard model.languageServiceGeneration == generation else { return }
+                    model.didStartLanguageService = false
                     model.snapshot.languageServiceState = .unavailable(
                         message: error.localizedDescription
                     )
@@ -611,8 +626,26 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         }
     }
 
+    private func applyLanguageServiceState(_ update: ScriptLanguageServiceUpdate) {
+        guard update.revision > languageServiceRevision else { return }
+        languageServiceRevision = update.revision
+        let state = update.state
+        snapshot.languageServiceState = snapshot.documents.isEmpty ? .inactive : state
+        snapshot.isLanguageServiceMessageDismissed = false
+        if state != .ready {
+            for index in snapshot.documents.indices { snapshot.documents[index].diagnostics = [] }
+        }
+        publish()
+    }
+
+    public func retryLanguageService() {
+        didStartLanguageService = false
+        startLanguageService()
+    }
+
     private func applyDiagnostics(_ update: ScriptLanguageDiagnosticUpdate) {
-        guard let index = documentIndex(scriptID: update.scriptID) else { return }
+        guard let index = documentIndex(scriptID: update.scriptID),
+              snapshot.documents[index].editRevision == update.sourceRevision else { return }
         snapshot.documents[index].diagnostics = update.diagnostics
         publish()
     }

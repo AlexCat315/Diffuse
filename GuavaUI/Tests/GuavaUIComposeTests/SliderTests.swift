@@ -25,6 +25,22 @@ struct SliderTests: GuavaUIComposeSerializedSuite {
         return (binding, { storage })
     }
 
+    @Test("A width-only slider in a centered row keeps its intrinsic height and paints")
+    func widthOnlyFrame() { GlobalTestLock.locked {
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: Row(alignment: .center) {
+            Slider(value: .constant(0.3)).frame(width: 180)
+        })
+        graph.computeLayout(width: 500, height: 100)
+        func find(_ node: Node) -> Node? {
+            node.accessibility?.role == .slider ? node : node.children.compactMap(find).first
+        }
+        let slider = find(graph.tree.root!)!
+        #expect(slider.frame.width == 180 && slider.frame.height == 24)
+        let list = DrawList(); slider.draw?(list, .zero)
+        #expect(!list.vertices.isEmpty)
+    } }
+
     @Test("Slider materialises a hit-testable, focusable host node")
     func materialise() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

@@ -1,0 +1,5 @@
+# Preserve pinned upstream source bytes, including their original whitespace.
+tree-sitter/** -whitespace
+tree-sitter-swift/** -whitespace
+# A unified diff's empty context lines consist of a required single space.
+patches/*.patch -whitespace

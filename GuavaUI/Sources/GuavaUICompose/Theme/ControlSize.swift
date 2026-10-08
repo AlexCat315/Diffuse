@@ -2,7 +2,7 @@ import GuavaUIRuntime
 
 /// Shared desktop control density. Explicit per-control sizes take precedence;
 /// otherwise the nearest `.controlSize` provider sizes a whole toolbar or form.
-public enum ControlSize: Sendable, Equatable {
+public enum ControlSize: Sendable, Hashable, CaseIterable {
     case mini, small, regular, large
 
     public var buttonHeight: Float {

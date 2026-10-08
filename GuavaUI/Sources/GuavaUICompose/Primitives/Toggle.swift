@@ -22,33 +22,43 @@ public struct Toggle: View {
     }
 }
 
-/// Checkbox visual variant that shares the same bool activation semantics as `Toggle`.
+public enum CheckboxState: Sendable, Equatable { case off, on, mixed }
+
+/// Mixed state represents a partially selected collection. Activation selects it fully.
 public struct Checkbox: View {
-    public let isOn: Binding<Bool>
+    public let state: Binding<CheckboxState>
     public let isEnabled: Bool
+
+    public init(state: Binding<CheckboxState>, isEnabled: Bool = true) {
+        self.state = state
+        self.isEnabled = isEnabled
+    }
 
     public init(isOn: Binding<Bool>,
                 isEnabled: Bool = true) {
-        self.isOn = isOn
+        self.state = Binding(get: { isOn.wrappedValue ? .on : .off },
+                             set: { isOn.wrappedValue = $0 == .on })
         self.isEnabled = isEnabled
     }
 
     public var body: some View {
-        _StatefulBoolControl(isOn: isOn,
+        _StatefulBoolControl(isOn: Binding(get: { state.wrappedValue == .on },
+                                          set: { state.wrappedValue = $0 ? .on : .off }),
                              isEnabled: isEnabled,
-                             variant: .checkbox)
+                             variant: state.wrappedValue == .mixed ? .mixedCheckbox : .checkbox)
     }
 }
 
 enum _BoolControlVariant: Sendable, Equatable {
     case toggle
     case checkbox
+    case mixedCheckbox
 
     var layoutSize: (width: Float, height: Float) {
         switch self {
         case .toggle:
             return (38, 24)
-        case .checkbox:
+        case .checkbox, .mixedCheckbox:
             return (18, 18)
         }
     }
@@ -92,9 +102,18 @@ struct BoolControlHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.isFocusable = isEnabled
+        node.accessibility = AccessibilitySemantics(variant == .toggle ? .toggle : .checkbox) {
+            $0.state.isEnabled = isEnabled; $0.state.isSelected = isOn.wrappedValue
+            $0.value = variant == .mixedCheckbox ? "mixed" : isOn.wrappedValue ? "1" : "0"
+        }
+        node.accessibilityActions = AccessibilityActions()
+        if isEnabled { node.accessibilityActions.activate = { isOn.wrappedValue.toggle() } }
         if !isEnabled {
             node.attachments[Self.pressedKey] = false
             node.attachments[Self.hoveredKey] = false
+            if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
+            if FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
         } else {
             if node.attachments[Self.pressedKey] == nil {
                 node.attachments[Self.pressedKey] = false
@@ -103,11 +122,11 @@ struct BoolControlHost: _PrimitiveView {
                 node.attachments[Self.hoveredKey] = false
             }
         }
-        node.attachments[Self.onKey] = isOn.wrappedValue
+        node.attachments[Self.onKey] = isOn.wrappedValue || variant == .mixedCheckbox
         node.attachments[Self.variantKey] = variant
         node.cursor = isEnabled ? .pointer : .notAllowed
 
-        updateBoolControlAppearance(node, isOn: isOn.wrappedValue, isEnabled: isEnabled)
+        updateBoolControlAppearance(node, isOn: isOn.wrappedValue || variant == .mixedCheckbox, isEnabled: isEnabled)
         let snapshot = self
         node.updateDraw(identity: PaintIdentity(isOn: isOn.wrappedValue,
                                                 isEnabled: isEnabled,
@@ -132,12 +151,15 @@ struct BoolControlHost: _PrimitiveView {
             if event.button != .left { return .ignored }
             switch phase {
             case .down:
+                PointerCaptureHolder.current?.acquire(node)
                 setBoolControlInteraction(node, key: Self.pressedKey, value: true)
                 return .handled
             case .up:
                 let wasPressed = node.attachments[Self.pressedKey] as? Bool ?? false
                 setBoolControlInteraction(node, key: Self.pressedKey, value: false)
                 guard wasPressed else { return .ignored }
+                if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
+                guard node.absoluteFrame.contains(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))) else { return .handled }
                 isOn.wrappedValue.toggle()
                 node.attachments[Self.onKey] = isOn.wrappedValue
                 updateBoolControlAppearance(node, isOn: isOn.wrappedValue, isEnabled: isEnabled)
@@ -145,8 +167,8 @@ struct BoolControlHost: _PrimitiveView {
                 return .handled
             }
         }
-        registry.setKey(node) { event, _ in
-            guard !event.isRepeat else { return .ignored }
+        registry.setKey(node) { event, phase in
+            guard phase == .target, !event.isRepeat else { return .ignored }
             switch event.scancode {
             case Scancode.return, Scancode.space, Scancode.keypadEnter:
                 isOn.wrappedValue.toggle()
@@ -178,7 +200,7 @@ struct BoolControlHost: _PrimitiveView {
         switch variant {
         case .toggle:
             renderToggle(node: node, origin: origin, list: list)
-        case .checkbox:
+        case .checkbox, .mixedCheckbox:
             renderCheckbox(node: node, origin: origin, list: list)
         }
     }
@@ -264,6 +286,11 @@ struct BoolControlHost: _PrimitiveView {
             let x2 = boxRect.minX + edge - inset
             let y2 = boxRect.minY + inset
             let lineColor = (isEnabled ? colors.onAccent : colors.onSurfaceMuted).multipliedAlpha(checkProgress * node.opacity)
+            if variant == .mixedCheckbox {
+                list.addLine(fromX: x0, fromY: boxRect.minY + edge / 2,
+                             toX: x2, toY: boxRect.minY + edge / 2, thickness: 2, color: lineColor)
+                return
+            }
             list.addLine(fromX: x0, fromY: y0,
                          toX: x1, toY: y1,
                          thickness: 2,

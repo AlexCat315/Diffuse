@@ -10,11 +10,12 @@ public struct DrawListAtlasDirty: Sendable {
     public var textureWidth: UInt32
     public var textureHeight: UInt32
     public var textureID: TextureID
+    public var format: GlyphAtlasFormat = .alpha
 
     public init(pixels: [UInt8], regionX: UInt32, regionY: UInt32,
                 regionWidth: UInt32, regionHeight: UInt32,
                 textureWidth: UInt32, textureHeight: UInt32,
-                textureID: TextureID) {
+                textureID: TextureID, format: GlyphAtlasFormat = .alpha) {
         self.pixels = pixels
         self.regionX = regionX
         self.regionY = regionY
@@ -23,6 +24,7 @@ public struct DrawListAtlasDirty: Sendable {
         self.textureWidth = textureWidth
         self.textureHeight = textureHeight
         self.textureID = textureID
+        self.format = format
     }
 }
 
@@ -36,14 +38,14 @@ public struct DrawListSnapshot: Sendable {
     public var viewportHeight: UInt32
     public var logicalWidth: Float
     public var logicalHeight: Float
-    public var atlasDirty: DrawListAtlasDirty?
+    public var atlasUpdates: [DrawListAtlasDirty] = []
 
     public var isEmpty: Bool { batches.isEmpty }
 
     public init(vertices: [UIVertex], indices: [UInt32], batches: [DrawBatch],
                 viewportWidth: UInt32, viewportHeight: UInt32,
                 logicalWidth: Float, logicalHeight: Float,
-                atlasDirty: DrawListAtlasDirty? = nil) {
+                atlasUpdates: [DrawListAtlasDirty] = []) {
         self.vertices = vertices
         self.indices = indices
         self.batches = batches
@@ -51,7 +53,7 @@ public struct DrawListSnapshot: Sendable {
         self.viewportHeight = viewportHeight
         self.logicalWidth = logicalWidth
         self.logicalHeight = logicalHeight
-        self.atlasDirty = atlasDirty
+        self.atlasUpdates = atlasUpdates
     }
 }
 
@@ -65,48 +67,58 @@ public struct DrawListSnapshot: Sendable {
 public final class InGameDrawListSource: @unchecked Sendable {
     private let lock = NSLock()
     private var latest: DrawListSnapshot?
-    private var atlas: DrawListAtlasDirty?
-    private var atlasNeedsUpload = false
+    private var planes: [GlyphAtlasFormat: DrawListAtlasDirty] = [:]
+    private var dirtyPlanes: Set<GlyphAtlasFormat> = []
 
     public init() {}
 
     public func publish(_ snapshot: DrawListSnapshot) {
         lock.lock()
-        if let dirty = snapshot.atlasDirty,
-           dirty.textureWidth > 0, dirty.textureHeight > 0,
-           dirty.textureWidth <= 16_384, dirty.textureHeight <= 16_384,
-           UInt64(dirty.textureWidth) * UInt64(dirty.textureHeight) <= 64 * 1024 * 1024,
-           UInt64(dirty.regionX) + UInt64(dirty.regionWidth) <= UInt64(dirty.textureWidth),
-           UInt64(dirty.regionY) + UInt64(dirty.regionHeight) <= UInt64(dirty.textureHeight),
-           dirty.pixels.count == Int(UInt64(dirty.regionWidth) * UInt64(dirty.regionHeight)) {
-            // A render thread can miss several main-thread frames during GPU
-            // startup. Preserve all atlas patches rather than overwriting the
-            // only upload with a newer frame containing no dirty glyphs.
-            if atlas?.textureID != dirty.textureID || atlas?.textureWidth != dirty.textureWidth || atlas?.textureHeight != dirty.textureHeight {
-                atlas = DrawListAtlasDirty(pixels: [UInt8](repeating: 0, count: Int(dirty.textureWidth * dirty.textureHeight)),
-                    regionX: 0, regionY: 0, regionWidth: dirty.textureWidth, regionHeight: dirty.textureHeight,
-                    textureWidth: dirty.textureWidth, textureHeight: dirty.textureHeight, textureID: dirty.textureID)
-            }
-            if var merged = atlas {
-                for row in 0..<Int(dirty.regionHeight) {
-                    let src = row * Int(dirty.regionWidth)
-                    let dst = (row + Int(dirty.regionY)) * Int(dirty.textureWidth) + Int(dirty.regionX)
-                    merged.pixels.replaceSubrange(dst..<(dst + Int(dirty.regionWidth)), with: dirty.pixels[src..<(src + Int(dirty.regionWidth))])
-                }
-                atlas = merged
-                atlasNeedsUpload = true
-            }
-        }
+        defer { lock.unlock() }
+        for update in snapshot.atlasUpdates { merge(update) }
         latest = snapshot
-        lock.unlock()
     }
 
     public func consume() -> DrawListSnapshot? {
         lock.lock()
         defer { lock.unlock() }
         guard var snapshot = latest else { return nil }
-        snapshot.atlasDirty = atlasNeedsUpload ? atlas : nil
-        atlasNeedsUpload = false
+        snapshot.atlasUpdates = [GlyphAtlasFormat.alpha, .color].compactMap {
+            dirtyPlanes.contains($0) ? planes[$0] : nil
+        }
+        dirtyPlanes.removeAll(keepingCapacity: true)
         return snapshot
+    }
+
+    /// Each plane retains the complete texture, including patches from
+    /// frames skipped during GPU startup. Geometry still uses the latest frame.
+    private func merge(_ update: DrawListAtlasDirty) {
+        let stride = update.format.bytesPerPixel
+        guard update.textureID != .none,
+              update.textureWidth > 0, update.textureHeight > 0,
+              update.textureWidth <= 16_384, update.textureHeight <= 16_384,
+              UInt64(update.textureWidth) * UInt64(update.textureHeight) * UInt64(stride) <= 64 * 1024 * 1024,
+              update.regionWidth > 0, update.regionHeight > 0,
+              UInt64(update.regionX) + UInt64(update.regionWidth) <= UInt64(update.textureWidth),
+              UInt64(update.regionY) + UInt64(update.regionHeight) <= UInt64(update.textureHeight),
+              UInt64(update.pixels.count) == UInt64(update.regionWidth) * UInt64(update.regionHeight) * UInt64(stride)
+        else { return }
+        var merged = planes.removeValue(forKey: update.format)
+        if merged?.textureID != update.textureID || merged?.textureWidth != update.textureWidth || merged?.textureHeight != update.textureHeight {
+            merged = DrawListAtlasDirty(
+                pixels: [UInt8](repeating: 0, count: Int(update.textureWidth) * Int(update.textureHeight) * stride),
+                regionX: 0, regionY: 0, regionWidth: update.textureWidth, regionHeight: update.textureHeight,
+                textureWidth: update.textureWidth, textureHeight: update.textureHeight,
+                textureID: update.textureID, format: update.format)
+        }
+        guard var plane = merged else { return }
+        let rowBytes = Int(update.regionWidth) * stride
+        for row in 0..<Int(update.regionHeight) {
+            let src = row * rowBytes
+            let dst = ((row + Int(update.regionY)) * Int(update.textureWidth) + Int(update.regionX)) * stride
+            plane.pixels.replaceSubrange(dst..<(dst + rowBytes), with: update.pixels[src..<(src + rowBytes)])
+        }
+        planes[update.format] = plane
+        dirtyPlanes.insert(update.format)
     }
 }

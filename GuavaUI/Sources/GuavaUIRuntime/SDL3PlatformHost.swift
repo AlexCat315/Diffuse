@@ -185,7 +185,6 @@ public final class SDL3PlatformHost: PlatformHost {
     public var pointerCapture: PointerCapture { mainInputContext.pointerCapture }
     public var focusChain: FocusChain { mainInputContext.focusChain }
     public var invalidationLog: InvalidationLog { mainInputContext.invalidationLog }
-    public var tooltips: TooltipStore { mainInputContext.tooltips }
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32) = (1, 1)
     public private(set) var logicalSize: (width: UInt32, height: UInt32) = (1, 1)
@@ -256,6 +255,10 @@ public final class SDL3PlatformHost: PlatformHost {
     public var mainSession: PlatformWindowSession? {
         guard let id = mainWindowID else { return nil }
         return sessions[id]
+    }
+
+    public func nativeWindowReference(for windowID: WindowID) -> NativeWindowReference? {
+        shell?.window(for: windowID)?.nativeWindowReference
     }
 
     public var windowIDs: [WindowID] {

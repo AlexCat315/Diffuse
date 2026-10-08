@@ -11,6 +11,7 @@ public enum SourceKitLSPClientError: Error, LocalizedError, Sendable, Equatable 
     case serverError(code: Int, message: String)
     case requestTimedOut(String)
     case processTerminated(Int32)
+    case connectionClosed
     case notRunning
 
     public var errorDescription: String? {
@@ -27,6 +28,8 @@ public enum SourceKitLSPClientError: Error, LocalizedError, Sendable, Equatable 
             return "SourceKit-LSP request '\(method)' timed out."
         case let .processTerminated(status):
             return "sourcekit-lsp exited with status \(status)."
+        case .connectionClosed:
+            return "SourceKit-LSP closed its connection."
         case .notRunning:
             return "SourceKit-LSP is not running."
         }

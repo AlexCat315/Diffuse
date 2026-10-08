@@ -41,9 +41,9 @@ struct ThemeCrossFadeComponentTests: GuavaUIComposeSerializedSuite {
         ]
 
         var body: some View {
-            Tree(roots,
-                 children: \.children,
-                 selection: $selection) { item, _, _, _ in
+            Tree(roots, children: \.children, configure: { tree in
+                tree.selection.primary = $selection
+            }) { item, _, _, _ in
                 Text(item.title)
             }
             .appearance(appearance)
@@ -53,7 +53,7 @@ struct ThemeCrossFadeComponentTests: GuavaUIComposeSerializedSuite {
 
     struct TextFieldHarness: View {
         @State var appearance: Appearance = .dark
-        @State var text: String = ""
+        @State var text: TextBuffer = ""
 
         var body: some View {
             TextField("Name", text: $text)

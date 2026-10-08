@@ -9,7 +9,7 @@ import GuavaUIRuntime
 struct ConsolePanel: View {
     let store: EditorStore
     var onNavigate: ((EditorIssueTarget) -> Void)? = nil
-    @State private var searchText: String = ""
+    @State private var searchText: TextBuffer = ""
     @State private var enabledSeverities: Set<EditorConsoleSeverity> = Set(EditorConsoleSeverity.allCases)
     @State private var selectedEntryID: UInt64? = nil
     @State private var followsLatest: Bool = true
@@ -26,7 +26,7 @@ struct ConsolePanel: View {
         let entries = store.consoleEntries
         let visibleEntries = ConsoleEntryFilter.filter(entries,
                                                        severities: enabledSeverities,
-                                                       query: searchText)
+                                                       query: searchText.stringValue)
         let counts = Dictionary(grouping: entries, by: \.severity).mapValues(\.count)
         let selectedEntry = visibleEntries.first { $0.id == selectedEntryID }
         let entriesToCopy = selectedEntry.map { [$0] } ?? visibleEntries
@@ -120,9 +120,9 @@ struct ConsolePanel: View {
             } else if visibleEntries.isEmpty {
                 EditorPanelEmptyState(
                     L("No matching console messages"),
-                    detail: searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    detail: searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         ? L("Enable a severity filter to show messages.")
-                        : "\"\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))\""
+                        : "\"\(searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines))\""
                 )
                 .flex()
             } else {

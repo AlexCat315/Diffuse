@@ -5,12 +5,18 @@ import GuavaUIRuntime
 /// Built-in SVG icons bundled with GuavaUICompose. Public so hosts reuse the
 /// same glyphs instead of approximating them with text characters.
 public enum UICommonIcons {
+    public static let star = BundleImageResource.svg(named: "star", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let starFill = BundleImageResource.svg(named: "star-fill", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let user = BundleImageResource.svg(named: "user", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
     public static let chevronDown = BundleImageResource.svg(named: "chevron-down",
                                                             in: GuavaUIComposeResourceBundle.bundle,
                                                             subdirectory: "UIIcons")
     public static let chevronUp = BundleImageResource.svg(named: "chevron-up",
                                                           in: GuavaUIComposeResourceBundle.bundle,
                                                           subdirectory: "UIIcons")
+    public static let chevronLeft = BundleImageResource.svg(named: "chevron-left",
+                                                            in: GuavaUIComposeResourceBundle.bundle,
+                                                            subdirectory: "UIIcons")
     public static let chevronRight = BundleImageResource.svg(named: "chevron-right",
                                                              in: GuavaUIComposeResourceBundle.bundle,
                                                              subdirectory: "UIIcons")
@@ -119,400 +125,6 @@ public struct KeyboardShortcut: Sendable, Equatable, Hashable {
             case .shift: return "Shift"
             }
         }
-    }
-}
-
-public enum MenuItemRole: Sendable, Equatable {
-    case normal
-    case destructive
-}
-
-public struct MenuItem {
-    public let id: AnyHashable
-    public let title: String
-    public let shortcut: String?
-    public let isEnabled: Bool
-    /// Rendered as a leading checkmark glyph (e.g. the current value in a
-    /// Select menu or a toggled menu-bar action).
-    public let isSelected: Bool
-    public let role: MenuItemRole
-    public let action: () -> Void
-
-    public init<ID: Hashable>(id: ID,
-                              title: String,
-                              shortcut: String? = nil,
-                              isEnabled: Bool = true,
-                              isSelected: Bool = false,
-                              role: MenuItemRole = .normal,
-                              action: @escaping () -> Void) {
-        self.id = AnyHashable(id)
-        self.title = title
-        self.shortcut = shortcut
-        self.isEnabled = isEnabled
-        self.isSelected = isSelected
-        self.role = role
-        self.action = action
-    }
-
-    public init(title: String,
-                shortcut: String? = nil,
-                isEnabled: Bool = true,
-                isSelected: Bool = false,
-                role: MenuItemRole = .normal,
-                action: @escaping () -> Void) {
-        self.id = AnyHashable(UUID().uuidString)
-        self.title = title
-        self.shortcut = shortcut
-        self.isEnabled = isEnabled
-        self.isSelected = isSelected
-        self.role = role
-        self.action = action
-    }
-}
-
-public enum MenuEntry {
-    case item(MenuItem)
-    case separator(id: AnyHashable)
-
-    public static func separator<ID: Hashable>(_ id: ID) -> MenuEntry {
-        .separator(id: AnyHashable(id))
-    }
-
-    public static func separator() -> MenuEntry {
-        .separator(id: AnyHashable(UUID().uuidString))
-    }
-
-    var id: AnyHashable {
-        switch self {
-        case .item(let item):
-            return item.id
-        case .separator(let id):
-            return id
-        }
-    }
-}
-
-public struct Menu: View {
-    public let entries: [MenuEntry]
-    public let width: Float?
-    public let maxVisibleRows: Int
-    public let onItemActivated: (() -> Void)?
-    public let highlightedIndex: Int?
-
-    public init(_ entries: [MenuEntry],
-                width: Float? = nil,
-                maxVisibleRows: Int = 8,
-                highlightedIndex: Int? = nil,
-                onItemActivated: (() -> Void)? = nil) {
-        self.entries = entries
-        self.width = width
-        self.maxVisibleRows = max(1, maxVisibleRows)
-        self.highlightedIndex = highlightedIndex
-        self.onItemActivated = onItemActivated
-    }
-
-    public var body: some View {
-        let rowHeight: Float = 32
-        let listHeight = Float(maxVisibleRows) * rowHeight
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            ScrollView(.vertical, consumePolicy: .always, scrollbarGutter: .stable) {
-                Box(direction: .column, alignItems: .stretch, spacing: 1) { rows() }
-            }
-            .frame(maxHeight: listHeight)
-            .modifier(_MenuWindowBounds())
-        }
-        .background(.surfaceFloating)
-        .cornerRadius(6)
-        .border(.border, width: 1)
-        .surfaceFinish()
-        .ifLet(width) { view, width in
-            view.frame(width: width)
-        }
-    }
-
-    private func rows() -> [AnyView] {
-        // Reserve a leading checkmark column for every row as soon as any
-        // sibling is selected, so titles stay aligned.
-        let showsSelectionColumn = entries.contains {
-            if case .item(let item) = $0 { return item.isSelected }
-            return false
-        }
-        var itemIndex = 0
-        return entries.map { entry in
-            let isHighlighted: Bool = {
-                if case .item = entry {
-                    defer { itemIndex += 1 }
-                    return highlightedIndex == itemIndex
-                }
-                return false
-            }()
-            return AnyView(menuEntry(entry,
-                                     isHighlighted: isHighlighted,
-                                     showsSelectionColumn: showsSelectionColumn)
-                .id(entry.id))
-        }
-    }
-
-    private func menuEntry(_ entry: MenuEntry,
-                           isHighlighted: Bool,
-                           showsSelectionColumn: Bool) -> some View {
-        switch entry {
-        case .separator:
-            return AnyView(
-                Divider(color: nil, thickness: 1, axis: .horizontal)
-                    .background(.divider)
-            )
-        case .item(let item):
-            return AnyView(
-                _MenuItemRow(item: item,
-                             isHighlighted: isHighlighted,
-                             showsSelectionColumn: showsSelectionColumn,
-                             onActivate: {
-                                 item.action()
-                                 onItemActivated?()
-                             })
-            )
-        }
-    }
-}
-
-private struct _MenuItemRow: View {
-    let item: MenuItem
-    let isHighlighted: Bool
-    let showsSelectionColumn: Bool
-    let onActivate: () -> Void
-
-    var body: some View {
-        _MenuItemRowHost(item: item,
-                         isHighlighted: isHighlighted,
-                         showsSelectionColumn: showsSelectionColumn,
-                         onActivate: onActivate)
-    }
-}
-
-private struct _MenuItemRowHost: _PrimitiveView {
-    let item: MenuItem
-    let isHighlighted: Bool
-    let showsSelectionColumn: Bool
-    let onActivate: () -> Void
-
-    private struct PaintIdentity: Equatable {
-        let id: AnyHashable
-        let isEnabled: Bool
-        let isSelected: Bool
-        let role: MenuItemRole
-        let isHighlighted: Bool
-    }
-
-    func _makeNode() -> Node {
-        let node = Node()
-        node.isHitTestable = true
-        node.isFocusable = true
-        return node
-    }
-
-    func _updateNode(_ node: Node) {
-        node.attachments[Self.itemIDKey] = item.id
-        if item.isEnabled {
-            if node.attachments[Self.hoveredKey] == nil {
-                node.attachments[Self.hoveredKey] = false
-            }
-            if node.attachments[Self.pressedKey] == nil {
-                node.attachments[Self.pressedKey] = false
-            }
-        } else {
-            node.attachments[Self.hoveredKey] = false
-            node.attachments[Self.pressedKey] = false
-            node.attachments.removeValue(forKey: Self.activePressKey)
-            if PointerCaptureHolder.current?.target === node {
-                PointerCaptureHolder.current?.release()
-            }
-        }
-        node.cursor = item.isEnabled ? .pointer : .notAllowed
-        node.attachments["__menu_highlighted"] = isHighlighted
-        node.attachments["__menu_enabled"] = item.isEnabled
-        updateMenuItemFill(node)
-        node.updateDraw(identity: PaintIdentity(id: item.id,
-                                                isEnabled: item.isEnabled,
-                                                isSelected: item.isSelected,
-                                                role: item.role,
-                                                isHighlighted: isHighlighted)) { [weak node] list, origin in
-            guard let node,
-                  let background = node.attachments["__menu_visual_fill"] as? Color else {
-                return
-            }
-            let width = max(0, Float(node.frame.width) - 8)
-            let rect = UIRect(x: Float(origin.x) + 4,
-                              y: Float(origin.y) + 2,
-                              width: width,
-                              height: 28)
-            list.addRoundedRect(rect,
-                                radius: 5,
-                                color: background.multipliedAlpha(node.opacity))
-        }
-
-        guard item.isEnabled, let registry = InteractionRegistryHolder.current else {
-            InteractionRegistryHolder.current?.remove(node)
-            return
-        }
-
-        registry.setHover(node) { phase in
-            switch phase {
-            case .enter:
-                setMenuItemInteraction(node, key: Self.hoveredKey, value: true)
-            case .leave:
-                node.attachments.removeValue(forKey: Self.activePressKey)
-                if PointerCaptureHolder.current?.target === node {
-                    PointerCaptureHolder.current?.release()
-                }
-                setMenuItemInteraction(node, key: Self.hoveredKey, value: false)
-                setMenuItemInteraction(node, key: Self.pressedKey, value: false)
-            }
-        }
-        registry.setPointer(node) { event, phase, _ in
-            guard event.button == .left else { return .ignored }
-            switch phase {
-            case .down:
-                node.attachments[Self.activePressKey] = true
-                PointerCaptureHolder.current?.acquire(node)
-                setMenuItemInteraction(node, key: Self.pressedKey, value: true)
-                return .handled
-            case .up:
-                let wasActive = node.attachments[Self.activePressKey] as? Bool == true
-                node.attachments.removeValue(forKey: Self.activePressKey)
-                setMenuItemInteraction(node, key: Self.pressedKey, value: false)
-                defer {
-                    if PointerCaptureHolder.current?.target === node {
-                        PointerCaptureHolder.current?.release()
-                    }
-                }
-                guard wasActive else { return .ignored }
-                onActivate()
-                return .handled
-            }
-        }
-        registry.setKey(node) { event, _ in
-            guard !event.isRepeat else { return .ignored }
-            switch event.scancode {
-            case Scancode.return, Scancode.space, Scancode.keypadEnter:
-                onActivate()
-                return .handled
-            default:
-                return .ignored
-            }
-        }
-    }
-
-    func _makeLayoutNode() -> LayoutNode? {
-        let layout = LayoutNode()
-        layout.flexDirection = .column
-        layout.alignItems = .stretch
-        layout.height = 32
-        return layout
-    }
-
-    func _updateLayout(_ layout: LayoutNode) {
-        layout.flexDirection = .column
-        layout.alignItems = .stretch
-        layout.height = 32
-    }
-
-    func _children(for node: Node) -> [any View] {
-        let theme = node.theme
-        let titleColor: Color = !item.isEnabled
-            ? (theme.textEmphasis.disabled ?? theme.colors.onSurfaceMuted)
-            : item.role == .destructive ? theme.colors.error : theme.colors.onSurface
-        let textOpacity: Float = 1
-
-        let checkmarkSize: Float = 10
-        let row = Row(alignment: .center, spacing: 8) {
-            if showsSelectionColumn {
-                // Fixed-width slot — a grow-able Spacer here pushes every
-                // unchecked title toward the centre of the menu.
-                Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                    if item.isSelected {
-                        Icon(UICommonIcons.checkmark, size: checkmarkSize, color: titleColor)
-                            .opacity(textOpacity)
-                    }
-                }
-                .frame(width: checkmarkSize)
-            }
-            Text(item.title)
-                .font(.body)
-                .foregroundColor(titleColor)
-                .opacity(textOpacity)
-                .flex()
-            if let shortcut = item.shortcut {
-                Text(shortcut)
-                    .font(.caption)
-                    .foregroundColor(theme.colors.onSurfaceMuted)
-                    .opacity(textOpacity)
-            }
-        }
-        .padding(horizontal: 12, vertical: 0)
-        .frame(height: 28)
-        .padding(horizontal: 4, vertical: 2)
-
-        return [row]
-    }
-
-    private static let hoveredKey = "__menu_item_hovered"
-    private static let itemIDKey = "__menu_item_id"
-    private static let pressedKey = "__menu_item_pressed"
-    private static let activePressKey = "__menu_item_active_press"
-}
-
-private func updateMenuItemFill(_ node: Node) {
-    let enabled = node.attachments["__menu_enabled"] as? Bool == true
-    let pressed = node.attachments["__menu_item_pressed"] as? Bool == true
-    let hovered = node.attachments["__menu_item_hovered"] as? Bool == true
-    let highlighted = node.attachments["__menu_highlighted"] as? Bool == true
-    let colors = node.theme.colors
-    let fill = !enabled ? Color.clear : pressed ? colors.stateLayerPressed
-        : hovered ? colors.stateLayerHover : highlighted ? colors.stateLayerSelected : .clear
-    let previous = node.attachments["__menu_visual_fill"] as? Color
-    let apply = { [node] in
-        node.animatableSet(propertyKey: "menu.fill", current: previous ?? fill, to: fill) { [weak node] color in
-            node?.attachments["__menu_visual_fill"] = color
-            node?.markRenderDirty(reason: .styleSet(field: "menu.fill"))
-        }
-    }
-    if previous != nil { withAnimation(.semantic(.fast, in: node.theme), apply) } else { apply() }
-}
-
-private func setMenuItemInteraction(_ node: Node, key: String, value: Bool) {
-    if node.attachments[key] as? Bool == value {
-        return
-    }
-    node.attachments[key] = value
-    updateMenuItemFill(node)
-    node.markRenderDirty(reason: .styleSet(field: key))
-}
-
-public extension Menu {
-    init(descriptor: MenuDescriptor,
-         width: Float? = nil,
-         maxVisibleRows: Int = 8,
-         onItemActivated: (() -> Void)? = nil) {
-        self.entries = descriptor.items.enumerated().map { index, item in
-            switch item {
-            case .separator:
-                return .separator(id: AnyHashable("sep-\(index)"))
-            case .action(let title, let shortcut, let isEnabled, let action):
-                return .item(MenuItem(
-                    id: "item-\(index)",
-                    title: title,
-                    shortcut: shortcut?.displayString,
-                    isEnabled: isEnabled,
-                    role: .normal,
-                    action: action
-                ))
-            }
-        }
-        self.width = width
-        self.maxVisibleRows = max(1, maxVisibleRows)
-        self.highlightedIndex = nil
-        self.onItemActivated = onItemActivated
     }
 }
 
@@ -767,51 +379,12 @@ private struct _StatefulSelect<Value: Hashable>: View {
     let select: Select<Value>
 
     @State var isPresented: Bool = false
-    @State var highlightedIndex: Int = 0
-    @State var popoverWasPresented: Bool = false
 
     var body: some View {
-        // Only write state on an actual transition: @State writes invalidate
-        // the owning scope unconditionally, so an unguarded write here would
-        // recompose this Select on every commit, forever.
-        let _ = {
-            if isPresented != popoverWasPresented {
-                if isPresented, highlightedIndex != 0 {
-                    highlightedIndex = 0
-                }
-                popoverWasPresented = isPresented
-            }
-        }()
-
-        let itemCount = select.options.count
-        let keyHandler: (KeyEvent, EventPhase) -> EventResult = { event, phase in
-            guard phase == .target || phase == .bubble else { return .ignored }
-            switch event.scancode {
-            case Scancode.arrowDown:
-                if highlightedIndex + 1 < itemCount { highlightedIndex += 1 }
-                return .handled
-            case Scancode.arrowUp:
-                if highlightedIndex > 0 { highlightedIndex -= 1 }
-                return .handled
-            case Scancode.return, Scancode.keypadEnter:
-                if highlightedIndex < itemCount {
-                    select.selection.wrappedValue = select.options[highlightedIndex].value
-                }
-                isPresented = false
-                return .handled
-            case Scancode.escape:
-                isPresented = false
-                return .handled
-            default:
-                return .ignored
-            }
-        }
-
         ThemeReader { theme in
         Popover(isPresented: $isPresented,
                 isEnabled: select.isEnabled,
                 width: select.width,
-                onKey: keyHandler,
                 label: {
             // Trigger reads as a text input: same sunken fill, border, and
             // radius the TextField/NumberField use (theme.inputs), so a Select
@@ -835,7 +408,6 @@ private struct _StatefulSelect<Value: Hashable>: View {
             Menu(menuEntries,
                  width: select.width,
                  maxVisibleRows: select.maxVisibleRows,
-                 highlightedIndex: isPresented ? highlightedIndex : nil,
                  onItemActivated: {
                 isPresented = false
             })
@@ -910,18 +482,5 @@ private extension View {
         } else {
             self
         }
-    }
-}
-
-private struct _MenuWindowBounds: ViewModifier {
-    func apply(node: Node) {
-        let preferredHeight = node.layoutNode?.maxHeight ?? .greatestFiniteMagnitude
-        func constrain(_ node: Node) {
-            let bounds = portalWindowBounds(node)
-            let height = min(preferredHeight, max(0, Float(bounds.height) - 12))
-            if node.layoutNode?.maxHeight != height { node.layoutNode?.maxHeight = height }
-        }
-        constrain(node)
-        node.layoutDidUpdate = constrain
     }
 }

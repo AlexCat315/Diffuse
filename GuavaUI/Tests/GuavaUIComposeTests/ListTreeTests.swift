@@ -65,18 +65,18 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         @State var expanded: Set<String> = []
 
         var body: some View {
-            Tree(roots,
-                 children: \.children,
-                 selection: Binding(get: { selection },
+            Tree(roots, children: \.children, configure: { tree in
+                tree.selection.primary = Binding(get: { selection },
                                     set: { newValue in
                                         selection = newValue
                                         selectionProbe.value = newValue
-                                    }),
-                 expanded: Binding(get: { expanded },
+                                    })
+                tree.selection.expanded = Binding(get: { expanded },
                                    set: { newValue in
                                        expanded = newValue
                                        expandedProbe.value = newValue
-                                   })) { item, isSelected, _, depth in
+                                   })
+            }) { item, isSelected, _, depth in
                 Text("\(depth): \(item.title)",
                      color: isSelected ? Color.white : Color.black)
             }
@@ -92,18 +92,18 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         @State var multiSelection: Set<String> = []
 
         var body: some View {
-            Tree(roots,
-                 children: \.children,
-                 selection: Binding(get: { selection },
+            Tree(roots, children: \.children, configure: { tree in
+                tree.selection.primary = Binding(get: { selection },
                                     set: { next in
                                         selection = next
                                         selectionProbe.value = next
-                                    }),
-                 multiSelection: Binding(get: { multiSelection },
+                                    })
+                tree.selection.multiple = Binding(get: { multiSelection },
                                          set: { next in
                                              multiSelection = next
                                              multiSelectionProbe.value = next
-                                         })) { item, isSelected, _, depth in
+                                         })
+            }) { item, isSelected, _, depth in
                 Text("\(depth): \(item.title)",
                      color: isSelected ? Color.white : Color.black)
             }
@@ -119,18 +119,18 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         @State var multiSelectionKeys: Set<TreeNodeKey<String>> = []
 
         var body: some View {
-            Tree(roots,
-                  children: \.children,
-                 selectionKey: Binding(get: { selectionKey },
+            Tree(roots, children: \.children, configure: { tree in
+                tree.selection.primaryKey = Binding(get: { selectionKey },
                                        set: { next in
                                            selectionKey = next
                                            selectionKeyProbe.value = next
-                                       }),
-                 multiSelectionKeys: Binding(get: { multiSelectionKeys },
+                                       })
+                tree.selection.multipleKeys = Binding(get: { multiSelectionKeys },
                                              set: { next in
                                                  multiSelectionKeys = next
                                                  multiSelectionKeyProbe.value = next
-                                             })) { item, isSelected, _, depth in
+                                             })
+            }) { item, isSelected, _, depth in
                 Text("\(depth): \(item.title)",
                      color: isSelected ? Color.white : Color.black)
             }
@@ -146,21 +146,21 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         @State var multiSelectionKeys: Set<TreeNodeKey<String>> = []
 
         var body: some View {
-            Tree(roots,
-                 children: \.children,
-                 selectionKey: Binding(get: { selectionKey },
+            Tree(roots, children: \.children, configure: { tree in
+                tree.selection.primaryKey = Binding(get: { selectionKey },
                                        set: { next in
                                            selectionKey = next
                                            selectionKeyProbe.value = next
-                                       }),
-                 multiSelectionKeys: Binding(get: { multiSelectionKeys },
+                                       })
+                tree.selection.multipleKeys = Binding(get: { multiSelectionKeys },
                                              set: { next in
                                                  multiSelectionKeys = next
                                                  multiSelectionKeyProbe.value = next
-                                             }),
-                 searchQuery: "Second",
-                 searchText: \.title,
-                 searchFilterPolicy: .filterAndAutoExpand) { item, _, _, depth in
+                                             })
+                tree.search.query = "Second"
+                tree.search.text = \.title
+                tree.search.policy = .filterAndAutoExpand
+            }) { item, _, _, depth in
                 Text("\(depth): \(item.title)")
             }
         }
@@ -171,16 +171,16 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         let roots: [TreeItem]
 
         var body: some View {
-            Tree(roots,
-                 children: \.children,
-                 canDrop: { _, _, _ in true },
-                 onDrop: { source, target, position in
+            Tree(roots, children: \.children, configure: { tree in
+                tree.drag.canDrop = { _, _, _ in true }
+                tree.drag.onDrop = { source, target, position in
                      dropProbe.value = DropEvent(sourceID: source.id,
                                                  targetID: target.id,
                                                  sourceTitle: source.title,
                                                  targetTitle: target.title,
                                                  position: position)
-                 }) { item, _, _, depth in
+                 }
+            }) { item, _, _, depth in
                 Text("\(depth): \(item.title)")
             }
         }

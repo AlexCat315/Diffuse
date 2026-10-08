@@ -428,10 +428,21 @@ let package = Package(
             ]
         ),
 
+        // Pinned, offline syntax parser; only lib.c is compiled (it includes the runtime).
+        .target(name: "CTreeSitter", path: "third-party/tree-sitter/lib",
+                sources: ["src/lib.c"], publicHeadersPath: "include",
+                cSettings: [.headerSearchPath("src"), .unsafeFlags(["-O2"])]),
+        .target(name: "CTreeSitterSwift", dependencies: ["CTreeSitter"],
+                path: "third-party/tree-sitter-swift",
+                sources: ["src/parser.c", "src/scanner.c"], publicHeadersPath: "include",
+                cSettings: [.headerSearchPath("src")]),
+
         // MARK: - Engine Host (orchestrates all services)
         .target(
             name: "EngineCore",
             dependencies: [
+                "CTreeSitter",
+                "CTreeSitterSwift",
                 "CEngineBridge",
                 "EngineKernel",
                 "RHIWGPU",

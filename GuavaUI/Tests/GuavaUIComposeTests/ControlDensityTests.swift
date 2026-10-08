@@ -51,7 +51,9 @@ struct ControlDensityTests {
             Button("Build") {}.debugName("small-button")
             TextField("Find", text: Binding(get: { "" }, set: { _ in }))
                 .debugName("inherited-field")
-            TextField("Find", text: Binding(get: { "" }, set: { _ in }), size: .large)
+            TextField("Find", text: Binding(get: { "" }, set: { _ in })) { input in
+                input.decoration.size = .large
+            }
                 .debugName("explicit-field")
             Button("Large") {}.controlSize(.large).debugName("large-button")
         }.controlSize(.small))

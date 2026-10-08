@@ -18,7 +18,7 @@ struct ControlMotionTests: GuavaUIComposeSerializedSuite {
                 var theme = Theme.defaultDark
                 theme.motion.fast = .milliseconds(200)
                 theme.inputs.borderHover = .white
-                var value = "12.5"
+                var value: TextBuffer = "12.5"
                 let tree = NodeTree()
                 let graph = ViewGraph(tree: tree, recomposer: Recomposer())
                 graph.install(root: TextField(text: Binding(get: { value }, set: { value = $0 })).theme(theme))
@@ -34,7 +34,7 @@ struct ControlMotionTests: GuavaUIComposeSerializedSuite {
                 #expect(field.borderColor == theme.inputs.borderHover)
                 hover(.leave); graph.recomposer.commitAll(); scheduler.tick(deltaTime: 1)
                 #expect(field.borderColor == theme.inputs.borderColor)
-                #expect(value == "12.5")
+                #expect(value.stringValue == "12.5")
             }
         }
     } }

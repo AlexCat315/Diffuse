@@ -69,7 +69,7 @@ struct ScriptLanguageReplyTests {
         #expect(result.isIncomplete)
         #expect(result.items.count == 1)
         #expect(result.items.first?.kind == .field)
-        #expect(result.items.first?.replaceStart == ScriptLanguagePosition(line: 2, character: 4))
+        #expect(result.items.first?.replacement?.start == ScriptLanguagePosition(line: 2, character: 4))
     }
 
     @Test("accepts a bare array of completion items")

@@ -36,7 +36,7 @@ extension EditorApplication {
         let source = URL(fileURLWithPath: asset.absolutePath)
         let destination = root.appendingPathComponent(relativePath)
         guard !relativePath.isEmpty, !relativePath.hasPrefix("/"),
-              !scriptWorkspace.snapshot.documents.contains(where: { $0.isDirty && $0.source.contains(asset.relativePath) }) else {
+              !scriptWorkspace.snapshot.documents.contains(where: { $0.isDirty && $0.source.stringValue.contains(asset.relativePath) }) else {
             logConsole("Asset relocation blocked", severity: .warning, target: .asset(id: asset.id),
                        nextStep: "Enter a project-relative path and save scripts referencing this asset before moving it.")
             return false

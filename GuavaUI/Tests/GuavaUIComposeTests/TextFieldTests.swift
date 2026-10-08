@@ -30,10 +30,10 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
     }
 
     final class TextStore {
-        var value: String = ""
+        var value: TextBuffer = ""
     }
 
-    private func makeBinding(_ store: TextStore) -> Binding<String> {
+    private func makeBinding(_ store: TextStore) -> Binding<TextBuffer> {
         Binding(get: { store.value }, set: { store.value = $0 })
     }
 
@@ -81,7 +81,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let textHandler = rig.registry.handlers(for: node).text!
         _ = textHandler("h", .target)
         _ = textHandler("i", .target)
-        #expect(rig.store.value == "hi")
+        #expect(rig.store.value.stringValue == "hi")
     } }
 
     @Test("Backspace deletes the character before the cursor")
@@ -97,7 +97,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let backspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false)
         let result = keyHandler(backspace, .target)
         #expect(result == .handled)
-        #expect(rig.store.value == "ab")
+        #expect(rig.store.value.stringValue == "ab")
     } }
 
     @Test("Left/right arrows move the cursor; insertion respects new position")
@@ -119,12 +119,12 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h.key!(right, .target)
         // Insert 'X' at position 2.
         _ = h.text!("X", .target)
-        #expect(rig.store.value == "heXllo")
+        #expect(rig.store.value.stringValue == "heXllo")
 
         // Backspace at the post-insert position deletes the 'X'.
         let backspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false)
         _ = h.key!(backspace, .target)
-        #expect(rig.store.value == "hello")
+        #expect(rig.store.value.stringValue == "hello")
     } }
 
     @Test("Return triggers onSubmit")
@@ -132,7 +132,9 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let rig = makeRig()
         var submitted = false
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), onSubmit: { submitted = true })
+            TextField(text: makeBinding(rig.store)) { input in
+                input.events.onSubmit = { submitted = true }
+            }
         )
 
         let node = fieldNode(in: rig.tree.root)
@@ -147,7 +149,9 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let rig = makeRig()
         var canceled = false
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), onCancel: { canceled = true })
+            TextField(text: makeBinding(rig.store)) { input in
+                input.events.onCancel = { canceled = true }
+            }
         )
 
         let node = fieldNode(in: rig.tree.root)
@@ -169,14 +173,16 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let rig = makeRig()
         rig.store.value = "Entity Name"
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), focusRequestID: "inline-rename-1")
+            TextField(text: makeBinding(rig.store)) { input in
+                input.navigation.focusRequestID = "inline-rename-1"
+            }
         )
 
         let node = fieldNode(in: rig.tree.root)
         let state = node.attachments["__textfield_state"] as? TextField.FieldState
         #expect(rig.focus.focused === node)
-        #expect(state?.selectionAnchor == 0)
-        #expect(state?.cursorIndex == rig.store.value.count)
+        #expect(state?.selection.anchor == 0)
+        #expect(state?.selection.cursorIndex == rig.store.value.characterCount)
     } }
 
     @Test("Focus callbacks and style state update without draw")
@@ -187,9 +193,10 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         var blurCount = 0
 
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store),
-                      onFocus: { focusCount += 1 },
-                      onBlur: { blurCount += 1 })
+            TextField(text: makeBinding(rig.store)) { input in
+                input.events.onFocus = { focusCount += 1 }
+                input.events.onBlur = { blurCount += 1 }
+            }
                 .textFieldStyle(ProbingTextFieldStyle(probe: probe))
         )
 
@@ -218,14 +225,17 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         rig.store.value = "abc"
         var submitted = false
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), axis: .vertical, onSubmit: { submitted = true })
+            TextField(text: makeBinding(rig.store)) { input in
+                input.layout.axis = .vertical
+                input.events.onSubmit = { submitted = true }
+            }
         )
 
         let node = fieldNode(in: rig.tree.root)
         let keyHandler = rig.registry.handlers(for: node).key!
         let ret = KeyEvent(scancode: 40, keycode: 0, modifiers: [], isRepeat: false)
         _ = keyHandler(ret, .target)
-        #expect(rig.store.value == "abc\n")
+        #expect(rig.store.value.stringValue == "abc\n")
         #expect(submitted == false)
     } }
 
@@ -235,14 +245,17 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         rig.store.value = "abc"
         var submitted = false
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), axis: .vertical, onSubmit: { submitted = true })
+            TextField(text: makeBinding(rig.store)) { input in
+                input.layout.axis = .vertical
+                input.events.onSubmit = { submitted = true }
+            }
         )
 
         let node = fieldNode(in: rig.tree.root)
         let keyHandler = rig.registry.handlers(for: node).key!
         let ret = KeyEvent(scancode: 40, keycode: 0, modifiers: [.lgui], isRepeat: false)
         _ = keyHandler(ret, .target)
-        #expect(rig.store.value == "abc")
+        #expect(rig.store.value.stringValue == "abc")
         #expect(submitted == true)
     } }
 
@@ -252,14 +265,16 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         rig.store.value = "abc"
         var submitted = false
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), onSubmit: { submitted = true })
+            TextField(text: makeBinding(rig.store)) { input in
+                input.events.onSubmit = { submitted = true }
+            }
         )
 
         let node = fieldNode(in: rig.tree.root)
         let keyHandler = rig.registry.handlers(for: node).key!
         _ = keyHandler(key(40, shift: true), .target)
 
-        #expect(rig.store.value == "abc\n")
+        #expect(rig.store.value.stringValue == "abc\n")
         #expect(submitted == false)
     } }
 
@@ -278,12 +293,12 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = handlers.key!(key(82), .target)
         _ = handlers.key!(key(82), .target)
         _ = handlers.text!("X", .target)
-        #expect(rig.store.value == "abcXd\na\nabc")
+        #expect(rig.store.value.stringValue == "abcXd\na\nabc")
 
         _ = handlers.key!(key(74), .target)
         _ = handlers.key!(key(81), .target)
         _ = handlers.text!("Y", .target)
-        #expect(rig.store.value == "abcXd\nYa\nabc")
+        #expect(rig.store.value.stringValue == "abcXd\nYa\nabc")
     } }
 
     @Test("Unhandled scancode returns .ignored so bubbling continues")
@@ -316,7 +331,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
             focusChain: rig.focus
         )
         dispatcher.dispatch(.textInput("ok"))
-        #expect(rig.store.value == "ok")
+        #expect(rig.store.value.stringValue == "ok")
     } }
 
     @Test("EventDispatcher routes textEditing and layout commit publishes text input area")
@@ -337,7 +352,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
             focusChain: rig.focus
         )
         dispatcher.dispatch(.textEditing(TextEditingEvent(text: "ni", start: 2, length: 0)))
-        #expect(rig.store.value == "")
+        #expect(rig.store.value.stringValue == "")
 
         rig.graph.computeLayout(width: 180, height: 64)
         let area = node.attachments[TextInputAttachmentKey.area] as? TextInputArea
@@ -348,7 +363,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(area?.cursorX == 0)
 
         dispatcher.dispatch(.textInput("你"))
-        #expect(rig.store.value == "你")
+        #expect(rig.store.value.stringValue == "你")
     } }
 
     @Test("Backspace removes a full grapheme cluster (emoji)")
@@ -364,10 +379,10 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let backspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false)
         // Cursor at end (index 3). Backspace once → removes the emoji.
         _ = key(backspace, .target)
-        #expect(rig.store.value == "a😀")
+        #expect(rig.store.value.stringValue == "a😀")
         // Backspace again → removes the emoji.
         _ = key(backspace, .target)
-        #expect(rig.store.value == "a")
+        #expect(rig.store.value.stringValue == "a")
     } }
 
     @Test("Click handler is registered and tolerates an empty text-environment")
@@ -397,7 +412,9 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
 
         graph.install(root:
-            TextField(text: makeBinding(store), axis: .vertical)
+            TextField(text: makeBinding(store)) { input in
+                input.layout.axis = .vertical
+            }
         )
         graph.computeLayout(width: 200, height: 200)
 
@@ -409,7 +426,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
     func multilineAutoGrowCapsAndScrolls() { GlobalTestLock.locked {
         let rig = makeRig()
         let scheduler = AnimatorScheduler()
-        rig.store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
+        rig.store.value = TextBuffer(Array(repeating: "line", count: 12).joined(separator: "\n"))
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
 
         rig.graph.install(root:
@@ -448,7 +465,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
     @Test("Manual TextField wheel scrolling survives redraw")
     func wheelScrollPersistsAcrossRedraw() { GlobalTestLock.locked {
         let rig = makeRig()
-        rig.store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
+        rig.store.value = TextBuffer(Array(repeating: "line", count: 12).joined(separator: "\n"))
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
 
         rig.graph.install(root:
@@ -470,7 +487,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
     @Test("Focused TextField wheel scrolling survives redraw")
     func focusedWheelScrollPersistsAcrossRedraw() { GlobalTestLock.locked {
         let rig = makeRig()
-        rig.store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
+        rig.store.value = TextBuffer(Array(repeating: "line", count: 12).joined(separator: "\n"))
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
 
         rig.graph.install(root:
@@ -501,7 +518,9 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
 
         graph.install(root:
-            TextField(text: makeBinding(store), axis: .vertical)
+            TextField(text: makeBinding(store)) { input in
+                input.layout.axis = .vertical
+            }
         )
         graph.computeLayout(width: 96, height: 240)
 
@@ -512,10 +531,13 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
     @Test("Multiline visible-line limit can expand for code editors")
     func multilineVisibleLineLimitCanExpand() { GlobalTestLock.locked {
         let rig = makeRig()
-        rig.store.value = Array(repeating: "let value = 42", count: 24).joined(separator: "\n")
+        rig.store.value = TextBuffer(Array(repeating: "let value = 42", count: 24).joined(separator: "\n"))
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), axis: .vertical, maxVisibleLines: 24)
+            TextField(text: makeBinding(rig.store)) { input in
+                input.layout.axis = .vertical
+                input.layout.maxVisibleLines = 24
+            }
         )
         rig.graph.computeLayout(width: 420, height: 1_000)
 
@@ -527,22 +549,23 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
     func lineNumbersAndSyntaxColorsRender() { GlobalTestLock.locked {
         let rig = makeRig()
         let source = "let answer = 42\nlet total = 7"
-        rig.store.value = source
+        rig.store.value = TextBuffer(source)
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
         let keywordColor = Color(r: 0.8, g: 0.2, b: 0.9)
         let numberColor = Color(r: 0.9, g: 0.6, b: 0.2)
         let gutterColor = Color(r: 0.2, g: 0.9, b: 0.6)
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store),
-                      axis: .vertical,
-                      maxVisibleLines: 24,
-                      showsLineNumbers: true,
-                      lineNumberColor: gutterColor,
-                      syntaxColorAtUTF8Offset: { _, offset in
+            TextField(text: makeBinding(rig.store)) { input in
+                input.layout.axis = .vertical
+                input.layout.maxVisibleLines = 24
+                input.codeEditing.showsLineNumbers = true
+                input.codeEditing.lineNumberColor = gutterColor
+                input.codeEditing.syntaxColorAtUTF8Offset = { _, offset in
                           if offset < 3 { return keywordColor }
                           if (13..<15).contains(offset) { return numberColor }
                           return nil
-                      })
+                      }
+            }
         )
         rig.graph.computeLayout(width: 360, height: 480)
 
@@ -562,7 +585,9 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         rig.store.value = "alpha beta gamma delta epsilon zeta"
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
         rig.graph.install(root:
-            TextField(text: makeBinding(rig.store), axis: .vertical)
+            TextField(text: makeBinding(rig.store)) { input in
+                input.layout.axis = .vertical
+            }
         )
         rig.graph.computeLayout(width: 96, height: 240)
 
@@ -575,7 +600,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = handlers.key!(down, .target)
         _ = handlers.text!("X", .target)
 
-        #expect(!rig.store.value.hasPrefix("Xalpha"))
+        #expect(!rig.store.value.stringValue.hasPrefix("Xalpha"))
     } }
 
     // CJK glyph fallback resolves via Apple's CoreText font cascade; the portable
@@ -673,7 +698,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         // Type 'X' should replace whole selection.
         let textHandler = rig.registry.handlers(for: node).text!
         _ = textHandler("X", .target)
-        #expect(rig.store.value == "X")
+        #expect(rig.store.value.stringValue == "X")
     } }
 
     @Test("Primary+A selects all; backspace clears the field")
@@ -685,7 +710,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let h = rig.registry.handlers(for: node).key!
         _ = h(key(4, primary: true), .target)    // primary+A
         _ = h(key(42), .target)                  // backspace deletes selection
-        #expect(rig.store.value == "")
+        #expect(rig.store.value.stringValue == "")
     } }
 
     @Test("Primary+C / Primary+V round-trip via ClipboardHolder")
@@ -709,7 +734,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
 
         _ = h(key(77), .target)                  // End — collapse to end
         _ = h(key(25, primary: true), .target)   // paste
-        #expect(rig.store.value == "hellohello")
+        #expect(rig.store.value.stringValue == "hellohello")
     } }
 
     @Test("Primary+X cuts the selection to the clipboard")
@@ -733,7 +758,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h(key(80, shift: true), .target)
         _ = h(key(27, primary: true), .target)   // cut
         #expect(pasteboard == "def")
-        #expect(rig.store.value == "abc")
+        #expect(rig.store.value.stringValue == "abc")
     } }
 
     @Test("Secure fields mask rendered text and never copy secrets")
@@ -744,13 +769,14 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         ClipboardHolder.write = { pasteboard = $0 }
         defer { ClipboardHolder.write = nil }
 
-        let field = TextField(text: makeBinding(rig.store), secure: true)
+        let field = TextField(text: makeBinding(rig.store)) { input in
+            input.behavior.secure = true
+        }
         let state = TextField.FieldState()
-        state.cursorIndex = rig.store.value.count
+        state.selection.cursorIndex = rig.store.value.characterCount
         let renderState = TextField.LayoutEngine(textField: field)
             .makeRenderState(current: rig.store.value, state: state, isFocused: false)
-        #expect(renderState.displayText == "••••••")
-        #expect(renderState.measurementText == "••••••")
+        #expect(renderState.buffer == rig.store.value)
 
         rig.graph.install(root: field)
         let node = fieldNode(in: rig.tree.root)
@@ -772,7 +798,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h(key(79, shift: true), .target)     // Shift+Right → select 'a'
         _ = h(key(79, shift: true), .target)     // Shift+Right → select 'ab'
         _ = txt("Z", .target)
-        #expect(rig.store.value == "Zcdef")
+        #expect(rig.store.value.stringValue == "Zcdef")
     } }
 
     // MARK: - Phase 6.4e — drag selection + multi-click
@@ -790,7 +816,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         // Backspace must wipe the field — the entire range is selected.
         let key = rig.registry.handlers(for: node).key!
         _ = key(KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false), .target)
-        #expect(rig.store.value == "")
+        #expect(rig.store.value.stringValue == "")
     } }
 
     @Test("Double click selects the word at the cursor; non-word click selects the run")
@@ -809,7 +835,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         // Type 'X' — the selected word is replaced.
         let txt = rig.registry.handlers(for: node).text!
         _ = txt("X", .target)
-        #expect(rig.store.value == "X   world")
+        #expect(rig.store.value.stringValue == "X   world")
     } }
 
     @Test("Pointer-down acquires capture; pointer-up releases it")
@@ -859,7 +885,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         // Cursor starts at the end (17). Option+Left → start of "world" (12).
         _ = h.key!(optLeft, .target)
         _ = h.text!("X", .target)
-        #expect(rig.store.value == "hello brave Xworld")
+        #expect(rig.store.value.stringValue == "hello brave Xworld")
 
         // Undo the insert, then check Option+Right from the start jumps past
         // the first word: caret 0 → 5, so an insert lands after "hello".
@@ -868,7 +894,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h.key!(cmdLeft, .target)
         _ = h.key!(optRight, .target)
         _ = h.text!("Y", .target)
-        #expect(rig.store.value == "helloY brave world")
+        #expect(rig.store.value.stringValue == "helloY brave world")
 
         // Option+Backspace from the end deletes the trailing word.
         rig.store.value = "hello brave world"
@@ -876,7 +902,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h.key!(cmdRight, .target)
         let optBackspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [.lalt], isRepeat: false)
         _ = h.key!(optBackspace, .target)
-        #expect(rig.store.value == "hello brave ")
+        #expect(rig.store.value.stringValue == "hello brave ")
     } }
 
     @Test("Command+arrows move to line ends (Mac has no Home/End keys)")
@@ -891,14 +917,14 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
 
         _ = h.key!(cmdLeft, .target)
         _ = h.text!("X", .target)
-        #expect(rig.store.value == "Xhello")
+        #expect(rig.store.value.stringValue == "Xhello")
 
         // Command+Backspace deletes to the start of the field.
         let cmdRight = KeyEvent(scancode: 79, keycode: 0, modifiers: [.lgui], isRepeat: false)
         _ = h.key!(cmdRight, .target)
         let cmdBackspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [.lgui], isRepeat: false)
         _ = h.key!(cmdBackspace, .target)
-        #expect(rig.store.value == "")
+        #expect(rig.store.value.stringValue == "")
     } }
 
     @Test("Caret movement invalidates the field's render so cached layers re-record")
@@ -924,7 +950,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         rig.tree.flush()
         #expect(!rig.tree.hasRenderUpdates)
         let state = node.attachments["__textfield_state"] as? TextField.FieldState
-        state?.isDragging = true
+        state?.pointer.isDragging = true
         let motion = MouseMotionEvent(x: 40, y: 10, deltaX: 4, deltaY: 0)
         _ = h.motion!(motion, .target)
         #expect(rig.tree.hasRenderUpdates)
@@ -944,7 +970,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         rig.store.value = "hi"
         let backspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false)
         _ = h.key!(backspace, .target)
-        #expect(rig.store.value == "h")
+        #expect(rig.store.value.stringValue == "h")
 
         // Stale selection: select all of "h", externally empty the text, then
         // type — the dead range must collapse instead of indexing past end.
@@ -952,6 +978,6 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h.key!(cmdA, .target)
         rig.store.value = ""
         _ = h.text!("x", .target)
-        #expect(rig.store.value == "x")
+        #expect(rig.store.value.stringValue == "x")
     } }
 }
