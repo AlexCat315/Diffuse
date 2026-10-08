@@ -11,7 +11,8 @@ final class NativeGridSurfaceTests: XCTestCase {
     @MainActor func testMetalRendererPresentsAndResizes() async throws { try render(.metal) }
     @MainActor func testMetalScenePresentsAndResizes() async throws { try scene(.metal) }
     @MainActor func testMetalHDRPresentsAndResizes() async throws { try scene(.metal, hdr: true) }
-    @MainActor private func scene(_ api: GraphicsAPI, hdr: Bool = false) throws {
+    @MainActor func testMetalPostPresentsAndResizes() async throws { try scene(.metal, hdr: true, post: true) }
+    @MainActor private func scene(_ api: GraphicsAPI, hdr: Bool = false, post: Bool = false) throws {
         _ = NSApplication.shared
         let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 96,height: 96), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false; defer { window.close() }
@@ -22,7 +23,8 @@ final class NativeGridSurfaceTests: XCTestCase {
         for frame in 0..<6 {
             let size: UInt32 = frame < 3 ? 96 : 64
             layer.drawableSize = CGSize(width: Int(size),height: Int(size))
-            var packet = hdr ? PBRProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
+            var packet = post ? PostProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
+                : hdr ? PBRProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
                 : MeshProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
             if frame == 1 {
                 packet.renderSettings.enableEditorGrid = true
@@ -34,6 +36,9 @@ final class NativeGridSurfaceTests: XCTestCase {
             if hdr && frame == 4 { packet.renderSettings.shadowSettings.mapResolution = 128 }
             try renderer.renderChecked(packet: packet)
             if hdr { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.tonemap],1) }
+            if post {
+                for kind in [RenderPassKind.ssao,.taa,.bloom,.fxaa] { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[kind],1) }
+            }
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], hdr ? 6 : 5)
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass], hdr ? 6 : 5)
         }

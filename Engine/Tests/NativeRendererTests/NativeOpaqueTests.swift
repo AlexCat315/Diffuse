@@ -175,7 +175,10 @@ final class NativeOpaqueTests: XCTestCase {
         packet.scene.instances = []; try renderer.renderChecked(packet: packet)
         XCTAssertEqual(renderer.residentMeshCount, 2)
         packet.renderSettings.stage = .r5PostProcess
+        try renderer.renderChecked(packet: packet)
+        packet.renderSettings.enableStylizedCharacterShading = true
         XCTAssertThrowsError(try renderer.renderChecked(packet: packet))
+        packet.renderSettings.enableStylizedCharacterShading = false
         packet.renderSettings.stage = .r3ViewportInterop; try renderer.renderChecked(packet: packet)
         try device.waitUntilIdle()
     }

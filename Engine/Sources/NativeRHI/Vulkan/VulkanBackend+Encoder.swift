@@ -189,6 +189,24 @@ extension VulkanBackend {
     private func encodeCopyPass(cmd: VkCommandBuffer, record: CopyPassRecord) throws {
         for command in record.body {
             switch command {
+            case .copyTexture(let source, let destination, let width, let height):
+                guard let src = registries.textures[source.id], let dst = registries.textures[destination.id] else {
+                    throw RHIError.invalidArgument("unknown texture copy resource")
+                }
+                try rhiRequire(source != destination && src.dimension == .texture2D && dst.dimension == .texture2D
+                    && src.layers == 1 && dst.layers == 1 && src.usage.contains(.transferSource)
+                    && dst.usage.contains(.transferDestination), "texture copy requires distinct transferable 2D textures")
+                try rhiColorTextureCopyExtent(width: width, height: height,
+                    source: (src.width,src.height,src.format), destination: (dst.width,dst.height,dst.format))
+                try transitionTexture(cmd: cmd, handle: source, state: .copySource)
+                try transitionTexture(cmd: cmd, handle: destination, state: .copyDestination)
+                var region = VkImageCopy()
+                region.srcSubresource = VkImageSubresourceLayers(aspectMask: VK_IMAGE_ASPECT_COLOR_BIT.rawValue,
+                    mipLevel: 0,baseArrayLayer: 0,layerCount: 1)
+                region.dstSubresource = region.srcSubresource
+                region.extent = VkExtent3D(width: UInt32(width),height: UInt32(height),depth: 1)
+                context.auxiliary.copyImage(cmd,src.image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    dst.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&region)
             case .copyBuffer(let source, let sourceOffset, let destination, let destinationOffset, let size):
                 guard let src = registries.buffers[source.id], let dst = registries.buffers[destination.id] else {
                     throw RHIError.invalidArgument("unknown copy buffer")

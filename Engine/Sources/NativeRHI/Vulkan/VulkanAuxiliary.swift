@@ -3,12 +3,14 @@ import CVulkanHeaders
 
 /// Commands with separate lifetimes from the primary draw encoder table.
 struct VulkanAuxiliaryCommands {
+    let copyImage: CVulkanHeaders.PFN_vkCmdCopyImage
     let freeDescriptorSets: CVulkanHeaders.PFN_vkFreeDescriptorSets
     let drawIndirect: CVulkanHeaders.PFN_vkCmdDrawIndirect
     let dispatchIndirect: CVulkanHeaders.PFN_vkCmdDispatchIndirect
     let destroyCommandPool: CVulkanHeaders.PFN_vkDestroyCommandPool
 
     init(_ resolve: VulkanResolver) {
+        copyImage = vkFunction(resolve, "vkCmdCopyImage")
         freeDescriptorSets = vkFunction(resolve, "vkFreeDescriptorSets")
         drawIndirect = vkFunction(resolve, "vkCmdDrawIndirect")
         dispatchIndirect = vkFunction(resolve, "vkCmdDispatchIndirect")

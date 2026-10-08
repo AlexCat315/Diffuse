@@ -27,6 +27,8 @@ def main():
         ('tonemap', 'tonemap.slang', [('vertex', 'toneVertex'), ('fragment', 'toneFragment')]),
         ('opaque_depth', 'opaque_mesh.slang', [('fragment', 'depthFragment')]),
     ]
+    programs.extend((name, f'{name}.slang', [('vertex', 'postVertex'), ('fragment', 'postFragment')])
+                    for name in ['ssao','ssr','taa','bloom','fxaa'])
     for target in args.targets:
         for name, source, stages in programs:
             for stage, entry in stages:

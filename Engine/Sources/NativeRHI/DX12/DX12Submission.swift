@@ -101,6 +101,8 @@ extension DX12Device {
     }
     private func copy(_ e: OpaquePointer, command: CopyCommand) throws {
         switch command {
+        case .copyTexture(let src, let dst, let width, let height):
+            try emit(e, kind: 21, resource: src.id, slot: dst.id, a: UInt64(rhiCount(width)), b: UInt64(rhiCount(height)))
         case .copyBuffer(let src, let srcOffset, let dst, let dstOffset, let size): try emit(e, kind: 15, resource: src.id, slot: dst.id, a: nonnegative(srcOffset), b: nonnegative(dstOffset), c: nonnegative(size))
         case .copyBufferToTexture(let buffer, let offset, let row, let texture, let width, let height): try emit(e, kind: 16, resource: buffer.id, slot: texture.id, a: nonnegative(offset), b: UInt64(rhiCount(row)), c: UInt64(rhiCount(width)), d: UInt64(rhiCount(height)))
         case .copyTextureToBuffer(let texture, let width, let height, let buffer, let offset, let row): try emit(e, kind: 17, resource: buffer.id, slot: texture.id, a: nonnegative(offset), b: UInt64(rhiCount(row)), c: UInt64(rhiCount(width)), d: UInt64(rhiCount(height)))

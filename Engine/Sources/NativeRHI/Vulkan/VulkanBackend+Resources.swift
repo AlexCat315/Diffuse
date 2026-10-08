@@ -171,7 +171,7 @@ extension VulkanBackend {
         var record = VulkanTextureRecord(
             image: image, allocation: allocation, view: view,
             format: descriptor.format, width: descriptor.width, height: descriptor.height,
-            depth: descriptor.depth, mipLevels: UInt32(max(1, descriptor.mipLevels)),
+            depth: descriptor.depth, dimension: descriptor.dimension, mipLevels: UInt32(max(1, descriptor.mipLevels)),
             usage: descriptor.usage, isSwapchain: false, layout: VK_IMAGE_LAYOUT_UNDEFINED)
         record.layers = info.arrayLayers
         registries.textures[handle.id] = record
