@@ -10,9 +10,9 @@ struct HierarchyPanel: View {
     private let sessionState: HierarchyPanelSessionState
 
     @State private var expandedKeys: Set<TreeNodeKey<UInt64>>
-    @State private var searchQuery: String
+    @State private var searchQuery: TextBuffer
     @State private var renamingEntityID: UInt64?
-    @State private var renameDraft: String
+    @State private var renameDraft: TextBuffer
     @State private var renameFocusRequestID: UInt64
 
     init(store: EditorStore, scene: EditorSceneAdapter) {
@@ -27,7 +27,7 @@ struct HierarchyPanel: View {
             entityIDs: sessionState.expandedEntityIDs,
             roots: scene.roots
         ))
-        _searchQuery = State(wrappedValue: sessionState.searchQuery)
+        _searchQuery = State(wrappedValue: TextBuffer(sessionState.searchQuery))
         _renamingEntityID = State(wrappedValue: nil)
         _renameDraft = State(wrappedValue: "")
         _renameFocusRequestID = State(wrappedValue: 0)
@@ -38,7 +38,7 @@ struct HierarchyPanel: View {
             let _ = store.sceneRevision
             let hierarchyRoots = scene.roots
             let parentKeys = Self.parentKeys(in: hierarchyRoots)
-            let trimmedSearchQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedSearchQuery = searchQuery.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             let matchingEntityIDs = HierarchyPanelModel.matchingEntityIDs(
                 in: hierarchyRoots,
                 query: trimmedSearchQuery
@@ -69,7 +69,7 @@ struct HierarchyPanel: View {
                 selectedIDs,
                 in: hierarchyRoots
             )
-            let searchTextBinding = Binding<String>(
+            let searchTextBinding = Binding<TextBuffer>(
                 get: { searchQuery },
                 set: updateSearchQuery
             )
@@ -183,21 +183,20 @@ struct HierarchyPanel: View {
                     )
                     .flex()
                 } else {
-                    Tree(hierarchyRoots,
-                         children: \.children,
-                         selectionKey: selectionKey,
-                         multiSelectionKeys: multiSelectionKeys,
-                         expandedKeys: expandedKeysBinding,
-                         rowHeight: 26,
-                         rowSpacing: 0,
-                         indentation: 16,
-                         disclosureWidth: 18,
-                         showsIndentGuides: false,
-                         disclosureContent: { isExpanded in
+                    Tree(hierarchyRoots, children: \.children, configure: { tree in
+                        tree.selection.primaryKey = selectionKey
+                        tree.selection.multipleKeys = multiSelectionKeys
+                        tree.selection.expandedKeys = expandedKeysBinding
+                        tree.layout.rowHeight = 26
+                        tree.layout.rowSpacing = 0
+                        tree.layout.indentation = 16
+                        tree.layout.disclosureWidth = 18
+                        tree.layout.showsIndentGuides = false
+                        tree.slots.disclosure = { isExpanded in
                              AnyView(HierarchyDisclosureIcon(isExpanded: isExpanded))
-                         },
-                         trailingSlotWidth: 58,
-                         trailingContent: { entity, isSelected, _, _, _, _ in
+                         }
+                        tree.layout.trailingSlotWidth = 58
+                        tree.slots.trailing = { entity, isSelected, _, _, _, _ in
                              AnyView(
                                 HierarchyRowTrailingSlots(
                                     isVisible: scene.isHierarchyVisible(entity.id),
@@ -214,32 +213,33 @@ struct HierarchyPanel: View {
                                     }
                                 )
                              )
-                         },
-                         searchQuery: searchQuery,
-                         searchText: { node in node.name },
-                         searchFilterPolicy: .filterAndAutoExpand,
-                         onKeyCommand: { event, selectedIDs in
+                         }
+                        tree.search.query = searchQuery.stringValue
+                        tree.search.text = { node in node.name }
+                        tree.search.policy = .filterAndAutoExpand
+                        tree.events.onKeyCommand = { event, selectedIDs in
                              handleBatchKey(event: event,
                                             selectedIDs: selectedIDs,
                                             matchingIDs: matchingEntityIDs,
                                             isAuthoringEnabled: isAuthoringEnabled)
-                         },
-                         canDrop: { source, target, position in
+                         }
+                        tree.drag.canDrop = { source, target, position in
                              isAuthoringEnabled && canDrop(entityID: source.id,
                                      on: target.id,
                                      position: position,
                                      in: hierarchyRoots)
-                         },
-                         onDrop: { source, target, position in
+                         }
+                        tree.drag.onDrop = { source, target, position in
                              guard isAuthoringEnabled else { return }
                              handleHierarchyDrop(entityID: source.id,
                                                  on: target.id,
                                                  position: position,
                                                  roots: hierarchyRoots)
-                         }) { entity, isSelected, _, _ in
+                         }
+                    }) { entity, isSelected, _, _ in
                         HierarchyEntityRow(entity: entity,
                                            isSelected: isSelected,
-                                           searchQuery: searchQuery,
+                                           searchQuery: searchQuery.stringValue,
                                            isRenaming: renamingEntityID == entity.id,
                                            renameDraft: $renameDraft,
                                            focusRequestID: renamingEntityID == entity.id
@@ -274,8 +274,8 @@ struct HierarchyPanel: View {
             canMoveSelectionToRoot: HierarchyPanelModel.canMoveSelectionToRoot(ids, in: roots))
     }
 
-    private func updateSearchQuery(_ value: String) {
-        sessionState.searchQuery = value
+    private func updateSearchQuery(_ value: TextBuffer) {
+        sessionState.searchQuery = value.stringValue
         searchQuery = value
     }
 
@@ -386,14 +386,14 @@ struct HierarchyPanel: View {
               selectedIDs.contains(entityID),
               !scene.isEntityLocked(entityID),
               let entity = scene.entitySummary(id: entityID) else { return }
-        renameDraft = entity.name
+        renameDraft = TextBuffer(entity.name)
         renamingEntityID = entityID
         renameFocusRequestID &+= 1
     }
 
     private func commitRename(entityID: UInt64) {
         guard renamingEntityID == entityID else { return }
-        let proposedName = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let proposedName = renameDraft.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !proposedName.isEmpty else {
             renameFocusRequestID &+= 1
             log(L("Entity name cannot be empty"), severity: .warning)
@@ -819,7 +819,7 @@ private struct HierarchyEntityRow: View {
     let isSelected: Bool
     let searchQuery: String
     let isRenaming: Bool
-    let renameDraft: Binding<String>
+    let renameDraft: Binding<TextBuffer>
     let focusRequestID: UInt64?
     let onCommitRename: () -> Void
     let onCancelRename: () -> Void
@@ -834,13 +834,14 @@ private struct HierarchyEntityRow: View {
             .frame(width: 18, height: 26)
 
             if isRenaming {
-                TextField(text: renameDraft,
-                          size: .small,
-                          maxLength: 128,
-                          focusRequestID: focusRequestID,
-                          onSubmit: onCommitRename,
-                          onCancel: onCancelRename,
-                          onBlur: onCommitRename)
+                TextField(text: renameDraft) { input in
+                    input.decoration.size = .small
+                    input.behavior.maxLength = 128
+                    input.navigation.focusRequestID = focusRequestID
+                    input.events.onSubmit = onCommitRename
+                    input.events.onCancel = onCancelRename
+                    input.events.onBlur = onCommitRename
+                }
                     .font(.body)
                     .flex(1, shrink: 1, basis: 0)
             } else {

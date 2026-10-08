@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import EngineKernel
@@ -7,533 +7,221 @@ import GuavaUIRuntime
 extension TextField {
     struct LayoutEngine {
         struct RenderState {
-            let displayText: String
-            let measurementText: String
+            let buffer: TextBuffer
             let cursorIndex: Int
             let compositionRange: Range<Int>?
             let showsPlaceholder: Bool
             let isComposing: Bool
         }
-
         struct RenderCacheKey: Equatable {
-            let displayText: String
-            let measurementText: String
+            let root: ObjectIdentifier
+            let version: UInt64
+            let visibleRows: Range<Int>
+            let totalRows: Int
             let font: Font
             let lineHeight: Float
+            let letterSpacing: Float
             let atlasID: ObjectIdentifier
             let availableTextWidth: Float
+            let secure: Bool
         }
-
         final class RenderCacheEntry {
             let key: RenderCacheKey
             let layout: TextLayoutResult
-
-            init(key: RenderCacheKey,
-                 layout: TextLayoutResult) {
-                self.key = key
-                self.layout = layout
+            let document: TextDocumentLayout
+            init(key: RenderCacheKey, layout: TextLayoutResult, document: TextDocumentLayout) {
+                self.key = key; self.layout = layout; self.document = document
             }
         }
-
-        struct CaretLocation {
-            let x: Float
-            let topY: Float
-        }
-
-        struct ViewportMetrics {
-            let textOriginX: Float
-            let textOriginY: Float
-            let availableTextWidth: Float
-            let rawCaret: CaretLocation
-        }
-
-        struct ScrollbarMetrics {
-            let trackRect: UIRect
-            let thumbRect: UIRect
-        }
-
+        struct CaretLocation { let x: Float; let topY: Float }
+        struct ViewportMetrics { let textOriginX: Float; let textOriginY: Float; let availableTextWidth: Float; let rawCaret: CaretLocation }
+        struct ScrollbarMetrics { let trackRect: UIRect; let thumbRect: UIRect }
         private static let renderCacheAttachmentKey = "__textfield_render_cache"
-
+        private static let documentAttachmentKey = "__textfield_document_layout"
         let textField: TextField
+        var letterSpacing: Float = 0
 
-        func makeRenderState(current: String,
-                             state: FieldState,
-                             isFocused: Bool) -> RenderState {
-            guard isFocused, state.isComposing else {
+        func makeRenderState(current: TextBuffer, state: FieldState, isFocused: Bool) -> RenderState {
+            guard isFocused, state.composition.isActive else {
                 if current.isEmpty {
-                    return RenderState(
-                        displayText: textField.placeholder,
-                        measurementText: "",
-                        cursorIndex: 0,
-                        compositionRange: nil,
-                        showsPlaceholder: true,
-                        isComposing: false
-                    )
+                    if state.renderDraft.placeholder != textField.placeholder {
+                        state.renderDraft.placeholder = textField.placeholder
+                        state.renderDraft.placeholderBuffer = TextBuffer(textField.placeholder)
+                    }
+                    return RenderState(buffer: state.renderDraft.placeholderBuffer, cursorIndex: 0,
+                                       compositionRange: nil, showsPlaceholder: true, isComposing: false)
                 }
-                return RenderState(
-                    displayText: textField.displayValue(current),
-                    measurementText: textField.displayValue(current),
-                    cursorIndex: clamp(state.cursorIndex, 0, current.count),
-                    compositionRange: nil,
-                    showsPlaceholder: false,
-                    isComposing: false
-                )
+                return RenderState(buffer: current, cursorIndex: clamp(state.selection.cursorIndex, 0, current.characterCount),
+                                   compositionRange: nil, showsPlaceholder: false, isComposing: false)
             }
-
-            let count = current.count
-            let cursor = clamp(state.cursorIndex, 0, count)
-            let selection = textField.selectionRange(state)
-            let lowerBound = clamp(selection?.lowerBound ?? cursor, 0, count)
-            let upperBound = clamp(selection?.upperBound ?? cursor, lowerBound, count)
-            let replaceRange = lowerBound..<upperBound
-            var preview = current
-            let lower = preview.index(preview.startIndex, offsetBy: replaceRange.lowerBound)
-            let upper = preview.index(preview.startIndex, offsetBy: replaceRange.upperBound)
-            preview.replaceSubrange(lower..<upper, with: state.compositionText)
-
-            let compositionStart = replaceRange.lowerBound
-            let compositionEnd = compositionStart + state.compositionText.count
-            let cursorOffset = state.compositionLength > 0
-                ? state.compositionStart + state.compositionLength
-                : state.compositionText.count
-
-            return RenderState(
-                displayText: textField.displayValue(preview),
-                measurementText: textField.displayValue(preview),
-                cursorIndex: compositionStart + clamp(cursorOffset, 0, state.compositionText.count),
-                compositionRange: compositionStart..<compositionEnd,
-                showsPlaceholder: false,
-                isComposing: true
-            )
+            let cursor = clamp(state.selection.cursorIndex, 0, current.characterCount)
+            let range = textField.selectionRange(state) ?? cursor..<cursor
+            let preview: TextBuffer
+            if let cached = state.renderDraft.preview, cached.source == current, cached.range == range, cached.text == state.composition.text {
+                preview = cached.buffer
+            } else {
+                preview = current.replace(characterRange: range, with: state.composition.text)
+                state.renderDraft.preview = CompositionPreview(source: current, range: range, text: state.composition.text, buffer: preview)
+            }
+            let startByte = current.utf8Offset(forCharacterIndex: range.lowerBound)
+            let endByte = startByte + state.composition.text.utf8.count
+            let offset = state.composition.length > 0 ? state.composition.start + state.composition.length : state.composition.text.count
+            let caretByte = startByte + state.composition.text.prefix(clamp(offset, 0, state.composition.text.count)).utf8.count
+            var first = preview.characterIndex(forUTF8Offset: startByte)
+            if preview.utf8Offset(forCharacterIndex: first) > startByte { first = max(0, first - 1) }
+            return RenderState(buffer: preview, cursorIndex: preview.characterIndex(forUTF8Offset: caretByte),
+                               compositionRange: first..<preview.characterIndex(forUTF8Offset: endByte), showsPlaceholder: false, isComposing: true)
         }
 
-        func cachedRenderLayout(node: Node,
-                                env: TextEnvironment,
-                                displayText: String,
-                                measurementText: String,
-                                font: Font,
-                                lineHeight: Float,
-                                availableTextWidth: Float) -> RenderCacheEntry {
-            let key = RenderCacheKey(displayText: displayText,
-                                     measurementText: measurementText,
-                                     font: font,
-                                     lineHeight: lineHeight,
-                                     atlasID: ObjectIdentifier(env.atlas),
-                                     availableTextWidth: max(0, availableTextWidth))
-            if let cached = node.attachments[Self.renderCacheAttachmentKey] as? RenderCacheEntry,
-               cached.key == key {
-                return cached
+        func document(in buffer: TextBuffer, node: Node, env: TextEnvironment, font: Font,
+                      lineHeight: Float, availableTextWidth: Float, placeholder: Bool = false) -> TextDocumentLayout {
+            let width = textField.layout.axis == .vertical && textField.layout.wrapsLines ? max(1, availableTextWidth) : .infinity
+            let geometry = TextLineGeometry(font: font, lineHeight: lineHeight, letterSpacing: letterSpacing,
+                                            atlas: ObjectIdentifier(env.atlas), width: width, secure: textField.behavior.secure && !placeholder)
+            if let cached = node.attachments[Self.documentAttachmentKey] as? TextDocumentLayout {
+                cached.update(buffer: buffer, geometry: geometry); return cached
             }
-            let layout = env.cachedLayout(
-                text: displayText,
-                font: font,
-                lineHeight: lineHeight,
-                maxWidth: layoutMaxWidth(for: displayText,
-                                         availableTextWidth: availableTextWidth),
-                alignment: .leading
-            )
-            let entry = RenderCacheEntry(key: key, layout: layout)
-            node.attachments[Self.renderCacheAttachmentKey] = entry
-            return entry
+            let result = TextDocumentLayout(buffer: buffer, geometry: geometry)
+            node.attachments[Self.documentAttachmentKey] = result; return result
         }
-
-        func updateViewport(node: Node,
-                            state: FieldState,
-                            origin: CGPoint,
-                            env: TextEnvironment,
-                            renderState: RenderState,
-                            renderCache: RenderCacheEntry,
-                            font: Font,
-                            lineHeight: Float,
-                            addonLeading: Float,
-                            addonTrailing: Float) -> ViewportMetrics {
-            let frameWidth = Float(node.frame.width)
-            let insetX = textField.horizontalInset(theme: node.theme)
-            let textOriginX = Float(origin.x) + insetX + addonLeading
-            let baseTextOriginY = Float(origin.y) + textField.textOriginYOffset(frameHeight: Float(node.frame.height),
-                                                                                lineHeight: lineHeight)
-            refreshScrollMetrics(node: node,
-                                   state: state,
-                                   renderCache: renderCache,
-                                   lineHeight: lineHeight)
-
-            let rawCaret = caretLocation(in: renderState.measurementText,
-                                         cursorIndex: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
-                                         env: env,
-                                         font: font,
-                                         lineHeight: lineHeight,
-                                         layout: renderCache.layout)
-            let caretBottom = rawCaret.topY + lineHeight
-            if state.needsCaretReveal {
-                if caretBottom - state.scrollOffsetY > state.visibleTextHeight {
-                    state.scrollOffsetY = min(state.maxScrollY, caretBottom - state.visibleTextHeight)
-                } else if rawCaret.topY < state.scrollOffsetY {
-                    state.scrollOffsetY = max(0, rawCaret.topY)
+        func cachedRenderLayout(node: Node, state: FieldState, env: TextEnvironment, renderState: RenderState,
+                                font: Font, lineHeight: Float, availableTextWidth: Float) -> RenderCacheEntry {
+            let document = document(in: renderState.buffer, node: node, env: env, font: font, lineHeight: lineHeight,
+                                    availableTextWidth: availableTextWidth, placeholder: renderState.showsPlaceholder)
+            state.scroll.visibleHeight = max(lineHeight, Float(node.frame.height) - TextField.verticalInset(for: lineHeight) * 2)
+            var revealCaretX: Float?
+            if state.scroll.horizontal.viewportWidth != availableTextWidth, FocusChainHolder.current?.focused === node {
+                revealCaretX = document.caret(atCharacter: renderState.cursorIndex,
+                    lineEndAffinity: !renderState.isComposing && state.selection.lineEndAffinity, environment: env).x
+            }
+            if state.scroll.needsCaretReveal {
+                let caret = document.caret(atCharacter: renderState.cursorIndex,
+                    lineEndAffinity: !renderState.isComposing && state.selection.lineEndAffinity, environment: env)
+                revealCaretX = caret.x
+                let top = Float(caret.row) * lineHeight, bottom = top + lineHeight
+                if bottom > state.scroll.offsetY + state.scroll.visibleHeight { state.scroll.offsetY = max(0, bottom - state.scroll.visibleHeight) }
+                else if top < state.scroll.offsetY { state.scroll.offsetY = top }
+                state.scroll.needsCaretReveal = false
+            }
+            updateScroll(state, document: document, lineHeight: lineHeight)
+            let first = max(0, Int(floor(state.scroll.offsetY / max(1, lineHeight))) - 1)
+            let count = Int(ceil(state.scroll.visibleHeight / max(1, lineHeight))) + 3
+            func key() -> RenderCacheKey {
+                RenderCacheKey(root: renderState.buffer.identity, version: renderState.buffer.version, visibleRows: first..<(first + count),
+                               totalRows: document.index.rowCount, font: font, lineHeight: lineHeight, letterSpacing: letterSpacing,
+                               atlasID: ObjectIdentifier(env.atlas), availableTextWidth: availableTextWidth, secure: document.geometry.secure)
+            }
+            func updateHorizontal(_ width: Float) {
+                if textField.layout.axis == .horizontal || !textField.layout.wrapsLines {
+                    state.scroll.horizontal.synchronize(buffer: renderState.buffer, geometry: document.geometry,
+                        viewportWidth: availableTextWidth, measuredWidth: width, revealCaret: revealCaretX)
+                } else { state.scroll.horizontal = HorizontalScrollState() }
+            }
+            if let cached = node.attachments[Self.renderCacheAttachmentKey] as? RenderCacheEntry, cached.key == key() {
+                updateHorizontal(cached.layout.totalWidth); return cached
+            }
+            let layout = document.visibleLayout(firstRow: first, rowCount: count, environment: env)
+            updateHorizontal(layout.totalWidth)
+            updateScroll(state, document: document, lineHeight: lineHeight)
+            let result = RenderCacheEntry(key: key(), layout: layout, document: document)
+            node.attachments[Self.renderCacheAttachmentKey] = result; return result
+        }
+        private func updateScroll(_ state: FieldState, document: TextDocumentLayout, lineHeight: Float) {
+            state.scroll.contentHeight = Float(document.index.rowCount) * lineHeight
+            state.scroll.maxY = max(0, state.scroll.contentHeight - state.scroll.visibleHeight)
+            state.scroll.offsetY = clamp(state.scroll.offsetY, 0, state.scroll.maxY)
+        }
+        func updateViewport(node: Node, state: FieldState, origin: CGPoint, env: TextEnvironment,
+                            renderState: RenderState, renderCache: RenderCacheEntry, font: Font, lineHeight: Float,
+                            addonLeading: Float, addonTrailing: Float) -> ViewportMetrics {
+            let inset = textField.horizontalInset(theme: node.theme)
+            let caret = renderCache.document.caret(atCharacter: renderState.cursorIndex,
+                lineEndAffinity: !renderState.isComposing && state.selection.lineEndAffinity, environment: env)
+            updateScroll(state, document: renderCache.document, lineHeight: lineHeight)
+            state.scroll.horizontal.leadingInset = inset + addonLeading
+            node.contentOffset = CGPoint(x: CGFloat(state.scroll.horizontal.offset), y: CGFloat(state.scroll.offsetY))
+            return ViewportMetrics(textOriginX: Float(origin.x) + inset + addonLeading - state.scroll.horizontal.offset,
+                                   textOriginY: Float(origin.y) + textField.textOriginYOffset(frameHeight: Float(node.frame.height), lineHeight: lineHeight) - state.scroll.offsetY,
+                                   availableTextWidth: renderCache.key.availableTextWidth,
+                                   rawCaret: CaretLocation(x: caret.x, topY: Float(caret.row) * lineHeight))
+        }
+        func visibleLayout(from layout: TextLayoutResult, scrollOffsetY: Float, visibleHeight: Float, lineHeight: Float) -> TextLayoutResult {
+            let lines = layout.lines.filter { $0.baselineY + lineHeight >= scrollOffsetY - lineHeight && $0.baselineY - lineHeight <= scrollOffsetY + visibleHeight + lineHeight }
+            return TextLayoutResult(lines: lines, totalWidth: layout.totalWidth, totalHeight: layout.totalHeight)
+        }
+        func interactiveDocument(in buffer: TextBuffer, node: Node, env: TextEnvironment) -> TextDocumentLayout {
+            let font = textField.resolvedFont(node: node, env: env), lineHeight = textField.resolvedLineHeight(node: node, env: env)
+            let width = Float(node.frame.width) - textField.horizontalInset(theme: node.theme) * 2
+                - textField.leadingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme)
+                - textField.trailingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme)
+                - textField.trailingControlWidth(isFocused: FocusChainHolder.current?.focused === node,
+                    env: env, font: font, lineHeight: lineHeight, theme: node.theme)
+            return document(in: buffer, node: node, env: env, font: font, lineHeight: lineHeight, availableTextWidth: width)
+        }
+        func characterIndex(atWindowPoint point: CGPoint, state: FieldState, node: Node) -> Int {
+            guard let env = TextEnvironmentHolder.current else { return 0 }
+            let font = textField.resolvedFont(node: node, env: env), lineHeight = textField.resolvedLineHeight(node: node, env: env)
+            let leading = textField.horizontalInset(theme: node.theme) + textField.leadingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme)
+            let x = Float(point.x - state.pointer.lastDrawOrigin.x) - leading + state.scroll.horizontal.offset
+            let y = Float(point.y - state.pointer.lastDrawOrigin.y) - textField.textOriginYOffset(frameHeight: Float(node.frame.height), lineHeight: lineHeight) + state.scroll.offsetY
+            let document = interactiveDocument(in: textField.text.wrappedValue, node: node, env: env)
+            return document.character(atRow: Int(floor(max(0, y) / max(1, lineHeight))), x: x, environment: env)
+        }
+        func drawSelection(_ range: Range<Int>, in buffer: TextBuffer, env: TextEnvironment, font: Font, lineHeight: Float,
+                           layout: TextLayoutResult, textOriginX: Float, textOriginY: Float, visibleTopY: Float,
+                           visibleBottomY: Float, list: DrawList, color: Color) {
+            drawRange(range, buffer: buffer, layout: layout, textOriginX: textOriginX, textOriginY: textOriginY,
+                      lineHeight: lineHeight, visibleTopY: visibleTopY, visibleBottomY: visibleBottomY, underline: false, list: list, color: color)
+        }
+        func drawUnderline(_ range: Range<Int>, in buffer: TextBuffer, env: TextEnvironment, font: Font, lineHeight: Float,
+                           layout: TextLayoutResult, textOriginX: Float, textOriginY: Float, visibleTopY: Float,
+                           visibleBottomY: Float, list: DrawList, color: Color) {
+            drawRange(range, buffer: buffer, layout: layout, textOriginX: textOriginX, textOriginY: textOriginY,
+                      lineHeight: lineHeight, visibleTopY: visibleTopY, visibleBottomY: visibleBottomY, underline: true, list: list, color: color)
+        }
+        private func drawRange(_ range: Range<Int>, buffer: TextBuffer, layout: TextLayoutResult, textOriginX: Float,
+                               textOriginY: Float, lineHeight: Float, visibleTopY: Float, visibleBottomY: Float,
+                               underline: Bool, list: DrawList, color: Color) {
+            let lower = buffer.utf8Offset(forCharacterIndex: range.lowerBound), upper = buffer.utf8Offset(forCharacterIndex: range.upperBound)
+            for line in layout.lines {
+                let top = line.topY
+                guard top + lineHeight >= visibleTopY, top <= visibleBottomY,
+                      lower <= Int(line.endCluster), upper > Int(line.startCluster) else { continue }
+                func x(atByte byte: Int) -> Float {
+                    if byte <= Int(line.startCluster) { return 0 }
+                    if byte >= Int(line.endCluster) { return line.width }
+                    return line.glyphs.first(where: { Int($0.cluster) >= byte })?.x ?? line.width
                 }
-                state.needsCaretReveal = false
-            }
-            node.contentOffset = CGPoint(x: 0, y: CGFloat(state.scrollOffsetY))
-
-            return ViewportMetrics(
-                textOriginX: textOriginX,
-                textOriginY: baseTextOriginY - state.scrollOffsetY,
-                availableTextWidth: max(0, frameWidth - insetX * 2 - addonLeading - addonTrailing),
-                rawCaret: rawCaret
-            )
-        }
-
-        func visibleLayout(from layout: TextLayoutResult,
-                           scrollOffsetY: Float,
-                           visibleHeight: Float,
-                           lineHeight: Float) -> TextLayoutResult {
-            let visibleTop = scrollOffsetY - lineHeight
-            let visibleBottom = scrollOffsetY + visibleHeight + lineHeight
-            let lines = layout.lines.filter { line in
-                let lineTop = line.baselineY - lineHeight
-                let lineBottom = line.baselineY + lineHeight
-                return lineBottom >= visibleTop && lineTop <= visibleBottom
-            }
-            return TextLayoutResult(lines: lines,
-                                    totalWidth: layout.totalWidth,
-                                    totalHeight: layout.totalHeight)
-        }
-
-        func characterIndex(atWindowPoint point: CGPoint,
-                            state: FieldState,
-                            node: Node) -> Int {
-            guard let env = TextEnvironmentHolder.current else {
-                return 0
-            }
-            let current = textField.text.wrappedValue
-
-            let resolvedFont = textField.resolvedFont(node: node, env: env)
-            let lineHeight = textField.resolvedLineHeight(node: node, env: env)
-            let leadingInset = textField.horizontalInset(theme: node.theme)
-                + textField.leadingAddonWidth(env: env,
-                                              font: resolvedFont,
-                                              lineHeight: lineHeight,
-                                              theme: node.theme)
-            let layout = interactiveLayout(in: current,
-                                           node: node,
-                                           env: env,
-                                           font: resolvedFont,
-                                           lineHeight: lineHeight)
-            let ranges = lineRanges(in: current, layout: layout)
-            guard !ranges.isEmpty else {
-                return 0
-            }
-            let localX = Float(point.x) - Float(state.lastDrawOrigin.x) - leadingInset
-            let localY = Float(point.y) - Float(state.lastDrawOrigin.y)
-                - textField.textOriginYOffset(frameHeight: Float(node.frame.height), lineHeight: lineHeight)
-                + state.scrollOffsetY
-
-            let lineIndex = clamp(Int((max(localY, 0) / max(lineHeight, 1)).rounded(.down)),
-                                  0,
-                                  max(0, ranges.count - 1))
-            let lineRange = ranges[lineIndex]
-            let lineText = textField.substring(current, lineRange)
-            if localX <= 0 {
-                return lineRange.lowerBound
-            }
-
-            let glyphs = env.shape(text: lineText, font: resolvedFont)
-            var pen: Float = 0
-            for (index, glyph) in glyphs.enumerated() {
-                let midpoint = pen + glyph.xAdvance * 0.5
-                if localX < midpoint {
-                    return lineRange.lowerBound + index
-                }
-                pen += glyph.xAdvance
-            }
-            return lineRange.upperBound
-        }
-
-        func characterIndex(inLineText text: String,
-                            desiredX: Float,
-                            env: TextEnvironment,
-                            font: Font) -> Int {
-            guard !text.isEmpty else { return 0 }
-            guard desiredX > 0 else { return 0 }
-            let glyphs = env.shape(text: text, font: font)
-            var pen: Float = 0
-            for (index, glyph) in glyphs.enumerated() {
-                let midpoint = pen + glyph.xAdvance * 0.5
-                if desiredX < midpoint {
-                    return index
-                }
-                pen += glyph.xAdvance
-            }
-            return text.count
-        }
-
-        func lineRanges(in text: String, layout: TextLayoutResult? = nil) -> [Range<Int>] {
-            guard let layout, !layout.lines.isEmpty else {
-                return explicitLineRanges(in: text)
-            }
-            let boundaries = characterBoundaryUTF8Offsets(in: text)
-            let mapped = layout.lines.map { line in
-                let lower = characterIndex(forUTF8Offset: Int(line.startCluster), boundaries: boundaries)
-                let upper = characterIndex(forUTF8Offset: Int(line.endCluster), boundaries: boundaries)
-                return lower..<max(lower, upper)
-            }
-            return mapped.isEmpty ? [0..<0] : mapped
-        }
-
-        func explicitLineRanges(in text: String) -> [Range<Int>] {
-            var ranges: [Range<Int>] = []
-            var start = 0
-            for (index, character) in text.enumerated() {
-                if character == "\n" {
-                    ranges.append(start..<index)
-                    start = index + 1
-                }
-            }
-            ranges.append(start..<text.count)
-            return ranges.isEmpty ? [0..<0] : ranges
-        }
-
-        func lineIndex(for cursorIndex: Int, lineRanges: [Range<Int>]) -> Int {
-            for (index, range) in lineRanges.enumerated() {
-                if cursorIndex <= range.upperBound {
-                    return index
-                }
-            }
-            return max(0, lineRanges.count - 1)
-        }
-
-        func rangeLength(_ range: Range<Int>) -> Int {
-            range.upperBound - range.lowerBound
-        }
-
-        func linePrefixWidth(in text: String,
-                             upTo count: Int,
-                             env: TextEnvironment,
-                             font: Font,
-                             lineHeight: Float) -> Float {
-            let bounded = clamp(count, 0, text.count)
-            guard bounded > 0 else { return 0 }
-            let endIndex = text.index(text.startIndex, offsetBy: bounded)
-            let prefix = String(text[text.startIndex..<endIndex])
-            let layout = env.cachedLayout(
-                text: prefix,
-                font: font,
-                lineHeight: lineHeight,
-                maxWidth: .infinity,
-                alignment: .leading
-            )
-            return layout.lines.last?.width ?? 0
-        }
-
-        func caretLocation(in text: String,
-                           cursorIndex: Int,
-                           env: TextEnvironment,
-                           font: Font,
-                           lineHeight: Float,
-                           layout: TextLayoutResult? = nil) -> CaretLocation {
-            let ranges = lineRanges(in: text, layout: layout)
-            let line = lineIndex(for: clamp(cursorIndex, 0, text.count), lineRanges: ranges)
-            let range = ranges[line]
-            let column = clamp(cursorIndex - range.lowerBound, 0, rangeLength(range))
-            let lineText = textField.substring(text, range)
-            return CaretLocation(
-                x: linePrefixWidth(in: lineText,
-                                   upTo: column,
-                                   env: env,
-                                   font: font,
-                                   lineHeight: lineHeight),
-                topY: Float(line) * lineHeight
-            )
-        }
-
-        func drawSelection(_ range: Range<Int>,
-                           in text: String,
-                           env: TextEnvironment,
-                           font: Font,
-                           lineHeight: Float,
-                           layout: TextLayoutResult,
-                           textOriginX: Float,
-                           textOriginY: Float,
-                           visibleTopY: Float,
-                           visibleBottomY: Float,
-                           list: DrawList,
-                           color: Color) {
-            let ranges = lineRanges(in: text, layout: layout)
-            let startLine = lineIndex(for: range.lowerBound, lineRanges: ranges)
-            let endLine = lineIndex(for: range.upperBound, lineRanges: ranges)
-            for line in startLine...endLine {
-                let lineTop = Float(line) * lineHeight
-                let lineBottom = lineTop + lineHeight
-                if lineBottom < visibleTopY || lineTop > visibleBottomY {
-                    continue
-                }
-                let lineRange = ranges[line]
-                let lower = max(range.lowerBound, lineRange.lowerBound)
-                let upper = min(range.upperBound, lineRange.upperBound)
-                guard upper > lower else { continue }
-                let lineText = textField.substring(text, lineRange)
-                let xLo = linePrefixWidth(in: lineText,
-                                          upTo: lower - lineRange.lowerBound,
-                                          env: env,
-                                          font: font,
-                                          lineHeight: lineHeight)
-                let xHi = linePrefixWidth(in: lineText,
-                                          upTo: upper - lineRange.lowerBound,
-                                          env: env,
-                                          font: font,
-                                          lineHeight: lineHeight)
-                list.addRect(
-                    UIRect(x: textOriginX + xLo,
-                           y: textOriginY + Float(line) * lineHeight,
-                           width: max(1, xHi - xLo),
-                           height: lineHeight),
-                    color: color
-                )
+                let xLo = x(atByte: max(lower, Int(line.startCluster))), xHi = x(atByte: min(upper, Int(line.endCluster)))
+                list.addRect(UIRect(x: textOriginX + xLo, y: textOriginY + top + (underline ? lineHeight - 1 : 0),
+                                   width: max(1, xHi - xLo), height: underline ? 1 : lineHeight), color: color)
             }
         }
-
-        func drawUnderline(_ range: Range<Int>,
-                           in text: String,
-                           env: TextEnvironment,
-                           font: Font,
-                           lineHeight: Float,
-                           layout: TextLayoutResult,
-                           textOriginX: Float,
-                           textOriginY: Float,
-                           visibleTopY: Float,
-                           visibleBottomY: Float,
-                           list: DrawList,
-                           color: Color) {
-            let ranges = lineRanges(in: text, layout: layout)
-            let startLine = lineIndex(for: range.lowerBound, lineRanges: ranges)
-            let endLine = lineIndex(for: range.upperBound, lineRanges: ranges)
-            for line in startLine...endLine {
-                let lineTop = Float(line) * lineHeight
-                let lineBottom = lineTop + lineHeight
-                if lineBottom < visibleTopY || lineTop > visibleBottomY {
-                    continue
-                }
-                let lineRange = ranges[line]
-                let lower = max(range.lowerBound, lineRange.lowerBound)
-                let upper = min(range.upperBound, lineRange.upperBound)
-                guard upper > lower else { continue }
-                let lineText = textField.substring(text, lineRange)
-                let xLo = linePrefixWidth(in: lineText,
-                                          upTo: lower - lineRange.lowerBound,
-                                          env: env,
-                                          font: font,
-                                          lineHeight: lineHeight)
-                let xHi = linePrefixWidth(in: lineText,
-                                          upTo: upper - lineRange.lowerBound,
-                                          env: env,
-                                          font: font,
-                                          lineHeight: lineHeight)
-                list.addRect(
-                    UIRect(x: textOriginX + xLo,
-                           y: textOriginY + Float(line) * lineHeight + lineHeight - 1,
-                           width: max(1, xHi - xLo),
-                           height: 1),
-                    color: color
-                )
-            }
+        func scrollbarMetrics(state: FieldState, node: Node, origin: CGPoint) -> ScrollbarMetrics? {
+            guard state.scroll.maxY > 0, state.scroll.contentHeight > state.scroll.visibleHeight else { return nil }
+            let thickness = TextField.scrollbarTrackThickness, inset = TextField.scrollbarInset
+            let x = Float(origin.x) + Float(node.frame.width) - thickness - inset, y = Float(origin.y) + inset
+            let height = max(thickness * 2, Float(node.frame.height) - inset * 2)
+            let thumbHeight = max(thickness * 2, height * state.scroll.visibleHeight / max(1, state.scroll.contentHeight))
+            let progress = state.scroll.offsetY / state.scroll.maxY
+            return ScrollbarMetrics(trackRect: UIRect(x: x, y: y, width: thickness, height: height),
+                                    thumbRect: UIRect(x: x, y: y + (height - thumbHeight) * progress, width: thickness, height: thumbHeight))
         }
-
-        func scrollbarMetrics(state: FieldState,
-                              node: Node,
-                              origin: CGPoint) -> ScrollbarMetrics? {
-            guard state.maxScrollY > 0, state.contentHeight > state.visibleTextHeight else { return nil }
-            let trackThickness = TextField.scrollbarTrackThickness
-            let inset = TextField.scrollbarInset
-            let trackX = Float(origin.x) + Float(node.frame.width) - trackThickness - inset
-            let trackY = Float(origin.y) + inset
-            let trackH = max(trackThickness * 2, Float(node.frame.height) - inset * 2)
-            let thumbH = max(trackThickness * 2,
-                             trackH * (state.visibleTextHeight / max(state.contentHeight, 1)))
-            let progress = state.maxScrollY > 0 ? state.scrollOffsetY / state.maxScrollY : 0
-            let thumbY = trackY + (trackH - thumbH) * progress
-            return ScrollbarMetrics(
-                trackRect: UIRect(x: trackX,
-                                  y: trackY,
-                                  width: trackThickness,
-                                  height: trackH),
-                thumbRect: UIRect(x: trackX,
-                                  y: thumbY,
-                                  width: trackThickness,
-                                  height: thumbH)
-            )
+        func horizontalScrollbarMetrics(state: FieldState, node: Node, origin: CGPoint) -> ScrollbarMetrics? {
+            let scroll = state.scroll.horizontal
+            guard scroll.maximum > 0, scroll.viewportWidth > 0 else { return nil }
+            let thickness = TextField.scrollbarTrackThickness, inset = TextField.scrollbarInset
+            let width = max(thickness * 2, scroll.viewportWidth - inset * 2)
+            let thumb = max(thickness * 2, width * scroll.viewportWidth / scroll.contentWidth)
+            let x = Float(origin.x) + scroll.leadingInset + inset
+            let y = Float(origin.y) + Float(node.frame.height) - thickness - inset
+            return ScrollbarMetrics(trackRect: UIRect(x: x, y: y, width: width, height: thickness),
+                thumbRect: UIRect(x: x + (width - thumb) * scroll.offset / scroll.maximum, y: y, width: thumb, height: thickness))
         }
-
-        func refreshScrollMetrics(node: Node,
-                                  state: FieldState,
-                                  renderCache: RenderCacheEntry,
-                                  lineHeight: Float) {
-            let frameHeight = Float(node.frame.height)
-            let availableTextHeight = max(lineHeight,
-                                          frameHeight - TextField.verticalInset(for: lineHeight) * 2)
-            state.visibleTextHeight = availableTextHeight
-            state.contentHeight = max(lineHeight, renderCache.layout.totalHeight)
-            state.maxScrollY = max(0, state.contentHeight - state.visibleTextHeight)
-            state.scrollOffsetY = clamp(state.scrollOffsetY, 0, state.maxScrollY)
-            node.contentOffset = CGPoint(x: 0, y: CGFloat(state.scrollOffsetY))
-        }
-
-        func interactiveLayout(in text: String,
-                               node: Node,
-                               env: TextEnvironment,
-                               font: Font,
-                               lineHeight: Float) -> TextLayoutResult {
-            let insetX = textField.horizontalInset(theme: node.theme)
-            let addonLeading = textField.leadingAddonWidth(env: env,
-                                                           font: font,
-                                                           lineHeight: lineHeight,
-                                                           theme: node.theme)
-            let addonTrailing = textField.trailingAddonWidth(env: env,
-                                                             font: font,
-                                                             lineHeight: lineHeight,
-                                                             theme: node.theme)
-            let availableTextWidth = max(0,
-                                         Float(node.frame.width)
-                                         - insetX * 2
-                                         - addonLeading
-                                         - addonTrailing)
-            return env.cachedLayout(text: text,
-                                    font: font,
-                                    lineHeight: lineHeight,
-                                    maxWidth: layoutMaxWidth(for: text,
-                                                             availableTextWidth: availableTextWidth),
-                                    alignment: .leading)
-        }
-
-        func layoutMaxWidth(for text: String, availableTextWidth: Float) -> Float {
-            guard textField.axis == .vertical else { return .infinity }
-            return max(1, availableTextWidth)
-        }
-
-        func characterBoundaryUTF8Offsets(in text: String) -> [Int] {
-            var offsets: [Int] = []
-            offsets.reserveCapacity(text.count + 1)
-            var running = 0
-            for character in text {
-                offsets.append(running)
-                running += String(character).utf8.count
-            }
-            offsets.append(running)
-            return offsets
-        }
-
-        func characterIndex(forUTF8Offset offset: Int, boundaries: [Int]) -> Int {
-            guard let last = boundaries.last else { return 0 }
-            let bounded = clamp(offset, 0, last)
-            var low = 0
-            var high = max(0, boundaries.count - 1)
-            while low < high {
-                let mid = (low + high + 1) / 2
-                if boundaries[mid] <= bounded {
-                    low = mid
-                } else {
-                    high = mid - 1
-                }
-            }
-            return low
+        func refreshScrollMetrics(node: Node, state: FieldState, renderCache: RenderCacheEntry, lineHeight: Float) {
+            state.scroll.visibleHeight = max(lineHeight, Float(node.frame.height) - TextField.verticalInset(for: lineHeight) * 2)
+            updateScroll(state, document: renderCache.document, lineHeight: lineHeight)
+            node.contentOffset = CGPoint(x: CGFloat(state.scroll.horizontal.offset), y: CGFloat(state.scroll.offsetY))
         }
     }
 }

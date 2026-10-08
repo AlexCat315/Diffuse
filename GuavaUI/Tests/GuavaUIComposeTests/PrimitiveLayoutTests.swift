@@ -240,8 +240,8 @@ struct PrimitiveLayoutTests {
         #expect(ys.max() == 75)
     } }
 
-    @Test("Image fill mode preserves aspect ratio and overdraws")
-    func imageFillModePreservesAspectRatioAndOverdraws() { GlobalTestLock.locked {
+    @Test("Image fill mode preserves aspect ratio with bounded UV cropping")
+    func imageFillModePreservesAspectRatioAndCrops() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -260,10 +260,12 @@ struct PrimitiveLayoutTests {
         #expect(list.vertices.count == 4)
         let xs = list.vertices.map(\.posX)
         let ys = list.vertices.map(\.posY)
-        #expect(xs.min() == -50)
-        #expect(xs.max() == 150)
+        #expect(xs.min() == 0)
+        #expect(xs.max() == 100)
         #expect(ys.min() == 0)
         #expect(ys.max() == 100)
+        #expect(list.vertices.map(\.u).min() == 10.25)
+        #expect(list.vertices.map(\.u).max() == 10.75)
     } }
 
     @Test("Modifier stack: padding + frame + background")

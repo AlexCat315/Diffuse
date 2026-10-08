@@ -1,3 +1,8 @@
+public enum GlyphAtlasFormat: Hashable, Sendable {
+    case alpha, color
+    public var bytesPerPixel: Int { self == .alpha ? 1 : 4 }
+}
+
 public struct GlyphAtlasInfo {
     public let glyphIndex: UInt32
     public let width: Float
@@ -9,6 +14,7 @@ public struct GlyphAtlasInfo {
     public let uvMinY: Float
     public let uvMaxX: Float
     public let uvMaxY: Float
+    public var format: GlyphAtlasFormat = .alpha
 
     public init(glyphIndex: UInt32, width: Float, height: Float, bearingX: Float, bearingY: Float, advance: Float, uvMinX: Float, uvMinY: Float, uvMaxX: Float, uvMaxY: Float) {
         self.glyphIndex = glyphIndex

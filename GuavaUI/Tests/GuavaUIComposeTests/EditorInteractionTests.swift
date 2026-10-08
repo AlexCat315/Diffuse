@@ -9,7 +9,7 @@ import GuavaUIRuntime
 
 @Suite("Editor interaction primitives", .serialized)
 struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
-    final class Store { var text = "alpha"; var actions = 0 }
+    final class Store { var text: TextBuffer = "alpha"; var actions = 0 }
     struct Rig {
         let registry = InteractionRegistry()
         let focus = FocusChain()
@@ -67,19 +67,19 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         let dispatcher = rig.dispatcher
         dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         dispatcher.dispatch(.textInput("中文🙂"))
-        #expect(store.text == "中文🙂")
+        #expect(store.text.stringValue == "中文🙂")
         dispatcher.dispatch(.keyDown(key(Scancode.z, modifiers: .lgui)))
-        #expect(store.text == "alpha")
+        #expect(store.text.stringValue == "alpha")
         #expect(store.actions == 0)
         let state = try #require(node.attachments["__textfield_state"] as? TextField.FieldState)
-        #expect(state.cursorIndex == 5)
-        #expect(state.selectionAnchor == 0)
+        #expect(state.selection.cursorIndex == 5)
+        #expect(state.selection.anchor == 0)
         dispatcher.dispatch(.keyDown(key(Scancode.z, modifiers: [.lgui, .lshift])))
-        #expect(store.text == "中文🙂")
+        #expect(store.text.stringValue == "中文🙂")
         dispatcher.dispatch(.keyDown(key(Scancode.z, modifiers: .lgui)))
         dispatcher.dispatch(.textInput("beta"))
         dispatcher.dispatch(.keyDown(key(Scancode.y, modifiers: .lctrl)))
-        #expect(store.text == "beta")
+        #expect(store.text.stringValue == "beta")
     } }
 
     @Test("invalid JSON draft survives blur and refocus")
@@ -93,14 +93,14 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         dispatcher.dispatch(.textInput("{ invalid"))
         rig.focus.clear(); graph.recomposer.commitAll()
-        #expect(store.text == "{}")
+        #expect(store.text.stringValue == "{}")
         rig.focus.focus(node); graph.recomposer.commitAll()
         let state = try #require(node.attachments["__textfield_state"] as? TextField.FieldState)
-        #expect(state.history.currentText == "{ invalid")
+        #expect(state.transaction.history.currentBuffer?.stringValue == "{ invalid")
         dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         dispatcher.dispatch(.textInput("{\"ok\":true}"))
         rig.focus.clear(); graph.recomposer.commitAll()
-        #expect(store.text == "{\"ok\":true}")
+        #expect(store.text.stringValue == "{\"ok\":true}")
     } }
 
     @Test("platform text commands share keyboard history and reject stale external edits")
@@ -115,15 +115,15 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         rig.dispatcher.dispatch(.textInput("replacement"))
         #expect(rig.focus.textEditAvailability(.undo) == true)
         #expect(rig.focus.performTextEdit(.undo))
-        #expect(store.text == "alpha")
+        #expect(store.text.stringValue == "alpha")
         #expect(rig.focus.textEditAvailability(.redo) == true)
         rig.focus.performTextEdit(.redo)
-        #expect(store.text == "replacement")
+        #expect(store.text.stringValue == "replacement")
         store.text = "external document"
         #expect(rig.focus.textEditAvailability(.undo) == false)
         #expect(rig.focus.textEditAvailability(.redo) == false)
         rig.focus.performTextEdit(.undo)
-        #expect(store.text == "external document")
+        #expect(store.text.stringValue == "external document")
         rig.focus.clear()
         #expect(rig.focus.textEditAvailability(.undo) == nil)
         #expect(!rig.focus.performTextEdit(.undo))
@@ -156,27 +156,27 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         #expect(rig.focus.focused === editor)
         rig.dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         rig.dispatcher.dispatch(.textInput("{ invalid")); settle()
-        #expect(store.text == "{}")
+        #expect(store.text.stringValue == "{}")
         rig.dispatcher.dispatch(.keyDown(key(Scancode.return, modifiers: .lgui))); settle()
         #expect(rig.focus.modalRoot != nil)
         rig.dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         rig.dispatcher.dispatch(.textInput("{\"value\":42}")); settle()
-        #expect(store.text == "{}")
+        #expect(store.text.stringValue == "{}")
         try activate("json-apply"); settle()
-        #expect(store.text == "{\"value\":42}")
+        #expect(store.text.stringValue == "{\"value\":42}")
         #expect(rig.focus.modalRoot == nil)
         try activate("json-expand"); settle()
         rig.dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         rig.dispatcher.dispatch(.textInput("{\"value\":100}")); settle()
         rig.dispatcher.dispatch(.keyDown(key(Scancode.escape))); settle()
-        #expect(store.text == "{\"value\":42}")
+        #expect(store.text.stringValue == "{\"value\":42}")
         #expect(PortalStoreHolder.current.entries.isEmpty)
     } }
 
     @Test("expanded JSON has a centered editor and clickable footer after opening and resizing", arguments: [false, true])
     func expandedJsonLayout(compactInitially: Bool) throws { try withRig { rig in
         let store = Store()
-        store.text = "[\n" + (0..<30).map { "  {\"value\":\($0)}" }.joined(separator: ",\n") + "\n]"
+        store.text = TextBuffer("[\n" + (0..<30).map { "  {\"value\":\($0)}" }.joined(separator: ",\n") + "\n]")
         let graph = rig.graph
         graph.install(root: LayerRoot {
             JsonField(text: Binding(get: { store.text }, set: { store.text = $0 }))
@@ -224,13 +224,13 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         rig.dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         rig.dispatcher.dispatch(.textInput("{\"value\":42}")); settle()
         click(try named("json-apply"))
-        #expect(store.text == "{\"value\":42}")
+        #expect(store.text.stringValue == "{\"value\":42}")
         #expect(rig.focus.modalRoot == nil)
     } }
 
     private struct ModalHarness: View {
         @State var shown = false
-        @State var text = ""
+        @State var text: TextBuffer = ""
         let store = Store()
         var body: some View {
             LayerRoot {
@@ -282,10 +282,13 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
     func contextMenuBounds() throws { try withRig { rig in
         let graph = rig.graph
         let store = Store()
-        store.text = (0..<20).map { "Line \($0)" }.joined(separator: "\n")
+        store.text = TextBuffer((0..<20).map { "Line \($0)" }.joined(separator: "\n"))
         graph.install(root: LayerRoot {
             Column(spacing: 0) {
-                TextField(text: Binding(get: { store.text }, set: { store.text = $0 }), axis: .vertical, maxVisibleLines: 1)
+                TextField(text: Binding(get: { store.text }, set: { store.text = $0 })) { input in
+                    input.layout.axis = .vertical
+                    input.layout.maxVisibleLines = 1
+                }
                     .frame(height: 20)
                 Text("Row").frame(width: 230, height: 130).debugName("context-test-target")
                     .contextMenu(onOpen: { store.actions += 1 }, entries: {

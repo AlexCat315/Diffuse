@@ -41,19 +41,19 @@ public struct JsonFieldLabels: Sendable {
 }
 
 public struct JsonField: View {
-    public let text: Binding<String>
+    public let text: Binding<TextBuffer>
     public let placeholder: String
     public let minHeight: Float
     public let isEnabled: Bool
-    public let onCommit: ((String) -> Void)?
+    public let onCommit: ((TextBuffer) -> Void)?
     public let labels: JsonFieldLabels
 
-    public init(text: Binding<String>,
+    public init(text: Binding<TextBuffer>,
                 placeholder: String = "{}",
                 minHeight: Float = 96,
                 isEnabled: Bool = true,
                 labels: JsonFieldLabels = JsonFieldLabels(),
-                onCommit: ((String) -> Void)? = nil) {
+                onCommit: ((TextBuffer) -> Void)? = nil) {
         self.text = text
         self.placeholder = placeholder
         self.minHeight = minHeight
@@ -102,22 +102,30 @@ public struct JsonField: View {
 
 private struct _StatefulJsonField: View {
     let field: JsonField
-    @State private var draft = ""
+    @State private var draft = TextBuffer.empty
     @State private var hasDraft = false
-    @State private var baseline = ""
+    @State private var baseline = TextBuffer.empty
     @State private var isExpanded = false
-    @State private var expandedDraft = ""
+    @State private var expandedDraft = TextBuffer.empty
     @State private var history = TextEditHistory()
     @State private var expandedHistory = TextEditHistory()
+
+    private var inlineCodeOptions: TextFieldCodeEditing {
+        var options = TextFieldCodeEditing()
+        options.showsLineNumbers = true
+        options.indentationWidth = 2
+        options.editHistory = history
+        return options
+    }
 
     init(field: JsonField) {
         self.field = field
         _baseline = State(wrappedValue: field.text.wrappedValue)
     }
 
-    private var currentText: String { hasDraft ? draft : field.text.wrappedValue }
-    private var validation: JsonFieldValidation { JsonField.validate(currentText) }
-    private var draftBinding: Binding<String> {
+    private var currentText: TextBuffer { hasDraft ? draft : field.text.wrappedValue }
+    private var validation: JsonFieldValidation { JsonField.validate(currentText.stringValue) }
+    private var draftBinding: Binding<TextBuffer> {
         Binding(get: { currentText }, set: { value in
             if !hasDraft { baseline = field.text.wrappedValue }
             draft = value
@@ -151,9 +159,10 @@ private struct _StatefulJsonField: View {
                     .debugName("json-expand")
             }
             ResizableTextArea(field.placeholder, text: draftBinding, minHeight: field.minHeight,
-                              disabled: !field.isEnabled, editHistory: history, onSubmit: { _ = commitDraft() },
+                              disabled: !field.isEnabled, codeEditing: inlineCodeOptions, onSubmit: { _ = commitDraft() },
                               onFocus: beginEditing,
                               onBlur: { if !isExpanded { _ = commitDraft() } })
+                .font(.mono)
                 .border(validation.isAcceptable ? .border : .error, width: 1)
                 .cornerRadius(4)
                 .clipped()
@@ -169,16 +178,16 @@ private struct _StatefulJsonField: View {
     }
 
     private var expandedEditor: some View {
-        let result = JsonField.validate(expandedDraft)
+        let result = JsonField.validate(expandedDraft.stringValue)
         return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 6) {
                 Text(field.labels.expand).font(.bodyStrong)
                 Spacer(minLength: 0)
                 Button(icon: .resource(UICommonIcons.format), size: 14,
                        isEnabled: result.isAcceptable, tooltip: field.labels.format, action: {
-                    if let pretty = JsonField.prettyPrinted(expandedDraft) {
-                        recordReplacement(before: expandedDraft, after: pretty, in: expandedHistory)
-                        expandedDraft = pretty
+                    if let pretty = JsonField.prettyPrinted(expandedDraft.stringValue) {
+                        recordReplacement(before: expandedDraft, after: TextBuffer(pretty), in: expandedHistory)
+                        expandedDraft = TextBuffer(pretty)
                     }
                 }).buttonStyle(.ghost)
                 Button(icon: .resource(UICommonIcons.close), size: 12,
@@ -186,9 +195,15 @@ private struct _StatefulJsonField: View {
             }
             .padding(horizontal: 14, vertical: 8)
             Divider()
-            TextField(field.placeholder, text: $expandedDraft, axis: .vertical,
-                      maxVisibleLines: 128, showsLineNumbers: true, indentationWidth: 2, editHistory: expandedHistory,
-                      onSubmit: applyExpandedDraft, onCancel: { isExpanded = false })
+            TextField(field.placeholder, text: $expandedDraft) { input in
+                input.layout.axis = .vertical
+                input.layout.maxVisibleLines = 128
+                input.codeEditing.showsLineNumbers = true
+                input.codeEditing.indentationWidth = 2
+                input.codeEditing.editHistory = expandedHistory
+                input.events.onSubmit = applyExpandedDraft
+                input.events.onCancel = { isExpanded = false }
+            }
                 .font(.mono)
                 .frame(minHeight: 0)
                 .padding(8)
@@ -222,8 +237,12 @@ private struct _StatefulJsonField: View {
 
     @discardableResult
     private func commitDraft() -> Bool {
-        guard JsonField.validate(currentText).isAcceptable else { return false }
-        let normalized = JsonField.normalizedCommitText(currentText)
+        guard JsonField.validate(currentText.stringValue).isAcceptable else { return false }
+        let current = currentText
+        let normalizedText = JsonField.normalizedCommitText(current.stringValue)
+        let authored = field.text.wrappedValue
+        let normalized = normalizedText == authored.stringValue ? authored
+            : (normalizedText == current.stringValue ? current : TextBuffer(normalizedText))
         if field.text.wrappedValue != normalized {
             field.text.wrappedValue = normalized
             field.onCommit?(normalized)
@@ -235,7 +254,7 @@ private struct _StatefulJsonField: View {
     }
 
     private func applyExpandedDraft() {
-        guard JsonField.validate(expandedDraft).isAcceptable else { return }
+        guard JsonField.validate(expandedDraft.stringValue).isAcceptable else { return }
         draftBinding.wrappedValue = expandedDraft
         if commitDraft() { isExpanded = false }
     }
@@ -246,15 +265,15 @@ private struct _StatefulJsonField: View {
         _ = commitDraft()
     }
     private func formatDraft() {
-        if let pretty = JsonField.prettyPrinted(currentText) {
-            recordReplacement(before: currentText, after: pretty, in: history)
-            draftBinding.wrappedValue = pretty
+        if let pretty = JsonField.prettyPrinted(currentText.stringValue) {
+            recordReplacement(before: currentText, after: TextBuffer(pretty), in: history)
+            draftBinding.wrappedValue = TextBuffer(pretty)
         }
     }
-    private func recordReplacement(before: String, after: String, in history: TextEditHistory) {
+    private func recordReplacement(before: TextBuffer, after: TextBuffer, in history: TextEditHistory) {
         history.synchronize(before)
-        history.record(before: .init(text: before, cursor: before.count),
-                       after: .init(text: after, cursor: after.count), kind: .atomic,
+        history.record(before: .init(buffer: before, cursor: before.characterCount),
+                       after: .init(buffer: after, cursor: after.characterCount), kind: .atomic,
                        time: ProcessInfo.processInfo.systemUptime)
     }
 }

@@ -9,15 +9,18 @@ public struct TextLine {
     public let glyphs: [PositionedGlyph]
     /// Baseline Y position relative to the text block origin.
     public let baselineY: Float
+    /// Top of the visual row, independent of the font baseline and leading.
+    public let topY: Float
     /// Total width of this line.
     public let width: Float
     /// UTF-8 byte offset of the first character shown on this line.
     public let startCluster: UInt32
     /// UTF-8 byte offset of the first character not shown on this line.
     public let endCluster: UInt32
-    public init(glyphs: [PositionedGlyph], baselineY: Float, width: Float, startCluster: UInt32, endCluster: UInt32) {
+    public init(glyphs: [PositionedGlyph], baselineY: Float, topY: Float, width: Float, startCluster: UInt32, endCluster: UInt32) {
         self.glyphs = glyphs
         self.baselineY = baselineY
+        self.topY = topY
         self.width = width
         self.startCluster = startCluster
         self.endCluster = endCluster
@@ -80,51 +83,62 @@ public struct TextLayout {
         atlas: any GlyphMetricsProvider,
         maxWidth: Float = .infinity,
         lineHeight: Float,
-        alignment: TextAlignment = .leading
+        alignment: TextAlignment = .leading,
+        letterSpacing: Float = 0
     ) -> TextLayoutResult {
         guard !shapedGlyphs.isEmpty else {
             return TextLayoutResult(lines: [], totalWidth: 0, totalHeight: 0)
         }
 
         let utf8 = Array(text.utf8)
+        var lineBreaks: [UInt32: UInt32] = [:], sourceOffset: UInt32 = 0
+        for character in text {
+            let length = UInt32(character.utf8.count)
+            if character.isNewline { lineBreaks[sourceOffset] = length }
+            sourceOffset += length
+        }
+        let spacing = letterSpacing.isFinite ? letterSpacing : 0
+        // All lines in a text block share the same font metrics, including empty lines.
+        let baselineOffset = centeredBaselineY(glyphs: shapedGlyphs.map { ($0, atlas.glyphMetrics(glyphIndex: $0.glyphID, fontID: $0.fontID)) }, atlas: atlas, lineTop: 0, lineHeight: lineHeight)
+        var lastWasNewline = false
 
         var lines: [TextLine] = []
         var currentLineGlyphs: [(ShapedGlyph, GlyphMetrics?)] = []
         var currentLineStartCluster: UInt32 = 0
         var penX: Float = 0
         var lastBreakIndex: Int? = nil
-        var penXAtLastBreak: Float = 0
 
         for (_, glyph) in shapedGlyphs.enumerated() {
             let clusterByte: UInt8 = Int(glyph.cluster) < utf8.count
                 ? utf8[Int(glyph.cluster)] : 0
 
             // Explicit newline → flush current line immediately, skip glyph.
-            let isNewline = clusterByte == UInt8(ascii: "\n") || clusterByte == UInt8(ascii: "\r")
+            let isNewline = lineBreaks[glyph.cluster] != nil || clusterByte == UInt8(ascii: "\n") || clusterByte == UInt8(ascii: "\r")
             if isNewline {
-                let baselineY = centeredBaselineY(
-                    glyphs: currentLineGlyphs,
-                    atlas: atlas,
-                    lineTop: Float(lines.count) * lineHeight,
-                    lineHeight: lineHeight
-                )
+                // HarfBuzz may emit both control glyphs, or one shared CRLF cluster.
+                if glyph.cluster < currentLineStartCluster { continue }
+                lastWasNewline = true
+                let baselineY = Float(lines.count) * lineHeight + baselineOffset
                 let line = buildLine(
                     glyphs: currentLineGlyphs,
                     baselineY: baselineY,
+                        topY: Float(lines.count) * lineHeight,
                     startCluster: currentLineStartCluster,
                     endCluster: glyph.cluster,
                     maxWidth: maxWidth,
-                    alignment: alignment
+                    alignment: alignment,
+                    letterSpacing: spacing
                 )
                 lines.append(line)
                 currentLineGlyphs = []
-                currentLineStartCluster = glyph.cluster + 1
+                let newlineLength = lineBreaks[glyph.cluster] ?? 1
+                currentLineStartCluster = glyph.cluster + newlineLength
                 penX = 0
                 lastBreakIndex = nil
-                penXAtLastBreak = 0
                 continue
             }
 
+            lastWasNewline = false
             let metrics = atlas.glyphMetrics(glyphIndex: glyph.glyphID, fontID: glyph.fontID)
 
             // Is this a whitespace cluster? Check source text.
@@ -132,57 +146,55 @@ public struct TextLayout {
 
             if isSpace {
                 lastBreakIndex = currentLineGlyphs.count
-                penXAtLastBreak = penX
             }
 
-            var nextPenX = penX + glyph.xAdvance
+            let gap = currentLineGlyphs.last.map { $0.0.cluster != glyph.cluster ? spacing : 0 } ?? 0
+            var nextPenX = penX + gap + glyph.xAdvance
 
             // Line break needed?
-            if nextPenX > maxWidth && !currentLineGlyphs.isEmpty {
+            if nextPenX > maxWidth && !currentLineGlyphs.isEmpty && currentLineGlyphs.last?.0.cluster != glyph.cluster {
                 if let breakIdx = lastBreakIndex, breakIdx > 0 {
                     // Break at last whitespace
                     let lineGlyphs = Array(currentLineGlyphs.prefix(breakIdx))
-                    let remaining = Array(currentLineGlyphs.suffix(from: breakIdx))
+                    let remaining = Array(currentLineGlyphs.suffix(from: breakIdx).drop(while: { value in
+                        let index = Int(value.0.cluster)
+                        return index < utf8.count && (utf8[index] == 32 || utf8[index] == 9)
+                    }))
                     let nextLineStartCluster = remaining.first?.0.cluster ?? glyph.cluster
-                    let baselineY = centeredBaselineY(
-                        glyphs: lineGlyphs,
-                        atlas: atlas,
-                        lineTop: Float(lines.count) * lineHeight,
-                        lineHeight: lineHeight
-                    )
+                    let baselineY = Float(lines.count) * lineHeight + baselineOffset
 
                     let line = buildLine(
                         glyphs: lineGlyphs,
                         baselineY: baselineY,
+                        topY: Float(lines.count) * lineHeight,
                         startCluster: currentLineStartCluster,
                         endCluster: nextLineStartCluster,
                         maxWidth: maxWidth,
-                        alignment: alignment
+                        alignment: alignment,
+                        letterSpacing: spacing
                     )
                     lines.append(line)
 
                     // Re-layout remaining glyphs
                     currentLineGlyphs = remaining
                     currentLineStartCluster = nextLineStartCluster
-                    penX = nextPenX - penXAtLastBreak
-                    nextPenX = penX
+                    penX = width(of: remaining, letterSpacing: spacing)
+                    let remainingGap = remaining.last.map { $0.0.cluster != glyph.cluster ? spacing : 0 } ?? 0
+                    nextPenX = penX + remainingGap + glyph.xAdvance
                     lastBreakIndex = nil
                 } else {
                     // No break point; force break here
                     let nextLineStartCluster = glyph.cluster
-                    let baselineY = centeredBaselineY(
-                        glyphs: currentLineGlyphs,
-                        atlas: atlas,
-                        lineTop: Float(lines.count) * lineHeight,
-                        lineHeight: lineHeight
-                    )
+                    let baselineY = Float(lines.count) * lineHeight + baselineOffset
                     let line = buildLine(
                         glyphs: currentLineGlyphs,
                         baselineY: baselineY,
+                        topY: Float(lines.count) * lineHeight,
                         startCluster: currentLineStartCluster,
                         endCluster: nextLineStartCluster,
                         maxWidth: maxWidth,
-                        alignment: alignment
+                        alignment: alignment,
+                        letterSpacing: spacing
                     )
                     lines.append(line)
                     currentLineGlyphs = []
@@ -201,20 +213,17 @@ public struct TextLayout {
         }
 
         // Flush remaining glyphs
-        if !currentLineGlyphs.isEmpty {
-            let baselineY = centeredBaselineY(
-                glyphs: currentLineGlyphs,
-                atlas: atlas,
-                lineTop: Float(lines.count) * lineHeight,
-                lineHeight: lineHeight
-            )
+        if !currentLineGlyphs.isEmpty || lastWasNewline {
+            let baselineY = Float(lines.count) * lineHeight + baselineOffset
             let line = buildLine(
                 glyphs: currentLineGlyphs,
                 baselineY: baselineY,
+                        topY: Float(lines.count) * lineHeight,
                 startCluster: currentLineStartCluster,
                 endCluster: UInt32(text.utf8.count),
                 maxWidth: maxWidth,
-                alignment: alignment
+                alignment: alignment,
+                letterSpacing: spacing
             )
             lines.append(line)
         }
@@ -230,10 +239,12 @@ public struct TextLayout {
     private static func buildLine(
         glyphs: [(ShapedGlyph, GlyphMetrics?)],
         baselineY: Float,
+        topY: Float,
         startCluster: UInt32,
         endCluster: UInt32,
         maxWidth: Float,
-        alignment: TextAlignment
+        alignment: TextAlignment,
+        letterSpacing: Float
     ) -> TextLine {
         var positioned: [PositionedGlyph] = []
         positioned.reserveCapacity(glyphs.count)
@@ -241,7 +252,10 @@ public struct TextLayout {
         var penX: Float = 0
         var lineWidth: Float = 0
 
+        var previousCluster: UInt32?
         for (shaped, _) in glyphs {
+            if let previousCluster, previousCluster != shaped.cluster { penX += letterSpacing }
+            previousCluster = shaped.cluster
             positioned.append(PositionedGlyph(
                 glyphID: shaped.glyphID,
                 fontID: shaped.fontID,
@@ -277,9 +291,21 @@ public struct TextLayout {
 
         return TextLine(glyphs: positioned,
                         baselineY: baselineY,
+                        topY: topY,
                         width: lineWidth,
                         startCluster: startCluster,
                         endCluster: endCluster)
+    }
+
+    private static func width(of glyphs: [(ShapedGlyph, GlyphMetrics?)], letterSpacing: Float) -> Float {
+        var result: Float = 0
+        var previousCluster: UInt32?
+        for (glyph, _) in glyphs {
+            if let previousCluster, previousCluster != glyph.cluster { result += letterSpacing }
+            previousCluster = glyph.cluster
+            result += glyph.xAdvance
+        }
+        return result
     }
 
     private static func centeredBaselineY(
@@ -309,7 +335,7 @@ public struct TextLayout {
         }
 
         let contentHeight = maxAscent + maxDescent
-        let topInset = max(0, (lineHeight - contentHeight) * 0.5)
+        let topInset = (lineHeight - contentHeight) * 0.5
         return lineTop + topInset + maxAscent
     }
 }

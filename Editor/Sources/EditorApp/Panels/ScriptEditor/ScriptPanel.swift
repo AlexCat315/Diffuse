@@ -10,7 +10,7 @@ struct ScriptPanel: View {
     let app: EditorApplication
 
     private var _workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
-    @State private var searchText = ""
+    @State private var searchText: TextBuffer = ""
     @State private var hoverPresentation: ScriptEditorHoverPresentation = .hidden
     @State private var hoverSequence = ScriptEditorHoverSequence()
     @State private var histories: [String: TextEditHistory] = [:]
@@ -231,8 +231,11 @@ struct ScriptPanel: View {
                                  caretLabel: Binding(get: { app.store.scriptCaretLabel(for: selectedScript.identifier) },
                                                      set: { app.store.setScriptCaretLabel($0, for: selectedScript.identifier) }),
                                  onChange: { text in
+                                     cancelHover()
                                      app.scriptWorkspace.updateSelectedSource(text)
                                  },
+                                 diagnostics: workspace.selectedDocument?.diagnostics ?? [],
+                                 completionProvider: completionProvider(for: selectedScript.identifier),
                                  editHistory: history(for: selectedScript.identifier),
                                  navigation: app.store.scriptNavigation.flatMap {
                                      $0.scriptID == selectedScript.identifier ? $0 : nil
@@ -247,6 +250,10 @@ struct ScriptPanel: View {
                             .font(.caption)
                             .foregroundColor(.warning)
                         Spacer(minLength: 0)
+                        if case .unavailable = workspace.languageServiceState {
+                            Button(L("Retry"), action: app.scriptWorkspace.retryLanguageService)
+                                .buttonStyle(.secondary)
+                        }
                         Button(action: app.scriptWorkspace.dismissLanguageServiceMessage) {
                             Text(L("Dismiss"))
                         }
@@ -342,7 +349,7 @@ struct ScriptPanel: View {
     }
 
     private var visibleDocuments: [ScriptWorkspaceDocument] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return workspace.documents }
         return workspace.documents.filter {
             $0.file.displayName.localizedCaseInsensitiveContains(query)
@@ -363,7 +370,7 @@ struct ScriptPanel: View {
 
     private var selectedDocument: ScriptWorkspaceDocument? { workspace.selectedDocument }
 
-    private var sourceText: Binding<String> {
+    private var sourceText: Binding<TextBuffer> {
         Binding(
             get: { app.scriptWorkspace.snapshot.selectedDocument?.source ?? "" },
             set: app.scriptWorkspace.updateSelectedSource
@@ -376,6 +383,7 @@ struct ScriptPanel: View {
 
 
     private var languageServiceMessage: String? {
+        guard !workspace.isLanguageServiceMessageDismissed else { return nil }
         switch workspace.languageServiceState {
         case .inactive, .ready: return nil
         case .starting: return L("Starting Swift language service…")
@@ -458,11 +466,23 @@ struct ScriptPanel: View {
         }
     }
 
+    private func completionProvider(for scriptID: String) -> TextCompletionProvider {
+        let manager = app.dynamicScriptManager, model = app.scriptWorkspace
+        return { request, reply in
+            Task { @MainActor in
+                let position = ScriptSourceCoordinates.position(in: request.buffer, atCharacterIndex: request.caretIndex)
+                let result = (try? await manager.completion(scriptID: scriptID, at: position)) ?? .empty
+                guard model.snapshot.selectedScriptID == scriptID, model.snapshot.selectedDocument?.source == request.buffer else { return }
+                reply(ScriptCompletionConversion.items(result, for: request))
+            }
+        }
+    }
+
     // MARK: - Hover
 
     /// Pointer settled on something that may have documentation.
     private func requestHover(_ anchor: TextFieldHoverAnchor) {
-        guard app.dynamicScriptManager.isLanguageServiceAvailable,
+        guard app.scriptWorkspace.snapshot.languageServiceState == .ready,
               let scriptID = workspace.selectedScriptID else {
             cancelHover()
             return
@@ -486,6 +506,7 @@ struct ScriptPanel: View {
         let sequence = hoverSequence
         let manager = app.dynamicScriptManager
         let presentationBinding = $hoverPresentation
+        let model = app.scriptWorkspace
         Task { @MainActor in
             guard let presentation = await ScriptEditorHoverResolver.resolve(
                 scriptID: scriptID,
@@ -497,6 +518,7 @@ struct ScriptPanel: View {
                     try await manager.hover(scriptID: scriptID, at: position)
                 }
             ) else { return }
+            guard model.snapshot.selectedScriptID == scriptID, model.snapshot.selectedDocument?.source == source else { return }
             presentationBinding.wrappedValue = presentation
         }
     }

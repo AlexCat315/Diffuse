@@ -40,6 +40,8 @@
 
 ## States
 
+`isLoading` 展示生命周期受控的 Spinner，并停止重复激活。`tooltip` 与通用 `Tooltip` 共用 Portal 会话：hover 或可见键盘焦点停留 450ms 后显示，按内容宽度排版并以 320pt 为最大宽度，空间不足时翻到上方。点击、键盘激活、Escape、离开、失焦、禁用或卸载都会关闭；Escape 关闭后保留按钮焦点。说明同时作为按钮的可访问性 help。
+
 | State | 视觉 | 触发 |
 | ----- | ---- | ---- |
 | rest | variant 默认 | — |

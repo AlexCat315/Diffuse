@@ -14,6 +14,9 @@ public final class ManagedFont {
     public let rasterScale: Float
     internal let ftFace: FT_Face
     internal let hbFont: OpaquePointer  // hb_font_t*
+    #if canImport(CoreText)
+    var colorGlyphFont: NativeColorGlyphFont?
+    #endif
 
     public var rawFace: FT_Face { ftFace }
 
@@ -99,6 +102,12 @@ public final class FontProvider {
 
     public func registerAllFonts(in atlas: FontAtlas) {
         for font in fonts.values {
+            #if canImport(CoreText)
+            if let colorFont = font.colorGlyphFont {
+                atlas.registerColorSource(colorFont.source, fontID: font.id)
+                continue
+            }
+            #endif
             atlas.registerFace(
                 font.ftFace,
                 fontID: font.id,
@@ -213,6 +222,11 @@ public final class FontProvider {
     // MARK: - Shaping
 
     public func shapeRun(_ run: FontRun) -> [ShapedGlyph] {
+        #if canImport(CoreText)
+        if let colorFont = run.font.colorGlyphFont {
+            return colorFont.shape(run.text, fontID: run.font.id, utf8Offset: run.utf8Offset)
+        }
+        #endif
         guard let buf = hb_buffer_create() else { return [] }
         defer { hb_buffer_destroy(buf) }
         let scale = max(run.font.rasterScale, 1)
@@ -449,7 +463,9 @@ public final class FontProvider {
             }
         }
 
-        return nil
+        // An unavailable glyph must still occupy its cluster and UTF-8
+        // position. Shape .notdef in the primary face rather than dropping it.
+        return primaryFont
     }
 
     private func loadFontFromCTFont(_ ctFont: CTFont, psName: String) -> ManagedFont? {
@@ -533,6 +549,9 @@ public final class FontProvider {
             ftFace: ftFace, hbFont: hbFont,
             buffer: buffer, bufferSize: data.count
         )
+        if ftFace.pointee.face_flags & FT_Long(FT_FACE_FLAG_COLOR) != 0 {
+            managed.colorGlyphFont = NativeColorGlyphFont(font: ctFont, size: size, rasterScale: rasterScale)
+        }
         for alias in Set(cacheAliases + [actualPSName]) {
             fonts[alias] = managed
         }
@@ -626,7 +645,7 @@ public final class FontProvider {
     private func managedFontCanRenderText(_ font: ManagedFont, text: String) -> Bool {
         guard !text.isEmpty else { return true }
         return text.unicodeScalars.allSatisfy { scalar in
-            FT_Get_Char_Index(font.ftFace, FT_ULong(scalar.value)) != 0
+            scalar.properties.isDefaultIgnorableCodePoint || FT_Get_Char_Index(font.ftFace, FT_ULong(scalar.value)) != 0
         }
     }
 

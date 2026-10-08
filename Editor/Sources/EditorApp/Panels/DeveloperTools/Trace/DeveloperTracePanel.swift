@@ -12,7 +12,7 @@ struct DeveloperTraceWorkbenchView: View {
     @State private var selectedEventID: String?
     @State private var selectedSampleIndex: UInt64?
     @State private var isTimelineExpanded = false
-    @State private var query = ""
+    @State private var query: TextBuffer = ""
     @State private var selectedTrack: DeveloperTraceTrack?
     @State private var severityFilter: DeveloperTraceSeverityFilter = .all
     @State private var sortOrder: DeveloperTraceEventSortOrder = .newest
@@ -20,7 +20,7 @@ struct DeveloperTraceWorkbenchView: View {
     var body: some View {
         let trace = frozenTrace ?? liveTrace
         let visibleEvents = developerTraceVisibleEvents(trace: trace,
-                                                        query: query,
+                                                        query: query.stringValue,
                                                         trackFilter: selectedTrack,
                                                         severityFilter: severityFilter,
                                                         sortOrder: sortOrder)
@@ -59,7 +59,7 @@ struct DeveloperTraceWorkbenchView: View {
             Row(alignment: .top, spacing: 0) {
                 DeveloperTraceEventList(events: visibleEvents,
                                         selectedEventID: activeEvent?.id,
-                                        searchIsActive: !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                        searchIsActive: !query.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                                         onSelect: { selectedEventID = $0.id })
                     .frame(minWidth: 260, maxWidth: 390)
 
@@ -191,7 +191,7 @@ private struct DeveloperTraceMetric: View {
 }
 
 private struct DeveloperTraceFilterBar: View {
-    let query: Binding<String>
+    let query: Binding<TextBuffer>
     let selectedTrack: Binding<DeveloperTraceTrack?>
     let severityFilter: Binding<DeveloperTraceSeverityFilter>
     let sortOrder: Binding<DeveloperTraceEventSortOrder>
@@ -199,7 +199,10 @@ private struct DeveloperTraceFilterBar: View {
 
     var body: some View {
         Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 4) {
-            TextField(L("Search trace events"), text: query, size: .small, clearable: true)
+            TextField(L("Search trace events"), text: query) { input in
+                input.decoration.size = .small
+                input.behavior.clearable = true
+            }
                 .frame(width: 168)
             Button(L("Clear Filters"), action: onClear).buttonStyle(.secondary)
             DeveloperTraceFilterChip(label: L("All Tracks"), isSelected: selectedTrack.wrappedValue == nil) {

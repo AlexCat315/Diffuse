@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -221,7 +222,7 @@ extern "C" bool guava_image_decode_memory(const uint8_t* data,
     }
 
     const std::string ext = lower_extension(extension);
-    if (ext == "webp") {
+    if (ext == "webp" || (data_size >= 12 && std::memcmp(data, "RIFF", 4) == 0 && std::memcmp(data + 8, "WEBP", 4) == 0)) {
         return decode_webp(data, data_size, target_width, target_height, out_result);
     }
     if (ext == "svg") {
@@ -231,6 +232,28 @@ extern "C" bool guava_image_decode_memory(const uint8_t* data,
     // for raw in-memory bytes) goes through stb_image, which sniffs the format
     // from the data itself.
     return decode_stb(data, data_size, target_width, target_height, out_result);
+}
+
+extern "C" bool guava_image_dimensions_memory(const uint8_t* data, size_t data_size,
+                                                const char* extension, int32_t* width, int32_t* height) {
+    if (!data || !data_size || !width || !height || data_size > INT_MAX) return false;
+    const std::string ext = lower_extension(extension);
+    int w = 0, h = 0, channels = 0;
+    if (ext == "svg") {
+        auto document = lunasvg::Document::loadFromData(std::string(reinterpret_cast<const char*>(data), data_size));
+        if (!document) return false;
+        if (!std::isfinite(document->width()) || !std::isfinite(document->height()) ||
+            document->width() > INT_MAX || document->height() > INT_MAX) return false;
+        w = static_cast<int>(std::ceil(document->width()));
+        h = static_cast<int>(std::ceil(document->height()));
+    } else if (ext == "webp" || (data_size >= 12 && std::memcmp(data, "RIFF", 4) == 0 && std::memcmp(data + 8, "WEBP", 4) == 0)) {
+        if (!WebPGetInfo(data, data_size, &w, &h)) return false;
+    } else {
+        if (!stbi_info_from_memory(data, static_cast<int>(data_size), &w, &h, &channels)) return false;
+    }
+    if (w <= 0 || h <= 0) return false;
+    *width = w; *height = h;
+    return true;
 }
 
 extern "C" void guava_image_decode_free(GuavaImageDecodeResult* result) {

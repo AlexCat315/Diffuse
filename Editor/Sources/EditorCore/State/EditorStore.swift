@@ -1,3 +1,4 @@
+import GuavaUICompose
 import Foundation
 import GuavaUIRuntime
 import IntentRuntime
@@ -315,7 +316,7 @@ extension EditorStore {
     public var assetNavigationID: String? { read(.workbench, storage.navigation.assetNavigationID) }
     public var assetNavigationRevision: UInt64 { read(.workbench, storage.navigation.assetNavigationRevision) }
     public var inspectorSceneSettingsVisible: Bool { read(.workbench, storage.selection.inspectorSceneSettingsVisible) }
-    public var commandPaletteQuery: String { read(.workbench, storage.navigation.commandPaletteQuery) }
+    public var commandPaletteQuery: TextBuffer { read(.workbench, storage.navigation.commandPaletteQuery) }
     public var outputTab: EditorOutputTab { read(.workbench, storage.output.outputTab) }
     public var viewportMode: EditorViewportMode { read(.workbench, storage.viewport.mode) }
     public var gamePreviewResolution: EditorGamePreviewResolution { read(.workbench, storage.viewport.gamePreviewResolution) }

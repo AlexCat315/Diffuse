@@ -122,57 +122,73 @@ struct ButtonIconTests: GuavaUIComposeSerializedSuite {
         #expect(button.tooltip == "Close")
     }
 
-    @Test("Icon Button tooltip installs host overlay draw")
-    func tooltipInstallsOverlayDraw() { GlobalTestLock.locked {
-        TooltipStoreHolder.current.unregisterAll()
-        defer { TooltipStoreHolder.current.unregisterAll() }
-
-        let registry = InteractionRegistry()
-        InteractionRegistryHolder.current = registry
-
-        let tree = NodeTree()
-        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
-        graph.install(root:
-            Button(icon: .texture(7), tooltip: "Pin") {}
-        )
-        graph.computeLayout(width: 60, height: 40)
-
-        guard let host = findButtonHost(tree.root!) else {
-            Issue.record("no ButtonHost found in tree"); return
-        }
-        #expect((host.attachments[ButtonHost.tooltipKey] as? String) == "Pin")
-        #expect(TooltipStoreHolder.current.contains(host))
+    @Test("Button tooltips share delayed portals and leave with disabled or removed controls")
+    @MainActor
+    func tooltipPortalLifecycle() throws { try GlobalTestLock.locked {
+        let context = PlatformInputContext(), portal = PortalStore(), scheduler = AnimatorScheduler()
+        context.addScopedAmbient(PortalStoreAmbient(portal))
+        let prior = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = prior }
+        try context.withCurrent { try AnimatorScheduler.$current.withValue(scheduler) {
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            func content(enabled: Bool) -> AnyView {
+                AnyView(LayerRoot { Button(icon: .texture(7), isEnabled: enabled, tooltip: "Pin") {} })
+            }
+            graph.install(root: content(enabled: true)); graph.computeLayout(width: 320, height: 180)
+            let host = try #require(findButtonHost(graph.tree.root!))
+            #expect(host.accessibility?.help == "Pin")
+            context.interactions.handlers(for: host).hover?(.enter)
+            scheduler.tick(deltaTime: 0.44); #expect(portal.entries.isEmpty)
+            scheduler.tick(deltaTime: 0.02); #expect(portal.entries.count == 1)
+            graph.recomposer.commitAll(); graph.computeLayout(width: 320, height: 180)
+            graph.install(root: content(enabled: false))
+            #expect(portal.entries.isEmpty)
+            scheduler.tick(deltaTime: 1); #expect(portal.entries.isEmpty)
+            graph.install(root: content(enabled: true)); graph.computeLayout(width: 320, height: 180)
+            let next = try #require(findButtonHost(graph.tree.root!))
+            context.interactions.handlers(for: next).hover?(.enter); scheduler.tick(deltaTime: 0.46)
+            #expect(portal.entries.count == 1)
+            graph.install(root: EmptyView()); #expect(portal.entries.isEmpty)
+        } }
     } }
 
-    @Test("Button tooltip flips below top-edge controls")
-    func tooltipFlipsBelowTopEdgeControls() { GlobalTestLock.locked {
-        TooltipStoreHolder.current.unregisterAll()
-        defer { TooltipStoreHolder.current.unregisterAll() }
-        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 12, lineHeight: 16)
-        defer { TextEnvironmentHolder.current = nil }
-
-        let host = ButtonHost(role: .normal,
-                              isEnabled: true,
-                              isSelected: false,
-                              tooltip: "Open Scene...",
-                              isPressed: false,
-                              isHovered: true,
-                              label: AnyView(EmptyView()),
-                              onHoverChange: { _ in },
-                              onDown: {},
-                              onPressChange: { _ in },
-                              action: {})
-        let node = host._makeNode()
-        node.frame = CGRect(x: 10, y: 0, width: 34, height: 34)
-        host._updateNode(node)
-        node.attachments[ButtonHost.hoveredKey] = true
-
-        let list = DrawList()
-        list.setViewportBounds(UIRect(x: 0, y: 0, width: 200, height: 120))
-        TooltipStoreHolder.current.drawAll(into: list)
-
-        let minY = list.vertices.map(\.posY).min() ?? -1
-        #expect(minY >= 30)
+    @Test("Keyboard button tooltips fit the window, preserve focus and dismiss with Escape")
+    @MainActor
+    func tooltipKeyboardAndPlacement() throws { try GlobalTestLock.locked {
+        let context = PlatformInputContext(), portal = PortalStore(), scheduler = AnimatorScheduler()
+        context.addScopedAmbient(PortalStoreAmbient(portal))
+        let prior = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = prior }
+        try context.withCurrent { try AnimatorScheduler.$current.withValue(scheduler) {
+            var activations = 0
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: LayerRoot {
+                Column { Spacer(); Button(icon: .texture(7), tooltip: "Open Scene…") { activations += 1 } }
+                    .frame(width: 320, height: 180)
+            }); graph.computeLayout(width: 320, height: 180)
+            let host = try #require(findButtonHost(graph.tree.root!))
+            context.focusChain.focus(host, visible: true); scheduler.tick(deltaTime: 0.46)
+            #expect(portal.entries.count == 1)
+            graph.recomposer.commitAll(); graph.computeLayout(width: 320, height: 180)
+            graph.recomposer.commitAll(); graph.computeLayout(width: 320, height: 180)
+            func all(_ node: Node) -> [Node] { [node] + node.children.flatMap(all) }
+            let slot = try #require(all(graph.tree.root!).first { $0.attachments[LayoutDebugAttachmentKey.layoutRole] as? String == "portal-entry" })
+            #expect(slot.absoluteFrame.minY >= 6 && slot.absoluteFrame.maxY <= host.absoluteFrame.minY)
+            #expect(slot.absoluteFrame.minX >= 6 && slot.absoluteFrame.maxX <= 314)
+            #expect(slot.absoluteFrame.width > 60 && slot.absoluteFrame.width < 200)
+            func elements(_ entries: [AccessibilityElement]) -> [AccessibilityElement] { entries + entries.flatMap { elements($0.children) } }
+            let accessible = elements(AccessibilityTree.snapshot(root: graph.tree.root!))
+            #expect(accessible.contains { $0.semantics.role == .staticText && $0.semantics.label == "Open Scene…" })
+            let handler = try #require(context.interactions.handlers(for: host).key)
+            #expect(handler(KeyEvent(scancode: Scancode.escape, keycode: 0, modifiers: [], isRepeat: false), .target) == .handled)
+            #expect(portal.entries.isEmpty && context.focusChain.focused === host && activations == 0)
+            scheduler.tick(deltaTime: 1); #expect(portal.entries.isEmpty)
+            context.focusChain.clear(); context.focusChain.focus(host, visible: true); scheduler.tick(deltaTime: 0.46)
+            #expect(portal.entries.count == 1)
+            _ = handler(KeyEvent(scancode: Scancode.return, keycode: 0, modifiers: [], isRepeat: false), .target)
+            #expect(activations == 1 && portal.entries.isEmpty)
+            graph.install(root: EmptyView())
+        } }
     } }
 
     @Test("Icon Button renders across style and theme combinations")

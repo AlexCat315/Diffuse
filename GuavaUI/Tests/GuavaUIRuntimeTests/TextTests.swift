@@ -267,6 +267,21 @@ struct TextTests {
         }
     }
 
+    @Test("Fallback preserves unsupported and joined clusters instead of dropping their source offsets")
+    func fallbackPreservesClusters() {
+        let provider = FontProvider(size: 14, rasterScale: 2)
+        #expect(provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName) != nil)
+        let text = "A👩🏽‍💻C\u{10FFFF}Z"
+        let runs = provider.resolveRuns(text: text)
+        #expect(runs.map(\.text).joined() == text)
+        var offset = 0
+        for run in runs {
+            #expect(run.utf8Offset == offset)
+            offset += run.text.utf8.count
+        }
+        #expect(offset == text.utf8.count)
+    }
+
     // MARK: - TextLayout
 
     @Test("Single-line layout for short text")

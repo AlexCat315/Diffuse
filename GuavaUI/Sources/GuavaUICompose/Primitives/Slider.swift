@@ -30,7 +30,7 @@ public struct Slider: View {
                 onEditingChanged: ((Bool) -> Void)? = nil) {
         self.value = value
         self.range = range
-        self.step = step
+        self.step = step.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         self.isEnabled = isEnabled
         self.onEditingChanged = onEditingChanged
     }
@@ -92,6 +92,22 @@ struct SliderHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.isFocusable = isEnabled
+        node.accessibility = AccessibilitySemantics(.slider) {
+            $0.state.isEnabled = isEnabled; $0.value = String(clampedValue(value.wrappedValue))
+        }
+        node.accessibilityActions = AccessibilityActions()
+        if isEnabled {
+            node.accessibilityActions.setValue = { if let number = Double($0), number.isFinite { value.wrappedValue = snap(clampedValue(number)) } }
+            let increment = step ?? (range.upperBound - range.lowerBound) / 100
+            node.accessibilityActions.increment = { value.wrappedValue = snap(clampedValue(value.wrappedValue + increment)) }
+            node.accessibilityActions.decrement = { value.wrappedValue = snap(clampedValue(value.wrappedValue - increment)) }
+        }
+        if !isEnabled {
+            if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
+            if FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
+            if node.attachments[Self.pressedKey] as? Bool == true { onEditingChanged?(false) }
+        }
         if !isEnabled {
             node.attachments[SliderHost.pressedKey] = false
             node.attachments[SliderHost.hoveredKey] = false
@@ -134,6 +150,7 @@ struct SliderHost: _PrimitiveView {
             }
         }
         registry.setPointer(node) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
                 PointerCaptureHolder.current?.acquire(node)
@@ -144,7 +161,7 @@ struct SliderHost: _PrimitiveView {
                 node.markRenderDirty(reason: .styleSet(field: "sliderValue"))
                 return .handled
             case .up:
-                PointerCaptureHolder.current?.release()
+                if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
                 if setSliderInteraction(node, key: SliderHost.pressedKey, value: false) {
                     onEditingChanged?(false)
                 }
@@ -160,11 +177,32 @@ struct SliderHost: _PrimitiveView {
             node.markRenderDirty(reason: .styleSet(field: "sliderValue"))
             return .handled
         }
+        registry.setKey(node) { event, phase in
+            guard phase == .target else { return .ignored }
+            let increment = step.flatMap { $0 > 0 && $0.isFinite ? $0 : nil }
+                ?? (range.upperBound - range.lowerBound) / 100
+            let next: Double
+            switch event.scancode {
+            case Scancode.arrowLeft, Scancode.arrowDown: next = value.wrappedValue - increment
+            case Scancode.arrowRight, Scancode.arrowUp: next = value.wrappedValue + increment
+            case Scancode.home: next = range.lowerBound
+            case Scancode.end: next = range.upperBound
+            default: return .ignored
+            }
+            value.wrappedValue = snapshot.snap(next)
+            node.markRenderDirty(reason: .styleSet(field: "sliderValue"))
+            return .handled
+        }
     }
 
     func _makeLayoutNode() -> LayoutNode? {
         let l = LayoutNode()
         l.height = 24
+        // A width-only frame restores Yoga's auto height. Keep the control's
+        // natural size through measurement, including in center-aligned rows.
+        l.setMeasureFunc { width, widthMode, _, _ in
+            CGSize(width: CGFloat(widthMode == .undefined ? 160 : min(160, width)), height: 24)
+        }
         return l
     }
 

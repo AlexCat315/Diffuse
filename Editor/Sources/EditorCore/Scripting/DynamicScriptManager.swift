@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUICompose
 import ScriptRuntime
 
 /// Manages dynamically compiled Swift scripts in a project.
@@ -186,30 +187,26 @@ public final class DynamicScriptManager: @unchecked Sendable {
     }
 
     public func startLanguageService(
-        onDiagnostics: @escaping ScriptLanguageSupport.DiagnosticsHandler
+        sources: [ScriptLanguageSource],
+        onDiagnostics: @escaping ScriptLanguageSupport.DiagnosticsHandler,
+        onStateChange: ScriptLanguageSupport.StateHandler? = nil
     ) async throws {
         guard let languageSupport else {
             throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
         }
-        let sources = try scanScriptFiles().map { file in
-            ScriptLanguageSource(file: file, text: try readSource(at: file.url))
-        }
-        try await languageSupport.start(sources: sources, onDiagnostics: onDiagnostics)
+        try await languageSupport.start(sources: sources, onDiagnostics: onDiagnostics, onStateChange: onStateChange)
     }
 
-    public func updateLanguageSource(scriptID: String, text: String) async throws {
+    public func updateLanguageSource(scriptID: String, text: TextBuffer, revision: UInt64) async throws {
         guard let languageSupport else {
             throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
         }
-        try await languageSupport.update(scriptID: scriptID, text: text)
+        try await languageSupport.update(scriptID: scriptID, text: text, revision: revision)
     }
 
-    public func refreshLanguageWorkspace() async throws {
+    public func refreshLanguageWorkspace(sources: [ScriptLanguageSource]) async throws {
         guard let languageSupport else {
             throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
-        }
-        let sources = try scanScriptFiles().map { file in
-            ScriptLanguageSource(file: file, text: try readSource(at: file.url))
         }
         try await languageSupport.restart(sources: sources)
     }
@@ -217,13 +214,6 @@ public final class DynamicScriptManager: @unchecked Sendable {
     public func stopLanguageService() async {
         await languageSupport?.stop()
     }
-
-    /// True when a SourceKit-LSP session can answer semantic queries. The UI
-    /// uses this to hide hover affordances rather than reporting failures for
-    /// every mouse pause on machines without a Swift toolchain.
-    public var isLanguageServiceAvailable: Bool { languageSupport != nil }
-
-    public var languageServiceUnavailableReason: String? { languageSupportUnavailableMessage }
 
     // MARK: - Native-code trust boundary
 

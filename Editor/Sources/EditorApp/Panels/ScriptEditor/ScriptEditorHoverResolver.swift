@@ -1,5 +1,6 @@
 import EditorCore
 import Foundation
+import GuavaUICompose
 
 /// Monotonic request counter shared between the panel and any in-flight hover
 /// task.
@@ -32,7 +33,7 @@ enum ScriptEditorHoverResolver {
 
     /// The position worth asking about, or `nil` when the pointer rests on
     /// punctuation, whitespace, or outside any token.
-    static func queryPosition(in source: String, characterIndex: Int) -> ScriptLanguagePosition? {
+    static func queryPosition(in source: TextBuffer, characterIndex: Int) -> ScriptLanguagePosition? {
         guard ScriptSourceCoordinates.identifierRange(in: source, containing: characterIndex) != nil else {
             return nil
         }
@@ -45,7 +46,7 @@ enum ScriptEditorHoverResolver {
     ///   superseded this one and the caller should leave its state untouched.
     @MainActor
     static func resolve(scriptID: String,
-                        source: String,
+                        source: TextBuffer,
                         characterIndex: Int,
                         anchor: ScriptEditorHoverAnchor,
                         sequence: ScriptEditorHoverSequence,

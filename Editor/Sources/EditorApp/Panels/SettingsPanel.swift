@@ -154,17 +154,17 @@ struct SettingsPanel: View {
 
             if aiDraft.provider != .none {
                 let credentialSource = app.aiCredentialSource(for: aiDraft.provider)
-                TextField(L("Model"), text: aiModelBinding, clearable: true,
-                          onSubmit: applyAIProviderSettings)
-                TextField(
-                    credentialSource != nil
+                TextField(L("Model"), text: aiModelBinding) { input in
+                    input.behavior.clearable = true
+                    input.events.onSubmit = applyAIProviderSettings
+                }
+                TextField(credentialSource != nil
                         ? L("API key (leave blank to use the available credential)")
-                        : L("API key"),
-                    text: aiKeyBinding,
-                    secure: true,
-                    clearable: true,
-                    onSubmit: applyAIProviderSettings
-                )
+                        : L("API key"), text: aiKeyBinding) { input in
+                    input.behavior.secure = true
+                    input.behavior.clearable = true
+                    input.events.onSubmit = applyAIProviderSettings
+                }
                 Text(aiCredentialStatus(credentialSource))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
@@ -229,11 +229,11 @@ struct SettingsPanel: View {
         }
     }
 
-    private var aiModelBinding: Binding<String> {
+    private var aiModelBinding: Binding<TextBuffer> {
         Binding(get: { aiDraft.model }, set: { aiDraft.model = $0 })
     }
 
-    private var aiKeyBinding: Binding<String> {
+    private var aiKeyBinding: Binding<TextBuffer> {
         Binding(get: { aiDraft.apiKey }, set: { aiDraft.apiKey = $0 })
     }
 
@@ -255,7 +255,7 @@ struct SettingsPanel: View {
     }
 
     private func applyAIProviderSettings() {
-        let model = aiDraft.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = aiDraft.model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard aiDraft.provider == .none || !model.isEmpty else {
             aiStatusMessage = L("Enter a model name.")
             aiStatusIsError = true
@@ -268,7 +268,7 @@ struct SettingsPanel: View {
         )
         if app.applyAISettings(
             settings,
-            apiKey: aiDraft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            apiKey: aiDraft.apiKey.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         ) {
             aiDraft.clearCredential()
             aiStatusMessage = settings.provider == .none
@@ -391,15 +391,15 @@ struct SettingsPanel: View {
 
 struct EditorAISettingsDraft: Equatable {
     private(set) var provider: EditorAIProvider
-    var model: String
-    var apiKey: String
+    var model: TextBuffer
+    var apiKey: TextBuffer
     var autoApprove: Bool
 
     init(settings: EditorAISettings) {
         provider = settings.provider
         // A model has no meaning while disabled; start blank so selecting a
         // provider reliably adopts that provider's default model.
-        model = settings.provider == .none ? "" : settings.model
+        model = TextBuffer(settings.provider == .none ? "" : settings.model)
         apiKey = ""
         autoApprove = settings.autoApprove
     }
@@ -407,8 +407,8 @@ struct EditorAISettingsDraft: Equatable {
     mutating func select(_ nextProvider: EditorAIProvider) {
         guard provider != nextProvider else { return }
         let previousDefaultModel = provider.defaultModel
-        if model.isEmpty || model == previousDefaultModel {
-            model = nextProvider.defaultModel
+        if model.isEmpty || model.stringValue == previousDefaultModel {
+            model = TextBuffer(nextProvider.defaultModel)
         }
         // Never carry an uncommitted secret across providers: otherwise a key
         // typed for one service could silently be stored under another.

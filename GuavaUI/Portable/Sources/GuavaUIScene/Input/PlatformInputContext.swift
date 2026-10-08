@@ -49,7 +49,7 @@ public typealias InputContext = PlatformInputContext
 /// Runtime services bound to one platform window.
 ///
 /// This is the per-window scope (规则 3): every registry the UI consults —
-/// interactions, focus, pointer capture, the invalidation log, tooltip draws,
+/// interactions, focus, pointer capture, the invalidation log,
 /// and (via `scopedAmbients`) the Compose-layer portal store — is owned here
 /// and made current only for the duration of `withCurrent`. One window's state
 /// can never pollute another's.
@@ -61,9 +61,6 @@ public final class PlatformInputContext {
     /// `withCurrent { ... }` so every `Node.markDirty` / `markRenderDirty`
     /// performed under that scope is attributed to this window.
     public let invalidationLog: InvalidationLog
-    /// Per-window tooltip/overlay draw store.
-    public let tooltips: TooltipStore
-
     /// Higher-layer ambients (e.g. the Compose portal store) swapped in lockstep
     /// with this context. Attach with `addScopedAmbient`.
     private var scopedAmbients: [ScopedAmbient] = []
@@ -71,13 +68,11 @@ public final class PlatformInputContext {
     public init(interactions: InteractionRegistry = InteractionRegistry(),
                 focusChain: FocusChain = FocusChain(),
                 pointerCapture: PointerCapture = PointerCapture(),
-                invalidationLog: InvalidationLog = InvalidationLog(),
-                tooltips: TooltipStore = TooltipStore()) {
+                invalidationLog: InvalidationLog = InvalidationLog()) {
         self.interactions = interactions
         self.focusChain = focusChain
         self.pointerCapture = pointerCapture
         self.invalidationLog = invalidationLog
-        self.tooltips = tooltips
     }
 
     /// Register a higher-layer ambient to be scoped with this context. Idempotent
@@ -94,13 +89,11 @@ public final class PlatformInputContext {
         let previousFocus = FocusChainHolder.current
         let previousCapture = PointerCaptureHolder.current
         let previousLog = InvalidationLogHolder.current
-        let previousTooltips = TooltipStoreHolder.current
 
         InteractionRegistryHolder.current = interactions
         FocusChainHolder.current = focusChain
         PointerCaptureHolder.current = pointerCapture
         InvalidationLogHolder.current = invalidationLog
-        TooltipStoreHolder.current = tooltips
 
         let restores = scopedAmbients.map { $0.activate() }
         defer {
@@ -109,7 +102,6 @@ public final class PlatformInputContext {
             FocusChainHolder.current = previousFocus
             PointerCaptureHolder.current = previousCapture
             InvalidationLogHolder.current = previousLog
-            TooltipStoreHolder.current = previousTooltips
         }
 
         return try body()

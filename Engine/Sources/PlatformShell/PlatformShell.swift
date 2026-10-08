@@ -121,9 +121,16 @@ public struct FileDialogFilter: Sendable, Equatable {
     public var pattern: String { extensions.joined(separator: ";") }
 }
 
+/// Native window identity for platform services such as accessibility.
+public enum NativeWindowReference: @unchecked Sendable {
+    case appKit(UnsafeMutableRawPointer)
+    case win32(UnsafeMutableRawPointer)
+}
+
 @MainActor
 public protocol WindowHandle: AnyObject {
     var id: WindowID { get }
+    var nativeWindowReference: NativeWindowReference? { get }
     var renderSurface: NativeRenderSurface? { get }
     var drawableSize: (width: UInt32, height: UInt32) { get }
     var logicalSize: (width: UInt32, height: UInt32) { get }
@@ -134,6 +141,7 @@ public protocol WindowHandle: AnyObject {
 }
 
 public extension WindowHandle {
+    var nativeWindowReference: NativeWindowReference? { nil }
     var contentScaleFactor: Float {
         let logicalWidth = max(logicalSize.width, 1)
         let raw = Float(drawableSize.width) / Float(logicalWidth)
@@ -336,6 +344,9 @@ public final class AppKitShell: Shell {
             self.shell = shell
         }
 
+        var nativeWindowReference: NativeWindowReference? {
+            shell?.window.map { .appKit(Unmanaged.passUnretained($0).toOpaque()) }
+        }
         var renderSurface: NativeRenderSurface? { shell?.renderSurface }
         var drawableSize: (width: UInt32, height: UInt32) { shell?.drawableSize ?? (1, 1) }
         var logicalSize: (width: UInt32, height: UInt32) { shell?.logicalSize ?? (1, 1) }

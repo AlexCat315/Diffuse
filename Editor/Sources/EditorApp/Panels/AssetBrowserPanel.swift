@@ -14,7 +14,7 @@ import AssetPipeline
 struct AssetBrowserPanel: View {
     let app: EditorApplication
 
-    @State private var searchText: String = ""
+    @State private var searchText: TextBuffer = ""
     @AppStorage("assetBrowser.viewMode") private var viewMode: AssetViewMode = .grid
     @AppStorage("assetBrowser.sortMode") private var sortMode: AssetSortMode = .nameAscending
     @AppStorage("assetBrowser.categoryFilter") private var categoryFilter: AssetCategoryFilter = .all
@@ -27,7 +27,7 @@ struct AssetBrowserPanel: View {
     @State private var lastNavigationRevision: UInt64 = 0
     @State private var previewAssetID: String? = nil
     @State private var editingAsset: EditorAsset? = nil
-    @State private var assetEditPath = ""
+    @State private var assetEditPath: TextBuffer = ""
     @State private var referenceLocations: [EditorAssetReferenceLocation] = []
     @State private var showsReferences = false
     @State private var missingPath: String? = nil
@@ -52,7 +52,7 @@ struct AssetBrowserPanel: View {
     }
 
     private var trimmedQuery: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func searchMatches(_ assets: [EditorAsset]) -> [EditorAsset] {
@@ -313,7 +313,7 @@ struct AssetBrowserPanel: View {
     }
 
     private func beginRelocation(_ asset: EditorAsset) {
-        editingAsset = asset; assetEditPath = asset.relativePath
+        editingAsset = asset; assetEditPath = TextBuffer(asset.relativePath)
     }
 
     private func repair(_ path: String) {
@@ -354,12 +354,14 @@ struct AssetBrowserPanel: View {
             if let asset = editingAsset {
                 Text(L("Rename or Move: project-relative destination")).font(.caption).foregroundColor(.onSurfaceVariant)
                 Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 6) {
-                    TextField(L("New project-relative path"), text: $assetEditPath,
-                        focusRequestID: "asset-path-" + asset.id, onSubmit: {
-                            if app.relocateAsset(asset, to: assetEditPath) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
-                        }).frame(minWidth: 160).flex()
+                    TextField(L("New project-relative path"), text: $assetEditPath) { input in
+                        input.navigation.focusRequestID = "asset-path-" + asset.id
+                        input.events.onSubmit = {
+                            if app.relocateAsset(asset, to: assetEditPath.stringValue) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
+                        }
+                    }.frame(minWidth: 160).flex()
                     Button(L("Apply")) {
-                        if app.relocateAsset(asset, to: assetEditPath) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
+                        if app.relocateAsset(asset, to: assetEditPath.stringValue) { editingAsset = nil; AssetThumbnailRasterizer.invalidate() }
                     }.buttonStyle(.primary)
                     Button(L("Cancel")) { editingAsset = nil }.buttonStyle(.ghost)
                 }
@@ -566,7 +568,7 @@ struct AssetFolderListing {
 // MARK: - Toolbar
 
 private struct AssetBrowserToolbar: View {
-    let searchText: Binding<String>
+    let searchText: Binding<TextBuffer>
     let totalCount: Int
     let visibleCount: Int
     let isFiltering: Bool
@@ -581,10 +583,10 @@ private struct AssetBrowserToolbar: View {
             Button(L("Reload")) { onReload() }
                 .buttonStyle(.secondary)
 
-            TextField(L("Search Assets"),
-                      text: searchText,
-                      size: .small,
-                      clearable: true)
+            TextField(L("Search Assets"), text: searchText) { input in
+                input.decoration.size = .small
+                input.behavior.clearable = true
+            }
                 .font(.caption)
                 .flex()
 

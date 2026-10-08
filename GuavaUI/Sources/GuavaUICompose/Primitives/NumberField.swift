@@ -68,43 +68,42 @@ public struct NumberField: View {
 private struct _StatefulNumberField: View {
     let field: NumberField
 
-    @State var draft: String = ""
+    @State var draft = TextBuffer.empty
     @State var isEditing: Bool = false
     @State var draftChanged: Bool = false
 
     var body: some View {
         let committed = field.mixedValueLabel == nil
             ? NumberField.format(normalized(field.value.wrappedValue), decimals: field.decimals) : ""
-        let input = TextField(
-            field.mixedValueLabel ?? "",
-            text: Binding(
-                get: { isEditing ? draft : committed },
+        let committedBuffer = TextBuffer(committed)
+        let input = TextField(field.mixedValueLabel ?? "", text: Binding(
+                get: { isEditing ? draft : committedBuffer },
                 set: { draft = $0; draftChanged = true }
-            ),
-            size: field.size,
-            disabled: !field.isEnabled,
-            onSubmit: {
+            )) { input in
+            input.decoration.size = field.size
+            input.behavior.disabled = !field.isEnabled
+            input.events.onSubmit = {
                 commitDraft()
-            },
-            onKeyDown: { event in
+            }
+            input.events.onKeyDown = { event in
                 guard event.scancode == Scancode.arrowUp || event.scancode == Scancode.arrowDown else { return false }
                 let multiplier: Float = !event.modifiers.isDisjoint(with: .shift) ? 10
                     : (!event.modifiers.isDisjoint(with: .alt) ? 0.1 : 1)
                 adjust(by: event.scancode == Scancode.arrowUp ? multiplier : -multiplier)
                 return true
-            },
-            onFocus: {
+            }
+            input.events.onFocus = {
                 if !isEditing {
-                    draft = committed
+                    draft = committedBuffer
                     draftChanged = false
                     isEditing = true
                 }
-            },
-            onBlur: {
+            }
+            input.events.onBlur = {
                 commitDraft()
                 isEditing = false
             }
-        )
+        }
 
         guard field.showsStepper else {
             return AnyView(input)
@@ -137,7 +136,7 @@ private struct _StatefulNumberField: View {
     private func commitDraft() {
         guard draftChanged else { return }
         draftChanged = false
-        if let parsed = NumberField.parse(draft) {
+        if let parsed = NumberField.parse(draft.stringValue) {
             let next = normalized(parsed)
             if field.mixedValueLabel != nil || field.value.wrappedValue != next {
                 field.value.wrappedValue = next
@@ -147,7 +146,7 @@ private struct _StatefulNumberField: View {
         if committed != field.value.wrappedValue {
             field.value.wrappedValue = committed
         }
-        draft = NumberField.format(committed, decimals: field.decimals)
+        draft = TextBuffer(NumberField.format(committed, decimals: field.decimals))
     }
 
     private func increment() {
@@ -159,12 +158,12 @@ private struct _StatefulNumberField: View {
     }
 
     private func adjust(by multiplier: Float) {
-        let current = isEditing ? NumberField.parse(draft) ?? field.value.wrappedValue : field.value.wrappedValue
+        let current = isEditing ? NumberField.parse(draft.stringValue) ?? field.value.wrappedValue : field.value.wrappedValue
         let next = normalized(current + resolvedStep * multiplier)
         if field.value.wrappedValue != next {
             field.value.wrappedValue = next
         }
-        draft = NumberField.format(next, decimals: field.decimals)
+        draft = TextBuffer(NumberField.format(next, decimals: field.decimals))
         draftChanged = false
     }
 

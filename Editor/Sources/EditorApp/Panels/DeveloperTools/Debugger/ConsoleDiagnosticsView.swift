@@ -7,7 +7,7 @@ import SceneRuntime
 
 struct ConsoleDiagnosticsView: View {
     let store: EditorStore
-    @State private var searchText = ""
+    @State private var searchText: TextBuffer = ""
     @State private var enabledSeverities = Set(EditorConsoleSeverity.allCases)
     @State private var selectedEntryID: UInt64?
 
@@ -15,7 +15,7 @@ struct ConsoleDiagnosticsView: View {
         let entries = store.consoleEntries
         let visibleEntries = developerDebuggerConsoleEntries(entries: entries,
                                                              severities: enabledSeverities,
-                                                             query: searchText)
+                                                             query: searchText.stringValue)
         let counts = Dictionary(grouping: entries, by: \.severity).mapValues(\.count)
         Column(alignment: .leading, spacing: 6) {
             Row(alignment: .center, spacing: 8) {
@@ -38,7 +38,10 @@ struct ConsoleDiagnosticsView: View {
             }
             .padding(horizontal: 12, vertical: 8)
 
-            TextField(L("Filter console messages"), text: $searchText, size: .small, clearable: true)
+            TextField(L("Filter console messages"), text: $searchText) { input in
+                input.decoration.size = .small
+                input.behavior.clearable = true
+            }
                 .padding(horizontal: 8, vertical: 3)
 
             Row(alignment: .center, spacing: 4) {
@@ -63,9 +66,9 @@ struct ConsoleDiagnosticsView: View {
                     .flex(1, shrink: 1)
             } else if visibleEntries.isEmpty {
                 EditorPanelEmptyState(L("No matching console messages"),
-                                      detail: searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                      detail: searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                         ? L("Enable a severity filter to show messages.")
-                                        : "\(L("Search")): \(searchText.trimmingCharacters(in: .whitespacesAndNewlines))")
+                                        : "\(L("Search")): \(searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines))")
                     .flex(1, shrink: 1)
             } else {
                 ScrollView(.vertical, scrollbarGutter: .stable) {

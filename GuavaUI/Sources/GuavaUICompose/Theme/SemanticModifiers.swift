@@ -45,30 +45,23 @@ public struct SemanticFontModifier: ViewModifier {
 
     public func apply(node: Node) {
         let token = ref.resolve(node.theme)
-        guard node.attachments[StyleAttachmentKey.font] as? Font != token.font
-            || node.attachments[StyleAttachmentKey.lineHeight] as? Float != token.lineHeight else { return }
+        let changed = node.attachments[StyleAttachmentKey.font] as? Font != token.font
+            || node.attachments[StyleAttachmentKey.lineHeight] as? Float != token.lineHeight
+            || node.attachments[StyleAttachmentKey.letterSpacing] as? Float != token.letterSpacing
         node.attachments[StyleAttachmentKey.font] = token.font
         node.attachments[StyleAttachmentKey.lineHeight] = token.lineHeight
-        node.invalidateTextStyle()
+        node.attachments[StyleAttachmentKey.letterSpacing] = token.letterSpacing
+        // Measurement must use the same resolved theme as painting. The layout
+        // node is already attached when a modifier is applied by the materializer.
+        if let layout = node.layoutNode {
+            layout.attachments[StyleAttachmentKey.font] = token.font
+            layout.attachments[StyleAttachmentKey.lineHeight] = token.lineHeight
+            layout.attachments[StyleAttachmentKey.letterSpacing] = token.letterSpacing
+            if changed { layout.invalidateTextMeasurements() }
+        }
+        if changed { node.invalidateTextStyle() }
     }
 
-    public func apply(layout: LayoutNode) {
-        // Layout-side cache cannot reach `node.theme`. Falls back to the
-        // Theme.defaultDark token so undecorated layout passes still get a
-        // sensible measure; the node-side apply above will refine it once
-        // the node is parented under any `.theme(_:)` provider.
-        let token = ref.resolve(.defaultDark)
-        let previousFont = layout.attachments[StyleAttachmentKey.font] as? Font
-        let previousLineHeight = layout.attachments[StyleAttachmentKey.lineHeight] as? Float
-        guard previousFont != token.font || previousLineHeight != token.lineHeight else {
-            return
-        }
-        layout.attachments[StyleAttachmentKey.font] = token.font
-        layout.attachments[StyleAttachmentKey.lineHeight] = token.lineHeight
-        // Mark measured descendants too: style hosts often sit above the
-        // Text / TextField surface, and Yoga only permits dirtying measured nodes.
-        layout.invalidateTextMeasurements()
-    }
 }
 
 public extension View {

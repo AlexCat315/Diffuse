@@ -47,23 +47,6 @@ struct NodeLifecycleCleanupTests {
         #expect(registry.count == 0)
     }
 
-    @Test("Tooltip draw is removed when the node leaves the tree")
-    func tooltipReleasedOnRemoval() {
-        let store = TooltipStore()
-        let saved = TooltipStoreHolder.current
-        TooltipStoreHolder.current = store
-        defer { TooltipStoreHolder.current = saved }
-
-        let parent = Node()
-        let child = Node()
-        parent.addChild(child)
-        store.register(child) { _ in }
-        #expect(store.contains(child))
-
-        parent.removeChild(child)
-        #expect(!store.contains(child))
-    }
-
     @Test("Pointer capture is released when the captured node is torn down")
     func captureReleasedOnRemoval() {
         let capture = PointerCapture()

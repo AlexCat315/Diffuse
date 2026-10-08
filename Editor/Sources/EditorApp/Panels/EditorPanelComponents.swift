@@ -28,14 +28,14 @@ struct EditorPanelToolbar<Content: View>: View {
 /// focus away from the query.
 struct EditorPanelSearchBar: View {
     let placeholder: String
-    let text: Binding<String>
+    let text: Binding<TextBuffer>
     let summary: String?
     let onSubmit: (() -> Void)?
     let onCancel: (() -> Void)?
     let actions: AnyView
 
     init<ActionContent: View>(_ placeholder: String,
-                              text: Binding<String>,
+                              text: Binding<TextBuffer>,
                               summary: String? = nil,
                               onSubmit: (() -> Void)? = nil,
                               onCancel: (() -> Void)? = nil,
@@ -49,7 +49,7 @@ struct EditorPanelSearchBar: View {
     }
 
     init(_ placeholder: String,
-         text: Binding<String>,
+         text: Binding<TextBuffer>,
          summary: String? = nil,
          onSubmit: (() -> Void)? = nil,
          onCancel: (() -> Void)? = nil) {
@@ -64,12 +64,12 @@ struct EditorPanelSearchBar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 6) {
-            TextField(placeholder,
-                      text: text,
-                      size: .regular,
-                      clearable: true,
-                      onSubmit: onSubmit,
-                      onCancel: onCancel)
+            TextField(placeholder, text: text) { input in
+                input.decoration.size = .regular
+                input.behavior.clearable = true
+                input.events.onSubmit = onSubmit
+                input.events.onCancel = onCancel
+            }
                 .font(.caption)
                 .flex()
 

@@ -1,6 +1,7 @@
 import EditorCore
 import EngineKernel
 import Testing
+import GuavaUICompose
 @testable import EditorApp
 
 @Suite("Editor panel workflows")
@@ -193,21 +194,21 @@ struct EditorPanelWorkflowTests {
 
         draft.apiKey = "secret-for-openai"
         draft.select(.openai)
-        #expect(draft.model == EditorAIProvider.openai.defaultModel)
+        #expect(draft.model.stringValue == EditorAIProvider.openai.defaultModel)
         #expect(draft.apiKey.isEmpty)
 
         draft.apiKey = "openai-secret"
         draft.select(.openai)
-        #expect(draft.apiKey == "openai-secret")
+        #expect(draft.apiKey.stringValue == "openai-secret")
 
         draft.model = "custom-compatible-model"
         draft.select(.deepseek)
-        #expect(draft.model == "custom-compatible-model")
+        #expect(draft.model.stringValue == "custom-compatible-model")
         #expect(draft.apiKey.isEmpty)
 
-        draft.model = EditorAIProvider.deepseek.defaultModel
+        draft.model = TextBuffer(EditorAIProvider.deepseek.defaultModel)
         draft.select(.anthropic)
-        #expect(draft.model == EditorAIProvider.anthropic.defaultModel)
+        #expect(draft.model.stringValue == EditorAIProvider.anthropic.defaultModel)
     }
 
     @Test("asset browser ordering keeps filters and sort modes deterministic")

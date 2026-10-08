@@ -18,7 +18,8 @@ public struct ContextMenu<Content: View>: View {
     @State private var point: CGPoint?
     public init(width: Float = 220, entries: @escaping () -> [MenuEntry],
                 onOpen: @escaping () -> Void = {}, @ViewBuilder content: () -> Content) {
-        self.content = content(); self.entries = entries; self.width = width; self.onOpen = onOpen
+        self.content = content(); self.entries = entries
+        self.width = width.isFinite ? max(80, width) : 220; self.onOpen = onOpen
     }
     public var body: some View {
         _ContextMenuHost(content: content, entries: point == nil ? [] : entries(), width: width, point: point,
@@ -59,31 +60,10 @@ private struct _ContextMenuHost<Content: View>: _PrimitiveView {
 
 struct _PopupMenu: View {
     let entries: [MenuEntry]; let width: Float; let onDismiss: () -> Void
-    @State private var highlighted: Int = 0
-    private var enabledIndices: [Int] {
-        entries.indices.filter { if case .item(let item) = entries[$0] { return item.isEnabled }; return false }
-    }
     var body: some View {
         FocusScope(restoresCommands: true) {
-            _MenuKeyHost(onKey: handleKey) {
-                Menu(entries, width: width, maxVisibleRows: 12, highlightedIndex: highlighted,
-                     onItemActivated: onDismiss)
-            }
-        }
-    }
-    private func handleKey(_ key: KeyEvent) -> Bool {
-        if key.scancode == Scancode.escape || key.scancode == Scancode.tab { onDismiss(); return true }
-        let enabled = enabledIndices
-        guard !enabled.isEmpty else { return false }
-        let current = enabled.firstIndex(of: highlighted) ?? 0
-        switch key.scancode {
-        case Scancode.arrowDown: highlighted = enabled[(current + 1) % enabled.count]; return true
-        case Scancode.arrowUp: highlighted = enabled[(current - 1 + enabled.count) % enabled.count]; return true
-        case Scancode.return, Scancode.keypadEnter:
-            let index = enabled.contains(highlighted) ? highlighted : enabled[0]
-            if case .item(let item) = entries[index] { item.action(); onDismiss() }
-            return true
-        default: return false
+            Menu(entries, width: width, maxVisibleRows: 12,
+                 onItemActivated: onDismiss, onDismiss: onDismiss)
         }
     }
 }
@@ -94,7 +74,10 @@ struct _MenuKeyHost<Content: View>: _PrimitiveView {
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
-        InteractionRegistryHolder.current?.setKey(node, route: .overlay) { event, _ in onKey(event) ? .handled : .ignored }
+        InteractionRegistryHolder.current?.setKey(node, route: .overlay) { event, phase in
+            guard phase != .capture else { return .ignored }
+            return onKey(event) ? .handled : .ignored
+        }
     }
     var _children: [any View] { [content] }
 }

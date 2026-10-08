@@ -9,6 +9,12 @@ public typealias TextureID = UInt32
 public extension TextureID {
     /// Sentinel value used by solid-color quads.
     static let none: TextureID = 0
+    /// The high bit is reserved for a font atlas's color plane. Application
+    /// image IDs and alpha atlas IDs must remain below this bit.
+    var colorGlyphAtlasID: TextureID {
+        precondition(self > 0 && self < 0x8000_0000)
+        return self | 0x8000_0000
+    }
 }
 
 /// One contiguous draw call, all sharing the same texture and scissor rect.
@@ -265,6 +271,19 @@ public final class DrawList {
     }
 
     /// Append a single textured quad from a font atlas glyph.
+    public func addAtlasGlyph(_ info: GlyphAtlasInfo, x: Float, y: Float, color: Color, textureID: TextureID) {
+        if info.format == .color {
+            addImageQuad(rect: UIRect(x: x, y: y, width: info.width, height: info.height),
+                textureID: textureID.colorGlyphAtlasID, tint: Color(r: 1, g: 1, b: 1, a: color.a),
+                uvMin: (info.uvMinX, info.uvMinY), uvMax: (info.uvMaxX, info.uvMaxY))
+        } else {
+            addGlyphQuad(x: x, y: y, width: info.width, height: info.height,
+                uvMinX: info.uvMinX, uvMinY: info.uvMinY, uvMaxX: info.uvMaxX, uvMaxY: info.uvMaxY,
+                color: color, textureID: textureID)
+        }
+    }
+
+    /// Append a single textured quad from an alpha font atlas glyph.
     public func addGlyphQuad(
         x: Float, y: Float, width: Float, height: Float,
         uvMinX: Float, uvMinY: Float, uvMaxX: Float, uvMaxY: Float,

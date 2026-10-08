@@ -74,10 +74,12 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         #expect(list.vertices.count == 4)
         let xs = list.vertices.map(\.posX)
         let ys = list.vertices.map(\.posY)
-        #expect(xs.min() == -50)
-        #expect(xs.max() == 150)
+        #expect(xs.min() == 0)
+        #expect(xs.max() == 100)
         #expect(ys.min() == 0)
         #expect(ys.max() == 100)
+        #expect(list.vertices.map(\.u).min() == 10.25)
+        #expect(list.vertices.map(\.u).max() == 10.75)
         #endif
     } }
 

@@ -99,16 +99,19 @@ public struct TextEnvironment {
                              font: Font? = nil,
                              lineHeight: Float? = nil,
                              maxWidth: Float = .infinity,
-                             alignment: TextAlignment = .leading) -> TextLayoutResult {
+                             alignment: TextAlignment = .leading,
+                             letterSpacing: Float = 0) -> TextLayoutResult {
         let resolvedFont = resolvedFont(font)
         let resolvedLineHeight = resolvedLineHeight(font: resolvedFont, override: lineHeight)
+        let spacing = letterSpacing.isFinite ? letterSpacing : 0
         let normalizedMaxWidth: Float = (maxWidth.isFinite && maxWidth > 0) ? maxWidth : .infinity
         let key = SharedTextLayoutCache.Key(
             text: text,
             font: resolvedFont,
             lineHeight: resolvedLineHeight,
             alignment: alignment,
-            maxWidth: normalizedMaxWidth
+            maxWidth: normalizedMaxWidth,
+            letterSpacing: spacing
         )
         return layoutCache.value(for: key) {
             let glyphs = shape(text: text, font: resolvedFont)
@@ -118,7 +121,8 @@ public struct TextEnvironment {
                 atlas: atlas,
                 maxWidth: normalizedMaxWidth,
                 lineHeight: resolvedLineHeight,
-                alignment: alignment
+                alignment: alignment,
+                letterSpacing: spacing
             )
         }
     }
@@ -169,6 +173,7 @@ final class SharedTextLayoutCache {
         let lineHeight: Float
         let alignment: TextAlignment
         let maxWidth: Float
+        let letterSpacing: Float
     }
 
     private let lock = NSLock()
@@ -240,6 +245,7 @@ public struct Text: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
+        node.accessibility = AccessibilitySemantics(.staticText) { $0.label = string }
         // Bind the draw callback. Captures `string` etc by value.
         let snapshot = self
         node.updateDraw(identity: PaintIdentity(string: string,
@@ -260,7 +266,8 @@ public struct Text: _PrimitiveView {
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
                 maxWidth: snapshot.resolvedMaxWidth(max(0, Float(node.frame.width) - (padding?.left ?? 0) - (padding?.right ?? 0))),
-                alignment: snapshot.alignment
+                alignment: snapshot.alignment,
+                letterSpacing: node.textStyleValue(StyleAttachmentKey.letterSpacing) ?? 0
             )
             // Composite button labels and other containers supply inherited
             // foregrounds; standalone text falls back to the active theme.
@@ -317,7 +324,8 @@ public struct Text: _PrimitiveView {
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
                 maxWidth: snapshot.resolvedMaxWidth(constraint),
-                alignment: snapshot.alignment
+                alignment: snapshot.alignment,
+                letterSpacing: layout?.textStyleValue(StyleAttachmentKey.letterSpacing) ?? 0
             )
             return CGSize(width: CGFloat(result.totalWidth),
                           height: CGFloat(result.totalHeight))
@@ -335,7 +343,8 @@ public struct Text: _PrimitiveView {
         font: Font,
         lineHeight: Float,
         maxWidth: Float,
-        alignment: TextAlignment
+        alignment: TextAlignment,
+        letterSpacing: Float = 0
     ) -> TextLayoutResult {
         let normalizedMaxWidth: Float = (maxWidth.isFinite && maxWidth > 0) ? maxWidth : .infinity
         let key = TextLayoutCacheKey(
@@ -344,7 +353,8 @@ public struct Text: _PrimitiveView {
             lineHeight: lineHeight,
             alignment: alignment,
             maxWidth: normalizedMaxWidth,
-            atlasID: ObjectIdentifier(env.atlas)
+            atlasID: ObjectIdentifier(env.atlas),
+            letterSpacing: letterSpacing
         )
         if let layout, let cached = layout.textMeasure, cached.key == key {
             return cached.result
@@ -354,7 +364,8 @@ public struct Text: _PrimitiveView {
             font: font,
             lineHeight: lineHeight,
             maxWidth: normalizedMaxWidth,
-            alignment: alignment
+            alignment: alignment,
+            letterSpacing: letterSpacing
         )
         if let layout {
             layout.textMeasure = TextLayoutCacheEntry(key: key, result: result)

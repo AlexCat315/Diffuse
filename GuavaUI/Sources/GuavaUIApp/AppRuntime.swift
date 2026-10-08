@@ -178,6 +178,11 @@ public final class AppRuntime {
             return
         }
 
+        if Self.forceContinuousFrameDrive {
+            host.setFrameRateMode(.displayRefresh)
+            return
+        }
+
         switch config.frameDrivePolicy {
         case .continuous:
             host.setFrameRateMode(.displayRefresh)
@@ -624,6 +629,7 @@ public final class AppRuntime {
         let layoutStart = TimingTrace.now()
         _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
         syncMainWindowChromeHitTest()
+        if let session = host.mainSession { NativeAccessibility.synchronize(host: host, session: session, root: root) }
         let layoutEnd = TimingTrace.now()
 
         drawList.reset()
@@ -633,13 +639,6 @@ public final class AppRuntime {
         } else {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
-        // Explicitly this window's tooltip store. This frame hook runs OUTSIDE
-        // `session.withCurrent`, so the ambient `TooltipStoreHolder.current`
-        // would resolve to the shared default here — while Button registers
-        // tooltips during recompose (inside withCurrent) into the per-window
-        // store. Reading the store explicitly keeps register/draw on the same
-        // instance.
-        host.tooltips.drawAll(into: drawList)
         drawDevToolsOverlay(into: drawList)
         let drawEnd = TimingTrace.now()
         tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")
@@ -838,24 +837,8 @@ public final class AppRuntime {
     }
 
     private func uploadAtlasIfNeeded(force: Bool = false) throws {
-        guard let atlas else { return }
-        guard force || atlas.isDirty, let payload = atlas.dirtyUploadPayload() else {
-            if force { atlas.markClean() }
-            return
-        }
-        try payload.pixels.withUnsafeBufferPointer { buf in
-            try renderer.registerAlphaTexture(
-                id: atlasTextureID,
-                pixels: buf.baseAddress!,
-                width: UInt32(payload.region.width),
-                height: UInt32(payload.region.height),
-                originX: UInt32(payload.region.x),
-                originY: UInt32(payload.region.y),
-                textureWidth: UInt32(atlas.atlasWidth),
-                textureHeight: UInt32(atlas.atlasHeight)
-            )
-        }
-        atlas.markClean()
+        guard let atlas, force || atlas.isDirty else { return }
+        try renderer.uploadFontAtlas(atlas, textureID: atlasTextureID)
     }
 
     private func ensureMSAATarget(widthPx: UInt32, heightPx: UInt32) throws {
@@ -959,6 +942,7 @@ public final class AppRuntime {
             session.onFrame = { [weak self, weak window] _ in
                 guard let self, let window else { return false }
                 return window.handleFrame(
+                    host: self.host,
                     configureTextEnvironment: { scale in
                         self.configureTextEnvironment(scale: scale)
                     },
@@ -1229,7 +1213,7 @@ private final class AuxiliaryAppWindow {
         lastWindowChromeHitTest = next
     }
 
-    func handleFrame(configureTextEnvironment: (Float) -> Void,
+    func handleFrame(host: SDL3PlatformHost, configureTextEnvironment: (Float) -> Void,
                      uploadAtlasIfNeeded: (Bool) throws -> Void) -> Bool {
         guard configuredSurface,
               let surface,
@@ -1241,6 +1225,7 @@ private final class AuxiliaryAppWindow {
             configureTextEnvironment(session.contentScaleFactor)
             _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
             syncWindowChromeHitTest()
+            NativeAccessibility.synchronize(host: host, session: session, root: root)
             drawList.reset()
             if useLegacyRenderer {
                 nodeRenderer.render(root: root, into: drawList)
@@ -1250,7 +1235,6 @@ private final class AuxiliaryAppWindow {
         }
         // Explicitly this window's store (we are outside withCurrent here —
         // see the main-window handleFrame for the full invariant).
-        session.inputContext.tooltips.drawAll(into: drawList)
 
         do {
             try uploadAtlasIfNeeded(false)

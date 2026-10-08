@@ -38,100 +38,33 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     public let roots: [Element]
     public let id: KeyPath<Element, ID>
     public let children: (Element) -> [Element]
-    public let selection: Binding<ID?>
-    public let multiSelection: Binding<Set<ID>>?
-    public let expanded: Binding<Set<ID>>?
-    public let selectionKey: Binding<TreeNodeKey<ID>?>
-    public let multiSelectionKeys: Binding<Set<TreeNodeKey<ID>>>?
-    public let expandedKeys: Binding<Set<TreeNodeKey<ID>>>?
-    public let rowHeight: Float
-    public let rowSpacing: Float
-    public let indentation: Float
-    public let disclosureWidth: Float
-    public let showsIndentGuides: Bool
-    public let disclosureContent: DisclosureContent?
-    public let trailingSlotWidth: Float
-    public let trailingContent: TrailingContent?
-    public let searchQuery: String
-    public let searchText: ((Element) -> String)?
-    public let searchFilterPolicy: TreeSearchFilterPolicy
-    public let onKeyCommand: ((KeyEvent, Set<ID>) -> Bool)?
-    public let onSelect: ((Element) -> Void)?
-    public let canDrop: CanDrop?
-    public let onDrop: OnDrop?
+    public var options = TreeOptions<Element, ID>()
     public let rowContent: (Element, Bool, Bool, Int) -> RowContent
-
-    @State private var localExpanded: Set<ID> = []
-    @State private var hoveredToken: TreeNodeKey<ID>? = nil
-    @State private var activeModifiers: KeyModifiers = []
-    @State private var rangeAnchorID: ID? = nil
-    @State private var rangeAnchorKey: TreeNodeKey<ID>? = nil
-    @State private var dragState: _TreeDragState<TreeNodeKey<ID>>? = nil
-    @State private var dragCursorPos: CGPoint = .zero
-    @State private var dragRegistry = _TreeRowDragRegistry<AnyHashable>()
+    @State private var session = TreeSession<ID>()
 
     public init(_ roots: Roots,
                 id: KeyPath<Element, ID>,
                 children: @escaping (Element) -> [Element],
-                selection: Binding<ID?> = .constant(nil),
-                multiSelection: Binding<Set<ID>>? = nil,
-                expanded: Binding<Set<ID>>? = nil,
-                selectionKey: Binding<TreeNodeKey<ID>?> = .constant(nil),
-                multiSelectionKeys: Binding<Set<TreeNodeKey<ID>>>? = nil,
-                expandedKeys: Binding<Set<TreeNodeKey<ID>>>? = nil,
-                rowHeight: Float = 30,
-                rowSpacing: Float = 0,
-                indentation: Float = 14,
-                disclosureWidth: Float = 18,
-                showsIndentGuides: Bool = true,
-                disclosureContent: DisclosureContent? = nil,
-                trailingSlotWidth: Float = 64,
-                trailingContent: TrailingContent? = nil,
-                searchQuery: String = "",
-                searchText: ((Element) -> String)? = nil,
-                searchFilterPolicy: TreeSearchFilterPolicy = .filterAndAutoExpand,
-                onKeyCommand: ((KeyEvent, Set<ID>) -> Bool)? = nil,
-                onSelect: ((Element) -> Void)? = nil,
-                canDrop: CanDrop? = nil,
-                onDrop: OnDrop? = nil,
+                configure: (inout TreeOptions<Element, ID>) -> Void = { _ in },
                 @ViewBuilder rowContent: @escaping (Element, Bool, Bool, Int) -> RowContent) {
         self.roots = Array(roots)
         self.id = id
         self.children = children
-        self.selection = selection
-        self.multiSelection = multiSelection
-        self.expanded = expanded
-        self.selectionKey = selectionKey
-        self.multiSelectionKeys = multiSelectionKeys
-        self.expandedKeys = expandedKeys
-        self.rowHeight = rowHeight
-        self.rowSpacing = rowSpacing
-        self.indentation = indentation
-        self.disclosureWidth = disclosureWidth
-        self.showsIndentGuides = showsIndentGuides
-        self.disclosureContent = disclosureContent
-        self.trailingSlotWidth = trailingSlotWidth
-        self.trailingContent = trailingContent
-        self.searchQuery = searchQuery
-        self.searchText = searchText
-        self.searchFilterPolicy = searchFilterPolicy
-        self.onKeyCommand = onKeyCommand
-        self.onSelect = onSelect
-        self.canDrop = canDrop
-        self.onDrop = onDrop
         self.rowContent = rowContent
+        configure(&options)
+        options.layout.validate()
     }
 
     public var body: some View {
         let treeState = derivedState()
         let entries = visibleEntries(using: treeState)
         let entriesByToken = Dictionary(uniqueKeysWithValues: entries.map { ($0.nodeKey, $0) })
-        let activeDrag = dragState
+        let activeDrag = session.dragState
         _TreeKeyboardHost(onKey: { event in
-            activeModifiers = event.modifiers
-            if onKeyCommand?(event, treeState.selectedIDs) == true { return true }
-            let current = entries.first { $0.nodeKey == selectionKey.wrappedValue }
-                ?? entries.first { $0.id == selection.wrappedValue }
+            session.activeModifiers = event.modifiers
+            if options.events.onKeyCommand?(event, treeState.selectedIDs) == true { return true }
+            let current = entries.first { $0.nodeKey == options.selection.primaryKey.wrappedValue }
+                ?? entries.first { $0.id == options.selection.primary.wrappedValue }
                 ?? entries.first { treeState.selectedIDs.contains($0.id) }
                 ?? entries.first
             guard let current else { return false }
@@ -144,88 +77,88 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             }
             return true
         }) {
-        _TreeGhostContainer(dragCursorPos: activeDrag != nil ? dragCursorPos : nil,
-                            rowHeight: rowHeight) {
-        VirtualStack(entries, id: \.nodeKey, rowHeight: rowHeight, spacing: rowSpacing,
-                     scrollToIndex: entries.firstIndex { $0.nodeKey == selectionKey.wrappedValue || $0.id == selection.wrappedValue }) { entry in
+        _TreeGhostContainer(dragCursorPos: activeDrag != nil ? session.dragCursorPos : nil,
+                            rowHeight: options.layout.rowHeight) {
+        VirtualStack(entries, id: \.nodeKey, rowHeight: options.layout.rowHeight, spacing: options.layout.rowSpacing,
+                     scrollToIndex: entries.firstIndex { $0.nodeKey == options.selection.primaryKey.wrappedValue || $0.id == options.selection.primary.wrappedValue }) { entry in
             _TreeGuideOverlayHost(rows: [_TreeGuideRowSnapshot(depth: entry.depth,
                                   ancestorHasNextSiblings: entry.ancestorHasNextSiblings,
                                   hasNextSibling: entry.hasNextSibling, hasChildren: entry.hasChildren,
                                   isExpanded: entry.isExpanded)],
-                                  rowHeight: rowHeight, rowSpacing: 0, indentation: indentation,
-                                  showsIndentGuides: showsIndentGuides) {
+                                  rowHeight: options.layout.rowHeight, rowSpacing: 0, indentation: options.layout.indentation,
+                                  showsIndentGuides: options.layout.showsIndentGuides) {
                         let token = entry.nodeKey
                         let isSel = treeState.usesNodeKeySelection
                             ? treeState.selectedNodeKeys.contains(token)
                             : treeState.selectedIDs.contains(entry.id)
                         _TreeRowComposite(
-                            depth: entry.depth,
-                            hasChildren: entry.hasChildren,
-                            isExpanded: entry.isExpanded,
-                            isSearchHit: entry.isSearchHit,
-                            isSelected: isSel,
-                            isHovered: hoveredToken == token,
-                            propagateHoverState: trailingContent != nil,
-                            dropPosition: dragState?.targetID == token ? dragState?.position : nil,
-                            dragID: AnyHashable(token),
-                            rowHeight: rowHeight,
-                            indentation: indentation,
-                            disclosureWidth: disclosureWidth,
-                            disclosureContent: disclosureContent,
-                            trailingSlotWidth: trailingContent == nil ? nil : trailingSlotWidth,
-                            trailingContent: trailingContent.map {
+                            appearance: TreeRowAppearance(hasChildren: entry.hasChildren,
+                                isExpanded: entry.isExpanded,
+                                isSearchHit: entry.isSearchHit,
+                                isSelected: isSel,
+                                isHovered: session.hoveredToken == token,
+                                propagateHoverState: options.slots.trailing != nil,
+                                dropPosition: session.dragState?.targetID == token ? session.dragState?.position : nil),
+                            geometry: TreeRowGeometry(depth: entry.depth,
+                                rowHeight: options.layout.rowHeight,
+                                indentation: options.layout.indentation,
+                                disclosureWidth: options.layout.disclosureWidth),
+                            slots: TreeRowSlots(disclosureContent: options.slots.disclosure,
+                                trailingSlotWidth: options.slots.trailing == nil ? nil : options.layout.trailingSlotWidth,
+                                trailingContent: options.slots.trailing.map {
                                 $0(entry.element,
                                    isSel,
                                    entry.isExpanded,
                                    entry.isSearchHit,
-                                   hoveredToken == token,
+                                   session.hoveredToken == token,
                                    entry.depth)
-                            },
-                            onToggle: { toggle(entry.nodeKey, legacyID: entry.id) },
-                            onSelect: { modifiers in
+                            }),
+                            actions: TreeRowActions(onToggle: { toggle(entry.nodeKey, legacyID: entry.id) },
+                                onSelect: { modifiers in
                                 select(entry, modifiers: modifiers, entries: entries)
                             },
-                            onMoveSelection: { delta in
+                                onMoveSelection: { delta in
                                 moveSelection(from: entry.nodeKey, delta: delta, entries: entries)
                             },
-                            onCollapseOrParent: {
+                                onCollapseOrParent: {
                                 collapseOrSelectParent(entry, entries: entries)
                             },
-                            onExpandOrChild: {
+                                onExpandOrChild: {
                                 expandOrSelectFirstChild(entry, entries: entries)
                             },
-                            onKeyEvent: { event in
-                                activeModifiers = event.modifiers
-                                if onKeyCommand?(event, treeState.selectedIDs) == true {
+                                onKeyEvent: { event in
+                                session.activeModifiers = event.modifiers
+                                if options.events.onKeyCommand?(event, treeState.selectedIDs) == true {
                                     return true
                                 }
                                 return false
                             },
-                            onDragStart: {
+                                onHoverChange: { hovered in
+                                if hovered {
+                                    if session.hoveredToken != token {
+                                        session.hoveredToken = token
+                                    }
+                                } else if session.hoveredToken == token {
+                                    session.hoveredToken = nil
+                                }
+                            }),
+                            drag: TreeRowDrag(dragID: AnyHashable(token),
+                                dragRegistry: session.dragRegistry,
+                                isDragEnabled: options.drag.onDrop != nil,
+                                isDragSource: activeDrag?.sourceID == token,
+                                onDragStart: {
                                 beginDrag(from: token)
                             },
-                            onDragMove: { x, y in
+                                onDragMove: { x, y in
                                 updateDrag(from: token,
                                            pointerX: x,
                                            pointerY: y,
                                            entriesByToken: entriesByToken)
                             },
-                            onDragEnd: {
+                                onDragEnd: {
                                 commitDrag(entriesByToken: entriesByToken)
                             },
-                            onDragCancel: cancelDrag,
-                            dragRegistry: dragRegistry,
-                            isDragEnabled: onDrop != nil,
-                            isDragSource: activeDrag?.sourceID == token,
-                            onHoverChange: { hovered in
-                                if hovered {
-                                    if hoveredToken != token {
-                                        hoveredToken = token
-                                    }
-                                } else if hoveredToken == token {
-                                    hoveredToken = nil
-                                }
-                            },
+                                onDragCancel: cancelDrag),
                             content: AnyView(rowContent(entry.element, isSel, entry.isExpanded, entry.depth))
                         )
                         .id(token)
@@ -236,35 +169,35 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     private var expandedNodeKeys: Set<TreeNodeKey<ID>> {
-        expandedKeys?.wrappedValue ?? []
+        options.selection.expandedKeys?.wrappedValue ?? []
     }
 
     private var expandedIDs: Set<ID> {
-        if expandedKeys != nil {
+        if options.selection.expandedKeys != nil {
             return Set(expandedNodeKeys.map(\.id))
         }
-        return expanded?.wrappedValue ?? localExpanded
+        return options.selection.expanded?.wrappedValue ?? session.localExpanded
     }
 
     private var selectedIDs: Set<ID> {
-        if let multiSelectionKeys {
+        if let multiSelectionKeys = options.selection.multipleKeys {
             return Set(multiSelectionKeys.wrappedValue.map(\.id))
         }
-        if let multiSelection {
+        if let multiSelection = options.selection.multiple {
             return multiSelection.wrappedValue
         }
-        if let selected = selectionKey.wrappedValue {
+        if let selected = options.selection.primaryKey.wrappedValue {
             return [selected.id]
         }
-        guard let single = selection.wrappedValue else { return [] }
+        guard let single = options.selection.primary.wrappedValue else { return [] }
         return [single]
     }
 
     private var selectedNodeKeys: Set<TreeNodeKey<ID>> {
-        if let multiSelectionKeys {
+        if let multiSelectionKeys = options.selection.multipleKeys {
             return multiSelectionKeys.wrappedValue
         }
-        if let selected = selectionKey.wrappedValue {
+        if let selected = options.selection.primaryKey.wrappedValue {
             return [selected]
         }
         return []
@@ -275,26 +208,26 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     private func derivedState() -> DerivedState {
-        let expandedNodeKeys = expandedKeys?.wrappedValue ?? []
+        let expandedNodeKeys = options.selection.expandedKeys?.wrappedValue ?? []
         let expandedIDs: Set<ID>
-        if expandedKeys != nil {
+        if options.selection.expandedKeys != nil {
             expandedIDs = Set(expandedNodeKeys.map(\.id))
         } else {
-            expandedIDs = expanded?.wrappedValue ?? localExpanded
+            expandedIDs = options.selection.expanded?.wrappedValue ?? session.localExpanded
         }
 
         let selectedNodeKeys: Set<TreeNodeKey<ID>>
         let selectedIDs: Set<ID>
-        if let multiSelectionKeys {
+        if let multiSelectionKeys = options.selection.multipleKeys {
             selectedNodeKeys = multiSelectionKeys.wrappedValue
             selectedIDs = Set(selectedNodeKeys.map(\.id))
-        } else if let multiSelection {
+        } else if let multiSelection = options.selection.multiple {
             selectedNodeKeys = []
             selectedIDs = multiSelection.wrappedValue
-        } else if let selected = selectionKey.wrappedValue {
+        } else if let selected = options.selection.primaryKey.wrappedValue {
             selectedNodeKeys = [selected]
             selectedIDs = [selected.id]
-        } else if let single = selection.wrappedValue {
+        } else if let single = options.selection.primary.wrappedValue {
             selectedNodeKeys = []
             selectedIDs = [single]
         } else {
@@ -304,13 +237,13 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
 
         let query = normalizedSearchQuery
         let filterActive = !query.isEmpty
-            && searchText != nil
-            && searchFilterPolicy == .filterAndAutoExpand
+            && options.search.text != nil
+            && options.search.policy == .filterAndAutoExpand
         return DerivedState(expandedIDs: expandedIDs,
                             expandedNodeKeys: expandedNodeKeys,
                             selectedIDs: selectedIDs,
                             selectedNodeKeys: selectedNodeKeys,
-                            usesNodeKeySelection: multiSelectionKeys != nil || selectionKey.wrappedValue != nil,
+                            usesNodeKeySelection: options.selection.multipleKeys != nil || options.selection.primaryKey.wrappedValue != nil,
                             searchMetadata: buildSearchMetadata(query: query),
                             filterActive: filterActive,
                             autoExpand: filterActive)
@@ -414,11 +347,11 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         let targetID = entry.id
         let targetKey = entry.nodeKey
 
-        if let multiSelectionKeys {
+        if let multiSelectionKeys = options.selection.multipleKeys {
             var next = multiSelectionKeys.wrappedValue
             var nextPrimary: TreeNodeKey<ID>? = targetKey
             if modifiers.hasShift,
-               let anchor = rangeAnchorKey ?? selectionKey.wrappedValue {
+               let anchor = session.rangeAnchorKey ?? options.selection.primaryKey.wrappedValue {
                 let keys = keysBetween(anchor, targetKey, entries: entries)
                 next = keys.isEmpty ? [targetKey] : keys
                 nextPrimary = targetKey
@@ -429,32 +362,32 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                     next.insert(targetKey)
                 }
                 if next.isEmpty {
-                    rangeAnchorKey = nil
+                    session.rangeAnchorKey = nil
                     nextPrimary = nil
                 } else {
-                    rangeAnchorKey = targetKey
+                    session.rangeAnchorKey = targetKey
                     nextPrimary = next.contains(targetKey) ? targetKey : firstVisibleKey(in: next, entries: entries)
                 }
             } else {
                 next = [targetKey]
-                rangeAnchorKey = targetKey
+                session.rangeAnchorKey = targetKey
                 nextPrimary = targetKey
             }
             multiSelectionKeys.wrappedValue = next
-            selectionKey.wrappedValue = nextPrimary
-            selection.wrappedValue = nextPrimary?.id
-            if let multiSelection {
+            options.selection.primaryKey.wrappedValue = nextPrimary
+            options.selection.primary.wrappedValue = nextPrimary?.id
+            if let multiSelection = options.selection.multiple {
                 multiSelection.wrappedValue = Set(next.map(\.id))
             }
-            onSelect?(entry.element)
+            options.events.onSelect?(entry.element)
             return
         }
 
-        if let multiSelection {
+        if let multiSelection = options.selection.multiple {
             var next = multiSelection.wrappedValue
             var nextPrimary: ID? = targetID
             if modifiers.hasShift,
-               let anchor = rangeAnchorID ?? selection.wrappedValue {
+               let anchor = session.rangeAnchorID ?? options.selection.primary.wrappedValue {
                 let ids = idsBetween(anchor, targetID, entries: entries)
                 if !ids.isEmpty {
                     next = ids
@@ -469,10 +402,10 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                     next.insert(targetID)
                 }
                 if next.isEmpty {
-                    rangeAnchorID = nil
+                    session.rangeAnchorID = nil
                     nextPrimary = nil
                 } else {
-                    rangeAnchorID = targetID
+                    session.rangeAnchorID = targetID
                     if next.contains(targetID) {
                         nextPrimary = targetID
                     } else {
@@ -481,20 +414,20 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                 }
             } else {
                 next = [targetID]
-                rangeAnchorID = targetID
+                session.rangeAnchorID = targetID
                 nextPrimary = targetID
             }
             multiSelection.wrappedValue = next
-            selection.wrappedValue = nextPrimary
-            selectionKey.wrappedValue = nextPrimary.flatMap { primary in
+            options.selection.primary.wrappedValue = nextPrimary
+            options.selection.primaryKey.wrappedValue = nextPrimary.flatMap { primary in
                 entries.first(where: { $0.id == primary })?.nodeKey
             }
         } else {
-            selection.wrappedValue = targetID
-            selectionKey.wrappedValue = targetKey
-            rangeAnchorID = targetID
+            options.selection.primary.wrappedValue = targetID
+            options.selection.primaryKey.wrappedValue = targetKey
+            session.rangeAnchorID = targetID
         }
-        onSelect?(entry.element)
+        options.events.onSelect?(entry.element)
     }
 
     private func keysBetween(_ a: TreeNodeKey<ID>, _ b: TreeNodeKey<ID>) -> Set<TreeNodeKey<ID>> {
@@ -560,11 +493,11 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         }
         var next = expandedIDs
         if next.contains(nodeID) { next.remove(nodeID) } else { next.insert(nodeID) }
-        if let expanded { expanded.wrappedValue = next } else { localExpanded = next }
+        if let expanded = options.selection.expanded { expanded.wrappedValue = next } else { session.localExpanded = next }
     }
 
     private func toggle(_ nodeKey: TreeNodeKey<ID>, legacyID: ID) {
-        if let expandedKeys {
+        if let expandedKeys = options.selection.expandedKeys {
             var next = expandedKeys.wrappedValue
             if next.contains(nodeKey) {
                 next.remove(nodeKey)
@@ -572,7 +505,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                 next.insert(nodeKey)
             }
             expandedKeys.wrappedValue = next
-            if let expanded {
+            if let expanded = options.selection.expanded {
                 expanded.wrappedValue = Set(next.map(\.id))
             }
             return
@@ -584,22 +517,22 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         } else {
             next.insert(legacyID)
         }
-        if let expanded {
+        if let expanded = options.selection.expanded {
             expanded.wrappedValue = next
         } else {
-            localExpanded = next
+            session.localExpanded = next
         }
     }
 
     private var normalizedSearchQuery: String {
-        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        options.search.query.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
     }
 
     private var isFilterActive: Bool {
         !normalizedSearchQuery.isEmpty
-            && searchText != nil
-            && searchFilterPolicy == .filterAndAutoExpand
+            && options.search.text != nil
+            && options.search.policy == .filterAndAutoExpand
     }
 
     private var isAutoExpandActive: Bool {
@@ -627,7 +560,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     private func buildSearchMetadata(query: String) -> SearchMetadata? {
-        guard !query.isEmpty, let searchText else {
+        guard !query.isEmpty, let searchText = options.search.text else {
             return nil
         }
         var selfMatches: [ID: Bool] = [:]
@@ -665,7 +598,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         guard let index = entries.firstIndex(where: { $0.nodeKey == currentKey }) else { return }
         let target = max(0, min(entries.count - 1, index + delta))
         guard target != index else { return }
-        select(entries[target], modifiers: activeModifiers, entries: entries)
+        select(entries[target], modifiers: session.activeModifiers, entries: entries)
     }
 
     private func collapseOrSelectParent(_ entry: VisibleEntry) {
@@ -684,7 +617,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         }) else {
             return
         }
-        select(parent, modifiers: activeModifiers, entries: entries)
+        select(parent, modifiers: session.activeModifiers, entries: entries)
     }
 
     private func expandOrSelectFirstChild(_ entry: VisibleEntry) {
@@ -700,12 +633,12 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         guard let firstChild = entries.first(where: { $0.parentKey == entry.nodeKey }) else {
             return
         }
-        select(firstChild, modifiers: activeModifiers, entries: entries)
+        select(firstChild, modifiers: session.activeModifiers, entries: entries)
     }
 
     private func beginDrag(from sourceToken: TreeNodeKey<ID>) {
-        guard onDrop != nil else { return }
-        dragState = _TreeDragState(sourceID: sourceToken,
+        guard options.drag.onDrop != nil else { return }
+        session.dragState = _TreeDragState(sourceID: sourceToken,
                                    targetID: nil,
                                    position: nil)
     }
@@ -714,40 +647,40 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             pointerX: Float,
                             pointerY: Float,
                             entriesByToken: [TreeNodeKey<ID>: VisibleEntry]) {
-        guard onDrop != nil else { return }
-        dragCursorPos = CGPoint(x: CGFloat(pointerX), y: CGFloat(pointerY))
-        guard let hit = dragRegistry.hit(atX: pointerX, y: pointerY),
+        guard options.drag.onDrop != nil else { return }
+        session.dragCursorPos = CGPoint(x: CGFloat(pointerX), y: CGFloat(pointerY))
+        guard let hit = session.dragRegistry.hit(atX: pointerX, y: pointerY),
               let targetToken = hit.id.base as? TreeNodeKey<ID>,
               let sourceEntry = entriesByToken[sourceToken],
               let targetEntry = entriesByToken[targetToken],
               sourceToken != targetToken else {
-            dragState = _TreeDragState(sourceID: sourceToken, targetID: nil, position: nil)
+            session.dragState = _TreeDragState(sourceID: sourceToken, targetID: nil, position: nil)
             return
         }
         let position = dropPosition(for: pointerY, frame: hit.frame)
-        if canDrop?(sourceEntry.element, targetEntry.element, position) == false {
-            dragState = _TreeDragState(sourceID: sourceToken, targetID: nil, position: nil)
+        if options.drag.canDrop?(sourceEntry.element, targetEntry.element, position) == false {
+            session.dragState = _TreeDragState(sourceID: sourceToken, targetID: nil, position: nil)
             return
         }
-        dragState = _TreeDragState(sourceID: sourceToken,
+        session.dragState = _TreeDragState(sourceID: sourceToken,
                                    targetID: targetToken,
                                    position: position)
     }
 
     private func commitDrag(entriesByToken: [TreeNodeKey<ID>: VisibleEntry]) {
-        defer { dragState = nil }
-        guard let state = dragState,
+        defer { session.dragState = nil }
+        guard let state = session.dragState,
               let targetToken = state.targetID,
               let position = state.position,
               let sourceEntry = entriesByToken[state.sourceID],
               let targetEntry = entriesByToken[targetToken] else {
             return
         }
-        onDrop?(sourceEntry.element, targetEntry.element, position)
+        options.drag.onDrop?(sourceEntry.element, targetEntry.element, position)
     }
 
     private func cancelDrag() {
-        dragState = nil
+        session.dragState = nil
     }
 
     private func dropPosition(for pointerY: Float,
@@ -782,104 +715,30 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
 // MARK: - Convenience inits
 
 public extension Tree {
-    init(_ roots: Roots,
-         id: KeyPath<Element, ID>,
-         children: KeyPath<Element, [Element]>,
-         selection: Binding<ID?> = .constant(nil),
-            multiSelection: Binding<Set<ID>>? = nil,
-         expanded: Binding<Set<ID>>? = nil,
-            selectionKey: Binding<TreeNodeKey<ID>?> = .constant(nil),
-            multiSelectionKeys: Binding<Set<TreeNodeKey<ID>>>? = nil,
-            expandedKeys: Binding<Set<TreeNodeKey<ID>>>? = nil,
-         rowHeight: Float = 30,
-         rowSpacing: Float = 0,
-         indentation: Float = 14,
-         disclosureWidth: Float = 18,
-         showsIndentGuides: Bool = true,
-         disclosureContent: DisclosureContent? = nil,
-         trailingSlotWidth: Float = 64,
-         trailingContent: TrailingContent? = nil,
-         searchQuery: String = "",
-         searchText: ((Element) -> String)? = nil,
-         searchFilterPolicy: TreeSearchFilterPolicy = .filterAndAutoExpand,
-         onKeyCommand: ((KeyEvent, Set<ID>) -> Bool)? = nil,
-         onSelect: ((Element) -> Void)? = nil,
-         canDrop: CanDrop? = nil,
-         onDrop: OnDrop? = nil,
+    init(_ roots: Roots, id: KeyPath<Element, ID>, children: KeyPath<Element, [Element]>,
+         configure: (inout TreeOptions<Element, ID>) -> Void = { _ in },
          @ViewBuilder rowContent: @escaping (Element, Bool, Bool, Int) -> RowContent) {
-        self.init(roots, id: id,
-                  children: { $0[keyPath: children] },
-                  selection: selection,
-                  multiSelection: multiSelection,
-                  expanded: expanded,
-                  selectionKey: selectionKey,
-                  multiSelectionKeys: multiSelectionKeys,
-                  expandedKeys: expandedKeys,
-                  rowHeight: rowHeight, rowSpacing: rowSpacing,
-                  indentation: indentation, disclosureWidth: disclosureWidth,
-                  showsIndentGuides: showsIndentGuides,
-                  disclosureContent: disclosureContent,
-                  trailingSlotWidth: trailingSlotWidth,
-                  trailingContent: trailingContent,
-                  searchQuery: searchQuery,
-                  searchText: searchText,
-                  searchFilterPolicy: searchFilterPolicy,
-                  onKeyCommand: onKeyCommand,
-                  onSelect: onSelect,
-                  canDrop: canDrop,
-                  onDrop: onDrop,
-                  rowContent: rowContent)
+        self.init(roots, id: id, children: { $0[keyPath: children] }, configure: configure, rowContent: rowContent)
     }
 }
 
 public extension Tree where Element: Identifiable, ID == Element.ID {
-    init(_ roots: Roots,
-         children: KeyPath<Element, [Element]>,
-         selection: Binding<ID?> = .constant(nil),
-            multiSelection: Binding<Set<ID>>? = nil,
-         expanded: Binding<Set<ID>>? = nil,
-            selectionKey: Binding<TreeNodeKey<ID>?> = .constant(nil),
-            multiSelectionKeys: Binding<Set<TreeNodeKey<ID>>>? = nil,
-            expandedKeys: Binding<Set<TreeNodeKey<ID>>>? = nil,
-         rowHeight: Float = 30,
-         rowSpacing: Float = 0,
-         indentation: Float = 14,
-         disclosureWidth: Float = 18,
-         showsIndentGuides: Bool = true,
-         disclosureContent: DisclosureContent? = nil,
-         trailingSlotWidth: Float = 64,
-         trailingContent: TrailingContent? = nil,
-         searchQuery: String = "",
-         searchText: ((Element) -> String)? = nil,
-         searchFilterPolicy: TreeSearchFilterPolicy = .filterAndAutoExpand,
-         onKeyCommand: ((KeyEvent, Set<ID>) -> Bool)? = nil,
-         onSelect: ((Element) -> Void)? = nil,
-         canDrop: CanDrop? = nil,
-         onDrop: OnDrop? = nil,
+    init(_ roots: Roots, children: KeyPath<Element, [Element]>,
+         configure: (inout TreeOptions<Element, ID>) -> Void = { _ in },
          @ViewBuilder rowContent: @escaping (Element, Bool, Bool, Int) -> RowContent) {
-        self.init(roots, id: \Element.id,
-                  children: children,
-                  selection: selection,
-                  multiSelection: multiSelection,
-                  expanded: expanded,
-                  selectionKey: selectionKey,
-                  multiSelectionKeys: multiSelectionKeys,
-                  expandedKeys: expandedKeys,
-                  rowHeight: rowHeight, rowSpacing: rowSpacing,
-                  indentation: indentation, disclosureWidth: disclosureWidth,
-                  showsIndentGuides: showsIndentGuides,
-                  disclosureContent: disclosureContent,
-                  trailingSlotWidth: trailingSlotWidth,
-                  trailingContent: trailingContent,
-                  searchQuery: searchQuery,
-                  searchText: searchText,
-                  searchFilterPolicy: searchFilterPolicy,
-                  onKeyCommand: onKeyCommand,
-                  onSelect: onSelect,
-                  canDrop: canDrop,
-                  onDrop: onDrop,
-                  rowContent: rowContent)
+        self.init(roots, id: \Element.id, children: children, configure: configure, rowContent: rowContent)
     }
+}
+
+private struct TreeSession<ID: Hashable> {
+    var localExpanded: Set<ID> = []
+    var hoveredToken: TreeNodeKey<ID>?
+    var activeModifiers: KeyModifiers = []
+    var rangeAnchorID: ID?
+    var rangeAnchorKey: TreeNodeKey<ID>?
+    var dragState: _TreeDragState<TreeNodeKey<ID>>?
+    var dragCursorPos: CGPoint = .zero
+    var dragRegistry = _TreeRowDragRegistry<AnyHashable>()
 }
 
 private struct _TreeDragState<ID: Hashable> {
@@ -940,8 +799,7 @@ private final class _TreeRowDragRegistry<ID: Hashable>: @unchecked Sendable {
 /// own pointer node, keeping disclosure-vs-row hit testing trivial. The row
 /// body itself is hosted by `_TreeRowHost` which delegates to the active
 /// `TreeRowStyle`.
-private struct _TreeRowComposite: View {
-    let depth: Int
+private struct TreeRowAppearance {
     let hasChildren: Bool
     let isExpanded: Bool
     let isSearchHit: Bool
@@ -949,81 +807,75 @@ private struct _TreeRowComposite: View {
     let isHovered: Bool
     let propagateHoverState: Bool
     let dropPosition: TreeDropPosition?
-    let dragID: AnyHashable
+}
+
+private struct TreeRowGeometry {
+    let depth: Int
     let rowHeight: Float
     let indentation: Float
     let disclosureWidth: Float
+}
+
+private struct TreeRowSlots {
     let disclosureContent: Tree<[Int], Int, EmptyView>.DisclosureContent?
     let trailingSlotWidth: Float?
     let trailingContent: AnyView?
+}
+
+private struct TreeRowActions {
     let onToggle: () -> Void
     let onSelect: (KeyModifiers) -> Void
     let onMoveSelection: (Int) -> Void
     let onCollapseOrParent: () -> Void
     let onExpandOrChild: () -> Void
     let onKeyEvent: (KeyEvent) -> Bool
+    let onHoverChange: (Bool) -> Void
+}
+
+private struct TreeRowDrag {
+    let dragID: AnyHashable
+    let dragRegistry: _TreeRowDragRegistry<AnyHashable>
+    let isDragEnabled: Bool
+    let isDragSource: Bool
     let onDragStart: () -> Void
     let onDragMove: (Float, Float) -> Void
     let onDragEnd: () -> Void
     let onDragCancel: () -> Void
-    let dragRegistry: _TreeRowDragRegistry<AnyHashable>
-    let isDragEnabled: Bool
-    let isDragSource: Bool
-    let onHoverChange: (Bool) -> Void
+}
+
+private struct _TreeRowComposite: View {
+    let appearance: TreeRowAppearance
+    let geometry: TreeRowGeometry
+    let slots: TreeRowSlots
+    let actions: TreeRowActions
+    let drag: TreeRowDrag
     let content: AnyView
 
     var body: some View {
-        let indentWidth = max(0, Float(depth) * indentation)
-        let trailingWidth = trailingSlotWidth ?? 0
-        let trailing = trailingContent ?? AnyView(EmptyView())
+        let indentWidth = max(0, Float(geometry.depth) * geometry.indentation)
+        let trailingWidth = slots.trailingSlotWidth ?? 0
+        let trailing = slots.trailingContent ?? AnyView(EmptyView())
 
         Row(alignment: .center, spacing: 0) {
             Box { EmptyView() }
-                .frame(width: indentWidth, height: rowHeight)
+                .frame(width: indentWidth, height: geometry.rowHeight)
 
-            _TreeDisclosureSlotHost(hasChildren: hasChildren,
-                                    isExpanded: isExpanded,
-                                    width: disclosureWidth,
-                                    rowHeight: rowHeight,
-                                    disclosureContent: disclosureContent,
-                                    onToggle: onToggle)
+            _TreeDisclosureSlotHost(hasChildren: appearance.hasChildren,
+                                    isExpanded: appearance.isExpanded,
+                                    width: geometry.disclosureWidth,
+                                    rowHeight: geometry.rowHeight,
+                                    disclosureContent: slots.disclosureContent,
+                                    onToggle: actions.onToggle)
 
             // Row body — delegates visuals to the TreeRowStyle env.
-            _TreeRowHost(
-                dragID: dragID,
-                depth: depth,
-                indentation: indentation,
-                disclosureWidth: disclosureWidth,
-                hasChildren: hasChildren,
-                isExpanded: isExpanded,
-                isSearchHit: isSearchHit,
-                isSelected: isSelected,
-                isHovered: isHovered,
-                propagateHoverState: propagateHoverState,
-                dropPosition: dropPosition,
-                rowHeight: rowHeight,
-                onSelect: onSelect,
-                onMoveSelection: onMoveSelection,
-                onCollapseOrParent: onCollapseOrParent,
-                onExpandOrChild: onExpandOrChild,
-                onKeyEvent: onKeyEvent,
-                onDragStart: onDragStart,
-                onDragMove: onDragMove,
-                onDragEnd: onDragEnd,
-                onDragCancel: onDragCancel,
-                dragRegistry: dragRegistry,
-                isDragEnabled: isDragEnabled,
-                isDragSource: isDragSource,
-                onHoverChange: onHoverChange,
-                content: content
-            )
+            _TreeRowHost(appearance: appearance, geometry: geometry, actions: actions, drag: drag, content: content)
             .flex()
 
             _TreeTrailingSlotHost(width: trailingWidth,
-                                  rowHeight: rowHeight,
+                                  rowHeight: geometry.rowHeight,
                                   content: trailing)
         }
-        .frame(height: rowHeight)
+        .frame(height: geometry.rowHeight)
     }
 }
 
@@ -1217,31 +1069,10 @@ private struct _TreeTrailingSlotHost: View {
 }
 
 private struct _TreeRowHost: _PrimitiveView {
-    let dragID: AnyHashable
-    let depth: Int
-    let indentation: Float
-    let disclosureWidth: Float
-    let hasChildren: Bool
-    let isExpanded: Bool
-    let isSearchHit: Bool
-    let isSelected: Bool
-    let isHovered: Bool
-    let propagateHoverState: Bool
-    let dropPosition: TreeDropPosition?
-    let rowHeight: Float
-    let onSelect: (KeyModifiers) -> Void
-    let onMoveSelection: (Int) -> Void
-    let onCollapseOrParent: () -> Void
-    let onExpandOrChild: () -> Void
-    let onKeyEvent: (KeyEvent) -> Bool
-    let onDragStart: () -> Void
-    let onDragMove: (Float, Float) -> Void
-    let onDragEnd: () -> Void
-    let onDragCancel: () -> Void
-    let dragRegistry: _TreeRowDragRegistry<AnyHashable>
-    let isDragEnabled: Bool
-    let isDragSource: Bool
-    let onHoverChange: (Bool) -> Void
+    let appearance: TreeRowAppearance
+    let geometry: TreeRowGeometry
+    let actions: TreeRowActions
+    let drag: TreeRowDrag
     let content: AnyView
 
     func _makeNode() -> Node {
@@ -1252,21 +1083,27 @@ private struct _TreeRowHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.accessibility = AccessibilitySemantics(.treeItem) {
+            $0.state.isSelected = appearance.isSelected; $0.state.isExpanded = appearance.hasChildren ? appearance.isExpanded : nil
+            $0.combinesChildren = true
+        }
+        node.accessibilityActions.activate = { actions.onSelect([]) }
+
         guard let registry = InteractionRegistryHolder.current else { return }
-        let captured = onSelect
-        let hoverChange = onHoverChange
+        let captured = actions.onSelect
+        let hoverChange = actions.onHoverChange
         let style = node.compositionValue(of: TreeRowStyleEnvironment.key)
-        let shouldPropagateHover = propagateHoverState || style.requiresHoverRecompose
+        let shouldPropagateHover = appearance.propagateHoverState || style.requiresHoverRecompose
         let usesNodeHoverChrome = !style.requiresHoverRecompose
-        let dropPosition = dropPosition
-        let depth = depth
-        let indentation = indentation
-        let disclosureWidth = disclosureWidth
+        let dropPosition = appearance.dropPosition
+        let depth = geometry.depth
+        let indentation = geometry.indentation
+        let disclosureWidth = geometry.disclosureWidth
         node.cursor = .pointer
         let effectiveHover: Bool
         if shouldPropagateHover {
-            node.attachments[Self.hoveredKey] = isHovered
-            effectiveHover = isHovered
+            node.attachments[Self.hoveredKey] = appearance.isHovered
+            effectiveHover = appearance.isHovered
         } else {
             if node.attachments[Self.hoveredKey] == nil {
                 node.attachments[Self.hoveredKey] = false
@@ -1275,11 +1112,11 @@ private struct _TreeRowHost: _PrimitiveView {
         }
         applyHoverChrome(to: node, isHovered: usesNodeHoverChrome && effectiveHover)
         // Dim source row during drag for visual lift feedback.
-        node.animatableSet(\.opacity, to: isDragSource ? 0.38 : 1.0)
+        node.animatableSet(\.opacity, to: drag.isDragSource ? 0.38 : 1.0)
         // Extend hit zone leftward to cover the indent gutter + disclosure slot
         // so drops over indented areas still resolve a valid target row.
         let extraLeft = CGFloat(depth) * CGFloat(indentation) + CGFloat(disclosureWidth)
-        dragRegistry.register(node: node, id: dragID, extraLeft: extraLeft)
+        drag.dragRegistry.register(node: node, id: drag.dragID, extraLeft: extraLeft)
         // Only reassign overlayDraw when the effective overlay state changes.
         // Node reuse can keep the same dropPosition while depth/indent changes,
         // so geometry must be part of the cache key.
@@ -1334,7 +1171,7 @@ private struct _TreeRowHost: _PrimitiveView {
                 }
                 FocusChainHolder.current?.focus(keyboardTarget, visible: false)
                 node.attachments[Self.pressedKey] = true
-                if isDragEnabled {
+                if drag.isDragEnabled {
                     node.attachments[Self.dragStateKey] = _TreeRowPressState(downX: event.x,
                                                                             downY: event.y,
                                                                             didDrag: false)
@@ -1346,11 +1183,11 @@ private struct _TreeRowHost: _PrimitiveView {
                 node.attachments[Self.pressedKey] = false
                 let pressState = node.attachments[Self.dragStateKey] as? _TreeRowPressState
                 node.attachments[Self.dragStateKey] = nil
-                if isDragEnabled {
+                if drag.isDragEnabled {
                     PointerCaptureHolder.current?.release()
                 }
                 if pressState?.didDrag == true {
-                    onDragEnd()
+                    drag.onDragEnd()
                     return .handled
                 }
                 if was { captured(event.modifiers); return .handled }
@@ -1358,7 +1195,7 @@ private struct _TreeRowHost: _PrimitiveView {
             }
         }
         registry.setMotion(node) { event, _ in
-            guard isDragEnabled,
+            guard drag.isDragEnabled,
                   PointerCaptureHolder.current?.target === node else {
                 return .ignored
             }
@@ -1369,31 +1206,31 @@ private struct _TreeRowHost: _PrimitiveView {
             if !state.didDrag, max(abs(dx), abs(dy)) >= 4 {
                 state.didDrag = true
                 node.attachments[Self.pressedKey] = false
-                onDragStart()
+                drag.onDragStart()
             }
             if state.didDrag {
-                onDragMove(event.x, event.y)
+                drag.onDragMove(event.x, event.y)
             }
             node.attachments[Self.dragStateKey] = state
             return .handled
         }
         registry.setKey(node) { event, _ in
             if event.isRepeat { return .ignored }
-            if onKeyEvent(event) {
+            if actions.onKeyEvent(event) {
                 return .handled
             }
             switch event.scancode {
             case Scancode.arrowUp:
-                onMoveSelection(-1)
+                actions.onMoveSelection(-1)
                 return .handled
             case Scancode.arrowDown:
-                onMoveSelection(1)
+                actions.onMoveSelection(1)
                 return .handled
             case Scancode.arrowLeft:
-                onCollapseOrParent()
+                actions.onCollapseOrParent()
                 return .handled
             case Scancode.arrowRight:
-                onExpandOrChild()
+                actions.onExpandOrChild()
                 return .handled
             case Scancode.return, Scancode.space, Scancode.keypadEnter:
                 captured(event.modifiers)
@@ -1408,7 +1245,7 @@ private struct _TreeRowHost: _PrimitiveView {
         let l = LayoutNode()
         l.flexDirection = .column
         l.alignItems = .stretch
-        l.height = rowHeight
+        l.height = geometry.rowHeight
         return l
     }
 
@@ -1420,14 +1257,14 @@ private struct _TreeRowHost: _PrimitiveView {
         let style = node.compositionValue(of: TreeRowStyleEnvironment.key)
         let cfg = TreeRowStyleConfiguration(
             content: content,
-            depth: depth,
-            indentation: indentation,
-            disclosureWidth: disclosureWidth,
-            hasChildren: hasChildren,
-            isExpanded: isExpanded,
-            isSearchHit: isSearchHit,
-            isSelected: isSelected,
-            isHovered: isHovered,
+            depth: geometry.depth,
+            indentation: geometry.indentation,
+            disclosureWidth: geometry.disclosureWidth,
+            hasChildren: appearance.hasChildren,
+            isExpanded: appearance.isExpanded,
+            isSearchHit: appearance.isSearchHit,
+            isSelected: appearance.isSelected,
+            isHovered: appearance.isHovered,
             isEnabled: true,
             theme: node.theme
         )
@@ -1441,7 +1278,7 @@ private struct _TreeRowHost: _PrimitiveView {
 
     private func applyHoverChrome(to node: Node, isHovered: Bool) {
         node.cornerRadius = node.theme.radius.sm
-        node.backgroundColor = isHovered && !isSelected && !isSearchHit
+        node.backgroundColor = isHovered && !appearance.isSelected && !appearance.isSearchHit
             ? node.theme.colors.stateLayerHover
             : nil
     }
@@ -1517,7 +1354,8 @@ private struct _TreeGhostContainer<Content: View>: _PrimitiveView {
         let l = LayoutNode()
         l.flexDirection = .column
         l.alignItems = .stretch
-        l.flex = 1
+        l.flexGrow = 1
+        l.flexShrink = 1
         return l
     }
 

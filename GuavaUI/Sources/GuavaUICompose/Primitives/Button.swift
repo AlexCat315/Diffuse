@@ -21,6 +21,7 @@ import EngineKernel
 public struct Button<Label: View>: View {
     public let role: ButtonRole
     public let isEnabled: Bool
+    public let isLoading: Bool
     /// On/off state surfaced to the active style via
     /// `ButtonStyleConfiguration.isSelected` (used by `.toggle` and friends).
     public let isSelected: Bool
@@ -30,12 +31,14 @@ public struct Button<Label: View>: View {
 
     public init(role: ButtonRole = .normal,
                 isEnabled: Bool = true,
+                isLoading: Bool = false,
                 isSelected: Bool = false,
                 tooltip: String? = nil,
                 action: @escaping () -> Void,
                 @ViewBuilder label: () -> Label) {
         self.role = role
         self.isEnabled = isEnabled
+        self.isLoading = isLoading
         self.isSelected = isSelected
         self.tooltip = tooltip
         self.action = action
@@ -44,11 +47,15 @@ public struct Button<Label: View>: View {
 
     public var body: some View {
         _StatefulButton(role: role,
-                        isEnabled: isEnabled,
+                        isEnabled: isEnabled && !isLoading,
                         isSelected: isSelected,
                         tooltip: tooltip,
                         action: action,
-                        label: AnyView(label))
+                        label: loadingLabel)
+    }
+    private var loadingLabel: AnyView {
+        guard isLoading else { return AnyView(label) }
+        return AnyView(Row(alignment: .center, spacing: 6) { Spinner(size: 14); label })
     }
 }
 
@@ -105,10 +112,11 @@ public extension Button where Label == Text {
     init(_ title: String,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+                isLoading: Bool = false,
          isSelected: Bool = false,
          tooltip: String? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+        self.init(role: role, isEnabled: isEnabled, isLoading: isLoading, isSelected: isSelected,
                   tooltip: tooltip, action: action) {
             Text(title)
         }
@@ -118,10 +126,11 @@ public extension Button where Label == Text {
     init(_ key: LocalizedStringKey,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+                isLoading: Bool = false,
          isSelected: Bool = false,
          tooltip: String? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+        self.init(role: role, isEnabled: isEnabled, isLoading: isLoading, isSelected: isSelected,
                   tooltip: tooltip, action: action) {
             Text(key)
         }
@@ -135,11 +144,12 @@ public extension Button where Label == ButtonIcon {
          size: Float = 16,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+                isLoading: Bool = false,
          isSelected: Bool = false,
          tooltip: String? = nil,
          tint: Color? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+        self.init(role: role, isEnabled: isEnabled, isLoading: isLoading, isSelected: isSelected,
                   tooltip: tooltip, action: action) {
             ButtonIcon(source, size: size, tint: tint)
         }
@@ -219,9 +229,17 @@ struct ButtonHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.isFocusable = isEnabled
+        node.accessibility = AccessibilitySemantics(.button) {
+            $0.state.isEnabled = isEnabled; $0.state.isSelected = isSelected
+            $0.help = tooltip ?? ""; $0.combinesChildren = true
+        }
+        node.accessibilityActions = AccessibilityActions()
+        if isEnabled { node.accessibilityActions.activate = action }
         node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] (_: Bool) in
             guard let node else { return }
             updateBuiltinButtonChromeDescendants(of: node, animated: true)
+            node.firstResource(TooltipSession.self)?.setFocused(
+                FocusChainHolder.current?.focused === node && FocusChainHolder.current?.isFocusVisible == true)
         }
         node.attachments[ButtonHost.markerKey] = true
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
@@ -241,87 +259,16 @@ struct ButtonHost: _PrimitiveView {
             node.attachments[ButtonHost.pressedKey] = false
             node.attachments[ButtonHost.hoveredKey] = false
         }
-        node.attachments[ButtonHost.tooltipKey] = tooltip
-
         let resolvedTooltip = tooltip?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if isEnabled, let resolvedTooltip, !resolvedTooltip.isEmpty {
-            let draw: (DrawList) -> Void = { [weak node] list in
-                guard let node else { return }
-                // Hover only. Clicking focuses the button, and a focus-driven
-                // tooltip would outlive the pointer leaving the control.
-                guard node.attachments[ButtonHost.hoveredKey] as? Bool == true else { return }
-                guard let env = TextEnvironmentHolder.current else { return }
-
-                let origin = node.absoluteOrigin
-
-                let theme = node.theme
-                let tooltipFont = theme.typography.caption.font
-                let lineHeight = theme.typography.caption.lineHeight
-                let layout = env.cachedLayout(text: resolvedTooltip,
-                                              font: tooltipFont,
-                                              lineHeight: lineHeight,
-                                              maxWidth: .infinity,
-                                              alignment: .leading)
-
-                let padX = max(6, theme.spacing.sm)
-                let padY = max(3, theme.spacing.xs)
-                let offset = max(4, theme.spacing.xs)
-                let width = layout.totalWidth + padX * 2
-                let height = lineHeight + padY * 2
-                let centerX = Float(origin.x) + Float(node.frame.width) * 0.5
-                var x = centerX - width * 0.5
-                var y = Float(origin.y) - height - offset
-
-                if let bounds = list.viewportBounds {
-                    let inset: Float = 2
-                    let minX = bounds.x + inset
-                    let maxX = bounds.x + bounds.width - width - inset
-                    if maxX >= minX {
-                        x = min(max(x, minX), maxX)
-                    }
-                    let topY = bounds.y + inset
-                    let bottomY = bounds.y + bounds.height - height - inset
-                    let belowY = Float(origin.y) + Float(node.frame.height) + offset
-                    if y < topY, belowY <= bottomY {
-                        y = belowY
-                    } else if y < topY {
-                        y = topY
-                    } else if y > bottomY {
-                        y = max(topY, bottomY)
-                    }
-                }
-
-                let bg = theme.colors.surfaceFloating
-                    .composited(over: Color.black.multipliedAlpha(0.22))
-                    .multipliedAlpha(node.opacity)
-                let border = theme.colors.border.multipliedAlpha(node.opacity)
-                let textColor = theme.colors.onSurface.multipliedAlpha(node.opacity)
-                let bubble = UIRect(x: x, y: y, width: width, height: height)
-                list.addRoundedRect(bubble, radius: max(4, theme.radius.sm), color: bg)
-                list.addRect(UIRect(x: bubble.x, y: bubble.y, width: bubble.width, height: 1),
-                             color: border)
-                list.addRect(UIRect(x: bubble.x,
-                                    y: bubble.y + bubble.height - 1,
-                                    width: bubble.width,
-                                    height: 1),
-                             color: border)
-                list.addRect(UIRect(x: bubble.x, y: bubble.y, width: 1, height: bubble.height),
-                             color: border)
-                list.addRect(UIRect(x: bubble.x + bubble.width - 1,
-                                    y: bubble.y,
-                                    width: 1,
-                                    height: bubble.height),
-                             color: border)
-                list.addText(layout,
-                             origin: (x: x + padX, y: y + padY),
-                             color: textColor,
-                             textureID: env.atlasTextureID,
-                             atlas: env.atlas)
-            }
-
-            TooltipStoreHolder.current.register(node, draw: draw)
+        if let resolvedTooltip, !resolvedTooltip.isEmpty {
+            if node.firstResource(PortalResource.self) == nil { node.addResource(PortalResource()) }
+            if node.firstResource(TooltipSession.self) == nil { node.addResource(TooltipSession()) }
+            var options = TooltipOptions(); options.isEnabled = isEnabled
+            node.firstResource(TooltipSession.self)?.configure(content: tooltipDescription(resolvedTooltip), options: options,
+                focused: FocusChainHolder.current?.focused === node && FocusChainHolder.current?.isFocusVisible == true)
+            node.layoutDidUpdate = { [weak node] _ in node?.firstResource(TooltipSession.self)?.updatePosition() }
         } else {
-            TooltipStoreHolder.current.unregister(node)
+            node.firstResource(TooltipSession.self)?.dismiss()
         }
 
         // Default cursor for buttons: `.pointer` when interactive,
@@ -346,6 +293,7 @@ struct ButtonHost: _PrimitiveView {
         let pressChange = onPressChange
         let activate = action
         registry.setHover(node) { phase in
+            node.firstResource(TooltipSession.self)?.setHovered(phase == .enter)
             switch phase {
             case .enter:
                 setButtonInteraction(node,
@@ -361,13 +309,15 @@ struct ButtonHost: _PrimitiveView {
                                      onChange: hoverChange)
             }
         }
-        registry.setPointer(node) { event, phase, _ in
+        registry.setPointer(node) { event, phase, eventPhase in
+            guard eventPhase != .capture else { return .ignored }
             // Buttons handle the primary mouse button only. Right- and
             // middle-clicks bubble so parent chrome can surface context-menu
             // or middle-click semantics.
             if event.button != .left { return .ignored }
             switch phase {
             case .down:
+                node.firstResource(TooltipSession.self)?.dismiss()
                 node.attachments[ButtonHost.activePressKey] = true
                 PointerCaptureHolder.current?.acquire(node)
                 if requiresInteractionRecompose {
@@ -432,9 +382,11 @@ struct ButtonHost: _PrimitiveView {
             return .handled
         }
         registry.setKey(node) { event, _ in
+            if event.scancode == Scancode.escape, node.firstResource(TooltipSession.self)?.dismiss() == true { return .handled }
             guard !event.isRepeat else { return .ignored }
             switch event.scancode {
             case Scancode.return, Scancode.space, Scancode.keypadEnter:
+                node.firstResource(TooltipSession.self)?.dismiss()
                 activate()
                 return .handled
             default:
@@ -480,7 +432,6 @@ struct ButtonHost: _PrimitiveView {
     static let markerKey = "__button_host"
     static let pressedKey = "__button_pressed"
     static let hoveredKey = "__button_hovered"
-    static let tooltipKey = "__button_tooltip"
     static let activePressKey = "__button_active_press"
     static let requiresInteractionRecomposeKey = "__button_requires_interaction_recompose"
 }

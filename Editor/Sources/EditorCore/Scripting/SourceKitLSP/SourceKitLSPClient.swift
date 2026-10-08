@@ -8,6 +8,7 @@ import Foundation
 /// ``ScriptLanguageRequest``/``ScriptLanguageResponse``.
 public actor SourceKitLSPClient {
     public typealias NotificationHandler = @Sendable (SourceKitLSPNotification) -> Void
+    public typealias FailureHandler = @Sendable (SourceKitLSPFailure) -> Void
 
     private static let shutdownTimeout: Duration = .seconds(2)
     /// Tail of stderr retained so it can be attached to a mid-flight failure.
@@ -18,16 +19,14 @@ public actor SourceKitLSPClient {
     private let scratchURL: URL
     private let environmentOverrides: [String: String]
 
-    private var process: Process?
-    private var inputHandle: FileHandle?
-    private var outputPipe: Pipe?
-    private var errorPipe: Pipe?
+    private var connection: SourceKitLSPConnection?
     private var decoder = LSPMessageFramer.Decoder()
     private var pending: [Int: CheckedContinuation<Data?, Error>] = [:]
     private var nextRequestID = 1
     private var notificationHandler: NotificationHandler?
     private var stderrTail = Data()
-    private var isStopping = false
+    private var failureHandler: FailureHandler?
+    private var isShuttingDown = false
     /// Probed once per client so restarting never re-pays the `--help` call.
     private var capabilities: SourceKitLSPCapabilities?
 
@@ -42,22 +41,21 @@ public actor SourceKitLSPClient {
     }
 
     deinit {
-        process?.terminate()
+        connection?.close()
     }
 
     // MARK: - Lifecycle
 
-    public func start(notificationHandler: NotificationHandler? = nil) throws {
-        guard process?.isRunning != true else { return }
+    public func start(notificationHandler: NotificationHandler? = nil,
+                      onFailure: FailureHandler? = nil) throws {
+        guard connection?.process.isRunning != true else { return }
+        stop()
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw SourceKitLSPClientError.executableNotFound(executableURL.path)
         }
         try FileManager.default.createDirectory(at: scratchURL, withIntermediateDirectories: true)
-
-        let process = Process()
-        let stdin = Pipe()
-        let stdout = Pipe()
-        let stderr = Pipe()
+        let connection = SourceKitLSPConnection()
+        let process = connection.process
         process.executableURL = executableURL
         let capabilities = self.capabilities
             ?? SourceKitLSPExecutableLocator.probeCapabilities(executableURL: executableURL)
@@ -67,43 +65,29 @@ public actor SourceKitLSPClient {
                                                              capabilities: capabilities)
         process.currentDirectoryURL = workspaceURL
         process.environment = ProcessInfo.processInfo.environment.merging(environmentOverrides) { _, new in new }
-        process.standardInput = stdin
-        process.standardOutput = stdout
-        process.standardError = stderr
-        process.terminationHandler = { [weak self] process in
-            Task { await self?.processDidTerminate(status: process.terminationStatus) }
-        }
-
+        connection.installPipes()
         do { try process.run() } catch {
+            connection.close()
             throw SourceKitLSPClientError.launchFailed(String(describing: error))
         }
-
-        self.process = process
-        self.inputHandle = stdin.fileHandleForWriting
-        self.outputPipe = stdout
-        self.errorPipe = stderr
+        self.connection = connection
+        decoder = LSPMessageFramer.Decoder()
+        stderrTail = Data()
         self.notificationHandler = notificationHandler
-        self.isStopping = false
-
-        stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            Task {
-                if data.isEmpty {
-                    await self?.outputDidClose()
-                } else {
-                    await self?.consume(data)
-                }
+        failureHandler = onFailure
+        isShuttingDown = false
+        let id = connection.id
+        let events = connection.events
+        connection.consumer = Task { [weak self] in
+            for await event in events {
+                guard !Task.isCancelled else { return }
+                await self?.receive(event, connectionID: id)
             }
-        }
-        stderr.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            Task { await self?.consumeStderr(data) }
         }
     }
 
     public func initialize() async throws {
-        guard process?.isRunning == true else { throw SourceKitLSPClientError.notRunning }
+        guard connection?.process.isRunning == true else { throw SourceKitLSPClientError.notRunning }
         _ = try await request("initialize",
                               params: try LSPJSON.data(Self.initializeParams(workspaceURL: workspaceURL)))
         try notify("initialized", params: try LSPJSON.data([String: String]()))
@@ -114,7 +98,7 @@ public actor SourceKitLSPClient {
     public func request(_ method: String,
                         params: Data? = nil,
                         timeout: Duration = .seconds(30)) async throws -> Data? {
-        guard process?.isRunning == true else { throw SourceKitLSPClientError.notRunning }
+        guard connection?.process.isRunning == true else { throw SourceKitLSPClientError.notRunning }
         let requestID = nextRequestID
         nextRequestID += 1
         let body = try Self.requestBody(id: requestID, method: method, params: params)
@@ -125,6 +109,7 @@ public actor SourceKitLSPClient {
                 try write(body)
             } catch {
                 pending.removeValue(forKey: requestID)?.resume(throwing: error)
+                failConnection(.connectionClosed)
                 return
             }
             Task { [weak self] in
@@ -135,33 +120,34 @@ public actor SourceKitLSPClient {
     }
 
     public func notify(_ method: String, params: Data? = nil) throws {
-        guard process?.isRunning == true else { throw SourceKitLSPClientError.notRunning }
-        try write(try Self.notificationBody(method: method, params: params))
+        guard connection?.process.isRunning == true else { throw SourceKitLSPClientError.notRunning }
+        let body = try Self.notificationBody(method: method, params: params)
+        do { try write(body) } catch {
+            failConnection(.connectionClosed)
+            throw error
+        }
     }
 
+    /// Intentional shutdown never reports a transport failure to the owner.
     public func stop() {
-        guard !isStopping else { return }
-        isStopping = true
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        errorPipe?.fileHandleForReading.readabilityHandler = nil
-        try? inputHandle?.close()
-        try? outputPipe?.fileHandleForReading.close()
-        try? errorPipe?.fileHandleForReading.close()
-        if process?.isRunning == true { process?.terminate() }
-        process = nil
-        inputHandle = nil
-        outputPipe = nil
-        errorPipe = nil
+        let old = connection
+        connection = nil // Queued events from this connection are now stale.
+        old?.close()
+        notificationHandler = nil
+        failureHandler = nil
         failPending(SourceKitLSPClientError.notRunning)
     }
 
     public func shutdown() async {
-        if process?.isRunning == true {
+        isShuttingDown = true
+        if connection?.process.isRunning == true {
             _ = try? await request("shutdown", timeout: Self.shutdownTimeout)
             try? notify("exit")
         }
         stop()
     }
+
+    public var isRunning: Bool { connection?.process.isRunning == true }
 
     // MARK: - Client capabilities
 
@@ -189,7 +175,7 @@ public actor SourceKitLSPClient {
                 "synchronization": ["dynamicRegistration": false, "willSave": false, "didSave": true],
                 "completion": [
                     "completionItem": [
-                        "snippetSupport": true,
+                        "snippetSupport": false,
                         "documentationFormat": ["markdown", "plaintext"],
                     ],
                 ],
@@ -221,7 +207,7 @@ public actor SourceKitLSPClient {
     }
 
     private func write(_ body: Data) throws {
-        guard let inputHandle else { throw SourceKitLSPClientError.notRunning }
+        guard let inputHandle = connection?.stdin.fileHandleForWriting else { throw SourceKitLSPClientError.notRunning }
         try inputHandle.write(contentsOf: LSPMessageFramer.frame(body))
     }
 
@@ -233,8 +219,7 @@ public actor SourceKitLSPClient {
                 try consumeMessage(body)
             }
         } catch {
-            failPending(error)
-            stop()
+            failConnection(error as? SourceKitLSPClientError ?? .protocolViolation(error.localizedDescription))
         }
     }
 
@@ -300,19 +285,29 @@ public actor SourceKitLSPClient {
         pending.removeValue(forKey: id)?.resume(throwing: SourceKitLSPClientError.requestTimedOut(method))
     }
 
-    private func processDidTerminate(status: Int32) {
-        guard !isStopping else { return }
-        failPending(SourceKitLSPClientError.processTerminated(status))
-        process = nil
-        inputHandle = nil
+    private func receive(_ event: SourceKitLSPConnection.Event, connectionID: UUID) {
+        guard connection?.id == connectionID else { return }
+        switch event {
+        case let .stdout(data): consume(data)
+        case let .stderr(data): consumeStderr(data)
+        case let .terminated(status): failConnection(.processTerminated(status))
+        case .stdoutClosed:
+            if let process = connection?.process, !process.isRunning {
+                failConnection(.processTerminated(process.terminationStatus))
+            } else { failConnection(.connectionClosed) }
+        }
     }
 
-    private func outputDidClose() {
-        guard !isStopping else { return }
-        let detail = stderrTail.isEmpty ? "" : ": " + (String(data: stderrTail, encoding: .utf8) ?? "")
-        failPending(SourceKitLSPClientError.protocolViolation("server closed stdout\(detail)"))
-        process = nil
-        inputHandle = nil
+    private func failConnection(_ error: SourceKitLSPClientError) {
+        guard let old = connection else { return }
+        let failure = SourceKitLSPFailure(error: error, stderr: String(decoding: stderrTail, as: UTF8.self))
+        let handler = isShuttingDown ? nil : failureHandler
+        connection = nil
+        old.close()
+        failureHandler = nil
+        notificationHandler = nil
+        failPending(error)
+        handler?(failure)
     }
 
     private func consumeStderr(_ data: Data) {

@@ -89,6 +89,57 @@ public enum ImageDecoder {
         try decodeViaBridge(data: data, extension: "", label: "<memory>", targetSize: targetSize)
     }
 
+    /// Bounded thumbnail decode without distorting the source's aspect ratio.
+    /// Dimensions are inspected before native bitmap allocation.
+    public static func decodeThumbnail(data: Data, formatHint: String,
+                                       boundingSize: (width: Int, height: Int),
+                                       maximumSourcePixels: Int = 32_000_000) throws -> DecodedImage {
+        guard (1...8_192).contains(boundingSize.width), (1...8_192).contains(boundingSize.height),
+              maximumSourcePixels > 0 else {
+            throw ImageDecodeError.decodeFailure("Invalid thumbnail dimensions or pixel budget")
+        }
+        #if canImport(AppKit) && canImport(CoreGraphics) && canImport(ImageIO)
+        if appleOnlyExtensions.contains(formatHint.lowercased()) {
+            guard let image = NSImage(data: data), image.size.width.isFinite, image.size.height.isFinite,
+                  image.size.width > 0, image.size.height > 0,
+                  image.size.width * image.size.height <= CGFloat(maximumSourcePixels) else {
+                throw ImageDecodeError.decodeFailure("Invalid or oversized image dimensions")
+            }
+            let fit = min(CGFloat(boundingSize.width) / image.size.width, CGFloat(boundingSize.height) / image.size.height)
+            let scale = formatHint.lowercased() == "pdf" ? fit : min(1, fit)
+            let width = max(1, Int((image.size.width * scale).rounded()))
+            let height = max(1, Int((image.size.height * scale).rounded()))
+            guard Int64(width) * Int64(height) <= Int64(maximumSourcePixels) else {
+                throw ImageDecodeError.decodeFailure("Oversized thumbnail dimensions")
+            }
+            var rect = CGRect(x: 0, y: 0, width: width, height: height)
+            guard let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+                throw ImageDecodeError.decodeFailure("Could not rasterize image thumbnail")
+            }
+            return rasterize(cg, targetSize: (width, height))
+        }
+        #endif
+        var width: Int32 = 0, height: Int32 = 0
+        let valid = data.withUnsafeBytes { buffer in
+            formatHint.withCString { hint in
+                guava_image_dimensions_memory(buffer.bindMemory(to: UInt8.self).baseAddress, data.count, hint, &width, &height)
+            }
+        }
+        guard valid, width > 0, height > 0, Int64(width) * Int64(height) <= Int64(maximumSourcePixels) else {
+            throw ImageDecodeError.decodeFailure("Invalid or oversized image dimensions")
+        }
+        let fit = min(Double(boundingSize.width) / Double(width), Double(boundingSize.height) / Double(height))
+        // Vectors have no native bitmap resolution. Rasterize them at the
+        // requested display density rather than upscaling a small bitmap.
+        let scale = formatHint.lowercased() == "svg" ? fit : min(1, fit)
+        let target = (max(1, Int((Double(width) * scale).rounded())),
+                      max(1, Int((Double(height) * scale).rounded())))
+        guard Int64(target.0) * Int64(target.1) <= Int64(maximumSourcePixels) else {
+            throw ImageDecodeError.decodeFailure("Oversized thumbnail dimensions")
+        }
+        return try decodeViaBridge(data: data, extension: formatHint, label: "<thumbnail>", targetSize: target)
+    }
+
     // MARK: - Native bridge (all platforms)
 
     private static func decodeViaBridge(data: Data,

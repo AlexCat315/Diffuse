@@ -22,15 +22,14 @@
 ## API
 
 ```swift
-Tree(roots,
-     children: \.children,
-     id: \.id,                       // 默认 \.id
-     selection: $selectedID,
-     expanded: $expandedSet,         // 可选，nil 时用内部 @State
-     rowHeight: 30,
-     rowSpacing: 0,
-     indentation: 16,
-     disclosureWidth: 18) { node, isSelected, isExpanded, depth in
+Tree(roots, children: \.children, id: \.id, // 默认 \.id
+     selection: $selectedID, // 可选，nil 时用内部 @State
+     rowHeight: 30, configure: { tree in
+    tree.selection.expanded = $expandedSet
+    tree.layout.rowSpacing = 0
+    tree.layout.indentation = 16
+    tree.layout.disclosureWidth = 18
+}) { node, isSelected, isExpanded, depth in
     Text(node.title)
 }
 ```

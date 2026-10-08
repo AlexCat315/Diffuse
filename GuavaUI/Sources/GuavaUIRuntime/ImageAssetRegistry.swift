@@ -116,7 +116,7 @@ public final class ImageAssetRegistry: @unchecked Sendable {
     /// requested rasterisation size so multiple sizes coexist; bitmap
     /// formats fold the natural-size key onto the same slot.
     public static func key(for url: URL, size: (Int, Int)?) -> String {
-        let path = url.standardizedFileURL.path
+        let path = url.isFileURL ? url.standardizedFileURL.path : url.absoluteString
         if let s = size {
             return "\(path)#\(s.0)x\(s.1)"
         }

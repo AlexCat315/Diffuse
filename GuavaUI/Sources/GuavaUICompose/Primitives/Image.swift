@@ -1,6 +1,7 @@
 ﻿#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
+import Foundation
 import GuavaUIRuntime
 
 /// Bitmap image primitive backed by a renderer-registered RGBA texture.
@@ -34,6 +35,7 @@ public struct Image: _PrimitiveView {
     public let sourcePixelSize: (width: Float, height: Float)?
     public let contentMode: ContentMode
     public let renderingMode: RenderingMode
+    var vectorSourceURL: URL? = nil
 
     private struct PaintIdentity: Equatable {
         let textureID: TextureID
@@ -44,6 +46,7 @@ public struct Image: _PrimitiveView {
         let sourceHeight: Float?
         let contentMode: ContentMode
         let renderingMode: RenderingMode
+        let vectorSourceURL: URL?
     }
 
     public init(textureID: TextureID,
@@ -70,6 +73,7 @@ public struct Image: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let snap = self
+        let vectorRaster = vectorSourceURL.map { VectorImageRaster(url: $0, initial: Image.ResolvedTexture(textureID: textureID, sourcePixelSize: sourcePixelSize), width: width, height: height) }
         node.updateDraw(identity: PaintIdentity(textureID: textureID,
                                                 width: width,
                                                 height: height,
@@ -77,7 +81,8 @@ public struct Image: _PrimitiveView {
                                                 sourceWidth: sourcePixelSize?.width,
                                                 sourceHeight: sourcePixelSize?.height,
                                                 contentMode: contentMode,
-                                                renderingMode: renderingMode)) { list, origin in
+                                                renderingMode: renderingMode,
+                                                vectorSourceURL: vectorSourceURL)) { list, origin in
             let f = node.frame
             let drawWidth  = f.width  > 0 ? Float(f.width)  : snap.width
             let drawHeight = f.height > 0 ? Float(f.height) : snap.height
@@ -94,20 +99,27 @@ public struct Image: _PrimitiveView {
                                    y: Float(origin.y),
                                    width: drawWidth,
                                    height: drawHeight)
-            let rect = snap.destinationRect(container: container)
+            let asset = vectorRaster?.resolve(width: drawWidth, height: drawHeight)
+            let texture = asset?.textureID ?? snap.textureID
+            let geometry = ImageGeometry(container: container, source: asset?.sourcePixelSize ?? snap.sourcePixelSize, mode: snap.contentMode)
+            var rect = geometry.rect
             if snap.renderingMode == .alphaMask {
+                let scale = ContentScaleHolder.current
+                if vectorRaster != nil, scale.isFinite, scale > 0 {
+                    rect = UIRect(x: (rect.x * scale).rounded() / scale, y: (rect.y * scale).rounded() / scale, width: rect.width, height: rect.height)
+                }
                 list.addImageMaskQuad(rect: rect,
-                                      textureID: snap.textureID,
-                                      tint: baseTint)
+                                      textureID: texture,
+                                      tint: baseTint, uvMin: geometry.uvMin, uvMax: geometry.uvMax)
             } else if node.cornerRadius > 0 {
                 list.addRoundedImageQuad(rect: rect,
                                          radius: node.cornerRadius,
-                                         textureID: snap.textureID,
-                                         tint: baseTint)
+                                         textureID: texture,
+                                         tint: baseTint, uvMin: geometry.uvMin, uvMax: geometry.uvMax)
             } else {
                 list.addImageQuad(rect: rect,
-                                  textureID: snap.textureID,
-                                  tint: baseTint)
+                                  textureID: texture,
+                                  tint: baseTint, uvMin: geometry.uvMin, uvMax: geometry.uvMax)
             }
         }
     }
@@ -124,43 +136,4 @@ public struct Image: _PrimitiveView {
         layout.height = height
     }
 
-    private func destinationRect(container: UIRect) -> UIRect {
-        guard let sourcePixelSize,
-              sourcePixelSize.width > 0,
-              sourcePixelSize.height > 0,
-              container.width > 0,
-              container.height > 0 else {
-            return container
-        }
-
-        if contentMode == .stretch {
-            return container
-        }
-
-        let sourceAspect = sourcePixelSize.width / sourcePixelSize.height
-        let containerAspect = container.width / container.height
-        let useWidthScale: Bool
-        switch contentMode {
-        case .fit:
-            useWidthScale = sourceAspect >= containerAspect
-        case .fill:
-            useWidthScale = sourceAspect <= containerAspect
-        case .stretch:
-            useWidthScale = true
-        }
-
-        let resultWidth: Float
-        let resultHeight: Float
-        if useWidthScale {
-            resultWidth = container.width
-            resultHeight = container.width / sourceAspect
-        } else {
-            resultHeight = container.height
-            resultWidth = container.height * sourceAspect
-        }
-
-        let x = container.x + (container.width - resultWidth) * 0.5
-        let y = container.y + (container.height - resultHeight) * 0.5
-        return UIRect(x: x, y: y, width: resultWidth, height: resultHeight)
-    }
 }
