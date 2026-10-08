@@ -45,6 +45,7 @@ enum VulkanFormats {
 
     static func vkVertexFormat(_ format: VertexFormat) -> VkFormat {
         switch format {
+        case .float: return VK_FORMAT_R32_SFLOAT
         case .float2: return VK_FORMAT_R32G32_SFLOAT
         case .float3: return VK_FORMAT_R32G32B32_SFLOAT
         case .float4: return VK_FORMAT_R32G32B32A32_SFLOAT

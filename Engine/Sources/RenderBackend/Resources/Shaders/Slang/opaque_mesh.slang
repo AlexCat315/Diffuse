@@ -1,5 +1,6 @@
 #include "mesh_common.slang"
 #include "pbr_lighting.slang"
+#include "stylized_style.slang"
 float acesInverse(float y) {
     float yy = clamp(y,0,0.9999);
     float A = yy*2.43-2.51, B = yy*0.59-0.03, C = yy*0.14;

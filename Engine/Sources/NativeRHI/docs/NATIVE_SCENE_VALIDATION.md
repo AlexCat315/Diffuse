@@ -4,7 +4,7 @@ NativeRenderer 已从独立网格 consumer 发展为真实场景 consumer，支�
 
 目前支持 r1/r2/r3/r4 和 unlit/baseColor/worldNormal/roughness/metallic 查看模式。材质查看模式沿用现有 WGSL 的 inverse-ACES 输出规则；在这些早期 LDR 阶段，它们还没有经过后续 tonemap。这是画面对照的共同输入约定，不能把它们当作最终 PBR 画面。
 
-完整替换目标仍在推进：PBR 光照、级联/多光源阴影、HDR 天空和 tonemap 已迁移，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。透明网格、蒙皮/变形、粒子、其他后处理、编辑器/GuavaUI 纹理互操作和默认 renderer 切换仍在推进。NativeRenderer 对尚未支持的场景明确报错，避免用缺失的画面冒充完整渲染。默认 EngineHost 仍使用 WGPU。
+完整替换目标仍在推进：PBR 光照、级联/多光源阴影、HDR 天空和 tonemap 已迁移，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)；透明/动画、r5 后处理和风格化见 [动画验证](NATIVE_ANIMATION_VALIDATION.md)、[后处理验证](NATIVE_POST_VALIDATION.md) 和 [风格化验证](NATIVE_STYLIZED_VALIDATION.md)。粒子、编辑器/GuavaUI 纹理互操作和默认 renderer 切换仍在推进。NativeRenderer 对尚未支持的场景明确报错，避免用缺失的画面冒充完整渲染。默认 EngineHost 仍使用 WGPU。
 
 ## 接入与资源
 

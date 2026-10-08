@@ -15,9 +15,11 @@ public enum NativePassBenchmark {
         case .mesh: packet = MeshProbeScene.packet(size: options.size)
         case .pbr: packet = PBRProbeScene.packet(size: options.size)
         case .post: packet = PostProbeScene.packet(size: options.size)
+        case .stylized: packet = StylizedProbeScene.packet(size: options.size)
         case .animated: packet = AnimatedProbeScene.packet(size: options.size)
         }
         func framePacket(_ frame: Int) -> RenderPacket {
+            if options.scene == .stylized { return StylizedProbeScene.packet(size: options.size,frame: frame) }
             if options.scene == .post { return PostProbeScene.packet(size: options.size,frame: frame) }
             if options.scene == .animated { return AnimatedProbeScene.packet(size: options.size,frame: frame) }
             var p = packet; p.frameIndex = frame
@@ -64,7 +66,7 @@ public enum NativePassBenchmark {
             let reference = try WGPUSceneReference()
             renderReference = { frame in
                 let result = try reference.render(packet: framePacket(frame))
-                if (options.scene == .pbr || options.scene == .animated) && reference.renderer.lastFrameUsedOpaqueCache {
+                if (options.scene == .pbr || options.scene == .animated || options.scene == .stylized) && reference.renderer.lastFrameUsedOpaqueCache {
                     throw RHIError.invalidArgument("scene reference unexpectedly reused an opaque snapshot")
                 }
                 return result
@@ -80,6 +82,17 @@ public enum NativePassBenchmark {
                     guard native.passFrames[kind.rawValue] == result.passFrames[kind.rawValue],
                           (native.passFrames[kind.rawValue] ?? 0) > 0 else {
                         throw RHIError.invalidArgument("post benchmark pass workload differs: \(native.backend) \(kind)")
+                    }
+                }
+            }
+        }
+        if options.scene == .stylized {
+            for native in results where native.backend != result.backend {
+                for kind in [RenderPassKind.outline,.inkPaperPost] {
+                    guard native.passFrames[kind.rawValue] == result.passFrames[kind.rawValue],
+                          native.passDraws[kind.rawValue] == result.passDraws[kind.rawValue],
+                          (native.passDraws[kind.rawValue] ?? 0) > 0 else {
+                        throw RHIError.invalidArgument("stylized benchmark workload differs: \(native.backend) \(kind)")
                     }
                 }
             }
@@ -129,7 +142,7 @@ public enum NativePassBenchmark {
     }
 }
 
-private enum ProbeScene: String { case grid, mesh, pbr, animated, post }
+private enum ProbeScene: String { case grid, mesh, pbr, animated, post, stylized }
 
 private struct PassBenchmarkOptions {
     var scene = ProbeScene.grid
@@ -140,12 +153,12 @@ private struct PassBenchmarkOptions {
     var backends: [GraphicsAPI] = NativeRHI.platformDefaultBackends
     var output = URL(fileURLWithPath: "/tmp/guava-native-grid")
     init(arguments: [String]) throws {
-        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated|post --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
+        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated|post|stylized --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
         for index in stride(from: 0, to: arguments.count, by: 2) {
             let value = arguments[index + 1]
             switch arguments[index] {
             case "--scene":
-                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh, pbr, animated or post scene") }
+                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh, pbr, animated, post or stylized scene") }
                 self.scene = scene
             case "--output": output = URL(fileURLWithPath: value)
             case "--backends":

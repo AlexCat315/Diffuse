@@ -1392,7 +1392,7 @@
             "binding": {
               "kind": "varyingInput",
               "index": 0,
-              "count": 7
+              "count": 8
             },
             "type": {
               "kind": "struct",
@@ -1564,12 +1564,32 @@
                   },
                   "semanticName": "TEXCOORD",
                   "semanticIndex": 6
+                },
+                {
+                  "name": "materialIndex",
+                  "type": {
+                    "kind": "scalar",
+                    "scalarType": "float32",
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "vertex",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 7
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 7
                 }
               ],
               "sizes": [
                 {
                   "kind": "varyingInput",
-                  "value": 7
+                  "value": 8
                 }
               ]
             }
@@ -1592,7 +1612,7 @@
           "binding": {
             "kind": "varyingInput",
             "index": 0,
-            "count": 7
+            "count": 8
           },
           "type": {
             "kind": "struct",
@@ -1764,12 +1784,32 @@
                 },
                 "semanticName": "TEXCOORD",
                 "semanticIndex": 6
+              },
+              {
+                "name": "materialIndex",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "vertex",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 7
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 7
               }
             ],
             "sizes": [
               {
                 "kind": "varyingInput",
-                "value": 7
+                "value": 8
               }
             ]
           }
@@ -1789,7 +1829,7 @@
         "binding": {
           "kind": "varyingOutput",
           "index": 0,
-          "count": 7
+          "count": 8
         },
         "type": {
           "kind": "struct",
@@ -1970,12 +2010,32 @@
               },
               "semanticName": "TEXCOORD",
               "semanticIndex": 6
+            },
+            {
+              "name": "materialIndex",
+              "type": {
+                "kind": "scalar",
+                "scalarType": "float32",
+                "sizes": [
+                  {
+                    "kind": "varyingOutput",
+                    "value": 1
+                  }
+                ]
+              },
+              "stage": "vertex",
+              "binding": {
+                "kind": "varyingOutput",
+                "index": 7
+              },
+              "semanticName": "TEXCOORD",
+              "semanticIndex": 7
             }
           ],
           "sizes": [
             {
               "kind": "varyingOutput",
-              "value": 7
+              "value": 8
             }
           ]
         }

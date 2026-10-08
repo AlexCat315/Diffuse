@@ -49,8 +49,8 @@ void grhi::graphicsPipeline(State& s, uint32_t id, const GRHI_GraphicsDesc& d) {
     auto& shader = s.shaders.at(d.vertex); require(shader.stage == GRHI_STAGE_VERTEX, "vertex stage mismatch"); native.VS = shader.code();
     std::vector<D3D12_INPUT_ELEMENT_DESC> attributes;
     for (UINT i = 0; i < d.vertex_buffer_count; ++i) result.strides.push_back(d.vertex_buffers[i].stride);
-    for (UINT i = 0; i < d.attribute_count; ++i) { auto a = d.attributes[i]; require(a.buffer < d.vertex_buffer_count && a.format < 3 && a.semantic, "invalid vertex attribute");
-        static const DXGI_FORMAT formats[] = {DXGI_FORMAT_R32G32_FLOAT,DXGI_FORMAT_R32G32B32_FLOAT,DXGI_FORMAT_R32G32B32A32_FLOAT}; bool instance = d.vertex_buffers[a.buffer].per_instance;
+    for (UINT i = 0; i < d.attribute_count; ++i) { auto a = d.attributes[i]; require(a.buffer < d.vertex_buffer_count && a.format < 4 && a.semantic, "invalid vertex attribute");
+        static const DXGI_FORMAT formats[] = {DXGI_FORMAT_R32G32_FLOAT,DXGI_FORMAT_R32G32B32_FLOAT,DXGI_FORMAT_R32G32B32A32_FLOAT,DXGI_FORMAT_R32_FLOAT}; bool instance = d.vertex_buffers[a.buffer].per_instance;
         attributes.push_back({a.semantic,a.semantic_index,formats[a.format],a.buffer,a.offset,instance ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,instance ? 1u : 0u}); }
     native.InputLayout = {attributes.data(), UINT(attributes.size())}; check(s.device->CreateGraphicsPipelineState(&native, IID_PPV_ARGS(&result.native)), "CreateGraphicsPipelineState"); s.graphics.emplace(id, std::move(result));
 }

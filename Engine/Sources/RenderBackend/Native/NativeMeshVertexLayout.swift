@@ -10,7 +10,8 @@ enum NativeMeshVertexLayout {
             VertexAttribute(location: 3, format: .float2, offset: MeshAsset.uvOffset),
             VertexAttribute(location: 4, format: .float4, offset: MeshAsset.tangentOffset),
             VertexAttribute(location: 5, format: .float4, offset: MeshAsset.jointsOffset),
-            VertexAttribute(location: 6, format: .float4, offset: MeshAsset.weightsOffset)
+            VertexAttribute(location: 6, format: .float4, offset: MeshAsset.weightsOffset),
+            VertexAttribute(location: 7, format: .float, offset: MeshAsset.materialIndexOffset)
         ], bufferLayouts: [VertexBufferLayout(stride: MeshAsset.vertexStride)])
     }
 }
