@@ -28,6 +28,8 @@ def main():
         ('opaque_depth', 'opaque_mesh.slang', [('fragment', 'depthFragment')]),
         ('stylized_character', 'stylized_character.slang', [('vertex', 'meshVertex'), ('fragment', 'stylizedFragment')]),
         ('outline', 'outline.slang', [('vertex', 'outlineVertex'), ('fragment', 'outlineFragment')]),
+        ('particles', 'particles.slang', [('vertex', 'particleVertex'), ('fragment', 'particleFragment')]),
+        ('particle_cull_compact', 'particle_cull_compact.slang', [('compute', 'particleCull')]),
     ]
     programs.extend((name, f'{name}.slang', [('vertex', 'postVertex'), ('fragment', 'postFragment')])
                     for name in ['ssao','ssr','taa','bloom','fxaa','ink_paper_post'])

@@ -13,7 +13,8 @@ final class NativeGridSurfaceTests: XCTestCase {
     @MainActor func testMetalHDRPresentsAndResizes() async throws { try scene(.metal, hdr: true) }
     @MainActor func testMetalPostPresentsAndResizes() async throws { try scene(.metal, hdr: true, post: true) }
     @MainActor func testMetalStylizedPresentsAndResizes() async throws { try scene(.metal, hdr: true, post: true, stylized: true) }
-    @MainActor private func scene(_ api: GraphicsAPI, hdr: Bool = false, post: Bool = false, stylized: Bool = false) throws {
+    @MainActor func testMetalParticlesPresentAndResize() async throws { try scene(.metal, hdr: true, post: true, particles: true) }
+    @MainActor private func scene(_ api: GraphicsAPI, hdr: Bool = false, post: Bool = false, stylized: Bool = false, particles: Bool = false) throws {
         _ = NSApplication.shared
         let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 96,height: 96), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false; defer { window.close() }
@@ -24,7 +25,8 @@ final class NativeGridSurfaceTests: XCTestCase {
         for frame in 0..<6 {
             let size: UInt32 = frame < 3 ? 96 : 64
             layer.drawableSize = CGSize(width: Int(size),height: Int(size))
-            var packet = post ? PostProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
+            var packet = particles ? ParticleProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
+                : post ? PostProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
                 : hdr ? PBRProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
                 : MeshProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
             packet.renderSettings.enableStylizedCharacterShading = stylized
@@ -44,6 +46,11 @@ final class NativeGridSurfaceTests: XCTestCase {
             if stylized {
                 XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.outline],6)
                 XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.inkPaperPost],1)
+            }
+            if particles {
+                XCTAssertEqual(renderer.lastFrameStats.gpuParticleCullCandidateCount,2080)
+                XCTAssertEqual(renderer.lastFrameStats.gpuParticleIndirectDrawCount,16)
+                XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.particles],16)
             }
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], hdr ? 6 : 5)
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass], hdr ? 6 : 5)

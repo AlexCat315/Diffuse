@@ -452,6 +452,15 @@ int wgpu_bridge_request_device(void* adapter, void** out_device) {
 
     AsyncResult result = {0};
     WGPUDeviceDescriptor desc = WGPU_DEVICE_DESCRIPTOR_INIT;
+    /* Particle compaction writes nonzero firstInstance for every later batch.
+       Without this feature WebGPU silently treats those indirect draws as no-ops. */
+    WGPUFeatureName required_feature = WGPUFeatureName_IndirectFirstInstance;
+    if (!wgpuAdapterHasFeature((WGPUAdapter)adapter, required_feature)) {
+        set_error("renderer requires indirect-first-instance for particle batches");
+        return 0;
+    }
+    desc.requiredFeatureCount = 1;
+    desc.requiredFeatures = &required_feature;
 
     WGPURequestDeviceCallbackInfo cb = WGPU_REQUEST_DEVICE_CALLBACK_INFO_INIT;
     cb.mode = WGPUCallbackMode_AllowProcessEvents;

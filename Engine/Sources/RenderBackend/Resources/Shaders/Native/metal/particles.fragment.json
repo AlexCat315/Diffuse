@@ -1,0 +1,67 @@
+{
+  "stage": "fragment",
+  "format": "mslSource",
+  "entryPoint": "particleFragment",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCBwaXhlbE91dHB1dF8wCnsKICAgIGZsb2F0NCBvdXRwdXRfMCBbW2NvbG9yKDApXV07Cn07CgpzdHJ1Y3QgcGl4ZWxJbnB1dF8wCnsKICAgIGZsb2F0MiB1dl8wIFtbdXNlcihURVhDT09SRCldXTsKICAgIGZsb2F0NCBjb2xvcl8wIFtbdXNlcihURVhDT09SRF8xKV1dOwogICAgZmxvYXQyIGxvY2FsVVZfMCBbW3VzZXIoVEVYQ09PUkRfMildXTsKICAgIGZsb2F0IHNoYXBlXzAgW1t1c2VyKFRFWENPT1JEXzMpXV07Cn07CgpzdHJ1Y3QgS2VybmVsQ29udGV4dF8wCnsKICAgIHRleHR1cmUyZDxmbG9hdCwgYWNjZXNzOjpzYW1wbGU+IHBhcnRpY2xlVGV4dHVyZV8wOwogICAgc2FtcGxlciBwYXJ0aWNsZVNhbXBsZXJfMDsKfTsKCltbZnJhZ21lbnRdXSBwaXhlbE91dHB1dF8wIHBhcnRpY2xlRnJhZ21lbnQocGl4ZWxJbnB1dF8wIF9TMSBbW3N0YWdlX2luXV0sIGZsb2F0NCBwb3NpdGlvbl8wIFtbcG9zaXRpb25dXSwgdGV4dHVyZTJkPGZsb2F0LCBhY2Nlc3M6OnNhbXBsZT4gcGFydGljbGVUZXh0dXJlXzEgW1t0ZXh0dXJlKDMpXV0sIHNhbXBsZXIgcGFydGljbGVTYW1wbGVyXzEgW1tzYW1wbGVyKDIpXV0pCnsKICAgIHRocmVhZCBLZXJuZWxDb250ZXh0XzAga2VybmVsQ29udGV4dF8wOwogICAgKCZrZXJuZWxDb250ZXh0XzApLT5wYXJ0aWNsZVRleHR1cmVfMCA9IHBhcnRpY2xlVGV4dHVyZV8xOwogICAgKCZrZXJuZWxDb250ZXh0XzApLT5wYXJ0aWNsZVNhbXBsZXJfMCA9IHBhcnRpY2xlU2FtcGxlcl8xOwogICAgZmxvYXQgZGlzdGFuY2VfMCA9IGxlbmd0aChfUzEubG9jYWxVVl8wIC0gZmxvYXQyKDAuNWYpICkgKiAyLjBmOwogICAgZmxvYXQgZmFsbG9mZl8wOwogICAgaWYoKF9TMS5zaGFwZV8wKSA+IDAuNWYpCiAgICB7CiAgICAgICAgZmFsbG9mZl8wID0gMS4wZjsKICAgIH0KICAgIGVsc2UKICAgIHsKICAgICAgICBmYWxsb2ZmXzAgPSBzbW9vdGhzdGVwKDEuMGYsIDAuMGYsIGRpc3RhbmNlXzApOwogICAgfQogICAgZmxvYXQ0IHRleGVsXzAgPSAoKCgma2VybmVsQ29udGV4dF8wKS0+cGFydGljbGVUZXh0dXJlXzApLnNhbXBsZSgoKCZrZXJuZWxDb250ZXh0XzApLT5wYXJ0aWNsZVNhbXBsZXJfMCksIChfUzEudXZfMCkpKTsKICAgIHBpeGVsT3V0cHV0XzAgX1MyID0geyBmbG9hdDQoX1MxLmNvbG9yXzAueHl6ICogdGV4ZWxfMC54eXosIF9TMS5jb2xvcl8wLncgKiB0ZXhlbF8wLncgKiBmYWxsb2ZmXzApIH07CiAgICByZXR1cm4gX1MyOwp9Cgo=",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "u",
+        "slot": 0,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "particles",
+        "slot": 1,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 112
+        }
+      },
+      {
+        "name": "particleSampler",
+        "slot": 2,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "particleTexture",
+        "slot": 3,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "drawRange",
+        "slot": 4,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}
