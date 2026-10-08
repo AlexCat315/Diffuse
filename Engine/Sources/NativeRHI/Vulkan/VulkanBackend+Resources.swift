@@ -1,6 +1,6 @@
 // NativeRHI Vulkan — resource creation, immediate transfers, surface configure.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -14,23 +14,26 @@ extension VulkanBackend {
             guard let native = descriptor.nativeHandle else {
                 throw RHIError.invalidArgument("Vulkan requires a native surface handle")
             }
-            #if os(macOS)
-            var info = VkMetalSurfaceCreateInfoEXTRepr()
-            info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT
-            info.flags = 0
-            info.pLayer = native
-            guard let newSurface = vkWithOutHandle({
-                context.instanceCommands.createMetalSurfaceEXT(
-                    context.instance, withUnsafePointer(to: &info) { UnsafeRawPointer($0) }, nil, $0)
-            }) else {
-                throw RHIError.unsupportedBackend("vkCreateMetalSurfaceEXT failed")
+            let kind: GRHIVulkanSurfaceKind
+            switch descriptor.kind {
+            case .win32Window: kind = GRHI_VULKAN_WIN32
+            case .xlibWindow: kind = GRHI_VULKAN_XLIB
+            case .waylandSurface: kind = GRHI_VULKAN_WAYLAND
+            case .metalLayer: throw RHIError.unsupportedBackend("Vulkan requires a native Windows/Linux surface")
             }
-            #else
             var created: VkSurfaceKHR?
-            guard grhi_vulkan_create_native_surface(context.instance, native, descriptor.display, &created) == VK_SUCCESS, let newSurface = created else {
-                throw RHIError.unsupportedBackend("native Vulkan surface creation failed")
+            let result = grhi_vulkan_create_native_surface(context.instance, kind, native, descriptor.display, &created)
+            guard result == VK_SUCCESS, let newSurface = created else {
+                throw RHIError.unsupportedBackend("native Vulkan surface creation failed: \(result)")
             }
-            #endif
+            var committed = false
+            defer { if !committed { context.instanceCommands.destroySurfaceKHR(context.instance, newSurface, nil); self.surface = nil } }
+            var supported: VkBool32 = VK_FALSE
+            guard context.extensions.contains("VK_KHR_swapchain"),
+                  context.instanceCommands.getSurfaceSupport(context.physicalDevice, context.queues.graphics.family,
+                    newSurface, &supported) == VK_SUCCESS, supported == VK_TRUE else {
+                throw RHIError.unsupportedBackend("selected Vulkan graphics queue cannot present this surface")
+            }
             self.surface = newSurface
             let vulkanSurface = VulkanSurface(
                 surface: newSurface,
@@ -41,6 +44,7 @@ extension VulkanBackend {
             )
             self.swapchain = try VulkanSwapchain.create(
                 context: context, surface: vulkanSurface, registries: registries)
+            committed = true
 
         }
     }

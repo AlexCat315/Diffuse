@@ -6,12 +6,83 @@ import XCTest
 final class NativeGPUContractTests: XCTestCase {
     private func makeDevice(_ api: GraphicsAPI) throws -> Device {
         guard NativeRHI.isCompiledIn(api) else { throw XCTSkip("Backend is not compiled") }
-        #if canImport(CVulkanHeaders)
+        #if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
         if api == .vulkan && !VulkanBackend.isAvailable { throw XCTSkip("No Vulkan ICD") }
         #endif
         return try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false))
     }
+    private func mipSampling(_ api: GraphicsAPI, target: String) throws {
+        let device = try makeDevice(api)
+        let artifact = try ShaderFixtures.compile("mip-sample", entry: "computeMain", stage: .compute, target: target)
+        let binding = try device.makeBindingLayout(artifact.bindingLayoutDescriptor())
+        let layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [binding]))
+        let shader = try device.makeShaderModule(artifact.moduleDescriptor()); defer { device.destroy(shader) }
+        let pipeline = try device.makeComputePipeline(ComputePipelineDescriptor(layout: layout, shader: shader))
+        let image = try device.makeTexture(TextureDescriptor(width: 8, height: 4, format: .rgba32Float,
+            usage: [.sampled,.transferDestination], mipLevels: 4))
+        let colors = (0..<4).map { SIMD4<Float>(Float($0)*0.25,1-Float($0)*0.25,0.5,1) }
+        for mip in 0..<4 {
+            let width = max(1,8 >> mip), height = max(1,4 >> mip)
+            let pixels = [SIMD4<Float>](repeating: colors[mip], count: width*height)
+            try device.uploadTextureData(image, data: pixels.withUnsafeBytes { Data($0) }, width: width, height: height,
+                bytesPerRow: width*16, subresource: .init(mipLevel: mip))
+        }
+        let sampler = try device.makeSampler(SamplerDescriptor(mipFilter: .linear))
+        let output = try device.makeBuffer(BufferDescriptor(size: 80, usage: [.storageWrite,.transferSource]))
+        let readback = try device.makeTexture(TextureDescriptor(width: 5, height: 1, format: .rgba32Float, usage: [.transferDestination,.transferSource]))
+        defer { device.destroy(pipeline); device.destroy(image); device.destroy(sampler); device.destroy(output); device.destroy(readback) }
+        let set = try device.makeBindingSet(layout: binding, descriptor: BindingSetDescriptor(entries: [
+            BindingSetEntry(slot: 0, resource: .texture(image)), BindingSetEntry(slot: 1, resource: .sampler(sampler)),
+            BindingSetEntry(slot: 2, resource: .storageBuffer(buffer: output))]))
+        let commands = CommandBuffer()
+        commands.computePass { $0.setPipeline(pipeline); $0.setBindingSet(set); $0.dispatch(groupsX: 5) }
+        commands.copyPass { $0.uploadBufferToTexture(buffer: output,bytesPerRow: 80,texture: readback,width: 5,height: 1) }
+        try device.beginFrame(); try device.submit(commands); device.endFrame(); try device.waitUntilIdle()
+        var values = [SIMD4<Float>](repeating: .zero,count: 5)
+        try values.withUnsafeMutableBytes { try device.readTextureData(readback,width: 5,height: 1,bytesPerRow: 80,into: $0) }
+        XCTAssertEqual(Array(values.prefix(4)),colors)
+        XCTAssertEqual(values[4],(colors[1]+colors[2])*0.5,"fractional LOD must interpolate the uploaded mip chain")
+    }
+    private func subresources(_ api: GraphicsAPI) throws {
+        let device = try makeDevice(api)
+        let texture = try device.makeTexture(TextureDescriptor(width: 8, height: 4, format: .rgba16Float,
+            usage: [.sampled, .transferDestination, .transferSource], dimension: .texture2DArray, layers: 2, mipLevels: 4))
+        defer { device.destroy(texture) }
+        // Every layer/mip carries a distinct value. Read in reverse order to
+        // detect accidental writes to mip0 or adjacent layers and layout loss.
+        for layer in 0..<2 {
+            for mip in 0..<4 {
+                let width = max(1,8 >> mip), height = max(1,4 >> mip)
+                let bytes = Data(repeating: UInt8(17 + layer*40 + mip*5), count: width*height*8)
+                try device.uploadTextureData(texture, data: bytes, width: width, height: height,
+                    bytesPerRow: width*8, subresource: .init(mipLevel: mip, layer: layer))
+            }
+        }
+        for layer in (0..<2).reversed() {
+            for mip in (0..<4).reversed() {
+                let width = max(1,8 >> mip), height = max(1,4 >> mip)
+                var bytes = Data(count: width*height*8)
+                try bytes.withUnsafeMutableBytes {
+                    try device.readTextureData(texture, width: width, height: height, bytesPerRow: width*8,
+                        subresource: .init(mipLevel: mip, layer: layer), into: $0)
+                }
+                XCTAssertEqual(bytes,Data(repeating: UInt8(17 + layer*40 + mip*5), count: bytes.count))
+            }
+        }
+        for subresource in [TextureSubresource(mipLevel: -1), .init(mipLevel: 4), .init(layer: -1), .init(layer: 2)] {
+            XCTAssertThrowsError(try device.uploadTextureData(texture, data: Data(count: 256), width: 1, height: 1,
+                bytesPerRow: 8, subresource: subresource))
+            var bytes = Data(count: 8)
+            XCTAssertThrowsError(try bytes.withUnsafeMutableBytes {
+                try device.readTextureData(texture, width: 1, height: 1, bytesPerRow: 8, subresource: subresource, into: $0)
+            })
+        }
+        XCTAssertThrowsError(try device.uploadTextureData(texture, data: Data(count: 256), width: 8, height: 4,
+            bytesPerRow: 64, subresource: .init(mipLevel: 1)))
+    }
     #if canImport(Metal)
+    func testMetalMipSampling() throws { try mipSampling(.metal,target: "metal") }
+    func testMetalMipAndArrayTransfers() throws { try subresources(.metal) }
     func testMetalTextureSamplerAndFloatReadback() throws { try sample(.metal, target: "metal") }
     func testMetalRasterPipelineBindsUniformsAndPreservesLoadAction() throws {
         let device = try makeDevice(.metal)
@@ -49,7 +120,9 @@ final class NativeGPUContractTests: XCTestCase {
     func testMetalStorageAcrossTransferComputeAndGraphicsQueues() throws { try storageAcrossQueues(.metal, target: "metal") }
     func testMetalPushConstantsAndLayoutRejection() throws { try constants(.metal, target: "metal") }
     #endif
-    #if canImport(CVulkanHeaders)
+    #if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+    func testVulkanMipSampling() throws { try mipSampling(.vulkan,target: "spirv") }
+    func testVulkanMipAndArrayTransfers() throws { try subresources(.vulkan) }
     func testVulkanTextureSamplerAndFloatReadback() throws { try sample(.vulkan, target: "spirv") }
     func testVulkanStorageAcrossTransferComputeAndGraphicsQueues() throws { try storageAcrossQueues(.vulkan, target: "spirv") }
     func testVulkanPushConstantsAndLayoutRejection() throws { try constants(.vulkan, target: "spirv") }

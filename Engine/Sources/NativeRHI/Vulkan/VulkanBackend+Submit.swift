@@ -3,7 +3,7 @@
 // each submit gets its own fence, the GPU work is queued, and completion fires
 // from a background waiter. Acquired images are recycled from a fixed pool.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 

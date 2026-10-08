@@ -3,7 +3,7 @@
 // reported capability set comes from the enumerated physical-device extensions
 // and queried feature chain.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -45,18 +45,8 @@ struct VulkanContext {
 enum VulkanDeviceSetup {
     /// Builds a full Vulkan context, throwing a clear error if any stage fails.
     static func make(loader: VulkanLoader, enableValidation: Bool) throws -> VulkanContext {
-        let instanceResolver: VulkanResolver = { name in
-            // Some loaders (notably Homebrew's vulkan-loader) do not return global
-            // or instance-level commands through vkGetInstanceProcAddr(NULL, ...);
-            // fall back to direct dlsym, which exports every core symbol.
-            loader.resolve(instance: nil, name: name) ?? loader.resolveGlobal(name: name)
-        }
-        let instanceCommands = VulkanInstanceCommands(instanceResolver)
-
-        guard let instance = try createInstance(instanceCommands,
-                                                enableValidation: enableValidation) else {
-            throw RHIError.unsupportedBackend("vkCreateInstance returned no instance")
-        }
+        let instance = try VulkanInstanceSetup.create(loader: loader, enableValidation: enableValidation)
+        let instanceCommands = VulkanInstanceCommands { loader.resolve(instance: instance, name: $0) }
 
         var complete = false
         var ownedDevice: VkDevice?
@@ -147,36 +137,6 @@ enum VulkanDeviceSetup {
             deviceName: deviceName,
             extensions: extensions
         )
-    }
-
-    // MARK: Instance
-
-    private static func createInstance(_ cmds: VulkanInstanceCommands,
-                                       enableValidation: Bool) throws -> VkInstance? {
-        let arena = VulkanScratch()
-        var app = VkApplicationInfo()
-        app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO
-        app.apiVersion = (1 << 22) | (3 << 12)
-        var names = ["VK_KHR_surface"]
-        #if os(macOS)
-        names += ["VK_KHR_portability_enumeration", "VK_EXT_metal_surface"]
-        #elseif os(Windows)
-        names += ["VK_KHR_win32_surface"]
-        #elseif os(Linux)
-        names += ["VK_KHR_xlib_surface"]
-        #endif
-        var info = VkInstanceCreateInfo()
-        info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
-        info.pApplicationInfo = UnsafePointer(arena.make(app))
-        info.enabledExtensionCount = UInt32(names.count)
-        info.ppEnabledExtensionNames = arena.store(names.map { Optional(arena.string($0)) })
-        let layers = enableValidation ? ["VK_LAYER_KHRONOS_validation"] : []
-        info.enabledLayerCount = UInt32(layers.count)
-        info.ppEnabledLayerNames = arena.store(layers.map { Optional(arena.string($0)) })
-        #if os(macOS)
-        info.flags = UInt32(VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR.rawValue)
-        #endif
-        return withExtendedLifetime(arena) { vkWithOutHandle { _ = cmds.createInstance(&info, nil, $0) } }
     }
 
     private static func destroyInstance(_ cmds: VulkanInstanceCommands, instance: VkInstance) {

@@ -1,4 +1,4 @@
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 /// Owns temporary C argument storage through a native API call. Vulkan copies
 /// these descriptors during creation/recording; their pointers never escape.
 final class VulkanScratch {

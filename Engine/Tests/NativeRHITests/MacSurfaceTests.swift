@@ -7,12 +7,6 @@ import XCTest
 
 final class MacSurfaceTests: XCTestCase {
     @MainActor func testMetalSurfacePresentAndResize() async throws { try surface(.metal) }
-    #if canImport(CVulkanHeaders)
-    @MainActor func testVulkanSurfacePresentAndResize() async throws {
-        guard VulkanBackend.isAvailable else { throw XCTSkip("No Vulkan ICD") }
-        try surface(.vulkan)
-    }
-    #endif
     @MainActor private func surface(_ api: GraphicsAPI) throws {
         _ = NSApplication.shared
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 32, height: 32), styleMask: [.borderless], backing: .buffered, defer: false)
@@ -23,6 +17,9 @@ final class MacSurfaceTests: XCTestCase {
         layer.pixelFormat = .bgra8Unorm; layer.drawableSize = CGSize(width: 32, height: 32)
         layer.frame = view.bounds; view.wantsLayer = true; view.layer = layer
         let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false))
+        var wrongSurface = SurfaceDescriptor(nativeHandle: UnsafeMutableRawPointer(bitPattern: 1))
+        wrongSurface.kind = .waylandSurface
+        XCTAssertThrowsError(try device.configureSurface(wrongSurface))
         func configure(_ size: Int) throws {
             layer.drawableSize = CGSize(width: size, height: size)
             try device.configureSurface(SurfaceDescriptor(nativeHandle: Unmanaged.passUnretained(layer).toOpaque(), width: size, height: size, colorFormat: .bgra8Unorm))

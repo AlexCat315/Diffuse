@@ -67,13 +67,15 @@ public protocol RHIBackend: AnyObject {
         data: Data,
         width: Int,
         height: Int,
-        bytesPerRow: Int
+        bytesPerRow: Int,
+        subresource: TextureSubresource
     ) throws
     func readTextureData(
         _ texture: Texture,
         width: Int,
         height: Int,
         bytesPerRow: Int,
+        subresource: TextureSubresource,
         into destination: UnsafeMutableRawBufferPointer
     ) throws
 

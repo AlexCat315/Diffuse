@@ -14,11 +14,13 @@ public enum NativeRHI {
     /// that constructs successfully wins; later entries are fallbacks.
     public static var platformDefaultBackends: [GraphicsAPI] {
         #if os(macOS)
-        return [.metal, .vulkan]
+        return [.metal]
         #elseif os(Windows)
         return [.dx12, .vulkan]
-        #else
+        #elseif os(Linux)
         return [.vulkan]
+        #else
+        return []
         #endif
     }
 
@@ -33,8 +35,8 @@ public enum NativeRHI {
             return false
             #endif
         case .vulkan:
-            #if canImport(CVulkanHeaders)
-            return VulkanBackend.isAvailable
+            #if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+            return true
             #else
             return false
             #endif

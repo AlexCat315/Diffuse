@@ -44,10 +44,9 @@ Bundled Metal 产物省略 `#line`，不会嵌入开发机器的绝对路径。D
 
 ## 本机验证
 
-在 Apple M1 / macOS 27.0.1 上验证 Metal 与 MoltenVK。NativeRendererTests 覆盖透视、三种正交平面、看向地面以外时 discard、depth/color load、禁用网格、连续帧改变参数、非方形 resize、无效 frame 后恢复、uniform 越界、native window present / resize。RenderThread 的 GPU 集成测试验证 consumer 收到正常 packet 并报告网格 draw。
+当前仅在 Apple M1 / macOS 27.0.1 上验证 Metal。macOS 不编译或回退到 Vulkan，Vulkan 面向原生 Windows/Linux。NativeRendererTests 覆盖透视、三种正交平面、看向地面以外时 discard、depth/color load、禁用网格、连续帧改变参数、非方形 resize、无效 frame 后恢复、uniform 越界、native window present / resize。RenderThread 的 GPU 集成测试验证 consumer 收到正常 packet 并报告网格 draw。
 
 ```sh
-export VK_DRIVER_FILES=/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json
 export SLANGC="$PWD/Engine/vendor/slang/bin/slangc"
 export GUAVA_RUN_GPU_SMOKE_TESTS=1
 export GUAVA_WGPU_BACKEND=metal
@@ -57,12 +56,11 @@ python3 scripts/check-swift-maintainability.py
 python3 scripts/test-rhi-shader-toolchain.py
 ```
 
-WGPU reference 检查启用 WGPU validation；本机无 Vulkan validation layer，Vulkan 检查基于实际像素和 GPU 完成结果。平台原生 Vulkan 与 DX12 仍待对应设备验证。
+WGPU reference 检查启用 WGPU validation。原生 Windows/Linux Vulkan 与 DX12 本轮不做 GPU 验证。
 
 ## 性能测量
 
 ```sh
-VK_DRIVER_FILES=/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json \
 GUAVA_WGPU_BACKEND=metal \
 swift run -c release --package-path Engine --jobs 4 NativeRHIPassProbe \
   --width 1280 --height 720 --frames 180 --warmup 30 --repeats 3 \
@@ -80,10 +78,10 @@ Completed-batch 时间包含 CPU、GPU、驱动提交及等待开销，**不是 
 | 尺寸 | 路径 | CPU frame（µs） | Completed batch（ms/frame） |
 | --- | --- | ---: | ---: |
 | 1280×720 | Native Metal | 24.0 | 0.520 |
-| 1280×720 | Native Vulkan / MoltenVK | 51.8 | 0.519 |
 | 1280×720 | WGPU / Metal | 115.5 | 1.484 |
 | 1920×1080 | Native Metal | 31.4 | 0.826 |
-| 1920×1080 | Native Vulkan / MoltenVK | 114.5 | 0.934 |
 | 1920×1080 | WGPU / Metal | 119.7 | 1.697 |
 
-图像差值按 RGB 三通道计算。两个尺寸下，Native Metal 与 WGPU 的 RGB 输出逐字节相同；MoltenVK 的最大通道差为 1，没有差值大于 3 的像素。完整 p95、样本数与环境见 [720p 报告](benchmarks/native-grid-m1-720.json) 和 [1080p 报告](benchmarks/native-grid-m1-1080.json)。
+图像差值按 RGB 三通道计算。两个尺寸下，Native Metal 与 WGPU 的 RGB 输出逐字节相同；完整 p95、样本数与环境见 [720p 报告](benchmarks/native-grid-m1-720.json) 和 [1080p 报告](benchmarks/native-grid-m1-1080.json)。
+
+历史报告中的 Vulkan 样本不属于 Windows/Linux 平台验证；当前探针默认仅选择本机原生 API。PBR/HDR 的新测量见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。

@@ -535,11 +535,12 @@ public final class Device {
         data: Data,
         width: Int,
         height: Int,
-        bytesPerRow: Int
+        bytesPerRow: Int,
+        subresource: TextureSubresource = .init()
     ) throws {
         try locked {
             try backend.uploadTextureData(
-                texture, data: data, width: width, height: height, bytesPerRow: bytesPerRow
+                texture, data: data, width: width, height: height, bytesPerRow: bytesPerRow, subresource: subresource
             )
             planner.recordImmediateWrite(ResourceRef(kind: .texture, id: texture.id))
         }
@@ -550,12 +551,13 @@ public final class Device {
         width: Int,
         height: Int,
         bytesPerRow: Int,
+        subresource: TextureSubresource = .init(),
         into destination: UnsafeMutableRawBufferPointer
     ) throws {
         try locked {
             try backend.readTextureData(
                 texture, width: width, height: height,
-                bytesPerRow: bytesPerRow, into: destination
+                bytesPerRow: bytesPerRow, subresource: subresource, into: destination
             )
         }
     }

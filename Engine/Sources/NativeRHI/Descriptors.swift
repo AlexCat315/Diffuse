@@ -100,6 +100,16 @@ public struct TextureDescriptor: Sendable {
     }
 }
 
+/// One 2D slice of a texture mip. Cube faces use layer indices 0...5.
+/// Immediate transfers start at (0, 0) in this subresource.
+public struct TextureSubresource: Hashable, Sendable {
+    public var mipLevel: Int = 0
+    public var layer: Int = 0
+    public init(mipLevel: Int = 0, layer: Int = 0) {
+        self.mipLevel = mipLevel; self.layer = layer
+    }
+}
+
 public struct TextureUsage: OptionSet, Sendable {
     public let rawValue: UInt32
     public init(rawValue: UInt32) { self.rawValue = rawValue }
@@ -420,14 +430,28 @@ public struct ComputePipelineDescriptor: Sendable {
     }
 }
 
-/// Backend-neutral swapchain surface. Apple backends interpret `nativeHandle`
-/// as a `CAMetalLayer`; Win32/Linux backends will use HWND/Xlib/Wayland handles.
+/// The platform object represented by an unmanaged native surface handle.
+public enum NativeSurfaceKind: Sendable {
+    case metalLayer, win32Window, xlibWindow, waylandSurface
+
+    public static var platformDefault: NativeSurfaceKind {
+        #if os(Windows)
+        return .win32Window
+        #elseif os(Linux)
+        return .xlibWindow
+        #else
+        return .metalLayer
+        #endif
+    }
+}
+
+/// Backend-neutral swapchain surface. `kind` identifies the platform handle.
 ///
 /// The opaque pointer is an unmanaged platform object whose lifetime is owned
-/// by the caller; the RHI only reads it during `configureSurface`, so it is
-/// safe to carry across the device's lock.
+/// by the caller and must remain valid until the device releases the surface.
 public struct SurfaceDescriptor: @unchecked Sendable {
-    /// Xlib Display*. On Linux nativeHandle holds the Window integer as a pointer bit pattern.
+    public var kind: NativeSurfaceKind = .platformDefault
+    /// Xlib Display* or Wayland wl_display*. Xlib nativeHandle holds the Window integer as a pointer bit pattern.
     public var display: UnsafeMutableRawPointer? = nil
     public var nativeHandle: UnsafeMutableRawPointer?
     public var width: Int

@@ -149,6 +149,7 @@ public final class MetalDevice: RHIBackend {
     }
 
     public func configure(surface descriptor: SurfaceDescriptor) throws {
+        try rhiRequire(descriptor.kind == .metalLayer, "Metal requires a CAMetalLayer surface")
         guard let raw = descriptor.nativeHandle else {
             throw RHIError.invalidArgument("surface nativeHandle is nil")
         }
