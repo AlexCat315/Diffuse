@@ -2,7 +2,9 @@
 """Rebuild bundled NativeRHI renderer artifacts with the pinned offline Slang compiler."""
 import argparse
 import importlib.util
+import json
 import os
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,13 +35,36 @@ def main():
     ]
     programs.extend((name, f'{name}.slang', [('vertex', 'postVertex'), ('fragment', 'postFragment')])
                     for name in ['ssao','ssr','taa','bloom','fxaa','ink_paper_post'])
+    particle_kernels = {
+        'particle_simulate': 'particleSimulate', 'particle_spawn_append': 'particleSpawn',
+        'particle_state_clear': 'particleClear', 'particle_state_compact': 'particleCompact',
+        'particle_metadata_reset': 'particleMetadataReset', 'particle_state_finalize': 'particleFinalize',
+    }
+    specialized = set(particle_kernels) - {'particle_metadata_reset','particle_state_finalize'}
+    programs.extend((name,f'{name}.slang',[('compute',entry)]) for name,entry in particle_kernels.items())
     for target in args.targets:
         for name, source, stages in programs:
             for stage, entry in stages:
                 output = shaders / f'Native/{target}/{name}.{stage}.json'
-                SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, target, output, args.slangc,
-                                      line_directives=False)
+                variable = name in specialized
+                artifact = SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, target, output, args.slangc,
+                    threadgroup_size=[64,1,1] if variable else None, line_directives=False,
+                    threadgroup_constants=[0,None,None] if variable and target != 'dxil' else None,
+                    defines={'PARTICLE_WORKGROUP_SIZE': 64} if target == 'dxil' and name in particle_kernels else None)
                 print(output.relative_to(ROOT))
+                if variable and target == 'dxil':
+                    # DXIL has fixed numthreads. Keep one reflected interface
+                    # and a complete 1...256 code family, without 256 duplicate layouts.
+                    codes = {'64': artifact['code']}
+                    with tempfile.TemporaryDirectory(prefix='guava-dxil-workgroups-') as directory:
+                        for size in range(1,257):
+                            if size == 64: continue
+                            variant = SHADER.compile_shader(shaders / 'Slang' / source,entry,stage,target,
+                                Path(directory)/'shader.json',args.slangc,line_directives=False,defines={'PARTICLE_WORKGROUP_SIZE': size})
+                            interface = dict(variant['interface']); interface['threadgroupSize'] = artifact['interface']['threadgroupSize']
+                            if interface != artifact['interface']: raise ValueError('DXIL workgroup variant changes reflected ABI')
+                            codes[str(size)] = variant['code']
+                    output.with_name(f'{name}.compute.workgroups.json').write_text(json.dumps({'base': artifact,'variants': codes},indent=2)+'\n')
 
 
 if __name__ == '__main__':

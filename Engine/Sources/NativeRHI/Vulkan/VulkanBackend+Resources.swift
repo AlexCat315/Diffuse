@@ -229,7 +229,8 @@ extension VulkanBackend {
         guard let module: VkShaderModule = withExtendedLifetime(arena, {
             vkWithOutHandle { _ = context.core.createShaderModule(context.device, &info, nil, $0) }
         }) else { throw RHIError.outOfMemory }
-        registries.shaderModules[handle.id] = VulkanShaderModuleRecord(module: module, stage: descriptor.stage, entryPoint: descriptor.entryPoint)
+        registries.shaderModules[handle.id] = VulkanShaderModuleRecord(module: module, stage: descriptor.stage,
+            entryPoint: descriptor.entryPoint,specializationConstants: descriptor.specializationConstants)
     }
 
     func destroyShaderModule(_ handle: ShaderModule) {

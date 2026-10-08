@@ -73,6 +73,7 @@ int32_t grhi_dx12_compute_pipeline(GRHI_DX12Device*, uint32_t id, uint32_t layou
 int32_t grhi_dx12_acceleration_structure(GRHI_DX12Device*, uint32_t id, const GRHI_Triangle*, size_t triangles, const GRHI_Instance*, size_t instances);
 void grhi_dx12_destroy(GRHI_DX12Device*, uint32_t kind, uint32_t id);
 int32_t grhi_dx12_upload_buffer(GRHI_DX12Device*, uint32_t id, uint64_t offset, const void*, size_t bytes);
+int32_t grhi_dx12_read_buffer(GRHI_DX12Device*, uint32_t id, uint64_t offset, void*, size_t bytes);
 int32_t grhi_dx12_transfer_texture(GRHI_DX12Device*, uint32_t id, uint32_t width, uint32_t height, uint32_t row_bytes, uint32_t mip, uint32_t layer, void*, size_t bytes, uint32_t upload);
 GRHI_DX12Encoder* grhi_dx12_begin(GRHI_DX12Device*, uint32_t queue);
 int32_t grhi_dx12_render(GRHI_DX12Encoder*, const GRHI_RenderColor*, size_t colors, const GRHI_RenderDepth*);

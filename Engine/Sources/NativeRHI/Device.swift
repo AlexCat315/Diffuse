@@ -125,6 +125,8 @@ public final class Device {
     public func makeShaderModule(_ descriptor: ShaderModuleDescriptor) throws -> ShaderModule {
         try locked {
             try descriptor.threadgroupSize.validate()
+            try rhiRequire(Set(descriptor.specializationConstants.map(\.id)).count == descriptor.specializationConstants.count,
+                           "duplicate shader specialization ID")
             try rhiRequire(!descriptor.code.isEmpty && !descriptor.entryPoint.isEmpty,
                            "shader code and entry point must be non-empty")
             if descriptor.stage == .task && !capabilities.meshShading.task {
@@ -527,6 +529,14 @@ public final class Device {
         try locked {
             try backend.uploadBufferData(buffer, offset: offset, data: data)
             if !data.isEmpty { planner.recordImmediateWrite(ResourceRef(kind: .buffer, id: buffer.id)) }
+        }
+    }
+
+    public func readBufferData(_ buffer: Buffer, offset: Int = 0, into destination: UnsafeMutableRawBufferPointer) throws {
+        try locked {
+            guard currentSlot == nil else { throw RHIError.invalidArgument("endFrame must precede buffer readback") }
+            try rhiRequire(destination.isEmpty || destination.baseAddress != nil,"missing buffer readback destination")
+            try backend.readBufferData(buffer, offset: offset, into: destination)
         }
     }
 

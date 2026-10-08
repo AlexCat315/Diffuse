@@ -4,7 +4,7 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、级联/多光源阴影、HDR 天空与 tonemap 已接入，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。其他后处理、透明网格、动画、粒子与 UI 互操作仍待迁移。
+现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、级联/多光源阴影、HDR 天空与 tonemap 已接入，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。透明/蒙皮/变形网格、r5 post/history/cache、风格化及 CPU 粒子绘制也已通过本机对照。resident GPU 粒子物理与事件迁移见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)；GPU 排序/实例转换与 UI 互操作仍待迁移。
 
 Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上原点、+Y 向下。Vulkan backend 通过负高度 viewport 统一这一约定，shader 不再自行翻转 Y。
 
@@ -55,7 +55,7 @@ try device.waitUntilIdle() // 调试、测试或停机
 
 规划器跟踪状态、访问依赖与 queue ownership，跨 queue 用 timeline handoff。多个 queue class 不代表多条独立硬件队列。Vulkan 资源跨不同 queue family 采用 concurrent sharing，各 family 使用独立 command pool。提交路径采用异步 fence completion，不调用 queue idle。
 
-立即上传会同步完成，并登记 transfer write，供下次提交生成依赖。修改已有资源时，调用方须先保证没有 GPU 同时访问该范围。立即纹理传输适合初始化与调试；上传/读回通过 TextureSubresource 指定 mip/layer，默认 mip0、第一层。正常帧的颜色纹理 copy 命令当前仅访问 mip0、第一层；行距使用字节。DX12 通过临时缓冲重排行距，适配原生 256 字节 row pitch。
+立即上传会同步完成，并登记 transfer write，供下次提交生成依赖。修改已有资源时，调用方须先保证没有 GPU 同时访问该范围。立即纹理传输适合初始化与调试；上传/读回通过 TextureSubresource 指定 mip/layer，默认 mip0、第一层。`readBufferData` 必须在 endFrame 后使用，等待此前 GPU 工作完成后回读指定字节范围；Metal 读取 shared buffer，Vulkan 使用 coherent staging 与 transfer/host barrier，DX12 使用 READBACK heap 与 CopyBufferRegion。读回不改变 planner 的写入版本。正常帧的颜色纹理 copy 命令当前仅访问 mip0、第一层；行距使用字节。DX12 通过临时缓冲重排行距，适配原生 256 字节 row pitch。
 
 规划或录制失败且尚未排入 GPU 的工作会回滚状态和 timeline。一次前端提交若已有部分工作排队后失败，设备阻止继续提交，须重建，避免错误复用状态。GPU completion 错误在 `waitUntilIdle` 上抛出。
 
@@ -69,7 +69,7 @@ Vulkan acquire semaphore 由第一次 graphics submission 消费；present 使�
 - Vulkan：SPIR-V，保留实际 entry point 名称；要求 Vulkan 1.3 dynamic rendering 与 timeline semaphore。
 - DX12：DXIL，当前工具使用 shader model 6.6，后端检查相同要求。编译需要 DXC/dxcompiler；本机没有该依赖，DXIL 产物未验证。
 
-`scripts/compile-rhi-shader.py` 固定 Slang **2026.19**。编译器通过 `--slangc` 或 `SLANGC` 显式提供；编译时不下载。目标反射与 SPIR-V 逻辑反射用于区分普通资源和 push constant，原始目标 reflection 保留供检查。编译/反射失败不会覆盖已有产物。
+`scripts/compile-rhi-shader.py` 固定 Slang **2026.19**。编译器通过 `--slangc` 或 `SLANGC` 显式提供；编译时不下载。目标反射与 SPIR-V 逻辑反射用于区分普通资源和 push constant，原始目标 reflection 保留供检查。编译/反射失败不会覆盖已有产物。`ShaderInterface` 直接序列化 typed specialization constants 和工作组维度对应的 constant ID；Metal function constants 与 Vulkan VkSpecializationInfo 共用同一类型/值输入，物理 dispatch 和 LocalSizeId 一致。Vulkan 设备必须启用 maintenance4 才能使用 LocalSizeId。DXIL 不能运行时改 numthreads，粒子工具链在 Windows 编译完整的 1–256 离线代码族，Native loader 按工作组大小选择；缺失变体会明确失败。
 
 `dispatch(groupsX:groupsY:groupsZ:)` 和 `drawMeshTasks` 的单位都是 workgroup 数量。local size 来自 shader module，例如 local size `(8,1,1)` 配合两个 groups 执行 16 个线程。当前 Slang mesh/task JSON 缺少 local size，必须显式传 `--threadgroup-size`，与 `numthreads` 一致。
 
