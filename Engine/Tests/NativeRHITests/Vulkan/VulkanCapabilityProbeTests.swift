@@ -1,23 +1,22 @@
 // NativeRHITests — Vulkan availability + real capability probe.
 //
-// Guarded by runtime availability (loader dlopen + ICD present). Capabilities are
+// Guarded by runtime availability (linked native loader + ICD present). Capabilities
 // report implemented paths; adapter extension presence is diagnostic only.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import XCTest
 @testable import NativeRHI
 
 final class VulkanCapabilityProbeTests: XCTestCase {
 
     func testUnavailableReportsFalseWithoutCrash() {
-        // On this host the loader + MoltenVK ICD are present, but the test still
-        // must not crash; the value is the real queried one.
+        // Query the native driver without assuming an installed ICD.
         _ = VulkanBackend.isAvailable
     }
 
     func testBackendCreatesAndReportsRealCapabilities() throws {
         guard VulkanBackend.isAvailable else {
-            throw XCTSkip("No Vulkan loader / ICD (MoltenVK) on this host")
+            throw XCTSkip("No native Vulkan driver on this Windows/Linux host")
         }
         let config = DeviceConfig(preferredBackends: [.vulkan], enableValidation: false)
         let backend = try VulkanBackend.make(config: config)
@@ -27,11 +26,12 @@ final class VulkanCapabilityProbeTests: XCTestCase {
         print("[Vulkan] deviceName=\(backend.deviceName) " +
               "rayTracing=\(caps.rayTracing) meshShaders=\(caps.meshShading.mesh) " +
               "compute=\(caps.compute) indirectDraw=\(caps.indirectDraw)")
-        // These paths are unavailable even on an adapter advertising extensions.
-        XCTAssertFalse(caps.rayTracing.accelerationStructures,
-                       "Vulkan acceleration structure commands are not implemented")
-        XCTAssertFalse(caps.meshShading.mesh,
-                       "Vulkan mesh commands are not implemented")
+        let adapter = backend.queryAdapterCapabilities()
+        XCTAssertTrue(!caps.meshShading.mesh || adapter.meshShading)
+        XCTAssertTrue(!caps.meshShading.task || caps.meshShading.mesh)
+        XCTAssertTrue(!caps.rayTracing.computeRayQuery || (caps.rayTracing.accelerationStructures && adapter.rayTracing))
+        XCTAssertFalse(caps.rayTracing.pipelines)
+        XCTAssertFalse(caps.meshShading.indirect)
         XCTAssertTrue(caps.graphics)
         XCTAssertTrue(caps.compute)
     }

@@ -3,20 +3,20 @@ import RenderBackend
 import RHIWGPU
 
 /// Uses the existing production WGPURenderer, including its real resource table
-/// and frame planning. Matching packets use r3 depth/base with debug materials.
+/// and frame planning. Scene packets start at r3, where viewport resolve makes
+/// the actual rendered texture available for readback.
 public final class WGPUSceneReference {
     public let backend: WGPUBackend
     public let renderer: WGPURenderer
     public init(validation: Bool = false) throws {
-        if let override = ProcessInfo.processInfo.environment["GUAVA_WGPU_BACKEND"], override.lowercased() != "metal" {
-            throw WGPUBackendError.initFailed("scene comparison requires Metal WGPU")
-        }
-        backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: validation, framesInFlight: 3, preferredBackends: [.metal]))
-        try backend.initialize()
+        backend = try WGPUReferenceConfiguration.make(validation: validation)
         renderer = WGPURenderer(backend: backend); renderer.initialize()
     }
     deinit { try? backend.waitUntilIdle() }
     public func render(packet: RenderPacket) throws -> RenderFrameStats {
+        guard packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r3ViewportInterop.rawValue else {
+            throw WGPUBackendError.initFailed("scene comparison requires r3 or later to publish the rendered viewport")
+        }
         renderer.render(packet: packet)
         guard renderer.lastFrameStats.frameIndex == packet.frameIndex,
               renderer.currentViewportSurfaceState().isValid else {

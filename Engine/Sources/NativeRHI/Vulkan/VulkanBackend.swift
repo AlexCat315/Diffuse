@@ -5,7 +5,7 @@
 // All Vulkan work is driven off the frozen RHIBackend contract; this file wires
 // that contract to the loaded function-pointer table.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -62,13 +62,20 @@ final class VulkanBackend: RHIBackend {
         } catch {
             throw RHIError.unsupportedBackend("Vulkan device creation failed: \(error)")
         }
+        var complete = false
+        defer {
+            if !complete {
+                context.instanceCommands.destroyDevice(context.device, nil)
+                context.instanceCommands.destroyInstance(context.instance, nil)
+            }
+        }
 
         var memProps = VkPhysicalDeviceMemoryProperties()
         context.instanceCommands.getPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps)
         let allocator = VulkanMemoryAllocator(context: context, memoryProperties: memProps)
 
         let descriptorPool = try createDescriptorPool(context: context)
-
+        complete = true
         return VulkanBackend(
             loader: loader,
             context: context,
@@ -122,8 +129,8 @@ final class VulkanBackend: RHIBackend {
     }
 
     func queryAdapterCapabilities() -> AdapterCapabilities {
-        // Extension presence is diagnostic only. The logical device currently
-        // does not enable the RT/mesh feature chains or encode these commands.
+        // Extension presence is diagnostic only; enabled features and resolved
+        // commands additionally determine the implemented capability set.
         var result = AdapterCapabilities()
         let ext = context.extensions
         result.rayTracing = ext.contains("VK_KHR_acceleration_structure")

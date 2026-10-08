@@ -8,16 +8,32 @@ import SIMDCompat
 import XCTest
 
 final class NativeOpaqueTests: XCTestCase {
+    #if os(macOS)
     func testMetalMatchesProductionWGPUScene() throws { try parity(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanMatchesProductionWGPUScene() throws { try parity(.vulkan) }
+    #endif
+    #if os(macOS)
     func testMetalResourceReplacementAndRemoval() throws { try lifecycle(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanResourceReplacementAndRemoval() throws { try lifecycle(.vulkan) }
+    #endif
 
+    #if os(macOS)
     func testMetalImportedTexturesAndSubmeshes() throws { try imported(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanImportedTexturesAndSubmeshes() throws { try imported(.vulkan) }
+    #endif
 
+    #if os(macOS)
     func testMetalVisibilityAndLOD() throws { try visibility(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanVisibilityAndLOD() throws { try visibility(.vulkan) }
+    #endif
     private func visibility(_ api: GraphicsAPI) throws {
         let assets = AssetRegistry()
         let cube = BuiltinMesh.cube(color: SIMD3(repeating: 1))
@@ -54,6 +70,9 @@ final class NativeOpaqueTests: XCTestCase {
         let renderer = try NativeRenderer(device: device)
         let reference = try WGPUSceneReference(validation: true)
         var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: 192,height: 128))
+        // The production renderer publishes its offscreen texture from r3.
+        // One-pass/depth-prepass equivalence is checked separately in parity.
+        packet.renderSettings.stage = .r3ViewportInterop
         packet.scene.camera = RenderCamera(eye: SIMD3(0,0,5), target: .zero, near: 0.1, far: 100)
         var back = matrix_identity_float4x4; back.columns.0.x = 2; back.columns.1.y = 2; back.columns.3.z = -1.5
         packet.scene.instances = [RenderInstance(meshIndex: 2, transform: matrix_identity_float4x4),
@@ -72,11 +91,16 @@ final class NativeOpaqueTests: XCTestCase {
                 XCTAssertEqual(image[pixel+2],0,"imported zero red factor must survive GPU shading")
                 XCTAssertGreaterThan(image[pixel],5); XCTAssertGreaterThan(image[pixel+1],5)
             }
-            let delta = try GridImage.difference(image, reference.readback())
+            let expected = try reference.readback()
+            let dir = URL(fileURLWithPath: "/tmp/guava-native-mask-\(api.rawValue)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try GridImage.writePPM(image,size: packet.drawableSize,to: dir.appendingPathComponent("frame-\(frame).ppm"))
+            try GridImage.writePPM(expected,size: packet.drawableSize,to: dir.appendingPathComponent("wgpu-\(frame).ppm"))
+            let delta = try GridImage.difference(image,expected)
             XCTAssertLessThan(delta.meanAbsoluteChannelError, 0.5, "textured \(api): \(delta)")
             XCTAssertLessThan(delta.pixelsOverThree, delta.pixelCount/100)
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], 3)
-            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass], 3)
+
         }
         // Masked fragments leave both color and depth untouched: opaque coverage
         // must fill the checker holes, independent of instance extraction order.
@@ -150,9 +174,9 @@ final class NativeOpaqueTests: XCTestCase {
         XCTAssertThrowsError(try renderer.renderChecked(packet: packet))
         packet.scene.instances = []; try renderer.renderChecked(packet: packet)
         XCTAssertEqual(renderer.residentMeshCount, 2)
-        packet.renderSettings.debugViewMode = .shaded
+        packet.renderSettings.stage = .r5PostProcess
         XCTAssertThrowsError(try renderer.renderChecked(packet: packet))
-        packet.renderSettings.debugViewMode = .unlit; try renderer.renderChecked(packet: packet)
+        packet.renderSettings.stage = .r3ViewportInterop; try renderer.renderChecked(packet: packet)
         try device.waitUntilIdle()
     }
 }

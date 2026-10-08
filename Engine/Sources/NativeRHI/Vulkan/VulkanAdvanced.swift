@@ -1,4 +1,4 @@
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 
 struct VulkanAdvancedCommands {

@@ -6,7 +6,19 @@ public enum NativePassBenchmark {
     public static func run(arguments: [String]) throws {
         let options = try PassBenchmarkOptions(arguments: arguments)
         try FileManager.default.createDirectory(at: options.output, withIntermediateDirectories: true)
-        let packet = options.scene == .grid ? GridProbeScene.packet(size: options.size) : MeshProbeScene.packet(size: options.size)
+        let packet: RenderPacket
+        switch options.scene {
+        case .grid: packet = GridProbeScene.packet(size: options.size)
+        case .mesh: packet = MeshProbeScene.packet(size: options.size)
+        case .pbr: packet = PBRProbeScene.packet(size: options.size)
+        }
+        func framePacket(_ frame: Int) -> RenderPacket {
+            var p = packet; p.frameIndex = frame
+            // Exercise the complete HDR frame on both renderers. A static WGPU
+            // view would reuse its opaque snapshot and measure a different workload.
+            if options.scene == .pbr { p.scene.camera.eye.x += Float(frame % 11)*0.002 }
+            return p
+        }
         var results: [PassBenchmarkResult] = []
         var images: [String: Data] = [:]
         for api in options.backends {
@@ -15,14 +27,14 @@ public enum NativePassBenchmark {
             let readback: () throws -> Data
             if options.scene == .grid {
                 let renderer = try NativeGridRenderer(device: device)
-                render = { frame in var p = packet; p.frameIndex = frame; try renderer.renderChecked(packet: p); return renderer.lastFrameStats }
+                render = { frame in let p = framePacket(frame); try renderer.renderChecked(packet: p); return renderer.lastFrameStats }
                 readback = {
                     guard let texture = renderer.colorTexture else { throw RHIError.invalidArgument("benchmark produced no color") }
                     return try GridImage.readback(device: device, texture: texture, size: options.size)
                 }
             } else {
                 let renderer = try NativeRenderer(device: device)
-                render = { frame in var p = packet; p.frameIndex = frame; try renderer.renderChecked(packet: p); return renderer.lastFrameStats }
+                render = { frame in let p = framePacket(frame); try renderer.renderChecked(packet: p); return renderer.lastFrameStats }
                 readback = {
                     guard let texture = renderer.colorTexture else { throw RHIError.invalidArgument("benchmark produced no color") }
                     return try GridImage.readback(device: device, texture: texture, size: options.size)
@@ -39,14 +51,20 @@ public enum NativePassBenchmark {
         let readReference: () throws -> Data
         if options.scene == .grid {
             let reference = try WGPUGridReference(size: options.size)
-            renderReference = { frame in var p = packet; p.frameIndex = frame; return try reference.render(packet: p) }
+            renderReference = { frame in let p = framePacket(frame); return try reference.render(packet: p) }
             finishReference = { try reference.finish() }; readReference = { try reference.readback() }
         } else {
             let reference = try WGPUSceneReference()
-            renderReference = { frame in var p = packet; p.frameIndex = frame; return try reference.render(packet: p) }
+            renderReference = { frame in
+                let result = try reference.render(packet: framePacket(frame))
+                if options.scene == .pbr && reference.renderer.lastFrameUsedOpaqueCache {
+                    throw RHIError.invalidArgument("PBR reference unexpectedly reused an opaque snapshot")
+                }
+                return result
+            }
             finishReference = { try reference.finish() }; readReference = { try reference.readback() }
         }
-        let result = try measure(name: "wgpu-metal", device: "wgpu-native Metal", options: options,
+        let result = try measure(name: WGPUReferenceConfiguration.name, device: "wgpu-native \(WGPUReferenceConfiguration.preference.rawValue)", options: options,
             render: renderReference, finish: finishReference)
         let expected = try readReference(); images[result.backend] = expected; results.append(result)
         var differences: [String: GridImageDifference] = [:]
@@ -89,7 +107,7 @@ public enum NativePassBenchmark {
     }
 }
 
-private enum ProbeScene: String { case grid, mesh }
+private enum ProbeScene: String { case grid, mesh, pbr }
 
 private struct PassBenchmarkOptions {
     var scene = ProbeScene.grid
@@ -97,15 +115,15 @@ private struct PassBenchmarkOptions {
     var frames = 180
     var warmup = 30
     var repeats = 3
-    var backends: [GraphicsAPI] = [.metal, .vulkan]
+    var backends: [GraphicsAPI] = NativeRHI.platformDefaultBackends
     var output = URL(fileURLWithPath: "/tmp/guava-native-grid")
     init(arguments: [String]) throws {
-        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh --width N --height N --frames N --warmup N --repeats N --backends metal,vulkan --output DIR") }
+        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
         for index in stride(from: 0, to: arguments.count, by: 2) {
             let value = arguments[index + 1]
             switch arguments[index] {
             case "--scene":
-                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid or mesh scene") }
+                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh or pbr scene") }
                 self.scene = scene
             case "--output": output = URL(fileURLWithPath: value)
             case "--backends":

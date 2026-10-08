@@ -36,3 +36,11 @@ func rhiTextureTransferBytes(width: Int, height: Int, rowBytes: Int, format: Tex
         "invalid color texture transfer bounds or row pitch")
     return bytes
 }
+
+func rhiTextureSubresourceExtent(_ subresource: TextureSubresource, width: Int, height: Int,
+                                 mipLevels: Int, layers: Int) throws -> (width: Int, height: Int) {
+    try rhiRequire(subresource.mipLevel >= 0 && subresource.mipLevel < mipLevels
+        && subresource.mipLevel < Int.bitWidth && subresource.layer >= 0 && subresource.layer < layers,
+        "texture subresource is out of bounds")
+    return (max(1, width >> subresource.mipLevel), max(1, height >> subresource.mipLevel))
+}

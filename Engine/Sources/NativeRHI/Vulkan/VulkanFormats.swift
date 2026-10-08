@@ -1,6 +1,6 @@
 // NativeRHI Vulkan — RHI ↔ Vulkan format / descriptor mappings.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 
 enum VulkanFormats {

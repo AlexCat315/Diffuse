@@ -4,7 +4,7 @@
 // a one-shot transfer; host-visible destinations are mapped directly. The hot
 // per-frame path uses the persistently-mapped upload ring instead.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -33,12 +33,14 @@ extension VulkanBackend {
         }
     }
 
-    func uploadTextureData(_ texture: Texture, data: Data, width: Int, height: Int, bytesPerRow: Int) throws {
+    func uploadTextureData(_ texture: Texture, data: Data, width: Int, height: Int, bytesPerRow: Int, subresource: TextureSubresource) throws {
         guard var record = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("unknown texture")
         }
+        let extent = try rhiTextureSubresourceExtent(subresource, width: record.width, height: record.height,
+            mipLevels: Int(record.mipLevels), layers: Int(record.layers))
         _ = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: record.format,
-            textureWidth: record.width, textureHeight: record.height, capacity: data.count)
+            textureWidth: extent.width, textureHeight: extent.height, capacity: data.count)
         let staging = try makeStagingBuffer(size: data.count)
         defer { destroyStagingBuffer(staging) }
         staging.pointer.copyMemory(from: (data as NSData).bytes, byteCount: data.count)
@@ -48,7 +50,7 @@ extension VulkanBackend {
         region.bufferRowLength = UInt32(bytesPerRow / record.format.byteCount)
         region.bufferImageHeight = 0
         region.imageSubresource = VkImageSubresourceLayers(
-            aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: 0, baseArrayLayer: 0, layerCount: 1)
+            aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: UInt32(subresource.mipLevel), baseArrayLayer: UInt32(subresource.layer), layerCount: 1)
         region.imageExtent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
 
         let oldLayout = record.layout
@@ -65,14 +67,16 @@ extension VulkanBackend {
         registries.textures[texture.id] = record
     }
 
-    func readTextureData(_ texture: Texture, width: Int, height: Int, bytesPerRow: Int,
+    func readTextureData(_ texture: Texture, width: Int, height: Int, bytesPerRow: Int, subresource: TextureSubresource,
                          into destination: UnsafeMutableRawBufferPointer) throws {
         guard let record = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("unknown texture")
         }
         try rhiRequire(record.layout != VK_IMAGE_LAYOUT_UNDEFINED, "cannot read an uninitialized Vulkan texture")
+        let extent = try rhiTextureSubresourceExtent(subresource, width: record.width, height: record.height,
+            mipLevels: Int(record.mipLevels), layers: Int(record.layers))
         let byteCount = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: record.format,
-            textureWidth: record.width, textureHeight: record.height, capacity: destination.count)
+            textureWidth: extent.width, textureHeight: extent.height, capacity: destination.count)
         let readback = try makeStagingBuffer(size: byteCount)
         defer { destroyStagingBuffer(readback) }
 
@@ -81,7 +85,7 @@ extension VulkanBackend {
         region.bufferRowLength = UInt32(bytesPerRow / record.format.byteCount)
         region.bufferImageHeight = 0
         region.imageSubresource = VkImageSubresourceLayers(
-            aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: 0, baseArrayLayer: 0, layerCount: 1)
+            aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: UInt32(subresource.mipLevel), baseArrayLayer: UInt32(subresource.layer), layerCount: 1)
         region.imageExtent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
 
         try oneShot { cmd in

@@ -5,12 +5,16 @@ import NativeRHI
 import SIMDCompat
 
 /// Scene renderer recorded entirely through NativeRHI. The initial migration
-/// supports static opaque/masked meshes, material inspection modes and the grid.
+/// supports static opaque/masked meshes, PBR lighting, directional shadows,
+/// HDR sky/tonemap, material inspection modes and the grid.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
     private let meshes: NativeMeshStore
     private let opaque: NativeOpaquePass
+    private let lighting: NativeLightingResources
+    private let shadows: NativeShadowPass
+    private let hdrPasses: NativeHDRPasses
     private let grid: NativeEditorGridPass
     private let surface: RenderSurfaceDescriptor?
     private var targets: NativeRenderTargets?
@@ -23,6 +27,9 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         self.device = device; self.surface = surface
         meshes = try NativeMeshStore(device: device, registry: assets)
         opaque = try NativeOpaquePass(device: device)
+        lighting = try NativeLightingResources(device: device)
+        shadows = try NativeShadowPass(device: device)
+        hdrPasses = try NativeHDRPasses(device: device)
         grid = try NativeEditorGridPass(device: device)
     }
     deinit { targets?.destroy(device: device) }
@@ -36,15 +43,22 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
 
     public func renderChecked(packet: RenderPacket) throws {
         let start = DispatchTime.now().uptimeNanoseconds
-        let matrices = try validate(packet)
+        let matrices = try NativePacketValidation.validate(packet)
         try meshes.synchronize()
-        try ensureTargets(size: packet.drawableSize)
+        let hdr = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r4LightingPBRShadow.rawValue
+        if hdr || packet.renderSettings.debugViewMode == .shaded { try lighting.ensureEnvironment() }
+        let shadowPlan = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: packet.scene, drawableSize: packet.drawableSize,
+            enabled: hdr, settings: packet.renderSettings.shadowSettings, meshBounds: { meshes[$0]?.bounds })
+        try shadows.ensureTargets(plan: shadowPlan)
+        try ensureTargets(size: packet.drawableSize, hdr: hdr)
         guard let targets else { throw RHIError.outOfMemory }
         try device.beginFrame()
         defer { device.endFrame() }
         let hasDepth = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r2MultiObjectDepth.rawValue
+        let lightBindings = try lighting.prepare(packet: packet, plan: shadowPlan, atlas: shadows.atlas, fallback: meshes.fallbacks[0])
+        let shadowTiles = try shadows.prepare(packet: packet, store: meshes, plan: shadowPlan)
         let prepared = try opaque.prepare(packet: packet, store: meshes,
-            matrices: matrices, depthPrepass: hasDepth)
+            matrices: matrices, depthPrepass: hasDepth, hdr: hdr, lighting: lightBindings)
         let image = surface == nil ? nil : try device.acquireSwapchainImage()
         guard let color = image?.texture ?? targets.color else { throw RHIError.swapchainAcquireFailed("no scene color target") }
         let prepareEnd = DispatchTime.now().uptimeNanoseconds
@@ -59,18 +73,41 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passTimes[.depthPrepass] = DispatchTime.now().uptimeNanoseconds - before
             passDraws[.depthPrepass] = prepared.draws.count; active.append(.depthPrepass)
         }
+        if !shadowTiles.isEmpty {
+            let before = DispatchTime.now().uptimeNanoseconds
+            shadows.encode(tiles: shadowTiles, plan: shadowPlan, into: commands)
+            passTimes[.shadowPass] = DispatchTime.now().uptimeNanoseconds - before
+            passDraws[.shadowPass] = shadowTiles.reduce(0) { $0 + $1.draws.count }; active.append(.shadowPass)
+        }
+        let sceneColor = targets.hdr ?? color
+        if hdr {
+            let before = DispatchTime.now().uptimeNanoseconds
+            try hdrPasses.encodeSky(packet: packet, matrices: matrices, hdr: sceneColor, depth: targets.depth, into: commands)
+            passTimes[.skybox] = DispatchTime.now().uptimeNanoseconds - before
+            passDraws[.skybox] = 1; active.append(.skybox)
+        }
         let beforeBase = DispatchTime.now().uptimeNanoseconds
         opaque.encode(draws: prepared.draws, size: packet.drawableSize,
-            color: RenderColorTarget(texture: color, loadAction: .clear(SIMD4(0.05,0.06,0.08,1))),
+            color: RenderColorTarget(texture: sceneColor, loadAction: hdr ? .load : .clear(SIMD4(0.05,0.06,0.08,1))),
             depth: RenderDepthTarget(texture: targets.depth, loadAction: hasDepth ? .load : .clear(1)), depthOnly: false, into: commands)
         passTimes[.basePass] = DispatchTime.now().uptimeNanoseconds - beforeBase
         passDraws[.basePass] = prepared.draws.count; active.append(.basePass)
         if packet.renderSettings.enableEditorGrid {
             let before = DispatchTime.now().uptimeNanoseconds
-            try grid.encode(packet: packet, color: RenderColorTarget(texture: color, loadAction: .load),
-                depth: RenderDepthTarget(texture: targets.depth, loadAction: .load), into: commands)
+            if hdr {
+                try hdrPasses.encodeGrid(packet: packet, hdr: sceneColor, depth: targets.depth, into: commands)
+            } else {
+                try grid.encode(packet: packet, color: RenderColorTarget(texture: color, loadAction: .load),
+                    depth: RenderDepthTarget(texture: targets.depth, loadAction: .load), into: commands)
+            }
             passTimes[.editorGrid] = DispatchTime.now().uptimeNanoseconds - before
             passDraws[.editorGrid] = 1; active.append(.editorGrid)
+        }
+        if hdr {
+            let before = DispatchTime.now().uptimeNanoseconds
+            try hdrPasses.encodeTonemap(size: packet.drawableSize, hdr: sceneColor, output: color, into: commands)
+            passTimes[.tonemap] = DispatchTime.now().uptimeNanoseconds - before
+            passDraws[.tonemap] = 1; active.append(.tonemap)
         }
         let encoded = DispatchTime.now().uptimeNanoseconds
         try device.submit(commands); if let image { try device.present(image) }
@@ -81,42 +118,20 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         stats.cpuPrepareNS = prepareEnd - start; stats.cpuEncodeNS = encoded - prepareEnd
         stats.cpuSubmitNS = end - encoded; stats.cpuFrameTotalNS = end - start
         stats.culledMeshInstanceCount = prepared.visibility.culledCount; stats.lodMeshInstanceCount = prepared.visibility.lodCount
+        stats.shadowedLightCount = shadowPlan.shadowedLightCount
+        stats.shadowTileCount = shadowPlan.shadowTileCount
+        stats.shadowCascadeCount = shadowPlan.cascadeCount
+        stats.shadowMapResolution = shadowPlan.tileSize
+        stats.shadowAtlasResolution = shadowPlan.atlasSize
         stats.meshBatchCount = prepared.draws.count; stats.instancedMeshBatchCount = prepared.draws.count { $0.instanceCount > 1 }
         stats.submittedMeshTriangleCount = prepared.draws.reduce(0) { $0 + $1.key.indexCount / 3 * $1.instanceCount }
         lastFrameStats = stats; lastError = nil
     }
 
-    private func validate(_ packet: RenderPacket) throws -> RenderCameraMatrices {
-        guard packet.drawableSize.width > 0, packet.drawableSize.height > 0,
-              !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
-        guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop].contains(packet.renderSettings.stage),
-              packet.renderSettings.debugViewMode != .shaded,
-              !packet.renderSettings.enableStylizedCharacterShading,
-              packet.jointPaletteMap.palettes.isEmpty, packet.scene.deformableMeshes.isEmpty,
-              packet.scene.particles.isEmpty, packet.scene.particleSimulationBatches.isEmpty else {
-            throw RHIError.unsupportedFeature("native lighting, post, animation and particle migration is pending; use static geometry with a material inspection mode")
-        }
-        let matrices = RenderCameraMatrices.make(scene: packet.scene, drawableSize: packet.drawableSize)
-        guard Self.finite(matrices.viewProjection), packet.scene.environment.exposure.isFinite,
-              packet.scene.instances.allSatisfy({ Self.finite($0.transform) }) else {
-            throw RHIError.invalidArgument("non-finite camera or instance transform")
-        }
-        for instance in packet.scene.instances {
-            guard instance.colorTint.x.isFinite, instance.colorTint.y.isFinite, instance.colorTint.z.isFinite,
-                  instance.material.baseColorFactor.x.isFinite, instance.material.baseColorFactor.y.isFinite,
-                  instance.material.baseColorFactor.z.isFinite, instance.material.baseColorFactor.w.isFinite else {
-                throw RHIError.invalidArgument("non-finite material color")
-            }
-        }
-        return matrices
-    }
-    private static func finite(_ matrix: simd_float4x4) -> Bool {
-        (0..<4).allSatisfy { column in (0..<4).allSatisfy { matrix[column][$0].isFinite } }
-    }
-    private func ensureTargets(size: RenderDrawableSize) throws {
-        if targets?.size == size { return }
+    private func ensureTargets(size: RenderDrawableSize, hdr: Bool) throws {
+        if targets?.size == size && (targets?.hdr != nil) == hdr { return }
         if let surface { try NativeRenderTargets.configure(device: device, surface: surface, size: size) }
-        let replacement = try NativeRenderTargets.make(device: device, size: size, offscreen: surface == nil)
+        let replacement = try NativeRenderTargets.make(device: device, size: size, offscreen: surface == nil, hdr: hdr)
         targets?.destroy(device: device); targets = replacement
     }
 }

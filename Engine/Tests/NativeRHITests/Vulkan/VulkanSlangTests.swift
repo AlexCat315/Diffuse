@@ -1,4 +1,4 @@
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import Foundation
 import XCTest
 @testable import NativeRHI

@@ -1,6 +1,6 @@
 // NativeRHI Vulkan — runtime function-pointer table and C-interop helpers.
 //
-// The Vulkan loader (libvulkan) is vendored in `VulkanLoader.xcframework` and
+// The native Vulkan loader is supplied by the Windows/Linux SDK and
 // linked at build time. We bind its `vkGetInstanceProcAddr` from the linked
 // image and then build a table of the instance/device entry points we use,
 // grouped so each struct stays well under the maintainability limit. Handles
@@ -8,7 +8,7 @@
 // is made by bit-casting a nil optional, and C out-handles are written through
 // a layout-compatible rebound helper.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -119,33 +119,7 @@ typealias PFN_vkGetPhysicalDeviceSurfacePresentModesKHR = @convention(c) (
     UnsafeMutablePointer<VkPresentModeKHR>?
 ) -> VkResult
 
-#if os(macOS)
-/// POD mirror of `VkMetalSurfaceCreateInfoEXT`. Swift's Clang importer refuses
-/// to expose the real struct because of the opaque `CAMetalLayer*` field, so we
-/// describe the C layout ourselves. Built into a local buffer and passed to the
-/// C entry point as an opaque pointer.
-struct VkMetalSurfaceCreateInfoEXTRepr {
-    var sType: VkStructureType
-    var pNext: UnsafeRawPointer?
-    var flags: UInt32
-    var pLayer: UnsafeMutableRawPointer?
 
-    init(sType: VkStructureType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT,
-         pNext: UnsafeRawPointer? = nil,
-         flags: UInt32 = 0,
-         pLayer: UnsafeMutableRawPointer? = nil) {
-        self.sType = sType
-        self.pNext = pNext
-        self.flags = flags
-        self.pLayer = pLayer
-    }
-}
-
-typealias PFN_vkCreateMetalSurfaceEXT = @convention(c) (
-    VkInstance, UnsafeRawPointer?,
-    UnsafePointer<VkAllocationCallbacks>?, UnsafeMutablePointer<VkSurfaceKHR>?
-) -> VkResult
-#endif
 
 // MARK: Device-level group A — memory, buffers, images, views, shaders, pools
 
@@ -458,7 +432,6 @@ typealias VulkanResolver = (String) -> UnsafeRawPointer?
 
 /// Instance-level commands (resolved through `vkGetInstanceProcAddr`).
 struct VulkanInstanceCommands {
-    let createInstance: PFN_vkCreateInstance
     let destroyInstance: PFN_vkDestroyInstance
     let enumeratePhysicalDevices: PFN_vkEnumeratePhysicalDevices
     let getPhysicalDeviceProperties: PFN_vkGetPhysicalDeviceProperties
@@ -472,15 +445,12 @@ struct VulkanInstanceCommands {
     let getDeviceQueue: PFN_vkGetDeviceQueue
     let deviceWaitIdle: PFN_vkDeviceWaitIdle
     let destroySurfaceKHR: PFN_vkDestroySurfaceKHR
+    let getSurfaceSupport: CVulkanHeaders.PFN_vkGetPhysicalDeviceSurfaceSupportKHR
     let getSurfaceCapabilities: PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR
     let getSurfaceFormats: PFN_vkGetPhysicalDeviceSurfaceFormatsKHR
     let getSurfacePresentModes: PFN_vkGetPhysicalDeviceSurfacePresentModesKHR
-    #if os(macOS)
-    let createMetalSurfaceEXT: PFN_vkCreateMetalSurfaceEXT
-    #endif
 
     init(_ resolve: VulkanResolver) {
-        createInstance = Self.bind(resolve("vkCreateInstance"))
         destroyInstance = Self.bind(resolve("vkDestroyInstance"))
         enumeratePhysicalDevices = Self.bind(resolve("vkEnumeratePhysicalDevices"))
         getPhysicalDeviceProperties = Self.bind(resolve("vkGetPhysicalDeviceProperties"))
@@ -494,12 +464,10 @@ struct VulkanInstanceCommands {
         getDeviceQueue = Self.bind(resolve("vkGetDeviceQueue"))
         deviceWaitIdle = Self.bind(resolve("vkDeviceWaitIdle"))
         destroySurfaceKHR = Self.bind(resolve("vkDestroySurfaceKHR"))
+        getSurfaceSupport = Self.bind(resolve("vkGetPhysicalDeviceSurfaceSupportKHR"))
         getSurfaceCapabilities = Self.bind(resolve("vkGetPhysicalDeviceSurfaceCapabilitiesKHR"))
         getSurfaceFormats = Self.bind(resolve("vkGetPhysicalDeviceSurfaceFormatsKHR"))
         getSurfacePresentModes = Self.bind(resolve("vkGetPhysicalDeviceSurfacePresentModesKHR"))
-        #if os(macOS)
-        createMetalSurfaceEXT = Self.bind(resolve("vkCreateMetalSurfaceEXT"))
-        #endif
     }
 
     private static func bind<F>(_ ptr: UnsafeRawPointer?) -> F {

@@ -15,10 +15,10 @@ enum BackendFactory {
             #endif
 
         case .vulkan:
-            #if canImport(CVulkanHeaders)
+            #if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
             return try VulkanBackend.make(config: config)
             #else
-            throw RHIError.unsupportedBackend("Vulkan loader integration is not built for this host")
+            throw RHIError.unsupportedBackend("Vulkan is built for Windows and Linux; macOS uses Metal")
             #endif
 
         case .dx12:

@@ -4,7 +4,7 @@
 // for the lifetime of the chunk. The ChunkUploadAllocator bumps offsets within
 // it, so no per-upload map/unmap/free happens on the hot path.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
