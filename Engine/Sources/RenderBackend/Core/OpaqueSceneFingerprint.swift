@@ -1,18 +1,18 @@
 import SceneRuntime
 import SIMDCompat
 
-extension WGPURenderer {
+enum OpaqueSceneFingerprint {
     /// Content hash of everything that determines the opaque render — camera,
     /// instances, lights, environment, render settings and skinning poses — but
     /// NOT the transparent particles. Equal hashes on consecutive frames mean
     /// the lit-opaque image is identical and can be served from
     /// `opaqueSnapshotTarget` instead of re-rendering every opaque pass.
     ///
-    /// Collections are folded with XOR so the hash is independent of array /
+    /// Collections are folded with wrapping sums so the hash is independent of array /
     /// dictionary iteration order (extraction order is not guaranteed stable).
     /// `Hasher`'s per-process seed is constant within a run, which is all the
     /// frame-to-frame comparison needs.
-    func computeOpaqueHash(packet: RenderPacket) -> Int {
+    static func make(packet: RenderPacket, settingsGeneration: UInt64) -> Int {
         var hasher = Hasher()
 
         let camera = packet.scene.camera
@@ -36,12 +36,14 @@ extension WGPURenderer {
         hasher.combine(environment.ambientIntensity)
         hasher.combine(environment.exposure)
 
+        hasher.combine(packet.scene.instances.count)
         var instanceAccumulator = 0
         for instance in packet.scene.instances {
-            instanceAccumulator ^= instanceHash(instance)
+            instanceAccumulator &+= instanceHash(instance)
         }
         hasher.combine(instanceAccumulator)
 
+        hasher.combine(packet.scene.deformableMeshes.count)
         var deformableAccumulator = 0
         for mesh in packet.scene.deformableMeshes {
             var sub = Hasher()
@@ -50,29 +52,31 @@ extension WGPURenderer {
             sub.combine(mesh.topologyRevision)
             sub.combine(mesh.vertexCount)
             sub.combine(mesh.triangleCount)
-            deformableAccumulator ^= sub.finalize()
+            deformableAccumulator &+= sub.finalize()
         }
         hasher.combine(deformableAccumulator)
 
+        hasher.combine(packet.scene.lights.count)
         var lightAccumulator = 0
         for light in packet.scene.lights {
-            lightAccumulator ^= lightHash(light)
+            lightAccumulator &+= lightHash(light)
         }
         hasher.combine(lightAccumulator)
 
+        hasher.combine(packet.jointPaletteMap.palettes.count)
         var jointAccumulator = 0
         for (entity, palette) in packet.jointPaletteMap.palettes {
             var sub = Hasher()
             sub.combine(entity)
             for matrix in palette.matrices { Self.combine(&sub, matrix) }
-            jointAccumulator ^= sub.finalize()
+            jointAccumulator &+= sub.finalize()
         }
         hasher.combine(jointAccumulator)
 
         return hasher.finalize()
     }
 
-    private func instanceHash(_ instance: RenderInstance) -> Int {
+    private static func instanceHash(_ instance: RenderInstance) -> Int {
         var hasher = Hasher()
         hasher.combine(instance.entity)
         hasher.combine(instance.mesh.meshIndex)
@@ -93,7 +97,7 @@ extension WGPURenderer {
         return hasher.finalize()
     }
 
-    private func lightHash(_ light: RenderLight) -> Int {
+    private static func lightHash(_ light: RenderLight) -> Int {
         var hasher = Hasher()
         hasher.combine(light.type)
         hasher.combine(light.position)

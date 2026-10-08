@@ -21,6 +21,7 @@ struct VulkanTextureRecord {
     let width: Int
     let height: Int
     let depth: Int
+    var dimension: TextureDimension = .texture2D
     var layers: UInt32 = 1
     let mipLevels: UInt32
     let usage: TextureUsage

@@ -405,6 +405,18 @@ private struct MetalPassEncoder {
         defer { encoder.endEncoding() }
         for copyCommand in record.body {
             switch copyCommand {
+            case .copyTexture(let source, let destination, let width, let height):
+                guard let src = registries.textures[source.id], let dst = registries.textures[destination.id] else {
+                    throw RHIError.invalidArgument("unknown texture copy resource")
+                }
+                try rhiRequire(src !== dst && src.textureType == .type2D && dst.textureType == .type2D
+                    && src.sampleCount == 1 && dst.sampleCount == 1, "texture copy requires distinct single-sample 2D textures")
+                try rhiColorTextureCopyExtent(width: width, height: height,
+                    source: (src.width,src.height,rhiColorFormat(src.pixelFormat)),
+                    destination: (dst.width,dst.height,rhiColorFormat(dst.pixelFormat)))
+                encoder.copy(from: src, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0,y: 0,z: 0),
+                    sourceSize: MTLSize(width: width,height: height,depth: 1), to: dst, destinationSlice: 0,
+                    destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0,y: 0,z: 0))
             case .copyBuffer(let src, let srcOffset, let dst, let dstOffset, let size):
                 guard let srcBuffer = registries.buffers[src.id],
                       let dstBuffer = registries.buffers[dst.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }

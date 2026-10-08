@@ -5,14 +5,18 @@ import SIMDCompat
 enum NativePacketValidation {
     static func validate(_ packet: RenderPacket) throws -> RenderCameraMatrices {
         guard packet.drawableSize.width > 0, packet.drawableSize.height > 0,
+              packet.drawableSize.width <= ViewportTargetAllocation.maxDimension,
+              packet.drawableSize.height <= ViewportTargetAllocation.maxDimension,
               !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
-        guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow].contains(packet.renderSettings.stage),
+        guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow,.r5PostProcess].contains(packet.renderSettings.stage),
               !packet.renderSettings.enableStylizedCharacterShading,
-              !packet.renderSettings.enableSSAO, !packet.renderSettings.enableSSR,
-              !packet.renderSettings.enableTAA, !packet.renderSettings.enableBloom, !packet.renderSettings.enableFXAA,
               packet.scene.particles.isEmpty, packet.scene.particleSimulationBatches.isEmpty,
               packet.inGameCanvas.commands.isEmpty else {
-            throw RHIError.unsupportedFeature("native post effects, particles and UI migration is pending; use mesh rendering through r4")
+            throw RHIError.unsupportedFeature("native stylized shading, particles and UI migration is pending")
+        }
+        let settings = packet.renderSettings
+        guard settings.stage == .r5PostProcess || !(settings.enableSSAO || settings.enableSSR || settings.enableTAA || settings.enableBloom || settings.enableFXAA) else {
+            throw RHIError.unsupportedFeature("post effects require the r5 stage")
         }
         let scene = packet.scene
         guard finite(scene.camera.eye), finite(scene.camera.target), finite(scene.camera.up),

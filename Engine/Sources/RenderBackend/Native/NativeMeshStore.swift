@@ -11,7 +11,7 @@ final class NativeMeshStore {
     private(set) var fallbacks: [Texture] = []
     private var builtins: [Int: NativeMesh] = [:]
     private var imported: [Int: NativeMesh] = [:]
-    private var revision: UInt64?
+    private(set) var revision: UInt64?
     private let registry: AssetRegistry
     var residentCount: Int { Set(builtins.keys).union(imported.keys).count }
 

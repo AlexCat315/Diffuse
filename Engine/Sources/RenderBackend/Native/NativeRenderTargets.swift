@@ -1,6 +1,7 @@
 import NativeRHI
 
 struct NativeRenderTargets {
+    /// Allocated capacity; scene passes render only the packet's used extent.
     let size: RenderDrawableSize
     let color: Texture?
     let hdr: Texture?
@@ -21,13 +22,13 @@ struct NativeRenderTargets {
     }
     static func make(device: Device, size: RenderDrawableSize, offscreen: Bool, hdr: Bool = false) throws -> NativeRenderTargets {
         let depth = try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
-            format: .depth32Float, usage: .depthStencilTarget, label: "native-render-depth"))
+            format: .depth32Float, usage: [.depthStencilTarget,.sampled], label: "native-render-depth"))
         var color: Texture?
         do {
             color = offscreen ? try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
                 format: .bgra8Unorm, usage: [.colorTarget, .transferSource], label: "native-render-color")) : nil
             let sceneHDR = hdr ? try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
-                format: .rgba16Float, usage: [.colorTarget,.sampled], label: "native-scene-hdr")) : nil
+                format: .rgba16Float, usage: [.colorTarget,.sampled,.transferSource,.transferDestination], label: "native-scene-hdr")) : nil
             return NativeRenderTargets(size: size, color: color, hdr: sceneHDR, depth: depth)
         } catch { if let color { device.destroy(color) }; device.destroy(depth); throw error }
     }

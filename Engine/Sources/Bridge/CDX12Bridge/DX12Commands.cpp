@@ -95,6 +95,19 @@ int32_t grhi_dx12_encode(GRHI_DX12Encoder* encoder, const GRHI_DX12Command* comm
     case GRHI_CMD_MESH_DISPATCH: require(e.pipeline && e.pipeline->mesh && e.rendering && c.a <= 65535 && c.b <= 65535 && c.c <= 65535 && c.a*c.b*c.c <= (1u << 22), "invalid mesh dispatch"); e.list->DispatchMesh(UINT(c.a),UINT(c.b),UINT(c.c)); uavDependency(e); break;
     case GRHI_CMD_COPY_BUFFER: { auto& src = s.buffers.at(c.resource); auto& dst = s.buffers.at(c.slot); require(c.a <= src.size && c.c <= src.size-c.a && c.b <= dst.size && c.c <= dst.size-c.b && &src != &dst, "buffer copy bounds or overlap invalid"); transition(e,src,D3D12_RESOURCE_STATE_COPY_SOURCE); transition(e,dst,D3D12_RESOURCE_STATE_COPY_DEST); e.list->CopyBufferRegion(dst.native.Get(),c.b,src.native.Get(),c.a,c.c); break; }
     case GRHI_CMD_BUFFER_TO_TEXTURE: case GRHI_CMD_TEXTURE_TO_BUFFER: textureCopy(e,s.buffers.at(c.resource),c.a,uint32_t(c.b),s.textures.at(c.slot),uint32_t(c.c),uint32_t(c.d),c.kind == GRHI_CMD_BUFFER_TO_TEXTURE); break;
+    case GRHI_CMD_COPY_TEXTURE: {
+        auto& src = s.textures.at(c.resource); auto& dst = s.textures.at(c.slot);
+        auto a = src.native->GetDesc(), b = dst.native->GetDesc();
+        require(&src != &dst && a.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && b.Dimension == a.Dimension
+            && a.DepthOrArraySize == 1 && b.DepthOrArraySize == 1 && a.SampleDesc.Count == 1 && b.SampleDesc.Count == 1
+            && src.texture.format == dst.texture.format && src.texture.format < GRHI_FORMAT_DEPTH24
+            && c.a && c.b && c.a <= std::min(a.Width,b.Width) && c.b <= std::min(a.Height,b.Height), "invalid 2D color texture copy");
+        transition(e,src,D3D12_RESOURCE_STATE_COPY_SOURCE); transition(e,dst,D3D12_RESOURCE_STATE_COPY_DEST);
+        D3D12_TEXTURE_COPY_LOCATION source{}, destination{};
+        source.pResource = src.native.Get(); source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        destination.pResource = dst.native.Get(); destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        D3D12_BOX box{0,0,0,UINT(c.a),UINT(c.b),1}; e.list->CopyTextureRegion(&destination,0,0,0,&source,&box); break;
+    }
     case GRHI_CMD_BARRIER: { Resource* r = c.slot == 0 ? &s.buffers.at(c.resource) : c.slot == 1 ? &s.textures.at(c.resource) : &s.acceleration.at(c.resource).result;
         auto state = resourceState(uint32_t(c.a)); if (c.b == 2 && c.slot != 2) state = D3D12_RESOURCE_STATE_COMMON; transition(e,*r,state); break; }
     case GRHI_CMD_AS_BUILD: require(e.queue != 2, "AS builds require graphics or compute queue"); buildAcceleration(e,c.resource); break;

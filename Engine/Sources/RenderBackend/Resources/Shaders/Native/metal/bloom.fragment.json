@@ -1,0 +1,67 @@
+{
+  "stage": "fragment",
+  "format": "mslSource",
+  "entryPoint": "postFragment",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCBLZXJuZWxDb250ZXh0XzAKewogICAgZmxvYXQ0IGNvbnN0YW50KiBmcmFtZV8wOwogICAgZmxvYXQ0IGNvbnN0YW50KiBlZmZlY3RfMDsKICAgIHRleHR1cmUyZDxmbG9hdCwgYWNjZXNzOjpzYW1wbGU+IHNjZW5lVGV4dHVyZV8wOwogICAgc2FtcGxlciBwb3N0U2FtcGxlcl8wOwp9OwoKZmxvYXQzIHNjZW5lQ29sb3JfMChmbG9hdDIgdXZfMCwgS2VybmVsQ29udGV4dF8wIHRocmVhZCoga2VybmVsQ29udGV4dF8wKQp7CiAgICByZXR1cm4gKChrZXJuZWxDb250ZXh0XzAtPnNjZW5lVGV4dHVyZV8wKS5zYW1wbGUoKGtlcm5lbENvbnRleHRfMC0+cG9zdFNhbXBsZXJfMCksIChjbGFtcCh1dl8wLCBmbG9hdDIoMC4wZiwgMC4wZiksICgqa2VybmVsQ29udGV4dF8wLT5mcmFtZV8wKS56dykpLCBsZXZlbCgoMC4wZikpKSkueHl6Owp9CgpzdHJ1Y3QgcGl4ZWxPdXRwdXRfMAp7CiAgICBmbG9hdDQgb3V0cHV0XzAgW1tjb2xvcigwKV1dOwp9OwoKc3RydWN0IHBpeGVsSW5wdXRfMAp7CiAgICBmbG9hdDIgdXZfMSBbW3VzZXIoVEVYQ09PUkQpXV07Cn07CgpbW2ZyYWdtZW50XV0gcGl4ZWxPdXRwdXRfMCBwb3N0RnJhZ21lbnQocGl4ZWxJbnB1dF8wIF9TMSBbW3N0YWdlX2luXV0sIGZsb2F0NCBwb3NpdGlvbl8wIFtbcG9zaXRpb25dXSwgZmxvYXQ0IGNvbnN0YW50KiBmcmFtZV8xIFtbYnVmZmVyKDQpXV0sIGZsb2F0NCBjb25zdGFudCogZWZmZWN0XzEgW1tidWZmZXIoMyldXSwgdGV4dHVyZTJkPGZsb2F0LCBhY2Nlc3M6OnNhbXBsZT4gc2NlbmVUZXh0dXJlXzEgW1t0ZXh0dXJlKDEpXV0sIHNhbXBsZXIgcG9zdFNhbXBsZXJfMSBbW3NhbXBsZXIoMCldXSkKewogICAgdGhyZWFkIEtlcm5lbENvbnRleHRfMCBrZXJuZWxDb250ZXh0XzE7CiAgICAoJmtlcm5lbENvbnRleHRfMSktPmZyYW1lXzAgPSBmcmFtZV8xOwogICAgKCZrZXJuZWxDb250ZXh0XzEpLT5lZmZlY3RfMCA9IGVmZmVjdF8xOwogICAgKCZrZXJuZWxDb250ZXh0XzEpLT5zY2VuZVRleHR1cmVfMCA9IHNjZW5lVGV4dHVyZV8xOwogICAgKCZrZXJuZWxDb250ZXh0XzEpLT5wb3N0U2FtcGxlcl8wID0gcG9zdFNhbXBsZXJfMTsKICAgIGZsb2F0MyBfUzIgPSBmbG9hdDMoaW50MyhpbnQoMCkpICk7CiAgICBpbnQgeV8wID0gaW50KC0xKTsKICAgIGZsb2F0MyBibG9vbV8wID0gX1MyOwogICAgZmxvYXQgdG90YWxfMCA9IDAuMGY7CiAgICBmb3IoOzspCiAgICB7CiAgICAgICAgaWYoeV8wIDw9IGludCgxKSkKICAgICAgICB7CiAgICAgICAgfQogICAgICAgIGVsc2UKICAgICAgICB7CiAgICAgICAgICAgIGJyZWFrOwogICAgICAgIH0KICAgICAgICBpbnQgeF8wID0gaW50KC0xKTsKICAgICAgICBmb3IoOzspCiAgICAgICAgewogICAgICAgICAgICBpZih4XzAgPD0gaW50KDEpKQogICAgICAgICAgICB7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxzZQogICAgICAgICAgICB7CiAgICAgICAgICAgICAgICBicmVhazsKICAgICAgICAgICAgfQogICAgICAgICAgICBpbnQgX1MzOwogICAgICAgICAgICBpZih4XzAgPT0gaW50KDApKQogICAgICAgICAgICB7CiAgICAgICAgICAgICAgICBfUzMgPSBpbnQoMik7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxzZQogICAgICAgICAgICB7CiAgICAgICAgICAgICAgICBfUzMgPSBpbnQoMSk7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgaW50IF9TNDsKICAgICAgICAgICAgaWYoeV8wID09IGludCgwKSkKICAgICAgICAgICAgewogICAgICAgICAgICAgICAgX1M0ID0gaW50KDIpOwogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsc2UKICAgICAgICAgICAgewogICAgICAgICAgICAgICAgX1M0ID0gaW50KDEpOwogICAgICAgICAgICB9CiAgICAgICAgICAgIGZsb2F0IHdlaWdodF8wID0gZmxvYXQoX1MzICogX1M0KTsKICAgICAgICAgICAgZmxvYXQ0IF9TNSA9ICooJmtlcm5lbENvbnRleHRfMSktPmVmZmVjdF8wOwogICAgICAgICAgICBmbG9hdDMgX1M2ID0gc2NlbmVDb2xvcl8wKF9TMS51dl8xICogKCooJmtlcm5lbENvbnRleHRfMSktPmZyYW1lXzApLnh5ICsgZmxvYXQyKGZsb2F0KHhfMCksIGZsb2F0KHlfMCkpICogKCooJmtlcm5lbENvbnRleHRfMSktPmVmZmVjdF8wKS56dyAqIGZsb2F0MigyLjBmKSAsICZrZXJuZWxDb250ZXh0XzEpOwogICAgICAgICAgICBmbG9hdDMgYmxvb21fMSA9IGJsb29tXzAgKyBfUzYgKiBmbG9hdDMobWF4KGRvdChfUzYsIGZsb2F0MygwLjIxMjU5OTk5Mjc1MjA3NTJmLCAwLjcxNTIwMDAwNjk2MTgyMjUxZiwgMC4wNzIyMDAwMDAyODYxMDIyOWYpKSAtIF9TNS54LCAwLjBmKSkgICogZmxvYXQzKHdlaWdodF8wKSA7CiAgICAgICAgICAgIGZsb2F0IHRvdGFsXzEgPSB0b3RhbF8wICsgd2VpZ2h0XzA7CiAgICAgICAgICAgIHhfMCA9IHhfMCArIGludCgxKTsKICAgICAgICAgICAgYmxvb21fMCA9IGJsb29tXzE7CiAgICAgICAgICAgIHRvdGFsXzAgPSB0b3RhbF8xOwogICAgICAgIH0KICAgICAgICB5XzAgPSB5XzAgKyBpbnQoMSk7CiAgICB9CiAgICBwaXhlbE91dHB1dF8wIF9TNyA9IHsgZmxvYXQ0KGJsb29tXzAgLyBmbG9hdDMobWF4KHRvdGFsXzAsIDAuMDAwMDk5OTk5OTk3NDczNzlmKSkgICogZmxvYXQzKG1heCgoKigma2VybmVsQ29udGV4dF8xKS0+ZWZmZWN0XzApLnksIDAuMGYpKSAsIDEuMGYpIH07CiAgICByZXR1cm4gX1M3Owp9Cgo=",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "postSampler",
+        "slot": 0,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "sceneTexture",
+        "slot": 1,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "secondaryTexture",
+        "slot": 2,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "frame",
+        "slot": 4,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "effect",
+        "slot": 3,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}

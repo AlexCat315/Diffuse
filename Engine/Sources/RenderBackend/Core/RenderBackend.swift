@@ -146,7 +146,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     /// Frames the opaque content must hold steady before the post-TAA snapshot
     /// is considered converged. This TAA is a jitter-free temporal blend, so a
     /// static scene stabilizes within a couple of frames; the margin is safety.
-    static let taaCacheWarmupFrames = 6
+    static let taaCacheWarmupFrames = RenderTemporalState.taaWarmupFrames
     /// Set each frame: whether the opaque passes were served from the cache.
     public private(set) var lastFrameUsedOpaqueCache = false
 
@@ -346,7 +346,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             //     returns once motion settles and TAA / the cache re-converge.
             // The snapshot is trusted only after `requiredStableFrames` so TAA's
             // temporal history has converged to a stable image before capture.
-            let opaqueHash = computeOpaqueHash(packet: packet)
+            let opaqueHash = OpaqueSceneFingerprint.make(packet: packet, settingsGeneration: settingsGeneration)
             let opaqueChanged = opaqueCacheHash != opaqueHash
             if opaqueChanged {
                 opaqueCacheHash = opaqueHash
@@ -1351,16 +1351,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     private func writePostFrameUniforms() {
         guard let postFrameUniformBuffer else { return }
-        let allocW = Float(max(allocatedTargetSize.width, 1))
-        let allocH = Float(max(allocatedTargetSize.height, 1))
-        let usedW = Float(configuredSize.width)
-        let usedH = Float(configuredSize.height)
-        var uniforms = PostFrameUniforms(uvScaleMax: SIMD4<Float>(
-            usedW / allocW,
-            usedH / allocH,
-            max(usedW - 0.5, 0.5) / allocW,
-            max(usedH - 0.5, 0.5) / allocH
-        ))
+        var uniforms = PostEffectUniforms.frame(used: configuredSize,capacity: allocatedTargetSize)
         writeUniform(&uniforms, buffer: postFrameUniformBuffer)
     }
 
@@ -1783,11 +1774,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         guard let linearSampler, let bloomUniformBuffer, let postFrameUniformBuffer else { return }
         // Texel offsets step in texture space, so they derive from the
         // allocated extent, not the used sub-region.
-        var uniforms = BloomUniforms(
-            params: SIMD4<Float>(1.05, 0.75,
-                                 1.0 / Float(max(allocatedTargetSize.width, 1)),
-                                 1.0 / Float(max(allocatedTargetSize.height, 1)))
-        )
+        var uniforms = PostEffectUniforms.bloom(size: allocatedTargetSize)
         writeUniform(&uniforms, buffer: bloomUniformBuffer)
         let bindGroup = try makeBindGroup(
             pipeline: pipeline,
@@ -1839,12 +1826,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         projection: simd_float4x4
     ) throws {
         guard let linearSampler, let ssrUniformBuffer, let postFrameUniformBuffer else { return }
-        var uniforms = SSRUniforms(
-            projection: projection,
-            invProjection: simd_inverse(projection),
-            resolutionIntensity: SIMD4<Float>(Float(configuredSize.width), Float(configuredSize.height), 0.22, 0),
-            tracing: SIMD4<Float>(14.0, 32.0, 0.18, 0.08)
-        )
+        var uniforms = PostEffectUniforms.ssr(projection: projection,size: configuredSize)
         writeUniform(&uniforms, buffer: ssrUniformBuffer)
         let depthView = try depthTexture.createView()
         let bindGroup = try makeBindGroup(
@@ -1873,12 +1855,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         pipeline: GPURenderPipeline
     ) throws {
         guard let linearSampler, let taaUniformBuffer, let postFrameUniformBuffer else { return }
-        var uniforms = TAAUniforms(
-            params: SIMD4<Float>(0.12,
-                                 1.0 / Float(max(allocatedTargetSize.width, 1)),
-                                 1.0 / Float(max(allocatedTargetSize.height, 1)),
-                                 historyValid ? 1.0 : 0.0)
-        )
+        var uniforms = PostEffectUniforms.taa(size: allocatedTargetSize,historyValid: historyValid)
         writeUniform(&uniforms, buffer: taaUniformBuffer)
         let bindGroup = try makeBindGroup(
             pipeline: pipeline,
@@ -1907,12 +1884,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         projection: simd_float4x4
     ) throws {
         guard let linearSampler, let ssaoUniformBuffer, let postFrameUniformBuffer else { return }
-        var uniforms = SSAOUniforms(
-            projection: projection,
-            invProjection: simd_inverse(projection),
-            resolutionRadius: SIMD4<Float>(Float(configuredSize.width), Float(configuredSize.height), 0.45, 0),
-            tuning: SIMD4<Float>(0.025, 0.7, 1.35, 0)
-        )
+        var uniforms = PostEffectUniforms.ssao(projection: projection,size: configuredSize)
         writeUniform(&uniforms, buffer: ssaoUniformBuffer)
         let depthView = try depthTexture.createView()
         let bindGroup = try makeBindGroup(

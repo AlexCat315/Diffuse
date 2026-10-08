@@ -292,6 +292,15 @@ final class SubmissionPlanner {
     ) {
         for copyCommand in record.body {
             switch copyCommand {
+            case .copyTexture(let src, let dst, _, _):
+                let source = ResourceRef(kind: .texture, id: src.id)
+                let destination = ResourceRef(kind: .texture, id: dst.id)
+                collect(resource: source, desired: .copySource,
+                    access: Self.makeAccess(resource: source, state: .copySource, stage: .transfer),
+                    scope: .outsidePass, on: queue, barriers: &barriers, splitReleases: &splitReleases, waits: &waits)
+                collect(resource: destination, desired: .copyDestination,
+                    access: Self.makeAccess(resource: destination, state: .copyDestination, stage: .transfer),
+                    scope: .outsidePass, on: queue, barriers: &barriers, splitReleases: &splitReleases, waits: &waits)
             case .copyBuffer(src: let src, srcOffset: _, dst: let dst, dstOffset: _, size: _):
                 let srcRef = ResourceRef(kind: .buffer, id: src.id)
                 collect(

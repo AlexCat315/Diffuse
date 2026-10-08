@@ -14,9 +14,11 @@ public enum NativePassBenchmark {
         case .grid: packet = GridProbeScene.packet(size: options.size)
         case .mesh: packet = MeshProbeScene.packet(size: options.size)
         case .pbr: packet = PBRProbeScene.packet(size: options.size)
+        case .post: packet = PostProbeScene.packet(size: options.size)
         case .animated: packet = AnimatedProbeScene.packet(size: options.size)
         }
         func framePacket(_ frame: Int) -> RenderPacket {
+            if options.scene == .post { return PostProbeScene.packet(size: options.size,frame: frame) }
             if options.scene == .animated { return AnimatedProbeScene.packet(size: options.size,frame: frame) }
             var p = packet; p.frameIndex = frame
             // Exercise the complete HDR frame on both renderers. A static WGPU
@@ -72,6 +74,16 @@ public enum NativePassBenchmark {
         let result = try measure(name: WGPUReferenceConfiguration.name, device: "wgpu-native \(WGPUReferenceConfiguration.preference.rawValue)", options: options,
             render: renderReference, finish: finishReference)
         let expected = try readReference(); images[result.backend] = expected; results.append(result)
+        if options.scene == .post {
+            for native in results where native.backend != result.backend {
+                for kind in [RenderPassKind.ssao,.ssr,.taa,.bloom,.fxaa,.tonemap] {
+                    guard native.passFrames[kind.rawValue] == result.passFrames[kind.rawValue],
+                          (native.passFrames[kind.rawValue] ?? 0) > 0 else {
+                        throw RHIError.invalidArgument("post benchmark pass workload differs: \(native.backend) \(kind)")
+                    }
+                }
+            }
+        }
         var differences: [String: GridImageDifference] = [:]
         for (name, image) in images {
             try GridImage.writePPM(image, size: options.size, to: options.output.appendingPathComponent("\(name).ppm"))
@@ -93,11 +105,16 @@ public enum NativePassBenchmark {
                                 render: (Int) throws -> RenderFrameStats, finish: () throws -> Void) throws -> PassBenchmarkResult {
         for frame in 0..<options.warmup { _ = try render(frame); if (frame + 1) % 3 == 0 { try finish() } }
         try finish()
+        var passFrames: [String: Int] = [:], passDraws: [String: Int] = [:]
         var frameSamples: [Double] = [], encodeSamples: [Double] = [], submitSamples: [Double] = [], batches: [Double] = []
         for repetition in 0..<options.repeats {
             let start = DispatchTime.now().uptimeNanoseconds
             for frame in 0..<options.frames {
                 let stats = try render(options.warmup + repetition * options.frames + frame)
+                for (kind, draws) in stats.passDrawCallCounts {
+                    passFrames[kind.rawValue, default: 0] += 1
+                    passDraws[kind.rawValue, default: 0] += draws
+                }
                 frameSamples.append(Double(stats.cpuFrameTotalNS) / 1000)
                 encodeSamples.append(Double(stats.cpuEncodeNS) / 1000)
                 submitSamples.append(Double(stats.cpuSubmitNS) / 1000)
@@ -108,11 +125,11 @@ public enum NativePassBenchmark {
         }
         return PassBenchmarkResult(backend: name, device: device, cpuFrame: PassTimingDistribution(frameSamples),
             cpuEncode: PassTimingDistribution(encodeSamples), cpuSubmit: PassTimingDistribution(submitSamples),
-            completedBatch: PassTimingDistribution(batches))
+            completedBatch: PassTimingDistribution(batches), passFrames: passFrames, passDraws: passDraws)
     }
 }
 
-private enum ProbeScene: String { case grid, mesh, pbr, animated }
+private enum ProbeScene: String { case grid, mesh, pbr, animated, post }
 
 private struct PassBenchmarkOptions {
     var scene = ProbeScene.grid
@@ -123,12 +140,12 @@ private struct PassBenchmarkOptions {
     var backends: [GraphicsAPI] = NativeRHI.platformDefaultBackends
     var output = URL(fileURLWithPath: "/tmp/guava-native-grid")
     init(arguments: [String]) throws {
-        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
+        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated|post --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
         for index in stride(from: 0, to: arguments.count, by: 2) {
             let value = arguments[index + 1]
             switch arguments[index] {
             case "--scene":
-                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh, pbr or animated scene") }
+                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh, pbr, animated or post scene") }
                 self.scene = scene
             case "--output": output = URL(fileURLWithPath: value)
             case "--backends":
@@ -171,6 +188,8 @@ public struct PassBenchmarkResult: Codable {
     /// Includes explicit GPU completion every three frames. This measures
     /// whole-batch throughput, not GPU timestamp duration or display FPS.
     public let completedBatch: PassTimingDistribution
+    public let passFrames: [String: Int]
+    public let passDraws: [String: Int]
 }
 private struct PassBenchmarkReport: Encodable {
     let scene: String

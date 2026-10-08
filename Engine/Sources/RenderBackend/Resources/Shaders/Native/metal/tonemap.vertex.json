@@ -31,8 +31,18 @@
         }
       },
       {
-        "name": "tone",
+        "name": "bloomTexture",
         "slot": 2,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "tone",
+        "slot": 3,
         "space": 0,
         "type": "uniformBuffer",
         "buffer": {
@@ -42,7 +52,7 @@
       },
       {
         "name": "frame",
-        "slot": 3,
+        "slot": 4,
         "space": 0,
         "type": "uniformBuffer",
         "buffer": {
