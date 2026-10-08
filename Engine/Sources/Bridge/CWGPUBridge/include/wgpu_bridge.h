@@ -682,6 +682,9 @@ void wgpu_bridge_copy_texture_to_buffer(
 
 int wgpu_bridge_buffer_map_sync(void* device, void* buffer,
                                 uint64_t offset, uint64_t size);
+/* Blocks until already submitted work has completed; intended for tests,
+   benchmarks, resizing and shutdown, not the normal render loop. */
+int wgpu_bridge_device_wait_idle(void* device);
 
 const void* wgpu_bridge_buffer_get_mapped_range(void* buffer,
                                                 uint64_t offset,

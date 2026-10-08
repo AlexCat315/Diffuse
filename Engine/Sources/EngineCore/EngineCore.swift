@@ -120,8 +120,11 @@ public final class EngineHost: @unchecked Sendable {
         state.withLock { $0.currentInputEvents }
     }
 
+    /// A supplied consumer receives the normal RenderPacket stream, allowing
+    /// isolated native passes to run without changing the default renderer.
     public func start(renderSurface: RenderSurfaceDescriptor? = nil,
-                      enableViewportSurface: Bool = false) {
+                      enableViewportSurface: Bool = false,
+                      renderConsumer: (any RenderPacketConsumer)? = nil) {
         let shouldStart = state.withLock { state -> Bool in
             guard !state.started else { return false }
             state.started = true
@@ -142,7 +145,9 @@ public final class EngineHost: @unchecked Sendable {
         self.ringBuffer = ringBuffer
 
         let consumer: (any RenderPacketConsumer)?
-        if let renderSurface {
+        if let renderConsumer {
+            consumer = renderConsumer
+        } else if let renderSurface {
             consumer = WGPURenderer(backend: wgpuBackend, renderSurface: renderSurface)
         } else if enableViewportSurface {
             consumer = WGPURenderer(backend: wgpuBackend)

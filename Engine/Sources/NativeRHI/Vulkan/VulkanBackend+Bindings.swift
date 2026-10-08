@@ -90,13 +90,20 @@ extension VulkanBackend {
         write.descriptorCount = 1
         write.descriptorType = VulkanLayoutFormats.descriptorType(declaration.type)
         switch entry.resource {
-        case .uniformBuffer(let buffer, let offset), .storageBuffer(let buffer, let offset):
+        case .uniformBuffer(let buffer, let offset, _), .storageBuffer(let buffer, let offset):
             guard let record = registries.buffers[buffer.id], offset >= 0, offset < record.size else {
                 throw RHIError.invalidArgument("unknown buffer or invalid binding offset")
             }
             let alignment = declaration.type == .uniformBuffer ? context.limits.minUniformBufferOffsetAlignment : context.limits.minStorageBufferOffsetAlignment
             try rhiRequire(UInt64(offset) % max(1, alignment) == 0, "buffer binding offset violates Vulkan alignment")
-            var info = VkDescriptorBufferInfo(buffer: record.buffer, offset: VkDeviceSize(offset), range: VkDeviceSize(record.size - offset))
+            let length: Int
+            if case .uniformBuffer(_, _, let size) = entry.resource { length = size ?? (record.size - offset) }
+            else { length = record.size - offset }
+            try rhiRequire(length > 0, "buffer binding size must be positive")
+            try rhiByteRange(offset: offset, size: length, capacity: record.size)
+            let limit = declaration.type == .uniformBuffer ? context.limits.maxUniformBufferRange : context.limits.maxStorageBufferRange
+            try rhiRequire(UInt64(length) <= UInt64(limit), "buffer binding exceeds Vulkan descriptor range limit")
+            var info = VkDescriptorBufferInfo(buffer: record.buffer, offset: VkDeviceSize(offset), range: VkDeviceSize(length))
             withUnsafePointer(to: &info) { pointer in
                 write.pBufferInfo = pointer
                 context.resources.updateDescriptorSets(context.device, 1, &write, 0, nil)

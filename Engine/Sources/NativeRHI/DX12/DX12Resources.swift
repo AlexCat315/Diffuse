@@ -37,8 +37,13 @@ extension DX12Device {
             case .sampler(let r): result.resource = r.id; result.type = 0
             case .texture(let r): result.resource = r.id; result.type = 1
             case .storageTexture(let r): result.resource = r.id; result.type = 2
-            case .uniformBuffer(let r, let offset), .storageBuffer(let r, let offset):
+            case .uniformBuffer(let r, let offset, _), .storageBuffer(let r, let offset):
                 guard offset >= 0 else { throw RHIError.invalidArgument("negative binding offset") }
+                if case .uniformBuffer(_, _, let size?) = entry.resource {
+                    guard let buffer = resources.buffers[r.id] else { throw RHIError.invalidArgument("unknown uniform buffer") }
+                    try rhiRequire(size > 0, "uniform binding size must be positive")
+                    try rhiByteRange(offset: offset, size: size, capacity: buffer.size)
+                }
                 result.resource = r.id; result.offset = UInt64(offset)
                 if case .uniformBuffer = entry.resource { result.type = 3 } else { result.type = 4 }
             case .accelerationStructure(let r): result.resource = r.id; result.type = 5

@@ -3,16 +3,6 @@ import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 
-struct EditorGridUniforms {
-    var inverseRelativeViewProjection: simd_float4x4
-    var relativeViewProjection: simd_float4x4
-    var cameraPosition: SIMD4<Float>
-    /// Used viewport dimensions, base spacing, reserved.
-    var viewport: SIMD4<Float>
-    var planeU: SIMD4<Float>
-    var planeV: SIMD4<Float>
-}
-
 /// Axis-aligned reference plane facing an orthographic editor view.
 public struct EditorGridPlane {
     public let u: SIMD3<Float>
@@ -69,22 +59,8 @@ extension WGPURenderer {
             editorGridUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
         }
         guard let editorGridUniformBuffer else { return }
-        let plane = EditorGridPlane.make(camera: camera)
-        // Unproject relative to the eye: translating a near-plane point back
-        // into a distant world loses the precision needed for stable rays.
-        var rotation = cameraMatrices.view
-        rotation.columns.3 = SIMD4<Float>(0, 0, 0, 1)
-        let relativeViewProjection = cameraMatrices.projection * rotation
-        var uniforms = EditorGridUniforms(
-            inverseRelativeViewProjection: simd_inverse(relativeViewProjection),
-            relativeViewProjection: relativeViewProjection,
-            cameraPosition: SIMD4<Float>(camera.eye, 1),
-            viewport: SIMD4<Float>(Float(max(drawableSize.width, 1)),
-                                   Float(max(drawableSize.height, 1)),
-                                   max(0.001, activeRenderSettings.editorGridSpacing), 0),
-            planeU: SIMD4<Float>(plane.u, plane.uAxis),
-            planeV: SIMD4<Float>(plane.v, plane.vAxis)
-        )
+        var uniforms = EditorGridUniforms.make(camera: camera, matrices: cameraMatrices,
+            size: drawableSize, spacing: activeRenderSettings.editorGridSpacing)
         writeUniform(&uniforms, buffer: editorGridUniformBuffer)
         let bindGroup = try makeBindGroup(pipeline: pipeline, entries: [
             GPUBindGroupEntry(binding: 0, buffer: editorGridUniformBuffer,

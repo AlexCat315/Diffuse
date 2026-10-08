@@ -29,6 +29,14 @@ final class PipelineLayoutCacheTests: XCTestCase {
 }
 
 final class BindingSetCacheTests: XCTestCase {
+    func testUniformRangesDoNotAlias() {
+        let cache = BindingSetCache()
+        let small = [BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: Buffer(id: 1), size: 16))]
+        let large = [BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: Buffer(id: 1), size: 192))]
+        cache.insert(100, layoutID: 5, entries: small)
+        XCTAssertEqual(cache.existing(layoutID: 5, entries: small), 100)
+        XCTAssertNil(cache.existing(layoutID: 5, entries: large))
+    }
     private func makeEntry(_ slot: UInt32) -> BindingSetEntry {
         BindingSetEntry(slot: slot, resource: .uniformBuffer(buffer: Buffer(id: slot + 1)))
     }

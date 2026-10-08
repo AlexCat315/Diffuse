@@ -1670,6 +1670,14 @@ int wgpu_bridge_buffer_map_sync(void* device, void* buffer,
     return 1;
 }
 
+int wgpu_bridge_device_wait_idle(void* device) {
+    if (device == NULL) { set_error("wait_idle requires a device"); return 0; }
+    if (!wgpuDevicePoll((WGPUDevice)device, WGPU_TRUE, NULL)) {
+        set_error("device poll did not complete submitted work"); return 0;
+    }
+    return 1;
+}
+
 const void* wgpu_bridge_buffer_get_mapped_range(void* buffer,
                                                 uint64_t offset, uint64_t size) {
     if (buffer == NULL) return NULL;

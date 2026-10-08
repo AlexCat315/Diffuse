@@ -59,9 +59,13 @@ extension MetalDevice {
 
     func validateBindingResource(_ resource: BindingResource) throws {
         switch resource {
-        case .uniformBuffer(let handle, let offset), .storageBuffer(let handle, let offset):
+        case .uniformBuffer(let handle, let offset, _), .storageBuffer(let handle, let offset):
             guard let buffer = registries.buffers[handle.id], offset >= 0, offset < buffer.length else {
                 throw RHIError.invalidArgument("binding references an unknown buffer or invalid offset")
+            }
+            if case .uniformBuffer(_, _, let size?) = resource {
+                try rhiRequire(size > 0, "uniform binding size must be positive")
+                try rhiByteRange(offset: offset, size: size, capacity: buffer.length)
             }
         case .texture(let handle), .storageTexture(let handle):
             try rhiRequire(registries.textures[handle.id] != nil, "binding references an unknown texture")
