@@ -9,3 +9,27 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+void* grhi_vulkan_get_instance_proc_addr(void);
+void* grhi_vulkan_loader_symbol(const char* name);
+#ifdef __cplusplus
+}
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+// The packed 64-byte GPU instance layout contains C bitfields that Swift cannot write.
+void grhi_vulkan_pack_instance(void* destination, const float* transform, uint32_t index, uint32_t mask, uint64_t address);
+#ifdef __cplusplus
+}
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+VkResult grhi_vulkan_create_native_surface(VkInstance instance, void* window, void* display, VkSurfaceKHR* surface);
+#ifdef __cplusplus
+}
+#endif

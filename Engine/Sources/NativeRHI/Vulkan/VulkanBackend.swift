@@ -22,12 +22,13 @@ final class VulkanBackend: RHIBackend {
     let registries: VulkanRegistries
     let descriptorPool: VkDescriptorPool
 
+    var presentation = VulkanPresentationState()
     var surface: VkSurfaceKHR?
     var swapchain: VulkanSwapchain?
 
     var frames: [VulkanFrame] = []
     var activeSlot: Int = 0
-    var frameUploaders: [Int: ChunkUploadAllocator<VulkanUploadChunk>] = [:]
+    let submissionStatus = VulkanSubmissionStatus()
     var timelineSemaphores: [UInt32: VkSemaphore] = [:]
     var chunkBufferIDs: [ObjectIdentifier: UInt32] = [:]
 
@@ -96,6 +97,8 @@ final class VulkanBackend: RHIBackend {
         self.capabilitiesValue = Self.probeCapabilities(context: context)
     }
 
+    deinit { releaseNativeObjects() }
+
     func queryCapabilities() -> Capabilities {
         capabilitiesValue
     }
@@ -103,13 +106,18 @@ final class VulkanBackend: RHIBackend {
     /// Exposes only completed RHI paths. Adapter extensions are diagnostic.
     private static func probeCapabilities(context: VulkanContext) -> Capabilities {
         return Capabilities {
-            // Pipeline creation exists as a prototype; descriptor binding and
-            // render-pass lifetime are incomplete, so it is not an available API.
-            $0.compute = false
-            $0.indirectDraw = false
+            $0.graphics = true
+            $0.compute = true
+            $0.indirectDraw = true
             $0.textures.texture3D = true
             $0.textures.cube = true
-            $0.maxQueues = QueueLimits(graphics: 1, compute: 0, transfer: 0)
+            $0.maxQueues = QueueLimits()
+            let advanced = context.advanced
+            $0.rayTracing.accelerationStructures = context.features.accelerationStructures && advanced.createStructure != nil
+                && advanced.destroyStructure != nil && advanced.buildSizes != nil && advanced.structureAddress != nil && advanced.build != nil
+            $0.rayTracing.computeRayQuery = $0.rayTracing.accelerationStructures && context.features.rayQuery
+            $0.meshShading.mesh = context.features.mesh && advanced.drawMesh != nil
+            $0.meshShading.task = $0.meshShading.mesh && context.features.task
         }
     }
 
@@ -139,15 +147,17 @@ final class VulkanBackend: RHIBackend {
             VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, descriptorCount: 256),
             VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount: 64),
         ]
+        if context.features.accelerationStructures { poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, descriptorCount: 256)) }
+        let arena = VulkanScratch()
         var info = VkDescriptorPoolCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO
         info.maxSets = 256
         info.poolSizeCount = UInt32(poolSizes.count)
-        poolSizes.withUnsafeMutableBufferPointer { info.pPoolSizes = UnsafePointer($0.baseAddress) }
+        info.pPoolSizes = arena.store(poolSizes)
         info.flags = UInt32(VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT.rawValue)
-        guard let pool = vkWithOutHandle({
-            context.core.createDescriptorPool(context.device, &info, nil, $0)
-        }) else {
+        guard let pool: VkDescriptorPool = withExtendedLifetime(arena, { vkWithOutHandle({
+            _ = context.core.createDescriptorPool(context.device, &info, nil, $0)
+        }) }) else {
             throw RHIError.outOfMemory
         }
         return pool

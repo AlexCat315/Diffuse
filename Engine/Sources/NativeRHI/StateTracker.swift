@@ -41,20 +41,20 @@ public struct Barrier: Sendable {
     }
 }
 
-final class StateTracker {
+struct StateTracker {
     private var currentStates: [ResourceRef: ResourceState] = [:]
     private(set) var pendingBarriers: [Barrier] = []
 
-    func clear() {
+    mutating func clear() {
         currentStates.removeAll(keepingCapacity: true)
         pendingBarriers.removeAll(keepingCapacity: true)
     }
 
-    func setInitialState(_ resource: ResourceRef, _ state: ResourceState) {
+    mutating func setInitialState(_ resource: ResourceRef, _ state: ResourceState) {
         currentStates[resource] = state
     }
 
-    func setCurrentState(_ resource: ResourceRef, _ state: ResourceState) {
+    mutating func setCurrentState(_ resource: ResourceRef, _ state: ResourceState) {
         currentStates[resource] = state
     }
 
@@ -62,13 +62,13 @@ final class StateTracker {
         currentStates[resource] ?? []
     }
 
-    func removeResource(_ resource: ResourceRef) {
+    mutating func removeResource(_ resource: ResourceRef) {
         currentStates.removeValue(forKey: resource)
     }
 
     /// Records a required state. If it differs from the current state, a
     /// barrier is queued and the tracked state is advanced immediately.
-    func requireState(_ resource: ResourceRef, _ desired: ResourceState) {
+    mutating func requireState(_ resource: ResourceRef, _ desired: ResourceState) {
         let current = currentStates[resource] ?? []
         if current == desired { return }
         pendingBarriers.append(Barrier(resource: resource, before: current, after: desired))
@@ -77,7 +77,7 @@ final class StateTracker {
 
     /// Drains the queued barriers, merging multiple transitions of the same
     /// resource into a single barrier whose destination state is the union.
-    func commitBarriers() -> [Barrier] {
+    mutating func commitBarriers() -> [Barrier] {
         if pendingBarriers.isEmpty { return [] }
 
         var merged: [ResourceRef: Barrier] = [:]

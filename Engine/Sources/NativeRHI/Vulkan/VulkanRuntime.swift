@@ -10,7 +10,6 @@
 #if canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
-import Darwin
 
 /// Binds the linked loader's global `vkGetInstanceProcAddr` entry point.
 final class VulkanLoader {
@@ -25,15 +24,9 @@ final class VulkanLoader {
     /// The loader is linked into the process, so its symbols are found in the
     /// global image table. Returns nil only if the linked entry point is absent.
     static func open() -> VulkanLoader? {
-        guard let sym = dlsym(Self.rtldDefault, "vkGetInstanceProcAddr") else { return nil }
+        guard let sym = grhi_vulkan_get_instance_proc_addr() else { return nil }
         let gipa = unsafeBitCast(OpaquePointer(sym), to: GIPASelf.self)
         return VulkanLoader(getInstanceProcAddr: gipa)
-    }
-
-    /// Darwin's `RTLD_DEFAULT` (a macro that Swift does not import): search
-    /// every image in the process, including the linked libvulkan dylib.
-    private static var rtldDefault: UnsafeMutableRawPointer? {
-        UnsafeMutableRawPointer(bitPattern: -2)
     }
 
     /// Resolves an entry point through `vkGetInstanceProcAddr`.
@@ -49,7 +42,7 @@ final class VulkanLoader {
     /// and some loaders do not return them through GIPA(NULL, ...).
     func resolveGlobal(name: String) -> UnsafeRawPointer? {
         name.withCString { cName in
-            guard let sym = dlsym(Self.rtldDefault, cName) else { return nil }
+            guard let sym = grhi_vulkan_loader_symbol(cName) else { return nil }
             return UnsafeRawPointer(sym)
         }
     }
@@ -79,24 +72,17 @@ enum VulkanRuntime {
         let createFn = unsafeBitCast(OpaquePointer(createPtr), to: PFN_vkCreateInstance.self)
         let enumFn = unsafeBitCast(OpaquePointer(enumPtr), to: PFN_vkEnumeratePhysicalDevices.self)
 
-        var appInfo = VkApplicationInfo()
-        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO
-        appInfo.apiVersion = (1 << 22) | (1 << 12)
-        var extNames: [UnsafePointer<CChar>?] = []
+        let arena = VulkanScratch()
+        var app = VkApplicationInfo(); app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO
+        app.apiVersion = (1 << 22) | (3 << 12)
+        var info = VkInstanceCreateInfo(); info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
+        info.pApplicationInfo = UnsafePointer(arena.make(app))
         #if os(macOS)
-        extNames.append(vkExtName("VK_KHR_portability_enumeration"))
+        info.enabledExtensionCount = 1
+        info.ppEnabledExtensionNames = arena.store([Optional(arena.string("VK_KHR_portability_enumeration"))])
+        info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR.rawValue
         #endif
-        var info = VkInstanceCreateInfo()
-        info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
-        withUnsafePointer(to: &appInfo) { info.pApplicationInfo = $0 }
-        info.enabledExtensionCount = UInt32(extNames.count)
-        extNames.withUnsafeBufferPointer { info.ppEnabledExtensionNames = $0.baseAddress }
-        #if os(macOS)
-        info.flags = UInt32(VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR.rawValue)
-        #endif
-
-        guard let instance = vkWithOutHandle({ createFn(&info, nil, $0) }),
-              instance != vkNull() else { return false }
+        guard let instance: VkInstance = withExtendedLifetime(arena, { vkWithOutHandle({ _ = createFn(&info, nil, $0) }) }) else { return false }
         var count: UInt32 = 0
         let rc = enumFn(instance, &count, nil)
         if let destroyPtr = loader.resolve(instance: instance, name: "vkDestroyInstance") {

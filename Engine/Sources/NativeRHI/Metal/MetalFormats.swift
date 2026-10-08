@@ -36,10 +36,21 @@ func metalBytesPerPixel(_ format: TextureFormat) -> Int {
     case .r8Unorm:            return 1
     case .rgba8Unorm, .bgra8Unorm, .bgra8UnormSRGB, .rgba8UnormSRGB: return 4
     case .rgba16Float:        return 8
-    case .rgba32Float, .r32Uint, .r32Float: return 4
+    case .rgba32Float: return 16
+    case .r32Uint, .r32Float: return 4
     case .depth24Unorm, .depth32Float: return 4
     case .depth24UnormStencil8: return 5
     case .invalid:            return 4
+    }
+}
+
+func rhiColorFormat(_ format: MTLPixelFormat) -> TextureFormat {
+    switch format {
+    case .r8Unorm: .r8Unorm; case .rgba8Unorm: .rgba8Unorm; case .bgra8Unorm: .bgra8Unorm
+    case .rgba8Unorm_srgb: .rgba8UnormSRGB; case .bgra8Unorm_srgb: .bgra8UnormSRGB
+    case .rgba16Float: .rgba16Float; case .rgba32Float: .rgba32Float
+    case .r32Uint: .r32Uint; case .r32Float: .r32Float
+    default: .invalid
     }
 }
 

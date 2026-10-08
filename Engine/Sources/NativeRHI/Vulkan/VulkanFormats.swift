@@ -4,6 +4,16 @@
 import CVulkanHeaders
 
 enum VulkanFormats {
+    static func textureFormat(_ format: VkFormat) -> TextureFormat {
+        switch format {
+        case VK_FORMAT_B8G8R8A8_UNORM: .bgra8Unorm
+        case VK_FORMAT_B8G8R8A8_SRGB: .bgra8UnormSRGB
+        case VK_FORMAT_R8G8B8A8_UNORM: .rgba8Unorm
+        case VK_FORMAT_R8G8B8A8_SRGB: .rgba8UnormSRGB
+        default: .invalid
+        }
+    }
+
     static func vkFormat(_ format: TextureFormat) -> VkFormat {
         switch format {
         case .invalid: return VK_FORMAT_UNDEFINED

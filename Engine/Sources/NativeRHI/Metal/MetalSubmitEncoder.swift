@@ -24,6 +24,7 @@ extension MetalDevice {
         }
 
         var encoder = MetalPassEncoder(device: device, registries: registries, commandBuffer: commandBuffer)
+        defer { encoder.endActiveEncoders() }
         for command in submit.commands {
             try encoder.encode(command)
         }
@@ -38,9 +39,10 @@ extension MetalDevice {
         }
 
         let status = submissionStatus
+        let callback = MetalCompletionCallback(completion)
         commandBuffer.addCompletedHandler { buffer in
             if let error = buffer.error { status.record(error.localizedDescription) }
-            completion()
+            callback.call()
         }
         commandBuffer.commit()
     }
@@ -51,6 +53,14 @@ extension MetalDevice {
         registries.sharedEvents[id] = event
         return event
     }
+}
+
+/// Completion belongs to one command buffer and is invoked once on its GPU
+/// completion thread. Its caller supplies synchronization for captured state.
+private final class MetalCompletionCallback: @unchecked Sendable {
+    private let body: () -> Void
+    init(_ body: @escaping () -> Void) { self.body = body }
+    func call() { body() }
 }
 
 /// Encodes a stream of `PlannedCommand`s for one command buffer. Holds the
@@ -107,7 +117,7 @@ private struct MetalPassEncoder {
 
         case .copyPass(let record):
             endActiveEncoders()
-            encodeCopyPass(record)
+            try encodeCopyPass(record)
         }
     }
 
@@ -124,8 +134,7 @@ private struct MetalPassEncoder {
         let rpd = MTLRenderPassDescriptor()
 
         for (index, target) in record.descriptor.colorTargets.enumerated() {
-            guard let texture = registries.textures[target.texture.id] else { continue }
-            guard let attachment = rpd.colorAttachments[index] else { continue }
+            guard let texture = registries.textures[target.texture.id], index < 8, let attachment = rpd.colorAttachments[index] else { throw RHIError.invalidArgument("invalid render color target") }
             attachment.texture = texture
             attachment.loadAction = mtlLoadAction(target.loadAction)
             attachment.storeAction = target.store ? .store : .dontCare
@@ -162,7 +171,7 @@ private struct MetalPassEncoder {
     }
 
     private mutating func encodeRenderCommand(_ command: RenderCommand) throws {
-        guard let encoder = renderEncoder else { return }
+        guard let encoder = renderEncoder else { throw RHIError.invalidArgument("render encoder is not active") }
         switch command {
         case .setMeshPipeline(let pipeline):
             guard let mesh = registries.meshPipelines[pipeline.id] else {
@@ -191,9 +200,7 @@ private struct MetalPassEncoder {
             }
             encoder.setRenderPipelineState(state)
             currentPrimitive = registries.pipelinePrimitives[pipeline.id] ?? .triangle
-            if let depthState = registries.depthStates[pipeline.id] {
-                encoder.setDepthStencilState(depthState)
-            }
+            encoder.setDepthStencilState(registries.depthStates[pipeline.id])
             if let raster = registries.pipelineRasterStates[pipeline.id] {
                 encoder.setCullMode(mtlCullMode(raster.cullMode))
                 encoder.setFrontFacing(mtlWinding(raster.frontWinding))
@@ -205,11 +212,13 @@ private struct MetalPassEncoder {
             try bindRenderBindingSet(set, encoder: encoder)
 
         case .setVertexBuffer(let slot, let buffer, let offset):
-            guard let mtlBuffer = registries.buffers[buffer.id] else { break }
+            guard let mtlBuffer = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+            try rhiByteRange(offset: offset, size: 0, capacity: mtlBuffer.length)
             encoder.setVertexBuffer(mtlBuffer, offset: offset, index: Int(kMetalVertexBufferBaseIndex) + Int(slot))
 
         case .setIndexBuffer(let buffer, let offset, let type):
-            guard let mtlBuffer = registries.buffers[buffer.id] else { break }
+            guard let mtlBuffer = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+            try rhiByteRange(offset: offset, size: 0, capacity: mtlBuffer.length)
             currentIndexBuffer = mtlBuffer
             currentIndexOffset = offset
             currentIndexType = mtlIndexType(type)
@@ -284,39 +293,38 @@ private struct MetalPassEncoder {
         }
     }
 
-    private func bindRenderBindingSet(_ set: BindingSet, encoder: MTLRenderCommandEncoder) throws {
-        guard let bindingSet = registries.bindingSets[set.id] else {
-            throw RHIError.invalidArgument("unknown render binding set")
-        }
+    private func bindRenderBindingSet(_ handle: BindingSet, encoder: MTLRenderCommandEncoder) throws {
+        guard let bindingSet = registries.bindingSets[handle.id] else { throw RHIError.invalidArgument("unknown render binding set") }
         for entry in bindingSet.entries {
-            bindEntry(entry,
-                      buffer: { buf, offset in
-                          switch entry.stage {
-                          case .vertex:   encoder.setVertexBuffer(buf, offset: offset, index: Int(entry.slot))
-                          case .fragment: encoder.setFragmentBuffer(buf, offset: offset, index: Int(entry.slot))
-                          case .task: encoder.setObjectBuffer(buf, offset: offset, index: Int(entry.slot))
-                          case .mesh: encoder.setMeshBuffer(buf, offset: offset, index: Int(entry.slot))
-                          case .compute: break
-                          }
-                      },
-                      texture: { tex in
-                          switch entry.stage {
-                          case .vertex:   encoder.setVertexTexture(tex, index: Int(entry.slot))
-                          case .fragment: encoder.setFragmentTexture(tex, index: Int(entry.slot))
-                          case .task: encoder.setObjectTexture(tex, index: Int(entry.slot))
-                          case .mesh: encoder.setMeshTexture(tex, index: Int(entry.slot))
-                          case .compute: break
-                          }
-                      },
-                      sampler: { sampler in
-                          switch entry.stage {
-                          case .vertex:   encoder.setVertexSamplerState(sampler, index: Int(entry.slot))
-                          case .fragment: encoder.setFragmentSamplerState(sampler, index: Int(entry.slot))
-                          case .task: encoder.setObjectSamplerState(sampler, index: Int(entry.slot))
-                          case .mesh: encoder.setMeshSamplerState(sampler, index: Int(entry.slot))
-                          case .compute: break
-                          }
-                      })
+            let stages = entry.visibility.stages.filter { currentMeshPipeline == nil ? ($0 == .vertex || $0 == .fragment) : ($0 == .task || $0 == .mesh || $0 == .fragment) }
+            for stage in stages {
+                try bindEntry(entry,
+                    buffer: { buffer, offset in
+                        switch stage {
+                        case .vertex: encoder.setVertexBuffer(buffer, offset: offset, index: Int(entry.slot))
+                        case .fragment: encoder.setFragmentBuffer(buffer, offset: offset, index: Int(entry.slot))
+                        case .mesh: encoder.setMeshBuffer(buffer, offset: offset, index: Int(entry.slot))
+                        case .task: encoder.setObjectBuffer(buffer, offset: offset, index: Int(entry.slot))
+                        case .compute: break
+                        }
+                    }, texture: { texture in
+                        switch stage {
+                        case .vertex: encoder.setVertexTexture(texture, index: Int(entry.slot))
+                        case .fragment: encoder.setFragmentTexture(texture, index: Int(entry.slot))
+                        case .mesh: encoder.setMeshTexture(texture, index: Int(entry.slot))
+                        case .task: encoder.setObjectTexture(texture, index: Int(entry.slot))
+                        case .compute: break
+                        }
+                    }, sampler: { sampler in
+                        switch stage {
+                        case .vertex: encoder.setVertexSamplerState(sampler, index: Int(entry.slot))
+                        case .fragment: encoder.setFragmentSamplerState(sampler, index: Int(entry.slot))
+                        case .mesh: encoder.setMeshSamplerState(sampler, index: Int(entry.slot))
+                        case .task: encoder.setObjectSamplerState(sampler, index: Int(entry.slot))
+                        case .compute: break
+                        }
+                    })
+            }
         }
     }
 
@@ -347,7 +355,7 @@ private struct MetalPassEncoder {
             guard let bindingSet = registries.bindingSets[set.id] else {
                 throw RHIError.invalidArgument("unknown compute binding set")
             }
-            for entry in bindingSet.entries {
+            for entry in bindingSet.entries where entry.visibility.contains(.compute) {
                 if case .accelerationStructure(let handle) = entry.resource {
                     guard let native = registries.accelerationStructures[handle.id] else {
                         throw RHIError.invalidArgument("unknown acceleration structure binding")
@@ -357,7 +365,7 @@ private struct MetalPassEncoder {
                     for resource in native.dependencies { encoder.useResource(resource, usage: .read) }
                     continue
                 }
-                bindEntry(entry,
+                try bindEntry(entry,
                           buffer: { buf, offset in encoder.setBuffer(buf, offset: offset, index: Int(entry.slot)) },
                           texture: { tex in encoder.setTexture(tex, index: Int(entry.slot)) },
                           sampler: { sampler in encoder.setSamplerState(sampler, index: Int(entry.slot)) })
@@ -377,31 +385,40 @@ private struct MetalPassEncoder {
                 threadsPerThreadgroup: computeThreadgroupSize.metalSize
             )
 
+            encoder.memoryBarrier(scope: [.buffers, .textures])
         case .dispatchIndirect(let buffer, let offset):
-            guard let mtlBuffer = registries.buffers[buffer.id] else { break }
+            guard let mtlBuffer = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+            try rhiByteRange(offset: offset, size: 12, capacity: mtlBuffer.length)
             encoder.dispatchThreadgroups(
                 indirectBuffer: mtlBuffer,
                 indirectBufferOffset: offset,
                 threadsPerThreadgroup: computeThreadgroupSize.metalSize
             )
+            encoder.memoryBarrier(scope: [.buffers, .textures])
         }
     }
 
     // MARK: Copy pass
 
-    private mutating func encodeCopyPass(_ record: CopyPassRecord) {
-        guard let encoder = commandBuffer.makeBlitCommandEncoder() else { return }
+    private mutating func encodeCopyPass(_ record: CopyPassRecord) throws {
+        guard let encoder = commandBuffer.makeBlitCommandEncoder() else { throw RHIError.outOfMemory }
+        defer { encoder.endEncoding() }
         for copyCommand in record.body {
             switch copyCommand {
             case .copyBuffer(let src, let srcOffset, let dst, let dstOffset, let size):
                 guard let srcBuffer = registries.buffers[src.id],
-                      let dstBuffer = registries.buffers[dst.id] else { break }
+                      let dstBuffer = registries.buffers[dst.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+                try rhiByteRange(offset: srcOffset, size: size, capacity: srcBuffer.length)
+                try rhiByteRange(offset: dstOffset, size: size, capacity: dstBuffer.length)
+                try rhiRequire(srcBuffer !== dstBuffer, "copies within one buffer are not supported")
                 encoder.copy(from: srcBuffer, sourceOffset: srcOffset,
                              to: dstBuffer, destinationOffset: dstOffset, size: size)
 
             case .copyBufferToTexture(let buffer, let offset, let bytesPerRow, let texture, let width, let height):
                 guard let srcBuffer = registries.buffers[buffer.id],
-                      let dstTexture = registries.textures[texture.id] else { break }
+                      let dstTexture = registries.textures[texture.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+                let bytes = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(dstTexture.pixelFormat), textureWidth: dstTexture.width, textureHeight: dstTexture.height, capacity: srcBuffer.length)
+                try rhiByteRange(offset: offset, size: bytes, capacity: srcBuffer.length)
                 encoder.copy(
                     from: srcBuffer, sourceOffset: offset,
                     sourceBytesPerRow: bytesPerRow,
@@ -413,7 +430,9 @@ private struct MetalPassEncoder {
 
             case .copyTextureToBuffer(let texture, let width, let height, let buffer, let offset, let bytesPerRow):
                 guard let srcTexture = registries.textures[texture.id],
-                      let dstBuffer = registries.buffers[buffer.id] else { break }
+                      let dstBuffer = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+                let bytes = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(srcTexture.pixelFormat), textureWidth: srcTexture.width, textureHeight: srcTexture.height, capacity: dstBuffer.length)
+                try rhiByteRange(offset: offset, size: bytes, capacity: dstBuffer.length)
                 encoder.copy(
                     from: srcTexture, sourceSlice: 0, sourceLevel: 0,
                     sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
@@ -424,7 +443,6 @@ private struct MetalPassEncoder {
                 )
             }
         }
-        encoder.endEncoding()
     }
 
     // MARK: Binding resolution
@@ -434,16 +452,17 @@ private struct MetalPassEncoder {
         buffer: (MTLBuffer, Int) -> Void,
         texture: (MTLTexture) -> Void,
         sampler: (MTLSamplerState) -> Void
-    ) {
+    ) throws {
         switch entry.resource {
         case .sampler(let s):
-            guard let state = registries.samplers[s.id] else { return }
+            guard let state = registries.samplers[s.id] else { throw RHIError.invalidArgument("unknown sampler binding") }
             sampler(state)
         case .texture(let t), .storageTexture(let t):
-            guard let tex = registries.textures[t.id] else { return }
+            guard let tex = registries.textures[t.id] else { throw RHIError.invalidArgument("unknown texture binding") }
             texture(tex)
         case .uniformBuffer(let b, let offset), .storageBuffer(let b, let offset):
-            guard let mtlBuffer = registries.buffers[b.id] else { return }
+            guard let mtlBuffer = registries.buffers[b.id] else { throw RHIError.invalidArgument("unknown buffer binding") }
+            try rhiByteRange(offset: offset, size: 0, capacity: mtlBuffer.length)
             buffer(mtlBuffer, offset)
         case .accelerationStructure:
             // Not used by the current pipeline model.

@@ -7,10 +7,14 @@ import Foundation
 extension VulkanBackend {
     func configure(surface descriptor: SurfaceDescriptor) throws {
         try lock.withLock {
-            #if os(macOS)
+            try waitUntilIdle()
+            swapchain?.destroy(registries: registries); swapchain = nil; surface = nil
+            for semaphore in presentation.ready.values { sync.destroySemaphore(context.device, semaphore, nil) }
+            presentation = VulkanPresentationState()
             guard let native = descriptor.nativeHandle else {
-                throw RHIError.invalidArgument("Vulkan on macOS requires a CAMetalLayer native handle")
+                throw RHIError.invalidArgument("Vulkan requires a native surface handle")
             }
+            #if os(macOS)
             var info = VkMetalSurfaceCreateInfoEXTRepr()
             info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT
             info.flags = 0
@@ -21,6 +25,12 @@ extension VulkanBackend {
             }) else {
                 throw RHIError.unsupportedBackend("vkCreateMetalSurfaceEXT failed")
             }
+            #else
+            var created: VkSurfaceKHR?
+            guard grhi_vulkan_create_native_surface(context.instance, native, descriptor.display, &created) == VK_SUCCESS, let newSurface = created else {
+                throw RHIError.unsupportedBackend("native Vulkan surface creation failed")
+            }
+            #endif
             self.surface = newSurface
             let vulkanSurface = VulkanSurface(
                 surface: newSurface,
@@ -31,9 +41,7 @@ extension VulkanBackend {
             )
             self.swapchain = try VulkanSwapchain.create(
                 context: context, surface: vulkanSurface, registries: registries)
-            #else
-            throw RHIError.unsupportedBackend("Vulkan surface creation is only implemented on macOS")
-            #endif
+
         }
     }
 
@@ -44,11 +52,24 @@ extension VulkanBackend {
         info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
         info.size = VkDeviceSize(max(1, descriptor.size))
         info.usage = Self.bufferUsageFlags(descriptor.usage)
-        info.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-        guard let buffer = vkWithOutHandle({
-            context.core.createBuffer(context.device, &info, nil, $0)
+        if context.features.accelerationStructures {
+            info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT.rawValue
+                | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR.rawValue
+                | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR.rawValue
+        }
+        let arena = VulkanScratch()
+        let families = Array(Set([context.queues.graphics.family, context.queues.compute.family, context.queues.transfer.family]))
+        info.sharingMode = families.count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE
+        if families.count > 1 {
+            info.queueFamilyIndexCount = UInt32(families.count)
+            info.pQueueFamilyIndices = arena.store(families)
+        }
+        guard let buffer: VkBuffer = withExtendedLifetime(arena, {
+            vkWithOutHandle { _ = context.core.createBuffer(context.device, &info, nil, $0) }
         }) else { throw RHIError.outOfMemory }
 
+        var stored = false
+        defer { if !stored { context.core.destroyBuffer(context.device, buffer, nil) } }
         var req = VkMemoryRequirements()
         context.core.getBufferMemoryRequirements(context.device, buffer, &req)
 
@@ -65,11 +86,13 @@ extension VulkanBackend {
         let allocation = try allocator.allocate(
             size: req.size, alignment: req.alignment,
             memoryTypeBits: req.memoryTypeBits, requiredFlags: flags)
+        defer { if !stored { allocator.free(allocation) } }
         if context.core.bindBufferMemory(context.device, buffer, allocation.memory, allocation.offset) != VK_SUCCESS {
             throw RHIError.outOfMemory
         }
         registries.buffers[handle.id] = VulkanBufferRecord(
             buffer: buffer, allocation: allocation, size: descriptor.size, usage: descriptor.usage)
+        stored = true
     }
 
     func destroyBuffer(_ handle: Buffer) {
@@ -89,23 +112,34 @@ extension VulkanBackend {
                                  height: UInt32(max(1, descriptor.height)),
                                  depth: UInt32(max(1, descriptor.depth)))
         info.mipLevels = UInt32(max(1, descriptor.mipLevels))
-        info.arrayLayers = UInt32(max(1, descriptor.layers))
+        info.arrayLayers = descriptor.dimension == .cube ? 6 : UInt32(descriptor.layers)
+        if descriptor.dimension == .cube { info.flags = UInt32(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT.rawValue) }
+        try rhiRequire(descriptor.sampleCount == 1, "Vulkan multisampled textures are not implemented")
         info.samples = VK_SAMPLE_COUNT_1_BIT
         info.tiling = VK_IMAGE_TILING_OPTIMAL
         info.usage = Self.textureUsageFlags(descriptor.usage)
-        info.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        let arena = VulkanScratch()
+        let families = Array(Set([context.queues.graphics.family, context.queues.compute.family, context.queues.transfer.family]))
+        info.sharingMode = families.count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE
+        if families.count > 1 {
+            info.queueFamilyIndexCount = UInt32(families.count)
+            info.pQueueFamilyIndices = arena.store(families)
+        }
         info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 
-        guard let image = vkWithOutHandle({
-            context.core.createImage(context.device, &info, nil, $0)
+        guard let image: VkImage = withExtendedLifetime(arena, {
+            vkWithOutHandle { _ = context.core.createImage(context.device, &info, nil, $0) }
         }) else { throw RHIError.outOfMemory }
 
+        var stored = false
+        defer { if !stored { context.core.destroyImage(context.device, image, nil) } }
         var req = VkMemoryRequirements()
         context.core.getImageMemoryRequirements(context.device, image, &req)
         let allocation = try allocator.allocate(
             size: req.size, alignment: req.alignment,
             memoryTypeBits: req.memoryTypeBits,
             requiredFlags: UInt32(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT.rawValue))
+        defer { if !stored { allocator.free(allocation) } }
         if context.core.bindImageMemory(context.device, image, allocation.memory, allocation.offset) != VK_SUCCESS {
             throw RHIError.outOfMemory
         }
@@ -115,7 +149,12 @@ extension VulkanBackend {
         var viewInfo = VkImageViewCreateInfo()
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO
         viewInfo.image = image
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D
+        switch descriptor.dimension {
+        case .texture2D: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D
+        case .texture2DArray: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY
+        case .texture3D: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D
+        case .cube: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE
+        }
         viewInfo.format = VulkanFormats.vkFormat(descriptor.format)
         viewInfo.subresourceRange = VkImageSubresourceRange(aspectMask: aspect, baseMipLevel: 0,
                                                            levelCount: VK_REMAINING_MIP_LEVELS,
@@ -125,15 +164,18 @@ extension VulkanBackend {
             context.core.createImageView(context.device, &viewInfo, nil, $0)
         }) else { throw RHIError.outOfMemory }
 
-        registries.textures[handle.id] = VulkanTextureRecord(
+        var record = VulkanTextureRecord(
             image: image, allocation: allocation, view: view,
             format: descriptor.format, width: descriptor.width, height: descriptor.height,
             depth: descriptor.depth, mipLevels: UInt32(max(1, descriptor.mipLevels)),
             usage: descriptor.usage, isSwapchain: false, layout: VK_IMAGE_LAYOUT_UNDEFINED)
+        record.layers = info.arrayLayers
+        registries.textures[handle.id] = record
+        stored = true
     }
 
     func destroyTexture(_ handle: Texture) {
-        guard var record = registries.textures.removeValue(forKey: handle.id) else { return }
+        guard let record = registries.textures.removeValue(forKey: handle.id) else { return }
         guard !record.isSwapchain else { return }
         context.core.destroyImageView(context.device, record.view, nil)
         context.core.destroyImage(context.device, record.image, nil)
@@ -153,6 +195,7 @@ extension VulkanBackend {
         info.addressModeW = VulkanFormats.vkSamplerAddressMode(descriptor.addressModeW)
         info.compareEnable = descriptor.compareEnabled ? VK_TRUE : VK_FALSE
         info.compareOp = VulkanFormats.vkCompareOp(descriptor.compareOp)
+        info.maxLod = VK_LOD_CLAMP_NONE
         info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK
         info.unnormalizedCoordinates = VK_FALSE
         guard let sampler = vkWithOutHandle({
@@ -173,13 +216,16 @@ extension VulkanBackend {
         var info = VkShaderModuleCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO
         info.codeSize = descriptor.code.count
-        descriptor.code.withUnsafeBytes { bytes in
-            info.pCode = bytes.baseAddress?.assumingMemoryBound(to: UInt32.self)
+        try rhiRequire(descriptor.code.count >= 20 && descriptor.code.count % 4 == 0, "invalid SPIR-V byte count")
+        let words = stride(from: 0, to: descriptor.code.count, by: 4).map { index in
+            descriptor.code.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: index, as: UInt32.self) }
         }
-        guard let module = vkWithOutHandle({
-            context.core.createShaderModule(context.device, &info, nil, $0)
+        let arena = VulkanScratch()
+        info.pCode = arena.store(words)
+        guard let module: VkShaderModule = withExtendedLifetime(arena, {
+            vkWithOutHandle { _ = context.core.createShaderModule(context.device, &info, nil, $0) }
         }) else { throw RHIError.outOfMemory }
-        registries.shaderModules[handle.id] = VulkanShaderModuleRecord(module: module, stage: descriptor.stage)
+        registries.shaderModules[handle.id] = VulkanShaderModuleRecord(module: module, stage: descriptor.stage, entryPoint: descriptor.entryPoint)
     }
 
     func destroyShaderModule(_ handle: ShaderModule) {
@@ -190,7 +236,7 @@ extension VulkanBackend {
     // MARK: Usage flag mapping
 
     private static func bufferUsageFlags(_ usage: BufferUsage) -> VkBufferUsageFlags {
-        var flags: VkBufferUsageFlags = 0
+        var flags: VkBufferUsageFlags = UInt32(VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue | VK_BUFFER_USAGE_TRANSFER_DST_BIT.rawValue)
         if usage.contains(.vertex) { flags |= UInt32(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT.rawValue) }
         if usage.contains(.index) { flags |= UInt32(VK_BUFFER_USAGE_INDEX_BUFFER_BIT.rawValue) }
         if usage.contains(.indirect) { flags |= UInt32(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT.rawValue) }
@@ -204,7 +250,7 @@ extension VulkanBackend {
     }
 
     private static func textureUsageFlags(_ usage: TextureUsage) -> VkImageUsageFlags {
-        var flags: VkImageUsageFlags = 0
+        var flags: VkImageUsageFlags = UInt32(VK_IMAGE_USAGE_TRANSFER_SRC_BIT.rawValue | VK_IMAGE_USAGE_TRANSFER_DST_BIT.rawValue)
         if usage.contains(.sampled) { flags |= UInt32(VK_IMAGE_USAGE_SAMPLED_BIT.rawValue) }
         if usage.contains(.colorTarget) { flags |= UInt32(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue) }
         if usage.contains(.depthStencilTarget) { flags |= UInt32(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT.rawValue) }

@@ -9,7 +9,7 @@ final class StateTrackerTests: XCTestCase {
     }
 
     func testFirstRequirementEmitsBarrierFromEmptyState() {
-        let tracker = StateTracker()
+        var tracker = StateTracker()
         tracker.requireState(ref(), .renderTarget)
         let barriers = tracker.commitBarriers()
 
@@ -19,14 +19,14 @@ final class StateTrackerTests: XCTestCase {
     }
 
     func testRequiringSameStateEmitsNoBarrier() {
-        let tracker = StateTracker()
+        var tracker = StateTracker()
         tracker.setInitialState(ref(), .renderTarget)
         tracker.requireState(ref(), .renderTarget)
         XCTAssertTrue(tracker.commitBarriers().isEmpty)
     }
 
     func testStateChangeEmitsBarrierWithBeforeAndAfter() {
-        let tracker = StateTracker()
+        var tracker = StateTracker()
         tracker.setInitialState(ref(), .shaderResource)
         tracker.requireState(ref(), .renderTarget)
         let barriers = tracker.commitBarriers()
@@ -37,7 +37,7 @@ final class StateTrackerTests: XCTestCase {
     }
 
     func testRepeatedTransitionsOfSameResourceMergeIntoOneBarrier() {
-        let tracker = StateTracker()
+        var tracker = StateTracker()
         tracker.requireState(ref(), .shaderResource)
         tracker.requireState(ref(), .renderTarget)
         let barriers = tracker.commitBarriers()
@@ -50,21 +50,21 @@ final class StateTrackerTests: XCTestCase {
     }
 
     func testDistinctResourcesAreNotMerged() {
-        let tracker = StateTracker()
+        var tracker = StateTracker()
         tracker.requireState(ResourceRef(kind: .texture, id: 1), .renderTarget)
         tracker.requireState(ResourceRef(kind: .texture, id: 2), .renderTarget)
         XCTAssertEqual(tracker.commitBarriers().count, 2)
     }
 
     func testCommitDrainsPendingBarriers() {
-        let tracker = StateTracker()
+        var tracker = StateTracker()
         tracker.requireState(ref(), .renderTarget)
         XCTAssertEqual(tracker.commitBarriers().count, 1)
         XCTAssertTrue(tracker.commitBarriers().isEmpty)
     }
 
     func testRemoveResourceStopsTracking() {
-        let tracker = StateTracker()
+        var tracker = StateTracker()
         tracker.setInitialState(ref(), .renderTarget)
         tracker.removeResource(ref())
         tracker.requireState(ref(), .shaderResource)

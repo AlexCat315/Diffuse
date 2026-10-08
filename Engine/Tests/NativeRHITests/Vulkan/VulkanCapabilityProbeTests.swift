@@ -32,18 +32,18 @@ final class VulkanCapabilityProbeTests: XCTestCase {
                        "Vulkan acceleration structure commands are not implemented")
         XCTAssertFalse(caps.meshShading.mesh,
                        "Vulkan mesh commands are not implemented")
-        XCTAssertFalse(caps.graphics)
-        XCTAssertFalse(caps.compute)
+        XCTAssertTrue(caps.graphics)
+        XCTAssertTrue(caps.compute)
     }
 
-    func testIncompleteComputeCommandsAndQueuesAreRejected() throws {
+    func testInvalidComputeCommandsAreRejectedAndEmptyComputeSubmitSucceeds() throws {
         guard VulkanBackend.isAvailable else { throw XCTSkip("No Vulkan loader / ICD") }
         let device = try Device.make(DeviceConfig(preferredBackends: [.vulkan], enableValidation: false))
         let commands = CommandBuffer()
         commands.computePass { $0.dispatch(groupsX: 1) }
         try device.beginFrame()
         XCTAssertThrowsError(try device.submit(commands))
-        XCTAssertThrowsError(try device.submit(CommandBuffer(), queue: .compute))
+        try device.submit(CommandBuffer(), queue: .compute)
         device.endFrame()
         try device.waitUntilIdle()
     }

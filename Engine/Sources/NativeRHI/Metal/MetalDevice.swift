@@ -33,6 +33,7 @@ public final class MetalDevice: RHIBackend {
     let libraryCache: MetalLibraryCache
     let capabilities: Capabilities
     let submissionStatus = MetalSubmissionStatus()
+    let interfaces = PipelineInterfaces()
     let surface = MetalSurfaceState()
     var uploaders: [Int: MetalFrameUploader] = [:]
     /// Lazily-grown shared staging buffer reused for immediate texture upload/readback.

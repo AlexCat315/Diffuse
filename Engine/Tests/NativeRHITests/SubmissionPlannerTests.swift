@@ -157,8 +157,8 @@ final class SubmissionPlannerTests: XCTestCase {
         XCTAssertEqual(blocks.count, 2)
         XCTAssertEqual(submit.commands.count, 4)
         // The second barrier is an ordering barrier: before == after.
-        XCTAssertEqual(blocks[1].first?.sourceState, [.shaderResource, .unorderedAccess])
-        XCTAssertEqual(blocks[1].first?.destinationState, [.shaderResource, .unorderedAccess])
+        XCTAssertEqual(blocks[1].first?.sourceState, .unorderedAccess)
+        XCTAssertEqual(blocks[1].first?.destinationState, .unorderedAccess)
         XCTAssertEqual(blocks[1].first?.syncAction, .full)
     }
 
@@ -217,8 +217,45 @@ final class SubmissionPlannerTests: XCTestCase {
 
         let blocks = barrierBlocks(in: consumer)
         XCTAssertEqual(blocks.count, 1)
-        XCTAssertEqual(blocks[0].first?.sourceState, [.shaderResource, .unorderedAccess])
-        XCTAssertEqual(blocks[0].first?.destinationState, [.shaderResource, .unorderedAccess])
+        XCTAssertEqual(blocks[0].first?.sourceState, .unorderedAccess)
+        XCTAssertEqual(blocks[0].first?.destinationState, .unorderedAccess)
         XCTAssertEqual(blocks[0].first?.syncAction, .acquire)
     }
+    func testCheckpointRestoresOwnershipAndTimelineValues() throws {
+        let planner = SubmissionPlanner()
+        let first = CopyPassRecord(body: [.copyBuffer(src: Buffer(id: 1), srcOffset: 0, dst: Buffer(id: 2), dstOffset: 0, size: 16)])
+        _ = try planner.buildPlan(queue: .graphics, commands: [.copyPass(first)], external: SubmitDescriptor())
+        let rollback = planner.checkpoint()
+        let next = CopyPassRecord(body: [.copyBuffer(src: Buffer(id: 2), srcOffset: 0, dst: Buffer(id: 3), dstOffset: 0, size: 16)])
+        let abandoned = try planner.buildPlan(queue: .compute, commands: [.copyPass(next)], external: SubmitDescriptor())
+        rollback()
+        let retried = try planner.buildPlan(queue: .compute, commands: [.copyPass(next)], external: SubmitDescriptor())
+        XCTAssertEqual(retried.submits.count, 2)
+        XCTAssertEqual(retried.submits.map(\.waitSemaphores), abandoned.submits.map(\.waitSemaphores))
+        XCTAssertEqual(retried.submits.map(\.signalSemaphores), abandoned.submits.map(\.signalSemaphores))
+        XCTAssertEqual(barrierBlocks(in: retried.submits[0]).first?.first?.sourceState, .copyDestination)
+    }
+    func testReadOnlyStorageBindingsDoNotIntroduceWriteDependencies() throws {
+        let planner = SubmissionPlanner()
+        planner.registerBindingSetEntries(20, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: Buffer(id: 1)))], readOnlySlots: [0])
+        let pass = ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 20))])
+        let first = try planner.buildPlan(queue: .compute, commands: [.computePass(pass)], external: SubmitDescriptor())
+        XCTAssertEqual(barrierBlocks(in: first.submits[0]).first?.first?.destinationState, .shaderResource)
+        let next = try planner.buildPlan(queue: .compute, commands: [.computePass(pass)], external: SubmitDescriptor())
+        XCTAssertEqual(next.submits[0].commands.count, 1)
+        XCTAssertTrue(barrierBlocks(in: next.submits[0]).isEmpty)
+    }
+
+    func testImmediateUploadToComputeIntroducesTransferWriteHandoff() throws {
+        let planner = SubmissionPlanner()
+        planner.recordImmediateWrite(ResourceRef(kind: .buffer, id: 1))
+        planner.registerBindingSetEntries(20, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: Buffer(id: 1)))], readOnlySlots: [0])
+        let pass = ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 20))])
+        let plan = try planner.buildPlan(queue: .compute, commands: [.computePass(pass)], external: SubmitDescriptor())
+        XCTAssertEqual(plan.submits.count, 2)
+        XCTAssertEqual(plan.submits[0].queue, .graphics)
+        XCTAssertEqual(barrierBlocks(in: plan.submits[0]).first?.first?.sourceState, .copyDestination)
+        XCTAssertEqual(plan.submits[0].signalSemaphores, plan.submits[1].waitSemaphores)
+    }
+
 }
