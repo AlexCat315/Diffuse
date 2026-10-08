@@ -70,7 +70,7 @@ final class VulkanUploadReadbackTests: XCTestCase {
             }
         }
         try device.uploadTextureData(texture, data: uploaded,
-                                     width: width, height: height, bytesPerRow: bytesPerRow)
+                                     region: .init(width: width,height: height), bytesPerRow: bytesPerRow)
 
         var readback = Data(count: byteCount)
         try readback.withUnsafeMutableBytes { dest in

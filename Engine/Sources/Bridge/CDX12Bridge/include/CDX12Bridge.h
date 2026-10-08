@@ -41,13 +41,13 @@ typedef struct { uint32_t format, stencil_format, enabled, write, compare; } GRH
 typedef struct { uint32_t location, format, buffer, offset, semantic_index; const char* semantic; } GRHI_VertexAttribute;
 typedef struct { uint32_t stride, per_instance; } GRHI_VertexBufferLayout;
 typedef struct {
-    uint32_t layout, vertex, fragment, mesh, task;
+    uint32_t layout, vertex, fragment, mesh, task, sample_count;
     GRHI_RasterDesc raster; GRHI_DepthDesc depth;
     const GRHI_ColorDesc* colors; uint32_t color_count;
     const GRHI_VertexAttribute* attributes; uint32_t attribute_count;
     const GRHI_VertexBufferLayout* vertex_buffers; uint32_t vertex_buffer_count;
 } GRHI_GraphicsDesc;
-typedef struct { uint32_t texture, load, store; float clear[4]; } GRHI_RenderColor;
+typedef struct { uint32_t texture, load, store, resolve; float clear[4]; } GRHI_RenderColor;
 typedef struct { uint32_t texture, load, store; float clear; } GRHI_RenderDepth;
 typedef struct { uint32_t buffer, triangles; uint64_t offset, stride; } GRHI_Triangle;
 typedef struct { uint32_t blas, mask; float transform[12]; } GRHI_Instance;
@@ -74,7 +74,7 @@ int32_t grhi_dx12_acceleration_structure(GRHI_DX12Device*, uint32_t id, const GR
 void grhi_dx12_destroy(GRHI_DX12Device*, uint32_t kind, uint32_t id);
 int32_t grhi_dx12_upload_buffer(GRHI_DX12Device*, uint32_t id, uint64_t offset, const void*, size_t bytes);
 int32_t grhi_dx12_read_buffer(GRHI_DX12Device*, uint32_t id, uint64_t offset, void*, size_t bytes);
-int32_t grhi_dx12_transfer_texture(GRHI_DX12Device*, uint32_t id, uint32_t width, uint32_t height, uint32_t row_bytes, uint32_t mip, uint32_t layer, void*, size_t bytes, uint32_t upload);
+int32_t grhi_dx12_transfer_texture(GRHI_DX12Device*, uint32_t id, uint32_t originX, uint32_t originY, uint32_t width, uint32_t height, uint32_t row_bytes, uint32_t mip, uint32_t layer, void*, size_t bytes, uint32_t upload);
 GRHI_DX12Encoder* grhi_dx12_begin(GRHI_DX12Device*, uint32_t queue);
 int32_t grhi_dx12_render(GRHI_DX12Encoder*, const GRHI_RenderColor*, size_t colors, const GRHI_RenderDepth*);
 int32_t grhi_dx12_encode(GRHI_DX12Encoder*, const GRHI_DX12Command*);

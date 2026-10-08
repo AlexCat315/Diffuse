@@ -130,7 +130,42 @@ private struct MetalPassEncoder {
 
     // MARK: Render pass
 
+    private func validateRenderAttachments(_ record: RenderPassRecord) throws {
+        let signature = try rhiRenderPassSignature(record.descriptor) { handle in
+            guard let texture = registries.textures[handle.id] else {
+                throw RHIError.invalidArgument("unknown render attachment")
+            }
+            let depth = [.depth32Float, .depth24Unorm_stencil8, .depth32Float_stencil8].contains(texture.pixelFormat)
+            let usage: TextureUsage = texture.usage.contains(.renderTarget)
+                ? (depth ? .depthStencilTarget : .colorTarget) : []
+            var info = RenderTextureInfo(extent: SIMD2(texture.width, texture.height), sampleCount: texture.sampleCount,
+                format: texture.pixelFormat, usage: usage,
+                singleLayer2D: (texture.textureType == .type2D || texture.textureType == .type2DMultisample), isDepth: depth)
+            info.supportsColorResolve = texture.pixelFormat != .r32Uint
+            return info
+        }
+        for command in record.body {
+            switch command {
+            case .setPipeline(let handle):
+                guard let pipeline = registries.renderPipelines[handle.id] else {
+                    throw RHIError.invalidArgument("unknown graphics pipeline")
+                }
+                let descriptor = pipeline.descriptor
+                try signature.validate(colors: descriptor.colorAttachments.map { mtlPixelFormat($0.format) },
+                    depth: descriptor.depthFormat.map(mtlPixelFormat), samples: descriptor.sampleCount)
+            case .setMeshPipeline(let handle):
+                guard let pipeline = registries.meshPipelines[handle.id] else {
+                    throw RHIError.invalidArgument("unknown mesh pipeline")
+                }
+                try signature.validate(colors: pipeline.descriptor.colorAttachments.map { mtlPixelFormat($0.format) },
+                    depth: pipeline.descriptor.depthFormat.map(mtlPixelFormat), samples: 1)
+            default: break
+            }
+        }
+    }
+
     private mutating func encodeRenderPass(_ record: RenderPassRecord) throws {
+        try validateRenderAttachments(record)
         let rpd = MTLRenderPassDescriptor()
 
         for (index, target) in record.descriptor.colorTargets.enumerated() {
@@ -138,6 +173,10 @@ private struct MetalPassEncoder {
             attachment.texture = texture
             attachment.loadAction = mtlLoadAction(target.loadAction)
             attachment.storeAction = target.store ? .store : .dontCare
+            if let resolve = target.resolveTexture {
+                attachment.resolveTexture = registries.textures[resolve.id]
+                attachment.storeAction = target.store ? .storeAndMultisampleResolve : .multisampleResolve
+            }
             if case .clear(let color) = target.loadAction {
                 attachment.clearColor = MTLClearColor(
                     red: Double(color.x), green: Double(color.y),
@@ -198,7 +237,7 @@ private struct MetalPassEncoder {
             guard let state = registries.renderPipelines[pipeline.id] else {
                 throw RHIError.invalidArgument("unknown graphics pipeline")
             }
-            encoder.setRenderPipelineState(state)
+            encoder.setRenderPipelineState(state.state)
             currentPrimitive = registries.pipelinePrimitives[pipeline.id] ?? .triangle
             encoder.setDepthStencilState(registries.depthStates[pipeline.id])
             if let raster = registries.pipelineRasterStates[pipeline.id] {
@@ -429,6 +468,7 @@ private struct MetalPassEncoder {
             case .copyBufferToTexture(let buffer, let offset, let bytesPerRow, let texture, let width, let height):
                 guard let srcBuffer = registries.buffers[buffer.id],
                       let dstTexture = registries.textures[texture.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+                try rhiRequire(dstTexture.sampleCount == 1, "buffer texture copies require a single-sample texture")
                 let bytes = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(dstTexture.pixelFormat), textureWidth: dstTexture.width, textureHeight: dstTexture.height, capacity: srcBuffer.length)
                 try rhiByteRange(offset: offset, size: bytes, capacity: srcBuffer.length)
                 encoder.copy(
@@ -443,6 +483,7 @@ private struct MetalPassEncoder {
             case .copyTextureToBuffer(let texture, let width, let height, let buffer, let offset, let bytesPerRow):
                 guard let srcTexture = registries.textures[texture.id],
                       let dstBuffer = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+                try rhiRequire(srcTexture.sampleCount == 1, "buffer texture copies require a single-sample texture")
                 let bytes = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(srcTexture.pixelFormat), textureWidth: srcTexture.width, textureHeight: srcTexture.height, capacity: dstBuffer.length)
                 try rhiByteRange(offset: offset, size: bytes, capacity: dstBuffer.length)
                 encoder.copy(

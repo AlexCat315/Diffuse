@@ -40,16 +40,30 @@ GRHI_DX12Encoder* grhi_dx12_begin(GRHI_DX12Device* device, uint32_t queue) {
 }
 static void pipeline(GRHI_DX12Encoder& e, Pipeline& p) {
     require(p.compute ? e.queue != 2 && !e.rendering : e.queue == 0 && e.rendering, "pipeline used outside its pass");
-    if (!p.compute) require(p.colors == e.colors && p.depth == e.depth, "pipeline attachment formats differ from render pass");
+    if (!p.compute) require(p.colors == e.colors && p.depth == e.depth && p.samples == e.samples, "pipeline attachment formats or samples differ from render pass");
     e.pipeline = &p; auto& layout = e.state->layouts.at(p.layout); e.list->SetPipelineState(p.native.Get());
     if (p.compute) e.list->SetComputeRootSignature(layout.native.Get()); else { e.list->SetGraphicsRootSignature(layout.native.Get());
         static const D3D_PRIMITIVE_TOPOLOGY topologies[] = {D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,D3D_PRIMITIVE_TOPOLOGY_LINELIST,D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,D3D_PRIMITIVE_TOPOLOGY_POINTLIST}; require(p.raster.primitive < 5, "invalid primitive"); if (!p.mesh) e.list->IASetPrimitiveTopology(topologies[p.raster.primitive]); }
 }
 int32_t grhi_dx12_render(GRHI_DX12Encoder* encoder, const GRHI_RenderColor* colors, size_t count, const GRHI_RenderDepth* depth) { return record(encoder, [&](GRHI_DX12Encoder& e) {
     require(e.queue == 0 && !e.rendering && count <= 8 && (count || depth), "invalid render pass"); e.colors.clear(); e.depth = DXGI_FORMAT_UNKNOWN; e.pipeline = nullptr;
+    e.renderColors.clear(); e.discardDepth = depth && !depth->store ? depth->texture : 0;
+    std::vector<uint32_t> attachments;
+    auto distinct = [&](uint32_t id) { require(std::find(attachments.begin(), attachments.end(), id) == attachments.end(), "render attachments and resolve targets must be distinct"); attachments.push_back(id); };
+    for (size_t i = 0; i < count; ++i) { distinct(colors[i].texture); if (colors[i].resolve) distinct(colors[i].resolve); }
+    if (depth) distinct(depth->texture);
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> views; UINT width = 0, height = 0;
-    auto dimensions = [&](Resource& r) { require(r.texture.dimension == 0 && r.texture.layers == 1, "render targets currently require 2D single layer textures"); if (width) require(width == r.texture.width && height == r.texture.height, "render target extent mismatch"); width = r.texture.width; height = r.texture.height; };
+    auto dimensions = [&](Resource& r) { require(r.texture.dimension == 0 && r.texture.layers == 1, "render targets currently require 2D single layer textures"); if (width) require(width == r.texture.width && height == r.texture.height && e.samples == r.texture.samples, "render target extent or sample count mismatch"); width = r.texture.width; height = r.texture.height; e.samples = r.texture.samples; };
     for (size_t i = 0; i < count; ++i) { auto c = colors[i]; auto& r = e.state->textures.at(c.texture); dimensions(r); require((r.usage & (1 << 1)) && r.view != UINT_MAX, "texture is not a color target");
+        if (c.resolve) {
+            auto& destination = e.state->textures.at(c.resolve); auto& a = r.texture; auto& b = destination.texture;
+            require(a.samples > 1 && b.samples == 1 && a.format == b.format && a.width == b.width && a.height == b.height
+                && b.dimension == 0 && b.layers == 1 && (destination.usage & (1 << 1)), "invalid color resolve target");
+            D3D12_FEATURE_DATA_FORMAT_SUPPORT support{format(a.format), D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE};
+            check(e.state->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support)), "CheckFeatureSupport resolve");
+            require(support.Support1 & D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RESOLVE, "color format does not support multisample resolve");
+        }
+        e.renderColors.push_back(c);
         transition(e, r, D3D12_RESOURCE_STATE_RENDER_TARGET); auto view = e.state->rtvs.cpu(r.view); views.push_back(view); e.colors.push_back(format(r.texture.format));
         if (c.load == 1) e.list->ClearRenderTargetView(view, c.clear, 0, nullptr); else if (c.load == 2) e.list->DiscardResource(r.native.Get(), nullptr);
     }
@@ -59,6 +73,25 @@ int32_t grhi_dx12_render(GRHI_DX12Encoder* encoder, const GRHI_RenderColor* colo
     e.list->OMSetRenderTargets(UINT(count), views.data(), FALSE, depth ? &dsv : nullptr);
     D3D12_VIEWPORT viewport{0,0,float(width),float(height),0,1}; D3D12_RECT scissor{0,0,LONG(width),LONG(height)}; e.list->RSSetViewports(1,&viewport); e.list->RSSetScissorRects(1,&scissor); e.rendering = true;
 }); }
+static void endRender(GRHI_DX12Encoder& e) {
+    require(e.rendering, "no active render pass to end");
+    e.list->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
+    for (auto color : e.renderColors) {
+        auto& source = e.state->textures.at(color.texture);
+        if (color.resolve) {
+            auto& destination = e.state->textures.at(color.resolve);
+            transition(e, source, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+            transition(e, destination, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+            e.list->ResolveSubresource(destination.native.Get(), 0, source.native.Get(), 0, format(source.texture.format));
+        }
+        if (!color.store) {
+            transition(e, source, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            e.list->DiscardResource(source.native.Get(), nullptr);
+        }
+    }
+    if (e.discardDepth) e.list->DiscardResource(e.state->textures.at(e.discardDepth).native.Get(), nullptr);
+    e.renderColors.clear(); e.discardDepth = 0; e.rendering = false; e.pipeline = nullptr;
+}
 static void bindSet(GRHI_DX12Encoder& e, uint32_t slot, uint32_t id) {
     require(e.pipeline != nullptr, "bind a pipeline before binding resources"); auto& layout = e.state->layouts.at(e.pipeline->layout); auto& set = e.state->sets.at(id);
     require(slot < layout.sets.size() && layout.sets[slot] == set.layout, "binding set layout mismatch"); bool compute = e.pipeline->compute;
@@ -111,7 +144,7 @@ int32_t grhi_dx12_encode(GRHI_DX12Encoder* encoder, const GRHI_DX12Command* comm
     case GRHI_CMD_BARRIER: { Resource* r = c.slot == 0 ? &s.buffers.at(c.resource) : c.slot == 1 ? &s.textures.at(c.resource) : &s.acceleration.at(c.resource).result;
         auto state = resourceState(uint32_t(c.a)); if (c.b == 2 && c.slot != 2) state = D3D12_RESOURCE_STATE_COMMON; transition(e,*r,state); break; }
     case GRHI_CMD_AS_BUILD: require(e.queue != 2, "AS builds require graphics or compute queue"); buildAcceleration(e,c.resource); break;
-    case GRHI_CMD_END_RENDER: e.rendering = false; e.pipeline = nullptr; break;
+    case GRHI_CMD_END_RENDER: endRender(e); break;
     default: throw std::runtime_error("unknown native command");
     }
 }); }

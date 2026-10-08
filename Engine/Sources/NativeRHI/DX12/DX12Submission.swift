@@ -46,6 +46,7 @@ extension DX12Device {
     private func beginRender(_ encoder: OpaquePointer, descriptor: RenderPassDescriptor) throws {
         let colors = descriptor.colorTargets.map { c -> GRHI_RenderColor in
             var result = GRHI_RenderColor(); result.texture = c.texture.id; result.store = c.store ? 1 : 0
+            result.resolve = c.resolveTexture?.id ?? 0
             switch c.loadAction {
             case .load: result.load = 0
             case .clear(let color): result.load = 1; result.clear = (color.x, color.y, color.z, color.w)

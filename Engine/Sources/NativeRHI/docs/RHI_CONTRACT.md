@@ -14,6 +14,7 @@ Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上
 | --- | --- | --- | --- |
 | Buffer / Texture / Sampler、上传与读回 | 本机验证 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
 | Raster / Compute、绑定、indirect、copy | 本机验证核心路径 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
+| 纹理局部上传、打包顶点颜色、MSAA color resolve | 本机验证；见 [UI 基础验证](NATIVE_UI_VALIDATION.md) | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
 | 窗口呈现与 resize | 本机验证 | Win32 / Xlib / Wayland 原生实现，待验证 | HWND swapchain 实现，待验证 |
 | 帧上传、延迟销毁、跨队列同步 | 本机验证 | 原生实现，独立 queue family 待验证 | 原生实现，待验证 |
 | Mesh / task | Mesh 已验证；task 关闭 | EXT 管线与直接 dispatch 实现，设备功能链控制，GPU 待验证 | MS / AS 管线与直接 dispatch 实现，GPU 待验证 |
@@ -55,7 +56,11 @@ try device.waitUntilIdle() // 调试、测试或停机
 
 规划器跟踪状态、访问依赖与 queue ownership，跨 queue 用 timeline handoff。多个 queue class 不代表多条独立硬件队列。Vulkan 资源跨不同 queue family 采用 concurrent sharing，各 family 使用独立 command pool。提交路径采用异步 fence completion，不调用 queue idle。
 
-立即上传会同步完成，并登记 transfer write，供下次提交生成依赖。修改已有资源时，调用方须先保证没有 GPU 同时访问该范围。立即纹理传输适合初始化与调试；上传/读回通过 TextureSubresource 指定 mip/layer，默认 mip0、第一层。`readBufferData` 必须在 endFrame 后使用，等待此前 GPU 工作完成后回读指定字节范围；Metal 读取 shared buffer，Vulkan 使用 coherent staging 与 transfer/host barrier，DX12 使用 READBACK heap 与 CopyBufferRegion。读回不改变 planner 的写入版本。正常帧的颜色纹理 copy 命令当前仅访问 mip0、第一层；行距使用字节。DX12 通过临时缓冲重排行距，适配原生 256 字节 row pitch。
+立即上传会同步完成，并登记 transfer write，供下次提交生成依赖。修改已有资源时，调用方须先保证没有 GPU 同时访问该范围。立即纹理传输适合初始化与调试；上传/读回通过 TextureSubresource 指定 mip/layer，默认 mip0、第一层。上传通过 `TextureUploadRegion` 指定矩形尺寸及 mip 内的 origin，默认 origin 为零；输入行距含 padding，矩形外的像素不改写。新分配的纹理内容未定义；字体图集等采用局部初次上传的资源须先初始化全部像素。`readBufferData` 必须在 endFrame 后使用，等待此前 GPU 工作完成后回读指定字节范围；Metal 读取 shared buffer，Vulkan 使用 coherent staging 与 transfer/host barrier，DX12 使用 READBACK heap 与 CopyBufferRegion。读回不改变 planner 的写入版本。正常帧的颜色纹理 copy 命令当前仅访问 mip0、第一层；行距使用字节。DX12 通过临时缓冲重排行距，适配原生 256 字节 row pitch。
+
+MSAA texture 当前要求一个 2D layer、一个 mip，并具备 color/depth attachment usage；不支持 multisampled shader binding，须先 resolve 再采样。sample count 接受 1/2/4/8/16/32/64；硬件与格式不支持的组合明确报错，不降级。`GraphicsPipelineDescriptor.sampleCount` 默认 1，必须与所有 source attachments 一致；extent 和格式也在录制时检查。`RenderColorTarget.resolveTexture` 默认 nil；非 nil 时要求匹配 extent/format 的单采样 color target，附件与 resolve destination 必须各不相同。`store` 控制保留 source attachment，resolve destination 总会保存结果。Resolve target 纳入 planner 的 attachment writes，后续采样、copy 和跨 queue 使用均建立依赖。Vulkan 为多 mip render target 单独创建 mip0 attachment view，采样 view 保留完整 mip 链。立即上传、读回及普通 texture copy 拒绝 MSAA source，须读 resolved image。Depth resolve 尚未实现。
+
+`VertexFormat.unorm8x4` 对应四个紧密排列的 UInt8，顶点取值归一化到 0…1；Metal 使用 uchar4Normalized，Vulkan 使用 R8G8B8A8_UNORM，DX12 使用 R8G8B8A8_UNORM。可直接读取 GuavaUI 的 RGBA 打包颜色，无须展开成四个 Float。
 
 规划或录制失败且尚未排入 GPU 的工作会回滚状态和 timeline。一次前端提交若已有部分工作排队后失败，设备阻止继续提交，须重建，避免错误复用状态。GPU completion 错误在 `waitUntilIdle` 上抛出。
 

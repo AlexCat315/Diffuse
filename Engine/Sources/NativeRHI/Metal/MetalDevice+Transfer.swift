@@ -110,8 +110,7 @@ extension MetalDevice {
     public func uploadTextureData(
         _ texture: Texture,
         data: Data,
-        width: Int,
-        height: Int,
+        region: TextureUploadRegion,
         bytesPerRow: Int,
         subresource: TextureSubresource
     ) throws {
@@ -122,7 +121,7 @@ extension MetalDevice {
         try rhiRequire(mtlTexture.sampleCount == 1, "texture transfer requires a single sample")
         let extent = try rhiTextureSubresourceExtent(subresource, width: mtlTexture.width, height: mtlTexture.height,
             mipLevels: mtlTexture.mipmapLevelCount, layers: layers)
-        let needed = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(mtlTexture.pixelFormat), textureWidth: extent.width, textureHeight: extent.height, capacity: data.count)
+        let needed = try rhiTextureUploadBytes(region: region,rowBytes: bytesPerRow,format: rhiColorFormat(mtlTexture.pixelFormat),textureWidth: extent.width,textureHeight: extent.height,capacity: data.count)
         let staging = try sharedStagingBuffer(minimumSize: needed)
         data.withUnsafeBytes { bytes in
             guard let source = bytes.baseAddress else { return }
@@ -140,12 +139,12 @@ extension MetalDevice {
             from: staging,
             sourceOffset: 0,
             sourceBytesPerRow: bytesPerRow,
-            sourceBytesPerImage: bytesPerRow * height,
-            sourceSize: MTLSize(width: width, height: height, depth: 1),
+            sourceBytesPerImage: bytesPerRow * region.height,
+            sourceSize: MTLSize(width: region.width, height: region.height, depth: 1),
             to: mtlTexture,
             destinationSlice: subresource.layer,
             destinationLevel: subresource.mipLevel,
-            destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
+            destinationOrigin: MTLOrigin(x: region.origin.x, y: region.origin.y, z: 0)
         )
         blit.endEncoding()
         cmdBuffer.commit()

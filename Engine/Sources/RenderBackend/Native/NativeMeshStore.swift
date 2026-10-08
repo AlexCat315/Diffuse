@@ -60,8 +60,7 @@ final class NativeMeshStore {
         let texture = try device.makeTexture(TextureDescriptor(width: image.width, height: image.height,
             format: .rgba8Unorm, usage: [.sampled, .transferDestination]))
         do {
-            try device.uploadTextureData(texture, data: Data(image.pixels), width: image.width,
-                height: image.height, bytesPerRow: image.width * 4)
+            try device.uploadTextureData(texture, data: Data(image.pixels), region: .init(width: image.width,height: image.height), bytesPerRow: image.width * 4)
             return texture
         } catch { device.destroy(texture); throw error }
     }

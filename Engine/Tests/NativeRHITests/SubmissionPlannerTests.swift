@@ -5,6 +5,25 @@ import XCTest
 @testable import NativeRHI
 
 final class SubmissionPlannerTests: XCTestCase {
+    func testResolvedAttachmentGetsWriteBarrierAndCrossQueueDependency() throws {
+        let planner = SubmissionPlanner()
+        var color = RenderColorTarget(texture: Texture(id: 1), store: false)
+        color.resolveTexture = Texture(id: 2)
+        let pass = RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: [color]), body: [])
+        let producer = try planner.buildPlan(queue: .graphics, commands: [.renderPass(pass)], external: SubmitDescriptor())
+        XCTAssertEqual(Set(barrierBlocks(in: producer.submits[0]).flatMap { $0 }.map(\.resource.id)), [1, 2])
+        planner.registerBindingSetEntries(50, entries: [BindingSetEntry(slot: 0, resource: .texture(Texture(id: 2)))])
+        let consumer = try planner.buildPlan(queue: .compute, commands: [.computePass(ComputePassRecord(body: [
+            .setBindingSet(slot: 0, set: BindingSet(id: 50))]))], external: SubmitDescriptor())
+        XCTAssertEqual(consumer.submits.count, 2)
+        XCTAssertEqual(consumer.submits[0].queue, .graphics)
+        XCTAssertEqual(consumer.submits[1].waitSemaphores, consumer.submits[0].signalSemaphores)
+        let acquire = try XCTUnwrap(barrierBlocks(in: consumer.submits[1]).flatMap { $0 }.first { $0.resource.id == 2 })
+        XCTAssertEqual(acquire.sourceState, .renderTarget)
+        XCTAssertEqual(acquire.destinationState, .shaderResource)
+        XCTAssertEqual(acquire.syncAction, .acquire)
+    }
+
     private func renderPass(target: Texture) -> RenderPassRecord {
         RenderPassRecord(
             descriptor: RenderPassDescriptor(colorTargets: [

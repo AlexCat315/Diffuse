@@ -440,6 +440,7 @@ struct VulkanInstanceCommands {
     let enumerateDeviceExtensionProperties: PFN_vkEnumerateDeviceExtensionProperties
     let getPhysicalDeviceQueueFamilyProperties: PFN_vkGetPhysicalDeviceQueueFamilyProperties
     let getPhysicalDeviceMemoryProperties: PFN_vkGetPhysicalDeviceMemoryProperties
+    let getImageFormatProperties: PFN_vkGetPhysicalDeviceImageFormatProperties
     let createDevice: PFN_vkCreateDevice
     let destroyDevice: PFN_vkDestroyDevice
     let getDeviceQueue: PFN_vkGetDeviceQueue
@@ -459,6 +460,7 @@ struct VulkanInstanceCommands {
         enumerateDeviceExtensionProperties = Self.bind(resolve("vkEnumerateDeviceExtensionProperties"))
         getPhysicalDeviceQueueFamilyProperties = Self.bind(resolve("vkGetPhysicalDeviceQueueFamilyProperties"))
         getPhysicalDeviceMemoryProperties = Self.bind(resolve("vkGetPhysicalDeviceMemoryProperties"))
+        getImageFormatProperties = Self.bind(resolve("vkGetPhysicalDeviceImageFormatProperties"))
         createDevice = Self.bind(resolve("vkCreateDevice"))
         destroyDevice = Self.bind(resolve("vkDestroyDevice"))
         getDeviceQueue = Self.bind(resolve("vkGetDeviceQueue"))

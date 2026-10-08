@@ -49,6 +49,7 @@ enum VulkanFormats {
         case .float2: return VK_FORMAT_R32G32_SFLOAT
         case .float3: return VK_FORMAT_R32G32B32_SFLOAT
         case .float4: return VK_FORMAT_R32G32B32A32_SFLOAT
+        case .unorm8x4: return VK_FORMAT_R8G8B8A8_UNORM
         }
     }
 
@@ -136,6 +137,11 @@ enum VulkanFormats {
 
     static func vkIndexType(_ type: IndexType) -> VkIndexType {
         type == .uint16 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32
+    }
+
+    static func vkSampleCount(_ count: Int) throws -> VkSampleCountFlagBits {
+        try rhiValidateSampleCount(count)
+        return VkSampleCountFlagBits(rawValue: UInt32(count))
     }
 }
 

@@ -64,20 +64,20 @@ extension DX12Device {
         try waitUntilIdle()
         try check(grhi_dx12_read_buffer(native, buffer.id, UInt64(offset), destination.baseAddress, destination.count))
     }
-    public func uploadTextureData(_ texture: Texture, data: Data, width: Int, height: Int, bytesPerRow: Int, subresource: TextureSubresource) throws {
-        try data.withUnsafeBytes { try transfer(texture, subresource: subresource, width: width, height: height, row: bytesPerRow, pointer: UnsafeMutableRawPointer(mutating: $0.baseAddress), size: $0.count, upload: true) }
+    public func uploadTextureData(_ texture: Texture, data: Data, region: TextureUploadRegion, bytesPerRow: Int, subresource: TextureSubresource) throws {
+        try data.withUnsafeBytes { try transfer(texture, subresource: subresource, region: region, row: bytesPerRow, pointer: UnsafeMutableRawPointer(mutating: $0.baseAddress), size: $0.count, upload: true) }
     }
     public func readTextureData(_ texture: Texture, width: Int, height: Int, bytesPerRow: Int, subresource: TextureSubresource, into destination: UnsafeMutableRawBufferPointer) throws {
-        try transfer(texture, subresource: subresource, width: width, height: height, row: bytesPerRow, pointer: destination.baseAddress, size: destination.count, upload: false)
+        try transfer(texture, subresource: subresource, region: .init(width: width,height: height), row: bytesPerRow, pointer: destination.baseAddress, size: destination.count, upload: false)
     }
-    private func transfer(_ texture: Texture, subresource: TextureSubresource, width: Int, height: Int, row: Int, pointer: UnsafeMutableRawPointer?, size: Int, upload: Bool) throws {
+    private func transfer(_ texture: Texture, subresource: TextureSubresource, region: TextureUploadRegion, row: Int, pointer: UnsafeMutableRawPointer?, size: Int, upload: Bool) throws {
         guard let descriptor = resources.textures[texture.id] else { throw RHIError.invalidArgument("unknown texture") }
         try rhiRequire(descriptor.sampleCount == 1, "texture transfer requires a single sample")
         let layers = descriptor.dimension == .cube ? 6 : descriptor.dimension == .texture2DArray ? descriptor.layers : 1
         let extent = try rhiTextureSubresourceExtent(subresource, width: descriptor.width, height: descriptor.height,
             mipLevels: descriptor.mipLevels, layers: layers)
-        _ = try rhiTextureTransferBytes(width: width, height: height, rowBytes: row, format: descriptor.format,
+        _ = try rhiTextureUploadBytes(region: region, rowBytes: row, format: descriptor.format,
             textureWidth: extent.width, textureHeight: extent.height, capacity: size)
-        try check(grhi_dx12_transfer_texture(native, texture.id, rhiCount(width), rhiCount(height), rhiCount(row), rhiCount(subresource.mipLevel), rhiCount(subresource.layer), pointer, size, upload ? 1 : 0))
+        try check(grhi_dx12_transfer_texture(native, texture.id, rhiCount(region.origin.x),rhiCount(region.origin.y),rhiCount(region.width), rhiCount(region.height), rhiCount(row), rhiCount(subresource.mipLevel), rhiCount(subresource.layer), pointer, size, upload ? 1 : 0))
     }
 }

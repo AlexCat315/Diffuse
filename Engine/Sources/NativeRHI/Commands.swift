@@ -25,6 +25,8 @@ public enum DepthLoadAction: Sendable {
 }
 
 public struct RenderColorTarget: Sendable {
+    /// Resolve the multisampled attachment into this single-sample color target.
+    public var resolveTexture: Texture? = nil
     public var texture: Texture
     public var loadAction: ColorLoadAction
     public var store: Bool

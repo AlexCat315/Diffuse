@@ -30,8 +30,8 @@ final class NativeTextureCopyTests: XCTestCase {
         let output = try device.makeTexture(TextureDescriptor(width: 6,height: 6,format: .rgba16Float,usage: usage))
         defer { [source,middle,output].forEach { device.destroy($0) } }
         let pixels = Data((0..<128).map { UInt8($0) })
-        try device.uploadTextureData(source,data: pixels,width: 4,height: 4,bytesPerRow: 32)
-        for target in [middle,output] { try device.uploadTextureData(target,data: Data(count: 288),width: 6,height: 6,bytesPerRow: 48) }
+        try device.uploadTextureData(source,data: pixels,region: .init(width: 4,height: 4),bytesPerRow: 32)
+        for target in [middle,output] { try device.uploadTextureData(target,data: Data(count: 288),region: .init(width: 6,height: 6),bytesPerRow: 48) }
         let commands = CommandBuffer()
         commands.copyPass {
             $0.copyTexture(src: source,dst: middle,width: 3,height: 2)

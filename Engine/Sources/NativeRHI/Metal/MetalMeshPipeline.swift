@@ -2,6 +2,7 @@
 import Metal
 
 struct MetalMeshPipeline {
+    let descriptor: MeshPipelineDescriptor
     let state: MTLRenderPipelineState
     let meshSize: ThreadgroupSize
     let taskSize: ThreadgroupSize
@@ -64,7 +65,7 @@ extension MetalDevice {
                            "task workgroup exceeds pipeline limit")
         }
         registries.meshPipelines[handle.id] = MetalMeshPipeline(
-            state: state, meshSize: meshSize, taskSize: taskSize, rasterization: descriptor.rasterization)
+            descriptor: descriptor, state: state, meshSize: meshSize, taskSize: taskSize, rasterization: descriptor.rasterization)
     }
 
     public func destroyMeshPipeline(_ handle: MeshPipeline) {
