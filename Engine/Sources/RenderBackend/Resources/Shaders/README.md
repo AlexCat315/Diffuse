@@ -1,6 +1,10 @@
-This directory contains shader source assets for the Swift Engine renderer.
+This directory contains offline shader assets for the Swift Engine renderer.
 
-- `manifest.json` is the shader catalog consumed by `RenderBackend`.
-- `WGSL/` contains the catalog-wide shader sources.
+- `manifest.json` and `WGSL/` serve the production WGPU reference renderer.
+- `Slang/` contains NativeRHI grid, indexed mesh/depth, shadow, sky and tonemap sources.
+- `Native/metal/` and `Native/spirv/` contain compiled `ShaderArtifact` JSON and target reflection. Runtime execution does not load Slang.
 
-The catalog is now WGSL-only. Some entries are already runtime-wired in `WGPURenderer`; the rest are source-level WGSL ports kept ready for later feature wiring.
+Rebuild with Slang 2026.19 using `scripts/compile-native-renderer-shaders.py`.
+For Windows, generate `Native/dxil/` with `--targets dxil` and an installed DXC library. DX12 renderer artifacts are still pending; missing artifacts throw explicitly.
+
+macOS uses Metal. SPIR-V is for native Windows/Linux Vulkan and is not validated through a macOS portability driver.

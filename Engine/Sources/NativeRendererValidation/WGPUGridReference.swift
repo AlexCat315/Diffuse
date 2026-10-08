@@ -18,12 +18,8 @@ public final class WGPUGridReference {
     private var frame = 0
 
     public init(size: RenderDrawableSize, validation: Bool = false) throws {
-        if let override = ProcessInfo.processInfo.environment["GUAVA_WGPU_BACKEND"], override.lowercased() != "metal" {
-            throw WGPUBackendError.initFailed("grid comparison requires GUAVA_WGPU_BACKEND=metal or no backend override")
-        }
         self.size = size
-        backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: validation, framesInFlight: 3, preferredBackends: [.metal]))
-        try backend.initialize()
+        backend = try WGPUReferenceConfiguration.make(validation: validation)
         color = try backend.createTexture(width: size.width, height: size.height,
             format: .bgra8Unorm, usage: [.renderAttachment, .copySrc])
         colorView = try color.createView()

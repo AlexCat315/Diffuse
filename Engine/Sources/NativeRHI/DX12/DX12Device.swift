@@ -46,6 +46,7 @@ public final class DX12Device: RHIBackend {
         return result
     }
     public func configure(surface: SurfaceDescriptor) throws {
+        try rhiRequire(surface.kind == .win32Window, "DX12 requires an HWND surface")
         try check(grhi_dx12_surface(native, surface.nativeHandle, rhiCount(surface.width), rhiCount(surface.height), surface.colorFormat.dx12, surface.vsyncEnabled ? 1 : 0))
     }
     public func acquireSwapchainImage() throws -> SwapchainImage {

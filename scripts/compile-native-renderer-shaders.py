@@ -22,6 +22,9 @@ def main():
     programs = [
         ('editor_grid', 'editor_grid.slang', [('vertex', 'gridVertex'), ('fragment', 'gridFragment')]),
         ('opaque_mesh', 'opaque_mesh.slang', [('vertex', 'meshVertex'), ('fragment', 'meshFragment')]),
+        ('shadow_mesh', 'shadow_mesh.slang', [('vertex', 'meshVertex'), ('fragment', 'shadowFragment')]),
+        ('skybox', 'skybox.slang', [('vertex', 'skyVertex'), ('fragment', 'skyFragment')]),
+        ('tonemap', 'tonemap.slang', [('vertex', 'toneVertex'), ('fragment', 'toneFragment')]),
         ('opaque_depth', 'opaque_mesh.slang', [('fragment', 'depthFragment')]),
     ]
     for target in args.targets:

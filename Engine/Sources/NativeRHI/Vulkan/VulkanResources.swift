@@ -2,7 +2,7 @@
 // frontend handles to Vulkan objects. Kept separate from the backend so the
 // device type stays small (one responsibility per type).
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 

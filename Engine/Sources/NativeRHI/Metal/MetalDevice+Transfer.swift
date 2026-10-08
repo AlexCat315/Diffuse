@@ -103,12 +103,17 @@ extension MetalDevice {
         data: Data,
         width: Int,
         height: Int,
-        bytesPerRow: Int
+        bytesPerRow: Int,
+        subresource: TextureSubresource
     ) throws {
         guard let mtlTexture = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("uploadTextureData: unknown texture \(texture.id)")
         }
-        let needed = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(mtlTexture.pixelFormat), textureWidth: mtlTexture.width, textureHeight: mtlTexture.height, capacity: data.count)
+        let layers = mtlTexture.textureType == .typeCube ? 6 : mtlTexture.arrayLength
+        try rhiRequire(mtlTexture.sampleCount == 1, "texture transfer requires a single sample")
+        let extent = try rhiTextureSubresourceExtent(subresource, width: mtlTexture.width, height: mtlTexture.height,
+            mipLevels: mtlTexture.mipmapLevelCount, layers: layers)
+        let needed = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(mtlTexture.pixelFormat), textureWidth: extent.width, textureHeight: extent.height, capacity: data.count)
         let staging = try sharedStagingBuffer(minimumSize: needed)
         data.withUnsafeBytes { bytes in
             guard let source = bytes.baseAddress else { return }
@@ -129,8 +134,8 @@ extension MetalDevice {
             sourceBytesPerImage: bytesPerRow * height,
             sourceSize: MTLSize(width: width, height: height, depth: 1),
             to: mtlTexture,
-            destinationSlice: 0,
-            destinationLevel: 0,
+            destinationSlice: subresource.layer,
+            destinationLevel: subresource.mipLevel,
             destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
         )
         blit.endEncoding()
@@ -144,12 +149,17 @@ extension MetalDevice {
         width: Int,
         height: Int,
         bytesPerRow: Int,
+        subresource: TextureSubresource,
         into destination: UnsafeMutableRawBufferPointer
     ) throws {
         guard let mtlTexture = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("readTextureData: unknown texture \(texture.id)")
         }
-        let needed = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(mtlTexture.pixelFormat), textureWidth: mtlTexture.width, textureHeight: mtlTexture.height, capacity: destination.count)
+        let layers = mtlTexture.textureType == .typeCube ? 6 : mtlTexture.arrayLength
+        try rhiRequire(mtlTexture.sampleCount == 1, "texture transfer requires a single sample")
+        let extent = try rhiTextureSubresourceExtent(subresource, width: mtlTexture.width, height: mtlTexture.height,
+            mipLevels: mtlTexture.mipmapLevelCount, layers: layers)
+        let needed = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(mtlTexture.pixelFormat), textureWidth: extent.width, textureHeight: extent.height, capacity: destination.count)
         guard destination.count >= needed, let destinationBase = destination.baseAddress else {
             throw RHIError.invalidArgument("readTextureData: destination buffer too small")
         }
@@ -161,8 +171,8 @@ extension MetalDevice {
         }
         blit.copy(
             from: mtlTexture,
-            sourceSlice: 0,
-            sourceLevel: 0,
+            sourceSlice: subresource.layer,
+            sourceLevel: subresource.mipLevel,
             sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
             sourceSize: MTLSize(width: width, height: height, depth: 1),
             to: staging,

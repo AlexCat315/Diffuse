@@ -1,13 +1,10 @@
 // NativeRHI Vulkan — runtime loader and backend entry point.
 //
-// The Vulkan loader (libvulkan) is vendored in `VulkanLoader.xcframework` and
-// linked at build time, exactly like the other native dependencies. We bind the
-// linked `vkGetInstanceProcAddr` and build the full command table lazily. The
-// driver (an ICD such as MoltenVK) is still discovered by the loader at
-// runtime; if no physical device is enumerated, `isAvailable` is false and
-// `make` throws a clear `RHIError.unsupportedBackend` instead of crashing.
+// The native Windows/Linux Vulkan SDK provides the linked loader. Instance
+// and device commands are resolved through their respective dispatch tables.
+// A GPU driver is discovered by the loader at runtime. macOS uses Metal.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -37,15 +34,7 @@ final class VulkanLoader {
         }
     }
 
-    /// Resolves a global-level symbol from the linked image. The loader exports
-    /// the global commands (vkCreateInstance, vkEnumeratePhysicalDevices, …),
-    /// and some loaders do not return them through GIPA(NULL, ...).
-    func resolveGlobal(name: String) -> UnsafeRawPointer? {
-        name.withCString { cName in
-            guard let sym = grhi_vulkan_loader_symbol(cName) else { return nil }
-            return UnsafeRawPointer(sym)
-        }
-    }
+
 }
 
 /// Reports whether a usable Vulkan driver (ICD) is present. The loader itself
@@ -65,32 +54,15 @@ enum VulkanRuntime {
     /// Vulkan driver.
     private static func probeAvailability() -> Bool {
         guard let loader = VulkanLoader.open() else { return false }
-        guard let createPtr = loader.resolve(instance: nil, name: "vkCreateInstance"),
-              let enumPtr = loader.resolveGlobal(name: "vkEnumeratePhysicalDevices") else {
-            return false
-        }
-        let createFn = unsafeBitCast(OpaquePointer(createPtr), to: PFN_vkCreateInstance.self)
-        let enumFn = unsafeBitCast(OpaquePointer(enumPtr), to: PFN_vkEnumeratePhysicalDevices.self)
-
-        let arena = VulkanScratch()
-        var app = VkApplicationInfo(); app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO
-        app.apiVersion = (1 << 22) | (3 << 12)
-        var info = VkInstanceCreateInfo(); info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
-        info.pApplicationInfo = UnsafePointer(arena.make(app))
-        #if os(macOS)
-        info.enabledExtensionCount = 1
-        info.ppEnabledExtensionNames = arena.store([Optional(arena.string("VK_KHR_portability_enumeration"))])
-        info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR.rawValue
-        #endif
-        guard let instance: VkInstance = withExtendedLifetime(arena, { vkWithOutHandle({ _ = createFn(&info, nil, $0) }) }) else { return false }
+        guard let instance = try? VulkanInstanceSetup.create(loader: loader, enableValidation: false, presentation: false),
+              let destroyPtr = loader.resolve(instance: instance, name: "vkDestroyInstance") else { return false }
+        let destroy = unsafeBitCast(OpaquePointer(destroyPtr), to: PFN_vkDestroyInstance.self)
+        defer { destroy(instance, nil) }
+        guard let enumPtr = loader.resolve(instance: instance, name: "vkEnumeratePhysicalDevices") else { return false }
+        let enumerate = unsafeBitCast(OpaquePointer(enumPtr), to: PFN_vkEnumeratePhysicalDevices.self)
         var count: UInt32 = 0
-        let rc = enumFn(instance, &count, nil)
-        if let destroyPtr = loader.resolve(instance: instance, name: "vkDestroyInstance") {
-            let destroyFn = unsafeBitCast(OpaquePointer(destroyPtr), to: PFN_vkDestroyInstance.self)
-            destroyFn(instance, nil)
-        }
-        return rc == VK_SUCCESS && count > 0
+        return enumerate(instance, &count, nil) == VK_SUCCESS && count > 0
     }
 }
 
-#endif // canImport(CVulkanHeaders)
+#endif

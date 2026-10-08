@@ -1,4 +1,4 @@
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 
 /// Commands with separate lifetimes from the primary draw encoder table.

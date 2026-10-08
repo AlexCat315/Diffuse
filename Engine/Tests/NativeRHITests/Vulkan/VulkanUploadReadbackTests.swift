@@ -4,7 +4,7 @@
 // write a known color into a device-local texture via the upload ring, then copy
 // it back out and verify the pixels. Guarded by runtime availability.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import Foundation
 import XCTest
 @testable import NativeRHI
@@ -43,7 +43,7 @@ final class VulkanUploadReadbackTests: XCTestCase {
 
     func testUploadThenReadbackRoundTripsPixels() throws {
         guard VulkanBackend.isAvailable else {
-            throw XCTSkip("No Vulkan loader / ICD (MoltenVK) on this host")
+            throw XCTSkip("No native Vulkan driver on this Windows/Linux host")
         }
         let config = DeviceConfig(preferredBackends: [.vulkan], enableValidation: false)
         let device = try Device.make(config)

@@ -4,7 +4,7 @@
 // a growing array. OUT_OF_DATE / SUBOPTIMAL triggers a recreate. Present has no
 // queue idle on the hot path.
 
-#if canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -18,6 +18,7 @@ final class VulkanSwapchain {
     private(set) var images: [VkImage]
     private(set) var textureIDs: [UInt32]
     private let vsync: Bool
+    private let requestedColorFormat: TextureFormat
 
     private init(context: VulkanContext,
                  surface: VkSurfaceKHR,
@@ -26,7 +27,7 @@ final class VulkanSwapchain {
                  extent: VkExtent2D,
                  images: [VkImage],
                  textureIDs: [UInt32],
-                 vsync: Bool) {
+                 vsync: Bool, requestedColorFormat: TextureFormat) {
         self.context = context
         self.surface = surface
         self.handle = handle
@@ -35,6 +36,7 @@ final class VulkanSwapchain {
         self.images = images
         self.textureIDs = textureIDs
         self.vsync = vsync
+        self.requestedColorFormat = requestedColorFormat
     }
 
     static func create(context: VulkanContext,
@@ -62,7 +64,7 @@ final class VulkanSwapchain {
             surface: surface,
             width: Int(extent.width),
             height: Int(extent.height),
-            colorFormat: .bgra8Unorm,
+            colorFormat: requestedColorFormat,
             vsync: vsync,
             oldSwapchain: old,
             registries: registries
@@ -114,22 +116,37 @@ final class VulkanSwapchain {
         registries: VulkanRegistries
     ) throws -> VulkanSwapchain {
         var caps = VkSurfaceCapabilitiesKHR()
-        _ = context.instanceCommands.getSurfaceCapabilities(context.physicalDevice, surface, &caps)
-
-        let extent = VkExtent2D(
-            width: width == 0 ? caps.currentExtent.width : UInt32(width),
-            height: height == 0 ? caps.currentExtent.height : UInt32(height)
-        )
+        guard context.instanceCommands.getSurfaceCapabilities(context.physicalDevice, surface, &caps) == VK_SUCCESS else {
+            throw RHIError.swapchainAcquireFailed("Vulkan surface capabilities unavailable")
+        }
+        let extent: VkExtent2D
+        if caps.currentExtent.width != UInt32.max {
+            extent = caps.currentExtent
+        } else {
+            try rhiRequire(width > 0 && height > 0 && width <= Int(UInt32.max) && height <= Int(UInt32.max), "Vulkan surface needs a positive drawable extent")
+            extent = VkExtent2D(width: min(max(UInt32(width), caps.minImageExtent.width), caps.maxImageExtent.width),
+                height: min(max(UInt32(height), caps.minImageExtent.height), caps.maxImageExtent.height))
+        }
+        guard extent.width > 0 && extent.height > 0 else {
+            throw RHIError.swapchainAcquireFailed("Vulkan drawable has zero extent")
+        }
 
         // Pick a surface format.
         var formatCount: UInt32 = 0
-        _ = context.instanceCommands.getSurfaceFormats(context.physicalDevice, surface, &formatCount, nil)
+        guard context.instanceCommands.getSurfaceFormats(context.physicalDevice, surface, &formatCount, nil) == VK_SUCCESS, formatCount > 0 else {
+            throw RHIError.swapchainAcquireFailed("Vulkan surface has no color formats")
+        }
         var formats: [VkSurfaceFormatKHR] = Array(repeating: VkSurfaceFormatKHR(), count: Int(formatCount))
-        _ = context.instanceCommands.getSurfaceFormats(context.physicalDevice, surface, &formatCount, &formats)
+        guard context.instanceCommands.getSurfaceFormats(context.physicalDevice, surface, &formatCount, &formats) == VK_SUCCESS else {
+            throw RHIError.swapchainAcquireFailed("Vulkan surface format enumeration failed")
+        }
         let desired = VulkanFormats.vkFormat(colorFormat)
-        var chosen = formats.first ?? VkSurfaceFormatKHR()
-        for candidate in formats {
-            if candidate.format == desired { chosen = candidate; break }
+        var chosen = formats.prefix(Int(formatCount)).first { $0.format == desired }
+        if chosen == nil, formatCount == 1, formats[0].format == VK_FORMAT_UNDEFINED {
+            chosen = VkSurfaceFormatKHR(format: desired, colorSpace: formats[0].colorSpace)
+        }
+        guard let chosen else {
+            throw RHIError.unsupportedFeature("Vulkan surface cannot present the requested color format")
         }
 
         // Present mode: FIFO for vsync, MAILBOX otherwise.
@@ -156,7 +173,10 @@ final class VulkanSwapchain {
         info.imageColorSpace = chosen.colorSpace
         info.imageExtent = extent
         info.imageArrayLayers = 1
-        info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue | VK_IMAGE_USAGE_TRANSFER_DST_BIT.rawValue
+        guard caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue != 0 else {
+            throw RHIError.unsupportedFeature("Vulkan surface images do not support color rendering")
+        }
+        info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue
         info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE
         info.preTransform = caps.currentTransform
         let alphaBits = caps.supportedCompositeAlpha
@@ -170,15 +190,28 @@ final class VulkanSwapchain {
         }) else {
             throw RHIError.swapchainAcquireFailed("vkCreateSwapchainKHR failed")
         }
+        var committed = false
+        var textureIDs: [UInt32] = []
+        defer {
+            if !committed {
+                for id in textureIDs {
+                    if let record = registries.textures.removeValue(forKey: id) { context.core.destroyImageView(context.device, record.view, nil) }
+                }
+                context.sync.destroySwapchain(context.device, swapchain, nil)
+            }
+        }
 
         var actualCount: UInt32 = 0
-        _ = context.sync.getSwapchainImages(context.device, swapchain, &actualCount, nil)
+        guard context.sync.getSwapchainImages(context.device, swapchain, &actualCount, nil) == VK_SUCCESS, actualCount > 0 else {
+            throw RHIError.swapchainAcquireFailed("Vulkan swapchain has no images")
+        }
         var images: [VkImage] = Array(repeating: vkNull(), count: Int(actualCount))
-        _ = context.sync.getSwapchainImages(context.device, swapchain, &actualCount, &images)
+        guard context.sync.getSwapchainImages(context.device, swapchain, &actualCount, &images) == VK_SUCCESS else {
+            throw RHIError.swapchainAcquireFailed("Vulkan swapchain image enumeration failed")
+        }
 
         // Wrap each swapchain image as a Texture record in the fixed pool.
-        var textureIDs: [UInt32] = []
-        for image in images {
+        for image in images.prefix(Int(actualCount)) {
             let id = registries.nextInternalID()
             var viewInfo = VkImageViewCreateInfo()
             viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; viewInfo.image = image; viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D
@@ -193,13 +226,14 @@ final class VulkanSwapchain {
                 height: Int(extent.height),
                 depth: 1,
                 mipLevels: 1,
-                usage: [.present, .colorTarget, .transferDestination],
+                usage: [.present, .colorTarget],
                 isSwapchain: true,
                 layout: VK_IMAGE_LAYOUT_UNDEFINED
             )
             textureIDs.append(id)
         }
 
+        committed = true
         return VulkanSwapchain(
             context: context,
             surface: surface,
@@ -208,7 +242,7 @@ final class VulkanSwapchain {
             extent: extent,
             images: images,
             textureIDs: textureIDs,
-            vsync: vsync
+            vsync: vsync, requestedColorFormat: colorFormat
         )
     }
 }

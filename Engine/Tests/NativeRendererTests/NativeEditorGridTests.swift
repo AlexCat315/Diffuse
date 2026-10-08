@@ -6,14 +6,30 @@ import NativeRendererValidation
 import SceneRuntime
 
 final class NativeEditorGridTests: XCTestCase {
+    #if os(macOS)
     func testMetalGridMatchesWGSL() throws { try parity(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanGridMatchesWGSL() throws { try parity(.vulkan) }
+    #endif
+    #if os(macOS)
     func testMetalGridLoadsDepthAndColor() throws { try depthAndColor(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanGridLoadsDepthAndColor() throws { try depthAndColor(.vulkan) }
+    #endif
+    #if os(macOS)
     func testMetalRendererResizeAndTransientFrames() throws { try resize(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanRendererResizeAndTransientFrames() throws { try resize(.vulkan) }
+    #endif
+    #if os(macOS)
     func testMetalUniformRangeValidation() throws { try uniformRanges(.metal) }
+    #endif
+    #if os(Windows) || os(Linux)
     func testVulkanUniformRangeValidation() throws { try uniformRanges(.vulkan) }
+    #endif
 
     private func uniformRanges(_ api: GraphicsAPI) throws {
         let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false))
