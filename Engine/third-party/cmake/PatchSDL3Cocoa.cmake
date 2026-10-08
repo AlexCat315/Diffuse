@@ -3,17 +3,20 @@
 # upstream change makes it inapplicable instead of silently building stale input.
 find_package(Git REQUIRED)
 set(SDL3_COCOA_PATCH "${CMAKE_CURRENT_LIST_DIR}/../patches/sdl3-cocoa-event-coordinate.patch")
+if(NOT SDL3_PATCH_SOURCE_DIR)
+    message(FATAL_ERROR "SDL3_PATCH_SOURCE_DIR must point at the disposable build-tree copy")
+endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SDL3_COCOA_PATCH}")
 execute_process(
     COMMAND "${GIT_EXECUTABLE}" apply --check "${SDL3_COCOA_PATCH}"
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/sdl3"
+    WORKING_DIRECTORY "${SDL3_PATCH_SOURCE_DIR}"
     RESULT_VARIABLE SDL3_COCOA_PATCH_CHECK
     ERROR_QUIET
 )
 if(SDL3_COCOA_PATCH_CHECK EQUAL 0)
     execute_process(
         COMMAND "${GIT_EXECUTABLE}" apply "${SDL3_COCOA_PATCH}"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/sdl3"
+        WORKING_DIRECTORY "${SDL3_PATCH_SOURCE_DIR}"
         RESULT_VARIABLE SDL3_COCOA_PATCH_RESULT
         ERROR_VARIABLE SDL3_COCOA_PATCH_ERROR
     )
@@ -23,7 +26,7 @@ if(SDL3_COCOA_PATCH_CHECK EQUAL 0)
 else()
     execute_process(
         COMMAND "${GIT_EXECUTABLE}" apply --reverse --check "${SDL3_COCOA_PATCH}"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/sdl3"
+        WORKING_DIRECTORY "${SDL3_PATCH_SOURCE_DIR}"
         RESULT_VARIABLE SDL3_COCOA_PATCH_REVERSE_CHECK
         ERROR_QUIET
     )

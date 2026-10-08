@@ -17,11 +17,19 @@ endif()
 
 set(SDL3_BUILD_NOTES "static library staged from SDL3-static")
 if(APPLE)
+    # Never mutate the pinned submodule. Configure SDL from a disposable copy
+    # in the CMake build tree, then apply the project patch to that copy.
+    set(SDL3_PATCH_SOURCE_DIR "${CMAKE_BINARY_DIR}/patched-sources/sdl3")
+    file(REMOVE_RECURSE "${SDL3_PATCH_SOURCE_DIR}")
+    file(COPY "${CMAKE_SOURCE_DIR}/sdl3" DESTINATION "${CMAKE_BINARY_DIR}/patched-sources"
+         PATTERN ".git" EXCLUDE)
     include(${CMAKE_CURRENT_LIST_DIR}/PatchSDL3Cocoa.cmake)
     string(APPEND SDL3_BUILD_NOTES "; Cocoa event-coordinate and ordered button-state patch")
+else()
+    set(SDL3_PATCH_SOURCE_DIR "${CMAKE_SOURCE_DIR}/sdl3")
 endif()
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/sdl3 sdl3-build EXCLUDE_FROM_ALL)
+add_subdirectory(${SDL3_PATCH_SOURCE_DIR} sdl3-build EXCLUDE_FROM_ALL)
 
 set(SDL3_BUNDLE ${GUAVA_VENDOR_DIR}/SDL3.artifactbundle)
 set(SDL3_VARIANT ${SDL3_BUNDLE}/${GUAVA_TRIPLE})
@@ -34,7 +42,7 @@ install(TARGETS SDL3-static
 )
 
 # Install public headers (source tree)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/sdl3/include/SDL3
+install(DIRECTORY ${SDL3_PATCH_SOURCE_DIR}/include/SDL3
     DESTINATION ${SDL3_VARIANT}/include
     FILES_MATCHING
     PATTERN "*.h"
@@ -116,7 +124,7 @@ add_custom_target(stage_sdl3 ALL
         $<TARGET_FILE:SDL3-static>
         ${SDL3_VARIANT}/lib/${SDL3_LIB_FILENAME}
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/sdl3/include/SDL3
+        ${SDL3_PATCH_SOURCE_DIR}/include/SDL3
         ${SDL3_VARIANT}/include/SDL3
     COMMAND ${CMAKE_COMMAND} -P "${SDL3_STAGE_GENERATED_HEADERS_SCRIPT}"
     COMMENT "Building and staging SDL3 into ${SDL3_VARIANT}"
