@@ -54,6 +54,8 @@ def reflected_bindings(reflection, target='spirv', constants=()):
         if parameter['name'] in {item['name'] for item in constants}:
             continue
         binding = target_binding(parameter, target)
+        if binding.get('kind') == 'specializationConstant':
+            continue
         type_info = parameter['type']
         kind = type_info.get('kind')
         shape = type_info.get('baseShape', '')
@@ -87,7 +89,8 @@ def reflected_bindings(reflection, target='spirv', constants=()):
     return result
 
 
-def compile_shader(source, entry, stage, target, output, compiler, threadgroup_size=None, line_directives=True):
+def compile_shader(source, entry, stage, target, output, compiler, threadgroup_size=None, line_directives=True,
+                   threadgroup_constants=None, defines=None):
     version = run([compiler, '-version'])
     if version != SLANG_VERSION:
         raise ValueError(f'Expected Slang {SLANG_VERSION}, got {version!r}')
@@ -101,13 +104,15 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
         if target == 'spirv': arguments += ['-fvk-use-entrypoint-name']
         if target == 'dxil': arguments += ['-profile', 'sm_6_6']
         if not line_directives: arguments += ['-line-directive-mode', 'none']
+        arguments += [f'-D{name}={value}' for name, value in (defines or {}).items()]
         run(arguments)
         reflection = json.loads(reflection_file.read_text())
         logical_reflection = reflection
         if target != 'spirv':
             logical_file = temp / 'logical.json'
             run([compiler, str(source.resolve()), '-entry', entry, '-stage', stage, '-target', 'spirv',
-                 '-o', str(temp / 'logical.spv'), '-reflection-json', str(logical_file), '-fvk-use-entrypoint-name'])
+                 '-o', str(temp / 'logical.spv'), '-reflection-json', str(logical_file), '-fvk-use-entrypoint-name']
+                 + [f'-D{name}={value}' for name, value in (defines or {}).items()])
             logical_reflection = json.loads(logical_file.read_text())
         constants = reflected_constants(logical_reflection, stage)
         for constant in constants:
@@ -117,7 +122,27 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
         dimensions = entry_reflection.get('threadGroupSize')
         if stage in ('mesh', 'task') and dimensions is None and threadgroup_size is None:
             raise ValueError('Slang JSON does not expose mesh/task local size; supply --threadgroup-size X Y Z matching numthreads')
-        if dimensions is not None and threadgroup_size is not None and dimensions != threadgroup_size:
+        specializations = []
+        types = {'uint32': 'uint32', 'int32': 'int32', 'float32': 'float32', 'bool': 'bool'}
+        for parameter in reflection.get('parameters', []):
+            binding = target_binding(parameter,target)
+            if binding.get('kind') == 'specializationConstant':
+                scalar = parameter['type'].get('scalarType')
+                if scalar not in types: raise ValueError('Only 32-bit scalar specialization constants are supported')
+                specializations.append({'id': binding['index'], 'name': parameter['name'], 'type': types[scalar]})
+        group_ids = dict(zip(('x','y','z'),threadgroup_constants or [None,None,None]))
+        if threadgroup_constants is not None and (len(threadgroup_constants) != 3 or dimensions is None
+            or any(value is not None and dimensions[i] != 0 for i,value in enumerate(threadgroup_constants))):
+            raise ValueError('Workgroup constant IDs must correspond to specialized local dimensions')
+        if dimensions is not None and 0 in dimensions:
+            if threadgroup_size is None: raise ValueError('Specialized local size needs an explicit default size')
+            for axis, declared, default in zip(('x','y','z'),dimensions,threadgroup_size):
+                if declared == 0:
+                    if not any(c['id'] == group_ids[axis] and c['type'] in ('uint32','int32') for c in specializations):
+                        raise ValueError('Specialized local dimension needs a reflected integer constant ID')
+                elif declared != default: raise ValueError('Explicit local size disagrees with compiler reflection')
+            dimensions = threadgroup_size
+        elif dimensions is not None and threadgroup_size is not None and dimensions != threadgroup_size:
             raise ValueError('Explicit local size disagrees with compiler reflection')
         dimensions = dimensions or threadgroup_size or [1, 1, 1]
         if len(dimensions) != 3 or any(value <= 0 for value in dimensions):
@@ -128,6 +153,7 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
             'code': base64.b64encode(code.read_bytes()).decode('ascii'),
             'interface': {'threadgroupSize': dict(zip(('x', 'y', 'z'), dimensions)),
                           'bindings': reflected_bindings(reflection, target, constants),
+                          'specializationConstants': specializations, 'threadgroupSpecialization': group_ids,
                           'pushConstants': [{k: v for k, v in c.items() if k != 'name'} for c in constants]},
             'compiler': f'Slang {version}',
         }
@@ -145,13 +171,16 @@ def main():
     parser.add_argument('--target', choices=['metal', 'spirv', 'dxil'], required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--threadgroup-size', nargs=3, type=int)
+    parser.add_argument('--threadgroup-constants', nargs=3, type=int, help='Specialized X/Y/Z IDs; -1 means fixed dimension')
     parser.add_argument('--no-line-directives', action='store_true', help='Omit absolute source paths from bundled shader code')
     parser.add_argument('--slangc', default=os.environ.get('SLANGC'))
     args = parser.parse_args()
     if not args.slangc:
         parser.error('Supply --slangc or SLANGC (Slang 2026.19)')
     try:
-        compile_shader(args.source, args.entry, args.stage, args.target, args.output, args.slangc, args.threadgroup_size, not args.no_line_directives)
+        compile_shader(args.source, args.entry, args.stage, args.target, args.output, args.slangc, args.threadgroup_size,
+                       not args.no_line_directives,
+                       None if args.threadgroup_constants is None else [None if i < 0 else i for i in args.threadgroup_constants])
     except (RuntimeError, ValueError, OSError, KeyError, StopIteration) as error:
         parser.exit(1, f'Shader compilation failed: {error}\n')
     print(args.output)

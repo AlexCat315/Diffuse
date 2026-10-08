@@ -9,6 +9,35 @@ import CVulkanHeaders
 import Foundation
 
 extension VulkanBackend {
+    func readBufferData(_ buffer: Buffer, offset: Int, into destination: UnsafeMutableRawBufferPointer) throws {
+        guard let record = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer") }
+        try rhiByteRange(offset: offset, size: destination.count, capacity: record.size)
+        try rhiRequire(record.usage.contains(.transferSource), "buffer readback requires transferSource usage")
+        if destination.isEmpty { return }
+        guard let base = destination.baseAddress else { throw RHIError.invalidArgument("missing buffer readback destination") }
+        try waitUntilIdle()
+        let staging = try makeStagingBuffer(size: destination.count)
+        defer { destroyStagingBuffer(staging) }
+        var copy = VkBufferCopy(srcOffset: VkDeviceSize(offset), dstOffset: 0, size: VkDeviceSize(destination.count))
+        try oneShot { cmd in
+            var barrier = VkBufferMemoryBarrier()
+            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER
+            barrier.srcAccessMask = UInt32(VK_ACCESS_MEMORY_WRITE_BIT.rawValue)
+            barrier.dstAccessMask = UInt32(VK_ACCESS_TRANSFER_READ_BIT.rawValue)
+            barrier.srcQueueFamilyIndex = UInt32(VK_QUEUE_FAMILY_IGNORED)
+            barrier.dstQueueFamilyIndex = UInt32(VK_QUEUE_FAMILY_IGNORED)
+            barrier.buffer = record.buffer; barrier.offset = VkDeviceSize(offset); barrier.size = copy.size
+            draw.cmdPipelineBarrier(cmd, UInt32(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT.rawValue),
+                UInt32(VK_PIPELINE_STAGE_TRANSFER_BIT.rawValue), 0, 0, nil, 1, &barrier, 0, nil)
+            draw.cmdCopyBuffer(cmd, record.buffer, staging.buffer, 1, &copy)
+            barrier.srcAccessMask = UInt32(VK_ACCESS_TRANSFER_WRITE_BIT.rawValue)
+            barrier.dstAccessMask = UInt32(VK_ACCESS_HOST_READ_BIT.rawValue)
+            barrier.buffer = staging.buffer; barrier.offset = 0
+            draw.cmdPipelineBarrier(cmd, UInt32(VK_PIPELINE_STAGE_TRANSFER_BIT.rawValue),
+                UInt32(VK_PIPELINE_STAGE_HOST_BIT.rawValue), 0, 0, nil, 1, &barrier, 0, nil)
+        }
+        base.copyMemory(from: staging.pointer, byteCount: destination.count)
+    }
     func uploadBufferData(_ buffer: Buffer, offset: Int, data: Data) throws {
         guard let record = registries.buffers[buffer.id] else {
             throw RHIError.invalidArgument("unknown buffer")
@@ -121,6 +150,8 @@ extension VulkanBackend {
         guard let buffer = vkWithOutHandle({
             context.core.createBuffer(context.device, &info, nil, $0)
         }) else { throw RHIError.outOfMemory }
+        var stored = false
+        defer { if !stored { context.core.destroyBuffer(context.device,buffer,nil) } }
 
         var req = VkMemoryRequirements()
         context.core.getBufferMemoryRequirements(context.device, buffer, &req)
@@ -128,8 +159,12 @@ extension VulkanBackend {
             size: req.size, alignment: req.alignment,
             memoryTypeBits: req.memoryTypeBits,
             requiredFlags: UInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue))
-        _ = context.core.bindBufferMemory(context.device, buffer, allocation.memory, allocation.offset)
+        defer { if !stored { allocator.free(allocation) } }
+        guard context.core.bindBufferMemory(context.device,buffer,allocation.memory,allocation.offset) == VK_SUCCESS else {
+            throw RHIError.outOfMemory
+        }
         guard let base = allocation.mappedBase else { throw RHIError.outOfMemory }
+        stored = true
         return StagingBuffer(buffer: buffer, allocation: allocation,
                              pointer: base.advanced(by: Int(allocation.offset)))
     }

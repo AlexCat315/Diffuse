@@ -9,11 +9,7 @@ extension VulkanBackend {
             throw RHIError.invalidArgument("unknown compute shader or pipeline layout")
         }
         let arena = VulkanScratch()
-        var stage = VkPipelineShaderStageCreateInfo()
-        stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
-        stage.stage = VK_SHADER_STAGE_COMPUTE_BIT
-        stage.module = module.module
-        stage.pName = arena.string(module.entryPoint)
+        let stage = try shaderStage(module,arena: arena)
         var info = VkComputePipelineCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO
         info.stage = stage
@@ -63,6 +59,17 @@ extension VulkanBackend {
         stage.stage = VkShaderStageFlagBits(rawValue: VulkanLayoutFormats.stageFlags(module.stage))
         stage.module = module.module
         stage.pName = arena.string(module.entryPoint)
+        if !module.specializationConstants.isEmpty {
+            let constants = module.specializationConstants
+            let entries = constants.enumerated().map {
+                VkSpecializationMapEntry(constantID: $0.element.id,offset: UInt32($0.offset*4),size: 4)
+            }
+            var info = VkSpecializationInfo()
+            info.mapEntryCount = UInt32(entries.count); info.pMapEntries = arena.store(entries)
+            info.dataSize = constants.count*4
+            info.pData = UnsafeRawPointer(arena.store(constants.map { $0.value.bits }))
+            stage.pSpecializationInfo = UnsafePointer(arena.make(info))
+        }
         return stage
     }
 

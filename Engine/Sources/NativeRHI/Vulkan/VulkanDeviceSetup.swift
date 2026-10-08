@@ -271,8 +271,8 @@ enum VulkanDeviceSetup {
         supported.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
         supported.pNext = UnsafeMutableRawPointer(native11)
         cmds.getPhysicalDeviceFeatures2(physicalDevice, &supported)
-        guard native12.pointee.timelineSemaphore != 0, native13.pointee.dynamicRendering != 0 else {
-            throw RHIError.unsupportedBackend("NativeRHI requires Vulkan 1.3 dynamic rendering and timeline semaphores")
+        guard native12.pointee.timelineSemaphore != 0, native13.pointee.dynamicRendering != 0, native13.pointee.maintenance4 != 0 else {
+            throw RHIError.unsupportedBackend("NativeRHI requires Vulkan 1.3 dynamic rendering, maintenance4 and timeline semaphores")
         }
         guard native11.pointee.shaderDrawParameters != 0, supported.features.drawIndirectFirstInstance != 0 else {
             throw RHIError.unsupportedBackend("NativeRHI requires shader draw parameters and indirect firstInstance")
@@ -313,6 +313,7 @@ enum VulkanDeviceSetup {
         nativeStructure.pointee = structure
         vk13.pNext = result.accelerationStructures ? UnsafeMutableRawPointer(nativeStructure) : structure.pNext
         vk13.dynamicRendering = VK_TRUE
+        vk13.maintenance4 = VK_TRUE
         native13.pointee = vk13
         vk12.timelineSemaphore = VK_TRUE
         vk12.bufferDeviceAddress = result.accelerationStructures ? VK_TRUE : VK_FALSE

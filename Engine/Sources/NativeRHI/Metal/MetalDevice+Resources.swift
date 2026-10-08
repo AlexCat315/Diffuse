@@ -66,7 +66,19 @@ extension MetalDevice {
 
     public func createShaderModule(_ handle: ShaderModule, descriptor: ShaderModuleDescriptor) throws {
         let library = try libraryCache.library(for: descriptor)
-        guard let function = library.makeFunction(name: descriptor.entryPoint) else {
+        let function: MTLFunction?
+        if descriptor.specializationConstants.isEmpty { function = library.makeFunction(name: descriptor.entryPoint) }
+        else {
+            let constants = MTLFunctionConstantValues()
+            for constant in descriptor.specializationConstants {
+                let type: MTLDataType
+                switch constant.value.type { case .uint32: type = .uint; case .int32: type = .int; case .float32: type = .float; case .bool: type = .bool }
+                var bits = constant.value.bits
+                withUnsafePointer(to: &bits) { constants.setConstantValue($0,type: type,index: Int(constant.id)) }
+            }
+            function = try library.makeFunction(name: descriptor.entryPoint,constantValues: constants)
+        }
+        guard let function else {
             throw RHIError.invalidArgument(
                 "entry point '\(descriptor.entryPoint)' not found in the compiled library"
             )

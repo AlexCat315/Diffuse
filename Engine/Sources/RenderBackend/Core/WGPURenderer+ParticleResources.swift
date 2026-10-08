@@ -14,30 +14,6 @@ private struct GPUParticleCullEncodeResult {
     var dispatchWorkgroups: Int
 }
 
-/// Layout matches `ParticleSimUniforms` in `particle_simulate.wgsl`.
-private struct GPUParticleSimulationUniforms {
-    /// x: delta time, y: particle count, z: elapsed time, w: event buffer capacity.
-    var time: SIMD4<Float>
-    /// xyz: acceleration.
-    var gravity: SIMD4<Float>
-    /// x: strength, y: scale, z: speed, w: normalized seed phase.
-    var noise: SIMD4<Float>
-    /// xyz: vector-field bias direction, w: strength.
-    var vectorFieldDirectionStrength: SIMD4<Float>
-    /// x: scale, y: scroll speed, z: field mode (0 none, 1 uniform, 2 curl).
-    var vectorFieldParams: SIMD4<Float>
-    /// xyz: force center, w: force radius. Radius 0 means unbounded.
-    var forceCenterRadius: SIMD4<Float>
-    /// xyz: force axis, w: force mode (0 none, 1 radial, 2 vortex).
-    var forceAxisMode: SIMD4<Float>
-    /// x: force strength, y: force falloff.
-    var forceParams: SIMD4<Float>
-    /// x: collision mode (0 none, 1 local plane, 2 world plane), y: plane y, z: restitution, w: damping.
-    var collisionParams: SIMD4<Float>
-    var collisionToWorld: simd_float4x4
-    var collisionToLocal: simd_float4x4
-}
-
 /// Layout matches `ParticleSimToInstanceUniforms` in `particle_sim_to_instance.wgsl`.
 private struct GPUParticleSimulationInstanceUniforms {
     var worldTransform: simd_float4x4
@@ -119,85 +95,7 @@ private struct GPUParticleSimulationInstanceEncodeReport {
     var sortReport: GPUParticleSimulationSortEncodeReport
 }
 
-/// Layout matches `ParticleSimState` in `particle_simulate.wgsl`.
-private struct GPUParticleSimulationState {
-    var positionLifetime: SIMD4<Float>
-    var velocityAge: SIMD4<Float>
-    var sizeRotation: SIMD4<Float>
-    var color: SIMD4<Float>
-    /// x: source generation, y: appearance index, z: texture frame seed, w: reserved.
-    var params: SIMD4<UInt32>
-}
-
-/// Layout matches `ParticleSimEvent` in `particle_simulate.wgsl`.
-private struct GPUParticleSimulationEvent {
-    /// xyz: event position, w: source lifetime.
-    var positionLifetime: SIMD4<Float>
-    /// xyz: event velocity, w: source age.
-    var velocityAge: SIMD4<Float>
-    /// x: trigger (1 collision, 2 death), y: source index,
-    /// z: source generation, w: source appearance index.
-    var params: SIMD4<UInt32>
-}
-
-/// Layout matches `ParticleSimMetadata` in `particle_simulate.wgsl`.
-private struct GPUParticleSimulationMetadata {
-    var aliveCount: UInt32
-    var expiredCount: UInt32
-    var collisionCount: UInt32
-    var spawnedCount: UInt32
-    var droppedSpawnCount: UInt32
-    var appendCursor: UInt32
-    var compactedCount: UInt32
-    var eventCount: UInt32
-}
-
-/// Layout matches `ParticleSpawnUniforms` in `particle_spawn_append.wgsl`.
-private struct GPUParticleSpawnUniforms {
-    /// x: requested spawn count, y: particle capacity.
-    var params: SIMD4<UInt32>
-}
-
-/// Layout matches `ParticleStateMaintenanceUniforms` in particle state maintenance shaders.
-private struct GPUParticleStateMaintenanceUniforms {
-    /// x: active simulation count, y: particle capacity.
-    var params: SIMD4<UInt32>
-}
-
 extension WGPURenderer {
-    private func gpuVectorFieldMode(_ mode: ParticleVectorFieldMode) -> Float {
-        switch mode {
-        case .none:
-            return 0
-        case .uniform:
-            return 1
-        case .curl:
-            return 2
-        }
-    }
-
-    private func gpuForceMode(_ mode: ParticleForceMode) -> Float {
-        switch mode {
-        case .none:
-            return 0
-        case .radial:
-            return 1
-        case .vortex:
-            return 2
-        }
-    }
-
-    private func gpuCollisionMode(_ mode: ParticleCollisionMode) -> Float {
-        switch mode {
-        case .none:
-            return 0
-        case .localPlane:
-            return 1
-        case .worldPlane:
-            return 2
-        }
-    }
-
     private func gpuParticleSortMode(_ mode: ParticleSortMode) -> Float {
         switch mode {
         case .distanceDescending:
@@ -855,34 +753,12 @@ extension WGPURenderer {
 
     @discardableResult
     func encodeParticleSimulationPass(encoder: GPUCommandEncoder,
-                                      plan: ParticleGPUSimulationPlan,
-                                      particles: [Particle],
+                                      batch: RenderParticleSimulationBatch,
                                       deltaTime: Float,
-                                      gravity: SIMD3<Float>,
-                                      noiseStrength: Float = 0,
-                                      noiseScale: Float = 1,
-                                      noiseSpeed: Float = 0,
-                                      noiseSeed: UInt64 = 0,
-                                      vectorFieldDirection: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
-                                      vectorFieldStrength: Float = 0,
-                                      vectorFieldScale: Float = 1,
-                                      vectorFieldScrollSpeed: Float = 0,
-                                      vectorFieldMode: ParticleVectorFieldMode = .none,
-                                      forceMode: ParticleForceMode = .none,
-                                      forceCenter: SIMD3<Float> = .zero,
-                                      forceAxis: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
-                                      forceRadius: Float = 0,
-                                      forceStrength: Float = 0,
-                                      forceFalloff: Float = 1,
-                                      collisionMode: ParticleCollisionMode = .none,
-                                      collisionPlaneY: Float = 0,
-                                      collisionRestitution: Float = 0.5,
-                                      collisionDamping: Float = 0,
-                                      collisionWorldTransform: simd_float4x4 = matrix_identity_float4x4,
-                                      spawnParticles: [Particle] = [],
                                       elapsedTime: Float = 0,
-                                      slot: Int = 0,
-                                      emitterEntity: EntityID? = nil) throws -> GPUParticleSimulationResources? {
+                                      slot: Int = 0) throws -> GPUParticleSimulationResources? {
+        let plan = batch.plan, particles = batch.particles, spawnParticles = batch.spawnParticles
+        let emitterEntity = batch.emitterEntity
         guard let resources = try ensureParticleSimulationResources(for: plan,
                                                                     slot: slot,
                                                                     emitterEntity: emitterEntity)
@@ -903,29 +779,7 @@ extension WGPURenderer {
         guard simulationDispatchCount > 0 else { return resources }
 
         if shouldUploadPersistedParticles && count > 0 {
-            var states = [GPUParticleSimulationState]()
-            states.reserveCapacity(count)
-            for particle in particles.prefix(count) {
-                states.append(
-                    GPUParticleSimulationState(
-                        positionLifetime: SIMD4<Float>(particle.position, particle.lifetime),
-                        velocityAge: SIMD4<Float>(particle.velocity, particle.age),
-                        sizeRotation: SIMD4<Float>(
-                            particle.size,
-                            particle.rotation,
-                            particle.angularVelocity,
-                            particle.sizeScale
-                        ),
-                        color: particle.color,
-                        params: SIMD4<UInt32>(
-                            UInt32(particle.generation),
-                            UInt32(particle.appearanceIndex),
-                            UInt32(particle.textureFrameSeed),
-                            0
-                        )
-                    )
-                )
-            }
+            let states = particles.prefix(count).map { GPUParticleSimulationState(particle: $0) }
             states.withUnsafeBytes { raw in
                 if let base = raw.baseAddress {
                     backend.writeBuffer(resources.stateBuffer, data: base, size: raw.count)
@@ -933,29 +787,7 @@ extension WGPURenderer {
             }
         }
         if requestedSpawnCount > 0 {
-            var spawnStates = [GPUParticleSimulationState]()
-            spawnStates.reserveCapacity(requestedSpawnCount)
-            for particle in spawnParticles.prefix(requestedSpawnCount) {
-                spawnStates.append(
-                    GPUParticleSimulationState(
-                        positionLifetime: SIMD4<Float>(particle.position, particle.lifetime),
-                        velocityAge: SIMD4<Float>(particle.velocity, particle.age),
-                        sizeRotation: SIMD4<Float>(
-                            particle.size,
-                            particle.rotation,
-                            particle.angularVelocity,
-                            particle.sizeScale
-                        ),
-                        color: particle.color,
-                        params: SIMD4<UInt32>(
-                            UInt32(particle.generation),
-                            UInt32(particle.appearanceIndex),
-                            UInt32(particle.textureFrameSeed),
-                            0
-                        )
-                    )
-                )
-            }
+            let spawnStates = spawnParticles.prefix(requestedSpawnCount).map { GPUParticleSimulationState(particle: $0) }
             spawnStates.withUnsafeBytes { raw in
                 if let base = raw.baseAddress {
                     backend.writeBuffer(resources.spawnInputBuffer, data: base, size: raw.count)
@@ -963,62 +795,10 @@ extension WGPURenderer {
             }
         }
 
-        var uniforms = GPUParticleSimulationUniforms(
-            time: SIMD4<Float>(
-                max(0, deltaTime),
-                Float(simulationDispatchCount),
-                max(0, elapsedTime),
-                Float(resources.eventCapacity)
-            ),
-            gravity: SIMD4<Float>(gravity, 0),
-            noise: SIMD4<Float>(
-                max(0, noiseStrength),
-                max(0.0001, noiseScale),
-                max(0, noiseSpeed),
-                Float(noiseSeed & 0xFFFF) * 0.0001
-            ),
-            vectorFieldDirectionStrength: SIMD4<Float>(
-                vectorFieldDirection,
-                max(0, vectorFieldStrength)
-            ),
-            vectorFieldParams: SIMD4<Float>(
-                max(0.0001, vectorFieldScale),
-                vectorFieldScrollSpeed,
-                gpuVectorFieldMode(vectorFieldMode),
-                0
-            ),
-            forceCenterRadius: SIMD4<Float>(
-                forceCenter,
-                max(0, forceRadius)
-            ),
-            forceAxisMode: SIMD4<Float>(
-                forceAxis,
-                gpuForceMode(forceMode)
-            ),
-            forceParams: SIMD4<Float>(
-                forceStrength,
-                max(0, forceFalloff),
-                0,
-                0
-            ),
-            collisionParams: SIMD4<Float>(
-                gpuCollisionMode(collisionMode),
-                collisionPlaneY,
-                simd_clamp(collisionRestitution, 0, 1),
-                simd_clamp(collisionDamping, 0, 1)
-            ),
-            collisionToWorld: collisionWorldTransform,
-            collisionToLocal: simd_inverse(collisionWorldTransform)
-        )
+        var uniforms = GPUParticleSimulationUniforms(batch: batch,deltaTime: deltaTime,
+            elapsedTime: elapsedTime,dispatchCount: simulationDispatchCount,eventCapacity: resources.eventCapacity)
         writeUniform(&uniforms, buffer: resources.uniformBuffer)
-        var metadata = GPUParticleSimulationMetadata(aliveCount: 0,
-                                                     expiredCount: 0,
-                                                     collisionCount: 0,
-                                                     spawnedCount: 0,
-                                                     droppedSpawnCount: 0,
-                                                     appendCursor: UInt32(count),
-                                                     compactedCount: 0,
-                                                     eventCount: 0)
+        var metadata = GPUParticleSimulationMetadata(appendCursor: count)
         if shouldUploadPersistedParticles {
             writeUniform(&metadata, buffer: resources.metadataBuffer)
         } else {
@@ -1139,37 +919,8 @@ extension WGPURenderer {
             if let emitterEntity = batch.emitterEntity {
                 activeEmitterResourceKeys.insert(emitterEntity.rawValue)
             }
-            let resources = try encodeParticleSimulationPass(
-                encoder: encoder,
-                plan: batch.plan,
-                particles: batch.particles,
-                deltaTime: deltaTime * batch.simulationSpeed,
-                gravity: batch.gravity,
-                noiseStrength: batch.noiseStrength,
-                noiseScale: batch.noiseScale,
-                noiseSpeed: batch.noiseSpeed,
-                noiseSeed: batch.noiseSeed,
-                vectorFieldDirection: batch.vectorFieldDirection,
-                vectorFieldStrength: batch.vectorFieldStrength,
-                vectorFieldScale: batch.vectorFieldScale,
-                vectorFieldScrollSpeed: batch.vectorFieldScrollSpeed,
-                vectorFieldMode: batch.vectorFieldMode,
-                forceMode: batch.forceMode,
-                forceCenter: batch.forceCenter,
-                forceAxis: batch.forceAxis,
-                forceRadius: batch.forceRadius,
-                forceStrength: batch.forceStrength,
-                forceFalloff: batch.forceFalloff,
-                collisionMode: batch.collisionMode,
-                collisionPlaneY: batch.collisionPlaneY,
-                collisionRestitution: batch.collisionRestitution,
-                collisionDamping: batch.collisionDamping,
-                collisionWorldTransform: batch.worldTransform,
-                spawnParticles: batch.spawnParticles,
-                elapsedTime: elapsedTime,
-                slot: slot,
-                emitterEntity: batch.emitterEntity
-            )
+            let resources = try encodeParticleSimulationPass(encoder: encoder,batch: batch,
+                deltaTime: deltaTime * batch.simulationSpeed,elapsedTime: elapsedTime,slot: slot)
             guard resources != nil else { continue }
             if let resources {
                 try enqueueParticleSimulationEventReadback(
@@ -1300,24 +1051,9 @@ extension WGPURenderer {
         }
         request.metadataBuffer.unmap()
 
-        let totalEventCount = Int(metadata.eventCount)
-        let readableEventCount = min(totalEventCount, request.eventCapacity)
-        let droppedEventCount = max(0, totalEventCount - request.eventCapacity)
+        let readableEventCount = min(Int(metadata.eventCount), request.eventCapacity)
         guard readableEventCount > 0 else {
-            return GPUParticleSimulationEventSnapshot(
-                slot: request.slot,
-                emitterRawValue: request.emitterRawValue,
-                eventCapacity: request.eventCapacity,
-                totalEventCount: totalEventCount,
-                droppedEventCount: droppedEventCount,
-                records: [],
-                aliveParticleCount: Int(metadata.aliveCount),
-                expiredParticleCount: Int(metadata.expiredCount),
-                collisionEventCount: Int(metadata.collisionCount),
-                gpuSpawnedParticleCount: Int(metadata.spawnedCount),
-                gpuDroppedSpawnCount: Int(metadata.droppedSpawnCount),
-                compactedParticleCount: Int(metadata.compactedCount)
-            )
+            return metadata.snapshot(slot: request.slot,emitter: request.emitterRawValue,capacity: request.eventCapacity,records: [])
         }
 
         let eventStride = MemoryLayout<GPUParticleSimulationEvent>.stride
@@ -1331,44 +1067,8 @@ extension WGPURenderer {
 
         let typed = mapped.bindMemory(to: GPUParticleSimulationEvent.self,
                                       capacity: readableEventCount)
-        var records: [GPUParticleSimulationEventRecord] = []
-        records.reserveCapacity(readableEventCount)
-        for event in UnsafeBufferPointer(start: typed, count: readableEventCount) {
-            records.append(
-                GPUParticleSimulationEventRecord(
-                    trigger: GPUParticleSimulationEventTrigger(rawTrigger: event.params.x),
-                    sourceIndex: event.params.y,
-                    position: SIMD3<Float>(
-                        event.positionLifetime.x,
-                        event.positionLifetime.y,
-                        event.positionLifetime.z
-                    ),
-                    lifetime: event.positionLifetime.w,
-                    velocity: SIMD3<Float>(
-                        event.velocityAge.x,
-                        event.velocityAge.y,
-                        event.velocityAge.z
-                    ),
-                    age: event.velocityAge.w,
-                    generation: UInt8(clamping: event.params.z),
-                    appearanceIndex: UInt16(clamping: event.params.w)
-                )
-            )
-        }
-        return GPUParticleSimulationEventSnapshot(
-            slot: request.slot,
-            emitterRawValue: request.emitterRawValue,
-            eventCapacity: request.eventCapacity,
-            totalEventCount: totalEventCount,
-            droppedEventCount: droppedEventCount,
-            records: records,
-            aliveParticleCount: Int(metadata.aliveCount),
-            expiredParticleCount: Int(metadata.expiredCount),
-            collisionEventCount: Int(metadata.collisionCount),
-            gpuSpawnedParticleCount: Int(metadata.spawnedCount),
-            gpuDroppedSpawnCount: Int(metadata.droppedSpawnCount),
-            compactedParticleCount: Int(metadata.compactedCount)
-        )
+        let records = UnsafeBufferPointer(start: typed,count: readableEventCount).map(\.record)
+        return metadata.snapshot(slot: request.slot,emitter: request.emitterRawValue,capacity: request.eventCapacity,records: records)
     }
 
     private func encodeParticleSimulationInstancePass(

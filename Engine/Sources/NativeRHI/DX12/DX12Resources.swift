@@ -17,6 +17,7 @@ extension DX12Device {
     }
     public func createShaderModule(_ handle: ShaderModule, descriptor: ShaderModuleDescriptor) throws {
         guard descriptor.format == .dxil else { throw RHIError.invalidArgument("DX12 requires DXIL") }
+        guard descriptor.specializationConstants.isEmpty else { throw RHIError.unsupportedFeature("DXIL specialization requires an offline shader variant") }
         try descriptor.code.withUnsafeBytes { try check(grhi_dx12_shader(native, handle.id, descriptor.stage.dx12, $0.baseAddress, $0.count)) }
     }
     public func registerBindingLayout(_ handle: BindingLayout, descriptor: BindingLayoutDescriptor) throws {
@@ -55,6 +56,13 @@ extension DX12Device {
     public func uploadBufferData(_ buffer: Buffer, offset: Int, data: Data) throws {
         guard offset >= 0 else { throw RHIError.invalidArgument("negative upload offset") }
         try data.withUnsafeBytes { try check(grhi_dx12_upload_buffer(native, buffer.id, UInt64(offset), $0.baseAddress, $0.count)) }
+    }
+    public func readBufferData(_ buffer: Buffer, offset: Int, into destination: UnsafeMutableRawBufferPointer) throws {
+        guard let descriptor = resources.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer") }
+        try rhiByteRange(offset: offset, size: destination.count, capacity: descriptor.size)
+        if destination.isEmpty { return }
+        try waitUntilIdle()
+        try check(grhi_dx12_read_buffer(native, buffer.id, UInt64(offset), destination.baseAddress, destination.count))
     }
     public func uploadTextureData(_ texture: Texture, data: Data, width: Int, height: Int, bytesPerRow: Int, subresource: TextureSubresource) throws {
         try data.withUnsafeBytes { try transfer(texture, subresource: subresource, width: width, height: height, row: bytesPerRow, pointer: UnsafeMutableRawPointer(mutating: $0.baseAddress), size: $0.count, upload: true) }

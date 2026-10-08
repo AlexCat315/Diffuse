@@ -7,7 +7,8 @@ import SIMDCompat
 /// Scene renderer recorded entirely through NativeRHI. The initial migration
 /// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
 /// HDR sky/tonemap, stylized materials/outline/paper, r5 post effects, temporal
-/// history/cache, the grid and CPU-authored particles with GPU compaction/indirect draws.
+/// history/cache, the grid, CPU-authored particle draws and resident GPU particle
+/// physics/events. Simulated-particle instance conversion is the next migration step.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
@@ -20,6 +21,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     private let grid: NativeEditorGridPass
     private let post: NativePostPasses
     private let particles: NativeParticlePass
+    let particleSimulation: NativeParticleSimulation
     private var frameState = RenderTemporalState()
     public var lastFrameUsedOpaqueCache: Bool { frameState.cacheHit }
     private let surface: RenderSurfaceDescriptor?
@@ -41,11 +43,15 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         grid = try NativeEditorGridPass(device: device)
         post = try NativePostPasses(device: device)
         particles = try NativeParticlePass(device: device)
+        particleSimulation = NativeParticleSimulation(device: device)
     }
     deinit { targets?.destroy(device: device) }
     public func initialize() { Logger.renderer.info("NativeRenderer ready (\(device.deviceName))") }
     public func currentFrameStats() -> RenderFrameStats { lastFrameStats }
     public func currentViewportSurfaceState() -> ViewportSurfaceState { .init() }
+    public func drainGPUParticleSimulationEventSnapshots(maxSnapshots: Int = Int.max) throws -> [GPUParticleSimulationEventSnapshot] {
+        try particleSimulation.drain(maxSnapshots: maxSnapshots)
+    }
     public func render(packet: RenderPacket) {
         do { try renderChecked(packet: packet) }
         catch { lastError = String(describing: error); Logger.renderer.error("native scene render failed: \(error)") }
@@ -70,6 +76,10 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         defer { device.endFrame() }
         let hasDepth = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r2MultiObjectDepth.rawValue
         let commands = CommandBuffer()
+        let simulationStart = DispatchTime.now().uptimeNanoseconds
+        let simulation = try particleSimulation.prepare(scene: packet.scene,deltaTime: Float(packet.deltaTime),
+            elapsedTime: Float(packet.simulationTimeSeconds),into: commands)
+        let simulationTime = DispatchTime.now().uptimeNanoseconds - simulationStart
         let deformableStart = DispatchTime.now().uptimeNanoseconds
         let dynamic = try deformables.prepare(packet.scene.deformableMeshes, into: commands)
         let deformableTime = DispatchTime.now().uptimeNanoseconds - deformableStart
@@ -184,7 +194,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passDraws[kind] = draws; active.append(kind)
         }
         let encoded = DispatchTime.now().uptimeNanoseconds
-        try device.submit(commands); deformables.commit(dynamic); frameState = nextFrame
+        try device.submit(commands); deformables.commit(dynamic); particleSimulation.commit(simulation); frameState = nextFrame
         if let image { try device.present(image) }
         let end = DispatchTime.now().uptimeNanoseconds
         var stats = RenderFrameStats()
@@ -211,6 +221,12 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         stats.gpuParticleCullCandidateCount = particleFrame?.candidates ?? 0
         stats.gpuParticleCullDispatchWorkgroups = particleFrame?.draws.count ?? 0
         stats.gpuParticleIndirectDrawCount = particleFrame?.draws.count ?? 0
+        stats.gpuParticleSimulationBatchCount = simulation.report.batchCount
+        stats.gpuParticleSimulationParticleCount = simulation.report.particleCount
+        stats.gpuParticleSimulationDispatchWorkgroups = simulation.report.dispatchWorkgroups
+        stats.gpuParticleSimulationEventCapacity = simulation.report.eventCapacity
+        stats.gpuParticleSimulationEventBufferBytes = simulation.report.eventBufferBytes
+        stats.gpuParticleSimulationEncodeNS = simulationTime
         lastFrameStats = stats; lastError = nil
     }
 
