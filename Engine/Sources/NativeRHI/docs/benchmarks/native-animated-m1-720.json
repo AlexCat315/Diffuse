@@ -1,0 +1,75 @@
+{
+  "environment" : {
+    "buildConfiguration" : "release",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-10-08T09:12:34Z",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 180,
+  "height" : 720,
+  "imageDifferences" : {
+    "native-metal" : {
+      "maximumChannelError" : 1,
+      "meanAbsoluteChannelError" : 0.00012586805555555555,
+      "pixelCount" : 921600,
+      "pixelsOverThree" : 0
+    }
+  },
+  "repeats" : 3,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 2505.097222222222,
+        "p95Microseconds" : 2568.065277777778,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 12.5,
+        "p95Microseconds" : 18.208,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 903.875,
+        "p95Microseconds" : 1014.5,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 699.458,
+        "p95Microseconds" : 779.917,
+        "sampleCount" : 540
+      },
+      "device" : "Apple M1"
+    },
+    {
+      "backend" : "wgpu-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 3235.576388888889,
+        "p95Microseconds" : 3255.9280055555555,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 195.75,
+        "p95Microseconds" : 220.125,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 967.625,
+        "p95Microseconds" : 1108.75,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 222.125,
+        "p95Microseconds" : 282.292,
+        "sampleCount" : 540
+      },
+      "device" : "wgpu-native metal"
+    }
+  ],
+  "scene" : "animated",
+  "warmup" : 30,
+  "width" : 1280
+}

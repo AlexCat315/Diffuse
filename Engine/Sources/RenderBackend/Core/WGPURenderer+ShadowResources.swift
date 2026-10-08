@@ -73,13 +73,15 @@ extension WGPURenderer {
         scene: RenderScene,
         drawableSize: RenderDrawableSize,
         enabled: Bool,
-        settings: RenderShadowSettings
+        settings: RenderShadowSettings,
+        palettes: JointPaletteMap = JointPaletteMap()
     ) -> ShadowAtlasPlan {
         let plan = makeShadowAtlasPlan(
             scene: scene,
             drawableSize: drawableSize,
             enabled: enabled,
-            settings: settings
+            settings: settings,
+            palettes: palettes
         )
         guard let shadowUniformBuffer else { return plan }
         var uniforms = plan.uniforms
@@ -88,9 +90,9 @@ extension WGPURenderer {
     }
 
     func makeShadowAtlasPlan(scene: RenderScene, drawableSize: RenderDrawableSize,
-                             enabled: Bool, settings: RenderShadowSettings) -> ShadowAtlasPlan {
+                             enabled: Bool, settings: RenderShadowSettings, palettes: JointPaletteMap = JointPaletteMap()) -> ShadowAtlasPlan {
         ShadowAtlasPlanner.makeShadowAtlasPlan(scene: scene, drawableSize: drawableSize,
-            enabled: enabled, settings: settings, meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) })
+            enabled: enabled, settings: settings, palettes: palettes, meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) })
     }
     func shadowedDirectionalLightCount(scene: RenderScene, settings: RenderShadowSettings) -> Int {
         ShadowAtlasPlanner.shadowedDirectionalLightCount(scene: scene, settings: settings)

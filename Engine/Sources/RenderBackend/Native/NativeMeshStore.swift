@@ -67,14 +67,20 @@ final class NativeMeshStore {
     }
 }
 
-struct NativeMesh {
+struct NativeMeshGeometry {
     let vertices: Buffer
     let indices: Buffer
-    let indexCount: Int
+    let vertexCapacity: Int
+    let indexCapacity: Int
     let submeshes: [MeshSubmesh]
+    let bounds: (min: SIMD3<Float>, max: SIMD3<Float>)
+    func destroy(device: Device) { device.destroy(vertices); device.destroy(indices) }
+}
+
+struct NativeMesh {
+    let geometry: NativeMeshGeometry
     let materials: [MeshMaterial]
     let textures: [Int: Texture]
-    let bounds: (min: SIMD3<Float>, max: SIMD3<Float>)
 
     static func make(device: Device, asset: MeshAsset, sourceDirectory: String?) throws -> NativeMesh {
         guard asset.vertexCount > 0, asset.vertices.count.isMultiple(of: MeshAsset.vertexFloatCount),
@@ -106,14 +112,15 @@ struct NativeMesh {
                 catch { Logger.renderer.warning("native mesh texture \(asset.name)[\(index)] uses fallback: \(error)"); continue }
                 textures[index] = try NativeMeshStore.texture(device: device, image: decoded)
             }
-            return NativeMesh(vertices: vertices, indices: indexBuffer, indexCount: asset.indices.count,
-                submeshes: parts, materials: asset.materials, textures: textures, bounds: asset.localBounds)
+            return NativeMesh(geometry: NativeMeshGeometry(vertices: vertices, indices: indexBuffer,
+                vertexCapacity: asset.vertexBufferSize, indexCapacity: asset.indexBufferSize,
+                submeshes: parts, bounds: asset.localBounds), materials: asset.materials, textures: textures)
         } catch {
             device.destroy(vertices); if let indices { device.destroy(indices) }
             textures.values.forEach { device.destroy($0) }; throw error
         }
     }
     func destroy(device: Device) {
-        device.destroy(vertices); device.destroy(indices); textures.values.forEach { device.destroy($0) }
+        geometry.destroy(device: device); textures.values.forEach { device.destroy($0) }
     }
 }

@@ -1,0 +1,75 @@
+{
+  "environment" : {
+    "buildConfiguration" : "release",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-10-08T09:13:27Z",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 180,
+  "height" : 1080,
+  "imageDifferences" : {
+    "native-metal" : {
+      "maximumChannelError" : 4,
+      "meanAbsoluteChannelError" : 0.00013342335390946502,
+      "pixelCount" : 2073600,
+      "pixelsOverThree" : 1
+    }
+  },
+  "repeats" : 3,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 3357.3344944444443,
+        "p95Microseconds" : 3364.2145833333334,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 15.166,
+        "p95Microseconds" : 19.416,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 1104.5,
+        "p95Microseconds" : 1233.167,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 848.709,
+        "p95Microseconds" : 948.708,
+        "sampleCount" : 540
+      },
+      "device" : "Apple M1"
+    },
+    {
+      "backend" : "wgpu-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 4233.262266666667,
+        "p95Microseconds" : 4234.655322222223,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 203.417,
+        "p95Microseconds" : 226.959,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 1004.625,
+        "p95Microseconds" : 1138.917,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 226.042,
+        "p95Microseconds" : 293.833,
+        "sampleCount" : 540
+      },
+      "device" : "wgpu-native metal"
+    }
+  ],
+  "scene" : "animated",
+  "warmup" : 30,
+  "width" : 1920
+}

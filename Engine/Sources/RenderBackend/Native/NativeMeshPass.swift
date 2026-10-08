@@ -5,10 +5,8 @@ import SceneRuntime
 import SIMDCompat
 
 struct NativePreparedMeshDraw {
-    let mesh: NativeMesh
-    let key: NativeMeshBatchKey
+    let batch: NativeMeshBatch
     let bindings: BindingSet
-    let instanceCount: Int
     let basePipeline: GraphicsPipeline
     let depthPipeline: GraphicsPipeline?
 }
@@ -17,11 +15,12 @@ private struct NativeMeshPipelineKey: Hashable {
     let hdr: Bool
     let mirrored: Bool
     let doubleSided: Bool
+    let blend: Bool
 }
 
 /// Preparation resolves visibility/materials and allocates only frame-owned
 /// instance data. Pipeline variants and immutable layouts remain resident.
-final class NativeOpaquePass {
+final class NativeMeshPass {
     private let device: Device
     private let bindingLayout: BindingLayout
     private let pipelineLayout: PipelineLayout
@@ -37,10 +36,10 @@ final class NativeOpaquePass {
         let ds = try NativeShaderLibrary.artifact(name: "opaque_depth", api: device.backendAPI, stage: .fragment)
         let reflected = try NativeShaderLibrary.layout(artifacts: [vs,fs,ds])
         // This shader's explicit cross-target slots are part of the offline ABI.
-        let expected: [String: UInt32] = ["draw":0,"instances":1,"meshSampler":2,"baseTexture":3,"sceneLights":4,"normalTexture":5,"mrTexture":6,"shadow":7,"shadowSampler":8,"shadowTexture":9,"iblTexture":10]
+        let expected: [String: UInt32] = ["draw":0,"instances":1,"meshSampler":2,"baseTexture":3,"sceneLights":4,"normalTexture":5,"mrTexture":6,"shadow":7,"shadowSampler":8,"shadowTexture":9,"iblTexture":10,"skinParameters":11,"jointPalette":12]
         guard [vs,fs,ds].allSatisfy({ artifact in artifact.interface.bindings.count == expected.count
             && artifact.interface.bindings.allSatisfy { expected[$0.name] == $0.slot } }) else {
-            throw RHIError.layoutMismatch("native opaque shader binding ABI mismatch")
+            throw RHIError.layoutMismatch("native mesh shader binding ABI mismatch")
         }
         bindingLayout = try device.makeBindingLayout(reflected)
         pipelineLayout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [bindingLayout]))
@@ -58,30 +57,32 @@ final class NativeOpaquePass {
     }
 
     func prepare(packet: RenderPacket, store: NativeMeshStore,
-                 matrices: RenderCameraMatrices, depthPrepass: Bool, hdr: Bool, lighting: NativeLightingBindings) throws -> (draws: [NativePreparedMeshDraw], visibility: MeshVisibilityPlan) {
-        let prepared = try NativeMeshBatchPlanner.prepare(packet: packet, store: store, viewProjection: matrices.viewProjection)
+                 matrices: RenderCameraMatrices, depthPrepass: Bool, hdr: Bool, lighting: NativeLightingBindings, skin: NativeSkinBindings,
+                 deformables: [EntityID: NativeMeshGeometry]) throws -> (draws: [NativePreparedMeshDraw], visibility: MeshVisibilityPlan) {
+        let prepared = try NativeMeshBatchPlanner.prepare(packet: packet, store: store, viewProjection: matrices.viewProjection, deformables: deformables)
         var draws: [NativePreparedMeshDraw] = []
         for batch in prepared.batches {
-                let mesh = batch.mesh, key = batch.key, uniforms = batch.uniforms
-                let bytes = uniforms.withUnsafeBytes { Data($0) }
-                let upload = try device.uploadTransient(bytes)
-                let bindings = try device.makeBindingSet(layout: bindingLayout, descriptor: BindingSetDescriptor(entries: [
-                    BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: upload.buffer, offset: upload.offset, size: MemoryLayout<MeshInstanceUniforms>.stride)),
-                    BindingSetEntry(slot: 1, resource: .storageBuffer(buffer: upload.buffer, offset: upload.offset)),
-                    BindingSetEntry(slot: 2, resource: .sampler(store.sampler)),
-                    BindingSetEntry(slot: 3, resource: .texture(key.baseTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[0])),
-                    BindingSetEntry(slot: 4, resource: lighting.lights),
-                    BindingSetEntry(slot: 5, resource: .texture(key.normalTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[1])),
-                    BindingSetEntry(slot: 6, resource: .texture(key.mrTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[2])),
-                    BindingSetEntry(slot: 7, resource: lighting.shadows),
-                    BindingSetEntry(slot: 8, resource: .sampler(lighting.sampler)),
-                    BindingSetEntry(slot: 9, resource: .texture(lighting.atlas)),
-                    BindingSetEntry(slot: 10, resource: .texture(lighting.environment))
-                ]))
-                let base = try pipeline(key: key, depth: false, hdr: hdr)
-                let depth = depthPrepass ? try pipeline(key: key, depth: true, hdr: hdr) : nil
-                draws.append(NativePreparedMeshDraw(mesh: mesh, key: key, bindings: bindings,
-                    instanceCount: uniforms.count, basePipeline: base, depthPipeline: depth))
+            let mesh = batch.mesh, key = batch.key, uniforms = batch.uniforms
+            let bytes = uniforms.withUnsafeBytes { Data($0) }
+            let upload = try device.uploadTransient(bytes)
+            let bindings = try device.makeBindingSet(layout: bindingLayout, descriptor: BindingSetDescriptor(entries: [
+                BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: upload.buffer, offset: upload.offset, size: MemoryLayout<MeshInstanceUniforms>.stride)),
+                BindingSetEntry(slot: 1, resource: .storageBuffer(buffer: upload.buffer, offset: upload.offset)),
+                BindingSetEntry(slot: 2, resource: .sampler(store.sampler)),
+                BindingSetEntry(slot: 3, resource: .texture(key.baseTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[0])),
+                BindingSetEntry(slot: 4, resource: lighting.lights),
+                BindingSetEntry(slot: 5, resource: .texture(key.normalTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[1])),
+                BindingSetEntry(slot: 6, resource: .texture(key.mrTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[2])),
+                BindingSetEntry(slot: 7, resource: lighting.shadows),
+                BindingSetEntry(slot: 8, resource: .sampler(lighting.sampler)),
+                BindingSetEntry(slot: 9, resource: .texture(lighting.atlas)),
+                BindingSetEntry(slot: 10, resource: .texture(lighting.environment)),
+                BindingSetEntry(slot: 11, resource: skin[batch.skinEntity].parameters),
+                BindingSetEntry(slot: 12, resource: skin[batch.skinEntity].matrices)
+            ]))
+            let base = try pipeline(key: key, depth: false, hdr: hdr)
+            let depth = depthPrepass && key.mode != .blend ? try pipeline(key: key, depth: true, hdr: hdr) : nil
+            draws.append(NativePreparedMeshDraw(batch: batch, bindings: bindings, basePipeline: base, depthPipeline: depth))
         }
         return (draws, prepared.visibility)
     }
@@ -93,22 +94,22 @@ final class NativeOpaquePass {
             pass.setScissor(ScissorRect(width: Int(size.width), height: Int(size.height)))
             for draw in draws {
                 pass.setPipeline(depthOnly ? draw.depthPipeline! : draw.basePipeline)
-                pass.setBindingSet(draw.bindings); pass.setVertexBuffer(draw.mesh.vertices)
-                pass.setIndexBuffer(draw.mesh.indices, type: .uint32)
-                pass.drawIndexed(DrawIndexedArguments(indexCount: draw.key.indexCount, instanceCount: draw.instanceCount, firstIndex: draw.key.firstIndex))
+                pass.setBindingSet(draw.bindings); pass.setVertexBuffer(draw.batch.geometry.vertices)
+                pass.setIndexBuffer(draw.batch.geometry.indices, type: .uint32)
+                pass.drawIndexed(DrawIndexedArguments(indexCount: draw.batch.key.indexCount, instanceCount: draw.batch.uniforms.count, firstIndex: draw.batch.key.firstIndex))
             }
         }
     }
     private func pipeline(key: NativeMeshBatchKey, depth: Bool, hdr: Bool) throws -> GraphicsPipeline {
-        let variant = NativeMeshPipelineKey(depth: depth, hdr: hdr, mirrored: key.mirrored, doubleSided: key.doubleSided)
+        let variant = NativeMeshPipelineKey(depth: depth, hdr: hdr, mirrored: key.mirrored, doubleSided: key.doubleSided, blend: key.mode == .blend)
         if let existing = pipelines[variant] { return existing }
         let pipeline = try device.makeGraphicsPipeline(GraphicsPipelineDescriptor(layout: pipelineLayout,
             vertex: vertex, fragment: depth ? depthFragment : fragment,
-            colorAttachments: depth ? [] : [ColorAttachmentDescriptor(format: hdr ? .rgba16Float : .bgra8Unorm)],
+            colorAttachments: depth ? [] : [ColorAttachmentDescriptor(format: hdr ? .rgba16Float : .bgra8Unorm, blend: variant.blend ? .alphaBlend : .opaque)],
             rasterization: RasterizationState(cullMode: key.doubleSided ? .none : .back,
                 frontWinding: key.mirrored ? .clockwise : .counterClockwise),
-            depthStencil: DepthStencilState(depthCompare: depth ? .less : .lessOrEqual, depthWriteEnabled: true),
-            vertexLayout: NativeMeshVertexLayout.descriptor, label: depth ? "native-depth" : "native-opaque"))
+            depthStencil: DepthStencilState(depthCompare: depth ? .less : .lessOrEqual, depthWriteEnabled: !variant.blend),
+            vertexLayout: NativeMeshVertexLayout.descriptor, label: depth ? "native-depth" : "native-mesh"))
         pipelines[variant] = pipeline; return pipeline
     }
 }
