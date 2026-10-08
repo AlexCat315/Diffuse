@@ -64,13 +64,8 @@ final class NativeParticleTests: XCTestCase {
         }
     }
     private func readBuffer(device: Device, buffer: Buffer, bytes: Int) throws -> Data {
-        let target = try device.makeTexture(TextureDescriptor(width: bytes/4,height: 1,format: .r32Uint,usage: [.transferDestination,.transferSource]))
-        defer { device.destroy(target) }
-        let commands = CommandBuffer()
-        commands.copyPass { $0.uploadBufferToTexture(buffer: buffer,bytesPerRow: bytes,texture: target,width: bytes/4,height: 1) }
-        try device.beginFrame(); try device.submit(commands); device.endFrame(); try device.waitUntilIdle()
         var data = Data(count: bytes)
-        try data.withUnsafeMutableBytes { try device.readTextureData(target,width: bytes/4,height: 1,bytesPerRow: bytes,into: $0) }
+        try data.withUnsafeMutableBytes { try device.readBufferData(buffer,into: $0) }
         return data
     }
     private func parity(_ api: GraphicsAPI) throws {

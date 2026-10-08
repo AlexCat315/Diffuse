@@ -83,6 +83,15 @@ extension MetalDevice {
 
     // MARK: Immediate data transfer
 
+    public func readBufferData(_ buffer: Buffer, offset: Int, into destination: UnsafeMutableRawBufferPointer) throws {
+        guard let source = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer") }
+        try rhiByteRange(offset: offset, size: destination.count, capacity: source.length)
+        if destination.isEmpty { return }
+        guard let base = destination.baseAddress else { throw RHIError.invalidArgument("missing buffer readback destination") }
+        try waitUntilIdle()
+        base.copyMemory(from: source.contents().advanced(by: offset), byteCount: destination.count)
+    }
+
     public func uploadBufferData(_ buffer: Buffer, offset: Int, data: Data) throws {
         guard let mtlBuffer = registries.buffers[buffer.id] else {
             throw RHIError.invalidArgument("uploadBufferData: unknown buffer \(buffer.id)")

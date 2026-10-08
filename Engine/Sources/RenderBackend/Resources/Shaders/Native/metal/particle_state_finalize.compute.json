@@ -1,0 +1,39 @@
+{
+  "stage": "compute",
+  "format": "mslSource",
+  "entryPoint": "particleFinalize",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCBQYXJ0aWNsZVNpbU1ldGFkYXRhXzAKewogICAgdWludCBhbGl2ZV9jb3VudF8wOwogICAgdWludCBleHBpcmVkX2NvdW50XzA7CiAgICB1aW50IGNvbGxpc2lvbl9jb3VudF8wOwogICAgdWludCBzcGF3bmVkX2NvdW50XzA7CiAgICB1aW50IGRyb3BwZWRfc3Bhd25fY291bnRfMDsKICAgIHVpbnQgYXBwZW5kX2N1cnNvcl8wOwogICAgdWludCBjb21wYWN0ZWRfY291bnRfMDsKICAgIHVpbnQgZXZlbnRfY291bnRfMDsKfTsKCnN0cnVjdCBLZXJuZWxDb250ZXh0XzAKewogICAgUGFydGljbGVTaW1NZXRhZGF0YV8wIGRldmljZSogbWV0YWRhdGFfMDsKfTsKCltba2VybmVsXV0gdm9pZCBwYXJ0aWNsZUZpbmFsaXplKHVpbnQzIGdpZF8wIFtbdGhyZWFkX3Bvc2l0aW9uX2luX2dyaWRdXSwgUGFydGljbGVTaW1NZXRhZGF0YV8wIGRldmljZSogbWV0YWRhdGFfMSBbW2J1ZmZlcigwKV1dKQp7CiAgICB0aHJlYWQgS2VybmVsQ29udGV4dF8wIGtlcm5lbENvbnRleHRfMDsKICAgICgma2VybmVsQ29udGV4dF8wKS0+bWV0YWRhdGFfMCA9IG1ldGFkYXRhXzE7CiAgICBpZigoZ2lkXzAueCkgPT0gMFUpCiAgICB7CiAgICAgICAgKCgma2VybmVsQ29udGV4dF8wKS0+bWV0YWRhdGFfMCtpbnQoMCkpLT5hcHBlbmRfY3Vyc29yXzAgPSAoKCZrZXJuZWxDb250ZXh0XzApLT5tZXRhZGF0YV8wK2ludCgwKSktPmNvbXBhY3RlZF9jb3VudF8wOwogICAgfQogICAgcmV0dXJuOwp9Cgo=",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "metadata",
+        "slot": 0,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": false,
+          "elementStride": 32
+        }
+      }
+    ],
+    "specializationConstants": [
+      {
+        "id": 0,
+        "name": "particleWorkgroupSize",
+        "type": "uint32"
+      }
+    ],
+    "threadgroupSpecialization": {
+      "x": null,
+      "y": null,
+      "z": null
+    },
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}

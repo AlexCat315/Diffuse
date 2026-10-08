@@ -9,10 +9,10 @@ enum NativePacketValidation {
               packet.drawableSize.height <= ViewportTargetAllocation.maxDimension,
               !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
         guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow,.r5PostProcess].contains(packet.renderSettings.stage),
-              packet.scene.particleSimulationBatches.isEmpty,
               packet.inGameCanvas.commands.isEmpty else {
-            throw RHIError.unsupportedFeature("native GPU particle simulation and UI migration is pending")
+            throw RHIError.unsupportedFeature("native stage or UI migration is pending")
         }
+        try validateSimulation(packet)
         let settings = packet.renderSettings
         let style = settings.stylizedCharacterStyle
         if settings.enableStylizedCharacterShading {
@@ -62,5 +62,29 @@ enum NativePacketValidation {
     }
     private static func finite(_ vector: SIMD3<Float>) -> Bool {
         vector.x.isFinite && vector.y.isFinite && vector.z.isFinite
+    }
+    private static func validateSimulation(_ packet: RenderPacket) throws {
+        guard Float(packet.deltaTime).isFinite, Float(packet.simulationTimeSeconds).isFinite else {
+            throw RHIError.invalidArgument("non-finite particle simulation time")
+        }
+        var emitters = Set<UInt64>()
+        for batch in packet.scene.particleSimulationBatches where batch.plan.usesGPU && batch.particleCount > 0 {
+            guard !batch.renderOnGPU else { throw RHIError.unsupportedFeature("native simulated-particle sorting and instance conversion is pending") }
+            guard batch.plan.particleCapacity > 0, batch.plan.particleCapacity <= GPUParticleSimulationUniforms.maximumExactParticleCount,
+                  [batch.simulationSpeed,batch.noiseStrength,batch.noiseScale,batch.noiseSpeed,
+                    batch.vectorFieldStrength,batch.vectorFieldScale,batch.vectorFieldScrollSpeed,
+                    batch.forceRadius,batch.forceStrength,batch.forceFalloff,batch.collisionPlaneY,
+                    batch.collisionRestitution,batch.collisionDamping].allSatisfy(\.isFinite),
+                  finite(batch.worldTransform),
+                  GPUParticleSimulationUniforms(batch: batch,deltaTime: Float(packet.deltaTime)*batch.simulationSpeed,
+                    elapsedTime: Float(packet.simulationTimeSeconds),dispatchCount: batch.particleCount,eventCapacity: batch.plan.particleCapacity*2).isFinite,
+                  batch.particles.allSatisfy({ GPUParticleSimulationState(particle: $0).isFinite }),
+                  batch.spawnParticles.allSatisfy({ GPUParticleSimulationState(particle: $0).isFinite }) else {
+                throw RHIError.invalidArgument("non-finite or oversized particle simulation input")
+            }
+            if let emitter = batch.emitterEntity?.rawValue, !emitters.insert(emitter).inserted {
+                throw RHIError.invalidArgument("duplicate particle simulation emitter")
+            }
+        }
     }
 }

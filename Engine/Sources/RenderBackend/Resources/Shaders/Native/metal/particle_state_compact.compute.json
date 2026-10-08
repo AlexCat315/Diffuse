@@ -1,0 +1,69 @@
+{
+  "stage": "compute",
+  "format": "mslSource",
+  "entryPoint": "particleCompact",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CmNvbnN0YW50IHVpbnQgZmNfcGFydGljbGVXb3JrZ3JvdXBTaXplXzAgW1tmdW5jdGlvbl9jb25zdGFudCgwKV1dOwpjb25zdGFudCB1aW50IHBhcnRpY2xlV29ya2dyb3VwU2l6ZV8wID0gaXNfZnVuY3Rpb25fY29uc3RhbnRfZGVmaW5lZChmY19wYXJ0aWNsZVdvcmtncm91cFNpemVfMCkgPyBmY19wYXJ0aWNsZVdvcmtncm91cFNpemVfMCA6IDY0VTsKc3RydWN0IFBhcnRpY2xlU3RhdGVNYWludGVuYW5jZVVuaWZvcm1zXzAKewogICAgdWludDQgcGFyYW1zXzA7Cn07CgpzdHJ1Y3QgUGFydGljbGVTaW1TdGF0ZV9uYXR1cmFsXzAKewogICAgcGFja2VkX2Zsb2F0NCBwb3NpdGlvbl9saWZldGltZV8wOwogICAgcGFja2VkX2Zsb2F0NCB2ZWxvY2l0eV9hZ2VfMDsKICAgIHBhY2tlZF9mbG9hdDQgc2l6ZV9yb3RhdGlvbl8wOwogICAgcGFja2VkX2Zsb2F0NCBjb2xvcl8wOwogICAgcGFja2VkX3VpbnQ0IHBhcmFtc18xOwp9OwoKc3RydWN0IFBhcnRpY2xlU2ltTWV0YWRhdGFfMAp7CiAgICB1aW50IGFsaXZlX2NvdW50XzA7CiAgICB1aW50IGV4cGlyZWRfY291bnRfMDsKICAgIHVpbnQgY29sbGlzaW9uX2NvdW50XzA7CiAgICB1aW50IHNwYXduZWRfY291bnRfMDsKICAgIHVpbnQgZHJvcHBlZF9zcGF3bl9jb3VudF8wOwogICAgdWludCBhcHBlbmRfY3Vyc29yXzA7CiAgICB1aW50IGNvbXBhY3RlZF9jb3VudF8wOwogICAgdWludCBldmVudF9jb3VudF8wOwp9OwoKc3RydWN0IEtlcm5lbENvbnRleHRfMAp7CiAgICBQYXJ0aWNsZVN0YXRlTWFpbnRlbmFuY2VVbmlmb3Jtc18wIGNvbnN0YW50KiB1bmlmb3Jtc18wOwogICAgUGFydGljbGVTaW1TdGF0ZV9uYXR1cmFsXzAgZGV2aWNlKiBzb3VyY2VfcGFydGljbGVzXzA7CiAgICBQYXJ0aWNsZVNpbU1ldGFkYXRhXzAgZGV2aWNlKiBtZXRhZGF0YV8wOwogICAgUGFydGljbGVTaW1TdGF0ZV9uYXR1cmFsXzAgZGV2aWNlKiBjb21wYWN0X3BhcnRpY2xlc18wOwp9OwoKW1trZXJuZWxdXSB2b2lkIHBhcnRpY2xlQ29tcGFjdCh1aW50MyBnaWRfMCBbW3RocmVhZF9wb3NpdGlvbl9pbl9ncmlkXV0sIFBhcnRpY2xlU3RhdGVNYWludGVuYW5jZVVuaWZvcm1zXzAgY29uc3RhbnQqIHVuaWZvcm1zXzEgW1tidWZmZXIoMCldXSwgUGFydGljbGVTaW1TdGF0ZV9uYXR1cmFsXzAgZGV2aWNlKiBzb3VyY2VfcGFydGljbGVzXzEgW1tidWZmZXIoMSldXSwgUGFydGljbGVTaW1NZXRhZGF0YV8wIGRldmljZSogbWV0YWRhdGFfMSBbW2J1ZmZlcigzKV1dLCBQYXJ0aWNsZVNpbVN0YXRlX25hdHVyYWxfMCBkZXZpY2UqIGNvbXBhY3RfcGFydGljbGVzXzEgW1tidWZmZXIoMildXSkKewogICAgdGhyZWFkIEtlcm5lbENvbnRleHRfMCBrZXJuZWxDb250ZXh0XzA7CiAgICAoJmtlcm5lbENvbnRleHRfMCktPnVuaWZvcm1zXzAgPSB1bmlmb3Jtc18xOwogICAgKCZrZXJuZWxDb250ZXh0XzApLT5zb3VyY2VfcGFydGljbGVzXzAgPSBzb3VyY2VfcGFydGljbGVzXzE7CiAgICAoJmtlcm5lbENvbnRleHRfMCktPm1ldGFkYXRhXzAgPSBtZXRhZGF0YV8xOwogICAgKCZrZXJuZWxDb250ZXh0XzApLT5jb21wYWN0X3BhcnRpY2xlc18wID0gY29tcGFjdF9wYXJ0aWNsZXNfMTsKICAgIHVpbnQgX1MxID0gZ2lkXzAueDsKICAgIGlmKF9TMSA+PSAodW5pZm9ybXNfMS0+cGFyYW1zXzAueCkpCiAgICB7CiAgICAgICAgcmV0dXJuOwogICAgfQogICAgUGFydGljbGVTaW1TdGF0ZV9uYXR1cmFsXzAgcGFydGljbGVfMCA9ICgma2VybmVsQ29udGV4dF8wKS0+c291cmNlX3BhcnRpY2xlc18wW19TMV07CiAgICBmbG9hdCBfUzIgPSAoZmxvYXQ0KHBhcnRpY2xlXzAucG9zaXRpb25fbGlmZXRpbWVfMCkgKS53OwogICAgYm9vbCBfUzM7CiAgICBpZihfUzIgPD0gMC4wZikKICAgIHsKICAgICAgICBfUzMgPSB0cnVlOwogICAgfQogICAgZWxzZQogICAgewogICAgICAgIF9TMyA9ICgoZmxvYXQ0KHBhcnRpY2xlXzAudmVsb2NpdHlfYWdlXzApICkudykgPj0gX1MyOwogICAgfQogICAgaWYoX1MzKQogICAgewogICAgICAgIHJldHVybjsKICAgIH0KICAgIHVpbnQgc2xvdF8wID0gYXRvbWljX2ZldGNoX2FkZF9leHBsaWNpdCgoKGF0b21pY191aW50IGRldmljZSopKCYoKCZrZXJuZWxDb250ZXh0XzApLT5tZXRhZGF0YV8wK2ludCgwKSktPmNvbXBhY3RlZF9jb3VudF8wKSksIDFVLCBtZW1vcnlfb3JkZXJfcmVsYXhlZCk7CiAgICBpZihzbG90XzAgPCAodW5pZm9ybXNfMS0+cGFyYW1zXzAueSkpCiAgICB7CiAgICAgICAgKigoJmtlcm5lbENvbnRleHRfMCktPmNvbXBhY3RfcGFydGljbGVzXzArc2xvdF8wKSA9IHBhcnRpY2xlXzA7CiAgICB9CiAgICByZXR1cm47Cn0KCg==",
+  "interface": {
+    "threadgroupSize": {
+      "x": 64,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "uniforms",
+        "slot": 0,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "source_particles",
+        "slot": 1,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 80
+        }
+      },
+      {
+        "name": "compact_particles",
+        "slot": 2,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": false,
+          "elementStride": 80
+        }
+      },
+      {
+        "name": "metadata",
+        "slot": 3,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": false,
+          "elementStride": 32
+        }
+      }
+    ],
+    "specializationConstants": [
+      {
+        "id": 0,
+        "name": "particleWorkgroupSize",
+        "type": "uint32"
+      }
+    ],
+    "threadgroupSpecialization": {
+      "x": 0,
+      "y": null,
+      "z": null
+    },
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}

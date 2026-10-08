@@ -18,6 +18,8 @@ public struct ShaderInterface: Codable, Sendable {
     public var threadgroupSize = ThreadgroupSize()
     public var bindings: [ReflectedShaderBinding] = []
     public var pushConstants: [PushConstantRange] = []
+    public var specializationConstants: [ReflectedShaderConstant] = []
+    public var threadgroupSpecialization = ThreadgroupSpecialization()
     public init() {}
 }
 
@@ -60,12 +62,37 @@ public struct ShaderArtifact: Codable, Sendable {
         self.compiler = compiler
     }
 
-    public func moduleDescriptor() throws -> ShaderModuleDescriptor {
+    public func moduleDescriptor(specialization: [ShaderSpecializationConstant] = []) throws -> ShaderModuleDescriptor {
         try interface.threadgroupSize.validate()
         try rhiRequire(!entryPoint.isEmpty && !code.isEmpty, "shader artifact is empty")
         var descriptor = ShaderModuleDescriptor(stage: stage, format: format,
                                                 code: code, entryPoint: entryPoint)
-        descriptor.threadgroupSize = interface.threadgroupSize
+        try rhiRequire(Set(specialization.map(\.id)).count == specialization.count,"duplicate shader specialization ID")
+        for constant in specialization {
+            try rhiRequire(interface.specializationConstants.contains { $0.id == constant.id && $0.type == constant.value.type },
+                           "unknown shader specialization ID or incompatible type")
+        }
+        var values = specialization
+        // Materialize artifact defaults on every target so physical dispatch
+        // dimensions also agree when the offline default was customized.
+        for (id,size) in [(interface.threadgroupSpecialization.x,interface.threadgroupSize.x),
+                          (interface.threadgroupSpecialization.y,interface.threadgroupSize.y),
+                          (interface.threadgroupSpecialization.z,interface.threadgroupSize.z)] {
+            guard let id else { continue }
+            guard let reflected = interface.specializationConstants.first(where: { $0.id == id }),
+                  reflected.type == .uint32 || reflected.type == .int32 else {
+                throw RHIError.layoutMismatch("workgroup constant needs a reflected integer ID")
+            }
+            if !values.contains(where: { $0.id == id }) {
+                let value: ShaderConstantValue
+                if reflected.type == .uint32, let size = UInt32(exactly: size) { value = .uint32(size) }
+                else if reflected.type == .int32, let size = Int32(exactly: size) { value = .int32(size) }
+                else { throw RHIError.layoutMismatch("workgroup default is outside the constant type's range") }
+                values.append(.init(id: id,value: value))
+            }
+        }
+        descriptor.specializationConstants = values
+        descriptor.threadgroupSize = try interface.threadgroupSpecialization.resolve(defaults: interface.threadgroupSize,values: values)
         return descriptor
     }
 

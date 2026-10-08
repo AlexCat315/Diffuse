@@ -746,27 +746,27 @@ struct RenderBackendGPUSmokeTests {
         let resources = try #require(
             try renderer.encodeParticleSimulationPass(
                 encoder: encoder,
-                plan: plan,
-                particles: [particle],
-                deltaTime: 0.5,
-                gravity: SIMD3<Float>(0, -10, 0),
-                noiseStrength: 2,
-                noiseScale: 1,
-                noiseSpeed: 0,
-                noiseSeed: 0,
-                vectorFieldDirection: SIMD3<Float>(2, 0, 0),
-                vectorFieldStrength: 4,
-                vectorFieldMode: .uniform,
-                forceMode: .radial,
-                forceCenter: SIMD3<Float>(-1, 0, 0),
-                forceRadius: 0,
-                forceStrength: 6,
-                forceFalloff: 0,
-                collisionMode: .worldPlane,
-                collisionPlaneY: 4.5,
-                collisionRestitution: 0.5,
-                collisionDamping: 0.25,
-                collisionWorldTransform: collisionTransform
+                batch: RenderParticleSimulationBatch(plan: plan,
+                    particles: [particle],
+                    gravity: SIMD3<Float>(0, -10, 0),
+                    noiseStrength: 2,
+                    noiseScale: 1,
+                    noiseSpeed: 0,
+                    noiseSeed: 0,
+                    vectorFieldMode: .uniform,
+                    vectorFieldDirection: SIMD3<Float>(2, 0, 0),
+                    vectorFieldStrength: 4,
+                    forceMode: .radial,
+                    forceCenter: SIMD3<Float>(-1, 0, 0),
+                    forceRadius: 0,
+                    forceStrength: 6,
+                    forceFalloff: 0,
+                    collisionMode: .worldPlane,
+                    collisionPlaneY: 4.5,
+                    collisionRestitution: 0.5,
+                    collisionDamping: 0.25,
+                    worldTransform: collisionTransform),
+                deltaTime: 0.5
             )
         )
 
@@ -917,11 +917,11 @@ struct RenderBackendGPUSmokeTests {
         let resources = try #require(
             try renderer.encodeParticleSimulationPass(
                 encoder: encoder,
-                plan: plan,
-                particles: [existing],
-                deltaTime: 0,
-                gravity: .zero,
-                spawnParticles: [acceptedSpawn, droppedSpawn]
+                batch: RenderParticleSimulationBatch(plan: plan,
+                    particles: [existing],
+                    spawnParticles: [acceptedSpawn, droppedSpawn],
+                    gravity: .zero),
+                deltaTime: 0
             )
         )
 
@@ -1036,10 +1036,10 @@ struct RenderBackendGPUSmokeTests {
         let resources = try #require(
             try renderer.encodeParticleSimulationPass(
                 encoder: encoder,
-                plan: plan,
-                particles: [aliveA, expired, aliveB],
-                deltaTime: 0,
-                gravity: .zero
+                batch: RenderParticleSimulationBatch(plan: plan,
+                    particles: [aliveA, expired, aliveB],
+                    gravity: .zero),
+                deltaTime: 0
             )
         )
 
@@ -1149,11 +1149,9 @@ struct RenderBackendGPUSmokeTests {
             _ = try #require(
                 try renderer.encodeParticleSimulationPass(
                     encoder: encoder,
-                    plan: plan,
-                    particles: [staleCPUState],
-                    deltaTime: 1,
-                    gravity: .zero,
-                    emitterEntity: emitter
+                    batch: RenderParticleSimulationBatch(emitterEntity: emitter,
+                        plan: plan,particles: [staleCPUState],gravity: .zero),
+                    deltaTime: 1
                 )
             )
             let commandBuffer = try encoder.finish()
@@ -1164,11 +1162,11 @@ struct RenderBackendGPUSmokeTests {
         let resources = try #require(
             try renderer.encodeParticleSimulationPass(
                 encoder: encoder,
-                plan: plan,
-                particles: [staleCPUState],
-                deltaTime: 1,
-                gravity: .zero,
-                emitterEntity: emitter
+                batch: RenderParticleSimulationBatch(emitterEntity: emitter,
+                    plan: plan,
+                    particles: [staleCPUState],
+                    gravity: .zero),
+                deltaTime: 1
             )
         )
         let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
@@ -1252,11 +1250,9 @@ struct RenderBackendGPUSmokeTests {
             _ = try #require(
                 try renderer.encodeParticleSimulationPass(
                     encoder: encoder,
-                    plan: plan,
-                    particles: [resident],
-                    deltaTime: 0,
-                    gravity: .zero,
-                    emitterEntity: emitter
+                    batch: RenderParticleSimulationBatch(emitterEntity: emitter,
+                        plan: plan,particles: [resident],gravity: .zero),
+                    deltaTime: 0
                 )
             )
             let commandBuffer = try encoder.finish()
@@ -1267,12 +1263,12 @@ struct RenderBackendGPUSmokeTests {
         let resources = try #require(
             try renderer.encodeParticleSimulationPass(
                 encoder: encoder,
-                plan: plan,
-                particles: [],
-                deltaTime: 0,
-                gravity: .zero,
-                spawnParticles: [spawned],
-                emitterEntity: emitter
+                batch: RenderParticleSimulationBatch(emitterEntity: emitter,
+                    plan: plan,
+                    particles: [],
+                    spawnParticles: [spawned],
+                    gravity: .zero),
+                deltaTime: 0
             )
         )
         let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)

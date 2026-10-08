@@ -39,6 +39,7 @@ struct VulkanShaderModuleRecord {
     let module: VkShaderModule
     let stage: ShaderStage
     let entryPoint: String
+    let specializationConstants: [ShaderSpecializationConstant]
 }
 
 struct VulkanGraphicsPipelineRecord {

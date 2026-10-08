@@ -62,6 +62,8 @@ public protocol RHIBackend: AnyObject {
     // MARK: Immediate data transfer (host-visible / shared storage)
 
     func uploadBufferData(_ buffer: Buffer, offset: Int, data: Data) throws
+    /// Synchronous readback of previously submitted buffer contents.
+    func readBufferData(_ buffer: Buffer, offset: Int, into destination: UnsafeMutableRawBufferPointer) throws
     func uploadTextureData(
         _ texture: Texture,
         data: Data,
@@ -110,6 +112,9 @@ public protocol RHIBackend: AnyObject {
 }
 
 public extension RHIBackend {
+    func readBufferData(_ buffer: Buffer, offset: Int, into destination: UnsafeMutableRawBufferPointer) throws {
+        throw RHIError.unsupportedFeature("buffer readback is not implemented by this backend")
+    }
     func registerBindingLayout(_ handle: BindingLayout, descriptor: BindingLayoutDescriptor) throws {}
     func registerPipelineLayout(_ handle: PipelineLayout, descriptor: PipelineLayoutDescriptor) throws {}
     func createAccelerationStructure(_ handle: AccelerationStructure, descriptor: AccelerationStructureDescriptor) throws {

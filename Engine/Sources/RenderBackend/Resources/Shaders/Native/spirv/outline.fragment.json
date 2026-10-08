@@ -151,6 +151,12 @@
         }
       }
     ],
+    "specializationConstants": [],
+    "threadgroupSpecialization": {
+      "x": null,
+      "y": null,
+      "z": null
+    },
     "pushConstants": []
   },
   "compiler": "Slang 2026.19"

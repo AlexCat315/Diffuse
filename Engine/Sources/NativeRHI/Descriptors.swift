@@ -160,6 +160,7 @@ public struct ShaderModuleDescriptor: Sendable {
     public var format: ShaderFormat
     public var code: Data
     public var threadgroupSize = ThreadgroupSize()
+    public var specializationConstants: [ShaderSpecializationConstant] = []
     public var entryPoint: String
 
     public init(

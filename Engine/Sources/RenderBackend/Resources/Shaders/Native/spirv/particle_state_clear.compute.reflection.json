@@ -1,0 +1,625 @@
+{
+  "version": "1.1",
+  "parameters": [
+    {
+      "name": "particleWorkgroupSize",
+      "binding": {
+        "kind": "specializationConstant",
+        "index": 0
+      },
+      "type": {
+        "kind": "scalar",
+        "scalarType": "uint32",
+        "sizes": [
+          {
+            "kind": "specializationConstant",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "uniforms",
+      "binding": {
+        "kind": "descriptorTableSlot",
+        "index": 0
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "ParticleStateMaintenanceUniforms",
+          "fields": [
+            {
+              "name": "params",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "uint32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 16,
+              "alignment": 16
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "descriptorTableSlot",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "ParticleStateMaintenanceUniforms",
+            "fields": [
+              {
+                "name": "params",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "uint32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 16
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 16,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "descriptorTableSlot",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "particles",
+      "binding": {
+        "kind": "descriptorTableSlot",
+        "index": 1
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "structuredBuffer",
+        "access": "readWrite",
+        "resultType": {
+          "kind": "struct",
+          "name": "ParticleSimState",
+          "fields": [
+            {
+              "name": "position_lifetime",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "velocity_age",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 16,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "size_rotation",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 32,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "color",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 48,
+                "size": 16,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "params",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "uint32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 64,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 80,
+              "alignment": 16
+            }
+          ]
+        },
+        "sizes": [
+          {
+            "kind": "descriptorTableSlot",
+            "value": 1
+          }
+        ]
+      }
+    }
+  ],
+  "globalScope": {
+    "kind": "none",
+    "parameters": [
+      {
+        "name": "particleWorkgroupSize",
+        "binding": {
+          "kind": "specializationConstant",
+          "index": 0
+        },
+        "type": {
+          "kind": "scalar",
+          "scalarType": "uint32",
+          "sizes": [
+            {
+              "kind": "specializationConstant",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "uniforms",
+        "binding": {
+          "kind": "descriptorTableSlot",
+          "index": 0
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "ParticleStateMaintenanceUniforms",
+            "fields": [
+              {
+                "name": "params",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "uint32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 16
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "descriptorTableSlot",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "ParticleStateMaintenanceUniforms",
+              "fields": [
+                {
+                  "name": "params",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "uint32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 16,
+                  "alignment": 16
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 16,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "descriptorTableSlot",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "particles",
+        "binding": {
+          "kind": "descriptorTableSlot",
+          "index": 1
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "structuredBuffer",
+          "access": "readWrite",
+          "resultType": {
+            "kind": "struct",
+            "name": "ParticleSimState",
+            "fields": [
+              {
+                "name": "position_lifetime",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "velocity_age",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 16,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "size_rotation",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 32,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "color",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 48,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "params",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "uint32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 64,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 80,
+                "alignment": 16
+              }
+            ]
+          },
+          "sizes": [
+            {
+              "kind": "descriptorTableSlot",
+              "value": 1
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "entryPoints": [
+    {
+      "name": "particleClear",
+      "stage": "compute",
+      "scope": {
+        "kind": "none",
+        "parameters": [
+          {
+            "name": "gid",
+            "semanticName": "SV_DISPATCHTHREADID",
+            "type": {
+              "kind": "vector",
+              "elementCount": 3,
+              "elementType": {
+                "kind": "scalar",
+                "scalarType": "uint32"
+              },
+              "sizes": []
+            }
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "name": "gid",
+          "semanticName": "SV_DISPATCHTHREADID",
+          "type": {
+            "kind": "vector",
+            "elementCount": 3,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "uint32"
+            },
+            "sizes": []
+          }
+        }
+      ],
+      "threadGroupSize": [
+        0,
+        1,
+        1
+      ],
+      "bindings": [
+        {
+          "name": "particleWorkgroupSize",
+          "binding": {
+            "kind": "specializationConstant",
+            "index": 0,
+            "used": 1
+          }
+        },
+        {
+          "name": "uniforms",
+          "binding": {
+            "kind": "descriptorTableSlot",
+            "index": 0,
+            "used": 1
+          }
+        },
+        {
+          "name": "particles",
+          "binding": {
+            "kind": "descriptorTableSlot",
+            "index": 1,
+            "used": 1
+          }
+        }
+      ]
+    }
+  ],
+  "bindlessSpaceIndex": 1
+}

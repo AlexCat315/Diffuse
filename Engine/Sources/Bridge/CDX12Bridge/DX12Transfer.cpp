@@ -29,6 +29,16 @@ int32_t grhi_dx12_upload_buffer(GRHI_DX12Device* d, uint32_t id, uint64_t offset
     if (target.upload) { void* pointer = nullptr; D3D12_RANGE read{0,0}; check(target.native->Map(0,&read,&pointer), "Map upload buffer"); memcpy((char*)pointer+offset,bytes,count); D3D12_RANGE written{SIZE_T(offset),SIZE_T(offset+count)}; target.native->Unmap(0,&written); return; }
     auto staging = makeBuffer(s,count,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_FLAG_NONE,D3D12_RESOURCE_STATE_GENERIC_READ); void* pointer = nullptr; D3D12_RANGE read{0,0}; check(staging.native->Map(0,&read,&pointer), "Map staging"); memcpy(pointer,bytes,count); staging.native->Unmap(0,nullptr);
     std::unique_ptr<GRHI_DX12Encoder> e(grhi_dx12_begin(d,0)); require(bool(e), "begin upload failed"); auto previous = target.state; transition(*e,target,D3D12_RESOURCE_STATE_COPY_DEST); e->list->CopyBufferRegion(target.native.Get(),offset,staging.native.Get(),0,count); transition(*e,target,previous); finishImmediate(e.get()); }); }
+int32_t grhi_dx12_read_buffer(GRHI_DX12Device* d, uint32_t id, uint64_t offset, void* data, size_t count) { return run(d, [&](State& s) {
+    auto& source = s.buffers.at(id); require(offset <= source.size && count <= source.size-offset, "buffer readback bounds"); if (!count) return;
+    require(data != nullptr, "missing buffer readback destination");
+    auto staging = makeBuffer(s,count,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_FLAG_NONE,D3D12_RESOURCE_STATE_COPY_DEST);
+    std::unique_ptr<GRHI_DX12Encoder> e(grhi_dx12_begin(d,0)); require(bool(e), "begin buffer readback failed");
+    auto previous = source.state; transition(*e,source,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    e->list->CopyBufferRegion(staging.native.Get(),0,source.native.Get(),offset,count); transition(*e,source,previous); finishImmediate(e.get());
+    void* pointer = nullptr; D3D12_RANGE read{0,SIZE_T(count)}; check(staging.native->Map(0,&read,&pointer), "Map buffer readback"); memcpy(data,pointer,count);
+    D3D12_RANGE written{0,0}; staging.native->Unmap(0,&written);
+}); }
 int32_t grhi_dx12_transfer_texture(GRHI_DX12Device* d, uint32_t id, uint32_t width, uint32_t height, uint32_t rowBytes, uint32_t mip, uint32_t layer, void* data, size_t count, uint32_t upload) { return run(d, [&](State& s) {
     auto& texture = s.textures.at(id); auto& t = texture.texture; uint64_t rowSize = uint64_t(width)*pixelBytes(t.format);
     auto desc = texture.native->GetDesc();
