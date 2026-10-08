@@ -7,7 +7,7 @@ import SIMDCompat
 /// Scene renderer recorded entirely through NativeRHI. The initial migration
 /// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
 /// HDR sky/tonemap, stylized materials/outline/paper, r5 post effects, temporal
-/// history/cache and the grid.
+/// history/cache, the grid and CPU-authored particles with GPU compaction/indirect draws.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
@@ -19,6 +19,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     private let hdrPasses: NativeHDRPasses
     private let grid: NativeEditorGridPass
     private let post: NativePostPasses
+    private let particles: NativeParticlePass
     private var frameState = RenderTemporalState()
     public var lastFrameUsedOpaqueCache: Bool { frameState.cacheHit }
     private let surface: RenderSurfaceDescriptor?
@@ -39,6 +40,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         hdrPasses = try NativeHDRPasses(device: device)
         grid = try NativeEditorGridPass(device: device)
         post = try NativePostPasses(device: device)
+        particles = try NativeParticlePass(device: device)
     }
     deinit { targets?.destroy(device: device) }
     public func initialize() { Logger.renderer.info("NativeRenderer ready (\(device.deviceName))") }
@@ -76,6 +78,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         let shadowTiles = try shadows.prepare(packet: packet, store: meshes, plan: shadowPlan, skin: skin, deformables: dynamic.geometries)
         let prepared = try meshPass.prepare(packet: packet, store: meshes,
             matrices: matrices, depthPrepass: hasDepth, hdr: hdr, lighting: lightBindings, skin: skin, deformables: dynamic.geometries)
+        let particleFrame = try particles.prepare(scene: packet.scene,matrices: matrices,hdr: hdr,into: commands)
         let opaqueDraws = prepared.draws.filter { $0.batch.key.mode != .blend }
         let transparentDraws = prepared.draws.filter { $0.batch.key.mode == .blend }.sorted { $0.batch.distance > $1.batch.distance }
         let image = surface == nil ? nil : try device.acquireSwapchainImage()
@@ -160,7 +163,11 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                 guard let input = post.targets?.ldr else { throw RHIError.outOfMemory }
                 try post.encode(kind: kind,input: input,secondary: input,output: color,
                     uniforms: SIMD4<Float>(1/Float(targets.size.width),1/Float(targets.size.height),0,0),size: packet.drawableSize,into: commands)
-            case .particles, .viewportResolve: continue
+            case .particles:
+                guard let particleFrame else { continue }
+                particles.encode(particleFrame,size: packet.drawableSize,color: current,depth: targets.depth,into: commands)
+                draws = particleFrame.draws.count
+            case .viewportResolve: continue
             case .outline:
                 let outlines = opaqueDraws.filter { $0.outlinePipeline != nil }
                 meshPass.encode(draws: outlines,size: packet.drawableSize,color: RenderColorTarget(texture: current,loadAction: .load),
@@ -200,6 +207,10 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         stats.deformableRejectedMeshCount = dynamic.report.rejectedMeshCount
         stats.deformableUploadedBytes = dynamic.report.uploadedBytes
         stats.deformableUploadNS = deformableTime
+        stats.gpuParticleCullBatchCount = particleFrame?.draws.count ?? 0
+        stats.gpuParticleCullCandidateCount = particleFrame?.candidates ?? 0
+        stats.gpuParticleCullDispatchWorkgroups = particleFrame?.draws.count ?? 0
+        stats.gpuParticleIndirectDrawCount = particleFrame?.draws.count ?? 0
         lastFrameStats = stats; lastError = nil
     }
 
