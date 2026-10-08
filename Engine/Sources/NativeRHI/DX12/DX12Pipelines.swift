@@ -22,6 +22,7 @@ extension DX12Device {
     public func createGraphicsPipeline(_ handle: GraphicsPipeline, descriptor: GraphicsPipelineDescriptor) throws {
         let arena = DX12Arguments()
         var desc = GRHI_GraphicsDesc()
+        desc.sample_count = try rhiCount(descriptor.sampleCount)
         desc.layout = descriptor.layout.id; desc.vertex = descriptor.vertex.id; desc.fragment = descriptor.fragment?.id ?? 0
         desc.raster = descriptor.rasterization.dx12(primitive: descriptor.primitive)
         desc.depth = depth(format: descriptor.depthFormat, stencil: descriptor.stencilFormat, state: descriptor.depthStencil)
@@ -30,7 +31,7 @@ extension DX12Device {
             let buffers = try vertex.bufferLayouts.map { try GRHI_VertexBufferLayout(stride: rhiCount($0.stride), per_instance: $0.stepRate == .perInstance ? 1 : 0) }
             let attributes = try vertex.attributes.map { a -> GRHI_VertexAttribute in
                 let format: UInt32
-                switch a.format { case .float2: format = 0; case .float3: format = 1; case .float4: format = 2; case .float: format = 3 }
+                switch a.format { case .float2: format = 0; case .float3: format = 1; case .float4: format = 2; case .float: format = 3; case .unorm8x4: format = 4 }
                 return try GRHI_VertexAttribute(location: a.location, format: format, buffer: a.bufferIndex, offset: rhiCount(a.offset), semantic_index: a.semantic.index, semantic: arena.string(a.semantic.name))
             }
             desc.vertex_buffers = arena.store(buffers); desc.vertex_buffer_count = try rhiCount(buffers.count)
@@ -40,6 +41,7 @@ extension DX12Device {
     }
     public func createMeshPipeline(_ handle: MeshPipeline, descriptor: MeshPipelineDescriptor) throws {
         let arena = DX12Arguments(); var desc = GRHI_GraphicsDesc()
+        desc.sample_count = 1
         desc.layout = descriptor.layout.id; desc.mesh = descriptor.mesh.id; desc.task = descriptor.task?.id ?? 0; desc.fragment = descriptor.fragment?.id ?? 0
         desc.raster = descriptor.rasterization.dx12(primitive: .triangleList)
         desc.depth = depth(format: descriptor.depthFormat, stencil: nil, state: descriptor.depthStencil)

@@ -101,7 +101,7 @@ public struct TextureDescriptor: Sendable {
 }
 
 /// One 2D slice of a texture mip. Cube faces use layer indices 0...5.
-/// Immediate transfers start at (0, 0) in this subresource.
+/// Upload regions are relative to this mip; readback starts at (0, 0).
 public struct TextureSubresource: Hashable, Sendable {
     public var mipLevel: Int = 0
     public var layer: Int = 0
@@ -380,6 +380,7 @@ public struct ColorAttachmentDescriptor: Sendable {
 }
 
 public struct GraphicsPipelineDescriptor: Sendable {
+    public var sampleCount: Int = 1
     public var layout: PipelineLayout
     public var vertex: ShaderModule
     public var fragment: ShaderModule?

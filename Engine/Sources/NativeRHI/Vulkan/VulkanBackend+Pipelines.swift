@@ -110,7 +110,7 @@ extension VulkanBackend {
         viewport.scissorCount = 1
         var samples = VkPipelineMultisampleStateCreateInfo()
         samples.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO
-        samples.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+        samples.rasterizationSamples = try VulkanFormats.vkSampleCount(descriptor.sampleCount)
         var depth = VkPipelineDepthStencilStateCreateInfo()
         depth.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO
         if let state = descriptor.depthStencil, descriptor.depthFormat != nil {

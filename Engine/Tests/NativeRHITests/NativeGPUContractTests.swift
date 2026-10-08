@@ -24,7 +24,7 @@ final class NativeGPUContractTests: XCTestCase {
         for mip in 0..<4 {
             let width = max(1,8 >> mip), height = max(1,4 >> mip)
             let pixels = [SIMD4<Float>](repeating: colors[mip], count: width*height)
-            try device.uploadTextureData(image, data: pixels.withUnsafeBytes { Data($0) }, width: width, height: height,
+            try device.uploadTextureData(image, data: pixels.withUnsafeBytes { Data($0) }, region: .init(width: width,height: height),
                 bytesPerRow: width*16, subresource: .init(mipLevel: mip))
         }
         let sampler = try device.makeSampler(SamplerDescriptor(mipFilter: .linear))
@@ -54,7 +54,7 @@ final class NativeGPUContractTests: XCTestCase {
             for mip in 0..<4 {
                 let width = max(1,8 >> mip), height = max(1,4 >> mip)
                 let bytes = Data(repeating: UInt8(17 + layer*40 + mip*5), count: width*height*8)
-                try device.uploadTextureData(texture, data: bytes, width: width, height: height,
+                try device.uploadTextureData(texture, data: bytes, region: .init(width: width,height: height),
                     bytesPerRow: width*8, subresource: .init(mipLevel: mip, layer: layer))
             }
         }
@@ -70,14 +70,14 @@ final class NativeGPUContractTests: XCTestCase {
             }
         }
         for subresource in [TextureSubresource(mipLevel: -1), .init(mipLevel: 4), .init(layer: -1), .init(layer: 2)] {
-            XCTAssertThrowsError(try device.uploadTextureData(texture, data: Data(count: 256), width: 1, height: 1,
+            XCTAssertThrowsError(try device.uploadTextureData(texture, data: Data(count: 256), region: .init(width: 1,height: 1),
                 bytesPerRow: 8, subresource: subresource))
             var bytes = Data(count: 8)
             XCTAssertThrowsError(try bytes.withUnsafeMutableBytes {
                 try device.readTextureData(texture, width: 1, height: 1, bytesPerRow: 8, subresource: subresource, into: $0)
             })
         }
-        XCTAssertThrowsError(try device.uploadTextureData(texture, data: Data(count: 256), width: 8, height: 4,
+        XCTAssertThrowsError(try device.uploadTextureData(texture, data: Data(count: 256), region: .init(width: 8,height: 4),
             bytesPerRow: 64, subresource: .init(mipLevel: 1)))
     }
     #if canImport(Metal)
@@ -209,7 +209,7 @@ final class NativeGPUContractTests: XCTestCase {
         let pipeline = try device.makeComputePipeline(ComputePipelineDescriptor(layout: layout, shader: device.makeShaderModule(artifact.moduleDescriptor())))
         let image = try device.makeTexture(TextureDescriptor(width: 1, height: 1, format: .rgba32Float, usage: .sampled))
         var expected = SIMD4<Float>(0.25, 0.5, 0.75, 1)
-        try withUnsafeBytes(of: &expected) { try device.uploadTextureData(image, data: Data($0), width: 1, height: 1, bytesPerRow: 16) }
+        try withUnsafeBytes(of: &expected) { try device.uploadTextureData(image, data: Data($0), region: .init(width: 1,height: 1), bytesPerRow: 16) }
         let sampler = try device.makeSampler(SamplerDescriptor(minFilter: .nearest, magFilter: .nearest))
         let output = try device.makeBuffer(BufferDescriptor(size: 16, usage: [.storageWrite, .transferSource]))
         let set = try device.makeBindingSet(layout: binding, descriptor: BindingSetDescriptor(entries: [

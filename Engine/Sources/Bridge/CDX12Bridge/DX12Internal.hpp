@@ -53,7 +53,7 @@ struct Shader { uint32_t stage; std::vector<uint8_t> bytes; D3D12_SHADER_BYTECOD
 struct Root { UINT index; uint32_t type, stage; };
 struct Layout { ComPtr<ID3D12RootSignature> native; std::vector<uint32_t> sets; std::map<std::pair<uint32_t,uint32_t>,Root> roots; std::map<uint32_t,std::pair<Root,uint32_t>> constants; };
 struct BindingSet { uint32_t layout; std::vector<GRHI_BindingValue> values; std::map<uint32_t,UINT> descriptors; };
-struct Pipeline { ComPtr<ID3D12PipelineState> native; uint32_t layout; GRHI_RasterDesc raster{}; std::vector<uint32_t> strides; std::vector<DXGI_FORMAT> colors; DXGI_FORMAT depth = DXGI_FORMAT_UNKNOWN; bool compute = false, mesh = false; };
+struct Pipeline { ComPtr<ID3D12PipelineState> native; uint32_t layout; GRHI_RasterDesc raster{}; std::vector<uint32_t> strides; std::vector<DXGI_FORMAT> colors; DXGI_FORMAT depth = DXGI_FORMAT_UNKNOWN; uint32_t samples = 1; bool compute = false, mesh = false; };
 struct Acceleration { Resource result, scratch, instances; std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometry; std::vector<GRHI_Instance> authored; bool top = false; };
 struct Queue { ComPtr<ID3D12CommandQueue> native; ComPtr<ID3D12Fence> fence; uint64_t value = 0; };
 struct Surface { ComPtr<IDXGISwapChain3> native; HWND window = nullptr; UINT width = 0, height = 0; bool vsync = true; std::vector<uint32_t> ids; };
@@ -94,6 +94,7 @@ void retireEncoder(GRHI_DX12Encoder*, GRHI_DX12Completion = nullptr, void* = nul
 void textureCopy(GRHI_DX12Encoder&, Resource&, uint64_t, uint32_t, Resource&, uint32_t, uint32_t, bool);
 void buildAcceleration(GRHI_DX12Encoder&, uint32_t);
 void graphicsPipeline(State&, uint32_t, const GRHI_GraphicsDesc&);
+void validateSamples(State&, DXGI_FORMAT, uint32_t);
 }
 struct GRHI_DX12Device { std::shared_ptr<grhi::State> state; };
 struct GRHI_DX12Encoder {
@@ -107,6 +108,9 @@ struct GRHI_DX12Encoder {
     std::map<grhi::Resource*,D3D12_RESOURCE_STATES> states;
     std::vector<DXGI_FORMAT> colors;
     DXGI_FORMAT depth = DXGI_FORMAT_UNKNOWN;
+    uint32_t samples = 1;
+    std::vector<GRHI_RenderColor> renderColors;
+    uint32_t discardDepth = 0;
 };
 namespace grhi {
 template<typename F> int32_t run(GRHI_DX12Device* d, F f) {

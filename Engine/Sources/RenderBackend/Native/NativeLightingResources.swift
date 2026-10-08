@@ -38,7 +38,7 @@ final class NativeLightingResources {
         do {
             for (index,level) in levels.enumerated() {
                 try device.uploadTextureData(texture, data: level.halfRGBA.withUnsafeBytes { Data($0) },
-                    width: level.width, height: level.height, bytesPerRow: level.width*8, subresource: .init(mipLevel: index))
+                    region: .init(width: level.width,height: level.height), bytesPerRow: level.width*8, subresource: .init(mipLevel: index))
             }
             environment = texture
         } catch { device.destroy(texture); throw error }

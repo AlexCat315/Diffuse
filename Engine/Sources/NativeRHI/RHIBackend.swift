@@ -67,8 +67,7 @@ public protocol RHIBackend: AnyObject {
     func uploadTextureData(
         _ texture: Texture,
         data: Data,
-        width: Int,
-        height: Int,
+        region: TextureUploadRegion,
         bytesPerRow: Int,
         subresource: TextureSubresource
     ) throws

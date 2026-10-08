@@ -45,6 +45,14 @@ func rhiTextureSubresourceExtent(_ subresource: TextureSubresource, width: Int, 
     return (max(1, width >> subresource.mipLevel), max(1, height >> subresource.mipLevel))
 }
 
+func rhiTextureUploadBytes(region: TextureUploadRegion, rowBytes: Int, format: TextureFormat,
+    textureWidth: Int, textureHeight: Int, capacity: Int) throws -> Int {
+    try rhiRequire(region.origin.x >= 0 && region.origin.y >= 0
+        && region.origin.x <= textureWidth && region.origin.y <= textureHeight, "texture upload origin is out of bounds")
+    return try rhiTextureTransferBytes(width: region.width, height: region.height, rowBytes: rowBytes, format: format,
+        textureWidth: textureWidth - region.origin.x, textureHeight: textureHeight - region.origin.y, capacity: capacity)
+}
+
 func rhiColorTextureCopyExtent(width: Int, height: Int,
     source: (width: Int, height: Int, format: TextureFormat),
     destination: (width: Int, height: Int, format: TextureFormat)) throws {

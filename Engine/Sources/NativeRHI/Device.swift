@@ -108,6 +108,7 @@ public final class Device {
             if descriptor.dimension == .texture2D { try rhiRequire(descriptor.layers == 1, "use texture2DArray for array layers") }
             if descriptor.dimension == .cube { try rhiRequire(descriptor.layers == 1 && descriptor.width == descriptor.height, "cube textures require six square faces in one cube") }
             try rhiRequire(descriptor.format != .invalid, "texture format must be valid")
+            try rhiValidateTextureSamples(descriptor)
             let handle = Texture(id: identifiers.next())
             try backend.createTexture(handle, descriptor: descriptor)
             return handle
@@ -222,6 +223,7 @@ public final class Device {
             }
             try rhiRequire(interfaces.pipelines[descriptor.layout.id] != nil, "unknown pipeline layout")
             guard descriptor.stencilFormat == nil else { throw RHIError.unsupportedFeature("stencil pipeline state is not implemented") }
+            try rhiValidateSampleCount(descriptor.sampleCount)
             let handle = GraphicsPipeline(id: identifiers.next())
             try backend.createGraphicsPipeline(handle, descriptor: descriptor)
             interfaces.uses[handle.id] = PipelineUse(layout: descriptor.layout, kind: .graphics)
@@ -543,14 +545,13 @@ public final class Device {
     public func uploadTextureData(
         _ texture: Texture,
         data: Data,
-        width: Int,
-        height: Int,
+        region: TextureUploadRegion,
         bytesPerRow: Int,
         subresource: TextureSubresource = .init()
     ) throws {
         try locked {
             try backend.uploadTextureData(
-                texture, data: data, width: width, height: height, bytesPerRow: bytesPerRow, subresource: subresource
+                texture, data: data, region: region, bytesPerRow: bytesPerRow, subresource: subresource
             )
             planner.recordImmediateWrite(ResourceRef(kind: .texture, id: texture.id))
         }
