@@ -88,6 +88,7 @@ assets_backup_*/
 /build/
 /packages/*/build/
 /CMakeFiles/
-
+.build/
+.build-*/
 
 vendor/
