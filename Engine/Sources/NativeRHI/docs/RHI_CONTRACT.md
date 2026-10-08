@@ -14,7 +14,8 @@ Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上
 | --- | --- | --- | --- |
 | Buffer / Texture / Sampler、上传与读回 | 本机验证 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
 | Raster / Compute、绑定、indirect、copy | 本机验证核心路径 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
-| 纹理局部上传、打包顶点颜色、MSAA color resolve | 本机验证；见 [UI 基础验证](NATIVE_UI_VALIDATION.md) | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
+| 纹理局部上传、打包顶点颜色、MSAA color resolve | 本机验证；见 [UI 绘制验证](NATIVE_UI_VALIDATION.md) | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
+| GuavaUI Native DrawList 绘制器 | 30 组画面对照与资源生命周期验证；窗口宿主待接入 | SPIR-V 离线产物已生成，宿主与 GPU 待验证 | 共用绘制路径；DXIL 产物与 GPU 待验证 |
 | 窗口呈现与 resize | 本机验证 | Win32 / Xlib / Wayland 原生实现，待验证 | HWND swapchain 实现，待验证 |
 | 帧上传、延迟销毁、跨队列同步 | 本机验证 | 原生实现，独立 queue family 待验证 | 原生实现，待验证 |
 | Mesh / task | Mesh 已验证；task 关闭 | EXT 管线与直接 dispatch 实现，设备功能链控制，GPU 待验证 | MS / AS 管线与直接 dispatch 实现，GPU 待验证 |
@@ -34,10 +35,11 @@ Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上
 - Pipeline layout 缓存按有序 set layouts 与 push constant 声明共同建 key。资源绑定和小常量会在提交前检查是否匹配当前管线。
 - `PushConstantRange` 声明 stage、逻辑 slot、字节数。slot 和 stage 分别唯一；每个 stage 最多一个块，整个布局最多 128 字节，大小须为四字节倍数。Metal 使用 buffer 参数；DX12 使用 space0 的 b-register root constants；Vulkan 每个 stage 的 SPIR-V push block 从 offset 0 开始，以不同 stage mask 允许范围重叠。
 - Slang fixture 使用显式 register / Vulkan binding，目标反射决定实际 slot。工具拒绝目标 slot 冲突，不猜测跨后端 register 映射。
+- `BindingLayoutDescriptor(reflecting:)` 合并多个 stage 的 visibility，保留 buffer ABI，按 slot 排序；单 shader 内重复 slot、非零 space、同 slot 的 type 或 buffer ABI 冲突被拒绝。
 - Metal 当前直接绑定 set 0；buffer slot 24...31 留给 vertex inputs。Vulkan 和 DX12 支持多个 set；DX12 set index 对应 register space。DX12 root signature 仍受原生 64 DWORD 限制。
 - `VertexAttribute.semantic` 保存 DXIL input semantic，默认 TEXCOORD + location。使用 POSITION 等 HLSL 语义时，调用方应显式配置；Metal / Vulkan 使用 location。
 
-当前 graphics 不支持 stencil pipeline state；纹理采用单采样。Depth、MRT、blend、raster、vertex/index 和直接/间接 draw 使用各自的原生描述。
+当前 graphics 不支持 stencil pipeline state。Depth、MRT、blend、raster、vertex/index、MSAA attachment / color resolve 和直接/间接 draw 使用各自的原生描述。
 
 ## 资源与帧生命周期
 
@@ -61,6 +63,8 @@ try device.waitUntilIdle() // 调试、测试或停机
 MSAA texture 当前要求一个 2D layer、一个 mip，并具备 color/depth attachment usage；不支持 multisampled shader binding，须先 resolve 再采样。sample count 接受 1/2/4/8/16/32/64；硬件与格式不支持的组合明确报错，不降级。`GraphicsPipelineDescriptor.sampleCount` 默认 1，必须与所有 source attachments 一致；extent 和格式也在录制时检查。`RenderColorTarget.resolveTexture` 默认 nil；非 nil 时要求匹配 extent/format 的单采样 color target，附件与 resolve destination 必须各不相同。`store` 控制保留 source attachment，resolve destination 总会保存结果。Resolve target 纳入 planner 的 attachment writes，后续采样、copy 和跨 queue 使用均建立依赖。Vulkan 为多 mip render target 单独创建 mip0 attachment view，采样 view 保留完整 mip 链。立即上传、读回及普通 texture copy 拒绝 MSAA source，须读 resolved image。Depth resolve 尚未实现。
 
 `VertexFormat.unorm8x4` 对应四个紧密排列的 UInt8，顶点取值归一化到 0…1；Metal 使用 uchar4Normalized，Vulkan 使用 R8G8B8A8_UNORM，DX12 使用 R8G8B8A8_UNORM。可直接读取 GuavaUI 的 RGBA 打包颜色，无须展开成四个 Float。
+
+正常帧的 `CopyPassEncoder.uploadBufferToTexture` 接收 `TextureBufferUpload`，指定源 buffer、bytesPerRow、texture、矩形 region，以及默认零的 buffer offset / mip / layer。调用方的 source storage 必须保留到 submit；`uploadTransient` 由 frame ring 保留到 GPU 完成。上传可以在同一 command buffer 随后供 UI 采样，planner 记录 transfer write 依赖。`TextureResource` 为跨 renderer / viewport 的纹理提供强引用所有权；它不会让一个设备创建的 texture 可供其他设备使用。
 
 规划或录制失败且尚未排入 GPU 的工作会回滚状态和 timeline。一次前端提交若已有部分工作排队后失败，设备阻止继续提交，须重建，避免错误复用状态。GPU completion 错误在 `waitUntilIdle` 上抛出。
 

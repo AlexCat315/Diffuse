@@ -28,22 +28,4 @@ enum NativeShaderLibrary {
         guard artifact.stage == stage else { throw RHIError.layoutMismatch("artifact stage mismatch: \(name)") }
         return artifact
     }
-    static func layout(artifacts: [ShaderArtifact]) throws -> BindingLayoutDescriptor {
-        var entries: [UInt32: BindingLayoutEntry] = [:]
-        for artifact in artifacts {
-            for binding in artifact.interface.bindings {
-                guard binding.space == 0 else { throw RHIError.layoutMismatch("native renderer expects space0") }
-                if var existing = entries[binding.slot] {
-                    guard existing.type == binding.type, existing.buffer == binding.buffer else {
-                        throw RHIError.layoutMismatch("inconsistent reflected resource at \(binding.slot)")
-                    }
-                    existing.visibility.formUnion(ShaderVisibility(artifact.stage)); entries[binding.slot] = existing
-                } else {
-                    var entry = BindingLayoutEntry(slot: binding.slot, type: binding.type, visibility: ShaderVisibility(artifact.stage))
-                    entry.buffer = binding.buffer; entries[binding.slot] = entry
-                }
-            }
-        }
-        return BindingLayoutDescriptor(entries: entries.values.sorted { $0.slot < $1.slot })
-    }
 }

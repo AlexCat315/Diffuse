@@ -334,36 +334,29 @@ private struct MetalPassEncoder {
 
     private func bindRenderBindingSet(_ handle: BindingSet, encoder: MTLRenderCommandEncoder) throws {
         guard let bindingSet = registries.bindingSets[handle.id] else { throw RHIError.invalidArgument("unknown render binding set") }
+        let active: ShaderVisibility = currentMeshPipeline == nil ? .graphics : [.task, .mesh, .fragment]
         for entry in bindingSet.entries {
-            let stages = entry.visibility.stages.filter { currentMeshPipeline == nil ? ($0 == .vertex || $0 == .fragment) : ($0 == .task || $0 == .mesh || $0 == .fragment) }
-            for stage in stages {
-                try bindEntry(entry,
-                    buffer: { buffer, offset in
-                        switch stage {
-                        case .vertex: encoder.setVertexBuffer(buffer, offset: offset, index: Int(entry.slot))
-                        case .fragment: encoder.setFragmentBuffer(buffer, offset: offset, index: Int(entry.slot))
-                        case .mesh: encoder.setMeshBuffer(buffer, offset: offset, index: Int(entry.slot))
-                        case .task: encoder.setObjectBuffer(buffer, offset: offset, index: Int(entry.slot))
-                        case .compute: break
-                        }
-                    }, texture: { texture in
-                        switch stage {
-                        case .vertex: encoder.setVertexTexture(texture, index: Int(entry.slot))
-                        case .fragment: encoder.setFragmentTexture(texture, index: Int(entry.slot))
-                        case .mesh: encoder.setMeshTexture(texture, index: Int(entry.slot))
-                        case .task: encoder.setObjectTexture(texture, index: Int(entry.slot))
-                        case .compute: break
-                        }
-                    }, sampler: { sampler in
-                        switch stage {
-                        case .vertex: encoder.setVertexSamplerState(sampler, index: Int(entry.slot))
-                        case .fragment: encoder.setFragmentSamplerState(sampler, index: Int(entry.slot))
-                        case .mesh: encoder.setMeshSamplerState(sampler, index: Int(entry.slot))
-                        case .task: encoder.setObjectSamplerState(sampler, index: Int(entry.slot))
-                        case .compute: break
-                        }
-                    })
-            }
+            let stages = entry.visibility.intersection(active)
+            guard !stages.isEmpty else { continue }
+            // Resolve and validate once, then bind to every visible stage.
+            // Avoid allocating stage arrays for every entry of every draw.
+            try bindEntry(entry,
+                buffer: { buffer, offset in
+                    if stages.contains(.vertex) { encoder.setVertexBuffer(buffer, offset: offset, index: Int(entry.slot)) }
+                    if stages.contains(.fragment) { encoder.setFragmentBuffer(buffer, offset: offset, index: Int(entry.slot)) }
+                    if stages.contains(.mesh) { encoder.setMeshBuffer(buffer, offset: offset, index: Int(entry.slot)) }
+                    if stages.contains(.task) { encoder.setObjectBuffer(buffer, offset: offset, index: Int(entry.slot)) }
+                }, texture: { texture in
+                    if stages.contains(.vertex) { encoder.setVertexTexture(texture, index: Int(entry.slot)) }
+                    if stages.contains(.fragment) { encoder.setFragmentTexture(texture, index: Int(entry.slot)) }
+                    if stages.contains(.mesh) { encoder.setMeshTexture(texture, index: Int(entry.slot)) }
+                    if stages.contains(.task) { encoder.setObjectTexture(texture, index: Int(entry.slot)) }
+                }, sampler: { sampler in
+                    if stages.contains(.vertex) { encoder.setVertexSamplerState(sampler, index: Int(entry.slot)) }
+                    if stages.contains(.fragment) { encoder.setFragmentSamplerState(sampler, index: Int(entry.slot)) }
+                    if stages.contains(.mesh) { encoder.setMeshSamplerState(sampler, index: Int(entry.slot)) }
+                    if stages.contains(.task) { encoder.setObjectSamplerState(sampler, index: Int(entry.slot)) }
+                })
         }
     }
 
@@ -465,19 +458,24 @@ private struct MetalPassEncoder {
                 encoder.copy(from: srcBuffer, sourceOffset: srcOffset,
                              to: dstBuffer, destinationOffset: dstOffset, size: size)
 
-            case .copyBufferToTexture(let buffer, let offset, let bytesPerRow, let texture, let width, let height):
-                guard let srcBuffer = registries.buffers[buffer.id],
-                      let dstTexture = registries.textures[texture.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
+            case .copyBufferToTexture(let upload):
+                guard let srcBuffer = registries.buffers[upload.buffer.id],
+                      let dstTexture = registries.textures[upload.texture.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
                 try rhiRequire(dstTexture.sampleCount == 1, "buffer texture copies require a single-sample texture")
-                let bytes = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: rhiColorFormat(dstTexture.pixelFormat), textureWidth: dstTexture.width, textureHeight: dstTexture.height, capacity: srcBuffer.length)
-                try rhiByteRange(offset: offset, size: bytes, capacity: srcBuffer.length)
+                let layers = dstTexture.textureType == .typeCube ? 6 : dstTexture.arrayLength
+                let extent = try rhiTextureSubresourceExtent(upload.subresource, width: dstTexture.width,
+                    height: dstTexture.height, mipLevels: dstTexture.mipmapLevelCount, layers: layers)
+                let bytes = try rhiTextureUploadBytes(region: upload.region, rowBytes: upload.bytesPerRow,
+                    format: rhiColorFormat(dstTexture.pixelFormat), textureWidth: extent.width,
+                    textureHeight: extent.height, capacity: srcBuffer.length)
+                try rhiByteRange(offset: upload.offset, size: bytes, capacity: srcBuffer.length)
                 encoder.copy(
-                    from: srcBuffer, sourceOffset: offset,
-                    sourceBytesPerRow: bytesPerRow,
-                    sourceBytesPerImage: bytesPerRow * height,
-                    sourceSize: MTLSize(width: width, height: height, depth: 1),
-                    to: dstTexture, destinationSlice: 0, destinationLevel: 0,
-                    destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
+                    from: srcBuffer, sourceOffset: upload.offset,
+                    sourceBytesPerRow: upload.bytesPerRow,
+                    sourceBytesPerImage: upload.bytesPerRow * upload.region.height,
+                    sourceSize: MTLSize(width: upload.region.width, height: upload.region.height, depth: 1),
+                    to: dstTexture, destinationSlice: upload.subresource.layer, destinationLevel: upload.subresource.mipLevel,
+                    destinationOrigin: MTLOrigin(x: upload.region.origin.x, y: upload.region.origin.y, z: 0)
                 )
 
             case .copyTextureToBuffer(let texture, let width, let height, let buffer, let offset, let bytesPerRow):

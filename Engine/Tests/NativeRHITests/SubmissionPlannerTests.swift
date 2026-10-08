@@ -5,6 +5,34 @@ import XCTest
 @testable import NativeRHI
 
 final class SubmissionPlannerTests: XCTestCase {
+    func testRepeatedRenderBindingsPreservePassAndQueueDependencies() throws {
+        let planner = SubmissionPlanner()
+        let set = BindingSet(id: 50)
+        let storage = Buffer(id: 4)
+        planner.registerBindingSetEntries(set.id, entries: [
+            BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: Buffer(id: 3))),
+            BindingSetEntry(slot: 1, resource: .texture(Texture(id: 2))),
+            BindingSetEntry(slot: 2, resource: .storageBuffer(buffer: storage))
+        ])
+        let pass = RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: [RenderColorTarget(texture: Texture(id: 1))]),
+            body: (0..<100).map { _ in .setBindingSet(slot: 0, set: set) })
+        let result = try planner.buildPlan(queue: .graphics, commands: [.renderPass(pass), .renderPass(pass)], external: SubmitDescriptor())
+        let blocks = barrierBlocks(in: result.submits[0])
+        XCTAssertEqual(blocks.count, 2)
+        XCTAssertEqual(Set(blocks[0].map(\.resource.id)), [1, 2, 3, 4])
+        XCTAssertEqual(blocks[0].filter { $0.resource.id == storage.id }.count, 1)
+        XCTAssertEqual(blocks[1].filter { $0.resource.id == storage.id }.count, 1)
+        let ordered = try XCTUnwrap(blocks[1].first { $0.resource.id == storage.id })
+        XCTAssertEqual(ordered.sourceState, .unorderedAccess)
+        XCTAssertEqual(ordered.destinationState, .unorderedAccess)
+        let compute = try planner.buildPlan(queue: .compute,
+            commands: [.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: set)]))], external: SubmitDescriptor())
+        XCTAssertEqual(compute.submits.count, 2)
+        XCTAssertEqual(compute.submits[1].waitSemaphores, compute.submits[0].signalSemaphores)
+        let acquire = barrierBlocks(in: compute.submits[1]).flatMap { $0 }.filter { $0.syncAction == .acquire }
+        XCTAssertEqual(Set(acquire.map(\.resource.id)), [2, 3, 4])
+    }
+
     func testResolvedAttachmentGetsWriteBarrierAndCrossQueueDependency() throws {
         let planner = SubmissionPlanner()
         var color = RenderColorTarget(texture: Texture(id: 1), store: false)

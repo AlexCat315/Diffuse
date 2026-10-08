@@ -36,7 +36,7 @@ final class NativeParticlePass {
         guard vs.interface.bindings.first(where: { $0.slot == 1 })?.buffer.elementStride == MemoryLayout<GPUParticleInstance>.stride else {
             throw RHIError.layoutMismatch("particle instance shader/host stride differs")
         }
-        bindings = try device.makeBindingLayout(NativeShaderLibrary.layout(artifacts: [vs,fs]))
+        bindings = try device.makeBindingLayout(BindingLayoutDescriptor(reflecting: [vs,fs]))
         layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [bindings]))
         vertex = try device.makeShaderModule(vs.moduleDescriptor())
         do { fragment = try device.makeShaderModule(fs.moduleDescriptor()) }

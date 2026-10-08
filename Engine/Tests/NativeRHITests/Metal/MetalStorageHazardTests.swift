@@ -55,16 +55,14 @@ final class MetalStorageHazardTests: XCTestCase {
         try device.beginFrame()
         let cmd = CommandBuffer()
         cmd.copyPass { encoder in
-            encoder.uploadBufferToTexture(
+            encoder.uploadBufferToTexture(.init(
                 buffer: redBuffer, bytesPerRow: bytesPerRow,
-                texture: target, width: w, height: h
-            )
+                texture: target, region: .init(width: w, height: h)))
         }
         cmd.copyPass { encoder in
-            encoder.uploadBufferToTexture(
+            encoder.uploadBufferToTexture(.init(
                 buffer: blueBuffer, bytesPerRow: bytesPerRow,
-                texture: target, width: w, height: h
-            )
+                texture: target, region: .init(width: w, height: h)))
         }
         try device.submit(cmd)
         device.endFrame()

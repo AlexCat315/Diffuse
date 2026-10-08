@@ -1,0 +1,684 @@
+{
+  "version": "1.1",
+  "parameters": [
+    {
+      "name": "uniforms",
+      "binding": {
+        "kind": "constantBuffer",
+        "index": 0
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "Uniforms",
+          "fields": [
+            {
+              "name": "viewport",
+              "type": {
+                "kind": "vector",
+                "elementCount": 2,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 8,
+                    "alignment": 8
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 8,
+                "elementStride": 4
+              }
+            },
+            {
+              "name": "srgb",
+              "type": {
+                "kind": "scalar",
+                "scalarType": "float32",
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 4,
+                    "alignment": 4
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 8,
+                "size": 4,
+                "elementStride": 0
+              }
+            },
+            {
+              "name": "padding",
+              "type": {
+                "kind": "scalar",
+                "scalarType": "float32",
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 4,
+                    "alignment": 4
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 12,
+                "size": 4,
+                "elementStride": 0
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 16,
+              "alignment": 8
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "Uniforms",
+            "fields": [
+              {
+                "name": "viewport",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 2,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 8,
+                      "alignment": 8
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 8,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "srgb",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 4,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 8,
+                  "size": 4,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "padding",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 4,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 12,
+                  "size": 4,
+                  "elementStride": 0
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 8
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 16,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "constantBuffer",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "atlas",
+      "binding": {
+        "kind": "shaderResource",
+        "index": 1
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "texture2D",
+        "resultType": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          }
+        },
+        "sizes": [
+          {
+            "kind": "shaderResource",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "atlasSampler",
+      "binding": {
+        "kind": "samplerState",
+        "index": 2
+      },
+      "type": {
+        "kind": "samplerState",
+        "sizes": [
+          {
+            "kind": "samplerState",
+            "value": 1
+          }
+        ]
+      }
+    }
+  ],
+  "globalScope": {
+    "kind": "none",
+    "parameters": [
+      {
+        "name": "uniforms",
+        "binding": {
+          "kind": "constantBuffer",
+          "index": 0
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "Uniforms",
+            "fields": [
+              {
+                "name": "viewport",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 2,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 8,
+                      "alignment": 8
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 8,
+                  "elementStride": 4
+                }
+              },
+              {
+                "name": "srgb",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 4,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 8,
+                  "size": 4,
+                  "elementStride": 0
+                }
+              },
+              {
+                "name": "padding",
+                "type": {
+                  "kind": "scalar",
+                  "scalarType": "float32",
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 4,
+                      "alignment": 4
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 12,
+                  "size": 4,
+                  "elementStride": 0
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 8
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "constantBuffer",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "Uniforms",
+              "fields": [
+                {
+                  "name": "viewport",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 2,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 8,
+                        "alignment": 8
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 8,
+                    "elementStride": 4
+                  }
+                },
+                {
+                  "name": "srgb",
+                  "type": {
+                    "kind": "scalar",
+                    "scalarType": "float32",
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 4,
+                        "alignment": 4
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 8,
+                    "size": 4,
+                    "elementStride": 0
+                  }
+                },
+                {
+                  "name": "padding",
+                  "type": {
+                    "kind": "scalar",
+                    "scalarType": "float32",
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 4,
+                        "alignment": 4
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 12,
+                    "size": 4,
+                    "elementStride": 0
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 16,
+                  "alignment": 8
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 16,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "constantBuffer",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "atlas",
+        "binding": {
+          "kind": "shaderResource",
+          "index": 1
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "texture2D",
+          "resultType": {
+            "kind": "vector",
+            "elementCount": 4,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "float32"
+            }
+          },
+          "sizes": [
+            {
+              "kind": "shaderResource",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "atlasSampler",
+        "binding": {
+          "kind": "samplerState",
+          "index": 2
+        },
+        "type": {
+          "kind": "samplerState",
+          "sizes": [
+            {
+              "kind": "samplerState",
+              "value": 1
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "entryPoints": [
+    {
+      "name": "uiFragment",
+      "stage": "fragment",
+      "scope": {
+        "kind": "none",
+        "parameters": [
+          {
+            "name": "input",
+            "stage": "fragment",
+            "binding": {
+              "kind": "varyingInput",
+              "index": 0,
+              "count": 2
+            },
+            "type": {
+              "kind": "struct",
+              "name": "Vertex",
+              "fields": [
+                {
+                  "name": "position",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": []
+                  },
+                  "semanticName": "SV_POSITION"
+                },
+                {
+                  "name": "uv",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 2,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 0
+                  },
+                  "semanticName": "TEXCOORD"
+                },
+                {
+                  "name": "color",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "varyingInput",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "stage": "fragment",
+                  "binding": {
+                    "kind": "varyingInput",
+                    "index": 1
+                  },
+                  "semanticName": "TEXCOORD",
+                  "semanticIndex": 1
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "varyingInput",
+                  "value": 2
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "name": "input",
+          "stage": "fragment",
+          "binding": {
+            "kind": "varyingInput",
+            "index": 0,
+            "count": 2
+          },
+          "type": {
+            "kind": "struct",
+            "name": "Vertex",
+            "fields": [
+              {
+                "name": "position",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": []
+                },
+                "semanticName": "SV_POSITION"
+              },
+              {
+                "name": "uv",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 2,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 0
+                },
+                "semanticName": "TEXCOORD"
+              },
+              {
+                "name": "color",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "varyingInput",
+                      "value": 1
+                    }
+                  ]
+                },
+                "stage": "fragment",
+                "binding": {
+                  "kind": "varyingInput",
+                  "index": 1
+                },
+                "semanticName": "TEXCOORD",
+                "semanticIndex": 1
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "varyingInput",
+                "value": 2
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "stage": "fragment",
+        "binding": {
+          "kind": "varyingOutput",
+          "index": 0
+        },
+        "semanticName": "SV_TARGET",
+        "type": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          },
+          "sizes": [
+            {
+              "kind": "varyingOutput",
+              "value": 1
+            }
+          ]
+        }
+      },
+      "bindings": [
+        {
+          "name": "uniforms",
+          "binding": {
+            "kind": "constantBuffer",
+            "index": 0,
+            "used": 1
+          }
+        },
+        {
+          "name": "atlas",
+          "binding": {
+            "kind": "shaderResource",
+            "index": 1,
+            "used": 1
+          }
+        },
+        {
+          "name": "atlasSampler",
+          "binding": {
+            "kind": "samplerState",
+            "index": 2,
+            "used": 1
+          }
+        }
+      ]
+    }
+  ],
+  "bindlessSpaceIndex": 1
+}

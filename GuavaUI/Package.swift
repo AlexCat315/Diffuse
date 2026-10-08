@@ -35,11 +35,13 @@ let package = Package(
                 .product(name: "CHarfBuzz", package: "Text"),
                 "GuavaUIBundledFonts",
                 .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "ImageDecodeBridge", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
             ],
+            resources: [.copy("Resources/Shaders")],
             linkerSettings: [
                 // winmm provides timeBeginPeriod/timeEndPeriod, used by the run
                 // loop to raise the Windows timer resolution so Thread.sleep
@@ -149,6 +151,8 @@ let package = Package(
                 .product(name: "GuavaUIScene", package: "Portable"),
                 "GuavaUIRuntime",
                 "GuavaUIBundledFonts",
+                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
             ]
         ),

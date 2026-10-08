@@ -6,6 +6,7 @@ public enum GPUTextureFormat: Sendable {
     case bgra8Unorm
     case bgra8UnormSrgb
     case rgba8Unorm
+    case rgba8UnormSrgb
     case r8Unorm
     case rgba16Float
     case depth24Plus
@@ -16,6 +17,7 @@ public enum GPUTextureFormat: Sendable {
         case .bgra8Unorm:     return WGPUBridge_TextureFormat_BGRA8Unorm
         case .bgra8UnormSrgb: return WGPUBridge_TextureFormat_BGRA8UnormSrgb
         case .rgba8Unorm:     return WGPUBridge_TextureFormat_RGBA8Unorm
+        case .rgba8UnormSrgb: return WGPUBridge_TextureFormat_RGBA8UnormSrgb
         case .r8Unorm:        return WGPUBridge_TextureFormat_R8Unorm
         case .rgba16Float:    return WGPUBridge_TextureFormat_RGBA16Float
         case .depth24Plus:    return WGPUBridge_TextureFormat_Depth24Plus

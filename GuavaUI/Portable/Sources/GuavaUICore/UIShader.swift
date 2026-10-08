@@ -9,7 +9,7 @@
 ///                                                    actual u = u - 10
 ///                                * `u ≥ 20`        → image alpha mask,
 ///                                                    actual u = u - 20
-///   loc 2: unorm8x4   color    (linear RGBA, used as tint)
+///   loc 2: unorm8x4   color    (straight sRGB-encoded RGBA, used as tint)
 ///
 /// Bindings:
 ///   group 0, binding 0: uniform { viewport: vec2<f32> } — screen size in pixels
