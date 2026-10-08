@@ -113,7 +113,7 @@ struct StyleIntegrationTests {
     @Test("TextField default chrome resolves to theme.colors.surfaceSunken")
     func textFieldUsesThemeChrome() { GlobalTestLock.locked {
         struct H: View {
-            @State var s = ""
+            @State var s: TextBuffer = ""
             var body: some View {
                 TextField("p", text: $s).appearance(.dark)
             }
@@ -132,7 +132,7 @@ struct StyleIntegrationTests {
     @Test("TextField chrome flips with appearance")
     func textFieldFlipsWithAppearance() { GlobalTestLock.locked {
         struct H: View {
-            @State var s = ""
+            @State var s: TextBuffer = ""
             let app: Appearance
             var body: some View {
                 Panel("X") { TextField("p", text: $s) }.appearance(app)

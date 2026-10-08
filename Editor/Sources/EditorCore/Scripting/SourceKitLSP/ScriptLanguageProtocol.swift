@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUICompose
 
 /// Builds request payloads understood by SourceKit-LSP.
 ///
@@ -21,13 +22,15 @@ public enum ScriptLanguageQueries {
         ])
     }
 
-    public static func didChange(uri: String, text: String, version: Int) throws -> Data {
-        try LSPJSON.data([
-            "textDocument": [
-                "uri": uri,
-                "version": version,
-            ],
-            "contentChanges": [["text": text]],
+    public static func didChange(uri: String, previous: TextBuffer, current: TextBuffer, version: Int) throws -> Data? {
+        guard let delta = current.editDelta(from: previous) else { return nil }
+        let start = ScriptSourceCoordinates.position(in: previous, atUTF8Offset: delta.startUTF8Offset)
+        let end = ScriptSourceCoordinates.position(in: previous, atUTF8Offset: delta.oldEndUTF8Offset)
+        return try LSPJSON.data([
+            "textDocument": ["uri": uri, "version": version],
+            "contentChanges": [["range": ["start": ["line": start.line, "character": start.character],
+                                            "end": ["line": end.line, "character": end.character]],
+                                "text": delta.newText]],
         ])
     }
 
@@ -172,24 +175,30 @@ public enum ScriptLanguageReplies {
         guard let label = object["label"] as? String, !label.isEmpty else { return nil }
         let kind = object["kind"] as? Int ?? 0
         let insertText: String
-        let replaceStart: ScriptLanguagePosition?
+        let replacement: ScriptLanguageSpan?
         if let edit = object["textEdit"] as? [String: Any] {
             insertText = edit["newText"] as? String ?? label
-            replaceStart = parseSpan(edit["range"])?.start ?? parseSpan(edit["insert"])?.start
+            replacement = parseSpan(edit["range"]) ?? parseSpan(edit["replace"]) ?? parseSpan(edit["insert"])
         } else {
             insertText = object["insertText"] as? String ?? label
-            replaceStart = nil
+            replacement = nil
         }
-        return ScriptCompletionItem(
+        var item = ScriptCompletionItem(
             label: label,
             kind: ScriptCompletionItemKind(rawValue: kind),
             detail: object["detail"] as? String,
             documentation: parseMarkup(object["documentation"])?.text,
             insertText: insertText,
-            replaceStart: replaceStart,
+            replacement: replacement,
             filterText: object["filterText"] as? String,
             sortText: object["sortText"] as? String
         )
+        item.usesSnippet = (object["insertTextFormat"] as? Int) == 2
+        item.additionalEdits = (object["additionalTextEdits"] as? [[String: Any]] ?? []).compactMap { edit in
+            guard let range = parseSpan(edit["range"]), let text = edit["newText"] as? String else { return nil }
+            return ScriptCompletionTextEdit(range: range, text: text)
+        }
+        return item
     }
 
     // MARK: Definition

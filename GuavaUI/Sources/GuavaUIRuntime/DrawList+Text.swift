@@ -21,13 +21,7 @@ extension DrawList {
                 guard let info, info.width > 0, info.height > 0 else { continue }
                 let dx = snappedTextPixel(origin.x + glyph.x + info.bearingX)
                 let dy = snappedTextPixel(origin.y + glyph.y - info.bearingY)
-                addGlyphQuad(
-                    x: dx, y: dy,
-                    width: info.width, height: info.height,
-                    uvMinX: info.uvMinX, uvMinY: info.uvMinY,
-                    uvMaxX: info.uvMaxX, uvMaxY: info.uvMaxY,
-                    color: colorForGlyph?(glyph) ?? color, textureID: textureID
-                )
+                addAtlasGlyph(info, x: dx, y: dy, color: colorForGlyph?(glyph) ?? color, textureID: textureID)
             }
         }
     }

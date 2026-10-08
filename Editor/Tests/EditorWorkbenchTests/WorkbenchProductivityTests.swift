@@ -5,6 +5,7 @@ import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
 import Testing
+import GuavaUICompose
 
 @Suite("Workbench productivity interactions", .serialized)
 struct WorkbenchProductivityTests {
@@ -70,7 +71,7 @@ struct WorkbenchProductivityTests {
         let source = "let first = 1\nlet second = \"😀\"\nlet failure = missing"
         var label = "Ln 1, Col 1"
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: ScriptCodeEditor(source: .constant(source), hover: .constant(.hidden),
+        graph.install(root: ScriptCodeEditor(source: .constant(TextBuffer(source)), hover: .constant(.hidden),
             caretLabel: Binding(get: { label }, set: { label = $0 }), onChange: { _ in },
             navigation: .init(scriptID: "Test", line: 2, column: 4), onHover: { _ in }, onHoverEnd: {}))
         graph.computeLayout(width: 600, height: 400)

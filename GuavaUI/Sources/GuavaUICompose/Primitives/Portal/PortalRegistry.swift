@@ -10,6 +10,8 @@ public struct PortalEntry: Identifiable {
     public var width: Float?
     public var content: AnyView
     public var fillsWindow: Bool = false
+    public var placement: PortalPlacementMode = .belowAnchor
+    var parentID: String?
     var isExiting = false
 
     public init(id: String,
@@ -67,7 +69,7 @@ public final class PortalStore {
         if let slotNode = slotNodes[id]?.node {
             if slotNode.frame.origin != position {
                 slotNode.frame = PortalPlacement.fit(position: position, size: slotNode.frame.size,
-                                                      in: portalWindowBounds(slotNode), anchor: anchor(for: id))
+                                                      in: portalWindowBounds(slotNode), anchor: anchor(for: id), placement: entry.placement)
             }
         } else if slotNodes[id] != nil {
             slotNodes.removeValue(forKey: id)
@@ -78,9 +80,10 @@ public final class PortalStore {
         notifyChanged()
     }
 
-    func configure(_ id: String, fillsWindow: Bool) {
-        guard var entry = storage[id], entry.fillsWindow != fillsWindow else { return }
-        entry.fillsWindow = fillsWindow; storage[id] = entry; notifyChanged()
+    func configure(_ id: String, fillsWindow: Bool, placement: PortalPlacementMode, parentID: String?) {
+        guard var entry = storage[id], entry.fillsWindow != fillsWindow || entry.placement != placement || entry.parentID != parentID else { return }
+        entry.fillsWindow = fillsWindow; entry.placement = placement; entry.parentID = parentID
+        storage[id] = entry; notifyChanged()
     }
     func anchor(for id: String) -> CGRect? { dismissals[id]?.anchor() }
     func frame(_ id: String) -> CGRect? { slotNodes[id]?.node?.absoluteFrame }
@@ -106,16 +109,25 @@ public final class PortalStore {
         guard var entry = storage[id], !entry.isExiting else { return }
         entry.isExiting = true; entry.content = content
         storage[id] = entry
+        removeDescendants(of: id)
         notifyChanged()
     }
 
     public func unregister(_ id: String) {
         guard storage.removeValue(forKey: id) != nil else { return }
+        removeDescendants(of: id)
         presentationOrder.removeAll { $0 == id }
         dismissals.removeValue(forKey: id)
         slotNodes.removeValue(forKey: id)
         notifyChanged()
     }
+
+    private func removeDescendants(of id: String) {
+        let children = storage.values.filter { $0.parentID == id }.map(\.id)
+        for child in children { unregister(child) }
+    }
+
+    func permitsChild(of id: String) -> Bool { storage[id]?.isExiting == false }
 
     public func clear() {
         guard !storage.isEmpty else { return }
@@ -224,8 +236,9 @@ final class PortalResource: NodeResource {
     private var transition: Transition?
     private var isDismissing = false
     private var generation = 0
+    private weak var owner: Node?
 
-    func mount(node: Node) {}
+    func mount(node: Node) { owner = node }
 
     /// Idempotent: safe to call more than once during teardown.
     func unmount(node: Node) {
@@ -248,8 +261,19 @@ final class PortalResource: NodeResource {
                  width: Float?,
                  content: AnyView,
                  fillsWindow: Bool = false,
+                 placement: PortalPlacementMode = .belowAnchor,
                  transition: Transition? = nil) {
         let current = resolvedStore ?? PortalStoreHolder.current
+        var ancestor = owner?.parent
+        var parentID: String?
+        while let candidate = ancestor {
+            if let id = candidate.attachments[PortalOwnership.entryKey] as? String { parentID = id; break }
+            ancestor = candidate.parent
+        }
+        if let parentID, !current.permitsChild(of: parentID) {
+            if let owner { unmount(node: owner) }
+            return
+        }
         if let previous = store, previous !== current, let id = entryID {
             // The owning node moved to a different window's tree (e.g. a panel
             // re-hosted): release the entry from the old store first.
@@ -271,7 +295,7 @@ final class PortalResource: NodeResource {
                                        width: width,
                                        content: presented)
         }
-        if let id = entryID { current.configure(id, fillsWindow: fillsWindow) }
+        if let id = entryID { current.configure(id, fillsWindow: fillsWindow, placement: placement, parentID: parentID) }
     }
 
     /// Logical dismissal is immediate. Only noninteractive paint survives the
@@ -302,4 +326,8 @@ final class PortalResource: NodeResource {
         guard let id = entryID else { return }
         store?.setDismissal(id, anchor: anchor, dismiss: dismiss)
     }
+}
+
+enum PortalOwnership {
+    static let entryKey = "__portal.entry"
 }

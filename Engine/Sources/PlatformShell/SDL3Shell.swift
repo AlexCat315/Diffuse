@@ -56,6 +56,16 @@ public final class SDL3Shell: Shell {
             syncDrawableSize()
         }
 
+        var nativeWindowReference: NativeWindowReference? {
+#if os(macOS)
+            return cocoaWindow.map { .appKit(Unmanaged.passUnretained($0).toOpaque()) }
+#elseif os(Windows)
+            return pointerWindowProperty(named: "SDL.window.win32.hwnd").map { .win32($0) }
+#else
+            return nil
+#endif
+        }
+
         var renderSurface: NativeRenderSurface? {
 #if os(macOS)
             guard let metalLayer else { return nil }

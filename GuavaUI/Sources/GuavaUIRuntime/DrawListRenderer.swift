@@ -264,11 +264,14 @@ public final class DrawListRenderer {
     /// total bytes); this is the path used by `Image` primitives.
     public func registerColorTexture(id: TextureID,
                                      pixels: UnsafePointer<UInt8>,
-                                     width: UInt32, height: UInt32) throws {
+                                     width: UInt32, height: UInt32,
+                                     originX: UInt32 = 0, originY: UInt32 = 0,
+                                     textureWidth: UInt32? = nil, textureHeight: UInt32? = nil) throws {
         precondition(id != .none, "TextureID 0 is reserved")
         guard bindGroupLayout != nil else {
             preconditionFailure("registerColorTexture requires a prior configure(format:)")
         }
+        let fullWidth = textureWidth ?? width, fullHeight = textureHeight ?? height
         let alignedRowBytes: UInt32 = (((width * 4) + 255) / 256) * 256
         let srcRowBytes = Int(width * 4)
         var aligned = [UInt8](repeating: 0, count: Int(alignedRowBytes * height))
@@ -282,12 +285,13 @@ public final class DrawListRenderer {
 
         if let existing = textures[id],
            existing.sampling == .color,
-           existing.width == width,
-           existing.height == height {
+           existing.width == fullWidth,
+           existing.height == fullHeight {
             aligned.withUnsafeBytes { raw in
                 backend.writeTexture(existing.texture,
                                      data: raw.baseAddress!,
                                      dataSize: aligned.count,
+                                     originX: originX, originY: originY,
                                      bytesPerRow: alignedRowBytes,
                                      rowsPerImage: height,
                                      width: width, height: height)
@@ -296,7 +300,7 @@ public final class DrawListRenderer {
         }
 
         let tex = try backend.createTexture(
-            width: width, height: height,
+            width: fullWidth, height: fullHeight,
             format: .rgba8Unorm,
             usage: [.textureBinding, .copyDst]
         )
@@ -304,6 +308,7 @@ public final class DrawListRenderer {
             backend.writeTexture(tex,
                                  data: raw.baseAddress!,
                                  dataSize: aligned.count,
+                                 originX: originX, originY: originY,
                                  bytesPerRow: alignedRowBytes,
                                  rowsPerImage: height,
                                  width: width, height: height)
@@ -313,7 +318,7 @@ public final class DrawListRenderer {
         textures[id] = GPUTextureSlot(
             texture: tex, view: view,
             bindGroup: bg, sampling: .color,
-            width: width, height: height
+            width: fullWidth, height: fullHeight
         )
     }
 

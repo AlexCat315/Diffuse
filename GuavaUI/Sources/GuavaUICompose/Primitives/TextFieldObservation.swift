@@ -43,7 +43,7 @@ extension TextField {
     /// Publishes a hover position change. `nil` clears the hover so any popup
     /// anchored to the previous position can dismiss itself.
     func reportHover(_ anchor: TextFieldHoverAnchor?) {
-        onHoverChange?(anchor)
+        events.onHoverChange?(anchor)
     }
 
     /// Publishes caret / selection movement.
@@ -52,9 +52,9 @@ extension TextField {
     /// outside an interaction (switching edits another file, for instance), and
     /// forwarding a stale offset would crash downstream index math.
     func notifyCaretChange(_ state: FieldState) {
-        guard let handler = onCaretChange else { return }
+        guard let handler = events.onCaretChange else { return }
         normalizeIndices(state)
-        handler(TextFieldCaretState(caretIndex: state.cursorIndex,
+        handler(TextFieldCaretState(caretIndex: state.selection.cursorIndex,
                                     selectedRange: selectionRange(state)))
     }
 }

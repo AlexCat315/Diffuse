@@ -87,8 +87,11 @@ struct EditorOutputPanel: View {
             if output.isEmpty {
                 EditorPanelEmptyState(L("Build output will appear here.")).flex()
             } else {
-                TextField(text: Binding(get: { output }, set: { _ in }), axis: .vertical,
-                          maxVisibleLines: 200, readOnly: true)
+                TextField(text: .constant(TextBuffer(output))) { input in
+                    input.layout.axis = .vertical
+                    input.layout.maxVisibleLines = 200
+                    input.behavior.readOnly = true
+                }
                     .font(.mono)
                     .textFieldStyle(OutputTextFieldStyle())
                     .flex(1, shrink: 1)

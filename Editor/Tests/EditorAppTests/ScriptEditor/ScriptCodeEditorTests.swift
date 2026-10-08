@@ -1,4 +1,5 @@
 import Testing
+import GuavaUICompose
 @testable import EditorApp
 
 @Suite("Swift script syntax highlighting")
@@ -13,7 +14,8 @@ struct ScriptCodeEditorTests {
             func update() {}
         }
         """
-        let highlighter = SwiftSyntaxHighlighter(source)
+        let highlighter = TreeSitterHighlighter()
+        #expect(highlighter.synchronize(TextBuffer(source)))
 
         #expect(highlighter.color(atUTF8Offset: try #require(source.utf8Offset(of: "struct"))) != nil)
         #expect(highlighter.color(atUTF8Offset: try #require(source.utf8Offset(of: "GameScript"))) != nil)
@@ -27,7 +29,8 @@ struct ScriptCodeEditorTests {
     @Test("leaves whitespace and punctuation in the default foreground")
     func leavesUnclassifiedTextUncolored() throws {
         let source = "let answer = 42"
-        let highlighter = SwiftSyntaxHighlighter(source)
+        let highlighter = TreeSitterHighlighter()
+        #expect(highlighter.synchronize(TextBuffer(source)))
         let equalsOffset = try #require(source.utf8Offset(of: " = ")) + 1
         #expect(highlighter.color(atUTF8Offset: equalsOffset) == nil)
     }

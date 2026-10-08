@@ -37,6 +37,10 @@ private func runEditor() throws {
         FileHandle.standardOutput.write(Data("\(report)\n".utf8))
         return
     }
+    if CommandLine.arguments.contains("--script-editor-demo") || ProcessInfo.processInfo.environment["GUAVA_SCRIPT_EDITOR_DEMO"] == "1" {
+        try runScriptEditorDemo(backendConfig: launchOptions.backendConfig)
+        return
+    }
     if CommandLine.arguments.contains("--mcp-headless") {
         guard let directory = launchOptions.projectDirectory else {
             throw EditorProjectToolError("--mcp-headless requires --project-dir <directory>.")

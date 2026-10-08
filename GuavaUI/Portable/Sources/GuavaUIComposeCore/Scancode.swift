@@ -33,13 +33,16 @@ public enum Scancode {
     public static let tab: UInt32 = 43
     public static let space: UInt32 = 44
     public static let home: UInt32 = 74
+    public static let pageUp: UInt32 = 75
     public static let delete: UInt32 = 76
     public static let end: UInt32 = 77
+    public static let pageDown: UInt32 = 78
     public static let arrowRight: UInt32 = 79
     public static let arrowLeft: UInt32 = 80
     public static let arrowDown: UInt32 = 81
     public static let arrowUp: UInt32 = 82
     public static let keypadEnter: UInt32 = 88
+    public static let f1: UInt32 = 58
     public static let f2: UInt32 = 59
 }
 

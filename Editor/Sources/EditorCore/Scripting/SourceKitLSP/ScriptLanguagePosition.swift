@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUICompose
 
 /// A zero-based `line` / UTF-16 `character` offset — the coordinate space the
 /// Language Server Protocol mandates.
@@ -41,160 +42,42 @@ public struct ScriptLanguageSpan: Sendable, Equatable, Hashable {
 
 /// Conversions between editor indices and LSP positions.
 ///
-/// Every member is a pure function over `String`, which keeps the subtle
+/// Every member is a pure function over `TextBuffer`, which keeps the subtle
 /// UTF-16 arithmetic testable without a running language server.
 public enum ScriptSourceCoordinates {
-
-    // MARK: - Line splitting
-
-    /// Half-open ranges covering each line's content, excluding the trailing
-    /// newline. A text ending in `\n` yields an additional empty final line,
-    /// matching how editors show a caret below the last visible row.
-    public static func lineRanges(in text: String) -> [Range<String.Index>] {
-        var ranges: [Range<String.Index>] = []
-        var start = text.startIndex
-        while true {
-            if let newline = text[start...].firstIndex(of: "\n") {
-                ranges.append(start..<newline)
-                let next = text.index(after: newline)
-                if next == text.endIndex {
-                    ranges.append(next..<next)
-                    break
-                }
-                start = next
-            } else {
-                ranges.append(start..<text.endIndex)
-                break
-            }
-        }
-        return ranges
+    public static func position(in buffer: TextBuffer, atCharacterIndex index: Int) -> ScriptLanguagePosition {
+        position(in: buffer, atUTF8Offset: buffer.utf8Offset(forCharacterIndex: index))
     }
-
-    // MARK: - Editor index → LSP position
-
-    /// Converts a `Character` offset within `text` into an LSP position.
-    ///
-    /// Out-of-range offsets clamp to the nearest valid position rather than
-    /// trapping: the caret index is captured from a render pass and the bound
-    /// text may have been rewritten since.
-    public static func position(in text: String, atCharacterIndex index: Int) -> ScriptLanguagePosition {
-        let count = text.count
-        guard count > 0 else { return .zero }
-        let lines = lineRanges(in: text)
-        let bounded = min(max(index, 0), count)
-        let target = text.index(text.startIndex, offsetBy: bounded)
-
-        // A caret parked directly after the line's content still belongs to
-        // that line; the following line starts *past* the newline, so its lower
-        // bound never matches this index and `first` resolves correctly.
-        if let lineIndex = lines.indices.first(where: {
-            lines[$0].lowerBound <= target && target <= lines[$0].upperBound
-        }) {
-            let utf16 = text.utf16.distance(from: lines[lineIndex].lowerBound, to: target)
-            return ScriptLanguagePosition(line: lineIndex, character: max(0, utf16))
-        }
-
-        guard let last = lines.last else { return .zero }
-        return ScriptLanguagePosition(line: max(0, lines.count - 1),
-                                      character: max(0, text.utf16.distance(from: last.lowerBound,
-                                                                            to: text.endIndex)))
+    public static func position(in buffer: TextBuffer, atUTF8Offset offset: Int) -> ScriptLanguagePosition {
+        let point = buffer.point(forUTF8Offset: offset)
+        let start = buffer.lineRange(forLine: point.row).lowerBound
+        let range = buffer.lineRange(forLine: point.row)
+        let byte = min(buffer.utf8Offset(forCharacterIndex: range.upperBound), max(0, offset))
+        let column = buffer.utf16Offset(forUTF8Offset: byte) - buffer.utf16Offset(forCharacterIndex: start)
+        return ScriptLanguagePosition(line: point.row, character: max(0, column))
     }
-
-    // MARK: - LSP position → editor index
-
-    /// Converts an LSP position back into a `Character` offset, clamped to the
-    /// enclosing line so an imprecise server reply can never produce an
-    /// out-of-bounds `String.Index`.
-    public static func characterIndex(in text: String, at position: ScriptLanguagePosition) -> Int {
-        let lines = lineRanges(in: text)
-        guard !lines.isEmpty else { return 0 }
-        let lineIndex = min(max(position.line, 0), lines.count - 1)
-        let range = lines[lineIndex]
-        guard position.character > 0 else {
-            return text.distance(from: text.startIndex, to: range.lowerBound)
-        }
-        guard let target = text.utf16.index(range.lowerBound,
-                                            offsetBy: position.character,
-                                            limitedBy: range.upperBound) else {
-            return text.distance(from: text.startIndex, to: range.upperBound)
-        }
-        return text.distance(from: text.startIndex, to: target)
+    public static func characterIndex(in buffer: TextBuffer, at position: ScriptLanguagePosition) -> Int {
+        buffer.characterIndex(forUTF8Offset: utf8Offset(in: buffer, at: position))
     }
-
-    /// UTF-8 byte offset for a position — the unit the script highlighter and
-    /// the text field's colouring callback use.
-    public static func utf8Offset(in text: String, at position: ScriptLanguagePosition) -> Int {
-        let index = characterIndex(in: text, at: position)
-        guard let converted = text.index(text.startIndex,
-                                         offsetBy: index,
-                                         limitedBy: text.endIndex) else { return 0 }
-        return text.utf8.distance(from: text.startIndex, to: converted)
+    public static func utf8Offset(in buffer: TextBuffer, at position: ScriptLanguagePosition) -> Int {
+        let range = buffer.lineRange(forLine: position.line)
+        let start = buffer.utf16Offset(forCharacterIndex: range.lowerBound)
+        let end = buffer.utf16Offset(forCharacterIndex: range.upperBound)
+        return buffer.utf8Offset(forUTF16Offset: min(end, start + max(0, position.character)))
     }
-
-    // MARK: - Word queries
-
-    /// The Swift identifier enclosing `index`, used to decide what to ask about
-    /// when hovering or completing. Returns `nil` when the caret sits on
-    /// whitespace or punctuation.
-    ///
-    /// Member accesses intentionally yield the trailing component:
-    /// `context.deltaTime` focused anywhere inside `deltaTime` reports
-    /// `deltaTime`, so the language server resolves the member rather than the
-    /// value it is read from.
-    public static func identifierRange(in text: String, containing index: Int) -> Range<Int>? {
-        let count = text.count
-        guard count > 0 else { return nil }
-        let clamped = min(max(index, 0), count)
-        guard clamped < count else { return trailingIdentifier(in: text, before: count) }
-        let cursor = text.index(text.startIndex, offsetBy: clamped)
-        guard isIdentifier(text[cursor]) else {
-            return trailingIdentifier(in: text, before: clamped)
+    public static func identifierRange(in buffer: TextBuffer, containing index: Int) -> Range<Int>? {
+        guard !buffer.isEmpty else { return nil }
+        let cursor = min(buffer.characterCount, max(0, index))
+        var lower = cursor, upper = cursor
+        while lower > 0, let character = buffer.character(at: lower - 1), isIdentifier(character) { lower -= 1 }
+        if let character = buffer.character(at: cursor), isIdentifier(character) {
+            while upper < buffer.characterCount, let character = buffer.character(at: upper), isIdentifier(character) { upper += 1 }
         }
-
-        var lower = clamped
-        var scanner = cursor
-        while scanner > text.startIndex {
-            let previous = text.index(before: scanner)
-            guard isIdentifier(text[previous]) else { break }
-            scanner = previous
-            lower -= 1
-        }
-        var upper = clamped
-        var forward = cursor
-        while forward < text.endIndex {
-            guard isIdentifier(text[forward]) else { break }
-            forward = text.index(after: forward)
-            upper += 1
-        }
-        guard lower < upper else { return nil }
-        return lower..<upper
+        return lower < upper ? lower..<upper : nil
     }
-
-    /// Identifier immediately before `index` — the prefix a completion request
-    /// should filter on while the caret trails a partially typed word.
-    private static func trailingIdentifier(in text: String, before index: Int) -> Range<Int>? {
-        guard index > 0 else { return nil }
-        var upper = index
-        var scanner = text.index(text.startIndex, offsetBy: index)
-        while scanner > text.startIndex {
-            let previous = text.index(before: scanner)
-            guard isIdentifier(text[previous]) else { break }
-            scanner = previous
-            upper -= 1
-        }
-        guard upper < index else { return nil }
-        return upper..<index
-    }
-
-    /// Approximates Swift's identifier character set. Anything outside ASCII is
-    /// treated as a possible identifier body — Swift source routinely contains
-    /// accented and CJK names, and a false positive only widens the token the
-    /// language server is asked about.
     private static func isIdentifier(_ character: Character) -> Bool {
-        if character == "_" { return true }
-        if character.isLetter || character.isNumber { return true }
-        guard character.unicodeScalars.count == 1,
-              let scalar = character.unicodeScalars.first else { return false }
+        if character == "_" || character.isLetter || character.isNumber { return true }
+        guard character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first else { return false }
         return scalar.value >= 0x80
     }
 }

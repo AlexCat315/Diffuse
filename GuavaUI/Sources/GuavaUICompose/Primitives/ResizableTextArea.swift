@@ -6,7 +6,7 @@ import GuavaUIRuntime
 
 /// Multiline input with a draggable lower edge and internal text scrolling.
 public struct ResizableTextArea: View {
-    let text: Binding<String>
+    let text: Binding<TextBuffer>
     let placeholder: String
     let minHeight: Float
     let maxHeight: Float
@@ -14,19 +14,19 @@ public struct ResizableTextArea: View {
     let onSubmit: (() -> Void)?
     let onFocus: (() -> Void)?
     let onBlur: (() -> Void)?
-    let editHistory: TextEditHistory?
+    let codeEditing: TextFieldCodeEditing
     @State private var height: Float
 
-    public init(_ placeholder: String = "", text: Binding<String>, minHeight: Float = 96,
+    public init(_ placeholder: String = "", text: Binding<TextBuffer>, minHeight: Float = 96,
                 maxHeight: Float = 360, disabled: Bool = false,
-                editHistory: TextEditHistory? = nil,
+                codeEditing: TextFieldCodeEditing = TextFieldCodeEditing(),
                 onSubmit: (() -> Void)? = nil, onFocus: (() -> Void)? = nil, onBlur: (() -> Void)? = nil) {
         self.placeholder = placeholder
         self.text = text
         self.minHeight = max(32, minHeight)
         self.maxHeight = max(self.minHeight, maxHeight)
         self.disabled = disabled
-        self.editHistory = editHistory
+        self.codeEditing = codeEditing
         self.onSubmit = onSubmit
         self.onFocus = onFocus
         self.onBlur = onBlur
@@ -34,10 +34,15 @@ public struct ResizableTextArea: View {
     }
     public var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            TextField(placeholder, text: text, axis: .vertical, maxVisibleLines: 128,
-                      showsLineNumbers: true, indentationWidth: 2, editHistory: editHistory,
-                      disabled: disabled, onSubmit: onSubmit, onFocus: onFocus, onBlur: onBlur)
-                .font(.mono)
+            TextField(placeholder, text: text) { input in
+                input.layout.axis = .vertical
+                input.layout.maxVisibleLines = 128
+                input.codeEditing = codeEditing
+                input.behavior.disabled = disabled
+                input.events.onSubmit = onSubmit
+                input.events.onFocus = onFocus
+                input.events.onBlur = onBlur
+            }
                 .frame(height: height)
                 .flex(0, shrink: 0)
             _TextAreaResizeHandle(height: height, isEnabled: !disabled, onResize: { next in
@@ -63,7 +68,13 @@ private struct _TextAreaResizeHandle: _PrimitiveView {
     }
     func _updateNode(_ node: Node) {
         node.isHitTestable = isEnabled
-        node.cursor = .resizeVertical
+        node.cursor = isEnabled ? .resizeVertical : .notAllowed
+        if !isEnabled {
+            node.attachments.removeValue(forKey: "textarea.resizeStart")
+            if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
+            InteractionRegistryHolder.current?.remove(node)
+            return
+        }
         guard let registry = InteractionRegistryHolder.current else { return }
         registry.setPointer(node) { event, phase, _ in
             guard isEnabled, event.button == .left else { return .ignored }
@@ -72,12 +83,13 @@ private struct _TextAreaResizeHandle: _PrimitiveView {
                 PointerCaptureHolder.current?.acquire(node)
             } else {
                 node.attachments.removeValue(forKey: "textarea.resizeStart")
-                PointerCaptureHolder.current?.release()
+                if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
             }
             return .handled
         }
         registry.setMotion(node) { event, _ in
-            guard let (startY, startHeight) = node.attachments["textarea.resizeStart"] as? (Float, Float) else { return .ignored }
+            guard isEnabled, PointerCaptureHolder.current?.target === node,
+                  let (startY, startHeight) = node.attachments["textarea.resizeStart"] as? (Float, Float) else { return .ignored }
             onResize(startHeight + event.y - startY)
             return .handled
         }

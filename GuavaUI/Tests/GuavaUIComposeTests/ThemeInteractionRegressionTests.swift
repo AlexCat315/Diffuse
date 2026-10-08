@@ -87,7 +87,9 @@ struct ThemeInteractionRegressionTests: GuavaUIComposeSerializedSuite {
         let environment = TestTextEnvironmentFactory.make()
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
-        let field = TextField(text: .constant("alpha\nbeta"), axis: .vertical)
+        let field = TextField(text: .constant("alpha\nbeta")) { input in
+            input.layout.axis = .vertical
+        }
         graph.install(root: Box { field }.font(Font.monospaced(size: 17)).lineHeight(25))
         graph.computeLayout(width: 240, height: 200)
         let surface = try #require(find(tree.root) { $0.attachments[TextField.surfaceMarkerKey] != nil })
@@ -152,12 +154,12 @@ struct ThemeInteractionRegressionTests: GuavaUIComposeSerializedSuite {
     @Test("IME preview clamps a stale search caret after external clearing")
     func staleCompositionCaret() {
         let state = TextField.FieldState()
-        state.cursorIndex = 20
-        state.compositionText = "属性"
+        state.selection.cursorIndex = 20
+        state.composition.text = "属性"
         let field = TextField(text: Binding(get: { "" }, set: { _ in }))
         let result = TextField.LayoutEngine(textField: field)
             .makeRenderState(current: "", state: state, isFocused: true)
-        #expect(result.displayText == "属性")
+        #expect(result.buffer.stringValue == "属性")
         #expect(result.cursorIndex == 2)
     }
 
@@ -187,23 +189,25 @@ struct ThemeInteractionRegressionTests: GuavaUIComposeSerializedSuite {
     func codeIndentation() throws { try GlobalTestLock.locked {
         let context = PlatformInputContext()
         try context.withCurrent {
-            var text = "甲\n乙"
+            var text: TextBuffer = "甲\n乙"
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-            graph.install(root: TextField(text: Binding(get: { text }, set: { text = $0 }),
-                                         axis: .vertical, indentationWidth: 2))
+            graph.install(root: TextField(text: Binding(get: { text }, set: { text = $0 })) { input in
+                input.layout.axis = .vertical
+                input.codeEditing.indentationWidth = 2
+            })
             let node = try #require(find(graph.tree.root) { $0.attachments[TextField.surfaceMarkerKey] != nil })
             context.focusChain.focus(node)
             graph.recomposer.commitAll()
             let handlers = context.interactions.handlers(for: node)
             _ = handlers.key?(KeyEvent(scancode: Scancode.a, keycode: 0, modifiers: [.lgui], isRepeat: false), .target)
             _ = handlers.key?(KeyEvent(scancode: 43, keycode: 0, modifiers: [], isRepeat: false), .target)
-            #expect(text == "  甲\n  乙")
+            #expect(text.stringValue == "  甲\n  乙")
             _ = handlers.key?(KeyEvent(scancode: 43, keycode: 0, modifiers: [.shift], isRepeat: false), .target)
-            #expect(text == "甲\n乙")
+            #expect(text.stringValue == "甲\n乙")
             _ = handlers.key?(KeyEvent(scancode: Scancode.a, keycode: 0, modifiers: [.lgui], isRepeat: false), .target)
             _ = handlers.text?("  if true {", .target)
             _ = handlers.key?(KeyEvent(scancode: Scancode.return, keycode: 0, modifiers: [], isRepeat: false), .target)
-            #expect(text == "  if true {\n    ")
+            #expect(text.stringValue == "  if true {\n    ")
         }
     } }
 

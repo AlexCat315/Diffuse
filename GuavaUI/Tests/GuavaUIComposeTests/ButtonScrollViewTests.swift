@@ -12,10 +12,10 @@ import GuavaUIRuntime
 struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
 
     final class TextStore {
-        var value: String = ""
+        var value: TextBuffer = ""
     }
 
-    private func makeBinding(_ store: TextStore) -> Binding<String> {
+    private func makeBinding(_ store: TextStore) -> Binding<TextBuffer> {
         Binding(get: { store.value }, set: { store.value = $0 })
     }
 
@@ -732,7 +732,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let store = TextStore()
-        store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
+        store.value = TextBuffer(Array(repeating: "line", count: 12).joined(separator: "\n"))
 
         graph.install(root:
             ScrollView(.vertical) {
@@ -750,11 +750,11 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         let scrollView = tree.root!.children.first!
         let field = firstNode(in: tree.root, where: { $0.attachments[TextField.surfaceMarkerKey] != nil })!
         let fieldState = field.attachments["__textfield_state"] as? TextField.FieldState
-        #expect((fieldState?.maxScrollY ?? 0) > 0)
+        #expect((fieldState?.scroll.maxY ?? 0) > 0)
         #expect(scrollView.contentOffset.y == 0)
-        fieldState?.maxScrollY = 0
-        fieldState?.visibleTextHeight = 0
-        fieldState?.contentHeight = 0
+        fieldState?.scroll.maxY = 0
+        fieldState?.scroll.visibleHeight = 0
+        fieldState?.scroll.contentHeight = 0
 
         let dispatcher = EventDispatcher(
             tree: tree,
@@ -784,7 +784,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let store = TextStore()
-        store.value = Array(repeating: "line", count: 16).joined(separator: "\n")
+        store.value = TextBuffer(Array(repeating: "line", count: 16).joined(separator: "\n"))
 
         graph.install(root:
             ScrollView(.vertical) {
@@ -801,7 +801,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         let scrollView = tree.root!.children.first!
         let field = firstNode(in: tree.root, where: { $0.attachments[TextField.surfaceMarkerKey] != nil })!
         let fieldState = field.attachments["__textfield_state"] as? TextField.FieldState
-        #expect((fieldState?.maxScrollY ?? 0) > 0)
+        #expect((fieldState?.scroll.maxY ?? 0) > 0)
 
         let dispatcher = EventDispatcher(
             tree: tree,
@@ -816,8 +816,8 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
                                                           deltaX: 0,
                                                           deltaY: 0)))
 
-        fieldState?.scrollOffsetY = fieldState?.maxScrollY ?? 0
-        field.contentOffset = CGPoint(x: 0, y: CGFloat(fieldState?.maxScrollY ?? 0))
+        fieldState?.scroll.offsetY = fieldState?.scroll.maxY ?? 0
+        field.contentOffset = CGPoint(x: 0, y: CGFloat(fieldState?.scroll.maxY ?? 0))
 
         let previousFieldOffset = field.contentOffset.y
         dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
@@ -959,7 +959,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let store = TextStore()
-        store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
+        store.value = TextBuffer(Array(repeating: "line", count: 12).joined(separator: "\n"))
 
         graph.install(root:
             ScrollView(.vertical) {
@@ -976,7 +976,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         let scrollView = tree.root!.children.first!
         let field = firstNode(in: tree.root, where: { $0.attachments[TextField.surfaceMarkerKey] != nil })!
         let fieldState = field.attachments["__textfield_state"] as? TextField.FieldState
-        #expect((fieldState?.maxScrollY ?? 0) > 0)
+        #expect((fieldState?.scroll.maxY ?? 0) > 0)
 
         focus.focus(field)
         graph.recomposer.commitAll()

@@ -39,9 +39,11 @@ struct CursorPipelineTests {
 
             let tree = NodeTree()
             let graph = ViewGraph(tree: tree, recomposer: Recomposer())
-            var text: String = ""
-            let binding = Binding<String>(get: { text }, set: { text = $0 })
-            graph.install(root: TextField("placeholder", text: binding, onSubmit: {}))
+            var text: TextBuffer = ""
+            let binding = Binding<TextBuffer>(get: { text }, set: { text = $0 })
+            graph.install(root: TextField("placeholder", text: binding) { input in
+                input.events.onSubmit = {}
+            })
 
             let fieldNode = firstHitTestable(in: tree.root)
             #expect(fieldNode?.cursor == .ibeam)

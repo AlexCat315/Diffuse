@@ -1,7 +1,7 @@
 import GuavaUICore
 import CFreeType
 
-/// Rasterizes glyphs with FreeType and packs them into an alpha-only texture atlas.
+/// Packs FreeType alpha glyphs and registered color glyphs into separate atlas planes.
 ///
 /// Thread safety: not thread-safe. All calls must happen on the same thread (typically the main/render thread).
 public final class FontAtlas {
@@ -13,8 +13,10 @@ public final class FontAtlas {
     public private(set) var atlasData: [UInt8]
     public let atlasWidth: Int
     public let atlasHeight: Int
-    public private(set) var isDirty: Bool = false
-    public private(set) var isFull: Bool = false
+    private var alphaIsDirty = false
+    public var isDirty: Bool { alphaIsDirty || colorAtlas?.isDirty == true }
+    private var alphaIsFull = false
+    public var isFull: Bool { alphaIsFull || colorAtlas?.isFull == true }
 
     /// Current packing cursor (shelf packing algorithm).
     private var shelfX: Int = 0
@@ -30,6 +32,8 @@ public final class FontAtlas {
 
     /// Registered external FreeType faces for multi-font rendering.
     private var registeredFaces: [Int: RegisteredFace] = [:]
+    private var colorSources: [Int: ColorGlyphSource] = [:]
+    private var colorAtlas: ColorGlyphAtlas?
 
     /// Current font size in points.
     public private(set) var fontSize: Float = 0
@@ -122,8 +126,9 @@ public final class FontAtlas {
         metricsCache.removeAll()
         rasterCache.removeAll()
         dirtyRegion = nil
-        isDirty = false
-        isFull = false
+        alphaIsDirty = false
+        alphaIsFull = false
+        colorAtlas?.reset()
         return true
     }
 
@@ -197,6 +202,11 @@ public final class FontAtlas {
     }
 
     public func glyphMetrics(glyphIndex: UInt32, fontID: Int = 0) -> GlyphMetrics? {
+        if let source = colorSources[fontID] {
+            let key = GlyphKey(fontID: fontID, glyphIndex: glyphIndex, size: source.size, rasterScale: source.rasterScale)
+            if let cached = metricsCache[key] { return cached }
+            let metrics = source.metrics(glyphIndex); metricsCache[key] = metrics; return metrics
+        }
         guard let resolved = resolveFace(fontID: fontID) else { return nil }
 
         let scale = max(resolved.rasterScale, 1)
@@ -221,6 +231,9 @@ public final class FontAtlas {
     }
 
     public func cachedGlyphInfo(glyphIndex: UInt32, fontID: Int = 0) -> GlyphInfo? {
+        if let source = colorSources[fontID] {
+            return rasterCache[GlyphKey(fontID: fontID, glyphIndex: glyphIndex, size: source.size, rasterScale: source.rasterScale)]
+        }
         guard let resolved = resolveFace(fontID: fontID) else { return nil }
 
         let scale = max(resolved.rasterScale, 1)
@@ -234,6 +247,7 @@ public final class FontAtlas {
     }
 
     public func lineMetrics(fontID: Int = 0) -> LineMetrics? {
+        if let source = colorSources[fontID] { return source.lineMetrics() }
         guard let resolved = resolveFace(fontID: fontID),
               let size = resolved.face.pointee.size else { return nil }
 
@@ -272,6 +286,7 @@ public final class FontAtlas {
     ///   - fontID: Font identifier (0 = default/stored face, others = registered faces).
     /// - Returns: Cached or newly rasterized glyph info, or nil on failure.
     public func rasterizeGlyph(glyphIndex: UInt32, fontID: Int = 0) -> GlyphInfo? {
+        if let source = colorSources[fontID] { return rasterizeColorGlyph(glyphIndex, fontID: fontID, source: source) }
         guard let resolved = resolveFace(fontID: fontID) else { return nil }
 
         let scale = max(resolved.rasterScale, 1)
@@ -308,7 +323,7 @@ public final class FontAtlas {
         let (x, y) = packGlyph(width: w, height: h)
         guard x >= 0 else {
             // Atlas full
-            isFull = true
+            alphaIsFull = true
             return nil
         }
 
@@ -348,7 +363,7 @@ public final class FontAtlas {
         if w > 0, h > 0 {
             mergeDirtyRegion(x: x, y: y, width: w, height: h)
         }
-        isDirty = true
+        alphaIsDirty = true
         return info
     }
 
@@ -363,19 +378,40 @@ public final class FontAtlas {
     /// Clears the atlas bitmap and raster cache. Keeps the loaded font and
     /// cached metrics so future layout passes stay cheap.
     public func reset() {
-        isFull = false
+        colorAtlas?.reset()
+        alphaIsFull = false
         atlasData = [UInt8](repeating: 0, count: atlasWidth * atlasHeight)
         rasterCache.removeAll()
         shelfX = 0
         shelfY = 0
         shelfRowHeight = 0
         dirtyRegion = DirtyRegion(x: 0, y: 0, width: atlasWidth, height: atlasHeight)
-        isDirty = true
+        alphaIsDirty = true
     }
 
     public func markClean() {
-        isDirty = false
+        colorAtlas?.markClean()
+        alphaIsDirty = false
         dirtyRegion = nil
+    }
+
+    public func registerColorSource(_ source: ColorGlyphSource, fontID: Int) {
+        colorSources[fontID] = source
+    }
+
+    public func colorDirtyUploadPayload() -> (region: DirtyRegion, pixels: [UInt8], textureWidth: Int, textureHeight: Int)? {
+        guard let colorAtlas, let payload = colorAtlas.payload() else { return nil }
+        return (payload.region, payload.pixels, colorAtlas.width, colorAtlas.height)
+    }
+
+    private func rasterizeColorGlyph(_ glyphIndex: UInt32, fontID: Int, source: ColorGlyphSource) -> GlyphInfo? {
+        let key = GlyphKey(fontID: fontID, glyphIndex: glyphIndex, size: source.size, rasterScale: source.rasterScale)
+        if let cached = rasterCache[key] { return cached }
+        guard let bitmap = source.rasterize(glyphIndex) else { return nil }
+        if colorAtlas == nil { colorAtlas = ColorGlyphAtlas(width: atlasWidth, height: atlasHeight) }
+        guard let info = colorAtlas?.insert(bitmap) else { return nil }
+        metricsCache[key] = bitmap.metrics; rasterCache[key] = info
+        return info
     }
 
     // MARK: - Shelf packing

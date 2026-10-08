@@ -28,16 +28,16 @@ struct AdvancedInteractionTests: GuavaUIComposeSerializedSuite {
     @Test("history groups typing, restores Unicode selections, branches redo, and resets on external replacement")
     func historyTransactions() {
         let history = TextEditHistory()
-        let a = TextEditHistory.Snapshot(text: "中", cursor: 1)
-        let b = TextEditHistory.Snapshot(text: "中😀", cursor: 2)
-        let c = TextEditHistory.Snapshot(text: "中😀a", cursor: 3)
-        history.synchronize(a.text)
+        let a = TextEditHistory.Snapshot(buffer: "中", cursor: 1)
+        let b = TextEditHistory.Snapshot(buffer: "中😀", cursor: 2)
+        let c = TextEditHistory.Snapshot(buffer: "中😀a", cursor: 3)
+        history.synchronize(a.buffer)
         history.record(before: a, after: b, kind: .typing, time: 1)
         history.record(before: b, after: c, kind: .typing, time: 1.2)
         #expect(history.undo() == a)
         #expect(history.redo() == c)
-        let selection = TextEditHistory.Snapshot(text: c.text, cursor: 3, anchor: 0)
-        let paste = TextEditHistory.Snapshot(text: "替换", cursor: 2)
+        let selection = TextEditHistory.Snapshot(buffer: c.buffer, cursor: 3, anchor: 0)
+        let paste = TextEditHistory.Snapshot(buffer: "替换", cursor: 2)
         history.record(before: selection, after: paste, kind: .atomic, time: 2)
         #expect(history.undo() == selection)
         history.record(before: selection, after: a, kind: .atomic, time: 3)
@@ -50,7 +50,7 @@ struct AdvancedInteractionTests: GuavaUIComposeSerializedSuite {
     func fieldUndoRouting() throws { try GlobalTestLock.locked {
         let context = PlatformInputContext()
         try context.withCurrent {
-            var text = "中😀"; var sceneUndos = 0
+            var text: TextBuffer = "中😀"; var sceneUndos = 0
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: Box {
                 ShortcutHost { event in if event.scancode == Scancode.z { sceneUndos += 1; return true }; return false }
@@ -62,19 +62,19 @@ struct AdvancedInteractionTests: GuavaUIComposeSerializedSuite {
             let input = dispatcher(graph, context)
             input.dispatch(.textInput("a")); input.dispatch(.textInput("b"))
             input.dispatch(.keyDown(key(Scancode.z, primary: true)))
-            #expect(text == "中😀"); #expect(sceneUndos == 0)
+            #expect(text.stringValue == "中😀"); #expect(sceneUndos == 0)
             input.dispatch(.keyDown(key(Scancode.z, primary: true, shift: true)))
-            #expect(text == "中😀ab")
+            #expect(text.stringValue == "中😀ab")
             let previousRead = ClipboardHolder.read
             defer { ClipboardHolder.read = previousRead }
             ClipboardHolder.read = { "粘贴\n值" }
             input.dispatch(.keyDown(key(Scancode.a, primary: true)))
             input.dispatch(.keyDown(key(Scancode.v, primary: true)))
-            #expect(text == "粘贴\n值")
+            #expect(text.stringValue == "粘贴\n值")
             input.dispatch(.keyDown(key(Scancode.z, primary: true)))
-            #expect(text == "中😀ab")
+            #expect(text.stringValue == "中😀ab")
             let state = try #require(field.attachments["__textfield_state"] as? TextField.FieldState)
-            #expect(state.selectionAnchor == 0 && state.cursorIndex == 4)
+            #expect(state.selection.anchor == 0 && state.selection.cursorIndex == 4)
         }
     } }
 
@@ -104,7 +104,7 @@ struct AdvancedInteractionTests: GuavaUIComposeSerializedSuite {
             LayerRoot {
                 Button("Background", action: onBackground).debugName("background")
             } portals: {
-                Modal(isPresented: $presented, width: 260, height: 160) {
+                Modal(isPresented: $presented, configure: { $0.geometry.width = 260; $0.geometry.height = 160 }) {
                     TextField(text: .constant("JSON")).debugName("modal-input")
                 }
                 PortalHost()
@@ -205,7 +205,9 @@ struct AdvancedInteractionTests: GuavaUIComposeSerializedSuite {
         try context.withCurrent {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: ResizableEditor(initialHeight: 160, minHeight: 100, maxHeight: 300) {
-                TextField(text: .constant("JSON"), axis: .vertical)
+                TextField(text: .constant("JSON")) { input in
+                    input.layout.axis = .vertical
+                }
             }.frame(width: 300))
             settle(graph, width: 300, height: 400)
             let grip = try #require(nodes(graph.tree.root).first { $0.cursor == .resizeVertical })

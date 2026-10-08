@@ -18,7 +18,7 @@ struct ScriptCanvasTests: GuavaUIComposeSerializedSuite {
         let frame = try #require(source.consume())
         #expect(!frame.isEmpty)
         #expect(!frame.vertices.isEmpty)
-        #expect(frame.atlasDirty != nil)
+        #expect(!frame.atlasUpdates.isEmpty)
         #expect(frame.logicalWidth == 640)
         bridge.tick(width: 640, height: 480, contentScale: 2)
         #expect(source.consume()?.isEmpty == true)
@@ -36,4 +36,21 @@ struct ScriptCanvasTests: GuavaUIComposeSerializedSuite {
         bridge.tick(width: 640, height: 480, canvas: canvas)
         #expect(try #require(source.consume()).vertices.count > base)
     } }
+
+    #if canImport(CoreText)
+    @Test("script HUD delivers both atlas planes and keeps emoji after skipped frames")
+    func publishesColorGlyphs() throws { try GlobalTestLock.locked {
+        let source = InGameDrawListSource()
+        let bridge = InGameViewGraphBridge(source: source)
+        var canvas = InGameCanvas()
+        canvas.label("Score 🙂", x: 20, y: 20, fontSize: 24)
+        bridge.tick(width: 640, height: 480, contentScale: 2, canvas: canvas)
+        bridge.tick(width: 640, height: 480, contentScale: 2, canvas: canvas)
+        let frame = try #require(source.consume())
+        #expect(frame.atlasUpdates.map(\.format) == [.alpha, .color])
+        #expect(frame.batches.contains { $0.textureID == TextureID(1).colorGlyphAtlasID })
+        #expect(frame.atlasUpdates[1].pixels.contains { $0 != 0 })
+        #expect(source.consume()?.atlasUpdates.isEmpty == true)
+    } }
+    #endif
 }

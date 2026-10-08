@@ -118,6 +118,7 @@ struct ViewportKeyRoutingPolicyTests {
 }
 
 @Suite("Viewport chrome layout")
+@MainActor
 struct ViewportChromeLayoutTests {
     @Test("narrow viewport reserves a non-overlapping view-cube region")
     func narrowToolbarDoesNotOverlapCube() {

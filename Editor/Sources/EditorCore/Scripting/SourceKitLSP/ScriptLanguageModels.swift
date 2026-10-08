@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUICompose
 
 // MARK: - Sources
 
@@ -6,9 +7,10 @@ import Foundation
 /// be newer than what is on disk (unsaved edits).
 public struct ScriptLanguageSource: Sendable {
     public let file: DynamicScriptManager.ScriptFile
-    public let text: String
+    public let text: TextBuffer
+    public var revision: UInt64 = 0
 
-    public init(file: DynamicScriptManager.ScriptFile, text: String) {
+    public init(file: DynamicScriptManager.ScriptFile, text: TextBuffer) {
         self.file = file
         self.text = text
     }
@@ -61,11 +63,13 @@ public struct ScriptLanguageDiagnostic: Sendable, Equatable, Identifiable {
 }
 
 public struct ScriptLanguageDiagnosticUpdate: Sendable {
+    public let sourceRevision: UInt64
     public let scriptID: String
     public let version: Int?
     public let diagnostics: [ScriptLanguageDiagnostic]
 
-    public init(scriptID: String, version: Int?, diagnostics: [ScriptLanguageDiagnostic]) {
+    public init(scriptID: String, sourceRevision: UInt64, version: Int?, diagnostics: [ScriptLanguageDiagnostic]) {
+        self.sourceRevision = sourceRevision
         self.scriptID = scriptID
         self.version = version
         self.diagnostics = diagnostics
@@ -208,7 +212,9 @@ public struct ScriptCompletionItem: Sendable, Equatable, Identifiable {
     public let insertText: String
     /// Characters that must be replaced ahead of the caret — SourceKit emits
     /// edits reaching back over the partially typed identifier.
-    public let replaceStart: ScriptLanguagePosition?
+    public let replacement: ScriptLanguageSpan?
+    public var additionalEdits: [ScriptCompletionTextEdit] = []
+    public var usesSnippet = false
     public let filterText: String?
     public let sortText: String?
 
@@ -219,7 +225,7 @@ public struct ScriptCompletionItem: Sendable, Equatable, Identifiable {
                 detail: String?,
                 documentation: String?,
                 insertText: String,
-                replaceStart: ScriptLanguagePosition?,
+                replacement: ScriptLanguageSpan?,
                 filterText: String?,
                 sortText: String?) {
         self.label = label
@@ -227,10 +233,16 @@ public struct ScriptCompletionItem: Sendable, Equatable, Identifiable {
         self.detail = detail
         self.documentation = documentation
         self.insertText = insertText
-        self.replaceStart = replaceStart
+        self.replacement = replacement
         self.filterText = filterText
         self.sortText = sortText
     }
+}
+
+public struct ScriptCompletionTextEdit: Sendable, Equatable {
+    public let range: ScriptLanguageSpan
+    public let text: String
+    public init(range: ScriptLanguageSpan, text: String) { self.range = range; self.text = text }
 }
 
 public struct ScriptCompletionResult: Sendable, Equatable {

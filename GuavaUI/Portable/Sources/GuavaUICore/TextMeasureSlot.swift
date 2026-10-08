@@ -35,6 +35,7 @@ public struct TextLayoutCacheKey: Hashable {
     public let lineHeight: Float
     public let alignment: TextAlignment
     public let maxWidth: Float
+    public let letterSpacing: Float
     public let atlasID: ObjectIdentifier
 
     public init(text: String,
@@ -42,13 +43,15 @@ public struct TextLayoutCacheKey: Hashable {
                 lineHeight: Float,
                 alignment: TextAlignment,
                 maxWidth: Float,
-                atlasID: ObjectIdentifier) {
+                atlasID: ObjectIdentifier,
+                letterSpacing: Float = 0) {
         self.text = text
         self.font = font
         self.lineHeight = lineHeight
         self.alignment = alignment
         self.maxWidth = maxWidth
         self.atlasID = atlasID
+        self.letterSpacing = letterSpacing
     }
 }
 

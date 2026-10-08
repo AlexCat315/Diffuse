@@ -3,6 +3,7 @@ import GuavaUIRuntime
 enum StyleAttachmentKey {
     static let font = "__font"
     static let lineHeight = "__line_height"
+    static let letterSpacing = "__letter_spacing"
 }
 
 extension Node {
@@ -200,6 +201,10 @@ public extension View {
 
     func font(_ font: Font) -> some View {
         modifier(FontModifier(font))
+    }
+
+    func letterSpacing(_ value: Float) -> some View {
+        modifier(LetterSpacingModifier(value))
     }
 
     func lineHeight(_ value: Float) -> some View {

@@ -1,3 +1,4 @@
+import GuavaUICompose
 import Foundation
 import IntentRuntime
 
@@ -9,7 +10,7 @@ public struct EditorNavigationState: Codable, Sendable {
     public var scriptNavigation: EditorScriptNavigationRequest? = nil
     public var assetNavigationID: String? = nil
     public var assetNavigationRevision: UInt64 = 0
-    public var commandPaletteQuery: String = ""
+    public var commandPaletteQuery: TextBuffer = ""
 
     public init(_ configure: (inout Self) -> Void = { _ in }) {
         configure(&self)

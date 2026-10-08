@@ -66,8 +66,8 @@ struct _TextFieldStyleHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let style = node.compositionValue(of: TextFieldStyleEnvironment.key)
         var resolvedField = textField
-        if resolvedField.size == .automatic {
-            resolvedField.size = node.compositionValue(of: ControlSizeEnvironment.key).textFieldSize
+        if resolvedField.decoration.size == .automatic {
+            resolvedField.decoration.size = node.compositionValue(of: ControlSizeEnvironment.key).textFieldSize
         }
         let configuration = TextFieldStyleConfiguration(
             content: AnyView(_TextFieldSurface(textField: resolvedField,
@@ -76,12 +76,12 @@ struct _TextFieldStyleHost: _PrimitiveView {
                                                onFocusChange: onFocusChange,
                                                onEditingChange: onEditingChange)),
             placeholder: textField.placeholder,
-            isFocused: interactionState.isFocused && !textField.disabled,
-            isEditing: interactionState.isEditing && !textField.disabled,
+            isFocused: interactionState.isFocused && !textField.behavior.disabled,
+            isEditing: interactionState.isEditing && !textField.behavior.disabled,
             isError: false,
-            isEnabled: !textField.disabled,
+            isEnabled: !textField.behavior.disabled,
             theme: node.theme,
-            isHovered: interactionState.isHovered && !textField.disabled
+            isHovered: interactionState.isHovered && !textField.behavior.disabled
         )
         return [style.makeBody(configuration)]
     }
@@ -114,7 +114,7 @@ struct _TextFieldSurface: _PrimitiveView {
         textField._updateLayout(layout)
         // Multiline fields fill an allocated editor/JSON viewport while
         // retaining their intrinsic height when unconstrained.
-        if textField.axis == .vertical {
+        if textField.layout.axis == .vertical {
             layout.flexGrow = 1
             layout.flexShrink = 1
         }

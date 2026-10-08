@@ -15,6 +15,12 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
 endif()
 
+set(SDL3_BUILD_NOTES "static library staged from SDL3-static")
+if(APPLE)
+    include(${CMAKE_CURRENT_LIST_DIR}/PatchSDL3Cocoa.cmake)
+    string(APPEND SDL3_BUILD_NOTES "; Cocoa event-coordinate and ordered button-state patch")
+endif()
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/sdl3 sdl3-build EXCLUDE_FROM_ALL)
 
 set(SDL3_BUNDLE ${GUAVA_VENDOR_DIR}/SDL3.artifactbundle)
@@ -128,6 +134,6 @@ guava_add_artifact_build_manifest(
     SOURCE_URL "Engine/third-party/sdl3"
     SOURCE_REF "3.4.18"
     SOURCE_REVISION ${SDL3_SOURCE_REVISION}
-    NOTES "static library staged from SDL3-static"
+    NOTES "${SDL3_BUILD_NOTES}"
     DEPENDS stage_sdl3
 )

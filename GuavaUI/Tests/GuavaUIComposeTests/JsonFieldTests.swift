@@ -6,7 +6,7 @@ import GuavaUIRuntime
 @Suite("JsonField", .serialized)
 struct JsonFieldTests: GuavaUIComposeSerializedSuite {
     final class Store {
-        var value = "{}"
+        var value: TextBuffer = "{}"
     }
 
     @Test("empty input saves as an empty JSON object")
@@ -41,7 +41,7 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         var commits: [String] = []
         graph.install(root:
             JsonField(text: Binding(get: { store.value }, set: { store.value = $0 }),
-                      onCommit: { commits.append($0) })
+                      onCommit: { commits.append($0.stringValue) })
         )
 
         let node = fieldNode(in: tree.root)
@@ -53,7 +53,7 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         _ = handlers.text!("{\"speed\":4}", .target)
         _ = handlers.key!(key(40, primary: true), .target)
 
-        #expect(store.value == "{\"speed\":4}")
+        #expect(store.value.stringValue == "{\"speed\":4}")
         #expect(commits == ["{\"speed\":4}"])
     } }
 
@@ -82,7 +82,7 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         _ = handlers.text!("{ nope }", .target)
         _ = handlers.key!(key(40, primary: true), .target)
 
-        #expect(store.value == "{\"ok\":true}")
+        #expect(store.value.stringValue == "{\"ok\":true}")
     } }
 
     private func fieldNode(in root: Node?) -> Node {
@@ -108,7 +108,7 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
             _ = handlers.text?("{ unfinished", .target)
             context.focusChain.clear()
             graph.recomposer.commitAll()
-            #expect(store.value == "{\"ok\":true}")
+            #expect(store.value.stringValue == "{\"ok\":true}")
             context.focusChain.focus(node)
             graph.recomposer.commitAll()
             var copied = ""

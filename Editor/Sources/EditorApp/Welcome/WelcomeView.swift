@@ -10,8 +10,8 @@ struct WelcomeView: View {
     @State private var recentProjects: [String] = RecentProjectsStore.all()
     @State private var errorMessage: String? = nil
     @State private var template: EditorProjectTemplate? = nil
-    @State private var projectName = "NewGame"
-    @State private var parentPath = Self.defaultParent.path
+    @State private var projectName: TextBuffer = "NewGame"
+    @State private var parentPath = TextBuffer(Self.defaultParent.path)
     @State private var deletionPath: String? = nil
 
     private static var defaultParent: URL {
@@ -91,8 +91,8 @@ struct WelcomeView: View {
                 TextField(L("Parent Folder"), text: $parentPath).flex().debugName("welcome-project-parent")
                 Button(L("Browse...")) { pickParent() }.buttonStyle(.secondary)
             }
-            Text(URL(fileURLWithPath: (parentPath as NSString).expandingTildeInPath)
-                .appendingPathComponent(projectName.trimmingCharacters(in: .whitespacesAndNewlines)).path)
+            Text(URL(fileURLWithPath: (parentPath.stringValue as NSString).expandingTildeInPath)
+                .appendingPathComponent(projectName.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)).path)
                 .font(.caption).foregroundColor(.onSurfaceMuted)
             Text(L(template == .crystalRush
                    ? "Creates a separate copy and compiles its bundled script. When ready, click Play."
@@ -170,7 +170,7 @@ struct WelcomeView: View {
         MainActor.assumeIsolated {
             guard let display = context.display else { errorMessage = L("Folder picker is unavailable on this platform."); return }
             display.requestOpenFolder { path in
-                if let path { self.parentPath = path }
+                if let path { self.parentPath = TextBuffer(path) }
             }
         }
     }
@@ -180,8 +180,8 @@ struct WelcomeView: View {
         MainActor.assumeIsolated {
             errorMessage = nil
             do {
-                try context.createProject(name: projectName,
-                                          parent: URL(fileURLWithPath: (parentPath as NSString).expandingTildeInPath, isDirectory: true),
+                try context.createProject(name: projectName.stringValue,
+                                          parent: URL(fileURLWithPath: (parentPath.stringValue as NSString).expandingTildeInPath, isDirectory: true),
                                           template: template)
             } catch { errorMessage = error.localizedDescription }
         }

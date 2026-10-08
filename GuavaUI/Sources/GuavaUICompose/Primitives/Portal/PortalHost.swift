@@ -143,6 +143,7 @@ private struct _PortalEntrySlot: _PrimitiveView {
     func _makeNode() -> Node {
         let node = Node()
         node.attachments[LayoutDebugAttachmentKey.layoutRole] = "portal-entry"
+        node.attachments[PortalOwnership.entryKey] = entry.id
         node.attachments[LayoutDebugAttachmentKey.debugName] = entry.id
         node.attachments[WheelRoutingAttachmentKey.priority] = WheelRoutingPriority.preferHit
         return node
@@ -157,7 +158,7 @@ private struct _PortalEntrySlot: _PrimitiveView {
             guard !entry.fillsWindow else { return }
             let window = portalWindowBounds(node)
             let fitted = PortalPlacement.fit(position: entry.position, size: node.frame.size,
-                                              in: window, anchor: store.anchor(for: entry.id))
+                                              in: window, anchor: store.anchor(for: entry.id), placement: entry.placement)
             node.frame = fitted
             node.layoutNode?.maxWidth = Float(max(0, window.width - 12))
             node.layoutNode?.maxHeight = Float(max(0, window.height - 12))

@@ -25,11 +25,11 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
         Column(alignment: .leading, spacing: 8) {
             Row(alignment: .center, spacing: 8) {
                 Text("W").font(.caption).foregroundColor(.onSurfaceMuted)
-                TextField("640", text: $width).frame(width: 56)
+                CommitOnBlurTextField(identity: "render-width", text: $width).frame(width: 56)
                 Text("H").font(.caption).foregroundColor(.onSurfaceMuted)
-                TextField("480", text: $height).frame(width: 56)
+                CommitOnBlurTextField(identity: "render-height", text: $height).frame(width: 56)
                 Text("SPP").font(.caption).foregroundColor(.onSurfaceMuted)
-                TextField("64", text: $samples).frame(width: 56)
+                CommitOnBlurTextField(identity: "render-samples", text: $samples).frame(width: 56)
             }
 
             Row(alignment: .center, spacing: 5) {

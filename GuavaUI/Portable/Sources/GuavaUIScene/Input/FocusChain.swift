@@ -33,6 +33,8 @@ public final class FocusChain {
 
     public init() {}
 
+    public var currentFocus: Node? { registrar.access("focus"); return focused }
+
     /// Menus keep text editing commands directed at the control they cover.
     public var commandTarget: Node? {
         registrar.access("focus")
@@ -45,8 +47,13 @@ public final class FocusChain {
     }
 
     public func permitsInput(_ node: Node) -> Bool {
-        if let active = scopes.last, active.restoresCommands, let root = active.root,
-           isDescendant(node, of: root) { return true }
+        // A submenu is a sibling portal of its parent menu. Every transient
+        // scope above the current modal stays pointer-accessible, so users can
+        // return to an earlier column without escaping the dialog itself.
+        for scope in scopes.reversed() {
+            guard scope.restoresCommands else { break }
+            if let root = scope.root, isDescendant(node, of: root) { return true }
+        }
         guard let root = scopes.last(where: { !$0.restoresCommands })?.root else { return true }
         return isDescendant(node, of: root)
     }
@@ -104,7 +111,7 @@ public final class FocusChain {
         let visibilityChanged = isFocusVisible != visible
         isFocusVisible = visible
         guard focused !== node else {
-            if visibilityChanged { notifyFocusChange(for: node, isFocused: true) }
+            if visibilityChanged { registrar.invalidate("focus"); notifyFocusChange(for: node, isFocused: true) }
             return
         }
         let previous = focused
@@ -189,7 +196,7 @@ public final class FocusChain {
 
     private func collect(node: Node, into out: inout [Node]) {
         guard node.acceptsSubtreeInput else { return }
-        if node.isFocusable { out.append(node) }
+        if node.isFocusable && node.isTabStop { out.append(node) }
         for c in node.children { collect(node: c, into: &out) }
     }
 

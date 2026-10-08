@@ -8,7 +8,7 @@ import GuavaUIRuntime
 struct IntentInputPanel: View {
     let app: EditorApplication
     let store: EditorStore
-    @State private var inputText: String = ""
+    @State private var inputText: TextBuffer = ""
 
     init(app: EditorApplication) {
         self.app = app
@@ -100,9 +100,9 @@ struct IntentInputPanel: View {
                     }
 
                     Row(alignment: .center, spacing: 8) {
-                        TextField(L("Describe what you want to do…"),
-                                  text: $inputText,
-                                  onSubmit: { submitInput() })
+                        TextField(L("Describe what you want to do…"), text: $inputText) { input in
+                            input.events.onSubmit = { submitInput() }
+                        }
                             .flex(1, shrink: 1)
 
                         Button(isEnabled: app.isAIAvailable
@@ -124,7 +124,7 @@ struct IntentInputPanel: View {
     }
 
     private func submitInput() {
-        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = inputText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if app.submitNaturalLanguageIntent(trimmed) {
             inputText = ""

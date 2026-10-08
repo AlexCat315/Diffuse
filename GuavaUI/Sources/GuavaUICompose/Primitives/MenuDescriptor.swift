@@ -10,6 +10,8 @@ public struct MenuDescriptor: Sendable {
 
 public enum MenuItemDescriptor: Sendable {
     case separator
+    case label(String)
+    case submenu(title: String, isEnabled: Bool = true, items: [MenuItemDescriptor])
     case action(title: String,
                 shortcut: KeyboardShortcut? = nil,
                 isEnabled: Bool = true,

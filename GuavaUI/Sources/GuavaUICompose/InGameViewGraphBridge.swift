@@ -73,19 +73,28 @@ public final class InGameViewGraphBridge {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
 
-        var atlasDirty: DrawListAtlasDirty? = nil
-        if let env = textEnv, env.atlas.isDirty,
-           let payload = env.atlas.dirtyUploadPayload() {
-            atlasDirty = DrawListAtlasDirty(
-                pixels: payload.pixels,
-                regionX: UInt32(payload.region.x),
-                regionY: UInt32(payload.region.y),
-                regionWidth: UInt32(payload.region.width),
-                regionHeight: UInt32(payload.region.height),
-                textureWidth: UInt32(env.atlas.atlasWidth),
-                textureHeight: UInt32(env.atlas.atlasHeight),
-                textureID: atlasTextureID
-            )
+        var atlasUpdates: [DrawListAtlasDirty] = []
+        if let env = textEnv, env.atlas.isDirty {
+            if let payload = env.atlas.dirtyUploadPayload() {
+                atlasUpdates.append(DrawListAtlasDirty(
+                    pixels: payload.pixels,
+                    regionX: UInt32(payload.region.x),
+                    regionY: UInt32(payload.region.y),
+                    regionWidth: UInt32(payload.region.width),
+                    regionHeight: UInt32(payload.region.height),
+                    textureWidth: UInt32(env.atlas.atlasWidth),
+                    textureHeight: UInt32(env.atlas.atlasHeight),
+                    textureID: atlasTextureID
+                ))
+            }
+            if let payload = env.atlas.colorDirtyUploadPayload() {
+                atlasUpdates.append(DrawListAtlasDirty(
+                    pixels: payload.pixels,
+                    regionX: UInt32(payload.region.x), regionY: UInt32(payload.region.y),
+                    regionWidth: UInt32(payload.region.width), regionHeight: UInt32(payload.region.height),
+                    textureWidth: UInt32(payload.textureWidth), textureHeight: UInt32(payload.textureHeight),
+                    textureID: atlasTextureID.colorGlyphAtlasID, format: .color))
+            }
             env.atlas.markClean()
         }
 
@@ -97,7 +106,7 @@ public final class InGameViewGraphBridge {
             viewportHeight: UInt32(height),
             logicalWidth: Float(width),
             logicalHeight: Float(height),
-            atlasDirty: atlasDirty
+            atlasUpdates: atlasUpdates
         ))
     }
 
@@ -109,7 +118,7 @@ public final class InGameViewGraphBridge {
         lastScale = s
         textEnv = TextEnvironment.bootstrapped(
             atlasTextureID: atlasTextureID,
-            primaryFontName: ".AppleSystemUIFont",
+            primaryFontName: SystemFontDefaults.primaryFontName,
             defaultFont: .system(size: 16),
             defaultLineHeight: 20,
             defaultColor: .white,

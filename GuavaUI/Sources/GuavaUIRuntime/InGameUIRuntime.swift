@@ -19,7 +19,7 @@ public final class InGameUIRenderer: InGameUIProviding, @unchecked Sendable {
     private let source: InGameDrawListSource
     private var configuredFormat: GPUTextureFormat?
     private let renderThreadList = DrawList()
-    private var pendingAtlasDirty: DrawListAtlasDirty?
+    private var pendingAtlasUpdates: [GlyphAtlasFormat: DrawListAtlasDirty] = [:]
     private var reportedFailures: [String: String] = [:]
 
     public init(renderer: DrawListRenderer, source: InGameDrawListSource) {
@@ -39,7 +39,7 @@ public final class InGameUIRenderer: InGameUIProviding, @unchecked Sendable {
         deltaTime: Double
     ) {
         guard let snapshot = source.consume() else { return }
-        if let dirty = snapshot.atlasDirty { pendingAtlasDirty = dirty }
+        for update in snapshot.atlasUpdates { pendingAtlasUpdates[update.format] = update }
         guard !snapshot.isEmpty,
               let encoder = commandEncoder as? GPUCommandEncoder,
               let view = colorView as? GPUTextureView,
@@ -66,24 +66,33 @@ public final class InGameUIRenderer: InGameUIProviding, @unchecked Sendable {
         }
         guard configuredFormat != nil else { return }
 
-        if let dirty = pendingAtlasDirty {
+        for atlasFormat in [GlyphAtlasFormat.alpha, .color] {
+            guard let dirty = pendingAtlasUpdates[atlasFormat] else { continue }
             do {
                 try dirty.pixels.withUnsafeBufferPointer { ptr in
                     guard let base = ptr.baseAddress else {
                         throw InGameUIRendererError.emptyAtlasPayload
                     }
-                    try renderer.registerAlphaTexture(
-                        id: dirty.textureID,
-                        pixels: base,
-                        width: dirty.regionWidth,
-                        height: dirty.regionHeight,
-                        originX: dirty.regionX,
-                        originY: dirty.regionY,
-                        textureWidth: dirty.textureWidth,
-                        textureHeight: dirty.textureHeight
-                    )
+                    if dirty.format == .alpha {
+                        try renderer.registerAlphaTexture(
+                            id: dirty.textureID,
+                            pixels: base,
+                            width: dirty.regionWidth,
+                            height: dirty.regionHeight,
+                            originX: dirty.regionX,
+                            originY: dirty.regionY,
+                            textureWidth: dirty.textureWidth,
+                            textureHeight: dirty.textureHeight
+                        )
+                    } else {
+                        try renderer.registerColorTexture(
+                            id: dirty.textureID, pixels: base,
+                            width: dirty.regionWidth, height: dirty.regionHeight,
+                            originX: dirty.regionX, originY: dirty.regionY,
+                            textureWidth: dirty.textureWidth, textureHeight: dirty.textureHeight)
+                    }
                 }
-                pendingAtlasDirty = nil
+                pendingAtlasUpdates.removeValue(forKey: atlasFormat)
                 clearFailure(context: "atlas upload")
             } catch {
                 reportFailure(error, context: "atlas upload")
