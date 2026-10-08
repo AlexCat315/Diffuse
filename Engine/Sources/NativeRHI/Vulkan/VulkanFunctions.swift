@@ -11,7 +11,6 @@
 #if canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
-import Darwin
 
 // MARK: - Handle / pointer interop helpers
 

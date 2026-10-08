@@ -21,6 +21,7 @@ struct VulkanTextureRecord {
     let width: Int
     let height: Int
     let depth: Int
+    var layers: UInt32 = 1
     let mipLevels: UInt32
     let usage: TextureUsage
     /// True for images acquired from the swapchain (memory owned by Vulkan).
@@ -36,22 +37,33 @@ struct VulkanSamplerRecord {
 struct VulkanShaderModuleRecord {
     let module: VkShaderModule
     let stage: ShaderStage
+    let entryPoint: String
 }
 
 struct VulkanGraphicsPipelineRecord {
     let pipeline: VkPipeline
-    let layout: VkPipelineLayout
-    let renderPass: VkRenderPass
+    let descriptor: GraphicsPipelineDescriptor
 }
 
 struct VulkanComputePipelineRecord {
     let pipeline: VkPipeline
-    let layout: VkPipelineLayout
+    let descriptor: ComputePipelineDescriptor
 }
 
 struct VulkanBindingSetRecord {
     let descriptorSet: VkDescriptorSet
-    let setLayout: VkDescriptorSetLayout
+    let layoutID: UInt32
+}
+
+struct VulkanPushRange {
+    let declaration: PushConstantRange
+    let offset: UInt32
+}
+
+struct VulkanPipelineLayoutRecord {
+    let native: VkPipelineLayout
+    let descriptor: PipelineLayoutDescriptor
+    let pushRanges: [VulkanPushRange]
 }
 
 final class VulkanRegistries {
@@ -62,8 +74,10 @@ final class VulkanRegistries {
     var graphicsPipelines: [UInt32: VulkanGraphicsPipelineRecord] = [:]
     var computePipelines: [UInt32: VulkanComputePipelineRecord] = [:]
     var bindingSets: [UInt32: VulkanBindingSetRecord] = [:]
-    /// Render passes cached by attachment format signature so pipelines can share.
-    var renderPasses: [String: VkRenderPass] = [:]
+    var bindingLayouts: [UInt32: VkDescriptorSetLayout] = [:]
+    var pipelineLayouts: [UInt32: VulkanPipelineLayoutRecord] = [:]
+    var meshPipelines: [UInt32: VulkanMeshPipelineRecord] = [:]
+    var accelerationStructures: [UInt32: VulkanAccelerationRecord] = [:]
     /// Internal-handle counter for backend-owned resources (upload chunks,
     /// swapchain drawables); starts above the frontend's low IDs.
     private var internalID: UInt32 = 0x8000_0000

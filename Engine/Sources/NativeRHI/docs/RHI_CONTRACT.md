@@ -1,122 +1,101 @@
 # NativeRHI 内部契约
 
-`NativeRHI` 是 Guava 自有的显式 GPU 接口。资源描述、命令记录和提交规划由前端负责，Metal / Vulkan / DX12 后端负责原生对象与执行。接口可参考 WebGPU 的资源与布局组织，但高级功能按原生 API 的能力设计；不承诺符合 WebGPU 标准。
+`NativeRHI` 是 Guava 自有的显式 GPU 接口。前端负责句柄、布局、命令记录、帧生命周期和提交规划；后端负责原生对象与执行。资源和布局的组织可参考 WebGPU，但高级能力独立设计，不承诺符合 WebGPU 标准。
 
-这是第一阶段实现。目前包集成与 GPU 测试针对 Swift 6.4、macOS 13+、arm64。窗口、输入和 SDL 不属于本模块。现有 `RenderBackend` 仍使用 `RHIWGPU`，尚未迁移到 `NativeRHI`。
+这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-## 实现状态
+现有 `RenderBackend` 仍使用 `RHIWGPU`。本阶段完成独立后端和 GPU 契约测试，尚未迁移现有 renderer。
+
+## 实现与验证状态
 
 | 路径 | Metal | Vulkan | DX12 |
 | --- | --- | --- | --- |
-| Buffer / Texture 创建和直接上传、读回 | 已实现并验证 | 已验证上传和纹理读回 | 源码骨架 |
-| 命令记录、帧槽、延迟销毁、提交规划 | 已实现并验证 | Buffer copy 提交可用 | 不可用 |
-| Raster / Compute pipeline | 可用；compute 已验证 Slang 输出 | 原型未完成，公开接口拒绝调用 | 不可用 |
-| Mesh shader | 支持设备上可用，已验证 Slang 三角形 | 不可用 | 不可用 |
-| Task / amplification shader、间接 mesh dispatch | 不可用 | 不可用 | 不可用 |
-| BLAS / TLAS 与 compute ray query | 支持设备上可用，已验证原生 MSL 命中与未命中 | 不可用 | 不可用 |
-| RT pipeline / SBT / AS update / compaction | 不可用 | 不可用 | 不可用 |
+| Buffer / Texture / Sampler、上传与读回 | 本机验证 | MoltenVK 验证 | 原生实现，Windows 待验证 |
+| Raster / Compute、绑定、indirect、copy | 本机验证核心路径 | MoltenVK 验证核心路径 | 原生实现，Windows 待验证 |
+| 窗口呈现与 resize | 本机验证 | Metal surface 本机验证；Win32 / Xlib 待验证 | HWND swapchain 实现，待验证 |
+| 帧上传、延迟销毁、跨队列同步 | 本机验证 | 本机验证；独立 queue family 待原生验证 | 原生实现，待验证 |
+| Mesh / task | Mesh 已验证；task 关闭 | EXT 管线与直接 dispatch 实现，设备功能链控制，GPU 待验证 | MS / AS 管线与直接 dispatch 实现，GPU 待验证 |
+| BLAS / TLAS / compute ray query | 原生 MSL 命中与未命中已验证 | KHR 构建、地址、绑定实现，GPU 待验证 | DXR 构建、绑定实现；inline query 要求 tier 1.1，GPU 待验证 |
+| RT pipeline / SBT、AS update / compaction、间接 mesh | 关闭 | 关闭 | 关闭 |
 
-`Device.capabilities` 表示**当前后端已经实现，并且当前设备支持**的操作。所有默认值为关闭。高级功能需要独立检查，例如 `rayTracing.computeRayQuery` 与 `rayTracing.pipelines` 分别表示不同路径。
+`Device.capabilities` 表示实现路径与当前设备支持的交集，默认值全部关闭。**功能存在与平台验证是两件事**：DX12、Vulkan RT / mesh 的源码已接入，但本机没有相应设备，不能把它们称为已验证。
 
-`Device.adapterCapabilities` 仅提供诊断信息。Vulkan 扩展存在或 DX12 feature query 返回支持，不能使尚未实现的命令可用。未知、不完整或未经验证的路径必须抛出 `unsupportedFeature`，不能静默忽略。
+`adapterCapabilities` 是硬件诊断信息，不能代替 `capabilities`。光追能力表示 API 可用，不保证具有专用光追单元；本机 Apple M1 测试验证功能正确性，不代表专用 RT 硬件性能。
 
-光追 capability 表示原生 API 可用，不保证 GPU 具有专用光追单元。本阶段在 Apple M1 上验证 API 正确性；具有专用光追硬件的设备仍需要另外验证性能。
+## 布局与 shader ABI
 
-Vulkan 当前只开放 graphics queue 上的 Buffer copy 命令；render / compute、录制的 texture copy 命令在提交规划前拒绝。同步使用保守的 buffer memory barrier。Vulkan 包接入仍依赖 Darwin loader；Windows / Linux 构建与原生 Vulkan RT、mesh 需要后续工作。DX12 在本机不能构建或验证。
+- 先创建 binding layout 和 pipeline layout，再创建管线；具体 binding set 可以晚于管线创建。后端不能通过现存 binding set 推断管线布局。
+- Binding layout 声明 slot、资源类型、`ShaderVisibility` 和 buffer 访问/结构信息。一个资源可同时供 vertex 与 fragment 使用。Binding set 必须覆盖全部声明，资源类型匹配；目前不支持数组、bindless。
+- `BufferBindingLayout.readOnly` 决定 SRV / UAV 和读写依赖；`elementStride` 保存离线反射的 structured buffer 元素大小，零表示 byte-address。不要把只读 storage buffer 当作 UAV。
+- Pipeline layout 缓存按有序 set layouts 与 push constant 声明共同建 key。资源绑定和小常量会在提交前检查是否匹配当前管线。
+- `PushConstantRange` 声明 stage、逻辑 slot、字节数。slot 和 stage 分别唯一；每个 stage 最多一个块，整个布局最多 128 字节，大小须为四字节倍数。Metal 使用 buffer 参数；DX12 使用 space0 的 b-register root constants；Vulkan 每个 stage 的 SPIR-V push block 从 offset 0 开始，以不同 stage mask 允许范围重叠。
+- Slang fixture 使用显式 register / Vulkan binding，目标反射决定实际 slot。工具拒绝目标 slot 冲突，不猜测跨后端 register 映射。
+- Metal 当前直接绑定 set 0；buffer slot 24...31 留给 vertex inputs。Vulkan 和 DX12 支持多个 set；DX12 set index 对应 register space。DX12 root signature 仍受原生 64 DWORD 限制。
+- `VertexAttribute.semantic` 保存 DXIL input semantic，默认 TEXCOORD + location。使用 POSITION 等 HLSL 语义时，调用方应显式配置；Metal / Vulkan 使用 location。
 
-## 资源与所有权
+当前 graphics 不支持 stencil pipeline state；纹理采用单采样。Depth、MRT、blend、raster、vertex/index 和直接/间接 draw 使用各自的原生描述。
 
-- `Device` 分配不透明句柄，ID 0 无效，ID 不复用。句柄只属于创建它的设备；不得自行伪造 ID。
-- 后端注册表持有原生资源。调用 `destroy` 后，调用方不得再次使用该句柄，也不得复用引用它的 binding set 或命令。
-- `destroy` 延迟到调用时所有在途帧都完成后，再在 Device API 线程上清理注册表；GPU completion 线程只更新完成状态。
-- Binding layout 声明槽位、类型与 shader stage；binding set 必须恰好覆盖 layout，资源类型必须匹配。当前不支持 binding array。
-- 空 binding layout / pipeline layout 合法，用于无资源 shader。布局缓存和 binding set 缓存由前端管理。
-- 当前 Metal 采用直接绑定，仅支持 set 0。资源槽位使用目标产物的反射索引；buffer 参数槽 24...31 保留给最多八个 vertex buffer。多 set、argument buffer、bindless 与跨目标槽位映射不在本阶段。
-- 直接 buffer 上传是 CPU 写入共享内存；调用方须保证没有 GPU 同时访问该范围。直接 texture 上传和读回会同步等待，适用于初始化、调试和测试；正常帧中的数据传输使用 copy 命令和 transient upload。
+## 资源与帧生命周期
 
-## 帧与提交
+句柄属于创建它的设备，ID 不复用；不要伪造 ID。`destroy` 后不能再录制使用该资源，也不能复用引用它的 binding set。后端对象延迟到调用时全部在途帧结束后，在 API 线程上销毁；completion 线程只记录完成和错误。
 
 ```swift
 try device.beginFrame()
+let image = try device.acquireSwapchainImage() // 窗口渲染时
 try device.submit(commands, queue: .graphics)
+try device.present(image)
 device.endFrame()
-try device.waitUntilIdle() // 测试或停机时；正常帧不需要
+try device.waitUntilIdle() // 调试、测试或停机
 ```
 
-一个设备同时只能有一个活动帧。`submit`、`uploadTransient` 需要活动帧。每帧可提交多个 command buffer；`endFrame` 封闭帧，只有封闭且所有提交完成后，帧槽才能复用。即使 GPU 在 `endFrame` 前完成，也不能提前重置上传内存或销毁资源。
+一个设备同时只有一个活动帧。每帧可提交多个 command buffer；帧须已封闭且全部提交完成，上传内存和 command pool 才能复用。帧上传使用 `uploadTransient`；创建或重置失败会抛错，不以 force unwrap 崩溃。
 
-`beginFrame` 仅在选中的帧槽仍在执行时等待。`waitUntilIdle` 需要先结束活动帧，并清理已经安全的延迟销毁队列。Metal GPU 执行错误由 completion 记录，在 `waitUntilIdle` 上抛出。
+规划器跟踪状态、访问依赖与 queue ownership，跨 queue 用 timeline handoff。多个 queue class 不代表多条独立硬件队列。Vulkan 资源跨不同 queue family 采用 concurrent sharing，各 family 使用独立 command pool。提交路径采用异步 fence completion，不调用 queue idle。
 
-`CommandBuffer` 是 CPU 命令列表，记录后交给 `SubmissionPlanner`。规划器跟踪访问、状态转换及跨 queue 依赖；后端执行生成的 `SubmitPlan`。调用方只使用 capability 声明的队列；多个 API queue class 不代表多个独立硬件队列。命令记录器本身不支持并发写入。
+立即上传会同步完成，并登记 transfer write，供下次提交生成依赖。修改已有资源时，调用方须先保证没有 GPU 同时访问该范围。立即纹理传输适合初始化与调试；正常帧使用 copy 命令。颜色纹理 copy 操作当前访问 mip0、第一层；行距使用字节。DX12 在录制 copy 时通过临时缓冲重排行距，适配原生 256 字节 row pitch。
 
-`ComputePassEncoder.dispatch(groupsX:groupsY:groupsZ:)` 的单位为 **workgroup 数量**。每组的线程数由 shader module 的 `threadgroupSize` 决定，不能默认为一个线程。例如 local size 为 `(8,1,1)`，`dispatch(groupsX: 2)` 执行 16 个线程。`drawMeshTasks(x:y:z:)` 同样使用组数量。
+规划或录制失败且尚未排入 GPU 的工作会回滚状态和 timeline。一次前端提交若已有部分工作排队后失败，设备阻止继续提交，须重建，避免错误复用状态。GPU completion 错误在 `waitUntilIdle` 上抛出。
 
-## Shader 工具链边界
+Vulkan acquire semaphore 由第一次 graphics submission 消费；present 使用每个 image 独立的二进制 semaphore，并保留最终 layout transition 的 command pool 到 fence 完成。Resize 会等待原生设备空闲并重建 image views。
 
-RHI 不依赖 Slang runtime 或 Slang reflection 类型。它接收 `ShaderModuleDescriptor`，也可以从离线 `ShaderArtifact` 构造该描述符。产物包含：
+## Shader 工具链
 
-- shader stage、目标格式和 entry point；
-- 二进制/源码 `Data`（JSON 中为 Base64）；
-- `ShaderInterface`：local workgroup size 和目标资源绑定；
-- 编译器标识，便于重现。
+`ShaderArtifact` 包含 stage、格式、entry point、code、编译器标识，以及 local workgroup size、目标绑定、push constant ranges。RHI 不加载 Slang runtime 或 reflection 类型。
 
-Metal 接收 MSL source / metallib，Vulkan shader 原型接收 SPIR-V，DX12 接口预留 DXIL。产物是目标专用的，需要为不同后端分别编译。反射不是跨后端统一 register ABI；工具链必须明确降低绑定。当前工具拒绝目标资源槽冲突和不支持的复合绑定，避免猜测映射。
+- Metal：MSL source / metallib。
+- Vulkan：SPIR-V，保留实际 entry point 名称；要求 Vulkan 1.3 dynamic rendering 与 timeline semaphore。
+- DX12：DXIL，当前工具使用 shader model 6.6，后端检查相同要求。编译需要 DXC/dxcompiler；本机没有该依赖，DXIL 产物未验证。
 
-`scripts/compile-rhi-shader.py` 固定 Slang **2026.19**，显式接收 `--slangc` 或 `SLANGC`，编译阶段不下载工具。原始 JSON reflection 与产物一起保存，便于检查。编译失败、版本不符或反射不合法时，不覆盖已有产物。
+`scripts/compile-rhi-shader.py` 固定 Slang **2026.19**。编译器通过 `--slangc` 或 `SLANGC` 显式提供；编译时不下载。目标反射与 SPIR-V 逻辑反射用于区分普通资源和 push constant，原始目标 reflection 保留供检查。编译/反射失败不会覆盖已有产物。
 
-这一版本 Slang 的 compute JSON reflection 提供 local size，但 mesh / task JSON reflection 缺少该字段。因此 mesh / task 编译必须显式传 `--threadgroup-size X Y Z`，与 shader 的 `numthreads` 保持一致；能获得反射时，会检查显式值是否冲突。这里仍需要调用方保证 mesh 的声明一致。
+`dispatch(groupsX:groupsY:groupsZ:)` 和 `drawMeshTasks` 的单位都是 workgroup 数量。local size 来自 shader module，例如 local size `(8,1,1)` 配合两个 groups 执行 16 个线程。当前 Slang mesh/task JSON 缺少 local size，必须显式传 `--threadgroup-size`，与 `numthreads` 一致。
 
-本阶段验证了 Slang → MSL compute、mesh、fragment，以及 Slang → SPIR-V 编译。Metal 光追测试使用原生 MSL intersector；不把 Slang Metal RT 或 Metal Shader Converter 当作已完成的依赖。DXIL 还需要下游 DXC/dxcompiler，本机未安装，未验证该目标。
+Metal 光追仍使用原生 MSL；Slang Metal RT 和 Metal Shader Converter 不是已完成的依赖。
 
-### 安装与验证
+## 安装与本机验证
 
-首次在 macOS arm64 上准备依赖：
+macOS arm64：
 
 ```sh
 python3 scripts/bootstrap-rhi-vulkan.py
 python3 scripts/bootstrap-rhi-slang.py
 export SLANGC="$PWD/Engine/vendor/slang/bin/slangc"
-# 如果 ICD 不在系统搜索路径中，显式指定其 manifest；下面是 Homebrew 的例子。
 export VK_DRIVER_FILES=/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json
-```
-
-Vulkan bootstrap 从校验过 SHA-256 的 Vulkan-Headers / Vulkan-Loader **1.4.328** 源码构建 macOS 13 deployment target 的 XCFramework，需要 Xcode command line tools 和 CMake。它只安装 loader；Vulkan GPU 测试仍需要单独安装 ICD（例如 MoltenVK）。已有 loader 会保留，可用 `--destination` 另建。Slang installer 同样校验固定发行包。所有编译器和 loader 二进制位于忽略的 `Engine/vendor`，不提交 Git。
-
-```sh
-python3 scripts/compile-rhi-shader.py \
-  Engine/Tests/NativeRHITests/Fixtures/compute.slang \
-  --entry computeMain --stage compute --target metal \
-  --output /tmp/guava-compute.json
-
-python3 scripts/compile-rhi-shader.py \
-  Engine/Tests/NativeRHITests/Fixtures/mesh.slang \
-  --entry meshMain --stage mesh --target metal \
-  --threadgroup-size 3 1 1 --output /tmp/guava-mesh.json
-
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" \
-  swift test --package-path Engine --filter 'NativeRHITests\.' --jobs 4
+swift test --package-path Engine --filter 'NativeRHITests\.' --jobs 4
 python3 scripts/test-rhi-shader-toolchain.py
 python3 scripts/check-swift-maintainability.py
 ```
 
-没有 `SLANGC` 时，Swift shader 编译集成测试会明确 skip。没有对应 GPU / ICD 时，硬件测试会明确 skip；跳过不构成功能已验证的证据。
+Bootstrap 校验固定包的 SHA-256；Vulkan-Headers / Loader **1.4.328** 构建为 macOS 13+ XCFramework。Loader 不包含 ICD，须另外提供 MoltenVK。编译器和 loader 位于忽略的 `Engine/vendor`，不提交二进制。
 
-## Mesh 与光追最小接口
+Windows / Linux 使用安装的 Vulkan SDK，非系统位置设置 `VULKAN_SDK`。Windows DX12 bridge 使用系统 Windows SDK 的 D3D12 / DXGI。平台 surface 目前支持 CAMetalLayer、HWND 和 Xlib（通过 `SurfaceDescriptor.display` 提供 Display*，nativeHandle 保存 Window 的 pointer bit pattern）；Wayland 未实现。
 
-Mesh 使用独立 `MeshPipelineDescriptor`，不将 mesh 和传统 vertex pipeline 塞进同一组可空字段。当前支持无 task 的 mesh + 可选 fragment；local size 与原生 pipeline 限制会检查。depth/stencil mesh state 暂不支持，会明确报错。
+当前 GPU 检查覆盖：Metal 与 MoltenVK 的 raster、多 stage uniform、compute、只读 storage、纹理/sampler 与 float readback、push constants、跨 queue copy/compute、窗口 present/resize，以及 Metal mesh、BLAS/TLAS ray query。失败录制和 planner checkpoint 有回归测试。缺少 GPU、ICD 或 `SLANGC` 时会明确 skip；skip 不是通过证据。本机未安装 Vulkan validation layers，GPU 测试检查实际结果，不代表通过 Khronos validation。
 
-AS 输入分为 `.bottomLevel([TriangleGeometry])` 和 `.topLevel([AccelerationInstance])`：
+## Mesh 与 AS 范围
 
-- BLAS 当前只支持不透明、非索引、float32 xyz 三角形；vertex offset / stride 按 4 字节对齐，输入范围会校验。
-- TLAS 引用已经创建的 BLAS，instance transform 为三个 `SIMD4<Float>` 行组成的 3×4 仿射矩阵。矩阵必须有限，默认单位变换，mask 默认 `0xff`。
-- 创建只分配对象；`device.recordBuild(structure, into: commands)` 才记录 GPU 构建。先构建 BLAS，再构建引用它的 TLAS，再提交查询。
-- 规划器把输入标记为读取，把输出标记为 AS 写入；后端保留构建和间接访问所需的原生资源，并声明 TLAS 的 BLAS 依赖。
-- 当前只有 compute 中的 closest-hit opaque triangle 查询；没有 alpha-test、procedural geometry、intersection enumeration 或 RT pipeline。
+Mesh 使用独立 descriptor。Metal 当前无 task；Vulkan 与 DX12 task 根据设备支持启用。间接 mesh dispatch 仍关闭。
 
-## 后续实现顺序
+BLAS 当前只支持不透明、非索引 float32 xyz 三角形。TLAS 引用已创建的 BLAS，变换为三个 SIMD4 行，默认单位矩阵，mask 默认 0xff。创建分配对象；先 `recordBuild(blas)`，再 `recordBuild(tlas)`，随后执行 compute ray query。RT pipelines、SBT、procedural geometry、AS update 与 compaction 尚未实现。
 
-1. 用一个独立 renderer pass 接入 `NativeRHI`，补齐实际资源布局、渲染目标和 GPU 性能验证，再迁移现有 `RenderBackend`。
-2. 完成 Vulkan descriptor / pipeline layout、render-pass 生命周期、texture barrier 与 copy，验证 raster / compute 后再打开 capability。
-3. 在原生 Vulkan 设备验证 BLAS / TLAS / ray query 与 mesh；随后再扩展 RT pipeline / SBT、AS update / compaction。
-4. 在 Windows 建立 DX12 编译与 GPU 测试；工具链可增加 DXC 等产物生成器，复用 `ShaderArtifact` 契约。
-5. 根据 renderer 需求扩展 argument buffer / bindless、多 set、task、间接 mesh 与跨后端 shader ABI；每次只打开完成并验证的能力。
+下一阶段先将一个独立 renderer pass 接入 NativeRHI，验证实际渲染与性能，再逐步迁移 RenderBackend；原生 Windows / Linux 环境可用后，再验证 DX12 与 Vulkan RT / mesh、独立 queue family。

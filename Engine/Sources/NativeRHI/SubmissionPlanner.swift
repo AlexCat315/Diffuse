@@ -30,25 +30,38 @@ final class SubmissionPlanner {
         let dstQueue: QueueClass
     }
 
-    private final class QueueTimeline {
+    private struct QueueTimeline {
         var id: UInt32 = 0
         var nextValue: UInt64 = 0
     }
 
-    private let stateTracker = StateTracker()
-    private let accessTracker = AccessTracker()
-    private var resourceQueues: [ResourceRef: QueueClass] = [:]
-    private var pendingTransfers: [ResourceRef: PendingTransfer] = [:]
-    private var queueTimelines: [QueueClass: QueueTimeline] = [:]
-    private var nextTimelineSemaphoreID: UInt32 = 1
-    private var bindingSetEntries: [UInt32: [BindingSetEntry]] = [:]
+    private struct Tracking {
+        var stateTracker = StateTracker()
+        var accessTracker = AccessTracker()
+        var resourceQueues: [ResourceRef: QueueClass] = [:]
+        var pendingTransfers: [ResourceRef: PendingTransfer] = [:]
+        var queueTimelines: [QueueClass: QueueTimeline] = [:]
+        var nextTimelineSemaphoreID: UInt32 = 1
+    }
+    private var tracking = Tracking()
+    private struct RegisteredBindings {
+        let entries: [BindingSetEntry]
+        let readOnlySlots: Set<UInt32>
+    }
+    private var bindingSetEntries: [UInt32: RegisteredBindings] = [:]
+
+    /// Restore an unsubmitted plan as a value, including queue timeline values.
+    func checkpoint() -> () -> Void {
+        let previous = tracking
+        return { [weak self] in self?.tracking = previous }
+    }
 
     init() {}
 
     // MARK: Binding set bookkeeping
 
-    func registerBindingSetEntries(_ handleID: UInt32, entries: [BindingSetEntry]) {
-        bindingSetEntries[handleID] = entries
+    func registerBindingSetEntries(_ handleID: UInt32, entries: [BindingSetEntry], readOnlySlots: Set<UInt32> = []) {
+        bindingSetEntries[handleID] = RegisteredBindings(entries: entries, readOnlySlots: readOnlySlots)
     }
 
     func removeBindingSetEntries(_ handleID: UInt32) {
@@ -57,10 +70,20 @@ final class SubmissionPlanner {
 
     /// Removes all frontend/planner bookkeeping for a resource being destroyed.
     func forgetResource(_ resource: ResourceRef) {
-        stateTracker.removeResource(resource)
-        accessTracker.removeResource(resource)
-        resourceQueues[resource] = nil
-        pendingTransfers[resource] = nil
+        tracking.stateTracker.removeResource(resource)
+        tracking.accessTracker.removeResource(resource)
+        tracking.resourceQueues[resource] = nil
+        tracking.pendingTransfers[resource] = nil
+    }
+
+    /// Immediate uploads finish on the graphics queue (or write coherent host
+    /// storage before it is submitted). Their next GPU reader still needs a
+    /// transfer-write dependency and, on another queue, a timeline handoff.
+    func recordImmediateWrite(_ resource: ResourceRef) {
+        tracking.stateTracker.setCurrentState(resource, .copyDestination)
+        tracking.resourceQueues[resource] = .graphics
+        tracking.pendingTransfers[resource] = nil
+        _ = tracking.accessTracker.observe(ResourceAccess(resource: resource, kind: .write, stage: .transfer), on: .graphics)
     }
 
     // MARK: Plan entry point
@@ -340,8 +363,8 @@ final class SubmissionPlanner {
         waits: inout [TimelineSemaphore]
     ) {
         guard let entries = bindingSetEntries[set.id] else { return }
-        for entry in entries {
-            guard let tracked = trackedResource(for: entry.resource) else { continue }
+        for entry in entries.entries {
+            guard let tracked = trackedResource(for: entry.resource, readOnly: entries.readOnlySlots.contains(entry.slot)) else { continue }
             let access = ResourceAccess(
                 resource: tracked.resource,
                 kind: Self.accessKind(tracked.state),
@@ -358,18 +381,18 @@ final class SubmissionPlanner {
         }
     }
 
-    private func trackedResource(for resource: BindingResource) -> (resource: ResourceRef, state: ResourceState)? {
+    private func trackedResource(for resource: BindingResource, readOnly: Bool) -> (resource: ResourceRef, state: ResourceState)? {
         switch resource {
         case .sampler:
             return nil
         case .texture(let texture):
             return (ResourceRef(kind: .texture, id: texture.id), .shaderResource)
         case .storageTexture(let texture):
-            return (ResourceRef(kind: .texture, id: texture.id), [.shaderResource, .unorderedAccess])
+            return (ResourceRef(kind: .texture, id: texture.id), .unorderedAccess)
         case .uniformBuffer(let buffer, _):
             return (ResourceRef(kind: .buffer, id: buffer.id), .constantBuffer)
         case .storageBuffer(let buffer, _):
-            return (ResourceRef(kind: .buffer, id: buffer.id), [.shaderResource, .unorderedAccess])
+            return (ResourceRef(kind: .buffer, id: buffer.id), readOnly ? .shaderResource : .unorderedAccess)
         case .accelerationStructure(let accel):
             return (ResourceRef(kind: .accelerationStructure, id: accel.id), .accelerationStructureRead)
         }
@@ -387,18 +410,18 @@ final class SubmissionPlanner {
         splitReleases: inout [SplitReleaseRequest],
         waits: inout [TimelineSemaphore]
     ) {
-        let ownerQueue = resourceQueues[resource] ?? queue
+        let ownerQueue = tracking.resourceQueues[resource] ?? queue
         let crossQueue = ownerQueue != queue
 
         // Capture the real prior state before any layer mutates it.
-        let beforeState = stateTracker.currentState(resource)
+        let beforeState = tracking.stateTracker.currentState(resource)
 
         // Layer 1: state/layout transition (may be empty when state is unchanged).
-        stateTracker.requireState(resource, desired)
-        let stateBarriers = stateTracker.commitBarriers()
+        tracking.stateTracker.requireState(resource, desired)
+        let stateBarriers = tracking.stateTracker.commitBarriers()
 
         // Layer 2: access ordering (RAW/WAR/WAW), tracked regardless of state.
-        let hazards = accessTracker.observe(access, on: queue)
+        let hazards = tracking.accessTracker.observe(access, on: queue)
         let sameQueueHazards = hazards.filter { $0.sourceQueue == $0.destinationQueue }
 
         if crossQueue {
@@ -428,7 +451,7 @@ final class SubmissionPlanner {
                 sourceQueue: ownerQueue,
                 destinationQueue: queue
             ))
-            pendingTransfers[resource] = nil
+            tracking.pendingTransfers[resource] = nil
         } else if let stateBarrier = stateBarriers.first {
             // State changed: the transition barrier also orders memory.
             barriers.append(BarrierCommand(
@@ -455,7 +478,7 @@ final class SubmissionPlanner {
             ))
         }
 
-        resourceQueues[resource] = queue
+        tracking.resourceQueues[resource] = queue
     }
 
     // MARK: Access construction
@@ -522,7 +545,7 @@ final class SubmissionPlanner {
             guard queue == srcQueue else { return nil }
             if srcQueue != dstQueue {
                 let semaphore = try ensureSignalSemaphore(queue: queue, signals: &signals)
-                pendingTransfers[resource] = PendingTransfer(
+                tracking.pendingTransfers[resource] = PendingTransfer(
                     srcQueue: srcQueue, dstQueue: dstQueue,
                     releasedState: barrier.sourceState, semaphore: semaphore
                 )
@@ -558,34 +581,34 @@ final class SubmissionPlanner {
         let resource = barrier.resource
         switch barrier.syncAction {
         case .full:
-            stateTracker.setCurrentState(resource, barrier.destinationState)
-            resourceQueues[resource] = barrier.destinationQueue
-            pendingTransfers[resource] = nil
+            tracking.stateTracker.setCurrentState(resource, barrier.destinationState)
+            tracking.resourceQueues[resource] = barrier.destinationQueue
+            tracking.pendingTransfers[resource] = nil
 
         case .acquire:
-            if let pending = pendingTransfers[resource] {
+            if let pending = tracking.pendingTransfers[resource] {
                 guard pending.srcQueue == barrier.sourceQueue,
                       pending.dstQueue == barrier.destinationQueue,
                       pending.releasedState == barrier.sourceState
                 else {
                     throw RHIError.submitFailed("acquire barrier does not match a pending release")
                 }
-                pendingTransfers[resource] = nil
+                tracking.pendingTransfers[resource] = nil
             }
-            stateTracker.setCurrentState(resource, barrier.destinationState)
-            resourceQueues[resource] = barrier.destinationQueue
+            tracking.stateTracker.setCurrentState(resource, barrier.destinationState)
+            tracking.resourceQueues[resource] = barrier.destinationQueue
 
         case .release:
             let releasedState = barrier.sourceState
-            stateTracker.setCurrentState(resource, releasedState)
-            resourceQueues[resource] = barrier.sourceQueue
+            tracking.stateTracker.setCurrentState(resource, releasedState)
+            tracking.resourceQueues[resource] = barrier.sourceQueue
             if barrier.sourceQueue == barrier.destinationQueue {
-                pendingTransfers[resource] = nil
+                tracking.pendingTransfers[resource] = nil
                 return
             }
-            let existingSemaphore = pendingTransfers[resource]?.semaphore
+            let existingSemaphore = tracking.pendingTransfers[resource]?.semaphore
                 ?? TimelineSemaphore(id: 0, value: 0)
-            pendingTransfers[resource] = PendingTransfer(
+            tracking.pendingTransfers[resource] = PendingTransfer(
                 srcQueue: barrier.sourceQueue,
                 dstQueue: barrier.destinationQueue,
                 releasedState: releasedState,
@@ -665,18 +688,13 @@ final class SubmissionPlanner {
     }
 
     private func nextQueueTimeline(_ queue: QueueClass) -> TimelineSemaphore {
-        let timeline: QueueTimeline
-        if let existing = queueTimelines[queue] {
-            timeline = existing
-        } else {
-            timeline = QueueTimeline()
-            queueTimelines[queue] = timeline
-        }
+        var timeline = tracking.queueTimelines[queue] ?? QueueTimeline()
         if timeline.id == 0 {
-            timeline.id = nextTimelineSemaphoreID
-            nextTimelineSemaphoreID += 1
+            timeline.id = tracking.nextTimelineSemaphoreID
+            tracking.nextTimelineSemaphoreID += 1
         }
         timeline.nextValue += 1
+        tracking.queueTimelines[queue] = timeline
         return TimelineSemaphore(id: timeline.id, value: timeline.nextValue)
     }
 
@@ -688,7 +706,7 @@ final class SubmissionPlanner {
         dstQueue: QueueClass,
         state: ResourceState
     ) -> PendingTransfer? {
-        guard let pending = pendingTransfers[resource] else { return nil }
+        guard let pending = tracking.pendingTransfers[resource] else { return nil }
         guard pending.srcQueue == srcQueue,
               pending.dstQueue == dstQueue,
               pending.releasedState == state

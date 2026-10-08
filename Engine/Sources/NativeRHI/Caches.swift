@@ -136,14 +136,14 @@ public struct CacheStats: Sendable, Equatable {
 /// Maps the ordered set of binding-layout IDs to a pipeline-layout handle.
 /// Keyed by the full ID list, so distinct layouts never collide.
 final class PipelineLayoutCache {
-    private var bySetLayouts: [[UInt32]: UInt32] = [:]
+    private var byInterface: [PipelineInterfaceKey: UInt32] = [:]
 
-    func layout(forSetLayouts ids: [UInt32]) -> UInt32? {
-        bySetLayouts[ids]
+    func layout(for key: PipelineInterfaceKey) -> UInt32? {
+        byInterface[key]
     }
 
-    func insert(_ handleID: UInt32, forSetLayouts ids: [UInt32]) {
-        bySetLayouts[ids] = handleID
+    func insert(_ handleID: UInt32, for key: PipelineInterfaceKey) {
+        byInterface[key] = handleID
     }
 }
 

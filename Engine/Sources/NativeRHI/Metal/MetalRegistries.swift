@@ -14,7 +14,7 @@ import Metal
 struct MetalBoundEntry {
     let slot: UInt32
     let type: BindingType
-    let stage: ShaderStage
+    let visibility: ShaderVisibility
     let resource: BindingResource
 }
 

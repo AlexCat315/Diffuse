@@ -27,7 +27,7 @@ final class VulkanUploadReadbackTests: XCTestCase {
         commands.copyPass { $0.copyBuffer(src: handles[1], dst: handles[2], size: 64) }
         let plan = try SubmissionPlanner().buildPlan(queue: .graphics, commands: commands.commands,
                                                      external: SubmitDescriptor())
-        _ = backend.makeFrameUploader(slot: 0)
+        _ = try backend.makeFrameUploader(slot: 0)
         var completions: [XCTestExpectation] = []
         for submit in plan.submits {
             let completed = expectation(description: "Vulkan buffer copy completion")

@@ -7,24 +7,24 @@ import XCTest
 final class PipelineLayoutCacheTests: XCTestCase {
     func testLayoutKeyedByFullIDList() {
         let cache = PipelineLayoutCache()
-        cache.insert(10, forSetLayouts: [1, 2])
-        cache.insert(11, forSetLayouts: [2, 1])
+        cache.insert(10, for: PipelineInterfaceKey(setLayouts: [1, 2], pushConstants: []))
+        cache.insert(11, for: PipelineInterfaceKey(setLayouts: [2, 1], pushConstants: []))
 
         // Order matters: [1,2] and [2,1] are distinct layouts.
-        XCTAssertEqual(cache.layout(forSetLayouts: [1, 2]), 10)
-        XCTAssertEqual(cache.layout(forSetLayouts: [2, 1]), 11)
+        XCTAssertEqual(cache.layout(for: PipelineInterfaceKey(setLayouts: [1, 2], pushConstants: [])), 10)
+        XCTAssertEqual(cache.layout(for: PipelineInterfaceKey(setLayouts: [2, 1], pushConstants: [])), 11)
     }
 
     func testUnknownLayoutReturnsNil() {
         let cache = PipelineLayoutCache()
-        XCTAssertNil(cache.layout(forSetLayouts: [9]))
+        XCTAssertNil(cache.layout(for: PipelineInterfaceKey(setLayouts: [9], pushConstants: [])))
     }
 
     func testReInsertingSameLayoutOverwrites() {
         let cache = PipelineLayoutCache()
-        cache.insert(10, forSetLayouts: [1])
-        cache.insert(12, forSetLayouts: [1])
-        XCTAssertEqual(cache.layout(forSetLayouts: [1]), 12)
+        cache.insert(10, for: PipelineInterfaceKey(setLayouts: [1], pushConstants: []))
+        cache.insert(12, for: PipelineInterfaceKey(setLayouts: [1], pushConstants: []))
+        XCTAssertEqual(cache.layout(for: PipelineInterfaceKey(setLayouts: [1], pushConstants: [])), 12)
     }
 }
 

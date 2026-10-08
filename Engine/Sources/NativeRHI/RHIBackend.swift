@@ -46,10 +46,14 @@ public protocol RHIBackend: AnyObject {
 
     // MARK: Binding sets
 
+    func registerBindingLayout(_ handle: BindingLayout, descriptor: BindingLayoutDescriptor) throws
+    func registerPipelineLayout(_ handle: PipelineLayout, descriptor: PipelineLayoutDescriptor) throws
+
     /// Maps a binding-set handle to the concrete GPU resources it references.
     /// Must throw (never silently no-op) if backend allocation fails.
     func registerBindingSet(
         _ handle: BindingSet,
+        layout: BindingLayout,
         layoutEntries: [BindingLayoutEntry],
         setEntries: [BindingSetEntry]
     ) throws
@@ -81,7 +85,7 @@ public protocol RHIBackend: AnyObject {
     // MARK: Submission
 
     /// Vends (and resets) the per-slot transient uploader for an upcoming frame.
-    func makeFrameUploader(slot: Int) -> FrameUploader
+    func makeFrameUploader(slot: Int) throws -> FrameUploader
 
     /// Executes one planned submission. Must be asynchronous: it returns once
     /// the work is queued and invokes `completion` when the GPU finishes. No
@@ -104,6 +108,8 @@ public protocol RHIBackend: AnyObject {
 }
 
 public extension RHIBackend {
+    func registerBindingLayout(_ handle: BindingLayout, descriptor: BindingLayoutDescriptor) throws {}
+    func registerPipelineLayout(_ handle: PipelineLayout, descriptor: PipelineLayoutDescriptor) throws {}
     func createAccelerationStructure(_ handle: AccelerationStructure, descriptor: AccelerationStructureDescriptor) throws {
         throw RHIError.unsupportedFeature("acceleration structures are not implemented by this backend")
     }

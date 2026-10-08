@@ -22,10 +22,38 @@ def run(arguments):
     return result.stdout.strip() or result.stderr.strip()
 
 
-def reflected_bindings(reflection):
+def parameter_bindings(parameter):
+    return ([parameter['binding']] if 'binding' in parameter else []) + parameter.get('bindings', [])
+
+
+def target_binding(parameter, target):
+    bindings = parameter_bindings(parameter)
+    priorities = ('constantBuffer', 'shaderResource', 'unorderedAccess', 'samplerState', 'descriptorTableSlot') if target == 'metal' else ('descriptorTableSlot', 'constantBuffer', 'shaderResource', 'unorderedAccess', 'samplerState')
+    return next((binding for kind in priorities for binding in bindings if binding.get('kind') == kind), bindings[0] if bindings else {})
+
+
+def reflected_constants(reflection, stage):
     result = []
     for parameter in reflection.get('parameters', []):
-        binding = parameter.get('binding', {})
+        bindings = parameter_bindings(parameter)
+        if not any(binding.get('kind') == 'pushConstantBuffer' for binding in bindings):
+            continue
+        register = next((binding for binding in bindings if binding.get('kind') == 'descriptorTableSlot'), None)
+        size = parameter['type']['elementVarLayout']['binding']['size']
+        if register is None or register.get('space', 0) != 0 or size <= 0 or size % 4 or size > 128:
+            raise ValueError('Push constants require a space0 register and at most 128 aligned bytes')
+        result.append({'name': parameter['name'], 'slot': register['index'], 'byteCount': size, 'stage': stage})
+    if len(result) > 1:
+        raise ValueError('At most one push constant block per shader stage is supported')
+    return result
+
+
+def reflected_bindings(reflection, target='spirv', constants=()):
+    result = []
+    for parameter in reflection.get('parameters', []):
+        if parameter['name'] in {item['name'] for item in constants}:
+            continue
+        binding = target_binding(parameter, target)
         type_info = parameter['type']
         kind = type_info.get('kind')
         shape = type_info.get('baseShape', '')
@@ -43,8 +71,16 @@ def reflected_bindings(reflection):
             raise ValueError(f"Unsupported reflected binding {parameter['name']!r}: {kind}/{shape}")
         if 'index' not in binding:
             raise ValueError(f"Binding {parameter['name']!r} has no target resource index")
+        buffer = {'readOnly': type_info.get('access') != 'readWrite', 'elementStride': 0}
+        if shape == 'structuredBuffer':
+            sizes = type_info.get('resultType', {}).get('sizes', [])
+            size = next((item for item in sizes if item.get('kind') == 'uniform'), None)
+            if size is None:
+                raise ValueError(f"Missing structured element layout for {parameter['name']!r}")
+            alignment = size.get('alignment', 1)
+            buffer['elementStride'] = ((size['value'] + alignment - 1) // alignment) * alignment
         result.append({'name': parameter['name'], 'slot': binding['index'],
-                       'space': binding.get('space', 0), 'type': resource_type})
+                       'space': binding.get('space', 0), 'type': resource_type, 'buffer': buffer})
     slots = [(item['space'], item['slot']) for item in result]
     if len(slots) != len(set(slots)):
         raise ValueError('Target bindings overlap; assign distinct slots before using the RHI direct-binding path')
@@ -60,9 +96,22 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
         temp = Path(directory)
         code = temp / {'metal': 'shader.metal', 'spirv': 'shader.spv', 'dxil': 'shader.dxil'}[target]
         reflection_file = temp / 'reflection.json'
-        run([compiler, str(source.resolve()), '-entry', entry, '-stage', stage,
-             '-target', target, '-o', str(code), '-reflection-json', str(reflection_file)])
+        arguments = [compiler, str(source.resolve()), '-entry', entry, '-stage', stage,
+                     '-target', target, '-o', str(code), '-reflection-json', str(reflection_file)]
+        if target == 'spirv': arguments += ['-fvk-use-entrypoint-name']
+        if target == 'dxil': arguments += ['-profile', 'sm_6_6']
+        run(arguments)
         reflection = json.loads(reflection_file.read_text())
+        logical_reflection = reflection
+        if target != 'spirv':
+            logical_file = temp / 'logical.json'
+            run([compiler, str(source.resolve()), '-entry', entry, '-stage', stage, '-target', 'spirv',
+                 '-o', str(temp / 'logical.spv'), '-reflection-json', str(logical_file), '-fvk-use-entrypoint-name'])
+            logical_reflection = json.loads(logical_file.read_text())
+        constants = reflected_constants(logical_reflection, stage)
+        for constant in constants:
+            parameter = next(p for p in reflection['parameters'] if p['name'] == constant['name'])
+            if target != 'spirv': constant['slot'] = target_binding(parameter, target)['index']
         entry_reflection = next(item for item in reflection['entryPoints'] if item['name'] == entry)
         dimensions = entry_reflection.get('threadGroupSize')
         if stage in ('mesh', 'task') and dimensions is None and threadgroup_size is None:
@@ -77,7 +126,8 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
             'stage': stage, 'format': format_name, 'entryPoint': entry,
             'code': base64.b64encode(code.read_bytes()).decode('ascii'),
             'interface': {'threadgroupSize': dict(zip(('x', 'y', 'z'), dimensions)),
-                          'bindings': reflected_bindings(reflection)},
+                          'bindings': reflected_bindings(reflection, target, constants),
+                          'pushConstants': [{k: v for k, v in c.items() if k != 'name'} for c in constants]},
             'compiler': f'Slang {version}',
         }
         # Compilation must finish before an artifact is published.

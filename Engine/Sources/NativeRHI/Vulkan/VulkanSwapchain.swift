@@ -54,7 +54,9 @@ final class VulkanSwapchain {
     /// Recreates the swapchain after a resize or OUT_OF_DATE. The previous image
     /// records are dropped; the fixed pool is rebuilt.
     func recreate(registries: VulkanRegistries) throws {
+        _ = context.instanceCommands.deviceWaitIdle(context.device)
         let old = handle
+        let oldIDs = textureIDs
         let rebuilt = try Self.build(
             context: context,
             surface: surface,
@@ -70,6 +72,7 @@ final class VulkanSwapchain {
         extent = rebuilt.extent
         images = rebuilt.images
         textureIDs = rebuilt.textureIDs
+        for id in oldIDs { if let record = registries.textures.removeValue(forKey: id) { context.core.destroyImageView(context.device, record.view, nil) } }
         context.sync.destroySwapchain(context.device, old, nil)
     }
 
@@ -83,20 +86,17 @@ final class VulkanSwapchain {
     }
 
     func present(queue: VkQueue, semaphore: VkSemaphore, index: UInt32) -> VkResult {
-        var swapchains: [VkSwapchainKHR?] = [handle]
-        var indices: [UInt32] = [index]
+        let arena = VulkanScratch()
         var info = VkPresentInfoKHR()
         info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
-        info.waitSemaphoreCount = 1
-        var wait: [VkSemaphore?] = [semaphore]
-        wait.withUnsafeBufferPointer { info.pWaitSemaphores = $0.baseAddress }
-        info.swapchainCount = 1
-        swapchains.withUnsafeBufferPointer { info.pSwapchains = $0.baseAddress }
-        indices.withUnsafeBufferPointer { info.pImageIndices = $0.baseAddress }
-        return context.sync.queuePresent(queue, &info)
+        info.waitSemaphoreCount = 1; info.pWaitSemaphores = arena.store([Optional(semaphore)])
+        info.swapchainCount = 1; info.pSwapchains = arena.store([Optional(handle)])
+        info.pImageIndices = arena.store([index])
+        return withExtendedLifetime(arena) { context.sync.queuePresent(queue, &info) }
     }
 
     func destroy(registries: VulkanRegistries) {
+        for id in textureIDs { if let record = registries.textures.removeValue(forKey: id) { context.core.destroyImageView(context.device, record.view, nil) } }
         context.sync.destroySwapchain(context.device, handle, nil)
         context.instanceCommands.destroySurfaceKHR(context.instance, surface, nil)
     }
@@ -146,8 +146,7 @@ final class VulkanSwapchain {
             presentMode = VK_PRESENT_MODE_FIFO_KHR
         }
 
-        let imageCount = max(caps.minImageCount + 1,
-                             min(caps.minImageCount + 1, caps.maxImageCount == 0 ? 3 : caps.maxImageCount))
+        let imageCount = caps.maxImageCount == 0 ? caps.minImageCount + 1 : min(caps.minImageCount + 1, caps.maxImageCount)
 
         var info = VkSwapchainCreateInfoKHR()
         info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR
@@ -160,7 +159,8 @@ final class VulkanSwapchain {
         info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue | VK_IMAGE_USAGE_TRANSFER_DST_BIT.rawValue
         info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE
         info.preTransform = caps.currentTransform
-        info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
+        let alphaBits = caps.supportedCompositeAlpha
+        info.compositeAlpha = VkCompositeAlphaFlagBitsKHR(rawValue: alphaBits & (~alphaBits &+ 1))
         info.presentMode = presentMode
         info.clipped = VK_TRUE
         info.oldSwapchain = oldSwapchain
@@ -180,16 +180,20 @@ final class VulkanSwapchain {
         var textureIDs: [UInt32] = []
         for image in images {
             let id = registries.nextInternalID()
+            var viewInfo = VkImageViewCreateInfo()
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; viewInfo.image = image; viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D
+            viewInfo.format = chosen.format; viewInfo.subresourceRange = VkImageSubresourceRange(aspectMask: VK_IMAGE_ASPECT_COLOR_BIT.rawValue, baseMipLevel: 0, levelCount: 1, baseArrayLayer: 0, layerCount: 1)
+            guard let view = vkWithOutHandle({ _ = context.core.createImageView(context.device, &viewInfo, nil, $0) }) else { throw RHIError.outOfMemory }
             registries.textures[id] = VulkanTextureRecord(
                 image: image,
                 allocation: nil,
-                view: vkNull(),
-                format: colorFormat,
+                view: view,
+                format: VulkanFormats.textureFormat(chosen.format),
                 width: Int(extent.width),
                 height: Int(extent.height),
                 depth: 1,
                 mipLevels: 1,
-                usage: .present,
+                usage: [.present, .colorTarget, .transferDestination],
                 isSwapchain: true,
                 layout: VK_IMAGE_LAYOUT_UNDEFINED
             )

@@ -124,7 +124,7 @@ struct Hazard: Equatable, Sendable {
 // MARK: - Tracker
 
 /// Per-resource active access window: the last write plus the reads since it.
-final class AccessTracker {
+struct AccessTracker {
     private struct Record: Sendable {
         let kind: AccessKind
         let stage: AccessStage
@@ -143,12 +143,12 @@ final class AccessTracker {
 
     init() {}
 
-    func reset() {
+    mutating func reset() {
         memories.removeAll(keepingCapacity: true)
         observedHazards.removeAll(keepingCapacity: true)
     }
 
-    func removeResource(_ resource: ResourceRef) {
+    mutating func removeResource(_ resource: ResourceRef) {
         memories.removeValue(forKey: resource)
     }
 
@@ -156,7 +156,7 @@ final class AccessTracker {
     /// accesses. The ordering window is then pruned: a new write clears the
     /// reads and becomes the new last write.
     @discardableResult
-    func observe(_ access: ResourceAccess, on queue: QueueClass) -> [Hazard] {
+    mutating func observe(_ access: ResourceAccess, on queue: QueueClass) -> [Hazard] {
         var memory = memories[access.resource] ?? Memory()
         var hazards: [Hazard] = []
         let range = access.range ?? .whole

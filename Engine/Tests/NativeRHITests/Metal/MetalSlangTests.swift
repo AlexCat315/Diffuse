@@ -5,42 +5,8 @@ import XCTest
 @testable import NativeRHI
 
 final class MetalSlangTests: XCTestCase {
-    /// Compile fixtures through the exact offline path shipped to users.
-    private func compile(_ fixture: String, entry: String, stage: ShaderStage) throws -> ShaderArtifact {
-        guard let compiler = ProcessInfo.processInfo.environment["SLANGC"] else {
-            throw XCTSkip("Set SLANGC to Slang 2026.19 to run compiler/GPU integration tests")
-        }
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        let source = try XCTUnwrap(Bundle.module.url(forResource: fixture, withExtension: "slang", subdirectory: "Fixtures"))
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let artifact = directory.appendingPathComponent("shader.json")
-        let log = directory.appendingPathComponent("compiler.log")
-        FileManager.default.createFile(atPath: log.path, contents: nil)
-        let logHandle = try FileHandle(forWritingTo: log)
-        defer { try? logHandle.close() }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["python3", root.appendingPathComponent("scripts/compile-rhi-shader.py").path,
-            source.path, "--entry", entry, "--stage", stage.rawValue, "--target", "metal",
-            "--slangc", compiler, "--output", artifact.path]
-        if stage == .mesh { process.arguments! += ["--threadgroup-size", "3", "1", "1"] }
-        process.standardOutput = logHandle
-        process.standardError = logHandle
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            XCTFail(try String(contentsOf: log, encoding: .utf8))
-            throw RHIError.invalidArgument("fixture compilation failed")
-        }
-        return try JSONDecoder().decode(ShaderArtifact.self, from: Data(contentsOf: artifact))
-    }
-
     func testSlangComputeUsesReflectedEightThreadWorkgroups() throws {
-        let artifact = try compile("compute", entry: "computeMain", stage: .compute)
+        let artifact = try ShaderFixtures.compile("compute", entry: "computeMain", stage: .compute, target: "metal")
         XCTAssertEqual(artifact.interface.threadgroupSize.x, 8)
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal]))
         let shader = try device.makeShaderModule(artifact.moduleDescriptor())
@@ -75,8 +41,8 @@ final class MetalSlangTests: XCTestCase {
     func testSlangMeshPipelineDrawsGreenTriangle() throws {
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal]))
         guard device.capabilities.meshShading.mesh else { throw XCTSkip("No mesh shader GPU") }
-        let mesh = try device.makeShaderModule(compile("mesh", entry: "meshMain", stage: .mesh).moduleDescriptor())
-        let fragment = try device.makeShaderModule(compile("mesh", entry: "fragmentMain", stage: .fragment).moduleDescriptor())
+        let mesh = try device.makeShaderModule(ShaderFixtures.compile("mesh", entry: "meshMain", stage: .mesh, target: "metal", groups: [3, 1, 1]).moduleDescriptor())
+        let fragment = try device.makeShaderModule(ShaderFixtures.compile("mesh", entry: "fragmentMain", stage: .fragment, target: "metal").moduleDescriptor())
         let layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: []))
         var descriptor = MeshPipelineDescriptor(layout: layout, mesh: mesh)
         descriptor.fragment = fragment

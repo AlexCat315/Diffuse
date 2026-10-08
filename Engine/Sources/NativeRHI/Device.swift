@@ -38,11 +38,13 @@ public final class Device {
     private let frameRing: FrameRing
     private let planner = SubmissionPlanner()
     private let caches = DeviceCaches()
+    private let interfaces = PipelineInterfaces()
     private var accelerationBuildInputs: [UInt32: [ResourceRef]] = [:]
     private let identifiers = IdentifierPool()
     private let lock = NSLock()
     private var currentSlot: FrameRing.Slot?
     private var currentUploader: FrameUploader?
+    private var submissionFault: RHIError?
 
     private init(backend: RHIBackend, config: DeviceConfig) throws {
         self.backend = backend
@@ -98,6 +100,13 @@ public final class Device {
             try rhiRequire(descriptor.width > 0 && descriptor.height > 0 && descriptor.depth > 0
                 && descriptor.layers > 0 && descriptor.mipLevels > 0 && descriptor.sampleCount > 0,
                 "texture dimensions, layers, mips and samples must be positive")
+            if descriptor.dimension == .texture3D {
+                try rhiRequire(descriptor.layers == 1, "3D textures cannot have array layers")
+            } else {
+                try rhiRequire(descriptor.depth == 1, "2D and cube textures require depth one")
+            }
+            if descriptor.dimension == .texture2D { try rhiRequire(descriptor.layers == 1, "use texture2DArray for array layers") }
+            if descriptor.dimension == .cube { try rhiRequire(descriptor.layers == 1 && descriptor.width == descriptor.height, "cube textures require six square faces in one cube") }
             try rhiRequire(descriptor.format != .invalid, "texture format must be valid")
             let handle = Texture(id: identifiers.next())
             try backend.createTexture(handle, descriptor: descriptor)
@@ -136,6 +145,18 @@ public final class Device {
         try locked {
             guard capabilities.rayTracing.accelerationStructures else {
                 throw RHIError.unsupportedFeature("acceleration structures are not implemented by this backend")
+            }
+            switch descriptor {
+            case .bottomLevel(let triangles):
+                try rhiRequire(!triangles.isEmpty && triangles.allSatisfy { $0.triangleCount > 0 && $0.triangleCount <= Int(UInt32.max / 3)
+                    && $0.vertexOffset >= 0 && $0.vertexOffset % 4 == 0 && $0.vertexStride >= 12
+                    && $0.vertexStride <= Int(UInt32.max) && $0.vertexStride % 4 == 0 }, "invalid triangle geometry")
+            case .topLevel(let instances):
+                try rhiRequire(!instances.isEmpty && instances.count <= 0x100_0000 && instances.allSatisfy { instance in
+                    instance.mask <= 255 && [instance.transform.x, instance.transform.y, instance.transform.z].allSatisfy { row in
+                        [row.x, row.y, row.z, row.w].allSatisfy(\.isFinite)
+                    }
+                }, "invalid acceleration instance")
             }
             let handle = AccelerationStructure(id: identifiers.next())
             try backend.createAccelerationStructure(handle, descriptor: descriptor)
@@ -197,8 +218,11 @@ public final class Device {
             guard capabilities.graphics else {
                 throw RHIError.unsupportedFeature("graphics pipelines are not implemented by this backend")
             }
+            try rhiRequire(interfaces.pipelines[descriptor.layout.id] != nil, "unknown pipeline layout")
+            guard descriptor.stencilFormat == nil else { throw RHIError.unsupportedFeature("stencil pipeline state is not implemented") }
             let handle = GraphicsPipeline(id: identifiers.next())
             try backend.createGraphicsPipeline(handle, descriptor: descriptor)
+            interfaces.uses[handle.id] = PipelineUse(layout: descriptor.layout, kind: .graphics)
             return handle
         }
     }
@@ -208,14 +232,16 @@ public final class Device {
             guard capabilities.meshShading.mesh else {
                 throw RHIError.unsupportedFeature("mesh pipelines are not implemented by this backend")
             }
+            try rhiRequire(interfaces.pipelines[descriptor.layout.id] != nil, "unknown pipeline layout")
             let handle = MeshPipeline(id: identifiers.next())
             try backend.createMeshPipeline(handle, descriptor: descriptor)
+            interfaces.uses[handle.id] = PipelineUse(layout: descriptor.layout, kind: .mesh)
             return handle
         }
     }
 
     public func destroy(_ pipeline: MeshPipeline) {
-        locked { frameRing.retireCurrent { [backend] in backend.destroyMeshPipeline(pipeline) } }
+        locked { interfaces.uses[pipeline.id] = nil; frameRing.retireCurrent { [backend] in backend.destroyMeshPipeline(pipeline) } }
     }
 
     public func makeComputePipeline(_ descriptor: ComputePipelineDescriptor) throws -> ComputePipeline {
@@ -223,18 +249,20 @@ public final class Device {
             guard capabilities.compute else {
                 throw RHIError.unsupportedFeature("compute pipelines are not implemented by this backend")
             }
+            try rhiRequire(interfaces.pipelines[descriptor.layout.id] != nil, "unknown pipeline layout")
             let handle = ComputePipeline(id: identifiers.next())
             try backend.createComputePipeline(handle, descriptor: descriptor)
+            interfaces.uses[handle.id] = PipelineUse(layout: descriptor.layout, kind: .compute)
             return handle
         }
     }
 
     public func destroy(_ pipeline: GraphicsPipeline) {
-        locked { frameRing.retireCurrent { [backend] in backend.destroyGraphicsPipeline(pipeline) } }
+        locked { interfaces.uses[pipeline.id] = nil; frameRing.retireCurrent { [backend] in backend.destroyGraphicsPipeline(pipeline) } }
     }
 
     public func destroy(_ pipeline: ComputePipeline) {
-        locked { frameRing.retireCurrent { [backend] in backend.destroyComputePipeline(pipeline) } }
+        locked { interfaces.uses[pipeline.id] = nil; frameRing.retireCurrent { [backend] in backend.destroyComputePipeline(pipeline) } }
     }
 
     // MARK: Binding layouts / sets / pipeline layouts
@@ -246,27 +274,38 @@ public final class Device {
             guard descriptor.entries.allSatisfy({ $0.arraySize == 1 }) else {
                 throw RHIError.unsupportedFeature("binding arrays are not implemented")
             }
+            try rhiRequire(descriptor.entries.allSatisfy { $0.type != .accelerationStructure || $0.visibility == .compute }, "acceleration structure bindings currently support compute ray queries")
             if descriptor.entries.contains(where: { $0.type == .accelerationStructure }),
                !capabilities.rayTracing.accelerationStructures {
                 throw RHIError.unsupportedFeature("acceleration structure bindings are unavailable")
             }
+            try rhiRequire(descriptor.entries.allSatisfy { !$0.visibility.isEmpty && $0.visibility.subtracting(.all).isEmpty }, "invalid shader visibility")
+            if descriptor.entries.contains(where: { $0.visibility.contains(.mesh) }), !capabilities.meshShading.mesh { throw RHIError.unsupportedFeature("mesh visibility is unavailable") }
+            if descriptor.entries.contains(where: { $0.visibility.contains(.task) }), !capabilities.meshShading.task { throw RHIError.unsupportedFeature("task visibility is unavailable") }
+            try rhiRequire(descriptor.entries.allSatisfy { $0.buffer.elementStride >= 0 }, "negative storage element stride")
             let handle = BindingLayout(id: identifiers.next())
+            try backend.registerBindingLayout(handle, descriptor: descriptor)
             caches.storeBindingLayout(handle.id, entries: descriptor.entries)
+            interfaces.bindings[handle.id] = descriptor
             return handle
         }
     }
 
     public func makePipelineLayout(_ descriptor: PipelineLayoutDescriptor) throws -> PipelineLayout {
         try locked {
+            try interfaces.validate(descriptor)
             let setIDs = descriptor.setLayouts.map(\.id)
             for setID in setIDs where caches.bindingLayoutEntries(setID) == nil {
                 throw RHIError.invalidArgument("pipeline layout references an unknown binding layout")
             }
-            if let existing = caches.pipelineLayouts.layout(forSetLayouts: setIDs) {
+            let key = PipelineInterfaceKey(setLayouts: setIDs, pushConstants: descriptor.pushConstants)
+            if let existing = caches.pipelineLayouts.layout(for: key) {
                 return PipelineLayout(id: existing)
             }
             let handle = PipelineLayout(id: identifiers.next())
-            caches.pipelineLayouts.insert(handle.id, forSetLayouts: setIDs)
+            try backend.registerPipelineLayout(handle, descriptor: descriptor)
+            interfaces.pipelines[handle.id] = descriptor
+            caches.pipelineLayouts.insert(handle.id, for: key)
             caches.storePipelineLayoutDefinition(handle.id, setLayouts: setIDs)
             return handle
         }
@@ -289,10 +328,11 @@ public final class Device {
             let handle = BindingSet(id: identifiers.next())
             caches.bindingSets.insert(handle.id, layoutID: layout.id, entries: descriptor.entries)
             caches.storeBindingSet(handle.id, layoutID: layout.id)
-            planner.registerBindingSetEntries(handle.id, entries: descriptor.entries)
+            planner.registerBindingSetEntries(handle.id, entries: descriptor.entries,
+                readOnlySlots: Set(layoutEntries.filter { $0.buffer.readOnly }.map(\.slot)))
 
             do {
-                try backend.registerBindingSet(handle, layoutEntries: layoutEntries, setEntries: descriptor.entries)
+                try backend.registerBindingSet(handle, layout: layout, layoutEntries: layoutEntries, setEntries: descriptor.entries)
             } catch {
                 // Roll back the frontend so we never hold a set the backend lacks
                 // (the Zig prototype silently swallowed this and mis-bound).
@@ -352,17 +392,17 @@ public final class Device {
     /// Begins a frame, blocking the CPU only if the chosen slot's prior frame
     /// is still executing on the GPU.
     public func beginFrame() throws {
-        lock.lock()
-        guard currentSlot == nil else {
-            lock.unlock()
-            throw RHIError.invalidArgument("a frame is already active")
+        try locked {
+            guard currentSlot == nil else { throw RHIError.invalidArgument("a frame is already active") }
+            let slot = frameRing.begin()
+            do {
+                let uploader = try backend.makeFrameUploader(slot: slot.index)
+                uploader.reset(); currentSlot = slot; currentUploader = uploader
+            } catch {
+                frameRing.end()
+                throw error
+            }
         }
-        let slot = frameRing.begin()
-        let uploader = backend.makeFrameUploader(slot: slot.index)
-        uploader.reset()
-        currentSlot = slot
-        currentUploader = uploader
-        lock.unlock()
     }
 
     /// Ends the frame and releases the per-frame upload context.
@@ -395,6 +435,7 @@ public final class Device {
     ) throws {
         try locked {
             guard let slot = currentSlot else { throw RHIError.frameNotActive }
+            if let submissionFault { throw submissionFault }
             let queueCount: UInt8
             switch queue {
             case .graphics: queueCount = capabilities.maxQueues.graphics
@@ -402,41 +443,52 @@ public final class Device {
             case .transfer: queueCount = capabilities.maxQueues.transfer
             }
             guard queueCount > 0 else { throw RHIError.unsupportedFeature("requested queue is unavailable") }
-            try validateCommands(commandBuffer)
-            let plan = try planner.buildPlan(
-                queue: queue,
-                commands: commandBuffer.commands,
-                external: SubmitDescriptor(waitSemaphores: waits, signalSemaphores: signals)
-            )
+            try validateCommands(commandBuffer, queue: queue)
+            let rollback = planner.checkpoint()
+            let plan: SubmitPlan
+            do {
+                plan = try planner.buildPlan(queue: queue, commands: commandBuffer.commands,
+                    external: SubmitDescriptor(waitSemaphores: waits, signalSemaphores: signals))
+            } catch {
+                rollback()
+                throw error
+            }
+            var submitted = false
             for plannedSubmit in plan.submits {
                 frameRing.registerCommandBuffer(slotIndex: slot.index)
                 do {
                     try backend.submit(plannedSubmit) { [frameRing, slot] in
                         frameRing.commandBufferCompleted(slotIndex: slot.index)
                     }
+                    submitted = true
                 } catch {
                     frameRing.unregisterCommandBuffer(slotIndex: slot.index)
+                    if submitted {
+                        submissionFault = .submitFailed("partial submission failed; recreate the device before further submissions")
+                    } else {
+                        rollback()
+                    }
                     throw error
                 }
             }
         }
     }
 
-    private func validateCommands(_ commandBuffer: CommandBuffer) throws {
+    private func validateCommands(_ commandBuffer: CommandBuffer, queue: QueueClass) throws {
+        try interfaces.validateCommands(commandBuffer, caches: caches)
         for command in commandBuffer.commands {
-            if backendAPI == .vulkan, case .copyPass(let record) = command {
-                for copy in record.body {
-                    if case .copyBuffer = copy { continue }
-                    throw RHIError.unsupportedFeature("Vulkan recorded texture copies are not implemented")
-                }
-            }
+            if case .accelerationStructureBuild = command, queue == .transfer { throw RHIError.invalidArgument("acceleration builds require graphics or compute queue") }
             if case .accelerationStructureBuild = command, !capabilities.rayTracing.accelerationStructures {
                 throw RHIError.unsupportedFeature("acceleration structure builds are not implemented by this backend")
             }
             if case .computePass = command, !capabilities.compute {
                 throw RHIError.unsupportedFeature("compute commands are not implemented by this backend")
             }
+            if case .computePass = command, queue == .transfer {
+                throw RHIError.invalidArgument("compute passes cannot execute on a transfer queue")
+            }
             if case .renderPass(let record) = command {
+                try rhiRequire(queue == .graphics, "render passes require the graphics queue")
                 guard capabilities.graphics else {
                     throw RHIError.unsupportedFeature("graphics commands are not implemented by this backend")
                 }
@@ -456,17 +508,26 @@ public final class Device {
     // MARK: Swapchain
 
     public func acquireSwapchainImage() throws -> SwapchainImage {
-        try locked { try backend.acquireSwapchainImage() }
+        try locked {
+            guard currentSlot != nil else { throw RHIError.frameNotActive }
+            return try backend.acquireSwapchainImage()
+        }
     }
 
     public func present(_ image: SwapchainImage) throws {
-        try locked { try backend.present(image) }
+        try locked {
+            guard currentSlot != nil else { throw RHIError.frameNotActive }
+            try backend.present(image)
+        }
     }
 
     // MARK: Immediate data transfer
 
     public func uploadBufferData(_ buffer: Buffer, offset: Int = 0, data: Data) throws {
-        try locked { try backend.uploadBufferData(buffer, offset: offset, data: data) }
+        try locked {
+            try backend.uploadBufferData(buffer, offset: offset, data: data)
+            if !data.isEmpty { planner.recordImmediateWrite(ResourceRef(kind: .buffer, id: buffer.id)) }
+        }
     }
 
     public func uploadTextureData(
@@ -480,6 +541,7 @@ public final class Device {
             try backend.uploadTextureData(
                 texture, data: data, width: width, height: height, bytesPerRow: bytesPerRow
             )
+            planner.recordImmediateWrite(ResourceRef(kind: .texture, id: texture.id))
         }
     }
 

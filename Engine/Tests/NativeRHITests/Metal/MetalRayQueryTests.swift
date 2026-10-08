@@ -37,8 +37,8 @@ final class MetalRayQueryTests: XCTestCase {
         let target = try device.makeTexture(TextureDescriptor(width: 2, height: 1, format: .rgba8Unorm,
             usage: [.storageWrite, .transferSource]))
         let binding = try device.makeBindingLayout(BindingLayoutDescriptor(entries: [
-            BindingLayoutEntry(slot: 0, type: .accelerationStructure, stage: .compute),
-            BindingLayoutEntry(slot: 1, type: .storageTexture, stage: .compute)]))
+            BindingLayoutEntry(slot: 0, type: .accelerationStructure, visibility: .compute),
+            BindingLayoutEntry(slot: 1, type: .storageTexture, visibility: .compute)]))
         let layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [binding]))
         let set = try device.makeBindingSet(layout: binding, descriptor: BindingSetDescriptor(entries: [
             BindingSetEntry(slot: 0, resource: .accelerationStructure(tlas)),
