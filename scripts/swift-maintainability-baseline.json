@@ -77,8 +77,8 @@
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
     "Editor/Sources/EditorCore/Application/EditorApplication.swift::EditorApplication": {
-      "stored_properties": 61,
-      "initializer_assignments": 22,
+      "stored_properties": 57,
+      "initializer_assignments": 21,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
     "Editor/Sources/EditorCore/Scene/Manifest/EditorSceneManifestNode.swift::EditorSceneManifestNode": {
