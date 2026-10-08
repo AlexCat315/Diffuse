@@ -36,6 +36,7 @@ public final class DrawList {
     public private(set) var vertices: [UIVertex] = []
     public private(set) var indices: [UInt32] = []
     public private(set) var batches: [DrawBatch] = []
+    public private(set) var resources = DrawListResources()
 
     /// Stack of clip rectangles applied via `pushClip` / `popClip`.
     private var clipStack: [UIRect] = []
@@ -48,6 +49,7 @@ public final class DrawList {
         vertices.removeAll(keepingCapacity: true)
         indices.removeAll(keepingCapacity: true)
         batches.removeAll(keepingCapacity: true)
+        resources.reset()
         clipStack.removeAll(keepingCapacity: true)
         viewportBounds = nil
     }
@@ -99,14 +101,18 @@ public final class DrawList {
         }
     }
 
+    /// Keep ownership with this geometry, including cached layer composites.
+    public func retainResource(_ resource: any AnyObject & Sendable) { resources.retain(resource) }
+
     // MARK: - Snapshot restore
 
     /// Replace the draw list contents with pre-built data from a `DrawListSnapshot`.
     /// Used by the render thread to reconstruct a frame without re-walking the node tree.
-    public func load(vertices: [UIVertex], indices: [UInt32], batches: [DrawBatch]) {
+    public func load(vertices: [UIVertex], indices: [UInt32], batches: [DrawBatch], resources: DrawListResources = .init()) {
         self.vertices = vertices
         self.indices = indices
         self.batches = batches
+        self.resources = resources
         clipStack.removeAll(keepingCapacity: true)
         viewportBounds = nil
     }
@@ -129,6 +135,7 @@ public final class DrawList {
     public func append(_ other: DrawList,
                 vertexTranslationX: Float,
                 vertexTranslationY: Float) {
+        resources.append(other.resources)
         if vertices.isEmpty,
            indices.isEmpty,
            batches.isEmpty,
@@ -317,6 +324,32 @@ public final class DrawList {
         let v2 = UIVertex(posX: rect.maxX, posY: rect.maxY, u: u1, v: uvMax.y, color: packed)
         let v3 = UIVertex(posX: rect.minX, posY: rect.maxY, u: u0, v: uvMax.y, color: packed)
         appendQuad(v0, v1, v2, v3, textureID: textureID)
+    }
+
+    /// Clamp linear sampling to a cropped image's texel centers. Nine adjoining
+    /// quads preserve the original mapping in the interior and hold UVs at the
+    /// edges, preventing unused texture padding from bleeding into an upscale.
+    /// The quads merge into one batch and retain the ordinary packed vertex ABI.
+    public func addClampedImageQuad(
+        rect: UIRect, textureID: TextureID, texelSize: (x: Float, y: Float),
+        tint: Color = .white, uvMin: (x: Float, y: Float) = (0, 0), uvMax: (x: Float, y: Float) = (1, 1)
+    ) {
+        guard rect.width > 0, rect.height > 0,
+              uvMax.x > uvMin.x, uvMax.y > uvMin.y,
+              texelSize.x > 0, texelSize.y > 0 else { return }
+        let insetX = min(texelSize.x / 2, (uvMax.x - uvMin.x) / 2)
+        let insetY = min(texelSize.y / 2, (uvMax.y - uvMin.y) / 2)
+        let edgeX = rect.width * insetX / (uvMax.x - uvMin.x)
+        let edgeY = rect.height * insetY / (uvMax.y - uvMin.y)
+        let xs = [rect.minX, rect.minX + edgeX, rect.maxX - edgeX, rect.maxX]
+        let ys = [rect.minY, rect.minY + edgeY, rect.maxY - edgeY, rect.maxY]
+        let us = [uvMin.x + insetX, uvMin.x + insetX, uvMax.x - insetX, uvMax.x - insetX]
+        let vs = [uvMin.y + insetY, uvMin.y + insetY, uvMax.y - insetY, uvMax.y - insetY]
+        for y in 0..<3 { for x in 0..<3 {
+            guard xs[x + 1] > xs[x], ys[y + 1] > ys[y] else { continue }
+            addImageQuad(rect: UIRect(x: xs[x], y: ys[y], width: xs[x + 1] - xs[x], height: ys[y + 1] - ys[y]),
+                textureID: textureID, tint: tint, uvMin: (us[x], vs[y]), uvMax: (us[x + 1], vs[y + 1]))
+        } }
     }
 
     /// Append a textured quad treating the source image's alpha channel as

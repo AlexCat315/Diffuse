@@ -103,7 +103,8 @@ public final class InGameUIRenderer: InGameUIProviding, @unchecked Sendable {
         renderThreadList.load(
             vertices: snapshot.vertices,
             indices: snapshot.indices,
-            batches: snapshot.batches
+            batches: snapshot.batches,
+            resources: snapshot.resources
         )
 
         do {

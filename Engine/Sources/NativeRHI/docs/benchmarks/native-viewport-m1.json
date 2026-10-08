@@ -1,0 +1,401 @@
+{
+  "date": "2026-10-09",
+  "device": "Apple M1",
+  "api": "Metal",
+  "validation": true,
+  "uiLogicalExtent": [
+    192,
+    128
+  ],
+  "uiPixelExtent": [
+    384,
+    256
+  ],
+  "nativeViewportUsesCPUTransfer": false,
+  "sameSourceUIProbeUsesTestOnlyCPUTransfer": true,
+  "sameSourceUIProbeMaximumChannelErrorLimit": 1,
+  "combinedMeanRGBLimit": 0.5,
+  "combinedPixelsOverThreeFractionLimit": 0.01,
+  "source": [
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 24576
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 2048
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 24576
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0017225477430555555,
+      "maximumRGBError": 23,
+      "pixelsOverThree": 3,
+      "pixelCount": 24576
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.0006510416666666666,
+      "maximumRGBError": 1,
+      "pixelsOverThree": 0,
+      "pixelCount": 2048
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.0003255208333333333,
+      "maximumRGBError": 6,
+      "pixelsOverThree": 1,
+      "pixelCount": 24576
+    }
+  ],
+  "combined": [
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": false,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.0,
+      "maximumRGBError": 0,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0009663899739583334,
+      "maximumRGBError": 17,
+      "pixelsOverThree": 6,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.015567355685763888,
+      "maximumRGBError": 17,
+      "pixelsOverThree": 275,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.0009731716579861111,
+      "maximumRGBError": 17,
+      "pixelsOverThree": 6,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        192,
+        128
+      ],
+      "meanAbsoluteRGBError": 0.008416069878472222,
+      "maximumRGBError": 17,
+      "pixelsOverThree": 6,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.00041029188368055556,
+      "maximumRGBError": 1,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.006744384765625,
+      "maximumRGBError": 3,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.0004170735677083333,
+      "maximumRGBError": 1,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        64,
+        32
+      ],
+      "meanAbsoluteRGBError": 0.003848605685763889,
+      "maximumRGBError": 2,
+      "pixelsOverThree": 0,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.00012885199652777778,
+      "maximumRGBError": 5,
+      "pixelsOverThree": 2,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.008585611979166666,
+      "maximumRGBError": 6,
+      "pixelsOverThree": 157,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8Unorm",
+      "sampleCount": 4
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.00013563368055555556,
+      "maximumRGBError": 5,
+      "pixelsOverThree": 2,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 1
+    },
+    {
+      "postProcessing": true,
+      "sceneExtent": [
+        256,
+        96
+      ],
+      "meanAbsoluteRGBError": 0.004675971137152778,
+      "maximumRGBError": 5,
+      "pixelsOverThree": 2,
+      "pixelCount": 98304,
+      "targetFormat": "bgra8UnormSRGB",
+      "sampleCount": 4
+    }
+  ]
+}

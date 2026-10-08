@@ -39,13 +39,14 @@ public struct DrawListSnapshot: Sendable {
     public var logicalWidth: Float
     public var logicalHeight: Float
     public var atlasUpdates: [DrawListAtlasDirty] = []
+    public var resources = DrawListResources()
 
     public var isEmpty: Bool { batches.isEmpty }
 
     public init(vertices: [UIVertex], indices: [UInt32], batches: [DrawBatch],
                 viewportWidth: UInt32, viewportHeight: UInt32,
                 logicalWidth: Float, logicalHeight: Float,
-                atlasUpdates: [DrawListAtlasDirty] = []) {
+                atlasUpdates: [DrawListAtlasDirty] = [], resources: DrawListResources = .init()) {
         self.vertices = vertices
         self.indices = indices
         self.batches = batches
@@ -54,6 +55,7 @@ public struct DrawListSnapshot: Sendable {
         self.logicalWidth = logicalWidth
         self.logicalHeight = logicalHeight
         self.atlasUpdates = atlasUpdates
+        self.resources = resources
     }
 }
 

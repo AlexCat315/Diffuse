@@ -25,10 +25,7 @@ struct ViewportHostInputTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
-            ViewportHost(surface: ViewportSurfaceState(surfaceID: 1,
-                                                       handle: 1,
-                                                       width: 200,
-                                                       height: 120),
+            ViewportHost(surface: ViewportSurfaceState(),
                          onInputEvent: { viewportEvents.append($0) }) {
                 Button(action: { buttonTaps += 1 }) {
                     Text("Rotate")
@@ -75,10 +72,7 @@ struct ViewportHostInputTests: GuavaUIComposeSerializedSuite {
                     shortcutKeys.append(key)
                     return true
                 }
-                ViewportHost(surface: ViewportSurfaceState(surfaceID: 1,
-                                                           handle: 1,
-                                                           width: 200,
-                                                           height: 120),
+                ViewportHost(surface: ViewportSurfaceState(),
                              onInputEvent: { viewportEvents.append($0) })
                     .frame(width: 200, height: 120)
             }

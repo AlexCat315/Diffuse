@@ -17,8 +17,9 @@ struct RenderThreadTests {
         let consumer = try NativeGridRenderer(device: device)
         let ring = RingBuffer<RenderPacket>()
         let rendered = DispatchSemaphore(value: 0)
+        let reportRecorder = RenderReportRecorder()
         let thread = RenderThread(runtime: NoopRuntime(), ringBuffer: ring, consumer: consumer,
-            onFrameRendered: { _ in rendered.signal() })
+            onFrameRendered: { report in reportRecorder.append(report); rendered.signal() })
         thread.start(); defer { thread.shutdown() }
         var packet = Self.makePacket(frameIndex: 17)
         packet.drawableSize = RenderDrawableSize(width: 128, height: 96)
@@ -30,7 +31,14 @@ struct RenderThreadTests {
         #expect(consumer.currentFrameStats().frameIndex == 17)
         #expect(consumer.currentFrameStats().passDrawCallCounts[.editorGrid] == 1)
         #expect(consumer.colorTexture != nil)
-        #expect(!consumer.currentViewportSurfaceState().isValid)
+        let surface = consumer.currentViewportSurfaceState()
+        #expect(surface.isValid)
+        #expect(surface.region.size == packet.drawableSize)
+        let reported = try #require(reportRecorder.snapshot().first?.viewportSurfaceState)
+        #expect(reported == surface && reported.image === surface.image)
+        if case .native(let resource) = surface.image?.storage {
+            #expect(resource.texture == consumer.colorTexture)
+        } else { Issue.record("render thread must publish an owned native image") }
     }
     @Test("RenderThread consumes indexed scene packets through NativeRenderer",
           .enabled(if: ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1",

@@ -502,8 +502,8 @@ struct ViewportPanel: View {
     }
 
     private func viewportAspectRatio(for surface: ViewportSurfaceState) -> Float? {
-        guard surface.isValid, surface.height > 0 else { return nil }
-        return Float(surface.width) / Float(surface.height)
+        guard surface.isValid, surface.region.size.height > 0 else { return nil }
+        return Float(surface.region.size.width) / Float(surface.region.size.height)
     }
 
     private func cancelActiveViewportInteraction() -> Bool {
@@ -1891,7 +1891,7 @@ private struct ViewportStatusBar: View {
             }
 
             if surface.isValid {
-                EditorPanelBadge("\(surface.width)×\(surface.height)")
+                EditorPanelBadge("\(surface.region.size.width)×\(surface.region.size.height)")
             }
             EditorPanelBadge("\(renderScalePercent)%")
             if realtimeEnabled {

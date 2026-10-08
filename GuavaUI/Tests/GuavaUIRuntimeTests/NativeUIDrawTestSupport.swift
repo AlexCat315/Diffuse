@@ -191,7 +191,7 @@ func nativeUIScene(_ context: NativeUIDrawTestContext) throws -> DrawList {
     let prefix = DrawList(); prefix.addRect(UIRect(x: -50, y: -50, width: 1, height: 1), color: .white)
     let output = DrawList()
     output.load(vertices: prefix.vertices + list.vertices, indices: prefix.indices + list.indices.map { $0 + 4 },
-        batches: list.batches.map { var batch = $0; batch.indexOffset += 6; return batch })
+        batches: list.batches.map { var batch = $0; batch.indexOffset += 6; return batch }, resources: list.resources)
     return output
 }
 #endif

@@ -3,6 +3,30 @@ import Testing
 
 @Suite("In-game atlas delivery")
 struct InGameDrawListSourceTests {
+    private final class Lease: Sendable {}
+
+    @Test("latest frame and consumed snapshots own resources independently")
+    func snapshotOwnership() throws {
+        let source = InGameDrawListSource()
+        let list = DrawList()
+        var owner: Lease? = Lease()
+        weak let observed = owner
+        list.retainResource(owner!)
+        var published = frame()
+        published.resources = list.resources
+        source.publish(published)
+        owner = nil; list.reset(); published.resources.reset()
+        var consumed = try #require(source.consume())
+        source.publish(frame())
+        #expect(observed != nil)
+        let restored = DrawList()
+        restored.load(vertices: consumed.vertices, indices: consumed.indices, batches: consumed.batches, resources: consumed.resources)
+        consumed.resources.reset()
+        #expect(observed != nil)
+        restored.reset()
+        #expect(observed == nil)
+    }
+
     private func frame(_ dirty: DrawListAtlasDirty? = nil, width: UInt32 = 640) -> DrawListSnapshot {
         DrawListSnapshot(vertices: [], indices: [], batches: [], viewportWidth: width,
                          viewportHeight: 480, logicalWidth: Float(width), logicalHeight: 480,
