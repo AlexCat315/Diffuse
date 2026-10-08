@@ -25,6 +25,7 @@ node_modules/
 .vscode/
 .codebuddy/
 .workbuddy/
+.trae/
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
