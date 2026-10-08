@@ -9,9 +9,9 @@ enum NativePacketValidation {
               packet.drawableSize.height <= ViewportTargetAllocation.maxDimension,
               !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
         guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow,.r5PostProcess].contains(packet.renderSettings.stage),
-              packet.scene.particles.isEmpty, packet.scene.particleSimulationBatches.isEmpty,
+              packet.scene.particleSimulationBatches.isEmpty,
               packet.inGameCanvas.commands.isEmpty else {
-            throw RHIError.unsupportedFeature("native particles and UI migration is pending")
+            throw RHIError.unsupportedFeature("native GPU particle simulation and UI migration is pending")
         }
         let settings = packet.renderSettings
         let style = settings.stylizedCharacterStyle
@@ -26,6 +26,9 @@ enum NativePacketValidation {
             throw RHIError.unsupportedFeature("post effects require the r5 stage")
         }
         let scene = packet.scene
+        guard scene.particles.count <= Int(UInt32.max), scene.particles.allSatisfy({ particle in
+            GPUParticleInstance(particle: particle).isFinite
+        }) else { throw RHIError.invalidArgument("non-finite or oversized particle input") }
         guard finite(scene.camera.eye), finite(scene.camera.target), finite(scene.camera.up),
               finite(scene.environment.ambientColor), scene.environment.ambientIntensity.isFinite,
               scene.environment.ambientIntensity >= 0, scene.environment.exposure.isFinite, scene.environment.exposure >= 0,

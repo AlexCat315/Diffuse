@@ -263,12 +263,19 @@ enum VulkanDeviceSetup {
         vk12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
         vk12.pNext = UnsafeMutableRawPointer(native13)
         let native12 = arena.make(vk12)
+        var vk11 = VkPhysicalDeviceVulkan11Features()
+        vk11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES
+        vk11.pNext = UnsafeMutableRawPointer(native12)
+        let native11 = arena.make(vk11)
         var supported = VkPhysicalDeviceFeatures2()
         supported.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
-        supported.pNext = UnsafeMutableRawPointer(native12)
+        supported.pNext = UnsafeMutableRawPointer(native11)
         cmds.getPhysicalDeviceFeatures2(physicalDevice, &supported)
         guard native12.pointee.timelineSemaphore != 0, native13.pointee.dynamicRendering != 0 else {
             throw RHIError.unsupportedBackend("NativeRHI requires Vulkan 1.3 dynamic rendering and timeline semaphores")
+        }
+        guard native11.pointee.shaderDrawParameters != 0, supported.features.drawIndirectFirstInstance != 0 else {
+            throw RHIError.unsupportedBackend("NativeRHI requires shader draw parameters and indirect firstInstance")
         }
         var result = VulkanFeatureSupport()
         result.dynamicRendering = true
@@ -310,11 +317,14 @@ enum VulkanDeviceSetup {
         vk12.timelineSemaphore = VK_TRUE
         vk12.bufferDeviceAddress = result.accelerationStructures ? VK_TRUE : VK_FALSE
         native12.pointee = vk12
+        vk11.shaderDrawParameters = VK_TRUE
+        native11.pointee = vk11
         var enabled = VkPhysicalDeviceFeatures()
         enabled.fillModeNonSolid = supported.features.fillModeNonSolid
+        enabled.drawIndirectFirstInstance = VK_TRUE
         var info = VkDeviceCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
-        info.pNext = UnsafeRawPointer(native12)
+        info.pNext = UnsafeRawPointer(native11)
         info.queueCreateInfoCount = UInt32(queues.count)
         info.pQueueCreateInfos = arena.store(queues)
         info.enabledExtensionCount = UInt32(names.count)
