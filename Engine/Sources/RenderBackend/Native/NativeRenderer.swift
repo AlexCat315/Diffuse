@@ -8,7 +8,7 @@ import SIMDCompat
 /// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
 /// HDR sky/tonemap, stylized materials/outline/paper, r5 post effects, temporal
 /// history/cache, the grid, CPU-authored particle draws and resident GPU particle
-/// physics/events. Simulated-particle instance conversion is the next migration step.
+/// physics/events, GPU sorting and simulated-particle instance conversion.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
@@ -88,7 +88,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         let shadowTiles = try shadows.prepare(packet: packet, store: meshes, plan: shadowPlan, skin: skin, deformables: dynamic.geometries)
         let prepared = try meshPass.prepare(packet: packet, store: meshes,
             matrices: matrices, depthPrepass: hasDepth, hdr: hdr, lighting: lightBindings, skin: skin, deformables: dynamic.geometries)
-        let particleFrame = try particles.prepare(scene: packet.scene,matrices: matrices,hdr: hdr,into: commands)
+        let particleFrame = try particles.prepare(scene: packet.scene,matrices: matrices,hdr: hdr,simulated: simulation.render,into: commands)
         let opaqueDraws = prepared.draws.filter { $0.batch.key.mode != .blend }
         let transparentDraws = prepared.draws.filter { $0.batch.key.mode == .blend }.sorted { $0.batch.distance > $1.batch.distance }
         let image = surface == nil ? nil : try device.acquireSwapchainImage()
@@ -227,6 +227,12 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         stats.gpuParticleSimulationEventCapacity = simulation.report.eventCapacity
         stats.gpuParticleSimulationEventBufferBytes = simulation.report.eventBufferBytes
         stats.gpuParticleSimulationEncodeNS = simulationTime
+        stats.gpuParticleRenderInstanceCount = simulation.report.renderInstanceCount
+        stats.gpuParticleInstanceDispatchWorkgroups = simulation.report.instanceDispatchWorkgroups
+        stats.gpuParticleSortPassCount = simulation.report.sortPassCount
+        stats.gpuParticleSortItemCount = simulation.report.sortItemCount
+        stats.gpuParticleSortPaddedItemCount = simulation.report.sortPaddedItemCount
+        stats.gpuParticleSortDispatchWorkgroups = simulation.report.sortDispatchWorkgroups
         lastFrameStats = stats; lastError = nil
     }
 

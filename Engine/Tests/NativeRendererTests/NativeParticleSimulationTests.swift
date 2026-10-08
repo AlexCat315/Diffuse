@@ -36,6 +36,8 @@ final class NativeParticleSimulationTests: XCTestCase {
         XCTAssertThrowsError(try NativePacketValidation.validate(packet))
         packet.scene.particleSimulationBatches = [batch]
         packet.scene.particleSimulationBatches[0].renderOnGPU = true
+        _ = try NativePacketValidation.validate(packet)
+        packet.scene.particleSimulationBatches[0].trailSegments = Int.max
         XCTAssertThrowsError(try NativePacketValidation.validate(packet))
         packet.scene.particleSimulationBatches = [batch]
         packet.scene.particleSimulationBatches[0].plan.particleCapacity = (1 << 24)+1
@@ -90,7 +92,7 @@ final class NativeParticleSimulationTests: XCTestCase {
             try device.submit(commands); simulation.commit(update); device.endFrame()
             let native = try XCTUnwrap(simulation.entries[.anonymous(0)]?.state)
             let encoder = try reference.backend.createCommandEncoder()
-            let wgpu = try XCTUnwrap(reference.renderer.encodeParticleSimulationPass(encoder: encoder,batch: batch,deltaTime: 0.2,elapsedTime: 1.7))
+            let wgpu = try XCTUnwrap(reference.renderer.encodeParticleSimulationPass(encoder: encoder,batch: batch,deltaTime: 0.2,elapsedTime: 1.7)).resources
             reference.backend.submit(try encoder.finish())
             let rawStates = try nativeStates(device: device,state: native)
             for state in rawStates where state.positionLifetime.w == 0 {

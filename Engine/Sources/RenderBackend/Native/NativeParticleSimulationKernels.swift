@@ -52,7 +52,7 @@ final class NativeParticleSimulationKernels {
             .init(slot: 3,resource: .storageBuffer(buffer: state.events))],groups: groups(count),into: commands)
         try clear.encode(entries: [.init(slot: 0,resource: maintenance),.init(slot: 1,resource: .storageBuffer(buffer: state.compact))],groups: groups(state.capacity),into: commands)
         try compact.encode(entries: [.init(slot: 0,resource: maintenance),.init(slot: 1,resource: .storageBuffer(buffer: state.state)),
-            .init(slot: 2,resource: .storageBuffer(buffer: state.compact)),.init(slot: 3,resource: .storageBuffer(buffer: state.metadata))],groups: groups(count),into: commands)
+            .init(slot: 2,resource: .storageBuffer(buffer: state.compact)),.init(slot: 3,resource: .storageBuffer(buffer: state.metadata))],groups: 1,into: commands)
         try finalize.encode(entries: [.init(slot: 0,resource: .storageBuffer(buffer: state.metadata))],groups: 1,into: commands)
         commands.copyPass { $0.copyBuffer(src: state.compact,dst: state.state,size: state.capacity*MemoryLayout<GPUParticleSimulationState>.stride) }
         return count

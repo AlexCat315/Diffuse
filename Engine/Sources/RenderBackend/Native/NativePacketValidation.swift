@@ -1,4 +1,5 @@
 import NativeRHI
+import SceneRuntime
 import SIMDCompat
 
 /// Validate supported scene features before allocating resources or acquiring a drawable.
@@ -68,8 +69,8 @@ enum NativePacketValidation {
             throw RHIError.invalidArgument("non-finite particle simulation time")
         }
         var emitters = Set<UInt64>()
+        var instances = packet.scene.particles.count
         for batch in packet.scene.particleSimulationBatches where batch.plan.usesGPU && batch.particleCount > 0 {
-            guard !batch.renderOnGPU else { throw RHIError.unsupportedFeature("native simulated-particle sorting and instance conversion is pending") }
             guard batch.plan.particleCapacity > 0, batch.plan.particleCapacity <= GPUParticleSimulationUniforms.maximumExactParticleCount,
                   [batch.simulationSpeed,batch.noiseStrength,batch.noiseScale,batch.noiseSpeed,
                     batch.vectorFieldStrength,batch.vectorFieldScale,batch.vectorFieldScrollSpeed,
@@ -85,6 +86,28 @@ enum NativePacketValidation {
             if let emitter = batch.emitterEntity?.rawValue, !emitters.insert(emitter).inserted {
                 throw RHIError.invalidArgument("duplicate particle simulation emitter")
             }
+            if batch.renderOnGPU {
+                try validateParticleRendering(batch)
+                let (count,overflow) = batch.renderParticleCount.multipliedReportingOverflow(by: batch.renderInstanceMultiplier)
+                let (total,additionOverflow) = instances.addingReportingOverflow(count)
+                guard !overflow, !additionOverflow, total <= GPUParticleSimulationUniforms.maximumExactParticleCount else {
+                    throw RHIError.invalidArgument("simulated particle instance count exceeds the Float32 ABI")
+                }
+                instances = total
+            }
         }
+    }
+    private static func validateParticleRendering(_ batch: RenderParticleSimulationBatch) throws {
+        let limit = GPUParticleSimulationUniforms.maximumExactParticleCount
+        let (frames,overflow) = batch.textureSheetColumns.multipliedReportingOverflow(by: batch.textureSheetRows)
+        let appearance = GPUParticleAppearanceData(batch: batch)
+        guard batch.trailSegments >= 0, batch.trailSegments < limit,
+              [batch.textureSheetColumns,batch.textureSheetRows,batch.textureSheetFrameCount].allSatisfy({ $0 > 0 && $0 <= limit }),
+              [batch.textureSheetStartFrame,batch.textureSheetFrameRandomness].allSatisfy({ $0 >= 0 && $0 <= limit }),
+              !overflow, frames <= Int(UInt32.max),
+              [batch.startSize,batch.endSize,batch.textureSheetFrameRate,batch.velocityStretchScale,batch.velocityStretchMax,
+                batch.renderAlphaScale,batch.trailLength,batch.trailEndSizeScale,batch.trailEndAlphaScale].allSatisfy(\.isFinite),
+              GPUParticleSimulationInstanceUniforms(batch: batch,baseInstance: 0,appearance: appearance).isFinite,
+              appearance.isFinite else { throw RHIError.invalidArgument("non-finite or oversized simulated-particle rendering input") }
     }
 }

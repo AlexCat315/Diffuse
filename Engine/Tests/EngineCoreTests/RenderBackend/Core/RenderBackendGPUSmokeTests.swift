@@ -768,7 +768,7 @@ struct RenderBackendGPUSmokeTests {
                     worldTransform: collisionTransform),
                 deltaTime: 0.5
             )
-        )
+        ).resources
 
         let stride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
         let readback = try backend.createBuffer(size: stride, usage: [.copyDst, .mapRead])
@@ -923,7 +923,7 @@ struct RenderBackendGPUSmokeTests {
                     gravity: .zero),
                 deltaTime: 0
             )
-        )
+        ).resources
 
         let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
         let stateReadback = try backend.createBuffer(size: stateStride * 2, usage: [.copyDst, .mapRead])
@@ -1041,7 +1041,7 @@ struct RenderBackendGPUSmokeTests {
                     gravity: .zero),
                 deltaTime: 0
             )
-        )
+        ).resources
 
         let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
         let stateReadback = try backend.createBuffer(size: stateStride * 4, usage: [.copyDst, .mapRead])
@@ -1168,7 +1168,7 @@ struct RenderBackendGPUSmokeTests {
                     gravity: .zero),
                 deltaTime: 1
             )
-        )
+        ).resources
         let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
         let stateReadback = try backend.createBuffer(size: stateStride, usage: [.copyDst, .mapRead])
         encoder.copyBufferToBuffer(source: resources.stateBuffer,
@@ -1270,7 +1270,7 @@ struct RenderBackendGPUSmokeTests {
                     gravity: .zero),
                 deltaTime: 0
             )
-        )
+        ).resources
         let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
         let stateReadback = try backend.createBuffer(size: stateStride * 2, usage: [.copyDst, .mapRead])
         encoder.copyBufferToBuffer(source: resources.stateBuffer,
