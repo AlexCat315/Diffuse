@@ -147,6 +147,7 @@ public enum VertexFormat: Sendable {
     case float2
     case float3
     case float4
+    case unorm8x4
 }
 
 public enum IndexType: Sendable {

@@ -81,20 +81,29 @@ int32_t grhi_dx12_buffer(GRHI_DX12Device* d, uint32_t id, uint64_t size, uint32_
         !upload && (usage & (1 << 5)) ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE,
         upload ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON);
     buffer.upload = upload; buffer.usage = usage; s.buffers.emplace(id, std::move(buffer)); }); }
+void grhi::validateSamples(State& s, DXGI_FORMAT format, uint32_t samples) {
+    require(samples && samples <= 64 && !(samples & (samples - 1)), "invalid texture sample count");
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS info{format, samples, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE, 0};
+    check(s.device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &info, sizeof(info)), "CheckFeatureSupport samples");
+    require(info.NumQualityLevels > 0, "requested format and sample count are unsupported");
+}
 int32_t grhi_dx12_texture(GRHI_DX12Device* d, uint32_t id, const GRHI_TextureDesc* desc) { return run(d, [&](State& s) {
     require(desc && desc->width && desc->height && desc->depth && desc->layers && desc->mips, "invalid texture size");
-    require(desc->samples == 1 && desc->layers <= UINT16_MAX && desc->depth <= UINT16_MAX && desc->mips <= UINT16_MAX, "unsupported texture samples or extent");
+    require(desc->layers <= UINT16_MAX && desc->depth <= UINT16_MAX && desc->mips <= UINT16_MAX, "unsupported texture extent");
+    validateSamples(s, format(desc->format), desc->samples);
+    if (desc->samples > 1) require(desc->dimension == 0 && desc->layers == 1 && desc->depth == 1 && desc->mips == 1
+        && (desc->usage & ((1 << 1) | (1 << 2))) && !(desc->usage & ((1 << 0) | (1 << 3) | (1 << 4) | (1 << 7))), "unsupported multisample texture shape or usage");
     Resource r; r.texture = *desc; r.usage = desc->usage;
     D3D12_RESOURCE_DESC native{}; native.Dimension = desc->dimension == 1 ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     native.Width = desc->width; native.Height = desc->height; native.DepthOrArraySize = UINT16(desc->dimension == 1 ? desc->depth : desc->dimension == 2 ? 6 : desc->layers);
-    native.MipLevels = UINT16(desc->mips); native.Format = format(desc->format); native.SampleDesc.Count = 1;
+    native.MipLevels = UINT16(desc->mips); native.Format = format(desc->format); native.SampleDesc.Count = desc->samples;
     if (desc->usage & (1 << 1)) native.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     if (desc->usage & (1 << 2)) { native.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL; native.Format = desc->format == GRHI_FORMAT_DEPTH32 ? DXGI_FORMAT_R32_TYPELESS : DXGI_FORMAT_R24G8_TYPELESS; }
     if (desc->usage & (1 << 4)) native.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     D3D12_HEAP_PROPERTIES props{}; props.Type = D3D12_HEAP_TYPE_DEFAULT;
     check(s.device->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &native, r.state, nullptr, IID_PPV_ARGS(&r.native)), "CreateCommittedResource texture");
     if (desc->usage & (1 << 1)) { r.view = s.rtvs.allocate(); s.device->CreateRenderTargetView(r.native.Get(), nullptr, s.rtvs.cpu(r.view)); }
-    else if (desc->usage & (1 << 2)) { r.view = s.dsvs.allocate(); D3D12_DEPTH_STENCIL_VIEW_DESC view{}; view.Format = format(desc->format); view.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D; s.device->CreateDepthStencilView(r.native.Get(), &view, s.dsvs.cpu(r.view)); }
+    else if (desc->usage & (1 << 2)) { r.view = s.dsvs.allocate(); D3D12_DEPTH_STENCIL_VIEW_DESC view{}; view.Format = format(desc->format); view.ViewDimension = desc->samples > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D; s.device->CreateDepthStencilView(r.native.Get(), &view, s.dsvs.cpu(r.view)); }
     s.textures.emplace(id, std::move(r)); }); }
 int32_t grhi_dx12_sampler(GRHI_DX12Device* d, uint32_t id, const GRHI_SamplerDesc* desc) { return run(d, [&](State& s) {
     D3D12_SAMPLER_DESC result{};

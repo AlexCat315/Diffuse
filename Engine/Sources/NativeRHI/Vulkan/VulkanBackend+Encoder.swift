@@ -16,14 +16,24 @@ extension VulkanBackend {
     }
 
     private func encodeRenderPass(cmd: VkCommandBuffer, record: RenderPassRecord) throws {
+        let signature = try renderPassSignature(record.descriptor)
         let arena = VulkanScratch()
         let targets = try record.descriptor.colorTargets.map { target -> VkRenderingAttachmentInfo in
             try transitionTexture(cmd: cmd, handle: target.texture, state: .renderTarget)
             guard let texture = registries.textures[target.texture.id] else { throw RHIError.invalidArgument("unknown color target") }
             var info = VkRenderingAttachmentInfo()
             info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO
-            info.imageView = texture.view
+            info.imageView = texture.attachmentView ?? texture.view
             info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+            if let handle = target.resolveTexture {
+                try transitionTexture(cmd: cmd, handle: handle, state: .renderTarget)
+                guard let resolve = registries.textures[handle.id] else {
+                    throw RHIError.invalidArgument("unknown resolve target")
+                }
+                info.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT
+                info.resolveImageView = resolve.attachmentView ?? resolve.view
+                info.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+            }
             info.storeOp = target.store ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE
             switch target.loadAction {
             case .load: info.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD
@@ -34,11 +44,7 @@ extension VulkanBackend {
             }
             return info
         }
-        let first = record.descriptor.colorTargets.first?.texture ?? record.descriptor.depthTarget?.texture
-        guard let first, let extent = registries.textures[first.id] else { throw RHIError.invalidArgument("render pass has no target") }
-        let handles = record.descriptor.colorTargets.map(\.texture) + (record.descriptor.depthTarget.map { [$0.texture] } ?? [])
-        try rhiRequire(handles.allSatisfy { registries.textures[$0.id]?.width == extent.width
-            && registries.textures[$0.id]?.height == extent.height }, "render targets have different dimensions")
+        let extent = (width: signature.extent.x, height: signature.extent.y)
         var rendering = VkRenderingInfo()
         rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO
         rendering.renderArea.extent = VkExtent2D(width: UInt32(extent.width), height: UInt32(extent.height))
@@ -52,7 +58,7 @@ extension VulkanBackend {
             }
             var depth = VkRenderingAttachmentInfo()
             depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO
-            depth.imageView = texture.view
+            depth.imageView = texture.attachmentView ?? texture.view
             depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
             depth.storeOp = target.store ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE
             switch target.loadAction {
@@ -179,11 +185,19 @@ extension VulkanBackend {
     }
 
     private func validateRenderTargets(_ pass: RenderPassDescriptor, pipeline: GraphicsPipelineDescriptor) throws {
-        let actual = pass.colorTargets.map { registries.textures[$0.texture.id].map { VulkanFormats.vkFormat($0.format) } }
-        let expected = pipeline.colorAttachments.map { Optional(VulkanFormats.vkFormat($0.format)) }
-        try rhiRequire(actual == expected, "pipeline color formats do not match render targets")
-        let depth = pass.depthTarget.flatMap { registries.textures[$0.texture.id]?.format }.map(VulkanFormats.vkFormat)
-        try rhiRequire(depth == pipeline.depthFormat.map(VulkanFormats.vkFormat), "pipeline depth format does not match render target")
+        try renderPassSignature(pass).validate(colors: pipeline.colorAttachments.map { VulkanFormats.vkFormat($0.format) },
+            depth: pipeline.depthFormat.map(VulkanFormats.vkFormat), samples: pipeline.sampleCount)
+    }
+
+    private func renderPassSignature(_ pass: RenderPassDescriptor) throws -> RenderPassSignature<VkFormat> {
+        try rhiRenderPassSignature(pass) { handle in
+            guard let texture = registries.textures[handle.id] else { throw RHIError.invalidArgument("unknown render attachment") }
+            var info = RenderTextureInfo(extent: SIMD2(texture.width, texture.height), sampleCount: texture.sampleCount,
+                format: VulkanFormats.vkFormat(texture.format), usage: texture.usage,
+                singleLayer2D: texture.dimension == .texture2D && texture.layers == 1, isDepth: texture.format.isDepth)
+            info.supportsColorResolve = texture.format != .r32Uint
+            return info
+        }
     }
 
     private func encodeCopyPass(cmd: VkCommandBuffer, record: CopyPassRecord) throws {
@@ -194,6 +208,7 @@ extension VulkanBackend {
                     throw RHIError.invalidArgument("unknown texture copy resource")
                 }
                 try rhiRequire(source != destination && src.dimension == .texture2D && dst.dimension == .texture2D
+                    && src.sampleCount == 1 && dst.sampleCount == 1
                     && src.layers == 1 && dst.layers == 1 && src.usage.contains(.transferSource)
                     && dst.usage.contains(.transferDestination), "texture copy requires distinct transferable 2D textures")
                 try rhiColorTextureCopyExtent(width: width, height: height,
@@ -229,6 +244,7 @@ extension VulkanBackend {
         guard let image = registries.textures[texture.id], let native = registries.buffers[buffer.id] else {
             throw RHIError.invalidArgument("unknown texture copy resource")
         }
+        try rhiRequire(image.sampleCount == 1, "buffer texture copies require a single-sample texture")
         let bytes = try rhiTextureTransferBytes(width: width, height: height, rowBytes: rowBytes, format: image.format,
             textureWidth: image.width, textureHeight: image.height, capacity: native.size - min(max(0, offset), native.size))
         try rhiByteRange(offset: offset, size: bytes, capacity: native.size)

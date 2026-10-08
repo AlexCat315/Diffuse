@@ -187,16 +187,18 @@ final class SubmissionPlanner {
         waits: inout [TimelineSemaphore]
     ) {
         for target in record.descriptor.colorTargets {
-            let ref = ResourceRef(kind: .texture, id: target.texture.id)
-            collect(
-                resource: ref,
-                desired: .renderTarget,
-                access: Self.makeAccess(resource: ref, state: .renderTarget,
-                                        stage: .fragment, isAttachment: true),
-                scope: .beforePass,
-                on: queue, barriers: &barriers,
-                splitReleases: &splitReleases, waits: &waits
-            )
+            for texture in [target.texture] + (target.resolveTexture.map { [$0] } ?? []) {
+                let ref = ResourceRef(kind: .texture, id: texture.id)
+                collect(
+                    resource: ref,
+                    desired: .renderTarget,
+                    access: Self.makeAccess(resource: ref, state: .renderTarget,
+                                            stage: .fragment, isAttachment: true),
+                    scope: .beforePass,
+                    on: queue, barriers: &barriers,
+                    splitReleases: &splitReleases, waits: &waits
+                )
+            }
         }
         if let depth = record.descriptor.depthTarget {
             let ref = ResourceRef(kind: .texture, id: depth.texture.id)

@@ -23,6 +23,11 @@ final class MetalBindingSet {
     init(entries: [MetalBoundEntry]) { self.entries = entries }
 }
 
+struct MetalGraphicsPipeline {
+    let state: MTLRenderPipelineState
+    let descriptor: GraphicsPipelineDescriptor
+}
+
 /// All concrete Metal objects the backend owns. Grouped on its own so the
 /// device type stays small (one responsibility per type).
 final class MetalRegistries {
@@ -38,7 +43,7 @@ final class MetalRegistries {
     var shaderThreadgroupSizes: [UInt32: ThreadgroupSize] = [:]
     var computeThreadgroupSizes: [UInt32: ThreadgroupSize] = [:]
     var meshPipelines: [UInt32: MetalMeshPipeline] = [:]
-    var renderPipelines: [UInt32: MTLRenderPipelineState] = [:]
+    var renderPipelines: [UInt32: MetalGraphicsPipeline] = [:]
     var computePipelines: [UInt32: MTLComputePipelineState] = [:]
     var depthStates: [UInt32: MTLDepthStencilState] = [:]
     var pipelinePrimitives: [UInt32: MTLPrimitiveType] = [:]

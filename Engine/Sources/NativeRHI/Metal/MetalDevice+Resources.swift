@@ -22,12 +22,16 @@ extension MetalDevice {
     // MARK: Textures
 
     public func createTexture(_ handle: Texture, descriptor: TextureDescriptor) throws {
+        try rhiValidateTextureSamples(descriptor)
+        guard device.supportsTextureSampleCount(descriptor.sampleCount) else {
+            throw RHIError.unsupportedFeature("Metal adapter does not support the requested texture sample count")
+        }
         let td = MTLTextureDescriptor()
         td.pixelFormat = mtlPixelFormat(descriptor.format)
         td.width = max(1, descriptor.width)
         td.height = max(1, descriptor.height)
         td.depth = max(1, descriptor.depth)
-        td.textureType = mtlTextureType(descriptor.dimension)
+        td.textureType = descriptor.sampleCount > 1 ? .type2DMultisample : mtlTextureType(descriptor.dimension)
         if descriptor.dimension == .texture2DArray {
             td.arrayLength = max(1, descriptor.layers)
         }
@@ -104,6 +108,11 @@ extension MetalDevice {
         }
 
         let pd = MTLRenderPipelineDescriptor()
+        try rhiValidateSampleCount(descriptor.sampleCount)
+        guard device.supportsTextureSampleCount(descriptor.sampleCount) else {
+            throw RHIError.unsupportedFeature("Metal adapter does not support the requested pipeline sample count")
+        }
+        pd.rasterSampleCount = descriptor.sampleCount
         pd.vertexFunction = vertexFunction
         pd.fragmentFunction = fragmentFunction
 
@@ -151,7 +160,7 @@ extension MetalDevice {
 
         do {
             let state = try device.makeRenderPipelineState(descriptor: pd)
-            registries.renderPipelines[handle.id] = state
+            registries.renderPipelines[handle.id] = MetalGraphicsPipeline(state: state, descriptor: descriptor)
         } catch {
             throw RHIError.invalidArgument(
                 "graphics pipeline failed: \(error.localizedDescription)"

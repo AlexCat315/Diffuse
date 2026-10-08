@@ -87,6 +87,7 @@ func mtlVertexFormat(_ format: VertexFormat) -> MTLVertexFormat {
     case .float2: return .float2
     case .float3: return .float3
     case .float4: return .float4
+    case .unorm8x4: return .uchar4Normalized
     }
 }
 

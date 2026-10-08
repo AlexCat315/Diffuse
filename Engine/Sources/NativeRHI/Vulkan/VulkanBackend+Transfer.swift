@@ -62,13 +62,14 @@ extension VulkanBackend {
         }
     }
 
-    func uploadTextureData(_ texture: Texture, data: Data, width: Int, height: Int, bytesPerRow: Int, subresource: TextureSubresource) throws {
+    func uploadTextureData(_ texture: Texture, data: Data, region upload: TextureUploadRegion, bytesPerRow: Int, subresource: TextureSubresource) throws {
         guard var record = registries.textures[texture.id] else {
             throw RHIError.invalidArgument("unknown texture")
         }
+        try rhiRequire(record.sampleCount == 1, "texture upload requires a single-sample texture")
         let extent = try rhiTextureSubresourceExtent(subresource, width: record.width, height: record.height,
             mipLevels: Int(record.mipLevels), layers: Int(record.layers))
-        _ = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: record.format,
+        _ = try rhiTextureUploadBytes(region: upload, rowBytes: bytesPerRow, format: record.format,
             textureWidth: extent.width, textureHeight: extent.height, capacity: data.count)
         let staging = try makeStagingBuffer(size: data.count)
         defer { destroyStagingBuffer(staging) }
@@ -80,7 +81,8 @@ extension VulkanBackend {
         region.bufferImageHeight = 0
         region.imageSubresource = VkImageSubresourceLayers(
             aspectMask: UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue), mipLevel: UInt32(subresource.mipLevel), baseArrayLayer: UInt32(subresource.layer), layerCount: 1)
-        region.imageExtent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
+        region.imageOffset = VkOffset3D(x: Int32(upload.origin.x),y: Int32(upload.origin.y),z: 0)
+        region.imageExtent = VkExtent3D(width: UInt32(upload.width), height: UInt32(upload.height), depth: 1)
 
         let oldLayout = record.layout
         let finalLayout = record.usage.contains(.sampled) ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL
@@ -102,6 +104,7 @@ extension VulkanBackend {
             throw RHIError.invalidArgument("unknown texture")
         }
         try rhiRequire(record.layout != VK_IMAGE_LAYOUT_UNDEFINED, "cannot read an uninitialized Vulkan texture")
+        try rhiRequire(record.sampleCount == 1, "texture readback requires a single-sample texture")
         let extent = try rhiTextureSubresourceExtent(subresource, width: record.width, height: record.height,
             mipLevels: Int(record.mipLevels), layers: Int(record.layers))
         let byteCount = try rhiTextureTransferBytes(width: width, height: height, rowBytes: bytesPerRow, format: record.format,

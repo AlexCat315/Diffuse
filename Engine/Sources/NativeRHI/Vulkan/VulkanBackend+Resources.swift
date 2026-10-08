@@ -118,8 +118,8 @@ extension VulkanBackend {
         info.mipLevels = UInt32(max(1, descriptor.mipLevels))
         info.arrayLayers = descriptor.dimension == .cube ? 6 : UInt32(descriptor.layers)
         if descriptor.dimension == .cube { info.flags = UInt32(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT.rawValue) }
-        try rhiRequire(descriptor.sampleCount == 1, "Vulkan multisampled textures are not implemented")
-        info.samples = VK_SAMPLE_COUNT_1_BIT
+        try rhiValidateTextureSamples(descriptor)
+        info.samples = try VulkanFormats.vkSampleCount(descriptor.sampleCount)
         info.tiling = VK_IMAGE_TILING_OPTIMAL
         info.usage = Self.textureUsageFlags(descriptor.usage)
         let arena = VulkanScratch()
@@ -130,6 +130,15 @@ extension VulkanBackend {
             info.pQueueFamilyIndices = arena.store(families)
         }
         info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        var support = VkImageFormatProperties()
+        let supported = context.instanceCommands.getImageFormatProperties(context.physicalDevice, info.format,
+            info.imageType, info.tiling, info.usage, info.flags, &support)
+        guard supported == VK_SUCCESS && support.sampleCounts & UInt32(descriptor.sampleCount) != 0 else {
+            throw RHIError.unsupportedFeature("Vulkan adapter does not support the requested texture format, usage and samples")
+        }
+        try rhiRequire(info.extent.width <= support.maxExtent.width && info.extent.height <= support.maxExtent.height
+            && info.extent.depth <= support.maxExtent.depth && info.mipLevels <= support.maxMipLevels
+            && info.arrayLayers <= support.maxArrayLayers, "texture exceeds Vulkan format limits")
 
         guard let image: VkImage = withExtendedLifetime(arena, {
             vkWithOutHandle { _ = context.core.createImage(context.device, &info, nil, $0) }
@@ -167,6 +176,13 @@ extension VulkanBackend {
         guard let view = vkWithOutHandle({
             context.core.createImageView(context.device, &viewInfo, nil, $0)
         }) else { throw RHIError.outOfMemory }
+        defer { if !stored { context.core.destroyImageView(context.device, view, nil) } }
+        var attachmentView: VkImageView?
+        if descriptor.mipLevels > 1 && (descriptor.usage.contains(.colorTarget) || descriptor.usage.contains(.depthStencilTarget)) {
+            viewInfo.subresourceRange.levelCount = 1
+            attachmentView = vkWithOutHandle { context.core.createImageView(context.device, &viewInfo, nil, $0) }
+            guard attachmentView != nil else { throw RHIError.outOfMemory }
+        }
 
         var record = VulkanTextureRecord(
             image: image, allocation: allocation, view: view,
@@ -174,6 +190,8 @@ extension VulkanBackend {
             depth: descriptor.depth, dimension: descriptor.dimension, mipLevels: UInt32(max(1, descriptor.mipLevels)),
             usage: descriptor.usage, isSwapchain: false, layout: VK_IMAGE_LAYOUT_UNDEFINED)
         record.layers = info.arrayLayers
+        record.sampleCount = descriptor.sampleCount
+        record.attachmentView = attachmentView
         registries.textures[handle.id] = record
         stored = true
     }
@@ -181,6 +199,7 @@ extension VulkanBackend {
     func destroyTexture(_ handle: Texture) {
         guard let record = registries.textures.removeValue(forKey: handle.id) else { return }
         guard !record.isSwapchain else { return }
+        if let attachment = record.attachmentView { context.core.destroyImageView(context.device, attachment, nil) }
         context.core.destroyImageView(context.device, record.view, nil)
         context.core.destroyImage(context.device, record.image, nil)
         if let allocation = record.allocation { allocator.free(allocation) }
