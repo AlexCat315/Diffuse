@@ -355,6 +355,8 @@ public final class DrawListRenderer {
         )
     }
 
+    public func unregisterTexture(id: TextureID) { textures.removeValue(forKey: id) }
+
     // MARK: - Frame submission
 
     /// Issue draw calls for `list` inside an already-begun render pass.

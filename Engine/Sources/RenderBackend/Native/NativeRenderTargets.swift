@@ -3,9 +3,9 @@ import NativeRHI
 struct NativeRenderTargets {
     /// Allocated capacity; scene passes render only the packet's used extent.
     let size: RenderDrawableSize
-    let color: Texture?
-    let hdr: Texture?
-    let depth: Texture
+    let color: TextureResource?
+    let hdr: TextureResource?
+    let depth: TextureResource
     static func configure(device: Device, surface: RenderSurfaceDescriptor, size: RenderDrawableSize) throws {
         try device.waitUntilIdle()
         var descriptor = SurfaceDescriptor(nativeHandle: nil, width: Int(size.width), height: Int(size.height), colorFormat: .bgra8Unorm)
@@ -21,16 +21,12 @@ struct NativeRenderTargets {
         try device.configureSurface(descriptor)
     }
     static func make(device: Device, size: RenderDrawableSize, offscreen: Bool, hdr: Bool = false) throws -> NativeRenderTargets {
-        let depth = try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
+        let depth = try TextureResource(device: device, descriptor: TextureDescriptor(width: Int(size.width), height: Int(size.height),
             format: .depth32Float, usage: [.depthStencilTarget,.sampled], label: "native-render-depth"))
-        var color: Texture?
-        do {
-            color = offscreen ? try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
-                format: .bgra8Unorm, usage: [.colorTarget, .transferSource], label: "native-render-color")) : nil
-            let sceneHDR = hdr ? try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
-                format: .rgba16Float, usage: [.colorTarget,.sampled,.transferSource,.transferDestination], label: "native-scene-hdr")) : nil
-            return NativeRenderTargets(size: size, color: color, hdr: sceneHDR, depth: depth)
-        } catch { if let color { device.destroy(color) }; device.destroy(depth); throw error }
+        let color = offscreen ? try TextureResource(device: device, descriptor: TextureDescriptor(width: Int(size.width), height: Int(size.height),
+            format: .bgra8Unorm, usage: [.colorTarget, .sampled, .transferSource], label: "native-render-color")) : nil
+        let sceneHDR = hdr ? try TextureResource(device: device, descriptor: TextureDescriptor(width: Int(size.width), height: Int(size.height),
+            format: .rgba16Float, usage: [.colorTarget,.sampled,.transferSource,.transferDestination], label: "native-scene-hdr")) : nil
+        return NativeRenderTargets(size: size, color: color, hdr: sceneHDR, depth: depth)
     }
-    func destroy(device: Device) { if let color { device.destroy(color) }; if let hdr { device.destroy(hdr) }; device.destroy(depth) }
 }

@@ -1,4 +1,5 @@
 import EngineKernel
+import RenderBackend
 
 public final class PlatformEventBridge: @unchecked Sendable {
     public struct SubscriptionToken: Hashable, Sendable {
@@ -31,11 +32,9 @@ public final class PlatformEventBridge: @unchecked Sendable {
 
 public protocol ViewportTextureBridge: AnyObject {
     /// Resolve a published viewport surface to a `TextureID` the renderer
-    /// can sample. `surfaceID` is a monotonic identifier (used for cache
-    /// invalidation); `handle` is an opaque pointer to the producer's
-    /// underlying texture object that the producer keeps alive while the
-    /// surfaceID is current.
-    func textureID(surfaceID: UInt64, handle: UInt64, width: UInt32, height: UInt32) -> TextureID?
+    /// can sample. Geometry must retain `surface.image` for as long as it uses
+    /// the returned ID, including cached layers and render-thread snapshots.
+    func textureID(for surface: ViewportSurfaceState) -> TextureID?
 }
 
 public enum ViewportTextureBridgeHolder {

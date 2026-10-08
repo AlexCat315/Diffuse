@@ -36,6 +36,7 @@ let package = Package(
                 "GuavaUIBundledFonts",
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "ImageDecodeBridge", package: "Engine"),
@@ -52,7 +53,7 @@ let package = Package(
 
         // MARK: - Compose
         // 声明式 API、状态系统、modifier、layout composable、组件集合。
-        // 不依赖 Engine，只依赖 GuavaUIRuntime。
+        // viewport 桥使用 Engine 的 RenderBackend；纯 UI API 位于 Portable。
         .target(
             name: "GuavaUICompose",
             dependencies: ["GuavaUIRuntime",
@@ -100,6 +101,8 @@ let package = Package(
                 "GuavaUIDevTools",
                 "GuavaUIBundledFonts",
                 .product(name: "PlatformShell", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
@@ -173,6 +176,10 @@ let package = Package(
                 "GuavaUIApp",
                 "GuavaUICompose",
                 "GuavaUIWorkspace",
+                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "NativeRendererValidation", package: "Engine"),
+                .product(name: "RenderBackend", package: "Engine"),
+                .product(name: "RHIWGPU", package: "Engine"),
             ]
         ),
         .testTarget(

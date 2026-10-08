@@ -49,12 +49,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var offscreenColorView: GPUTextureView?
     private var depthTexture: GPUTexture?
     private var depthView: GPUTextureView?
-    var publishedTextureRetainer: Unmanaged<GPUTexture>?
-    var stalePublishedTextureRetainers: [Unmanaged<GPUTexture>] = []
-    let publishedTextureRetainerHistoryLimit = 32
-    var publishedSurfaceID: UInt64 = 0
-    var publishedSurfaceHandle: UInt64 = 0
-    var nextSurfaceID: UInt64 = 0
+    var viewportPublication = ViewportSurfacePublication()
     private var sceneColorTarget: RenderTextureTarget?
     var postProcessTargetA: RenderTextureTarget?
     var postProcessTargetB: RenderTextureTarget?
@@ -153,22 +148,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     var activeRenderSettings: RenderSettings = .init()
     var settingsGeneration: UInt64 = 0
-    var viewportSurfaceState: ViewportSurfaceState = .init()
 
     public private(set) var lastFrameStats: RenderFrameStats = .init()
 
     public init(backend: WGPUBackend, renderSurface: RenderSurfaceDescriptor? = nil) {
         self.backend = backend
         self.renderSurface = renderSurface
-    }
-
-    deinit {
-        publishedTextureRetainer?.release()
-        publishedTextureRetainer = nil
-        for retained in stalePublishedTextureRetainers {
-            retained.release()
-        }
-        stalePublishedTextureRetainers.removeAll(keepingCapacity: false)
     }
 
     public func initialize() {
@@ -201,7 +186,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     public func currentViewportSurfaceState() -> ViewportSurfaceState {
-        viewportSurfaceState
+        viewportPublication.state
     }
 
     public func render(packet: RenderPacket) {
@@ -610,9 +595,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         passDrawCallCount = 1
 
                     case .viewportResolve:
-                        registerViewportSurface(texture: colorTarget.texture,
-                                                size: configuredSize,
-                                                textureSize: allocatedTargetSize)
                         viewportResolved = true
                 }
 
@@ -636,10 +618,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
             let encodeDoneNS = DispatchTime.now().uptimeNanoseconds
 
-            if !viewportResolved {
-                viewportSurfaceState = .init()
-            }
-
             if let uiProvider = InGameUIRegistry.shared.provider,
                !packet.inGameCanvas.commands.isEmpty {
                 let formatHint: String
@@ -661,6 +639,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
             let cmd = try encoder.finish()
             backend.submit(cmd)
+            if viewportResolved {
+                registerViewportSurface(texture: colorTarget.texture, size: configuredSize, textureSize: allocatedTargetSize)
+            } else { viewportPublication.clear() }
             if colorTarget.presentAfterSubmit {
                 surface?.present()
             }

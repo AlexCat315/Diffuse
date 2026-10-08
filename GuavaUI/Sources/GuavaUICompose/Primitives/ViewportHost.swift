@@ -159,25 +159,20 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             }
 
             guard let bridge = ViewportTextureBridgeHolder.current,
-                  let textureID = bridge.textureID(surfaceID: snap.surface.surfaceID,
-                                                  handle: snap.surface.handle,
-                                                  width: snap.surface.textureWidth,
-                                                  height: snap.surface.textureHeight)
+                  let textureID = bridge.textureID(for: snap.surface)
             else {
                 return
             }
 
             let rect = UIRect(x: screenFrame.x, y: screenFrame.y,
                               width: screenFrame.width, height: screenFrame.height)
+            if let image = snap.surface.image { list.retainResource(image) }
             // The engine renders into the top-left sub-region of a grow-only
             // allocated texture; crop to the used extent.
-            let uvMax: (x: Float, y: Float) = (
-                snap.surface.textureWidth > 0
-                    ? Float(snap.surface.width) / Float(snap.surface.textureWidth) : 1,
-                snap.surface.textureHeight > 0
-                    ? Float(snap.surface.height) / Float(snap.surface.textureHeight) : 1
-            )
-            list.addImageQuad(rect: rect, textureID: textureID, tint: .white, uvMax: uvMax)
+            let extent = snap.surface.region.uvMax
+            let uvMax = (x: extent.x, y: extent.y)
+            list.addClampedImageQuad(rect: rect, textureID: textureID,
+                texelSize: (1 / Float(snap.surface.region.capacity.width), 1 / Float(snap.surface.region.capacity.height)), uvMax: uvMax)
 
             snap.onDrawOverlay?(list, screenFrame)
         }

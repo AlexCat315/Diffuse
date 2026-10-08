@@ -39,6 +39,7 @@ final class NativeGridSurfaceTests: XCTestCase {
             }
             if hdr && frame == 4 { packet.renderSettings.shadowSettings.mapResolution = 128 }
             try renderer.renderChecked(packet: packet)
+            XCTAssertFalse(renderer.currentViewportSurfaceState().isValid, "swapchain images are not persistent viewport textures")
             if hdr { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.tonemap],1) }
             if post {
                 for kind in [RenderPassKind.ssao,.taa,.bloom,.fxaa] { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[kind],1) }
@@ -71,6 +72,7 @@ final class NativeGridSurfaceTests: XCTestCase {
             let size: UInt32 = frame < 3 ? 96 : 64
             layer.drawableSize = CGSize(width: Int(size), height: Int(size))
             try renderer.renderChecked(packet: GridProbeScene.packet(size: RenderDrawableSize(width: size, height: size), frame: frame))
+            XCTAssertFalse(renderer.currentViewportSurfaceState().isValid)
             XCTAssertEqual(renderer.lastFrameStats.drawCallCount, 1)
         }
         try device.waitUntilIdle()

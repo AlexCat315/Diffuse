@@ -315,7 +315,7 @@ struct RenderBackendGPUSmokeTests {
         activeRenderer.render(packet: packet)
         let resized = try readbackBGRA8(texture: texture, width: 320, height: 192, backend: backend)
         #expect(resized.count { Int($0.b) > Int($0.r) + 30 } > 10)
-        #expect(activeRenderer.currentViewportSurfaceState().width == 320)
+        #expect(activeRenderer.currentViewportSurfaceState().region.size.width == 320)
         // Toggling off must invalidate the cached grid image.
         packet.frameIndex += 1
         packet.drawableSize = RenderDrawableSize(width: width, height: height)
@@ -520,8 +520,8 @@ struct RenderBackendGPUSmokeTests {
 
         let viewport = renderer.currentViewportSurfaceState()
         #expect(viewport.isValid)
-        #expect(viewport.width == width)
-        #expect(viewport.height == height)
+        #expect(viewport.region.size.width == width)
+        #expect(viewport.region.size.height == height)
 
         guard let texture = renderer.offscreenColorTexture else {
             Issue.record("expected renderer to retain an offscreen color texture")
@@ -2902,8 +2902,8 @@ struct RenderBackendGPUSmokeTests {
 
         let viewport = renderer.currentViewportSurfaceState()
         #expect(viewport.isValid)
-        #expect(viewport.width == width)
-        #expect(viewport.height == height)
+        #expect(viewport.region.size.width == width)
+        #expect(viewport.region.size.height == height)
     }
 
     private static func makeSmokeScene() -> RenderScene {

@@ -138,7 +138,7 @@ struct NativeDrawListBenchmarkTests {
                 }
                 return batch
             }
-            shifted.load(vertices: vertices, indices: source.indices, batches: batches)
+            shifted.load(vertices: vertices, indices: source.indices, batches: batches, resources: source.resources)
             list.append(shifted)
         } }
         return list
