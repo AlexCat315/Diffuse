@@ -37,7 +37,7 @@ final class NativeShadowPass {
         self.device = device
         let vs = try NativeShaderLibrary.artifact(name: "shadow_mesh", api: device.backendAPI, stage: .vertex)
         let fs = try NativeShaderLibrary.artifact(name: "shadow_mesh", api: device.backendAPI, stage: .fragment)
-        bindings = try device.makeBindingLayout(NativeShaderLibrary.layout(artifacts: [vs,fs]))
+        bindings = try device.makeBindingLayout(BindingLayoutDescriptor(reflecting: [vs,fs]))
         layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [bindings]))
         let module = try device.makeShaderModule(vs.moduleDescriptor())
         do { fragment = try device.makeShaderModule(fs.moduleDescriptor()); vertex = module }

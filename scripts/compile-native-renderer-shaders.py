@@ -17,6 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--slangc', default=os.environ.get('SLANGC'))
     parser.add_argument('--targets', nargs='+', choices=['metal', 'spirv', 'dxil'], default=['metal', 'spirv'])
+    parser.add_argument('--ui-only', action='store_true', help='Rebuild only the GuavaUI artifacts')
     args = parser.parse_args()
     if not args.slangc:
         parser.error('Supply --slangc or SLANGC (Slang 2026.19)')
@@ -44,8 +45,11 @@ def main():
     }
     specialized = set(particle_kernels) - {'particle_metadata_reset','particle_state_finalize'}
     programs.extend((name,f'{name}.slang',[('compute',entry)]) for name,entry in particle_kernels.items())
+    programs = [(shaders, *program) for program in programs] if not args.ui_only else []
+    ui_shaders = ROOT / 'GuavaUI/Sources/GuavaUIRuntime/Resources/Shaders'
+    programs.append((ui_shaders, 'ui', 'ui.slang', [('vertex', 'uiVertex'), ('fragment', 'uiFragment')]))
     for target in args.targets:
-        for name, source, stages in programs:
+        for shaders, name, source, stages in programs:
             for stage, entry in stages:
                 output = shaders / f'Native/{target}/{name}.{stage}.json'
                 variable = name in specialized

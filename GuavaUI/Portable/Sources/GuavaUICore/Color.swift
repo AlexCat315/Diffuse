@@ -1,4 +1,4 @@
-/// Linear RGBA color in 0..1 float range.
+/// sRGB-encoded RGB and straight alpha in the 0..1 float range.
 ///
 /// Stored as floats for ease of composition; packed to 8-bit per channel via
 /// `rgba8` when uploaded to the GPU vertex stream.

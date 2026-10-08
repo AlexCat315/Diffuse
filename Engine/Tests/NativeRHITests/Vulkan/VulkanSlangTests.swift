@@ -23,7 +23,7 @@ final class VulkanSlangTests: XCTestCase {
             usage: [.transferSource, .transferDestination]))
         let commands = CommandBuffer()
         commands.computePass { $0.setPipeline(pipeline); $0.setBindingSet(set); $0.dispatch(groupsX: 2) }
-        commands.copyPass { $0.uploadBufferToTexture(buffer: buffer, bytesPerRow: 64, texture: target, width: 16, height: 1) }
+        commands.copyPass { $0.uploadBufferToTexture(.init(buffer: buffer, bytesPerRow: 64, texture: target, region: .init(width: 16, height: 1))) }
         try device.beginFrame()
         try device.submit(commands, queue: .compute)
         device.endFrame()

@@ -13,7 +13,7 @@ final class NativeComputePass {
                 throw RHIError.layoutMismatch("\(shader) buffer \(slot) shader/host stride differs")
             }
         }
-        bindings = try device.makeBindingLayout(NativeShaderLibrary.layout(artifacts: [artifact]))
+        bindings = try device.makeBindingLayout(BindingLayoutDescriptor(reflecting: [artifact]))
         let layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [bindings]))
         var constants: [ShaderSpecializationConstant] = []
         if let workgroupSize, let id = artifact.interface.threadgroupSpecialization.x {

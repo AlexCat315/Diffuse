@@ -49,6 +49,7 @@ typedef struct {
 } GRHI_GraphicsDesc;
 typedef struct { uint32_t texture, load, store, resolve; float clear[4]; } GRHI_RenderColor;
 typedef struct { uint32_t texture, load, store; float clear; } GRHI_RenderDepth;
+typedef struct { uint32_t origin_x, origin_y, width, height, mip, layer; } GRHI_TextureRegion;
 typedef struct { uint32_t buffer, triangles; uint64_t offset, stride; } GRHI_Triangle;
 typedef struct { uint32_t blas, mask; float transform[12]; } GRHI_Instance;
 typedef struct { uint32_t id; uint64_t value; } GRHI_Timeline;

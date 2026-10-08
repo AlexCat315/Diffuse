@@ -65,6 +65,7 @@ static WGPUTextureFormat to_wgpu_format(WGPUBridgeTextureFormat f) {
     switch (f) {
         case WGPUBridge_TextureFormat_BGRA8Unorm:     return WGPUTextureFormat_BGRA8Unorm;
         case WGPUBridge_TextureFormat_BGRA8UnormSrgb: return WGPUTextureFormat_BGRA8UnormSrgb;
+        case WGPUBridge_TextureFormat_RGBA8UnormSrgb: return WGPUTextureFormat_RGBA8UnormSrgb;
         case WGPUBridge_TextureFormat_RGBA8Unorm:   return WGPUTextureFormat_RGBA8Unorm;
         case WGPUBridge_TextureFormat_R8Unorm:      return WGPUTextureFormat_R8Unorm;
         case WGPUBridge_TextureFormat_RGBA16Float:  return WGPUTextureFormat_RGBA16Float;

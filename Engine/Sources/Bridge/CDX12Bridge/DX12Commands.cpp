@@ -127,7 +127,11 @@ int32_t grhi_dx12_encode(GRHI_DX12Encoder* encoder, const GRHI_DX12Command* comm
     case GRHI_CMD_DISPATCH_INDIRECT: { require(e.pipeline && e.pipeline->compute, "indirect dispatch requires compute pipeline"); auto& r = s.buffers.at(c.resource); require(c.a <= r.size && r.size-c.a >= 12 && c.a % 4 == 0, "indirect dispatch range invalid"); e.list->ExecuteIndirect(s.dispatchSignature.Get(),1,r.native.Get(),c.a,nullptr,0); uavDependency(e); break; }
     case GRHI_CMD_MESH_DISPATCH: require(e.pipeline && e.pipeline->mesh && e.rendering && c.a <= 65535 && c.b <= 65535 && c.c <= 65535 && c.a*c.b*c.c <= (1u << 22), "invalid mesh dispatch"); e.list->DispatchMesh(UINT(c.a),UINT(c.b),UINT(c.c)); uavDependency(e); break;
     case GRHI_CMD_COPY_BUFFER: { auto& src = s.buffers.at(c.resource); auto& dst = s.buffers.at(c.slot); require(c.a <= src.size && c.c <= src.size-c.a && c.b <= dst.size && c.c <= dst.size-c.b && &src != &dst, "buffer copy bounds or overlap invalid"); transition(e,src,D3D12_RESOURCE_STATE_COPY_SOURCE); transition(e,dst,D3D12_RESOURCE_STATE_COPY_DEST); e.list->CopyBufferRegion(dst.native.Get(),c.b,src.native.Get(),c.a,c.c); break; }
-    case GRHI_CMD_BUFFER_TO_TEXTURE: case GRHI_CMD_TEXTURE_TO_BUFFER: textureCopy(e,s.buffers.at(c.resource),c.a,uint32_t(c.b),s.textures.at(c.slot),uint32_t(c.c),uint32_t(c.d),c.kind == GRHI_CMD_BUFFER_TO_TEXTURE); break;
+    case GRHI_CMD_BUFFER_TO_TEXTURE: case GRHI_CMD_TEXTURE_TO_BUFFER: {
+        GRHI_TextureRegion region{0,0,uint32_t(c.c),uint32_t(c.d),0,0};
+        if (c.kind == GRHI_CMD_BUFFER_TO_TEXTURE) { require(c.data && c.bytes == sizeof(region), "invalid texture upload region"); memcpy(&region,c.data,sizeof(region)); }
+        textureCopy(e,s.buffers.at(c.resource),c.a,uint32_t(c.b),s.textures.at(c.slot),region,c.kind == GRHI_CMD_BUFFER_TO_TEXTURE); break;
+    }
     case GRHI_CMD_COPY_TEXTURE: {
         auto& src = s.textures.at(c.resource); auto& dst = s.textures.at(c.slot);
         auto a = src.native->GetDesc(), b = dst.native->GetDesc();

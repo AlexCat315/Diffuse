@@ -30,7 +30,7 @@ final class NativeMeshShaders {
             && $0.interface.bindings.allSatisfy { expected[$0.name] == $0.slot } }) else {
             throw RHIError.layoutMismatch("native mesh shader binding ABI mismatch")
         }
-        bindings = try device.makeBindingLayout(NativeShaderLibrary.layout(artifacts: artifacts))
+        bindings = try device.makeBindingLayout(BindingLayoutDescriptor(reflecting: artifacts))
         var created: [NativeMeshShaderRole: ShaderModule] = [:]
         do {
             for (role,artifact) in zip(roles,artifacts) { created[role] = try device.makeShaderModule(artifact.moduleDescriptor()) }

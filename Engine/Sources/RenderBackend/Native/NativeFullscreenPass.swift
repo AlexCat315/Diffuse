@@ -9,7 +9,7 @@ final class NativeFullscreenPass {
         self.device = device
         let vs = try NativeShaderLibrary.artifact(name: shader, api: device.backendAPI, stage: .vertex)
         let fs = try NativeShaderLibrary.artifact(name: shader, api: device.backendAPI, stage: .fragment)
-        bindings = try device.makeBindingLayout(NativeShaderLibrary.layout(artifacts: [vs,fs]))
+        bindings = try device.makeBindingLayout(BindingLayoutDescriptor(reflecting: [vs,fs]))
         let layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [bindings]))
         let vertex = try device.makeShaderModule(vs.moduleDescriptor()); defer { device.destroy(vertex) }
         let fragment = try device.makeShaderModule(fs.moduleDescriptor()); defer { device.destroy(fragment) }

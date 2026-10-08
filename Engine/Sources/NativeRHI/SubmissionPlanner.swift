@@ -212,9 +212,13 @@ final class SubmissionPlanner {
                 splitReleases: &splitReleases, waits: &waits
             )
         }
+        // Sets are immutable and their resources are collected before the
+        // entire pass. Rebinding a set for another draw adds no new access.
+        var collectedSets: Set<UInt32> = []
         for renderCommand in record.body {
             switch renderCommand {
             case .setBindingSet(slot: _, set: let set):
+                guard collectedSets.insert(set.id).inserted else { continue }
                 collectBindingSetResources(
                     set, on: queue, stage: [.vertex, .fragment, .task, .mesh], scope: .beforePass,
                     barriers: &barriers, splitReleases: &splitReleases, waits: &waits
@@ -322,8 +326,8 @@ final class SubmissionPlanner {
                     on: queue, barriers: &barriers,
                     splitReleases: &splitReleases, waits: &waits
                 )
-            case .copyBufferToTexture(buffer: let src, offset: _, bytesPerRow: _, texture: let dst, width: _, height: _):
-                let srcRef = ResourceRef(kind: .buffer, id: src.id)
+            case .copyBufferToTexture(let upload):
+                let srcRef = ResourceRef(kind: .buffer, id: upload.buffer.id)
                 collect(
                     resource: srcRef,
                     desired: .copySource,
@@ -332,7 +336,7 @@ final class SubmissionPlanner {
                     on: queue, barriers: &barriers,
                     splitReleases: &splitReleases, waits: &waits
                 )
-                let dstRef = ResourceRef(kind: .texture, id: dst.id)
+                let dstRef = ResourceRef(kind: .texture, id: upload.texture.id)
                 collect(
                     resource: dstRef,
                     desired: .copyDestination,

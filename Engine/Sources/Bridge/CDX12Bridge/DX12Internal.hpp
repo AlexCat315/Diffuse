@@ -91,7 +91,7 @@ void transition(GRHI_DX12Encoder&, Resource&, D3D12_RESOURCE_STATES);
 // Takes ownership after ExecuteCommandLists; completion fires only after the
 // commands retire or the device is removed, including signal/wait failures.
 void retireEncoder(GRHI_DX12Encoder*, GRHI_DX12Completion = nullptr, void* = nullptr);
-void textureCopy(GRHI_DX12Encoder&, Resource&, uint64_t, uint32_t, Resource&, uint32_t, uint32_t, bool);
+void textureCopy(GRHI_DX12Encoder&, Resource&, uint64_t, uint32_t, Resource&, const GRHI_TextureRegion&, bool);
 void buildAcceleration(GRHI_DX12Encoder&, uint32_t);
 void graphicsPipeline(State&, uint32_t, const GRHI_GraphicsDesc&);
 void validateSamples(State&, DXGI_FORMAT, uint32_t);

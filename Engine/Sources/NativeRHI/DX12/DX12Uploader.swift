@@ -19,8 +19,9 @@ final class DX12FrameUploader: FrameUploader {
         self.backend = backend
         allocator = ChunkUploadAllocator { [unowned backend] size in
             let handle = Buffer(id: backend.nextInternalID); backend.nextInternalID += 1
-            try backend.check(grhi_dx12_buffer(backend.native, handle.id, UInt64(size), BufferUsage.uniform.union(.transferSource).rawValue, 1))
-            backend.resources.buffers[handle.id] = BufferDescriptor(size: size, usage: [.uniform, .transferSource])
+            let usage: BufferUsage = [.uniform, .storageRead, .vertex, .index, .indirect, .transferSource]
+            try backend.check(grhi_dx12_buffer(backend.native, handle.id, UInt64(size), usage.rawValue, 1))
+            backend.resources.buffers[handle.id] = BufferDescriptor(size: size, usage: usage)
             return DX12UploadChunk(capacity: size, handle: handle)
         }
     }
