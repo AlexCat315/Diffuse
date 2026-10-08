@@ -107,7 +107,12 @@ extension VulkanBackend {
         var info = VkBufferCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
         info.size = VkDeviceSize(max(1, size))
-        info.usage = UInt32(VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue | VK_BUFFER_USAGE_TRANSFER_DST_BIT.rawValue)
+        // Transient uploads are also bound directly by renderer passes. Vulkan
+        // requires each binding use to be declared when the buffer is created.
+        info.usage = UInt32(VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue | VK_BUFFER_USAGE_TRANSFER_DST_BIT.rawValue
+            | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT.rawValue
+            | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT.rawValue | VK_BUFFER_USAGE_INDEX_BUFFER_BIT.rawValue
+            | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT.rawValue)
         info.sharingMode = VK_SHARING_MODE_EXCLUSIVE
         guard let buffer = vkWithOutHandle({
             context.core.createBuffer(context.device, &info, nil, $0)

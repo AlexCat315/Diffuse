@@ -86,6 +86,7 @@ let package = Package(
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "ImageDecodeBridge", targets: ["CImageDecodeBridge"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
+        .executable(name: "NativeRHIPassProbe", targets: ["NativeRHIPassProbe"]),
         .library(name: "ObservationBus", targets: ["ObservationBus"]),
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
@@ -415,6 +416,7 @@ let package = Package(
                 "EngineKernel",
                 "EngineMath",
                 "RHIWGPU",
+                "NativeRHI",
                 "AssetPipeline",
                 "SceneRuntime",
                 .product(name: "Logging", package: "swift-log"),
@@ -489,6 +491,7 @@ let package = Package(
         .testTarget(
             name: "EngineCoreTests",
             dependencies: [
+                "NativeRHI",
                 "SIMDCompat",
                 "EngineCore",
                 "EngineKernel",
@@ -648,6 +651,12 @@ let package = Package(
                 "CinematicRenderer",
             ]
         ),
+        .executableTarget(name: "NativeRHIPassProbe",
+            dependencies: ["NativeRendererValidation"]),
+        .target(name: "NativeRendererValidation",
+            dependencies: ["RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat"]),
+        .testTarget(name: "NativeRendererTests",
+            dependencies: ["NativeRendererValidation", "RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat"]),
         .testTarget(
             name: "NativeRHITests",
             dependencies: [

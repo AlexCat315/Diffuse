@@ -510,6 +510,13 @@ public final class WGPUBackend: @unchecked Sendable {
         wgpu_bridge_queue_submit(queue, &buf, 1)
     }
 
+    public func waitUntilIdle() throws {
+        guard let device else { throw WGPUBackendError.initFailed("device not ready") }
+        guard wgpu_bridge_device_wait_idle(device) == 1 else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+    }
+
     public func createSampler(desc: GPUSamplerDescriptor = .init()) throws -> GPUSampler {
         guard let device else {
             throw WGPUBackendError.initFailed("device not ready")

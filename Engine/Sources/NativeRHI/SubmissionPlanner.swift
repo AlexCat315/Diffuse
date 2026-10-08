@@ -389,7 +389,7 @@ final class SubmissionPlanner {
             return (ResourceRef(kind: .texture, id: texture.id), .shaderResource)
         case .storageTexture(let texture):
             return (ResourceRef(kind: .texture, id: texture.id), .unorderedAccess)
-        case .uniformBuffer(let buffer, _):
+        case .uniformBuffer(let buffer, _, _):
             return (ResourceRef(kind: .buffer, id: buffer.id), .constantBuffer)
         case .storageBuffer(let buffer, _):
             return (ResourceRef(kind: .buffer, id: buffer.id), readOnly ? .shaderResource : .unorderedAccess)

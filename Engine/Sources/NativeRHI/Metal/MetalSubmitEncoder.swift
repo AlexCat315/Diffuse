@@ -460,7 +460,7 @@ private struct MetalPassEncoder {
         case .texture(let t), .storageTexture(let t):
             guard let tex = registries.textures[t.id] else { throw RHIError.invalidArgument("unknown texture binding") }
             texture(tex)
-        case .uniformBuffer(let b, let offset), .storageBuffer(let b, let offset):
+        case .uniformBuffer(let b, let offset, _), .storageBuffer(let b, let offset):
             guard let mtlBuffer = registries.buffers[b.id] else { throw RHIError.invalidArgument("unknown buffer binding") }
             try rhiByteRange(offset: offset, size: 0, capacity: mtlBuffer.length)
             buffer(mtlBuffer, offset)

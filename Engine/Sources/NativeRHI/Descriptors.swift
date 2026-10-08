@@ -208,7 +208,9 @@ public enum BindingResource: Hashable, Sendable {
     case sampler(Sampler)
     case texture(Texture)
     case storageTexture(Texture)
-    case uniformBuffer(buffer: Buffer, offset: Int = 0)
+    /// A bounded range is required when a large transient upload buffer is
+    /// bound as a small uniform block. nil exposes the remaining buffer.
+    case uniformBuffer(buffer: Buffer, offset: Int = 0, size: Int? = nil)
     case storageBuffer(buffer: Buffer, offset: Int = 0)
     case accelerationStructure(AccelerationStructure)
 
@@ -218,7 +220,7 @@ public enum BindingResource: Hashable, Sendable {
         case .sampler: return nil
         case .texture(let t): return (t, .texture)
         case .storageTexture(let t): return (t, .storageTexture)
-        case .uniformBuffer(let b, _): return (b, .uniformBuffer)
+        case .uniformBuffer(let b, _, _): return (b, .uniformBuffer)
         case .storageBuffer(let b, _): return (b, .storageBuffer)
         case .accelerationStructure(let a): return (a, .accelerationStructure)
         }
@@ -239,8 +241,8 @@ public struct BindingSetEntry: Hashable, Sendable {
 /// only by an omitted vs explicit zero offset compare equal (cache key stable).
 private func bindingResourceIgnoringDefaultOffset(_ resource: BindingResource) -> BindingResource {
     switch resource {
-    case .uniformBuffer(let b, let offset) where offset == 0:
-        return .uniformBuffer(buffer: b)
+    case .uniformBuffer(let b, let offset, let size) where offset == 0:
+        return .uniformBuffer(buffer: b, size: size)
     case .storageBuffer(let b, let offset) where offset == 0:
         return .storageBuffer(buffer: b)
     default:
