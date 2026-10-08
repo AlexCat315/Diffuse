@@ -36,7 +36,7 @@ final class NativeGPUContractTests: XCTestCase {
             BindingSetEntry(slot: 2, resource: .storageBuffer(buffer: output))]))
         let commands = CommandBuffer()
         commands.computePass { $0.setPipeline(pipeline); $0.setBindingSet(set); $0.dispatch(groupsX: 5) }
-        commands.copyPass { $0.uploadBufferToTexture(buffer: output,bytesPerRow: 80,texture: readback,width: 5,height: 1) }
+        commands.copyPass { $0.uploadBufferToTexture(.init(buffer: output,bytesPerRow: 80,texture: readback, region: .init(width: 5, height: 1))) }
         try device.beginFrame(); try device.submit(commands); device.endFrame(); try device.waitUntilIdle()
         var values = [SIMD4<Float>](repeating: .zero,count: 5)
         try values.withUnsafeMutableBytes { try device.readTextureData(readback,width: 5,height: 1,bytesPerRow: 80,into: $0) }
@@ -133,13 +133,13 @@ final class NativeGPUContractTests: XCTestCase {
         let texture = try device.makeTexture(TextureDescriptor(width: 4, height: 1, format: .r32Uint, usage: [.transferDestination, .transferSource]))
         let invalid = CommandBuffer()
         invalid.copyPass {
-            $0.uploadBufferToTexture(buffer: source, bytesPerRow: 16, texture: texture, width: 4, height: 1)
+            $0.uploadBufferToTexture(.init(buffer: source, bytesPerRow: 16, texture: texture, region: .init(width: 4, height: 1)))
             $0.copyBuffer(src: Buffer(id: 0x4242), dst: source, size: 16)
         }
         try device.beginFrame()
         XCTAssertThrowsError(try device.submit(invalid))
         let valid = CommandBuffer()
-        valid.copyPass { $0.uploadBufferToTexture(buffer: source, bytesPerRow: 16, texture: texture, width: 4, height: 1) }
+        valid.copyPass { $0.uploadBufferToTexture(.init(buffer: source, bytesPerRow: 16, texture: texture, region: .init(width: 4, height: 1))) }
         try device.submit(valid, queue: .transfer)
         device.endFrame(); try device.waitUntilIdle()
         var bytes = [UInt8](repeating: 0, count: 16)
@@ -168,7 +168,7 @@ final class NativeGPUContractTests: XCTestCase {
         try device.submit(transfer, queue: .transfer)
         let compute = CommandBuffer(); compute.computePass { $0.setPipeline(pipeline); $0.setBindingSet(set); $0.dispatch(groupsX: 2) }
         try device.submit(compute, queue: .compute)
-        let copy = CommandBuffer(); copy.copyPass { $0.uploadBufferToTexture(buffer: output, bytesPerRow: 32, texture: texture, width: 8, height: 1) }
+        let copy = CommandBuffer(); copy.copyPass { $0.uploadBufferToTexture(.init(buffer: output, bytesPerRow: 32, texture: texture, region: .init(width: 8, height: 1))) }
         try device.submit(copy, queue: .graphics)
         device.endFrame(); try device.waitUntilIdle()
         values = [UInt32](repeating: 0, count: 8)
@@ -195,7 +195,7 @@ final class NativeGPUContractTests: XCTestCase {
         let invalid = CommandBuffer(); invalid.computePass { $0.setPipeline(pipeline); $0.pushConstant(slot: 9, value: UInt32(73)) }
         XCTAssertThrowsError(try device.submit(invalid))
         let valid = CommandBuffer(); valid.computePass { $0.setPipeline(pipeline); $0.setBindingSet(set); $0.pushConstant(slot: 1, value: UInt32(73)); $0.dispatch(groupsX: 1) }
-        valid.copyPass { $0.uploadBufferToTexture(buffer: buffer, bytesPerRow: 4, texture: texture, width: 1, height: 1) }
+        valid.copyPass { $0.uploadBufferToTexture(.init(buffer: buffer, bytesPerRow: 4, texture: texture, region: .init(width: 1, height: 1))) }
         try device.submit(valid); device.endFrame(); try device.waitUntilIdle()
         var value: UInt32 = 0
         try withUnsafeMutableBytes(of: &value) { try device.readTextureData(texture, width: 1, height: 1, bytesPerRow: 4, into: $0) }
@@ -217,7 +217,7 @@ final class NativeGPUContractTests: XCTestCase {
         let readback = try device.makeTexture(TextureDescriptor(width: 1, height: 1, format: .rgba32Float, usage: [.transferSource, .transferDestination]))
         let commands = CommandBuffer()
         commands.computePass { $0.setPipeline(pipeline); $0.setBindingSet(set); $0.dispatch(groupsX: 1) }
-        commands.copyPass { $0.uploadBufferToTexture(buffer: output, bytesPerRow: 16, texture: readback, width: 1, height: 1) }
+        commands.copyPass { $0.uploadBufferToTexture(.init(buffer: output, bytesPerRow: 16, texture: readback, region: .init(width: 1, height: 1))) }
         try device.beginFrame(); try device.submit(commands); device.endFrame(); try device.waitUntilIdle()
         var value = SIMD4<Float>.zero
         try withUnsafeMutableBytes(of: &value) { try device.readTextureData(readback, width: 1, height: 1, bytesPerRow: 16, into: $0) }

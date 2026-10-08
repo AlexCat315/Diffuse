@@ -1,0 +1,53 @@
+{
+  "stage": "fragment",
+  "format": "mslSource",
+  "entryPoint": "uiFragment",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CmZsb2F0MyBzcmdiVG9MaW5lYXJfMChmbG9hdDMgY29sb3JfMCkKewogICAgcmV0dXJuIHNlbGVjdChwb3coKGNvbG9yXzAgKyBmbG9hdDMoMC4wNTQ5OTk5OTk3MDE5NzY3OGYpICkgLyBmbG9hdDMoMS4wNTQ5OTk5NDc1NDc5MTI2ZikgLCBmbG9hdDMoMi40MDAwMDAwOTUzNjc0MzE2NGYpICksIGNvbG9yXzAgLyBmbG9hdDMoMTIuOTIwMDAwMDc2MjkzOTQ1MzFmKSAsIGNvbG9yXzAgPD0gKGZsb2F0MygwLjA0MDQ0OTk5OTI3MjgyMzMzZikgKSk7Cn0KCnN0cnVjdCBwaXhlbE91dHB1dF8wCnsKICAgIGZsb2F0NCBvdXRwdXRfMCBbW2NvbG9yKDApXV07Cn07CgpzdHJ1Y3QgcGl4ZWxJbnB1dF8wCnsKICAgIGZsb2F0MiB1dl8wIFtbdXNlcihURVhDT09SRCldXTsKICAgIGZsb2F0NCBjb2xvcl8xIFtbdXNlcihURVhDT09SRF8xKV1dOwp9OwoKc3RydWN0IFVuaWZvcm1zXzAKewogICAgZmxvYXQyIHZpZXdwb3J0XzA7CiAgICBmbG9hdCBzcmdiXzA7CiAgICBmbG9hdCBwYWRkaW5nXzA7Cn07CgpzdHJ1Y3QgS2VybmVsQ29udGV4dF8wCnsKICAgIFVuaWZvcm1zXzAgY29uc3RhbnQqIHVuaWZvcm1zXzA7CiAgICB0ZXh0dXJlMmQ8ZmxvYXQsIGFjY2Vzczo6c2FtcGxlPiBhdGxhc18wOwogICAgc2FtcGxlciBhdGxhc1NhbXBsZXJfMDsKfTsKCltbZnJhZ21lbnRdXSBwaXhlbE91dHB1dF8wIHVpRnJhZ21lbnQocGl4ZWxJbnB1dF8wIF9TMSBbW3N0YWdlX2luXV0sIGZsb2F0NCBwb3NpdGlvbl8wIFtbcG9zaXRpb25dXSwgVW5pZm9ybXNfMCBjb25zdGFudCogdW5pZm9ybXNfMSBbW2J1ZmZlcigwKV1dLCB0ZXh0dXJlMmQ8ZmxvYXQsIGFjY2Vzczo6c2FtcGxlPiBhdGxhc18xIFtbdGV4dHVyZSgxKV1dLCBzYW1wbGVyIGF0bGFzU2FtcGxlcl8xIFtbc2FtcGxlcigyKV1dKQp7CiAgICB0aHJlYWQgS2VybmVsQ29udGV4dF8wIGtlcm5lbENvbnRleHRfMDsKICAgICgma2VybmVsQ29udGV4dF8wKS0+dW5pZm9ybXNfMCA9IHVuaWZvcm1zXzE7CiAgICAoJmtlcm5lbENvbnRleHRfMCktPmF0bGFzXzAgPSBhdGxhc18xOwogICAgKCZrZXJuZWxDb250ZXh0XzApLT5hdGxhc1NhbXBsZXJfMCA9IGF0bGFzU2FtcGxlcl8xOwogICAgYm9vbCBzcmdiXzEgPSAodW5pZm9ybXNfMS0+c3JnYl8wKSA+IDAuNWY7CiAgICBmbG9hdDMgcmdiXzA7CiAgICBpZihzcmdiXzEpCiAgICB7CiAgICAgICAgcmdiXzAgPSBzcmdiVG9MaW5lYXJfMChfUzEuY29sb3JfMS54eXopOwogICAgfQogICAgZWxzZQogICAgewogICAgICAgIHJnYl8wID0gX1MxLmNvbG9yXzEueHl6OwogICAgfQogICAgZmxvYXQgX1MyID0gX1MxLnV2XzAueDsKICAgIGlmKF9TMiA8IDAuMGYpCiAgICB7CiAgICAgICAgcGl4ZWxPdXRwdXRfMCBfUzMgPSB7IGZsb2F0NChyZ2JfMCwgX1MxLmNvbG9yXzEudykgfTsKICAgICAgICByZXR1cm4gX1MzOwogICAgfQogICAgaWYoX1MyID49IDIwLjBmKQogICAgewogICAgICAgIHBpeGVsT3V0cHV0XzAgX1M0ID0geyBmbG9hdDQocmdiXzAsIF9TMS5jb2xvcl8xLncgKiAoKCgma2VybmVsQ29udGV4dF8wKS0+YXRsYXNfMCkuc2FtcGxlKCgoJmtlcm5lbENvbnRleHRfMCktPmF0bGFzU2FtcGxlcl8wKSwgKGZsb2F0MihfUzIgLSAyMC4wZiwgX1MxLnV2XzAueSkpLCBsZXZlbCgoMC4wZikpKSkudykgfTsKICAgICAgICByZXR1cm4gX1M0OwogICAgfQogICAgaWYoX1MyID49IDEwLjBmKQogICAgewogICAgICAgIGZsb2F0NCBzYW1wbGVkXzAgPSAoKCgma2VybmVsQ29udGV4dF8wKS0+YXRsYXNfMCkuc2FtcGxlKCgoJmtlcm5lbENvbnRleHRfMCktPmF0bGFzU2FtcGxlcl8wKSwgKGZsb2F0MihfUzIgLSAxMC4wZiwgX1MxLnV2XzAueSkpLCBsZXZlbCgoMC4wZikpKSk7CiAgICAgICAgZmxvYXQzIHRleHR1cmVSR0JfMDsKICAgICAgICBpZihzcmdiXzEpCiAgICAgICAgewogICAgICAgICAgICB0ZXh0dXJlUkdCXzAgPSBzcmdiVG9MaW5lYXJfMChzYW1wbGVkXzAueHl6KTsKICAgICAgICB9CiAgICAgICAgZWxzZQogICAgICAgIHsKICAgICAgICAgICAgdGV4dHVyZVJHQl8wID0gc2FtcGxlZF8wLnh5ejsKICAgICAgICB9CiAgICAgICAgcGl4ZWxPdXRwdXRfMCBfUzUgPSB7IGZsb2F0NChyZ2JfMCAqIHRleHR1cmVSR0JfMCwgX1MxLmNvbG9yXzEudyAqIHNhbXBsZWRfMC53KSB9OwogICAgICAgIHJldHVybiBfUzU7CiAgICB9CiAgICBmbG9hdCBhbHBoYV8wID0gKCgoJmtlcm5lbENvbnRleHRfMCktPmF0bGFzXzApLnNhbXBsZSgoKCZrZXJuZWxDb250ZXh0XzApLT5hdGxhc1NhbXBsZXJfMCksIChfUzEudXZfMCksIGxldmVsKCgwLjBmKSkpKS54OwogICAgZmxvYXQgY292ZXJhZ2VfMDsKICAgIGlmKHNyZ2JfMSkKICAgIHsKICAgICAgICBjb3ZlcmFnZV8wID0gMS4wZiAtIHNyZ2JUb0xpbmVhcl8wKGZsb2F0MygoMS4wZiAtIGFscGhhXzApKSApLng7CiAgICB9CiAgICBlbHNlCiAgICB7CiAgICAgICAgY292ZXJhZ2VfMCA9IHBvdyhhbHBoYV8wLCAwLjc1Zik7CiAgICB9CiAgICBwaXhlbE91dHB1dF8wIF9TNiA9IHsgZmxvYXQ0KHJnYl8wLCBfUzEuY29sb3JfMS53ICogY292ZXJhZ2VfMCkgfTsKICAgIHJldHVybiBfUzY7Cn0KCg==",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "uniforms",
+        "slot": 0,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "atlas",
+        "slot": 1,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "atlasSampler",
+        "slot": 2,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "specializationConstants": [],
+    "threadgroupSpecialization": {
+      "x": null,
+      "y": null,
+      "z": null
+    },
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}

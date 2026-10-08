@@ -3,7 +3,7 @@
 /// Layout (20 bytes, packed):
 ///   - `pos`   : `float32x2` at offset 0  (screen-space pixels, top-left origin)
 ///   - `uv`    : `float32x2` at offset 8  (atlas UV in 0..1; sentinel `(-1, mode)` for non-textured shapes)
-///   - `color` : `unorm8x4`  at offset 16 (premultiplied RGBA)
+///   - `color` : `unorm8x4`  at offset 16 (straight, sRGB-encoded RGBA tint)
 public struct UIVertex: Sendable {
     public var posX: Float
     public var posY: Float
@@ -19,7 +19,7 @@ public struct UIVertex: Sendable {
         self.color = color
     }
 
-    /// Stride in bytes. Must match the WGSL vertex layout.
+    /// Stride in bytes. Must match the WGSL and native vertex layouts.
     public static let stride: Int = 20
 }
 

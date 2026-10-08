@@ -351,7 +351,9 @@ extension VulkanBackend {
         var info = VkBufferCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
         info.size = VkDeviceSize(size)
-        info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT.rawValue
+        info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue
+            | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT.rawValue | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT.rawValue
+            | VK_BUFFER_USAGE_INDEX_BUFFER_BIT.rawValue | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT.rawValue
         let arena = VulkanScratch()
         let families = Array(Set([context.queues.graphics.family, context.queues.compute.family, context.queues.transfer.family]))
         info.sharingMode = families.count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE

@@ -1,20 +1,26 @@
 #include "DX12Internal.hpp"
 #ifdef _WIN32
 using namespace grhi;
-void grhi::textureCopy(GRHI_DX12Encoder& e, Resource& buffer, uint64_t offset, uint32_t rowBytes, Resource& texture, uint32_t width, uint32_t height, bool upload) {
-    auto& t = texture.texture; require(width && height && width <= t.width && height <= t.height && t.format < GRHI_FORMAT_DEPTH24 && t.samples == 1, "invalid color texture transfer extent");
+void grhi::textureCopy(GRHI_DX12Encoder& e, Resource& buffer, uint64_t offset, uint32_t rowBytes, Resource& texture, const GRHI_TextureRegion& region, bool upload) {
+    auto& t = texture.texture; auto desc = texture.native->GetDesc(); auto width = region.width, height = region.height;
+    require(region.mip < desc.MipLevels && region.mip < 32 && region.layer < (t.dimension == 1 ? 1u : desc.DepthOrArraySize), "texture subresource bounds");
+    require(width && height && uint64_t(region.origin_x)+width <= std::max(1u,t.width >> region.mip)
+        && uint64_t(region.origin_y)+height <= std::max(1u,t.height >> region.mip)
+        && t.format < GRHI_FORMAT_DEPTH24 && t.samples == 1, "invalid color texture transfer extent");
     uint64_t rowSize = uint64_t(width)*pixelBytes(t.format); require(rowBytes >= rowSize && offset <= buffer.size && uint64_t(height-1)*rowBytes+rowSize <= buffer.size-offset, "texture transfer exceeds buffer");
     uint32_t pitch = UINT((rowSize+255)&~uint64_t(255)); auto scratch = makeBuffer(*e.state,uint64_t(pitch)*height,D3D12_HEAP_TYPE_DEFAULT);
     transition(e,texture,upload ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_COPY_SOURCE);
     transition(e,buffer,upload ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST);
     transition(e,scratch,upload ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_COPY_SOURCE);
     D3D12_TEXTURE_COPY_LOCATION image{}; image.pResource = texture.native.Get(); image.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    image.SubresourceIndex = region.mip + region.layer * desc.MipLevels;
     D3D12_TEXTURE_COPY_LOCATION bytes{}; bytes.pResource = scratch.native.Get(); bytes.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     bytes.PlacedFootprint.Footprint = {format(t.format),width,height,1,pitch}; D3D12_BOX box{0,0,0,width,height,1};
     if (upload) {
         for (UINT row = 0; row < height; ++row) e.list->CopyBufferRegion(scratch.native.Get(),uint64_t(row)*pitch,buffer.native.Get(),offset+uint64_t(row)*rowBytes,rowSize);
-        transition(e,scratch,D3D12_RESOURCE_STATE_COPY_SOURCE); e.list->CopyTextureRegion(&image,0,0,0,&bytes,&box);
+        transition(e,scratch,D3D12_RESOURCE_STATE_COPY_SOURCE); e.list->CopyTextureRegion(&image,region.origin_x,region.origin_y,0,&bytes,&box);
     } else {
+        box = {region.origin_x,region.origin_y,0,region.origin_x+width,region.origin_y+height,1};
         transition(e,scratch,D3D12_RESOURCE_STATE_COPY_DEST); e.list->CopyTextureRegion(&bytes,0,0,0,&image,&box); transition(e,scratch,D3D12_RESOURCE_STATE_COPY_SOURCE);
         for (UINT row = 0; row < height; ++row) e.list->CopyBufferRegion(buffer.native.Get(),offset+uint64_t(row)*rowBytes,scratch.native.Get(),uint64_t(row)*pitch,rowSize);
     }

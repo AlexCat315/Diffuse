@@ -25,7 +25,7 @@ final class MetalSlangTests: XCTestCase {
             $0.dispatch(groupsX: 2)
         }
         commands.copyPass {
-            $0.uploadBufferToTexture(buffer: buffer, bytesPerRow: 64, texture: target, width: 16, height: 1)
+            $0.uploadBufferToTexture(.init(buffer: buffer, bytesPerRow: 64, texture: target, region: .init(width: 16, height: 1)))
         }
         try device.beginFrame()
         try device.submit(commands)

@@ -194,7 +194,7 @@ final class NativeMultisampleTests: XCTestCase {
         for upload in [true, false] {
             let invalid = CommandBuffer()
             invalid.copyPass {
-                if upload { $0.uploadBufferToTexture(buffer: transfer, bytesPerRow: 4, texture: source, width: 1, height: 1) }
+                if upload { $0.uploadBufferToTexture(.init(buffer: transfer, bytesPerRow: 4, texture: source, region: .init(width: 1, height: 1))) }
                 else { $0.copyTextureToBuffer(texture: source, width: 1, height: 1, buffer: transfer, bytesPerRow: 4) }
             }
             XCTAssertThrowsError(try device.submit(invalid))

@@ -230,31 +230,36 @@ extension VulkanBackend {
                 try rhiByteRange(offset: destinationOffset, size: size, capacity: dst.size)
                 var region = VkBufferCopy(srcOffset: VkDeviceSize(sourceOffset), dstOffset: VkDeviceSize(destinationOffset), size: VkDeviceSize(size))
                 draw.cmdCopyBuffer(cmd, src.buffer, dst.buffer, 1, &region)
-            case .copyBufferToTexture(let buffer, let offset, let rowBytes, let texture, let width, let height):
-                try textureCopy(cmd: cmd, buffer: buffer, offset: offset, rowBytes: rowBytes, texture: texture, width: width, height: height, upload: true)
+            case .copyBufferToTexture(let upload):
+                try textureCopy(cmd: cmd, buffer: upload.buffer, offset: upload.offset, rowBytes: upload.bytesPerRow,
+                    texture: upload.texture, region: upload.region, subresource: upload.subresource, upload: true)
             case .copyTextureToBuffer(let texture, let width, let height, let buffer, let offset, let rowBytes):
-                try textureCopy(cmd: cmd, buffer: buffer, offset: offset, rowBytes: rowBytes, texture: texture, width: width, height: height, upload: false)
+                try textureCopy(cmd: cmd, buffer: buffer, offset: offset, rowBytes: rowBytes, texture: texture,
+                    region: .init(width: width, height: height), subresource: .init(), upload: false)
             }
             memoryDependency(cmd: cmd, source: VK_ACCESS_TRANSFER_WRITE_BIT.rawValue, destination: VK_ACCESS_TRANSFER_READ_BIT.rawValue | VK_ACCESS_TRANSFER_WRITE_BIT.rawValue)
         }
     }
 
     private func textureCopy(cmd: VkCommandBuffer, buffer: Buffer, offset: Int, rowBytes: Int, texture: Texture,
-                             width: Int, height: Int, upload: Bool) throws {
+                             region copy: TextureUploadRegion, subresource: TextureSubresource, upload: Bool) throws {
         guard let image = registries.textures[texture.id], let native = registries.buffers[buffer.id] else {
             throw RHIError.invalidArgument("unknown texture copy resource")
         }
         try rhiRequire(image.sampleCount == 1, "buffer texture copies require a single-sample texture")
-        let bytes = try rhiTextureTransferBytes(width: width, height: height, rowBytes: rowBytes, format: image.format,
-            textureWidth: image.width, textureHeight: image.height, capacity: native.size - min(max(0, offset), native.size))
+        let extent = try rhiTextureSubresourceExtent(subresource, width: image.width, height: image.height,
+            mipLevels: Int(image.mipLevels), layers: Int(image.layers))
+        let bytes = try rhiTextureUploadBytes(region: copy, rowBytes: rowBytes, format: image.format,
+            textureWidth: extent.width, textureHeight: extent.height, capacity: native.size - min(max(0, offset), native.size))
         try rhiByteRange(offset: offset, size: bytes, capacity: native.size)
         try transitionTexture(cmd: cmd, handle: texture, state: upload ? .copyDestination : .copySource)
         var region = VkBufferImageCopy()
         region.bufferOffset = VkDeviceSize(offset)
         region.bufferRowLength = UInt32(rowBytes / image.format.byteCount)
         region.imageSubresource = VkImageSubresourceLayers(aspectMask: VulkanSynchronization.aspect(image.format),
-            mipLevel: 0, baseArrayLayer: 0, layerCount: 1)
-        region.imageExtent = VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1)
+            mipLevel: UInt32(subresource.mipLevel), baseArrayLayer: UInt32(subresource.layer), layerCount: 1)
+        region.imageOffset = VkOffset3D(x: Int32(copy.origin.x), y: Int32(copy.origin.y), z: 0)
+        region.imageExtent = VkExtent3D(width: UInt32(copy.width), height: UInt32(copy.height), depth: 1)
         if upload {
             draw.cmdCopyBufferToImage(cmd, native.buffer, image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region)
         } else {

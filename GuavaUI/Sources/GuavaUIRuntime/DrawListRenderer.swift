@@ -382,7 +382,12 @@ public final class DrawListRenderer {
         let scaleY = viewport.height > 0 ? Float(viewportPx.height) / viewport.height : 1
 
         // 1. Upload uniforms (viewport size + sRGB-target flag).
-        let srgbFlag: Float = { if case .bgra8UnormSrgb = configuredFormat { return 1 } else { return 0 } }()
+        let srgbFlag: Float = {
+            switch configuredFormat {
+            case .bgra8UnormSrgb, .rgba8UnormSrgb: return 1
+            default: return 0
+            }
+        }()
         var u: (Float, Float, Float, Float) = (viewport.width,
                                                viewport.height,
                                                srgbFlag, 0)
