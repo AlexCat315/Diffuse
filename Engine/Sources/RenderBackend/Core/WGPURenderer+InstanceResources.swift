@@ -145,17 +145,19 @@ extension WGPURenderer {
     }
 
     func ensureJointPaletteBuffers(from paletteMap: JointPaletteMap) throws {
+        jointPaletteBuffers = jointPaletteBuffers.filter { paletteMap.palettes[$0.key] != nil }
         for (entityID, palette) in paletteMap.palettes {
             let required = UInt64(max(palette.matrices.count, 1)) * UInt64(MemoryLayout<simd_float4x4>.stride)
-            if let existing = jointPaletteBuffers[entityID], existing.size >= required { continue }
+            if let existing = jointPaletteBuffers[entityID], existing.size == required { continue }
             jointPaletteBuffers[entityID] = try backend.createBuffer(size: required, usage: [.storage, .copyDst])
         }
     }
 
     func writeJointPaletteBuffers(from paletteMap: JointPaletteMap) {
         for (entityID, palette) in paletteMap.palettes {
-            guard let buffer = jointPaletteBuffers[entityID], !palette.matrices.isEmpty else { continue }
-            palette.matrices.withUnsafeBufferPointer { ptr in
+            guard let buffer = jointPaletteBuffers[entityID] else { continue }
+            let matrices = palette.matrices.isEmpty ? [matrix_identity_float4x4] : palette.matrices
+            matrices.withUnsafeBufferPointer { ptr in
                 let raw = UnsafeRawPointer(ptr.baseAddress!)
                 let size = ptr.count * MemoryLayout<simd_float4x4>.stride
                 backend.writeBuffer(buffer, data: raw, size: size)

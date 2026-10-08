@@ -1,5 +1,6 @@
 import Foundation
 import NativeRHI
+import SceneRuntime
 import SIMDCompat
 
 private struct NativeShadowPipelineKey: Hashable {
@@ -56,10 +57,11 @@ final class NativeShadowPass {
             targets?.destroy(device: device); targets = NativeShadowTargets(size: plan.atlasSize, color: color, depth: depth)
         } catch { device.destroy(color); throw error }
     }
-    func prepare(packet: RenderPacket, store: NativeMeshStore, plan: ShadowAtlasPlan) throws -> [NativeShadowTile] {
+    func prepare(packet: RenderPacket, store: NativeMeshStore, plan: ShadowAtlasPlan, skin: NativeSkinBindings,
+                 deformables: [EntityID: NativeMeshGeometry]) throws -> [NativeShadowTile] {
         guard !plan.lights.isEmpty else { return [] }
         let batches = try NativeMeshBatchPlanner.prepare(packet: packet, store: store,
-            viewProjection: matrix_identity_float4x4, shadow: true).batches
+            viewProjection: matrix_identity_float4x4, deformables: deformables, shadow: true).batches
         // Every atlas tile shares the same caster geometry/instances. Upload it
         // once; only the 64-byte light matrix differs between tiles.
         let uploads = try batches.map { try device.uploadTransient($0.uniforms.withUnsafeBytes { Data($0) }) }
@@ -72,7 +74,9 @@ final class NativeShadowPass {
                     BindingSetEntry(slot: 1, resource: .storageBuffer(buffer: upload.buffer, offset: upload.offset)),
                     BindingSetEntry(slot: 2, resource: .sampler(store.sampler)),
                     BindingSetEntry(slot: 3, resource: .texture(batch.key.baseTexture.flatMap { batch.mesh.textures[$0] } ?? store.fallbacks[0])),
-                    BindingSetEntry(slot: 4, resource: view)
+                    BindingSetEntry(slot: 4, resource: view),
+                    BindingSetEntry(slot: 11, resource: skin[batch.skinEntity].parameters),
+                    BindingSetEntry(slot: 12, resource: skin[batch.skinEntity].matrices)
                 ]))
                 return try NativeShadowDraw(batch: batch, bindings: set, pipeline: pipeline(key: batch.key))
             }
@@ -90,7 +94,7 @@ final class NativeShadowPass {
                 pass.setScissor(ScissorRect(x: x, y: y, width: Int(plan.tileSize), height: Int(plan.tileSize)))
                 for draw in tile.draws {
                     pass.setPipeline(draw.pipeline); pass.setBindingSet(draw.bindings)
-                    pass.setVertexBuffer(draw.batch.mesh.vertices); pass.setIndexBuffer(draw.batch.mesh.indices, type: .uint32)
+                    pass.setVertexBuffer(draw.batch.geometry.vertices); pass.setIndexBuffer(draw.batch.geometry.indices, type: .uint32)
                     pass.drawIndexed(DrawIndexedArguments(indexCount: draw.batch.key.indexCount,
                         instanceCount: draw.batch.uniforms.count, firstIndex: draw.batch.key.firstIndex))
                 }

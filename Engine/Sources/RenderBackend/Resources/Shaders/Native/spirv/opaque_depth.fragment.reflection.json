@@ -423,6 +423,165 @@
       }
     },
     {
+      "name": "skinParameters",
+      "binding": {
+        "kind": "descriptorTableSlot",
+        "index": 11
+      },
+      "type": {
+        "kind": "constantBuffer",
+        "elementType": {
+          "kind": "struct",
+          "name": "SkinParameters",
+          "fields": [
+            {
+              "name": "counts",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "uint32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 16,
+                "elementStride": 4
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 16,
+              "alignment": 16
+            }
+          ]
+        },
+        "containerVarLayout": {
+          "binding": {
+            "kind": "descriptorTableSlot",
+            "index": 0
+          }
+        },
+        "elementVarLayout": {
+          "type": {
+            "kind": "struct",
+            "name": "SkinParameters",
+            "fields": [
+              {
+                "name": "counts",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "uint32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 16
+              }
+            ]
+          },
+          "binding": {
+            "kind": "uniform",
+            "offset": 0,
+            "size": 16,
+            "elementStride": 0
+          }
+        },
+        "sizes": [
+          {
+            "kind": "descriptorTableSlot",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "jointPalette",
+      "binding": {
+        "kind": "descriptorTableSlot",
+        "index": 12
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "structuredBuffer",
+        "resultType": {
+          "kind": "struct",
+          "name": "SkinMatrix",
+          "fields": [
+            {
+              "name": "matrix",
+              "type": {
+                "kind": "matrix",
+                "rowCount": 4,
+                "columnCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 64,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 0,
+                "size": 64,
+                "elementStride": 0
+              }
+            }
+          ],
+          "sizes": [
+            {
+              "kind": "uniform",
+              "value": 64,
+              "alignment": 16
+            }
+          ]
+        },
+        "sizes": [
+          {
+            "kind": "descriptorTableSlot",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
       "name": "sceneLights",
       "binding": {
         "kind": "descriptorTableSlot",
@@ -1760,6 +1919,165 @@
               "kind": "scalar",
               "scalarType": "float32"
             }
+          },
+          "sizes": [
+            {
+              "kind": "descriptorTableSlot",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "skinParameters",
+        "binding": {
+          "kind": "descriptorTableSlot",
+          "index": 11
+        },
+        "type": {
+          "kind": "constantBuffer",
+          "elementType": {
+            "kind": "struct",
+            "name": "SkinParameters",
+            "fields": [
+              {
+                "name": "counts",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "uint32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 16,
+                  "elementStride": 4
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 16,
+                "alignment": 16
+              }
+            ]
+          },
+          "containerVarLayout": {
+            "binding": {
+              "kind": "descriptorTableSlot",
+              "index": 0
+            }
+          },
+          "elementVarLayout": {
+            "type": {
+              "kind": "struct",
+              "name": "SkinParameters",
+              "fields": [
+                {
+                  "name": "counts",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "uint32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 0,
+                    "size": 16,
+                    "elementStride": 4
+                  }
+                }
+              ],
+              "sizes": [
+                {
+                  "kind": "uniform",
+                  "value": 16,
+                  "alignment": 16
+                }
+              ]
+            },
+            "binding": {
+              "kind": "uniform",
+              "offset": 0,
+              "size": 16,
+              "elementStride": 0
+            }
+          },
+          "sizes": [
+            {
+              "kind": "descriptorTableSlot",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "jointPalette",
+        "binding": {
+          "kind": "descriptorTableSlot",
+          "index": 12
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "structuredBuffer",
+          "resultType": {
+            "kind": "struct",
+            "name": "SkinMatrix",
+            "fields": [
+              {
+                "name": "matrix",
+                "type": {
+                  "kind": "matrix",
+                  "rowCount": 4,
+                  "columnCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 64,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 0,
+                  "size": 64,
+                  "elementStride": 0
+                }
+              }
+            ],
+            "sizes": [
+              {
+                "kind": "uniform",
+                "value": 64,
+                "alignment": 16
+              }
+            ]
           },
           "sizes": [
             {
@@ -3147,6 +3465,22 @@
             "kind": "descriptorTableSlot",
             "index": 3,
             "used": 1
+          }
+        },
+        {
+          "name": "skinParameters",
+          "binding": {
+            "kind": "descriptorTableSlot",
+            "index": 11,
+            "used": 0
+          }
+        },
+        {
+          "name": "jointPalette",
+          "binding": {
+            "kind": "descriptorTableSlot",
+            "index": 12,
+            "used": 0
           }
         },
         {

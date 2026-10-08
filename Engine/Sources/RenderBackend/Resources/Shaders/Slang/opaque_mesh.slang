@@ -47,7 +47,7 @@ float4 meshFragment(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
     float3 ambient = (envSpec+envDiff)*ao*sceneLights.ambientColorIntensity.a;
     color = (direct+ambient)*sceneLights.exposureLightCount.x;
     }
-    return float4(color,1);
+    return float4(color,draw.material.x > 1.5 ? texel.a*draw.colorTint.a : 1);
 }
 [shader("fragment")]
 void depthFragment(VertexOutput input, bool front : SV_IsFrontFace) { coverage(input,front); }

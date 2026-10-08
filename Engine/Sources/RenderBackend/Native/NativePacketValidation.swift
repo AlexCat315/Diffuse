@@ -10,10 +10,9 @@ enum NativePacketValidation {
               !packet.renderSettings.enableStylizedCharacterShading,
               !packet.renderSettings.enableSSAO, !packet.renderSettings.enableSSR,
               !packet.renderSettings.enableTAA, !packet.renderSettings.enableBloom, !packet.renderSettings.enableFXAA,
-              packet.jointPaletteMap.palettes.isEmpty, packet.scene.deformableMeshes.isEmpty,
               packet.scene.particles.isEmpty, packet.scene.particleSimulationBatches.isEmpty,
               packet.inGameCanvas.commands.isEmpty else {
-            throw RHIError.unsupportedFeature("native post effects, animation, particles and UI migration is pending; use static geometry through r4")
+            throw RHIError.unsupportedFeature("native post effects, particles and UI migration is pending; use mesh rendering through r4")
         }
         let scene = packet.scene
         guard finite(scene.camera.eye), finite(scene.camera.target), finite(scene.camera.up),
@@ -39,6 +38,9 @@ enum NativePacketValidation {
                 throw RHIError.invalidArgument("non-finite material color")
             }
         }
+        guard packet.jointPaletteMap.palettes.values.allSatisfy({ palette in
+            palette.matrices.count <= Int(UInt32.max) && palette.matrices.allSatisfy(Self.finite)
+        }) else { throw RHIError.invalidArgument("non-finite or oversized joint palette") }
         return matrices
     }
     private static func finite(_ matrix: simd_float4x4) -> Bool {

@@ -10,6 +10,7 @@ enum ShadowAtlasPlanner {
         drawableSize: RenderDrawableSize,
         enabled: Bool,
         settings: RenderShadowSettings,
+        palettes: JointPaletteMap = JointPaletteMap(),
         meshBounds: (Int) -> (min: SIMD3<Float>, max: SIMD3<Float>)?
     ) -> ShadowAtlasPlan {
         var settings = settings
@@ -48,7 +49,7 @@ enum ShadowAtlasPlanner {
         guard !selectedLights.isEmpty else {
             return disabledPlan()
         }
-        let sceneBounds = worldBounds(for: scene, meshBounds: meshBounds)
+        let sceneBounds = worldBounds(for: scene, palettes: palettes, meshBounds: meshBounds)
         let allocations = directionalShadowAllocations(
             selectedLights: selectedLights,
             settings: settings
@@ -350,7 +351,7 @@ enum ShadowAtlasPlanner {
         return projection * view
     }
 
-    private static func worldBounds(for scene: RenderScene, meshBounds: (Int) -> (min: SIMD3<Float>, max: SIMD3<Float>)?) -> (min: SIMD3<Float>, max: SIMD3<Float>) {
+    private static func worldBounds(for scene: RenderScene, palettes: JointPaletteMap, meshBounds: (Int) -> (min: SIMD3<Float>, max: SIMD3<Float>)?) -> (min: SIMD3<Float>, max: SIMD3<Float>) {
         guard !scene.instances.isEmpty else {
             let center = scene.camera.target
             let extent = SIMD3<Float>(repeating: 2)
@@ -362,7 +363,7 @@ enum ShadowAtlasPlanner {
         let deformableMeshes = scene.deformableMeshes.reduce(
             into: [EntityID: RenderDeformableMesh]()
         ) { result, mesh in
-            if mesh.isValid {
+            if mesh.isValid && result[mesh.entity] == nil {
                 result[mesh.entity] = mesh
             }
         }
@@ -378,8 +379,15 @@ enum ShadowAtlasPlanner {
             }
             let localBounds = meshBounds(instance.meshIndex)
                 ?? (SIMD3<Float>(repeating: -0.5), SIMD3<Float>(repeating: 0.5))
-            for corner in boundsCorners(min: localBounds.min, max: localBounds.max) {
-                points.append(transformPoint(corner, by: instance.transform))
+            // Normalized nonnegative skin weights place each vertex inside
+            // the union of its joint-transformed bounds. Include identity for
+            // unweighted vertices and out-of-range joint indices.
+            let poses = [matrix_identity_float4x4] + (instance.entity.flatMap { palettes.palette(for: $0)?.matrices } ?? [])
+            let corners = boundsCorners(min: localBounds.min, max: localBounds.max)
+            for pose in poses {
+                for corner in corners {
+                    points.append(transformPoint(corner, by: instance.transform * pose))
+                }
             }
         }
         return bounds(of: points)
