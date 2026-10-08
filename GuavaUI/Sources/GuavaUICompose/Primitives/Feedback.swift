@@ -79,17 +79,22 @@ public struct ProgressView: _PrimitiveView {
 /// Animation is registered with the owning node and cancelled when it leaves the tree.
 public struct Spinner: _PrimitiveView {
     public let size: Float
-    public init(size: Float = 16) { self.size = max(8, size) }
+    public let isAnimating: Bool
+    public init(size: Float = 16, isAnimating: Bool = true) {
+        self.size = size.isFinite ? max(8, min(128, size)) : 16; self.isAnimating = isAnimating
+    }
     public func _makeNode() -> Node {
-        let node = Node(); node.isHitTestable = false; node.addResource(SpinnerClock()); return node
+        let node = Node(); node.isHitTestable = false; node.addResource(LoadingAnimationClock()); return node
     }
     public func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode(); layout.width = size; layout.height = size; return layout
     }
     public func _updateNode(_ node: Node) {
+        let clock = node.firstResource(LoadingAnimationClock.self)!
+        clock.configure(duration: 1, isActive: isAnimating && !node.prefersReducedMotion)
         node.draw = { [weak node] list, origin in
             guard let node else { return }
-            let phase = node.firstResource(SpinnerClock.self)?.phase ?? 0
+            let phase = Float(clock.phase) * Float.pi * 2
             let cx = Float(origin.x + node.frame.width / 2), cy = Float(origin.y + node.frame.height / 2)
             let radius = max(2, min(Float(node.frame.width), Float(node.frame.height)) / 2 - 2)
             let color = (node.foregroundColor ?? node.theme.colors.onSurface).multipliedAlpha(node.opacity)
@@ -102,19 +107,4 @@ public struct Spinner: _PrimitiveView {
             }
         }
     }
-}
-
-private final class SpinnerClock: NodeResource, AnyAnimationController {
-    weak var node: Node?
-    var phase: Float = 0
-    var isFinished = false
-    func mount(node: Node) { self.node = node; AnimatorScheduler.current.register(self) }
-    func unmount(node: Node) { cancel() }
-    func tick(deltaTime: Double) {
-        guard !isFinished, let node else { return }
-        phase = (phase + Float(deltaTime) * Float.pi * 2).truncatingRemainder(dividingBy: Float.pi * 2)
-        node.markRenderDirty(reason: .styleSet(field: "spinner.phase"))
-    }
-    func finishImmediately() { cancel() }
-    func cancel() { isFinished = true; node = nil }
 }
