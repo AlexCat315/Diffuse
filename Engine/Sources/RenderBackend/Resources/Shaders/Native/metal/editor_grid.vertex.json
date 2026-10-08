@@ -1,0 +1,27 @@
+{
+  "stage": "vertex",
+  "format": "mslSource",
+  "entryPoint": "gridVertex",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCB2ZXJ0ZXhPdXRwdXRfMAp7CiAgICBmbG9hdDQgb3V0cHV0XzAgW1twb3NpdGlvbl1dOwp9OwoKW1t2ZXJ0ZXhdXSB2ZXJ0ZXhPdXRwdXRfMCBncmlkVmVydGV4KHVpbnQgaW5kZXhfMCBbW3ZlcnRleF9pZF1dKQp7CiAgICBhcnJheTxmbG9hdDIsIGludCgzKT4gcG9zaXRpb25zXzAgPSB7IHsgZmxvYXQyKC0xLjBmLCAtMS4wZiksIGZsb2F0MigzLjBmLCAtMS4wZiksIGZsb2F0MigtMS4wZiwgMy4wZikgfSB9OwogICAgdmVydGV4T3V0cHV0XzAgX1MxID0geyBmbG9hdDQocG9zaXRpb25zXzBbaW5kZXhfMF0sIDAuMGYsIDEuMGYpIH07CiAgICByZXR1cm4gX1MxOwp9Cgo=",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "grid",
+        "slot": 0,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}

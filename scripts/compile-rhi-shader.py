@@ -87,7 +87,7 @@ def reflected_bindings(reflection, target='spirv', constants=()):
     return result
 
 
-def compile_shader(source, entry, stage, target, output, compiler, threadgroup_size=None):
+def compile_shader(source, entry, stage, target, output, compiler, threadgroup_size=None, line_directives=True):
     version = run([compiler, '-version'])
     if version != SLANG_VERSION:
         raise ValueError(f'Expected Slang {SLANG_VERSION}, got {version!r}')
@@ -100,6 +100,7 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
                      '-target', target, '-o', str(code), '-reflection-json', str(reflection_file)]
         if target == 'spirv': arguments += ['-fvk-use-entrypoint-name']
         if target == 'dxil': arguments += ['-profile', 'sm_6_6']
+        if not line_directives: arguments += ['-line-directive-mode', 'none']
         run(arguments)
         reflection = json.loads(reflection_file.read_text())
         logical_reflection = reflection
@@ -144,12 +145,13 @@ def main():
     parser.add_argument('--target', choices=['metal', 'spirv', 'dxil'], required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--threadgroup-size', nargs=3, type=int)
+    parser.add_argument('--no-line-directives', action='store_true', help='Omit absolute source paths from bundled shader code')
     parser.add_argument('--slangc', default=os.environ.get('SLANGC'))
     args = parser.parse_args()
     if not args.slangc:
         parser.error('Supply --slangc or SLANGC (Slang 2026.19)')
     try:
-        compile_shader(args.source, args.entry, args.stage, args.target, args.output, args.slangc, args.threadgroup_size)
+        compile_shader(args.source, args.entry, args.stage, args.target, args.output, args.slangc, args.threadgroup_size, not args.no_line_directives)
     except (RuntimeError, ValueError, OSError, KeyError, StopIteration) as error:
         parser.exit(1, f'Shader compilation failed: {error}\n')
     print(args.output)

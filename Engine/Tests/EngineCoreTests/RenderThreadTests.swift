@@ -2,12 +2,36 @@
 import EngineKernel
 import RenderBackend
 import SceneRuntime
+import NativeRHI
 import Testing
 import SIMDCompat
 @testable import EngineCore
 
 @Suite("RenderThread")
 struct RenderThreadTests {
+    @Test("RenderThread consumes real packets through the NativeRHI grid renderer",
+          .enabled(if: ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1",
+                   "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
+    func nativeGridRenderPacketIntegration() throws {
+        let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false))
+        let consumer = try NativeGridRenderer(device: device)
+        let ring = RingBuffer<RenderPacket>()
+        let rendered = DispatchSemaphore(value: 0)
+        let thread = RenderThread(runtime: NoopRuntime(), ringBuffer: ring, consumer: consumer,
+            onFrameRendered: { _ in rendered.signal() })
+        thread.start(); defer { thread.shutdown() }
+        var packet = Self.makePacket(frameIndex: 17)
+        packet.drawableSize = RenderDrawableSize(width: 128, height: 96)
+        packet.scene.instances = []; packet.renderSettings.enableEditorGrid = true
+        ring.publish(packet); thread.requestRender()
+        #expect(rendered.wait(timeout: .now() + 5) == .success)
+        thread.shutdown(); try device.waitUntilIdle()
+        #expect(consumer.lastError == nil)
+        #expect(consumer.currentFrameStats().frameIndex == 17)
+        #expect(consumer.currentFrameStats().passDrawCallCounts[.editorGrid] == 1)
+        #expect(consumer.colorTexture != nil)
+        #expect(!consumer.currentViewportSurfaceState().isValid)
+    }
     @Test("RingBuffer returns the latest published payload")
     func ringBufferReturnsLatestPayload() {
         let ring = RingBuffer<Int>()

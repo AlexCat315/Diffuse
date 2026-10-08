@@ -112,7 +112,7 @@ extension VulkanBackend {
             buffer: chunk.buffer,
             allocation: chunk.allocation,
             size: chunk.capacity,
-            usage: .transferDestination)
+            usage: [.transferSource, .transferDestination, .uniform, .storageRead, .vertex, .index, .indirect])
         chunkBufferIDs[key] = id
         return id
     }

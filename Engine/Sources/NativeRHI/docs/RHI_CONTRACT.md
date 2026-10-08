@@ -4,7 +4,7 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-现有 `RenderBackend` 仍使用 `RHIWGPU`。本阶段完成独立后端和 GPU 契约测试，尚未迁移现有 renderer。
+现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。其余场景 pass 尚未迁移。
 
 ## 实现与验证状态
 
@@ -26,6 +26,7 @@
 
 - 先创建 binding layout 和 pipeline layout，再创建管线；具体 binding set 可以晚于管线创建。后端不能通过现存 binding set 推断管线布局。
 - Binding layout 声明 slot、资源类型、`ShaderVisibility` 和 buffer 访问/结构信息。一个资源可同时供 vertex 与 fragment 使用。Binding set 必须覆盖全部声明，资源类型匹配；目前不支持数组、bindless。
+- Uniform binding 可声明 `size`，nil 表示 buffer 剩余范围。帧上传的大 buffer 绑定小常量块时应提供实际字节数，以满足 Vulkan `maxUniformBufferRange`；范围也参与 binding-set 缓存 key。帧上传 buffer 声明 uniform、storage read、vertex/index/indirect 与 copy 用途。
 - `BufferBindingLayout.readOnly` 决定 SRV / UAV 和读写依赖；`elementStride` 保存离线反射的 structured buffer 元素大小，零表示 byte-address。不要把只读 storage buffer 当作 UAV。
 - Pipeline layout 缓存按有序 set layouts 与 push constant 声明共同建 key。资源绑定和小常量会在提交前检查是否匹配当前管线。
 - `PushConstantRange` 声明 stage、逻辑 slot、字节数。slot 和 stage 分别唯一；每个 stage 最多一个块，整个布局最多 128 字节，大小须为四字节倍数。Metal 使用 buffer 参数；DX12 使用 space0 的 b-register root constants；Vulkan 每个 stage 的 SPIR-V push block 从 offset 0 开始，以不同 stage mask 允许范围重叠。
@@ -98,4 +99,4 @@ Mesh 使用独立 descriptor。Metal 当前无 task；Vulkan 与 DX12 task 根�
 
 BLAS 当前只支持不透明、非索引 float32 xyz 三角形。TLAS 引用已创建的 BLAS，变换为三个 SIMD4 行，默认单位矩阵，mask 默认 0xff。创建分配对象；先 `recordBuild(blas)`，再 `recordBuild(tlas)`，随后执行 compute ray query。RT pipelines、SBT、procedural geometry、AS update 与 compaction 尚未实现。
 
-下一阶段先将一个独立 renderer pass 接入 NativeRHI，验证实际渲染与性能，再逐步迁移 RenderBackend；原生 Windows / Linux 环境可用后，再验证 DX12 与 Vulkan RT / mesh、独立 queue family。
+编辑器网格 pass 已完成本机接入、WGPU 画面对照和 Release 批次性能测量。下一阶段可接入深度或不透明几何 pass，再逐步迁移 RenderBackend；原生 Windows / Linux 环境可用后，再验证 DX12 与 Vulkan RT / mesh、独立 queue family。
