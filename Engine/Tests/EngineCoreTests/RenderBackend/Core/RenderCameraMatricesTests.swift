@@ -6,6 +6,28 @@ import Testing
 
 @Suite("RenderCameraMatrices")
 struct RenderCameraMatricesTests {
+    @Test("shadow fitting encloses joint-transformed bounds beyond the bind pose")
+    func posedShadowBounds() {
+        let entity = EntityID(rawValue: 12)
+        let scene = RenderScene(camera: RenderCamera(eye: SIMD3(0,0,8)),
+            instances: [RenderInstance(meshIndex: 0, transform: matrix_identity_float4x4, entity: entity)],
+            lights: [RenderLight(type: .directional,direction: SIMD3(-1,-2,-1))])
+        var pose = matrix_identity_float4x4; pose.columns.3 = SIMD4(12,3,0,1)
+        let palette = JointPaletteMap(palettes: [entity: JointPalette(matrices: [pose])])
+        let plan = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: scene, drawableSize: .init(width: 256,height: 256),
+            enabled: true, settings: RenderShadowSettings(enabled: true), palettes: palette,
+            meshBounds: { _ in (SIMD3(repeating: -1),SIMD3(repeating: 1)) })
+        for x: Float in [-1,1] {
+            for y: Float in [-1,1] {
+                for z: Float in [-1,1] {
+                    let projected = plan.uniforms.lightViewProjection0 * pose * SIMD4(x,y,z,1)
+                    let ndc = projected / projected.w
+                    #expect(abs(ndc.x) <= 1 && abs(ndc.y) <= 1 && ndc.z >= 0 && ndc.z <= 1)
+                }
+            }
+        }
+    }
+
     @Test("orthographic shadow cascades follow visible height and carry parallel shading with shadows off")
     func orthographicShadowFrustum() {
         let renderer = WGPURenderer(backend: WGPUBackend(config: .init()))

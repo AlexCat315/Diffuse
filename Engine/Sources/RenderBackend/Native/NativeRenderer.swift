@@ -5,13 +5,14 @@ import NativeRHI
 import SIMDCompat
 
 /// Scene renderer recorded entirely through NativeRHI. The initial migration
-/// supports static opaque/masked meshes, PBR lighting, directional shadows,
+/// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
 /// HDR sky/tonemap, material inspection modes and the grid.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
     private let meshes: NativeMeshStore
-    private let opaque: NativeOpaquePass
+    private let meshPass: NativeMeshPass
+    private let deformables: NativeDeformableMeshes
     private let lighting: NativeLightingResources
     private let shadows: NativeShadowPass
     private let hdrPasses: NativeHDRPasses
@@ -26,7 +27,8 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public init(device: Device, surface: RenderSurfaceDescriptor? = nil, assets: AssetRegistry = .shared) throws {
         self.device = device; self.surface = surface
         meshes = try NativeMeshStore(device: device, registry: assets)
-        opaque = try NativeOpaquePass(device: device)
+        meshPass = try NativeMeshPass(device: device)
+        deformables = NativeDeformableMeshes(device: device)
         lighting = try NativeLightingResources(device: device)
         shadows = try NativeShadowPass(device: device)
         hdrPasses = try NativeHDRPasses(device: device)
@@ -48,30 +50,36 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         let hdr = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r4LightingPBRShadow.rawValue
         if hdr || packet.renderSettings.debugViewMode == .shaded { try lighting.ensureEnvironment() }
         let shadowPlan = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: packet.scene, drawableSize: packet.drawableSize,
-            enabled: hdr, settings: packet.renderSettings.shadowSettings, meshBounds: { meshes[$0]?.bounds })
+            enabled: hdr, settings: packet.renderSettings.shadowSettings, palettes: packet.jointPaletteMap, meshBounds: { meshes[$0]?.geometry.bounds })
         try shadows.ensureTargets(plan: shadowPlan)
         try ensureTargets(size: packet.drawableSize, hdr: hdr)
         guard let targets else { throw RHIError.outOfMemory }
         try device.beginFrame()
         defer { device.endFrame() }
         let hasDepth = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r2MultiObjectDepth.rawValue
+        let commands = CommandBuffer()
+        let deformableStart = DispatchTime.now().uptimeNanoseconds
+        let dynamic = try deformables.prepare(packet.scene.deformableMeshes, into: commands)
+        let deformableTime = DispatchTime.now().uptimeNanoseconds - deformableStart
+        let skin = try NativeSkinBindings(packet: packet, device: device)
         let lightBindings = try lighting.prepare(packet: packet, plan: shadowPlan, atlas: shadows.atlas, fallback: meshes.fallbacks[0])
-        let shadowTiles = try shadows.prepare(packet: packet, store: meshes, plan: shadowPlan)
-        let prepared = try opaque.prepare(packet: packet, store: meshes,
-            matrices: matrices, depthPrepass: hasDepth, hdr: hdr, lighting: lightBindings)
+        let shadowTiles = try shadows.prepare(packet: packet, store: meshes, plan: shadowPlan, skin: skin, deformables: dynamic.geometries)
+        let prepared = try meshPass.prepare(packet: packet, store: meshes,
+            matrices: matrices, depthPrepass: hasDepth, hdr: hdr, lighting: lightBindings, skin: skin, deformables: dynamic.geometries)
+        let opaqueDraws = prepared.draws.filter { $0.batch.key.mode != .blend }
+        let transparentDraws = prepared.draws.filter { $0.batch.key.mode == .blend }.sorted { $0.batch.distance > $1.batch.distance }
         let image = surface == nil ? nil : try device.acquireSwapchainImage()
         guard let color = image?.texture ?? targets.color else { throw RHIError.swapchainAcquireFailed("no scene color target") }
         let prepareEnd = DispatchTime.now().uptimeNanoseconds
-        let commands = CommandBuffer()
         var passTimes: [RenderPassKind: UInt64] = [:]
         var passDraws: [RenderPassKind: Int] = [:]
         var active: [RenderPassKind] = []
         if hasDepth {
             let before = DispatchTime.now().uptimeNanoseconds
-            opaque.encode(draws: prepared.draws, size: packet.drawableSize, color: nil,
+            meshPass.encode(draws: opaqueDraws, size: packet.drawableSize, color: nil,
                 depth: RenderDepthTarget(texture: targets.depth, loadAction: .clear(1)), depthOnly: true, into: commands)
             passTimes[.depthPrepass] = DispatchTime.now().uptimeNanoseconds - before
-            passDraws[.depthPrepass] = prepared.draws.count; active.append(.depthPrepass)
+            passDraws[.depthPrepass] = opaqueDraws.count; active.append(.depthPrepass)
         }
         if !shadowTiles.isEmpty {
             let before = DispatchTime.now().uptimeNanoseconds
@@ -87,11 +95,11 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passDraws[.skybox] = 1; active.append(.skybox)
         }
         let beforeBase = DispatchTime.now().uptimeNanoseconds
-        opaque.encode(draws: prepared.draws, size: packet.drawableSize,
+        meshPass.encode(draws: opaqueDraws, size: packet.drawableSize,
             color: RenderColorTarget(texture: sceneColor, loadAction: hdr ? .load : .clear(SIMD4(0.05,0.06,0.08,1))),
             depth: RenderDepthTarget(texture: targets.depth, loadAction: hasDepth ? .load : .clear(1)), depthOnly: false, into: commands)
         passTimes[.basePass] = DispatchTime.now().uptimeNanoseconds - beforeBase
-        passDraws[.basePass] = prepared.draws.count; active.append(.basePass)
+        passDraws[.basePass] = opaqueDraws.count; active.append(.basePass)
         if packet.renderSettings.enableEditorGrid {
             let before = DispatchTime.now().uptimeNanoseconds
             if hdr {
@@ -103,6 +111,14 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passTimes[.editorGrid] = DispatchTime.now().uptimeNanoseconds - before
             passDraws[.editorGrid] = 1; active.append(.editorGrid)
         }
+        if !transparentDraws.isEmpty {
+            let before = DispatchTime.now().uptimeNanoseconds
+            meshPass.encode(draws: transparentDraws, size: packet.drawableSize,
+                color: RenderColorTarget(texture: sceneColor, loadAction: .load),
+                depth: RenderDepthTarget(texture: targets.depth, loadAction: .load), depthOnly: false, into: commands)
+            passTimes[.transparentMeshes] = DispatchTime.now().uptimeNanoseconds - before
+            passDraws[.transparentMeshes] = transparentDraws.count; active.append(.transparentMeshes)
+        }
         if hdr {
             let before = DispatchTime.now().uptimeNanoseconds
             try hdrPasses.encodeTonemap(size: packet.drawableSize, hdr: sceneColor, output: color, into: commands)
@@ -110,7 +126,8 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passDraws[.tonemap] = 1; active.append(.tonemap)
         }
         let encoded = DispatchTime.now().uptimeNanoseconds
-        try device.submit(commands); if let image { try device.present(image) }
+        try device.submit(commands); deformables.commit(dynamic)
+        if let image { try device.present(image) }
         let end = DispatchTime.now().uptimeNanoseconds
         var stats = RenderFrameStats()
         stats.frameIndex = packet.frameIndex; stats.passCount = active.count; stats.activePasses = active
@@ -123,8 +140,14 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         stats.shadowCascadeCount = shadowPlan.cascadeCount
         stats.shadowMapResolution = shadowPlan.tileSize
         stats.shadowAtlasResolution = shadowPlan.atlasSize
-        stats.meshBatchCount = prepared.draws.count; stats.instancedMeshBatchCount = prepared.draws.count { $0.instanceCount > 1 }
-        stats.submittedMeshTriangleCount = prepared.draws.reduce(0) { $0 + $1.key.indexCount / 3 * $1.instanceCount }
+        stats.meshBatchCount = prepared.draws.count; stats.instancedMeshBatchCount = prepared.draws.count { $0.batch.uniforms.count > 1 }
+        stats.submittedMeshTriangleCount = prepared.draws.reduce(0) { $0 + $1.batch.key.indexCount / 3 * $1.batch.uniforms.count }
+        stats.deformableMeshCount = dynamic.report.meshCount
+        stats.deformableVertexCount = dynamic.report.vertexCount
+        stats.deformableTriangleCount = dynamic.report.triangleCount
+        stats.deformableRejectedMeshCount = dynamic.report.rejectedMeshCount
+        stats.deformableUploadedBytes = dynamic.report.uploadedBytes
+        stats.deformableUploadNS = deformableTime
         lastFrameStats = stats; lastError = nil
     }
 

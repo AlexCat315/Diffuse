@@ -241,7 +241,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 scene: packet.scene,
                 drawableSize: packet.drawableSize,
                 enabled: framePlan.passes.contains(.shadowPass),
-                settings: activeRenderSettings.shadowSettings
+                settings: activeRenderSettings.shadowSettings,
+                palettes: packet.jointPaletteMap
             )
             writeSceneLightUniforms(
                 scene: packet.scene,

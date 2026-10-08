@@ -1,3 +1,4 @@
+import AssetPipeline
 import Foundation
 import NativeRHI
 import RenderBackend
@@ -6,13 +7,17 @@ public enum NativePassBenchmark {
     public static func run(arguments: [String]) throws {
         let options = try PassBenchmarkOptions(arguments: arguments)
         try FileManager.default.createDirectory(at: options.output, withIntermediateDirectories: true)
+        if options.scene == .animated { AssetRegistry.shared.registerForTesting(AnimatedProbeScene.skinnedFixture(), at: 2) }
+        defer { if options.scene == .animated { AssetRegistry.shared.unregisterTestingMesh(at: 2) } }
         let packet: RenderPacket
         switch options.scene {
         case .grid: packet = GridProbeScene.packet(size: options.size)
         case .mesh: packet = MeshProbeScene.packet(size: options.size)
         case .pbr: packet = PBRProbeScene.packet(size: options.size)
+        case .animated: packet = AnimatedProbeScene.packet(size: options.size)
         }
         func framePacket(_ frame: Int) -> RenderPacket {
+            if options.scene == .animated { return AnimatedProbeScene.packet(size: options.size,frame: frame) }
             var p = packet; p.frameIndex = frame
             // Exercise the complete HDR frame on both renderers. A static WGPU
             // view would reuse its opaque snapshot and measure a different workload.
@@ -57,8 +62,8 @@ public enum NativePassBenchmark {
             let reference = try WGPUSceneReference()
             renderReference = { frame in
                 let result = try reference.render(packet: framePacket(frame))
-                if options.scene == .pbr && reference.renderer.lastFrameUsedOpaqueCache {
-                    throw RHIError.invalidArgument("PBR reference unexpectedly reused an opaque snapshot")
+                if (options.scene == .pbr || options.scene == .animated) && reference.renderer.lastFrameUsedOpaqueCache {
+                    throw RHIError.invalidArgument("scene reference unexpectedly reused an opaque snapshot")
                 }
                 return result
             }
@@ -107,7 +112,7 @@ public enum NativePassBenchmark {
     }
 }
 
-private enum ProbeScene: String { case grid, mesh, pbr }
+private enum ProbeScene: String { case grid, mesh, pbr, animated }
 
 private struct PassBenchmarkOptions {
     var scene = ProbeScene.grid
@@ -118,12 +123,12 @@ private struct PassBenchmarkOptions {
     var backends: [GraphicsAPI] = NativeRHI.platformDefaultBackends
     var output = URL(fileURLWithPath: "/tmp/guava-native-grid")
     init(arguments: [String]) throws {
-        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
+        guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
         for index in stride(from: 0, to: arguments.count, by: 2) {
             let value = arguments[index + 1]
             switch arguments[index] {
             case "--scene":
-                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh or pbr scene") }
+                guard let scene = ProbeScene(rawValue: value) else { throw RHIError.invalidArgument("choose grid, mesh, pbr or animated scene") }
                 self.scene = scene
             case "--output": output = URL(fileURLWithPath: value)
             case "--backends":
