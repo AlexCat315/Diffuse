@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
-    let slot = atomicAdd(&metadata.append_cursor, 1u);
+    let slot = atomicLoad(&metadata.append_cursor) + index;
     if (slot >= capacity) {
         _ = atomicAdd(&metadata.dropped_spawn_count, 1u);
         return;

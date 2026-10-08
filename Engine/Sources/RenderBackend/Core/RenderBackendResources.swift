@@ -267,6 +267,11 @@ struct GPUParticleSortBitonicPass {
 
 extension GPUParticleSortBitonicPass: @unchecked Sendable {}
 
+struct GPUParticleSimulationEncoding {
+    let resources: GPUParticleSimulationResources
+    let particleCount: Int
+}
+
 struct GPUParticleSimulationResources {
     let bindGroupLayout: GPUBindGroupLayout
     let pipelineLayout: GPUPipelineLayout

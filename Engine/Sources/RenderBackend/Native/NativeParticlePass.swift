@@ -43,18 +43,32 @@ final class NativeParticlePass {
         catch { device.destroy(vertex); throw error }
     }
     deinit { pipelines.values.forEach { device.destroy($0) }; device.destroy(vertex); device.destroy(fragment) }
-    func prepare(scene: RenderScene, matrices: RenderCameraMatrices, hdr: Bool, into commands: CommandBuffer) throws -> NativeParticleFrame? {
-        guard !scene.particles.isEmpty else { return nil }
-        let batches = ParticleRenderBatchPlan(particles: scene.particles).batches
-        try buffers.ensure(instances: scene.particles.count,batches: batches.count)
+    func prepare(scene: RenderScene, matrices: RenderCameraMatrices, hdr: Bool,
+                 simulated: NativeParticleSimulationRender? = nil, into commands: CommandBuffer) throws -> NativeParticleFrame? {
+        let gpuCount = simulated?.instanceCount ?? 0, count = gpuCount+scene.particles.count
+        guard count > 0 else { return nil }
+        var batches = simulated?.batches ?? []
+        batches += ParticleRenderBatchPlan(particles: scene.particles).batches.map { .init(key: $0.key,start: gpuCount+$0.start,count: $0.count) }
+        try buffers.ensure(instances: count,batches: batches.count)
         guard let visible = buffers.visible, let indirect = buffers.indirect else { throw RHIError.outOfMemory }
         let instances = scene.particles.map { GPUParticleInstance(particle: $0) }
-        let source = try device.uploadTransient(instances.withUnsafeBytes { Data($0) })
+        let source: BindingResource
+        if let simulated {
+            if !instances.isEmpty {
+                let upload = try device.uploadTransient(instances.withUnsafeBytes { Data($0) })
+                commands.copyPass { $0.copyBuffer(src: upload.buffer,srcOffset: upload.offset,dst: simulated.source.buffer,
+                    dstOffset: gpuCount*MemoryLayout<GPUParticleInstance>.stride,size: instances.count*MemoryLayout<GPUParticleInstance>.stride) }
+            }
+            source = .storageBuffer(buffer: simulated.source.buffer)
+        } else {
+            let upload = try device.uploadTransient(instances.withUnsafeBytes { Data($0) })
+            source = .storageBuffer(buffer: upload.buffer,offset: upload.offset)
+        }
         let ranges = batches.map { GPUParticleCullBatch(sourceStart: UInt32($0.start),sourceCount: UInt32($0.count),outputStart: UInt32($0.start)) }
         let descriptors = try device.uploadTransient(ranges.withUnsafeBytes { Data($0) })
         try cull.encode(entries: [
             BindingSetEntry(slot: 0,resource: NativeUniformUpload.binding(GPUParticleCullUniforms(viewProj: matrices.viewProjection,params: SIMD4(UInt32(batches.count),0,0,0)),device: device)),
-            BindingSetEntry(slot: 1,resource: .storageBuffer(buffer: source.buffer,offset: source.offset)),
+            BindingSetEntry(slot: 1,resource: source),
             BindingSetEntry(slot: 2,resource: .storageBuffer(buffer: descriptors.buffer,offset: descriptors.offset)),
             BindingSetEntry(slot: 3,resource: .storageBuffer(buffer: visible)),
             BindingSetEntry(slot: 4,resource: .storageBuffer(buffer: indirect))
@@ -73,7 +87,7 @@ final class NativeParticlePass {
             ]))
             return NativeParticleDraw(pipeline: pipeline,bindings: set)
         }
-        return NativeParticleFrame(draws: draws,indirect: indirect,candidates: instances.count)
+        return NativeParticleFrame(draws: draws,indirect: indirect,candidates: count)
     }
     func encode(_ frame: NativeParticleFrame, size: RenderDrawableSize, color: Texture, depth: Texture, into commands: CommandBuffer) {
         commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [RenderColorTarget(texture: color,loadAction: .load)],

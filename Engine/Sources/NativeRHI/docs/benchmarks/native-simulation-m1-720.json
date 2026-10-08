@@ -1,0 +1,173 @@
+{
+  "environment" : {
+    "buildConfiguration" : "release",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-10-08T16:01:20Z",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 180,
+  "height" : 720,
+  "imageDifferences" : {
+    "native-metal" : {
+      "maximumChannelError" : 76,
+      "meanAbsoluteChannelError" : 0.04220486111111111,
+      "pixelCount" : 921600,
+      "pixelsOverThree" : 4676
+    }
+  },
+  "repeats" : 3,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 2983.8458333333333,
+        "p95Microseconds" : 3002.5796277777777,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 22.875,
+        "p95Microseconds" : 28.541,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 1179.417,
+        "p95Microseconds" : 1388.916,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 885.5,
+        "p95Microseconds" : 1035,
+        "sampleCount" : 540
+      },
+      "device" : "Apple M1",
+      "particleWork" : {
+        "batches" : 1620,
+        "candidates" : 3335040,
+        "dispatchWorkgroups" : 1620,
+        "indirectDraws" : 1620
+      },
+      "passDraws" : {
+        "basePass" : 1890,
+        "bloom" : 540,
+        "depthPrepass" : 1890,
+        "editorGrid" : 315,
+        "fxaa" : 540,
+        "particles" : 1620,
+        "shadowPass" : 5670,
+        "skybox" : 315,
+        "ssao" : 315,
+        "ssr" : 270,
+        "taa" : 315,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "passFrames" : {
+        "basePass" : 315,
+        "bloom" : 540,
+        "depthPrepass" : 315,
+        "editorGrid" : 315,
+        "fxaa" : 540,
+        "particles" : 540,
+        "shadowPass" : 315,
+        "skybox" : 315,
+        "ssao" : 315,
+        "ssr" : 270,
+        "taa" : 315,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "simulationWork" : {
+        "batches" : 1080,
+        "eventBytes" : 106168320,
+        "eventCapacity" : 2211840,
+        "instanceWorkgroups" : 52380,
+        "particles" : 1105920,
+        "renderInstances" : 3317760,
+        "simulationWorkgroups" : 17820,
+        "sortItems" : 1105920,
+        "sortPaddedItems" : 1105920,
+        "sortPasses" : 60480,
+        "sortWorkgroups" : 997920
+      }
+    },
+    {
+      "backend" : "wgpu-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 9012.762966666667,
+        "p95Microseconds" : 9018.698844444445,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 827.458,
+        "p95Microseconds" : 1009.791,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 3193.667,
+        "p95Microseconds" : 3634.625,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 2063.25,
+        "p95Microseconds" : 2386.333,
+        "sampleCount" : 540
+      },
+      "device" : "wgpu-native metal",
+      "particleWork" : {
+        "batches" : 1620,
+        "candidates" : 3335040,
+        "dispatchWorkgroups" : 1620,
+        "indirectDraws" : 1620
+      },
+      "passDraws" : {
+        "basePass" : 1890,
+        "bloom" : 540,
+        "depthPrepass" : 1890,
+        "editorGrid" : 315,
+        "fxaa" : 540,
+        "particles" : 1620,
+        "shadowPass" : 5670,
+        "skybox" : 315,
+        "ssao" : 315,
+        "ssr" : 270,
+        "taa" : 315,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "passFrames" : {
+        "basePass" : 315,
+        "bloom" : 540,
+        "depthPrepass" : 315,
+        "editorGrid" : 315,
+        "fxaa" : 540,
+        "particles" : 540,
+        "shadowPass" : 315,
+        "skybox" : 315,
+        "ssao" : 315,
+        "ssr" : 270,
+        "taa" : 315,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "simulationWork" : {
+        "batches" : 1080,
+        "eventBytes" : 106168320,
+        "eventCapacity" : 2211840,
+        "instanceWorkgroups" : 52380,
+        "particles" : 1105920,
+        "renderInstances" : 3317760,
+        "simulationWorkgroups" : 17820,
+        "sortItems" : 1105920,
+        "sortPaddedItems" : 1105920,
+        "sortPasses" : 60480,
+        "sortWorkgroups" : 997920
+      }
+    }
+  ],
+  "scene" : "simulation",
+  "warmup" : 30,
+  "width" : 1280
+}
