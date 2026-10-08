@@ -46,7 +46,7 @@ extension WGPURenderer {
     func prepareMeshDraws(scene: RenderScene, viewProjection: simd_float4x4, palettes: JointPaletteMap) throws {
         meshVisibility = MeshVisibilityPlan.make(scene: scene, viewProjection: viewProjection,
             settings: activeRenderSettings, skinnedEntities: Set(palettes.palettes.keys),
-            meshExists: { self.meshes.indices.contains($0) })
+            meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { self.meshes.indices.contains($0) })
         var activeKeys = Set<MeshDrawKey>()
         cameraMeshDraws = try makeMeshDraws(scene: scene, indices: meshVisibility.visibleIndices,
             viewProjection: viewProjection, palettes: palettes, shadow: false, activeKeys: &activeKeys)
@@ -75,18 +75,14 @@ extension WGPURenderer {
             let deformable = instance.entity.flatMap { deformableMeshResources[$0] } != nil
             for part in submeshes {
                 let imported = materialSet.flatMap { $0.materials.indices.contains(part.materialIndex) ? $0.materials[part.materialIndex] : nil } ?? .fallback
-                let mode = instance.material.alphaMode ?? imported.alphaMode
+                let material = ResolvedMeshMaterial(imported: imported, runtime: instance.material)
+                let mode = material.alphaMode
                 if shadow && mode == .blend { continue }
-                let alpha = instance.material.baseColorFactor.w * imported.baseColorFactor.w
-                let factor = SIMD4<Float>(instance.material.baseColorFactor.x, instance.material.baseColorFactor.y,
-                                          instance.material.baseColorFactor.z, alpha)
                 var key = MeshDrawKey(shadow: shadow, mirrored: simd_determinant(instance.transform) < 0, meshIndex: meshIndex,
                     firstIndex: part.indexStart, indexCount: part.indexCount, materialIndex: part.materialIndex,
-                    alphaMode: mode, cutoff: instance.material.alphaCutoff ?? imported.alphaCutoff,
-                    doubleSided: instance.material.doubleSided ?? imported.doubleSided,
-                    baseTexture: instance.material.baseColorTextureIndex ?? imported.baseColorTextureIndex,
-                    normalTexture: instance.material.normalTextureIndex ?? imported.normalTextureIndex,
-                    mrTexture: imported.metallicRoughnessTextureIndex, colorFactor: factor,
+                    alphaMode: mode, cutoff: material.cutoff, doubleSided: material.doubleSided,
+                    baseTexture: material.baseTexture, normalTexture: material.normalTexture,
+                    mrTexture: material.mrTexture, colorFactor: material.color,
                     uniqueInstance: !activeRenderSettings.enableMeshInstancing || mode == .blend || posed || deformable ? index : nil,
                     paletteEntity: posed ? instance.entity : nil,
                     paletteMatrixCount: instance.entity.flatMap { palettes.palette(for: $0)?.matrices.count } ?? 0)

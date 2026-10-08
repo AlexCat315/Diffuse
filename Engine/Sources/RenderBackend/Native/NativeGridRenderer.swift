@@ -10,7 +10,7 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
     public let device: Device
     private let grid: NativeEditorGridPass
     private let surface: RenderSurfaceDescriptor?
-    private var targets: NativeGridTargets?
+    private var targets: NativeRenderTargets?
     public private(set) var lastFrameStats = RenderFrameStats()
     public private(set) var lastError: String?
     public var colorTexture: Texture? { targets?.color }
@@ -33,7 +33,8 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
     /// mistaken for a successful frame or a performance sample.
     public func renderChecked(packet: RenderPacket) throws {
         let start = DispatchTime.now().uptimeNanoseconds
-        guard packet.drawableSize.width > 0, packet.drawableSize.height > 0 else {
+        guard packet.drawableSize.width > 0, packet.drawableSize.height > 0,
+              !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else {
             throw RHIError.invalidArgument("native grid viewport must be nonempty")
         }
         try ensureTargets(size: packet.drawableSize)
@@ -68,36 +69,9 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
 
     private func ensureTargets(size: RenderDrawableSize) throws {
         if targets?.size == size { return }
-        if let surface {
-            try device.waitUntilIdle()
-            var descriptor = SurfaceDescriptor(nativeHandle: nil, width: Int(size.width), height: Int(size.height), colorFormat: .bgra8Unorm)
-            switch surface {
-            case .metalLayer(let layer): descriptor.nativeHandle = layer
-            case .win32Window(let window, _): descriptor.nativeHandle = window
-            case .xlibWindow(let display, let window):
-                descriptor.display = display; descriptor.nativeHandle = UnsafeMutableRawPointer(bitPattern: UInt(window))
-            case .waylandSurface: throw RHIError.unsupportedFeature("NativeRHI Wayland surface is not implemented")
-            }
-            try device.configureSurface(descriptor)
-        }
-        let replacement = try NativeGridTargets.make(device: device, size: size, offscreen: surface == nil)
+        if let surface { try NativeRenderTargets.configure(device: device, surface: surface, size: size) }
+        let replacement = try NativeRenderTargets.make(device: device, size: size, offscreen: surface == nil)
         targets?.destroy(device: device)
         targets = replacement
     }
-}
-
-private struct NativeGridTargets {
-    let size: RenderDrawableSize
-    let color: Texture?
-    let depth: Texture
-    static func make(device: Device, size: RenderDrawableSize, offscreen: Bool) throws -> NativeGridTargets {
-        let depth = try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
-            format: .depth32Float, usage: .depthStencilTarget, label: "native-grid-depth"))
-        do {
-            let color = offscreen ? try device.makeTexture(TextureDescriptor(width: Int(size.width), height: Int(size.height),
-                format: .bgra8Unorm, usage: [.colorTarget, .transferSource], label: "native-grid-color")) : nil
-            return NativeGridTargets(size: size, color: color, depth: depth)
-        } catch { device.destroy(depth); throw error }
-    }
-    func destroy(device: Device) { if let color { device.destroy(color) }; device.destroy(depth) }
 }

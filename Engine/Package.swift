@@ -423,6 +423,7 @@ let package = Package(
             ],
             resources: [
                 .copy("Resources/FinalBaseMesh.obj"),
+                .copy("Resources/NativeSceneFixture.gltf"),
                 .copy("Resources/Shaders"),
             ]
         ),
@@ -654,9 +655,9 @@ let package = Package(
         .executableTarget(name: "NativeRHIPassProbe",
             dependencies: ["NativeRendererValidation"]),
         .target(name: "NativeRendererValidation",
-            dependencies: ["RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat"]),
+            dependencies: ["RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat", "AssetPipeline"]),
         .testTarget(name: "NativeRendererTests",
-            dependencies: ["NativeRendererValidation", "RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat"]),
+            dependencies: ["NativeRendererValidation", "RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat", "AssetPipeline"]),
         .testTarget(
             name: "NativeRHITests",
             dependencies: [

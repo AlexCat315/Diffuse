@@ -4,7 +4,9 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。其余场景 pass 尚未迁移。
+现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、阴影、后处理、粒子与 UI 互操作仍待迁移。
+
+Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上原点、+Y 向下。Vulkan backend 通过负高度 viewport 统一这一约定，shader 不再自行翻转 Y。
 
 ## 实现与验证状态
 
@@ -99,4 +101,4 @@ Mesh 使用独立 descriptor。Metal 当前无 task；Vulkan 与 DX12 task 根�
 
 BLAS 当前只支持不透明、非索引 float32 xyz 三角形。TLAS 引用已创建的 BLAS，变换为三个 SIMD4 行，默认单位矩阵，mask 默认 0xff。创建分配对象；先 `recordBuild(blas)`，再 `recordBuild(tlas)`，随后执行 compute ray query。RT pipelines、SBT、procedural geometry、AS update 与 compaction 尚未实现。
 
-编辑器网格 pass 已完成本机接入、WGPU 画面对照和 Release 批次性能测量。下一阶段可接入深度或不透明几何 pass，再逐步迁移 RenderBackend；原生 Windows / Linux 环境可用后，再验证 DX12 与 Vulkan RT / mesh、独立 queue family。
+编辑器网格、静态场景深度/不透明几何 pass 已接入 NativeRHI。接下来迁移 PBR 光照、阴影与 HDR/后处理，再完成粒子/动画和编辑器 UI 互操作，验证后切换默认 renderer；原生 Windows / Linux 环境可用后，再验证 DX12 与 Vulkan RT / mesh、独立 queue family。

@@ -12,8 +12,8 @@ public final class NativeEditorGridPass {
     public init(device: Device, colorFormat: TextureFormat = .bgra8Unorm,
                 depthFormat: TextureFormat = .depth32Float) throws {
         self.device = device
-        let vertex = try Self.artifact(api: device.backendAPI, stage: .vertex)
-        let fragment = try Self.artifact(api: device.backendAPI, stage: .fragment)
+        let vertex = try NativeShaderLibrary.artifact(name: "editor_grid", api: device.backendAPI, stage: .vertex)
+        let fragment = try NativeShaderLibrary.artifact(name: "editor_grid", api: device.backendAPI, stage: .fragment)
         guard let uniform = fragment.interface.bindings.first(where: { $0.name == "grid" }),
               uniform.type == .uniformBuffer, uniform.space == 0,
               fragment.interface.bindings.count == 1 else {
@@ -59,16 +59,4 @@ public final class NativeEditorGridPass {
         }
     }
 
-    private static func artifact(api: GraphicsAPI, stage: ShaderStage) throws -> ShaderArtifact {
-        let target: String
-        switch api { case .metal: target = "metal"; case .vulkan: target = "spirv"; case .dx12: target = "dxil" }
-        let name = "editor_grid.\(stage.rawValue)"
-        guard let url = RenderBackendResourceBundle.bundle.url(forResource: name, withExtension: "json",
-            subdirectory: "Shaders/Native/\(target)") else {
-            throw RHIError.unsupportedFeature("missing \(target) grid artifact; rebuild native renderer shaders")
-        }
-        let artifact = try JSONDecoder().decode(ShaderArtifact.self, from: Data(contentsOf: url))
-        guard artifact.stage == stage else { throw RHIError.layoutMismatch("grid artifact stage mismatch") }
-        return artifact
-    }
 }

@@ -1,0 +1,105 @@
+{
+  "environment" : {
+    "buildConfiguration" : "release",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-10-08T07:13:06Z",
+    "operatingSystem" : "Version 27.0.1 (Build 26A434)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 180,
+  "height" : 720,
+  "imageDifferences" : {
+    "native-metal" : {
+      "maximumChannelError" : 0,
+      "meanAbsoluteChannelError" : 0,
+      "pixelCount" : 921600,
+      "pixelsOverThree" : 0
+    },
+    "native-vulkan" : {
+      "maximumChannelError" : 0,
+      "meanAbsoluteChannelError" : 0,
+      "pixelCount" : 921600,
+      "pixelsOverThree" : 0
+    }
+  },
+  "repeats" : 3,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 1084.9527777777778,
+        "p95Microseconds" : 1105.744211111111,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 2.167,
+        "p95Microseconds" : 8.792,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 122.791,
+        "p95Microseconds" : 292.084,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 90.417,
+        "p95Microseconds" : 204.041,
+        "sampleCount" : 540
+      },
+      "device" : "Apple M1"
+    },
+    {
+      "backend" : "native-vulkan",
+      "completedBatch" : {
+        "p50Microseconds" : 1254.1446777777778,
+        "p95Microseconds" : 1363.9270833333333,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 2.791,
+        "p95Microseconds" : 7,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 176.708,
+        "p95Microseconds" : 339.167,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 129.667,
+        "p95Microseconds" : 240.417,
+        "sampleCount" : 540
+      },
+      "device" : "Apple M1"
+    },
+    {
+      "backend" : "wgpu-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 1406.1122722222224,
+        "p95Microseconds" : 1434.2148111111112,
+        "sampleCount" : 3
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 19.583,
+        "p95Microseconds" : 35.416,
+        "sampleCount" : 540
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 243.667,
+        "p95Microseconds" : 477.333,
+        "sampleCount" : 540
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 78.666,
+        "p95Microseconds" : 166.417,
+        "sampleCount" : 540
+      },
+      "device" : "wgpu-native Metal"
+    }
+  ],
+  "scene" : "mesh",
+  "warmup" : 30,
+  "width" : 1280
+}
