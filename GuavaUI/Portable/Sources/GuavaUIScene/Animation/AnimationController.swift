@@ -141,10 +141,14 @@ public final class AnimatorScheduler: @unchecked Sendable {
     /// strong reference until the controller becomes finished, after which
     /// it is dropped on the next `tick`.
     public func register(_ controller: AnyAnimationController) {
-        if active.contains(where: \.isFinished) {
-            active.removeAll(where: \.isFinished)
-        }
+        active.removeAll { $0.isFinished || $0 === controller }
         active.append(controller)
+    }
+
+    /// Release a repeating controller immediately when its view is paused or
+    /// removed. Registering it again later resumes with one scheduler entry.
+    public func unregister(_ controller: AnyAnimationController) {
+        active.removeAll { $0 === controller }
     }
 
     /// Advance every registered controller by `deltaTime` seconds, then
