@@ -40,6 +40,17 @@ extension BuiltinComponentCodecs {
         )
     }
 
+    static func mergeAnimationPlayer(_ previous: ComponentValue, _ changes: ComponentValue) throws -> ComponentValue {
+        let merged = try previous.merging(changes)
+        guard case let .object(changes) = changes, let clip = changes["clipName"],
+              clip != (previous.value(at: ["clipName"]) ?? .null), changes["time"] == nil,
+              case var .object(fields) = merged else { return merged }
+        // Switching clips restarts playback. Other controls retain progress;
+        // an explicitly supplied playhead is honored by transaction callers.
+        fields["time"] = .number(0)
+        return .object(fields)
+    }
+
     static func serializeAnimationGraphPlayer(_ c: AnimationGraphPlayer) -> [String: Any] {
         var d: [String: Any] = [
             "graph": serializeAnimationGraph(c.graph),
