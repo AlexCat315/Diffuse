@@ -62,7 +62,7 @@ public extension ComponentRegistry {
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRenderMesh(dictionary), for: entity)
             }, makeDefault: { entity, world in
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRenderMesh([:]), for: entity)
-            }, configure: { $0.requires = ["localTransform"] }))
+            }, configure: { $0.requires = ["localTransform"]; $0.inspection = .renderMesh }))
         registry.register(ComponentSchema(CameraComponent.self, typeID: "camera", displayName: "Camera", category: .rendering,
             encode: BuiltinComponentCodecs.serializeCamera, decode: BuiltinComponentCodecs.deserializeCamera,
             makeDefault: { entity, world in _ = world.setComponent(CameraComponent(isActive: false), for: entity) },
@@ -83,12 +83,14 @@ public extension ComponentRegistry {
             encode: BuiltinComponentCodecs.serializeAudioListener, decode: BuiltinComponentCodecs.deserializeAudioListener,
             configure: { $0.requires = ["localTransform"]; $0.inspection = .audioListener }))
         registry.register(ComponentSchema(RenderMaterialComponent.self, typeID: "renderMaterial", displayName: "Render Material", category: .rendering,
-            encode: BuiltinComponentCodecs.serializeRenderMaterial, decode: BuiltinComponentCodecs.deserializeRenderMaterial))
+            encode: BuiltinComponentCodecs.serializeRenderMaterial, decode: BuiltinComponentCodecs.deserializeRenderMaterial,
+            configure: { $0.inspection = .renderMaterial }))
         registry.register(ComponentSchema(AssetReferenceComponent.self, typeID: "assetReference", displayName: "Asset Reference", category: .assets,
             encode: BuiltinComponentCodecs.serializeAssetReference, decode: BuiltinComponentCodecs.deserializeAssetReference,
             configure: { $0.isUserAddable = false; $0.inspection.isReadOnly = true }))
         registry.register(ComponentSchema(AnimationPlayer.self, typeID: "animationPlayer", displayName: "Animation Player", category: .animation,
-            encode: BuiltinComponentCodecs.serializeAnimationPlayer, decode: BuiltinComponentCodecs.deserializeAnimationPlayer))
+            encode: BuiltinComponentCodecs.serializeAnimationPlayer, decode: BuiltinComponentCodecs.deserializeAnimationPlayer,
+            configure: { $0.inspection = .animationPlayer; $0.merge = BuiltinComponentCodecs.mergeAnimationPlayer }))
         registry.register(ComponentSchema(AnimationGraphPlayer.self, typeID: "animationGraphPlayer", displayName: "Animation Graph", category: .animation,
             encode: BuiltinComponentCodecs.serializeAnimationGraphPlayer, decode: BuiltinComponentCodecs.deserializeAnimationGraphPlayer,
             makeDefault: { entity, world in

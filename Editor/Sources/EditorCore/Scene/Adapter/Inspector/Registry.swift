@@ -48,8 +48,8 @@ extension EditorSceneAdapter {
         case .string, .options:
             let binding = Binding<String>(get: { if case let .string(value) = read() { return value }; return "" },
                                           set: { next in
-                guard field.choices.isEmpty || field.choices.contains(next) else { return }
-                write(.string(next))
+                if next.isEmpty && field.isNullable { write(.null) }
+                else if field.choices.isEmpty || field.choices.contains(next) { write(.string(next)) }
             })
             if field.kind == .options {
                 return .stringOptions(binding, options: field.choices.map {
@@ -77,9 +77,15 @@ extension EditorSceneAdapter {
                 let values = (0..<4).map { read(field.path + [String($0)]).numericValue }
                 return Color(r: Float(values[0] ?? 0), g: Float(values[1] ?? 0), b: Float(values[2] ?? 0), a: Float(values[3] ?? 1))
             }, set: { color in
-                let values = [color.r, color.g, color.b, color.a].map { ComponentValue.number(Double(max(0, min(1, $0)))) }
                 let count: Int = { if case let .array(values) = read() { return values.count }; return 4 }()
-                write(.array(Array(values.prefix(count == 3 ? 3 : 4))))
+                let channels = Array([color.r, color.g, color.b, color.a].prefix(count == 3 ? 3 : 4))
+                guard channels.allSatisfy(\.isFinite) else { return }
+                let values = channels.enumerated().map { index, channel -> ComponentValue in
+                    var value = max(index == 3 ? 0 : field.color.minimum, Double(channel))
+                    if let maximum = index == 3 ? 1 : field.color.maximum { value = min(maximum, value) }
+                    return .number(value)
+                }
+                write(.array(values))
             }))
         case .automatic, .json:
             return .json(Binding(get: { self.componentText(read()) }, set: { text in

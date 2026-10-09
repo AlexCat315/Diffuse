@@ -13,11 +13,8 @@ public extension EditorInspectorRendererRegistry {
             ("ragdoll", { $0.ragdollSection(for: $1) }),
             ("constraint", { $0.constraintSection(for: $1) }),
             ("script", { $0.scriptSection(for: $1) }),
-            ("animationPlayer", { $0.animationPlayerSection(for: $1) }),
             ("animationGraphPlayer", { $0.animationGraphPlayerSection(for: $1) }),
             ("particleEmitter", { $0.particleEmitterSection(for: $1) }),
-            ("renderMesh", { $0.renderMeshSection(for: $1) }),
-            ("renderMaterial", { $0.renderMaterialSection(for: $1) }),
         ]
         for (typeID, render) in renderers {
             // Duplicate/empty IDs in this fixed list are programming errors.
