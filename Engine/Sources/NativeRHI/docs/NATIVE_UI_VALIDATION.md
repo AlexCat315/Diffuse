@@ -1,6 +1,6 @@
 # NativeRHI UI 迁移验证
 
-默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI、生产场景＋ViewportHost 与游戏内 HUD 对照已通过。NativeRHI 已提供多个窗口的 swapchain 所有权与帧协调；整个 Editor 的窗口宿主和默认 backend 尚未切换。
+默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI、生产场景＋ViewportHost 与游戏内 HUD 对照已通过。NativeRHI 已提供多个窗口的 swapchain 所有权与帧协调，GuavaUI `AppRuntime` 现在支持可选的 `.native(Device)` 路径；Editor／Player 默认仍显式选择 WGPU。
 
 ## 已实现的基础能力
 
@@ -199,10 +199,10 @@ Metal 每个窗口按 frame slot 复用有限的 texture ID，并通过 graphics
 
 2026-10-09 Apple M1 Metal 实测：两个真实 NSWindow／CAMetalLayer 连续 40 帧分别绘制红色和绿色，交替 present 顺序。在第 20 帧只 resize 第一个窗口，另一个窗口的尺寸、generation 和像素保持正确；两窗口 readback 全部像素符合预期。两个在途 frame slot 的纹理池最多保留四个 texture。非法格式 resize 保留原窗口；关闭第一个窗口后第二个继续获取／呈现，最后两个窗口的 registry 和图像池均释放。readback 测试单独关闭 framebufferOnly，生产路径仍启用它。
 
-可控 completion 测试覆盖并发帧准备、错误后解锁、延迟 present 阻止 frame slot 复用与资源退休、未呈现图像归还、相同图像 ID 的旧 ticket 拒绝、排队前失败重试，以及 close 的幂等和晚报错误清理。NativeRHI 114 项 XCTest 与 NativeRenderer 43 项 XCTest、GuavaUI 全包测试通过。GuavaUIApp 21 项 XCTest 中性能 benchmark 按默认设置跳过一项，其余没有失败；Runtime 222 项、Compose 504 项也通过。Swift maintainability 检查通过，46 项既有超限指标未增加。DX12 的 macOS unavailable bridge 编译通过；Windows DX12 和 Windows/Linux Vulkan 的原生编译／运行验证仍暂缓，未引入 MoltenVK。
+可控 completion 测试覆盖并发帧准备、错误后解锁、延迟 present 阻止 frame slot 复用与资源退休、未呈现图像归还、相同图像 ID 的旧 ticket 拒绝、排队前失败重试，以及 close 的幂等和晚报错误清理。NativeRHI 114 项 XCTest 与 NativeRenderer 43 项 XCTest、GuavaUI 全包测试通过。GuavaUIApp 25 项 XCTest 中性能 benchmark 按默认设置跳过一项，其余没有失败；Runtime 222 项、Compose 504 项也通过。Swift maintainability 检查通过，45 项既有超限指标未增加。DX12 的 macOS unavailable bridge 编译通过；Windows DX12 和 Windows/Linux Vulkan 的原生编译／运行验证仍暂缓，未引入 MoltenVK。
 
-这一步提供主／辅助窗口迁移所需的底层能力；AppRuntime 窗口 UI 仍使用 WGPU，尚未进行整个窗口 UI 的画面和呈现性能对照。
+这一步已把主／辅助窗口宿主接到可选 NativeRHI 路径。`AppRuntime.run(backend: .native(device))` 让两个窗口共享一个 Device，同时各自拥有 swapchain、resize、VSync 和 close 生命周期；WGPU 默认路径仍保留。Native 主／辅助窗口、共享设备的场景线程、Native/WGPU DevTools 截图和 WGPU 默认多窗口回归均已在 Apple M1 通过。整个 Editor 的默认 backend 尚未切换，整个窗口 UI 的画面和呈现性能门槛仍未完成。
 
 ## 后续门槛
 
-下一步接入可选的主／辅助窗口宿主，同时继续处理多图片工作量的 CPU 回退。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
+下一步在 Editor／Player 的开发配置中接入共享 Native Device，继续处理多图片工作量的 CPU 回退，并完成全窗口画面对照、呈现性能和持续运行验证。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
