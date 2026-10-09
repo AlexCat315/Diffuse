@@ -44,11 +44,11 @@ final class SubmissionPlanner {
         var nextTimelineSemaphoreID: UInt32 = 1
     }
     private var tracking = Tracking()
-    private struct RegisteredBindings {
-        let entries: [BindingSetEntry]
-        let readOnlySlots: Set<UInt32>
+    private struct TrackedBinding {
+        let resource: ResourceRef
+        let state: ResourceState
     }
-    private var bindingSetEntries: [UInt32: RegisteredBindings] = [:]
+    private var bindingSetEntries: [UInt32: [TrackedBinding]] = [:]
 
     /// Restore an unsubmitted plan as a value, including queue timeline values.
     func checkpoint() -> () -> Void {
@@ -61,7 +61,11 @@ final class SubmissionPlanner {
     // MARK: Binding set bookkeeping
 
     func registerBindingSetEntries(_ handleID: UInt32, entries: [BindingSetEntry], readOnlySlots: Set<UInt32> = []) {
-        bindingSetEntries[handleID] = RegisteredBindings(entries: entries, readOnlySlots: readOnlySlots)
+        // Immutable sets keep their resolved dependency description. Samplers
+        // have no tracked memory, and buffer access comes from the layout.
+        bindingSetEntries[handleID] = entries.compactMap {
+            trackedResource(for: $0.resource, readOnly: readOnlySlots.contains($0.slot))
+        }
     }
 
     func removeBindingSetEntries(_ handleID: UInt32) {
@@ -394,8 +398,7 @@ final class SubmissionPlanner {
         waits: inout [TimelineSemaphore]
     ) {
         guard let entries = bindingSetEntries[set.id] else { return }
-        for entry in entries.entries {
-            guard let tracked = trackedResource(for: entry.resource, readOnly: entries.readOnlySlots.contains(entry.slot)) else { continue }
+        for tracked in entries {
             let access = ResourceAccess(
                 resource: tracked.resource,
                 kind: Self.accessKind(tracked.state),
@@ -421,20 +424,20 @@ final class SubmissionPlanner {
         }
     }
 
-    private func trackedResource(for resource: BindingResource, readOnly: Bool) -> (resource: ResourceRef, state: ResourceState)? {
+    private func trackedResource(for resource: BindingResource, readOnly: Bool) -> TrackedBinding? {
         switch resource {
         case .sampler:
             return nil
         case .texture(let texture):
-            return (ResourceRef(kind: .texture, id: texture.id), .shaderResource)
+            return TrackedBinding(resource: ResourceRef(kind: .texture, id: texture.id), state: .shaderResource)
         case .storageTexture(let texture):
-            return (ResourceRef(kind: .texture, id: texture.id), .unorderedAccess)
+            return TrackedBinding(resource: ResourceRef(kind: .texture, id: texture.id), state: .unorderedAccess)
         case .uniformBuffer(let buffer, _, _):
-            return (ResourceRef(kind: .buffer, id: buffer.id), .constantBuffer)
+            return TrackedBinding(resource: ResourceRef(kind: .buffer, id: buffer.id), state: .constantBuffer)
         case .storageBuffer(let buffer, _):
-            return (ResourceRef(kind: .buffer, id: buffer.id), readOnly ? .shaderResource : .unorderedAccess)
+            return TrackedBinding(resource: ResourceRef(kind: .buffer, id: buffer.id), state: readOnly ? .shaderResource : .unorderedAccess)
         case .accelerationStructure(let accel):
-            return (ResourceRef(kind: .accelerationStructure, id: accel.id), .accelerationStructureRead)
+            return TrackedBinding(resource: ResourceRef(kind: .accelerationStructure, id: accel.id), state: .accelerationStructureRead)
         }
     }
 
@@ -450,7 +453,8 @@ final class SubmissionPlanner {
         splitReleases: inout [SplitReleaseRequest],
         waits: inout [TimelineSemaphore]
     ) {
-        let ownerQueue = tracking.resourceQueues[resource] ?? queue
+        let knownQueue = tracking.resourceQueues[resource]
+        let ownerQueue = knownQueue ?? queue
         let crossQueue = ownerQueue != queue
 
         // Capture the real prior state before any layer mutates it.
@@ -518,7 +522,7 @@ final class SubmissionPlanner {
             ))
         }
 
-        tracking.resourceQueues[resource] = queue
+        if knownQueue != queue { tracking.resourceQueues[resource] = queue }
     }
 
     // MARK: Access construction

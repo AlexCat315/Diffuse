@@ -1,0 +1,321 @@
+{
+  "device" : "Apple M1",
+  "format" : "bgra8UnormSRGB",
+  "frames" : 180,
+  "height" : 1080,
+  "measurementScopes" : {
+    "comparableCPU" : "cpuFrame includes frame setup and recording\/submission; excludes explicit three-frame GPU drains",
+    "nativePhaseProfiling" : true,
+    "nativeRecord" : "UI preparation and abstract command recording",
+    "nativeSubmit" : "validation, dependency planning, native encoding and queue submission; includes frame acknowledgment\/end",
+    "wgpuRecord" : "UI preparation, abstract recording and CommandEncoder.finish (validation, local tracking, native encoding)",
+    "wgpuSubmit" : "global state reconciliation, pending writes, lifetime tracking and queue submission"
+  },
+  "nativeUploads" : {
+    "initialBytes" : 0,
+    "steadyStateBytes" : 0
+  },
+  "repeats" : 6,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "blocks" : [
+        {
+          "completedMicroseconds" : 354.0365777777778,
+          "cpuFrame" : {
+            "p50Microseconds" : 23.042,
+            "p95Microseconds" : 33.208,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 2.417,
+            "p95Microseconds" : 3.667,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 20.125,
+            "p95Microseconds" : 28.458,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 433.94491111111114,
+          "cpuFrame" : {
+            "p50Microseconds" : 32.333,
+            "p95Microseconds" : 50,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 3.458,
+            "p95Microseconds" : 5.667,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 28.125,
+            "p95Microseconds" : 42.583,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 447.3324055555555,
+          "cpuFrame" : {
+            "p50Microseconds" : 38.625,
+            "p95Microseconds" : 64.167,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 4.084,
+            "p95Microseconds" : 7,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 33.792,
+            "p95Microseconds" : 54.875,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 430.8266222222222,
+          "cpuFrame" : {
+            "p50Microseconds" : 52.875,
+            "p95Microseconds" : 78.209,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 5.667,
+            "p95Microseconds" : 9.083,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 45.958,
+            "p95Microseconds" : 67.458,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 421.58796666666666,
+          "cpuFrame" : {
+            "p50Microseconds" : 44.959,
+            "p95Microseconds" : 67,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 4.709,
+            "p95Microseconds" : 7.458,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 38.959,
+            "p95Microseconds" : 57.458,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 437.83286666666663,
+          "cpuFrame" : {
+            "p50Microseconds" : 55.125,
+            "p95Microseconds" : 85.125,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 5.75,
+            "p95Microseconds" : 10,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 48.333,
+            "p95Microseconds" : 74.625,
+            "sampleCount" : 180
+          }
+        }
+      ],
+      "completedBatch" : {
+        "p50Microseconds" : 430.8266222222222,
+        "p95Microseconds" : 447.3324055555555,
+        "sampleCount" : 6
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 43.584,
+        "p95Microseconds" : 74.75,
+        "sampleCount" : 1080
+      },
+      "cpuRecord" : {
+        "p50Microseconds" : 4.75,
+        "p95Microseconds" : 8.333,
+        "sampleCount" : 1080
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 37.875,
+        "p95Microseconds" : 64.042,
+        "sampleCount" : 1080
+      },
+      "nativeSubmissionPhases" : {
+        "encoding" : {
+          "p50Microseconds" : 25.542,
+          "p95Microseconds" : 38.459,
+          "sampleCount" : 1080
+        },
+        "planning" : {
+          "p50Microseconds" : 6.292,
+          "p95Microseconds" : 9.167,
+          "sampleCount" : 1080
+        },
+        "queueSubmit" : {
+          "p50Microseconds" : 3.041,
+          "p95Microseconds" : 12.083,
+          "sampleCount" : 1080
+        },
+        "validation" : {
+          "p50Microseconds" : 0.458,
+          "p95Microseconds" : 0.792,
+          "sampleCount" : 1080
+        }
+      }
+    },
+    {
+      "backend" : "wgpu-metal",
+      "blocks" : [
+        {
+          "completedMicroseconds" : 514.0958333333333,
+          "cpuFrame" : {
+            "p50Microseconds" : 55,
+            "p95Microseconds" : 92.042,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 46.375,
+            "p95Microseconds" : 76.708,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 8.125,
+            "p95Microseconds" : 16,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 545.2400444444445,
+          "cpuFrame" : {
+            "p50Microseconds" : 57,
+            "p95Microseconds" : 91.25,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 48.292,
+            "p95Microseconds" : 76.458,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 8.708,
+            "p95Microseconds" : 16.291,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 590.4844888888889,
+          "cpuFrame" : {
+            "p50Microseconds" : 84.959,
+            "p95Microseconds" : 149.375,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 71.459,
+            "p95Microseconds" : 123.042,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 12.916,
+            "p95Microseconds" : 23.958,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 561.352311111111,
+          "cpuFrame" : {
+            "p50Microseconds" : 88.959,
+            "p95Microseconds" : 145.916,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 74.75,
+            "p95Microseconds" : 121.292,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 13.458,
+            "p95Microseconds" : 30.5,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 641.2724555555556,
+          "cpuFrame" : {
+            "p50Microseconds" : 107.458,
+            "p95Microseconds" : 178.292,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 89.459,
+            "p95Microseconds" : 146.916,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 18.5,
+            "p95Microseconds" : 32.042,
+            "sampleCount" : 180
+          }
+        },
+        {
+          "completedMicroseconds" : 647.3983777777777,
+          "cpuFrame" : {
+            "p50Microseconds" : 108.666,
+            "p95Microseconds" : 177.625,
+            "sampleCount" : 180
+          },
+          "cpuRecord" : {
+            "p50Microseconds" : 89.875,
+            "p95Microseconds" : 147.417,
+            "sampleCount" : 180
+          },
+          "cpuSubmit" : {
+            "p50Microseconds" : 17.917,
+            "p95Microseconds" : 28.458,
+            "sampleCount" : 180
+          }
+        }
+      ],
+      "completedBatch" : {
+        "p50Microseconds" : 561.352311111111,
+        "p95Microseconds" : 647.3983777777777,
+        "sampleCount" : 6
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 86.333,
+        "p95Microseconds" : 161.25,
+        "sampleCount" : 1080
+      },
+      "cpuRecord" : {
+        "p50Microseconds" : 72.334,
+        "p95Microseconds" : 134,
+        "sampleCount" : 1080
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 13.333,
+        "p95Microseconds" : 26.75,
+        "sampleCount" : 1080
+      }
+    }
+  ],
+  "samples" : 4,
+  "scenario" : "native-command-count-1",
+  "schedule" : "paired blocks with alternating first backend",
+  "warmup" : 60,
+  "width" : 1920,
+  "work" : {
+    "draws" : 1,
+    "imageAssetBytes" : 0,
+    "imageAssets" : 0,
+    "indices" : 6,
+    "vertices" : 4
+  }
+}

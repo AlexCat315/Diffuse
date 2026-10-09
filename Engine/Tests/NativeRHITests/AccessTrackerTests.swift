@@ -129,17 +129,22 @@ final class AccessTrackerTests: XCTestCase {
         XCTAssertTrue(hazards.allSatisfy { $0.kind == .writeAfterRead && $0.destinationQueue == .transfer })
     }
 
-    func testRepeatedReadsPreserveRAWStageUnionAndTheNextWriteWindow() {
+    func testCoveredReadsReuseRAWAndPreserveStageUnionForTheNextWrite() {
         var tracker = AccessTracker()
         tracker.observe(access(buffer, .write, stage: .compute), on: .compute)
-        for _ in 0..<128 {
+        for index in 0..<128 {
             let hazards = tracker.observe(access(buffer, .read, stage: .vertex), on: .graphics)
-            XCTAssertEqual(hazards.count, 1)
-            XCTAssertEqual(hazards.first?.kind, .readAfterWrite)
-            XCTAssertEqual(hazards.first?.sourceQueue, .compute)
-            XCTAssertEqual(hazards.first?.destinationStage, .vertex)
+            if index == 0 {
+                XCTAssertEqual(hazards.count, 1)
+                XCTAssertEqual(hazards.first?.kind, .readAfterWrite)
+                XCTAssertEqual(hazards.first?.sourceQueue, .compute)
+                XCTAssertEqual(hazards.first?.destinationStage, .vertex)
+            } else { XCTAssertTrue(hazards.isEmpty) }
         }
-        tracker.observe(access(buffer, .read, stage: .fragment), on: .graphics)
+        let expanded = tracker.observe(access(buffer, .read, stage: .fragment), on: .graphics)
+        XCTAssertEqual(expanded.first?.kind, .readAfterWrite)
+        XCTAssertEqual(expanded.first?.destinationStage, .fragment)
+        XCTAssertTrue(tracker.observe(access(buffer, .read, stage: [.vertex, .fragment]), on: .graphics).isEmpty)
         let writes = tracker.observe(access(buffer, .write, stage: .transfer), on: .transfer)
         XCTAssertEqual(writes.count, 2)
         XCTAssertEqual(writes.first { $0.kind == .writeAfterRead }?.sourceStage, [.vertex, .fragment])
@@ -160,5 +165,18 @@ final class AccessTrackerTests: XCTestCase {
         tracker.reset()
         let hazards = tracker.observe(access(texture, .write), on: .graphics)
         XCTAssertTrue(hazards.isEmpty)
+    }
+
+    func testReadCoverageDoesNotHideNewRangesQueuesOrImmediateWrites() {
+        var tracker = AccessTracker()
+        let first = BufferRange(offset: 0, size: 64), second = BufferRange(offset: 64, size: 64)
+        tracker.observe(access(buffer, .write, stage: .transfer), on: .graphics)
+        XCTAssertEqual(tracker.observe(access(buffer, .read, stage: .vertex, range: first), on: .graphics).count, 1)
+        XCTAssertTrue(tracker.observe(access(buffer, .read, stage: .vertex, range: first), on: .graphics).isEmpty)
+        XCTAssertEqual(tracker.observe(access(buffer, .read, stage: .vertex, range: second), on: .graphics).count, 1)
+        XCTAssertEqual(tracker.observe(access(buffer, .read, stage: .vertex, range: first), on: .compute).count, 1)
+        let writes = tracker.observe(access(buffer, .write, stage: .transfer), on: .graphics)
+        XCTAssertEqual(writes.filter { $0.kind == .writeAfterRead }.count, 3)
+        XCTAssertEqual(tracker.observe(access(buffer, .read, stage: .vertex, range: first), on: .graphics).count, 1)
     }
 }

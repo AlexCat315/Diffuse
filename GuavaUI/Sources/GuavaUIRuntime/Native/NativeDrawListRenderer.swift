@@ -125,6 +125,7 @@ public final class NativeDrawListRenderer {
             if let last = patches.last { commits.append(NativeUITextureCommit(slot: slot, sequence: last.sequence)) }
         }
         var draws: [NativeUIBatch] = []
+        draws.reserveCapacity(list.batches.count)
         var vertices: UploadLocation?, indices: UploadLocation?
         if !list.indices.isEmpty && !list.batches.isEmpty {
             vertices = try list.vertices.withUnsafeBytes { try device.uploadTransient(Data($0)) }
@@ -158,8 +159,15 @@ public final class NativeDrawListRenderer {
                 // as upload chunks, viewports and target formats change.
                 pass.pushConstant(stage: .vertex, slot: shaders.constants.slot,
                     value: SIMD4(viewport.logical.x, viewport.logical.y, pipeline.srgb, Float(0)))
+                var boundSet: BindingSet?
+                var scissor: ScissorRect?
                 for draw in draws {
-                    pass.setBindingSet(draw.bindings); pass.setScissor(draw.scissor)
+                    if boundSet != draw.bindings {
+                        pass.setBindingSet(draw.bindings); boundSet = draw.bindings
+                    }
+                    if scissor != draw.scissor {
+                        pass.setScissor(draw.scissor); scissor = draw.scissor
+                    }
                     pass.drawIndexed(DrawIndexedArguments(indexCount: Int(draw.indices.indexCount), firstIndex: Int(draw.indices.indexOffset)))
                 }
             }

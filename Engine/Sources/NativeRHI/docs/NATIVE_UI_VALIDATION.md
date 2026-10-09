@@ -252,6 +252,29 @@ python3 scripts/validate-editor-native-loop.py --renderer both
 
 Editor 的 project tools 三项测试、真实 Native GameApplication Metal viewport 测试和 NativeOpaque 四项测试通过。Swift maintainability 检查通过，未增加既有超限指标。
 
+## 提交阶段的只读依赖复用
+
+NativeDrawListRenderer 在每个 pass 内只在实际变化时录制 binding set 和 scissor；首个 draw 仍设置完整状态。DrawBatch 顺序和 draw 数量不变。Device 的不可变 binding-set 全值缓存命中后直接返回已验证集合；新值仍完整检查并在后端注册失败时回滚。
+
+SubmissionPlanner 在注册不可变集合时预解析纹理／缓冲依赖和布局的只读访问，忽略无内存依赖的 sampler。已排序的读访问可供同队列、同范围、已覆盖阶段的后续读复用；新写入清空读窗口，新队列、范围或阶段仍建立依赖。队列未变化时不重复写入 owner 字典。该优化保留状态转换、重新上传、跨队列 release/acquire、后续写入和资源销毁的边界，而不是关闭规划或校验。
+
+2026-10-09 Apple M1，Swift 6.4 Release。在 `fb92b738` 的隔离工作树加本轮渲染改动验证，避免共享工作区另一项组件格式重构的中间编译状态。两次空闲配对采样均使用前述 60 帧预热、6×180 帧交替先后顺序和每三帧等待完成。所有 draw 数相等，稳态图片上传为零，预检最大通道误差为 1。CPU 单位为 µs，completed-batch 单位为 ms/frame：
+
+| 工作量／运行 | Native CPU p50 / p95 | WGPU CPU p50 / p95 | Native completed p50 / p95 | WGPU completed p50 / p95 |
+|---|---:|---:|---:|---:|
+| 图片 720p | 334.625 / 489.208 | 359.000 / 505.500 | 0.706 / 0.781 | 0.976 / 1.008 |
+| 图片 1080p | 471.292 / 617.209 | 393.916 / 537.875 | 1.054 / 1.553 | 1.397 / 1.502 |
+| 控件 720p | 330.041 / 400.792 | 451.209 / 552.917 | 0.607 / 0.722 | 0.982 / 1.017 |
+| 控件 1080p | 428.875 / 466.334 | 570.208 / 675.083 | 0.924 / 0.970 | 1.474 / 1.486 |
+| 图片 720p 确认 | 410.583 / 503.583 | 415.792 / 528.708 | 0.781 / 0.832 | 0.999 / 1.097 |
+| 图片 1080p 确认 | 475.084 / 631.333 | 439.958 / 595.500 | 1.201 / 1.341 | 1.420 / 1.487 |
+| 控件 720p 确认 | 206.792 / 462.458 | 292.417 / 537.333 | 0.518 / 0.944 | 0.843 / 1.326 |
+| 控件 1080p 确认 | 442.292 / 554.041 | 586.334 / 732.542 | 0.954 / 1.028 | 1.455 / 1.505 |
+
+720p 图片 CPU p50 两次略低于或接近 WGPU；1080p 图片仍高约 8%–20%，且第一次 completed-batch p95 高约 3.4%。普通控件 CPU 和所有 completed-batch p50 均更低。绝对 CPU 数值仍有调度波动，不据此宣称前后速度提升，也不宣称整个性能门槛通过。原始数据：[图片 720p](benchmarks/native-ui-image-assets-m1-720-read-dependencies.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-read-dependencies.json)、[控件 720p](benchmarks/native-ui-m1-720-read-dependencies.json)、[控件 1080p](benchmarks/native-ui-m1-1080-read-dependencies.json)，[图片 720p 确认](benchmarks/native-ui-image-assets-m1-720-read-dependencies-confirmation.json)、[图片 1080p 确认](benchmarks/native-ui-image-assets-m1-1080-read-dependencies-confirmation.json)、[控件 720p 确认](benchmarks/native-ui-m1-720-read-dependencies-confirmation.json)、[控件 1080p 确认](benchmarks/native-ui-m1-1080-read-dependencies-confirmation.json)。这些 completed-batch 数据不包含窗口呈现，也不是 GPU timestamp 或显示 FPS。
+
+NativeRHI 116 项测试在设置 Slang 2026.19 路径后全部通过，无跳过，包含真实 Metal 跨 transfer/compute/graphics 队列的存储读写、绑定状态和 MSAA。NativeRenderer 43 项场景回归、GuavaUI Release 的 11 项 Native draw-list／绑定复用回归通过。新增规划器测试覆盖持续只读、重新上传、队列移交、后续写入和资源销毁；AccessTracker 另检查范围、队列和阶段扩展。Swift maintainability 检查通过，未增加既有超限指标。
+
 ## 后续门槛
 
-下一步继续处理多图片工作量的 CPU 回退，并完成整个 Editor 的 Release 呈现性能、更多窗口／面板交互和持续运行验证。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。仍须补齐 DXIL 生产产物与可重现生成流程。Windows DX12 和 Windows/Linux Vulkan 的原生编译／运行验证按用户要求暂缓，不作为本机 macOS 迁移验收的前置条件；macOS 只验证 Metal，不引入 MoltenVK。完成本机功能／画面／性能门槛后再切换默认值和删除 WGPU。
+CPU 后续工作改为整体命令路径对照与优化：先分开 frontend 校验、依赖规划、原生编码和原生提交调用，再覆盖空 pass、普通控件、命令数量、动态上传、compute 与场景。图片只是资源压力用例之一。旧报告的 cpuRecord/cpuSubmit 分工不同，不能跨后端直接按列比较；CPU 总成本与 completed-batch 定义见 [提交架构对照](SUBMISSION_ARCHITECTURE.md)。同时继续完成整个 Editor 的 Release 呈现性能、更多窗口／面板交互和持续运行验证。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。仍须补齐 DXIL 生产产物与可重现生成流程。Windows DX12 和 Windows/Linux Vulkan 的原生编译／运行验证按用户要求暂缓，不作为本机 macOS 迁移验收的前置条件；macOS 只验证 Metal，不引入 MoltenVK。完成本机功能／画面／性能门槛后再切换默认值和删除 WGPU。

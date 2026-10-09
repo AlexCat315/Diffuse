@@ -5,6 +5,42 @@ import XCTest
 @testable import NativeRHI
 
 final class SubmissionPlannerTests: XCTestCase {
+    func testCachedReadDependenciesKeepUploadQueueWriteAndForgetBoundaries() throws {
+        let planner = SubmissionPlanner(), set = BindingSet(id: 50), writer = BindingSet(id: 51)
+        let resources = [ResourceRef(kind: .texture, id: 2), ResourceRef(kind: .buffer, id: 3), ResourceRef(kind: .buffer, id: 4)]
+        planner.registerBindingSetEntries(set.id, entries: [
+            BindingSetEntry(slot: 0, resource: .texture(Texture(id: 2))),
+            BindingSetEntry(slot: 1, resource: .uniformBuffer(buffer: Buffer(id: 3))),
+            BindingSetEntry(slot: 2, resource: .storageBuffer(buffer: Buffer(id: 4))),
+            BindingSetEntry(slot: 3, resource: .sampler(Sampler(id: 5)))], readOnlySlots: [2])
+        planner.registerBindingSetEntries(writer.id, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: Buffer(id: 4)))])
+        let render = RecordedCommand.renderPass(RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: []),
+            body: [.setBindingSet(slot: 0, set: set)]))
+        let compute = RecordedCommand.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: set)]))
+        for resource in resources { planner.recordImmediateWrite(resource) }
+        let first = try planner.buildPlan(queue: .graphics, commands: [render], external: SubmitDescriptor())
+        XCTAssertEqual(Set(barrierBlocks(in: first.submits[0]).flatMap { $0 }.map(\.resource)), Set(resources))
+        let steady = try planner.buildPlan(queue: .graphics, commands: [render], external: SubmitDescriptor())
+        XCTAssertTrue(barrierBlocks(in: steady.submits[0]).isEmpty)
+        planner.recordImmediateWrite(resources[2])
+        let uploaded = try planner.buildPlan(queue: .graphics, commands: [render], external: SubmitDescriptor())
+        XCTAssertEqual(barrierBlocks(in: uploaded.submits[0]).flatMap { $0 }.map(\.resource), [resources[2]])
+        let handoff = try planner.buildPlan(queue: .compute, commands: [compute], external: SubmitDescriptor())
+        XCTAssertEqual(handoff.submits.count, 2)
+        XCTAssertEqual(handoff.submits[0].signalSemaphores, handoff.submits[1].waitSemaphores)
+        let acquired = barrierBlocks(in: handoff.submits[1]).flatMap { $0 }
+        XCTAssertEqual(Set(acquired.map(\.resource)), Set(resources))
+        XCTAssertTrue(acquired.allSatisfy { $0.syncAction == .acquire })
+        let written = try planner.buildPlan(queue: .compute, commands: [.computePass(ComputePassRecord(body: [
+            .setBindingSet(slot: 0, set: writer)]))], external: SubmitDescriptor())
+        XCTAssertEqual(barrierBlocks(in: written.submits[0]).flatMap { $0 }.map(\.destinationState), [.unorderedAccess])
+        let reread = try planner.buildPlan(queue: .compute, commands: [compute], external: SubmitDescriptor())
+        XCTAssertEqual(barrierBlocks(in: reread.submits[0]).flatMap { $0 }.map(\.destinationState), [.shaderResource])
+        planner.forgetResource(resources[0])
+        let forgotten = try planner.buildPlan(queue: .compute, commands: [compute], external: SubmitDescriptor())
+        XCTAssertEqual(barrierBlocks(in: forgotten.submits[0]).flatMap { $0 }.map(\.resource), [resources[0]])
+    }
+
     func testPresentationRestoresTheExternalStateBeforeImageReuse() throws {
         let planner = SubmissionPlanner(), target = Texture(id: 1)
         _ = try planner.buildPlan(queue: .graphics, commands: [.renderPass(renderPass(target: target))], external: SubmitDescriptor())

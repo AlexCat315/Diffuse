@@ -10,7 +10,8 @@ final class DX12Completion {
 }
 
 extension DX12Device {
-    public func submit(_ submit: PlannedSubmit, completion: @escaping () -> Void) throws {
+    public func submit(_ submit: PlannedSubmit, cpuProfile: SubmissionCPUProfile? = nil, completion: @escaping () -> Void) throws {
+        let encodingStart = cpuProfile?.begin()
         guard let encoder = grhi_dx12_begin(native, UInt32(submit.queue.rawValue)) else { try check(0); return }
         var consumed = false
         defer { if !consumed { grhi_dx12_abort(encoder) } }
@@ -34,6 +35,8 @@ extension DX12Device {
         let waits = submit.waitSemaphores.map { GRHI_Timeline(id: $0.id, value: $0.value) }
         let signals = submit.signalSemaphores.map { GRHI_Timeline(id: $0.id, value: $0.value) }
         let retained = Unmanaged.passRetained(DX12Completion(backend: self, callback: completion)).toOpaque()
+        cpuProfile?.end(.encoding, since: encodingStart)
+        let queueStart = cpuProfile?.begin()
         let result = waits.withUnsafeBufferPointer { w in signals.withUnsafeBufferPointer { s in
             grhi_dx12_submit(encoder, w.baseAddress, w.count, s.baseAddress, s.count, { context in
                 guard let context else { return }
@@ -41,6 +44,7 @@ extension DX12Device {
             }, retained)
         } }
         if result == 0 { Unmanaged<DX12Completion>.fromOpaque(retained).release(); try check(0) }
+        cpuProfile?.end(.queueSubmit, since: queueStart)
         consumed = true
     }
     private func beginRender(_ encoder: OpaquePointer, descriptor: RenderPassDescriptor) throws {

@@ -74,7 +74,7 @@ public struct Viewport: Sendable {
     }
 }
 
-public struct ScissorRect: Sendable {
+public struct ScissorRect: Sendable, Equatable {
     public var x: Int
     public var y: Int
     public var width: Int
