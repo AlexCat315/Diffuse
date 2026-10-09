@@ -52,8 +52,6 @@ public struct ComponentInspection: Codable, Sendable, Equatable {
     public var sectionID: String?
     public var fields: [ComponentFieldDescriptor] = []
     public var isReadOnly = false
-    /// Optional rich editor for structured behavior such as script or particle modules.
-    public var customEditor: String?
     public init(_ configure: (inout Self) -> Void = { _ in }) { configure(&self) }
 
     public func resolvedFields(for value: ComponentValue) -> [ComponentFieldDescriptor] {
