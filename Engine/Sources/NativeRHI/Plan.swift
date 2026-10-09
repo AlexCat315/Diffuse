@@ -31,14 +31,20 @@ public protocol FrameUploader: AnyObject {
     func write(_ data: Data, alignment: Int) throws -> UploadLocation
 }
 
-/// A transient swapchain image. `texture` is valid for the duration of the
-/// frame and is recycled by the backend after present.
-public struct SwapchainImage: Sendable {
-    public var texture: Texture
-    public var width: Int
-    public var height: Int
+/// A distinct immutable acquisition ticket. The borrowed `texture` is valid
+/// through this frame; retaining a ticket does not make it a persistent image.
+/// Backend texture IDs may be recycled, but old tickets never become current.
+public final class SwapchainImage: Equatable, Sendable {
+    public static func == (lhs: SwapchainImage, rhs: SwapchainImage) -> Bool { lhs === rhs }
+    public let swapchain: Swapchain
+    public let generation: UInt64
+    public let texture: Texture
+    public let width: Int
+    public let height: Int
 
-    public init(texture: Texture, width: Int, height: Int) {
+    public init(swapchain: Swapchain, generation: UInt64, texture: Texture, width: Int, height: Int) {
+        self.swapchain = swapchain
+        self.generation = generation
         self.texture = texture
         self.width = width
         self.height = height

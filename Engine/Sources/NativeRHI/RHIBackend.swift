@@ -23,9 +23,10 @@ public protocol RHIBackend: AnyObject {
     func queryCapabilities() -> Capabilities
     func queryAdapterCapabilities() -> AdapterCapabilities
 
-    /// Provides the native surface (CAMetalLayer / HWND / Xlib window) used by
-    /// the swapchain. May be called again on resize.
-    func configure(surface: SurfaceDescriptor) throws
+    /// Creates or resizes one window's swapchain. The frontend waits for idle
+    /// before resizing; the platform handle must outlive deferred destruction.
+    func configureSwapchain(_ handle: Swapchain, descriptor: SurfaceDescriptor) throws
+    func destroySwapchain(_ handle: Swapchain)
 
     // MARK: Resource creation
 
@@ -82,8 +83,10 @@ public protocol RHIBackend: AnyObject {
 
     // MARK: Swapchain
 
-    func acquireSwapchainImage() throws -> SwapchainImage
-    func present(_ image: SwapchainImage) throws
+    func acquireSwapchainImage(_ handle: Swapchain) throws -> SwapchainImage
+    /// Completion includes the final GPU transition/presentation command.
+    /// Throws only before queuing work; queued failures reach device status.
+    func present(_ image: SwapchainImage, completion: @escaping () -> Void) throws
 
     // MARK: Submission
 

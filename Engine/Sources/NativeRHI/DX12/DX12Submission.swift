@@ -3,7 +3,7 @@ import Foundation
 
 /// Retains the backend and callback until native fence completion. Native submit
 /// consumes this reference exactly once after successfully queuing the work.
-private final class DX12Completion {
+final class DX12Completion {
     let backend: DX12Device
     let callback: () -> Void
     init(backend: DX12Device, callback: @escaping () -> Void) { self.backend = backend; self.callback = callback }

@@ -9,7 +9,7 @@ import NativeRHI
 public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
     private let grid: NativeEditorGridPass
-    private let surface: RenderSurfaceDescriptor?
+    private let windowTarget: NativeWindowTarget?
     private var targets: NativeRenderTargets?
     private var viewportPublication = ViewportSurfacePublication()
     public private(set) var lastFrameStats = RenderFrameStats()
@@ -18,7 +18,7 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
     public var colorTexture: Texture? { targets?.color?.texture }
 
     public init(device: Device, surface: RenderSurfaceDescriptor? = nil) throws {
-        self.device = device; self.surface = surface
+        self.device = device; windowTarget = surface.map { NativeWindowTarget(device: device, surface: $0) }
         grid = try NativeEditorGridPass(device: device)
     }
 
@@ -33,6 +33,10 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
     /// Throwing entry point used by tools/tests so a failed render cannot be
     /// mistaken for a successful frame or a performance sample.
     public func renderChecked(packet: RenderPacket) throws {
+        try device.withFrameSession { try renderFrame(packet: packet) }
+    }
+
+    private func renderFrame(packet: RenderPacket) throws {
         let start = DispatchTime.now().uptimeNanoseconds
         guard packet.drawableSize.width > 0, packet.drawableSize.height > 0,
               !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else {
@@ -42,7 +46,7 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         guard let targets else { throw RHIError.outOfMemory }
         try device.beginFrame()
         defer { device.endFrame() }
-        let image = surface == nil ? nil : try device.acquireSwapchainImage()
+        let image = try windowTarget?.acquire()
         guard let color = image?.texture ?? targets.color?.texture else { throw RHIError.swapchainAcquireFailed("no grid color target") }
         let prepared = DispatchTime.now().uptimeNanoseconds
         let commands = CommandBuffer()
@@ -74,8 +78,8 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
 
     private func ensureTargets(size: RenderDrawableSize) throws {
         if targets?.size == size { return }
-        if let surface { try NativeRenderTargets.configure(device: device, surface: surface, size: size) }
-        let replacement = try NativeRenderTargets.make(device: device, size: size, offscreen: surface == nil)
+        try windowTarget?.configure(size: size)
+        let replacement = try NativeRenderTargets.make(device: device, size: size, offscreen: windowTarget == nil)
         targets = replacement
     }
 }

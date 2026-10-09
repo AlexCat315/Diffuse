@@ -2,7 +2,7 @@
 //
 // Owns the Vulkan device, the block suballocator, resource registries, the
 // per-frame command pools/fences, the timeline-semaphore map and the swapchain.
-// All Vulkan work is driven off the frozen RHIBackend contract; this file wires
+// All Vulkan work is driven off the typed RHIBackend contract; this file wires
 // that contract to the loaded function-pointer table.
 
 #if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
@@ -22,9 +22,7 @@ final class VulkanBackend: RHIBackend {
     let registries: VulkanRegistries
     let descriptorPool: VkDescriptorPool
 
-    var presentation = VulkanPresentationState()
-    var surface: VkSurfaceKHR?
-    var swapchain: VulkanSwapchain?
+    var swapchains: [UInt32: VulkanWindowSwapchain] = [:]
 
     var frames: [VulkanFrame] = []
     var activeSlot: Int = 0
