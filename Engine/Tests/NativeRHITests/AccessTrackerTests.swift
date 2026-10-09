@@ -129,6 +129,30 @@ final class AccessTrackerTests: XCTestCase {
         XCTAssertTrue(hazards.allSatisfy { $0.kind == .writeAfterRead && $0.destinationQueue == .transfer })
     }
 
+    func testRepeatedReadsPreserveRAWStageUnionAndTheNextWriteWindow() {
+        var tracker = AccessTracker()
+        tracker.observe(access(buffer, .write, stage: .compute), on: .compute)
+        for _ in 0..<128 {
+            let hazards = tracker.observe(access(buffer, .read, stage: .vertex), on: .graphics)
+            XCTAssertEqual(hazards.count, 1)
+            XCTAssertEqual(hazards.first?.kind, .readAfterWrite)
+            XCTAssertEqual(hazards.first?.sourceQueue, .compute)
+            XCTAssertEqual(hazards.first?.destinationStage, .vertex)
+        }
+        tracker.observe(access(buffer, .read, stage: .fragment), on: .graphics)
+        let writes = tracker.observe(access(buffer, .write, stage: .transfer), on: .transfer)
+        XCTAssertEqual(writes.count, 2)
+        XCTAssertEqual(writes.first { $0.kind == .writeAfterRead }?.sourceStage, [.vertex, .fragment])
+        XCTAssertEqual(writes.first { $0.kind == .writeAfterWrite }?.sourceQueue, .compute)
+        for queue in [QueueClass.graphics, .compute] {
+            let next = tracker.observe(access(buffer, .read, stage: .fragment), on: queue)
+            XCTAssertEqual(next.count, 1)
+            XCTAssertEqual(next.first?.sourceQueue, .transfer)
+            XCTAssertEqual(next.first?.destinationQueue, queue)
+            XCTAssertEqual(next.first?.kind, .readAfterWrite)
+        }
+    }
+
     func testResetClearsAllState() {
         var tracker = AccessTracker()
         XCTAssertTrue(tracker.observe(access(texture, .write), on: .graphics).isEmpty)
