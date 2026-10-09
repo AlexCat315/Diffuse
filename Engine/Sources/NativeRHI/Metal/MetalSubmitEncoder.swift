@@ -73,6 +73,7 @@ private struct MetalPassEncoder {
 
     // Current encoder state.
     private var renderEncoder: MTLRenderCommandEncoder?
+    private var renderBindings: MetalRenderBindings?
     private var computeEncoder: MTLComputeCommandEncoder?
     private var currentMeshPipeline: MetalMeshPipeline?
     private var computeThreadgroupSize = ThreadgroupSize()
@@ -124,6 +125,7 @@ private struct MetalPassEncoder {
     fileprivate mutating func endActiveEncoders() {
         renderEncoder?.endEncoding()
         renderEncoder = nil
+        renderBindings = nil
         computeEncoder?.endEncoding()
         computeEncoder = nil
     }
@@ -201,6 +203,7 @@ private struct MetalPassEncoder {
             throw RHIError.submitFailed("cannot create render command encoder")
         }
         renderEncoder = encoder
+        renderBindings = MetalRenderBindings()
         currentIndexBuffer = nil
         currentMeshPipeline = nil
 
@@ -263,6 +266,7 @@ private struct MetalPassEncoder {
             currentIndexType = mtlIndexType(type)
 
         case .pushConstant(let stage, let slot, let data):
+            if !data.isEmpty { renderBindings?.invalidateBuffer(slot: slot, stage: stage) }
             data.withUnsafeBytes { bytes in
                 guard let base = bytes.baseAddress else { return }
                 switch stage {
@@ -334,6 +338,7 @@ private struct MetalPassEncoder {
 
     private func bindRenderBindingSet(_ handle: BindingSet, encoder: MTLRenderCommandEncoder) throws {
         guard let bindingSet = registries.bindingSets[handle.id] else { throw RHIError.invalidArgument("unknown render binding set") }
+        guard let bindings = renderBindings else { throw RHIError.invalidArgument("render binding state is not active") }
         let active: ShaderVisibility = currentMeshPipeline == nil ? .graphics : [.task, .mesh, .fragment]
         for entry in bindingSet.entries {
             let stages = entry.visibility.intersection(active)
@@ -342,20 +347,44 @@ private struct MetalPassEncoder {
             // Avoid allocating stage arrays for every entry of every draw.
             try bindEntry(entry,
                 buffer: { buffer, offset in
-                    if stages.contains(.vertex) { encoder.setVertexBuffer(buffer, offset: offset, index: Int(entry.slot)) }
-                    if stages.contains(.fragment) { encoder.setFragmentBuffer(buffer, offset: offset, index: Int(entry.slot)) }
-                    if stages.contains(.mesh) { encoder.setMeshBuffer(buffer, offset: offset, index: Int(entry.slot)) }
-                    if stages.contains(.task) { encoder.setObjectBuffer(buffer, offset: offset, index: Int(entry.slot)) }
+                    if stages.contains(.vertex), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .vertex) {
+                        encoder.setVertexBuffer(buffer, offset: offset, index: Int(entry.slot))
+                    }
+                    if stages.contains(.fragment), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .fragment) {
+                        encoder.setFragmentBuffer(buffer, offset: offset, index: Int(entry.slot))
+                    }
+                    if stages.contains(.mesh), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .mesh) {
+                        encoder.setMeshBuffer(buffer, offset: offset, index: Int(entry.slot))
+                    }
+                    if stages.contains(.task), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .task) {
+                        encoder.setObjectBuffer(buffer, offset: offset, index: Int(entry.slot))
+                    }
                 }, texture: { texture in
-                    if stages.contains(.vertex) { encoder.setVertexTexture(texture, index: Int(entry.slot)) }
-                    if stages.contains(.fragment) { encoder.setFragmentTexture(texture, index: Int(entry.slot)) }
-                    if stages.contains(.mesh) { encoder.setMeshTexture(texture, index: Int(entry.slot)) }
-                    if stages.contains(.task) { encoder.setObjectTexture(texture, index: Int(entry.slot)) }
+                    if stages.contains(.vertex), bindings.textureChanged(texture, slot: entry.slot, stage: .vertex) {
+                        encoder.setVertexTexture(texture, index: Int(entry.slot))
+                    }
+                    if stages.contains(.fragment), bindings.textureChanged(texture, slot: entry.slot, stage: .fragment) {
+                        encoder.setFragmentTexture(texture, index: Int(entry.slot))
+                    }
+                    if stages.contains(.mesh), bindings.textureChanged(texture, slot: entry.slot, stage: .mesh) {
+                        encoder.setMeshTexture(texture, index: Int(entry.slot))
+                    }
+                    if stages.contains(.task), bindings.textureChanged(texture, slot: entry.slot, stage: .task) {
+                        encoder.setObjectTexture(texture, index: Int(entry.slot))
+                    }
                 }, sampler: { sampler in
-                    if stages.contains(.vertex) { encoder.setVertexSamplerState(sampler, index: Int(entry.slot)) }
-                    if stages.contains(.fragment) { encoder.setFragmentSamplerState(sampler, index: Int(entry.slot)) }
-                    if stages.contains(.mesh) { encoder.setMeshSamplerState(sampler, index: Int(entry.slot)) }
-                    if stages.contains(.task) { encoder.setObjectSamplerState(sampler, index: Int(entry.slot)) }
+                    if stages.contains(.vertex), bindings.samplerChanged(sampler, slot: entry.slot, stage: .vertex) {
+                        encoder.setVertexSamplerState(sampler, index: Int(entry.slot))
+                    }
+                    if stages.contains(.fragment), bindings.samplerChanged(sampler, slot: entry.slot, stage: .fragment) {
+                        encoder.setFragmentSamplerState(sampler, index: Int(entry.slot))
+                    }
+                    if stages.contains(.mesh), bindings.samplerChanged(sampler, slot: entry.slot, stage: .mesh) {
+                        encoder.setMeshSamplerState(sampler, index: Int(entry.slot))
+                    }
+                    if stages.contains(.task), bindings.samplerChanged(sampler, slot: entry.slot, stage: .task) {
+                        encoder.setObjectSamplerState(sampler, index: Int(entry.slot))
+                    }
                 })
         }
     }

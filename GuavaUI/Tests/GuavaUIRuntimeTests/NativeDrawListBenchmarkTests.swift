@@ -22,6 +22,52 @@ private struct NativeUIBenchmarkResult: Encodable {
     let cpuRecord: NativeUITiming
     let cpuSubmit: NativeUITiming
     let completedBatch: NativeUITiming
+    let blocks: [NativeUIBenchmarkBlock]
+}
+
+/// Each index identifies the same paired block in both backend reports.
+private struct NativeUIBenchmarkBlock: Encodable {
+    let cpuFrame: NativeUITiming
+    let cpuRecord: NativeUITiming
+    let cpuSubmit: NativeUITiming
+    let completedMicroseconds: Double
+}
+
+private struct NativeUIBenchmarkBackend {
+    let name: String
+    let render: () throws -> NativeUIFrameTiming
+    let finish: () throws -> Void
+}
+
+private struct NativeUIBenchmarkSamples {
+    var cpu: [Double] = []
+    var recorded: [Double] = []
+    var submitted: [Double] = []
+    var completed: [Double] = []
+    var blocks: [NativeUIBenchmarkBlock] = []
+
+    mutating func measure(_ backend: NativeUIBenchmarkBackend) throws {
+        try backend.finish()
+        let sampleStart = cpu.count
+        let start = DispatchTime.now().uptimeNanoseconds
+        for frame in 0..<180 {
+            let frameStart = DispatchTime.now().uptimeNanoseconds
+            let timing = try backend.render()
+            cpu.append(Double(DispatchTime.now().uptimeNanoseconds - frameStart) / 1000)
+            recorded.append(Double(timing.recordNanoseconds) / 1000)
+            submitted.append(Double(timing.submitNanoseconds) / 1000)
+            if (frame + 1) % 3 == 0 { try backend.finish() }
+        }
+        let duration = Double(DispatchTime.now().uptimeNanoseconds - start) / 180 / 1000
+        completed.append(duration)
+        blocks.append(NativeUIBenchmarkBlock(cpuFrame: NativeUITiming(Array(cpu[sampleStart...])),
+            cpuRecord: NativeUITiming(Array(recorded[sampleStart...])), cpuSubmit: NativeUITiming(Array(submitted[sampleStart...])),
+            completedMicroseconds: duration))
+    }
+    func result(_ name: String) -> NativeUIBenchmarkResult {
+        NativeUIBenchmarkResult(backend: name, cpuFrame: NativeUITiming(cpu), cpuRecord: NativeUITiming(recorded),
+            cpuSubmit: NativeUITiming(submitted), completedBatch: NativeUITiming(completed), blocks: blocks)
+    }
 }
 
 private struct NativeUIFrameTiming {
@@ -50,8 +96,9 @@ private struct NativeUIBenchmarkReport: Encodable {
     let samples = 4
     let format = "bgra8UnormSRGB"
     let frames = 180
-    let warmup = 30
-    let repeats = 3
+    let warmup = 60
+    let repeats = 6
+    let schedule = "paired blocks with alternating first backend"
     let work: NativeUIBenchmarkWork
     let nativeUploads: NativeUIBenchmarkUploads
     let results: [NativeUIBenchmarkResult]
@@ -119,7 +166,7 @@ struct NativeDrawListBenchmarkTests {
                 format: format.reference, usage: .renderAttachment, sampleCount: 4)
             let referenceOutputView = try referenceOutput.createView(), referenceMSView = try referenceMS.createView()
             var lastStatistics = statistics
-            let native = try measure("native-metal", render: {
+            let native = NativeUIBenchmarkBackend(name: "native-metal", render: {
                 try context.device.beginFrame()
                 do {
                     let start = DispatchTime.now().uptimeNanoseconds
@@ -136,8 +183,7 @@ struct NativeDrawListBenchmarkTests {
                         submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded)
                 } catch { context.device.endFrame(); throw error }
             }, finish: { try context.device.waitUntilIdle() })
-            #expect(lastStatistics.drawCalls == statistics.drawCalls && lastStatistics.textureUploads == 0)
-            let reference = try measure("wgpu-metal", render: {
+            let reference = NativeUIBenchmarkBackend(name: "wgpu-metal", render: {
                 let start = DispatchTime.now().uptimeNanoseconds
                 let encoder = try context.backend.createCommandEncoder()
                 let pass = try encoder.beginRenderPass(colorView: referenceMSView, resolveTargetView: referenceOutputView,
@@ -151,11 +197,13 @@ struct NativeDrawListBenchmarkTests {
                 return NativeUIFrameTiming(recordNanoseconds: recorded - start,
                     submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded)
             }, finish: { try context.backend.waitUntilIdle() })
+            let results = try measurePair(native, reference)
+            #expect(lastStatistics.drawCalls == statistics.drawCalls && lastStatistics.textureUploads == 0)
             let report = NativeUIBenchmarkReport(device: context.device.deviceName, scenario: name, width: size.x, height: size.y,
                 work: NativeUIBenchmarkWork(vertices: list.vertices.count, indices: list.indices.count, draws: statistics.drawCalls,
                     imageAssets: assetCount, imageAssetBytes: assetBytes),
                 nativeUploads: NativeUIBenchmarkUploads(initialBytes: statistics.textureUploadBytes, steadyStateBytes: lastStatistics.textureUploadBytes),
-                results: [native, reference])
+                results: results)
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let root = ProcessInfo.processInfo.environment["GUAVA_NATIVE_UI_BENCHMARK_OUTPUT"] ?? "/tmp/guava-native-ui-benchmark"
             let directory = URL(fileURLWithPath: root)
@@ -190,26 +238,19 @@ struct NativeDrawListBenchmarkTests {
         return list
     }
 
-    /// Complete every three frames on both APIs. This is batch throughput;
-    /// it does not claim GPU timestamp duration or display FPS.
-    private func measure(_ backend: String, render: () throws -> NativeUIFrameTiming, finish: () throws -> Void) throws -> NativeUIBenchmarkResult {
-        for frame in 0..<30 { _ = try render(); if (frame + 1) % 3 == 0 { try finish() } }
-        try finish()
-        var cpu: [Double] = [], recorded: [Double] = [], submitted: [Double] = [], completed: [Double] = []
-        for _ in 0..<3 {
-            let start = DispatchTime.now().uptimeNanoseconds
-            for frame in 0..<180 {
-                let frameStart = DispatchTime.now().uptimeNanoseconds
-                let timing = try render()
-                cpu.append(Double(DispatchTime.now().uptimeNanoseconds - frameStart) / 1000)
-                recorded.append(Double(timing.recordNanoseconds) / 1000)
-                submitted.append(Double(timing.submitNanoseconds) / 1000)
-                if (frame + 1) % 3 == 0 { try finish() }
-            }
-            completed.append(Double(DispatchTime.now().uptimeNanoseconds - start) / 180 / 1000)
+    /// Alternate the first backend of six equal blocks so one API does not
+    /// consistently receive the colder CPU/GPU or the earlier scheduler slot.
+    private func measurePair(_ native: NativeUIBenchmarkBackend, _ reference: NativeUIBenchmarkBackend) throws -> [NativeUIBenchmarkResult] {
+        for backend in [native, reference] {
+            for frame in 0..<60 { _ = try backend.render(); if (frame + 1) % 3 == 0 { try backend.finish() } }
+            try backend.finish()
         }
-        return NativeUIBenchmarkResult(backend: backend, cpuFrame: NativeUITiming(cpu), cpuRecord: NativeUITiming(recorded),
-            cpuSubmit: NativeUITiming(submitted), completedBatch: NativeUITiming(completed))
+        var a = NativeUIBenchmarkSamples(), b = NativeUIBenchmarkSamples()
+        for block in 0..<6 {
+            if block.isMultiple(of: 2) { try a.measure(native); try b.measure(reference) }
+            else { try b.measure(reference); try a.measure(native) }
+        }
+        return [a.result(native.name), b.result(reference.name)]
     }
 }
 #endif
