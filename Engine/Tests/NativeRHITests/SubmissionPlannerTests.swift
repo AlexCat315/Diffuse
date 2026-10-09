@@ -33,6 +33,66 @@ final class SubmissionPlannerTests: XCTestCase {
         XCTAssertEqual(Set(acquire.map(\.resource.id)), [2, 3, 4])
     }
 
+    func testDistinctSetsSharingReadsKeepUploadAndQueueHandoffs() throws {
+        let planner = SubmissionPlanner(), buffer = Buffer(id: 1)
+        let resource = ResourceRef(kind: .buffer, id: buffer.id)
+        planner.recordImmediateWrite(resource)
+        let sets = (0..<96).map { BindingSet(id: UInt32(50 + $0)) }
+        for (index, set) in sets.enumerated() {
+            planner.registerBindingSetEntries(set.id, entries: [
+                BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: buffer)),
+                BindingSetEntry(slot: 1, resource: .texture(Texture(id: UInt32(1000 + index))))
+            ])
+        }
+        let pass = RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: []),
+            body: sets.map { .setBindingSet(slot: 0, set: $0) })
+        let graphics = try planner.buildPlan(queue: .graphics, commands: [.renderPass(pass)], external: SubmitDescriptor())
+        let barriers = barrierBlocks(in: graphics.submits[0]).flatMap { $0 }
+        XCTAssertEqual(barriers.count, 97)
+        let upload = try XCTUnwrap(barriers.first { $0.resource == resource })
+        XCTAssertEqual(upload.sourceState, .copyDestination)
+        XCTAssertEqual(upload.destinationState, .constantBuffer)
+        let computePass = ComputePassRecord(body: sets.map { .setBindingSet(slot: 0, set: $0) })
+        let compute = try planner.buildPlan(queue: .compute, commands: [.computePass(computePass)], external: SubmitDescriptor())
+        XCTAssertEqual(compute.submits.count, 2)
+        XCTAssertEqual(compute.submits[0].signalSemaphores, compute.submits[1].waitSemaphores)
+        let acquired = barrierBlocks(in: compute.submits[1]).flatMap { $0 }
+        XCTAssertEqual(acquired.count, 97)
+        XCTAssertTrue(acquired.allSatisfy { $0.syncAction == .acquire })
+        let writer = BindingSet(id: 200)
+        planner.registerBindingSetEntries(writer.id, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: buffer))])
+        let write = try planner.buildPlan(queue: .compute,
+            commands: [.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: writer)]))], external: SubmitDescriptor())
+        XCTAssertEqual(barrierBlocks(in: write.submits[0]).first?.first?.destinationState, .unorderedAccess)
+    }
+
+    func testSharedReadCollectionResetsAfterWritesAndOtherBufferUses() throws {
+        for render in [true, false] {
+            let planner = SubmissionPlanner(), buffer = Buffer(id: 1)
+            let sets = (0..<5).map { BindingSet(id: UInt32(50 + $0)) }
+            for (index, set) in sets.enumerated() {
+                planner.registerBindingSetEntries(set.id, entries: [BindingSetEntry(slot: 0,
+                    resource: index == 2 ? .storageBuffer(buffer: buffer) : .uniformBuffer(buffer: buffer))])
+            }
+            let commands: [RecordedCommand]
+            if render {
+                commands = [.renderPass(RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: []), body: [
+                    .setBindingSet(slot: 0, set: sets[0]), .setVertexBuffer(slot: 0, buffer: buffer, offset: 0),
+                    .setBindingSet(slot: 0, set: sets[1]), .setBindingSet(slot: 0, set: sets[2]),
+                    .setBindingSet(slot: 0, set: sets[3]), .setBindingSet(slot: 0, set: sets[4])]))]
+            } else {
+                commands = [.computePass(ComputePassRecord(body: [
+                    .setBindingSet(slot: 0, set: sets[0]), .dispatchIndirect(buffer: buffer, offset: 0),
+                    .setBindingSet(slot: 0, set: sets[1]), .setBindingSet(slot: 0, set: sets[2]),
+                    .setBindingSet(slot: 0, set: sets[3]), .setBindingSet(slot: 0, set: sets[4])]))]
+            }
+            let plan = try planner.buildPlan(queue: .graphics, commands: commands, external: SubmitDescriptor())
+            let barriers = barrierBlocks(in: plan.submits[0]).flatMap { $0 }
+            XCTAssertEqual(barriers.map(\.destinationState), [.constantBuffer, render ? .vertexBuffer : .indirectArgument,
+                .constantBuffer, .unorderedAccess, .constantBuffer])
+        }
+    }
+
     func testResolvedAttachmentGetsWriteBarrierAndCrossQueueDependency() throws {
         let planner = SubmissionPlanner()
         var color = RenderColorTarget(texture: Texture(id: 1), store: false)

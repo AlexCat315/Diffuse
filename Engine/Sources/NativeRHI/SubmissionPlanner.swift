@@ -215,16 +215,19 @@ final class SubmissionPlanner {
         // Sets are immutable and their resources are collected before the
         // entire pass. Rebinding a set for another draw adds no new access.
         var collectedSets: Set<UInt32> = []
+        var collectedReads: [ResourceRef: ResourceState] = [:]
         for renderCommand in record.body {
             switch renderCommand {
             case .setBindingSet(slot: _, set: let set):
                 guard collectedSets.insert(set.id).inserted else { continue }
                 collectBindingSetResources(
                     set, on: queue, stage: [.vertex, .fragment, .task, .mesh], scope: .beforePass,
+                    collectedReads: &collectedReads,
                     barriers: &barriers, splitReleases: &splitReleases, waits: &waits
                 )
             case .setVertexBuffer(slot: _, buffer: let buffer, offset: _):
                 let ref = ResourceRef(kind: .buffer, id: buffer.id)
+                collectedReads[ref] = nil
                 collect(
                     resource: ref,
                     desired: .vertexBuffer,
@@ -235,6 +238,7 @@ final class SubmissionPlanner {
                 )
             case .setIndexBuffer(buffer: let buffer, offset: _, type: _):
                 let ref = ResourceRef(kind: .buffer, id: buffer.id)
+                collectedReads[ref] = nil
                 collect(
                     resource: ref,
                     desired: .indexBuffer,
@@ -245,6 +249,7 @@ final class SubmissionPlanner {
                 )
             case .drawIndirect(buffer: let buffer, offset: _, drawCount: _):
                 let ref = ResourceRef(kind: .buffer, id: buffer.id)
+                collectedReads[ref] = nil
                 collect(
                     resource: ref,
                     desired: .indirectArgument,
@@ -266,15 +271,18 @@ final class SubmissionPlanner {
         splitReleases: inout [SplitReleaseRequest],
         waits: inout [TimelineSemaphore]
     ) {
+        var collectedReads: [ResourceRef: ResourceState] = [:]
         for computeCommand in record.body {
             switch computeCommand {
             case .setBindingSet(slot: _, set: let set):
                 collectBindingSetResources(
                     set, on: queue, stage: .compute, scope: .beforePass,
+                    collectedReads: &collectedReads,
                     barriers: &barriers, splitReleases: &splitReleases, waits: &waits
                 )
             case .dispatchIndirect(buffer: let buffer, offset: _):
                 let ref = ResourceRef(kind: .buffer, id: buffer.id)
+                collectedReads[ref] = nil
                 collect(
                     resource: ref,
                     desired: .indirectArgument,
@@ -373,6 +381,7 @@ final class SubmissionPlanner {
         on queue: QueueClass,
         stage: AccessStage,
         scope: BarrierPassScope,
+        collectedReads: inout [ResourceRef: ResourceState],
         barriers: inout [BarrierCommand],
         splitReleases: inout [SplitReleaseRequest],
         waits: inout [TimelineSemaphore]
@@ -385,6 +394,15 @@ final class SubmissionPlanner {
                 kind: Self.accessKind(tracked.state),
                 stage: stage
             )
+            // All binding reads in this pass use the same stage mask and
+            // whole-resource range. Different immutable sets can share one
+            // read dependency; writes and other buffer uses reset this entry.
+            if access.kind == .read {
+                guard collectedReads[tracked.resource] != tracked.state else { continue }
+                collectedReads[tracked.resource] = tracked.state
+            } else {
+                collectedReads[tracked.resource] = nil
+            }
             collect(
                 resource: tracked.resource,
                 desired: tracked.state,

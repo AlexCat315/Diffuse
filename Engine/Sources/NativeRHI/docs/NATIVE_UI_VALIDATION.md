@@ -164,6 +164,31 @@ GUAVA_NATIVE_IMAGE_BENCHMARK=1 swift test --package-path GuavaUI -c release \
 # GUAVA_NATIVE_UI_BENCHMARK_OUTPUT 指定绝对目录。
 ```
 
+## 配对性能采样与提交缓存
+
+先前 benchmark 依次完成 Native 的全部批次，再完成 WGPU 的全部批次，容易混入 CPU/GPU 温度和调度变化。现改为两条路径各预热 60 帧，再交替进行 6×180 帧的配对批次；每个批次轮换先运行的 backend，仍每三帧等待完成。CPU 有 1080 个样本，completed-batch 有 6 个样本；报告保留六个批次各自的 record／submit／frame 分位数和完成耗时。每帧继续核对 draw count 和 Native 零稳态上传，计时不包含批次报告整理。
+
+Metal render encoder 现在缓存各 stage 的 buffer＋offset、texture 和 sampler 原生对象，只在绑定改变时调用 setter。每个绑定仍先解析并校验资源，push constant 覆盖会使相应 buffer slot 失效，新 render pass 使用新缓存。SubmissionPlanner 在单个 render／compute pass 内合并不同 binding set 对同一资源、同一状态的只读依赖；写入以及 vertex／index／indirect 用途切换会清除对应记录。AccessTracker 对已覆盖的读取保留原 RAW 结果，避免重写相同的读取历史；跨帧 RAW／WAR／WAW 结果保持原行为。
+
+2026-10-09 Apple M1：新增实际 Metal 像素测试验证反复绑定、texture／sampler 切换、buffer offset 改变、不同 pipeline 的 fragment push constant 覆盖，以及第二个 load pass 重新绑定。规划器测试验证 96 个不同 set 共享 uniform 的上传依赖、跨队列 release／acquire／timeline、随后写入，以及 buffer 用途切换。NativeRHI 106 项与 NativeRenderer 43 项 XCTest、GuavaUI 全包测试通过；两项 DrawList Release benchmark 在独立测量中运行。Swift maintainability 检查通过，46 项既有超限指标未增加。
+
+优化前的配对基线保留在 [图片 720p](benchmarks/native-ui-image-assets-m1-720-paired-baseline.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-paired-baseline.json)、[控件 720p](benchmarks/native-ui-m1-720-paired-baseline.json)、[控件 1080p](benchmarks/native-ui-m1-1080-paired-baseline.json)。优化后的空闲测量和第二次确认结果：
+
+| 工作量／运行 | 分辨率 | CPU p50，Native / WGPU (µs) | CPU p95，Native / WGPU (µs) | completed-batch p50，Native / WGPU (ms/frame) |
+| --- | --- | ---: | ---: | ---: |
+| 96 张图片／首次 | 1280×720 | 494.292 / 365.458 | 611.625 / 463.750 | 0.764 / 0.924 |
+| 96 张图片／确认 | 1280×720 | 324.250 / 255.459 | 517.916 / 375.042 | 0.585 / 0.843 |
+| 96 张图片／首次 | 1920×1080 | 529.625 / 416.625 | 646.958 / 577.709 | 1.159 / 1.418 |
+| 96 张图片／确认 | 1920×1080 | 527.708 / 437.333 | 637.208 / 565.625 | 1.157 / 1.378 |
+| 48 组控件／首次 | 1280×720 | 345.083 / 449.250 | 404.708 / 518.375 | 0.610 / 0.914 |
+| 48 组控件／确认 | 1280×720 | 254.417 / 316.584 | 320.583 / 396.792 | 0.602 / 1.018 |
+| 48 组控件／首次 | 1920×1080 | 457.875 / 590.584 | 562.041 / 725.334 | 0.877 / 1.428 |
+| 48 组控件／确认 | 1920×1080 | 400.708 / 462.375 | 542.625 / 634.625 | 0.812 / 1.410 |
+
+图片工作量的 CPU p50 两次均高约 21%–35%，CPU p95 也更高；单个配对批次仍有调度波动，不能把减少 setter／规划器重复工作当作性能门槛已通过。普通控件 CPU p50/p95 和两类工作量的 completed-batch p50/p95 两次均降低。图片 720p 预检逐像素一致，1080p 最大通道误差 1，所有稳态帧图片上传为零。整个 renderer 性能门槛仍未通过，默认值继续使用 WGPU。
+
+原始优化报告：[图片 720p](benchmarks/native-ui-image-assets-m1-720-paired.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-paired.json)、[控件 720p](benchmarks/native-ui-m1-720-paired.json)、[控件 1080p](benchmarks/native-ui-m1-1080-paired.json)。独立确认报告：[图片 720p](benchmarks/native-ui-image-assets-m1-720-paired-confirmation.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-paired-confirmation.json)、[控件 720p](benchmarks/native-ui-m1-720-paired-confirmation.json)、[控件 1080p](benchmarks/native-ui-m1-1080-paired-confirmation.json)。completed-batch 仍不是 GPU timestamp 或显示 FPS；采样不包含窗口呈现和 UI 重组。
+
 ## 后续门槛
 
-先调查并处理 720p 多图片工作量的 CPU 回退／波动，再迁移主／辅助窗口宿主与多 swapchain 帧协调。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
+下一步迁移可选的主／辅助窗口宿主与多 swapchain 帧协调，同时继续处理多图片工作量的 CPU 回退。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。

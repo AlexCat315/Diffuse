@@ -172,6 +172,10 @@ struct AccessTracker {
                     sourceQueue: write.queue, destinationQueue: queue, range: access.range))
             }
             let key = ReadKey(queue: queue, range: range)
+            // The RAW result still belongs to this access, but an already
+            // covered read adds no history. Avoid COW copies of both the read
+            // window and resource dictionary on every steady-state binding.
+            if let previous = memory.reads[key], previous.isSuperset(of: access.stage) { return hazards }
             memory.reads[key, default: []].formUnion(access.stage)
 
         case .write:
