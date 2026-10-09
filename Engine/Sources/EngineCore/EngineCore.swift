@@ -1,5 +1,6 @@
 import EngineKernel
 import Foundation
+import NativeRHI
 import RenderBackend
 import RHIWGPU
 import SceneRuntime
@@ -101,15 +102,27 @@ public final class EngineHost: @unchecked Sendable {
     private let state = LockedState(EngineHostState())
     private let timings = LockedState(FrameTimingLedger())
 
-    public let wgpuBackend: WGPUBackend
+    public let renderDevice: EngineRenderDevice
+
+    /// Compatibility access for callers that inspect the WGPU backend. Native
+    /// sessions return nil because they do not construct a WGPU device.
+    public var wgpuBackend: WGPUBackend? { renderDevice.wgpuBackend }
 
     private var ringBuffer: RingBuffer<RenderPacket>?
     private var simulationThread: SimulationThread?
     private var renderThread: RenderThread?
 
-    public init(runtime: any EngineRuntime, wgpuBackend: WGPUBackend = WGPUBackend()) {
+    public init(runtime: any EngineRuntime, renderDevice: EngineRenderDevice) {
         self.runtime = runtime
-        self.wgpuBackend = wgpuBackend
+        self.renderDevice = renderDevice
+    }
+
+    public convenience init(runtime: any EngineRuntime, wgpuBackend: WGPUBackend = WGPUBackend()) {
+        self.init(runtime: runtime, renderDevice: .wgpu(wgpuBackend))
+    }
+
+    public convenience init(runtime: any EngineRuntime, nativeDevice: Device) {
+        self.init(runtime: runtime, renderDevice: .native(nativeDevice))
     }
 
     public var lastTimings: PhaseTimings {
@@ -135,10 +148,12 @@ public final class EngineHost: @unchecked Sendable {
         runtime.initialize()
         kernel.withLock { $0.boot() }
 
-        do {
-            try wgpuBackend.initialize()
-        } catch {
-            FileHandle.standardError.write(Data("[EngineHost] WGPU backend initialization failed: \(error)\n".utf8))
+        if case .wgpu(let backend) = renderDevice {
+            do {
+                try backend.initialize()
+            } catch {
+                FileHandle.standardError.write(Data("[EngineHost] WGPU backend initialization failed: \(error)\n".utf8))
+            }
         }
 
         let ringBuffer = RingBuffer<RenderPacket>()
@@ -147,12 +162,28 @@ public final class EngineHost: @unchecked Sendable {
         let consumer: (any RenderPacketConsumer)?
         if let renderConsumer {
             consumer = renderConsumer
-        } else if let renderSurface {
-            consumer = WGPURenderer(backend: wgpuBackend, renderSurface: renderSurface)
-        } else if enableViewportSurface {
-            consumer = WGPURenderer(backend: wgpuBackend)
         } else {
-            consumer = nil
+            switch renderDevice {
+            case .wgpu(let backend):
+                if let renderSurface {
+                    consumer = WGPURenderer(backend: backend, renderSurface: renderSurface)
+                } else if enableViewportSurface {
+                    consumer = WGPURenderer(backend: backend)
+                } else {
+                    consumer = nil
+                }
+            case .native(let device):
+                if renderSurface != nil || enableViewportSurface {
+                    do {
+                        consumer = try NativeRenderer(device: device, surface: renderSurface)
+                    } catch {
+                        FileHandle.standardError.write(Data("[EngineHost] NativeRHI renderer initialization failed: \(error)\n".utf8))
+                        consumer = nil
+                    }
+                } else {
+                    consumer = nil
+                }
+            }
         }
 
         let renderThread = consumer.map {
@@ -276,9 +307,9 @@ public final class EngineHost: @unchecked Sendable {
         ringBuffer = nil
 
         kernel.withLock { $0.shutdown() }
-        if shutdownBackend {
+        if shutdownBackend, let backend = renderDevice.wgpuBackend {
             do {
-                try wgpuBackend.shutdown()
+                try backend.shutdown()
             } catch {
                 // Do not crash process during teardown.
             }

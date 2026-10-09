@@ -105,6 +105,7 @@ let package = Package(
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "EngineCore", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
             ],
             resources: [
