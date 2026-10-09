@@ -43,18 +43,25 @@ Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上
 
 ## 资源与帧生命周期
 
-句柄属于创建它的设备，ID 不复用；不要伪造 ID。`destroy` 后不能再录制使用该资源，也不能复用引用它的 binding set。后端对象延迟到调用时全部在途帧结束后，在 API 线程上销毁；completion 线程只记录完成和错误。
+普通资源句柄属于创建它的设备，ID 不复用；不要伪造 ID。Swapchain 的临时 texture ID 按图像池／帧槽复用，不能当作持久纹理。`destroy` 后不能再录制使用该资源，也不能复用引用它的 binding set。后端对象延迟到调用时全部在途帧结束后，在 API 线程上销毁；completion 线程只记录完成和错误。
 
 ```swift
-try device.beginFrame()
-let image = try device.acquireSwapchainImage() // 窗口渲染时
-try device.submit(commands, queue: .graphics)
-try device.present(image)
-device.endFrame()
+let window = try SwapchainResource(device: device, descriptor: surface)
+try device.withFrameSession {
+    try device.beginFrame()
+    defer { device.endFrame() }
+    let image = try device.acquireSwapchainImage(window.swapchain)
+    let commands = CommandBuffer()
+    commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [
+        RenderColorTarget(texture: image.texture, loadAction: .clear(SIMD4(0, 0, 0, 1)))
+    ])) { _ in }
+    try device.submit(commands, queue: .graphics)
+    try device.present(image)
+}
 try device.waitUntilIdle() // 调试、测试或停机
 ```
 
-一个设备同时只有一个活动帧。每帧可提交多个 command buffer；帧须已封闭且全部提交完成，上传内存和 command pool 才能复用。帧上传使用 `uploadTransient`；创建或重置失败会抛错，不以 force unwrap 崩溃。
+一个设备同时只有一个活动帧。场景 renderer、窗口 UI 和窗口重配／释放使用同一 `withFrameSession` 串行安排资源准备和完整 frame 生命周期；较低层的 begin/end API 仍由调用方平衡。每帧可提交多个 command buffer，并取得多个不同窗口的图像；帧须已封闭且全部提交和呈现命令完成，上传内存、command pool 和 acquire semaphore 才能复用。帧上传使用 `uploadTransient`；创建或重置失败会抛错，不以 force unwrap 崩溃。
 
 规划器跟踪状态、访问依赖与 queue ownership，跨 queue 用 timeline handoff。多个 queue class 不代表多条独立硬件队列。Vulkan 资源跨不同 queue family 采用 concurrent sharing，各 family 使用独立 command pool。提交路径采用异步 fence completion，不调用 queue idle。
 
@@ -68,7 +75,9 @@ MSAA texture 当前要求一个 2D layer、一个 mip，并具备 color/depth at
 
 规划或录制失败且尚未排入 GPU 的工作会回滚状态和 timeline。一次前端提交若已有部分工作排队后失败，设备阻止继续提交，须重建，避免错误复用状态。GPU completion 错误在 `waitUntilIdle` 上抛出。
 
-Vulkan acquire semaphore 由第一次 graphics submission 消费；present 使用每个 image 独立的二进制 semaphore，并保留最终 layout transition 的 command pool 到 fence 完成。Resize 会等待原生设备空闲并重建 image views。
+`makeSwapchain`／`configureSwapchain`／`destroy` 使用独立的 Swapchain 句柄，`SwapchainResource` 提供强引用所有权。平台窗口须保留到 swapchain 的 GPU 退休完成；关闭窗口前调用 `SwapchainResource.close()`，在串行 session 内等待并释放原生资源，再销毁平台窗口。close 幂等，即使 idle 后报告原生错误也会清理该窗口。创建／重配在 frame 外执行，重配只改变指定窗口，等待原生设备空闲后更新图像池。每个 native window 在同一 device 上只能有一个 swapchain，每个 swapchain 在一帧中只能 acquire 一次。SwapchainImage 是不可变 acquisition ticket；即使池内 texture ID 再次出现，旧 ticket 也不能呈现新图像。拒绝错误窗口、过期、重复 present，以及 active frame 内的重配。endFrame 自动归还放弃的 acquisition，并把归还命令计入完成跟踪；归还失败使设备阻止后续提交。
+
+Metal 通过 graphics command buffer 排队 present，保证它在先前绘制之后；drawable texture ID 按 frame slot 复用，注册和 planner 历史保持有界。Vulkan 的每个窗口分别持有按 frame slot 组织的 acquire semaphore 和按 image 组织的 ready semaphore；第一次 graphics submission 消费所有待用 acquisition，直接 present 也会消费尚未使用的 acquisition。最终 layout transition 的 pool 保留到 fence 完成，该 completion 纳入 frame ring。OUT_OF_DATE／SUBOPTIMAL 延后到下次 acquire 重建，并改变 generation 以清除旧 planner 记录。DX12 每个 swapchain 保留自己的 back buffers、extent 和 vsync；最终 transition 的 fence completion 也纳入 frame ring。提交排队后的呈现错误保存到原生 execution status，completion 仍只发生一次。
 
 ## Shader 工具链
 

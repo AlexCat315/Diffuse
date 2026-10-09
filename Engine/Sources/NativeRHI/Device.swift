@@ -45,8 +45,18 @@ public final class Device {
     private var currentSlot: FrameRing.Slot?
     private var currentUploader: FrameUploader?
     private var submissionFault: RHIError?
+    private struct WindowSwapchain {
+        let descriptor: SurfaceDescriptor
+        var generation: UInt64?
+        var acquired: SwapchainImage?
+        var acquisitionFrame: UInt64?
+        var textures: Set<Texture> = []
+    }
+    private var swapchains: [UInt32: WindowSwapchain] = [:]
+    private var frameSequence: UInt64 = 0
+    private let sessionLock = NSRecursiveLock()
 
-    private init(backend: RHIBackend, config: DeviceConfig) throws {
+    init(backend: RHIBackend, config: DeviceConfig) throws {
         self.backend = backend
         self.config = config
         self.capabilities = backend.queryCapabilities()
@@ -80,8 +90,73 @@ public final class Device {
 
     // MARK: Surface
 
-    public func configureSurface(_ descriptor: SurfaceDescriptor) throws {
-        try locked { try backend.configure(surface: descriptor) }
+    public func makeSwapchain(_ descriptor: SurfaceDescriptor) throws -> Swapchain {
+        try locked {
+            guard currentSlot == nil else { throw RHIError.invalidArgument("create a swapchain outside a frame") }
+            try validateSurface(descriptor)
+            try validateUniqueSurface(descriptor, excluding: nil)
+            let handle = Swapchain(id: identifiers.next())
+            try backend.configureSwapchain(handle, descriptor: descriptor)
+            swapchains[handle.id] = WindowSwapchain(descriptor: descriptor)
+            return handle
+        }
+    }
+
+    public func configureSwapchain(_ handle: Swapchain, descriptor: SurfaceDescriptor) throws {
+        try locked {
+            guard currentSlot == nil, let previous = swapchains[handle.id] else {
+                throw RHIError.invalidArgument("resize a live swapchain outside a frame")
+            }
+            try validateSurface(descriptor)
+            try validateUniqueSurface(descriptor, excluding: handle)
+            frameRing.waitUntilIdle()
+            try backend.waitUntilIdle()
+            try backend.configureSwapchain(handle, descriptor: descriptor)
+            for texture in previous.textures { planner.forgetResource(ResourceRef(kind: .texture, id: texture.id)) }
+            swapchains[handle.id] = WindowSwapchain(descriptor: descriptor)
+        }
+    }
+
+    public func destroy(_ handle: Swapchain) { locked { destroySwapchainLocked(handle) } }
+
+    private func destroySwapchainLocked(_ handle: Swapchain) {
+        guard let previous = swapchains.removeValue(forKey: handle.id) else { return }
+        for texture in previous.textures { planner.forgetResource(ResourceRef(kind: .texture, id: texture.id)) }
+        frameRing.retireCurrent { [backend] in backend.destroySwapchain(handle) }
+    }
+
+    /// The owning resource uses this before its platform window is destroyed.
+    /// Native error reporting must not leave an already-idle window registered.
+    func closeSwapchain(_ handle: Swapchain) throws {
+        try locked {
+            guard swapchains[handle.id] != nil else { return }
+            guard currentSlot == nil else { throw RHIError.invalidArgument("close a swapchain outside a frame") }
+            frameRing.waitUntilIdle()
+            defer { destroySwapchainLocked(handle) }
+            try backend.waitUntilIdle()
+        }
+    }
+
+    private func validateSurface(_ descriptor: SurfaceDescriptor) throws {
+        try rhiRequire(descriptor.nativeHandle != nil && descriptor.width > 0 && descriptor.height > 0
+            && descriptor.width <= Int(UInt32.max) && descriptor.height <= Int(UInt32.max)
+            && descriptor.colorFormat != .invalid, "swapchain requires a native handle, positive extent and color format")
+    }
+
+    private func validateUniqueSurface(_ descriptor: SurfaceDescriptor, excluding: Swapchain?) throws {
+        try rhiRequire(!swapchains.contains { id, window in
+            id != excluding?.id && window.descriptor.kind == descriptor.kind
+                && window.descriptor.nativeHandle == descriptor.nativeHandle && window.descriptor.display == descriptor.display
+        }, "a native window already has a swapchain on this device")
+    }
+
+    /// Serializes a complete host operation, including resource preparation,
+    /// beginFrame, submissions, presentation and endFrame, on a shared device.
+    /// Low-level frame methods still require balanced begin/end on their caller.
+    public func withFrameSession<T>(_ body: () throws -> T) rethrows -> T {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        return try body()
     }
 
     // MARK: Resources
@@ -402,6 +477,7 @@ public final class Device {
             do {
                 let uploader = try backend.makeFrameUploader(slot: slot.index)
                 uploader.reset(); currentSlot = slot; currentUploader = uploader
+                frameSequence += 1
             } catch {
                 frameRing.end()
                 throw error
@@ -412,6 +488,12 @@ public final class Device {
     /// Ends the frame and releases the per-frame upload context.
     public func endFrame() {
         locked {
+            // Returning abandoned acquisitions consumes Vulkan's binary wait
+            // and prevents a failed recording from stranding a window image.
+            for image in swapchains.values.compactMap(\.acquired) {
+                do { try presentLocked(image) }
+                catch { submissionFault = .presentFailed("abandoned image release failed: \(error)") }
+            }
             frameRing.end()
             currentSlot = nil
             currentUploader = nil
@@ -511,18 +593,45 @@ public final class Device {
 
     // MARK: Swapchain
 
-    public func acquireSwapchainImage() throws -> SwapchainImage {
+    public func acquireSwapchainImage(_ handle: Swapchain) throws -> SwapchainImage {
         try locked {
             guard currentSlot != nil else { throw RHIError.frameNotActive }
-            return try backend.acquireSwapchainImage()
+            guard var window = swapchains[handle.id], window.acquisitionFrame != frameSequence else {
+                throw RHIError.swapchainAcquireFailed("acquire each live swapchain at most once per frame")
+            }
+            let image = try backend.acquireSwapchainImage(handle)
+            try rhiRequire(image.swapchain == handle && image.generation > 0 && image.texture.id != 0 && image.width > 0 && image.height > 0,
+                           "backend returned an invalid swapchain image")
+            if window.generation != image.generation {
+                for texture in window.textures { planner.forgetResource(ResourceRef(kind: .texture, id: texture.id)) }
+                window.textures.removeAll(keepingCapacity: true)
+                window.generation = image.generation
+            }
+            window.acquired = image; window.acquisitionFrame = frameSequence
+            window.textures.insert(image.texture)
+            swapchains[handle.id] = window
+            return image
         }
     }
 
     public func present(_ image: SwapchainImage) throws {
-        try locked {
-            guard currentSlot != nil else { throw RHIError.frameNotActive }
-            try backend.present(image)
+        try locked { try presentLocked(image) }
+    }
+
+    private func presentLocked(_ image: SwapchainImage) throws {
+        guard let slot = currentSlot else { throw RHIError.frameNotActive }
+        guard swapchains[image.swapchain.id]?.acquired == image else {
+            throw RHIError.presentFailed("image is stale, already presented or belongs to another swapchain")
         }
+        frameRing.registerCommandBuffer(slotIndex: slot.index)
+        do {
+            try backend.present(image) { [frameRing, slot] in frameRing.commandBufferCompleted(slotIndex: slot.index) }
+        } catch {
+            frameRing.unregisterCommandBuffer(slotIndex: slot.index)
+            throw error
+        }
+        swapchains[image.swapchain.id]?.acquired = nil
+        planner.recordPresentation(ResourceRef(kind: .texture, id: image.texture.id))
     }
 
     // MARK: Immediate data transfer

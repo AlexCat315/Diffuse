@@ -5,6 +5,16 @@ import XCTest
 @testable import NativeRHI
 
 final class SubmissionPlannerTests: XCTestCase {
+    func testPresentationRestoresTheExternalStateBeforeImageReuse() throws {
+        let planner = SubmissionPlanner(), target = Texture(id: 1)
+        _ = try planner.buildPlan(queue: .graphics, commands: [.renderPass(renderPass(target: target))], external: SubmitDescriptor())
+        planner.recordPresentation(ResourceRef(kind: .texture, id: target.id))
+        let reused = try planner.buildPlan(queue: .graphics, commands: [.renderPass(renderPass(target: target))], external: SubmitDescriptor())
+        let barrier = try XCTUnwrap(barrierBlocks(in: reused.submits[0]).first?.first)
+        XCTAssertEqual(barrier.sourceState, .present)
+        XCTAssertEqual(barrier.destinationState, .renderTarget)
+    }
+
     func testRepeatedRenderBindingsPreservePassAndQueueDependencies() throws {
         let planner = SubmissionPlanner()
         let set = BindingSet(id: 50)

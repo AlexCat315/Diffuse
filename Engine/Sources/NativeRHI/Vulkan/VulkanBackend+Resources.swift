@@ -5,15 +5,9 @@ import CVulkanHeaders
 import Foundation
 
 extension VulkanBackend {
-    func configure(surface descriptor: SurfaceDescriptor) throws {
+    func configureSwapchain(_ handle: Swapchain, descriptor: SurfaceDescriptor) throws {
         try lock.withLock {
-            try waitUntilIdle()
-            swapchain?.destroy(registries: registries); swapchain = nil; surface = nil
-            for semaphore in presentation.ready.values { sync.destroySemaphore(context.device, semaphore, nil) }
-            presentation = VulkanPresentationState()
-            guard let native = descriptor.nativeHandle else {
-                throw RHIError.invalidArgument("Vulkan requires a native surface handle")
-            }
+            guard let native = descriptor.nativeHandle else { throw RHIError.invalidArgument("Vulkan requires a native surface handle") }
             let kind: GRHIVulkanSurfaceKind
             switch descriptor.kind {
             case .win32Window: kind = GRHI_VULKAN_WIN32
@@ -21,32 +15,41 @@ extension VulkanBackend {
             case .waylandSurface: kind = GRHI_VULKAN_WAYLAND
             case .metalLayer: throw RHIError.unsupportedBackend("Vulkan requires a native Windows/Linux surface")
             }
+            try waitUntilIdle()
+            let generation = (swapchains[handle.id]?.generation ?? 0) + 1
+            destroySwapchain(handle)
             var created: VkSurfaceKHR?
             let result = grhi_vulkan_create_native_surface(context.instance, kind, native, descriptor.display, &created)
             guard result == VK_SUCCESS, let newSurface = created else {
                 throw RHIError.unsupportedBackend("native Vulkan surface creation failed: \(result)")
             }
             var committed = false
-            defer { if !committed { context.instanceCommands.destroySurfaceKHR(context.instance, newSurface, nil); self.surface = nil } }
+            defer { if !committed { context.instanceCommands.destroySurfaceKHR(context.instance, newSurface, nil) } }
             var supported: VkBool32 = VK_FALSE
             guard context.extensions.contains("VK_KHR_swapchain"),
                   context.instanceCommands.getSurfaceSupport(context.physicalDevice, context.queues.graphics.family,
                     newSurface, &supported) == VK_SUCCESS, supported == VK_TRUE else {
                 throw RHIError.unsupportedBackend("selected Vulkan graphics queue cannot present this surface")
             }
-            self.surface = newSurface
-            let vulkanSurface = VulkanSurface(
-                surface: newSurface,
-                width: descriptor.width,
-                height: descriptor.height,
-                colorFormat: descriptor.colorFormat,
-                vsync: descriptor.vsyncEnabled
-            )
-            self.swapchain = try VulkanSwapchain.create(
-                context: context, surface: vulkanSurface, registries: registries)
+            let surface = VulkanSurface(surface: newSurface, width: descriptor.width, height: descriptor.height,
+                colorFormat: descriptor.colorFormat, vsync: descriptor.vsyncEnabled)
+            let chain = try VulkanSwapchain.create(context: context, surface: surface, registries: registries)
+            swapchains[handle.id] = VulkanWindowSwapchain(chain: chain, generation: generation)
             committed = true
-
         }
+    }
+
+    func destroySwapchain(_ handle: Swapchain) {
+        guard let window = swapchains.removeValue(forKey: handle.id) else { return }
+        // Present's queue wait must also retire before binary semaphores die.
+        _ = context.instanceCommands.deviceWaitIdle(context.device)
+        destroyWindowSwapchain(window)
+    }
+
+    func destroyWindowSwapchain(_ window: VulkanWindowSwapchain) {
+        window.chain.destroy(registries: registries)
+        for semaphore in window.acquireSemaphores.values { sync.destroySemaphore(context.device, semaphore, nil) }
+        for semaphore in window.presentation.ready.values { sync.destroySemaphore(context.device, semaphore, nil) }
     }
 
     // MARK: Buffers

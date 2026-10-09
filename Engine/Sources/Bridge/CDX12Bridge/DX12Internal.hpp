@@ -56,7 +56,7 @@ struct BindingSet { uint32_t layout; std::vector<GRHI_BindingValue> values; std:
 struct Pipeline { ComPtr<ID3D12PipelineState> native; uint32_t layout; GRHI_RasterDesc raster{}; std::vector<uint32_t> strides; std::vector<DXGI_FORMAT> colors; DXGI_FORMAT depth = DXGI_FORMAT_UNKNOWN; uint32_t samples = 1; bool compute = false, mesh = false; };
 struct Acceleration { Resource result, scratch, instances; std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometry; std::vector<GRHI_Instance> authored; bool top = false; };
 struct Queue { ComPtr<ID3D12CommandQueue> native; ComPtr<ID3D12Fence> fence; uint64_t value = 0; };
-struct Surface { ComPtr<IDXGISwapChain3> native; HWND window = nullptr; UINT width = 0, height = 0; bool vsync = true; std::vector<uint32_t> ids; };
+struct Surface { ComPtr<IDXGISwapChain3> native; HWND window = nullptr; UINT width = 0, height = 0; bool vsync = true; std::vector<uint32_t> ids; uint32_t acquired = 0; uint64_t generation = 0; };
 struct ExecutionStatus { std::atomic<bool> failed{false}; std::mutex mutex; std::string error; };
 struct State {
     ComPtr<IDXGIFactory6> factory;
@@ -73,7 +73,8 @@ struct State {
     std::map<uint32_t,Acceleration> acceleration;
     std::map<uint32_t,ComPtr<ID3D12Fence>> timelines;
     ComPtr<ID3D12CommandSignature> drawSignature, dispatchSignature;
-    Surface surface;
+    std::map<uint32_t,Surface> surfaces;
+    uint32_t nextSwapchainTexture = 0x80000000u;
     GRHI_DX12Capabilities capabilities{};
     std::string name, error;
     ExecutionStatus execution;
@@ -91,6 +92,7 @@ void transition(GRHI_DX12Encoder&, Resource&, D3D12_RESOURCE_STATES);
 // Takes ownership after ExecuteCommandLists; completion fires only after the
 // commands retire or the device is removed, including signal/wait failures.
 void retireEncoder(GRHI_DX12Encoder*, GRHI_DX12Completion = nullptr, void* = nullptr);
+void executionFailure(const std::shared_ptr<State>&, const std::exception&);
 void textureCopy(GRHI_DX12Encoder&, Resource&, uint64_t, uint32_t, Resource&, const GRHI_TextureRegion&, bool);
 void buildAcceleration(GRHI_DX12Encoder&, uint32_t);
 void graphicsPipeline(State&, uint32_t, const GRHI_GraphicsDesc&);

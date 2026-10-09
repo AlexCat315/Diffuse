@@ -86,6 +86,13 @@ final class SubmissionPlanner {
         _ = tracking.accessTracker.observe(ResourceAccess(resource: resource, kind: .write, stage: .transfer), on: .graphics)
     }
 
+    /// The backend's presentation command transitions the acquired image back
+    /// to the external present layout. The next use must plan from that state.
+    func recordPresentation(_ resource: ResourceRef) {
+        tracking.stateTracker.setCurrentState(resource, .present)
+        tracking.resourceQueues[resource] = .graphics
+    }
+
     // MARK: Plan entry point
 
     func buildPlan(

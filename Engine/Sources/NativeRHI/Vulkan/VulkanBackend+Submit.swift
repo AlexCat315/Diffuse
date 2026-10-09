@@ -7,14 +7,13 @@
 import CVulkanHeaders
 import Foundation
 
-/// Per-slot frames-in-flight state: its own command pool and a per-frame binary
-/// acquire semaphore. A slot's command pool is reset only when that slot begins
+/// Per-slot frames-in-flight state: command pools and upload storage. Each
+/// window owns its acquire semaphores. A command pool resets only when its slot begins
 /// a new frame (the FrameRing has already confirmed the GPU finished the old one).
 final class VulkanFrame {
     let index: Int
     let uploader: VulkanFrameUploader
     var commandPools: [UInt32: VkCommandPool] = [:]
-    var acquireSemaphore: VkSemaphore?
 
     init(index: Int, uploader: VulkanFrameUploader) {
         self.index = index; self.uploader = uploader
@@ -159,8 +158,11 @@ extension VulkanBackend {
 
         // Resolve timeline semaphores (create on first use).
         var waitTimeline = try submit.waitSemaphores.map { try semaphore(for: $0) }
-        let consumesAcquire = submit.queue == .graphics && presentation.pendingAcquire
-        if consumesAcquire, let semaphore = frame.acquireSemaphore { waitTimeline.append(TimelineEntry(semaphore: semaphore, value: 0)) }
+        let acquisitions = submit.queue == .graphics ? swapchains.values.filter { $0.presentation.pendingAcquire } : []
+        for window in acquisitions {
+            guard let semaphore = window.acquireSemaphores[activeSlot] else { throw RHIError.submitFailed("acquire semaphore is missing") }
+            waitTimeline.append(TimelineEntry(semaphore: semaphore, value: 0))
+        }
         let signalTimeline = try submit.signalSemaphores.map { try semaphore(for: $0) }
 
         guard let fence = vkWithOutHandle({ out in
@@ -178,7 +180,7 @@ extension VulkanBackend {
         }
 
         queued = true
-        if consumesAcquire { presentation.pendingAcquire = false }
+        for window in acquisitions { window.presentation.pendingAcquire = false }
         // Asynchronous completion: wait on a background thread, then fire the
         // callback. No queue idle on the hot path.
         let waiter = VulkanFenceCompletion(backend: self, fence: fence, completion: completion)
@@ -187,31 +189,33 @@ extension VulkanBackend {
 
     // MARK: Swapchain
 
-    func acquireSwapchainImage() throws -> SwapchainImage {
-        guard let swapchain, activeSlot < frames.count else { throw RHIError.swapchainAcquireFailed("configure a swapchain and begin a frame first") }
-        try rhiRequire(presentation.acquiredID == nil, "present the acquired image before acquiring another")
-        let frame = frames[activeSlot]
-        if frame.acquireSemaphore == nil { frame.acquireSemaphore = try binarySemaphore() }
-        let semaphore = frame.acquireSemaphore!
+    func acquireSwapchainImage(_ handle: Swapchain) throws -> SwapchainImage {
+        guard let window = swapchains[handle.id], activeSlot < frames.count else { throw RHIError.swapchainAcquireFailed("configure a swapchain and begin a frame first") }
+        let swapchain = window.chain
+        if window.needsRecreate { try recreateWindowSwapchain(window) }
+        try rhiRequire(window.presentation.acquiredID == nil, "present the acquired image before acquiring another")
+        if window.acquireSemaphores[activeSlot] == nil { window.acquireSemaphores[activeSlot] = try binarySemaphore() }
+        let semaphore = window.acquireSemaphores[activeSlot]!
         var result = swapchain.acquire(semaphore: semaphore, timeout: UInt64.max)
         if result.result == VK_ERROR_OUT_OF_DATE_KHR {
-            try swapchain.recreate(registries: registries)
+            try recreateWindowSwapchain(window)
             result = swapchain.acquire(semaphore: semaphore, timeout: UInt64.max)
         }
         guard result.result == VK_SUCCESS || result.result == VK_SUBOPTIMAL_KHR else {
             throw RHIError.swapchainAcquireFailed("vkAcquireNextImageKHR: \(result.result)")
         }
-        let image = makeSwapchainImage(swapchain: swapchain, index: result.index)
-        presentation.acquiredID = image.texture.id; presentation.pendingAcquire = true
+        let image = makeSwapchainImage(handle: handle, window: window, index: result.index)
+        window.presentation.acquiredID = image.texture.id; window.presentation.pendingAcquire = true
         return image
     }
 
-    func present(_ image: SwapchainImage) throws {
-        guard let swapchain, presentation.acquiredID == image.texture.id,
-              let index = swapchain.textureIDs.firstIndex(of: image.texture.id) else { throw RHIError.presentFailed("image was not acquired from this swapchain") }
+    func present(_ image: SwapchainImage, completion: @escaping () -> Void) throws {
+        guard let window = swapchains[image.swapchain.id], window.generation == image.generation,
+              window.presentation.acquiredID == image.texture.id,
+              let index = window.chain.textureIDs.firstIndex(of: image.texture.id) else { throw RHIError.presentFailed("image was not acquired from this swapchain") }
         let ready: VkSemaphore
-        if let existing = presentation.ready[image.texture.id] { ready = existing }
-        else { ready = try binarySemaphore(); presentation.ready[image.texture.id] = ready }
+        if let existing = window.presentation.ready[image.texture.id] { ready = existing }
+        else { ready = try binarySemaphore(); window.presentation.ready[image.texture.id] = ready }
         // Presentation owns an independent pool; a frame slot may complete and
         // reset its pools before the final transition/present wait has finished.
         let transient = VulkanFrame(index: -1, uploader: frames[activeSlot].uploader)
@@ -233,17 +237,17 @@ extension VulkanBackend {
             var info = VkFenceCreateInfo(); info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
             _ = sync.createFence(context.device, &info, nil, out)
         }) else { throw RHIError.outOfMemory }
-        let waits: [TimelineEntry] = presentation.pendingAcquire ? [TimelineEntry(semaphore: frames[activeSlot].acquireSemaphore!, value: 0)] : []
+        let waits: [TimelineEntry] = window.presentation.pendingAcquire ? [TimelineEntry(semaphore: window.acquireSemaphores[activeSlot]!, value: 0)] : []
         let result = withSubmissionInfo(command: cmd, waits: waits, signals: [TimelineEntry(semaphore: ready, value: 0)]) {
             sync.queueSubmit(context.queues.graphics.handle, 1, $0, fence)
         }
         guard result == VK_SUCCESS else { sync.destroyFence(context.device, fence, nil); throw RHIError.presentFailed("present transition submit failed: \(result)") }
-        submitted = true; presentation.pendingAcquire = false; presentation.acquiredID = nil
-        let waiter = VulkanFenceCompletion(backend: self, fence: fence, commandPool: pool, completion: {})
+        submitted = true; window.presentation.pendingAcquire = false; window.presentation.acquiredID = nil
+        let waiter = VulkanFenceCompletion(backend: self, fence: fence, commandPool: pool, completion: completion)
         DispatchQueue.global().async { waiter.wait() }
-        let status = swapchain.present(queue: context.queues.graphics.handle, semaphore: ready, index: UInt32(index))
-        if status == VK_ERROR_OUT_OF_DATE_KHR || status == VK_SUBOPTIMAL_KHR { try swapchain.recreate(registries: registries) }
-        else if status != VK_SUCCESS { throw RHIError.presentFailed("vkQueuePresentKHR: \(status)") }
+        let status = window.chain.present(queue: context.queues.graphics.handle, semaphore: ready, index: UInt32(index))
+        if status == VK_ERROR_OUT_OF_DATE_KHR || status == VK_SUBOPTIMAL_KHR { window.needsRecreate = true }
+        else if status != VK_SUCCESS { submissionStatus.record("vkQueuePresentKHR: \(status)") }
     }
 
     private func binarySemaphore() throws -> VkSemaphore {
@@ -252,11 +256,18 @@ extension VulkanBackend {
         return semaphore
     }
 
-    private func makeSwapchainImage(swapchain: VulkanSwapchain, index: UInt32) -> SwapchainImage {
-        let textureID = swapchain.textureIDs[Int(index)]
-        return SwapchainImage(texture: Texture(id: textureID),
-                              width: Int(swapchain.extent.width),
-                              height: Int(swapchain.extent.height))
+    private func makeSwapchainImage(handle: Swapchain, window: VulkanWindowSwapchain, index: UInt32) -> SwapchainImage {
+        let chain = window.chain
+        return SwapchainImage(swapchain: handle, generation: window.generation, texture: Texture(id: chain.textureIDs[Int(index)]),
+                              width: Int(chain.extent.width), height: Int(chain.extent.height))
+    }
+
+    private func recreateWindowSwapchain(_ window: VulkanWindowSwapchain) throws {
+        try waitUntilIdle()
+        for semaphore in window.presentation.ready.values { sync.destroySemaphore(context.device, semaphore, nil) }
+        window.presentation = VulkanPresentationState()
+        try window.chain.recreate(registries: registries)
+        window.generation += 1; window.needsRecreate = false
     }
 
     // MARK: Synchronization

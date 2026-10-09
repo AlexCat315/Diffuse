@@ -20,3 +20,6 @@ public struct ComputePipeline: RHIHandle { public let id: UInt32; public init(id
 
 /// Handle to a BLAS or TLAS. Creation and build support are capability-gated.
 public struct AccelerationStructure: RHIHandle { public let id: UInt32; public init(id: UInt32) { self.id = id } }
+
+/// One native window swapchain on a device.
+public struct Swapchain: RHIHandle { public let id: UInt32; public init(id: UInt32) { self.id = id } }

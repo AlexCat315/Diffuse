@@ -45,17 +45,26 @@ public final class DX12Device: RHIBackend {
         result.rayTracing = features.ray_tier > 0; result.meshShading = features.mesh != 0
         return result
     }
-    public func configure(surface: SurfaceDescriptor) throws {
+    public func configureSwapchain(_ handle: Swapchain, descriptor surface: SurfaceDescriptor) throws {
         try rhiRequire(surface.kind == .win32Window, "DX12 requires an HWND surface")
-        try check(grhi_dx12_surface(native, surface.nativeHandle, rhiCount(surface.width), rhiCount(surface.height), surface.colorFormat.dx12, surface.vsyncEnabled ? 1 : 0))
+        try check(grhi_dx12_surface(native, handle.id, surface.nativeHandle, rhiCount(surface.width), rhiCount(surface.height), surface.colorFormat.dx12, surface.vsyncEnabled ? 1 : 0))
     }
-    public func acquireSwapchainImage() throws -> SwapchainImage {
+    public func acquireSwapchainImage(_ handle: Swapchain) throws -> SwapchainImage {
         var width: UInt32 = 0, height: UInt32 = 0
-        let id = grhi_dx12_acquire(native, &width, &height)
+        var generation: UInt64 = 0
+        let id = grhi_dx12_acquire(native, handle.id, &width, &height, &generation)
         try check(id == 0 ? 0 : 1)
-        return SwapchainImage(texture: Texture(id: id), width: Int(width), height: Int(height))
+        return SwapchainImage(swapchain: handle, generation: generation, texture: Texture(id: id), width: Int(width), height: Int(height))
     }
-    public func present(_ image: SwapchainImage) throws { try check(grhi_dx12_present(native, image.texture.id)) }
+    public func destroySwapchain(_ handle: Swapchain) { grhi_dx12_destroy_surface(native, handle.id) }
+    public func present(_ image: SwapchainImage, completion: @escaping () -> Void) throws {
+        let retained = Unmanaged.passRetained(DX12Completion(backend: self, callback: completion)).toOpaque()
+        let result = grhi_dx12_present(native, image.swapchain.id, image.texture.id, { context in
+            guard let context else { return }
+            Unmanaged<DX12Completion>.fromOpaque(context).takeRetainedValue().callback()
+        }, retained)
+        if result == 0 { Unmanaged<DX12Completion>.fromOpaque(retained).release(); try check(0) }
+    }
     public func waitUntilIdle() throws { try check(grhi_dx12_wait_idle(native)) }
     public func makeFrameUploader(slot: Int) -> FrameUploader {
         let uploader = uploaders[slot] ?? DX12FrameUploader(backend: self)
