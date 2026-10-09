@@ -37,9 +37,9 @@ public enum InGameCanvasCommand: Sendable, Equatable {
 
 /// Per-frame immediate-mode 2D canvas for in-game UI.
 ///
-/// Coordinates are in screen pixels (top-left origin).
-/// Scripts accumulate draw commands each frame via `ctx.drawUI { ... }`;
-/// the renderer consumes and clears this at the start of the next frame.
+/// Coordinates are in logical points (top-left origin). The HUD host maps
+/// its logical viewport to drawable pixels. Scripts emit commands each tick
+/// via `ctx.drawUI { ... }`; RenderPacket carries that tick's canvas value.
 public struct InGameCanvas: Sendable, Equatable {
     public var commands: [InGameCanvasCommand]
 

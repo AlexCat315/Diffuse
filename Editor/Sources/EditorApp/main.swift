@@ -6,6 +6,7 @@ import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
 import RHIWGPU
+import RenderBackend
 import CardBattleRuntime
 
 @MainActor

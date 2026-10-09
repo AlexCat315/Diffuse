@@ -1,0 +1,121 @@
+{
+  "buildConfiguration" : "release",
+  "device" : "Apple M1",
+  "difference" : {
+    "maximumChannelError" : 14,
+    "meanAbsoluteChannelError" : 0.00022099247685185186,
+    "pixelCount" : 921600,
+    "pixelsOverThree" : 17
+  },
+  "frames" : 180,
+  "height" : 720,
+  "logicalHeight" : 720,
+  "logicalWidth" : 1280,
+  "measuredAt" : "2026-10-09T02:16:23Z",
+  "operatingSystem" : "版本27.0.1（版号26A434）",
+  "post" : true,
+  "repeats" : 3,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 9831.250922222223,
+        "p95Microseconds" : 9942.518283333333,
+        "sampleCount" : 3
+      },
+      "cpuHUDEncode" : {
+        "p50Microseconds" : 70.583,
+        "p95Microseconds" : 82.541,
+        "sampleCount" : 540
+      },
+      "cpuScene" : {
+        "p50Microseconds" : 591.041,
+        "p95Microseconds" : 733.459,
+        "sampleCount" : 540
+      },
+      "cpuTickAndScene" : {
+        "p50Microseconds" : 7700.042,
+        "p95Microseconds" : 8359.667,
+        "sampleCount" : 540
+      },
+      "passDraws" : {
+        "basePass" : 3240,
+        "bloom" : 540,
+        "depthPrepass" : 3240,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inGameUI" : 66420,
+        "shadowPass" : 9720,
+        "skybox" : 540,
+        "ssao" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "passFrames" : {
+        "basePass" : 540,
+        "bloom" : 540,
+        "depthPrepass" : 540,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inGameUI" : 540,
+        "shadowPass" : 540,
+        "skybox" : 540,
+        "ssao" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      }
+    },
+    {
+      "backend" : "wgpu-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 10161.597683333333,
+        "p95Microseconds" : 10165.271755555556,
+        "sampleCount" : 3
+      },
+      "cpuHUDEncode" : {
+        "p50Microseconds" : 138.417,
+        "p95Microseconds" : 167.25,
+        "sampleCount" : 540
+      },
+      "cpuScene" : {
+        "p50Microseconds" : 860.416,
+        "p95Microseconds" : 1051.375,
+        "sampleCount" : 540
+      },
+      "cpuTickAndScene" : {
+        "p50Microseconds" : 7872.666,
+        "p95Microseconds" : 8300.25,
+        "sampleCount" : 540
+      },
+      "passDraws" : {
+        "basePass" : 3240,
+        "bloom" : 540,
+        "depthPrepass" : 3240,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inGameUI" : 66420,
+        "shadowPass" : 9720,
+        "skybox" : 540,
+        "ssao" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      },
+      "passFrames" : {
+        "basePass" : 540,
+        "bloom" : 540,
+        "depthPrepass" : 540,
+        "editorGrid" : 540,
+        "fxaa" : 540,
+        "inGameUI" : 540,
+        "shadowPass" : 540,
+        "skybox" : 540,
+        "ssao" : 540,
+        "tonemap" : 540,
+        "transparentMeshes" : 540
+      }
+    }
+  ],
+  "timingMethod" : "Main-thread HUD tick + scene CPU duration; GPU completion every three frames; no GPU timestamps or presentation",
+  "warmup" : 30,
+  "width" : 1280
+}

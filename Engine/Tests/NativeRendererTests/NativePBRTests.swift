@@ -8,13 +8,11 @@ import SIMDCompat
 import XCTest
 
 final class NativePBRTests: XCTestCase {
-    func testPendingFeaturesRejectPacketsBeforeRendering() throws {
+    func testSceneValidationAcceptsCanvasAndRejectsPostEffectsBeforeR5() throws {
         var packet = PBRProbeScene.packet(size: RenderDrawableSize(width: 64, height: 64))
         _ = try NativePacketValidation.validate(packet)
         packet.inGameCanvas.rect(x: 0, y: 0, w: 10, h: 10, color: .white)
-        XCTAssertThrowsError(try NativePacketValidation.validate(packet)) { error in
-            guard case RHIError.unsupportedFeature = error else { return XCTFail("unexpected error: \(error)") }
-        }
+        _ = try NativePacketValidation.validate(packet)
         packet.inGameCanvas.commands = []
         packet.renderSettings.enableTAA = true
         XCTAssertThrowsError(try NativePacketValidation.validate(packet))

@@ -15,7 +15,7 @@ public final class DrawListRenderer {
         case color
     }
 
-    private let backend: WGPUBackend
+    let backend: WGPUBackend
     private var pipeline: GPURenderPipeline?
     private var bindGroupLayout: GPUBindGroupLayout?
     private var pipelineLayout: GPUPipelineLayout?
@@ -366,17 +366,18 @@ public final class DrawListRenderer {
     ///   - pass: Active render pass encoder.
     ///   - viewportPx: Drawable size in pixels (used for NDC mapping and scissor).
     ///   - coordinateSpace: Layout coordinate space used by the draw list.
+    @discardableResult
     public func render(list: DrawList,
                        pass: GPURenderPassEncoder,
                        viewportPx: (width: UInt32, height: UInt32),
-                       coordinateSpace: (width: Float, height: Float)? = nil) throws {
+                       coordinateSpace: (width: Float, height: Float)? = nil) throws -> Int {
         guard let pipeline,
               let uniformBuffer,
               let dummyBindGroup else {
             preconditionFailure("DrawListRenderer.render before configure(format:)")
         }
         if list.vertices.isEmpty || list.indices.isEmpty || list.batches.isEmpty {
-            return
+            return 0
         }
 
         let viewport = coordinateSpace ?? (Float(viewportPx.width), Float(viewportPx.height))
@@ -420,6 +421,7 @@ public final class DrawListRenderer {
         pass.setVertexBuffer(vertexBuffer!, slot: 0)
         pass.setIndexBuffer(indexBuffer!, format: .uint32)
 
+        var drawCallCount = 0
         for batch in list.batches {
             // Bind group selection by texture.
             let bg: GPUBindGroup
@@ -455,7 +457,9 @@ public final class DrawListRenderer {
 
             pass.drawIndexed(indexCount: batch.indexCount,
                              firstIndex: batch.indexOffset)
+            drawCallCount += 1
         }
+        return drawCallCount
     }
 
     // MARK: - Internals

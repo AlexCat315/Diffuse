@@ -9,9 +9,8 @@ enum NativePacketValidation {
               packet.drawableSize.width <= ViewportTargetAllocation.maxDimension,
               packet.drawableSize.height <= ViewportTargetAllocation.maxDimension,
               !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
-        guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow,.r5PostProcess].contains(packet.renderSettings.stage),
-              packet.inGameCanvas.commands.isEmpty else {
-            throw RHIError.unsupportedFeature("native stage or UI migration is pending")
+        guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow,.r5PostProcess].contains(packet.renderSettings.stage) else {
+            throw RHIError.unsupportedFeature("unsupported native scene stage")
         }
         try validateSimulation(packet)
         let settings = packet.renderSettings

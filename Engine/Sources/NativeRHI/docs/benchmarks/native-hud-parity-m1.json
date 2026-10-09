@@ -1,0 +1,77 @@
+{
+  "backend" : "Metal",
+  "samples" : [
+    {
+      "height" : 128,
+      "maximum" : 0,
+      "mean" : 0,
+      "nativeHUDDrawCalls" : 2,
+      "pixelCount" : 24576,
+      "pixelsOverThree" : 0,
+      "post" : false,
+      "scale" : 1,
+      "wgpuHUDDrawCalls" : 2,
+      "width" : 192
+    },
+    {
+      "height" : 96,
+      "maximum" : 0,
+      "mean" : 0,
+      "nativeHUDDrawCalls" : 6,
+      "pixelCount" : 11520,
+      "pixelsOverThree" : 0,
+      "post" : false,
+      "scale" : 1.5,
+      "wgpuHUDDrawCalls" : 6,
+      "width" : 120
+    },
+    {
+      "height" : 192,
+      "maximum" : 0,
+      "mean" : 0,
+      "nativeHUDDrawCalls" : 6,
+      "pixelCount" : 61440,
+      "pixelsOverThree" : 0,
+      "post" : false,
+      "scale" : 2,
+      "wgpuHUDDrawCalls" : 6,
+      "width" : 320
+    },
+    {
+      "height" : 128,
+      "maximum" : 23,
+      "mean" : 0.0017225477430555555,
+      "nativeHUDDrawCalls" : 2,
+      "pixelCount" : 24576,
+      "pixelsOverThree" : 3,
+      "post" : true,
+      "scale" : 1,
+      "wgpuHUDDrawCalls" : 2,
+      "width" : 192
+    },
+    {
+      "height" : 96,
+      "maximum" : 1,
+      "mean" : 0.00020254629629629629,
+      "nativeHUDDrawCalls" : 6,
+      "pixelCount" : 11520,
+      "pixelsOverThree" : 0,
+      "post" : true,
+      "scale" : 1.5,
+      "wgpuHUDDrawCalls" : 6,
+      "width" : 120
+    },
+    {
+      "height" : 192,
+      "maximum" : 3,
+      "mean" : 0.00015733506944444445,
+      "nativeHUDDrawCalls" : 6,
+      "pixelCount" : 61440,
+      "pixelsOverThree" : 0,
+      "post" : true,
+      "scale" : 2,
+      "wgpuHUDDrawCalls" : 6,
+      "width" : 320
+    }
+  ]
+}
