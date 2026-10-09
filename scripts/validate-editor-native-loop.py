@@ -29,8 +29,10 @@ MCPClient = _shared.MCPClient
 validate_bridge_connections = _shared.validate_bridge_connections
 
 
-def executable(package, name):
-    for directory in (ROOT / package / ".build/out/Products/Debug", ROOT / package / ".build/debug"):
+def executable(package, name, configuration="debug"):
+    product_configuration = configuration.capitalize()
+    for directory in (ROOT / package / f".build/out/Products/{product_configuration}",
+                      ROOT / package / f".build/{configuration}"):
         candidate = directory / name
         if candidate.is_file():
             return candidate.resolve()
@@ -67,10 +69,18 @@ def rendered_game(runtime, previous_frame):
             and rendered["visible_mesh_instances"] > 0 and rendered["draw_call_count"] > 0)
 
 
-def validate(directory, continuous, renderer):
+def record_timings(port, destination, frames):
+    measured = subprocess.run(["swift", str(ROOT / "scripts/record-editor-timings.swift"),
+                               str(port), str(destination), str(frames), "60"],
+                              capture_output=True, text=True, timeout=45 + frames / 30)
+    assert measured.returncode == 0, measured.stderr
+    print(measured.stdout.strip(), flush=True)
+
+
+def validate(directory, continuous, renderer, configuration="debug", timing_frames=0):
     directory.mkdir()
-    editor = executable("Editor", "EditorApp")
-    player = executable("Editor", "GuavaPlayer")
+    editor = executable("Editor", "EditorApp", configuration)
+    player = executable("Editor", "GuavaPlayer", configuration)
     server = executable("guava-mcp", "GuavaMCP")
     project = directory / "Crystal Rush"
     scripts = project / "Scripts"
@@ -111,12 +121,11 @@ def validate(directory, continuous, renderer):
     (state / "script-workspace-trust.json").write_text(json.dumps({
         "version": 1, "trustedProjectPaths": [str(project), str(project.resolve())],
     }))
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        devtools_port = probe.getsockname()[1]
+    with socket.socket() as bridge_probe, socket.socket() as devtools_probe:
+        bridge_probe.bind(("127.0.0.1", 0))
+        devtools_probe.bind(("127.0.0.1", 0))
+        port = bridge_probe.getsockname()[1]
+        devtools_port = devtools_probe.getsockname()[1]
     environment = dict(os.environ, GUAVA_MCP_PORT=str(port), GUAVA_EDITOR_STATE_DIRECTORY=str(state),
                        GUAVA_PLAYER_EXECUTABLE=str(player), GUAVAUI_FORCE_CONTINUOUS_FRAMES="1" if continuous else "0",
                        GUAVA_DEVTOOLS="1", GUAVA_DEVTOOLS_PORT=str(devtools_port), GUAVA_DEVTOOLS_AUTO_LOG_TAP="0")
@@ -165,9 +174,13 @@ def validate(directory, continuous, renderer):
         assert runtime["scripts"][0]["values"]["phase"] == "ready", runtime
         assert runtime["scripts"][0]["values"]["validation_generation"] == "native-loop", runtime
         assert rendered_game(runtime, previous_frame), runtime
+        if timing_frames:
+            record_timings(devtools_port, directory / "playing-timings.json", timing_frames)
         client.tool("set_playback_state", {"state": "paused"})
         assert client.tool("get_project_info")["playback_state"] == "paused"
         capture_window(devtools_port, directory / "paused-editor.jpg")
+        if timing_frames:
+            record_timings(devtools_port, directory / "paused-timings.json", timing_frames)
         client.tool("set_playback_state", {"state": "stopped"})
         assert client.tool("get_project_info")["entity_count"] == 1
         previous_frame = client.tool("get_runtime_state")["render"]["frame_index"]
@@ -213,7 +226,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("both", "event-driven", "continuous"), default="both")
     parser.add_argument("--renderer", choices=("native", "metal", "wgpu", "both"), default="native")
+    parser.add_argument("--configuration", choices=("debug", "release"), default="debug")
+    parser.add_argument("--timing-frames", type=int, default=0,
+                        help="Record presented window timings after 60 warmup frames; requires --mode continuous")
+    parser.add_argument("--wgpu-first", action="store_true", help="Measure WGPU first with --renderer both")
     options = parser.parse_args()
+    if options.timing_frames < 0 or (options.timing_frames and options.mode != "continuous"):
+        parser.error("--timing-frames requires a positive count and --mode continuous")
     if sys.platform != "darwin":
         parser.error("The native editor TCP bridge currently requires macOS")
     directory = Path(tempfile.mkdtemp(prefix="guava-native-validation-"))
@@ -221,11 +240,14 @@ def main():
     modes = [continuous for continuous in (False, True)
              if options.mode == "both" or (options.mode == "continuous") == continuous]
     renderers = ("native", "wgpu") if options.renderer == "both" else (options.renderer,)
+    if options.wgpu_first:
+        renderers = tuple(reversed(renderers))
     for renderer in renderers:
         renderer_directory = directory / renderer
         renderer_directory.mkdir()
         for continuous in modes:
-            validate(renderer_directory / ("continuous" if continuous else "event-driven"), continuous, renderer)
+            validate(renderer_directory / ("continuous" if continuous else "event-driven"),
+                     continuous, renderer, options.configuration, options.timing_frames)
     if options.renderer == "both":
         for continuous in modes:
             mode = "continuous" if continuous else "event-driven"

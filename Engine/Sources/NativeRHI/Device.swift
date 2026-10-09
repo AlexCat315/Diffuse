@@ -395,11 +395,12 @@ public final class Device {
             guard let layoutEntries = caches.bindingLayoutEntries(layout.id) else {
                 throw RHIError.invalidArgument("unknown binding layout")
             }
-            try validateBindingSet(descriptor, layoutEntries: layoutEntries)
-
             if let existing = caches.bindingSets.existing(layoutID: layout.id, entries: descriptor.entries) {
                 return BindingSet(id: existing)
             }
+            // Layouts and cached sets are immutable. A full-value cache hit
+            // already passed this validation when the set was registered.
+            try validateBindingSet(descriptor, layoutEntries: layoutEntries)
             if let evicted = caches.bindingSets.evictIfFull() {
                 teardownBindingSet(evicted)
             }
@@ -517,7 +518,8 @@ public final class Device {
         _ commandBuffer: CommandBuffer,
         queue: QueueClass = .graphics,
         waits: [TimelineSemaphore] = [],
-        signals: [TimelineSemaphore] = []
+        signals: [TimelineSemaphore] = [],
+        cpuProfile: SubmissionCPUProfile? = nil
     ) throws {
         try locked {
             guard let slot = currentSlot else { throw RHIError.frameNotActive }
@@ -529,7 +531,10 @@ public final class Device {
             case .transfer: queueCount = capabilities.maxQueues.transfer
             }
             guard queueCount > 0 else { throw RHIError.unsupportedFeature("requested queue is unavailable") }
+            let validationStart = cpuProfile?.begin()
             try validateCommands(commandBuffer, queue: queue)
+            cpuProfile?.end(.validation, since: validationStart)
+            let planningStart = cpuProfile?.begin()
             let rollback = planner.checkpoint()
             let plan: SubmitPlan
             do {
@@ -539,11 +544,12 @@ public final class Device {
                 rollback()
                 throw error
             }
+            cpuProfile?.end(.planning, since: planningStart)
             var submitted = false
             for plannedSubmit in plan.submits {
                 frameRing.registerCommandBuffer(slotIndex: slot.index)
                 do {
-                    try backend.submit(plannedSubmit) { [frameRing, slot] in
+                    try backend.submit(plannedSubmit, cpuProfile: cpuProfile) { [frameRing, slot] in
                         frameRing.commandBufferCompleted(slotIndex: slot.index)
                     }
                     submitted = true

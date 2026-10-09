@@ -22,7 +22,22 @@ private struct NativeUIBenchmarkResult: Encodable {
     let cpuRecord: NativeUITiming
     let cpuSubmit: NativeUITiming
     let completedBatch: NativeUITiming
+    let nativeSubmissionPhases: NativeUISubmissionPhases?
     let blocks: [NativeUIBenchmarkBlock]
+}
+
+private struct NativeUISubmissionPhases: Encodable {
+    let validation: NativeUITiming
+    let planning: NativeUITiming
+    let encoding: NativeUITiming
+    let queueSubmit: NativeUITiming
+
+    init(_ profiles: [SubmissionCPUProfile]) {
+        validation = NativeUITiming(profiles.map { Double($0.validationNanoseconds) / 1000 })
+        planning = NativeUITiming(profiles.map { Double($0.planningNanoseconds) / 1000 })
+        encoding = NativeUITiming(profiles.map { Double($0.encodingNanoseconds) / 1000 })
+        queueSubmit = NativeUITiming(profiles.map { Double($0.queueSubmitNanoseconds) / 1000 })
+    }
 }
 
 /// Each index identifies the same paired block in both backend reports.
@@ -45,6 +60,7 @@ private struct NativeUIBenchmarkSamples {
     var submitted: [Double] = []
     var completed: [Double] = []
     var blocks: [NativeUIBenchmarkBlock] = []
+    var profiles: [SubmissionCPUProfile] = []
 
     mutating func measure(_ backend: NativeUIBenchmarkBackend) throws {
         try backend.finish()
@@ -56,6 +72,7 @@ private struct NativeUIBenchmarkSamples {
             cpu.append(Double(DispatchTime.now().uptimeNanoseconds - frameStart) / 1000)
             recorded.append(Double(timing.recordNanoseconds) / 1000)
             submitted.append(Double(timing.submitNanoseconds) / 1000)
+            if let profile = timing.profile { profiles.append(profile) }
             if (frame + 1) % 3 == 0 { try backend.finish() }
         }
         let duration = Double(DispatchTime.now().uptimeNanoseconds - start) / 180 / 1000
@@ -66,13 +83,24 @@ private struct NativeUIBenchmarkSamples {
     }
     func result(_ name: String) -> NativeUIBenchmarkResult {
         NativeUIBenchmarkResult(backend: name, cpuFrame: NativeUITiming(cpu), cpuRecord: NativeUITiming(recorded),
-            cpuSubmit: NativeUITiming(submitted), completedBatch: NativeUITiming(completed), blocks: blocks)
+            cpuSubmit: NativeUITiming(submitted), completedBatch: NativeUITiming(completed),
+            nativeSubmissionPhases: profiles.isEmpty ? nil : NativeUISubmissionPhases(profiles), blocks: blocks)
     }
 }
 
 private struct NativeUIFrameTiming {
     let recordNanoseconds: UInt64
     let submitNanoseconds: UInt64
+    var profile: SubmissionCPUProfile? = nil
+}
+
+private struct NativeUIBenchmarkScopes: Encodable {
+    let nativeRecord = "UI preparation and abstract command recording"
+    let nativeSubmit = "validation, dependency planning, native encoding and queue submission; includes frame acknowledgment/end"
+    let wgpuRecord = "UI preparation, abstract recording and CommandEncoder.finish (validation, local tracking, native encoding)"
+    let wgpuSubmit = "global state reconciliation, pending writes, lifetime tracking and queue submission"
+    let comparableCPU = "cpuFrame includes frame setup and recording/submission; excludes explicit three-frame GPU drains"
+    let nativePhaseProfiling = ProcessInfo.processInfo.environment["GUAVA_NATIVE_SUBMISSION_PROFILE"] == "1"
 }
 
 private struct NativeUIBenchmarkWork: Encodable {
@@ -99,6 +127,7 @@ private struct NativeUIBenchmarkReport: Encodable {
     let warmup = 60
     let repeats = 6
     let schedule = "paired blocks with alternating first backend"
+    let measurementScopes = NativeUIBenchmarkScopes()
     let work: NativeUIBenchmarkWork
     let nativeUploads: NativeUIBenchmarkUploads
     let results: [NativeUIBenchmarkResult]
@@ -106,6 +135,33 @@ private struct NativeUIBenchmarkReport: Encodable {
 
 @Suite("Native draw list release benchmark", .serialized)
 struct NativeDrawListBenchmarkTests {
+    /// Fixed geometry, no authored image assets: varies command count while
+    /// avoiding a growing vertex upload or texture working set.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["GUAVA_NATIVE_COMMAND_BENCHMARK"] == "1"))
+    func commandScaling() throws {
+        #if DEBUG
+        throw RHIError.invalidArgument("run the command benchmark with swift test -c release")
+        #else
+        let context = try NativeUIDrawTestContext(validation: false)
+        let geometry = DrawList()
+        geometry.addRoundedRect(UIRect(x: 0, y: 0, width: 1280, height: 720), radius: 0,
+            color: Color(r: 0.3, g: 0.5, b: 0.7, a: 1))
+        for count in [0, 1, 96, 1024] {
+            let list = DrawList()
+            if count > 0 {
+                let batch = try #require(geometry.batches.first)
+                let batches = (0..<count).map { index in
+                    var value = batch
+                    value.scissor = UIRect(x: Float(index % 32) * 32, y: Float(index / 32) * 18, width: 32, height: 18)
+                    return value
+                }
+                list.load(vertices: geometry.vertices, indices: geometry.indices, batches: batches)
+            }
+            try run(context, list: list, name: "native-command-count-\(count)")
+        }
+        #endif
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GUAVA_NATIVE_UI_BENCHMARK"] == "1"))
     func equivalentWork() throws {
         #if DEBUG
@@ -143,6 +199,7 @@ struct NativeDrawListBenchmarkTests {
 
     private func run(_ context: NativeUIDrawTestContext, list: DrawList, name: String) throws {
         let format = NativeUITestFormat.cases[3]
+        let profileEnabled = ProcessInfo.processInfo.environment["GUAVA_NATIVE_SUBMISSION_PROFILE"] == "1"
         var assetCount = 0, assetBytes = 0
         list.resources.forEach(of: ImageAssetRegistry.Asset.self) { asset in
             assetCount += 1; assetBytes += asset.image.pixels.count
@@ -177,10 +234,11 @@ struct NativeDrawListBenchmarkTests {
                     }
                     lastStatistics = frame.statistics
                     let recorded = DispatchTime.now().uptimeNanoseconds
-                    try context.device.submit(commands); frame.didSubmit()
+                    let profile = profileEnabled ? SubmissionCPUProfile() : nil
+                    try context.device.submit(commands, cpuProfile: profile); frame.didSubmit()
                     context.device.endFrame()
                     return NativeUIFrameTiming(recordNanoseconds: recorded - start,
-                        submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded)
+                        submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded, profile: profile)
                 } catch { context.device.endFrame(); throw error }
             }, finish: { try context.device.waitUntilIdle() })
             let reference = NativeUIBenchmarkBackend(name: "wgpu-metal", render: {

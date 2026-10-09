@@ -165,17 +165,18 @@ struct AccessTracker {
 
         switch access.kind {
         case .read:
+            let key = ReadKey(queue: queue, range: range)
+            // The first read ordered the last write for this queue/range and
+            // these stages. Later covered reads reuse that dependency. A new
+            // write clears the window; new queues, ranges or stages still
+            // require their own RAW dependency.
+            if let previous = memory.reads[key], previous.isSuperset(of: access.stage) { return [] }
             if let write = memory.lastWrite, Self.overlaps(write.range, range) {
                 hazards.append(Hazard(
                     resource: access.resource, kind: .readAfterWrite,
                     sourceStage: write.stage, destinationStage: access.stage,
                     sourceQueue: write.queue, destinationQueue: queue, range: access.range))
             }
-            let key = ReadKey(queue: queue, range: range)
-            // The RAW result still belongs to this access, but an already
-            // covered read adds no history. Avoid COW copies of both the read
-            // window and resource dictionary on every steady-state binding.
-            if let previous = memory.reads[key], previous.isSuperset(of: access.stage) { return hazards }
             memory.reads[key, default: []].formUnion(access.stage)
 
         case .write:

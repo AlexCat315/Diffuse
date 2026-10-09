@@ -116,7 +116,8 @@ extension VulkanBackend {
         return id
     }
 
-    func submit(_ submit: PlannedSubmit, completion: @escaping () -> Void) throws {
+    func submit(_ submit: PlannedSubmit, cpuProfile: SubmissionCPUProfile? = nil, completion: @escaping () -> Void) throws {
+        let encodingStart = cpuProfile?.begin()
         try submissionStatus.check()
         let nativeQueue: VulkanQueue
         switch submit.queue {
@@ -171,9 +172,12 @@ extension VulkanBackend {
             context.sync.createFence(context.device, &info, nil, out)
         }) else { throw RHIError.outOfMemory }
 
+        cpuProfile?.end(.encoding, since: encodingStart)
+        let queueStart = cpuProfile?.begin()
         let result = withSubmissionInfo(command: cmd, waits: waitTimeline, signals: signalTimeline) {
             sync.queueSubmit(nativeQueue.handle, 1, $0, fence)
         }
+        cpuProfile?.end(.queueSubmit, since: queueStart)
         guard result == VK_SUCCESS else {
             sync.destroyFence(context.device, fence, nil)
             throw RHIError.submitFailed("vkQueueSubmit failed: \(result)")

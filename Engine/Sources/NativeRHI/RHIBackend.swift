@@ -96,7 +96,8 @@ public protocol RHIBackend: AnyObject {
     /// Executes one planned submission. Must be asynchronous: it returns once
     /// the work is queued and invokes `completion` when the GPU finishes. No
     /// `waitUntilCompleted` / `vkQueueWaitIdle` on the hot path.
-    func submit(_ submit: PlannedSubmit, completion: @escaping () -> Void) throws
+    /// Optional CPU profiling must never wait for GPU completion.
+    func submit(_ submit: PlannedSubmit, cpuProfile: SubmissionCPUProfile?, completion: @escaping () -> Void) throws
 
     // MARK: Deferred destruction (called by FrameRing)
 
