@@ -1,15 +1,15 @@
 {
   "description": "Existing structural debt only. New declarations and increases are rejected. Reduce or remove entries as code is split; do not regenerate this file to bypass the guard.",
   "declarations": {
-    "Engine/Sources/AIRuntime/SceneEditPlan.swift::SceneEditStep": {
+    "Engine/Sources/AIRuntime/Planning/SceneEditPlan.swift::SceneEditStep": {
       "stored_properties": 58,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "Engine/Sources/AIRuntime/SceneSemanticSnapshot.swift::SceneSemanticSnapshot.Entity": {
+    "Engine/Sources/AIRuntime/Semantic/SceneSemanticSnapshot.swift::SceneSemanticSnapshot.Entity": {
       "stored_properties": 107,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "Engine/Sources/AIRuntime/WorldView.swift::WorldEntityRecord": {
+    "Engine/Sources/AIRuntime/Context/WorldView.swift::WorldEntityRecord": {
       "stored_properties": 59,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
@@ -56,7 +56,7 @@
       "initializer_parameters": 17,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "Engine/Sources/SceneRuntime/RenderScene.swift::RenderParticleSimulationBatch": {
+    "Engine/Sources/SceneRuntime/Rendering/RenderScene.swift::RenderParticleSimulationBatch": {
       "stored_properties": 56,
       "initializer_parameters": 56,
       "initializer_assignments": 56,
@@ -72,7 +72,7 @@
       "stored_properties": 23,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "Editor/Sources/EditorApp/Panels/ViewportPanel.swift::ViewportInfoBar": {
+    "Editor/Sources/EditorApp/Panels/Viewport/ViewportPanel.swift::ViewportInfoBar": {
       "stored_properties": 27,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
@@ -87,21 +87,21 @@
       "initializer_assignments": 25,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "GuavaUI/Sources/GuavaUIApp/AppDisplayHandle.swift::AppDisplayHandle": {
+    "GuavaUI/Sources/GuavaUIApp/Core/AppDisplayHandle.swift::AppDisplayHandle": {
       "stored_properties": 27,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "GuavaUI/Sources/GuavaUIApp/AppRuntime.swift::AppRuntime": {
+    "GuavaUI/Sources/GuavaUIApp/Core/AppRuntime.swift::AppRuntime": {
       "stored_properties": 38,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "GuavaUI/Sources/GuavaUICompose/Theme/ColorScheme.swift::ColorScheme": {
+    "GuavaUI/Sources/GuavaUICompose/Theme/Tokens/ColorScheme.swift::ColorScheme": {
       "stored_properties": 30,
       "initializer_parameters": 30,
       "initializer_assignments": 30,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "GuavaUI/Sources/GuavaUIRuntime/SDL3PlatformHost.swift::SDL3PlatformHost": {
+    "GuavaUI/Sources/GuavaUIRuntime/Core/SDL3PlatformHost.swift::SDL3PlatformHost": {
       "stored_properties": 27,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     }
