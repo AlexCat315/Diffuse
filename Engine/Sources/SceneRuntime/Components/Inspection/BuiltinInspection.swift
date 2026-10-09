@@ -80,7 +80,7 @@ extension ComponentInspection {
         ] }
     }
 
-    private static func field(_ key: String, id: String? = nil, label: String,
+    static func field(_ key: String, id: String? = nil, label: String,
         min: Double? = nil, max: Double? = nil, step: Double? = nil, scale: Double = 1,
         kind: ComponentFieldKind = .automatic, choices: [String] = []) -> ComponentFieldDescriptor {
         ComponentFieldDescriptor([key]) { field in

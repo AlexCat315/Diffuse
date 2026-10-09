@@ -14,6 +14,13 @@ public struct ComponentNumericPresentation: Codable, Sendable, Equatable {
     public init(_ configure: (inout Self) -> Void = { _ in }) { configure(&self) }
 }
 
+public struct ComponentColorPresentation: Codable, Sendable, Equatable {
+    public var minimum: Double = 0
+    /// RGB channel limit; nil permits HDR values. Alpha remains in 0...1.
+    public var maximum: Double? = 1
+    public init(_ configure: (inout Self) -> Void = { _ in }) { configure(&self) }
+}
+
 public struct ComponentFieldVisibility: Codable, Sendable, Equatable {
     public let path: [String]
     public let values: [ComponentValue]
@@ -28,6 +35,9 @@ public struct ComponentFieldDescriptor: Codable, Sendable, Equatable {
     public var label: String
     public var kind: ComponentFieldKind = .automatic
     public var numeric = ComponentNumericPresentation()
+    public var color = ComponentColorPresentation()
+    /// Clearing a nullable string writes null; the codec may omit that key.
+    public var isNullable = false
     public var choices: [String] = []
     public var visibility: ComponentFieldVisibility?
     public var isReadOnly = false
@@ -52,6 +62,8 @@ public struct ComponentInspection: Codable, Sendable, Equatable {
     public var sectionID: String?
     public var fields: [ComponentFieldDescriptor] = []
     public var isReadOnly = false
+    /// Keep inferred codec details accessible without crowding the main form.
+    public var inferredFieldsAreAdvanced = false
     public init(_ configure: (inout Self) -> Void = { _ in }) { configure(&self) }
 
     public func resolvedFields(for value: ComponentValue) -> [ComponentFieldDescriptor] {
@@ -87,6 +99,10 @@ public struct ComponentInspection: Codable, Sendable, Equatable {
             return resolved
         } + inferred.filter { field in
             !explicitPaths.contains { path in field.path.starts(with: path) }
+        }.map { field in
+            var field = field
+            field.isAdvanced = inferredFieldsAreAdvanced
+            return field
         }
         return resolved.map { field in
             var field = field

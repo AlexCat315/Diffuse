@@ -130,8 +130,16 @@ Numeric `scale` converts stored units to display units, such as camera radians
 to degrees; field paths and defaults always use stored units. Exact integer
 fields use text editing to preserve seeds beyond Float precision.
 
+`isNullable` string fields write JSON null when cleared, letting the owning codec
+restore an absent optional key. Color presentation limits RGB channels to 0...1
+by default; an absent `color.maximum` retains HDR values, while alpha stays in
+0...1. Non-finite channels reject the whole edit. `inferredFieldsAreAdvanced`
+keeps additional codec fields behind the advanced form without maintaining a
+second field list. Explicit descriptors control read-only runtime or asset data.
+
 The editor traverses the registry to build component sections. Camera, light,
-audio source/listener and character controller use the generic form. New module
+audio source/listener, character controller, render mesh, render material and
+animation player use the generic form. New module
 registrations obtain the same form automatically. Each `EditorSceneAdapter` owns
 an `EditorInspectorRendererRegistry` keyed directly by component `typeID`. Its
 built-in registrations provide rich controls for particles, scripts, compound
@@ -159,6 +167,12 @@ adapters, and may be configured on the UI thread before or after scene loading.
 They survive reset, load and undo/redo, but are never serialized or recorded in
 edit history. Factories receive the current adapter at render time; avoid
 capturing its owning adapter strongly in a stored factory.
+
+Animation playback edits use the runtime registry's merge rule: switching a clip
+resets its playhead unless the caller also supplies a time. Speed, loop and play
+controls retain playback progress. Full document replacement and loading still
+preserve the stored time. Optional clip names, HDR emission and imported mesh /
+material references retain the existing component disk format.
 
 Generic bindings patch one document path through component transactions. Undo,
 redo, interactive cancellation and multi-selection use the existing history

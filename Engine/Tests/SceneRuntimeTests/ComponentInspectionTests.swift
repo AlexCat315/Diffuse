@@ -79,6 +79,33 @@ struct ComponentInspectionTests {
         #expect(patched.value(at: ["offset", "3"]) == nil)
         #expect(patched.value(at: []) == patched)
     }
+
+    @Test("rendering and playback descriptions share nullable strings, color ranges and advanced fields with the editor")
+    func generatedFormMetadata() throws {
+        let scene = SceneRuntime()
+        let mesh = try #require(scene.componentDescriptions(typeID: "renderMesh").first)
+        #expect(mesh.fields.filter { !$0.isAdvanced }.map(\.id) == ["mesh-visible", "mesh-color-tint"])
+        #expect(mesh.fields.first { $0.path == ["meshIndex"] }?.isReadOnly == true)
+        let material = try #require(scene.componentDescriptions(typeID: "renderMaterial").first)
+        let baseColor = try #require(material.fields.first { $0.path == ["baseColorFactor"] })
+        let emissive = try #require(material.fields.first { $0.path == ["emissiveFactor"] })
+        #expect(baseColor.kind == .color && baseColor.color.maximum == 1)
+        #expect(emissive.kind == .color && emissive.color.minimum == 0 && emissive.color.maximum == nil)
+        let player = try #require(scene.componentDescriptions(typeID: "animationPlayer").first)
+        #expect(player.defaults?.value(at: ["clipName"]) == nil)
+        #expect(player.fields.first { $0.id == "anim-clip" }?.kind == .string)
+        #expect(player.fields.first { $0.id == "anim-clip" }?.isNullable == true)
+        #expect(player.fields.first { $0.path == ["time"] }?.isReadOnly == true)
+        #expect(player.fields.first { $0.path == ["time"] }?.isAdvanced == true)
+        let encoded = try JSONEncoder().encode([mesh, material, player])
+        #expect(try JSONDecoder().decode([ComponentDescription].self, from: encoded) == [mesh, material, player])
+        let inferred = ComponentInspection {
+            $0.inferredFieldsAreAdvanced = true
+            $0.fields = [ComponentFieldDescriptor(["visible"]) { $0.kind = .boolean }]
+        }.resolvedFields(for: .object(["visible": .bool(true), "details": .object(["gain": .number(1)])]))
+        #expect(inferred.first { $0.id == "visible" }?.isAdvanced == false)
+        #expect(inferred.first { $0.id == "details.gain" }?.isAdvanced == true)
+    }
 }
 
 private struct InspectionSource: RuntimeComponent {}
