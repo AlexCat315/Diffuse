@@ -1,3 +1,4 @@
+import SceneRuntime
 @testable import EditorCore
 import Foundation
 import ScriptRuntime
@@ -35,7 +36,7 @@ struct EditorStoreTests {
     @Test("unresolved export bindings locate the nested entity that needs repair")
     func unresolvedBindingTarget() {
         let child = EditorSceneManifestNode(id: 42, name: "Player: Main", kind: "empty",
-            script: EditorSceneManifestScript(ScriptComponent(ScriptBinding(identifier: "game.missing"))))
+            components: [ManifestComponent(type: "script", value: ComponentValue(jsonObject: ["bindings": [encodeScriptBinding(ScriptBinding(identifier: "game.missing"))]]))])
         let root = EditorSceneManifestNode(id: 1, name: "Root", kind: "empty", children: [child])
         let manifest = EditorSceneManifest(revision: 0, entityCount: 2, roots: [root])
         #expect(EditorIssueTarget.unresolvedBindingTarget(["Player: Main: game.missing"], in: manifest) == .entity(id: 42))

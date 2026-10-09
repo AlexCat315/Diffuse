@@ -359,6 +359,7 @@ extension EditorApplication {
         session = nextSession
         if let nextSession {
             await nextSession.setProjectToolExecutor(makeProjectToolExecutor())
+            await nextSession.setComponentDescriptionProvider(makeComponentDescriptionProvider())
             await nextSession.setObservationBus(observationBus)
             await nextSession.setContextMemory(contextMemoryStore)
             await nextSession.setWorkflowContext(Self.workflowContext(

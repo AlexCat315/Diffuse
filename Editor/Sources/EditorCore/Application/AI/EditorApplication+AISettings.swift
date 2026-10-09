@@ -59,11 +59,13 @@ extension EditorApplication {
             let mem = self.contextMemoryStore
             let previousTask = pendingAISetupTask
             let projectTools = makeProjectToolExecutor()
+            let componentDescriptions = makeComponentDescriptionProvider()
             pendingAISetupTask = Task {
                 await previousTask?.value
                 await oldSession?.cancelActiveRun()
                 if let newSession {
                     await newSession.setProjectToolExecutor(projectTools)
+                    await newSession.setComponentDescriptionProvider(componentDescriptions)
                     await newSession.replaceWorldView(await worldContext.snapshot())
                     await newSession.setObservationBus(bus)
                     await newSession.setContextMemory(mem)

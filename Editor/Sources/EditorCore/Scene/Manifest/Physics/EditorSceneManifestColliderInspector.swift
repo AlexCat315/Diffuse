@@ -7,22 +7,10 @@ import SceneRuntime
 import ScriptRuntime
 import SIMDCompat
 
-public struct EditorSceneManifestPhysicsMaterial: Codable, Sendable, Equatable {
-    public let friction: Float
-    public let restitution: Float
-    public let density: Float
-
-    public init(_ material: PhysicsMaterial) {
-        self.friction = material.friction
-        self.restitution = material.restitution
-        self.density = material.density
-    }
-
-    var material: PhysicsMaterial {
-        PhysicsMaterial(friction: friction, restitution: restitution, density: density)
-    }
-}
-
+/// Inspector-side JSON round-trip for compound collider shapes. This is not part of
+/// the scene document: the manifest stores colliders through the shared
+/// SceneSerializer component document, while the inspector exposes this lossless
+/// text representation as a debug editing surface over `ColliderShapeInstance`.
 public struct EditorSceneManifestColliderShape: Codable, Sendable, Equatable {
     public let kind: String
     public let halfExtents: EditorSceneManifestVector3?
@@ -132,33 +120,5 @@ public struct EditorSceneManifestColliderShapeInstance: Codable, Sendable, Equat
             localRotation: localRotation.simdValue,
             localScale: localScale.simdValue
         )
-    }
-}
-
-public struct EditorSceneManifestCollider: Codable, Sendable, Equatable {
-    public let shape: EditorSceneManifestColliderShape
-    public let shapes: [EditorSceneManifestColliderShapeInstance]
-    public let isTrigger: Bool
-    public let layerID: UInt16
-    public let layerMask: UInt16
-    public let material: EditorSceneManifestPhysicsMaterial
-
-    public init(_ component: Collider) {
-        self.shape = EditorSceneManifestColliderShape(component.shape)
-        self.shapes = component.shapes.map(EditorSceneManifestColliderShapeInstance.init)
-        self.isTrigger = component.isTrigger
-        self.layerID = component.layerID
-        self.layerMask = component.layerMask
-        self.material = EditorSceneManifestPhysicsMaterial(component.material)
-    }
-
-    var component: Collider {
-        Collider(shapes: shapes.isEmpty
-                    ? [ColliderShapeInstance(shape: shape.shape)]
-                    : shapes.map(\.instance),
-                 isTrigger: isTrigger,
-                 layerID: layerID,
-                 layerMask: layerMask,
-                 material: material.material)
     }
 }

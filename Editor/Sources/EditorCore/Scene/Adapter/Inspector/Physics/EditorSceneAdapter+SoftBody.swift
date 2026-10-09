@@ -127,10 +127,9 @@ extension EditorSceneAdapter {
                 var value = next
                 if let minimum { value = Swift.max(minimum, value) }
                 if let maximum { value = Swift.min(maximum, value) }
-                guard scene.updateComponent(SoftBody.self, for: entity, {
+                guard updateComponentData(SoftBody.self, for: entity, {
                     $0[keyPath: keyPath] = value
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -142,10 +141,9 @@ extension EditorSceneAdapter {
         Binding(
             get: { [self] in scene.component(SoftBody.self, for: entity)?[keyPath: keyPath] ?? false },
             set: { [self] value in
-                guard scene.updateComponent(SoftBody.self, for: entity, {
+                guard updateComponentData(SoftBody.self, for: entity, {
                     $0[keyPath: keyPath] = value
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -157,10 +155,9 @@ extension EditorSceneAdapter {
             },
             set: { [self] value in
                 let iterations = max(1, min(Int(value.rounded()), 128))
-                guard scene.updateComponent(SoftBody.self, for: entity, {
+                guard updateComponentData(SoftBody.self, for: entity, {
                     $0.solverIterations = iterations
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -176,10 +173,9 @@ extension EditorSceneAdapter {
             },
             set: { [self] value in
                 let rounded = max(0, min(Int(value.rounded()), Int(maximum)))
-                guard scene.updateComponent(SoftBody.self, for: entity, {
+                guard updateComponentData(SoftBody.self, for: entity, {
                     $0[keyPath: keyPath] = UInt16(rounded)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -208,8 +204,7 @@ extension EditorSceneAdapter {
                     bendCompliance: cloth.bendCompliance,
                     bendType: cloth.bendType
                 )
-                guard scene.setComponent(next, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(next, for: entity) else { return }
             }
         )
     }
@@ -223,10 +218,9 @@ extension EditorSceneAdapter {
             get: { [self] in scene.component(Cloth.self, for: entity)?[keyPath: keyPath] ?? 0 },
             set: { [self] next in
                 let value = minimum.map { Swift.max($0, next) } ?? next
-                guard scene.updateComponent(Cloth.self, for: entity, {
+                guard updateComponentData(Cloth.self, for: entity, {
                     $0[keyPath: keyPath] = value
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -254,8 +248,7 @@ extension EditorSceneAdapter {
                     bendCompliance: cloth.bendCompliance,
                     bendType: cloth.bendType
                 )
-                guard scene.setComponent(next, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(next, for: entity) else { return }
             }
         )
     }
@@ -268,10 +261,9 @@ extension EditorSceneAdapter {
             set: { [self] text in
                 guard let bendType = ClothBendType.allCases.first(where: {
                     String(describing: $0).caseInsensitiveCompare(text) == .orderedSame
-                }), scene.updateComponent(Cloth.self, for: entity, {
+                }), updateComponentData(Cloth.self, for: entity, {
                     $0.bendType = bendType
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -292,8 +284,7 @@ extension EditorSceneAdapter {
                     volumeCompliance: mesh.volumeCompliance,
                     bendType: mesh.bendType
                 )
-                guard scene.setComponent(next, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(next, for: entity) else { return }
             }
         )
     }
@@ -307,10 +298,9 @@ extension EditorSceneAdapter {
                 scene.component(SoftBodyMesh.self, for: entity)?[keyPath: keyPath] ?? 0
             },
             set: { [self] value in
-                guard scene.updateComponent(SoftBodyMesh.self, for: entity, {
+                guard updateComponentData(SoftBodyMesh.self, for: entity, {
                     $0[keyPath: keyPath] = max(0, value)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -337,8 +327,7 @@ extension EditorSceneAdapter {
                     volumeCompliance: mesh.volumeCompliance,
                     bendType: mesh.bendType
                 )
-                guard scene.setComponent(next, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(next, for: entity) else { return }
             }
         )
     }
@@ -351,10 +340,9 @@ extension EditorSceneAdapter {
             set: { [self] text in
                 guard let bendType = ClothBendType.allCases.first(where: {
                     String(describing: $0).caseInsensitiveCompare(text) == .orderedSame
-                }), scene.updateComponent(SoftBodyMesh.self, for: entity, {
+                }), updateComponentData(SoftBodyMesh.self, for: entity, {
                     $0.bendType = bendType
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }

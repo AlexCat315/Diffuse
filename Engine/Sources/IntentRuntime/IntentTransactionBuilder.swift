@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SceneRuntime
 import SIMDCompat
 
@@ -110,10 +110,7 @@ public struct IntentTransactionBuilder: Sendable {
             let target = vec3Argument("target", in: intent) ?? SIMD3<Float>(0, 0, -1)
             var transform = LocalTransform()
             transform.matrix.columns.3 = SIMD4<Float>(position, 1)
-            mutations = [.setCameraPose(entityID: entityID,
-                                         localTransform: transform,
-                                         target: target,
-                                         up: nil)]
+            mutations = [.setLocalTransform(entityID: entityID, transform: transform), .componentFields(entityID: entityID, typeID: "camera", fields: ["target": target, "up": (nil as SIMD3<Float>?) as Any])]
             summary = "Set camera pose"
 
         case "scene.set_camera_aspect_ratio":
@@ -121,7 +118,7 @@ public struct IntentTransactionBuilder: Sendable {
             guard let aspectRatio = numberArgument("aspect_ratio", in: intent) else {
                 throw IntentTransactionBuilderError.missingArgument(verbID: intent.verb, argument: "aspect_ratio")
             }
-            mutations = [.setCameraAspectRatio(entityID: entityID, aspectRatio: aspectRatio)]
+            mutations = [.componentFields(entityID: entityID, typeID: "camera", fields: ["aspectRatio": (aspectRatio)])]
             summary = intent.summary.isEmpty ? "Set camera aspect ratio" : intent.summary
 
         default:

@@ -39,11 +39,17 @@ extension EditorSceneAdapter {
                 return identifiers.count == ids.count && Set(identifiers).count == 1
             }
             if section.id == "scripts", !section.groups.isEmpty, groups.isEmpty {
-                return EditorInspectorSection(id: section.id, title: section.title, fields: [
+                var result = section
+                result.fields = [
                     EditorInspectorField(id: "script-mixed", label: L("Scripts"), value: .readOnly(L("Different script behaviors")))
-                ])
+                ]
+                result.groups = []
+                return result
             }
-            return EditorInspectorSection(id: section.id, title: section.title, fields: fields, groups: groups)
+            var result = section
+            result.fields = fields
+            result.groups = groups
+            return result
         }
     }
 }
@@ -130,9 +136,6 @@ private final class InspectorFieldBatch {
         case .color:
             guard let binding: Binding<Color> = merge({ if case .color(let b) = $0 { return b }; return nil }) else { return nil }
             return .color(binding)
-        case .lightType:
-            guard let binding: Binding<LightType> = merge({ if case .lightType(let b) = $0 { return b }; return nil }) else { return nil }
-            return .lightType(binding)
         case .physicsSimulationMode:
             guard let binding: Binding<PhysicsSimulationMode> = merge({ if case .physicsSimulationMode(let b) = $0 { return b }; return nil }) else { return nil }
             return .physicsSimulationMode(binding)

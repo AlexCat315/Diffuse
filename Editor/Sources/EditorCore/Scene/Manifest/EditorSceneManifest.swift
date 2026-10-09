@@ -8,7 +8,7 @@ import ScriptRuntime
 import SIMDCompat
 
 public struct EditorSceneManifest: Codable, Sendable, Equatable {
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 8
     public let schemaVersion: Int
     public let revision: UInt64
     public let entityCount: Int

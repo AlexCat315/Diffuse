@@ -362,7 +362,7 @@ public struct SetLightTypeCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .light, context: context)
         return PreparedCapability(
-            operations: [.scene(.setLightType(entityID: entityID, type: input.light_type.runtimeValue))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "light", fields: ["type": (input.light_type.runtimeValue).rawValue]))],
             preview: CapabilityPreview(summary: "Set light type",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -394,10 +394,7 @@ public struct SetLightIntensityCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .light, context: context)
         return PreparedCapability(
-            operations: [.scene(.setLightIntensity(
-                entityID: entityID,
-                intensity: try capabilityFloat(input.intensity, field: "intensity")
-            ))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "light", fields: ["intensity": (try capabilityFloat(input.intensity, field: "intensity"))]))],
             preview: CapabilityPreview(summary: "Set light intensity",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -429,10 +426,7 @@ public struct SetLightColorCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .light, context: context)
         return PreparedCapability(
-            operations: [.scene(.setLightColor(
-                entityID: entityID,
-                color: try capabilityVector(input.color, field: "color")
-            ))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "light", fields: ["color": (try capabilityVector(input.color, field: "color"))]))],
             preview: CapabilityPreview(summary: "Set light colour",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -464,10 +458,7 @@ public struct SetLightRangeCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .light, context: context)
         return PreparedCapability(
-            operations: [.scene(.setLightRange(
-                entityID: entityID,
-                range: try capabilityFloat(input.range, field: "range")
-            ))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "light", fields: ["range": (try capabilityFloat(input.range, field: "range"))]))],
             preview: CapabilityPreview(summary: "Set light range",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -516,16 +507,10 @@ public struct SetLightSpotAnglesCapability: GuavaCapability {
         // Apply the outer angle first so a valid pair is not temporarily
         // clamped against the previous, narrower outer cone.
         if let outer = input.spot_outer_angle {
-            operations.append(.scene(.setLightSpotOuterAngle(
-                entityID: entityID,
-                angleDegrees: try capabilityFloat(outer, field: "spot_outer_angle")
-            )))
+            operations.append(.scene(.componentFields(entityID: entityID, typeID: "light", fields: ["spotOuterAngleDegrees": (try capabilityFloat(outer, field: "spot_outer_angle"))])))
         }
         if let inner = input.spot_inner_angle {
-            operations.append(.scene(.setLightSpotInnerAngle(
-                entityID: entityID,
-                angleDegrees: try capabilityFloat(inner, field: "spot_inner_angle")
-            )))
+            operations.append(.scene(.componentFields(entityID: entityID, typeID: "light", fields: ["spotInnerAngleDegrees": (try capabilityFloat(inner, field: "spot_inner_angle"))])))
         }
         return PreparedCapability(
             operations: operations,
@@ -560,10 +545,7 @@ public struct SetLightCastShadowsCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .light, context: context)
         return PreparedCapability(
-            operations: [.scene(.setLightCastShadows(
-                entityID: entityID,
-                value: input.light_cast_shadows
-            ))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "light", fields: ["castShadows": (input.light_cast_shadows)]))],
             preview: CapabilityPreview(summary: "Set light shadow casting",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]

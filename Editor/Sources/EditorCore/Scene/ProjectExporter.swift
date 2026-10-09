@@ -1,5 +1,6 @@
 import AssetPipeline
 import Foundation
+import ScriptRuntime
 
 public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
     case missingAsset(String)
@@ -164,10 +165,13 @@ public enum ProjectExporter {
         var unresolvedBindings: [String] = []
         func validateScripts(_ nodes: [EditorSceneManifestNode]) {
             for node in nodes {
-                for binding in node.script?.bindings ?? [] where binding.isEnabled {
-                    guard let identifier = binding.identifier, availableScriptIdentifiers.contains(identifier) else {
-                        unresolvedBindings.append("\(node.name): \(binding.identifier ?? "handle #\(binding.script)")")
-                        continue
+                if let bindings = sceneDocumentScripts(in: node.components) {
+                    for binding in bindings where binding.isEnabled {
+                        guard let identifier = binding.identifier,
+                              availableScriptIdentifiers.contains(identifier) else {
+                            unresolvedBindings.append("\(node.name): \(binding.identifier ?? "<no identifier>")")
+                            continue
+                        }
                     }
                 }
                 validateScripts(node.children)

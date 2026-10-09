@@ -204,7 +204,7 @@ public struct CapabilityRegistry: Sendable {
         let editable = CapabilityPreconditionSpec(kind: .sceneEditable)
         let entityExists = CapabilityPreconditionSpec(kind: .entityExists)
         let selectionRequired = CapabilityPreconditionSpec(kind: .selectionRequired)
-        let constraint = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "Constraint")
+        let constraint = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "PhysicsJoint")
         let light = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "LightComponent")
         let camera = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "CameraComponent")
         let renderMesh = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "RenderMeshComponent")
@@ -226,6 +226,12 @@ public struct CapabilityRegistry: Sendable {
             ),
 
             // MARK: Read-only AI context
+            CapabilityDescriptor(
+                verb: "scene.describe_components",
+                releasePhase: .stable,
+                domain: "scene",
+                access: .read
+            ),
             CapabilityDescriptor(
                 verb: "scene.get_entities",
                 releasePhase: .stable,

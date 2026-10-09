@@ -195,6 +195,10 @@ extension EditorApplication {
                     return ["ok": true, "result": result]
                 }
                 switch contract.id {
+                case "scene.describe_components":
+                    let descriptions = scene.componentDescriptions(typeID: arguments["type_id"] as? String)
+                    let payload = try JSONEncoder().encode(descriptions)
+                    return ["ok": true, "components": try JSONSerialization.jsonObject(with: payload)]
                 case "scene.get_entities":
                     return mcpGetScene()
                 case "scene.get_selection":

@@ -85,8 +85,7 @@ extension EditorSceneAdapter {
         return applySceneTransaction(intentVerb: "scene.add_script_binding",
                                      summary: "Add script binding",
                                      targetRawIDs: [rawID],
-                                     mutations: [.setScriptBindings(entityID: rawID,
-                                                                    bindings: bindings)]) != nil
+                                     mutations: [.setComponentData(entityID: rawID, typeID: "script", value: ComponentValue(jsonObject: ["bindings": (bindings).map(encodeScriptBindingForEditing)]))]) != nil
     }
 
     @discardableResult
@@ -100,8 +99,7 @@ extension EditorSceneAdapter {
         return applySceneTransaction(intentVerb: "scene.remove_script_binding",
                                      summary: "Remove script binding",
                                      targetRawIDs: [rawID],
-                                     mutations: [.setScriptBindings(entityID: rawID,
-                                                                    bindings: bindings)]) != nil
+                                     mutations: [.setComponentData(entityID: rawID, typeID: "script", value: ComponentValue(jsonObject: ["bindings": (bindings).map(encodeScriptBindingForEditing)]))]) != nil
     }
 
     var defaultScriptIdentifier: String {

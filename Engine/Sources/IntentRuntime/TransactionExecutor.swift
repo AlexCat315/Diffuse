@@ -1,4 +1,4 @@
-﻿import AssetPipeline
+import AssetPipeline
 import Foundation
 import ObservationBus
 import SceneRuntime
@@ -26,7 +26,9 @@ public struct TransactionExecutionContext {
                 transactionStreamID: String = "transaction",
                 assetStreamID: String = "asset:project",
                 uiStreamID: String = "ui:confirmation") {
-        self.sceneRuntime = sceneRuntime
+        var scene = sceneRuntime
+        scene?.componentRegistry.registerScriptCodec()
+        self.sceneRuntime = scene
         self.sequenceDocument = sequenceDocument
         self.assetRegistry = assetRegistry
         self.observationBus = observationBus
@@ -279,6 +281,38 @@ public struct TransactionExecutor {
             retainedSceneStateIndices.insert(index)
             supersededSceneStateKeys.formUnion(state.supersededVerificationKeys)
         }
+        var componentChecks: [SceneComponentKey: TransactionVerificationAssertion] = [:]
+        for assertion in assertions {
+            switch assertion {
+            case let .componentData(entityID, typeID, value, mode):
+                let key = SceneComponentKey(entityID: entityID, typeID: typeID)
+                if mode == .merge,
+                   case let .componentData(_, _, previous, previousMode) = componentChecks[key] {
+                    let merged = previousMode == .replace
+                        ? try (context.sceneRuntime?.componentRegistry[typeID]?.merge(previous, value) ?? previous.merging(value))
+                        : try previous.merging(value)
+                    componentChecks[key] = .componentData(entityID: entityID, typeID: typeID,
+                        value: merged, mode: previousMode)
+                } else { componentChecks[key] = assertion }
+            case let .componentPresence(entityID, typeID, _):
+                componentChecks[SceneComponentKey(entityID: entityID, typeID: typeID)] = assertion
+            default: break
+            }
+        }
+        for (key, assertion) in componentChecks {
+            guard let scene = context.sceneRuntime else { throw TransactionExecutorError.missingSceneRuntime }
+            let actual = scene.componentData(key.typeID, for: entityID(fromRaw: key.entityID))
+            let matched: Bool
+            switch assertion {
+            case let .componentData(_, _, expected, mode):
+                matched = mode == .merge ? actual?.containsFields(expected) == true : actual == expected
+            case let .componentPresence(_, _, isPresent): matched = (actual != nil) == isPresent
+            default: preconditionFailure("Unexpected component assertion")
+            }
+            guard matched else {
+                throw TransactionExecutorError.verificationFailed("component \(key.typeID) on \(key.entityID) did not match")
+            }
+        }
         for (index, assertion) in assertions.enumerated() {
             switch assertion {
             case let .entityExists(rawID):
@@ -313,6 +347,8 @@ public struct TransactionExecutor {
                         "expected scene revision after \(previous), got \(result.sceneRevision.map(String.init) ?? "nil")"
                     )
                 }
+            case .componentData, .componentPresence:
+                break
             case let .sceneState(state):
                 guard retainedSceneStateIndices.contains(index) else { continue }
                 guard let scene = context.sceneRuntime else {
@@ -385,24 +421,27 @@ public struct TransactionExecutor {
                                         createdEntityIDs: &createdEntityIDs,
                                         deletedEntityIDs: &deletedEntityIDs)
 
-            case .moveEntity, .setLocalTransform, .setSceneName,
-                 .setRigidBodyMotionType, .setRigidBodyMass,
-                 .setRigidBodyGravityScale, .setRigidBodyAllowSleep,
-                 .setRigidBody, .setCollider, .setColliderTrigger,
-                 .setColliderShapeType, .setColliderShapeBoxHalfExtents,
-                 .setColliderShapeSphereRadius, .setColliderShapeCapsuleRadius,
-                 .setColliderShapeCapsuleHalfHeight, .setColliderMaterialFriction,
-                 .setColliderMaterialRestitution, .setColliderMaterialDensity,
-                 .setColliderLayer, .setColliderLayerMask, .setConstraintEnabled:
-                try applyPhysicsMutation(mutation, to: &scene)
-
-            case .setLightType, .setLightColor, .setLightIntensity, .setLightRange,
-                 .setLightSpotInnerAngle, .setLightSpotOuterAngle, .setLightCastShadows,
-                 .setMeshColorTint, .setRenderMeshVisibility, .setRenderMaterialComponent,
-                 .setScriptBindings, .setCameraPose, .setCameraFOV, .setCameraAspectRatio,
-                 .setCameraActive, .setAudioSource, .setAnimationPlayer,
-                 .setAnimationGraphPlayer, .setAudioListener, .setParticleEmitter:
-                try applyPresentationMutation(mutation, to: &scene)
+            case let .moveEntity(rawID, parentID, index):
+                let entity = try requireEntity(rawID, in: scene)
+                let parent = try requireOptionalEntity(parentID, in: scene)
+                guard scene.moveEntity(entity, to: parent, at: index) else {
+                    throw TransactionExecutorError.invalidEntity(rawID)
+                }
+            case let .setLocalTransform(rawID, transform):
+                let entity = try requireEntity(rawID, in: scene)
+                _ = scene.setLocalTransform(transform, for: entity)
+            case let .setSceneName(rawID, name):
+                let entity = try requireEntity(rawID, in: scene)
+                _ = scene.setComponent(SceneNameComponent(value: name), for: entity)
+            case let .setComponentData(rawID, typeID, value, mode):
+                let entity = try requireEntity(rawID, in: scene)
+                try scene.setComponentData(value, typeID: typeID, for: entity, mode: mode)
+            case let .addComponent(rawID, typeID):
+                let entity = try requireEntity(rawID, in: scene)
+                try scene.addComponent(typeID: typeID, for: entity)
+            case let .removeComponentData(rawID, typeID):
+                let entity = try requireEntity(rawID, in: scene)
+                try scene.removeComponentData(typeID: typeID, for: entity)
             }
         }
 
@@ -440,13 +479,15 @@ public struct TransactionExecutor {
                 let entity = scene.createEntity()
                 _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
                 _ = scene.setComponent(SceneKindComponent(value: "Light"), for: entity)
+                try scene.addComponent(typeID: "light", for: entity)
+                _ = scene.updateComponent(LightComponent.self, for: entity) { light in
+                    light.type = lightType
+                    if let v = initialIntensity { light.intensity = v }
+                    if let v = initialColor { light.color = v }
+                    if let v = initialRange { light.range = v }
+                    if let v = initialCastShadows { light.castShadows = v }
+                }
                 _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
-                var light = LightComponent(type: lightType)
-                if let v = initialIntensity    { light.intensity    = v }
-                if let v = initialColor        { light.color        = v }
-                if let v = initialRange        { light.range        = v }
-                if let v = initialCastShadows  { light.castShadows  = v }
-                _ = scene.setComponent(light, for: entity)
                 if let pid = parentID { _ = scene.setParent(EntityID(index: UInt32(pid & 0xFFFF_FFFF), generation: UInt32(pid >> 32)), for: entity) }
                 createdEntityIDs.append(entity.rawValue)
 
@@ -454,10 +495,11 @@ public struct TransactionExecutor {
                 let entity = scene.createEntity()
                 _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
                 _ = scene.setComponent(SceneKindComponent(value: "Camera"), for: entity)
+                try scene.addComponent(typeID: "camera", for: entity)
+                if let fov = initialFovYDegrees {
+                    _ = scene.updateComponent(CameraComponent.self, for: entity) { $0.fovYRadians = fov * .pi / 180 }
+                }
                 _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
-                var cam = CameraComponent(isActive: false)
-                if let fov = initialFovYDegrees { cam.fovYRadians = fov * .pi / 180 }
-                _ = scene.setComponent(cam, for: entity)
                 if let pid = parentID { _ = scene.setParent(EntityID(index: UInt32(pid & 0xFFFF_FFFF), generation: UInt32(pid >> 32)), for: entity) }
                 createdEntityIDs.append(entity.rawValue)
 
@@ -470,476 +512,34 @@ public struct TransactionExecutor {
 
             case let .duplicateEntity(entityID):
                 let source = try requireEntity(entityID, in: scene)
-                let entity = scene.createEntity()
-
-                if let name = scene.component(SceneNameComponent.self, for: source) {
-                    _ = scene.setComponent(SceneNameComponent(value: name.value + " Copy"), for: entity)
-                }
-                if let kind = scene.component(SceneKindComponent.self, for: source) {
-                    _ = scene.setComponent(kind, for: entity)
-                }
-                if let local = scene.localTransform(for: source) {
-                    _ = scene.setLocalTransform(local, for: entity)
-                }
-                if let parent = scene.parent(of: source) {
-                    _ = scene.setParent(parent, for: entity)
-                }
-                if let mesh = scene.component(RenderMeshComponent.self, for: source) {
-                    _ = scene.setComponent(mesh, for: entity)
-                }
-                if let asset = scene.component(AssetReferenceComponent.self, for: source) {
-                    _ = scene.setComponent(asset, for: entity)
-                }
-                if let body = scene.component(RigidBody.self, for: source) {
-                    _ = scene.setComponent(body, for: entity)
-                }
-                if let collider = scene.component(Collider.self, for: source) {
-                    _ = scene.setComponent(collider, for: entity)
-                }
-                if let camera = scene.component(CameraComponent.self, for: source) {
-                    var copy = camera
-                    copy.isActive = false
-                    _ = scene.setComponent(copy, for: entity)
-                }
-                if let light = scene.component(LightComponent.self, for: source) {
-                    _ = scene.setComponent(light, for: entity)
-                }
-                if let scripts = scene.component(ScriptComponent.self, for: source) {
-                    _ = scene.setComponent(scripts, for: entity)
-                }
-                if let player = scene.component(AnimationPlayer.self, for: source) {
-                    _ = scene.setComponent(player, for: entity)
-                }
-                createdEntityIDs.append(entity.rawValue)
-
+                createdEntityIDs.append(duplicateEntity(source, offset: nil, in: &scene).rawValue)
             case let .duplicateEntityWithOffset(entityID, offset):
                 let source = try requireEntity(entityID, in: scene)
-                let entity = scene.createEntity()
-                if let name = scene.component(SceneNameComponent.self, for: source) {
-                    _ = scene.setComponent(SceneNameComponent(value: name.value + " Copy"), for: entity)
-                }
-                if let kind = scene.component(SceneKindComponent.self, for: source) {
-                    _ = scene.setComponent(kind, for: entity)
-                }
-                var transform = scene.localTransform(for: source) ?? LocalTransform()
-                transform.matrix.columns.3 += SIMD4<Float>(offset, 0)
-                _ = scene.setLocalTransform(transform, for: entity)
-                if let parent = scene.parent(of: source) {
-                    _ = scene.setParent(parent, for: entity)
-                }
-                if let mesh = scene.component(RenderMeshComponent.self, for: source) {
-                    _ = scene.setComponent(mesh, for: entity)
-                }
-                if let asset = scene.component(AssetReferenceComponent.self, for: source) {
-                    _ = scene.setComponent(asset, for: entity)
-                }
-                if let body = scene.component(RigidBody.self, for: source) {
-                    _ = scene.setComponent(body, for: entity)
-                }
-                if let collider = scene.component(Collider.self, for: source) {
-                    _ = scene.setComponent(collider, for: entity)
-                }
-                if let camera = scene.component(CameraComponent.self, for: source) {
-                    var copy = camera; copy.isActive = false
-                    _ = scene.setComponent(copy, for: entity)
-                }
-                if let light = scene.component(LightComponent.self, for: source) {
-                    _ = scene.setComponent(light, for: entity)
-                }
-                if let scripts = scene.component(ScriptComponent.self, for: source) {
-                    _ = scene.setComponent(scripts, for: entity)
-                }
-                if let player = scene.component(AnimationPlayer.self, for: source) {
-                    _ = scene.setComponent(player, for: entity)
-                }
-                createdEntityIDs.append(entity.rawValue)
+                createdEntityIDs.append(duplicateEntity(source, offset: offset, in: &scene).rawValue)
 
             default:
                 preconditionFailure("non-entity mutation routed to applyEntityMutation")
         }
     }
 
-    private func applyPhysicsMutation(_ mutation: SceneMutation,
-                                      to scene: inout SceneRuntime) throws {
-        switch mutation {
-
-            case let .moveEntity(entityID, parentID, index):
-                let entity = try requireEntity(entityID, in: scene)
-                let parent = try requireOptionalEntity(parentID, in: scene)
-                guard scene.moveEntity(entity, to: parent, at: index) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setLocalTransform(entityID, transform):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.setLocalTransform(transform, for: entity) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setSceneName(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                if scene.hasComponent(SceneNameComponent.self, for: entity) {
-                    _ = scene.updateComponent(SceneNameComponent.self, for: entity) { $0.value = value }
-                } else {
-                    _ = scene.setComponent(SceneNameComponent(value: value), for: entity)
-                }
-
-            case let .setRigidBodyMotionType(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(RigidBody.self, for: entity, { $0.motionType = value }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "RigidBody")
-                }
-
-            case let .setRigidBodyMass(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(RigidBody.self, for: entity, { $0.mass = max(0, value) }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "RigidBody")
-                }
-
-            case let .setRigidBodyGravityScale(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(RigidBody.self, for: entity, { $0.gravityScale = value }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "RigidBody")
-                }
-
-            case let .setRigidBodyAllowSleep(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(RigidBody.self, for: entity, { $0.allowSleep = value }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "RigidBody")
-                }
-
-            case let .setRigidBody(entityID, body):
-                let entity = try requireEntity(entityID, in: scene)
-                _ = scene.setComponent(body, for: entity)
-
-            case let .setCollider(entityID, collider):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.setComponent(collider, for: entity) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setColliderTrigger(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(Collider.self, for: entity, { $0.isTrigger = value }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-
-            case let .setColliderShapeType(entityID, kind):
-                let entity = try requireEntity(entityID, in: scene)
-                guard let collider = scene.component(Collider.self, for: entity) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-                let center = collider.shape.center
-                let newShape: ColliderShape
-                switch kind {
-                case .box:
-                    newShape = .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: center)
-                case .sphere:
-                    newShape = .sphere(radius: 0.5, center: center)
-                case .capsule:
-                    newShape = .capsule(radius: 0.5, halfHeight: 0.5, center: center)
-                case .cylinder:
-                    newShape = .cylinder(radius: 0.5, halfHeight: 0.5, center: center)
-                case .heightField:
-                    newShape = .heightField(resourceID: nil, center: center)
-                case .mesh:
-                    newShape = .mesh(resourceID: nil, center: center)
-                case .convex:
-                    newShape = .convex(resourceID: nil, center: center)
-                }
-                guard scene.updateComponent(Collider.self, for: entity, { $0.shape = newShape }) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setColliderShapeBoxHalfExtents(entityID, halfExtents):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.component(Collider.self, for: entity) != nil else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    if case .box(_, let center) = $0.shape {
-                        $0.shape = .box(halfExtents: halfExtents, center: center)
-                    }
-                }) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setColliderShapeSphereRadius(entityID, radius):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.component(Collider.self, for: entity) != nil else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    if case .sphere(_, let center) = $0.shape {
-                        $0.shape = .sphere(radius: radius, center: center)
-                    }
-                }) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setColliderShapeCapsuleRadius(entityID, radius):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.component(Collider.self, for: entity) != nil else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    if case .capsule(_, let halfHeight, let center) = $0.shape {
-                        $0.shape = .capsule(radius: radius, halfHeight: halfHeight, center: center)
-                    }
-                }) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setColliderShapeCapsuleHalfHeight(entityID, halfHeight):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.component(Collider.self, for: entity) != nil else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    if case .capsule(let radius, _, let center) = $0.shape {
-                        $0.shape = .capsule(radius: radius, halfHeight: halfHeight, center: center)
-                    }
-                }) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-
-            case let .setColliderMaterialFriction(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    $0.material.friction = max(0, value)
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-
-            case let .setColliderMaterialRestitution(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    $0.material.restitution = max(0, min(value, 1))
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-
-            case let .setColliderMaterialDensity(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    $0.material.density = max(0, value)
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-
-            case let .setColliderLayer(entityID, layerID):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    $0.layerID = layerID
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-
-            case let .setColliderLayerMask(entityID, layerMask):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(Collider.self, for: entity, {
-                    $0.layerMask = layerMask
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Collider")
-                }
-
-            case let .setConstraintEnabled(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(Constraint.self, for: entity, { $0.isEnabled = value }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "Constraint")
-                }
-
-            default:
-                preconditionFailure("non-physics mutation routed to applyPhysicsMutation")
+    private func duplicateEntity(_ source: EntityID, offset: SIMD3<Float>?,
+                                 in scene: inout SceneRuntime) -> EntityID {
+        let entity = scene.createEntity()
+        if let name = scene.component(SceneNameComponent.self, for: source) {
+            _ = scene.setComponent(SceneNameComponent(value: name.value + " Copy"), for: entity)
         }
-    }
-
-    private func applyPresentationMutation(_ mutation: SceneMutation,
-                                           to scene: inout SceneRuntime) throws {
-        switch mutation {
-
-            case let .setLightType(entityID, type):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(LightComponent.self, for: entity, { $0.type = type }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "LightComponent")
-                }
-
-            case let .setLightColor(entityID, color):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(LightComponent.self, for: entity, { $0.color = color }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "LightComponent")
-                }
-
-            case let .setLightIntensity(entityID, intensity):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(LightComponent.self, for: entity, {
-                    $0.intensity = max(0, intensity)
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "LightComponent")
-                }
-
-            case let .setLightRange(entityID, range):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(LightComponent.self, for: entity, {
-                    $0.range = max(0, range)
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "LightComponent")
-                }
-
-            case let .setLightSpotInnerAngle(entityID, angleDegrees):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(LightComponent.self, for: entity, {
-                    let inner = max(0, min(179, angleDegrees))
-                    $0.spotInnerAngleDegrees = min(inner, $0.spotOuterAngleDegrees)
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "LightComponent")
-                }
-
-            case let .setLightSpotOuterAngle(entityID, angleDegrees):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(LightComponent.self, for: entity, {
-                    let outer = max(1, min(179, angleDegrees))
-                    $0.spotOuterAngleDegrees = outer
-                    $0.spotInnerAngleDegrees = min($0.spotInnerAngleDegrees, outer)
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "LightComponent")
-                }
-
-            case let .setLightCastShadows(entityID, value):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(LightComponent.self, for: entity, {
-                    $0.castShadows = value
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "LightComponent")
-                }
-
-            case let .setMeshColorTint(entityID, color):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(RenderMeshComponent.self, for: entity, {
-                    $0.colorTint = SIMD3(max(0, color.x), max(0, color.y), max(0, color.z))
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "RenderMeshComponent")
-                }
-
-            case let .setRenderMeshVisibility(entityID, isVisible):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(RenderMeshComponent.self, for: entity, {
-                    $0.isVisible = isVisible
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "RenderMeshComponent")
-                }
-
-            case let .setRenderMaterialComponent(entityID, baseColorFactor, baseColorTextureIndex, normalTextureIndex, metallicFactor, roughnessFactor, emissiveFactor):
-                let entity = try requireEntity(entityID, in: scene)
-                let existing = scene.component(RenderMaterialComponent.self, for: entity)
-                let component = RenderMaterialComponent(
-                    baseColorFactor: baseColorFactor,
-                    baseColorTextureIndex: baseColorTextureIndex,
-                    normalTextureIndex: normalTextureIndex,
-                    metallicFactor: metallicFactor,
-                    roughnessFactor: roughnessFactor,
-                    emissiveFactor: emissiveFactor,
-                    alphaMode: existing?.alphaMode, alphaCutoff: existing?.alphaCutoff, doubleSided: existing?.doubleSided
-                )
-                _ = scene.setComponent(component, for: entity)
-
-            case let .setScriptBindings(entityID, bindings):
-                let entity = try requireEntity(entityID, in: scene)
-                _ = scene.setComponent(ScriptComponent(bindings: bindings), for: entity)
-
-            case let .setCameraPose(entityID, localTransform, target, up):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.setLocalTransform(localTransform, for: entity) else {
-                    throw TransactionExecutorError.invalidEntity(entityID)
-                }
-                guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
-                    camera.target = target
-                    if let up {
-                        camera.up = up
-                    }
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "CameraComponent")
-                }
-
-            case let .setCameraFOV(entityID, fovYDegrees):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
-                    camera.fovYRadians = fovYDegrees * .pi / 180.0
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "CameraComponent")
-                }
-
-            case let .setCameraAspectRatio(entityID, aspectRatio):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
-                    camera.aspectRatio = max(0.001, aspectRatio)
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "CameraComponent")
-                }
-
-            case let .setCameraActive(entityID, isActive):
-                let entity = try requireEntity(entityID, in: scene)
-                guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
-                    camera.isActive = isActive
-                }) else {
-                    throw TransactionExecutorError.missingComponent(entityID: entityID,
-                                                                   type: "CameraComponent")
-                }
-
-            case let .setAudioSource(entityID, source):
-                let entity = try requireEntity(entityID, in: scene)
-                _ = scene.setComponent(source, for: entity)
-
-            case let .setAnimationPlayer(entityID, clipName, speed, loop, isPlaying):
-                let entity = try requireEntity(entityID, in: scene)
-                _ = scene.setComponent(
-                    AnimationPlayer(clipName: clipName, speed: speed,
-                                    loop: loop, isPlaying: isPlaying),
-                    for: entity)
-
-            case let .setAnimationGraphPlayer(entityID, player):
-                let entity = try requireEntity(entityID, in: scene)
-                _ = scene.setComponent(player, for: entity)
-
-            case let .setAudioListener(entityID, masterVolume):
-                let entity = try requireEntity(entityID, in: scene)
-                _ = scene.setComponent(AudioListener(masterVolume: masterVolume), for: entity)
-
-            case let .setParticleEmitter(entityID, emitter):
-                let entity = try requireEntity(entityID, in: scene)
-                _ = scene.setComponent(emitter, for: entity)
-
-            default:
-                preconditionFailure("non-presentation mutation routed to applyPresentationMutation")
+        if let kind = scene.component(SceneKindComponent.self, for: source) {
+            _ = scene.setComponent(kind, for: entity)
         }
+        if let local = scene.localTransform(for: source) { _ = scene.setLocalTransform(local, for: entity) }
+        if let offset {
+            var transform = scene.localTransform(for: source) ?? LocalTransform()
+            transform.matrix.columns.3 += SIMD4<Float>(offset, 0)
+            _ = scene.setLocalTransform(transform, for: entity)
+        }
+        if let parent = scene.parent(of: source) { _ = scene.setParent(parent, for: entity) }
+        scene.duplicateComponentData(from: source, to: entity)
+        return entity
     }
 
     private func requireEntity(_ rawID: UInt64,
@@ -1213,82 +813,12 @@ public struct TransactionExecutor {
             return "scene:transform:\(id)"
         case let .setSceneName(id, name):
             return "scene:rename:\(id):\(name)"
-        case let .setRigidBodyMotionType(id, _):
-            return "scene:rigidbody_motion:\(id)"
-        case let .setRigidBodyMass(id, _):
-            return "scene:rigidbody_mass:\(id)"
-        case let .setRigidBodyGravityScale(id, _):
-            return "scene:rigidbody_gravity:\(id)"
-        case let .setRigidBodyAllowSleep(id, _):
-            return "scene:rigidbody_sleep:\(id)"
-        case let .setRigidBody(id, _):
-            return "scene:rigidbody_full:\(id)"
-        case let .setCollider(id, _):
-            return "scene:collider_set:\(id)"
-        case let .setColliderTrigger(id, _):
-            return "scene:collider_trigger:\(id)"
-        case let .setColliderShapeType(id, _):
-            return "scene:collider_shape:\(id)"
-        case let .setColliderShapeBoxHalfExtents(id, _):
-            return "scene:collider_box:\(id)"
-        case let .setColliderShapeSphereRadius(id, _):
-            return "scene:collider_sphere:\(id)"
-        case let .setColliderShapeCapsuleRadius(id, _):
-            return "scene:collider_capsule_r:\(id)"
-        case let .setColliderShapeCapsuleHalfHeight(id, _):
-            return "scene:collider_capsule_h:\(id)"
-        case let .setColliderMaterialFriction(id, _):
-            return "scene:collider_friction:\(id)"
-        case let .setColliderMaterialRestitution(id, _):
-            return "scene:collider_restitution:\(id)"
-        case let .setColliderMaterialDensity(id, _):
-            return "scene:collider_density:\(id)"
-        case let .setColliderLayer(id, _):
-            return "scene:collider_layer:\(id)"
-        case let .setColliderLayerMask(id, _):
-            return "scene:collider_mask:\(id)"
-        case let .setConstraintEnabled(id, _):
-            return "scene:constraint:\(id)"
-        case let .setLightType(id, _):
-            return "scene:light_type:\(id)"
-        case let .setLightColor(id, _):
-            return "scene:light_color:\(id)"
-        case let .setLightIntensity(id, _):
-            return "scene:light_intensity:\(id)"
-        case let .setLightRange(id, _):
-            return "scene:light_range:\(id)"
-        case let .setLightSpotInnerAngle(id, _):
-            return "scene:light_spot_inner:\(id)"
-        case let .setLightSpotOuterAngle(id, _):
-            return "scene:light_spot_outer:\(id)"
-        case let .setLightCastShadows(id, _):
-            return "scene:light_cast_shadows:\(id)"
-        case let .setMeshColorTint(id, _):
-            return "scene:mesh_color:\(id)"
-        case let .setRenderMeshVisibility(id, _):
-            return "scene:mesh_visibility:\(id)"
-        case let .setRenderMaterialComponent(id, _, _, _, _, _, _):
-            return "scene:render_material:\(id)"
-        case let .setScriptBindings(id, _):
-            return "scene:scripts:\(id)"
-        case let .setCameraPose(id, _, _, _):
-            return "scene:camera_pose:\(id)"
-        case let .setCameraFOV(id, _):
-            return "scene:camera_fov:\(id)"
-        case let .setCameraAspectRatio(id, _):
-            return "scene:camera_aspect:\(id)"
-        case let .setCameraActive(id, _):
-            return "scene:camera_active:\(id)"
-        case let .setAudioSource(id, _):
-            return "scene:audio_source:\(id)"
-        case let .setAnimationPlayer(id, _, _, _, _):
-            return "scene:animation_player:\(id)"
-        case let .setAnimationGraphPlayer(id, _):
-            return "scene:animation_graph_player:\(id)"
-        case let .setAudioListener(id, _):
-            return "scene:audio_listener:\(id)"
-        case let .setParticleEmitter(id, _):
-            return "scene:particle_emitter:\(id)"
+        case let .setComponentData(id, typeID, _, _):
+            return "scene:component:\(typeID):\(id)"
+        case let .addComponent(id, typeID):
+            return "scene:add_component:\(typeID):\(id)"
+        case let .removeComponentData(id, typeID):
+            return "scene:remove_component:\(typeID):\(id)"
         }
     }
 
@@ -1336,27 +866,15 @@ public struct TransactionExecutor {
                     createdIndex += 1
                 }
 
-            case let .spawnLightEntity(label, lightType, position, initialIntensity, initialColor, initialRange, initialCastShadows, parentID):
+            case let .spawnLightEntity(label, _, position, _, _, _, _, parentID):
                 if createdIndex < createdEntityIDs.count {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"
                     events.append(.entityAdded(ref: ref, name: label, kind: "Light"))
                     events.append(.entityAuthoredChanged(ref: ref, property: "position",
                         value: .vec3(position.x, position.y, position.z)))
-                    events.append(.entityAuthoredChanged(ref: ref, property: "lightType",
-                        value: .string(lightType.rawValue)))
-                    if let v = initialIntensity {
-                        events.append(.entityAuthoredChanged(ref: ref, property: "lightIntensity", value: .float(v)))
-                    }
-                    if let v = initialColor {
-                        events.append(.entityAuthoredChanged(ref: ref, property: "lightColor",
-                            value: .vec3(v.x, v.y, v.z)))
-                    }
-                    if let v = initialRange {
-                        events.append(.entityAuthoredChanged(ref: ref, property: "lightRange", value: .float(v)))
-                    }
-                    if let v = initialCastShadows {
-                        events.append(.entityAuthoredChanged(ref: ref, property: "lightCastShadows", value: .bool(v)))
+                    if let data = scene?.componentData("light", for: self.entityID(fromRaw: rawID)) {
+                        events.append(contentsOf: WorldEvent.componentChanges(entityID: rawID, typeID: "light", value: data))
                     }
                     if let pid = parentID {
                         events.append(.entityAuthoredChanged(ref: ref, property: "parentRef",
@@ -1366,15 +884,15 @@ public struct TransactionExecutor {
                     createdIndex += 1
                 }
 
-            case let .spawnCameraEntity(label, position, initialFovYDegrees, parentID):
+            case let .spawnCameraEntity(label, position, _, parentID):
                 if createdIndex < createdEntityIDs.count {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"
                     events.append(.entityAdded(ref: ref, name: label, kind: "Camera"))
                     events.append(.entityAuthoredChanged(ref: ref, property: "position",
                         value: .vec3(position.x, position.y, position.z)))
-                    if let fov = initialFovYDegrees {
-                        events.append(.entityAuthoredChanged(ref: ref, property: "cameraFovYDegrees", value: .float(fov)))
+                    if let data = scene?.componentData("camera", for: self.entityID(fromRaw: rawID)) {
+                        events.append(contentsOf: WorldEvent.componentChanges(entityID: rawID, typeID: "camera", value: data))
                     }
                     if let pid = parentID {
                         events.append(.entityAuthoredChanged(ref: ref, property: "parentRef",
@@ -1436,313 +954,14 @@ public struct TransactionExecutor {
                     ref: "scene:\(entityID)", property: "name",
                     value: .string(value)))
 
-            case let .setRigidBodyMotionType(entityID, value):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "rigidBodyMotionType",
-                    value: .string(value.rawValue)))
-
-            case let .setMeshColorTint(entityID, color):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "meshColor",
-                    value: .vec3(color.x, color.y, color.z)))
-
-            case let .setRenderMeshVisibility(entityID, isVisible):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "meshIsVisible",
-                    value: .bool(isVisible)))
-
-            case let .setRenderMaterialComponent(entityID, baseColorFactor, _, _, metallicFactor, roughnessFactor, emissiveFactor):
-                let ref = "scene:\(entityID)"
-                events.append(.entityAuthoredChanged(ref: ref, property: "materialBaseColor",
-                    value: .vec4(baseColorFactor.x, baseColorFactor.y, baseColorFactor.z, baseColorFactor.w)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "materialMetallic",
-                    value: .float(metallicFactor)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "materialRoughness",
-                    value: .float(roughnessFactor)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "materialEmissive",
-                    value: .vec3(emissiveFactor.x, emissiveFactor.y, emissiveFactor.z)))
-
-            case let .setLightType(entityID, type):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "lightType",
-                    value: .string(type.rawValue)))
-
-            case let .setLightColor(entityID, color):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "lightColor",
-                    value: .vec3(color.x, color.y, color.z)))
-
-            case let .setLightIntensity(entityID, intensity):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "lightIntensity",
-                    value: .float(max(0, intensity))))
-
-            case let .setLightRange(entityID, range):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "lightRange",
-                    value: .float(max(0, range))))
-
-            case let .setLightSpotInnerAngle(entityID, angle):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "lightSpotInner",
-                    value: .float(max(0, min(179, angle)))))
-
-            case let .setLightSpotOuterAngle(entityID, angle):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "lightSpotOuter",
-                    value: .float(max(1, min(179, angle)))))
-
-            case let .setLightCastShadows(entityID, value):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "lightCastShadows",
-                    value: .bool(value)))
-
-            case let .setCameraPose(entityID, localTransform, _, _):
-                let t = localTransform.translation
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "position",
-                    value: .vec3(t.x, t.y, t.z)))
-                events.append(contentsOf: worldTransformEvents(for: entityID, in: scene))
-
-            case let .setCameraFOV(entityID, fovYDegrees):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "cameraFovYDegrees",
-                    value: .float(max(1, min(179, fovYDegrees)))))
-
-            case let .setCameraAspectRatio(entityID, aspectRatio):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "cameraAspectRatio",
-                    value: .float(max(0.001, aspectRatio))))
-
-            case let .setCameraActive(entityID, isActive):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "cameraIsActive",
-                    value: .bool(isActive)))
-
-            case let .setRigidBodyMass(entityID, mass):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "rigidBodyMass",
-                    value: .float(max(0, mass))))
-
-            case let .setRigidBodyGravityScale(entityID, scale):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "rigidBodyGravityScale",
-                    value: .float(scale)))
-
-            case let .setRigidBodyAllowSleep(entityID, allow):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "rigidBodyAllowSleep",
-                    value: .bool(allow)))
-
-            case let .setRigidBody(entityID, body):
-                let ref = "scene:\(entityID)"
-                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyMotionType",
-                    value: .string(body.motionType.rawValue)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyMass",
-                    value: .float(body.mass)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyGravityScale",
-                    value: .float(body.gravityScale)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyAllowSleep",
-                    value: .bool(body.allowSleep)))
-
-            case let .setColliderShapeType(entityID, kind):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "colliderShape",
-                    value: .string(kind.rawValue)))
-
-            case let .setColliderTrigger(entityID, isTrigger):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "colliderIsTrigger",
-                    value: .bool(isTrigger)))
-
-            case let .setColliderMaterialFriction(entityID, friction):
-                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
-                    property: "colliderFriction", value: .float(max(0, friction))))
-
-            case let .setColliderMaterialRestitution(entityID, restitution):
-                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
-                    property: "colliderRestitution", value: .float(max(0, restitution))))
-
-            case let .setColliderMaterialDensity(entityID, density):
-                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
-                    property: "colliderDensity", value: .float(max(0, density))))
-
-            case let .setColliderLayer(entityID, layerID):
-                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
-                    property: "colliderLayerID", value: .float(Float(layerID))))
-
-            case let .setColliderLayerMask(entityID, layerMask):
-                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
-                    property: "colliderLayerMask", value: .float(Float(layerMask))))
-
-            case let .setAudioSource(entityID, source):
-                let ref = "scene:\(entityID)"
-                if !source.clipName.isEmpty {
-                    events.append(.entityAuthoredChanged(ref: ref, property: "audioClip",
-                        value: .string(source.clipName)))
+            case let .setComponentData(entityID, typeID, _, _),
+                 let .addComponent(entityID, typeID), let .removeComponentData(entityID, typeID):
+                let entity = self.entityID(fromRaw: entityID)
+                let dependencies = (try? scene?.componentRegistry.requiredSchemas(for: typeID)) ?? []
+                for id in [typeID] + dependencies.filter({ !$0.isStructural }).map(\.typeID) {
+                    let data = scene?.componentData(id, for: entity) ?? .null
+                    events.append(contentsOf: WorldEvent.componentChanges(entityID: entityID, typeID: id, value: data))
                 }
-                events.append(.entityAuthoredChanged(ref: ref, property: "audioVolume",
-                    value: .float(source.volume)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "audioLoop",
-                    value: .bool(source.loop)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "audioPlayOnAwake",
-                    value: .bool(source.playOnAwake)))
-
-            case let .setAnimationPlayer(entityID, clipName, speed, loop, isPlaying):
-                let ref = "scene:\(entityID)"
-                if let clip = clipName, !clip.isEmpty {
-                    events.append(.entityAuthoredChanged(ref: ref, property: "animationClip",
-                        value: .string(clip)))
-                }
-                events.append(.entityAuthoredChanged(ref: ref, property: "animationSpeed",
-                    value: .float(speed)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "animationLoop",
-                    value: .bool(loop)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "animationIsPlaying",
-                    value: .bool(isPlaying)))
-
-            case let .setAnimationGraphPlayer(entityID, player):
-                let ref = "scene:\(entityID)"
-                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphStateCount",
-                    value: .float(Float(player.graph.stateMachine.states.count))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphBlendSpaceCount",
-                    value: .float(Float(player.graph.blendSpaces1D.count))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphSpeed",
-                    value: .float(player.speed)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphIsPlaying",
-                    value: .bool(player.isPlaying)))
-
-            case let .setAudioListener(entityID, masterVolume):
-                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
-                    property: "audioListenerMasterVolume", value: .float(masterVolume)))
-
-            case let .setParticleEmitter(entityID, emitter):
-                let ref = "scene:\(entityID)"
-                events.append(.entityAuthoredChanged(ref: ref, property: "particlePrewarmTime",
-                    value: .float(emitter.settings.emission.prewarmTime)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particlePrewarmStep",
-                    value: .float(emitter.settings.emission.prewarmStep)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRate",
-                    value: .float(emitter.settings.emission.emissionRate)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRateCurve",
-                    value: .string(Self.particleCurveSummary(emitter.settings.emission.emissionRateCurve))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleDistanceEmissionRate",
-                    value: .float(emitter.settings.emission.distanceEmissionRate)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleDistanceEmissionRateCurve",
-                    value: .string(Self.particleCurveSummary(emitter.settings.emission.distanceEmissionRateCurve))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleMaxParticles",
-                    value: .float(Float(emitter.settings.emission.maxParticles))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterTrigger",
-                    value: .string(emitter.settings.subEmitters.legacyTrigger.rawValue)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterBurstCount",
-                    value: .float(Float(emitter.settings.subEmitters.legacyBurstCount))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterProbability",
-                    value: .float(emitter.settings.subEmitters.legacyProbability)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterMaxDepth",
-                    value: .float(Float(emitter.settings.subEmitters.legacyMaxDepth))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterInheritVelocity",
-                    value: .float(emitter.settings.subEmitters.legacyInheritVelocity)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterLifetime",
-                    value: .float(emitter.settings.subEmitters.legacyLifetime)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterStartVelocity",
-                    value: .vec3(emitter.settings.subEmitters.legacyStartVelocity.x,
-                                 emitter.settings.subEmitters.legacyStartVelocity.y,
-                                 emitter.settings.subEmitters.legacyStartVelocity.z)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterVelocityRandomness",
-                    value: .vec3(emitter.settings.subEmitters.legacyVelocityRandomness.x,
-                                 emitter.settings.subEmitters.legacyVelocityRandomness.y,
-                                 emitter.settings.subEmitters.legacyVelocityRandomness.z)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterStartSize",
-                    value: .float(emitter.settings.subEmitters.legacyStartSize)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterEndSize",
-                    value: .float(emitter.settings.subEmitters.legacyEndSize)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleEmitting",
-                    value: .bool(emitter.settings.emission.isEmitting)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleSimulationSpace",
-                    value: .string(emitter.settings.gpuSimulation.simulationSpace.rawValue)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleVelocityInheritance",
-                    value: .float(emitter.settings.velocity.velocityInheritance)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceMode",
-                    value: .string(emitter.settings.forces.forceMode.rawValue)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceCenter",
-                    value: .vec3(emitter.settings.forces.forceCenter.x, emitter.settings.forces.forceCenter.y, emitter.settings.forces.forceCenter.z)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceAxis",
-                    value: .vec3(emitter.settings.forces.forceAxis.x, emitter.settings.forces.forceAxis.y, emitter.settings.forces.forceAxis.z)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceRadius",
-                    value: .float(emitter.settings.forces.forceRadius)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceStrength",
-                    value: .float(emitter.settings.forces.forceStrength)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceFalloff",
-                    value: .float(emitter.settings.forces.forceFalloff)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleRenderAlignment",
-                    value: .string(emitter.settings.renderer.renderAlignment.rawValue)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleVelocityStretchScale",
-                    value: .float(emitter.settings.renderer.velocityStretchScale)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleTextureSheetFrameCount",
-                    value: .float(Float(emitter.settings.textureSheet.frameCount))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleTrailLength",
-                    value: .float(emitter.settings.trails.trailLength)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "particleTrailSegments",
-                    value: .float(Float(emitter.settings.trails.trailSegments))))
-
-            case let .setConstraintEnabled(entityID, value):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "constraintEnabled",
-                    value: .bool(value)))
-
-            case let .setCollider(entityID, collider):
-                let ref = "scene:\(entityID)"
-                events.append(.entityAuthoredChanged(ref: ref, property: "colliderShape",
-                    value: .string(collider.shape.kind.rawValue)))
-                switch collider.shape {
-                case let .box(he, _):
-                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderBoxHalfExtents",
-                        value: .vec3(he.x, he.y, he.z)))
-                case let .sphere(r, _):
-                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderSphereRadius",
-                        value: .float(r)))
-                case let .capsule(r, hh, _):
-                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderCapsuleRadius",
-                        value: .float(r)))
-                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderCapsuleHalfHeight",
-                        value: .float(hh)))
-                default:
-                    break
-                }
-                events.append(.entityAuthoredChanged(ref: ref, property: "colliderIsTrigger",
-                    value: .bool(collider.isTrigger)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "colliderFriction",
-                    value: .float(collider.material.friction)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "colliderRestitution",
-                    value: .float(collider.material.restitution)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "colliderDensity",
-                    value: .float(collider.material.density)))
-                events.append(.entityAuthoredChanged(ref: ref, property: "colliderLayerID",
-                    value: .float(Float(collider.layerID))))
-                events.append(.entityAuthoredChanged(ref: ref, property: "colliderLayerMask",
-                    value: .float(Float(collider.layerMask))))
-
-            case let .setScriptBindings(entityID, bindings):
-                let ref = "scene:\(entityID)"
-                let records = bindings.map { b -> [String: Any] in
-                    var record: [String: Any] = [
-                        "handle": b.script.rawValue,
-                        "isEnabled": b.isEnabled,
-                        "parametersJSON": b.parametersJSON,
-                    ]
-                    if let identifier = b.identifier {
-                        record["identifier"] = identifier
-                    }
-                    return record
-                }
-                if let data = try? JSONSerialization.data(withJSONObject: records),
-                   let json = String(data: data, encoding: .utf8) {
-                    events.append(.entityAuthoredChanged(ref: ref, property: "scriptBindings",
-                        value: .string(json)))
-                }
-
-            default:
-                break
             }
         }
 
@@ -1775,17 +994,6 @@ public struct TransactionExecutor {
                                                   value: .vec3(s.x, s.y, s.z)))
         }
         return result
-    }
-
-    private static func particleCurveSummary(_ curve: ParticleCurve) -> String {
-        switch curve {
-        case .constant(let value):
-            return "constant:\(value)"
-        case .keyframes(let keyframes):
-            return "keyframes:\(keyframes.count)"
-        default:
-            return curve.rawValue
-        }
     }
 
     private func extractEulerXYZDegrees(_ m: simd_float4x4) -> SIMD3<Float> {

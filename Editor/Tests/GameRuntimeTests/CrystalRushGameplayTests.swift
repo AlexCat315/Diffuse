@@ -26,7 +26,7 @@ struct CrystalRushGameplayTests {
         _ = try manager.createScript(name: "CrystalRush", source: source)
         let identifier = try #require(manager.scanScriptFiles().first).identifier
         let node = EditorSceneManifestNode(id: 0, name: "Game Controller", kind: "empty",
-            script: EditorSceneManifestScript(ScriptComponent(bindings: [ScriptBinding(identifier: identifier)])))
+            components: [ManifestComponent(type: "script", value: ComponentValue(jsonObject: ["bindings": [encodeScriptBinding(ScriptBinding(identifier: identifier))]]))])
         let output = project.appendingPathComponent("export")
         _ = try ProjectExporter.export(manifest: EditorSceneManifest(revision: 0, entityCount: 1, roots: [node]),
             appName: "CrystalRules", sourceProjectDirectory: project, playerExecutableURL: playerBinary,

@@ -52,11 +52,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_clip",
                                           summary: "Update animation clip",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
-                                                                          clipName: clipName,
-                                                                          speed: player.speed,
-                                                                          loop: player.loop,
-                                                                          isPlaying: player.isPlaying)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationPlayer", component: AnimationPlayer(clipName: clipName, speed: player.speed, loop: player.loop, isPlaying: player.isPlaying))])
             }
         )
     }
@@ -72,11 +68,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_speed",
                                           summary: "Update animation speed",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
-                                                                          clipName: player.clipName,
-                                                                          speed: next,
-                                                                          loop: player.loop,
-                                                                          isPlaying: player.isPlaying)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationPlayer", component: AnimationPlayer(clipName: player.clipName, speed: next, loop: player.loop, isPlaying: player.isPlaying))])
             }
         )
     }
@@ -92,11 +84,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_loop",
                                           summary: "Update animation loop",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
-                                                                          clipName: player.clipName,
-                                                                          speed: player.speed,
-                                                                          loop: next,
-                                                                          isPlaying: player.isPlaying)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationPlayer", component: AnimationPlayer(clipName: player.clipName, speed: player.speed, loop: next, isPlaying: player.isPlaying))])
             }
         )
     }
@@ -112,11 +100,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_playing",
                                           summary: "Update animation playing state",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
-                                                                          clipName: player.clipName,
-                                                                          speed: player.speed,
-                                                                          loop: player.loop,
-                                                                          isPlaying: next)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationPlayer", component: AnimationPlayer(clipName: player.clipName, speed: player.speed, loop: player.loop, isPlaying: next))])
             }
         )
     }
@@ -194,8 +178,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_definition",
                                           summary: "Update animation graph definition",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
-                                                                               player: player)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationGraphPlayer", component: player)])
             }
         )
     }
@@ -212,8 +195,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_speed",
                                           summary: "Update animation graph speed",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
-                                                                               player: player)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationGraphPlayer", component: player)])
             }
         )
     }
@@ -230,8 +212,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_playing",
                                           summary: "Update animation graph playing state",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
-                                                                               player: player)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationGraphPlayer", component: player)])
             }
         )
     }
@@ -249,8 +230,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_parameters",
                                           summary: "Update animation graph parameters",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
-                                                                               player: player)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "animationGraphPlayer", component: player)])
             }
         )
     }

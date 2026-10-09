@@ -146,12 +146,11 @@ extension EditorSceneAdapter {
                       scene.component(Collider.self, for: candidate) != nil,
                       candidate != existing,
                       candidate != other,
-                      scene.updateComponent(PhysicsJoint.self, for: jointEntity, { joint in
+                      updateComponentData(PhysicsJoint.self, for: jointEntity, { joint in
                           if endpoint == .a { joint.entityA = candidate }
                           else { joint.entityB = candidate }
                       })
                 else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -242,7 +241,7 @@ extension EditorSceneAdapter {
                 scene.component(PhysicsJoint.self, for: entity)?.configuration.kind ?? .pointToPoint
             },
             set: { [self] kind in
-                guard scene.updateComponent(PhysicsJoint.self, for: entity, { joint in
+                guard updateComponentData(PhysicsJoint.self, for: entity, { joint in
                     guard joint.configuration.kind != kind else { return }
                     joint.configuration = switch kind {
                     case .pointToPoint: .point
@@ -254,7 +253,6 @@ extension EditorSceneAdapter {
                     case .sixDOF: .sixDOF(SixDOFJointConfiguration())
                     }
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -270,13 +268,12 @@ extension EditorSceneAdapter {
                 return physicsJointVector(joint, field: field)[keyPath: axis]
             },
             set: { [self] next in
-                guard scene.updateComponent(PhysicsJoint.self, for: entity, { joint in
+                guard updateComponentData(PhysicsJoint.self, for: entity, { joint in
                     var vector = physicsJointVector(joint, field: field)
                     guard vector[keyPath: axis] != next else { return }
                     vector[keyPath: axis] = next
                     setPhysicsJointVector(vector, field: field, joint: &joint)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -343,11 +340,10 @@ extension EditorSceneAdapter {
             },
             set: { [self] next in
                 let value = minimum.map { max($0, next) } ?? next
-                guard scene.updateComponent(PhysicsJoint.self, for: entity, { joint in
+                guard updateComponentData(PhysicsJoint.self, for: entity, { joint in
                     guard physicsJointScalar(joint, field: field) != value else { return }
                     setPhysicsJointScalar(value, field: field, joint: &joint)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -483,7 +479,7 @@ extension EditorSceneAdapter {
         slot: PhysicsJointMotorSlot,
         update: (inout PhysicsJointMotor) -> Void
     ) {
-        guard scene.updateComponent(PhysicsJoint.self, for: entity, { joint in
+        guard updateComponentData(PhysicsJoint.self, for: entity, { joint in
             switch joint.configuration {
             case var .hinge(value):
                 guard slot == .primary else { return }
@@ -498,7 +494,6 @@ extension EditorSceneAdapter {
             default: break
             }
         }) else { return }
-        notifyRevisionChanged()
     }
 
     private func constraintEnabledBinding(for entity: EntityID) -> Binding<Bool> {
@@ -513,7 +508,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_constraint_enabled",
                                           summary: "Update constraint enabled flag",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setConstraintEnabled(entityID: entity.rawValue, value: next)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "constraint", fields: ["isEnabled": (next)])])
             }
         )
     }

@@ -1,8 +1,11 @@
 import EditorCore
+import SceneRuntime
 import EngineKernel
 import Testing
 import GuavaUICompose
 @testable import EditorApp
+
+private struct WorkflowComponent: RuntimeComponent {}
 
 @Suite("Editor panel workflows")
 struct EditorPanelWorkflowTests {
@@ -171,19 +174,40 @@ struct EditorPanelWorkflowTests {
 
     @Test("inspector component picker searches names, identifiers, and categories")
     func inspectorComponentFiltering() {
-        let kinds = EditorComponentKind.allCases
+        let kinds = ComponentRegistry.builtIn.schemas.filter(\.isUserAddable)
 
-        #expect(InspectorComponentFilter.filter(kinds, query: "audioSource") == [.audioSource])
-        #expect(InspectorComponentFilter.filter(kinds, query: "rigid body") == [.rigidBody])
+        #expect(InspectorComponentFilter.filter(kinds, query: "audioSource").map(\.typeID) == ["audioSource"])
+        #expect(InspectorComponentFilter.filter(kinds, query: "rigid body").map(\.typeID) == ["rigidbody"])
 
-        let physics = InspectorComponentFilter.filter(kinds, query: "physics")
-        #expect(physics.contains(.rigidBody))
-        #expect(physics.contains(.collider))
-        #expect(!physics.contains(.audioSource))
+        let physics = InspectorComponentFilter.filter(kinds, query: "physics").map(\.typeID)
+        #expect(physics.contains("rigidbody"))
+        #expect(physics.contains("collider"))
+        #expect(!physics.contains("audioSource"))
 
-        let rendering = InspectorComponentFilter.filter(kinds, query: "rendering")
-        #expect(rendering.contains(.camera))
-        #expect(rendering.contains(.particleEmitter))
+        let rendering = InspectorComponentFilter.filter(kinds, query: "rendering").map(\.typeID)
+        #expect(rendering.contains("camera"))
+        #expect(rendering.contains("particleEmitter"))
+    }
+
+    @Test("contributed inspector sections share registry category policy with component menus")
+    func contributedInspectorPolicy() throws {
+        var registry = ComponentRegistry.builtIn
+        registry.register(ComponentSchema(WorkflowComponent.self, typeID: "module.workflow",
+            displayName: "Workflow", category: .gameplay,
+            encode: { world, entity, _ in world.hasComponent(WorkflowComponent.self, for: entity) ? .object(["enabled": .bool(true)]) : nil },
+            decode: { _, entity, _, world in _ = world.setComponent(WorkflowComponent(), for: entity) },
+            makeDefault: { entity, world in _ = world.setComponent(WorkflowComponent(), for: entity) }))
+        let scene = EditorSceneAdapter(seedPreviewScene: false, componentRegistry: registry)
+        let id = try #require(scene.spawnEntity(template: .empty))
+        #expect(scene.addComponent("module.workflow", to: id))
+        let section = try #require(scene.inspectorSections(for: id).first { $0.id == "module.workflow" })
+        #expect(section.componentTypeID == "module.workflow")
+        #expect(!InspectorWorkspacePolicy.allows(section, scene: scene, in: .modeling))
+        #expect(!InspectorWorkspacePolicy.allows(section, scene: scene, in: .animation))
+        #expect(InspectorWorkspacePolicy.allows(section, scene: scene, in: .level))
+        let label = try #require(section.fields.first?.label)
+        let filtered = try #require(InspectorSectionFilter.filter([section], query: label).first)
+        #expect(filtered.componentTypeID == section.componentTypeID)
     }
 
     @Test("AI settings drafts use provider defaults and never carry a secret across providers")

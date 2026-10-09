@@ -81,22 +81,6 @@
       "initializer_assignments": 21,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "Editor/Sources/EditorCore/Scene/Manifest/EditorSceneManifestNode.swift::EditorSceneManifestNode": {
-      "stored_properties": 26,
-      "initializer_parameters": 26,
-      "initializer_assignments": 26,
-      "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
-    },
-    "Editor/Sources/EditorCore/Scene/Manifest/Physics/EditorSceneManifestConstraint.swift::EditorSceneManifestConstraint": {
-      "stored_properties": 27,
-      "initializer_assignments": 27,
-      "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
-    },
-    "Editor/Sources/EditorCore/Scene/Manifest/Physics/EditorSceneManifestRigidBody.swift::EditorSceneManifestRigidBody": {
-      "stored_properties": 23,
-      "initializer_assignments": 23,
-      "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
-    },
     "Editor/Sources/EditorCore/State/EditorState.swift::EditorParticleDiagnosticsSample": {
       "stored_properties": 25,
       "initializer_parameters": 25,

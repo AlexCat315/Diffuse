@@ -1,4 +1,4 @@
-﻿import CapabilityRuntime
+import CapabilityRuntime
 import Foundation
 import SceneRuntime
 import ScriptRuntime
@@ -54,25 +54,16 @@ public struct CapabilityInvocationContext: Sendable, Equatable {
     private static func componentTypeNames(for entity: EntityID,
                                            in sceneRuntime: SceneRuntime) -> Set<String> {
         var names: Set<String> = []
-        insert(&names, "LocalTransform", if: sceneRuntime.hasComponent(LocalTransform.self, for: entity))
         insert(&names, "WorldTransform", if: sceneRuntime.hasComponent(WorldTransform.self, for: entity))
         insert(&names, "Parent", if: sceneRuntime.hasComponent(Parent.self, for: entity))
         insert(&names, "Children", if: sceneRuntime.hasComponent(Children.self, for: entity))
-        insert(&names, "RigidBody", if: sceneRuntime.hasComponent(RigidBody.self, for: entity))
-        insert(&names, "Collider", if: sceneRuntime.hasComponent(Collider.self, for: entity))
-        insert(&names, "Constraint", if: sceneRuntime.hasComponent(Constraint.self, for: entity))
         insert(&names, "SceneNameComponent", if: sceneRuntime.hasComponent(SceneNameComponent.self, for: entity))
         insert(&names, "SceneKindComponent", if: sceneRuntime.hasComponent(SceneKindComponent.self, for: entity))
-        insert(&names, "AssetReferenceComponent", if: sceneRuntime.hasComponent(AssetReferenceComponent.self,
-                                                                                 for: entity))
-        insert(&names, "RenderMeshComponent", if: sceneRuntime.hasComponent(RenderMeshComponent.self, for: entity))
-        insert(&names, "RenderMaterialComponent", if: sceneRuntime.hasComponent(RenderMaterialComponent.self,
-                                                                                 for: entity))
-        insert(&names, "CameraComponent", if: sceneRuntime.hasComponent(CameraComponent.self, for: entity))
-        insert(&names, "LightComponent", if: sceneRuntime.hasComponent(LightComponent.self, for: entity))
-        insert(&names, "AudioSource", if: sceneRuntime.hasComponent(AudioSource.self, for: entity))
-        insert(&names, "AnimationPlayer", if: sceneRuntime.hasComponent(AnimationPlayer.self, for: entity))
-        insert(&names, "ScriptComponent", if: sceneRuntime.hasComponent(ScriptComponent.self, for: entity))
+        for schema in sceneRuntime.componentRegistry.schemas {
+            if sceneRuntime.hasComponent(typeID: schema.typeID, for: entity) {
+                names.insert(schema.runtimeTypeName)
+            }
+        }
         return names
     }
 
@@ -368,9 +359,6 @@ private struct CapabilityOperationProjection {
                 "label": .string(label),
                 "position": .vec3(IntentVector3(position)),
             ]
-        case let .setRigidBody(_, body):
-            self.verb = "scene.set_rigidbody"
-            self.arguments["motion_type"] = .string(body.motionType.rawValue)
         case .deleteEntity:
             self.verb = "scene.delete_entity"
         case .duplicateEntity:
@@ -390,190 +378,15 @@ private struct CapabilityOperationProjection {
         case let .setSceneName(_, value):
             self.verb = "scene.set_name"
             self.arguments["name"] = .string(value)
-        case let .setRigidBodyMotionType(_, value):
-            self.verb = "scene.set_rigid_body_motion_type"
-            self.arguments["motion_type"] = .string(value.rawValue)
-        case let .setRigidBodyMass(_, value):
-            self.verb = "scene.set_rigid_body_mass"
-            self.arguments["mass"] = .number(Double(value))
-        case let .setRigidBodyGravityScale(_, value):
-            self.verb = "scene.set_rigid_body_gravity_scale"
-            self.arguments["gravity_scale"] = .number(Double(value))
-        case let .setRigidBodyAllowSleep(_, value):
-            self.verb = "scene.set_rigid_body_allow_sleep"
-            self.arguments["allow_sleep"] = .bool(value)
-        case .setCollider:
-            self.verb = "scene.set_collider"
-        case let .setColliderTrigger(_, value):
-            self.verb = "scene.set_collider_trigger"
-            self.arguments["is_trigger"] = .bool(value)
-        case let .setColliderShapeType(_, kind):
-            self.verb = "scene.set_collider_shape"
-            self.arguments["collider_shape"] = .string(kind.rawValue)
-        case let .setColliderShapeBoxHalfExtents(_, halfExtents):
-            self.verb = "scene.set_collider_box_extents"
-            self.arguments["half_extents"] = .vec3(IntentVector3(halfExtents))
-        case let .setColliderShapeSphereRadius(_, radius):
-            self.verb = "scene.set_collider_sphere_radius"
-            self.arguments["radius"] = .number(Double(radius))
-        case let .setColliderShapeCapsuleRadius(_, radius):
-            self.verb = "scene.set_collider_capsule"
-            self.arguments["radius"] = .number(Double(radius))
-        case let .setColliderShapeCapsuleHalfHeight(_, halfHeight):
-            self.verb = "scene.set_collider_capsule"
-            self.arguments["half_height"] = .number(Double(halfHeight))
-        case let .setColliderMaterialFriction(_, value):
-            self.verb = "scene.set_collider_material"
-            self.arguments["friction"] = .number(Double(value))
-        case let .setColliderMaterialRestitution(_, value):
-            self.verb = "scene.set_collider_material"
-            self.arguments["restitution"] = .number(Double(value))
-        case let .setColliderMaterialDensity(_, value):
-            self.verb = "scene.set_collider_material"
-            self.arguments["density"] = .number(Double(value))
-        case let .setColliderLayer(_, layerID):
-            self.verb = "scene.set_collider_layer"
-            self.arguments["layer_id"] = .integer(Int64(layerID))
-        case let .setColliderLayerMask(_, layerMask):
-            self.verb = "scene.set_collider_layer"
-            self.arguments["layer_mask"] = .integer(Int64(layerMask))
-        case let .setConstraintEnabled(_, value):
-            self.verb = "scene.set_constraint_enabled"
-            self.arguments["is_enabled"] = .bool(value)
-        case let .setLightType(_, type):
-            self.verb = "scene.set_light_type"
-            self.arguments["light_type"] = .string(type.rawValue)
-        case let .setLightColor(_, color):
-            self.verb = "scene.set_light_color"
-            self.arguments["color"] = .vec3(IntentVector3(color))
-        case let .setLightIntensity(_, intensity):
-            self.verb = "scene.set_light_intensity"
-            self.arguments["intensity"] = .number(Double(intensity))
-        case let .setLightRange(_, range):
-            self.verb = "scene.set_light_range"
-            self.arguments["range"] = .number(Double(range))
-        case let .setLightSpotInnerAngle(_, angleDegrees):
-            self.verb = "scene.set_light_spot_inner_angle"
-            self.arguments["spot_inner_angle"] = .number(Double(angleDegrees))
-        case let .setLightSpotOuterAngle(_, angleDegrees):
-            self.verb = "scene.set_light_spot_outer_angle"
-            self.arguments["spot_outer_angle"] = .number(Double(angleDegrees))
-        case let .setLightCastShadows(_, value):
-            self.verb = "scene.set_light_cast_shadows"
-            self.arguments["cast_shadows"] = .bool(value)
-        case let .setMeshColorTint(_, color):
-            self.verb = "scene.set_mesh_color"
-            self.arguments["color"] = .vec3(IntentVector3(color))
-        case let .setRenderMeshVisibility(_, isVisible):
-            self.verb = "scene.set_mesh_visibility"
-            self.arguments["is_visible"] = .bool(isVisible)
-        case let .setRenderMaterialComponent(_, baseColorFactor, _, _, metallicFactor, roughnessFactor, _):
-            self.verb = "scene.set_render_material"
-            self.arguments["base_color"] = .vec3(IntentVector3(SIMD3(baseColorFactor.x, baseColorFactor.y, baseColorFactor.z)))
-            self.arguments["metallic"] = .number(Double(metallicFactor))
-            self.arguments["roughness"] = .number(Double(roughnessFactor))
-        case .setScriptBindings:
-            self.verb = "scene.set_script_bindings"
-        case let .setCameraPose(_, localTransform, target, _):
-            self.verb = "scene.set_camera_pose"
-            self.arguments["position"] = .vec3(IntentVector3(localTransform.translation))
-            self.arguments["target"] = .vec3(IntentVector3(target))
-        case let .setCameraFOV(_, fovYDegrees):
-            self.verb = "scene.set_camera_fov"
-            self.arguments["fov_y_degrees"] = .number(Double(fovYDegrees))
-        case let .setCameraAspectRatio(_, aspectRatio):
-            self.verb = "scene.set_camera_aspect_ratio"
-            self.arguments["aspect_ratio"] = .number(Double(aspectRatio))
-        case let .setCameraActive(_, isActive):
-            self.verb = "scene.set_camera_active"
-            self.arguments["is_active"] = .bool(isActive)
-        case let .setAudioSource(_, source):
-            self.verb = "scene.set_audio_source"
-            self.arguments["audio_clip"] = .string(source.clipName)
-        case let .setAnimationPlayer(_, clipName, speed, loop, isPlaying):
-            self.verb = "scene.set_animation_player"
-            if let clipName {
-                self.arguments["clip_name"] = .string(clipName)
-            }
-            self.arguments["speed"] = .number(Double(speed))
-            self.arguments["loop"] = .bool(loop)
-            self.arguments["is_playing"] = .bool(isPlaying)
-        case let .setAnimationGraphPlayer(_, player):
-            self.verb = "scene.set_animation_graph_player"
-            self.arguments["state_count"] = .integer(Int64(player.graph.stateMachine.states.count))
-            self.arguments["blend_space_count"] = .integer(Int64(player.graph.blendSpaces1D.count))
-            self.arguments["speed"] = .number(Double(player.speed))
-            self.arguments["is_playing"] = .bool(player.isPlaying)
-        case let .setAudioListener(_, masterVolume):
-            self.verb = "scene.set_audio_listener"
-            self.arguments["master_volume"] = .number(Double(masterVolume))
-        case let .setParticleEmitter(_, emitter):
-            self.verb = "scene.set_particle_emitter"
-            self.arguments["duration"] = .number(Double(emitter.settings.emission.duration))
-            self.arguments["prewarm_time"] = .number(Double(emitter.settings.emission.prewarmTime))
-            self.arguments["prewarm_step"] = .number(Double(emitter.settings.emission.prewarmStep))
-            self.arguments["emission_rate"] = .number(Double(emitter.settings.emission.emissionRate))
-            self.arguments["emission_rate_curve"] = .string(Self.particleCurveSummary(emitter.settings.emission.emissionRateCurve))
-            self.arguments["distance_emission_rate"] = .number(Double(emitter.settings.emission.distanceEmissionRate))
-            self.arguments["distance_emission_rate_curve"] = .string(Self.particleCurveSummary(emitter.settings.emission.distanceEmissionRateCurve))
-            self.arguments["burst_count"] = .integer(Int64(emitter.settings.emission.burstCount))
-            self.arguments["burst_interval"] = .number(Double(emitter.settings.emission.burstInterval))
-            self.arguments["max_particles"] = .integer(Int64(emitter.settings.emission.maxParticles))
-            self.arguments["sub_emitter_trigger"] = .string(emitter.settings.subEmitters.legacyTrigger.rawValue)
-            self.arguments["sub_emitter_burst_count"] = .integer(Int64(emitter.settings.subEmitters.legacyBurstCount))
-            self.arguments["sub_emitter_probability"] = .number(Double(emitter.settings.subEmitters.legacyProbability))
-            self.arguments["sub_emitter_max_depth"] = .integer(Int64(emitter.settings.subEmitters.legacyMaxDepth))
-            self.arguments["sub_emitter_inherit_velocity"] = .number(Double(emitter.settings.subEmitters.legacyInheritVelocity))
-            self.arguments["sub_emitter_lifetime"] = .number(Double(emitter.settings.subEmitters.legacyLifetime))
-            self.arguments["sub_emitter_start_velocity"] = .vec3(IntentVector3(emitter.settings.subEmitters.legacyStartVelocity))
-            self.arguments["sub_emitter_velocity_randomness"] =
-                .vec3(IntentVector3(emitter.settings.subEmitters.legacyVelocityRandomness))
-            self.arguments["sub_emitter_start_size"] = .number(Double(emitter.settings.subEmitters.legacyStartSize))
-            self.arguments["sub_emitter_end_size"] = .number(Double(emitter.settings.subEmitters.legacyEndSize))
-            self.arguments["is_emitting"] = .bool(emitter.settings.emission.isEmitting)
-            self.arguments["emission_shape"] = .string(emitter.settings.shape.emissionShape.rawValue)
-            self.arguments["collision_mode"] = .string(emitter.settings.collision.collisionMode.rawValue)
-            self.arguments["simulation_space"] = .string(emitter.settings.gpuSimulation.simulationSpace.rawValue)
-            self.arguments["velocity_inheritance"] = .number(Double(emitter.settings.velocity.velocityInheritance))
-            self.arguments["noise_strength"] = .number(Double(emitter.settings.forces.noiseStrength))
-            self.arguments["noise_scale"] = .number(Double(emitter.settings.forces.noiseScale))
-            self.arguments["noise_speed"] = .number(Double(emitter.settings.forces.noiseSpeed))
-            self.arguments["force_mode"] = .string(emitter.settings.forces.forceMode.rawValue)
-            self.arguments["force_center"] = .vec3(IntentVector3(emitter.settings.forces.forceCenter))
-            self.arguments["force_axis"] = .vec3(IntentVector3(emitter.settings.forces.forceAxis))
-            self.arguments["force_radius"] = .number(Double(emitter.settings.forces.forceRadius))
-            self.arguments["force_strength"] = .number(Double(emitter.settings.forces.forceStrength))
-            self.arguments["force_falloff"] = .number(Double(emitter.settings.forces.forceFalloff))
-            self.arguments["size_randomness"] = .number(Double(emitter.settings.appearance.sizeRandomness))
-            self.arguments["start_rotation"] = .number(Double(emitter.settings.appearance.startRotation))
-            self.arguments["rotation_randomness"] = .number(Double(emitter.settings.appearance.rotationRandomness))
-            self.arguments["angular_velocity"] = .number(Double(emitter.settings.appearance.angularVelocity))
-            self.arguments["angular_velocity_randomness"] = .number(Double(emitter.settings.appearance.angularVelocityRandomness))
-            self.arguments["size_curve"] = .string(Self.particleCurveSummary(emitter.settings.appearance.sizeCurve))
-            self.arguments["color_curve"] = .string(Self.particleCurveSummary(emitter.settings.appearance.colorCurve))
-            self.arguments["blend_mode"] = .string(emitter.settings.appearance.blendMode.rawValue)
-            self.arguments["render_alignment"] = .string(emitter.settings.renderer.renderAlignment.rawValue)
-            self.arguments["velocity_stretch_scale"] = .number(Double(emitter.settings.renderer.velocityStretchScale))
-            self.arguments["velocity_stretch_max"] = .number(Double(emitter.settings.renderer.velocityStretchMax))
-            self.arguments["texture_sheet_columns"] = .integer(Int64(emitter.settings.textureSheet.columns))
-            self.arguments["texture_sheet_rows"] = .integer(Int64(emitter.settings.textureSheet.rows))
-            self.arguments["texture_sheet_frame_count"] = .integer(Int64(emitter.settings.textureSheet.frameCount))
-            self.arguments["texture_sheet_frame_rate"] = .number(Double(emitter.settings.textureSheet.frameRate))
-            self.arguments["trail_length"] = .number(Double(emitter.settings.trails.trailLength))
-            self.arguments["trail_segments"] = .integer(Int64(emitter.settings.trails.trailSegments))
-            self.arguments["trail_end_size_scale"] = .number(Double(emitter.settings.trails.trailEndSizeScale))
-            self.arguments["trail_end_alpha_scale"] = .number(Double(emitter.settings.trails.trailEndAlphaScale))
-        }
-    }
-
-    private static func particleCurveSummary(_ curve: ParticleCurve) -> String {
-        switch curve {
-        case .constant(let value):
-            return "constant:\(value)"
-        case .keyframes(let keyframes):
-            return "keyframes:\(keyframes.count)"
-        default:
-            return curve.rawValue
+        case let .setComponentData(_, typeID, _, _):
+            self.verb = "scene.set_component_data"
+            self.arguments["type_id"] = .string(typeID)
+        case let .addComponent(_, typeID):
+            self.verb = "scene.add_component"
+            self.arguments["type_id"] = .string(typeID)
+        case let .removeComponentData(_, typeID):
+            self.verb = "scene.remove_component_data"
+            self.arguments["type_id"] = .string(typeID)
         }
     }
 

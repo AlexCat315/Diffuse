@@ -253,8 +253,10 @@ public final class EditorApplication: @unchecked Sendable {
             let bus = observationBus
             let mem = contextMemoryStore
             let projectTools = makeProjectToolExecutor()
+            let componentDescriptions = makeComponentDescriptionProvider()
             pendingAISetupTask = Task {
                 await initialSession.setProjectToolExecutor(projectTools)
+                await initialSession.setComponentDescriptionProvider(componentDescriptions)
                 await initialSession.setObservationBus(bus)
                 await initialSession.setContextMemory(mem)
                 await initialSession.setWorkflowContext(ctx)

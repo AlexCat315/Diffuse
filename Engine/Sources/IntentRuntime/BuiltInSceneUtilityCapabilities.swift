@@ -245,10 +245,7 @@ public struct SetMeshColorCapability: GuavaCapability {
                                             requiring: .renderMesh,
                                             context: context)
         return PreparedCapability(
-            operations: [.scene(.setMeshColorTint(
-                entityID: entityID,
-                color: try capabilityVector(input.color, field: "color")
-            ))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "renderMesh", fields: ["colorTint": (try capabilityVector(input.color, field: "color"))]))],
             preview: CapabilityPreview(summary: "Set mesh colour",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -282,8 +279,7 @@ public struct SetMeshVisibilityCapability: GuavaCapability {
                                             requiring: .renderMesh,
                                             context: context)
         return PreparedCapability(
-            operations: [.scene(.setRenderMeshVisibility(entityID: entityID,
-                                                          isVisible: input.is_visible))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "renderMesh", fields: ["isVisible": (input.is_visible)]))],
             preview: CapabilityPreview(summary: "Set mesh visibility",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -317,8 +313,7 @@ public struct SetConstraintEnabledCapability: GuavaCapability {
                                             requiring: .constraint,
                                             context: context)
         return PreparedCapability(
-            operations: [.scene(.setConstraintEnabled(entityID: entityID,
-                                                       value: input.is_enabled))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "constraint", fields: ["isEnabled": (input.is_enabled)]))],
             preview: CapabilityPreview(summary: "Set constraint enabled",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -388,7 +383,7 @@ public struct SetAudioSourceCapability: GuavaCapability {
             source.spatialBlend = try capabilityFloat(value, field: "audio_spatial_blend")
         }
         return PreparedCapability(
-            operations: [.scene(.setAudioSource(entityID: entityID, source: source))],
+            operations: [.scene(.componentData(entityID: entityID, typeID: "audioSource", component: source))],
             preview: CapabilityPreview(summary: "Set audio source",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -542,7 +537,7 @@ public struct SetScriptPropertyCapability: GuavaCapability {
             value: input.script_property_value
         )
         return PreparedCapability(
-            operations: [.scene(.setScriptBindings(entityID: entityID, bindings: bindings))],
+            operations: [.scene(.setComponentData(entityID: entityID, typeID: "script", value: ComponentValue(jsonObject: ["bindings": (bindings).map(encodeScriptBindingForEditing)])))],
             preview: CapabilityPreview(summary: "Set script property",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -622,7 +617,7 @@ public struct SetScriptBindingsCapability: GuavaCapability {
             bindings[index].isEnabled = input.is_enabled
         }
         return PreparedCapability(
-            operations: [.scene(.setScriptBindings(entityID: entityID, bindings: bindings))],
+            operations: [.scene(.setComponentData(entityID: entityID, typeID: "script", value: ComponentValue(jsonObject: ["bindings": (bindings).map(encodeScriptBindingForEditing)])))],
             preview: CapabilityPreview(summary: "Set script binding",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -679,11 +674,7 @@ public struct SetAnimationPlayerCapability: GuavaCapability {
         if let value = input.animation_loop { player.loop = value }
         if let value = input.animation_is_playing { player.isPlaying = value }
         return PreparedCapability(
-            operations: [.scene(.setAnimationPlayer(entityID: entityID,
-                                                     clipName: player.clipName,
-                                                     speed: player.speed,
-                                                     loop: player.loop,
-                                                     isPlaying: player.isPlaying))],
+            operations: [.scene(.componentData(entityID: entityID, typeID: "animationPlayer", component: AnimationPlayer(clipName: player.clipName, speed: player.speed, loop: player.loop, isPlaying: player.isPlaying)))],
             preview: CapabilityPreview(summary: "Set animation player",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]

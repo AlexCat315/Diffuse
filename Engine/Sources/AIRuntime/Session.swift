@@ -8,11 +8,13 @@ import IntentRuntime
 import ObservationBus
 import PerceptionRuntime
 import PluginRuntime
+import SceneRuntime
 
 private extension WorldPropertyValue {
     /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
     var jsonValue: Any {
         switch self {
+        case let .json(value): return value.jsonObject
         case let .vec3(x, y, z):       return [x, y, z]
         case let .vec4(x, y, z, w):    return [x, y, z, w]
         case let .float(v):             return v
@@ -24,6 +26,7 @@ private extension WorldPropertyValue {
     /// Compact string representation for ContextMemory payloads.
     var promptString: String {
         switch self {
+        case let .json(value): return String(data: (try? JSONEncoder().encode(value)) ?? Data(), encoding: .utf8) ?? "null"
         case let .vec3(x, y, z):        return "[\(x),\(y),\(z)]"
         case let .vec4(x, y, z, w):     return "[\(x),\(y),\(z),\(w)]"
         case let .float(v):             return String(v)
@@ -96,6 +99,8 @@ public actor Session {
     private var lastSubmittedCapabilityDrafts: [CapabilityInvocationDraft] = []
     private var activeInferenceID: UUID?
     private var projectToolExecutor: ProjectToolset.Executor?
+    public typealias ComponentDescriptionProvider = @Sendable (String?) async -> [ComponentDescription]
+    private var componentDescriptionProvider: ComponentDescriptionProvider?
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -161,6 +166,10 @@ public actor Session {
 
     public func setProjectToolExecutor(_ executor: ProjectToolset.Executor?) {
         projectToolExecutor = executor
+    }
+
+    public func setComponentDescriptionProvider(_ provider: ComponentDescriptionProvider?) {
+        componentDescriptionProvider = provider
     }
 
     private static func workflowPayload(from ctx: WorkflowContext) -> [String: String] {
@@ -1043,6 +1052,9 @@ public actor Session {
         and `audio_spatial_blend` (0=fully 2D, 1=fully 3D positional) are shown in `audioPitch` \
         and `audioSpatialBlend` only when non-default (pitch≠1.0 or blend>0). Omitting any \
         field preserves the current value.
+        - Discover scene.describe_components to inspect registered component fields, dependencies and authored defaults. \
+        Field paths refer to stored component JSON; numeric presentation scales describe inspector display units. \
+        Use exact write capability contracts for changes.
         - Use the scene.find_entities read capability (name substring, kind, component, or spatial proximity) to locate \
         entities whose IDs are not visible in the scene list. The `component` parameter accepts \
         tags like "light", "camera", "rigidbody", "collider", "audio_source", "animation", "script", \
@@ -1523,6 +1535,13 @@ public actor Session {
                 result = value
             } else {
                 switch contract.id {
+                case "scene.describe_components":
+                    let typeID = call.input["type_id"] as? String
+                    let descriptions = await componentDescriptionProvider?(typeID)
+                        ?? SceneRuntime().componentDescriptions(typeID: typeID)
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.sortedKeys]
+                    result = String(data: try encoder.encode(descriptions), encoding: .utf8) ?? "[]"
                 case "scene.find_entities":
                     result = findEntitiesResult(input: call.input)
                 case "scene.get_entities":

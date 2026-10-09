@@ -34,6 +34,11 @@ public struct RuntimeScriptPhaseContext {
         self.physicsQueryScene = physicsQueryScene
     }
 
+    public var componentRegistry: ComponentRegistry {
+        get { worldPointer.pointee.componentRegistry }
+        nonmutating set { worldPointer.pointee.componentRegistry = newValue }
+    }
+
     public var deltaTimeSeconds: Double {
         deltaTimeSecondsValue
     }

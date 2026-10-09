@@ -63,7 +63,7 @@ extension EditorSceneAdapter {
         _ = applySceneTransaction(intentVerb: "scene.set_particle_emitter",
                                   summary: summary,
                                   targetRawIDs: [entity.rawValue],
-                                  mutations: [.setParticleEmitter(entityID: entity.rawValue, emitter: emitter)])
+                                  mutations: [.componentData(entityID: entity.rawValue, typeID: "particleEmitter", component: emitter)])
     }
 
     func particleModuleStackBinding(for entity: EntityID) -> Binding<ParticleModuleStack> {

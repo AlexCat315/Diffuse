@@ -112,6 +112,10 @@ struct SourceKitLSPProcessTests {
         try await support.restart(sources: [.init(file: file, text: "let value = 99 // manual retry")])
         #expect(await support.isReady)
         #expect(try fixture.launchCount() == 5)
+        // Sending didOpen does not wait for the fixture process to consume it.
+        try await waitUntil {
+            try fixture.openedDocuments().last == "let value = 99 // manual retry"
+        }
         #expect(try fixture.openedDocuments().last == "let value = 99 // manual retry")
         await support.stop()
     }
