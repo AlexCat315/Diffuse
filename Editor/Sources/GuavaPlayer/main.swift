@@ -88,7 +88,7 @@ private func runPlayer() throws {
             titleBarStyle: .standard,
             targetFrameRate: 60
         ),
-        backend: backend,
+        backend: .wgpu(backend),
         onTick: { dt in
             app.tick(deltaTime: dt)
             let logical = playerState.logicalSize

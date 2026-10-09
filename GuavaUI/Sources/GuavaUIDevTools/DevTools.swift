@@ -142,6 +142,12 @@ public final class DevTools {
         frameTap = FrameTap(sink: frameTapSink, backend: backend, renderer: renderer)
     }
 
+    /// Hosts may provide an owned pixel capture using their selected renderer.
+    public func attachFrameTap(capture: @escaping FrameTap.Capture, reset: @escaping () -> Void = {}) {
+        guard FrameTap.isSupported else { return }
+        frameTap = FrameTap(sink: frameTapSink, capture: capture, reset: reset)
+    }
+
     /// Capture a frame for the mirror viewport. No-op unless the client
     /// has issued `mirror.start` since the last `mirror.stop`.
     public func mirrorCapture(drawList: DrawList,
