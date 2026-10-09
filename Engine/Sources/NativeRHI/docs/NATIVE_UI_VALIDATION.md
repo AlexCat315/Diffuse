@@ -126,6 +126,44 @@ GUAVA_NATIVE_HUD_BENCHMARK=1 swift test --package-path GuavaUI -c release \
 
 NativeRHI 101 项、NativeRenderer 43 项、GuavaUI 全包及 Editor 受影响测试通过。Swift maintainability 仍为既有 46 项超限指标，没有增加。
 
+## 拥有 CPU 像素的图片资产
+
+`ImageAssetRegistry()` 改为独立 CPU cache，删除对 WGPU renderer 和 main-thread GPU 上传的依赖。每个不可变 Asset 保留整个 DecodedImage，验证 RGBA 字节数、尺寸和像素预算；相同 key 的并发注册只发布一个实例。图片 TextureID 使用独立命名空间，不同 registry、缓存清理前后的旧／新图可在同一 DrawList 中共存。
+
+Image.Source 将手动 GPU texture 与拥有 CPU 像素的 asset 分开。文件图片、AsyncImage、SVG 密度重栅格、评分星形与 TextField 清除图标将 asset 保留进 DrawListResources，再随 cached layer 和 DrawListSnapshot 传到消费端。InGameViewGraphBridge 安装自己的 CPU cache；异步解码只在捕获的 UI scheduler 上注册和发布，GPU texture 创建／上传由 Native 或 WGPU 绘制器的串行录制线程执行。没有 registry 时，同步文件图片也能直接解码并拥有像素。
+
+GPU residency 弱引用 CPU asset，成功首次注册后复用纹理。clear 只释放 cache 的所有权，旧节点和 snapshot 保持有效；最后一个 CPU 引用过期后，下次录制清理 GPU slot。Native frame token 独立保留已录制的 GPU slot，因而在提交前清理 CPU cache 或 registry 仍可完成原帧；失败或放弃的上传继续保留到随后成功提交。Sibling 同步共享 GPU 图片，并拒绝跨 device／backend 的绑定。CPU cache 尚无自动淘汰，需主动 clear 或释放宿主。
+
+2026-10-09 Apple M1 Metal 覆盖：
+
+- 64 次并发同 key 注册取得同一 asset；独立 registry 分配不同 ID。拒绝非法尺寸、溢出尺寸与 RGBA payload，错误不进入 cache。clear 增加 revision，snapshot COW／reset 保留并按时释放 CPU owner。
+- 三张红／绿／蓝图片同时显示，其中蓝图替换同 key 的红图，红图仍被旧 geometry 保留。两条路径逐像素一致；Native sibling 仅上传自己的 4 字节 fallback，随后主 renderer 的图片上传为零，WGPU sibling 也保持原图。
+- 无 active frame、录制后 submit 失败、cache clear／geometry reset 和提交前 prune 均覆盖。CPU owner 已释放时原 frame token 仍提交正确像素，无需重新发布图片。
+- 生产 mesh scene + InGameUIHost 的文件 SVG HUD：fit／fill、rounded clip、半透明色块、alpha mask，1× → 2× → 1.5× → 1×，四组 readback 与 WGPU 完全一致。AsyncImage 的实际文件由 main-thread scheduler 发布，再在 worker 线程录制 Native scene，实际红／绿像素正确。原始 [图片 HUD 对照](benchmarks/native-image-hud-parity-m1.json)。
+- SVG cache clear 后，未改变逻辑尺寸的 raster 取得新图，旧 retained geometry 仍保留原像素；评分 mask 的两张 CPU 图片随 draw list 保留。
+
+GuavaUI 和 Portable 全包通过，之后新增的缓存重置／worker-thread／sibling 回归单独通过。Editor 受影响测试及空闲环境下的串行全包通过。并行编译期间的两次全包运行分别出现 workspace preset 和 SourceKit retry fixture 的间歇性失败，相关单独测试与空闲全量复测通过；不据此修改这两处未变更的功能代码。Swift maintainability 仍为 46 项既有超限指标。
+
+图片 Release 性能使用 96 张独立 64×64 RGBA 图片，共 1,572,864 字节 CPU 像素，8,064 vertices、20,160 indices、96 draws。BGRA sRGB + 4× MSAA，logical 1280×720，物理 720p / 1080p；每条路径预热 30 帧、测量 3×180 帧，每三帧等待 GPU 完成。Native 首次上传 1,572,868 字节（含 white fallback），随后所有稳态帧上传为零。720p 预检逐像素一致，1080p 最大通道误差 1。
+
+| 分辨率 | CPU p50，Native / WGPU (µs) | CPU p95，Native / WGPU (µs) | completed-batch p50，Native / WGPU (ms/frame) |
+| --- | ---: | ---: | ---: |
+| 1280×720 | 302.917 / 228.041 | 336.750 / 308.500 | 0.609 / 0.786 |
+| 1920×1080 | 486.875 / 526.208 | 685.208 / 823.125 | 1.115 / 1.570 |
+
+这次空闲测量的 completed-batch p50/p95 均降低；1080p CPU p50/p95 也降低。720p CPU p50 高约 33%、p95 高约 9%，这项 CPU 门槛尚未通过。原始报告：[图片 720p](benchmarks/native-ui-image-assets-m1-720.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080.json)。
+
+之后给 benchmark 加上每帧 draw count 相等、Native 稳态零图片重上传的检查，再次空闲运行：720p CPU p50 为 299.042 / 340.208 µs，completed-batch 为 0.556 / 0.901 ms/frame；1080p CPU p50 为 446.708 / 523.292 µs，completed-batch 为 1.108 / 1.604 ms/frame。两种分辨率的 CPU p50/p95 和 completed-batch p50/p95 都低于 WGPU。后一次的 [720p 报告](benchmarks/native-ui-image-assets-m1-720-checked-work.json)、[1080p 报告](benchmarks/native-ui-image-assets-m1-1080-checked-work.json) 与前一次一起保留；720p CPU 对照仍有波动，需要调查测量稳定性和提交开销，不能仅凭后一组结果宣称性能门槛通过。
+
+这里仅测 renderer 的 steady-state 工作，不包含解码、首帧图片上传、UI 重组、窗口呈现；completed-batch 不是 GPU timestamp 或显示 FPS，三个批次样本的 p95 为最大批次值。
+
+```sh
+GUAVA_NATIVE_IMAGE_BENCHMARK=1 swift test --package-path GuavaUI -c release \
+  --filter NativeDrawListBenchmarkTests
+# 报告写到 /tmp/guava-native-ui-benchmark；可用
+# GUAVA_NATIVE_UI_BENCHMARK_OUTPUT 指定绝对目录。
+```
+
 ## 后续门槛
 
-继续迁移图片资产 registry 的原生上传、主／辅助窗口宿主与多 swapchain 帧协调。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
+先调查并处理 720p 多图片工作量的 CPU 回退／波动，再迁移主／辅助窗口宿主与多 swapchain 帧协调。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。

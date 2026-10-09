@@ -81,7 +81,7 @@ public final class NativeDrawListRenderer {
     public func registerExternalColorTexture(id: TextureID, resource: TextureResource) throws {
         try textureStore.register(id: id, resource: resource)
     }
-    public func unregisterTexture(id: TextureID) { textureStore.textures.removeValue(forKey: id) }
+    public func unregisterTexture(id: TextureID) { textureStore.unregister(id) }
 
     public func uploadFontAtlas(_ atlas: FontAtlas, textureID: TextureID) throws {
         guard textureID > 0 && textureID < 0x8000_0000 else { throw RHIError.invalidArgument("invalid font atlas texture ID") }
@@ -107,6 +107,7 @@ public final class NativeDrawListRenderer {
         guard let pipeline else { throw RHIError.invalidArgument("configure the native UI renderer before recording") }
         try viewport.validate()
         try validate(list)
+        try textureStore.prepareAssets(list.resources)
         var statistics = NativeUIDrawStatistics()
         statistics.vertices = list.vertices.count; statistics.indices = list.indices.count
         let slots = [textureStore.fallback] + textureStore.textures.keys.sorted().compactMap { textureStore.textures[$0] }

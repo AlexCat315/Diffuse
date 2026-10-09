@@ -1,0 +1,36 @@
+{
+  "backend": "Metal",
+  "device": "Apple M1",
+  "date": "2026-10-09",
+  "workload": "production mesh scene plus owned file-image HUD",
+  "samples": [
+    {
+      "height": 64,
+      "maximum": 0,
+      "mean": 0,
+      "scale": 1,
+      "width": 128
+    },
+    {
+      "height": 128,
+      "maximum": 0,
+      "mean": 0,
+      "scale": 2,
+      "width": 256
+    },
+    {
+      "height": 96,
+      "maximum": 0,
+      "mean": 0,
+      "scale": 1.5,
+      "width": 192
+    },
+    {
+      "height": 64,
+      "maximum": 0,
+      "mean": 0,
+      "scale": 1,
+      "width": 128
+    }
+  ]
+}

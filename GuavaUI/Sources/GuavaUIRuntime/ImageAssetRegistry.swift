@@ -1,43 +1,32 @@
 import Foundation
 
-/// Lazy file → `TextureID` cache. Wraps a `DrawListRenderer`: the first
-/// time a key is requested, the registry decodes the image, calls
-/// `registerColorTexture(...)` on the renderer with a freshly-allocated
-/// `TextureID`, and remembers the result. Repeat lookups return the
-/// cached id without touching the disk or the GPU.
-///
-/// Keys are arbitrary strings — typically a file path plus a size suffix
-/// when callers want multiple rasterisations of the same SVG. The default
-/// helpers (`texture(file:size:)` / `texture(url:size:)`) build a stable
-/// key for you.
-///
-/// Thread safety: all mutations are guarded by an internal lock so
-/// background loaders can prime the cache while the main thread renders.
+/// Thread-safe CPU image cache. Immutable assets travel with geometry; each
+/// renderer uploads them on its own recording thread, without a main-thread GPU
+/// dependency. Clearing the cache does not invalidate retained nodes or frames.
 public final class ImageAssetRegistry: @unchecked Sendable {
-
-    /// Per-asset metadata returned to callers.
-    public struct Asset: Sendable, Equatable {
+    public final class Asset: Sendable, Equatable {
         public let textureID: TextureID
-        public let width: Int
-        public let height: Int
-    }
+        public let image: DecodedImage
 
-    /// Renderer this registry uploads textures to. Stored unowned so the
-    /// caller controls lifetime — the registry must not outlive its
-    /// renderer.
-    public let renderer: DrawListRenderer
-
-    /// First TextureID handed out. The font atlas typically uses 1 and the
-    /// preview texture uses 2, so we start well above those to avoid
-    /// collisions with caller-allocated ids.
-    public init(renderer: DrawListRenderer, firstID: TextureID = 100) {
-        self.renderer = renderer
-        self.nextID = firstID
+        public init(image: DecodedImage) throws {
+            guard image.width > 0, image.height > 0, image.width <= 16_384, image.height <= 16_384 else {
+                throw ImageDecodeError.decodeFailure("invalid image asset dimensions")
+            }
+            let pixels = UInt64(image.width) * UInt64(image.height)
+            guard pixels <= 64 * 1_024 * 1_024, UInt64(image.pixels.count) == pixels * 4 else {
+                throw ImageDecodeError.decodeFailure("invalid or oversized RGBA image asset payload")
+            }
+            self.image = image
+            textureID = try ImageAssetIDs.shared.allocate()
+        }
+        public static func == (lhs: Asset, rhs: Asset) -> Bool { lhs === rhs }
     }
 
     private let lock = NSLock()
-    private var nextID: TextureID
     private var cache: [String: Asset] = [:]
+    private var generation: UInt64 = 0
+    public init() {}
+    public var revision: UInt64 { lock.withLock { generation } }
 
     // MARK: - Lookup
 
@@ -51,7 +40,7 @@ public final class ImageAssetRegistry: @unchecked Sendable {
     // MARK: - Register from disk
 
     /// Decode the file at `path` (resolved against the working directory)
-    /// at an optional `size` and upload it under a freshly-allocated
+    /// at an optional `size` and retain it under a freshly-allocated
     /// `TextureID`. Subsequent calls with the same `(path, size)` return
     /// the cached id.
     @discardableResult
@@ -76,38 +65,20 @@ public final class ImageAssetRegistry: @unchecked Sendable {
     /// keep their own decoder.
     @discardableResult
     public func register(key: String, decoded: DecodedImage) throws -> Asset {
-        lock.lock()
-        if let hit = cache[key] {
-            lock.unlock()
-            return hit
+        try lock.withLock {
+            if let hit = cache[key] { return hit }
+            let asset = try Asset(image: decoded)
+            cache[key] = asset
+            return asset
         }
-        let id = nextID
-        nextID &+= 1
-        lock.unlock()
-
-        try decoded.pixels.withUnsafeBufferPointer { buf in
-            try renderer.registerColorTexture(
-                id: id,
-                pixels: buf.baseAddress!,
-                width: UInt32(decoded.width),
-                height: UInt32(decoded.height)
-            )
-        }
-        let asset = Asset(textureID: id, width: decoded.width, height: decoded.height)
-        lock.lock()
-        cache[key] = asset
-        lock.unlock()
-        return asset
     }
 
     // MARK: - Maintenance
 
-    /// Clear the cache. Does **not** unregister textures from the renderer
-    /// (the renderer has no public unregister API yet); callers should
-    /// recreate the renderer if they need to reclaim GPU memory.
+    /// Release cache ownership. Geometry and snapshots retain their own assets;
+    /// GPU residency is reclaimed when those references expire.
     public func clear() {
-        lock.lock(); defer { lock.unlock() }
-        cache.removeAll()
+        lock.withLock { cache.removeAll(); generation &+= 1 }
     }
 
     // MARK: - Key composition
@@ -124,7 +95,7 @@ public final class ImageAssetRegistry: @unchecked Sendable {
     }
 }
 
-/// TaskLocal slot exposing the active `ImageAssetRegistry` to compose-side
+/// Main-thread context slot exposing the active `ImageAssetRegistry` to compose-side
 /// helpers (`Image(file:)`, `Button(icon: .file(...))`, etc.). Hosts set this
 /// once at startup, mirroring how `InteractionRegistryHolder` and
 /// `TextEnvironmentHolder` are wired.
@@ -137,4 +108,19 @@ public enum ImageAssetRegistryHolder {
 /// at physical-pixel resolution and stay crisp on HiDPI displays.
 public enum ContentScaleHolder {
     nonisolated(unsafe) public static var current: Float = 1
+}
+
+/// Reserve one process-wide namespace, distinct from caller/font IDs and
+/// viewport leases. Assets from independent registries can coexist in a frame.
+private final class ImageAssetIDs: @unchecked Sendable {
+    static let shared = ImageAssetIDs()
+    private let lock = NSLock()
+    private var next: TextureID = 0x1000_0000
+    func allocate() throws -> TextureID {
+        try lock.withLock {
+            guard next < 0x4000_0000 else { throw ImageDecodeError.decodeFailure("image texture IDs exhausted") }
+            defer { next += 1 }
+            return next
+        }
+    }
 }

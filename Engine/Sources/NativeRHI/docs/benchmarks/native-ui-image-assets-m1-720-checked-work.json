@@ -1,0 +1,72 @@
+{
+  "device": "Apple M1",
+  "format": "bgra8UnormSRGB",
+  "frames": 180,
+  "height": 720,
+  "nativeUploads": {
+    "initialBytes": 1572868,
+    "steadyStateBytes": 0
+  },
+  "repeats": 3,
+  "results": [
+    {
+      "backend": "native-metal",
+      "completedBatch": {
+        "p50Microseconds": 555.5916666666666,
+        "p95Microseconds": 574.5590277777777,
+        "sampleCount": 3
+      },
+      "cpuFrame": {
+        "p50Microseconds": 299.042,
+        "p95Microseconds": 329.542,
+        "sampleCount": 540
+      },
+      "cpuRecord": {
+        "p50Microseconds": 116.625,
+        "p95Microseconds": 128.583,
+        "sampleCount": 540
+      },
+      "cpuSubmit": {
+        "p50Microseconds": 180.375,
+        "p95Microseconds": 199.25,
+        "sampleCount": 540
+      }
+    },
+    {
+      "backend": "wgpu-metal",
+      "completedBatch": {
+        "p50Microseconds": 901.3293944444445,
+        "p95Microseconds": 1014.897688888889,
+        "sampleCount": 3
+      },
+      "cpuFrame": {
+        "p50Microseconds": 340.208,
+        "p95Microseconds": 457.209,
+        "sampleCount": 540
+      },
+      "cpuRecord": {
+        "p50Microseconds": 316.25,
+        "p95Microseconds": 428.917,
+        "sampleCount": 540
+      },
+      "cpuSubmit": {
+        "p50Microseconds": 21.083,
+        "p95Microseconds": 32.042,
+        "sampleCount": 540
+      }
+    }
+  ],
+  "samples": 4,
+  "scenario": "native-ui-image-assets",
+  "warmup": 30,
+  "width": 1280,
+  "work": {
+    "draws": 96,
+    "imageAssetBytes": 1572864,
+    "imageAssets": 96,
+    "indices": 20160,
+    "vertices": 8064
+  },
+  "date": "2026-10-09",
+  "perFrameWorkValidated": true
+}

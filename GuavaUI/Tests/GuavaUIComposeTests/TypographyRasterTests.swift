@@ -62,9 +62,37 @@ struct TypographyRasterTests: GuavaUIComposeSerializedSuite {
         #expect(initial.sourcePixelSize?.width == 14)
         ContentScaleHolder.current = 2
         #expect(raster.resolve(width: 14, height: 14).sourcePixelSize?.width == 28)
-        #expect(raster.resolve(width: 14, height: 14).sourcePixelSize?.width == 28 && diagnostics == 2)
+        #expect(raster.resolve(width: 14, height: 14).sourcePixelSize?.width == 28 && diagnostics == 0)
         #expect(raster.resolve(width: 20, height: 20).sourcePixelSize?.width == 40)
         ContentScaleHolder.current = .nan
         #expect(raster.resolve(width: 20, height: 20).sourcePixelSize?.width == 20)
+    } }
+
+    @Test("Clearing a vector cache refreshes the raster while retained geometry keeps the old asset")
+    func vectorCacheReset() throws { try GlobalTestLock.locked {
+        let previousScale = ContentScaleHolder.current, previousRegistry = ImageAssetRegistryHolder.current
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("guava-vector-reset-\(UUID()).svg")
+        defer {
+            ContentScaleHolder.current = previousScale; ImageAssetRegistryHolder.current = previousRegistry
+            try? FileManager.default.removeItem(at: url)
+        }
+        func write(_ color: String) throws {
+            try "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\"><rect width=\"12\" height=\"12\" fill=\"\(color)\"/></svg>"
+                .write(to: url, atomically: true, encoding: .utf8)
+        }
+        let registry = ImageAssetRegistry()
+        ImageAssetRegistryHolder.current = registry; ContentScaleHolder.current = 1
+        try write("red")
+        let initial = Image.resolve(path: url.path, width: 12, height: 12)
+        let raster = VectorImageRaster(url: url, initial: initial, width: 12, height: 12)
+        let retained = DrawList(); initial.retain(in: retained)
+        try write("blue")
+        #expect(raster.resolve(width: 12, height: 12) == initial)
+        registry.clear()
+        let replacement = raster.resolve(width: 12, height: 12)
+        #expect(replacement.textureID != initial.textureID)
+        if case .asset(let blue) = replacement { #expect(blue.image.pixels[0..<4] == [0, 0, 255, 255]) }
+        else { Issue.record("cache reset must decode an owned asset") }
+        retained.resources.forEach(of: ImageAssetRegistry.Asset.self) { #expect($0.image.pixels[0..<4] == [255, 0, 0, 255]) }
     } }
 }

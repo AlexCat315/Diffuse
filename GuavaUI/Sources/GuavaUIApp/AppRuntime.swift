@@ -154,7 +154,7 @@ public final class AppRuntime {
         let resolvedBackend = backend ?? WGPUBackend(config: config.backendConfig)
         self.backend = resolvedBackend
         self.renderer = DrawListRenderer(backend: resolvedBackend)
-        self.imageAssets = ImageAssetRegistry(renderer: renderer)
+        self.imageAssets = ImageAssetRegistry()
         self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
         // Each window gets its own portal store (规则 3): an open overlay in one
         // window can never paint into or swallow clicks for another. The store is

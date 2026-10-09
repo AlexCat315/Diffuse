@@ -1,18 +1,18 @@
 import Foundation
 import GuavaUIRuntime
 
-/// Boundary between node lifecycle, background decode and UI-only GPU work.
+/// Boundary between node lifecycle, background decode and UI-thread publication.
 final class ImageLoadServices: @unchecked Sendable {
     let id: AnyHashable
     let cached: (String) -> ImageAssetRegistry.Asset?
     let decode: @Sendable (AsyncImageRequest) async throws -> DecodedImage
-    let upload: (String, DecodedImage) throws -> ImageAssetRegistry.Asset
+    let register: (String, DecodedImage) throws -> ImageAssetRegistry.Asset
     let enqueue: (@escaping () -> Void) -> Void
     init(id: AnyHashable, cached: @escaping (String) -> ImageAssetRegistry.Asset?,
          decode: @escaping @Sendable (AsyncImageRequest) async throws -> DecodedImage,
-         upload: @escaping (String, DecodedImage) throws -> ImageAssetRegistry.Asset,
+         register: @escaping (String, DecodedImage) throws -> ImageAssetRegistry.Asset,
          enqueue: @escaping (@escaping () -> Void) -> Void) {
-        self.id = id; self.cached = cached; self.decode = decode; self.upload = upload; self.enqueue = enqueue
+        self.id = id; self.cached = cached; self.decode = decode; self.register = register; self.enqueue = enqueue
     }
     static var current: ImageLoadServices? {
         guard let registry = ImageAssetRegistryHolder.current, let enqueue = UIWorkSchedulerHolder.enqueue else { return nil }
@@ -22,16 +22,16 @@ final class ImageLoadServices: @unchecked Sendable {
             try Task.checkCancellation()
             return try ImageDecoder.decodeThumbnail(data: data, formatHint: url.pathExtension.lowercased(),
                 boundingSize: (request.pixelWidth, request.pixelHeight), maximumSourcePixels: request.policy.maximumSourcePixels)
-        }, upload: { try registry.register(key: $0, decoded: $1) }, enqueue: { work in
-            ImageUploadQueue.shared.enqueue(work, scheduler: enqueue)
+        }, register: { try registry.register(key: $0, decoded: $1) }, enqueue: { work in
+            ImagePublicationQueue.shared.enqueue(work, scheduler: enqueue)
         })
     }
 }
 
-/// Keep a folder of thumbnails from uploading all completed images in one
-/// run-loop batch. Every queued upload retains its own host scheduler.
-private final class ImageUploadQueue: @unchecked Sendable {
-    static let shared = ImageUploadQueue()
+/// Keep a folder of thumbnails from publishing all completed images in one
+/// run-loop batch. Every queued publication retains its own host scheduler.
+private final class ImagePublicationQueue: @unchecked Sendable {
+    static let shared = ImagePublicationQueue()
     private struct Job {
         let work: () -> Void
         let scheduler: (@escaping () -> Void) -> Void

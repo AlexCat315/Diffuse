@@ -3,7 +3,6 @@ import GuavaUIRuntime
 import Logging
 
 public enum ImageLoadFailureReason: Sendable {
-    case missingRegistry
     case decodeFailed
     case resourceNotFound
 }
@@ -36,12 +35,14 @@ public extension Image {
     /// `ImageAssetRegistryHolder.current`, then renders the resulting
     /// `TextureID` at the requested size.
     ///
-    /// First call decodes + uploads, subsequent calls hit the in-memory
+    /// First call decodes and retains CPU pixels; GPU upload belongs to the
+    /// consuming renderer. Subsequent calls hit the in-memory
     /// cache. Vector formats (SVG/PDF) are rasterised at the requested
     /// pixel dimensions so passing different sizes produces different
     /// crisp textures.
     ///
-    /// If no registry is set or decoding fails, the primitive degrades to
+    /// A registry provides shared caching; decoding works without one.
+    /// If decoding fails, the primitive degrades to
     /// `TextureID.none` (a tinted blank quad of the requested size).
     init(file path: String,
          width: Float,
@@ -50,11 +51,10 @@ public extension Image {
          contentMode: ContentMode = .stretch,
          renderingMode: RenderingMode = .color) {
         let resolved = Self.resolve(path: path, width: width, height: height)
-        self.init(textureID: resolved.textureID,
+        self.init(source: resolved,
                   width: width,
                   height: height,
                   tint: tint,
-                  sourcePixelSize: resolved.sourcePixelSize,
                   contentMode: contentMode,
                   renderingMode: renderingMode)
         if ["svg", "pdf"].contains(URL(fileURLWithPath: path).pathExtension.lowercased()) {
@@ -106,12 +106,7 @@ public extension Image {
                   renderingMode: renderingMode)
     }
 
-    struct ResolvedTexture {
-        let textureID: TextureID
-        let sourcePixelSize: (width: Float, height: Float)?
-    }
-
-    static func resolve(path: String, width: Float, height: Float) -> ResolvedTexture {
+    static func resolve(path: String, width: Float, height: Float) -> Source {
         let url = URL(fileURLWithPath: path)
         // Vector formats need an explicit raster size; bitmap formats
         // pass `nil` so the natural resolution is preserved. SVG/PDF are
@@ -129,33 +124,19 @@ public extension Image {
             size = nil
         }
 
-        guard let registry = ImageAssetRegistryHolder.current else {
-            do {
-                let decoded = try ImageDecoder.decode(url: url, targetSize: size)
-                ImageLoadDiagnostics.emit(path: path,
-                                          reason: .missingRegistry,
-                                          details: "using TextureID.none; decoded metadata \(decoded.width)x\(decoded.height)")
-                return ResolvedTexture(textureID: .none,
-                                       sourcePixelSize: (Float(decoded.width), Float(decoded.height)))
-            } catch {
-                ImageLoadDiagnostics.emit(path: path,
-                                          reason: .missingRegistry,
-                                          details: "using TextureID.none; decode failed without registry: \(error)")
-                return ResolvedTexture(textureID: .none, sourcePixelSize: nil)
-            }
-        }
-
         do {
-            let asset = try registry.texture(url: url, size: size)
-            return ResolvedTexture(
-                textureID: asset.textureID,
-                sourcePixelSize: (Float(asset.width), Float(asset.height))
-            )
+            let asset: ImageAssetRegistry.Asset
+            if let registry = ImageAssetRegistryHolder.current {
+                asset = try registry.texture(url: url, size: size)
+            } else {
+                asset = try ImageAssetRegistry.Asset(image: ImageDecoder.decode(url: url, targetSize: size))
+            }
+            return .asset(asset)
         } catch {
             ImageLoadDiagnostics.emit(path: path,
                                       reason: .decodeFailed,
-                                      details: "using TextureID.none; registry decode/upload failed: \(error)")
-            return ResolvedTexture(textureID: .none, sourcePixelSize: nil)
+                                      details: "using TextureID.none; image decode failed: \(error)")
+            return .texture(.none)
         }
     }
 }

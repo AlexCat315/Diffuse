@@ -23,6 +23,7 @@ public final class InGameViewGraphBridge {
     private let drawList = DrawList()
     private let source: InGameDrawListSource
     private let atlasTextureID: TextureID
+    private let imageAssets = ImageAssetRegistry()
 
     private var textEnv: TextEnvironment?
     private var lastScale: Float = 0
@@ -133,10 +134,13 @@ public final class InGameViewGraphBridge {
     private func withTextEnvInstalled(_ body: () -> Void) {
         let previousEnv = TextEnvironmentHolder.current
         let previousScale = ContentScaleHolder.current
+        let previousImages = ImageAssetRegistryHolder.current
         TextEnvironmentHolder.current = textEnv
+        ImageAssetRegistryHolder.current = imageAssets
         ContentScaleHolder.current = lastScale > 0 ? lastScale : 1
         body()
         TextEnvironmentHolder.current = previousEnv
+        ImageAssetRegistryHolder.current = previousImages
         ContentScaleHolder.current = previousScale
     }
 }
