@@ -19,7 +19,7 @@ struct ScriptCanvasTests: GuavaUIComposeSerializedSuite {
         #expect(!frame.isEmpty)
         #expect(!frame.vertices.isEmpty)
         #expect(!frame.atlasUpdates.isEmpty)
-        #expect(frame.logicalWidth == 640)
+        #expect(frame.logicalSize.x == 640)
         bridge.tick(width: 640, height: 480, contentScale: 2)
         #expect(source.consume()?.isEmpty == true)
     } }
@@ -35,6 +35,23 @@ struct ScriptCanvasTests: GuavaUIComposeSerializedSuite {
         canvas.rect(x: 100, y: 100, w: 200, h: 80, color: .green)
         bridge.tick(width: 640, height: 480, canvas: canvas)
         #expect(try #require(source.consume()).vertices.count > base)
+    } }
+
+    @Test("scale replacement rerasterizes unchanged cached script text")
+    func rerasterizesCachedTextOnScaleChange() throws { try GlobalTestLock.locked {
+        let source = InGameDrawListSource()
+        let bridge = InGameViewGraphBridge(source: source)
+        var canvas = InGameCanvas()
+        canvas.label("Score 🙂", x: 20, y: 20, fontSize: 24)
+        bridge.tick(width: 320, height: 120, canvas: canvas)
+        _ = try #require(source.consume())
+        bridge.tick(width: 320, height: 120, contentScale: 2, canvas: canvas)
+        let replaced = try #require(source.consume())
+        #expect(!replaced.isEmpty)
+        #expect(replaced.atlasUpdates.contains { $0.format == .alpha && $0.textureWidth == 1024 && $0.pixels.contains { $0 != 0 } })
+        #if canImport(CoreText)
+        #expect(replaced.atlasUpdates.contains { $0.format == .color && $0.pixels.contains { $0 != 0 } })
+        #endif
     } }
 
     #if canImport(CoreText)

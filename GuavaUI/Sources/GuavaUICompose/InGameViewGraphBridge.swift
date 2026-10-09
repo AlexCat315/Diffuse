@@ -9,7 +9,7 @@ import GuavaUIRuntime
 /// layout, render, and publish a `DrawListSnapshot` for the render thread.
 ///
 /// The render thread reads the snapshot via `InGameDrawListSource` and
-/// composites it on top of the 3-D scene through `InGameUIRenderer`.
+/// composites it on top of the 3-D scene through the selected HUD renderer.
 ///
 /// Thread contract:
 /// - `setRootView` and `tick` must be called on the main thread.
@@ -102,10 +102,7 @@ public final class InGameViewGraphBridge {
             vertices: drawList.vertices,
             indices: drawList.indices,
             batches: drawList.batches,
-            viewportWidth: UInt32(width),
-            viewportHeight: UInt32(height),
-            logicalWidth: Float(width),
-            logicalHeight: Float(height),
+            logicalSize: SIMD2(Float(width), Float(height)),
             atlasUpdates: atlasUpdates,
             resources: drawList.resources
         ))
@@ -126,6 +123,9 @@ public final class InGameViewGraphBridge {
             rasterScale: s,
             atlasEdge: max(512, Int((512 * s).rounded(.up)))
         )
+        // Cached layer geometry contains UVs from the old atlas. Repaint and
+        // remeasure text even if canvas commands and logical size did not change.
+        tree.root?.invalidateTextStyle()
     }
 
     /// Run `body` with this bridge's `TextEnvironment` installed as the

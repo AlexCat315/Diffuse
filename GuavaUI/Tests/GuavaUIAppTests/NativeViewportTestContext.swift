@@ -75,7 +75,7 @@ final class NativeViewportTestContext {
                 viewport: NativeUIViewport(pixels: size, logical: SIMD2(192, 128)))
             XCTAssertEqual(frame.statistics.textureUploadBytes, frame.statistics.textureUploads == 0 ? 0 : 4,
                 "viewport pixels must not be re-uploaded by the UI")
-            try device.submit(commands); try nativeUI.didSubmit(frame)
+            try device.submit(commands); frame.didSubmit()
             device.endFrame()
         } catch { device.endFrame(); throw error }
         return try GridImage.readback(device: device, texture: resolved.texture,

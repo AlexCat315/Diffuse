@@ -86,7 +86,7 @@ struct NativeDrawListBenchmarkTests {
                     let frame = try context.native.record(list: list, into: commands, target: target, viewport: viewport)
                     lastStatistics = frame.statistics
                     let recorded = DispatchTime.now().uptimeNanoseconds
-                    try context.device.submit(commands); try context.native.didSubmit(frame)
+                    try context.device.submit(commands); frame.didSubmit()
                     context.device.endFrame()
                     return NativeUIFrameTiming(recordNanoseconds: recorded - start,
                         submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded)

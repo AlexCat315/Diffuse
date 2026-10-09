@@ -2,6 +2,8 @@ import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime
 import RHIWGPU
+import NativeRHI
+import RenderBackend
 
 /// High-level in-game UI host that wires the full GuavaUI `ViewGraph` pipeline
 /// for rendering 2-D HUD overlays on top of a 3-D scene.
@@ -23,18 +25,25 @@ import RHIWGPU
 ///
 /// ## Threading
 /// - `setRootView` and `tick` must be called on the **main thread**.
-/// - `renderInGameUI` (via `InGameUIProviding`) is called on the **render thread**
+/// - `recordInGameUI` (via `InGameUIProviding`) is called on the **render thread**
 ///   and reads the last snapshot published by `tick`.
 public final class InGameUIHost: InGameUIProviding, @unchecked Sendable {
 
     private let bridge: InGameViewGraphBridge
-    private let renderer: InGameUIRenderer
+    private let renderer: any InGameUIProviding
 
     public init(backend: WGPUBackend) {
         let source = InGameDrawListSource()
         let drawListRenderer = DrawListRenderer(backend: backend)
         self.bridge = InGameViewGraphBridge(source: source)
-        self.renderer = InGameUIRenderer(renderer: drawListRenderer, source: source)
+        self.renderer = WGPUInGameUIRenderer(renderer: drawListRenderer, source: source)
+    }
+
+    /// Native HUD and scene must share the same device and active frame.
+    public init(device: Device) throws {
+        let source = InGameDrawListSource()
+        self.bridge = InGameViewGraphBridge(source: source)
+        self.renderer = try NativeInGameUIRenderer(device: device, source: source)
     }
 
     // MARK: - Main-thread API
@@ -56,25 +65,7 @@ public final class InGameUIHost: InGameUIProviding, @unchecked Sendable {
 
     // MARK: - InGameUIProviding (render thread)
 
-    public func renderInGameUI(
-        canvas: InGameCanvas,
-        commandEncoder: AnyObject,
-        colorView: AnyObject,
-        formatHint: String,
-        width: Int,
-        height: Int,
-        deltaTime: Double
-    ) {
-        renderer.renderInGameUI(
-            canvas: canvas,
-            commandEncoder: commandEncoder,
-            colorView: colorView,
-            formatHint: formatHint,
-            width: width,
-            height: height,
-            deltaTime: deltaTime
-        )
+    public func recordInGameUI(packet: RenderPacket, target: InGameUIRenderTarget) throws -> InGameUIRecording? {
+        try renderer.recordInGameUI(packet: packet, target: target)
     }
-
-    public func notifyResize(width: Int, height: Int) {}
 }

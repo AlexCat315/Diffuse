@@ -1,6 +1,6 @@
 # NativeRHI UI 迁移验证
 
-默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI 和生产场景＋ViewportHost 合成对照已通过；整个 Editor 的窗口宿主、in-game UI 与多窗口帧协调尚未切换。
+默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI、生产场景＋ViewportHost 与游戏内 HUD 对照已通过；整个 Editor 的窗口宿主、多窗口帧协调和默认 backend 尚未切换。
 
 ## 已实现的基础能力
 
@@ -19,7 +19,7 @@
 - `TextureResource` 持有 device 与原生 texture 所有权，释放时沿用设备的在途帧延迟销毁。外部图片注册检查同一 device、single-sample 2D sampled texture 与 encoded RGBA8/BGRA8 格式；frame token 和 sibling registry 强引用资源，resize / unregister 不产生悬空指针。线性 HDR / sRGB-source 需要独立的采样约定，目前明确拒绝。
 - 每个 renderer 保留独立管线配置，sibling 共享 shader 与 texture slots。所有方法在每个 renderer 上串行调用；窗口接入时，同一 device 的主／辅助绘制须由宿主串行安排在一帧内。Viewport 分别声明 logical / pixels，scissor 使用向外取整并在转整数前钳制，跳过空区域。
 
-调用方须持有 target / resolve target 直到提交，并保留 `NativeUIDrawFrame` 直到 `Device.submit` 成功。`didSubmit(frame)` 只确认已提交的记录；不能确认被放弃的 command buffer。它不替宿主管理 beginFrame / endFrame / present。
+调用方须持有 target / resolve target 直到提交，并保留 `NativeUIDrawFrame` 直到 `Device.submit` 成功。`frame.didSubmit()` 只确认已提交的记录；不能确认被放弃的 command buffer。它不替宿主管理 beginFrame / endFrame / present。
 
 ## 本机覆盖
 
@@ -88,6 +88,44 @@ GUAVA_NATIVE_UI_BENCHMARK=1 swift test --package-path GuavaUI -c release --jobs 
 # 可用 GUAVA_NATIVE_UI_BENCHMARK_OUTPUT 指定绝对输出目录。
 ```
 
+## 游戏内 UI 接入
+
+`InGameUIProviding` 移到 RenderBackend，接收整个 RenderPacket 和明确的 NativeRHI / WGPU target，删除 AnyObject encoder/view、字符串 format hint 与空 resize 回调。`InGameUIHost(device:)` 与 NativeRenderer 使用同一个 Device；场景 renderer 管理 beginFrame / submit / endFrame，HUD 在 tonemap / FXAA 之后向同一个 CommandBuffer 录制 load pass。`InGameUIRecording` 保留上传确认和所需资源，仅在 scene submit 成功后确认；失败不发布 surface 或推进 Native temporal state。WGPU 放弃 encoder 时也会使未提交的 history/cache 失效。
+
+两条路径都消费 main-thread bridge 发布的最新 snapshot。snapshot 仅保留 logicalSize，物理 used extent 由 RenderPacket.drawableSize 提供。字体 alpha / color planes 从 channel 转交到 renderer 的 pending upload 队列，空 geometry 也保留更新，之后有 HUD 时上传。没有 script canvas 时仍调用 provider，因而声明式 HUD 正常显示；有 script canvas 但没有 provider 时提前报错。HUD 的实际 draw calls、CPU encode 时间和动态 `inGameUI` pass 计入统计，HUD 不进入 opaque cache。
+
+替换 content scale / font atlas 时，bridge 使文本测量和 retained layer caches 失效，重新生成正确 atlas UV。此前未变化的脚本标签会复用旧 UV，Native/WGPU 都能产生一致但缺少文字的画面；现在用面板内实际白色文字像素检查和 unchanged-canvas scale regression 覆盖此问题。
+
+2026-10-09 Apple M1 Metal 覆盖：
+
+- 生产 NativeRenderer / WGPURenderer 与各自 InGameUIHost：r3 scene、r5 HDR/SSAO/Bloom/FXAA × 1 / 1.5 / 2 content scale，logical viewport 192×128 → 80×64 → 160×96，physical target 缩小后再增长，共六组。声明式中英文/emoji、脚本 label、圆角面板和 progress bar 叠加在最后输出上；跳过 producer tick 后两张字体 plane 仍有效。普通场景逐像素一致，后处理 RGB 平均误差最大 0.001723，>3 的像素最多 3/24576，均通过既定门限。原始 [HUD 对照数据](benchmarks/native-hud-parity-m1.json)。
+- Opaque snapshot 命中时，HUD 由红变蓝，仍逐帧更新；清空脚本/geometry 后动态 UI pass 消失，画面与无 provider 的 scene 相同，HUD 不残留在缓存里。
+- 缺 provider 在资源分配前拒绝；HUD record 已完成后抛错、以及 backend 拒绝同一 command buffer 时，旧 surface / pixels / stats 保持原值且不确认字体。无需再 tick 或重新发布 atlas，随后提交同时恢复 R8 和 RGBA 字体。
+- Backend / device 不匹配在 consume 前拒绝；空 snapshot 保留两种 atlas 更新，随后 geometry 正确绘制。重复确认安全，HUD 仅覆盖 packet used extent，不写 allocation padding。
+- WGPU HUD record 错误不再被内部吞掉；放弃 encoder 后重新完整绘制 scene，恢复字体和 HUD，不重用未提交的 opaque snapshot。
+
+游戏内 UI 的 Release 集成性能使用 40 个动态 progress card、中英文/emoji 和声明式标题，每帧 123 次 HUD draw。r3 mesh 与 r5 HDR/SSAO/Bloom/FXAA（TAA/SSR 关闭），720p / 1080p，logical 1280×720，1080p 使用 1.5× scale。每组预热 30 帧，再运行 3×180 帧；每三帧完成 GPU 等待。两条路径的所有 pass frames / draw counts 相等，每组测量共 66420 次 HUD draw；最后 readback 的 mesh 图像完全一致，post RGB 平均误差 <0.000221、>3 的像素 <0.002%。
+
+| 场景 | 分辨率 | HUD tick＋packet＋scene CPU p50，Native / WGPU (ms) | completed-batch p50，Native / WGPU (ms/frame) |
+| --- | --- | --- | --- |
+| mesh | 1280×720 | 6.935 / 7.015 | 7.726 / 7.991 |
+| mesh | 1920×1080 | 7.120 / 7.196 | 8.108 / 8.511 |
+| post | 1280×720 | 7.700 / 7.873 | 9.831 / 10.162 |
+| post | 1920×1080 | 7.690 / 7.930 | 9.899 / 10.397 |
+
+Native HUD encode p50 为 64.6–70.6 μs，WGPU 为 129.7–138.4 μs；scene CPU p50 也降低。包含共享 main-thread UI 重组/排版的总循环 p50 降低约 1%–3%，completed-batch 降低约 3%–5%。720p post 总 CPU p95 为 8.360 / 8.300 ms，Native 略高约 0.7%；其他三组总 CPU p95 和四组 scene/HUD encode p95 均降低。这里包含 UI tick 和 packet 构造，不包含窗口呈现或测量期的 atlas churn；completed-batch 不是 GPU timestamp 或显示 FPS，三个批次样本的 p95 对应最大批次值。整个 Editor 的性能仍须单独验证。
+
+原始报告：[mesh 720p](benchmarks/native-hud-mesh-m1-720.json)、[mesh 1080p](benchmarks/native-hud-mesh-m1-1080.json)、[post 720p](benchmarks/native-hud-post-m1-720.json)、[post 1080p](benchmarks/native-hud-post-m1-1080.json)。
+
+```sh
+GUAVA_NATIVE_HUD_BENCHMARK=1 swift test --package-path GuavaUI -c release \
+  --filter NativeInGameUIBenchmarkTests
+# 产物写到 /tmp/guava-native-hud-benchmark；可用
+# GUAVA_NATIVE_HUD_BENCHMARK_OUTPUT 指定绝对目录。
+```
+
+NativeRHI 101 项、NativeRenderer 43 项、GuavaUI 全包及 Editor 受影响测试通过。Swift maintainability 仍为既有 46 项超限指标，没有增加。
+
 ## 后续门槛
 
-继续迁移 in-game UI、主／辅助窗口宿主与多 swapchain 帧协调。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
+继续迁移图片资产 registry 的原生上传、主／辅助窗口宿主与多 swapchain 帧协调。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。

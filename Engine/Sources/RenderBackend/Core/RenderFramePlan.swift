@@ -17,6 +17,8 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     case fxaa
     case tonemap
     case viewportResolve
+    /// Dynamic HUD overlay, recorded after scene post-processing.
+    case inGameUI
 
     /// Passes whose output is a pure function of the opaque scene inputs
     /// (geometry, lights, camera, settings) — i.e. everything before the

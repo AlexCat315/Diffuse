@@ -1,0 +1,89 @@
+{
+  "buildConfiguration" : "release",
+  "device" : "Apple M1",
+  "difference" : {
+    "maximumChannelError" : 0,
+    "meanAbsoluteChannelError" : 0,
+    "pixelCount" : 921600,
+    "pixelsOverThree" : 0
+  },
+  "frames" : 180,
+  "height" : 720,
+  "logicalHeight" : 720,
+  "logicalWidth" : 1280,
+  "measuredAt" : "2026-10-09T02:16:02Z",
+  "operatingSystem" : "版本27.0.1（版号26A434）",
+  "post" : false,
+  "repeats" : 3,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 7725.745605555556,
+        "p95Microseconds" : 7727.3879611111115,
+        "sampleCount" : 3
+      },
+      "cpuHUDEncode" : {
+        "p50Microseconds" : 64.625,
+        "p95Microseconds" : 75.208,
+        "sampleCount" : 540
+      },
+      "cpuScene" : {
+        "p50Microseconds" : 280.792,
+        "p95Microseconds" : 342.542,
+        "sampleCount" : 540
+      },
+      "cpuTickAndScene" : {
+        "p50Microseconds" : 6935.042,
+        "p95Microseconds" : 7254.583,
+        "sampleCount" : 540
+      },
+      "passDraws" : {
+        "basePass" : 2700,
+        "depthPrepass" : 2700,
+        "inGameUI" : 66420
+      },
+      "passFrames" : {
+        "basePass" : 540,
+        "depthPrepass" : 540,
+        "inGameUI" : 540
+      }
+    },
+    {
+      "backend" : "wgpu-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 7990.9287,
+        "p95Microseconds" : 7993.562733333333,
+        "sampleCount" : 3
+      },
+      "cpuHUDEncode" : {
+        "p50Microseconds" : 129.666,
+        "p95Microseconds" : 153.917,
+        "sampleCount" : 540
+      },
+      "cpuScene" : {
+        "p50Microseconds" : 386.834,
+        "p95Microseconds" : 516.416,
+        "sampleCount" : 540
+      },
+      "cpuTickAndScene" : {
+        "p50Microseconds" : 7014.834,
+        "p95Microseconds" : 7433.958,
+        "sampleCount" : 540
+      },
+      "passDraws" : {
+        "basePass" : 2700,
+        "depthPrepass" : 2700,
+        "inGameUI" : 66420
+      },
+      "passFrames" : {
+        "basePass" : 540,
+        "depthPrepass" : 540,
+        "inGameUI" : 540
+      }
+    }
+  ],
+  "timingMethod" : "Main-thread HUD tick + scene CPU duration; GPU completion every three frames; no GPU timestamps or presentation",
+  "warmup" : 30,
+  "width" : 1280
+}

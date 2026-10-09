@@ -21,6 +21,13 @@ public struct NativeUIDrawFrame {
     let pipeline: NativeUIPipeline
     let textures: [NativeUITextureSlot]
     let commits: [NativeUITextureCommit]
+
+    /// Acknowledge this recording only after its commands were submitted.
+    /// Ownership and update sequences travel with the token, so the caller
+    /// does not need to retain or select the renderer that created it.
+    public func didSubmit() {
+        commits.forEach { $0.slot.commit(through: $0.sequence) }
+    }
 }
 
 private struct NativeUIBatch {
@@ -156,12 +163,6 @@ public final class NativeDrawListRenderer {
         }
         statistics.drawCalls = draws.count
         return NativeUIDrawFrame(statistics: statistics, pipeline: pipeline, textures: slots, commits: commits)
-    }
-
-    /// Call only after Device.submit returned successfully for the recorded commands.
-    public func didSubmit(_ frame: NativeUIDrawFrame) throws {
-        guard frame.pipeline.shaders.device === device else { throw RHIError.invalidArgument("UI frame belongs to another device") }
-        frame.commits.forEach { $0.slot.commit(through: $0.sequence) }
     }
 
     private func validate(_ list: DrawList) throws {
