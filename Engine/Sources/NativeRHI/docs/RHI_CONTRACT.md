@@ -4,7 +4,7 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、级联/多光源阴影、HDR 天空与 tonemap 已接入，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。透明/蒙皮/变形网格、r5 post/history/cache、风格化及 CPU 粒子绘制也已通过本机对照。resident GPU 粒子物理与事件迁移见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)；GPU 排序/appearance/实例转换已接入；UI 互操作仍待迁移。
+现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、级联/多光源阴影、HDR 天空与 tonemap 已接入，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。透明/蒙皮/变形网格、r5 post/history/cache、风格化及 CPU 粒子绘制也已通过本机对照。resident GPU 粒子物理与事件迁移见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)；GPU 排序/appearance/实例转换、GuavaUI viewport、游戏内 HUD 及主/辅助窗口已接入可选 NativeRHI 路径，见 [UI 验证](NATIVE_UI_VALIDATION.md)。默认切换与 WGPU 依赖移除仍待完整性能门槛。
 
 Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上原点、+Y 向下。Vulkan backend 通过负高度 viewport 统一这一约定，shader 不再自行翻转 Y。
 
@@ -43,7 +43,7 @@ Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上
 
 ## 资源与帧生命周期
 
-普通资源句柄属于创建它的设备，ID 不复用；不要伪造 ID。Swapchain 的临时 texture ID 按图像池／帧槽复用，不能当作持久纹理。`destroy` 后不能再录制使用该资源，也不能复用引用它的 binding set。后端对象延迟到调用时全部在途帧结束后，在 API 线程上销毁；completion 线程只记录完成和错误。
+普通资源句柄属于创建它的设备，ID 不复用；不要伪造 ID。Swapchain 的临时 texture ID 按图像池／帧槽复用，不能当作持久纹理。`destroy` 后不能再录制使用该资源，也不能复用引用它的 binding set。后端对象延迟到调用时全部在途帧结束后，在 API 线程上销毁；completion 线程只记录完成和错误。Metal 的不可变 binding set 在创建时解析并持有原生资源与 buffer offset；淘汰时延迟注销，资源退休时通过反向索引失效依赖 set 并释放引用。shader 绑定要求纹理具备相应 shader usage，framebuffer-only 的 swapchain drawable 不可作为持久采样绑定。
 
 ```swift
 let window = try SwapchainResource(device: device, descriptor: surface)

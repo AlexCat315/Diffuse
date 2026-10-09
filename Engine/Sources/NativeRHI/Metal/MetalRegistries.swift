@@ -9,17 +9,27 @@
 #if os(macOS)
 import Metal
 
-/// One resolved binding set: the recorded set entries (handles) plus the
-/// layout stage/type needed to bind correctly.
+/// Native resources are resolved and range-checked at set registration.
+/// Strong references stay bounded by set eviction/resource retirement.
+struct MetalBoundResource {
+    enum Value {
+        case buffer(MTLBuffer, offset: Int)
+        case texture(MTLTexture)
+        case sampler(MTLSamplerState)
+        case accelerationStructure(MetalAccelerationStructure)
+    }
+    let id: UInt32
+    let value: Value
+}
+
 struct MetalBoundEntry {
     let slot: UInt32
-    let type: BindingType
     let visibility: ShaderVisibility
-    let resource: BindingResource
+    let resource: MetalBoundResource
 }
 
 final class MetalBindingSet {
-    var entries: [MetalBoundEntry]
+    let entries: [MetalBoundEntry]
     init(entries: [MetalBoundEntry]) { self.entries = entries }
 }
 
@@ -50,7 +60,7 @@ final class MetalRegistries {
     /// Cull/winding/fill are encoder state in Metal; stash per pipeline so the
     /// encoder can re-apply them when the pipeline is bound.
     var pipelineRasterStates: [UInt32: RasterizationState] = [:]
-    var bindingSets: [UInt32: MetalBindingSet] = [:]
+    let bindingSets = MetalBindingRegistry()
     var sharedEvents: [UInt32: MTLSharedEvent] = [:]
 
     /// Internal-handle counter for backend-owned resources (upload chunks,

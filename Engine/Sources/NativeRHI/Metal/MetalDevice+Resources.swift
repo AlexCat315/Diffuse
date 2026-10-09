@@ -220,14 +220,17 @@ extension MetalDevice {
     // MARK: Deferred destruction (FrameRing already waited; just release).
 
     public func destroyBuffer(_ handle: Buffer) {
+        registries.bindingSets.removeAll(referencing: handle.id)
         registries.buffers[handle.id] = nil
     }
 
     public func destroyTexture(_ handle: Texture) {
+        registries.bindingSets.removeAll(referencing: handle.id)
         registries.textures[handle.id] = nil
     }
 
     public func destroySampler(_ handle: Sampler) {
+        registries.bindingSets.removeAll(referencing: handle.id)
         registries.samplers[handle.id] = nil
     }
 
