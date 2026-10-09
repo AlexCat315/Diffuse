@@ -17,6 +17,7 @@ For first-party Swift code in Engine, Editor, and GuavaUI:
 - Keep related codecs, registry code, inspection metadata, and value helpers in responsibility-oriented directories. A Swift file name does not need to match its primary type name.
 - Duplicate basenames across independent executable or library targets are acceptable when their module ownership is clear. Avoid duplicate concepts within one target when a domain-specific name or directory can make ownership explicit.
 - Large naming cleanups should be mechanical, isolated from behavior changes, and followed by the affected package tests. Do not add a new long-prefix filename merely to match an existing naming pattern.
+To address this issue and maintain efficient information display, this project adopts a non-flat directory structure.
 
 Preserve unrelated working-tree changes. Make API migrations in all first-party callers, tests, and embedded project/script templates.
 
