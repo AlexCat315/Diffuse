@@ -6,9 +6,8 @@ import GuavaUIRuntime
 import GuavaUIDevTools
 import Logging
 import PlatformShell
-import RHIWGPU
 
-/// 高层应用宿主。隐藏 `SDL3PlatformHost`、`WGPUBackend`、`DrawListRenderer`、
+/// 高层应用宿主。隐藏窗口、设备、DrawList 绘制器、
 /// `TextEnvironment`、`ViewGraph` 等装配细节。
 ///
 /// 调用方使用方式：
@@ -19,8 +18,8 @@ import RHIWGPU
 /// }
 /// ```
 ///
-/// 单窗口、单 wgpu surface。多窗口 / 浮动工作区窗口走 GuavaUIWorkspace 路线，
-/// 后续在此层之上扩展，不要让调用方再下沉到 `SDL3PlatformHost.openWindow`。
+/// 主窗口与辅助窗口共享 UI 资源，各自拥有 presentation target。
+/// `backend: .native(device)` 可与生产 NativeRenderer 共享设备与 viewport。
 @MainActor
 public final class AppRuntime {
 
@@ -29,7 +28,7 @@ public final class AppRuntime {
     /// `onTick` 会在每一帧 layout 之前调用，用于把外部子系统（例如游戏引擎
     /// `EngineHost`）按 UI 帧率推进。`deltaTime` 是上一帧到这一帧之间的秒数。
     public static func run<Root: View>(config: AppConfig = AppConfig(),
-                                       backend: WGPUBackend? = nil,
+                                       backend: AppRendererDevice? = nil,
                                        events: PlatformEventBridge = PlatformEventBridge(),
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
                                        onDisplayReady: ((AppDisplayHandle) -> Void)? = nil,
@@ -42,7 +41,7 @@ public final class AppRuntime {
         } else {
             devToolsLogSink = nil
         }
-        let runtime = AppRuntime(config: config,
+        let runtime = try AppRuntime(config: config,
                                  backend: backend,
                                  events: events,
                                  onTick: onTick,
@@ -63,11 +62,10 @@ public final class AppRuntime {
     private let mainPortalStore: PortalStore
     private let host: SDL3PlatformHost
     private let graph: ViewGraph
-    private let backend: WGPUBackend
-    private let renderer: DrawListRenderer
+    private let rendering: AppRenderingContext
+    private var windowRenderer: (any AppWindowRenderer)?
     private let imageAssets: ImageAssetRegistry
     private let assetDropRegistry = AssetDropRegistry()
-    private let viewportTextures: ViewportTextureRegistry
     private let drawList = DrawList()
     /// Phase 4c: layer-aware renderer drives RenderTree-based composition with
     /// per-layer DrawList caches. Falls back to the legacy `NodeRenderer`
@@ -81,13 +79,6 @@ public final class AppRuntime {
 
     /// 进程内的字体 atlas 纹理 id。固定为 1，调用方注册业务纹理时从 2 起。
     private let atlasTextureID: TextureID = 1
-
-    private var surface: GPUSurface?
-    private var configuredSurface = false
-    private var msaaColorTexture: GPUTexture?
-    private var msaaColorView: GPUTextureView?
-    private var msaaColorWidth: UInt32 = 0
-    private var msaaColorHeight: UInt32 = 0
 
     private var drawableW: UInt32 = 0
     private var drawableH: UInt32 = 0
@@ -131,7 +122,6 @@ public final class AppRuntime {
     private var fpsPresentAccum = 0.0
     private var fpsTickAccum = 0.0
 
-    private var currentPresentMode: GPUPresentMode = .fifo
     /// Callback APIs on SDL3PlatformHost are non-throwing. Preserve the first
     /// fatal main-window lifecycle failure so `run` can surface it after the
     /// event loop has been stopped instead of leaving an unexplained blank UI.
@@ -141,21 +131,18 @@ public final class AppRuntime {
     private var devTools: DevTools?
 
     private init(config: AppConfig,
-                 backend: WGPUBackend?,
+                 backend: AppRendererDevice?,
                  events: PlatformEventBridge,
                  onTick: ((Double) -> Void)?,
                  onDisplayReady: ((AppDisplayHandle) -> Void)?,
-                 devToolsLogSink: LogTap.Sink?) {
+                 devToolsLogSink: LogTap.Sink?) throws {
         self.config = config
         self.onTick = onTick
         self.onDisplayReady = onDisplayReady
         self.events = events
         self.devToolsLogSink = devToolsLogSink
-        let resolvedBackend = backend ?? WGPUBackend(config: config.backendConfig)
-        self.backend = resolvedBackend
-        self.renderer = DrawListRenderer(backend: resolvedBackend)
+        rendering = try AppRenderingContext(device: backend, config: config)
         self.imageAssets = ImageAssetRegistry()
-        self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
         // Each window gets its own portal store (规则 3): an open overlay in one
         // window can never paint into or swallow clicks for another. The store is
         // swapped in lockstep with the window's input registries via withCurrent.
@@ -193,7 +180,7 @@ public final class AppRuntime {
 
     private func start<Root: View>(rootView: Root) throws {
         BundledFonts.register()
-        try backend.initialize()
+        try rendering.initialize()
 
         if let devConfig = config.devTools {
             let dev = DevTools(config: devConfig,
@@ -201,7 +188,7 @@ public final class AppRuntime {
                                invalidationLog: host.invalidationLog,
                                renderTree: graph.renderTree,
                                logSink: devToolsLogSink ?? LogTap.Sink())
-            dev.attachFrameTap(backend: backend, renderer: renderer)
+            try rendering.attachFrameTap(to: dev)
             dev.stateRegistry = graph.stateRegistry
             dev.server.hostMainExecutor = { [weak self] operation in
                 self?.host.enqueueMainThreadWork {
@@ -231,7 +218,7 @@ public final class AppRuntime {
         let previousImageAssets = ImageAssetRegistryHolder.current
         let previousAssetDropRegistry = AssetDropRegistryHolder.current
         let previousUIWorkScheduler = UIWorkSchedulerHolder.enqueue
-        ViewportTextureBridgeHolder.current = viewportTextures
+        ViewportTextureBridgeHolder.current = rendering.viewportTextures
         ImageAssetRegistryHolder.current = imageAssets
         AssetDropRegistryHolder.current = assetDropRegistry
         UIWorkSchedulerHolder.enqueue = { [weak host] work in
@@ -418,29 +405,22 @@ public final class AppRuntime {
     /// in libwayland-client. Wired to `host.onTeardown`, which fires after the run
     /// loop exits but before `shell.shutdown()`.
     private func releaseGPUSurfaces() {
-        configuredSurface = false
-        msaaColorView = nil
-        msaaColorTexture = nil
-        msaaColorWidth = 0
-        msaaColorHeight = 0
-        surface = nil
-        for window in auxiliaryWindows.values {
-            window.releaseGPUSurface()
+        releaseMainWindowRenderer()
+        for window in auxiliaryWindows.values { window.releaseGPUSurface() }
+    }
+
+    private func releaseMainWindowRenderer() {
+        do { try windowRenderer?.close() }
+        catch {
+            runLoopError = runLoopError ?? error
+            Logger(label: "com.guava.ui.app").error("Main window GPU cleanup failed: \(error)")
         }
+        windowRenderer = nil
     }
 
     private func releaseGPUSurface(for windowID: WindowID) {
-        if host.mainSession?.id == windowID {
-            configuredSurface = false
-            msaaColorView = nil
-            msaaColorTexture = nil
-            msaaColorWidth = 0
-            msaaColorHeight = 0
-            surface = nil
-            return
-        }
-
-        auxiliaryWindows[windowID]?.releaseGPUSurface()
+        if host.mainSession?.id == windowID { releaseMainWindowRenderer() }
+        else { auxiliaryWindows[windowID]?.releaseGPUSurface() }
     }
 
     private func handleInit<Root: View>(native: NativeRenderSurface,
@@ -452,21 +432,9 @@ public final class AppRuntime {
         logicalW = host.logicalSize.width
         logicalH = host.logicalSize.height
 
-        let gpu = try SurfaceFactory.make(backend: backend, native: native)
-        let presentMode = resolvePresentMode(for: gpu, context: "main surface init")
-        try gpu.configure(
-            device: backend.rawDevice!,
-            format: .bgra8UnormSrgb,
-            width: widthPx,
-            height: heightPx,
-            presentMode: presentMode
-        )
-        currentPresentMode = presentMode
-        if !isVSyncEnabled { native.disableDisplaySync() }
-        try renderer.configure(format: .bgra8UnormSrgb,
-                               sampleCount: config.msaaSampleCount)
-        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
-        surface = gpu
+        let renderer = try rendering.makeWindow(settings: AppWindowRenderSettings(config: config))
+        try renderer.configure(native: native, size: SIMD2(widthPx, heightPx), vsync: isVSyncEnabled)
+        windowRenderer = renderer
 
         configureTextEnvironment(scale: host.contentScaleFactor)
 
@@ -483,7 +451,6 @@ public final class AppRuntime {
         }
 
         try uploadAtlasIfNeeded()
-        configuredSurface = true
         lastFrameTime = TimingTrace.now()
         
         // Request an initial frame to ensure surfaces like viewport have
@@ -496,17 +463,7 @@ public final class AppRuntime {
         drawableH = heightPx
         logicalW = host.logicalSize.width
         logicalH = host.logicalSize.height
-        guard let surface, let device = backend.rawDevice else { return }
-        let presentMode = resolvePresentMode(for: surface, context: "main surface resize")
-        try surface.configure(
-            device: device,
-            format: .bgra8UnormSrgb,
-            width: widthPx,
-            height: heightPx,
-            presentMode: presentMode
-        )
-        currentPresentMode = presentMode
-        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
+        try windowRenderer?.resize(size: SIMD2(widthPx, heightPx), vsync: isVSyncEnabled)
         configureTextEnvironment(scale: host.contentScaleFactor)
         try uploadAtlasIfNeeded()
     }
@@ -529,78 +486,8 @@ public final class AppRuntime {
     }
 
     private func reconfigureMainSurfaceForCurrentPresentMode() {
-        guard configuredSurface,
-              let surface,
-              let device = backend.rawDevice,
-              drawableW > 0,
-              drawableH > 0
-        else { return }
-
-        do {
-            let presentMode = resolvePresentMode(for: surface, context: "main surface present mode update")
-            try surface.configure(
-                device: device,
-                format: .bgra8UnormSrgb,
-                width: drawableW,
-                height: drawableH,
-                presentMode: presentMode
-            )
-            currentPresentMode = presentMode
-        } catch {
-            Logger(label: "com.guava.ui.app").warning("Main surface present mode update failed: \(error)")
-        }
-    }
-
-    private func resolvePresentMode(for surface: GPUSurface,
-                                    context: String) -> GPUPresentMode {
-        let candidates = Self.presentModeCandidates(vsyncEnabled: isVSyncEnabled,
-                                                    preferred: config.vsyncPresentMode)
-        guard let adapter = backend.rawAdapter else {
-            Logger(label: "com.guava.ui.app").warning("\(context): no adapter available; falling back to FIFO present mode")
-            return .fifo
-        }
-
-        do {
-            let supported = try surface.supportedPresentModes(adapter: adapter)
-            if let selected = candidates.first(where: { supported.contains($0) }) {
-                if selected != (candidates.first ?? selected) {
-                    Logger(label: "com.guava.ui.app").info("\(context): present mode \(String(describing: candidates.first ?? selected)) unsupported; using \(String(describing: selected))")
-                }
-                return selected
-            }
-            if supported.contains(.fifo) {
-                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; falling back to FIFO")
-                return .fifo
-            }
-            if let first = supported.first {
-                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; using \(String(describing: first))")
-                return first
-            }
-        } catch {
-            Logger(label: "com.guava.ui.app").warning("\(context): present mode capability query failed: \(error); falling back to FIFO")
-        }
-
-        return .fifo
-    }
-
-    fileprivate static func presentModeCandidates(vsyncEnabled: Bool,
-                                                  preferred: GPUPresentMode) -> [GPUPresentMode] {
-        let desired: [GPUPresentMode]
-        if vsyncEnabled {
-            if preferred == .fifo || preferred == .immediate {
-                desired = [preferred, .fifo]
-            } else {
-                desired = [preferred, .immediate, .fifo]
-            }
-        } else {
-            desired = [.immediate, .fifo]
-        }
-
-        var candidates: [GPUPresentMode] = []
-        for mode in desired where !candidates.contains(mode) {
-            candidates.append(mode)
-        }
-        return candidates
+        do { try windowRenderer?.resize(size: SIMD2(drawableW, drawableH), vsync: isVSyncEnabled) }
+        catch { Logger(label: "com.guava.ui.app").warning("Main window present mode update failed: \(error)") }
     }
 
     private func syncMainWindowChromeHitTest() {
@@ -621,7 +508,7 @@ public final class AppRuntime {
     }
 
     private func handleFrame() -> Bool {
-        guard configuredSurface, let surface, let root = tree.root else { return false }
+        guard let windowRenderer, windowRenderer.isConfigured, let root = tree.root else { return false }
 
         let frameStart = TimingTrace.now()
 
@@ -640,7 +527,7 @@ public final class AppRuntime {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
         drawDevToolsOverlay(into: drawList)
-        viewportTextures.prune()
+        rendering.viewportTextures.prune()
         let drawEnd = TimingTrace.now()
         tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")
 
@@ -658,60 +545,19 @@ public final class AppRuntime {
             }
         }
 
-        let acquired: (texture: GPUTexture, view: GPUTextureView)?
         do {
-            acquired = try surface.getCurrentTextureView()
-        } catch {
-            return false
-        }
-        guard let frame = acquired else {
-            devTools?.mirrorCapture(
-                drawList: drawList,
-                widthPx: drawableW,
-                heightPx: drawableH,
-                logical: (Float(logicalW), Float(logicalH))
-            )
-            let frameEnd = TimingTrace.now()
-            devTools?.timing.record(
-                layoutMs: (layoutEnd - layoutStart) * 1000,
-                drawMs: (drawEnd - layoutEnd) * 1000,
-                presentMs: 0,
-                totalMs: (frameEnd - frameStart) * 1000,
-                nodeCount: countNodes(root),
-                batchCount: drawList.batches.count,
-                presented: false
-            )
-            devTools?.notifyFrameFinished()
-            host.requestDisplay()
-            return false
-        }
-
-        do {
-            let encoder = try backend.createCommandEncoder()
-            // Ensure MSAA target matches the current drawable size.
-            // The swapchain may report a different size than what was used to configure the surface.
-            if msaaColorWidth != drawableW || msaaColorHeight != drawableH {
-                try ensureMSAATarget(widthPx: drawableW, heightPx: drawableH)
+            guard try windowRenderer.draw(list: drawList, logical: SIMD2(Float(logicalW), Float(logicalH))) else {
+                devTools?.mirrorCapture(drawList: drawList, widthPx: drawableW, heightPx: drawableH,
+                    logical: (Float(logicalW), Float(logicalH)))
+                let frameEnd = TimingTrace.now()
+                devTools?.timing.record(layoutMs: (layoutEnd - layoutStart) * 1000,
+                    drawMs: (drawEnd - layoutEnd) * 1000, presentMs: 0,
+                    totalMs: (frameEnd - frameStart) * 1000, nodeCount: countNodes(root),
+                    batchCount: drawList.batches.count, presented: false)
+                devTools?.notifyFrameFinished()
+                host.requestDisplay()
+                return false
             }
-            let passColorView = msaaColorView ?? frame.view
-            let passResolveView = msaaColorView == nil ? nil : frame.view
-            let pass = try encoder.beginRenderPass(
-                colorView: passColorView,
-                resolveTargetView: passResolveView,
-                loadOp: .clear,
-                storeOp: .store,
-                clearColor: config.clearColor
-            )
-            try renderer.render(
-                list: drawList,
-                pass: pass,
-                viewportPx: (drawableW, drawableH),
-                coordinateSpace: (Float(logicalW), Float(logicalH))
-            )
-            pass.end()
-            let buffer = try encoder.finish()
-            backend.submit(buffer)
-            surface.present()
             if let dev = devTools {
                 // Keep synchronous mirror readback behind the primary
                 // swapchain submission. Doing it before acquisition can make
@@ -839,38 +685,7 @@ public final class AppRuntime {
 
     private func uploadAtlasIfNeeded(force: Bool = false) throws {
         guard let atlas, force || atlas.isDirty else { return }
-        try renderer.uploadFontAtlas(atlas, textureID: atlasTextureID)
-    }
-
-    private func ensureMSAATarget(widthPx: UInt32, heightPx: UInt32) throws {
-        guard config.msaaSampleCount > 1 else {
-            msaaColorTexture = nil
-            msaaColorView = nil
-            msaaColorWidth = 0
-            msaaColorHeight = 0
-            return
-        }
-
-        if msaaColorTexture != nil,
-           msaaColorView != nil,
-           msaaColorWidth == widthPx,
-           msaaColorHeight == heightPx {
-            return
-        }
-
-        let texture = try backend.createTexture(
-            width: widthPx,
-            height: heightPx,
-            format: .bgra8UnormSrgb,
-            usage: [.renderAttachment],
-            mipLevels: 1,
-            depthOrLayers: 1,
-            sampleCount: config.msaaSampleCount
-        )
-        msaaColorTexture = texture
-        msaaColorView = try texture.createView()
-        msaaColorWidth = widthPx
-        msaaColorHeight = heightPx
+        try rendering.uploadFontAtlas(atlas, textureID: atlasTextureID)
     }
 
     private func openAuxiliaryWindow(_ request: AppAuxiliaryWindowRequest) -> WindowID? {
@@ -894,8 +709,7 @@ public final class AppRuntime {
             let window = AuxiliaryAppWindow(session: session,
                                             rootView: request.rootView,
                                             portalStore: portalStore,
-                                            backend: backend,
-                                            renderer: renderer,
+                                            rendering: rendering,
                                             config: config,
                                             isVSyncEnabled: isVSyncEnabled,
                                             useLegacyRenderer: useLegacyRenderer,
@@ -1015,24 +829,15 @@ private final class AuxiliaryAppWindow {
     private let graph: ViewGraph
     private let rootView: AnyView
     private let portalStore: PortalStore
-    private let backend: WGPUBackend
-    private let renderer: DrawListRenderer
+    private let rendering: AppRenderingContext
+    private var windowRenderer: (any AppWindowRenderer)?
     private let config: AppConfig
     private let useLegacyRenderer: Bool
     private let drawList = DrawList()
     private let layerRenderer = LayerAwareNodeRenderer()
     private let nodeRenderer = NodeRenderer()
     private var isVSyncEnabled: Bool
-    private var presentMode: GPUPresentMode = .fifo
 
-    private var surface: GPUSurface?
-    private var configuredSurface = false
-    private var msaaColorTexture: GPUTexture?
-    private var msaaColorView: GPUTextureView?
-    private var msaaColorWidth: UInt32 = 0
-    private var msaaColorHeight: UInt32 = 0
-    private var drawableW: UInt32 = 0
-    private var drawableH: UInt32 = 0
     private var logicalW: UInt32 = 0
     private var logicalH: UInt32 = 0
     private var didInstallRoot = false
@@ -1043,8 +848,7 @@ private final class AuxiliaryAppWindow {
     init(session: PlatformWindowSession,
          rootView: AnyView,
          portalStore: PortalStore,
-         backend: WGPUBackend,
-         renderer: DrawListRenderer,
+         rendering: AppRenderingContext,
          config: AppConfig,
          isVSyncEnabled: Bool,
          useLegacyRenderer: Bool,
@@ -1052,8 +856,7 @@ private final class AuxiliaryAppWindow {
         self.session = session
         self.rootView = rootView
         self.portalStore = portalStore
-        self.backend = backend
-        self.renderer = renderer
+        self.rendering = rendering
         self.config = config
         self.isVSyncEnabled = isVSyncEnabled
         self.useLegacyRenderer = useLegacyRenderer
@@ -1066,23 +869,12 @@ private final class AuxiliaryAppWindow {
                     heightPx: UInt32,
                     configureTextEnvironment: (Float) -> Void,
                     uploadAtlasIfNeeded: (Bool) throws -> Void) throws {
-        drawableW = widthPx
-        drawableH = heightPx
         logicalW = session.logicalSize.width
         logicalH = session.logicalSize.height
 
-        let gpu = try SurfaceFactory.make(backend: backend, native: native)
-        let resolvedPresentMode = resolvePresentMode(for: gpu, context: "auxiliary surface init")
-        try gpu.configure(
-            device: backend.rawDevice!,
-            format: .bgra8UnormSrgb,
-            width: widthPx,
-            height: heightPx,
-            presentMode: resolvedPresentMode
-        )
-        presentMode = resolvedPresentMode
-        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
-        surface = gpu
+        let renderer = try rendering.makeWindow(settings: AppWindowRenderSettings(config: config))
+        try renderer.configure(native: native, size: SIMD2(widthPx, heightPx), vsync: isVSyncEnabled)
+        windowRenderer = renderer
 
         try session.withCurrent {
             configureTextEnvironment(session.contentScaleFactor)
@@ -1100,40 +892,24 @@ private final class AuxiliaryAppWindow {
             try uploadAtlasIfNeeded(false)
         }
 
-        configuredSurface = true
         session.requestDisplay()
     }
 
     /// Release this window's GPU surface (and MSAA target) before the shell
     /// destroys its SDL/Wayland window. See `AppRuntime.releaseGPUSurfaces()`.
     func releaseGPUSurface() {
-        configuredSurface = false
-        msaaColorView = nil
-        msaaColorTexture = nil
-        msaaColorWidth = 0
-        msaaColorHeight = 0
-        surface = nil
+        do { try windowRenderer?.close() }
+        catch { Logger(label: "com.guava.ui.app").error("Auxiliary window GPU cleanup failed: \(error)") }
+        windowRenderer = nil
     }
 
     func handleResize(widthPx: UInt32,
                       heightPx: UInt32,
                       configureTextEnvironment: (Float) -> Void,
                       uploadAtlasIfNeeded: (Bool) throws -> Void) throws {
-        drawableW = widthPx
-        drawableH = heightPx
         logicalW = session.logicalSize.width
         logicalH = session.logicalSize.height
-        guard let surface, let device = backend.rawDevice else { return }
-        let resolvedPresentMode = resolvePresentMode(for: surface, context: "auxiliary surface resize")
-        try surface.configure(
-            device: device,
-            format: .bgra8UnormSrgb,
-            width: widthPx,
-            height: heightPx,
-            presentMode: resolvedPresentMode
-        )
-        presentMode = resolvedPresentMode
-        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
+        try windowRenderer?.resize(size: SIMD2(widthPx, heightPx), vsync: isVSyncEnabled)
         try session.withCurrent {
             configureTextEnvironment(session.contentScaleFactor)
             try uploadAtlasIfNeeded(false)
@@ -1142,60 +918,10 @@ private final class AuxiliaryAppWindow {
 
     func setVSyncEnabled(_ enabled: Bool) {
         isVSyncEnabled = enabled
-        guard configuredSurface,
-              let surface,
-              let device = backend.rawDevice,
-              drawableW > 0,
-              drawableH > 0
-        else { return }
-
         do {
-            let resolvedPresentMode = resolvePresentMode(for: surface, context: "auxiliary surface present mode update")
-            guard presentMode != resolvedPresentMode else { return }
-            try surface.configure(
-                device: device,
-                format: .bgra8UnormSrgb,
-                width: drawableW,
-                height: drawableH,
-                presentMode: resolvedPresentMode
-            )
-            presentMode = resolvedPresentMode
+            try windowRenderer?.resize(size: SIMD2(session.drawableSize.width, session.drawableSize.height), vsync: enabled)
             session.requestDisplay()
-        } catch {
-            Logger(label: "com.guava.ui.app").warning("Auxiliary surface present mode update failed: \(error)")
-        }
-    }
-
-    private func resolvePresentMode(for surface: GPUSurface,
-                                    context: String) -> GPUPresentMode {
-        let candidates = AppRuntime.presentModeCandidates(vsyncEnabled: isVSyncEnabled,
-                                                          preferred: config.vsyncPresentMode)
-        guard let adapter = backend.rawAdapter else {
-            Logger(label: "com.guava.ui.app").warning("\(context): no adapter available; falling back to FIFO present mode")
-            return .fifo
-        }
-
-        do {
-            let supported = try surface.supportedPresentModes(adapter: adapter)
-            if let selected = candidates.first(where: { supported.contains($0) }) {
-                if selected != (candidates.first ?? selected) {
-                    Logger(label: "com.guava.ui.app").info("\(context): present mode \(String(describing: candidates.first ?? selected)) unsupported; using \(String(describing: selected))")
-                }
-                return selected
-            }
-            if supported.contains(.fifo) {
-                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; falling back to FIFO")
-                return .fifo
-            }
-            if let first = supported.first {
-                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; using \(String(describing: first))")
-                return first
-            }
-        } catch {
-            Logger(label: "com.guava.ui.app").warning("\(context): present mode capability query failed: \(error); falling back to FIFO")
-        }
-
-        return .fifo
+        } catch { Logger(label: "com.guava.ui.app").warning("Auxiliary present mode update failed: \(error)") }
     }
 
     private func syncWindowChromeHitTest() {
@@ -1216,8 +942,7 @@ private final class AuxiliaryAppWindow {
 
     func handleFrame(host: SDL3PlatformHost, configureTextEnvironment: (Float) -> Void,
                      uploadAtlasIfNeeded: (Bool) throws -> Void) -> Bool {
-        guard configuredSurface,
-              let surface,
+        guard let windowRenderer, windowRenderer.isConfigured,
               let root = session.tree.root else {
             return false
         }
@@ -1243,77 +968,11 @@ private final class AuxiliaryAppWindow {
             return false
         }
 
-        let acquired: (texture: GPUTexture, view: GPUTextureView)?
         do {
-            acquired = try surface.getCurrentTextureView()
-        } catch {
-            return false
-        }
-        guard let frame = acquired else {
-            session.requestDisplay()
-            return false
-        }
-
-        do {
-            let encoder = try backend.createCommandEncoder()
-            // Ensure MSAA target matches the current drawable size.
-            // The swapchain may report a different size than what was used to configure the surface.
-            if msaaColorWidth != drawableW || msaaColorHeight != drawableH {
-                try ensureMSAATarget(widthPx: drawableW, heightPx: drawableH)
-            }
-            let passColorView = msaaColorView ?? frame.view
-            let passResolveView = msaaColorView == nil ? nil : frame.view
-            let pass = try encoder.beginRenderPass(
-                colorView: passColorView,
-                resolveTargetView: passResolveView,
-                loadOp: .clear,
-                storeOp: .store,
-                clearColor: config.clearColor
-            )
-            try renderer.render(
-                list: drawList,
-                pass: pass,
-                viewportPx: (drawableW, drawableH),
-                coordinateSpace: (Float(logicalW), Float(logicalH))
-            )
-            pass.end()
-            let buffer = try encoder.finish()
-            backend.submit(buffer)
-            surface.present()
-            return true
-        } catch {
-            return false
-        }
+            let presented = try windowRenderer.draw(list: drawList, logical: SIMD2(Float(logicalW), Float(logicalH)))
+            if !presented { session.requestDisplay() }
+            return presented
+        } catch { return false }
     }
 
-    private func ensureMSAATarget(widthPx: UInt32, heightPx: UInt32) throws {
-        guard config.msaaSampleCount > 1 else {
-            msaaColorTexture = nil
-            msaaColorView = nil
-            msaaColorWidth = 0
-            msaaColorHeight = 0
-            return
-        }
-
-        if msaaColorTexture != nil,
-           msaaColorView != nil,
-           msaaColorWidth == widthPx,
-           msaaColorHeight == heightPx {
-            return
-        }
-
-        let texture = try backend.createTexture(
-            width: widthPx,
-            height: heightPx,
-            format: .bgra8UnormSrgb,
-            usage: [.renderAttachment],
-            mipLevels: 1,
-            depthOrLayers: 1,
-            sampleCount: config.msaaSampleCount
-        )
-        msaaColorTexture = texture
-        msaaColorView = try texture.createView()
-        msaaColorWidth = widthPx
-        msaaColorHeight = heightPx
-    }
 }

@@ -108,11 +108,7 @@
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
     "GuavaUI/Sources/GuavaUIApp/AppRuntime.swift::AppRuntime": {
-      "stored_properties": 46,
-      "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
-    },
-    "GuavaUI/Sources/GuavaUIApp/AppRuntime.swift::AuxiliaryAppWindow": {
-      "stored_properties": 27,
+      "stored_properties": 38,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
     "GuavaUI/Sources/GuavaUICompose/Theme/ColorScheme.swift::ColorScheme": {

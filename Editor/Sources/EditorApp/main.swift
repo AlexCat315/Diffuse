@@ -145,7 +145,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                           // while letting the compositor consume the latest UI
                           // frame instead of back-pressuring the editor loop.
                           vsyncPresentMode: .mailbox),
-        backend: backend,
+        backend: .wgpu(backend),
         events: events,
         onTick: { dt in
             context.tick(deltaTime: dt)
