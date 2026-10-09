@@ -13,7 +13,7 @@ struct WorkbenchProductivityTests {
     func animationPanel() throws { try WorkbenchUITestSupport.withEnvironment { registry, _ in
         let scene = EditorSceneAdapter(seedPreviewScene: false)
         let entity = try #require(scene.spawnEntity(template: .pointLight))
-        #expect(scene.addComponent(.animationPlayer, to: entity))
+        #expect(scene.addComponent("animationPlayer", to: entity))
         let store = EditorStore(state: EditorState {
             $0.selection.selectedEntityID = entity
         })

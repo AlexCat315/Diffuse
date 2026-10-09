@@ -55,7 +55,7 @@ public struct EditorWorkspaceProfile: Sendable {
 
     public var capabilityIDs: Set<String> {
         var ids: Set<String> = [
-            "scene.get_entities", "scene.get_selection", "scene.find_entities", "scene.spawn_entity",
+            "scene.get_entities", "scene.get_selection", "scene.find_entities", "scene.describe_components", "scene.spawn_entity",
             "scene.delete_entity", "scene.duplicate_entity", "scene.reparent_entity", "scene.set_name",
             "scene.set_transform", "scene.snap_to_ground", "scene.set_light_type", "scene.set_light_intensity",
             "scene.set_light_color", "scene.set_light_range", "scene.set_light_spot_angles",

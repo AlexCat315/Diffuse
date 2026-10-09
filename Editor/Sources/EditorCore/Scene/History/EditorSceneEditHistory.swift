@@ -1,3 +1,4 @@
+import IntentRuntime
 import SceneRuntime
 
 /// Owns snapshot history and grouping; the adapter owns scene replacement and
@@ -10,6 +11,8 @@ final class EditorSceneEditHistory {
     private var groupDepth = 0
     private var groupStartScene: SceneRuntime?
     private var isInteractiveGroupActive = false
+    private var interactiveComponentKeys: Set<SceneComponentKey>?
+    private var hasInteractiveRevision = false
 
     init(limit: Int = 100) {
         self.limit = limit
@@ -27,13 +30,22 @@ final class EditorSceneEditHistory {
         if groupStartScene != nil { update(&groupStartScene!) }
     }
 
-    func recordRevisionChange(to scene: SceneRuntime, recordHistory: Bool) {
-        if recordHistory, groupDepth == 0, let previous = currentScene {
-            record(previous, replacingWith: scene)
+    func recordRevisionChange(to scene: SceneRuntime, recordHistory: Bool,
+                              componentKeys: Set<SceneComponentKey>? = nil) {
+        if recordHistory, let previous = currentScene {
+            if groupDepth == 0 {
+                record(previous, replacingWith: scene)
+            } else if isInteractiveGroupActive, groupDepth == 1 {
+                if hasInteractiveRevision, interactiveComponentKeys != componentKeys,
+                   let start = groupStartScene {
+                    record(start, replacingWith: previous)
+                    groupStartScene = previous
+                }
+                interactiveComponentKeys = componentKeys
+                hasInteractiveRevision = true
+            }
         }
-        if groupDepth == 0 || !recordHistory {
-            currentScene = scene
-        }
+        currentScene = scene
     }
 
     func beginGroup(in scene: SceneRuntime) {
@@ -57,6 +69,8 @@ final class EditorSceneEditHistory {
 
     func beginInteractiveGroup(in scene: SceneRuntime) {
         guard !isInteractiveGroupActive else { return }
+        interactiveComponentKeys = nil
+        hasInteractiveRevision = false
         isInteractiveGroupActive = true
         beginGroup(in: scene)
     }
@@ -64,12 +78,14 @@ final class EditorSceneEditHistory {
     func endInteractiveGroup(in scene: SceneRuntime) {
         guard isInteractiveGroupActive else { return }
         isInteractiveGroupActive = false
+        interactiveComponentKeys = nil
         endGroup(in: scene)
     }
 
     func cancelInteractiveGroup() -> SceneRuntime? {
         guard isInteractiveGroupActive else { return nil }
         isInteractiveGroupActive = false
+        interactiveComponentKeys = nil
         guard groupDepth > 0 else { return nil }
         groupDepth -= 1
         guard groupDepth == 0 else { return nil }
@@ -101,6 +117,7 @@ final class EditorSceneEditHistory {
         groupDepth = 0
         groupStartScene = nil
         isInteractiveGroupActive = false
+        interactiveComponentKeys = nil
         currentScene = scene
     }
 

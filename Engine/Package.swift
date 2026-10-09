@@ -513,7 +513,8 @@ let package = Package(
                 "EngineKernel",
                 "SceneRuntime",
                 "ScriptRuntime",
-            ]
+            ],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "ScriptRuntimeTests",

@@ -20,7 +20,15 @@ extension EditorSceneAdapter {
         let sceneKind = scene.resource(SceneKindComponent.self)?.value
         let assetCount = AssetRegistry.shared.entriesSnapshot().count
         let timestamp = ISO8601DateFormatter().string(from: Date())
-        let manifestRoots = scene.roots().map(manifestNode)
+        var ordered: [EntityID] = []
+        func visit(_ entity: EntityID) {
+            ordered.append(entity)
+            for child in scene.children(of: entity) { visit(child) }
+        }
+        for root in scene.roots() { visit(root) }
+        var context = ComponentEncodeContext(entityIndexMap: Dictionary(uniqueKeysWithValues:
+            ordered.enumerated().map { ($0.element, $0.offset) }))
+        let manifestRoots = scene.roots().map { manifestNode($0, context: &context) }
         return EditorSceneManifest(revision: revision,
                                    entityCount: entityCount,
                                    selectedEntityID: restoredSelection,
@@ -47,8 +55,9 @@ extension EditorSceneAdapter {
                 error: .unsupportedVersion(manifest.schemaVersion)
             )
         }
-        var restoredScene = SceneRuntime()
+        var restoredScene = SceneRuntime(componentRegistry: scene.componentRegistry)
         var idMap: [UInt64: EntityID] = [:]
+        var orderedNodes: [EditorSceneManifestNode] = []
 
         @discardableResult
         func restoreNode(_ node: EditorSceneManifestNode) -> EntityID {
@@ -58,80 +67,7 @@ extension EditorSceneAdapter {
             _ = restoredScene.setComponent(SceneKindComponent(value: node.kind), for: entity)
             _ = restoredScene.setLocalTransform(node.localTransform?.localTransform ?? .identity,
                                                 for: entity)
-            if let asset = node.asset {
-                var component = asset.component
-                if let registered = AssetRegistry.shared.entry(for: asset.assetID)
-                    ?? AssetRegistry.shared.entry(for: asset.relativePath) {
-                    component.assetID = registered.id
-                    component.name = registered.name
-                    component.relativePath = registered.relativePath
-                    component.absolutePath = registered.absolutePath
-                    component.kind = registered.kind.rawValue
-                    component.meshIndex = registered.meshIndex
-                }
-                _ = restoredScene.setComponent(component, for: entity)
-            }
-            if let renderMesh = node.renderMesh {
-                var component = renderMesh.component
-                let registeredAssetID = renderMesh.assetID ?? node.asset?.assetID
-                if let registeredAssetID,
-                   let registered = AssetRegistry.shared.entry(for: registeredAssetID) {
-                    component.meshIndex = registered.meshIndex
-                    component.assetID = registered.id
-                }
-                _ = restoredScene.setComponent(component, for: entity)
-            }
-            if let renderMaterial = node.renderMaterial {
-                _ = restoredScene.setComponent(renderMaterial.component, for: entity)
-            }
-            if let camera = node.camera {
-                _ = restoredScene.setComponent(camera.component, for: entity)
-            }
-            if let light = node.light {
-                _ = restoredScene.setComponent(light.component, for: entity)
-            }
-            if let rigidBody = node.rigidBody {
-                _ = restoredScene.setComponent(rigidBody.component, for: entity)
-            }
-            if let collider = node.collider {
-                _ = restoredScene.setComponent(collider.component, for: entity)
-            }
-            if let characterController = node.characterController {
-                _ = restoredScene.setComponent(characterController.component, for: entity)
-            }
-            if let vehicle = node.vehicle {
-                _ = restoredScene.setComponent(vehicle.component, for: entity)
-            }
-            if let softBody = node.softBody {
-                _ = restoredScene.setComponent(softBody.component, for: entity)
-            }
-            if let cloth = node.cloth {
-                _ = restoredScene.setComponent(cloth.component, for: entity)
-            }
-            if let softBodyMesh = node.softBodyMesh {
-                _ = restoredScene.setComponent(softBodyMesh.component, for: entity)
-            }
-            if let destructible = node.destructible {
-                _ = restoredScene.setComponent(destructible.component, for: entity)
-            }
-            if let script = node.script {
-                _ = restoredScene.setComponent(script.component, for: entity)
-            }
-            if let audioSource = node.audioSource {
-                _ = restoredScene.setComponent(audioSource.component, for: entity)
-            }
-            if let audioListener = node.audioListener {
-                _ = restoredScene.setComponent(audioListener.component, for: entity)
-            }
-            if let animationPlayer = node.animationPlayer {
-                _ = restoredScene.setComponent(animationPlayer.component, for: entity)
-            }
-            if let animationGraphPlayer = node.animationGraphPlayer {
-                _ = restoredScene.setComponent(animationGraphPlayer.component, for: entity)
-            }
-            if let particleEmitter = node.particleEmitter {
-                _ = restoredScene.setComponent(particleEmitter.component, for: entity)
-            }
+            orderedNodes.append(node)
             for child in node.children {
                 let childEntity = restoreNode(child)
                 _ = restoredScene.setParent(entity, for: childEntity)
@@ -139,26 +75,48 @@ extension EditorSceneAdapter {
             return entity
         }
 
-        func restoreReferencedComponents(_ node: EditorSceneManifestNode) {
-            if let entity = idMap[node.id] {
-                if let constraint = node.constraint?.component(idMap: idMap) {
-                    _ = restoredScene.setComponent(constraint, for: entity)
+        // Re-resolves authored asset references (and render-mesh indices that derive
+        // from them) against the current asset registry, mirroring the previous
+        // per-node open-time resolution. Runs before collider resources are rebuilt so
+        // mesh bounds use the re-resolved mesh indices.
+        func refreshAssetReferences(_ node: EditorSceneManifestNode) {
+            guard let entity = idMap[node.id],
+                  let assetReference = restoredScene.component(AssetReferenceComponent.self, for: entity) else {
+                for child in node.children {
+                    refreshAssetReferences(child)
                 }
-                if let ragdoll = node.ragdoll?.component(idMap: idMap) {
-                    _ = restoredScene.setComponent(ragdoll, for: entity)
-                }
+                return
+            }
+            var resolved = assetReference
+            if let registered = AssetRegistry.shared.entry(for: assetReference.assetID)
+                ?? AssetRegistry.shared.entry(for: assetReference.relativePath) {
+                resolved.assetID = registered.id
+                resolved.name = registered.name
+                resolved.relativePath = registered.relativePath
+                resolved.absolutePath = registered.absolutePath
+                resolved.kind = registered.kind.rawValue
+                resolved.meshIndex = registered.meshIndex
+            }
+            _ = restoredScene.setComponent(resolved, for: entity)
+            if var renderMesh = restoredScene.component(RenderMeshComponent.self, for: entity),
+               let registered = AssetRegistry.shared.entry(for: renderMesh.assetID ?? resolved.assetID) {
+                renderMesh.meshIndex = registered.meshIndex
+                renderMesh.assetID = registered.id
+                _ = restoredScene.setComponent(renderMesh, for: entity)
             }
             for child in node.children {
-                restoreReferencedComponents(child)
+                refreshAssetReferences(child)
             }
         }
 
-        for root in manifest.roots {
-            restoreNode(root)
+        for root in manifest.roots { restoreNode(root) }
+        var context = ComponentDecodeContext(entityMap: Dictionary(uniqueKeysWithValues:
+            orderedNodes.enumerated().compactMap { index, node in idMap[node.id].map { (index, $0) } }))
+        for node in orderedNodes {
+            guard let entity = idMap[node.id] else { continue }
+            SceneSerializer.applyComponentDocument(node.components, to: entity, in: &restoredScene, context: &context)
         }
-        for root in manifest.roots {
-            restoreReferencedComponents(root)
-        }
+        for root in manifest.roots { refreshAssetReferences(root) }
         if let physicsSettings = manifest.physicsSettings {
             restoredScene.setResource(physicsSettings.settings)
         }
@@ -192,83 +150,14 @@ extension EditorSceneAdapter {
                                              selectedEntityID: initialSelectionID)
     }
 
-    private func manifestNode(_ entity: EntityID) -> EditorSceneManifestNode {
-        let localTransform = scene.localTransform(for: entity).map { EditorSceneManifestMatrix($0.matrix) }
-        let asset = scene.component(AssetReferenceComponent.self, for: entity)
-            .map(EditorSceneManifestAssetReference.init)
-        let renderMesh = scene.component(RenderMeshComponent.self, for: entity)
-            .map(EditorSceneManifestRenderMesh.init)
-        let renderMaterial = scene.component(RenderMaterialComponent.self, for: entity)
-            .map(EditorSceneManifestRenderMaterial.init)
-        let camera = scene.component(CameraComponent.self, for: entity)
-            .map(EditorSceneManifestCamera.init)
-        let light = scene.component(LightComponent.self, for: entity)
-            .map(EditorSceneManifestLight.init)
-        let rigidBody = scene.component(RigidBody.self, for: entity)
-            .map(EditorSceneManifestRigidBody.init)
-        let collider = scene.component(Collider.self, for: entity)
-            .map(EditorSceneManifestCollider.init)
-        let characterController = scene.component(CharacterController.self, for: entity)
-            .map(EditorSceneManifestCharacterController.init)
-        let vehicle = scene.component(Vehicle.self, for: entity)
-            .map(EditorSceneManifestVehicle.init)
-        let softBody = scene.component(SoftBody.self, for: entity)
-            .map(EditorSceneManifestSoftBody.init)
-        let cloth = scene.component(Cloth.self, for: entity)
-            .map(EditorSceneManifestCloth.init)
-        let softBodyMesh = scene.component(SoftBodyMesh.self, for: entity)
-            .map(EditorSceneManifestSoftBodyMesh.init)
-        let destructible = scene.component(Destructible.self, for: entity)
-            .map(EditorSceneManifestDestructible.init)
-        let ragdoll = scene.component(Ragdoll.self, for: entity)
-            .map(EditorSceneManifestRagdoll.init)
-        let constraint = scene.component(Constraint.self, for: entity)
-            .map(EditorSceneManifestConstraint.init)
-        let script = scene.component(ScriptComponent.self, for: entity)
-            .map(EditorSceneManifestScript.init)
-        let audioSource = scene.component(AudioSource.self, for: entity)
-            .map(EditorSceneManifestAudioSource.init)
-        let audioListener = scene.component(AudioListener.self, for: entity)
-            .map(EditorSceneManifestAudioListener.init)
-        let animationPlayer = scene.component(AnimationPlayer.self, for: entity)
-            .map(EditorSceneManifestAnimationPlayer.init)
-        let animationGraphPlayer = scene.component(AnimationGraphPlayer.self, for: entity)
-            .map(EditorSceneManifestAnimationGraphPlayer.init)
-        let childIDs = scene.children(of: entity)
-        var children: [EditorSceneManifestNode] = []
-        children.reserveCapacity(childIDs.count)
-        for child in childIDs {
-            children.append(manifestNode(child))
-        }
-        let particleEmitter = scene.component(ParticleEmitter.self, for: entity)
-            .map(EditorSceneManifestParticleEmitter.init)
-        return EditorSceneManifestNode(
+    private func manifestNode(_ entity: EntityID, context: inout ComponentEncodeContext) -> EditorSceneManifestNode {
+        EditorSceneManifestNode(
             id: entity.rawValue,
             name: displayName(for: entity),
             kind: displayKind(for: entity),
-            localTransform: localTransform,
-            asset: asset,
-            renderMesh: renderMesh,
-            renderMaterial: renderMaterial,
-            camera: camera,
-            light: light,
-            rigidBody: rigidBody,
-            collider: collider,
-            characterController: characterController,
-            vehicle: vehicle,
-            softBody: softBody,
-            cloth: cloth,
-            softBodyMesh: softBodyMesh,
-            destructible: destructible,
-            ragdoll: ragdoll,
-            constraint: constraint,
-            script: script,
-            audioSource: audioSource,
-            audioListener: audioListener,
-            animationPlayer: animationPlayer,
-            animationGraphPlayer: animationGraphPlayer,
-            particleEmitter: particleEmitter,
-            children: children
+            localTransform: scene.localTransform(for: entity).map { EditorSceneManifestMatrix($0.matrix) },
+            components: SceneSerializer.componentDocument(for: entity, in: scene, context: &context),
+            children: scene.children(of: entity).map { manifestNode($0, context: &context) }
         )
     }
 

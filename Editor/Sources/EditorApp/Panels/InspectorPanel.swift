@@ -41,13 +41,13 @@ struct InspectorPanel: View {
             let selectedEntityIDs = store.selectedEntityIDs.isEmpty
                 ? Set(selectedEntityID.map { [$0] } ?? []) : store.selectedEntityIDs
             let entity = scene.entitySummary(id: selectedEntityID)
-            let profile = store.workspaceMode.profile
             let showingSceneSettings = sectionFilter == nil && store.inspectorSceneSettingsVisible
             let allSections = showingSceneSettings ? scene.sceneSettingsSections()
                 : scene.inspectorSections(for: selectedEntityIDs, primaryID: selectedEntityID)
             let globalIDs: Set<String> = ["physics-settings", "particle-scalability"]
             let sections = allSections.filter {
-                globalIDs.contains($0.id) == showingSceneSettings && profile.allowsInspectorSection($0.id)
+                globalIDs.contains($0.id) == showingSceneSettings
+                    && InspectorWorkspacePolicy.allows($0, scene: scene, in: store.workspaceMode)
                     && (sectionFilter?.contains($0.id) ?? true)
             }.map(InspectorSectionPresentation.presentedSection).sorted {
                 Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
@@ -71,7 +71,7 @@ struct InspectorPanel: View {
             Box(direction: .column, alignItems: .stretch) {
                 if let entity, !showingSceneSettings {
                     InspectorSelectionSummary(entity: entity,
-                                              componentCount: scene.componentKinds(on: entity.id).count,
+                                              componentCount: scene.componentTypeIDs(on: entity.id).count,
                                               selectionCount: selectedEntityIDs.count,
                                               isLocked: scene.isEntityLocked(entity.id),
                                               isAuthoringEnabled: isAuthoringEnabled)
@@ -143,9 +143,9 @@ struct InspectorPanel: View {
                                         entityIDs: selectedEntityIDs.isEmpty ? [entity.id] : selectedEntityIDs,
                                         isAuthoringEnabled: isAuthoringEnabled)
                 }
-                if let entity, sectionFilter != nil, !scene.componentKinds(on: entity.id).contains(.animationPlayer) {
+                if let entity, sectionFilter != nil, !scene.componentTypeIDs(on: entity.id).contains("animationPlayer") {
                     Button(L("Add Animation Player"), isEnabled: canEditSelection) {
-                        _ = scene.addComponent(.animationPlayer, to: selectedEntityIDs.isEmpty ? [entity.id] : selectedEntityIDs)
+                        _ = scene.addComponent("animationPlayer", to: selectedEntityIDs.isEmpty ? [entity.id] : selectedEntityIDs)
                     }.buttonStyle(.ghost).padding(6)
                 }
             }
@@ -387,20 +387,6 @@ struct InspectorPanel: View {
                        showsInlineChannels: false)
                 .flex()
                 .clipped()
-        }
-    }
-
-    private struct InspectorLightTypeValue: View {
-        let binding: Binding<LightType>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { type in
-                switch type {
-                case .directional: return L("Directional")
-                case .point: return L("Point")
-                case .spot: return L("Spot")
-                }
-            }
         }
     }
 
@@ -735,8 +721,6 @@ struct InspectorPanel: View {
                                                              valid: L("Valid JSON"), empty: L("Empty saves as {}"),
                                                              expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel")))
                 .id(identity).debugName("inspector-json-\(identity)"))
-        case let .lightType(binding):
-            return AnyView(InspectorLightTypeValue(binding: binding))
         case let .physicsSimulationMode(binding):
             return AnyView(InspectorPhysicsSimulationModeValue(binding: binding))
         case let .vehicleControllerKind(binding):
@@ -866,7 +850,10 @@ enum InspectorSectionFilter {
             }
             let controlIDs = Set(groups.flatMap { [$0.enabledFieldID, $0.statusFieldID, $0.selectorFieldID] + $0.actionFieldIDs })
             let controls = section.fields.filter { controlIDs.contains($0.id) && !visibleIDs.contains($0.id) }
-            return EditorInspectorSection(id: section.id, title: section.title, fields: fields + controls, groups: groups)
+            var result = section
+            result.fields = fields + controls
+            result.groups = groups
+            return result
         }
     }
 }
@@ -884,8 +871,9 @@ enum InspectorSectionPresentation {
             "shape-cylinder-half-height", "shape-heightfield-resource", "shape-mesh-resource",
             "shape-convex-resource", "shape-center", "shape-instance-count",
         ]
-        return EditorInspectorSection(id: section.id, title: section.title,
-                                      fields: section.fields.filter { !redundantIDs.contains($0.id) })
+        var result = section
+        result.fields = section.fields.filter { !redundantIDs.contains($0.id) }
+        return result
     }
 }
 
@@ -986,7 +974,6 @@ private extension EditorInspectorFieldValue {
             return String(format: "RGBA %.2f, %.2f, %.2f, %.2f",
                           value.r, value.g, value.b, value.a)
         case let .json(binding, _): return binding.wrappedValue
-        case let .lightType(binding): return String(describing: binding.wrappedValue)
         case let .physicsSimulationMode(binding): return String(describing: binding.wrappedValue)
         case let .vehicleControllerKind(binding): return String(describing: binding.wrappedValue)
         case let .rigidBodyMotion(binding): return String(describing: binding.wrappedValue)
@@ -1072,8 +1059,8 @@ private struct ComponentActionsBar: View {
     @State private var isResetPresented: Bool = false
 
     var body: some View {
-        let addableKinds = scene.addableComponentKinds(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
-        let commonKinds = scene.commonComponentKinds(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
+        let addableKinds = scene.addableComponentSchemas(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
+        let commonKinds = scene.commonComponentSchemas(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
         let containsLockedEntity = entityIDs.contains { scene.isEntityLocked($0) }
         let canMutate = isAuthoringEnabled && !containsLockedEntity && !entityIDs.isEmpty
         return Row(alignment: .center, spacing: 6) {
@@ -1218,15 +1205,15 @@ private struct ComponentActionsBar: View {
     }
 
     private func perform(_ action: InspectorComponentAction,
-                         kind: EditorComponentKind) {
+                         kind: ComponentSchema) {
         let succeeded: Bool
         switch action {
         case .add:
-            succeeded = scene.addComponent(kind, to: entityIDs)
+            succeeded = scene.addComponent(kind.typeID, to: entityIDs)
         case .reset:
-            succeeded = scene.resetComponent(kind, on: entityIDs)
+            succeeded = scene.resetComponent(kind.typeID, on: entityIDs)
         case .remove:
-            succeeded = scene.removeComponent(kind, from: entityIDs)
+            succeeded = scene.removeComponent(kind.typeID, from: entityIDs)
         }
         if !succeeded {
             store.dispatch(.appendConsoleMessage(
@@ -1268,11 +1255,11 @@ private enum InspectorComponentAction: Equatable {
 }
 
 private struct InspectorComponentPicker: View {
-    let kinds: [EditorComponentKind]
+    let kinds: [ComponentSchema]
     let action: InspectorComponentAction
     let targetCount: Int
     let isPresented: Binding<Bool>
-    let onSelect: (EditorComponentKind) -> Void
+    let onSelect: (ComponentSchema) -> Void
     @State private var searchText: TextBuffer = ""
 
     var body: some View {
@@ -1317,10 +1304,10 @@ private struct InspectorComponentPicker: View {
         .clipped()
     }
 
-    private func menuEntries(for filteredKinds: [EditorComponentKind]) -> [MenuEntry] {
+    private func menuEntries(for filteredKinds: [ComponentSchema]) -> [MenuEntry] {
         var entries: [MenuEntry] = []
-        for category in InspectorComponentCategory.allCases {
-            let categoryKinds = filteredKinds.filter { $0.inspectorCategory == category }
+        for category in ComponentCategory.allCases {
+            let categoryKinds = filteredKinds.filter { $0.category == category }
             guard !categoryKinds.isEmpty else { continue }
             if !entries.isEmpty {
                 entries.append(.separator("component-category-\(category.rawValue)"))
@@ -1333,7 +1320,7 @@ private struct InspectorComponentPicker: View {
             )))
             entries.append(contentsOf: categoryKinds.map { kind in
                 .item(MenuItem(
-                    id: "\(action)-component-\(kind.rawValue)",
+                    id: "\(action)-component-\(kind.typeID)",
                     title: L(kind.displayName),
                     role: action.menuRole,
                     action: { onSelect(kind) }
@@ -1345,50 +1332,14 @@ private struct InspectorComponentPicker: View {
 }
 
 enum InspectorComponentFilter {
-    static func filter(_ kinds: [EditorComponentKind], query: String) -> [EditorComponentKind] {
+    static func filter(_ kinds: [ComponentSchema], query: String) -> [ComponentSchema] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return kinds }
         return kinds.filter { kind in
             kind.displayName.range(of: needle, options: .caseInsensitive) != nil
-                || kind.rawValue.range(of: needle, options: .caseInsensitive) != nil
-                || kind.inspectorCategory.displayName.range(of: needle,
+                || kind.typeID.range(of: needle, options: .caseInsensitive) != nil
+                || kind.category.displayName.range(of: needle,
                                                              options: .caseInsensitive) != nil
-        }
-    }
-}
-
-private enum InspectorComponentCategory: String, CaseIterable {
-    case rendering
-    case physics
-    case animation
-    case audio
-    case scripting
-
-    var displayName: String {
-        switch self {
-        case .rendering: return "Rendering"
-        case .physics: return "Physics"
-        case .animation: return "Animation"
-        case .audio: return "Audio"
-        case .scripting: return "Scripting"
-        }
-    }
-}
-
-private extension EditorComponentKind {
-    var inspectorCategory: InspectorComponentCategory {
-        switch self {
-        case .renderMesh, .renderMaterial, .camera, .light, .particleEmitter:
-            return .rendering
-        case .rigidBody, .collider, .characterController, .vehicle, .softBody,
-             .cloth, .softBodyMesh, .destructible, .ragdoll:
-            return .physics
-        case .animationPlayer, .animationGraphPlayer:
-            return .animation
-        case .audioSource, .audioListener:
-            return .audio
-        case .script:
-            return .scripting
         }
     }
 }

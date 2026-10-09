@@ -9,6 +9,25 @@ import SIMDCompat
 
 extension EditorSceneAdapter {
     @discardableResult
+    func setComponentData<Component: RuntimeComponent>(_ component: Component, for entity: EntityID) -> Bool {
+        guard let schema = scene.componentRegistry.schema(for: Component.self) else { return false }
+        var prepared = scene
+        guard prepared.setComponent(component, for: entity),
+              let value = prepared.componentData(schema.typeID, for: entity) else { return false }
+        return applySceneTransaction(intentVerb: "scene.set_component_data", summary: "Update \(schema.displayName)",
+            targetRawIDs: [entity.rawValue],
+            mutations: [.setComponentData(entityID: entity.rawValue, typeID: schema.typeID, value: value)]) != nil
+    }
+
+    @discardableResult
+    func updateComponentData<Component: RuntimeComponent>(_ type: Component.Type, for entity: EntityID,
+                                                          _ update: (inout Component) -> Void) -> Bool {
+        guard var component = scene.component(type, for: entity) else { return false }
+        update(&component)
+        return setComponentData(component, for: entity)
+    }
+
+    @discardableResult
     func applySceneTransaction(intentVerb: String,
                                summary: String,
                                targetRawIDs: [UInt64] = [],
@@ -44,7 +63,8 @@ extension EditorSceneAdapter {
             return nil
         }
         scene = updatedScene
-        notifyRevisionChanged()
+        let keys = mutations.compactMap(\.componentKey)
+        notifyRevisionChanged(componentKeys: keys.count == mutations.count ? Set(keys) : nil)
         return result
     }
 }

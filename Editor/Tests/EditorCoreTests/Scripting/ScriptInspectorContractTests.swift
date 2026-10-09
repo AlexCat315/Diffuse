@@ -38,7 +38,13 @@ struct ScriptInspectorContractTests {
         let restored = EditorSceneAdapter(seedPreviewScene: false)
         _ = restored.applyProjectScriptCatalog(.builtIn)
         _ = restored.load(manifest: try JSONDecoder().decode(EditorSceneManifest.self, from: JSONEncoder().encode(manifest)))
-        #expect(restored.manifest().roots.first?.script?.bindings.first?.parametersJSON == adapter.manifest().roots.first?.script?.bindings.first?.parametersJSON)
+        func bindings(_ nodes: [EditorSceneManifestNode]) -> [ScriptBinding]? {
+            nodes.first.flatMap { node in
+                sceneDocumentScripts(in: node.components)
+            }
+        }
+        #expect(bindings(try #require(restored.manifest().roots))?.first?.parametersJSON
+                == bindings(try #require(adapter.manifest().roots))?.first?.parametersJSON)
         x.wrappedValue = 0
         y.wrappedValue = 0
         json = try #require(adapter.scene.component(ScriptComponent.self, for: entity)?.bindings.first?.parametersJSON)

@@ -1,5 +1,6 @@
 import Foundation
 import RenderBackend
+import ScriptRuntime
 
 public enum EditorViewportMode: String, Codable, Sendable {
     case scene, game
@@ -44,10 +45,11 @@ public enum EditorIssueTarget: Codable, Sendable, Equatable, Hashable {
         let descriptions = Set(descriptions)
         func find(_ nodes: [EditorSceneManifestNode]) -> EditorIssueTarget? {
             for node in nodes {
-                if (node.script?.bindings ?? []).contains(where: { binding in
-                    let reference = binding.identifier ?? "handle #\(binding.script)"
-                    return binding.isEnabled && descriptions.contains("\(node.name): \(reference)")
-                }) {
+                if let bindings = sceneDocumentScripts(in: node.components),
+                    bindings.contains(where: { binding in
+                        let reference = binding.identifier ?? "<no identifier>"
+                        return binding.isEnabled && descriptions.contains("\(node.name): \(reference)")
+                    }) {
                     return .entity(id: node.id)
                 }
                 if let target = find(node.children) { return target }

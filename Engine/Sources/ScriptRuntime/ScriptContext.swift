@@ -102,10 +102,10 @@ public final class ScriptContext {
     public func instantiate(_ prefab: Prefab,
                             parent: EntityID? = nil,
                             transform: LocalTransform? = nil) throws -> EntityID? {
+        var registry = phaseContext.componentRegistry
+        registry.registerScriptCodec()
+        phaseContext.componentRegistry = registry
         let entities = try phaseContext.instantiate(prefab, parent: parent, transform: transform)
-        restoreScriptBindings(from: prefab.data, entities: entities) { component, entity in
-            _ = phaseContext.setComponent(component, for: entity)
-        }
         return entities.first
     }
 

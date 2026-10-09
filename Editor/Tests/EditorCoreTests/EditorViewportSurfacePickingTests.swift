@@ -11,7 +11,7 @@ import Testing
 @Suite("Editor surface picking", .serialized)
 @MainActor
 struct EditorViewportSurfacePickingTests {
-    @Test("material coverage and authored LOD survive scene save and load, including legacy JSON")
+    @Test("material coverage and authored LOD survive scene save and load, including missing optional fields")
     func scenePersistence() throws {
         let adapter = EditorSceneAdapter()
         let id = try #require(adapter.spawnEntity(template: .cube))
@@ -27,9 +27,9 @@ struct EditorViewportSurfacePickingTests {
         let restored = EditorSceneAdapter(); _ = restored.load(manifest: saved)
         #expect(restored.scene.component(RenderMaterialComponent.self, for: entity) == material)
         #expect(restored.scene.component(RenderMeshComponent.self, for: entity)?.levelsOfDetail == mesh.levelsOfDetail)
-        let legacy = try JSONDecoder().decode(EditorSceneManifestRenderMesh.self,
-            from: Data(#"{"meshIndex":0,"isVisible":true}"#.utf8))
-        #expect(legacy.component.levelsOfDetail.isEmpty)
+        let emptyNode = try JSONDecoder().decode(EditorSceneManifestNode.self,
+            from: Data(#"{"id":0,"name":"Empty","kind":"empty"}"#.utf8))
+        #expect(emptyNode.components.isEmpty && emptyNode.children.isEmpty)
     }
 
     @Test("a triangle's blank bounding-box corner stays unselected despite its collider",

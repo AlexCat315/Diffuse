@@ -101,7 +101,7 @@ extension EditorSceneAdapter {
         update(&bindings[index])
         guard previous != bindings[index] else { return }
         _ = applySceneTransaction(intentVerb: verb, summary: summary, targetRawIDs: [entity.rawValue],
-                                  mutations: [.setScriptBindings(entityID: entity.rawValue, bindings: bindings)])
+                                  mutations: [.setComponentData(entityID: entity.rawValue, typeID: "script", value: ComponentValue(jsonObject: ["bindings": (bindings).map(encodeScriptBindingForEditing)]))])
     }
 
     private func scriptEnabledBinding(for entity: EntityID, id: ScriptBindingID) -> Binding<Bool> {

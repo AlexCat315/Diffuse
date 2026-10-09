@@ -15,9 +15,9 @@ struct EditorMultiSelectionInspectorTests {
         let adapter = EditorSceneAdapter()
         let a = try #require(adapter.spawnEntity(template: .empty))
         let b = try #require(adapter.spawnEntity(template: .empty))
-        #expect(adapter.addComponent(.light, to: a))
+        #expect(adapter.addComponent("light", to: a))
         #expect(!adapter.inspectorSections(for: Set([a, b])).contains { $0.id == "light" })
-        #expect(adapter.addComponent(.light, to: b))
+        #expect(adapter.addComponent("light", to: b))
         #expect(adapter.inspectorSections(for: Set([a, b])).contains { $0.id == "light" })
     }
 
@@ -107,7 +107,7 @@ struct EditorMultiSelectionInspectorTests {
         let intensity = try field(adapter, [a, b], section: "light", field: "intensity")
         guard case .constrainedNumber(let binding, _, _, _, _) = intensity.value else { Issue.record("Expected intensity binding"); return }
         let original = binding.wrappedValue
-        #expect(adapter.removeComponent(.light, from: b))
+        #expect(adapter.removeComponent("light", from: b))
         let revision = adapter.revision
         binding.wrappedValue = original + 10
         #expect(binding.wrappedValue == original)

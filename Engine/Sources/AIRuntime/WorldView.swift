@@ -10,6 +10,7 @@ extension WorldPropertyValue {
         case let .string(s):          return s
         case let .float(f):           return String(format: "%.4g", f)
         case let .bool(b):            return b ? "true" : "false"
+        case let .json(value): return String(data: (try? JSONEncoder().encode(value)) ?? Data(), encoding: .utf8) ?? "null"
         case let .vec3(x, y, z):      return "(\(x), \(y), \(z))"
         case let .vec4(x, y, z, w):   return "(\(x), \(y), \(z), \(w))"
         }
@@ -137,6 +138,12 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
 
     /// Applies a single authored property change from a WorldEvent.
     public mutating func apply(property: String, value: WorldPropertyValue) {
+        if property.hasPrefix("components."), case let .json(data) = value {
+            let typeID = String(property.dropFirst("components.".count))
+            if data == .null { components.removeAll { $0 == typeID } }
+            else if !components.contains(typeID) { components.append(typeID) }
+            return
+        }
         switch property {
         case "name":
             if case let .string(s) = value { name = s }

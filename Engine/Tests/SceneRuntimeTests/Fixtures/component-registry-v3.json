@@ -1,0 +1,1115 @@
+{
+  "entities" : [
+    {
+      "components" : {
+        "animationGraphPlayer" : {
+          "activeTime" : 0,
+          "graph" : {
+            "blendSpaces1D" : [
+
+            ],
+            "stateMachine" : {
+              "initialState" : "",
+              "states" : [
+
+              ],
+              "transitions" : [
+
+              ]
+            }
+          },
+          "isPlaying" : true,
+          "parameters" : {
+
+          },
+          "previousTime" : 0,
+          "speed" : 1,
+          "transitionDuration" : 0,
+          "transitionElapsed" : 0
+        },
+        "animationPlayer" : {
+          "isPlaying" : true,
+          "loop" : true,
+          "speed" : 1,
+          "time" : 0
+        },
+        "assetReference" : {
+          "absolutePath" : "",
+          "assetID" : "",
+          "kind" : "",
+          "meshIndex" : 0,
+          "name" : "",
+          "relativePath" : ""
+        },
+        "audioListener" : {
+          "masterVolume" : 1
+        },
+        "audioSource" : {
+          "clipName" : "",
+          "loop" : false,
+          "pitch" : 1,
+          "playOnAwake" : true,
+          "spatialBlend" : 1,
+          "volume" : 1
+        },
+        "camera" : {
+          "aspectRatio" : 1,
+          "far" : 1000,
+          "fovYRadians" : 1,
+          "isActive" : false,
+          "near" : 0.10000000149011612,
+          "target" : [
+            0,
+            1,
+            0
+          ],
+          "up" : [
+            0,
+            1,
+            0
+          ]
+        },
+        "characterController" : {
+          "center" : [
+            0,
+            0,
+            0
+          ],
+          "crouchingHalfHeight" : 0.25,
+          "gravityScale" : 1,
+          "layerID" : 0,
+          "layerMask" : 65535,
+          "mass" : 70,
+          "maxSlopeDegrees" : 50,
+          "maxStrength" : 100,
+          "radius" : 0.40000000596046448,
+          "skinWidth" : 0.019999999552965164,
+          "standingHalfHeight" : 0.60000002384185791,
+          "stepHeight" : 0.40000000596046448
+        },
+        "cloth" : {
+          "bendCompliance" : 9.9999997473787516e-06,
+          "bendType" : 1,
+          "compliance" : 9.9999997473787516e-06,
+          "fixedVertexIndices" : [
+
+          ],
+          "gridSizeX" : 16,
+          "gridSizeZ" : 16,
+          "shearCompliance" : 9.9999997473787516e-06,
+          "spacing" : 0.20000000298023224
+        },
+        "collider" : {
+          "center" : [
+            0,
+            0,
+            0
+          ],
+          "density" : 1,
+          "friction" : 0.60000002384185791,
+          "halfExtents" : [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "isTrigger" : false,
+          "layerID" : 0,
+          "layerMask" : 65535,
+          "restitution" : 0,
+          "shape" : "box",
+          "shapes" : [
+            {
+              "center" : [
+                0,
+                0,
+                0
+              ],
+              "halfExtents" : [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "localPosition" : [
+                0,
+                0,
+                0
+              ],
+              "localRotation" : [
+                0,
+                0,
+                0,
+                1
+              ],
+              "localScale" : [
+                1,
+                1,
+                1
+              ],
+              "shape" : "box"
+            }
+          ]
+        },
+        "constraint" : {
+          "axisA" : [
+            0,
+            1,
+            0
+          ],
+          "axisB" : [
+            0,
+            1,
+            0
+          ],
+          "breakForce" : 3.4028234663852886e+38,
+          "breakTorque" : 3.4028234663852886e+38,
+          "entityA" : 0,
+          "entityB" : 1,
+          "isEnabled" : true,
+          "maxLimit" : 0,
+          "minLimit" : 0,
+          "motorMaxForce" : 3.4028234663852886e+38,
+          "motorMode" : "velocity",
+          "motorTargetPosition" : 0,
+          "motorTargetVelocity" : 2.5,
+          "pivotA" : [
+            0,
+            0,
+            0
+          ],
+          "pivotB" : [
+            0,
+            0,
+            0
+          ],
+          "springDamping" : 0,
+          "springFrequency" : 0,
+          "type" : "hinge"
+        },
+        "destructible" : {
+          "assetResourceID" : "",
+          "damageThreshold" : 100,
+          "fragmentBudget" : 256,
+          "impulseThreshold" : 10,
+          "isEnabled" : true,
+          "maximumFragmentLifetimeSeconds" : 30,
+          "separationImpulse" : 0.05000000074505806,
+          "sleepingRecycleDelaySeconds" : 5
+        },
+        "light" : {
+          "castShadows" : false,
+          "color" : [
+            1,
+            1,
+            1
+          ],
+          "intensity" : 1,
+          "range" : 10,
+          "spotInnerAngleDegrees" : 30,
+          "spotOuterAngleDegrees" : 45,
+          "type" : "point"
+        },
+        "particleEmitter" : {
+          "moduleStack" : {
+            "modules" : [
+              {
+                "displayName" : "Emission",
+                "id" : "emission",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "burstCount" : 0,
+                    "burstInterval" : 0,
+                    "distanceEmissionRate" : 0,
+                    "distanceEmissionRateCurve" : {
+                      "type" : "constant",
+                      "value" : 1
+                    },
+                    "duration" : 0,
+                    "emissionRate" : 10,
+                    "emissionRateCurve" : {
+                      "type" : "constant",
+                      "value" : 1
+                    },
+                    "isEmitting" : true,
+                    "looping" : true,
+                    "maxParticles" : 256,
+                    "maxRenderedParticles" : 0,
+                    "maxSpawnedParticlesPerFrame" : 0,
+                    "prewarmStep" : 0.033333334999999999,
+                    "prewarmTime" : 0,
+                    "seed" : 2654435769,
+                    "simulationSpeed" : 1
+                  },
+                  "type" : "emission"
+                },
+                "stage" : "spawn"
+              },
+              {
+                "displayName" : "Shape",
+                "id" : "shape",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "boxHalfExtents" : [
+                      0.5,
+                      0.5,
+                      0.5
+                    ],
+                    "coneHeight" : 1,
+                    "coneRadius" : 0.5,
+                    "emissionShape" : "sphere",
+                    "originOffset" : [
+                      0,
+                      0,
+                      0
+                    ],
+                    "spawnRadius" : 0
+                  },
+                  "type" : "shape"
+                },
+                "stage" : "spawn"
+              },
+              {
+                "displayName" : "Velocity",
+                "id" : "velocity",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "startVelocity" : [
+                      0,
+                      1,
+                      0
+                    ],
+                    "velocityInheritance" : 0,
+                    "velocityRandomness" : [
+                      0,
+                      0,
+                      0
+                    ]
+                  },
+                  "type" : "velocity"
+                },
+                "stage" : "initialize"
+              },
+              {
+                "displayName" : "Forces",
+                "id" : "forces",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "forceAxis" : [
+                      0,
+                      1,
+                      0
+                    ],
+                    "forceCenter" : [
+                      0,
+                      0,
+                      0
+                    ],
+                    "forceFalloff" : 1,
+                    "forceMode" : "none",
+                    "forceRadius" : 0,
+                    "forceStrength" : 0,
+                    "gravity" : [
+                      0,
+                      -9.8100000000000005,
+                      0
+                    ],
+                    "noiseScale" : 1,
+                    "noiseSpeed" : 1,
+                    "noiseStrength" : 0,
+                    "vectorFieldDirection" : [
+                      0,
+                      1,
+                      0
+                    ],
+                    "vectorFieldMode" : "none",
+                    "vectorFieldScale" : 1,
+                    "vectorFieldScrollSpeed" : 0,
+                    "vectorFieldStrength" : 0
+                  },
+                  "type" : "forces"
+                },
+                "stage" : "update"
+              },
+              {
+                "displayName" : "Collision",
+                "id" : "collision",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "collisionDamping" : 0,
+                    "collisionMode" : "none",
+                    "collisionPlaneY" : 0,
+                    "collisionRestitution" : 0.5
+                  },
+                  "type" : "collision"
+                },
+                "stage" : "update"
+              },
+              {
+                "displayName" : "Appearance",
+                "id" : "appearance",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "angularVelocity" : 0,
+                    "angularVelocityRandomness" : 0,
+                    "blendMode" : "alpha",
+                    "colorCurve" : "linear",
+                    "endColor" : [
+                      1,
+                      1,
+                      1,
+                      0
+                    ],
+                    "endSize" : 0,
+                    "lifetime" : 2,
+                    "lifetimeRandomness" : 0,
+                    "rotationRandomness" : 0,
+                    "sizeCurve" : "linear",
+                    "sizeRandomness" : 0,
+                    "startColor" : [
+                      1,
+                      1,
+                      1,
+                      1
+                    ],
+                    "startRotation" : 0,
+                    "startSize" : 1
+                  },
+                  "type" : "appearance"
+                },
+                "stage" : "initialize"
+              },
+              {
+                "displayName" : "Texture Sheet",
+                "id" : "textureSheet",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "columns" : 1,
+                    "frameCount" : 1,
+                    "frameRandomness" : 0,
+                    "frameRate" : 0,
+                    "playbackMode" : "automatic",
+                    "rows" : 1,
+                    "startFrame" : 0
+                  },
+                  "type" : "textureSheet"
+                },
+                "stage" : "render"
+              },
+              {
+                "displayName" : "Renderer",
+                "id" : "renderer",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "maxRenderDistance" : 0,
+                    "renderAlignment" : "billboard",
+                    "renderBoundsMode" : "disabled",
+                    "renderBoundsRadius" : 0,
+                    "renderDistanceFadeRange" : 0,
+                    "renderLODEndDistance" : 0,
+                    "renderLODMinParticleScale" : 1,
+                    "renderLODStartDistance" : 0,
+                    "renderMode" : "billboard",
+                    "renderSortPriority" : 0,
+                    "sortMode" : "distanceDescending",
+                    "velocityStretchMax" : 8,
+                    "velocityStretchScale" : 0
+                  },
+                  "type" : "renderer"
+                },
+                "stage" : "render"
+              },
+              {
+                "displayName" : "Trails",
+                "id" : "trails",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "ribbonJoinOverlapScale" : 0,
+                    "ribbonMaxSegmentLength" : 0,
+                    "ribbonSmoothingSegments" : 1,
+                    "ribbonTailAlphaScale" : 1,
+                    "ribbonTailWidthScale" : 1,
+                    "ribbonTextureOffset" : 0,
+                    "ribbonTextureTiling" : 0,
+                    "ribbonWidthScale" : 1,
+                    "trailEndAlphaScale" : 0,
+                    "trailEndSizeScale" : 0.5,
+                    "trailLength" : 0,
+                    "trailSegments" : 0
+                  },
+                  "type" : "trails"
+                },
+                "stage" : "render"
+              },
+              {
+                "displayName" : "Sub-Emitters",
+                "id" : "subEmitters",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "legacyBurstCount" : 0,
+                    "legacyEndColor" : [
+                      1,
+                      1,
+                      1,
+                      0
+                    ],
+                    "legacyEndSize" : 0,
+                    "legacyInheritVelocity" : 0,
+                    "legacyLifetime" : 0.5,
+                    "legacyMaxDepth" : 1,
+                    "legacyProbability" : 1,
+                    "legacyStartColor" : [
+                      1,
+                      1,
+                      1,
+                      1
+                    ],
+                    "legacyStartSize" : 0.25,
+                    "legacyStartVelocity" : [
+                      0,
+                      0,
+                      0
+                    ],
+                    "legacyTrigger" : "none",
+                    "legacyVelocityRandomness" : [
+                      0,
+                      0,
+                      0
+                    ],
+                    "rules" : [
+
+                    ]
+                  },
+                  "type" : "subEmitters"
+                },
+                "stage" : "event"
+              },
+              {
+                "displayName" : "GPU Simulation",
+                "id" : "gpuSimulation",
+                "isEnabled" : true,
+                "isExpanded" : false,
+                "settings" : {
+                  "payload" : {
+                    "simulationBackend" : "cpu",
+                    "simulationSpace" : "local",
+                    "workgroupSize" : 64
+                  },
+                  "type" : "gpuSimulation"
+                },
+                "stage" : "simulation"
+              }
+            ],
+            "version" : 1
+          },
+          "settings" : {
+            "appearance" : {
+              "angularVelocity" : 0,
+              "angularVelocityRandomness" : 0,
+              "blendMode" : "alpha",
+              "colorCurve" : "linear",
+              "endColor" : [
+                1,
+                1,
+                1,
+                0
+              ],
+              "endSize" : 0,
+              "lifetime" : 2,
+              "lifetimeRandomness" : 0,
+              "rotationRandomness" : 0,
+              "sizeCurve" : "linear",
+              "sizeRandomness" : 0,
+              "startColor" : [
+                1,
+                1,
+                1,
+                1
+              ],
+              "startRotation" : 0,
+              "startSize" : 1
+            },
+            "collision" : {
+              "collisionDamping" : 0,
+              "collisionMode" : "none",
+              "collisionPlaneY" : 0,
+              "collisionRestitution" : 0.5
+            },
+            "emission" : {
+              "burstCount" : 0,
+              "burstInterval" : 0,
+              "distanceEmissionRate" : 0,
+              "distanceEmissionRateCurve" : {
+                "type" : "constant",
+                "value" : 1
+              },
+              "duration" : 0,
+              "emissionRate" : 10,
+              "emissionRateCurve" : {
+                "type" : "constant",
+                "value" : 1
+              },
+              "isEmitting" : true,
+              "looping" : true,
+              "maxParticles" : 256,
+              "maxRenderedParticles" : 0,
+              "maxSpawnedParticlesPerFrame" : 0,
+              "prewarmStep" : 0.033333334999999999,
+              "prewarmTime" : 0,
+              "seed" : 2654435769,
+              "simulationSpeed" : 1
+            },
+            "forces" : {
+              "forceAxis" : [
+                0,
+                1,
+                0
+              ],
+              "forceCenter" : [
+                0,
+                0,
+                0
+              ],
+              "forceFalloff" : 1,
+              "forceMode" : "none",
+              "forceRadius" : 0,
+              "forceStrength" : 0,
+              "gravity" : [
+                0,
+                -9.8100000000000005,
+                0
+              ],
+              "noiseScale" : 1,
+              "noiseSpeed" : 1,
+              "noiseStrength" : 0,
+              "vectorFieldDirection" : [
+                0,
+                1,
+                0
+              ],
+              "vectorFieldMode" : "none",
+              "vectorFieldScale" : 1,
+              "vectorFieldScrollSpeed" : 0,
+              "vectorFieldStrength" : 0
+            },
+            "gpuSimulation" : {
+              "simulationBackend" : "cpu",
+              "simulationSpace" : "local",
+              "workgroupSize" : 64
+            },
+            "renderer" : {
+              "maxRenderDistance" : 0,
+              "renderAlignment" : "billboard",
+              "renderBoundsMode" : "disabled",
+              "renderBoundsRadius" : 0,
+              "renderDistanceFadeRange" : 0,
+              "renderLODEndDistance" : 0,
+              "renderLODMinParticleScale" : 1,
+              "renderLODStartDistance" : 0,
+              "renderMode" : "billboard",
+              "renderSortPriority" : 0,
+              "sortMode" : "distanceDescending",
+              "velocityStretchMax" : 8,
+              "velocityStretchScale" : 0
+            },
+            "shape" : {
+              "boxHalfExtents" : [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "coneHeight" : 1,
+              "coneRadius" : 0.5,
+              "emissionShape" : "sphere",
+              "originOffset" : [
+                0,
+                0,
+                0
+              ],
+              "spawnRadius" : 0
+            },
+            "subEmitters" : {
+              "legacyBurstCount" : 0,
+              "legacyEndColor" : [
+                1,
+                1,
+                1,
+                0
+              ],
+              "legacyEndSize" : 0,
+              "legacyInheritVelocity" : 0,
+              "legacyLifetime" : 0.5,
+              "legacyMaxDepth" : 1,
+              "legacyProbability" : 1,
+              "legacyStartColor" : [
+                1,
+                1,
+                1,
+                1
+              ],
+              "legacyStartSize" : 0.25,
+              "legacyStartVelocity" : [
+                0,
+                0,
+                0
+              ],
+              "legacyTrigger" : "none",
+              "legacyVelocityRandomness" : [
+                0,
+                0,
+                0
+              ],
+              "rules" : [
+
+              ]
+            },
+            "textureSheet" : {
+              "columns" : 1,
+              "frameCount" : 1,
+              "frameRandomness" : 0,
+              "frameRate" : 0,
+              "playbackMode" : "automatic",
+              "rows" : 1,
+              "startFrame" : 0
+            },
+            "trails" : {
+              "ribbonJoinOverlapScale" : 0,
+              "ribbonMaxSegmentLength" : 0,
+              "ribbonSmoothingSegments" : 1,
+              "ribbonTailAlphaScale" : 1,
+              "ribbonTailWidthScale" : 1,
+              "ribbonTextureOffset" : 0,
+              "ribbonTextureTiling" : 0,
+              "ribbonWidthScale" : 1,
+              "trailEndAlphaScale" : 0,
+              "trailEndSizeScale" : 0.5,
+              "trailLength" : 0,
+              "trailSegments" : 0
+            },
+            "velocity" : {
+              "startVelocity" : [
+                0,
+                1,
+                0
+              ],
+              "velocityInheritance" : 0,
+              "velocityRandomness" : [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "ragdoll" : {
+          "blendWeight" : 1,
+          "bones" : [
+            {
+              "blendWeight" : 1,
+              "bodyEntity" : 1,
+              "bodyFromPalette" : [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ],
+              "boneName" : "Hip",
+              "isSimulationEnabled" : true,
+              "jointEntity" : 0,
+              "paletteIndex" : 2,
+              "simulatedMotionType" : "dynamic"
+            }
+          ],
+          "isEnabled" : true,
+          "mode" : "animated"
+        },
+        "renderMaterial" : {
+          "baseColorFactor" : [
+            1,
+            1,
+            1,
+            1
+          ],
+          "emissiveFactor" : [
+            0,
+            0,
+            0
+          ],
+          "metallicFactor" : 0,
+          "roughnessFactor" : 1
+        },
+        "renderMesh" : {
+          "colorTint" : [
+            1,
+            1,
+            1
+          ],
+          "isVisible" : true,
+          "meshIndex" : 0
+        },
+        "rigidbody" : {
+          "accumulatedAngularImpulse" : [
+            0,
+            0,
+            0
+          ],
+          "accumulatedForce" : [
+            0,
+            0,
+            0
+          ],
+          "accumulatedLinearImpulse" : [
+            0,
+            0,
+            0
+          ],
+          "accumulatedTorque" : [
+            0,
+            0,
+            0
+          ],
+          "allowSleep" : true,
+          "angularDamping" : 0.039999999105930328,
+          "angularVelocity" : [
+            0,
+            0,
+            0
+          ],
+          "axisLocks" : 0,
+          "continuousCollisionDetection" : false,
+          "gravityScale" : 1,
+          "isSleeping" : false,
+          "linearDamping" : 0.039999999105930328,
+          "linearVelocity" : [
+            0,
+            0,
+            0
+          ],
+          "mass" : 1,
+          "massMode" : "mass",
+          "maxAngularVelocity" : 47.123886108398438,
+          "maxLinearVelocity" : 500,
+          "motionQuality" : "discrete",
+          "motionType" : "dynamic"
+        },
+        "softBody" : {
+          "allowSleep" : true,
+          "facesDoubleSided" : true,
+          "friction" : 0.20000000298023224,
+          "gravityScale" : 1,
+          "isEnabled" : true,
+          "layerID" : 0,
+          "layerMask" : 65535,
+          "linearDamping" : 0.10000000149011612,
+          "maxLinearVelocity" : 500,
+          "pressure" : 0,
+          "restitution" : 0,
+          "selfCollision" : false,
+          "solverIterations" : 5,
+          "vertexMass" : 1,
+          "vertexRadius" : 0.019999999552965164
+        },
+        "softBodyMesh" : {
+          "bendCompliance" : 9.9999997473787516e-06,
+          "bendType" : 2,
+          "compliance" : 9.9999997473787516e-06,
+          "fixedVertexIndices" : [
+
+          ],
+          "shearCompliance" : 9.9999997473787516e-06,
+          "volumeCompliance" : 9.9999999747524271e-07
+        },
+        "vehicle" : {
+          "antiRollBars" : [
+            {
+              "leftWheel" : 0,
+              "rightWheel" : 1,
+              "stiffness" : 1000
+            },
+            {
+              "leftWheel" : 2,
+              "rightWheel" : 3,
+              "stiffness" : 1000
+            }
+          ],
+          "controller" : {
+            "kind" : 0
+          },
+          "differentials" : [
+            {
+              "differentialRatio" : 3.4200000762939453,
+              "engineTorqueRatio" : 1,
+              "leftRightSplit" : 0.5,
+              "leftWheel" : 2,
+              "limitedSlipRatio" : 1.3999999761581421,
+              "rightWheel" : 3
+            }
+          ],
+          "engine" : {
+            "angularDamping" : 0.20000000298023224,
+            "inertia" : 0.5,
+            "maxRPM" : 6000,
+            "maxTorque" : 500,
+            "minRPM" : 1000
+          },
+          "forward" : [
+            0,
+            0,
+            1
+          ],
+          "isEnabled" : true,
+          "maxPitchRollAngle" : 3.1415925025939941,
+          "transmission" : {
+            "clutchReleaseTime" : 0.30000001192092896,
+            "clutchStrength" : 10,
+            "gearRatios" : [
+              2.6600000858306885,
+              1.7799999713897705,
+              1.2999999523162842,
+              1,
+              0.74000000953674316
+            ],
+            "mode" : 0,
+            "reverseGearRatios" : [
+              -2.9000000953674316
+            ],
+            "shiftDownRPM" : 2000,
+            "shiftUpRPM" : 4000,
+            "switchLatency" : 0.5,
+            "switchTime" : 0.5
+          },
+          "up" : [
+            0,
+            1,
+            0
+          ],
+          "wheels" : [
+            {
+              "angularDamping" : 0.20000000298023224,
+              "inertia" : 0.89999997615814209,
+              "maxBrakeTorque" : 1500,
+              "maxHandBrakeTorque" : 0,
+              "maxSteerAngle" : 0.78539812564849854,
+              "position" : [
+                0.89999997615814209,
+                -0.20000000298023224,
+                1.3999999761581421
+              ],
+              "radius" : 0.34999999403953552,
+              "steeringAxis" : [
+                0,
+                1,
+                0
+              ],
+              "suspensionDamping" : 0.5,
+              "suspensionDirection" : [
+                0,
+                -1,
+                0
+              ],
+              "suspensionFrequency" : 1.5,
+              "suspensionMaxLength" : 0.5,
+              "suspensionMinLength" : 0.20000000298023224,
+              "suspensionPreloadLength" : 0,
+              "wheelForward" : [
+                0,
+                0,
+                1
+              ],
+              "wheelUp" : [
+                0,
+                1,
+                0
+              ],
+              "width" : 0.20000000298023224
+            },
+            {
+              "angularDamping" : 0.20000000298023224,
+              "inertia" : 0.89999997615814209,
+              "maxBrakeTorque" : 1500,
+              "maxHandBrakeTorque" : 0,
+              "maxSteerAngle" : 0.78539812564849854,
+              "position" : [
+                -0.89999997615814209,
+                -0.20000000298023224,
+                1.3999999761581421
+              ],
+              "radius" : 0.34999999403953552,
+              "steeringAxis" : [
+                0,
+                1,
+                0
+              ],
+              "suspensionDamping" : 0.5,
+              "suspensionDirection" : [
+                0,
+                -1,
+                0
+              ],
+              "suspensionFrequency" : 1.5,
+              "suspensionMaxLength" : 0.5,
+              "suspensionMinLength" : 0.20000000298023224,
+              "suspensionPreloadLength" : 0,
+              "wheelForward" : [
+                0,
+                0,
+                1
+              ],
+              "wheelUp" : [
+                0,
+                1,
+                0
+              ],
+              "width" : 0.20000000298023224
+            },
+            {
+              "angularDamping" : 0.20000000298023224,
+              "inertia" : 0.89999997615814209,
+              "maxBrakeTorque" : 1500,
+              "maxHandBrakeTorque" : 4000,
+              "maxSteerAngle" : 0,
+              "position" : [
+                0.89999997615814209,
+                -0.20000000298023224,
+                -1.3999999761581421
+              ],
+              "radius" : 0.34999999403953552,
+              "steeringAxis" : [
+                0,
+                1,
+                0
+              ],
+              "suspensionDamping" : 0.5,
+              "suspensionDirection" : [
+                0,
+                -1,
+                0
+              ],
+              "suspensionFrequency" : 1.5,
+              "suspensionMaxLength" : 0.5,
+              "suspensionMinLength" : 0.20000000298023224,
+              "suspensionPreloadLength" : 0,
+              "wheelForward" : [
+                0,
+                0,
+                1
+              ],
+              "wheelUp" : [
+                0,
+                1,
+                0
+              ],
+              "width" : 0.20000000298023224
+            },
+            {
+              "angularDamping" : 0.20000000298023224,
+              "inertia" : 0.89999997615814209,
+              "maxBrakeTorque" : 1500,
+              "maxHandBrakeTorque" : 4000,
+              "maxSteerAngle" : 0,
+              "position" : [
+                -0.89999997615814209,
+                -0.20000000298023224,
+                -1.3999999761581421
+              ],
+              "radius" : 0.34999999403953552,
+              "steeringAxis" : [
+                0,
+                1,
+                0
+              ],
+              "suspensionDamping" : 0.5,
+              "suspensionDirection" : [
+                0,
+                -1,
+                0
+              ],
+              "suspensionFrequency" : 1.5,
+              "suspensionMaxLength" : 0.5,
+              "suspensionMinLength" : 0.20000000298023224,
+              "suspensionPreloadLength" : 0,
+              "wheelForward" : [
+                0,
+                0,
+                1
+              ],
+              "wheelUp" : [
+                0,
+                1,
+                0
+              ],
+              "width" : 0.20000000298023224
+            }
+          ]
+        }
+      },
+      "name" : "Registry Golden",
+      "rotation" : [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale" : [
+        1,
+        1,
+        1
+      ],
+      "translation" : [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "parent" : 0,
+      "rotation" : [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale" : [
+        1,
+        1,
+        1
+      ],
+      "translation" : [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "version" : 3
+}

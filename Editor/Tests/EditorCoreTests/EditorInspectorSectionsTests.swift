@@ -17,7 +17,7 @@ struct EditorInspectorSectionsTests {
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))
 
-        #expect(adapter.addComponent(.script, to: id))
+        #expect(adapter.addComponent("script", to: id))
         guard case let .stringOptions(identifier, options) =
                 field(adapter, id, section: "scripts", field: "script-0-identifier") else {
             Issue.record("expected script catalog selector"); return
@@ -78,7 +78,7 @@ struct EditorInspectorSectionsTests {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         #expect(!hasSection(adapter, id, "camera"))
-        _ = adapter.addComponent(.camera, to: id)
+        _ = adapter.addComponent("camera", to: id)
         #expect(hasSection(adapter, id, "camera"))
     }
 
@@ -86,7 +86,7 @@ struct EditorInspectorSectionsTests {
     func cameraActiveBinding() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.camera, to: id)
+        _ = adapter.addComponent("camera", to: id)
 
         guard case let .bool(binding) = field(adapter, id, section: "camera", field: "camera-active") else {
             Issue.record("expected camera-active bool field"); return
@@ -99,7 +99,7 @@ struct EditorInspectorSectionsTests {
     func cameraFOVBinding() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.camera, to: id)
+        _ = adapter.addComponent("camera", to: id)
 
         guard case let .constrainedNumber(binding, _, _, _, _) =
                 field(adapter, id, section: "camera", field: "camera-fov") else {
@@ -117,7 +117,7 @@ struct EditorInspectorSectionsTests {
     func cameraAspectBinding() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.camera, to: id)
+        _ = adapter.addComponent("camera", to: id)
 
         guard case let .constrainedNumber(binding, _, _, _, _) =
                 field(adapter, id, section: "camera", field: "camera-aspect") else {
@@ -177,7 +177,7 @@ struct EditorInspectorSectionsTests {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))
-        _ = adapter.addComponent(.rigidBody, to: id)
+        _ = adapter.addComponent("rigidbody", to: id)
 
         guard case let .vector3(linearX, linearY, linearZ) =
                 field(adapter, id, section: "rigid-body", field: "linear-velocity") else {
@@ -221,7 +221,7 @@ struct EditorInspectorSectionsTests {
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))
         #expect(!hasSection(adapter, id, "vehicle"))
-        #expect(adapter.addComponent(.vehicle, to: id))
+        #expect(adapter.addComponent("vehicle", to: id))
         #expect(hasSection(adapter, id, "vehicle"))
 
         guard case let .bool(enabled) =
@@ -279,7 +279,7 @@ struct EditorInspectorSectionsTests {
         #expect(motorcycle.maxLeanAngle == 0.6)
         #expect(!motorcycle.isLeanControllerEnabled)
 
-        #expect(adapter.removeComponent(.vehicle, from: id))
+        #expect(adapter.removeComponent("vehicle", from: id))
         #expect(!hasSection(adapter, id, "vehicle"))
     }
 
@@ -288,8 +288,8 @@ struct EditorInspectorSectionsTests {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))
-        #expect(adapter.addComponent(.softBody, to: id))
-        #expect(adapter.addComponent(.cloth, to: id))
+        #expect(adapter.addComponent("softBody", to: id))
+        #expect(adapter.addComponent("cloth", to: id))
         #expect(hasSection(adapter, id, "soft-body"))
         #expect(hasSection(adapter, id, "cloth"))
 
@@ -327,8 +327,8 @@ struct EditorInspectorSectionsTests {
         #expect(cloth.fixedVertexIndices == [0, 2, 5])
         #expect(cloth.bendType == .dihedral)
 
-        #expect(adapter.removeComponent(.cloth, from: id))
-        #expect(adapter.removeComponent(.softBody, from: id))
+        #expect(adapter.removeComponent("cloth", from: id))
+        #expect(adapter.removeComponent("softBody", from: id))
         #expect(!hasSection(adapter, id, "cloth"))
         #expect(!hasSection(adapter, id, "soft-body"))
     }
@@ -362,11 +362,11 @@ struct EditorInspectorSectionsTests {
             ),
         ]))
 
-        #expect(adapter.addComponent(.softBody, to: id))
-        #expect(adapter.addComponent(.softBodyMesh, to: id))
+        #expect(adapter.addComponent("softBody", to: id))
+        #expect(adapter.addComponent("softBodyMesh", to: id))
         #expect(hasSection(adapter, id, "soft-body-mesh"))
-        #expect(!adapter.addableComponentKinds(on: id).contains(.cloth))
-        #expect(!adapter.addComponent(.cloth, to: id))
+        #expect(!adapter.addableComponentSchemas(on: id).map(\.typeID).contains("cloth"))
+        #expect(!adapter.addComponent("cloth", to: id))
 
         guard case let .text(resource) =
                 field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-resource"),
@@ -398,9 +398,9 @@ struct EditorInspectorSectionsTests {
         #expect(mesh.volumeCompliance == 0.002)
         #expect(mesh.bendType == .distance)
 
-        #expect(adapter.removeComponent(.softBodyMesh, from: id))
+        #expect(adapter.removeComponent("softBodyMesh", from: id))
         #expect(!hasSection(adapter, id, "soft-body-mesh"))
-        #expect(adapter.addableComponentKinds(on: id).contains(.cloth))
+        #expect(adapter.addableComponentSchemas(on: id).map(\.typeID).contains("cloth"))
     }
 
     @Test("destructible inspector edits pre-fracture thresholds and recycling policy")
@@ -408,7 +408,7 @@ struct EditorInspectorSectionsTests {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))
-        #expect(adapter.addComponent(.destructible, to: id))
+        #expect(adapter.addComponent("destructible", to: id))
         #expect(hasSection(adapter, id, "destructible"))
 
         guard case let .bool(enabled) =
@@ -460,7 +460,7 @@ struct EditorInspectorSectionsTests {
         #expect(fractureState == "Intact")
         #expect(retainedFragments == "0")
 
-        #expect(adapter.removeComponent(.destructible, from: id))
+        #expect(adapter.removeComponent("destructible", from: id))
         #expect(!hasSection(adapter, id, "destructible"))
     }
 
@@ -469,7 +469,7 @@ struct EditorInspectorSectionsTests {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))
-        _ = adapter.addComponent(.collider, to: id)
+        _ = adapter.addComponent("collider", to: id)
 
         guard case let .vector3(centerX, centerY, centerZ) =
                 field(adapter, id, section: "collider", field: "shape-center"),
@@ -666,7 +666,7 @@ struct EditorInspectorSectionsTests {
     func audioListenerBinding() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.audioListener, to: id)
+        _ = adapter.addComponent("audioListener", to: id)
         #expect(hasSection(adapter, id, "audio-listener"))
 
         guard case let .constrainedNumber(binding, _, _, _, _) =
@@ -684,7 +684,7 @@ struct EditorInspectorSectionsTests {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         let entity = EntityID(rawValue: id)!
-        _ = adapter.addComponent(.animationGraphPlayer, to: id)
+        _ = adapter.addComponent("animationGraphPlayer", to: id)
 
         guard case let .json(binding, _) =
                 field(adapter, id, section: "animation-graph-player", field: "anim-graph-definition") else {
@@ -726,7 +726,7 @@ struct EditorInspectorSectionsTests {
         let id = makeEntity(in: adapter)
         #expect(!hasSection(adapter, id, "particle-emitter"))
         #expect(hasSection(adapter, id, "particle-scalability"))
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
         #expect(hasSection(adapter, id, "particle-emitter"))
     }
 
@@ -734,7 +734,7 @@ struct EditorInspectorSectionsTests {
     func particleModuleStackField() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
 
         guard case let .particleModuleStack(binding) =
             field(adapter, id, section: "particle-emitter", field: "particle-module-stack") else {
@@ -763,7 +763,7 @@ struct EditorInspectorSectionsTests {
     func particleModuleStackBindingPreservesDisabledModuleAuthoringState() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
         let entity = try #require(EntityID(rawValue: id))
 
         guard case let .particleModuleStack(binding) =
@@ -814,7 +814,7 @@ struct EditorInspectorSectionsTests {
     func particleModuleStackBindingWritesOrderAndResetState() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
         let entity = try #require(EntityID(rawValue: id))
 
         guard case let .particleModuleStack(binding) =
@@ -846,7 +846,7 @@ struct EditorInspectorSectionsTests {
     func particleModuleStackBindingWritesSingleModuleDefaultReset() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
         let entity = try #require(EntityID(rawValue: id))
 
         guard case let .particleModuleStack(binding) =
@@ -889,7 +889,7 @@ struct EditorInspectorSectionsTests {
     func particleModuleStackBindingWritesInlineModuleSettings() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
         let entity = try #require(EntityID(rawValue: id))
 
         guard case let .particleModuleStack(binding) =
@@ -1270,7 +1270,7 @@ struct EditorInspectorSectionsTests {
     func particleScalarBindings() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
         let entity = EntityID(rawValue: id)!
 
         if case let .constrainedNumber(rate, _, _, _, _) =
@@ -1798,7 +1798,7 @@ struct EditorInspectorSectionsTests {
     func particleVectorAndColorBindings() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.particleEmitter, to: id)
+        _ = adapter.addComponent("particleEmitter", to: id)
         let entity = EntityID(rawValue: id)!
 
         guard case let .vector3(gx, gy, gz) =

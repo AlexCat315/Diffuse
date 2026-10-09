@@ -32,7 +32,7 @@ struct ProjectExporterTests {
         func manifest(enabled: Bool) -> EditorSceneManifest {
             let binding = ScriptBinding(identifier: "game.missing", isEnabled: enabled)
             let node = EditorSceneManifestNode(id: 1, name: "Missing", kind: "empty",
-                                               script: EditorSceneManifestScript(ScriptComponent(binding)))
+                                               components: [ManifestComponent(type: "script", value: ComponentValue(jsonObject: ["bindings": [encodeScriptBinding(binding)]]))])
             return EditorSceneManifest(revision: 0, entityCount: 1, roots: [node])
         }
         #expect(throws: ProjectExporterError.unresolvedScriptBindings(["Missing: game.missing"])) {

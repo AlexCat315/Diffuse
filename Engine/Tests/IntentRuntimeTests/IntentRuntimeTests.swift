@@ -102,7 +102,7 @@ struct IntentRuntimeTests {
                              summary: "Update script parameters",
                              source: .human),
             summary: "Update script parameters",
-            operations: [.scene(.setScriptBindings(entityID: entity.rawValue, bindings: [next]))],
+            operations: [.scene(.setComponentData(entityID: entity.rawValue, typeID: "script", value: ComponentValue(jsonObject: ["bindings": ([next]).map(encodeScriptBindingForEditing)])))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -171,7 +171,7 @@ struct IntentRuntimeTests {
         let transaction = TransactionIR(
             intent: IntentIR(verb: "scene.set_particle_emitter", summary: "Update emitter", source: .human),
             summary: "Update emitter",
-            operations: [.scene(.setParticleEmitter(entityID: entity.rawValue, emitter: emitter))],
+            operations: [.scene(.componentData(entityID: entity.rawValue, typeID: "particleEmitter", component: emitter))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -233,7 +233,7 @@ struct IntentRuntimeTests {
         let transaction = TransactionIR(
             intent: IntentIR(verb: "scene.set_audio_listener", summary: "Update listener", source: .human),
             summary: "Update listener",
-            operations: [.scene(.setAudioListener(entityID: entity.rawValue, masterVolume: 0.3))],
+            operations: [.scene(.componentFields(entityID: entity.rawValue, typeID: "audioListener", fields: ["masterVolume": (0.3)]))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -262,9 +262,9 @@ struct IntentRuntimeTests {
                              source: .human),
             summary: "Update rigid body inspector fields",
             operations: [
-                .scene(.setRigidBodyMotionType(entityID: entity.rawValue, value: .kinematic)),
-                .scene(.setRigidBodyMass(entityID: entity.rawValue, value: 42)),
-                .scene(.setRigidBodyGravityScale(entityID: entity.rawValue, value: 0.5)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["motionType": RigidBodyMotionType.kinematic.rawValue])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["mass": (42)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["gravityScale": (0.5)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -396,8 +396,7 @@ struct IntentRuntimeTests {
         }
         #expect(rawID == entity.rawValue)
         #expect(transform.translation == SIMD3<Float>(3, 4, 5))
-        #expect(aspectTx.operations == [.scene(.setCameraAspectRatio(entityID: entity.rawValue,
-                                                                     aspectRatio: 1.777))])
+        #expect(aspectTx.operations == [.scene(.componentFields(entityID: entity.rawValue, typeID: "camera", fields: ["aspectRatio": Float(1.777)]))])
     }
 
     @Test("AmbiguityScorer treats fully specified human intents as clear")
@@ -519,8 +518,7 @@ struct IntentRuntimeTests {
         let entity = scene.createEntity()
         let transaction = TransactionIR(
             summary: "Set light color",
-            operations: [.scene(.setLightColor(entityID: entity.rawValue,
-                                               color: SIMD3<Float>(1, 0, 0)))],
+            operations: [.scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["color": (SIMD3<Float>(1, 0, 0))]))],
             approvalPolicy: .automatic,
             provenance: .proposal
         )
@@ -547,8 +545,8 @@ struct IntentRuntimeTests {
             return
         }
         #expect(failures.count == 1)
-        #expect(failures[0].verb == "scene.set_light_color")
-        #expect(failures[0].reason.contains("LightComponent"))
+        #expect(failures[0].verb == "scene.set_component_data")
+        #expect(failures[0].reason.contains("unknown capability"))
     }
 
     @Test("capability planning escalates low-confidence AI plans")
@@ -586,8 +584,10 @@ struct IntentRuntimeTests {
         let entity = scene.createEntity()
         _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 1), for: entity)
         let transaction = TransactionIR(
+            intent: IntentIR(verb: "scene.set_rigid_body_mass", summary: "Update rigid body mass", targetObjectIDs: ["scene:\(entity.rawValue)"],
+                             arguments: ["mass": .number(12)], source: .human),
             summary: "Update rigid body mass",
-            operations: [.scene(.setRigidBodyMass(entityID: entity.rawValue, value: 12))],
+            operations: [.scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["mass": (12)]))],
             approvalPolicy: .automatic,
             provenance: .authored
         )
@@ -1122,10 +1122,10 @@ struct IntentRuntimeEndToEndTests {
                              source: .human),
             summary: "Add physics components",
             operations: [
-                .scene(.setRigidBodyMotionType(entityID: rawID, value: .dynamic)),
-                .scene(.setRigidBodyMass(entityID: rawID, value: 2.0)),
-                .scene(.setRigidBodyGravityScale(entityID: rawID, value: 1.0)),
-                .scene(.setCollider(entityID: rawID, collider: collider)),
+                .scene(.componentFields(entityID: rawID, typeID: "rigidbody", fields: ["motionType": RigidBodyMotionType.dynamic.rawValue])),
+                .scene(.componentFields(entityID: rawID, typeID: "rigidbody", fields: ["mass": (2.0)])),
+                .scene(.componentFields(entityID: rawID, typeID: "rigidbody", fields: ["gravityScale": (1.0)])),
+                .scene(.componentData(entityID: rawID, typeID: "collider", component: collider)),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored)
@@ -1321,9 +1321,8 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "Update mass and animation",
             operations: [
-                .scene(.setRigidBodyMass(entityID: entity.rawValue, value: 50)),
-                .scene(.setAnimationPlayer(entityID: entity.rawValue, clipName: "walk",
-                                           speed: 1.5, loop: true, isPlaying: true)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["mass": (50)])),
+                .scene(.componentData(entityID: entity.rawValue, typeID: "animationPlayer", component: AnimationPlayer(clipName: "walk", speed: 1.5, loop: true, isPlaying: true))),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1371,7 +1370,7 @@ struct UndoStackTests {
                                           isPlaying: true)
         let transaction = TransactionIR(
             summary: "Set animation graph",
-            operations: [.scene(.setAnimationGraphPlayer(entityID: entity.rawValue, player: player))],
+            operations: [.scene(.componentData(entityID: entity.rawValue, typeID: "animationGraphPlayer", component: player))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -1455,7 +1454,7 @@ struct UndoStackTests {
         _ = scene.setComponent(LightComponent(type: .directional, color: .one, intensity: 1, range: 100), for: entity)
         let transaction = TransactionIR(
             summary: "Enable shadow casting",
-            operations: [.scene(.setLightCastShadows(entityID: entity.rawValue, value: true))],
+            operations: [.scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["castShadows": (true)]))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -1478,8 +1477,8 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "Set layer",
             operations: [
-                .scene(.setColliderLayer(entityID: entity.rawValue, layerID: 3)),
-                .scene(.setColliderLayerMask(entityID: entity.rawValue, layerMask: 12)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["layerID": (3)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["layerMask": (12)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1511,7 +1510,7 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "Disable constraint",
             operations: [
-                .scene(.setConstraintEnabled(entityID: entity.rawValue, value: false)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "constraint", fields: ["isEnabled": (false)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1535,15 +1534,7 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "Set PBR material",
             operations: [
-                .scene(.setRenderMaterialComponent(
-                    entityID: entity.rawValue,
-                    baseColorFactor: SIMD4<Float>(0.8, 0.2, 0.1, 1.0),
-                    baseColorTextureIndex: 2,
-                    normalTextureIndex: 5,
-                    metallicFactor: 0.9,
-                    roughnessFactor: 0.3,
-                    emissiveFactor: SIMD3<Float>(0.0, 0.5, 0.0)
-                )),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "renderMaterial", fields: ["baseColorFactor": SIMD4<Float>(0.8, 0.2, 0.1, 1.0), "baseColorTextureIndex": 2, "normalTextureIndex": 5, "metallicFactor": 0.9, "roughnessFactor": 0.3, "emissiveFactor": SIMD3<Float>(0.0, 0.5, 0.0)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1588,7 +1579,7 @@ struct UndoStackTests {
                                     parametersJSON: #"{"speed":5}"#)
         let transaction = TransactionIR(
             summary: "Attach script",
-            operations: [.scene(.setScriptBindings(entityID: entity.rawValue, bindings: [binding]))],
+            operations: [.scene(.setComponentData(entityID: entity.rawValue, typeID: "script", value: ComponentValue(jsonObject: ["bindings": ([binding]).map(encodeScriptBindingForEditing)])))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -1620,7 +1611,7 @@ struct UndoStackTests {
         src.playOnAwake = false
         let transaction = TransactionIR(
             summary: "Set audio",
-            operations: [.scene(.setAudioSource(entityID: entity.rawValue, source: src))],
+            operations: [.scene(.componentData(entityID: entity.rawValue, typeID: "audioSource", component: src))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -1663,7 +1654,7 @@ struct UndoStackTests {
         )
         let transaction = TransactionIR(
             summary: "Set collider",
-            operations: [.scene(.setCollider(entityID: entity.rawValue, collider: collider))],
+            operations: [.scene(.componentData(entityID: entity.rawValue, typeID: "collider", component: collider))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )
@@ -1717,9 +1708,9 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "rb ops",
             operations: [
-                .scene(.setRigidBodyMotionType(entityID: entity.rawValue, value: .kinematic)),
-                .scene(.setRigidBodyGravityScale(entityID: entity.rawValue, value: 2.5)),
-                .scene(.setRigidBodyAllowSleep(entityID: entity.rawValue, value: false)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["motionType": RigidBodyMotionType.kinematic.rawValue])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["gravityScale": (2.5)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["allowSleep": (false)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1753,9 +1744,8 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "mesh events",
             operations: [
-                .scene(.setMeshColorTint(entityID: entity.rawValue,
-                                          color: SIMD3<Float>(1, 0.5, 0))),
-                .scene(.setRenderMeshVisibility(entityID: entity.rawValue, isVisible: false)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "renderMesh", fields: ["colorTint": (SIMD3<Float>(1, 0.5, 0))])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "renderMesh", fields: ["isVisible": (false)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1784,11 +1774,10 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "light ops",
             operations: [
-                .scene(.setLightType(entityID: entity.rawValue, type: .spot)),
-                .scene(.setLightColor(entityID: entity.rawValue,
-                                       color: SIMD3<Float>(0.9, 0.8, 0.7))),
-                .scene(.setLightIntensity(entityID: entity.rawValue, intensity: 500)),
-                .scene(.setLightRange(entityID: entity.rawValue, range: 25)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["type": LightType.spot.rawValue])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["color": (SIMD3<Float>(0.9, 0.8, 0.7))])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["intensity": (500)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["range": (25)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1827,8 +1816,8 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "spot angles",
             operations: [
-                .scene(.setLightSpotInnerAngle(entityID: entity.rawValue, angleDegrees: 20)),
-                .scene(.setLightSpotOuterAngle(entityID: entity.rawValue, angleDegrees: 45)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["spotInnerAngleDegrees": (20)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "light", fields: ["spotOuterAngleDegrees": (45)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1857,9 +1846,9 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "camera ops",
             operations: [
-                .scene(.setCameraFOV(entityID: entity.rawValue, fovYDegrees: 75)),
-                .scene(.setCameraAspectRatio(entityID: entity.rawValue, aspectRatio: 1.777)),
-                .scene(.setCameraActive(entityID: entity.rawValue, isActive: true)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "camera", fields: ["fovYRadians": (75) * Float.pi / 180])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "camera", fields: ["aspectRatio": Float(1.777)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "camera", fields: ["isActive": (true)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1896,11 +1885,11 @@ struct UndoStackTests {
         let transaction = TransactionIR(
             summary: "collider ops",
             operations: [
-                .scene(.setColliderShapeType(entityID: entity.rawValue, kind: .sphere)),
-                .scene(.setColliderTrigger(entityID: entity.rawValue, value: true)),
-                .scene(.setColliderMaterialFriction(entityID: entity.rawValue, value: 0.3)),
-                .scene(.setColliderMaterialRestitution(entityID: entity.rawValue, value: 0.6)),
-                .scene(.setColliderMaterialDensity(entityID: entity.rawValue, value: 1.5)),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["shapes": ["0": ColliderShapeKind.sphere.defaultComponentFields]])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["isTrigger": (true)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["friction": (0.3)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["restitution": (0.6)])),
+                .scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["density": (1.5)])),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
@@ -1946,7 +1935,7 @@ struct UndoStackTests {
                                 for: entity)
         let transaction = TransactionIR(
             summary: "to sphere",
-            operations: [.scene(.setColliderShapeType(entityID: entity.rawValue, kind: .sphere))],
+            operations: [.scene(.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["shapes": ["0": ColliderShapeKind.sphere.defaultComponentFields]]))],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
             provenance: .authored
         )

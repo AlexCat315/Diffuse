@@ -4,8 +4,9 @@ import SceneRuntime
 public struct EditorInspectorSection {
     public let id: String
     public let title: String
-    public let fields: [EditorInspectorField]
-    public let groups: [EditorInspectorFieldGroup]
+    public var fields: [EditorInspectorField]
+    public var groups: [EditorInspectorFieldGroup]
+    public var componentTypeID: String? = nil
 
     public init(id: String, title: String, fields: [EditorInspectorField], groups: [EditorInspectorFieldGroup] = []) {
         self.id = id
@@ -103,7 +104,6 @@ public enum EditorInspectorFieldValue {
     case vector3(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>)
     case color(Binding<Color>)
     case json(Binding<String>, minHeight: Float)
-    case lightType(Binding<LightType>)
     case physicsSimulationMode(Binding<PhysicsSimulationMode>)
     case vehicleControllerKind(Binding<VehicleControllerKind>)
     case rigidBodyMotion(Binding<RigidBodyMotionType>)

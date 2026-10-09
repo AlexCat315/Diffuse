@@ -107,7 +107,7 @@ struct GameProjectScriptLoaderTests {
         let component = ScriptComponent(bindings: [ScriptBinding(identifier: script.identifier),
                                                    ScriptBinding(identifier: alias, parametersJSON: #"{"speed":3}"#)])
         let node = EditorSceneManifestNode(id: 1, name: "Player", kind: "empty",
-                                           script: EditorSceneManifestScript(component))
+                                   components: [ManifestComponent(type: "script", value: ComponentValue(jsonObject: ["bindings": component.bindings.map(encodeScriptBindingForEditing)]))])
         let scene = EditorSceneManifest(revision: 0, entityCount: 1, roots: [node])
         let output = project.appendingPathComponent("export")
         _ = try ProjectExporter.export(manifest: scene, appName: "ScriptTest", sourceProjectDirectory: project,

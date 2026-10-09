@@ -354,10 +354,9 @@ struct CapabilityExposureTests {
               case let .scene(.spawnLightEntity(label, lightType, _, intensity, color, _, _, parentID))
                 = transaction.operations[0],
               case let .scene(.setLocalTransform(_, grounded)) = transaction.operations[1],
-              case let .scene(.setAudioSource(_, audio)) = transaction.operations[4],
-              case let .scene(.setAnimationPlayer(_, clip, speed, loop, playing))
-                = transaction.operations[5],
-              case let .scene(.setScriptBindings(_, finalBindings)) = transaction.operations[7]
+              let (_, audio) = transaction.operations[4].decodedComponent(AudioSource.self, typeID: "audioSource"),
+              let (_, animation) = transaction.operations[5].decodedComponent(AnimationPlayer.self, typeID: "animationPlayer"),
+              let (_, scripts) = transaction.operations[7].decodedComponent(ScriptComponent.self, typeID: "script")
         else {
             Issue.record("expected typed utility operations")
             return
@@ -371,10 +370,11 @@ struct CapabilityExposureTests {
         #expect(audio.clipName == "ambience")
         #expect(audio.volume == 0.25)
         #expect(audio.pitch == 2)
-        #expect(clip == "Idle")
-        #expect(speed == 0.5)
-        #expect(loop)
-        #expect(!playing)
+        #expect(animation.clipName == "Idle")
+        #expect(animation.speed == 0.5)
+        #expect(animation.loop)
+        #expect(!animation.isPlaying)
+        let finalBindings = scripts.bindings
         #expect(finalBindings.count == 1)
         #expect(!finalBindings[0].isEnabled)
         let parameters = try #require(
@@ -520,20 +520,20 @@ struct CapabilityExposureTests {
             exposureSnapshot: snapshot
         )
         #expect(transaction.operations == [
-            .scene(.setLightType(entityID: light.rawValue, type: .spot)),
-            .scene(.setLightIntensity(entityID: light.rawValue, intensity: 250)),
-            .scene(.setLightColor(entityID: light.rawValue, color: SIMD3<Float>(0.2, 0.4, 0.6))),
-            .scene(.setLightRange(entityID: light.rawValue, range: 15)),
-            .scene(.setLightSpotOuterAngle(entityID: light.rawValue, angleDegrees: 25)),
-            .scene(.setLightSpotInnerAngle(entityID: light.rawValue, angleDegrees: 15)),
-            .scene(.setLightCastShadows(entityID: light.rawValue, value: true)),
+            .scene(.componentFields(entityID: light.rawValue, typeID: "light", fields: ["type": LightType.spot.rawValue])),
+            .scene(.componentFields(entityID: light.rawValue, typeID: "light", fields: ["intensity": (250)])),
+            .scene(.componentFields(entityID: light.rawValue, typeID: "light", fields: ["color": (SIMD3<Float>(0.2, 0.4, 0.6))])),
+            .scene(.componentFields(entityID: light.rawValue, typeID: "light", fields: ["range": (15)])),
+            .scene(.componentFields(entityID: light.rawValue, typeID: "light", fields: ["spotOuterAngleDegrees": (25)])),
+            .scene(.componentFields(entityID: light.rawValue, typeID: "light", fields: ["spotInnerAngleDegrees": (15)])),
+            .scene(.componentFields(entityID: light.rawValue, typeID: "light", fields: ["castShadows": (true)])),
         ])
         #expect(transaction.capabilityInvocations.map(\.capabilityID) == capabilityIDs)
         #expect(transaction.verificationAssertions.contains(
-            .sceneState(.lightSpotOuterAngle(entityID: light.rawValue, value: 25))
+            .componentData(entityID: light.rawValue, typeID: "light", value: ComponentValue(jsonObject: ["spotOuterAngleDegrees": Float(25)]), mode: .merge)
         ))
         #expect(transaction.verificationAssertions.contains(
-            .sceneState(.lightSpotInnerAngle(entityID: light.rawValue, value: 15))
+            .componentData(entityID: light.rawValue, typeID: "light", value: ComponentValue(jsonObject: ["spotInnerAngleDegrees": Float(15)]), mode: .merge)
         ))
         var executionContext = TransactionExecutionContext(sceneRuntime: scene)
         _ = try TransactionExecutor().apply(transaction, to: &executionContext)
@@ -664,21 +664,22 @@ struct CapabilityExposureTests {
             scene: scene,
             exposureSnapshot: snapshot
         )
-        #expect(transaction.operations.count == 4)
+        #expect(transaction.operations.count == 5)
         #expect(transaction.capabilityInvocations.map(\.schemaHash) == [
             SetCameraPoseCapability.contract.schemaHash,
             SetCameraFOVCapability.contract.schemaHash,
             SetCameraAspectRatioCapability.contract.schemaHash,
             SetCameraActiveCapability.contract.schemaHash,
         ])
-        guard case let .scene(.setCameraPose(_, transform, target, up)) = transaction.operations[0]
+        guard case let .scene(.setLocalTransform(_, transform)) = transaction.operations[0],
+              let (_, camera) = transaction.operations[1].decodedComponent(CameraComponent.self, typeID: "camera")
         else {
             Issue.record("expected typed setCameraPose operation")
             return
         }
         #expect(transform.translation == SIMD3<Float>(4, 3, 2))
-        #expect(target == .zero)
-        #expect(up == SIMD3<Float>(0, 1, 0))
+        #expect(camera.target == .zero)
+        #expect(camera.up == SIMD3<Float>(0, 1, 0))
 
         let coincidentData = try JSONSerialization.data(withJSONObject: [
             "summary": "Invalid camera",
@@ -750,15 +751,14 @@ struct CapabilityExposureTests {
             exposureSnapshot: snapshot
         )
         guard transaction.operations.count == 2,
-              case let .scene(.setRenderMaterialComponent(_, base, _, _, metallic, roughness, emissive))
-                = transaction.operations[1] else {
+              let (_, material) = transaction.operations[1].decodedComponent(RenderMaterialComponent.self, typeID: "renderMaterial") else {
             Issue.record("expected a second typed material operation")
             return
         }
-        #expect(base == SIMD4<Float>(0.2, 0.4, 0.6, 1))
-        #expect(abs(metallic - 0.9) < 0.001)
-        #expect(abs(roughness - 0.2) < 0.001)
-        #expect(emissive == SIMD3<Float>(0.1, 0.2, 0.3))
+        #expect(material.baseColorFactor == SIMD4<Float>(0.2, 0.4, 0.6, 1))
+        #expect(abs(material.metallicFactor - 0.9) < 0.001)
+        #expect(abs(material.roughnessFactor - 0.2) < 0.001)
+        #expect(material.emissiveFactor == SIMD3<Float>(0.1, 0.2, 0.3))
 
         let emptyData = try JSONSerialization.data(withJSONObject: [
             "summary": "No-op material",
@@ -823,13 +823,13 @@ struct CapabilityExposureTests {
             exposureSnapshot: snapshot
         )
         #expect(transaction.operations.count == 4)
-        guard case let .scene(.setRigidBody(_, body)) = transaction.operations[1] else {
+        guard let (_, body) = transaction.operations[1].decodedComponent(RigidBody.self, typeID: "rigidbody") else {
             Issue.record("expected typed rigid body replacement")
             return
         }
         #expect(body.motionType == .kinematic)
         #expect(abs(body.mass - 12) < 0.001)
-        guard case let .scene(.setCollider(_, collider)) = transaction.operations[3] else {
+        guard let (_, collider) = transaction.operations[3].decodedComponent(Collider.self, typeID: "collider") else {
             Issue.record("expected typed collider replacement")
             return
         }
@@ -1202,6 +1202,85 @@ private final class StubPluginInvoker: PluginCapabilityInvoking, @unchecked Send
         -> PluginPreparedCapabilityResult {
         result
     }
+}
+
+extension CapabilityExposureTests {
+    @Test("AI discovers and reads the host registry descriptions without creating a write draft")
+    func componentDescriptionsRead() async throws {
+        ComponentDescriptionURLProtocol.reset()
+        var scene = SceneRuntime()
+        scene.componentRegistry.register(ComponentSchema(DescriptionFlag.self,
+            typeID: "test.described", displayName: "Described flag", category: .gameplay,
+            encode: { world, entity, _ in
+                world.component(DescriptionFlag.self, for: entity).map { .object(["enabled": .bool($0.enabled)]) }
+            }, decode: { value, entity, _, world in
+                guard case let .bool(enabled)? = value.value(at: ["enabled"]) else { return }
+                _ = world.setComponent(DescriptionFlag(enabled: enabled), for: entity)
+            }, makeDefault: { entity, world in _ = world.setComponent(DescriptionFlag(), for: entity) }))
+        let describedRegistry = scene.componentRegistry
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ComponentDescriptionURLProtocol.self]
+        let session = Session(config: .openAIResponses(apiKey: "test"),
+                              urlSession: URLSession(configuration: configuration))
+        await session.setComponentDescriptionProvider { typeID in
+            SceneRuntime(componentRegistry: describedRegistry).componentDescriptions(typeID: typeID)
+        }
+        let proposal = try await session.process(.naturalLanguage(text: "Describe the component fields", locale: "en"))
+        #expect(proposal.capabilityDrafts.isEmpty)
+        #expect(proposal.plan.steps.isEmpty)
+        #expect(ComponentDescriptionURLProtocol.requestCount == 3)
+        #expect(scene.entities().isEmpty)
+    }
+}
+
+private struct DescriptionFlag: RuntimeComponent { var enabled = true }
+
+private final class ComponentDescriptionURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var count = 0
+    static var requestCount: Int { lock.withLock { count } }
+    static func reset() { lock.withLock { count = 0 } }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let step = Self.lock.withLock { Self.count += 1; return Self.count }
+            let bodyData = try #require(ResponsesURLProtocol.bodyData(from: request))
+            let body = try #require(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            let contract = try #require(CapabilityRegistry.aiDefault.descriptor(for: "scene.describe_components")?.contract)
+            #expect(contract.access == .read)
+            let call: [String: Any]
+            switch step {
+            case 1:
+                call = ["name": CapabilityToolset.searchToolName,
+                        "arguments": #"{"query":"describe components","domain":"scene","access":"read"}"#]
+            case 2:
+                let tools = try #require(body["tools"] as? [[String: Any]])
+                #expect(tools.contains { $0["name"] as? String == contract.toolName })
+                call = ["name": contract.toolName, "arguments": #"{"type_id":"test.described"}"#]
+            default:
+                let inputs = try #require(body["input"] as? [[String: Any]])
+                let output = try #require(inputs.last { $0["type"] as? String == "function_call_output" }?["output"] as? String)
+                let descriptions = try JSONDecoder().decode([ComponentDescription].self, from: Data(output.utf8))
+                #expect(descriptions.count == 1)
+                #expect(descriptions.first?.typeID == "test.described")
+                #expect(descriptions.first?.defaults == .object(["enabled": .bool(true)]))
+                #expect(descriptions.first?.fields.first?.kind == .boolean)
+                call = ["name": CapabilityToolset.submitToolName,
+                        "arguments": #"{"summary":"Read component descriptions","draft_ids":[]}"#]
+            }
+            let data = try JSONSerialization.data(withJSONObject: ["output": [
+                call.merging(["type": "function_call", "call_id": "description_\(step)"]) { _, next in next },
+            ]])
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self, didFailWithError: error) }
+    }
+
+    override func stopLoading() {}
 }
 
 private final class ResponsesURLProtocol: URLProtocol, @unchecked Sendable {

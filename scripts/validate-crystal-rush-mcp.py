@@ -116,7 +116,7 @@ def main():
     scene = project / ".guava/editor-scene-manifest.json"
     scene.parent.mkdir(exist_ok=True)
     if not scene.exists():
-        scene.write_text(json.dumps({"schemaVersion": 6, "revision": 0, "entityCount": 0, "roots": []}))
+        scene.write_text(json.dumps({"schemaVersion": 8, "revision": 0, "entityCount": 0, "roots": []}))
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]

@@ -327,7 +327,11 @@ public struct RuntimeWorld: @unchecked Sendable {
     public private(set) var revision: UInt64 = 0
     private(set) var physicsRevision: UInt64 = 0
 
-    public init() {}
+    public var componentRegistry: ComponentRegistry
+
+    public init(componentRegistry: ComponentRegistry = .builtIn) {
+        self.componentRegistry = componentRegistry
+    }
 
     public var snapshot: SceneRuntimeSnapshot {
         SceneRuntimeSnapshot(entityCount: entityCount, revision: revision)
@@ -425,12 +429,28 @@ public struct RuntimeWorld: @unchecked Sendable {
         for entity: EntityID
     ) -> Bool {
         guard contains(entity) else { return false }
+        let requirements: [ComponentSchema]
+        do { requirements = try componentRegistry.requiredSchemas(for: Component.self) }
+        catch { return false }
+        if requirements.contains(where: { !$0.has(self, entity) }) {
+            var edited = self
+            do { try edited.ensureRequiredComponents(requirements, for: entity) }
+            catch { return false }
+            edited.storeComponent(component, for: entity)
+            self = edited
+        } else {
+            storeComponent(component, for: entity)
+        }
+        return true
+    }
+
+    private mutating func storeComponent<Component: RuntimeComponent>(_ component: Component, for entity: EntityID) {
         components.set(component, for: entity)
+        if Component.self == LocalTransform.self { markHierarchyDirty(entity) }
         revision &+= 1
         if componentAffectsPhysics(Component.self) {
             physicsRevision &+= 1
         }
-        return true
     }
 
     public func component<Component: RuntimeComponent>(
@@ -697,12 +717,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         _ transform: LocalTransform,
         for entity: EntityID
     ) -> Bool {
-        guard contains(entity) else { return false }
-        components.set(transform, for: entity)
-        markHierarchyDirty(entity)
-        revision &+= 1
-        physicsRevision &+= 1
-        return true
+        setComponent(transform, for: entity)
     }
 
     public func localTransform(for entity: EntityID) -> LocalTransform? {
