@@ -38,7 +38,26 @@ class ReflectionContractTests(unittest.TestCase):
 
 
 @unittest.skipUnless(os.environ.get('SLANGC'), 'Set SLANGC to Slang 2026.19')
-class CompilationFailureTests(unittest.TestCase):
+class CompilationContractTests(unittest.TestCase):
+    def test_ui_constants_are_vertex_only_and_image_bindings_are_static(self):
+        source = ROOT / 'GuavaUI/Sources/GuavaUIRuntime/Resources/Shaders/Slang/ui.slang'
+        with tempfile.TemporaryDirectory(prefix='guava-rhi-ui-') as directory:
+            for target in ('metal', 'spirv'):
+                for stage in ('vertex', 'fragment'):
+                    artifact = SHADER.compile_shader(source, 'ui' + stage.title(), stage, target,
+                        Path(directory) / f'{target}-{stage}.json', os.environ['SLANGC'],
+                        defines={'UI_VERTEX_SHADER': int(stage == 'vertex')})
+                    interface = artifact['interface']
+                    if stage == 'vertex':
+                        self.assertEqual(interface['bindings'], [])
+                        self.assertEqual(interface['pushConstants'],
+                                         [{'slot': 0, 'byteCount': 16, 'stage': 'vertex'}])
+                    else:
+                        self.assertEqual(interface['pushConstants'], [])
+                        self.assertEqual([(item['slot'], item['space'], item['type'])
+                                          for item in interface['bindings']],
+                                         [(1, 0, 'texture'), (2, 0, 'sampler')])
+
     def assert_preserves_artifact(self, fixture, entry, stage, error_type, dimensions=None, constants=None):
         with tempfile.TemporaryDirectory(prefix='guava-rhi-negative-') as directory:
             output = Path(directory) / 'shader.json'

@@ -53,10 +53,12 @@ def main():
             for stage, entry in stages:
                 output = shaders / f'Native/{target}/{name}.{stage}.json'
                 variable = name in specialized
+                defines = {'PARTICLE_WORKGROUP_SIZE': 64} if target == 'dxil' and name in particle_kernels else None
+                if name == 'ui': defines = {'UI_VERTEX_SHADER': int(stage == 'vertex')}
                 artifact = SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, target, output, args.slangc,
                     threadgroup_size=[64,1,1] if variable else None, line_directives=False,
                     threadgroup_constants=[0,None,None] if variable and target != 'dxil' else None,
-                    defines={'PARTICLE_WORKGROUP_SIZE': 64} if target == 'dxil' and name in particle_kernels else None)
+                    defines=defines)
                 print(output.relative_to(ROOT))
                 if variable and target == 'dxil':
                     # DXIL has fixed numthreads. Keep one reflected interface

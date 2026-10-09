@@ -129,8 +129,6 @@ public final class NativeDrawListRenderer {
         if !list.indices.isEmpty && !list.batches.isEmpty {
             vertices = try list.vertices.withUnsafeBytes { try device.uploadTransient(Data($0)) }
             indices = try list.indices.withUnsafeBytes { try device.uploadTransient(Data($0)) }
-            var uniforms = SIMD4(viewport.logical.x, viewport.logical.y, pipeline.srgb, Float(0))
-            let uniform = try withUnsafeBytes(of: &uniforms) { try device.uploadTransient(Data($0)) }
             var sets: [TextureID: BindingSet] = [:]
             for batch in list.batches {
                 guard batch.indexCount > 0, let scissor = try viewport.scissor(batch.scissor) else { continue }
@@ -139,7 +137,6 @@ public final class NativeDrawListRenderer {
                 else {
                     let slot = textureStore.textures[batch.textureID] ?? textureStore.fallback
                     bindings = try device.makeBindingSet(layout: shaders.bindings, descriptor: BindingSetDescriptor(entries: [
-                        BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: uniform.buffer, offset: uniform.offset, size: 16)),
                         BindingSetEntry(slot: 1, resource: .texture(slot.resource.texture)),
                         BindingSetEntry(slot: 2, resource: .sampler(shaders.sampler))
                     ]))
@@ -156,6 +153,11 @@ public final class NativeDrawListRenderer {
             if let vertices, let indices, !draws.isEmpty {
                 pass.setVertexBuffer(vertices.buffer, offset: vertices.offset)
                 pass.setIndexBuffer(indices.buffer, offset: indices.offset, type: .uint32)
+                // Constants belong to this recording. Image bindings have no
+                // frame-dependent buffers and can hit the Device's cache even
+                // as upload chunks, viewports and target formats change.
+                pass.pushConstant(stage: .vertex, slot: shaders.constants.slot,
+                    value: SIMD4(viewport.logical.x, viewport.logical.y, pipeline.srgb, Float(0)))
                 for draw in draws {
                     pass.setBindingSet(draw.bindings); pass.setScissor(draw.scissor)
                     pass.drawIndexed(DrawIndexedArguments(indexCount: Int(draw.indices.indexCount), firstIndex: Int(draw.indices.indexOffset)))
@@ -167,13 +169,15 @@ public final class NativeDrawListRenderer {
     }
 
     private func validate(_ list: DrawList) throws {
+        // Read the cross-module array counts once for these bounds checks.
+        let vertexCount = list.vertices.count, indexCount = list.indices.count
         guard list.vertices.allSatisfy({ $0.posX.isFinite && $0.posY.isFinite && $0.u.isFinite && $0.v.isFinite })
-            && list.indices.allSatisfy({ Int($0) < list.vertices.count }) else {
+            && list.indices.allSatisfy({ Int($0) < vertexCount }) else {
             throw RHIError.invalidArgument("invalid UI vertices or indices")
         }
         for batch in list.batches {
             let offset = Int(batch.indexOffset), count = Int(batch.indexCount)
-            guard offset <= list.indices.count && count <= list.indices.count - offset && count % 3 == 0 else {
+            guard offset <= indexCount && count <= indexCount - offset && count % 3 == 0 else {
                 throw RHIError.invalidArgument("UI batch index range exceeds the draw list")
             }
         }

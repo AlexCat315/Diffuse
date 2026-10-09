@@ -8,17 +8,27 @@ final class NativeUIShaderResources {
     let bindings: BindingLayout
     let layout: PipelineLayout
     let sampler: Sampler
+    let constants: PushConstantRange
 
     init(device: Device) throws {
         self.device = device
         let vertexArtifact = try Self.artifact(api: device.backendAPI, stage: .vertex)
         let fragmentArtifact = try Self.artifact(api: device.backendAPI, stage: .fragment)
+        guard vertexArtifact.interface.pushConstants.count == 1,
+              let range = vertexArtifact.interface.pushConstants.first,
+              range.stage == .vertex, range.byteCount == 16,
+              fragmentArtifact.interface.pushConstants.isEmpty else {
+            throw RHIError.layoutMismatch("UI shaders require one 16-byte vertex constant block")
+        }
+        constants = range
         vertex = try device.makeShaderModule(vertexArtifact.moduleDescriptor())
         do { fragment = try device.makeShaderModule(fragmentArtifact.moduleDescriptor()) }
         catch { device.destroy(vertex); throw error }
         do {
             bindings = try device.makeBindingLayout(BindingLayoutDescriptor(reflecting: [vertexArtifact, fragmentArtifact]))
-            layout = try device.makePipelineLayout(PipelineLayoutDescriptor(setLayouts: [bindings]))
+            var pipelineLayout = PipelineLayoutDescriptor(setLayouts: [bindings])
+            pipelineLayout.pushConstants = [constants]
+            layout = try device.makePipelineLayout(pipelineLayout)
             var descriptor = SamplerDescriptor(); descriptor.minFilter = .linear; descriptor.magFilter = .linear
             descriptor.mipFilter = .nearest
             descriptor.addressModeU = .clampToEdge; descriptor.addressModeV = .clampToEdge
