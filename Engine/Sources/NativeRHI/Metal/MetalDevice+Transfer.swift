@@ -211,41 +211,43 @@ extension MetalDevice {
 
     // MARK: Swapchain
 
-    public func acquireSwapchainImage() throws -> SwapchainImage {
-        guard let layer = surface.layer else {
-            throw RHIError.swapchainAcquireFailed("surface not configured; call configure(surface:) first")
+    public func acquireSwapchainImage(_ handle: Swapchain) throws -> SwapchainImage {
+        guard let window = swapchains[handle.id], window.currentDrawable == nil else {
+            throw RHIError.swapchainAcquireFailed("configure a swapchain and return its acquired image first")
         }
-        guard let drawable = layer.nextDrawable() else {
-            throw RHIError.swapchainAcquireFailed("nextDrawable returned nil")
-        }
-        // Release the previous drawable texture registration so the registry
-        // holds only the current drawable's texture.
-        if let oldID = surface.currentSwapchainTextureID {
-            registries.textures[oldID] = nil
-        }
-        let id = registries.nextInternalID()
+        guard let drawable = window.layer.nextDrawable() else { throw RHIError.swapchainAcquireFailed("nextDrawable returned nil") }
+        // One ID per frame slot keeps both resource and planner history bounded.
+        // The frontend has waited for that slot's render and present work.
+        let id = window.textureIDs[activeSlot] ?? registries.nextInternalID()
+        window.textureIDs[activeSlot] = id
         registries.textures[id] = drawable.texture
-        surface.currentDrawable = drawable
-        surface.currentSwapchainTextureID = id
-        let size = layer.drawableSize
-        return SwapchainImage(
-            texture: Texture(id: id),
-            width: Int(size.width),
-            height: Int(size.height)
-        )
+        window.currentDrawable = drawable
+        window.currentSwapchainTextureID = id
+        return SwapchainImage(swapchain: handle, generation: window.generation, texture: Texture(id: id),
+            width: drawable.texture.width, height: drawable.texture.height)
     }
 
-    public func present(_ image: SwapchainImage) throws {
-        guard let drawable = surface.currentDrawable else {
-            throw RHIError.presentFailed("no current drawable to present")
+    public func present(_ image: SwapchainImage, completion: @escaping () -> Void) throws {
+        guard let window = swapchains[image.swapchain.id], let drawable = window.currentDrawable,
+              window.currentSwapchainTextureID == image.texture.id else {
+            throw RHIError.presentFailed("image was not acquired from this swapchain")
         }
-        drawable.present()
-        surface.currentDrawable = nil
+        guard let commands = graphicsQueue.makeCommandBuffer() else { throw RHIError.outOfMemory }
+        let callback = MetalCompletionCallback(completion), status = submissionStatus
+        commands.addCompletedHandler { buffer in
+            if let error = buffer.error { status.record(error.localizedDescription) }
+            callback.call()
+        }
+        // Queue order places presentation after all preceding scene/UI work.
+        commands.present(drawable)
+        commands.commit()
+        window.currentDrawable = nil
     }
 
     // MARK: Frame uploader
 
     public func makeFrameUploader(slot: Int) -> FrameUploader {
+        activeSlot = slot
         if let existing = uploaders[slot] { return existing }
         let uploader = MetalFrameUploader(chunkSize: 4 * 1024 * 1024) { [device, registries] capacity in
             guard let buffer = device.makeBuffer(length: capacity, options: .storageModeShared) else {

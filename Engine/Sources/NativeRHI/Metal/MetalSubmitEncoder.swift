@@ -57,7 +57,7 @@ extension MetalDevice {
 
 /// Completion belongs to one command buffer and is invoked once on its GPU
 /// completion thread. Its caller supplies synchronization for captured state.
-private final class MetalCompletionCallback: @unchecked Sendable {
+final class MetalCompletionCallback: @unchecked Sendable {
     private let body: () -> Void
     init(_ body: @escaping () -> Void) { self.body = body }
     func call() { body() }

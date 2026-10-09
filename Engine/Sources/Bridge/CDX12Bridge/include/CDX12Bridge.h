@@ -83,9 +83,10 @@ int32_t grhi_dx12_encode(GRHI_DX12Encoder*, const GRHI_DX12Command*);
 int32_t grhi_dx12_submit(GRHI_DX12Encoder*, const GRHI_Timeline* waits, size_t wait_count, const GRHI_Timeline* signals, size_t signal_count, GRHI_DX12Completion, void*);
 void grhi_dx12_abort(GRHI_DX12Encoder*);
 int32_t grhi_dx12_wait_idle(GRHI_DX12Device*);
-int32_t grhi_dx12_surface(GRHI_DX12Device*, void* hwnd, uint32_t width, uint32_t height, uint32_t format, uint32_t vsync);
-uint32_t grhi_dx12_acquire(GRHI_DX12Device*, uint32_t* width, uint32_t* height);
-int32_t grhi_dx12_present(GRHI_DX12Device*, uint32_t texture);
+int32_t grhi_dx12_surface(GRHI_DX12Device*, uint32_t swapchain, void* hwnd, uint32_t width, uint32_t height, uint32_t format, uint32_t vsync);
+void grhi_dx12_destroy_surface(GRHI_DX12Device*, uint32_t swapchain);
+uint32_t grhi_dx12_acquire(GRHI_DX12Device*, uint32_t swapchain, uint32_t* width, uint32_t* height, uint64_t* generation);
+int32_t grhi_dx12_present(GRHI_DX12Device*, uint32_t swapchain, uint32_t texture, GRHI_DX12Completion, void*);
 #ifdef __cplusplus
 }
 #endif

@@ -14,12 +14,14 @@ import QuartzCore
 let kMetalVertexBufferBaseIndex: UInt = 24
 
 /// Swapchain/surface state, grouped so the device stays small.
-final class MetalSurfaceState {
-    var layer: CAMetalLayer?
+final class MetalWindowSwapchain {
+    let layer: CAMetalLayer
+    let generation: UInt64
     var currentDrawable: CAMetalDrawable?
     var currentSwapchainTextureID: UInt32?
+    var textureIDs: [Int: UInt32] = [:]
 
-    init() {}
+    init(layer: CAMetalLayer, generation: UInt64) { self.layer = layer; self.generation = generation }
 }
 
 public final class MetalDevice: RHIBackend {
@@ -34,7 +36,8 @@ public final class MetalDevice: RHIBackend {
     let capabilities: Capabilities
     let submissionStatus = MetalSubmissionStatus()
     let interfaces = PipelineInterfaces()
-    let surface = MetalSurfaceState()
+    var swapchains: [UInt32: MetalWindowSwapchain] = [:]
+    var activeSlot = 0
     var uploaders: [Int: MetalFrameUploader] = [:]
     /// Lazily-grown shared staging buffer reused for immediate texture upload/readback.
     var stagingBuffer: MTLBuffer?
@@ -148,22 +151,31 @@ public final class MetalDevice: RHIBackend {
         capabilities
     }
 
-    public func configure(surface descriptor: SurfaceDescriptor) throws {
+    public func configureSwapchain(_ handle: Swapchain, descriptor: SurfaceDescriptor) throws {
         try rhiRequire(descriptor.kind == .metalLayer, "Metal requires a CAMetalLayer surface")
-        guard let raw = descriptor.nativeHandle else {
-            throw RHIError.invalidArgument("surface nativeHandle is nil")
-        }
-        // The caller owns the CAMetalLayer; borrow it without moving ownership.
+        guard let raw = descriptor.nativeHandle else { throw RHIError.invalidArgument("surface nativeHandle is nil") }
+        try rhiRequire([TextureFormat.bgra8Unorm, .bgra8UnormSRGB].contains(descriptor.colorFormat),
+                       "CAMetalLayer requires BGRA8 or BGRA8 sRGB")
         let layer = Unmanaged<CAMetalLayer>.fromOpaque(raw).takeUnretainedValue()
+        try rhiRequire(!swapchains.contains { $0.key != handle.id && $0.value.layer === layer },
+                       "CAMetalLayer already has a swapchain")
+        try rhiRequire(swapchains[handle.id]?.currentDrawable == nil, "present an acquired drawable before resizing")
+        let generation = (swapchains[handle.id]?.generation ?? 0) + 1
+        destroySwapchain(handle)
         layer.device = device
         layer.pixelFormat = mtlPixelFormat(descriptor.colorFormat)
         layer.framebufferOnly = true
-        if descriptor.width > 0 && descriptor.height > 0 {
-            layer.drawableSize = CGSize(width: descriptor.width, height: descriptor.height)
-        }
+        layer.drawableSize = CGSize(width: descriptor.width, height: descriptor.height)
         layer.displaySyncEnabled = descriptor.vsyncEnabled
-        surface.layer = layer
+        swapchains[handle.id] = MetalWindowSwapchain(layer: layer, generation: generation)
     }
+
+    public func destroySwapchain(_ handle: Swapchain) {
+        guard let window = swapchains.removeValue(forKey: handle.id) else { return }
+        for id in window.textureIDs.values { registries.textures[id] = nil }
+        window.currentDrawable = nil
+    }
+
 }
 
 #endif

@@ -25,8 +25,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     let particleSimulation: NativeParticleSimulation
     private var frameState = RenderTemporalState()
     public var lastFrameUsedOpaqueCache: Bool { frameState.cacheHit }
-    private let surface: RenderSurfaceDescriptor?
-    private var configuredSurfaceSize: RenderDrawableSize?
+    private let windowTarget: NativeWindowTarget?
     private var targets: NativeRenderTargets?
     private var viewportPublication = ViewportSurfacePublication()
     public private(set) var lastFrameStats = RenderFrameStats()
@@ -37,7 +36,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public var residentMeshCount: Int { meshes.residentCount }
 
     public init(device: Device, surface: RenderSurfaceDescriptor? = nil, assets: AssetRegistry = .shared) throws {
-        self.device = device; self.surface = surface
+        self.device = device; windowTarget = surface.map { NativeWindowTarget(device: device, surface: $0) }
         meshes = try NativeMeshStore(device: device, registry: assets)
         meshPass = try NativeMeshPass(device: device)
         deformables = NativeDeformableMeshes(device: device)
@@ -53,7 +52,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public func currentFrameStats() -> RenderFrameStats { lastFrameStats }
     public func currentViewportSurfaceState() -> ViewportSurfaceState { viewportPublication.state }
     public func drainGPUParticleSimulationEventSnapshots(maxSnapshots: Int = Int.max) throws -> [GPUParticleSimulationEventSnapshot] {
-        try particleSimulation.drain(maxSnapshots: maxSnapshots)
+        try device.withFrameSession { try particleSimulation.drain(maxSnapshots: maxSnapshots) }
     }
     public func render(packet: RenderPacket) {
         do { try renderChecked(packet: packet) }
@@ -61,6 +60,10 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     public func renderChecked(packet: RenderPacket) throws {
+        try device.withFrameSession { try renderFrame(packet: packet) }
+    }
+
+    private func renderFrame(packet: RenderPacket) throws {
         let start = DispatchTime.now().uptimeNanoseconds
         let matrices = try NativePacketValidation.validate(packet)
         let uiProvider = InGameUIRegistry.shared.provider
@@ -98,7 +101,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         let particleFrame = try particles.prepare(scene: packet.scene,matrices: matrices,hdr: hdr,simulated: simulation.render,into: commands)
         let opaqueDraws = prepared.draws.filter { $0.batch.key.mode != .blend }
         let transparentDraws = prepared.draws.filter { $0.batch.key.mode == .blend }.sorted { $0.batch.distance > $1.batch.distance }
-        let image = surface == nil ? nil : try device.acquireSwapchainImage()
+        let image = try windowTarget?.acquire()
         guard let color = image?.texture ?? targets.color?.texture else { throw RHIError.swapchainAcquireFailed("no scene color target") }
         let prepareEnd = DispatchTime.now().uptimeNanoseconds
         var passTimes: [RenderPassKind: UInt64] = [:]
@@ -258,18 +261,15 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     private func ensureTargets(size: RenderDrawableSize, hdr: Bool) throws {
-        if let surface, configuredSurfaceSize != size {
-            try NativeRenderTargets.configure(device: device, surface: surface, size: size)
-            configuredSurfaceSize = size
-        }
+        try windowTarget?.configure(size: size)
         // Direct swapchain rendering needs matching depth dimensions. HDR and
         // offscreen targets share the production grow-only viewport policy.
         let previous = targets?.size ?? RenderDrawableSize(width: 0,height: 0)
         let postSize = hdr ? post.targets?.size : nil
         let current = RenderDrawableSize(width: max(previous.width,postSize?.width ?? 0),height: max(previous.height,postSize?.height ?? 0))
-        let capacity = surface != nil && !hdr ? size : ViewportTargetAllocation.grownCapacity(current: current,used: size)
+        let capacity = windowTarget != nil && !hdr ? size : ViewportTargetAllocation.grownCapacity(current: current,used: size)
         if targets?.size == capacity && (targets?.hdr != nil) == hdr { return }
-        let replacement = try NativeRenderTargets.make(device: device, size: capacity, offscreen: surface == nil, hdr: hdr)
+        let replacement = try NativeRenderTargets.make(device: device, size: capacity, offscreen: windowTarget == nil, hdr: hdr)
         targets = replacement
     }
 }

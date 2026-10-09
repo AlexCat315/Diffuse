@@ -152,7 +152,7 @@ int32_t grhi_dx12_encode(GRHI_DX12Encoder* encoder, const GRHI_DX12Command* comm
     default: throw std::runtime_error("unknown native command");
     }
 }); }
-static void executionFailure(const std::shared_ptr<State>& s, const std::exception& error) {
+void grhi::executionFailure(const std::shared_ptr<State>& s, const std::exception& error) {
     std::lock_guard<std::mutex> lock(s->execution.mutex); s->execution.error = error.what(); s->execution.failed = true;
 }
 void grhi::retireEncoder(GRHI_DX12Encoder* e, GRHI_DX12Completion completion, void* context) {

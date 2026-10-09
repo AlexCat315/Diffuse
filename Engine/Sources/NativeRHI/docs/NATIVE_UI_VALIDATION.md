@@ -1,6 +1,6 @@
 # NativeRHI UI 迁移验证
 
-默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI、生产场景＋ViewportHost 与游戏内 HUD 对照已通过；整个 Editor 的窗口宿主、多窗口帧协调和默认 backend 尚未切换。
+默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI、生产场景＋ViewportHost 与游戏内 HUD 对照已通过。NativeRHI 已提供多个窗口的 swapchain 所有权与帧协调；整个 Editor 的窗口宿主和默认 backend 尚未切换。
 
 ## 已实现的基础能力
 
@@ -17,7 +17,7 @@
 - Metal／SPIR-V 目标产物与反射已离线生成并随 Runtime 打包。使用 `BindingLayoutDescriptor(reflecting:)` 合并 stage visibility，同时拒绝 slot、space 与 buffer ABI 冲突。DXIL 使用相同生成入口；本机缺少 DXC，尚无 UI DXIL 产物。
 - 字体 alpha / color planes 和普通纹理更新先转移到 registry-owned Data，再记录进正常 frame。初次局部注册先清零全图；成功 submit 后通过 frame token 确认相应 sequence，失败或放弃记录仍可重试。较旧 token 的确认不会删除随后排入的更新。空 DrawList 仍执行 attachment clear / load / resolve。
 - `TextureResource` 持有 device 与原生 texture 所有权，释放时沿用设备的在途帧延迟销毁。外部图片注册检查同一 device、single-sample 2D sampled texture 与 encoded RGBA8/BGRA8 格式；frame token 和 sibling registry 强引用资源，resize / unregister 不产生悬空指针。线性 HDR / sRGB-source 需要独立的采样约定，目前明确拒绝。
-- 每个 renderer 保留独立管线配置，sibling 共享 shader 与 texture slots。所有方法在每个 renderer 上串行调用；窗口接入时，同一 device 的主／辅助绘制须由宿主串行安排在一帧内。Viewport 分别声明 logical / pixels，scissor 使用向外取整并在转整数前钳制，跳过空区域。
+- 每个 renderer 保留独立管线配置，sibling 共享 shader 与 texture slots。所有方法在每个 renderer 上串行调用；窗口接入时，同一 device 的主／辅助绘制须通过 `withFrameSession` 串行安排完整帧，也可在一个 frame 内绘制多个窗口。Viewport 分别声明 logical / pixels，scissor 使用向外取整并在转整数前钳制，跳过空区域。
 
 调用方须持有 target / resolve target 直到提交，并保留 `NativeUIDrawFrame` 直到 `Device.submit` 成功。`frame.didSubmit()` 只确认已提交的记录；不能确认被放弃的 command buffer。它不替宿主管理 beginFrame / endFrame / present。
 
@@ -189,6 +189,20 @@ Metal render encoder 现在缓存各 stage 的 buffer＋offset、texture 和 sam
 
 原始优化报告：[图片 720p](benchmarks/native-ui-image-assets-m1-720-paired.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-paired.json)、[控件 720p](benchmarks/native-ui-m1-720-paired.json)、[控件 1080p](benchmarks/native-ui-m1-1080-paired.json)。独立确认报告：[图片 720p](benchmarks/native-ui-image-assets-m1-720-paired-confirmation.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-paired-confirmation.json)、[控件 720p](benchmarks/native-ui-m1-720-paired-confirmation.json)、[控件 1080p](benchmarks/native-ui-m1-1080-paired-confirmation.json)。completed-batch 仍不是 GPU timestamp 或显示 FPS；采样不包含窗口呈现和 UI 重组。
 
+## 多窗口 swapchain 与帧协调
+
+NativeRHI 现在显式创建、配置和获取指定 `Swapchain`，每个窗口由 `SwapchainResource` 独立拥有。resize 只替换该窗口的图像池；同一原生窗口不能重复注册。每次获取返回独立、不可变的 `SwapchainImage` ticket，即使复用了相同的 texture ID，旧 ticket 也不能再次 present。每个窗口每帧最多获取一次，跨窗口、旧 ticket 和重复 present 明确拒绝。
+
+`Device.withFrameSession` 串行保护资源准备、beginFrame、submit、present 和 endFrame。生产 NativeRenderer／NativeGridRenderer 已使用该协调入口及各自的窗口 target，scene 线程与未来 UI 窗口可共享同一个 Device。present 的最终 GPU 命令也计入 FrameRing；复用上传存储、图像 ID 或销毁窗口须等待相应 completion。endFrame 自动归还录制失败后未 present 的图像，零 draw 帧也会消费 Vulkan acquire semaphore。`SwapchainResource.close()` 在销毁平台窗口前同步等待、释放；重复 close 有效，已完成 GPU 工作的错误仍会清理窗口。
+
+Metal 每个窗口按 frame slot 复用有限的 texture ID，并通过 graphics command buffer 排队 present。Windows/Linux Vulkan 每个窗口拥有按 slot 分配的 acquire semaphore 与按 swapchain image 分配的 present semaphore；out-of-date／suboptimal 后在下一次获取时重建并更新 generation。DX12 每个 HWND 拥有独立图像池和不冲突的内部 ID，最终 transition／Present 后的 fence completion 保护在途资源。已排队的 present 错误通过设备状态报告，不会触发重复 completion。
+
+2026-10-09 Apple M1 Metal 实测：两个真实 NSWindow／CAMetalLayer 连续 40 帧分别绘制红色和绿色，交替 present 顺序。在第 20 帧只 resize 第一个窗口，另一个窗口的尺寸、generation 和像素保持正确；两窗口 readback 全部像素符合预期。两个在途 frame slot 的纹理池最多保留四个 texture。非法格式 resize 保留原窗口；关闭第一个窗口后第二个继续获取／呈现，最后两个窗口的 registry 和图像池均释放。readback 测试单独关闭 framebufferOnly，生产路径仍启用它。
+
+可控 completion 测试覆盖并发帧准备、错误后解锁、延迟 present 阻止 frame slot 复用与资源退休、未呈现图像归还、相同图像 ID 的旧 ticket 拒绝、排队前失败重试，以及 close 的幂等和晚报错误清理。NativeRHI 114 项 XCTest 与 NativeRenderer 43 项 XCTest、GuavaUI 全包测试通过。GuavaUIApp 21 项 XCTest 中性能 benchmark 按默认设置跳过一项，其余没有失败；Runtime 222 项、Compose 504 项也通过。Swift maintainability 检查通过，46 项既有超限指标未增加。DX12 的 macOS unavailable bridge 编译通过；Windows DX12 和 Windows/Linux Vulkan 的原生编译／运行验证仍暂缓，未引入 MoltenVK。
+
+这一步提供主／辅助窗口迁移所需的底层能力；AppRuntime 窗口 UI 仍使用 WGPU，尚未进行整个窗口 UI 的画面和呈现性能对照。
+
 ## 后续门槛
 
-下一步迁移可选的主／辅助窗口宿主与多 swapchain 帧协调，同时继续处理多图片工作量的 CPU 回退。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主必须串行安排完整 beginFrame / submit / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
+下一步接入可选的主／辅助窗口宿主，同时继续处理多图片工作量的 CPU 回退。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、整个 Editor 场景＋UI 的性能和剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
