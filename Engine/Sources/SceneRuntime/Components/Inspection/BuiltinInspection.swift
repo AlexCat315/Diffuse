@@ -6,7 +6,6 @@ extension ComponentInspection {
         let example = PhysicsJoint(entityA: endpoint, entityB: endpoint)
         let document = ComponentValue(jsonObject: BuiltinComponentCodecs.serializeConstraint(example, entityA: 0, entityB: 1))
         return Self { inspection in
-            inspection.customEditor = "constraint"
             inspection.fields = Self().resolvedFields(for: document).map { field in
                 var field = field
                 if field.path == ["type"] {

@@ -109,6 +109,42 @@ struct EditorRegistryInspectorTests {
         #expect(adapter.scene.component(InspectorProbe.self, for: entity) == InspectorProbe())
         #expect(!adapter.canUndoEdit)
     }
+
+    @Test("a module renderer joins multi-selection and undo using the schema's component identity")
+    func contributedRenderer() throws {
+        let adapter = adapter()
+        try adapter.inspectorRenderers.register(componentTypeID: "test.probe") { adapter, entity in
+            guard let form = adapter.registryInspectorSection(probeSchema, for: entity) else { return nil }
+            var section = EditorInspectorSection(id: "module-form", title: "Module Form", fields: form.fields)
+            section.componentTypeID = "incorrect-renderer-identity"
+            return section
+        }
+        let a = adapter.scene.createEntity(), b = adapter.scene.createEntity()
+        #expect(!adapter.inspectorSections(for: a.rawValue).contains { $0.id == "module-form" })
+        #expect(adapter.addComponent("test.probe", to: [a.rawValue, b.rawValue]))
+        _ = adapter.scene.updateComponent(InspectorProbe.self, for: b) { $0.settings.gain = 2 }
+        adapter.resetEditHistory()
+        let before = adapter.manifest()
+        let section = try #require(adapter.inspectorSections(for: [a.rawValue, b.rawValue]).first {
+            $0.id == "module-form"
+        })
+        #expect(section.componentTypeID == "test.probe")
+        #expect(adapter.manifest() == before)
+        let field = try #require(section.fields.first { $0.id == "settings.gain" })
+        #expect(field.isMixed)
+        guard case let .constrainedNumber(gain, _, _, _, _) = field.value else {
+            Issue.record("Expected module-rendered binding"); return
+        }
+        gain.wrappedValue = 4
+        #expect(adapter.scene.component(InspectorProbe.self, for: a)?.settings.gain == 4)
+        #expect(adapter.scene.component(InspectorProbe.self, for: b)?.settings.gain == 4)
+        #expect(adapter.undoEdit())
+        #expect(adapter.scene.component(InspectorProbe.self, for: a)?.settings.gain == 1)
+        #expect(adapter.scene.component(InspectorProbe.self, for: b)?.settings.gain == 2)
+        #expect(!adapter.canUndoEdit)
+        #expect(adapter.redoEdit())
+        #expect(adapter.scene.component(InspectorProbe.self, for: b)?.settings.gain == 4)
+    }
 }
 
 private struct ProbeSettings: Codable, Equatable, Sendable {
@@ -137,7 +173,6 @@ private let probeSchema = ComponentSchema(InspectorProbe.self,
         _ = world.setComponent(component, for: entity)
     }, makeDefault: { entity, world in _ = world.setComponent(InspectorProbe(), for: entity) },
     configure: { schema in
-        schema.inspection.customEditor = "module.unavailable" // Falls back to the registry form.
         schema.inspection.fields = [
             ComponentFieldDescriptor(["settings", "gain"]) { $0.numeric.minimum = 0; $0.numeric.maximum = 5 },
             ComponentFieldDescriptor(["settings", "mode"]) { $0.kind = .options; $0.choices = ["normal", "fast"] },

@@ -59,7 +59,10 @@ defaults, reset, undo/redo, manifest persistence and prefab instantiation. It al
 compares editor and prefab component values and verifies remapped references.
 
 Run `swift test --package-path Engine`, `swift test --package-path Editor`, and
-`python3 scripts/check-swift-maintainability.py` after changing schemas. Field-level inspector generation remains a subsequent phase.
+`python3 scripts/check-swift-maintainability.py` after changing schemas.
+`EditorRegistryInspectorTests` covers generated forms and their transaction bindings;
+`InspectorRendererRegistryTests` covers optional rich controls and editor-session
+registration lifetime.
 
 
 Phase 3 replaces the per-field `SceneMutation` cases with thirteen operations:
@@ -129,11 +132,33 @@ fields use text editing to preserve seeds beyond Float precision.
 
 The editor traverses the registry to build component sections. Camera, light,
 audio source/listener and character controller use the generic form. New module
-registrations obtain the same form automatically. Optional `customEditor` keys
-select existing rich controls for particles, scripts, compound colliders and
-other structured behaviors; an unavailable renderer falls back to the generic
-form. Component sections carry their registry type ID, so workspace visibility
-uses the same category policy as the component menu.
+registrations obtain the same form automatically. Each `EditorSceneAdapter` owns
+an `EditorInspectorRendererRegistry` keyed directly by component `typeID`. Its
+built-in registrations provide rich controls for particles, scripts, compound
+colliders and other structured behaviors. Runtime schemas contain no editor
+implementation identifiers. Missing renderers, or renderers returning `nil`,
+fall back to the generated form. Component sections always carry their schema's
+type ID, so workspace visibility uses the same category policy as the component
+menu even when a renderer uses a different section ID.
+
+Native modules can supply UI factories without editing the inspector dispatcher:
+
+```swift
+var renderers = EditorInspectorRendererRegistry.builtIn
+try renderers.register(componentTypeID: "myModule.terrain") { adapter, entity in
+    terrainSection(adapter: adapter, entity: entity)
+}
+let adapter = EditorSceneAdapter(componentRegistry: moduleComponents,
+                                 inspectorRenderers: renderers)
+```
+
+`terrainSection` is the module's UI factory and `moduleComponents` includes its
+runtime schema. Registration rejects empty IDs and duplicates; explicitly remove
+a renderer before replacing it. Registries are value types, independent across
+adapters, and may be configured on the UI thread before or after scene loading.
+They survive reset, load and undo/redo, but are never serialized or recorded in
+edit history. Factories receive the current adapter at render time; avoid
+capturing its owning adapter strongly in a stored factory.
 
 Generic bindings patch one document path through component transactions. Undo,
 redo, interactive cancellation and multi-selection use the existing history

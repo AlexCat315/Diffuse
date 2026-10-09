@@ -31,10 +31,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     var managedScriptIdentifiers: Set<String> = []
     var dynamicScriptDisplayNames: [String: String] = [:]
     var dynamicScriptAliases: [String: String] = [:]
-    let particleFeedbackLock = NSLock()
-    var pendingParticleFeedback: [GPUParticleSimulationEventSnapshot] = []
-    var particleFeedbackGeneration: UInt64 = 0
-    var lastParticleFeedbackReport = ParticleSimulationEventApplyReport.empty
+    let particleFeedback = ParticleFeedbackInbox()
+    public var inspectorRenderers: EditorInspectorRendererRegistry
     let editHistory = EditorSceneEditHistory()
     public private(set) var isAuthoringEnabled = true
 
@@ -48,7 +46,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
     }
 
-    public init(seedPreviewScene: Bool = true, componentRegistry: ComponentRegistry = .builtIn) {
+    public init(seedPreviewScene: Bool = true, componentRegistry: ComponentRegistry = .builtIn,
+                inspectorRenderers: EditorInspectorRendererRegistry = .builtIn) {
+        self.inspectorRenderers = inspectorRenderers
         var registry = componentRegistry
         registry.registerScriptCodec()
         scene = SceneRuntime(componentRegistry: registry)
@@ -109,10 +109,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     func invalidateParticleFeedback() {
-        particleFeedbackLock.lock()
-        particleFeedbackGeneration &+= 1
-        pendingParticleFeedback.removeAll(keepingCapacity: true)
-        particleFeedbackLock.unlock()
-        lastParticleFeedbackReport = .empty
+        particleFeedback.invalidate()
     }
 }

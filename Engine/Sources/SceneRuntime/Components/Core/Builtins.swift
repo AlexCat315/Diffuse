@@ -18,7 +18,7 @@ public extension ComponentRegistry {
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRigidBody(dictionary), for: entity)
             }, makeDefault: { entity, world in
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRigidBody([:]), for: entity)
-            }, configure: { $0.requires = ["localTransform"]; $0.inspection.customEditor = "rigidbody" }))
+            }, configure: { $0.requires = ["localTransform"] }))
         registry.register(ComponentSchema(Collider.self, typeID: "collider", displayName: "Collider", category: .physics,
             encode: { world, entity, context in
                 let component: Collider? = BuiltinComponentCodecs.authoredComponent(
@@ -29,29 +29,29 @@ public extension ComponentRegistry {
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeCollider(dictionary), for: entity)
             }, makeDefault: { entity, world in
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeCollider([:]), for: entity)
-            }, configure: { $0.requires = ["localTransform"]; $0.inspection.customEditor = "collider" }))
+            }, configure: { $0.requires = ["localTransform"] }))
         registry.register(ComponentSchema(CharacterController.self, typeID: "characterController", displayName: "Character Controller", category: .gameplay,
             encode: BuiltinComponentCodecs.serializeCharacterController, decode: BuiltinComponentCodecs.deserializeCharacterController,
             configure: { $0.requires = ["localTransform"]; $0.inspection = .characterController }))
         registry.register(ComponentSchema(Vehicle.self, typeID: "vehicle", displayName: "Vehicle", category: .gameplay,
             encode: BuiltinComponentCodecs.serializeVehicle, decode: BuiltinComponentCodecs.deserializeVehicle,
-            configure: { $0.requires = ["localTransform"]; $0.inspection.customEditor = "vehicle" }))
+            configure: { $0.requires = ["localTransform"] }))
         registry.register(ComponentSchema(SoftBody.self, typeID: "softBody", displayName: "Soft Body", category: .physics,
             encode: BuiltinComponentCodecs.serializeSoftBody, decode: BuiltinComponentCodecs.deserializeSoftBody,
-            configure: { $0.requires = ["localTransform"]; $0.inspection.customEditor = "softBody" }))
+            configure: { $0.requires = ["localTransform"] }))
         registry.register(ComponentSchema(Cloth.self, typeID: "cloth", displayName: "Cloth", category: .physics,
             encode: BuiltinComponentCodecs.serializeCloth, decode: BuiltinComponentCodecs.deserializeCloth,
             makeDefault: { entity, world in _ = world.setComponent(Cloth.fixedTopEdge(), for: entity) },
-            configure: { $0.requires = ["localTransform"]; $0.incompatibleWith = ["softBodyMesh"]; $0.inspection.customEditor = "cloth" }))
+            configure: { $0.requires = ["localTransform"]; $0.incompatibleWith = ["softBodyMesh"] }))
         registry.register(ComponentSchema(SoftBodyMesh.self, typeID: "softBodyMesh", displayName: "Soft Body Mesh", category: .physics,
             encode: BuiltinComponentCodecs.serializeSoftBodyMesh, decode: BuiltinComponentCodecs.deserializeSoftBodyMesh,
             makeDefault: { entity, world in
                 let resourceID = world.component(AssetReferenceComponent.self, for: entity).map { "meshIndex:\($0.meshIndex)" }
                 _ = world.setComponent(SoftBodyMesh(resourceID: resourceID), for: entity)
-            }, configure: { $0.requires = ["localTransform"]; $0.incompatibleWith = ["cloth"]; $0.inspection.customEditor = "softBodyMesh" }))
+            }, configure: { $0.requires = ["localTransform"]; $0.incompatibleWith = ["cloth"] }))
         registry.register(ComponentSchema(Destructible.self, typeID: "destructible", displayName: "Destructible", category: .physics,
             encode: BuiltinComponentCodecs.serializeDestructible, decode: BuiltinComponentCodecs.deserializeDestructible,
-            configure: { $0.requires = ["localTransform"]; $0.inspection.customEditor = "destructible" }))
+            configure: { $0.requires = ["localTransform"] }))
         registry.register(ComponentSchema(RenderMeshComponent.self, typeID: "renderMesh", displayName: "Render Mesh", category: .rendering,
             encode: { world, entity, context in
                 let component: RenderMeshComponent? = BuiltinComponentCodecs.authoredComponent(
@@ -62,7 +62,7 @@ public extension ComponentRegistry {
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRenderMesh(dictionary), for: entity)
             }, makeDefault: { entity, world in
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRenderMesh([:]), for: entity)
-            }, configure: { $0.requires = ["localTransform"]; $0.inspection.customEditor = "renderMesh" }))
+            }, configure: { $0.requires = ["localTransform"] }))
         registry.register(ComponentSchema(CameraComponent.self, typeID: "camera", displayName: "Camera", category: .rendering,
             encode: BuiltinComponentCodecs.serializeCamera, decode: BuiltinComponentCodecs.deserializeCamera,
             makeDefault: { entity, world in _ = world.setComponent(CameraComponent(isActive: false), for: entity) },
@@ -83,25 +83,22 @@ public extension ComponentRegistry {
             encode: BuiltinComponentCodecs.serializeAudioListener, decode: BuiltinComponentCodecs.deserializeAudioListener,
             configure: { $0.requires = ["localTransform"]; $0.inspection = .audioListener }))
         registry.register(ComponentSchema(RenderMaterialComponent.self, typeID: "renderMaterial", displayName: "Render Material", category: .rendering,
-            encode: BuiltinComponentCodecs.serializeRenderMaterial, decode: BuiltinComponentCodecs.deserializeRenderMaterial,
-            configure: { $0.inspection.customEditor = "renderMaterial" }))
+            encode: BuiltinComponentCodecs.serializeRenderMaterial, decode: BuiltinComponentCodecs.deserializeRenderMaterial))
         registry.register(ComponentSchema(AssetReferenceComponent.self, typeID: "assetReference", displayName: "Asset Reference", category: .assets,
             encode: BuiltinComponentCodecs.serializeAssetReference, decode: BuiltinComponentCodecs.deserializeAssetReference,
             configure: { $0.isUserAddable = false; $0.inspection.isReadOnly = true }))
         registry.register(ComponentSchema(AnimationPlayer.self, typeID: "animationPlayer", displayName: "Animation Player", category: .animation,
-            encode: BuiltinComponentCodecs.serializeAnimationPlayer, decode: BuiltinComponentCodecs.deserializeAnimationPlayer,
-            configure: { $0.inspection.customEditor = "animationPlayer" }))
+            encode: BuiltinComponentCodecs.serializeAnimationPlayer, decode: BuiltinComponentCodecs.deserializeAnimationPlayer))
         registry.register(ComponentSchema(AnimationGraphPlayer.self, typeID: "animationGraphPlayer", displayName: "Animation Graph", category: .animation,
             encode: BuiltinComponentCodecs.serializeAnimationGraphPlayer, decode: BuiltinComponentCodecs.deserializeAnimationGraphPlayer,
             makeDefault: { entity, world in
                 _ = world.setComponent(AnimationGraphPlayer(graph: AnimationGraph(stateMachine:
                     AnimationStateMachine(initialState: "Default", states: [AnimationState(name: "Default", motion: .clip(nil))]))), for: entity)
-            }, configure: { $0.inspection.customEditor = "animationGraphPlayer" }))
+            }))
         registry.register(ComponentSchema(ParticleEmitter.self, typeID: "particleEmitter", displayName: "Particle Emitter", category: .rendering,
             encode: BuiltinComponentCodecs.serializeParticleEmitter, decode: BuiltinComponentCodecs.deserializeParticleEmitter,
             configure: { schema in
                 schema.requires = ["localTransform"]
-                schema.inspection.customEditor = "particleEmitter"
                 schema.merge = { previous, changes in
                     let merged = try previous.merging(changes)
                     guard let dictionary = merged.objectValue,
@@ -143,8 +140,7 @@ public extension ComponentRegistry {
             }, decode: { value, entity, context, world in
                 guard let dictionary = value.objectValue else { return }
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRagdoll(dictionary, entityMap: context.entityMap), for: entity)
-            }, makeDefault: { entity, world in _ = world.setComponent(Ragdoll(), for: entity) },
-            configure: { $0.inspection.customEditor = "ragdoll" }))
+            }, makeDefault: { entity, world in _ = world.setComponent(Ragdoll(), for: entity) }))
         return registry
     }
 }
