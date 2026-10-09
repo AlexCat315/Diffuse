@@ -8,7 +8,8 @@ import SIMDCompat
 /// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
 /// HDR sky/tonemap, stylized materials/outline/paper, r5 post effects, temporal
 /// history/cache, the grid, CPU-authored particle draws and resident GPU particle
-/// physics/events, GPU sorting and simulated-particle instance conversion.
+/// physics/events, GPU sorting, simulated-particle instance conversion and
+/// the installed GuavaUI HUD provider after scene post-processing.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public let device: Device
@@ -62,6 +63,10 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public func renderChecked(packet: RenderPacket) throws {
         let start = DispatchTime.now().uptimeNanoseconds
         let matrices = try NativePacketValidation.validate(packet)
+        let uiProvider = InGameUIRegistry.shared.provider
+        if !packet.inGameCanvas.commands.isEmpty && uiProvider == nil {
+            throw RHIError.unsupportedFeature("script HUD requires an installed in-game UI provider")
+        }
         try meshes.synchronize()
         let hdr = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r4LightingPBRShadow.rawValue
         if hdr || packet.renderSettings.debugViewMode == .shaded { try lighting.ensureEnvironment() }
@@ -179,7 +184,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                 guard let particleFrame else { continue }
                 particles.encode(particleFrame,size: packet.drawableSize,color: current,depth: targets.depth.texture,into: commands)
                 draws = particleFrame.draws.count
-            case .viewportResolve: continue
+            case .viewportResolve, .inGameUI: continue
             case .outline:
                 let outlines = opaqueDraws.filter { $0.outlinePipeline != nil }
                 meshPass.encode(draws: outlines,size: packet.drawableSize,color: RenderColorTarget(texture: current,loadAction: .load),
@@ -195,8 +200,18 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passTimes[kind] = DispatchTime.now().uptimeNanoseconds - before
             passDraws[kind] = draws; active.append(kind)
         }
+        let uiStart = DispatchTime.now().uptimeNanoseconds
+        let ui = try uiProvider?.recordInGameUI(packet: packet, target: .native(
+            NativeInGameUITarget(device: device, commands: commands,
+                color: RenderColorTarget(texture: color, loadAction: .load), format: .bgra8Unorm)))
+        if let ui {
+            active.append(.inGameUI)
+            passTimes[.inGameUI] = DispatchTime.now().uptimeNanoseconds - uiStart
+            passDraws[.inGameUI] = ui.drawCallCount
+        }
         let encoded = DispatchTime.now().uptimeNanoseconds
-        try device.submit(commands); deformables.commit(dynamic); particleSimulation.commit(simulation); frameState = nextFrame
+        try device.submit(commands); ui?.didSubmit()
+        deformables.commit(dynamic); particleSimulation.commit(simulation); frameState = nextFrame
         if let output = targets.color {
             viewportPublication.publish(storage: .native(output),
                 region: ViewportSamplingRegion(size: packet.drawableSize, capacity: targets.size))

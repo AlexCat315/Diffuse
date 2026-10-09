@@ -63,7 +63,7 @@ final class NativeUIDrawTestContext {
         do {
             let commands = CommandBuffer()
             let frame = try renderer.record(list: list, into: commands, target: target, viewport: viewport)
-            try device.submit(commands); try renderer.didSubmit(frame)
+            try device.submit(commands); frame.didSubmit()
             device.endFrame()
             try device.waitUntilIdle()
             return (try read(output, bytesPerPixel: format.bytesPerPixel), frame.statistics)

@@ -34,26 +34,19 @@ public struct DrawListSnapshot: Sendable {
     public var vertices: [UIVertex]
     public var indices: [UInt32]
     public var batches: [DrawBatch]
-    public var viewportWidth: UInt32
-    public var viewportHeight: UInt32
-    public var logicalWidth: Float
-    public var logicalHeight: Float
+    public var logicalSize: SIMD2<Float>
     public var atlasUpdates: [DrawListAtlasDirty] = []
     public var resources = DrawListResources()
 
     public var isEmpty: Bool { batches.isEmpty }
 
     public init(vertices: [UIVertex], indices: [UInt32], batches: [DrawBatch],
-                viewportWidth: UInt32, viewportHeight: UInt32,
-                logicalWidth: Float, logicalHeight: Float,
+                logicalSize: SIMD2<Float>,
                 atlasUpdates: [DrawListAtlasDirty] = [], resources: DrawListResources = .init()) {
         self.vertices = vertices
         self.indices = indices
         self.batches = batches
-        self.viewportWidth = viewportWidth
-        self.viewportHeight = viewportHeight
-        self.logicalWidth = logicalWidth
-        self.logicalHeight = logicalHeight
+        self.logicalSize = logicalSize
         self.atlasUpdates = atlasUpdates
         self.resources = resources
     }
@@ -63,7 +56,7 @@ public struct DrawListSnapshot: Sendable {
 /// main-thread ViewGraph pipeline to the render-thread `DrawListRenderer`.
 ///
 /// The main thread calls `publish(_:)` after each tick; the render thread
-/// calls `consume()` inside `renderInGameUI`. The render thread always sees
+/// calls `consume()` inside `recordInGameUI`. The render thread always sees
 /// the most recent published snapshot (last-write-wins — no queuing needed
 /// for an overlay that refreshes every frame).
 public final class InGameDrawListSource: @unchecked Sendable {

@@ -74,7 +74,7 @@ final class NativeViewportIntegrationTests: XCTestCase {
         list.addImageQuad(rect: UIRect(x: 0, y: 0, width: 96, height: 128), textureID: oldID)
         list.addImageQuad(rect: UIRect(x: 96, y: 0, width: 96, height: 128), textureID: newID)
         var snapshot = DrawListSnapshot(vertices: list.vertices, indices: list.indices, batches: list.batches,
-            viewportWidth: 384, viewportHeight: 256, logicalWidth: 192, logicalHeight: 128, resources: list.resources)
+            logicalSize: SIMD2(192, 128), resources: list.resources)
         old = nil; new = nil; list.reset(); context.nativeBridge.prune()
         XCTAssertNotNil(oldLease); XCTAssertNotNil(newLease)
         XCTAssertEqual(context.nativeUI.textureStore.textures.count, 2)
@@ -92,7 +92,7 @@ final class NativeViewportIntegrationTests: XCTestCase {
             XCTAssertTrue(context.nativeUI.textureStore.textures.isEmpty)
             // The recording token owns borrowed textures until submission,
             // even when every source lease and registry binding is released.
-            try context.device.submit(commands); try context.nativeUI.didSubmit(frame)
+            try context.device.submit(commands); frame.didSubmit()
             context.device.endFrame()
         } catch { context.device.endFrame(); throw error }
         let pixels = try GridImage.readback(device: context.device, texture: output.texture, size: .init(width: 384, height: 256))

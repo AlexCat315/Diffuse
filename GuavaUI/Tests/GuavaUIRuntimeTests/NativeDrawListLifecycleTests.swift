@@ -54,16 +54,16 @@ struct NativeDrawListLifecycleTests {
             target: RenderColorTarget(texture: output.texture), viewport: viewport)
         var patch = TextureUploadRegion(width: 1, height: 1); patch.origin = SIMD2(1, 1)
         try context.native.registerTexture(id: 2, pixels: Data([200, 190, 180, 255]), size: SIMD2(2, 2), region: patch, format: .rgba8Unorm)
-        try context.device.submit(retryCommands); try context.native.didSubmit(retry)
+        try context.device.submit(retryCommands); retry.didSubmit()
         #expect(slot.snapshot().count == 1)
         // A repeated acknowledgement cannot remove the new sequence.
-        try context.native.didSubmit(retry)
+        retry.didSubmit()
         #expect(slot.snapshot().count == 1)
         let nextCommands = CommandBuffer()
         let next = try context.native.record(list: DrawList(), into: nextCommands,
             target: RenderColorTarget(texture: output.texture), viewport: viewport)
         #expect(next.statistics.textureUploads == 1 && next.statistics.textureUploadBytes == 4)
-        try context.device.submit(nextCommands); try context.native.didSubmit(next)
+        try context.device.submit(nextCommands); next.didSubmit()
         #expect(slot.snapshot().isEmpty)
         context.device.endFrame(); try context.device.waitUntilIdle()
         var actual = Data(count: 16)
@@ -113,7 +113,7 @@ struct NativeDrawListLifecycleTests {
             target: RenderColorTarget(texture: output.texture), viewport: viewport)
         context.native.unregisterTexture(id: 2); resource = nil
         #expect(weakResource != nil)
-        try context.device.submit(commands); try context.native.didSubmit(frame!)
+        try context.device.submit(commands); frame!.didSubmit()
         frame = nil
         #expect(weakResource == nil)
         context.device.endFrame(); try context.device.waitUntilIdle()
@@ -124,11 +124,6 @@ struct NativeDrawListLifecycleTests {
         #expect(throws: RHIError.self) { try context.native.registerExternalColorTexture(id: 2, resource: foreignTexture) }
         let foreignRenderer = try NativeDrawListRenderer(device: foreign)
         #expect(throws: RHIError.self) { try foreignRenderer.synchronizeTextures(from: context.native) }
-        try context.device.beginFrame()
-        let localFrame = try context.native.record(list: DrawList(), into: CommandBuffer(),
-            target: RenderColorTarget(texture: output.texture), viewport: viewport)
-        context.device.endFrame()
-        #expect(throws: RHIError.self) { try foreignRenderer.didSubmit(localFrame) }
         for format in [TextureFormat.bgra8UnormSRGB, .r8Unorm, .rgba16Float] {
             let invalid = try context.nativeOutput(format: format, size: SIMD2(1, 1))
             #expect(throws: RHIError.self) { try context.native.registerExternalColorTexture(id: 2, resource: invalid) }
@@ -156,7 +151,7 @@ struct NativeDrawListLifecycleTests {
                     target: RenderColorTarget(texture: first.texture, loadAction: .clear(.zero)), viewport: viewport)
                 let b = try sibling.record(list: small, into: commands,
                     target: RenderColorTarget(texture: second.texture, loadAction: .clear(.zero)), viewport: otherViewport)
-                try context.device.submit(commands); try context.native.didSubmit(a); try sibling.didSubmit(b)
+                try context.device.submit(commands); a.didSubmit(); b.didSubmit()
                 context.device.endFrame()
             } catch { context.device.endFrame(); throw error }
         }
@@ -201,7 +196,7 @@ struct NativeDrawListLifecycleTests {
         #expect(throws: RHIError.self) { try context.native.configure(format: .r8Unorm) }
         let frame = try context.native.record(list: valid, into: commands,
             target: RenderColorTarget(texture: output.texture), viewport: viewport)
-        try context.device.submit(commands); try context.native.didSubmit(frame)
+        try context.device.submit(commands); frame.didSubmit()
         #expect(frame.statistics.drawCalls == 1)
         let full = try #require(try viewport.scissor(UIRect(x: -1e30, y: -1e30, width: 2e30, height: 2e30)))
         #expect(full.x == 0 && full.y == 0 && full.width == 32 && full.height == 24)

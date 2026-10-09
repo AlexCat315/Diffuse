@@ -192,6 +192,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     public func render(packet: RenderPacket) {
         do {
             let frameStartNS = DispatchTime.now().uptimeNanoseconds
+            let uiProvider = InGameUIRegistry.shared.provider
+            if !packet.inGameCanvas.commands.isEmpty && uiProvider == nil {
+                throw WGPUBackendError.initFailed("script HUD requires an installed in-game UI provider")
+            }
             applyPacketRenderSettingsIfNeeded(packet.renderSettings, frameIndex: packet.frameIndex)
             let framePlan = RenderFramePlanner.makePlan(settings: activeRenderSettings)
             let usesHDRFrameGraph = framePlan.passes.contains(.tonemap)
@@ -356,7 +360,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             // Progressive refinement: while the opaque scene is moving, skip SSR
             // (the costliest screen-space pass). Stacks with the editor's
             // interaction render-scale downscale.
-            let executedPasses = RenderFramePlanner.motionRefinedPasses(framePlan.passes, opaqueMoving: opaqueChanged)
+            var executedPasses = RenderFramePlanner.motionRefinedPasses(framePlan.passes, opaqueMoving: opaqueChanged)
 
             for passKind in executedPasses {
                 if opaqueCacheHit, RenderPassKind.opaquePasses.contains(passKind) {
@@ -596,6 +600,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
                     case .viewportResolve:
                         viewportResolved = true
+                    case .inGameUI:
+                        break
                 }
 
                 let passElapsedNS = DispatchTime.now().uptimeNanoseconds - passStartNS
@@ -611,34 +617,25 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     cpuBaseEncodeNS &+= passElapsedNS
                 case .inkPaperPost, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
                     cpuPostProcessEncodeNS &+= passElapsedNS
-                case .editorGrid, .transparentMeshes, .particles, .outline, .depthPrepass, .shadowPass, .viewportResolve:
+                case .editorGrid, .transparentMeshes, .particles, .outline, .depthPrepass, .shadowPass, .viewportResolve, .inGameUI:
                     break
                 }
             }
 
-            let encodeDoneNS = DispatchTime.now().uptimeNanoseconds
-
-            if let uiProvider = InGameUIRegistry.shared.provider,
-               !packet.inGameCanvas.commands.isEmpty {
-                let formatHint: String
-                switch format {
-                case .rgba16Float: formatHint = "rgba16Float"
-                case .rgba8Unorm:  formatHint = "rgba8Unorm"
-                default:           formatHint = "bgra8Unorm"
-                }
-                uiProvider.renderInGameUI(
-                    canvas: packet.inGameCanvas,
-                    commandEncoder: encoder,
-                    colorView: colorTarget.view,
-                    formatHint: formatHint,
-                    width: Int(configuredSize.width),
-                    height: Int(configuredSize.height),
-                    deltaTime: packet.deltaTime
-                )
+            let uiStart = DispatchTime.now().uptimeNanoseconds
+            let ui = try uiProvider?.recordInGameUI(packet: packet, target: .wgpu(
+                WGPUInGameUITarget(backend: backend, encoder: encoder, color: colorTarget.view, format: format)))
+            if let ui {
+                executedPasses.append(.inGameUI)
+                passDrawCallCounts[.inGameUI] = ui.drawCallCount
+                drawCallCount += ui.drawCallCount
+                passEncodeNS[.inGameUI] = DispatchTime.now().uptimeNanoseconds - uiStart
             }
+            let encodeDoneNS = DispatchTime.now().uptimeNanoseconds
 
             let cmd = try encoder.finish()
             backend.submit(cmd)
+            ui?.didSubmit()
             if viewportResolved {
                 registerViewportSurface(texture: colorTarget.texture, size: configuredSize, textureSize: allocatedTargetSize)
             } else { viewportPublication.clear() }
@@ -733,6 +730,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 )
             }
         } catch {
+            // History and snapshots recorded in an abandoned encoder were
+            // never submitted. Force a full scene before the next HUD retry.
+            historyValid = false; opaqueCacheValid = false; opaqueCacheHash = nil
+            lastFrameUsedOpaqueCache = false
             Logger.renderer.error("frame \(packet.frameIndex) failed: \(error)")
         }
     }

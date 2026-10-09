@@ -28,8 +28,7 @@ struct InGameDrawListSourceTests {
     }
 
     private func frame(_ dirty: DrawListAtlasDirty? = nil, width: UInt32 = 640) -> DrawListSnapshot {
-        DrawListSnapshot(vertices: [], indices: [], batches: [], viewportWidth: width,
-                         viewportHeight: 480, logicalWidth: Float(width), logicalHeight: 480,
+        DrawListSnapshot(vertices: [], indices: [], batches: [], logicalSize: SIMD2(Float(width), 480),
                          atlasUpdates: dirty.map { [$0] } ?? [])
     }
 
@@ -45,7 +44,7 @@ struct InGameDrawListSourceTests {
         source.publish(frame(patch(200, x: 1)))
         source.publish(frame(width: 800))
         let consumed = try #require(source.consume())
-        #expect(consumed.viewportWidth == 800)
+        #expect(consumed.logicalSize.x == 800)
         #expect(consumed.atlasUpdates.first?.pixels == [100, 200, 0, 0])
         #expect(consumed.atlasUpdates.first?.regionWidth == 2)
         #expect(source.consume()?.atlasUpdates.isEmpty == true)
@@ -77,7 +76,7 @@ struct InGameDrawListSourceTests {
         source.publish(frame(colorPatch(80, x: 1)))
         source.publish(frame(width: 900))
         let snapshot = try #require(source.consume())
-        #expect(snapshot.viewportWidth == 900)
+        #expect(snapshot.logicalSize.x == 900)
         #expect(snapshot.atlasUpdates.map(\.format) == [.alpha, .color])
         #expect(snapshot.atlasUpdates[0].pixels == [100, 0, 0, 0])
         #expect(snapshot.atlasUpdates[1].pixels == [50, 20, 30, 255, 80, 20, 30, 255, 0, 0, 0, 0, 0, 0, 0, 0])
