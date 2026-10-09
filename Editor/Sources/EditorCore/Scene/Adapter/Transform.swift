@@ -45,24 +45,11 @@ extension EditorSceneAdapter {
 
     public func makeParticleSimulationFeedbackHandler()
         -> @Sendable ([GPUParticleSimulationEventSnapshot]) -> Void {
-        particleFeedbackLock.lock()
-        let generation = particleFeedbackGeneration
-        particleFeedbackLock.unlock()
-        return { [weak self] snapshots in
-            guard !snapshots.isEmpty, let self else { return }
-            self.particleFeedbackLock.lock()
-            if self.particleFeedbackGeneration == generation {
-                self.pendingParticleFeedback.append(contentsOf: snapshots)
-            }
-            self.particleFeedbackLock.unlock()
-        }
+        particleFeedback.makeHandler()
     }
 
     private func applyPendingParticleFeedback() {
-        particleFeedbackLock.lock()
-        let snapshots = pendingParticleFeedback
-        pendingParticleFeedback.removeAll(keepingCapacity: true)
-        particleFeedbackLock.unlock()
+        let snapshots = particleFeedback.drain()
         guard !snapshots.isEmpty else { return }
 
         let totalReadbackEventCount = snapshots.reduce(0) { $0 + $1.totalEventCount }
@@ -93,7 +80,7 @@ extension EditorSceneAdapter {
         report.gpuDroppedSpawnCount = gpuDroppedSpawnCount
         report.gpuCompactedParticleCount = gpuCompactedParticleCount
         scene.applyParticleSimulationReadbackStats(report)
-        lastParticleFeedbackReport = report
+        particleFeedback.record(report)
     }
 
     public func currentJointPaletteMap() -> JointPaletteMap {
@@ -111,7 +98,7 @@ extension EditorSceneAdapter {
     }
 
     public func currentParticleSimulationEventApplyReport() -> ParticleSimulationEventApplyReport {
-        lastParticleFeedbackReport
+        particleFeedback.report
     }
 
     public func currentParticleScalabilityState() -> ParticleScalabilityStateResource {

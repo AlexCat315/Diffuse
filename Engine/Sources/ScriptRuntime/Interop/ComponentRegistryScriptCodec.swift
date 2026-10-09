@@ -24,7 +24,6 @@ public extension ComponentRegistry {
             }, makeDefault: { entity, world in
                 _ = world.setComponent(ScriptComponent(ScriptBinding(identifier: world.resource(ScriptAuthoringDefaults.self)?.identifier ?? defaultIdentifier)), for: entity)
             }, configure: { schema in
-                schema.inspection.customEditor = "script"
                 schema.applyEdit = { value, entity, context, world in
                     guard let raw = value.objectValue?["bindings"] as? [[String: Any]] else { return }
                     let previous = world.component(ScriptComponent.self, for: entity)?.bindings ?? []
