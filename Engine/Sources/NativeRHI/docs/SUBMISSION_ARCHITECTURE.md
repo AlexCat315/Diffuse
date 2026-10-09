@@ -69,13 +69,14 @@ WGPU 的主要原生编码已经包含在 `cpuRecord` 内；NativeRHI 的编码�
   已覆盖的只读窗口复用 RAW 依赖，但写入、范围扩大、stage 扩大和队列变化仍产生所需同步。
   绑定缓存命中复用先前校验结果；相邻重复 set/scissor 省略。
 
-## 接下来的结构改动应由数据决定
+## 结构改动的依据与进度
 
 1. 分离命令缓冲局部资源使用与提交时全局状态衔接，借鉴 WGPU 的局部 tracker / 全局
    transit，避免每次 submit 重新解释所有 draw；保留真实提交顺序、写后读、队列转移与失败回滚。
-2. 借鉴 WGPU HAL、slang-rhi BindingData 与 NVRHI descriptor set，在创建不可变绑定时
-   解析原生资源与 stage。当前 Metal 仍在每次 bind 中查资源字典；改动必须同时明确资源寿命、
-   绑定缓存淘汰和已销毁 handle 的失效规则，不能只保存裸指针。
+2. 已借鉴 WGPU HAL、slang-rhi BindingData 与 NVRHI descriptor set，在创建不可变绑定时
+   解析并强持有原生资源、offset 与 stage；编码不再逐 entry 查资源字典或验证 buffer 范围。
+   反向索引在资源退休时失效依赖 set；LRU 淘汰仍经 frame ring 延迟注销。纹理 shader usage
+   在创建绑定时校验，避免把按 frame slot 更换原生对象的 framebuffer-only drawable 缓存为采样绑定。
 3. 合并重复的命令遍历。当前 frontend 校验、能力检查、planner、附件检查、Metal 回放
    分别扫描 pass。不能以关闭必要校验来制造性能收益。
 4. 只有 CPU 总成本和完成时间改善才算收益；空 pass、普通控件、命令数量、动态上传、

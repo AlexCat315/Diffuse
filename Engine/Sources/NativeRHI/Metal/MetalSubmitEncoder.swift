@@ -347,9 +347,8 @@ private struct MetalPassEncoder {
         for entry in bindingSet.entries {
             let stages = entry.visibility.intersection(active)
             guard !stages.isEmpty else { continue }
-            // Resolve and validate once, then bind to every visible stage.
-            // Avoid allocating stage arrays for every entry of every draw.
-            try bindEntry(entry,
+            // Native resources and ranges were resolved at registration.
+            bindEntry(entry,
                 buffer: { buffer, offset in
                     if stages.contains(.vertex), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .vertex) {
                         encoder.setVertexBuffer(buffer, offset: offset, index: Int(entry.slot))
@@ -421,16 +420,13 @@ private struct MetalPassEncoder {
                 throw RHIError.invalidArgument("unknown compute binding set")
             }
             for entry in bindingSet.entries where entry.visibility.contains(.compute) {
-                if case .accelerationStructure(let handle) = entry.resource {
-                    guard let native = registries.accelerationStructures[handle.id] else {
-                        throw RHIError.invalidArgument("unknown acceleration structure binding")
-                    }
+                if case .accelerationStructure(let native) = entry.resource.value {
                     encoder.setAccelerationStructure(native.structure, bufferIndex: Int(entry.slot))
                     // TLAS traversal indirectly references each BLAS.
                     for resource in native.dependencies { encoder.useResource(resource, usage: .read) }
                     continue
                 }
-                try bindEntry(entry,
+                bindEntry(entry,
                           buffer: { buf, offset in encoder.setBuffer(buf, offset: offset, index: Int(entry.slot)) },
                           texture: { tex in encoder.setTexture(tex, index: Int(entry.slot)) },
                           sampler: { sampler in encoder.setSamplerState(sampler, index: Int(entry.slot)) })
@@ -529,24 +525,20 @@ private struct MetalPassEncoder {
         }
     }
 
-    // MARK: Binding resolution
+    // MARK: Resolved bindings
 
     private func bindEntry(
         _ entry: MetalBoundEntry,
         buffer: (MTLBuffer, Int) -> Void,
         texture: (MTLTexture) -> Void,
         sampler: (MTLSamplerState) -> Void
-    ) throws {
-        switch entry.resource {
-        case .sampler(let s):
-            guard let state = registries.samplers[s.id] else { throw RHIError.invalidArgument("unknown sampler binding") }
+    ) {
+        switch entry.resource.value {
+        case .sampler(let state):
             sampler(state)
-        case .texture(let t), .storageTexture(let t):
-            guard let tex = registries.textures[t.id] else { throw RHIError.invalidArgument("unknown texture binding") }
+        case .texture(let tex):
             texture(tex)
-        case .uniformBuffer(let b, let offset, _), .storageBuffer(let b, let offset):
-            guard let mtlBuffer = registries.buffers[b.id] else { throw RHIError.invalidArgument("unknown buffer binding") }
-            try rhiByteRange(offset: offset, size: 0, capacity: mtlBuffer.length)
+        case .buffer(let mtlBuffer, let offset):
             buffer(mtlBuffer, offset)
         case .accelerationStructure:
             // Not used by the current pipeline model.

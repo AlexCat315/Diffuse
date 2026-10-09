@@ -172,7 +172,7 @@ public final class MetalDevice: RHIBackend {
 
     public func destroySwapchain(_ handle: Swapchain) {
         guard let window = swapchains.removeValue(forKey: handle.id) else { return }
-        for id in window.textureIDs.values { registries.textures[id] = nil }
+        for id in window.textureIDs.values { destroyTexture(Texture(id: id)) }
         window.currentDrawable = nil
     }
 
