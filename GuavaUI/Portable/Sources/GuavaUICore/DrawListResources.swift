@@ -13,6 +13,11 @@ public struct DrawListResources: Sendable {
     public mutating func append(_ other: Self) {
         for resource in other.retained { retain(resource) }
     }
+    /// Inspect owned resources without exposing or mutating the ownership list.
+    public func forEach<T>(of type: T.Type, _ visit: (T) throws -> Void) rethrows where T: AnyObject, T: Sendable {
+        for resource in retained { if let value = resource as? T { try visit(value) } }
+    }
+
     public mutating func reset() {
         retained.removeAll(keepingCapacity: true)
         identities.removeAll(keepingCapacity: true)

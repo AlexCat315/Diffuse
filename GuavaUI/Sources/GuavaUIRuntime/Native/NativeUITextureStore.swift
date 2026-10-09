@@ -35,6 +35,7 @@ final class NativeUITextureStore {
     let device: Device
     let fallback: NativeUITextureSlot
     var textures: [TextureID: NativeUITextureSlot] = [:]
+    private var assetResidency = UIAssetResidency()
 
     init(device: Device) throws {
         self.device = device
@@ -86,8 +87,20 @@ final class NativeUITextureStore {
         textures[id] = slot
     }
 
+    func prepareAssets(_ resources: DrawListResources) throws {
+        try assetResidency.prepare(resources, register: { asset in
+            let image = asset.image
+            try stage(id: asset.textureID, pixels: Data(image.pixels), size: SIMD2(image.width, image.height),
+                region: .init(width: image.width, height: image.height), format: .rgba8Unorm)
+        }, unregister: { textures.removeValue(forKey: $0) })
+    }
+    func unregister(_ id: TextureID) {
+        textures.removeValue(forKey: id); assetResidency.forget(id)
+    }
+
     func synchronize(from source: NativeUITextureStore) throws {
         guard source.device === device else { throw RHIError.invalidArgument("UI texture synchronization requires the same device") }
         textures = source.textures
+        assetResidency = source.assetResidency
     }
 }

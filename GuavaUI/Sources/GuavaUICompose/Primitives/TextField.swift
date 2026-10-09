@@ -1134,6 +1134,7 @@ public struct TextField: View {
         let px = max(1, Int((side * scale).rounded()))
         guard let asset = try? registry.texture(url: url, size: (px, px)) else { return }
         let inset = (size - side) * 0.5
+        list.retainResource(asset)
         list.addImageMaskQuad(rect: UIRect(x: x + inset,
                                            y: y + inset,
                                            width: side,

@@ -33,10 +33,12 @@ final class RatingPaint {
         for index in 0..<geometry.maximum {
             let rect = geometry.starRect(index, origin: origin, height: height)
             if let asset = outline?.resolve(width: geometry.starSize, height: geometry.starSize) {
+                asset.retain(in: list)
                 list.addImageMaskQuad(rect: rect, textureID: asset.textureID, tint: palette.empty.multipliedAlpha(alpha))
             }
             let fraction = Float(max(0, min(1, value - Double(index))))
             if fraction > 0, let asset = filled?.resolve(width: geometry.starSize, height: geometry.starSize) {
+                asset.retain(in: list)
                 if fraction < 1 { list.pushClip(UIRect(x: rect.x, y: rect.y, width: rect.width * fraction, height: rect.height)) }
                 list.addImageMaskQuad(rect: rect, textureID: asset.textureID, tint: palette.filled.multipliedAlpha(alpha))
                 if fraction < 1 { list.popClip() }

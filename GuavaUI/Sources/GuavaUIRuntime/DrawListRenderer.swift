@@ -39,6 +39,7 @@ public final class DrawListRenderer {
         let height: UInt32
     }
     private var textures: [TextureID: GPUTextureSlot] = [:]
+    private var assetResidency = UIAssetResidency()
 
     /// 1×1 white texture used for solid-color batches (sampled but ignored by shader).
     private var dummyTexture: GPUTexture?
@@ -72,6 +73,8 @@ public final class DrawListRenderer {
     /// Texture objects are shared; bind groups are rebuilt against this
     /// renderer's pipeline layout only when a registration actually changes.
     public func synchronizeTextures(from source: DrawListRenderer) throws {
+        guard source.backend === backend else { throw WGPUBackendError.initFailed("UI texture synchronization requires the same backend") }
+        assetResidency = source.assetResidency
         let sourceIDs = Set(source.textures.keys)
         textures = textures.filter { sourceIDs.contains($0.key) }
 
@@ -355,7 +358,7 @@ public final class DrawListRenderer {
         )
     }
 
-    public func unregisterTexture(id: TextureID) { textures.removeValue(forKey: id) }
+    public func unregisterTexture(id: TextureID) { textures.removeValue(forKey: id); assetResidency.forget(id) }
 
     // MARK: - Frame submission
 
@@ -376,6 +379,12 @@ public final class DrawListRenderer {
               let dummyBindGroup else {
             preconditionFailure("DrawListRenderer.render before configure(format:)")
         }
+        try assetResidency.prepare(list.resources, register: { asset in
+            try asset.image.pixels.withUnsafeBufferPointer { pixels in
+                try registerColorTexture(id: asset.textureID, pixels: pixels.baseAddress!,
+                    width: UInt32(asset.image.width), height: UInt32(asset.image.height))
+            }
+        }, unregister: { textures.removeValue(forKey: $0) })
         if list.vertices.isEmpty || list.indices.isEmpty || list.batches.isEmpty {
             return 0
         }

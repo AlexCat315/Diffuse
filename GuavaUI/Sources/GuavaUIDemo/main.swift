@@ -152,7 +152,7 @@ func prewarmDemoTextGlyphs() {
 let backend = WGPUBackend()
 try backend.initialize()
 let renderer = DrawListRenderer(backend: backend)
-let demoImageAssets = ImageAssetRegistry(renderer: renderer)
+let demoImageAssets = ImageAssetRegistry()
 let demoAssetDrops = AssetDropRegistry()
 ImageAssetRegistryHolder.current = demoImageAssets
 AssetDropRegistryHolder.current = demoAssetDrops

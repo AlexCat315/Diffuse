@@ -14,11 +14,11 @@ public struct ImageLoadingPolicy: Sendable, Equatable {
 }
 
 public enum AsyncImageError: Error, Sendable, Equatable, CustomStringConvertible {
-    case rendererUnavailable, unsupportedURL, invalidResponse, fileNotFound, fileReadFailed
+    case hostUnavailable, unsupportedURL, invalidResponse, fileNotFound, fileReadFailed
     case httpStatus(Int), downloadTooLarge, decodeFailed(String), networkFailed(String)
     public var description: String {
         switch self {
-        case .rendererUnavailable: "Image renderer unavailable"
+        case .hostUnavailable: "Image host unavailable"
         case .unsupportedURL: "Unsupported image URL"
         case .invalidResponse: "Invalid image response"
         case .fileNotFound: "Image file not found"
@@ -39,7 +39,7 @@ public enum AsyncImagePhase {
 }
 
 /// File or HTTP image with explicit loading/failure content. Decode is off the
-/// UI loop; upload and publication use the captured host scheduler. The node
+/// UI loop; registration and publication use the captured host scheduler. The node
 /// owns cancellation, so an old request cannot replace a newer source.
 public struct AsyncImage<Content: View>: View {
     public let url: URL?
@@ -69,8 +69,7 @@ public struct AsyncImage<Content: View>: View {
         case .empty: phase = .empty
         case .loading: phase = .loading
         case .success(let asset):
-            phase = .success(Image(textureID: asset.textureID, width: width, height: height,
-                                   sourcePixelSize: (Float(asset.width), Float(asset.height)), contentMode: contentMode))
+            phase = .success(Image(source: .asset(asset), width: width, height: height, contentMode: contentMode))
         case .failure(let error): phase = .failure(error)
         }
         return AsyncImageHost(session: session, request: request, content: content(phase))
@@ -165,7 +164,7 @@ final class AsyncImageResource: NodeResource, @unchecked Sendable {
         cancel(); self.request = request; self.servicesID = services?.id
         guard let key = request.cacheKey, request.url != nil else { session.publish(.empty, for: request); return }
         guard let services else {
-            session.publish(.failure(.rendererUnavailable), for: request); return
+            session.publish(.failure(.hostUnavailable), for: request); return
         }
         if let asset = services.cached(key) { session.publish(.success(asset), for: request); return }
         session.publish(.loading, for: request)
@@ -184,7 +183,7 @@ final class AsyncImageResource: NodeResource, @unchecked Sendable {
                 self.task = nil
                 switch result {
                 case .success(let decoded):
-                    do { session.publish(.success(try services.upload(key, decoded)), for: request) }
+                    do { session.publish(.success(try services.register(key, decoded)), for: request) }
                     catch { session.publish(.failure(.decodeFailed(String(describing: error))), for: request) }
                 case .failure(let error): session.publish(.failure(error), for: request)
                 }
