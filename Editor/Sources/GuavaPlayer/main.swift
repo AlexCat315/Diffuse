@@ -1,11 +1,13 @@
 import Foundation
 import GameRuntime
+import EngineCore
 import GuavaUIApp
 import GuavaUICompose
 import GuavaUIRuntime
 import EngineKernel
 import RenderBackend
 import RHIWGPU
+import NativeRHI
 
 // MARK: - Observable viewport state
 
@@ -62,12 +64,45 @@ private func resolveProjectDirectory() -> String? {
     GameProjectDirectoryResolver.resolve()
 }
 
+private func requestedRendererName() throws -> String {
+    if let index = CommandLine.arguments.firstIndex(of: "--renderer") {
+        guard CommandLine.arguments.indices.contains(index + 1) else {
+            throw NSError(domain: "GuavaPlayer", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "--renderer requires wgpu, native, metal, vulkan, or dx12."])
+        }
+        return CommandLine.arguments[index + 1].lowercased()
+    }
+    return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "wgpu"
+}
+
+private func makeRenderDevice() throws -> EngineRenderDevice {
+    let requested = try requestedRendererName()
+    guard requested != "wgpu" else { return .wgpu(WGPUBackend()) }
+    let api: GraphicsAPI
+    switch requested {
+    case "native":
+        guard let platformAPI = NativeRHI.platformDefaultBackends.first else {
+            throw NSError(domain: "GuavaPlayer", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey: "NativeRHI has no backend for this platform."])
+        }
+        api = platformAPI
+    case "metal": api = .metal
+    case "vulkan": api = .vulkan
+    case "dx12", "d3d12": api = .dx12
+    default:
+        throw NSError(domain: "GuavaPlayer", code: 5,
+                      userInfo: [NSLocalizedDescriptionKey: "Unknown renderer '\(requested)'."])
+    }
+    let config = DeviceConfig(preferredBackends: [api], enableValidation: true, framesInFlight: 3)
+    return .native(try Device.make(config))
+}
+
 @MainActor
 @preconcurrency
 private func runPlayer() throws {
     let projectDirectory = resolveProjectDirectory()
-    let backend = WGPUBackend()
-    let app = try GameApplication(projectDirectory: projectDirectory, backend: backend)
+    let renderDevice = try makeRenderDevice()
+    let app = try GameApplication(projectDirectory: projectDirectory, renderDevice: renderDevice)
     let playerState = GamePlayerState()
 
     app.onViewportSurfaceChanged = { surface in
@@ -77,7 +112,11 @@ private func runPlayer() throws {
     app.bootstrap()
     defer { app.shutdown() }
 
-    let inGameUIHost = InGameUIHost(backend: backend)
+    let inGameUIHost: InGameUIHost
+    switch renderDevice {
+    case .wgpu(let backend): inGameUIHost = InGameUIHost(backend: backend)
+    case .native(let device): inGameUIHost = try InGameUIHost(device: device)
+    }
     InGameUIRegistry.shared.provider = inGameUIHost
 
     try AppRuntime.run(
@@ -88,7 +127,7 @@ private func runPlayer() throws {
             titleBarStyle: .standard,
             targetFrameRate: 60
         ),
-        backend: .wgpu(backend),
+        backend: renderDevice,
         onTick: { dt in
             app.tick(deltaTime: dt)
             let logical = playerState.logicalSize

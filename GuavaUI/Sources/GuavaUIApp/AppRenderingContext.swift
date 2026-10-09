@@ -1,3 +1,4 @@
+import EngineCore
 import GuavaUIRuntime
 import GuavaUIDevTools
 import NativeRHI
@@ -5,10 +6,7 @@ import RHIWGPU
 
 /// Inject the same device used by the scene renderer to compose its viewport
 /// without copying pixels. Omitting this option retains the WGPU default.
-public enum AppRendererDevice {
-    case wgpu(WGPUBackend)
-    case native(Device)
-}
+public typealias AppRendererDevice = EngineRenderDevice
 
 struct AppWindowRenderSettings {
     let samples: UInt32

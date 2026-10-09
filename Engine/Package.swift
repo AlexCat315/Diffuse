@@ -424,6 +424,7 @@ let package = Package(
                 "CTreeSitterSwift",
                 "CEngineBridge",
                 "EngineKernel",
+                "NativeRHI",
                 "RHIWGPU",
                 "RenderBackend",
                 "SceneRuntime",

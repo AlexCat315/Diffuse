@@ -1,4 +1,5 @@
 import EditorCore
+import EngineCore
 import EngineKernel
 import Foundation
 import GuavaUIApp
@@ -20,7 +21,8 @@ final class EditorLaunchContext: @unchecked Sendable {
     private var nativeMenuState: NativeMenuState?
 
     let backendConfig: WGPUDeviceConfig
-    let backend: WGPUBackend
+    let renderDevice: EngineRenderDevice
+    var backend: WGPUBackend? { renderDevice.wgpuBackend }
     let events: PlatformEventBridge
     private(set) var shellState: EditorRootViewFactory.EditorShellState?
 
@@ -28,14 +30,22 @@ final class EditorLaunchContext: @unchecked Sendable {
     private let publisher = _ObservablePublisher<EditorLaunchContext>()
 
     init(backendConfig: WGPUDeviceConfig,
-         backend: WGPUBackend,
+         renderDevice: EngineRenderDevice,
          events: PlatformEventBridge,
          shellState: EditorRootViewFactory.EditorShellState?) {
         self.backendConfig = backendConfig
-        self.backend = backend
+        self.renderDevice = renderDevice
         self.events = events
         self.shellState = shellState
         EditorLocalizationPreferences.language = shellState?.language ?? .system
+    }
+
+    convenience init(backendConfig: WGPUDeviceConfig,
+                     backend: WGPUBackend,
+                     events: PlatformEventBridge,
+                     shellState: EditorRootViewFactory.EditorShellState?) {
+        self.init(backendConfig: backendConfig, renderDevice: .wgpu(backend),
+                  events: events, shellState: shellState)
     }
 
     @MainActor func loadProject(directory: String) throws {
@@ -47,7 +57,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         let app = try EditorApplication(
             projectDirectory: directory,
             backendConfig: backendConfig,
-            backend: backend,
+            renderDevice: renderDevice,
             events: events,
             initialAISettings: shellState?.aiSettings ?? .default,
             initialCapabilitySettings: shellState?.capabilitySettings ?? .default

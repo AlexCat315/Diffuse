@@ -184,7 +184,12 @@ let package = Package(
 
         .testTarget(
             name: "GameRuntimeTests",
-            dependencies: ["GameRuntime"]
+            dependencies: [
+                "GameRuntime",
+                .product(name: "EngineCore", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "RenderBackend", package: "Engine"),
+            ]
         ),
     ],
     cxxLanguageStandard: .cxx17
