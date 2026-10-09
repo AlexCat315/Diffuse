@@ -39,7 +39,7 @@ private final class PresentationBackend: RHIBackend, @unchecked Sendable {
         }
     }
     func makeFrameUploader(slot: Int) -> FrameUploader { PresentationUploader() }
-    func submit(_ submit: PlannedSubmit, completion: @escaping () -> Void) throws { completion() }
+    func submit(_ submit: PlannedSubmit, cpuProfile: SubmissionCPUProfile?, completion: @escaping () -> Void) throws { completion() }
     func waitUntilIdle() throws {
         try lock.withLock {
             if failNextIdle { failNextIdle = false; throw RHIError.submitFailed("completed GPU work reported an error") }

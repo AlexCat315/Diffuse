@@ -9,7 +9,8 @@
 import Metal
 
 extension MetalDevice {
-    public func submit(_ submit: PlannedSubmit, completion: @escaping () -> Void) throws {
+    public func submit(_ submit: PlannedSubmit, cpuProfile: SubmissionCPUProfile? = nil, completion: @escaping () -> Void) throws {
+        let encodingStart = cpuProfile?.begin()
         let queue: MTLCommandQueue = submit.queue == .compute ? computeQueue : graphicsQueue
         guard let commandBuffer = queue.makeCommandBuffer() else {
             throw RHIError.submitFailed("cannot create command buffer")
@@ -44,7 +45,10 @@ extension MetalDevice {
             if let error = buffer.error { status.record(error.localizedDescription) }
             callback.call()
         }
+        cpuProfile?.end(.encoding, since: encodingStart)
+        let queueStart = cpuProfile?.begin()
         commandBuffer.commit()
+        cpuProfile?.end(.queueSubmit, since: queueStart)
     }
 
     func sharedEvent(forID id: UInt32) -> MTLSharedEvent? {
