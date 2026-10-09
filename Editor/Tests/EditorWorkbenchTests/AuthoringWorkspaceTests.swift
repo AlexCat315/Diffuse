@@ -1,5 +1,7 @@
 @testable import EditorApp
 import EditorCore
+import SceneRuntime
+import ScriptRuntime
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
@@ -45,9 +47,11 @@ struct AuthoringWorkspaceTests {
         let model = EditorMenuModel.make(workspaceMode: .modeling, activeLayoutPreset: .modelingDefault,
                                         playbackState: .stopped, interactionMode: .agent)
         #expect(!model.menus.contains { $0.title == L("Build") || $0.title == L("Layout") })
-        #expect(!InspectorWorkspacePolicy.allows(.script, in: .modeling))
-        #expect(InspectorWorkspacePolicy.allows(.cloth, in: .animation))
-        #expect(!InspectorWorkspacePolicy.allows(.characterController, in: .animation))
+        var registry = ComponentRegistry.builtIn
+        registry.registerScriptCodec()
+        #expect(!InspectorWorkspacePolicy.allows(registry["script"]!, in: .modeling))
+        #expect(InspectorWorkspacePolicy.allows(registry["cloth"]!, in: .animation))
+        #expect(!InspectorWorkspacePolicy.allows(registry["characterController"]!, in: .animation))
     } }
 
     @Test("Agent task and conversation panels use independent collapsible docking")

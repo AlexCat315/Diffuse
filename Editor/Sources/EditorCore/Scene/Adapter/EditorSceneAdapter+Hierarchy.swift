@@ -104,7 +104,7 @@ extension EditorSceneAdapter {
             guard let entity = entity(from: rawID),
                   let mesh = scene.component(RenderMeshComponent.self, for: entity),
                   mesh.isVisible != isVisible else { return nil }
-            return .setRenderMeshVisibility(entityID: rawID, isVisible: isVisible)
+            return .componentFields(entityID: rawID, typeID: "renderMesh", fields: ["isVisible": (isVisible)])
         }
         guard !mutations.isEmpty else { return false }
         return applySceneTransaction(intentVerb: "scene.set_hierarchy_visibility",

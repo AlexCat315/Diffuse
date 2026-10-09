@@ -111,10 +111,9 @@ extension EditorSceneAdapter {
                 scene.component(Destructible.self, for: entity)?.assetResourceID ?? ""
             },
             set: { [self] value in
-                guard scene.updateComponent(Destructible.self, for: entity, {
+                guard updateComponentData(Destructible.self, for: entity, {
                     $0.assetResourceID = value
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -129,10 +128,9 @@ extension EditorSceneAdapter {
             },
             set: { [self] value in
                 guard value.isFinite else { return }
-                guard scene.updateComponent(Destructible.self, for: entity, {
+                guard updateComponentData(Destructible.self, for: entity, {
                     $0[keyPath: keyPath] = max(0, value)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -146,10 +144,9 @@ extension EditorSceneAdapter {
                 scene.component(Destructible.self, for: entity)?[keyPath: keyPath] ?? false
             },
             set: { [self] value in
-                guard scene.updateComponent(Destructible.self, for: entity, {
+                guard updateComponentData(Destructible.self, for: entity, {
                     $0[keyPath: keyPath] = value
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -164,10 +161,9 @@ extension EditorSceneAdapter {
                 let rounded = value.rounded()
                 let budget = Int(exactly: rounded).map { max(0, $0) }
                     ?? (rounded > 0 ? Int.max : 0)
-                guard scene.updateComponent(Destructible.self, for: entity, {
+                guard updateComponentData(Destructible.self, for: entity, {
                     $0.fragmentBudget = budget
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }

@@ -23,6 +23,9 @@ struct EditorAgentTaskTests {
         #expect(!animation.projectToolNames.contains("export_project"))
         #expect(game.projectToolNames.contains("export_project"))
         #expect(game.capabilityIDs.contains("scene.set_script_bindings"))
+        for mode: EditorWorkspaceMode in [.level, .scripting, .modeling, .animation] {
+            #expect(mode.profile.capabilityIDs.contains("scene.describe_components"))
+        }
     }
 
     @Test("Capability discovery cannot widen a workflow allow-list")
@@ -34,7 +37,8 @@ struct EditorAgentTaskTests {
         let snapshot = registry.exposureSnapshot(policy: policy)
         #expect(snapshot.contract(id: "scene.set_material") != nil)
         #expect(snapshot.contract(id: "scene.set_script_bindings") == nil)
-        #expect(registry.searchContracts(query: "script", policy: policy, limit: 100).isEmpty)
+        // Shared inspector descriptions may match "script"; write access stays scoped.
+        #expect(registry.searchContracts(query: "script", policy: policy, limit: 100).allSatisfy { $0.access == .read })
         #expect(snapshot.contracts.allSatisfy { profile.capabilityIDs.contains($0.id) })
     }
 

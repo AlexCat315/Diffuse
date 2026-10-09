@@ -107,7 +107,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_allow_sleep",
                                           summary: "Update rigid body sleep flag",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBodyAllowSleep(entityID: entity.rawValue, value: next)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["allowSleep": (next)])])
             }
         )
     }
@@ -124,7 +124,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_motion",
                                           summary: "Update rigid body motion type",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBodyMotionType(entityID: entity.rawValue, value: next)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["motionType": (next).rawValue])])
             }
         )
     }
@@ -142,7 +142,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_mass",
                                           summary: "Update rigid body mass",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBodyMass(entityID: entity.rawValue, value: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["mass": (clamped)])])
             }
         )
     }
@@ -159,7 +159,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_gravity_scale",
                                           summary: "Update rigid body gravity scale",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBodyGravityScale(entityID: entity.rawValue, value: next)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "rigidbody", fields: ["gravityScale": (next)])])
             }
         )
     }
@@ -179,7 +179,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_linear_velocity",
                                           summary: "Update rigid body linear velocity",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "rigidbody", component: body)])
             }
         )
     }
@@ -199,7 +199,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_angular_velocity",
                                           summary: "Update rigid body angular velocity",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "rigidbody", component: body)])
             }
         )
     }
@@ -217,7 +217,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_linear_damping",
                                           summary: "Update rigid body linear damping",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "rigidbody", component: body)])
             }
         )
     }
@@ -235,7 +235,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_angular_damping",
                                           summary: "Update rigid body angular damping",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "rigidbody", component: body)])
             }
         )
     }
@@ -249,10 +249,11 @@ extension EditorSceneAdapter {
                 guard var body = scene.component(RigidBody.self, for: entity),
                       body.continuousCollisionDetection != next else { return }
                 body.continuousCollisionDetection = next
+                body.motionQuality = next ? .linearCast : .discrete
                 _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_ccd",
                                           summary: "Update rigid body continuous collision detection",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "rigidbody", component: body)])
             }
         )
     }

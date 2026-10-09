@@ -10,7 +10,7 @@ import SIMDCompat
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`；
 /// 面板只读取这里导出的树与属性 schema，不再依赖 stub 列表。
 public final class EditorSceneAdapter: @unchecked Sendable {
-    var scene = SceneRuntime() {
+    var scene: SceneRuntime {
         didSet { scene.setScriptDriver(scriptRuntime) }
     }
     // Navigation is session state, independent of authored game cameras.
@@ -48,7 +48,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
     }
 
-    public init(seedPreviewScene: Bool = true) {
+    public init(seedPreviewScene: Bool = true, componentRegistry: ComponentRegistry = .builtIn) {
+        var registry = componentRegistry
+        registry.registerScriptCodec()
+        scene = SceneRuntime(componentRegistry: registry)
         if seedPreviewScene { scene.bootstrapEditorPreviewScene() }
         scene.setResource(InputActionMap.guavaDefault)
         scene.setScriptDriver(scriptRuntime)
@@ -63,7 +66,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     private func resetToPreviewScene(notify: Bool) {
-        scene = SceneRuntime()
+        scene = SceneRuntime(componentRegistry: scene.componentRegistry)
         scene.bootstrapEditorPreviewScene()
         scene.setResource(InputActionMap.guavaDefault)
         scriptRuntime.reset()

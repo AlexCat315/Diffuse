@@ -1,16 +1,14 @@
 {
-  "entityCount" : 1,
-  "lastModifiedAt" : "2026-10-01T05:01:07Z",
-  "revision" : 8,
-  "roots" : [
+  "entityCount": 1,
+  "lastModifiedAt": "2026-10-01T05:01:07Z",
+  "revision": 8,
+  "roots": [
     {
-      "children" : [
-
-      ],
-      "id" : 0,
-      "kind" : "Empty",
-      "localTransform" : {
-        "rows" : [
+      "children": [],
+      "id": 0,
+      "kind": "Empty",
+      "localTransform": {
+        "rows": [
           1,
           0,
           0,
@@ -29,20 +27,24 @@
           1
         ]
       },
-      "name" : "Game Controller",
-      "script" : {
-        "bindings" : [
-          {
-            "bindingID" : "e2b66ee2-94cb-41f8-a91f-88e08a759cda",
-            "identifier" : "scripts.asset.f8097892-f6bf-4a3a-9bd3-998a843ea625",
-            "isEnabled" : true,
-            "parametersJSON" : "{\"title\":\"Crystal Rush\"}",
-            "script" : 0
+      "name": "Game Controller",
+      "components": [
+        {
+          "type": "script",
+          "value": {
+            "bindings": [
+              {
+                "bindingID": "e2b66ee2-94cb-41f8-a91f-88e08a759cda",
+                "identifier": "scripts.asset.f8097892-f6bf-4a3a-9bd3-998a843ea625",
+                "isEnabled": true,
+                "parametersJSON": "{\"title\":\"Crystal Rush\"}"
+              }
+            ]
           }
-        ]
-      }
+        }
+      ]
     }
   ],
-  "schemaVersion" : 6,
-  "selectedEntityID" : 0
+  "schemaVersion": 8,
+  "selectedEntityID": 0
 }

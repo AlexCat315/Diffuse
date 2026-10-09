@@ -53,29 +53,20 @@ extension EditorSceneAdapter {
             mutation = .spawnLightEntity(label: uniqueDisplayName(base: "Directional Light"),
                                          lightType: .directional,
                                          position: spawnPosition,
-                                         initialIntensity: 3,
-                                         initialCastShadows: true,
                                          parentID: parentID)
         case .pointLight:
             mutation = .spawnLightEntity(label: uniqueDisplayName(base: "Point Light"),
                                          lightType: .point,
                                          position: spawnPosition,
-                                         initialIntensity: 10,
-                                         initialRange: 10,
-                                         initialCastShadows: true,
                                          parentID: parentID)
         case .spotLight:
             mutation = .spawnLightEntity(label: uniqueDisplayName(base: "Spot Light"),
                                          lightType: .spot,
                                          position: spawnPosition,
-                                         initialIntensity: 10,
-                                         initialRange: 10,
-                                         initialCastShadows: true,
                                          parentID: parentID)
         case .camera:
             mutation = .spawnCameraEntity(label: uniqueDisplayName(base: "Camera"),
                                           position: spawnPosition,
-                                          initialFovYDegrees: 60,
                                           parentID: parentID)
         }
 

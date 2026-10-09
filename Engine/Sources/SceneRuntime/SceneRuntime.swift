@@ -28,15 +28,24 @@ public struct InputFrameResource: Sendable {
 }
 
 public struct SceneRuntime {
-    private var world = RuntimeWorld()
+    private var world: RuntimeWorld
     private var commandBuffer = RuntimeCommandBuffer()
     private var schedule = RuntimeWorldSchedule()
 
-    public init() {}
+    public init(componentRegistry: ComponentRegistry = .builtIn) {
+        world = RuntimeWorld(componentRegistry: componentRegistry)
+    }
 
-    /// Lets serializers reuse their world operations during a script phase without
-    /// constructing another simulation schedule or copying the scene's resources.
-    mutating func withWorld<Result>(_ body: (inout RuntimeWorld) throws -> Result) rethrows -> Result {
+    public var componentRegistry: ComponentRegistry {
+        get { world.componentRegistry }
+        set { world.componentRegistry = newValue }
+    }
+
+    func readWorld<Result>(_ body: (RuntimeWorld) -> Result) -> Result { body(world) }
+
+    /// Applies registry-backed authoring and serialization operations to this world's
+    /// components without constructing another simulation schedule.
+    public mutating func withWorld<Result>(_ body: (inout RuntimeWorld) throws -> Result) rethrows -> Result {
         try body(&world)
     }
 

@@ -1,4 +1,4 @@
-﻿import AssetPipeline
+import AssetPipeline
 import Foundation
 import CapabilityRuntime
 import SceneRuntime
@@ -88,109 +88,32 @@ public enum SceneMutation: Sendable, Equatable {
     case moveEntity(entityID: UInt64, parentID: UInt64?, index: Int)
     case setLocalTransform(entityID: UInt64, transform: LocalTransform)
     case setSceneName(entityID: UInt64, value: String)
-    case setRigidBodyMotionType(entityID: UInt64, value: RigidBodyMotionType)
-    case setRigidBodyMass(entityID: UInt64, value: Float)
-    case setRigidBodyGravityScale(entityID: UInt64, value: Float)
-    case setRigidBodyAllowSleep(entityID: UInt64, value: Bool)
-    /// Full rigidbody replacement — creates the component if it doesn't exist yet.
-    case setRigidBody(entityID: UInt64, body: RigidBody)
-    case setCollider(entityID: UInt64, collider: Collider)
-    case setColliderTrigger(entityID: UInt64, value: Bool)
-    case setColliderShapeType(entityID: UInt64, kind: ColliderShapeKind)
-    case setColliderShapeBoxHalfExtents(entityID: UInt64, halfExtents: SIMD3<Float>)
-    case setColliderShapeSphereRadius(entityID: UInt64, radius: Float)
-    case setColliderShapeCapsuleRadius(entityID: UInt64, radius: Float)
-    case setColliderShapeCapsuleHalfHeight(entityID: UInt64, halfHeight: Float)
-    case setColliderMaterialFriction(entityID: UInt64, value: Float)
-    case setColliderMaterialRestitution(entityID: UInt64, value: Float)
-    case setColliderMaterialDensity(entityID: UInt64, value: Float)
-    case setColliderLayer(entityID: UInt64, layerID: UInt16)
-    case setColliderLayerMask(entityID: UInt64, layerMask: UInt16)
-    case setConstraintEnabled(entityID: UInt64, value: Bool)
-    case setLightType(entityID: UInt64, type: LightType)
-    case setLightColor(entityID: UInt64, color: SIMD3<Float>)
-    case setLightIntensity(entityID: UInt64, intensity: Float)
-    case setLightRange(entityID: UInt64, range: Float)
-    case setLightSpotInnerAngle(entityID: UInt64, angleDegrees: Float)
-    case setLightSpotOuterAngle(entityID: UInt64, angleDegrees: Float)
-    case setLightCastShadows(entityID: UInt64, value: Bool)
-    case setMeshColorTint(entityID: UInt64, color: SIMD3<Float>)
-    case setRenderMeshVisibility(entityID: UInt64, isVisible: Bool)
-    case setRenderMaterialComponent(entityID: UInt64,
-                                    baseColorFactor: SIMD4<Float>,
-                                    baseColorTextureIndex: Int?,
-                                    normalTextureIndex: Int?,
-                                    metallicFactor: Float,
-                                    roughnessFactor: Float,
-                                    emissiveFactor: SIMD3<Float>)
-    case setScriptBindings(entityID: UInt64, bindings: [ScriptBinding])
-    case setCameraPose(entityID: UInt64,
-                       localTransform: LocalTransform,
-                       target: SIMD3<Float>,
-                       up: SIMD3<Float>?)
-    case setCameraFOV(entityID: UInt64, fovYDegrees: Float)
-    case setCameraAspectRatio(entityID: UInt64, aspectRatio: Float)
-    case setCameraActive(entityID: UInt64, isActive: Bool)
-    case setAudioSource(entityID: UInt64, source: AudioSource)
-    case setAnimationPlayer(entityID: UInt64, clipName: String?, speed: Float, loop: Bool, isPlaying: Bool)
-    case setAnimationGraphPlayer(entityID: UInt64, player: AnimationGraphPlayer)
-    case setAudioListener(entityID: UInt64, masterVolume: Float)
-    indirect case setParticleEmitter(entityID: UInt64, emitter: ParticleEmitter)
+    /// Replace a complete component document, or merge field edits into its current document.
+    case setComponentData(entityID: UInt64, typeID: String, value: ComponentValue,
+                          mode: ComponentWriteMode = .replace)
+    case addComponent(entityID: UInt64, typeID: String)
+    case removeComponentData(entityID: UInt64, typeID: String)
 
-    /// The primary entity targeted by this mutation, if any.
-    /// `spawnImportedMeshEntity` returns `nil` because it creates entities
-    /// rather than referencing an existing one.
     public var entityID: UInt64? {
         switch self {
         case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity:
-            return nil
-        case let .deleteEntity(id),
-             let .duplicateEntity(id),
-             let .duplicateEntityWithOffset(id, _),
-             let .setRigidBody(id, _),
-             let .moveEntity(id, _, _),
-             let .setLocalTransform(id, _),
-             let .setSceneName(id, _),
-             let .setRigidBodyMotionType(id, _),
-             let .setRigidBodyMass(id, _),
-             let .setRigidBodyGravityScale(id, _),
-             let .setRigidBodyAllowSleep(id, _),
-             let .setCollider(id, _),
-             let .setColliderTrigger(id, _),
-             let .setColliderShapeType(id, _),
-             let .setColliderShapeBoxHalfExtents(id, _),
-             let .setColliderShapeSphereRadius(id, _),
-             let .setColliderShapeCapsuleRadius(id, _),
-             let .setColliderShapeCapsuleHalfHeight(id, _),
-             let .setColliderMaterialFriction(id, _),
-             let .setColliderMaterialRestitution(id, _),
-             let .setColliderMaterialDensity(id, _),
-             let .setColliderLayer(id, _),
-             let .setColliderLayerMask(id, _),
-             let .setConstraintEnabled(id, _),
-             let .setLightType(id, _),
-             let .setLightColor(id, _),
-             let .setLightIntensity(id, _),
-             let .setLightRange(id, _),
-             let .setLightSpotInnerAngle(id, _),
-             let .setLightSpotOuterAngle(id, _),
-             let .setLightCastShadows(id, _),
-             let .setMeshColorTint(id, _),
-             let .setRenderMeshVisibility(id, _),
-             let .setRenderMaterialComponent(id, _, _, _, _, _, _),
-             let .setScriptBindings(id, _),
-             let .setCameraPose(id, _, _, _),
-             let .setCameraFOV(id, _),
-             let .setCameraAspectRatio(id, _),
-             let .setCameraActive(id, _),
-             let .setAudioSource(id, _),
-             let .setAnimationPlayer(id, _, _, _, _),
-             let .setAnimationGraphPlayer(id, _),
-             let .setAudioListener(id, _),
-             let .setParticleEmitter(id, _):
-            return id
+            nil
+        case let .deleteEntity(id), let .duplicateEntity(id), let .duplicateEntityWithOffset(id, _),
+             let .moveEntity(id, _, _), let .setLocalTransform(id, _), let .setSceneName(id, _),
+             let .setComponentData(id, _, _, _), let .addComponent(id, _), let .removeComponentData(id, _):
+            id
         }
     }
+
+    public var componentKey: SceneComponentKey? {
+        switch self {
+        case let .setComponentData(id, typeID, _, _), let .addComponent(id, typeID),
+             let .removeComponentData(id, typeID):
+            SceneComponentKey(entityID: id, typeID: typeID)
+        default: nil
+        }
+    }
+
 }
 
 public enum SequenceMutation: Sendable, Equatable {
@@ -266,6 +189,8 @@ public enum TransactionVerificationAssertion: Codable, Sendable, Equatable {
     case deletedEntity(UInt64)
     case sceneRevisionAdvanced(from: UInt64)
     case sceneState(SceneStateAssertion)
+    case componentData(entityID: UInt64, typeID: String, value: ComponentValue, mode: ComponentWriteMode)
+    case componentPresence(entityID: UInt64, typeID: String, isPresent: Bool)
 }
 
 public struct TransactionIR: Sendable, Equatable {

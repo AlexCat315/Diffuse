@@ -14,13 +14,13 @@ struct EditorComponentEditingTests {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
 
-        #expect(!adapter.hasComponent(.particleEmitter, on: id))
-        #expect(adapter.addableComponentKinds(on: id).contains(.particleEmitter))
+        #expect(!adapter.hasComponent("particleEmitter", on: id))
+        #expect(adapter.addableComponentSchemas(on: id).map(\.typeID).contains("particleEmitter"))
 
-        #expect(adapter.addComponent(.particleEmitter, to: id) == true)
-        #expect(adapter.hasComponent(.particleEmitter, on: id))
-        #expect(adapter.componentKinds(on: id).contains(.particleEmitter))
-        #expect(!adapter.addableComponentKinds(on: id).contains(.particleEmitter))
+        #expect(adapter.addComponent("particleEmitter", to: id) == true)
+        #expect(adapter.hasComponent("particleEmitter", on: id))
+        #expect(adapter.componentTypeIDs(on: id).contains("particleEmitter"))
+        #expect(!adapter.addableComponentSchemas(on: id).map(\.typeID).contains("particleEmitter"))
     }
 
     @Test("adding an animation graph creates a default graph player")
@@ -29,14 +29,14 @@ struct EditorComponentEditingTests {
         let id = makeEntity(in: adapter)
         let entity = EntityID(rawValue: id)!
 
-        #expect(adapter.addComponent(.animationGraphPlayer, to: id) == true)
+        #expect(adapter.addComponent("animationGraphPlayer", to: id) == true)
         let player = adapter.scene.component(AnimationGraphPlayer.self, for: entity)
         #expect(player != nil)
         #expect(player?.graph.stateMachine.initialState == "Default")
         #expect(player?.graph.stateMachine.states.count == 1)
-        #expect(adapter.componentKinds(on: id).contains(.animationGraphPlayer))
+        #expect(adapter.componentTypeIDs(on: id).contains("animationGraphPlayer"))
 
-        #expect(adapter.removeComponent(.animationGraphPlayer, from: id) == true)
+        #expect(adapter.removeComponent("animationGraphPlayer", from: id) == true)
         #expect(adapter.scene.component(AnimationGraphPlayer.self, for: entity) == nil)
     }
 
@@ -47,10 +47,10 @@ struct EditorComponentEditingTests {
         let entity = adapter.scene.createEntity() // unused, keeps ids distinct from preview
         _ = entity
 
-        #expect(adapter.addComponent(.light, to: id) == true)
+        #expect(adapter.addComponent("light", to: id) == true)
         // Mutate it, then a second add must not reset it.
         adapter.scene.updateComponent(LightComponent.self, for: EntityID(rawValue: id)!) { $0.intensity = 42 }
-        #expect(adapter.addComponent(.light, to: id) == false)
+        #expect(adapter.addComponent("light", to: id) == false)
         #expect(adapter.scene.component(LightComponent.self, for: EntityID(rawValue: id)!)?.intensity == 42)
     }
 
@@ -58,12 +58,12 @@ struct EditorComponentEditingTests {
     func removeComponent() {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        _ = adapter.addComponent(.audioSource, to: id)
+        _ = adapter.addComponent("audioSource", to: id)
 
-        #expect(adapter.removeComponent(.audioSource, from: id) == true)
-        #expect(!adapter.hasComponent(.audioSource, on: id))
+        #expect(adapter.removeComponent("audioSource", from: id) == true)
+        #expect(!adapter.hasComponent("audioSource", on: id))
         // Removing again is a no-op.
-        #expect(adapter.removeComponent(.audioSource, from: id) == false)
+        #expect(adapter.removeComponent("audioSource", from: id) == false)
     }
 
     @Test("add and remove bump the scene revision")
@@ -73,8 +73,8 @@ struct EditorComponentEditingTests {
         var revisions: [UInt64] = []
         adapter.onRevisionChanged = { revisions.append($0) }
 
-        _ = adapter.addComponent(.camera, to: id)
-        _ = adapter.removeComponent(.camera, from: id)
+        _ = adapter.addComponent("camera", to: id)
+        _ = adapter.removeComponent("camera", from: id)
         #expect(revisions.count == 2)
     }
 
@@ -82,10 +82,10 @@ struct EditorComponentEditingTests {
     func unknownEntity() {
         let adapter = EditorSceneAdapter()
         let bogus: UInt64 = 0xFFFF_FFFF_FFFF_FFFF
-        #expect(adapter.addComponent(.light, to: bogus) == false)
-        #expect(adapter.removeComponent(.light, from: bogus) == false)
-        #expect(adapter.hasComponent(.light, on: bogus) == false)
-        #expect(adapter.componentKinds(on: bogus).isEmpty)
+        #expect(adapter.addComponent("light", to: bogus) == false)
+        #expect(adapter.removeComponent("light", from: bogus) == false)
+        #expect(adapter.hasComponent("light", on: bogus) == false)
+        #expect(adapter.componentTypeIDs(on: bogus).isEmpty)
     }
 
     @Test("multi-selection component add is atomic and one undo step")
@@ -95,14 +95,14 @@ struct EditorComponentEditingTests {
         let second = try #require(adapter.spawnEntity(template: .empty))
         let selection: Set<UInt64> = [first, second]
 
-        #expect(adapter.addableComponentKinds(on: selection).contains(.audioSource))
-        #expect(adapter.addComponent(.audioSource, to: selection))
-        #expect(selection.allSatisfy { adapter.hasComponent(.audioSource, on: $0) })
+        #expect(adapter.addableComponentSchemas(on: selection).map(\.typeID).contains("audioSource"))
+        #expect(adapter.addComponent("audioSource", to: selection))
+        #expect(selection.allSatisfy { adapter.hasComponent("audioSource", on: $0) })
 
         #expect(adapter.undoEdit())
-        #expect(selection.allSatisfy { !adapter.hasComponent(.audioSource, on: $0) })
+        #expect(selection.allSatisfy { !adapter.hasComponent("audioSource", on: $0) })
         #expect(adapter.redoEdit())
-        #expect(selection.allSatisfy { adapter.hasComponent(.audioSource, on: $0) })
+        #expect(selection.allSatisfy { adapter.hasComponent("audioSource", on: $0) })
     }
 
     @Test("multi-selection add fills missing members without resetting existing data")
@@ -110,7 +110,7 @@ struct EditorComponentEditingTests {
         let adapter = EditorSceneAdapter()
         let first = try #require(adapter.spawnEntity(template: .empty))
         let second = try #require(adapter.spawnEntity(template: .empty))
-        #expect(adapter.addComponent(.light, to: first))
+        #expect(adapter.addComponent("light", to: first))
         let firstEntity = try #require(EntityID(rawValue: first))
         adapter.scene.updateComponent(LightComponent.self, for: firstEntity) {
             $0.intensity = 42
@@ -118,14 +118,14 @@ struct EditorComponentEditingTests {
         adapter.notifyRevisionChanged()
         let selection: Set<UInt64> = [first, second]
 
-        #expect(adapter.addableComponentKinds(on: selection).contains(.light))
-        #expect(adapter.addComponent(.light, to: selection))
+        #expect(adapter.addableComponentSchemas(on: selection).map(\.typeID).contains("light"))
+        #expect(adapter.addComponent("light", to: selection))
         #expect(adapter.scene.component(LightComponent.self, for: firstEntity)?.intensity == 42)
-        #expect(adapter.hasComponent(.light, on: second))
+        #expect(adapter.hasComponent("light", on: second))
 
         #expect(adapter.undoEdit())
         #expect(adapter.scene.component(LightComponent.self, for: firstEntity)?.intensity == 42)
-        #expect(!adapter.hasComponent(.light, on: second))
+        #expect(!adapter.hasComponent("light", on: second))
     }
 
     @Test("multi-selection add rejects a locked member without partial mutation")
@@ -138,8 +138,8 @@ struct EditorComponentEditingTests {
         var revisionCount = 0
         adapter.onRevisionChanged = { _ in revisionCount += 1 }
 
-        #expect(!adapter.addComponent(.light, to: selection))
-        #expect(selection.allSatisfy { !adapter.hasComponent(.light, on: $0) })
+        #expect(!adapter.addComponent("light", to: selection))
+        #expect(selection.allSatisfy { !adapter.hasComponent("light", on: $0) })
         #expect(revisionCount == 0)
     }
 
@@ -149,7 +149,7 @@ struct EditorComponentEditingTests {
         let first = try #require(adapter.spawnEntity(template: .empty))
         let second = try #require(adapter.spawnEntity(template: .empty))
         let selection: Set<UInt64> = [first, second]
-        #expect(adapter.addComponent(.light, to: selection))
+        #expect(adapter.addComponent("light", to: selection))
 
         for rawID in selection {
             let entity = try #require(EntityID(rawValue: rawID))
@@ -159,7 +159,7 @@ struct EditorComponentEditingTests {
         }
         adapter.notifyRevisionChanged()
 
-        #expect(adapter.resetComponent(.light, on: selection))
+        #expect(adapter.resetComponent("light", on: selection))
         #expect(selection.allSatisfy { rawID in
             guard let entity = EntityID(rawValue: rawID) else { return false }
             return adapter.scene.component(LightComponent.self, for: entity)?.intensity
@@ -171,10 +171,10 @@ struct EditorComponentEditingTests {
             return adapter.scene.component(LightComponent.self, for: entity)?.intensity == 42
         })
 
-        #expect(adapter.removeComponent(.light, from: selection))
-        #expect(selection.allSatisfy { !adapter.hasComponent(.light, on: $0) })
+        #expect(adapter.removeComponent("light", from: selection))
+        #expect(selection.allSatisfy { !adapter.hasComponent("light", on: $0) })
         #expect(adapter.undoEdit())
-        #expect(selection.allSatisfy { adapter.hasComponent(.light, on: $0) })
+        #expect(selection.allSatisfy { adapter.hasComponent("light", on: $0) })
     }
 }
 

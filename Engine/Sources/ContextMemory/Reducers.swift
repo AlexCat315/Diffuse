@@ -114,6 +114,7 @@ public let highConfidenceInferredReducer: ContextMemoryReducer = { existing, eve
     case let .string(s): payload["value"] = s
     case let .float(f):  payload["value"] = String(format: "%.4g", f)
     case let .bool(b):   payload["value"] = b ? "true" : "false"
+    case let .json(value): payload["value"] = String(data: (try? JSONEncoder().encode(value)) ?? Data(), encoding: .utf8) ?? "null"
     case let .vec3(x, y, z): payload["value"] = "(\(x), \(y), \(z))"
     case let .vec4(x, y, z, w): payload["value"] = "(\(x), \(y), \(z), \(w))"
     }

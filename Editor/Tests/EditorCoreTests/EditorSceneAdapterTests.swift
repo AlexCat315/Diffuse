@@ -15,13 +15,13 @@ struct EditorSceneAdapterTests {
 
         let manifest = scene.manifest(selectedEntityID: scene.defaultSelectionID)
 
-        #expect(manifest.schemaVersion == 6)
+        #expect(manifest.schemaVersion == EditorSceneManifest.currentSchemaVersion)
         #expect(manifest.revision == scene.revision)
         #expect(manifest.entityCount == scene.entityCount)
         #expect(manifest.selectedEntityID == scene.defaultSelectionID)
         #expect(!manifest.roots.isEmpty)
         #expect(manifest.roots.contains { $0.name == "Main Camera" })
-        #expect(manifest.roots.contains { $0.camera != nil })
+        #expect(manifest.roots.contains { $0.components.value(for: "camera")?.objectValue != nil })
     }
 
     @Test("Preview scene reports active particles so the viewport keeps driving frames")
@@ -376,7 +376,8 @@ struct EditorSceneAdapterTests {
         }
 
         let manifest = source.manifest(selectedEntityID: cameraNode.id)
-        #expect(findNode(in: manifest.roots, id: cameraNode.id)?.camera?.aspectRatio == 1.777)
+        let cameraDoc = findNode(in: manifest.roots, id: cameraNode.id)?.components.value(for: "camera")?.objectValue
+        #expect((cameraDoc?["aspectRatio"] as? NSNumber)?.floatValue == 1.777)
 
         let data = try JSONEncoder().encode(manifest)
         let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
@@ -857,12 +858,14 @@ struct EditorSceneAdapterTests {
         let manifest = source.manifest(selectedEntityID: hero.id)
         let manifestHero = findNode(in: manifest.roots, id: hero.id)
 
-        #expect(manifestHero?.renderMesh?.meshIndex == 12)
-        #expect(manifestHero?.renderMesh?.assetID == "hero.asset")
-        #expect(manifestHero?.renderMesh?.colorTint?.simdValue == SIMD3<Float>(0.4, 0.5, 0.6))
-        #expect(manifestHero?.renderMaterial?.baseColorFactor.simdValue == SIMD4<Float>(0.8, 0.7, 0.6, 0.9))
-        #expect(manifestHero?.renderMaterial?.baseColorTextureIndex == 2)
-        #expect(manifestHero?.renderMaterial?.normalTextureIndex == 4)
+        let meshDoc = manifestHero?.components.value(for: "renderMesh")?.objectValue
+        #expect((meshDoc?["meshIndex"] as? NSNumber)?.intValue == 12)
+        #expect(meshDoc?["assetID"] as? String == "hero.asset")
+        #expect((meshDoc?["colorTint"] as? [NSNumber])?.map { Float(truncating: $0) } == [0.4, 0.5, 0.6])
+        let materialDoc = manifestHero?.components.value(for: "renderMaterial")?.objectValue
+        #expect((materialDoc?["baseColorFactor"] as? [NSNumber])?.map { Float(truncating: $0) } == [0.8, 0.7, 0.6, 0.9])
+        #expect((materialDoc?["baseColorTextureIndex"] as? NSNumber)?.intValue == 2)
+        #expect((materialDoc?["normalTextureIndex"] as? NSNumber)?.intValue == 4)
 
         let restored = EditorSceneAdapter()
         let result = restored.load(manifest: manifest)
@@ -1027,14 +1030,28 @@ struct EditorSceneAdapterTests {
 
         let original = try #require(source.scene.component(ParticleEmitter.self, for: entityID(hero.id)))
         let manifest = source.manifest(selectedEntityID: hero.id)
-        let savedEmitter = try #require(findNode(in: manifest.roots, id: hero.id)?.particleEmitter)
+        let savedParticleDoc = try #require(
+            findNode(in: manifest.roots, id: hero.id)?.components.value(for: "particleEmitter")?.objectValue
+        )
+        func decodeEmitter(_ doc: [String: Any]) throws -> ParticleEmitter {
+            var scene = SceneRuntime()
+            let entity = scene.createEntity()
+            var context = ComponentDecodeContext(entityMap: [0: entity])
+            SceneSerializer.applyComponentDocument([ManifestComponent(type: "particleEmitter", value: ComponentValue(jsonObject: doc))], to: entity, in: &scene, context: &context)
+            return try #require(scene.component(ParticleEmitter.self, for: entity))
+        }
+        let savedEmitter = try decodeEmitter(savedParticleDoc)
         #expect(savedEmitter.settings == original.settings)
         #expect(savedEmitter.moduleStack == original.moduleStack)
 
         let data = try JSONEncoder().encode(manifest)
         let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
-        let decodedEmitter = try #require(findNode(in: decoded.roots, id: hero.id)?.particleEmitter)
-        #expect(decodedEmitter == savedEmitter)
+        let decodedParticleDoc = try #require(
+            findNode(in: decoded.roots, id: hero.id)?.components.value(for: "particleEmitter")?.objectValue
+        )
+        let decodedEmitter = try decodeEmitter(decodedParticleDoc)
+        #expect(decodedEmitter.settings == savedEmitter.settings)
+        #expect(decodedEmitter.moduleStack == savedEmitter.moduleStack)
 
         let restored = EditorSceneAdapter()
         let result = restored.load(manifest: decoded)
@@ -1048,14 +1065,17 @@ struct EditorSceneAdapterTests {
 
     @Test("Particle emitter manifest applies authored module settings")
     func particleEmitterManifestAppliesModuleStack() throws {
-        let manifest = EditorSceneManifestParticleEmitter(
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
             ParticleEmitter(settings: .init {
                 $0.emission.emissionRate = 1
                 $0.emission.maxParticles = 4
                 $0.textureSheet.columns = 1
                 $0.textureSheet.rows = 1
                 $0.textureSheet.playbackMode = .automatic
-            })
+            }),
+            for: entity
         )
         let overridingEmitter = ParticleEmitter(settings: .init {
             $0.emission.emissionRate = 42
@@ -1070,12 +1090,23 @@ struct EditorSceneAdapterTests {
             $0.textureSheet.frameRandomness = 2
         })
 
-        var json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(manifest)) as? [String: Any])
-        json["moduleStack"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(overridingEmitter.moduleStack))
-
-        let data = try JSONSerialization.data(withJSONObject: json)
-        let decoded = try JSONDecoder().decode(EditorSceneManifestParticleEmitter.self, from: data)
-        let emitter = decoded.component
+        var encodeContext = ComponentEncodeContext(entityIndexMap: [entity: 0])
+        var components = SceneSerializer.componentDocument(for: entity, in: scene, context: &encodeContext)
+        let index = try #require(components.firstIndex { $0.type == "particleEmitter" })
+        guard case .object(var particle) = components[index].value else {
+            Issue.record("Expected particle emitter document")
+            return
+        }
+        particle["moduleStack"] = ComponentValue(jsonObject:
+            try JSONSerialization.jsonObject(with: JSONEncoder().encode(overridingEmitter.moduleStack)))
+        components[index].value = .object(particle)
+        let data = try JSONEncoder().encode(components)
+        let decoded = try JSONDecoder().decode([ManifestComponent].self, from: data)
+        var restoredScene = SceneRuntime()
+        let restoredEntity = restoredScene.createEntity()
+        var context = ComponentDecodeContext(entityMap: [0: restoredEntity])
+        SceneSerializer.applyComponentDocument(decoded, to: restoredEntity, in: &restoredScene, context: &context)
+        let emitter = try #require(restoredScene.component(ParticleEmitter.self, for: restoredEntity))
 
         #expect(emitter.settings.emission.emissionRate == 42)
         #expect(emitter.settings.emission.maxParticles == 256)
@@ -1716,11 +1747,11 @@ struct GameSaveDocumentTests {
         #expect(restored?.previousState == "Idle")
     }
 
-    @Test("schemaVersion is 6 for new manifests")
-    func schemaVersionIs6() {
+    @Test("new manifests use the current schema version")
+    func currentSchemaVersion() {
         let adapter = EditorSceneAdapter()
         let manifest = adapter.manifest()
-        #expect(manifest.schemaVersion == 6)
+        #expect(manifest.schemaVersion == EditorSceneManifest.currentSchemaVersion)
     }
 
     @Test("GameSaveDocument write and read round-trip")

@@ -725,7 +725,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCollider = ops.contains {
-            if case let .setCollider(_, c) = $0 { return c.layerID == 3 && c.layerMask == 12 }
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") { return c.layerID == 3 && c.layerMask == 12 }
             return false
         }
         XCTAssertTrue(hasCollider, "set_collider_layer must produce setCollider mutation with layerID=3 and layerMask=12")
@@ -745,7 +745,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasShape = ops.contains {
-            if case let .setCollider(_, c) = $0 { if case .sphere = c.shape { return true } }
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") { if case .sphere = c.shape { return true } }
             return false
         }
         XCTAssertTrue(hasShape, "set_collider_shape sphere must produce setCollider mutation with sphere shape")
@@ -766,7 +766,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCollider = ops.contains {
-            if case let .setCollider(_, c) = $0 {
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 return abs(c.material.friction - 0.05) < 0.001
                     && abs(c.material.restitution - 0.9) < 0.001
                     && abs(c.material.density - 0.8) < 0.001
@@ -795,7 +795,7 @@ final class AIRuntimeTests: XCTestCase {
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         var foundBindings: [ScriptBinding]? = nil
         for op in ops {
-            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+            if let (_, component) = op.decodedComponent(ScriptComponent.self, typeID: "script") { let bindings = component.bindings; foundBindings = bindings; break }
         }
         let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
         XCTAssertEqual(bindings.count, 1)
@@ -820,7 +820,7 @@ final class AIRuntimeTests: XCTestCase {
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         var foundBindings: [ScriptBinding]? = nil
         for op in ops {
-            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+            if let (_, component) = op.decodedComponent(ScriptComponent.self, typeID: "script") { let bindings = component.bindings; foundBindings = bindings; break }
         }
         let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
         XCTAssertEqual(bindings.count, 1, "executor must create a binding when none exist")
@@ -847,7 +847,7 @@ final class AIRuntimeTests: XCTestCase {
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         var foundBindings: [ScriptBinding]? = nil
         for op in ops {
-            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+            if let (_, component) = op.decodedComponent(ScriptComponent.self, typeID: "script") { let bindings = component.bindings; foundBindings = bindings; break }
         }
         let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
         XCTAssertFalse(bindings[0].isEnabled, "set_script_enabled false must disable the binding")
@@ -868,7 +868,7 @@ final class AIRuntimeTests: XCTestCase {
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         var foundBindings: [ScriptBinding]? = nil
         for op in ops {
-            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+            if let (_, component) = op.decodedComponent(ScriptComponent.self, typeID: "script") { let bindings = component.bindings; foundBindings = bindings; break }
         }
         let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
         XCTAssertEqual(bindings.count, 1)
@@ -906,7 +906,7 @@ final class AIRuntimeTests: XCTestCase {
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         var foundBindings: [ScriptBinding]? = nil
         for op in ops {
-            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+            if let (_, component) = op.decodedComponent(ScriptComponent.self, typeID: "script") { let bindings = component.bindings; foundBindings = bindings; break }
         }
         let bindings = try XCTUnwrap(foundBindings)
         XCTAssertTrue(bindings[0].isEnabled, "binding 0 must remain enabled")
@@ -926,7 +926,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasTrigger = ops.contains { if case let .setCollider(_, c) = $0 { return c.isTrigger == true }; return false }
+        let hasTrigger = ops.contains { if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") { return c.isTrigger == true }; return false }
         XCTAssertTrue(hasTrigger, "set_collider_trigger must produce setCollider mutation with isTrigger=true")
     }
 
@@ -945,7 +945,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasExtents = ops.contains {
-            if case let .setCollider(_, c) = $0 {
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 if case let .box(ext, _) = c.shape {
                     return abs(ext.x - 0.5) < 0.001 && abs(ext.y - 1.0) < 0.001 && abs(ext.z - 2.0) < 0.001
                 }
@@ -969,7 +969,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasRadius = ops.contains {
-            if case let .setCollider(_, c) = $0 {
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 if case let .sphere(r, _) = c.shape { return abs(r - 3.5) < 0.001 }
             }
             return false
@@ -992,7 +992,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCollider = ops.contains {
-            if case let .setCollider(_, c) = $0 {
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 if case let .capsule(r, hh, _) = c.shape {
                     return abs(r - 0.4) < 0.001 && abs(hh - 1.2) < 0.001
                 }
@@ -1019,7 +1019,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasConstraint = ops.contains { if case .setConstraintEnabled(_, false) = $0 { return true }; return false }
+        let hasConstraint = ops.contains { if case let .setComponentData(_, "constraint", value, _) = $0 { return value.objectValue?["isEnabled"] as? Bool == false }; return false }
         XCTAssertTrue(hasConstraint, "set_constraint_enabled must produce setConstraintEnabled mutation")
     }
 
@@ -1035,7 +1035,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasSleep = ops.contains { if case let .setRigidBody(_, body) = $0 { return body.allowSleep == true }; return false }
+        let hasSleep = ops.contains { if let (_, body) = $0.decodedComponent(RigidBody.self, typeID: "rigidbody") { return body.allowSleep == true }; return false }
         XCTAssertTrue(hasSleep, "set_rigid_body_allow_sleep must produce setRigidBody mutation with allowSleep=true")
     }
 
@@ -1052,7 +1052,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasVisibility = ops.contains { if case .setRenderMeshVisibility(_, false) = $0 { return true }; return false }
+        let hasVisibility = ops.contains { if let (_, component) = $0.decodedComponent(RenderMeshComponent.self, typeID: "renderMesh") { return component.isVisible == false }; return false }
         XCTAssertTrue(hasVisibility, "set_mesh_visibility must produce setRenderMeshVisibility mutation")
     }
 
@@ -1069,7 +1069,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasType = ops.contains { if case .setLightType(_, .spot) = $0 { return true }; return false }
+        let hasType = ops.contains { if let (_, component) = $0.decodedComponent(LightComponent.self, typeID: "light") { return component.type == .spot }; return false }
         XCTAssertTrue(hasType, "set_light_type must produce setLightType(.spot) mutation")
     }
 
@@ -1087,7 +1087,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasIntensity = ops.contains {
-            if case let .setLightIntensity(_, v) = $0 { return abs(v - 800) < 0.01 }
+            if let (_, component) = $0.decodedComponent(LightComponent.self, typeID: "light") { let v = component.intensity; return abs(v - 800) < 0.01 }
             return false
         }
         XCTAssertTrue(hasIntensity, "set_light_intensity must produce setLightIntensity mutation")
@@ -1107,7 +1107,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasColor = ops.contains {
-            if case let .setLightColor(_, c) = $0 { return abs(c.x - 1.0) < 0.01 && abs(c.y - 0.8) < 0.01 }
+            if let (_, component) = $0.decodedComponent(LightComponent.self, typeID: "light") { let c = component.color; return abs(c.x - 1.0) < 0.01 && abs(c.y - 0.8) < 0.01 }
             return false
         }
         XCTAssertTrue(hasColor, "set_light_color must produce setLightColor mutation")
@@ -1127,7 +1127,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasRange = ops.contains {
-            if case let .setLightRange(_, r) = $0 { return abs(r - 35) < 0.01 }
+            if let (_, component) = $0.decodedComponent(LightComponent.self, typeID: "light") { let r = component.range; return abs(r - 35) < 0.01 }
             return false
         }
         XCTAssertTrue(hasRange, "set_light_range must produce setLightRange mutation")
@@ -1148,11 +1148,11 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasInner = ops.contains {
-            if case let .setLightSpotInnerAngle(_, a) = $0 { return abs(a - 15) < 0.01 }
+            if let (_, component) = $0.decodedComponent(LightComponent.self, typeID: "light") { let a = component.spotInnerAngleDegrees; return abs(a - 15) < 0.01 }
             return false
         }
         let hasOuter = ops.contains {
-            if case let .setLightSpotOuterAngle(_, a) = $0 { return abs(a - 40) < 0.01 }
+            if let (_, component) = $0.decodedComponent(LightComponent.self, typeID: "light") { let a = component.spotOuterAngleDegrees; return abs(a - 40) < 0.01 }
             return false
         }
         XCTAssertTrue(hasInner, "set_light_spot_angles must produce setLightSpotInnerAngle mutation")
@@ -1173,7 +1173,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasTint = ops.contains {
-            if case let .setMeshColorTint(_, c) = $0 {
+            if let (_, component) = $0.decodedComponent(RenderMeshComponent.self, typeID: "renderMesh") { let c = component.colorTint;
                 return abs(c.x - 0.2) < 0.01 && abs(c.y - 0.5) < 0.01 && abs(c.z - 0.9) < 0.01
             }
             return false
@@ -1195,7 +1195,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasFOV = ops.contains {
-            if case let .setCameraFOV(_, fov) = $0 { return abs(fov - 90) < 0.01 }
+            if let (_, component) = $0.decodedComponent(CameraComponent.self, typeID: "camera") { let fov = component.fovYRadians * 180 / .pi; return abs(fov - 90) < 0.01 }
             return false
         }
         XCTAssertTrue(hasFOV, "set_camera_fov must produce setCameraFOV mutation")
@@ -1215,7 +1215,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasAspect = ops.contains {
-            if case let .setCameraAspectRatio(_, aspect) = $0 { return abs(aspect - 1.777) < 0.001 }
+            if let (_, component) = $0.decodedComponent(CameraComponent.self, typeID: "camera") { let aspect = component.aspectRatio; return abs(aspect - 1.777) < 0.001 }
             return false
         }
         XCTAssertTrue(hasAspect, "set_camera_aspect_ratio must produce setCameraAspectRatio mutation")
@@ -1234,7 +1234,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasActive = ops.contains { if case .setCameraActive(_, true) = $0 { return true }; return false }
+        let hasActive = ops.contains { if let (_, component) = $0.decodedComponent(CameraComponent.self, typeID: "camera") { return component.isActive == true }; return false }
         XCTAssertTrue(hasActive, "set_camera_active must produce setCameraActive mutation")
     }
 
@@ -1252,7 +1252,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasMotion = ops.contains { if case let .setRigidBody(_, body) = $0 { return body.motionType == .kinematic }; return false }
+        let hasMotion = ops.contains { if let (_, body) = $0.decodedComponent(RigidBody.self, typeID: "rigidbody") { return body.motionType == .kinematic }; return false }
         XCTAssertTrue(hasMotion, "set_rigidbody_motion must produce setRigidBody mutation with motionType=.kinematic")
     }
 
@@ -1271,7 +1271,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasMass = ops.contains {
-            if case let .setRigidBody(_, body) = $0 { return abs(body.mass - 25) < 0.01 }
+            if let (_, body) = $0.decodedComponent(RigidBody.self, typeID: "rigidbody") { return abs(body.mass - 25) < 0.01 }
             return false
         }
         XCTAssertTrue(hasMass, "set_rigidbody_mass must produce setRigidBody mutation with mass=25")
@@ -1292,7 +1292,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasGravity = ops.contains {
-            if case let .setRigidBody(_, body) = $0 { return abs(body.gravityScale - 0.2) < 0.001 }
+            if let (_, body) = $0.decodedComponent(RigidBody.self, typeID: "rigidbody") { return abs(body.gravityScale - 0.2) < 0.001 }
             return false
         }
         XCTAssertTrue(hasGravity, "set_rigidbody_gravity must produce setRigidBody mutation with gravityScale=0.2")
@@ -1448,7 +1448,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasCast = ops.contains { if case .setLightCastShadows(_, true) = $0 { return true }; return false }
+        let hasCast = ops.contains { if let (_, component) = $0.decodedComponent(LightComponent.self, typeID: "light") { return component.castShadows == true }; return false }
         XCTAssertTrue(hasCast, "set_light_cast_shadows must produce setLightCastShadows mutation")
     }
 
@@ -1467,12 +1467,12 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasPose = ops.contains {
-            if case let .setCameraPose(_, t, target, _) = $0 {
-                return abs(t.translation.x - 5) < 0.01
-                    && abs(t.translation.z - 10) < 0.01
-                    && abs(target.x) < 0.01
+            if case let .setLocalTransform(_, t) = $0 {
+                return abs(t.translation.x - 5) < 0.01 && abs(t.translation.z - 10) < 0.01
             }
             return false
+        } && ops.contains {
+            $0.decodedComponent(CameraComponent.self, typeID: "camera")?.1.target == .zero
         }
         XCTAssertTrue(hasPose, "set_camera_pose must produce setCameraPose mutation with correct position and target")
     }
@@ -1641,7 +1641,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasAnim = ops.contains {
-            if case let .setAnimationPlayer(id, clip, speed, loop, playing) = $0 {
+            if let (id, component) = $0.decodedComponent(AnimationPlayer.self, typeID: "animationPlayer") { let clip = component.clipName; let speed = component.speed; let loop = component.loop; let playing = component.isPlaying;
                 return id == entity.rawValue
                     && clip == "walk"
                     && abs(speed - 1.5) < 0.001
@@ -1885,7 +1885,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasAudio = ops.contains {
-            if case let .setAudioSource(id, src) = $0 {
+            if let (id, src) = $0.decodedComponent(AudioSource.self, typeID: "audioSource") {
                 return id == entity.rawValue
                     && src.clipName == "theme"
                     && abs(src.volume - 0.8) < 0.001
@@ -2328,7 +2328,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasMaterial = ops.contains {
-            if case let .setRenderMaterialComponent(id, base, _, _, metallic, roughness, _) = $0 {
+            if let (id, component) = $0.decodedComponent(RenderMaterialComponent.self, typeID: "renderMaterial") { let base = component.baseColorFactor; let metallic = component.metallicFactor; let roughness = component.roughnessFactor;
                 return id == entity.rawValue
                     && abs(base.x - 1.0) < 0.001
                     && abs(base.y - 0.8) < 0.001
@@ -3424,7 +3424,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let has = ops.contains {
-            if case let .setCollider(_, c) = $0 { if case .mesh = c.shape { return true } }
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") { if case .mesh = c.shape { return true } }
             return false
         }
         XCTAssertTrue(has, "set_collider_shape 'mesh' must produce setCollider mutation with mesh shape")
@@ -3443,7 +3443,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let has = ops.contains {
-            if case let .setCollider(_, c) = $0 { if case .convex = c.shape { return true } }
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") { if case .convex = c.shape { return true } }
             return false
         }
         XCTAssertTrue(has, "set_collider_shape 'convex' must produce setCollider mutation with convex shape")
@@ -3534,7 +3534,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let ok = ops.contains {
-            if case let .setRenderMaterialComponent(id, base, baseTexture, normalTexture, metallic, roughness, _) = $0 {
+            if let (id, component) = $0.decodedComponent(RenderMaterialComponent.self, typeID: "renderMaterial") { let base = component.baseColorFactor; let baseTexture = component.baseColorTextureIndex; let normalTexture = component.normalTextureIndex; let metallic = component.metallicFactor; let roughness = component.roughnessFactor;
                 return id == entity.rawValue
                     && abs(base.x - 0.2) < 0.001   // preserved
                     && abs(base.y - 0.4) < 0.001   // preserved
@@ -3566,7 +3566,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let ok = ops.contains {
-            if case let .setRenderMaterialComponent(id, base, _, _, metallic, roughness, _) = $0 {
+            if let (id, component) = $0.decodedComponent(RenderMaterialComponent.self, typeID: "renderMaterial") { let base = component.baseColorFactor; let metallic = component.metallicFactor; let roughness = component.roughnessFactor;
                 return id == entity.rawValue
                     && abs(base.x - 1.0) < 0.001   // preserved
                     && abs(base.z - 0.0) < 0.001   // preserved
@@ -3918,7 +3918,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasRigidBody = ops.contains {
-            if case let .setRigidBody(eid, body) = $0 {
+            if let (eid, body) = $0.decodedComponent(RigidBody.self, typeID: "rigidbody") {
                 return eid == entity.rawValue && body.motionType == .dynamic
             }
             return false
@@ -3941,7 +3941,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCorrect = ops.contains {
-            if case let .setRigidBody(eid, body) = $0 {
+            if let (eid, body) = $0.decodedComponent(RigidBody.self, typeID: "rigidbody") {
                 return eid == entity.rawValue && body.motionType == .kinematic && abs(body.mass - 42) < 0.01
             }
             return false
@@ -3963,7 +3963,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCollider = ops.contains {
-            if case let .setCollider(eid, col) = $0 { return eid == entity.rawValue && col.isTrigger == true }
+            if let (eid, col) = $0.decodedComponent(Collider.self, typeID: "collider") { return eid == entity.rawValue && col.isTrigger == true }
             return false
         }
         XCTAssertTrue(hasCollider, "set_collider_trigger on entity without Collider must create it via setCollider")
@@ -3982,7 +3982,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCollider = ops.contains {
-            if case let .setCollider(eid, col) = $0 {
+            if let (eid, col) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 if case .sphere(1.5, _) = col.shape { return eid == entity.rawValue && abs(col.material.friction - 0.3) < 0.001 }
             }
             return false
@@ -4002,7 +4002,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCollider = ops.contains {
-            if case let .setCollider(eid, col) = $0 {
+            if let (eid, col) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 if case let .box(he, _) = col.shape {
                     return eid == entity.rawValue && abs(he.x - 1) < 0.01 && abs(he.y - 2) < 0.01 && abs(he.z - 3) < 0.01
                 }
@@ -4027,7 +4027,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCollider = ops.contains {
-            if case let .setCollider(eid, c) = $0 {
+            if let (eid, c) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 if case .sphere = c.shape { return eid == entity.rawValue && c.isTrigger == true }
             }
             return false
@@ -4090,7 +4090,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasExtents = ops.contains {
-            if case let .setCollider(_, c) = $0 {
+            if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") {
                 if case let .box(he, _) = c.shape {
                     return abs(he.x - 2) < 0.01 && abs(he.y - 3) < 0.01 && abs(he.z - 4) < 0.01
                 }
@@ -4138,7 +4138,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasScript = ops.contains {
-            if case let .setScriptBindings(eid, bindings) = $0 {
+            if let (eid, component) = $0.decodedComponent(ScriptComponent.self, typeID: "script") { let bindings = component.bindings;
                 guard eid == entity.rawValue, let first = bindings.first else { return false }
                 let data = first.parametersJSON.data(using: .utf8)!
                 let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -4703,7 +4703,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         // The final setCollider (from step 2) should preserve isTrigger=true from step 1
-        let lastCollider = ops.compactMap { if case let .setCollider(_, c) = $0 { return c } else { return nil } }.last
+        let lastCollider = ops.compactMap { if let (_, c) = $0.decodedComponent(Collider.self, typeID: "collider") { return c } else { return nil } }.last
         XCTAssertNotNil(lastCollider)
         XCTAssertTrue(lastCollider?.isTrigger == true,
                       "step 2's setCollider must preserve isTrigger=true set by step 1")

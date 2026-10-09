@@ -1,7 +1,9 @@
 import Foundation
+import SceneRuntime
 
 /// Scalar property value carried by a WorldEvent state change.
 public enum WorldPropertyValue: Sendable, Equatable, Codable {
+    case json(ComponentValue)
     case vec3(Float, Float, Float)
     /// Four-component value: bounding rect (x, y, w, h), RGBA color, or quaternion.
     case vec4(Float, Float, Float, Float)
@@ -14,6 +16,8 @@ public enum WorldPropertyValue: Sendable, Equatable, Codable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         switch self {
+        case let .json(value):
+            try c.encode("json", forKey: .type); try c.encode(value, forKey: .value)
         case let .vec3(x, y, z):
             try c.encode("vec3", forKey: .type)
             try c.encode(x, forKey: .x); try c.encode(y, forKey: .y); try c.encode(z, forKey: .z)
@@ -33,6 +37,7 @@ public enum WorldPropertyValue: Sendable, Equatable, Codable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(String.self, forKey: .type) {
+        case "json": self = .json(try c.decode(ComponentValue.self, forKey: .value))
         case "vec3":
             self = .vec3(try c.decode(Float.self, forKey: .x),
                          try c.decode(Float.self, forKey: .y),

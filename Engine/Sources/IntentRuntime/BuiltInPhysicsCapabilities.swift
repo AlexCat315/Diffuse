@@ -82,7 +82,7 @@ public struct SetRigidBodyMotionTypeCapability: GuavaCapability {
             entityID: prepared.entityID,
             reference: input.entity_id,
             summary: "Set rigid body motion",
-            mutation: .setRigidBody(entityID: prepared.entityID, body: body)
+            mutation: .componentData(entityID: prepared.entityID, typeID: "rigidbody", component: body)
         )
     }
 }
@@ -114,7 +114,7 @@ public struct SetRigidBodyMassCapability: GuavaCapability {
             entityID: prepared.entityID,
             reference: input.entity_id,
             summary: "Set rigid body mass",
-            mutation: .setRigidBody(entityID: prepared.entityID, body: body)
+            mutation: .componentData(entityID: prepared.entityID, typeID: "rigidbody", component: body)
         )
     }
 }
@@ -146,7 +146,7 @@ public struct SetRigidBodyGravityScaleCapability: GuavaCapability {
             entityID: prepared.entityID,
             reference: input.entity_id,
             summary: "Set rigid body gravity scale",
-            mutation: .setRigidBody(entityID: prepared.entityID, body: body)
+            mutation: .componentData(entityID: prepared.entityID, typeID: "rigidbody", component: body)
         )
     }
 }
@@ -178,7 +178,7 @@ public struct SetRigidBodyAllowSleepCapability: GuavaCapability {
             entityID: prepared.entityID,
             reference: input.entity_id,
             summary: "Set rigid body sleeping",
-            mutation: .setRigidBody(entityID: prepared.entityID, body: body)
+            mutation: .componentData(entityID: prepared.entityID, typeID: "rigidbody", component: body)
         )
     }
 }
@@ -273,7 +273,7 @@ public struct SetColliderShapeCapability: GuavaCapability {
             entityID: prepared.entityID,
             reference: input.entity_id,
             summary: "Set collider shape",
-            mutation: .setCollider(entityID: prepared.entityID, collider: collider)
+            mutation: .componentData(entityID: prepared.entityID, typeID: "collider", component: collider)
         )
     }
 }
@@ -309,8 +309,7 @@ public struct SetColliderBoxExtentsCapability: GuavaCapability {
         return physicsPrepared(entityID: prepared.entityID,
                                reference: input.entity_id,
                                summary: "Set box collider extents",
-                               mutation: .setCollider(entityID: prepared.entityID,
-                                                      collider: collider))
+                               mutation: .componentData(entityID: prepared.entityID, typeID: "collider", component: collider))
     }
 }
 
@@ -343,8 +342,7 @@ public struct SetColliderSphereRadiusCapability: GuavaCapability {
         return physicsPrepared(entityID: prepared.entityID,
                                reference: input.entity_id,
                                summary: "Set sphere collider radius",
-                               mutation: .setCollider(entityID: prepared.entityID,
-                                                      collider: collider))
+                               mutation: .componentData(entityID: prepared.entityID, typeID: "collider", component: collider))
     }
 }
 
@@ -394,8 +392,7 @@ public struct SetColliderCapsuleCapability: GuavaCapability {
         return physicsPrepared(entityID: prepared.entityID,
                                reference: input.entity_id,
                                summary: "Set capsule collider dimensions",
-                               mutation: .setCollider(entityID: prepared.entityID,
-                                                      collider: collider))
+                               mutation: .componentData(entityID: prepared.entityID, typeID: "collider", component: collider))
     }
 }
 
@@ -442,8 +439,7 @@ public struct SetColliderMaterialCapability: GuavaCapability {
         return physicsPrepared(entityID: prepared.entityID,
                                reference: input.entity_id,
                                summary: "Set collider material",
-                               mutation: .setCollider(entityID: prepared.entityID,
-                                                      collider: collider))
+                               mutation: .componentData(entityID: prepared.entityID, typeID: "collider", component: collider))
     }
 }
 
@@ -473,8 +469,7 @@ public struct SetColliderTriggerCapability: GuavaCapability {
         return physicsPrepared(entityID: prepared.entityID,
                                reference: input.entity_id,
                                summary: "Set collider trigger",
-                               mutation: .setCollider(entityID: prepared.entityID,
-                                                      collider: collider))
+                               mutation: .componentData(entityID: prepared.entityID, typeID: "collider", component: collider))
     }
 }
 
@@ -511,8 +506,7 @@ public struct SetColliderLayerCapability: GuavaCapability {
         return physicsPrepared(entityID: prepared.entityID,
                                reference: input.entity_id,
                                summary: "Set collider layers",
-                               mutation: .setCollider(entityID: prepared.entityID,
-                                                      collider: collider))
+                               mutation: .componentData(entityID: prepared.entityID, typeID: "collider", component: collider))
     }
 }
 

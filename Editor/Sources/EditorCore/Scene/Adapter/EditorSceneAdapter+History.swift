@@ -1,8 +1,9 @@
+import IntentRuntime
 import SceneRuntime
 
 extension EditorSceneAdapter {
-    func notifyRevisionChanged(recordHistory: Bool = true) {
-        editHistory.recordRevisionChange(to: scene, recordHistory: recordHistory)
+    func notifyRevisionChanged(recordHistory: Bool = true, componentKeys: Set<SceneComponentKey>? = nil) {
+        editHistory.recordRevisionChange(to: scene, recordHistory: recordHistory, componentKeys: componentKeys)
         invalidateParticleFeedback()
         onRevisionChanged?(scene.snapshot.revision)
     }

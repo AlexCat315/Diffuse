@@ -33,19 +33,29 @@ struct GroupedStateTests {
         #expect(restored.navigation.commandPaletteQuery.isEmpty)
     }
 
-    @Test("Particle manifests persist typed settings without a separate flat field table")
+    @Test("Component documents persist particle settings without a separate flat field table")
     func groupedParticleManifestRoundTrip() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
         let emitter = ParticleEmitter(
             settings: .init {
                 $0.emission.seed = .max
                 $0.forces.gravity = SIMD3<Float>(1, -3, 2)
                 $0.textureSheet.textureAssetID = "fire.png"
             })
-        let data = try JSONEncoder().encode(EditorSceneManifestParticleEmitter(emitter))
-        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(object["settings"] is [String: Any])
-        #expect(object["gravity"] == nil)
-        let restored = try JSONDecoder().decode(EditorSceneManifestParticleEmitter.self, from: data)
-        #expect(restored.component.settings == emitter.settings)
+        _ = scene.setComponent(emitter, for: entity)
+        var encodeContext = ComponentEncodeContext(entityIndexMap: [entity: 0])
+        let components = SceneSerializer.componentDocument(for: entity, in: scene, context: &encodeContext)
+        let data = try JSONEncoder().encode(components)
+        let restored = try JSONDecoder().decode([ManifestComponent].self, from: data)
+        #expect(restored == components)
+        let particle = try #require(restored.value(for: "particleEmitter")?.objectValue)
+        #expect(particle["settings"] is [String: Any])
+        #expect(particle["gravity"] == nil)
+        var restoredScene = SceneRuntime()
+        let restoredEntity = restoredScene.createEntity()
+        var decodeContext = ComponentDecodeContext(entityMap: [0: restoredEntity])
+        SceneSerializer.applyComponentDocument(restored, to: restoredEntity, in: &restoredScene, context: &decodeContext)
+        #expect(restoredScene.component(ParticleEmitter.self, for: restoredEntity)?.settings == emitter.settings)
     }
 }

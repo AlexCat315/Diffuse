@@ -62,12 +62,7 @@ public struct SetCameraPoseCapability: GuavaCapability {
             throw CameraMaterialCapabilityPreparationError.invalidCameraUp
         }
         return PreparedCapability(
-            operations: [.scene(.setCameraPose(
-                entityID: entityID,
-                localTransform: LocalTransform(translation: position),
-                target: target,
-                up: up
-            ))],
+            operations: [.scene(.setLocalTransform(entityID: entityID, transform: LocalTransform(translation: position))), .scene(.componentFields(entityID: entityID, typeID: "camera", fields: ["target": target, "up": up as Any]))],
             preview: CapabilityPreview(summary: "Set camera pose",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -99,10 +94,7 @@ public struct SetCameraFOVCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .camera, context: context)
         return PreparedCapability(
-            operations: [.scene(.setCameraFOV(
-                entityID: entityID,
-                fovYDegrees: try capabilityFloat(input.camera_fov_y, field: "camera_fov_y")
-            ))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "camera", fields: ["fovYRadians": (try capabilityFloat(input.camera_fov_y, field: "camera_fov_y")) * Float.pi / 180]))],
             preview: CapabilityPreview(summary: "Set camera field of view",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -134,13 +126,10 @@ public struct SetCameraAspectRatioCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .camera, context: context)
         return PreparedCapability(
-            operations: [.scene(.setCameraAspectRatio(
-                entityID: entityID,
-                aspectRatio: try capabilityFloat(
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "camera", fields: ["aspectRatio": (try capabilityFloat(
                     input.camera_aspect_ratio,
                     field: "camera_aspect_ratio"
-                )
-            ))],
+                ))]))],
             preview: CapabilityPreview(summary: "Set camera aspect ratio",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -172,8 +161,7 @@ public struct SetCameraActiveCapability: GuavaCapability {
     ) throws -> PreparedCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .camera, context: context)
         return PreparedCapability(
-            operations: [.scene(.setCameraActive(entityID: entityID,
-                                                 isActive: input.camera_is_active))],
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "camera", fields: ["isActive": (input.camera_is_active)]))],
             preview: CapabilityPreview(summary: "Set camera active state",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]
@@ -250,16 +238,18 @@ public struct SetMaterialCapability: GuavaCapability {
         if let value = input.material_emissive {
             emissive = try capabilityVector(value, field: "material_emissive")
         }
-        return PreparedCapability(
-            operations: [.scene(.setRenderMaterialComponent(
-                entityID: entityID,
-                baseColorFactor: baseColor,
+        if entity.renderMaterial == nil {
+            let material = RenderMaterialComponent(baseColorFactor: baseColor,
                 baseColorTextureIndex: snapshot.baseColorTextureIndex,
                 normalTextureIndex: snapshot.normalTextureIndex,
-                metallicFactor: metallic,
-                roughnessFactor: roughness,
-                emissiveFactor: emissive
-            ))],
+                metallicFactor: metallic, roughnessFactor: roughness, emissiveFactor: emissive)
+            return PreparedCapability(
+                operations: [.scene(.componentData(entityID: entityID, typeID: "renderMaterial", component: material))],
+                preview: CapabilityPreview(summary: "Set PBR material", targetReferences: [input.entity_id.rawValue]),
+                assertions: [.entityExists(entityID)])
+        }
+        return PreparedCapability(
+            operations: [.scene(.componentFields(entityID: entityID, typeID: "renderMaterial", fields: ["baseColorFactor": baseColor, "baseColorTextureIndex": (snapshot.baseColorTextureIndex).map { $0 as Any } ?? NSNull(), "normalTextureIndex": (snapshot.normalTextureIndex).map { $0 as Any } ?? NSNull(), "metallicFactor": metallic, "roughnessFactor": roughness, "emissiveFactor": emissive]))],
             preview: CapabilityPreview(summary: "Set PBR material",
                                        targetReferences: [input.entity_id.rawValue]),
             assertions: [.entityExists(entityID)]

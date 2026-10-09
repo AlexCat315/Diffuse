@@ -88,6 +88,13 @@ enum BuiltInCapabilityCatalog {
             ], required: ["summary", "draft_ids"]),
             access: .read
         ),
+        "scene.describe_components": Spec(
+            title: "Describe components",
+            description: "Read registered scene components, required components, authored defaults, and field descriptions shared with the inspector. Field paths address stored component JSON; numeric scales describe display units.",
+            schema: object([
+                "type_id": .string(description: "Optional stable component type ID; omit to list all registered components."),
+            ]), access: .read
+        ),
         "scene.get_entities": Spec(
             title: "Get scene entities",
             description: "Read the AI-visible entity list for the current scene.",

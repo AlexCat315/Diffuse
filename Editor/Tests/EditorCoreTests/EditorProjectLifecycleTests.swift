@@ -2,6 +2,7 @@ import Foundation
 import SceneRuntime
 import GuavaUIRuntime
 import GuavaUICompose
+import ScriptRuntime
 import Testing
 @testable import EditorCore
 
@@ -96,7 +97,8 @@ struct EditorProjectLifecycleTests {
         defer { app.shutdown() }
         #expect(app.restoreProjectSceneAtLaunch()?.entityCount == 1)
         let document = try #require(app.scriptWorkspace.snapshot.documents.first)
-        #expect(document.file.identifier == scene.roots.first?.script?.bindings.first?.identifier)
+        let sceneBindings = scene.roots.first.flatMap { sceneDocumentScripts(in: $0.components) }
+        #expect(document.file.identifier == sceneBindings?.first?.identifier)
         #expect(!app.dynamicScriptManager.projectTrustState.allowsExecution)
         try Data("modified".utf8).write(to: source)
         #expect(try Data(contentsOf: second.directory.appendingPathComponent("Scripts/CrystalRush.swift")) != Data("modified".utf8))
@@ -166,7 +168,7 @@ struct EditorProjectLifecycleTests {
         scene.frameEntity(cube)
         #expect(scene.currentRenderCamera().target == SIMD3<Float>(12, 4, 2))
         #expect(scene.manifest().entityCount == 1)
-        #expect(scene.manifest().roots.first?.camera == nil)
+        #expect(scene.manifest().roots.first?.components.value(for: "camera")?.objectValue == nil)
     }
 
 }

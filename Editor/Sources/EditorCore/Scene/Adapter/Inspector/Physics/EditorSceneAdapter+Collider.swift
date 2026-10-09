@@ -198,7 +198,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_center",
                                           summary: "Update collider center",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setCollider(entityID: entity.rawValue, collider: collider)])
+                                          mutations: [.componentData(entityID: entity.rawValue, typeID: "collider", component: collider)])
             }
         )
     }
@@ -215,7 +215,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_trigger",
                                           summary: "Update collider trigger flag",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderTrigger(entityID: entity.rawValue, value: next)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["isTrigger": (next)])])
             }
         )
     }
@@ -232,7 +232,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_shape_type",
                                           summary: "Update collider shape type",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderShapeType(entityID: entity.rawValue, kind: next)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["shapes": ["0": next.defaultComponentFields]])])
             }
         )
     }
@@ -256,8 +256,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_box_extents",
                                           summary: "Update collider box extents",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderShapeBoxHalfExtents(entityID: entity.rawValue,
-                                                                                      halfExtents: newHE)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["shapes": ["0": ["halfExtents": newHE]]])])
             }
         )
     }
@@ -279,8 +278,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_sphere_radius",
                                           summary: "Update collider sphere radius",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderShapeSphereRadius(entityID: entity.rawValue,
-                                                                                    radius: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["shapes": ["0": ["radius": clamped]]])])
             }
         )
     }
@@ -302,8 +300,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_capsule_radius",
                                           summary: "Update collider capsule radius",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderShapeCapsuleRadius(entityID: entity.rawValue,
-                                                                                     radius: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["shapes": ["0": ["radius": clamped]]])])
             }
         )
     }
@@ -325,8 +322,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_capsule_half_height",
                                           summary: "Update collider capsule half height",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderShapeCapsuleHalfHeight(entityID: entity.rawValue,
-                                                                                         halfHeight: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["shapes": ["0": ["halfHeight": clamped]]])])
             }
         )
     }
@@ -344,8 +340,7 @@ extension EditorSceneAdapter {
                       case let .cylinder(radius, halfHeight, center) = collider.shape,
                       radius != clamped else { return }
                 collider.shape = .cylinder(radius: clamped, halfHeight: halfHeight, center: center)
-                guard scene.setComponent(collider, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(collider, for: entity) else { return }
             }
         )
     }
@@ -363,8 +358,7 @@ extension EditorSceneAdapter {
                       case let .cylinder(radius, halfHeight, center) = collider.shape,
                       halfHeight != clamped else { return }
                 collider.shape = .cylinder(radius: radius, halfHeight: clamped, center: center)
-                guard scene.setComponent(collider, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(collider, for: entity) else { return }
             }
         )
     }
@@ -391,8 +385,7 @@ extension EditorSceneAdapter {
                 let shapes = encoded.map(\.instance)
                 guard shapes != collider.shapes else { return }
                 collider.shapes = shapes
-                guard scene.setComponent(collider, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(collider, for: entity) else { return }
             }
         )
     }
@@ -410,8 +403,7 @@ extension EditorSceneAdapter {
                       collider.shapes != shapes
                 else { return }
                 collider.shapes = shapes
-                guard scene.setComponent(collider, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(collider, for: entity) else { return }
             }
         )
     }
@@ -429,8 +421,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_friction",
                                           summary: "Update collider friction",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderMaterialFriction(entityID: entity.rawValue,
-                                                                                   value: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["friction": (clamped)])])
             }
         )
     }
@@ -448,8 +439,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_restitution",
                                           summary: "Update collider restitution",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderMaterialRestitution(entityID: entity.rawValue,
-                                                                                      value: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["restitution": (clamped)])])
             }
         )
     }
@@ -467,8 +457,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_density",
                                           summary: "Update collider density",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderMaterialDensity(entityID: entity.rawValue,
-                                                                                  value: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["density": (clamped)])])
             }
         )
     }
@@ -486,8 +475,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_layer",
                                           summary: "Update collider layer",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderLayer(entityID: entity.rawValue,
-                                                                        layerID: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["layerID": (clamped)])])
             }
         )
     }
@@ -505,8 +493,7 @@ extension EditorSceneAdapter {
                 _ = applySceneTransaction(intentVerb: "scene.set_collider_layer_mask",
                                           summary: "Update collider layer mask",
                                           targetRawIDs: [entity.rawValue],
-                                          mutations: [.setColliderLayerMask(entityID: entity.rawValue,
-                                                                            layerMask: clamped)])
+                                          mutations: [.componentFields(entityID: entity.rawValue, typeID: "collider", fields: ["layerMask": (clamped)])])
             }
         )
     }

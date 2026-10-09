@@ -169,8 +169,7 @@ extension EditorSceneAdapter {
                 next.forward = current.forward
                 next.maxPitchRollAngle = current.maxPitchRollAngle
                 next.isEnabled = current.isEnabled
-                guard scene.setComponent(next, for: entity) else { return }
-                notifyRevisionChanged()
+                guard setComponentData(next, for: entity) else { return }
             }
         )
     }
@@ -180,8 +179,7 @@ extension EditorSceneAdapter {
             get: { [self] in scene.component(Vehicle.self, for: entity)?.isEnabled ?? false },
             set: { [self] value in
                 guard scene.component(Vehicle.self, for: entity)?.isEnabled != value else { return }
-                _ = scene.updateComponent(Vehicle.self, for: entity) { $0.isEnabled = value }
-                notifyRevisionChanged()
+                _ = updateComponentData(Vehicle.self, for: entity) { $0.isEnabled = value }
             }
         )
     }
@@ -197,10 +195,9 @@ extension EditorSceneAdapter {
             },
             set: { [self] next in
                 let value = minimum.map { Swift.max($0, next) } ?? next
-                guard scene.updateComponent(Vehicle.self, for: entity, {
+                guard updateComponentData(Vehicle.self, for: entity, {
                     $0.engine[keyPath: keyPath] = value
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -216,10 +213,9 @@ extension EditorSceneAdapter {
             },
             set: { [self] next in
                 let value = minimum.map { Swift.max($0, next) } ?? next
-                guard scene.updateComponent(Vehicle.self, for: entity, {
+                guard updateComponentData(Vehicle.self, for: entity, {
                     $0.transmission[keyPath: keyPath] = value
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -238,12 +234,11 @@ extension EditorSceneAdapter {
             },
             set: { [self] next in
                 let value = minimum.map { Swift.max($0, next) } ?? next
-                guard scene.updateComponent(Vehicle.self, for: entity, { vehicle in
+                guard updateComponentData(Vehicle.self, for: entity, { vehicle in
                     guard case var .tracked(configuration) = vehicle.controller else { return }
                     configuration[keyPath: keyPath] = value
                     vehicle.controller = .tracked(configuration)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -264,12 +259,11 @@ extension EditorSceneAdapter {
             set: { [self] next in
                 var value = minimum.map { Swift.max($0, next) } ?? next
                 value = maximum.map { Swift.min($0, value) } ?? value
-                guard scene.updateComponent(Vehicle.self, for: entity, { vehicle in
+                guard updateComponentData(Vehicle.self, for: entity, { vehicle in
                     guard case var .motorcycle(configuration) = vehicle.controller else { return }
                     configuration[keyPath: keyPath] = value
                     vehicle.controller = .motorcycle(configuration)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -283,12 +277,11 @@ extension EditorSceneAdapter {
                 return configuration.isLeanControllerEnabled
             },
             set: { [self] value in
-                guard scene.updateComponent(Vehicle.self, for: entity, { vehicle in
+                guard updateComponentData(Vehicle.self, for: entity, { vehicle in
                     guard case var .motorcycle(configuration) = vehicle.controller else { return }
                     configuration.isLeanControllerEnabled = value
                     vehicle.controller = .motorcycle(configuration)
                 }) else { return }
-                notifyRevisionChanged()
             }
         )
     }
@@ -298,8 +291,7 @@ extension EditorSceneAdapter {
             get: { [self] in scene.component(Ragdoll.self, for: entity)?.isEnabled ?? false },
             set: { [self] value in
                 guard scene.component(Ragdoll.self, for: entity)?.isEnabled != value else { return }
-                _ = scene.updateComponent(Ragdoll.self, for: entity) { $0.isEnabled = value }
-                notifyRevisionChanged()
+                _ = updateComponentData(Ragdoll.self, for: entity) { $0.isEnabled = value }
             }
         )
     }
@@ -310,8 +302,7 @@ extension EditorSceneAdapter {
             set: { [self] value in
                 let clamped = max(0, min(value, 1))
                 guard scene.component(Ragdoll.self, for: entity)?.blendWeight != clamped else { return }
-                _ = scene.updateComponent(Ragdoll.self, for: entity) { $0.blendWeight = clamped }
-                notifyRevisionChanged()
+                _ = updateComponentData(Ragdoll.self, for: entity) { $0.blendWeight = clamped }
             }
         )
     }

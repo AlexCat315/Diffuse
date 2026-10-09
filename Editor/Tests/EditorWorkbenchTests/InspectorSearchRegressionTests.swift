@@ -26,8 +26,8 @@ struct InspectorSearchRegressionTests {
     func liveSearch() throws { try WorkbenchUITestSupport.withEnvironment { registry, focus in
         var scene = EditorSceneAdapter()
         let entity = scene.scene.createEntity()
-        #expect(scene.addComponent(.rigidBody, to: entity.rawValue))
-        #expect(scene.addComponent(.collider, to: entity.rawValue))
+        #expect(scene.addComponent("rigidbody", to: entity.rawValue))
+        #expect(scene.addComponent("collider", to: entity.rawValue))
         let store = EditorStore()
         store.dispatch(.setSelectedEntity(entity.rawValue))
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
