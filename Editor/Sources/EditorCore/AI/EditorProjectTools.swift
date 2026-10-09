@@ -95,6 +95,11 @@ extension EditorApplication {
         case "get_runtime_state":
             let debug = scene.scene.resource(ScriptDebugState.self) ?? ScriptDebugState()
             result["entity_count"] = scene.scene.snapshot.entityCount
+            let rendered = engine.currentRenderStats()
+            result["render"] = ["frame_index": rendered.frameIndex,
+                                "visible_mesh_instances": rendered.visibleMeshInstanceCount,
+                                "draw_call_count": rendered.drawCallCount,
+                                "viewport_valid": engine.currentViewportSurfaceState().isValid]
             result["unresolved_bindings"] = scene.unresolvedScriptBindingDescriptions(onlyEnabled: true)
             result["scripts"] = debug.entities.keys.sorted(by: { $0.rawValue < $1.rawValue })
                 .filter { scene.scene.contains($0) }.prefix(100).map {
