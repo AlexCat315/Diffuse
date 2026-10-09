@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Validate real Editor windows, MCP compilation/reload, playback, and export.
 
-Runs both idle/event-driven and continuous frame loops. The disposable bundle,
+Runs both idle/event-driven and continuous frame loops on NativeRHI by default.
+Use --renderer wgpu for the reference path. The disposable bundle,
 project, trust decision, logs and transcript stay in a new temporary directory.
+Use --renderer both to compare the two paused Editor window captures as well.
 macOS currently provides the native editor TCP bridge used by this test.
 """
 import argparse
@@ -35,20 +37,37 @@ def executable(package, name):
     raise FileNotFoundError(f"Build {package}'s {name} before running this validation")
 
 
-def wait_for_bridge(child, port, log):
+def wait_for_bridge(child, port, log, renderer):
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         if child.poll() is not None:
             raise RuntimeError(log.read_text()[-8192:])
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                return
+                # Bridge startup can precede scene renderer initialization.
+                startup = log.read_text()
+                if renderer == "wgpu" or "NativeRenderer ready" in startup:
+                    return
         except OSError:
-            time.sleep(0.1)
-    raise TimeoutError("The native editor did not start its MCP bridge")
+            pass
+        time.sleep(0.1)
+    raise TimeoutError(f"The editor did not start its bridge and {renderer} renderer: {log.read_text()[-8192:]}")
 
 
-def validate(directory, continuous):
+def capture_window(port, destination):
+    capture = subprocess.run(["swift", str(ROOT / "scripts/capture-editor-devtools.swift"),
+                              str(port), str(destination)], capture_output=True, text=True, timeout=45)
+    assert capture.returncode == 0, capture.stderr
+    print(capture.stdout.strip(), flush=True)
+
+
+def rendered_game(runtime, previous_frame):
+    rendered = runtime["render"]
+    return (rendered["viewport_valid"] and rendered["frame_index"] > previous_frame
+            and rendered["visible_mesh_instances"] > 0 and rendered["draw_call_count"] > 0)
+
+
+def validate(directory, continuous, renderer):
     directory.mkdir()
     editor = executable("Editor", "EditorApp")
     player = executable("Editor", "GuavaPlayer")
@@ -95,15 +114,30 @@ def validate(directory, continuous):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        devtools_port = probe.getsockname()[1]
     environment = dict(os.environ, GUAVA_MCP_PORT=str(port), GUAVA_EDITOR_STATE_DIRECTORY=str(state),
-                       GUAVA_PLAYER_EXECUTABLE=str(player), GUAVAUI_FORCE_CONTINUOUS_FRAMES="1" if continuous else "0")
+                       GUAVA_PLAYER_EXECUTABLE=str(player), GUAVAUI_FORCE_CONTINUOUS_FRAMES="1" if continuous else "0",
+                       GUAVA_DEVTOOLS="1", GUAVA_DEVTOOLS_PORT=str(devtools_port), GUAVA_DEVTOOLS_AUTO_LOG_TAP="0")
     log = directory / "editor.log"
     with log.open("wb") as output:
-        child = subprocess.Popen([str(macos / "GuavaNativeValidation"), "--project-dir", str(project)],
+        child = subprocess.Popen([str(macos / "GuavaNativeValidation"), "--project-dir", str(project),
+                                  "--renderer", renderer],
                                  stdout=output, stderr=output, env=environment)
     client = None
     try:
-        wait_for_bridge(child, port, log)
+        wait_for_bridge(child, port, log, renderer)
+        if renderer != "wgpu":
+            # Validate the renderer used by the actual application process;
+            # successful simulation/MCP traffic alone cannot prove GPU startup.
+            startup = log.read_text()
+            assert "NativeRenderer ready" in startup, startup[-8192:]
+            assert "[RHIWGPU]" not in startup, startup[-8192:]
+        # The listener can accept connections before the first UI layout and
+        # font rasterization finishes. Wait for a real window frame before
+        # applying the bridge's normal interactive-response deadline.
+        capture_window(devtools_port, directory / "startup-editor.jpg")
         validate_bridge_connections(port)
         client = MCPClient(server, environment)
         client.request("initialize", {"protocolVersion": "2025-11-25", "capabilities": {},
@@ -119,28 +153,33 @@ def validate(directory, continuous):
                                      "expected_sha256": source["sha256"]})
         client.tool("compile_scripts")
         client.tool("save_scene")
+        previous_frame = client.tool("get_runtime_state")["render"]["frame_index"]
         client.tool("set_playback_state", {"state": "playing"})
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             runtime = client.tool("get_runtime_state")
-            if runtime["entity_count"] == 60 and runtime["scripts"]:
+            if runtime["entity_count"] == 60 and runtime["scripts"] and rendered_game(runtime, previous_frame):
                 break
             time.sleep(0.1)
         assert runtime["entity_count"] == 60 and runtime["unresolved_bindings"] == [], runtime
         assert runtime["scripts"][0]["values"]["phase"] == "ready", runtime
         assert runtime["scripts"][0]["values"]["validation_generation"] == "native-loop", runtime
+        assert rendered_game(runtime, previous_frame), runtime
         client.tool("set_playback_state", {"state": "paused"})
         assert client.tool("get_project_info")["playback_state"] == "paused"
+        capture_window(devtools_port, directory / "paused-editor.jpg")
         client.tool("set_playback_state", {"state": "stopped"})
         assert client.tool("get_project_info")["entity_count"] == 1
+        previous_frame = client.tool("get_runtime_state")["render"]["frame_index"]
         client.tool("set_playback_state", {"state": "playing"})
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             restarted = client.tool("get_runtime_state")
-            if restarted["entity_count"] == 60:
+            if restarted["entity_count"] == 60 and rendered_game(restarted, previous_frame):
                 break
             time.sleep(0.1)
         assert restarted["entity_count"] == 60, restarted
+        assert rendered_game(restarted, previous_frame), restarted
         assert restarted["scripts"][0]["values"]["phase"] == "ready", restarted
         client.tool("set_playback_state", {"state": "stopped"})
         exported = client.tool("export_project")
@@ -150,7 +189,11 @@ def validate(directory, continuous):
         validation = subprocess.run([exported["executable"], "--validate-project", "--simulation-frames", "120"],
                                     capture_output=True, text=True, timeout=30, env=isolated_player_environment)
         assert validation.returncode == 0, validation.stderr
-        print(f"{'Continuous' if continuous else 'Event-driven'} native loop passed: compile, reload, Play/Pause/Stop, export", flush=True)
+        application_log = log.read_text()
+        for failure in ("native scene render failed:", "[EngineHost] NativeRHI renderer initialization failed:",
+                        "render failed:"):
+            assert failure not in application_log, application_log[-8192:]
+        print(f"{'Continuous' if continuous else 'Event-driven'} {renderer} loop passed: compile, reload, Play/Pause/Stop, export", flush=True)
         print(validation.stdout.strip(), flush=True)
     finally:
         if client:
@@ -169,14 +212,34 @@ def validate(directory, continuous):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("both", "event-driven", "continuous"), default="both")
+    parser.add_argument("--renderer", choices=("native", "metal", "wgpu", "both"), default="native")
     options = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("The native editor TCP bridge currently requires macOS")
     directory = Path(tempfile.mkdtemp(prefix="guava-native-validation-"))
     print("Validation artifacts:", directory, flush=True)
-    for continuous in (False, True):
-        if options.mode == "both" or (options.mode == "continuous") == continuous:
-            validate(directory / ("continuous" if continuous else "event-driven"), continuous)
+    modes = [continuous for continuous in (False, True)
+             if options.mode == "both" or (options.mode == "continuous") == continuous]
+    renderers = ("native", "wgpu") if options.renderer == "both" else (options.renderer,)
+    for renderer in renderers:
+        renderer_directory = directory / renderer
+        renderer_directory.mkdir()
+        for continuous in modes:
+            validate(renderer_directory / ("continuous" if continuous else "event-driven"), continuous, renderer)
+    if options.renderer == "both":
+        for continuous in modes:
+            mode = "continuous" if continuous else "event-driven"
+            captures = [directory / renderer / mode / "paused-editor.jpg" for renderer in renderers]
+            comparison = subprocess.run(["swift", str(ROOT / "scripts/compare-editor-captures.swift"),
+                                         *map(str, captures)], capture_output=True, text=True, timeout=30)
+            assert comparison.returncode == 0, comparison.stderr
+            report = json.loads(comparison.stdout)
+            (directory / f"{mode}-comparison.json").write_text(json.dumps(report, indent=2) + "\n")
+            # Allow a small amount of dynamic status text. Component tests use
+            # lossless readbacks; these JPEG mirrors cover the assembled window.
+            assert report["meanAbsoluteRGBByteError"] < 0.25, report
+            assert report["pixelsOverThree"] / report["pixelCount"] < 0.001, report
+            print(f"{mode} Editor window comparison passed: {report}", flush=True)
 
 
 if __name__ == "__main__":

@@ -232,6 +232,26 @@ UI 的 logical viewport 和 sRGB 标志改用 16 字节顶点 push constants。s
 
 GuavaUI 全包回归通过，随后修改的数组计数读取经 Release 的 11 项 draw-list 回归验证，变化几何的绑定复用测试另行通过。Slang 工具链 9 项测试通过，包括两个 UI 阶段在 Metal / SPIR-V 上的反射契约。Swift maintainability 检查通过，未增加既有超限指标。
 
+## 真实 Editor 循环与整窗对照
+
+`validate-editor-native-loop.py` 现在默认显式选择 NativeRHI；`--renderer both` 顺序运行 NativeRHI / WGPU 的事件驱动和连续帧循环，并自动比较暂停后的整窗内容。临时 app、项目、布局和脚本信任与日常项目分开。Native 启动须出现 `NativeRenderer ready`，且不能出现 WGPU 初始化或任何渲染失败日志。监听端口可早于首帧布局／字体栅格化开放，脚本先取得非空窗口画面，再检查桥接的交互响应。
+
+`get_runtime_state` 增加已提交帧的编号、可见网格数、draw count 和 viewport 有效性。脚本等待新帧、有效 viewport 和非零可见网格后才暂停截图，避免将已经更新的仿真实体数当作渲染完成。该检查发现 NativeRenderer 漏填 `visibleMeshInstanceCount`；现从相机 visibility plan 填写，与 WGPU 使用相同定义。剔除、LOD 和对照场景的统计回归覆盖此修复。
+
+2026-10-09 Apple M1 Debug 实测四个流程全部通过：独立 TCP 客户端、分段／流水线请求和非法 JSON 恢复；实际 Swift 编译、修改源码并热重载；Play → Pause → Stop → Play 的确定性重启；导出后在没有外部工具链的 PATH 下运行 GuavaPlayer，验证一个编译脚本、60 个实体和 120 个仿真帧。两条 renderer 在两种循环下均发布有效场景 viewport，游戏包含 56 个可见网格。
+
+两种循环的 1440×870 窗口对照均得到 RGB 平均字节误差 0.003259，超过 3 的像素为 37 / 1,252,800，多数位于文字边缘，最大字节误差 85。自动门槛为平均误差 <0.25、超过 3 的像素 <0.1%。这里是实际窗口 DrawList 通过所选 renderer 重新绘制并 readback 的质量 1 JPEG，包含同一 Device 的场景 viewport 和动态 Editor 文字；它补充组件的无损 readback 测试，不等同于系统 compositor 截图或呈现性能验证。[整窗与运行状态报告](benchmarks/native-editor-window-parity-m1.json)。
+
+```sh
+swift build --package-path Editor --jobs 4
+swift build --package-path guava-mcp --product GuavaMCP
+python3 scripts/validate-editor-native-loop.py --renderer both
+# 默认检查两种循环；--mode event-driven / continuous 可单独检查。
+# 临时目录保留每条路径的启动／暂停 JPEG、渲染状态、比较报告和日志。
+```
+
+Editor 的 project tools 三项测试、真实 Native GameApplication Metal viewport 测试和 NativeOpaque 四项测试通过。Swift maintainability 检查通过，未增加既有超限指标。
+
 ## 后续门槛
 
-下一步继续处理多图片工作量的 CPU 回退，并完成全窗口画面对照、呈现性能和持续运行验证。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、Windows DX12 与 Windows/Linux Vulkan 的原生编译／运行验证，以及整个 Editor 场景＋UI 的剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。
+下一步继续处理多图片工作量的 CPU 回退，并完成整个 Editor 的 Release 呈现性能、更多窗口／面板交互和持续运行验证。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。仍须补齐 DXIL 生产产物与可重现生成流程。Windows DX12 和 Windows/Linux Vulkan 的原生编译／运行验证按用户要求暂缓，不作为本机 macOS 迁移验收的前置条件；macOS 只验证 Metal，不引入 MoltenVK。完成本机功能／画面／性能门槛后再切换默认值和删除 WGPU。
