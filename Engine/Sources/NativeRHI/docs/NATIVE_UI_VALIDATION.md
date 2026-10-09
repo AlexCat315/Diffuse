@@ -203,6 +203,35 @@ Metal 每个窗口按 frame slot 复用有限的 texture ID，并通过 graphics
 
 这一步已把主／辅助窗口宿主和 EngineHost 场景线程接到可选 NativeRHI 路径。`AppRuntime.run(backend: .native(device))` 与 `EngineHost(renderDevice: .native(device))` 共用一个 Device，同时各自拥有 swapchain、resize、VSync 和 close 生命周期；WGPU 默认路径仍保留。EditorApp 和 GuavaPlayer 可通过 `--renderer native` 或 `GUAVA_RENDERER=native` 选择当前平台的 NativeRHI；也可显式指定 `metal`、`vulkan` 或 `dx12`，macOS 不启用 MoltenVK。Native 主／辅助窗口、共享设备的场景线程、Native/WGPU DevTools 截图、WGPU 默认多窗口回归和真实 GameApplication NativeRenderer viewport 均已在 Apple M1 通过。整个 Editor 的默认 backend 尚未切换，整个窗口 UI 的画面和呈现性能门槛仍未完成。
 
+## 每次录制的常量与图片绑定
+
+UI 的 logical viewport 和 sRGB 标志改用 16 字节顶点 push constants。sRGB 标志通过 flat varying 传给 fragment；离线编译分别定义两个阶段，避免 Slang 反射把未使用的全局资源也加入接口。Metal 和 SPIR-V 产物已重新生成，加载器验证常量的阶段和字节布局，图片 binding set 仅含 texture / sampler。
+
+图片绑定仍通过 Device 的有界缓存查询，不在 UI 层长期保存可能被淘汰的 BindingSet handle。新增 Metal 回归在同一个 renderer、同一次提交内切换 logical viewport 和线性／sRGB target，连续八帧改变 geometry 大小，跨过三个 frame slots。首次录制后所有图片绑定均命中，后续图片上传为零；两张输出与 WGPU 逐像素一致。现有无效几何的原子失败、多个录制器、大于 4 MiB 的上传、字体、裁剪和 MSAA 回归继续通过。索引校验显式预读数组计数，校验规则不变。
+
+固定工作量的旧 uniform buffer / offset 会随帧环复用，预热后旧 binding set 本来就可以命中。因而不能将这次接口拆分视为消除了稳态图片 CPU 回退。以下仍使用交替先后顺序的 6×180 配对采样、60 帧预热、每三帧等待完成；测量时没有其他编译、测试或 Editor 进程运行。
+
+2026-10-09 Apple M1 Release：
+
+| 工作量／运行 | 分辨率 | CPU p50，Native / WGPU (µs) | CPU p95，Native / WGPU (µs) | completed-batch p50，Native / WGPU (ms/frame) |
+| --- | --- | ---: | ---: | ---: |
+| 96 张图片／改动前 | 1280×720 | 495.250 / 355.958 | 546.416 / 460.833 | 0.794 / 0.934 |
+| 96 张图片／改动前 | 1920×1080 | 548.542 / 440.000 | 630.666 / 592.959 | 1.141 / 1.388 |
+| 96 张图片／首次 | 1280×720 | 530.250 / 429.833 | 652.750 / 585.959 | 0.815 / 0.986 |
+| 96 张图片／确认 | 1280×720 | 534.625 / 432.625 | 567.042 / 629.542 | 0.854 / 1.055 |
+| 96 张图片／首次 | 1920×1080 | 543.667 / 547.417 | 711.542 / 891.417 | 1.254 / 1.627 |
+| 96 张图片／确认 | 1920×1080 | 538.708 / 492.041 | 696.500 / 824.875 | 1.239 / 1.569 |
+| 48 组控件／首次 | 1280×720 | 548.458 / 646.458 | 588.667 / 748.209 | 0.894 / 1.096 |
+| 48 组控件／确认 | 1280×720 | 479.959 / 593.833 | 575.708 / 724.667 | 0.835 / 1.132 |
+| 48 组控件／首次 | 1920×1080 | 554.750 / 686.042 | 697.750 / 746.334 | 1.012 / 1.321 |
+| 48 组控件／确认 | 1920×1080 | 556.750 / 680.625 | 697.625 / 741.875 | 1.003 / 1.322 |
+
+720p 图片 CPU p50 两次仍高约 23%–24%，p95 一次更高、一次更低；1080p CPU p50 一次相近、一次高约 9.5%。普通控件 CPU p50/p95，以及所有工作量的 completed-batch p50/p95 均低于 WGPU。图片预检最大通道误差 1，控件最大通道误差 1，所有稳态图片上传仍为零。CPU 门槛尚未通过，默认 renderer 保留 WGPU。这里没有测量窗口呈现或 UI 重组；completed-batch 不是 GPU timestamp 或显示 FPS。不同运行的绝对 CPU 数值仍有明显调度波动，不据此宣称改动前后的速度提升。
+
+原始基线：[图片 720p](benchmarks/native-ui-image-assets-m1-720-recording-constants-baseline.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-recording-constants-baseline.json)。首次报告：[图片 720p](benchmarks/native-ui-image-assets-m1-720-recording-constants.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-recording-constants.json)、[控件 720p](benchmarks/native-ui-m1-720-recording-constants.json)、[控件 1080p](benchmarks/native-ui-m1-1080-recording-constants.json)。确认报告：[图片 720p](benchmarks/native-ui-image-assets-m1-720-recording-constants-confirmation.json)、[图片 1080p](benchmarks/native-ui-image-assets-m1-1080-recording-constants-confirmation.json)、[控件 720p](benchmarks/native-ui-m1-720-recording-constants-confirmation.json)、[控件 1080p](benchmarks/native-ui-m1-1080-recording-constants-confirmation.json)。
+
+GuavaUI 全包回归通过，随后修改的数组计数读取经 Release 的 11 项 draw-list 回归验证，变化几何的绑定复用测试另行通过。Slang 工具链 9 项测试通过，包括两个 UI 阶段在 Metal / SPIR-V 上的反射契约。Swift maintainability 检查通过，未增加既有超限指标。
+
 ## 后续门槛
 
 下一步继续处理多图片工作量的 CPU 回退，并完成全窗口画面对照、呈现性能和持续运行验证。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。补齐 DXIL 生产产物、Windows DX12 与 Windows/Linux Vulkan 的原生编译／运行验证，以及整个 Editor 场景＋UI 的剩余性能场景；组件级通过不能替代整个 Editor 和 EngineHost 的功能覆盖。完成全部功能／画面／性能门槛后才切换默认值和删除 WGPU。

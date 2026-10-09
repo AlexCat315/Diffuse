@@ -3,10 +3,16 @@
   "parameters": [
     {
       "name": "uniforms",
-      "binding": {
-        "kind": "constantBuffer",
-        "index": 0
-      },
+      "bindings": [
+        {
+          "kind": "constantBuffer",
+          "index": 0
+        },
+        {
+          "kind": "descriptorTableSlot",
+          "index": 0
+        }
+      ],
       "type": {
         "kind": "constantBuffer",
         "elementType": {
@@ -181,46 +187,9 @@
           {
             "kind": "constantBuffer",
             "value": 1
-          }
-        ]
-      }
-    },
-    {
-      "name": "atlas",
-      "binding": {
-        "kind": "shaderResource",
-        "index": 1
-      },
-      "type": {
-        "kind": "resource",
-        "baseShape": "texture2D",
-        "resultType": {
-          "kind": "vector",
-          "elementCount": 4,
-          "elementType": {
-            "kind": "scalar",
-            "scalarType": "float32"
-          }
-        },
-        "sizes": [
+          },
           {
-            "kind": "shaderResource",
-            "value": 1
-          }
-        ]
-      }
-    },
-    {
-      "name": "atlasSampler",
-      "binding": {
-        "kind": "samplerState",
-        "index": 2
-      },
-      "type": {
-        "kind": "samplerState",
-        "sizes": [
-          {
-            "kind": "samplerState",
+            "kind": "descriptorTableSlot",
             "value": 1
           }
         ]
@@ -232,10 +201,16 @@
     "parameters": [
       {
         "name": "uniforms",
-        "binding": {
-          "kind": "constantBuffer",
-          "index": 0
-        },
+        "bindings": [
+          {
+            "kind": "constantBuffer",
+            "index": 0
+          },
+          {
+            "kind": "descriptorTableSlot",
+            "index": 0
+          }
+        ],
         "type": {
           "kind": "constantBuffer",
           "elementType": {
@@ -410,46 +385,9 @@
             {
               "kind": "constantBuffer",
               "value": 1
-            }
-          ]
-        }
-      },
-      {
-        "name": "atlas",
-        "binding": {
-          "kind": "shaderResource",
-          "index": 1
-        },
-        "type": {
-          "kind": "resource",
-          "baseShape": "texture2D",
-          "resultType": {
-            "kind": "vector",
-            "elementCount": 4,
-            "elementType": {
-              "kind": "scalar",
-              "scalarType": "float32"
-            }
-          },
-          "sizes": [
+            },
             {
-              "kind": "shaderResource",
-              "value": 1
-            }
-          ]
-        }
-      },
-      {
-        "name": "atlasSampler",
-        "binding": {
-          "kind": "samplerState",
-          "index": 2
-        },
-        "type": {
-          "kind": "samplerState",
-          "sizes": [
-            {
-              "kind": "samplerState",
+              "kind": "descriptorTableSlot",
               "value": 1
             }
           ]
@@ -657,7 +595,7 @@
         "binding": {
           "kind": "varyingOutput",
           "index": 0,
-          "count": 2
+          "count": 3
         },
         "type": {
           "kind": "struct",
@@ -722,12 +660,32 @@
               },
               "semanticName": "TEXCOORD",
               "semanticIndex": 1
+            },
+            {
+              "name": "srgb",
+              "type": {
+                "kind": "scalar",
+                "scalarType": "float32",
+                "sizes": [
+                  {
+                    "kind": "varyingOutput",
+                    "value": 1
+                  }
+                ]
+              },
+              "stage": "vertex",
+              "binding": {
+                "kind": "varyingOutput",
+                "index": 2
+              },
+              "semanticName": "TEXCOORD",
+              "semanticIndex": 2
             }
           ],
           "sizes": [
             {
               "kind": "varyingOutput",
-              "value": 2
+              "value": 3
             }
           ]
         }
@@ -735,27 +693,18 @@
       "bindings": [
         {
           "name": "uniforms",
-          "binding": {
-            "kind": "constantBuffer",
-            "index": 0,
-            "used": 1
-          }
-        },
-        {
-          "name": "atlas",
-          "binding": {
-            "kind": "shaderResource",
-            "index": 1,
-            "used": 0
-          }
-        },
-        {
-          "name": "atlasSampler",
-          "binding": {
-            "kind": "samplerState",
-            "index": 2,
-            "used": 0
-          }
+          "bindings": [
+            {
+              "kind": "constantBuffer",
+              "index": 0,
+              "used": 1
+            },
+            {
+              "kind": "descriptorTableSlot",
+              "index": 0,
+              "used": 1
+            }
+          ]
         }
       ]
     }
