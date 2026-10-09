@@ -2,52 +2,27 @@
   "stage": "vertex",
   "format": "mslSource",
   "entryPoint": "uiVertex",
-  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCB1aVZlcnRleF9SZXN1bHRfMAp7CiAgICBmbG9hdDQgcG9zaXRpb25fMCBbW3Bvc2l0aW9uXV07CiAgICBmbG9hdDIgdXZfMCBbW3VzZXIoVEVYQ09PUkQpXV07CiAgICBmbG9hdDQgY29sb3JfMCBbW3VzZXIoVEVYQ09PUkRfMSldXTsKfTsKCnN0cnVjdCB2ZXJ0ZXhJbnB1dF8wCnsKICAgIGZsb2F0MiBwb3NpdGlvbl8xIFtbYXR0cmlidXRlKDApXV07CiAgICBmbG9hdDIgdXZfMSBbW2F0dHJpYnV0ZSgxKV1dOwogICAgZmxvYXQ0IGNvbG9yXzEgW1thdHRyaWJ1dGUoMildXTsKfTsKCnN0cnVjdCBVbmlmb3Jtc18wCnsKICAgIGZsb2F0MiB2aWV3cG9ydF8wOwogICAgZmxvYXQgc3JnYl8wOwogICAgZmxvYXQgcGFkZGluZ18wOwp9OwoKc3RydWN0IFZlcnRleF8wCnsKICAgIGZsb2F0NCBwb3NpdGlvbl8yOwogICAgZmxvYXQyIHV2XzI7CiAgICBmbG9hdDQgY29sb3JfMjsKfTsKCltbdmVydGV4XV0gdWlWZXJ0ZXhfUmVzdWx0XzAgdWlWZXJ0ZXgodmVydGV4SW5wdXRfMCBfUzEgW1tzdGFnZV9pbl1dLCBVbmlmb3Jtc18wIGNvbnN0YW50KiB1bmlmb3Jtc18wIFtbYnVmZmVyKDApXV0pCnsKICAgIHRocmVhZCBWZXJ0ZXhfMCBvdXRwdXRfMDsKICAgICgmb3V0cHV0XzApLT5wb3NpdGlvbl8yID0gZmxvYXQ0KF9TMS5wb3NpdGlvbl8xLnggLyB1bmlmb3Jtc18wLT52aWV3cG9ydF8wLnggKiAyLjBmIC0gMS4wZiwgMS4wZiAtIF9TMS5wb3NpdGlvbl8xLnkgLyB1bmlmb3Jtc18wLT52aWV3cG9ydF8wLnkgKiAyLjBmLCAwLjBmLCAxLjBmKTsKICAgICgmb3V0cHV0XzApLT51dl8yID0gX1MxLnV2XzE7CiAgICAoJm91dHB1dF8wKS0+Y29sb3JfMiA9IF9TMS5jb2xvcl8xOwogICAgdGhyZWFkIHVpVmVydGV4X1Jlc3VsdF8wIF9TMjsKICAgICgmX1MyKS0+cG9zaXRpb25fMCA9IG91dHB1dF8wLnBvc2l0aW9uXzI7CiAgICAoJl9TMiktPnV2XzAgPSBvdXRwdXRfMC51dl8yOwogICAgKCZfUzIpLT5jb2xvcl8wID0gb3V0cHV0XzAuY29sb3JfMjsKICAgIHJldHVybiBfUzI7Cn0KCg==",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCB1aVZlcnRleF9SZXN1bHRfMAp7CiAgICBmbG9hdDQgcG9zaXRpb25fMCBbW3Bvc2l0aW9uXV07CiAgICBmbG9hdDIgdXZfMCBbW3VzZXIoVEVYQ09PUkQpXV07CiAgICBmbG9hdDQgY29sb3JfMCBbW3VzZXIoVEVYQ09PUkRfMSldXTsKICAgIGZsb2F0IHNyZ2JfMCBbW3VzZXIoVEVYQ09PUkRfMildXTsKfTsKCnN0cnVjdCB2ZXJ0ZXhJbnB1dF8wCnsKICAgIGZsb2F0MiBwb3NpdGlvbl8xIFtbYXR0cmlidXRlKDApXV07CiAgICBmbG9hdDIgdXZfMSBbW2F0dHJpYnV0ZSgxKV1dOwogICAgZmxvYXQ0IGNvbG9yXzEgW1thdHRyaWJ1dGUoMildXTsKfTsKCnN0cnVjdCBVbmlmb3Jtc18wCnsKICAgIGZsb2F0MiB2aWV3cG9ydF8wOwogICAgZmxvYXQgc3JnYl8xOwogICAgZmxvYXQgcGFkZGluZ18wOwp9OwoKc3RydWN0IFZlcnRleF8wCnsKICAgIGZsb2F0NCBwb3NpdGlvbl8yOwogICAgZmxvYXQyIHV2XzI7CiAgICBmbG9hdDQgY29sb3JfMjsKICAgIFtbZmxhdF1dIGZsb2F0IHNyZ2JfMjsKfTsKCltbdmVydGV4XV0gdWlWZXJ0ZXhfUmVzdWx0XzAgdWlWZXJ0ZXgodmVydGV4SW5wdXRfMCBfUzEgW1tzdGFnZV9pbl1dLCBVbmlmb3Jtc18wIGNvbnN0YW50KiB1bmlmb3Jtc18wIFtbYnVmZmVyKDApXV0pCnsKICAgIHRocmVhZCBWZXJ0ZXhfMCBvdXRwdXRfMDsKICAgICgmb3V0cHV0XzApLT5wb3NpdGlvbl8yID0gZmxvYXQ0KF9TMS5wb3NpdGlvbl8xLnggLyB1bmlmb3Jtc18wLT52aWV3cG9ydF8wLnggKiAyLjBmIC0gMS4wZiwgMS4wZiAtIF9TMS5wb3NpdGlvbl8xLnkgLyB1bmlmb3Jtc18wLT52aWV3cG9ydF8wLnkgKiAyLjBmLCAwLjBmLCAxLjBmKTsKICAgICgmb3V0cHV0XzApLT51dl8yID0gX1MxLnV2XzE7CiAgICAoJm91dHB1dF8wKS0+Y29sb3JfMiA9IF9TMS5jb2xvcl8xOwogICAgKCZvdXRwdXRfMCktPnNyZ2JfMiA9IHVuaWZvcm1zXzAtPnNyZ2JfMTsKICAgIHRocmVhZCB1aVZlcnRleF9SZXN1bHRfMCBfUzI7CiAgICAoJl9TMiktPnBvc2l0aW9uXzAgPSBvdXRwdXRfMC5wb3NpdGlvbl8yOwogICAgKCZfUzIpLT51dl8wID0gb3V0cHV0XzAudXZfMjsKICAgICgmX1MyKS0+Y29sb3JfMCA9IG91dHB1dF8wLmNvbG9yXzI7CiAgICAoJl9TMiktPnNyZ2JfMCA9IG91dHB1dF8wLnNyZ2JfMjsKICAgIHJldHVybiBfUzI7Cn0KCg==",
   "interface": {
     "threadgroupSize": {
       "x": 1,
       "y": 1,
       "z": 1
     },
-    "bindings": [
-      {
-        "name": "uniforms",
-        "slot": 0,
-        "space": 0,
-        "type": "uniformBuffer",
-        "buffer": {
-          "readOnly": true,
-          "elementStride": 0
-        }
-      },
-      {
-        "name": "atlas",
-        "slot": 1,
-        "space": 0,
-        "type": "texture",
-        "buffer": {
-          "readOnly": true,
-          "elementStride": 0
-        }
-      },
-      {
-        "name": "atlasSampler",
-        "slot": 2,
-        "space": 0,
-        "type": "sampler",
-        "buffer": {
-          "readOnly": true,
-          "elementStride": 0
-        }
-      }
-    ],
+    "bindings": [],
     "specializationConstants": [],
     "threadgroupSpecialization": {
       "x": null,
       "y": null,
       "z": null
     },
-    "pushConstants": []
+    "pushConstants": [
+      {
+        "slot": 0,
+        "byteCount": 16,
+        "stage": "vertex"
+      }
+    ]
   },
   "compiler": "Slang 2026.19"
 }
