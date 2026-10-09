@@ -40,8 +40,10 @@ public final class GameApplication: @unchecked Sendable {
     /// trigger recomposition.
     public var onViewportSurfaceChanged: ((ViewportSurfaceState) -> Void)?
 
-    public init(projectDirectory: String? = nil, backend: WGPUBackend? = nil) throws {
-        let resolvedBackend = backend ?? WGPUBackend()
+    public init(projectDirectory: String? = nil,
+                backend: WGPUBackend? = nil,
+                renderDevice: EngineRenderDevice? = nil) throws {
+        let resolvedRenderDevice = renderDevice ?? .wgpu(backend ?? WGPUBackend())
         let scene = EditorSceneAdapter()
         let scriptLoader = GameProjectScriptLoader()
         var compiledScriptCount = 0
@@ -90,7 +92,7 @@ public final class GameApplication: @unchecked Sendable {
             for binding in unresolvedBindings { Self.writeStandardError("unresolved script binding: \(binding)") }
         }
 
-        self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
+        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: resolvedRenderDevice)
         self.scene = scene
         self.scriptCatalogMonitor = scriptMonitor
         self.projectScriptLoader = scriptLoader

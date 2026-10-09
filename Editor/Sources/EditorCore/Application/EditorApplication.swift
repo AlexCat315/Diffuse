@@ -103,13 +103,14 @@ public final class EditorApplication: @unchecked Sendable {
                 seedPreviewScene: Bool = false,
                 backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
+                renderDevice: EngineRenderDevice? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default,
                 initialCapabilitySettings: EditorCapabilitySettings = .default,
                 trustedPluginHostExecutableURL: URL? = nil) throws {
-        self.ownsBackend = backend == nil
         let resolvedBackendConfig = backendConfig ?? .init()
-        let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
+        let resolvedRenderDevice = renderDevice ?? .wgpu(backend ?? WGPUBackend(config: resolvedBackendConfig))
+        self.ownsBackend = backend == nil && renderDevice == nil && resolvedRenderDevice.wgpuBackend != nil
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
@@ -153,7 +154,7 @@ public final class EditorApplication: @unchecked Sendable {
         let projectScriptCatalogMonitor = ProjectScriptCatalogMonitor(
             projectDirectory: projectDirectory
         )
-        self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
+        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: resolvedRenderDevice)
         self.projectDirectory = projectDirectory
         self.store = store
         self.inputState = InputState()

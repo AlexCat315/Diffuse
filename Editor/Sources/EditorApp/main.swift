@@ -1,4 +1,5 @@
 import Foundation
+import EngineCore
 import EngineKernel
 import EditorCore
 import GuavaUIApp
@@ -6,6 +7,7 @@ import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
 import RHIWGPU
+import NativeRHI
 import RenderBackend
 import CardBattleRuntime
 
@@ -81,6 +83,39 @@ private func runEditor() throws {
     try runLegacyEditor(launchOptions: launchOptions)
 }
 
+private func requestedEditorRendererName() throws -> String {
+    if let index = CommandLine.arguments.firstIndex(of: "--renderer") {
+        guard CommandLine.arguments.indices.contains(index + 1) else {
+            throw NSError(domain: "EditorApp", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "--renderer requires wgpu, native, metal, vulkan, or dx12."])
+        }
+        return CommandLine.arguments[index + 1].lowercased()
+    }
+    return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "wgpu"
+}
+
+private func makeEditorRenderDevice(config: WGPUDeviceConfig) throws -> EngineRenderDevice {
+    let requested = try requestedEditorRendererName()
+    guard requested != "wgpu" else { return .wgpu(WGPUBackend(config: config)) }
+    let api: GraphicsAPI
+    switch requested {
+    case "native":
+        guard let platformAPI = NativeRHI.platformDefaultBackends.first else {
+            throw NSError(domain: "EditorApp", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey: "NativeRHI has no backend for this platform."])
+        }
+        api = platformAPI
+    case "metal": api = .metal
+    case "vulkan": api = .vulkan
+    case "dx12", "d3d12": api = .dx12
+    default:
+        throw NSError(domain: "EditorApp", code: 5,
+                      userInfo: [NSLocalizedDescriptionKey: "Unknown renderer '\(requested)'."])
+    }
+    let nativeConfig = DeviceConfig(preferredBackends: [api], enableValidation: true, framesInFlight: 3)
+    return .native(try Device.make(nativeConfig))
+}
+
 @MainActor
 private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     // UI preferences (@AppStorage) live next to the shell-state/layout JSONs
@@ -88,13 +123,13 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     AppStorageDefaults.store = FileAppStorageStore(
         url: FileAppStorageStore.defaultURL(appName: "Guava")
     )
-    let backend = WGPUBackend(config: launchOptions.backendConfig)
+    let renderDevice = try makeEditorRenderDevice(config: launchOptions.backendConfig)
     let events = PlatformEventBridge()
     let shellState = EditorRootViewFactory.loadShellState()
 
     let context = EditorLaunchContext(
         backendConfig: launchOptions.backendConfig,
-        backend: backend,
+        renderDevice: renderDevice,
         events: events,
         shellState: shellState
     )
@@ -104,7 +139,11 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         try context.loadProject(directory: dir)
     }
 
-    let inGameUIHost = InGameUIHost(backend: backend)
+    let inGameUIHost: InGameUIHost
+    switch renderDevice {
+    case .wgpu(let backend): inGameUIHost = InGameUIHost(backend: backend)
+    case .native(let device): inGameUIHost = try InGameUIHost(device: device)
+    }
     InGameUIRegistry.shared.provider = inGameUIHost
     if ProcessInfo.processInfo.environment["GUAVA_EDITOR_SAMPLE_HUD"] == "1" {
         let host = inGameUIHost
@@ -145,7 +184,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                           // while letting the compositor consume the latest UI
                           // frame instead of back-pressuring the editor loop.
                           vsyncPresentMode: .mailbox),
-        backend: .wgpu(backend),
+        backend: renderDevice,
         events: events,
         onTick: { dt in
             context.tick(deltaTime: dt)
