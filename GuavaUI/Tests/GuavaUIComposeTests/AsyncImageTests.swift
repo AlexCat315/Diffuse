@@ -6,7 +6,7 @@ import Testing
 @Suite("Asynchronous image lifecycle", .serialized)
 @MainActor
 struct AsyncImageTests {
-    @Test("Changing source drops old replies and uploads only on the captured UI queue")
+    @Test("Changing source drops old replies and registers CPU assets only on the captured UI queue")
     func sourceReplacement() async throws {
         let gate = ImageDecodeGate(), ui = ImageTestUIQueue()
         let services = makeServices(gate: gate, ui: ui)
@@ -19,19 +19,19 @@ struct AsyncImageTests {
         try await wait { await gate.contains(second) }
         await gate.finish(second)
         try await wait { ui.count > 0 }
-        #expect(ui.uploads == 0)
+        #expect(ui.registrations == 0)
         ui.drain()
-        #expect(ui.uploads == 1)
-        #expect(session.status(for: second) == .success(.init(textureID: 77, width: 2, height: 1)))
+        #expect(ui.registrations == 1)
+        #expect(session.status(for: second) == .success(try #require(ui.asset)))
         await gate.finish(first)
         try await Task.sleep(for: .milliseconds(50))
         ui.drain()
-        #expect(ui.uploads == 1)
-        #expect(session.status(for: second) == .success(.init(textureID: 77, width: 2, height: 1)))
+        #expect(ui.registrations == 1)
+        #expect(session.status(for: second) == .success(try #require(ui.asset)))
         resource.unmount(node: node)
     }
-    @Test("Unmount cancels upload and publishing even if decode already completed")
-    func unmountBeforeUpload() async throws {
+    @Test("Unmount cancels registration and publishing even if decode already completed")
+    func unmountBeforeRegistration() async throws {
         let gate = ImageDecodeGate(), ui = ImageTestUIQueue()
         let resource = AsyncImageResource(), session = AsyncImageSession(), node = Node()
         resource.mount(node: node)
@@ -42,7 +42,7 @@ struct AsyncImageTests {
         try await wait { ui.count > 0 }
         resource.unmount(node: node)
         ui.drain()
-        #expect(ui.uploads == 0)
+        #expect(ui.registrations == 0)
         #expect(session.status(for: request) == .loading)
     }
     @Test("A drawable density change replaces an existing request without rebuilding the node")
@@ -68,8 +68,8 @@ struct AsyncImageTests {
         await gate.finish(first)
         await gate.finish(second)
         try await wait { ui.count > 0 }; ui.drain()
-        #expect(ui.uploads == 1)
-        #expect(session.status(for: second) == .success(.init(textureID: 77, width: 2, height: 1)))
+        #expect(ui.registrations == 1)
+        #expect(session.status(for: second) == .success(try #require(ui.asset)))
         resource.unmount(node: node)
     }
     @Test("A failed request stays settled until its retry identity changes")
@@ -92,7 +92,7 @@ struct AsyncImageTests {
         await gate.finish(retry)
         try await wait { ui.count > 0 }; ui.drain()
         let starts = await gate.startCount
-        #expect(ui.uploads == 1 && starts == 2)
+        #expect(ui.registrations == 1 && starts == 2)
         resource.unmount(node: node)
     }
     @Test("Remote cache keys distinguish host and query; render size and policy are bounded")
@@ -135,10 +135,12 @@ struct AsyncImageTests {
     }
     private func makeServices(gate: ImageDecodeGate, ui: ImageTestUIQueue) -> ImageLoadServices {
         .init(id: "test-images", cached: { _ in nil }, decode: { try await gate.decode($0) },
-              upload: { _, decoded in
+              register: { _, decoded in
                   #expect(Thread.isMainThread)
-                  ui.uploads += 1
-                  return .init(textureID: 77, width: decoded.width, height: decoded.height)
+                  ui.registrations += 1
+                  let asset = try ImageAssetRegistry.Asset(image: decoded)
+                  ui.asset = asset
+                  return asset
               }, enqueue: ui.enqueue)
     }
     private func wait(_ condition: () async -> Bool) async throws {
@@ -170,7 +172,8 @@ private actor ImageDecodeGate {
 private final class ImageTestUIQueue: @unchecked Sendable {
     private let lock = NSLock()
     private var jobs: [() -> Void] = []
-    var uploads = 0
+    var registrations = 0
+    var asset: ImageAssetRegistry.Asset?
     var count: Int { lock.withLock { jobs.count } }
     func enqueue(_ work: @escaping () -> Void) { lock.withLock { jobs.append(work) } }
     func drain() { let jobs = lock.withLock { let result = self.jobs; self.jobs = []; return result }; jobs.forEach { $0() } }

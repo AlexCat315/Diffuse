@@ -5,7 +5,7 @@ import RHIWGPU
 import Testing
 @testable import GuavaUIRuntime
 
-private struct NativeUITiming: Codable {
+private struct NativeUITiming: Encodable {
     let p50Microseconds: Double
     let p95Microseconds: Double
     let sampleCount: Int
@@ -16,7 +16,7 @@ private struct NativeUITiming: Codable {
     }
 }
 
-private struct NativeUIBenchmarkResult: Codable {
+private struct NativeUIBenchmarkResult: Encodable {
     let backend: String
     let cpuFrame: NativeUITiming
     let cpuRecord: NativeUITiming
@@ -29,14 +29,22 @@ private struct NativeUIFrameTiming {
     let submitNanoseconds: UInt64
 }
 
-private struct NativeUIBenchmarkWork: Codable {
+private struct NativeUIBenchmarkWork: Encodable {
     let vertices: Int
     let indices: Int
     let draws: Int
+    let imageAssets: Int
+    let imageAssetBytes: Int
 }
 
-private struct NativeUIBenchmarkReport: Codable {
+private struct NativeUIBenchmarkUploads: Encodable {
+    let initialBytes: Int
+    let steadyStateBytes: Int
+}
+
+private struct NativeUIBenchmarkReport: Encodable {
     let device: String
+    let scenario: String
     let width: Int
     let height: Int
     let samples = 4
@@ -45,6 +53,7 @@ private struct NativeUIBenchmarkReport: Codable {
     let warmup = 30
     let repeats = 3
     let work: NativeUIBenchmarkWork
+    let nativeUploads: NativeUIBenchmarkUploads
     let results: [NativeUIBenchmarkResult]
 }
 
@@ -57,8 +66,40 @@ struct NativeDrawListBenchmarkTests {
         #else
         let context = try NativeUIDrawTestContext(validation: false)
         let scene = try nativeUIScene(context)
-        let list = tiled(scene)
+        try run(context, list: tiled(scene), name: "native-ui")
+        #endif
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["GUAVA_NATIVE_IMAGE_BENCHMARK"] == "1"))
+    func ownedImages() throws {
+        #if DEBUG
+        throw RHIError.invalidArgument("run the image benchmark with swift test -c release")
+        #else
+        let context = try NativeUIDrawTestContext(validation: false)
+        let registry = ImageAssetRegistry(), list = DrawList()
+        for row in 0..<8 { for column in 0..<12 {
+            let index = row * 12 + column
+            var pixels: [UInt8] = []
+            for y in 0..<64 { for x in 0..<64 {
+                pixels.append(contentsOf: [UInt8((index * 17 + x * 3) % 256), UInt8((index * 29 + y * 3) % 256),
+                    UInt8((x * 2 + y * 2) % 256), UInt8(128 + ((x / 8 + y / 8) % 2) * 127)])
+            } }
+            let asset = try registry.register(key: "tile-\(index)", decoded: .init(pixels: pixels, width: 64, height: 64))
+            list.retainResource(asset)
+            list.addRoundedImageQuad(rect: UIRect(x: Float(column * 106 + 2), y: Float(row * 90 + 2), width: 102, height: 86),
+                radius: 8, textureID: asset.textureID, tint: Color(r: 0.9, g: 0.8, b: 1, a: 0.9))
+        } }
+        #expect(list.resources.count == 96)
+        try run(context, list: list, name: "native-ui-image-assets")
+        #endif
+    }
+
+    private func run(_ context: NativeUIDrawTestContext, list: DrawList, name: String) throws {
         let format = NativeUITestFormat.cases[3]
+        var assetCount = 0, assetBytes = 0
+        list.resources.forEach(of: ImageAssetRegistry.Asset.self) { asset in
+            assetCount += 1; assetBytes += asset.image.pixels.count
+        }
         for size in [SIMD2(1280, 720), SIMD2(1920, 1080)] {
             let viewport = NativeUIViewport(pixels: size, logical: SIMD2(1280, 720))
             let (actual, statistics) = try context.nativeImage(list: list, format: format, samples: 4, viewport: viewport)
@@ -84,6 +125,9 @@ struct NativeDrawListBenchmarkTests {
                     let start = DispatchTime.now().uptimeNanoseconds
                     let commands = CommandBuffer()
                     let frame = try context.native.record(list: list, into: commands, target: target, viewport: viewport)
+                    guard frame.statistics.textureUploads == 0 && frame.statistics.drawCalls == statistics.drawCalls else {
+                        throw RHIError.invalidArgument("steady-state native UI work changed or reuploaded textures")
+                    }
                     lastStatistics = frame.statistics
                     let recorded = DispatchTime.now().uptimeNanoseconds
                     try context.device.submit(commands); frame.didSubmit()
@@ -98,29 +142,31 @@ struct NativeDrawListBenchmarkTests {
                 let encoder = try context.backend.createCommandEncoder()
                 let pass = try encoder.beginRenderPass(colorView: referenceMSView, resolveTargetView: referenceOutputView,
                     storeOp: .discard, clearColor: GPUColor(r: 0.07, g: 0.09, b: 0.12, a: 0.5))
-                try context.reference.render(list: list, pass: pass, viewportPx: (UInt32(size.x), UInt32(size.y)),
+                let draws = try context.reference.render(list: list, pass: pass, viewportPx: (UInt32(size.x), UInt32(size.y)),
                     coordinateSpace: (viewport.logical.x, viewport.logical.y))
+                guard draws == statistics.drawCalls else { throw RHIError.invalidArgument("reference UI draw count changed") }
                 pass.end(); let buffer = try encoder.finish()
                 let recorded = DispatchTime.now().uptimeNanoseconds
                 context.backend.submit(buffer)
                 return NativeUIFrameTiming(recordNanoseconds: recorded - start,
                     submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded)
             }, finish: { try context.backend.waitUntilIdle() })
-            let report = NativeUIBenchmarkReport(device: context.device.deviceName, width: size.x, height: size.y,
-                work: NativeUIBenchmarkWork(vertices: list.vertices.count, indices: list.indices.count, draws: statistics.drawCalls),
+            let report = NativeUIBenchmarkReport(device: context.device.deviceName, scenario: name, width: size.x, height: size.y,
+                work: NativeUIBenchmarkWork(vertices: list.vertices.count, indices: list.indices.count, draws: statistics.drawCalls,
+                    imageAssets: assetCount, imageAssetBytes: assetBytes),
+                nativeUploads: NativeUIBenchmarkUploads(initialBytes: statistics.textureUploadBytes, steadyStateBytes: lastStatistics.textureUploadBytes),
                 results: [native, reference])
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let root = ProcessInfo.processInfo.environment["GUAVA_NATIVE_UI_BENCHMARK_OUTPUT"] ?? "/tmp/guava-native-ui-benchmark"
             let directory = URL(fileURLWithPath: root)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let destination = directory.appendingPathComponent("native-ui-m1-\(size.y).json")
+            let destination = directory.appendingPathComponent("\(name)-m1-\(size.y).json")
             try encoder.encode(report).write(to: destination)
             print("UI benchmark report: \(destination.path)")
             for result in report.results {
                 print("\(size): \(result.backend) CPU p50=\(result.cpuFrame.p50Microseconds) us completed p50=\(result.completedBatch.p50Microseconds) us/frame")
             }
         }
-        #endif
     }
 
     private func tiled(_ source: DrawList) -> DrawList {

@@ -37,7 +37,8 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         let list = DrawList()
         image?.draw?(list, .zero)
 
-        #expect(list.batches.first?.textureID == TextureID.none)
+        #expect(list.batches.first?.textureID != TextureID.none)
+        #expect(list.resources.count == 1)
         #expect(list.vertices.count == 4)
         let xs = list.vertices.map(\.posX)
         let ys = list.vertices.map(\.posY)
@@ -70,7 +71,8 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         let list = DrawList()
         image?.draw?(list, .zero)
 
-        #expect(list.batches.first?.textureID == TextureID.none)
+        #expect(list.batches.first?.textureID != TextureID.none)
+        #expect(list.resources.count == 1)
         #expect(list.vertices.count == 4)
         let xs = list.vertices.map(\.posX)
         let ys = list.vertices.map(\.posY)
@@ -83,7 +85,7 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         #endif
     } }
 
-    @Test("Image(file:) emits diagnostics for missing registry and decode failure")
+    @Test("Image(file:) emits diagnostics for decode failure without a registry")
     func emitsDiagnosticsWithoutRegistry() { GlobalTestLock.locked {
         var events: [ImageLoadDiagnostic] = []
         let previous = ImageLoadDiagnostics.onEvent
@@ -103,7 +105,7 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         graph.computeLayout(width: 64, height: 64)
 
         #expect(events.count >= 1)
-        #expect(events.contains { $0.reason == .missingRegistry })
+        #expect(events.contains { $0.reason == .decodeFailed })
     } }
 
     @Test("missing bundle resource emits a diagnostic and uses the empty texture")
@@ -120,7 +122,7 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         )
         let image = Image(resource: resource, width: 24, height: 24)
 
-        #expect(image.textureID == .none)
+        #expect(image.source.textureID == .none)
         #expect(events.contains { $0.reason == .resourceNotFound })
     } }
 

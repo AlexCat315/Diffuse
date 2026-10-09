@@ -219,6 +219,10 @@ struct RatingTests: GuavaUIComposeSerializedSuite {
             let node = host(graph), list = DrawList()
             node.draw?(list, .zero)
             #expect(list.vertices.count == 32)
+            var retainedIDs = Set<TextureID>()
+            list.resources.forEach(of: ImageAssetRegistry.Asset.self) { retainedIDs.insert($0.textureID) }
+            #expect(retainedIDs.count == 2)
+            #expect(Set(list.batches.map(\.textureID)) == retainedIDs)
             let fractional = list.batches.compactMap(\.scissor).filter { $0.width == 10 }
             #expect(fractional.count == 1 && fractional[0].x == 72 && fractional[0].height == 20)
             #expect(list.currentClip == nil)

@@ -4,13 +4,11 @@ import CoreGraphics
 import Foundation
 import GuavaUIRuntime
 
-/// Bitmap image primitive backed by a renderer-registered RGBA texture.
+/// Bitmap image primitive backed by an owned CPU asset or a registered GPU texture.
 ///
-/// The host registers the texture once via
-/// `DrawListRenderer.registerColorTexture(id:pixels:width:height:)` and then
-/// passes the resulting `TextureID` to `Image`. The primitive emits a single
-/// quad sized by the explicit `width` / `height`; layout treats those as
-/// fixed dimensions (no intrinsic aspect ratio inference yet).
+/// File images retain their decoded asset with the draw list. Native and WGPU
+/// renderers upload it on first use. Hosts can also supply a manually registered
+/// `TextureID`. Layout uses the explicit logical `width` and `height`.
 ///
 /// `tint` multiplies the sampled RGBA. Pass `.white` (default) for an
 /// untouched bitmap, or any other color to recolour an opaque shape (acts as
@@ -28,22 +26,36 @@ public struct Image: _PrimitiveView {
         case alphaMask
     }
 
-    public let textureID: TextureID
+    public enum Source: Sendable, Equatable {
+        case texture(TextureID, size: SIMD2<Float>? = nil)
+        case asset(ImageAssetRegistry.Asset)
+
+        var textureID: TextureID {
+            switch self { case .texture(let id, _): id; case .asset(let asset): asset.textureID }
+        }
+        var sourcePixelSize: (width: Float, height: Float)? {
+            switch self {
+            case .texture(_, let size): size.map { ($0.x, $0.y) }
+            case .asset(let asset): (Float(asset.image.width), Float(asset.image.height))
+            }
+        }
+        func retain(in list: DrawList) {
+            if case .asset(let asset) = self { list.retainResource(asset) }
+        }
+    }
+    public let source: Source
     public let width: Float
     public let height: Float
     public let tint: Color
-    public let sourcePixelSize: (width: Float, height: Float)?
     public let contentMode: ContentMode
     public let renderingMode: RenderingMode
     var vectorSourceURL: URL? = nil
 
     private struct PaintIdentity: Equatable {
-        let textureID: TextureID
+        let source: Source
         let width: Float
         let height: Float
         let tint: Color
-        let sourceWidth: Float?
-        let sourceHeight: Float?
         let contentMode: ContentMode
         let renderingMode: RenderingMode
         let vectorSourceURL: URL?
@@ -56,13 +68,14 @@ public struct Image: _PrimitiveView {
                 sourcePixelSize: (width: Float, height: Float)? = nil,
                 contentMode: ContentMode = .stretch,
                 renderingMode: RenderingMode = .color) {
-        self.textureID = textureID
-        self.width = width
-        self.height = height
-        self.tint = tint
-        self.sourcePixelSize = sourcePixelSize
-        self.contentMode = contentMode
-        self.renderingMode = renderingMode
+        self.init(source: .texture(textureID, size: sourcePixelSize.map { SIMD2($0.width, $0.height) }),
+            width: width, height: height, tint: tint, contentMode: contentMode, renderingMode: renderingMode)
+    }
+
+    public init(source: Source, width: Float, height: Float, tint: Color = .white,
+        contentMode: ContentMode = .stretch, renderingMode: RenderingMode = .color) {
+        self.source = source; self.width = width; self.height = height
+        self.tint = tint; self.contentMode = contentMode; self.renderingMode = renderingMode
     }
 
     public func _makeNode() -> Node {
@@ -73,13 +86,11 @@ public struct Image: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let snap = self
-        let vectorRaster = vectorSourceURL.map { VectorImageRaster(url: $0, initial: Image.ResolvedTexture(textureID: textureID, sourcePixelSize: sourcePixelSize), width: width, height: height) }
-        node.updateDraw(identity: PaintIdentity(textureID: textureID,
+        let vectorRaster = vectorSourceURL.map { VectorImageRaster(url: $0, initial: source, width: width, height: height) }
+        node.updateDraw(identity: PaintIdentity(source: source,
                                                 width: width,
                                                 height: height,
                                                 tint: tint,
-                                                sourceWidth: sourcePixelSize?.width,
-                                                sourceHeight: sourcePixelSize?.height,
                                                 contentMode: contentMode,
                                                 renderingMode: renderingMode,
                                                 vectorSourceURL: vectorSourceURL)) { list, origin in
@@ -99,9 +110,10 @@ public struct Image: _PrimitiveView {
                                    y: Float(origin.y),
                                    width: drawWidth,
                                    height: drawHeight)
-            let asset = vectorRaster?.resolve(width: drawWidth, height: drawHeight)
-            let texture = asset?.textureID ?? snap.textureID
-            let geometry = ImageGeometry(container: container, source: asset?.sourcePixelSize ?? snap.sourcePixelSize, mode: snap.contentMode)
+            let resolved = vectorRaster?.resolve(width: drawWidth, height: drawHeight) ?? snap.source
+            resolved.retain(in: list)
+            let texture = resolved.textureID
+            let geometry = ImageGeometry(container: container, source: resolved.sourcePixelSize, mode: snap.contentMode)
             var rect = geometry.rect
             if snap.renderingMode == .alphaMask {
                 let scale = ContentScaleHolder.current
