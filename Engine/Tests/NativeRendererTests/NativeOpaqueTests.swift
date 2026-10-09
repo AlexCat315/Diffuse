@@ -48,6 +48,7 @@ final class NativeOpaqueTests: XCTestCase {
             levelsOfDetail: [RenderMeshLOD(meshIndex: 46,minimumDistance: 1)]), transform: matrix_identity_float4x4),
             RenderInstance(meshIndex: 45,transform: distant)]
         try renderer.renderChecked(packet: packet)
+        XCTAssertEqual(renderer.lastFrameStats.visibleMeshInstanceCount,1)
         XCTAssertEqual(renderer.lastFrameStats.culledMeshInstanceCount,1)
         XCTAssertEqual(renderer.lastFrameStats.lodMeshInstanceCount,1)
         XCTAssertEqual(renderer.lastFrameStats.submittedMeshTriangleCount,1)
@@ -56,6 +57,8 @@ final class NativeOpaqueTests: XCTestCase {
         XCTAssertEqual(renderer.lastFrameStats.submittedMeshTriangleCount,12)
         packet.renderSettings.enableFrustumCulling = false; packet.renderSettings.enableMeshInstancing = false
         try renderer.renderChecked(packet: packet)
+        XCTAssertEqual(renderer.lastFrameStats.visibleMeshInstanceCount,2)
+        XCTAssertEqual(renderer.lastFrameStats.culledMeshInstanceCount,0)
         XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass],2)
         XCTAssertEqual(renderer.lastFrameStats.submittedMeshTriangleCount,24)
         try device.waitUntilIdle()
@@ -128,6 +131,7 @@ final class NativeOpaqueTests: XCTestCase {
             XCTAssertLessThan(delta.meanAbsoluteChannelError, 0.5, "\(api) \(mode): \(delta)")
             XCTAssertLessThan(delta.pixelsOverThree, delta.pixelCount / 100, "\(api) \(mode): \(delta)")
             XCTAssertEqual(renderer.lastFrameStats.submittedMeshTriangleCount, reference.renderer.lastFrameStats.submittedMeshTriangleCount)
+            XCTAssertEqual(renderer.lastFrameStats.visibleMeshInstanceCount, reference.renderer.lastFrameStats.visibleMeshInstanceCount)
             XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], reference.renderer.lastFrameStats.passDrawCallCounts[.basePass])
             XCTAssertGreaterThan(renderer.lastFrameStats.instancedMeshBatchCount, 0)
         }

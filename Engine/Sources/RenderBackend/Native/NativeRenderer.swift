@@ -227,6 +227,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         stats.cpuPrepareNS = prepareEnd - start; stats.cpuEncodeNS = encoded - prepareEnd
         stats.cpuPostProcessEncodeNS = [.inkPaperPost,.ssao,.ssr,.taa,.bloom,.tonemap,.fxaa].reduce(0) { $0 + (passTimes[$1] ?? 0) }
         stats.cpuSubmitNS = end - encoded; stats.cpuFrameTotalNS = end - start
+        stats.visibleMeshInstanceCount = prepared.visibility.visibleIndices.count
         stats.culledMeshInstanceCount = prepared.visibility.culledCount; stats.lodMeshInstanceCount = prepared.visibility.lodCount
         stats.shadowedLightCount = shadowPlan.shadowedLightCount
         stats.shadowTileCount = shadowPlan.shadowTileCount
