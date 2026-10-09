@@ -32,10 +32,8 @@ extension MetalDevice {
         layoutEntries: [BindingLayoutEntry],
         setEntries: [BindingSetEntry]
     ) throws {
-        // The frontend already validated entry counts and resource types; here
-        // we record each entry with its layout stage/type for encoder-time use.
-        // Dictionary insertion cannot fail, but it is never a silent no-op:
-        // every set is stored and bound when referenced.
+        // Resolve immutable bindings once, as WGPU's Metal BindGroup and
+        // slang-rhi's BindingData do. Encoding no longer looks up each resource.
         for entry in layoutEntries {
             if entry.type == .uniformBuffer || entry.type == .storageBuffer || entry.type == .accelerationStructure {
                 try rhiRequire(entry.slot < UInt32(kMetalVertexBufferBaseIndex),
@@ -45,19 +43,19 @@ extension MetalDevice {
         var resolved: [MetalBoundEntry] = []
         resolved.reserveCapacity(setEntries.count)
         for setEntry in setEntries {
-            try validateBindingResource(setEntry.resource)
-            let layout = layoutEntries.first(where: { $0.slot == setEntry.slot })
+            guard let layout = layoutEntries.first(where: { $0.slot == setEntry.slot }) else {
+                throw RHIError.layoutMismatch("binding is missing its layout entry")
+            }
             resolved.append(MetalBoundEntry(
                 slot: setEntry.slot,
-                type: layout?.type ?? .texture,
-                visibility: layout?.visibility ?? .fragment,
-                resource: setEntry.resource
+                visibility: layout.visibility,
+                resource: try resolveBindingResource(setEntry.resource)
             ))
         }
         registries.bindingSets[handle.id] = MetalBindingSet(entries: resolved)
     }
 
-    func validateBindingResource(_ resource: BindingResource) throws {
+    private func resolveBindingResource(_ resource: BindingResource) throws -> MetalBoundResource {
         switch resource {
         case .uniformBuffer(let handle, let offset, _), .storageBuffer(let handle, let offset):
             guard let buffer = registries.buffers[handle.id], offset >= 0, offset < buffer.length else {
@@ -67,13 +65,28 @@ extension MetalDevice {
                 try rhiRequire(size > 0, "uniform binding size must be positive")
                 try rhiByteRange(offset: offset, size: size, capacity: buffer.length)
             }
+            return MetalBoundResource(id: handle.id, value: .buffer(buffer, offset: offset))
         case .texture(let handle), .storageTexture(let handle):
-            try rhiRequire(registries.textures[handle.id] != nil, "binding references an unknown texture")
+            guard let texture = registries.textures[handle.id] else {
+                throw RHIError.invalidArgument("binding references an unknown texture")
+            }
+            // Swapchain drawables are framebuffer-only and can change their
+            // native object under a frame-slot handle. They cannot be cached
+            // as sampled/storage bindings.
+            let usage: MTLTextureUsage
+            if case .storageTexture = resource { usage = [.shaderRead, .shaderWrite] } else { usage = .shaderRead }
+            try rhiRequire(!texture.usage.intersection(usage).isEmpty, "texture lacks its binding's shader usage")
+            return MetalBoundResource(id: handle.id, value: .texture(texture))
         case .sampler(let handle):
-            try rhiRequire(registries.samplers[handle.id] != nil, "binding references an unknown sampler")
+            guard let sampler = registries.samplers[handle.id] else {
+                throw RHIError.invalidArgument("binding references an unknown sampler")
+            }
+            return MetalBoundResource(id: handle.id, value: .sampler(sampler))
         case .accelerationStructure(let handle):
-            try rhiRequire(registries.accelerationStructures[handle.id] != nil,
-                           "binding references an unknown acceleration structure")
+            guard let structure = registries.accelerationStructures[handle.id] else {
+                throw RHIError.invalidArgument("binding references an unknown acceleration structure")
+            }
+            return MetalBoundResource(id: handle.id, value: .accelerationStructure(structure))
         }
     }
 

@@ -90,6 +90,7 @@ extension MetalDevice {
     }
 
     public func destroyAccelerationStructure(_ handle: AccelerationStructure) {
+        registries.bindingSets.removeAll(referencing: handle.id)
         registries.accelerationStructures[handle.id] = nil
     }
 }
