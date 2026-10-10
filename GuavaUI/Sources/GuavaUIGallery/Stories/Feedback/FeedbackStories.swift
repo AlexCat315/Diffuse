@@ -16,8 +16,30 @@ struct IntroductionStory: View {
 
 struct BadgeStory: View {
     var body: some View {
-        StorySection("Status tones", "Semantic status labels inherit the active theme.") {
-            Row(alignment: .center, spacing: 12) { for tone in StatusTone.allCases { Badge(String(describing: tone).capitalized, tone: tone) } }
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Status tones", "Semantic status labels inherit the active theme.") {
+                Row(alignment: .center, spacing: 12) { for tone in StatusTone.allCases { Badge(String(describing: tone).capitalized, tone: tone) } }
+            }
+            StorySection("Variants", "Soft reads inside dense content, solid is a single callout, and outline sits beside a bordered surface.") {
+                Row(alignment: .center, spacing: 12) {
+                    Badge("Running") { $0.tone = .success; $0.variant = .soft }
+                    Badge("Running") { $0.tone = .success; $0.variant = .solid }
+                    Badge("Running") { $0.tone = .success; $0.variant = .outline }
+                }
+            }
+            StorySection("Glyphs, dots and density", "The glyph carries the same meaning as the colour, so the tone survives a monochrome theme.") {
+                Row(alignment: .center, spacing: 12) {
+                    Badge("Passing") { $0.tone = .success; $0.icon = UIIcons.Status.checkCircle }
+                    Badge("3 failures") { $0.tone = .danger; $0.showsDot = true }
+                    Badge("Unverified") { $0.tone = .neutral; $0.isEnabled = false }
+                }
+                Row(alignment: .center, spacing: 8) {
+                    Badge("Mini") { $0.tone = .info; $0.variant = .solid }.controlSize(.mini)
+                    Badge("Small") { $0.tone = .info; $0.variant = .solid }.controlSize(.small)
+                    Badge("Medium") { $0.tone = .info; $0.variant = .solid }.controlSize(.regular)
+                    Badge("Large") { $0.tone = .info; $0.variant = .solid }.controlSize(.large)
+                }
+            }
         }
     }
 }
@@ -37,11 +59,24 @@ struct ProgressStory: View {
     let options: GalleryOptions
     @State private var progress = 0.45
     var body: some View {
-        StorySection("Progress & activity", "Determinate progress clamps to its range; the spinner stops when its owning node unmounts.") {
-            ProgressView(value: progress)
-            Slider(value: $progress, isEnabled: options.isEnabled)
-            Text("\(Int(progress * 100))% complete").font(.caption).foregroundColor(.onSurfaceMuted)
-            Row(alignment: .center, spacing: 12) { Spinner(); Text("Working…").font(.body); Button("Uploading…", isLoading: true) {} }
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Progress & activity", "Determinate progress clamps to its range; the spinner stops when its owning node unmounts.") {
+                ProgressView(value: progress)
+                ProgressView(value: progress) { $0.tone = .success; $0.height = 8 }
+                Slider(value: $progress, isEnabled: options.isEnabled)
+                Text("\(Int(progress * 100))% complete").font(.caption).foregroundColor(.onSurfaceMuted)
+                Row(alignment: .center, spacing: 12) { Spinner(); Text("Working…").font(.body); Button("Uploading…", isLoading: true) {} }
+            }
+            StorySection("Indeterminate", "Used when the total work is unknown — a fabricated percentage that never advances is worse than admitting the wait.") {
+                ProgressView(value: nil)
+                ProgressView(value: nil) { $0.tone = .warning }
+                Row(alignment: .center, spacing: 16) {
+                    ProgressCircle(value: progress, diameter: 44) { $0.showsValue = true }
+                    ProgressCircle(value: progress, diameter: 28) { $0.tone = .success }
+                    ProgressCircle(value: nil, diameter: 44) { $0.tone = .info }
+                    ProgressCircle(value: 0.72, diameter: 56) { $0.showsValue = true; $0.tone = .warning }
+                }
+            }
         }
     }
 }
@@ -142,6 +177,10 @@ public extension GalleryPage {
         case .dialog: AnyView(DialogStory())
         case .alertDialog: AnyView(AlertDialogStory())
         case .sheet: AnyView(SheetStory(options: options))
+        case .commandPalette: AnyView(CommandPaletteStory())
+        case .hoverCard: AnyView(HoverCardStory())
+        case .timeline: AnyView(TimelineStory())
+        case .toolbar: AnyView(ToolbarStory(options: options))
         }
     }
 }

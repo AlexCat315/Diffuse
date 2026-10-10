@@ -25,7 +25,7 @@ public struct AvatarAppearance {
     public var shape: AvatarShape = .circle
     public var borderWidth: Float = 1
     public var colors: AvatarColors?
-    public var placeholder = UICommonIcons.user
+    public var placeholder = UIIcons.User.user
     public var retryID = 0
     public init() {}
     mutating func validate() {

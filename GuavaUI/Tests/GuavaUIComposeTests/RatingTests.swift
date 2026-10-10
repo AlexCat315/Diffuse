@@ -208,7 +208,7 @@ struct RatingTests: GuavaUIComposeSerializedSuite {
 
     @Test("Fractional fills clip matching SVG stars and focused ratings paint a visible ring")
     func paint() throws {
-        for resource in [UICommonIcons.star, UICommonIcons.starFill] {
+        for resource in [UIIcons.Status.star, UIIcons.Status.starFill] {
             let url = try #require(resource.url)
             let bitmap = try ImageDecoder.decode(url: url, targetSize: (40, 40))
             #expect(bitmap.width == 40 && bitmap.height == 40)

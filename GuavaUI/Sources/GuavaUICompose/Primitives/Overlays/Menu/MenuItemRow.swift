@@ -166,7 +166,7 @@ struct MenuItemRowHost: _PrimitiveView {
                 // unchecked title toward the centre of the menu.
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
                     if item.isSelected {
-                        Icon(UICommonIcons.checkmark, size: checkmarkSize, color: titleColor)
+                        Icon(UIIcons.Action.check, size: checkmarkSize, color: titleColor)
                             .opacity(textOpacity)
                     }
                 }
@@ -180,7 +180,7 @@ struct MenuItemRowHost: _PrimitiveView {
                 .clipped()
                 .flex()
             if item.hasSubmenu {
-                Icon(UICommonIcons.chevronRight, size: 12, color: titleColor)
+                Icon(UIIcons.Navigation.chevronRight, size: 12, color: titleColor)
             } else if let shortcut = item.shortcut {
                 Text(shortcut)
                     .lineLimit(1)

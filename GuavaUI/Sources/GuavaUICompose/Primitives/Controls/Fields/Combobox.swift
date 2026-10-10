@@ -62,11 +62,11 @@ public struct Combobox<Value: Hashable>: View {
                 Text(title).lineLimit(1).font(.label).foregroundColor(selection.wrappedValue == nil ? .placeholder : .onSurface)
                 Spacer()
                 if presentation.isClearable, selection.wrappedValue != nil {
-                    Button(icon: .resource(UICommonIcons.close), size: 12, isEnabled: presentation.isEnabled,
+                    Button(icon: .resource(UIIcons.Action.x), size: 12, isEnabled: presentation.isEnabled,
                            tooltip: "Clear selection") { selection.wrappedValue = nil }
                         .buttonStyle(.ghost).controlSize(.mini)
                 }
-                Icon(UICommonIcons.chevronDown, size: 10)
+                Icon(UIIcons.Navigation.chevronDown, size: 10)
             }.padding(horizontal: 10).frame(height: 32).background(.surface).cornerRadius(6).border(.border, width: 1)
         }, content: {
             Box(direction: .column, alignItems: .stretch, spacing: 6) {
@@ -95,7 +95,7 @@ public struct Combobox<Value: Hashable>: View {
                         Row(alignment: .center, spacing: 8) {
                             Text(option.label).font(.label).foregroundColor(option.isEnabled ? .onSurface : .onSurfaceDisabled)
                             Spacer()
-                            if option.value == selection.wrappedValue { Icon(UICommonIcons.checkmark, size: 12) }
+                            if option.value == selection.wrappedValue { Icon(UIIcons.Action.check, size: 12) }
                         }
                     }.frame(height: Float(min(presentation.maxVisibleRows, matches.count)) * 32).flex(0, shrink: 0)
                 }
