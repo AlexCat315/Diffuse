@@ -35,6 +35,10 @@ private struct NativeUISubmissionPhases: Encodable {
     let encoderCreation: NativeUITiming
     let commandReplay: NativeUITiming
     let bindingApply: NativeUITiming
+    /// Minimum planning time across the measured frames. If this is far below
+    /// `planning.p50`, the per-frame planning collapses after the first frame
+    /// (steady state); if it tracks p50, planning re-runs in full every frame.
+    let planningMinMicroseconds: Double
 
     init(_ profiles: [SubmissionCPUProfile]) {
         validation = NativeUITiming(profiles.map { Double($0.validationNanoseconds) / 1000 })
@@ -45,6 +49,7 @@ private struct NativeUISubmissionPhases: Encodable {
         encoderCreation = NativeUITiming(profiles.map { Double($0.encoderCreationNanoseconds) / 1000 })
         commandReplay = NativeUITiming(profiles.map { Double($0.commandReplayNanoseconds) / 1000 })
         bindingApply = NativeUITiming(profiles.map { Double($0.bindingApplyNanoseconds) / 1000 })
+        planningMinMicroseconds = profiles.map { Double($0.planningNanoseconds) / 1000 }.min() ?? 0
     }
 }
 
