@@ -49,7 +49,7 @@ struct InspectorPanel: View {
                 globalIDs.contains($0.id) == showingSceneSettings
                     && InspectorWorkspacePolicy.allows($0, scene: scene, in: store.workspaceMode)
                     && (sectionFilter?.contains($0.id) ?? true)
-            }.map(InspectorSectionPresentation.presentedSection).sorted {
+            }.map { scene.inspectorRenderers.presentedSection($0) }.sorted {
                 Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
             }
             let collapsedIDs = store.inspectorCollapsedSectionIDs
@@ -514,7 +514,10 @@ struct InspectorPanel: View {
                                   collapsedIDs: Set<String>,
                                   identity: String,
                                   isEditable: Bool) -> [PropertyGridSection] {
-        func row(for field: EditorInspectorField, sectionID: String) -> PropertyGridRow {
+        /// `requiresDirectMatch` keeps search from unfolding every binding of a
+        /// grouped form: only rows whose label or value matches stay expanded.
+        func row(for field: EditorInspectorField, sectionID: String,
+                 requiresDirectMatch: Bool = false) -> PropertyGridRow {
             let isAdvanced = field.presentation == .advanced
             let fieldID = "\(sectionID)/\(field.id)"
             let value = propertyValue(field, identity: "\(identity)/\(fieldID)", isEditable: isEditable)
@@ -523,7 +526,7 @@ struct InspectorPanel: View {
                     let query = searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
                     let directlyMatches = field.label.range(of: query, options: .caseInsensitive) != nil
                         || field.value.readOnlyDescription.range(of: query, options: .caseInsensitive) != nil
-                    return (!query.isEmpty && (!sectionID.hasPrefix("scripts/") || directlyMatches))
+                    return (!query.isEmpty && (!requiresDirectMatch || directlyMatches))
                         || expandedAdvancedFieldIDs.contains(fieldID)
                 },
                 set: { expanded in
@@ -549,77 +552,44 @@ struct InspectorPanel: View {
 
         return sections.flatMap { section -> [PropertyGridSection] in
             let startsCollapsed = collapsedIDs.contains(section.id)
-            if section.id == "scripts" {
-                let children = section.groups.map { group -> PropertyGridSection in
-                    let fields = group.fieldIDs.compactMap { id in section.fields.first { $0.id == id } }
-                    let enabled = section.fields.first { $0.id == group.enabledFieldID }
-                    let leading: AnyView?
-                    if case let .bool(binding)? = enabled?.value {
-                        leading = AnyView(Checkbox(isOn: binding, isEnabled: isEditable)
-                            .debugName("inspector-script-enabled-\(group.id)"))
-                    } else { leading = nil }
-                    let document = scripts?.wrappedValue.documents.first { document in
-                        document.file.identifier == group.sourceIdentifier
-                            || document.file.legacyIdentifiers.contains(group.sourceIdentifier ?? "")
-                    }
-                    var rows: [PropertyGridRow] = []
-                    var previousGroup: String?
-                    for field in fields {
-                        if let propertyGroup = field.group, propertyGroup != previousGroup {
-                            rows.append(PropertyGridRow(id: "group-\(propertyGroup)", label: "", rowHeight: 22,
-                                                        layout: .fullWidth, sizing: .intrinsic) {
-                                Text(propertyGroup).font(.caption).foregroundColor(.onSurfaceVariant)
-                            })
-                        }
-                        previousGroup = field.group
-                        if field.id.hasSuffix("-issues") || field.id.hasSuffix("-interface"),
-                           case .readOnly(let message) = field.value {
-                            rows.append(PropertyGridRow(id: field.id, label: "", layout: .fullWidth, sizing: .intrinsic) {
-                                Text(message, lineLimit: 3).font(.caption)
-                                    .foregroundColor(field.id.hasSuffix("-issues") ? .warning : .onSurfaceMuted)
-                                    .debugName("inspector-script-message-\(group.id)/\(field.id)")
-                            })
-                        } else {
-                            rows.append(row(for: field, sectionID: group.id))
-                        }
-                    }
-                    return PropertyGridSection(id: group.id, title: group.title,
-                        rows: rows,
-                        isCollapsible: true, startsCollapsed: startsCollapsed,
-                        headerLeading: leading,
-                        headerTrailing: AnyView(InspectorScriptHeaderActions(group: group, fields: section.fields,
-                            document: document, isEditable: isEditable, isPaused: store.playbackState == .paused, onOpenScript: onOpenScript)),
-                        showsRowCount: false)
-                }
-                let emptyFields = section.groups.isEmpty ? section.fields.filter { $0.id != "script-add" } : []
-                let footer = AnyView(InspectorScriptAddButton(options: scene.availableScriptOptions,
-                    isEnabled: isEditable && store.selectedEntityIDs.count <= 1) { identifier in
+            let layout = section.componentTypeID.map { scene.inspectorRenderers.layout(forComponentTypeID: $0) }
+                ?? .standard
+            switch layout {
+            case .scriptBindings:
+                return InspectorScriptSectionLayout.sections(for: section, context: .init(
+                    collapsedIDs: collapsedIDs,
+                    startsCollapsed: startsCollapsed,
+                    isEditable: isEditable,
+                    isPaused: store.playbackState == .paused,
+                    canAddScript: isEditable && store.selectedEntityIDs.count <= 1,
+                    documents: scripts?.wrappedValue.documents ?? [],
+                    addOptions: scene.availableScriptOptions,
+                    onOpenScript: onOpenScript,
+                    addScript: { identifier in
                         guard let id = store.selectedEntityID else { return }
                         _ = scene.addScriptBinding(to: id, identifier: identifier)
-                    })
-                return [PropertyGridSection(id: section.id, title: section.title,
-                    rows: emptyFields.map { row(for: $0, sectionID: section.id) },
-                    isCollapsible: true, startsCollapsed: startsCollapsed, children: children,
-                    footer: footer, badge: String(section.groups.count), showsRowCount: false)]
-            }
-            if section.id == "particle-emitter" {
+                    },
+                    row: { field, sectionID in
+                        row(for: field, sectionID: sectionID, requiresDirectMatch: true)
+                    }))
+            case .particleModules:
                 return InspectorParticlePropertyLayout.sections(
                     for: section,
                     collapsedIDs: collapsedIDs,
                     parentStartsCollapsed: startsCollapsed,
-                    rowBuilder: row
+                    rowBuilder: { field, sectionID in row(for: field, sectionID: sectionID) }
                 )
+            case .standard:
+                return [
+                    PropertyGridSection(
+                        id: section.id,
+                        title: section.title,
+                        rows: section.fields.map { row(for: $0, sectionID: section.id) },
+                        isCollapsible: true,
+                        startsCollapsed: startsCollapsed
+                    )
+                ]
             }
-
-            return [
-                PropertyGridSection(
-                    id: section.id,
-                    title: section.title,
-                    rows: section.fields.map { row(for: $0, sectionID: section.id) },
-                    isCollapsible: true,
-                    startsCollapsed: startsCollapsed
-                )
-            ]
         }
     }
 
@@ -839,25 +809,6 @@ enum InspectorSectionFilter {
             result.groups = groups
             return result
         }
-    }
-}
-
-enum InspectorSectionPresentation {
-    /// Keep the legacy single-shape bindings in the scene adapter for existing
-    /// clients. The typed compound editor already exposes them, so presenting
-    /// them again would edit shape #1 twice and duplicate the shape count.
-    static func presentedSection(_ section: EditorInspectorSection) -> EditorInspectorSection {
-        guard section.id == "collider",
-              section.fields.contains(where: { $0.id == "shape-instances" }) else { return section }
-        let redundantIDs: Set<String> = [
-            "shape-kind", "shape-box-extents", "shape-sphere-radius",
-            "shape-capsule-radius", "shape-capsule-half-height", "shape-cylinder-radius",
-            "shape-cylinder-half-height", "shape-heightfield-resource", "shape-mesh-resource",
-            "shape-convex-resource", "shape-center", "shape-instance-count",
-        ]
-        var result = section
-        result.fields = section.fields.filter { !redundantIDs.contains($0.id) }
-        return result
     }
 }
 
