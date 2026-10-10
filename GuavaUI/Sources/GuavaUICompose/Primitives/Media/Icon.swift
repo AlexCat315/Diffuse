@@ -6,7 +6,7 @@ import GuavaUIRuntime
 /// `Image(resource:width:height:tint:contentMode:renderingMode:)` incantation.
 ///
 /// ```swift
-/// Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+/// Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
 /// Icon(WorkspaceIcons.pinDot, size: 6, color: titleColor)
 /// ```
 public struct Icon: View {

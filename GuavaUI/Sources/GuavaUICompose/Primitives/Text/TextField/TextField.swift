@@ -1127,7 +1127,7 @@ public struct TextField: View {
                                 size: Float,
                                 list: DrawList,
                                 color: Color) {
-        guard let url = UICommonIcons.close.url,
+        guard let url = UIIcons.Action.x.url,
               let registry = ImageAssetRegistryHolder.current else { return }
         let scale = max(1, ContentScaleHolder.current)
         let side = size * 0.7

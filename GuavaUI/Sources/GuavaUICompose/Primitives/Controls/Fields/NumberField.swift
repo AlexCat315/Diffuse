@@ -109,28 +109,56 @@ private struct _StatefulNumberField: View {
             return AnyView(input)
         }
 
-        // Optional compact spinner. Inspector fields use keyboard stepping.
+        // Compact spinner. Keyboard stepping (arrow keys) stays the primary
+        // path; the buttons exist so the field is usable with the pointer too.
         return AnyView(
             Row(alignment: .center, spacing: 2) {
                 input
                     .flex()
                 Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                    stepButton(UICommonIcons.chevronUp) { increment() }
-                    stepButton(UICommonIcons.chevronDown) { decrement() }
+                    stepButton(UIIcons.Navigation.chevronUp,
+                               title: "Increment",
+                               isEnabled: canStepUp) { increment() }
+                    stepButton(UIIcons.Navigation.chevronDown,
+                               title: "Decrement",
+                               isEnabled: canStepDown) { decrement() }
                 }
+                .frame(width: 22)
             }
         )
     }
 
     private func stepButton(_ icon: BundleImageResource,
+                            title: String,
+                            isEnabled: Bool,
                             action: @escaping () -> Void) -> some View {
         Button(role: .normal,
-               isEnabled: field.isEnabled,
+               isEnabled: isEnabled,
+               tooltip: title,
                action: action) {
-            Icon(icon, size: 7, color: .onSurfaceMuted)
+            Icon(icon, size: 10, color: .onSurfaceVariant)
         }
-        .buttonStyle(.plain)
-        .frame(width: 20, height: 14)
+        .buttonStyle(.ghost)
+        .frame(height: 15)
+        .accessibility { $0.label = title }
+    }
+
+    /// Stepping past a bound is a no-op, so the button reports it instead of
+    /// swallowing the press.
+    private var currentValue: Float {
+        isEditing ? NumberField.parse(draft.stringValue) ?? field.value.wrappedValue : field.value.wrappedValue
+    }
+
+    private var canStepUp: Bool {
+        guard field.isEnabled else { return false }
+        if let maxValue = field.maxValue { return currentValue < maxValue }
+        return true
+    }
+
+    private var canStepDown: Bool {
+        guard field.isEnabled else { return false }
+        if let minValue = field.minValue { return currentValue > minValue }
+        return true
     }
 
     private func commitDraft() {
@@ -158,8 +186,7 @@ private struct _StatefulNumberField: View {
     }
 
     private func adjust(by multiplier: Float) {
-        let current = isEditing ? NumberField.parse(draft.stringValue) ?? field.value.wrappedValue : field.value.wrappedValue
-        let next = normalized(current + resolvedStep * multiplier)
+        let next = normalized(currentValue + resolvedStep * multiplier)
         if field.value.wrappedValue != next {
             field.value.wrappedValue = next
         }

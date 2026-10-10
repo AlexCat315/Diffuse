@@ -30,10 +30,10 @@ public struct DatePicker: View {
                 Text(selection.wrappedValue.map(formatter.string) ?? options.presentation.placeholder).font(.label)
                 Spacer()
                 if options.presentation.isClearable && selection.wrappedValue != nil {
-                    Button(icon: .resource(UICommonIcons.close), size: 12, isEnabled: options.presentation.isEnabled,
+                    Button(icon: .resource(UIIcons.Action.x), size: 12, isEnabled: options.presentation.isEnabled,
                            tooltip: "Clear date") { selection.wrappedValue = nil }.buttonStyle(.ghost).controlSize(.mini)
                 }
-                Icon(UICommonIcons.chevronDown, size: 10)
+                Icon(UIIcons.Navigation.chevronDown, size: 10)
             }.padding(horizontal: 10).frame(height: 34).background(.surface).cornerRadius(6).border(.border, width: 1)
         }, content: {
             CalendarView(selection: Binding(get: { selection.wrappedValue }, set: { selection.wrappedValue = $0; isPresented = false })) {

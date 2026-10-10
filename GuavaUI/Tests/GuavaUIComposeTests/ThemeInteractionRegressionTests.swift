@@ -69,7 +69,7 @@ struct ThemeInteractionRegressionTests: GuavaUIComposeSerializedSuite {
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let theme = Theme.defaultLight
         graph.install(root: Button(isEnabled: enabled, action: {}) {
-            Row { Icon(UICommonIcons.close, size: 12); Text("Build") }
+            Row { Icon(UIIcons.Action.x, size: 12); Text("Build") }
         }.buttonStyle(.primary).theme(theme))
         graph.computeLayout(width: 180, height: 60)
         let icon = try #require(find(tree.root) { $0.draw != nil && $0.frame.width == 12 })

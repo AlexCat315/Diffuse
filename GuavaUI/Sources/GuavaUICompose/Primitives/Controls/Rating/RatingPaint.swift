@@ -22,7 +22,7 @@ final class RatingPaint {
             guard let url = resource.url else { return nil }
             return VectorImageRaster(url: url, initial: Image.resolve(path: url.path, width: size, height: size), width: size, height: size)
         }
-        filled = raster(UICommonIcons.starFill); outline = raster(UICommonIcons.star)
+        filled = raster(UIIcons.Status.starFill); outline = raster(UIIcons.Status.star)
     }
     func draw(value: Double, geometry: RatingGeometry, palette: RatingPalette, node: Node, origin: CGPoint, list: DrawList) {
         let alpha = node.opacity

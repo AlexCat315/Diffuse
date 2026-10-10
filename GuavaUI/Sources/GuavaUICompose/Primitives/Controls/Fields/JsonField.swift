@@ -138,18 +138,18 @@ private struct _StatefulJsonField: View {
             Row(alignment: .center, spacing: 2) {
                 Text("JSON").font(.caption).foregroundColor(.onSurfaceMuted)
                 if validation.isAcceptable {
-                    Icon(UICommonIcons.checkmark, size: 9, color: .success)
+                    Icon(UIIcons.Action.check, size: 9, color: .success)
                 }
                 Spacer(minLength: 0)
-                Button(icon: .resource(UICommonIcons.format), size: 12,
+                Button(icon: .resource(UIIcons.Action.format), size: 12,
                        isEnabled: field.isEnabled && validation.isAcceptable,
                        tooltip: field.labels.format, action: formatDraft)
                     .buttonStyle(.ghost).controlSize(.small)
-                Button(icon: .resource(UICommonIcons.reset), size: 12,
+                Button(icon: .resource(UIIcons.Action.reset), size: 12,
                        isEnabled: field.isEnabled && currentText != baseline,
                        tooltip: field.labels.revert, action: revertDraft)
                     .buttonStyle(.ghost).controlSize(.small)
-                Button(icon: .resource(UICommonIcons.expand), size: 12,
+                Button(icon: .resource(UIIcons.Navigation.expand), size: 12,
                        isEnabled: field.isEnabled, tooltip: field.labels.expand, action: {
                     expandedDraft = currentText
                     expandedHistory = TextEditHistory()
@@ -183,14 +183,14 @@ private struct _StatefulJsonField: View {
             Row(alignment: .center, spacing: 6) {
                 Text(field.labels.expand).font(.bodyStrong)
                 Spacer(minLength: 0)
-                Button(icon: .resource(UICommonIcons.format), size: 14,
+                Button(icon: .resource(UIIcons.Action.format), size: 14,
                        isEnabled: result.isAcceptable, tooltip: field.labels.format, action: {
                     if let pretty = JsonField.prettyPrinted(expandedDraft.stringValue) {
                         recordReplacement(before: expandedDraft, after: TextBuffer(pretty), in: expandedHistory)
                         expandedDraft = TextBuffer(pretty)
                     }
                 }).buttonStyle(.ghost)
-                Button(icon: .resource(UICommonIcons.close), size: 12,
+                Button(icon: .resource(UIIcons.Action.x), size: 12,
                        tooltip: field.labels.cancel, action: { isExpanded = false }).buttonStyle(.ghost)
             }
             .padding(horizontal: 14, vertical: 8)
@@ -213,7 +213,7 @@ private struct _StatefulJsonField: View {
                 if case let .invalid(message) = result {
                     Text(message, lineLimit: 2).font(.caption).foregroundColor(.error).flex(1, shrink: 1, basis: 0)
                 } else {
-                    Icon(UICommonIcons.checkmark, size: 11, color: .success)
+                    Icon(UIIcons.Action.check, size: 11, color: .success)
                     Text(field.labels.valid).font(.caption).foregroundColor(.onSurfaceMuted)
                 }
                 Spacer(minLength: 0)
