@@ -38,7 +38,8 @@ extension EditorSceneAdapter {
                 }
                 return identifiers.count == ids.count && Set(identifiers).count == 1
             }
-            if section.id == "scripts", !section.groups.isEmpty, groups.isEmpty {
+            let scriptLayout = section.componentTypeID.map { inspectorRenderers.layout(forComponentTypeID: $0) }
+            if scriptLayout == .scriptBindings, !section.groups.isEmpty, groups.isEmpty {
                 var result = section
                 result.fields = [
                     EditorInspectorField(id: "script-mixed", label: L("Scripts"), value: .readOnly(L("Different script behaviors")))

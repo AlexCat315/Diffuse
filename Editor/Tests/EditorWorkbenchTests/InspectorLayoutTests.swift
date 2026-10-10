@@ -128,7 +128,7 @@ struct InspectorLayoutTests {
         let section = try #require(scene.inspectorSections(for: entity.rawValue).first { $0.id == "collider" })
         let json = try #require(section.fields.first { $0.id == "shape-instances-json" })
         #expect(json.presentation == .advanced)
-        let presented = InspectorSectionPresentation.presentedSection(section)
+        let presented = scene.inspectorRenderers.presentedSection(section)
         #expect(!presented.fields.contains { $0.id == "shape-kind" || $0.id == "shape-instance-count" })
         #expect(presented.fields.contains { $0.id == "shape-instances" })
         #expect(presented.fields.contains { $0.id == "trigger" })

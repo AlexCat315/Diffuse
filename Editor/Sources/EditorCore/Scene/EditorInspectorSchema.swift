@@ -42,6 +42,18 @@ public struct EditorInspectorFieldGroup {
     }
 }
 
+/// How the property grid lays out one section. Registered renderers declare the
+/// layout their fields are shaped for, so panels dispatch on this value instead
+/// of comparing section identifiers.
+public enum EditorInspectorSectionLayout: Sendable, Equatable {
+    /// One row per field, in the order the renderer produced them.
+    case standard
+    /// One collapsible child section per script binding, each with its own header actions.
+    case scriptBindings
+    /// Fixed module groups owned by the particle emitter form.
+    case particleModules
+}
+
 public enum EditorInspectorFieldPresentation: Sendable {
     case standard
     /// Expert/raw-data access is available, but not part of the default form.

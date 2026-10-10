@@ -155,13 +155,25 @@ fall back to the generated form. Component sections always carry their schema's
 type ID, so workspace visibility uses the same category policy as the component
 menu even when a renderer uses a different section ID.
 
+A registration is a value, not a string-keyed dispatch table entry: it pairs the
+section factory with the property-grid `layout` its fields are shaped for and an
+optional `presentation` pass applied to the produced section. Built-ins install
+them per domain (`registerPhysicsRenderers()`, `registerParticleRenderers()`,
+`registerScriptRenderers()`, `registerAnimationRenderers()`, composed by
+`registerBuiltInRenderers()`). Properties dispatch on the registered layout —
+`.standard`, `.scriptBindings`, `.particleModules` — and never compare section
+identifiers, so a new registration obtains both its form and its layout without
+editing the inspector. Colliders register a presentation pass that drops the
+legacy single-shape fields once the typed compound editor is present; the scene
+adapter keeps those fields for other clients.
+
 Native modules can supply UI factories without editing the inspector dispatcher:
 
 ```swift
 var renderers = EditorInspectorRendererRegistry.builtIn
-try renderers.register(componentTypeID: "myModule.terrain") { adapter, entity in
-    terrainSection(adapter: adapter, entity: entity)
-}
+try renderers.register(.init(componentTypeID: "myModule.terrain", layout: .particleModules) {
+    adapter, entity in terrainSection(adapter: adapter, entity: entity)
+})
 let adapter = EditorSceneAdapter(componentRegistry: moduleComponents,
                                  inspectorRenderers: renderers)
 ```
@@ -208,4 +220,8 @@ contracts and authorization.
 
 WASM plugin-defined component storage/registration and migration of the remaining
 rich component forms to shared field metadata remain separate follow-up work.
-The current module registration API is native Swift.
+The current module registration API is native Swift; because a registration is a
+value (`EditorInspectorRendererRegistration`) rather than a string-keyed entry in
+a fixed table, a plugin host can install one once it owns a component type ID.
+Adding a layout case still requires an editor change, so plugin-defined forms
+should keep using `.standard` until layouts become registrable.

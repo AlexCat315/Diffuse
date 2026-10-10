@@ -498,3 +498,19 @@ extension EditorSceneAdapter {
         )
     }
 }
+
+/// Drops the legacy single-shape fields once the typed compound editor is present.
+/// The scene adapter keeps them for existing clients, but presenting them again
+/// would edit shape #1 twice and duplicate the shape count.
+func colliderSectionPresentation(_ section: EditorInspectorSection) -> EditorInspectorSection {
+    guard section.fields.contains(where: { $0.id == "shape-instances" }) else { return section }
+    let redundantIDs: Set<String> = [
+        "shape-kind", "shape-box-extents", "shape-sphere-radius",
+        "shape-capsule-radius", "shape-capsule-half-height", "shape-cylinder-radius",
+        "shape-cylinder-half-height", "shape-heightfield-resource", "shape-mesh-resource",
+        "shape-convex-resource", "shape-center", "shape-instance-count",
+    ]
+    var result = section
+    result.fields = section.fields.filter { !redundantIDs.contains($0.id) }
+    return result
+}
