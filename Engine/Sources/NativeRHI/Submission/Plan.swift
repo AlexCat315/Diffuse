@@ -27,8 +27,17 @@ public struct UploadLocation: Sendable {
 public protocol FrameUploader: AnyObject {
     /// Returns the uploader to a zero-used state. Called when a frame begins.
     func reset()
-    /// Suballocates `data` from GPU-visible ring storage.
+    /// Suballocates `data` from GPU-visible ring storage and copies it there.
     func write(_ data: Data, alignment: Int) throws -> UploadLocation
+}
+
+public extension FrameUploader {
+    /// Zero-copy fast path for callers that already own contiguous memory. The
+    /// default wraps the bytes in a `Data` (copy); backends that care about the
+    /// copy override this directly.
+    func write(_ bytes: UnsafeRawBufferPointer, alignment: Int) throws -> UploadLocation {
+        try write(Data(bytes), alignment: alignment)
+    }
 }
 
 /// A distinct immutable acquisition ticket. The borrowed `texture` is valid

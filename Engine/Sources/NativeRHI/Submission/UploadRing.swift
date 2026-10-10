@@ -79,12 +79,18 @@ public final class ChunkUploadAllocator<Chunk: UploadRingChunk> {
         return attempt(index: index, size: size, alignment: alignment)!
     }
 
-    public func write(_ data: Data, alignment: Int = 256) throws -> UploadAllocation<Chunk> {
-        let allocation = try allocate(size: data.count, alignment: alignment)
-        data.withUnsafeBytes { bytes in
-            allocation.pointer.copyMemory(from: bytes.baseAddress!, byteCount: data.count)
+    /// Copies `bytes` straight into ring storage. Callers that already own
+    /// contiguous memory use this to skip building an intermediate `Data`.
+    public func write(_ bytes: UnsafeRawBufferPointer, alignment: Int = 256) throws -> UploadAllocation<Chunk> {
+        let allocation = try allocate(size: bytes.count, alignment: alignment)
+        if let base = bytes.baseAddress, bytes.count > 0 {
+            allocation.pointer.copyMemory(from: base, byteCount: bytes.count)
         }
         return allocation
+    }
+
+    public func write(_ data: Data, alignment: Int = 256) throws -> UploadAllocation<Chunk> {
+        try data.withUnsafeBytes { try write($0, alignment: alignment) }
     }
 
     private func attempt(index: Int, size: Int, alignment: Int) -> UploadAllocation<Chunk>? {
