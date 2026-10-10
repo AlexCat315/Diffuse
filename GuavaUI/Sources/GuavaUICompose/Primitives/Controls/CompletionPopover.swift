@@ -56,7 +56,7 @@ public struct CompletionPopover: View {
                     .padding(horizontal: 10, vertical: 4)
             }
         }.padding(3).background(.materialFloating).cornerRadius(6).backdropBlur(14)
-        .border(.border, width: 1)
+        .border(.border, width: 1).floatingSurface()
             .accessibility { $0.role = .list; $0.label = "Completions" }
     }
 }

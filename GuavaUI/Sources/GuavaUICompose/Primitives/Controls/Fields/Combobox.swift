@@ -100,7 +100,7 @@ public struct Combobox<Value: Hashable>: View {
                     }.frame(height: Float(min(presentation.maxVisibleRows, matches.count)) * 32).flex(0, shrink: 0)
                 }
             }.padding(8).background(.materialFloating).cornerRadius(8).backdropBlur(14)
-            .border(.border, width: 1)
+            .border(.border, width: 1).floatingSurface()
         }).frame(width: presentation.width)
     }
     private func choose(_ value: Value) {

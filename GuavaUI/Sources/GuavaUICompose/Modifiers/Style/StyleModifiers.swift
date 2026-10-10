@@ -127,10 +127,10 @@ public struct ShadowModifier: ViewModifier {
     }
 
     public func apply(node: Node) {
-        node.animatableSet(\.shadowColor, to: color)
-        node.shadowOffsetX = offsetX
-        node.shadowOffsetY = offsetY
-        node.animatableSet(\.shadowBlur, to: blur)
+        node.animatableSet(\.shadow.color, to: color)
+        node.animatableSet(\.shadow.offsetX, to: offsetX)
+        node.animatableSet(\.shadow.offsetY, to: offsetY)
+        node.animatableSet(\.shadow.blur, to: blur)
     }
 }
 
