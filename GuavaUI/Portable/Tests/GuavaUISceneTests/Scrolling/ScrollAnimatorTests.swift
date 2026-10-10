@@ -259,11 +259,25 @@ private final class ManualClock {
             #expect(!animator.isGliding)
 
             clock.run(frames: 400)
-            #expect(animator.offset.y > delivered + 150)
-            // v / deceleration ≈ how far 480 pt/s travels before it dies.
-            #expect(animator.offset.y < delivered + 260)
+            #expect(animator.offset.y > delivered + 60)
+            // (v - minimumVelocity) / deceleration: how far 480 pt/s travels
+            // before it dies. A flick carries content on, it does not launch it.
+            #expect(animator.offset.y < delivered + 130)
             #expect(animator.isFinished)
             #expect(animator.velocity == .zero)
+        }
+    }
+
+    @Test("One or two notches are a nudge, not a throw")
+    func nudgesDoNotCoast() {
+        withIsolatedScheduler {
+            let clock = ManualClock()
+            let animator = makeCoastingAnimator(clock: clock)
+            wheel(animator, clock, samples: 2, step: 30)
+
+            clock.run(frames: 400)
+            #expect(animator.offset.y == 60)
+            #expect(animator.isFinished)
         }
     }
 
@@ -281,6 +295,47 @@ private final class ManualClock {
             clock.run(frames: 400)
             #expect(animator.offset.y == 60)
             #expect(animator.isFinished)
+        }
+    }
+
+    @Test("A notch while coasting brakes and does not relaunch")
+    func notchDuringGlideBrakes() {
+        withIsolatedScheduler {
+            let clock = ManualClock()
+            let animator = makeCoastingAnimator(clock: clock)
+            wheel(animator, clock, samples: 10)
+
+            // Well past the quiet window: the glide is under way.
+            clock.run(frames: 30)
+            #expect(animator.isGliding)
+
+            clock.now += 1.0 / 60.0
+            let braked = animator.scroll(by: CGPoint(x: 0, y: 30)).y
+            #expect(!animator.isGliding)
+
+            // The brake has to hold: relaunching from the samples behind the
+            // glide is what made stopping impossible.
+            clock.run(frames: 400)
+            #expect(animator.offset.y == braked)
+            #expect(animator.isFinished)
+        }
+    }
+
+    @Test("Stopping a glide leaves the offset where it was")
+    func stopCoastingHoldsPosition() {
+        withIsolatedScheduler {
+            let clock = ManualClock()
+            let animator = makeCoastingAnimator(clock: clock)
+            wheel(animator, clock, samples: 10)
+
+            clock.run(frames: 20)
+            #expect(animator.isGliding)
+            let caught = animator.offset.y
+
+            animator.stopCoasting()
+            #expect(!animator.isGliding)
+            clock.run(frames: 200)
+            #expect(animator.offset.y == caught)
         }
     }
 
@@ -424,21 +479,28 @@ private final class ManualClock {
         }
     }
 
-    @Test("Launch velocity is clamped so one rogue sample cannot fling far")
+    @Test("Launch velocity is clamped so a burst cannot fling far")
     func launchVelocityIsClamped() {
         withIsolatedScheduler {
             let clock = ManualClock()
             let animator = makeCoastingAnimator(clock: clock, maximum: 100_000)
-            // Two samples a thousandth of a second apart, 10 points apart:
-            // a slope no human hand produced.
-            clock.now += 0.001
-            _ = animator.scroll(by: CGPoint(x: 0, y: 10))
-            clock.now += 0.001
-            _ = animator.scroll(by: CGPoint(x: 0, y: 10))
+            // Samples a thousandth of a second apart, 10 points apart: a slope
+            // no human hand produced, and exactly what a burst of wheel
+            // notches arriving in the same millisecond looks like.
+            for _ in 0..<4 {
+                clock.now += 0.001
+                _ = animator.scroll(by: CGPoint(x: 0, y: 10))
+            }
 
             let velocity = animator.currentVelocity()
-            #expect(velocity.y <= 4_200)
-            #expect(abs(velocity.y - 4_200) < 1)
+            #expect(abs(velocity.y - 1_100) < 1)
+
+            // And so the whole throw stays within a fraction of a viewport,
+            // rather than the several thousand points the raw slope would
+            // have travelled.
+            let delivered = animator.offset.y
+            clock.run(frames: 600)
+            #expect(animator.offset.y - delivered < 300)
         }
     }
 }
