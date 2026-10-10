@@ -11,6 +11,8 @@ final class NativeAppWindowRenderer: AppWindowRenderer {
     private var swapchain: SwapchainResource?
     private var size = SIMD2<UInt32>(repeating: 0)
     private var multisample: TextureResource?
+    /// Owned copy of the presented frame, so a panel can blur it.
+    private var framebuffer: TextureResource?
 
     var isConfigured: Bool { swapchain != nil }
 
@@ -53,12 +55,31 @@ final class NativeAppWindowRenderer: AppWindowRenderer {
                 multisample = try TextureResource(device: device, descriptor: descriptor)
             }
             let clear = settings.clearColor
-            var target = RenderColorTarget(texture: multisample?.texture ?? image.texture,
+            // With frost, the frame lives in an owned texture rather than
+            // straight in the drawable: a panel samples whatever is already
+            // behind it, and a swapchain image is a render target that cannot
+            // be sampled. The drawable then gets the frame in one final pass.
+            // A backend without the backdrop program renders into the drawable
+            // exactly as before, and loses nothing but the frost.
+            let frosted = renderer.supportsBackdrop
+            if !frosted { framebuffer = nil }
+            else if framebuffer?.descriptor.width != pixels.x || framebuffer?.descriptor.height != pixels.y {
+                framebuffer = try TextureResource(device: device, descriptor: TextureDescriptor(
+                    width: pixels.x, height: pixels.y, format: .bgra8UnormSRGB,
+                    usage: [.colorTarget, .sampled], label: "ui-framebuffer"))
+            }
+            let surface = framebuffer?.texture ?? image.texture
+            var target = RenderColorTarget(texture: multisample?.texture ?? surface,
                 loadAction: .clear(SIMD4(Float(clear.r), Float(clear.g), Float(clear.b), Float(clear.a))))
-            target.resolveTexture = multisample == nil ? nil : image.texture
+            target.resolveTexture = multisample == nil ? nil : surface
             let commands = CommandBuffer()
             let frame = try renderer.record(list: list, into: commands, target: target,
-                viewport: NativeUIViewport(pixels: pixels, logical: logical))
+                viewport: NativeUIViewport(pixels: pixels, logical: logical),
+                backdropSource: framebuffer?.texture)
+            if let source = framebuffer?.texture {
+                var present = RenderColorTarget(texture: image.texture, loadAction: .dontCare, store: true)
+                try renderer.recordBlit(source: source, into: commands, target: present, size: pixels)
+            }
             try device.submit(commands)
             frame.didSubmit()
             try device.present(image)
@@ -68,7 +89,7 @@ final class NativeAppWindowRenderer: AppWindowRenderer {
 
     func close() throws {
         try device.withFrameSession {
-            defer { swapchain = nil; native = nil; multisample = nil; size = .zero }
+            defer { swapchain = nil; native = nil; multisample = nil; framebuffer = nil; size = .zero }
             try swapchain?.close()
         }
     }

@@ -17,6 +17,27 @@ public extension TextureID {
     }
 }
 
+/// A frosted backdrop: the renderer blurs whatever was already drawn inside
+/// `rect` and composites the result underneath the batch this is attached to.
+///
+/// This is a *request*, not a guarantee. A renderer without an offscreen pass
+/// (the WGPU path) ignores it, so the fill above it must stay legible on its
+/// own — see `SemanticColorRef.materialFloating`.
+public struct UIBackdrop: Equatable, Sendable {
+    /// Region to blur, in logical points. Usually the panel's own box.
+    public var rect: UIRect
+    /// Corner radius of the composite, matching the fill above it.
+    public var cornerRadius: Float
+    /// Gaussian radius in logical points.
+    public var blurRadius: Float
+
+    public init(rect: UIRect, cornerRadius: Float = 0, blurRadius: Float = 12) {
+        self.rect = rect
+        self.cornerRadius = cornerRadius
+        self.blurRadius = blurRadius
+    }
+}
+
 /// One contiguous draw call, all sharing the same texture and scissor rect.
 public struct DrawBatch: Equatable, Sendable {
     public var indexOffset: UInt32
@@ -24,6 +45,10 @@ public struct DrawBatch: Equatable, Sendable {
     public var textureID: TextureID
     /// `nil` means no scissor restriction (use the full viewport).
     public var scissor: UIRect?
+    /// Blur the frame behind this batch before drawing it. Attached to the
+    /// first primitive of a frosted panel so the renderer can insert the
+    /// offscreen pass exactly where the panel's fill starts.
+    public var backdrop: UIBackdrop? = nil
 }
 
 /// CPU-side command buffer for the UI renderer.
@@ -41,6 +66,9 @@ public final class DrawList {
     /// Stack of clip rectangles applied via `pushClip` / `popClip`.
     private var clipStack: [UIRect] = []
     public private(set) var viewportBounds: UIRect?
+    /// Backdrop awaiting the next emitted primitive. Consumed by
+    /// `recordIndices`, which also starts a fresh batch for it.
+    private var pendingBackdrop: UIBackdrop?
 
     public init() {}
 
@@ -51,7 +79,18 @@ public final class DrawList {
         batches.removeAll(keepingCapacity: true)
         resources.reset()
         clipStack.removeAll(keepingCapacity: true)
+        pendingBackdrop = nil
         viewportBounds = nil
+    }
+
+    /// Attach a frosted backdrop to the geometry emitted immediately next.
+    ///
+    /// The caller must emit that geometry right away: the request is consumed
+    /// by the very next primitive, and it forces that primitive into its own
+    /// batch so the renderer can insert the offscreen blur before it — and
+    /// before nothing else.
+    public func beginBackdrop(_ backdrop: UIBackdrop) {
+        pendingBackdrop = backdrop
     }
 
     public func setViewportBounds(_ bounds: UIRect?) {
@@ -172,7 +211,8 @@ public final class DrawList {
                     indexOffset: b.indexOffset + baseIndex,
                     indexCount: b.indexCount,
                     textureID: b.textureID,
-                    scissor: b.scissor
+                    scissor: b.scissor,
+                    backdrop: b.backdrop
                 ))
             }
         }
@@ -462,9 +502,16 @@ public final class DrawList {
 
     /// Record `count` indices starting at `baseIndex`, merging with the previous
     /// batch when texture and scissor match.
+    ///
+    /// A pending backdrop never merges: the renderer can only insert an
+    /// offscreen pass between whole batches, so the frosted fill has to start
+    /// one rather than ride along with the shadow or container behind it.
     private func recordIndices(at baseIndex: UInt32, count: UInt32, textureID: TextureID) {
         let scissor = clipStack.last
-        if var last = batches.last,
+        let backdrop = pendingBackdrop
+        pendingBackdrop = nil
+        if backdrop == nil,
+           var last = batches.last,
            last.textureID == textureID,
            last.scissor == scissor,
            last.indexOffset + last.indexCount == baseIndex {
@@ -475,7 +522,8 @@ public final class DrawList {
                 indexOffset: baseIndex,
                 indexCount: count,
                 textureID: textureID,
-                scissor: scissor
+                scissor: scissor,
+                backdrop: backdrop
             ))
         }
     }

@@ -31,6 +31,43 @@ struct NodeRendererTests {
         #expect(list.batches[0].textureID == .none)
     }
 
+    @Test("A frosted node attaches its backdrop to its own fill")
+    func backdropRidesOnTheFill() {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 100)
+        root.backgroundColor = Color.white
+
+        let panel = Node()
+        panel.frame = CGRect(x: 20, y: 20, width: 80, height: 40)
+        panel.cornerRadius = 6
+        panel.backdropBlur = 12
+        panel.backgroundColor = Color(r: 1, g: 1, b: 1, a: 0.84)
+        root.addChild(panel)
+
+        let list = DrawList()
+        NodeRenderer().render(root: root, into: list)
+
+        // The panel cannot merge into the container behind it: the blur has to
+        // land between the two, which only a batch boundary can express.
+        #expect(list.batches.count == 2)
+        #expect(list.batches[0].backdrop == nil)
+        // The backdrop covers the whole node, not just the fill, so the border
+        // ring drawn over it stays crisp.
+        #expect(list.batches[1].backdrop == UIBackdrop(
+            rect: UIRect(x: 20, y: 20, width: 80, height: 40), cornerRadius: 6, blurRadius: 12))
+    }
+
+    @Test("A backdrop with no fill leaves nothing behind")
+    func backdropWithoutFillIsDropped() {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        root.backdropBlur = 12
+
+        let list = DrawList()
+        NodeRenderer().render(root: root, into: list)
+        #expect(list.batches.isEmpty)
+    }
+
     @Test("Child frames are translated by parent origin")
     func childFramesAccumulateOrigin() {
         let root = Node()
