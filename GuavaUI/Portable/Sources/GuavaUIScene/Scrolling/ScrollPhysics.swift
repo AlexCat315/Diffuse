@@ -1,3 +1,4 @@
+import Foundation
 import GuavaUICore
 
 /// Tuning for the rubber-band stretch applied when a scroll offset travels
@@ -68,29 +69,97 @@ public struct ScrollSettleSettings: Sendable, Equatable {
     }
 }
 
+/// Tuning for inertial scrolling — the glide that carries content along after
+/// the input that produced it has stopped.
+///
+/// The wheel has no "release" event, so a glide can only be launched once it
+/// is known that no further input is coming: `idleWindow` is how long the last
+/// sample is given to arrive before the recorded velocity is handed to the
+/// glide. Trackpad users never notice because their samples are continuous;
+/// mouse users get a fling out of a fast burst of notches.
+public struct ScrollMomentumSettings: Sendable, Equatable {
+    /// `false` stops content dead the moment input stops.
+    public var isEnabled: Bool = true
+
+    /// Decay rate in nepers per second: velocity is multiplied by `e^-rate`
+    /// each second. `2.2` matches `UIScrollView.DecelerationRate.normal`
+    /// (0.998 per millisecond ≈ e^-2.0 per second), leaving about 11% of the
+    /// launch speed after one second. Higher stops sooner.
+    public var deceleration: Float = 2.2
+
+    /// Launch speed, in points per second, below which the gesture counts as
+    /// placed rather than thrown and no glide starts.
+    public var minimumVelocity: Float = 18
+
+    /// Ceiling on the launch speed. A pathological device can report a huge
+    /// slope for one frame; without a ceiling one such sample would throw the
+    /// viewport across the whole document.
+    public var maximumVelocity: Float = 4_200
+
+    /// Quiet period, in seconds, after the newest wheel sample before the
+    /// glide launches. Must outlast the gap between two notches of the same
+    /// burst, or every burst turns into several glides fighting each other.
+    public var idleWindow: TimeInterval = 0.09
+
+    /// Age limit, in seconds, of samples contributing to the launch velocity.
+    public var trackingWindow: TimeInterval = 0.1
+
+    /// How long the newest sample keeps describing the gesture, in seconds.
+    ///
+    /// A drag lets go whenever the user lets go, so silence is not a signal on
+    /// its own: holding a thumb still for a while and *then* releasing must not
+    /// fling, while the wheel — whose samples always stop `idleWindow` before
+    /// the release is noticed — must. Anything quiet for this long was released
+    /// earlier. Sits comfortably clear of `idleWindow` on purpose.
+    public var staleWindow: TimeInterval = 0.25
+
+    public init(isEnabled: Bool = true,
+                deceleration: Float = 2.2,
+                minimumVelocity: Float = 18,
+                maximumVelocity: Float = 4_200,
+                idleWindow: TimeInterval = 0.09,
+                trackingWindow: TimeInterval = 0.1,
+                staleWindow: TimeInterval = 0.25) {
+        self.isEnabled = isEnabled
+        self.deceleration = deceleration
+        self.minimumVelocity = minimumVelocity
+        self.maximumVelocity = maximumVelocity
+        self.idleWindow = idleWindow
+        self.trackingWindow = trackingWindow
+        self.staleWindow = staleWindow
+    }
+}
+
 /// How a scrollable container reacts to input that pushes it past its bounds.
 ///
-/// Split into two independent groups because they answer different questions:
-/// how far content *stretches* while being pushed, and how it *returns* once
-/// released. Reusable outside `ScrollView` — any component that owns a
-/// scrollable offset can share one instance.
+/// Split into independent groups because they answer different questions: how
+/// far content *stretches* while being pushed, how it *returns* once released,
+/// and how long it keeps *coasting* once input stops. Reusable outside
+/// `ScrollView` — any component that owns a scrollable offset can share one
+/// instance.
 public struct ScrollPhysics: Sendable, Equatable {
     public var rubberBand: ScrollRubberBandSettings
     public var settle: ScrollSettleSettings
+    public var momentum: ScrollMomentumSettings
 
     public init(rubberBand: ScrollRubberBandSettings = .init(),
-                settle: ScrollSettleSettings = .init()) {
+                settle: ScrollSettleSettings = .init(),
+                momentum: ScrollMomentumSettings = .init()) {
         self.rubberBand = rubberBand
         self.settle = settle
+        self.momentum = momentum
     }
 }
 
 public extension ScrollPhysics {
-    /// Rubber band with a critically damped return — the default everywhere.
+    /// Rubber band, critically damped return, momentum — the default
+    /// everywhere.
     static let `default` = ScrollPhysics()
 
-    /// Hard clamping at both bounds. Opt-in for surfaces where any overshoot
-    /// reads as a bug (canvas rulers, scroll-linked timelines).
+    /// Hard clamping at both bounds: content stops dead instead of stretching.
+    /// Momentum still carries it there; the coast just ends at the edge.
+    /// Opt-in for surfaces where any overshoot reads as a bug (canvas rulers,
+    /// scroll-linked timelines).
     static let clamped = ScrollPhysics(rubberBand: ScrollRubberBandSettings(isEnabled: false))
 
     /// Stretch plus a visible bounce at the bound on release.
@@ -98,10 +167,19 @@ public extension ScrollPhysics {
         settle: ScrollSettleSettings(response: 0.42, dampingFraction: 0.62)
     )
 
-    /// Stretch only at the far end, with a stiff early curve and a slow return.
+    /// Stiff early curve, slow return, no bounce.
     /// Useful for lists where the top edge is anchored to a header.
     static let firm = ScrollPhysics(
         rubberBand: ScrollRubberBandSettings(compliance: 0.25),
         settle: ScrollSettleSettings(response: 0.5)
+    )
+
+    /// Nothing that was not asked for: every wheel notch lands where it lands
+    /// and the content stays there. For stepper-like surfaces where both
+    /// coasting and stretching read as lost control (numeric scrubbers,
+    /// frame-accurate timelines).
+    static let precise = ScrollPhysics(
+        rubberBand: ScrollRubberBandSettings(isEnabled: false),
+        momentum: ScrollMomentumSettings(isEnabled: false)
     )
 }
