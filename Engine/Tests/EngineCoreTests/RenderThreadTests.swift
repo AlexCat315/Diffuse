@@ -15,16 +15,16 @@ struct RenderThreadTests {
     func nativeGridRenderPacketIntegration() throws {
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false))
         let consumer = try NativeGridRenderer(device: device)
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let rendered = DispatchSemaphore(value: 0)
         let reportRecorder = RenderReportRecorder()
-        let thread = RenderThread(runtime: NoopRuntime(), ringBuffer: ring, consumer: consumer,
+        let thread = RenderThread(runtime: NoopRuntime(), packetBuffer: buffer, consumer: consumer,
             onFrameRendered: { report in reportRecorder.append(report); rendered.signal() })
         thread.start(); defer { thread.shutdown() }
         var packet = Self.makePacket(frameIndex: 17)
         packet.drawableSize = RenderDrawableSize(width: 128, height: 96)
         packet.scene.instances = []; packet.renderSettings.enableEditorGrid = true
-        ring.publish(packet); thread.requestRender()
+        buffer.publish(packet); thread.requestRender()
         #expect(rendered.wait(timeout: .now() + 5) == .success)
         thread.shutdown(); try device.waitUntilIdle()
         #expect(consumer.lastError == nil)
@@ -46,9 +46,9 @@ struct RenderThreadTests {
     func nativeSceneRenderPacketIntegration() throws {
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false))
         let consumer = try NativeRenderer(device: device)
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let rendered = DispatchSemaphore(value: 0)
-        let thread = RenderThread(runtime: NoopRuntime(), ringBuffer: ring, consumer: consumer,
+        let thread = RenderThread(runtime: NoopRuntime(), packetBuffer: buffer, consumer: consumer,
             onFrameRendered: { _ in rendered.signal() })
         thread.start(); defer { thread.shutdown() }
         var packet = Self.makePacket(frameIndex: 21)
@@ -56,7 +56,7 @@ struct RenderThreadTests {
         packet.renderSettings.stage = .r2MultiObjectDepth
         packet.renderSettings.debugViewMode = .unlit
         packet.renderSettings.enableEditorGrid = true
-        ring.publish(packet); thread.requestRender()
+        buffer.publish(packet); thread.requestRender()
         #expect(rendered.wait(timeout: .now() + 5) == .success)
         thread.shutdown(); try device.waitUntilIdle()
         #expect(consumer.lastError == nil)
@@ -67,20 +67,20 @@ struct RenderThreadTests {
         #expect(consumer.lastFrameStats.submittedMeshTriangleCount == 12)
     }
 
-    @Test("RingBuffer returns the latest published payload")
-    func ringBufferReturnsLatestPayload() {
-        let ring = RingBuffer<Int>()
-        ring.publish(1)
-        ring.publish(2)
-        ring.publish(3)
+    @Test("LatestValueBuffer returns the latest published payload")
+    func packetBufferReturnsLatestPayload() {
+        let buffer = LatestValueBuffer<Int>()
+        buffer.publish(1)
+        buffer.publish(2)
+        buffer.publish(3)
 
-        #expect(ring.consumeLatest() == 3)
-        #expect(ring.consumeLatest() == nil)
+        #expect(buffer.consumeLatest() == 3)
+        #expect(buffer.consumeLatest() == nil)
     }
 
     @Test("RenderThread drains a follow-up render request after the current pass")
     func renderThreadDrainsFollowUpRequest() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let runtime = NoopRuntime()
         let consumer = TestConsumer()
         let rendered = FrameRecorder()
@@ -88,7 +88,7 @@ struct RenderThreadTests {
 
         let thread = RenderThread(
             runtime: runtime,
-            ringBuffer: ring,
+            packetBuffer: buffer,
             consumer: consumer,
             onFrameRendered: { report in
                 rendered.append(report.frameIndex)
@@ -97,11 +97,11 @@ struct RenderThreadTests {
         )
         thread.start()
 
-        ring.publish(Self.makePacket(frameIndex: 0))
+        buffer.publish(Self.makePacket(frameIndex: 0))
         thread.requestRender()
         consumer.waitUntilRenderStarts()
 
-        ring.publish(Self.makePacket(frameIndex: 1))
+        buffer.publish(Self.makePacket(frameIndex: 1))
         thread.requestRender()
         consumer.releaseFirstRender()
         for _ in 0..<2 {
@@ -115,7 +115,7 @@ struct RenderThreadTests {
 
     @Test("RenderThread emits render submit kernel phase before rendering")
     func renderThreadEmitsRenderSubmitPhase() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let runtime = NoopRuntime()
         let consumer = FastConsumer()
         let phaseRecorder = PhaseRecorder()
@@ -123,7 +123,7 @@ struct RenderThreadTests {
 
         let thread = RenderThread(
             runtime: runtime,
-            ringBuffer: ring,
+            packetBuffer: buffer,
             onKernelPhase: { phase, context in
                 phaseRecorder.append(phase: phase, context: context)
             },
@@ -134,7 +134,7 @@ struct RenderThreadTests {
         )
         thread.start()
 
-        ring.publish(Self.makePacket(frameIndex: 9))
+        buffer.publish(Self.makePacket(frameIndex: 9))
         thread.requestRender()
 
         #expect(rendered.wait(timeout: .now() + 2) == .success)
@@ -150,7 +150,7 @@ struct RenderThreadTests {
 
     @Test("RenderThread reports drained GPU particle simulation events")
     func renderThreadReportsDrainedGPUParticleSimulationEvents() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let runtime = NoopRuntime()
         let snapshot = GPUParticleSimulationEventSnapshot(
             slot: 0,
@@ -175,7 +175,7 @@ struct RenderThreadTests {
 
         let thread = RenderThread(
             runtime: runtime,
-            ringBuffer: ring,
+            packetBuffer: buffer,
             consumer: consumer,
             onFrameRendered: { report in
                 reportRecorder.append(report)
@@ -184,7 +184,7 @@ struct RenderThreadTests {
         )
         thread.start()
 
-        ring.publish(Self.makePacket(frameIndex: 3))
+        buffer.publish(Self.makePacket(frameIndex: 3))
         thread.requestRender()
 
         #expect(rendered.wait(timeout: .now() + 2) == .success)

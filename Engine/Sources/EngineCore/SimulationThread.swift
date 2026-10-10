@@ -55,7 +55,7 @@ struct SimulationFrameReport: Sendable {
 
 final class SimulationThread: @unchecked Sendable {
     private let runtime: any EngineRuntime
-    private let ringBuffer: RingBuffer<RenderPacket>
+    private let packetBuffer: LatestValueBuffer<RenderPacket>
     private let queue = DispatchQueue(label: "com.guava.engine.simulation", qos: .userInitiated)
     private let onKernelPhase: @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void
     private let onFrameReady: @Sendable (SimulationFrameReport) -> Void
@@ -69,7 +69,7 @@ final class SimulationThread: @unchecked Sendable {
 
     init(
         runtime: any EngineRuntime,
-        ringBuffer: RingBuffer<RenderPacket>,
+        packetBuffer: LatestValueBuffer<RenderPacket>,
         onKernelPhase: @escaping @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void = { _, _ in },
         onFrameReady: @escaping @Sendable (SimulationFrameReport) -> Void,
         onParticleSimulationEventsApplied: @escaping @Sendable (ParticleSimulationEventApplyReport) -> Void = { _ in },
@@ -77,7 +77,7 @@ final class SimulationThread: @unchecked Sendable {
         initialSceneRuntime: SceneRuntime? = nil
     ) {
         self.runtime = runtime
-        self.ringBuffer = ringBuffer
+        self.packetBuffer = packetBuffer
         self.onKernelPhase = onKernelPhase
         self.onFrameReady = onFrameReady
         self.onParticleSimulationEventsApplied = onParticleSimulationEventsApplied
@@ -165,7 +165,7 @@ final class SimulationThread: @unchecked Sendable {
                 jointPaletteMap: paletteMap,
                 inGameCanvas: canvas
             )
-            ringBuffer.publish(packet)
+            packetBuffer.publish(packet)
             onPacketPublished()
         }
 

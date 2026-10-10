@@ -44,7 +44,7 @@ struct SoftBodyTests {
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
             )
-            #expect(report.physicsError == nil)
+            #expect(report.physics.error == nil)
         }
 
         let state = try #require(runtime.softBodyStateFrame.states[clothEntity])
@@ -77,7 +77,7 @@ struct SoftBodyTests {
         )
         _ = runtime.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
 
-        #expect(runtime.tick(deltaTime: 1.0 / 60.0).physicsError == nil)
+        #expect(runtime.tick(deltaTime: 1.0 / 60.0).physics.error == nil)
         let first = try #require(runtime.renderScene.deformableMeshes.first)
         let instance = try #require(
             runtime.renderScene.instances.first { $0.entity == entity }
@@ -94,13 +94,13 @@ struct SoftBodyTests {
 
         let firstPositions = first.positions
         let firstRevision = first.revision
-        #expect(runtime.tick(deltaTime: 0).physicsError == nil)
+        #expect(runtime.tick(deltaTime: 0).physics.error == nil)
         let preserved = try #require(runtime.renderScene.deformableMeshes.first)
         #expect(preserved.positions == firstPositions)
         #expect(preserved.revision == firstRevision)
         #expect(runtime.softBodyStateFrame.states[entity]?.positions == firstPositions)
 
-        #expect(runtime.tick(deltaTime: 1.0 / 60.0).physicsError == nil)
+        #expect(runtime.tick(deltaTime: 1.0 / 60.0).physics.error == nil)
         let unchangedPinnedMesh = try #require(runtime.renderScene.deformableMeshes.first)
         #expect(unchangedPinnedMesh.positions == firstPositions)
         #expect(unchangedPinnedMesh.revision == firstRevision)
@@ -117,12 +117,12 @@ struct SoftBodyTests {
         )
 
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError == nil)
+        #expect(report.physics.error == nil)
         #expect(runtime.softBodyStateFrame.states[entity]?.positions.count == 9)
 
         _ = runtime.removeComponent(Cloth.self, from: entity)
         report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError == nil)
+        #expect(report.physics.error == nil)
         #expect(runtime.softBodyStateFrame.states[entity] == nil)
         #expect(runtime.softBodyStateFrame.vertexCount == 0)
     }
@@ -156,7 +156,7 @@ struct SoftBodyTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
         let state = try #require(runtime.softBodyStateFrame.states[clothEntity])
         let minimumY = try #require(state.positions.map(\.y).min())
@@ -211,7 +211,7 @@ struct SoftBodyTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
         let sphereY = try #require(runtime.worldTransform(for: sphere)?.translation.y)
         let clothState = try #require(runtime.softBodyStateFrame.states[clothEntity])
@@ -253,7 +253,7 @@ struct SoftBodyTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
         let state = runtime.characterStateFrame.states[character]
         #expect(state?.isGrounded == true)
@@ -284,11 +284,11 @@ struct SoftBodyTests {
             #expect(first.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
             #expect(second.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
             #expect(first.physicsStateHashFrame == second.physicsStateHashFrame)
         }
         #expect(first.physicsStateHashFrame.hash != 0)
@@ -347,11 +347,11 @@ struct SoftBodyTests {
             #expect(first.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
             #expect(second.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
 
         let firstState = try #require(first.softBodyStateFrame.states[firstEntity])
@@ -372,7 +372,7 @@ struct SoftBodyTests {
         )
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError?.code == .invalidArgument)
+        #expect(report.physics.error?.code == .invalidArgument)
         #expect(runtime.softBodyStateFrame.states[entity] == nil)
     }
 
@@ -425,7 +425,7 @@ struct SoftBodyTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
 
         let state = try #require(runtime.softBodyStateFrame.states[entity])
@@ -505,7 +505,7 @@ struct SoftBodyTests {
                 #expect(runtime.tick(
                     deltaTime: 1.0 / 60.0,
                     frameIndex: UInt64(frame)
-                ).physicsError == nil)
+                ).physics.error == nil)
             }
             let state = try #require(runtime.softBodyStateFrame.states[entity])
             #expect(runtime.renderScene.deformableMeshes.first?.triangleIndices == triangles)
@@ -582,7 +582,7 @@ struct SoftBodyTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
         let state = try #require(runtime.softBodyStateFrame.states[entity])
         #expect(state.positions.count == 5)
@@ -600,7 +600,7 @@ struct SoftBodyTests {
         )
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError?.code == .invalidArgument)
+        #expect(report.physics.error?.code == .invalidArgument)
         #expect(runtime.softBodyStateFrame.states[entity] == nil)
     }
 
@@ -636,7 +636,7 @@ struct SoftBodyTests {
             _ = runtime.setComponent(SoftBodyMesh(resourceID: resourceID), for: entity)
 
             let report = runtime.tick(deltaTime: 1.0 / 60.0)
-            #expect(report.physicsError?.code == .invalidArgument)
+            #expect(report.physics.error?.code == .invalidArgument)
             #expect(runtime.softBodyStateFrame.states[entity] == nil)
         }
     }
@@ -671,7 +671,7 @@ struct SoftBodyTests {
             _ = runtime.setComponent(SoftBodyMesh(resourceID: resourceID), for: entity)
 
             let report = runtime.tick(deltaTime: 1.0 / 60.0)
-            #expect(report.physicsError?.code == .invalidArgument)
+            #expect(report.physics.error?.code == .invalidArgument)
             #expect(runtime.softBodyStateFrame.states[entity] == nil)
         }
 
@@ -695,7 +695,7 @@ struct SoftBodyTests {
         )
         #expect(zeroVolumeRuntime.tick(
             deltaTime: 1.0 / 60.0
-        ).physicsError?.code == .invalidArgument)
+        ).physics.error?.code == .invalidArgument)
     }
 
     @Test("cloth and surface topology conflict returns an explicit native error")
@@ -707,7 +707,7 @@ struct SoftBodyTests {
         _ = runtime.setComponent(SoftBodyMesh(resourceID: "soft.asset"), for: entity)
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError?.code == .invalidArgument)
+        #expect(report.physics.error?.code == .invalidArgument)
         #expect(runtime.softBodyStateFrame.states[entity] == nil)
     }
 

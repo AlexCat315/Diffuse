@@ -170,7 +170,7 @@ Guava-Engine/
 │   ├── CapabilityRuntime/    (CapabilityRegistry, PreconditionChecker, EffectAnalyzer)
 │   ├── CinematicRenderer/    (PathTracer, BSDF, SamplingStrategy, AOV)
 │   ├── ColorPipeline/        (OCIO bridge, ACES config, view/display transform)
-│   ├── EngineCore/           (core types, RingBuffer, EngineFFI)
+│   ├── EngineCore/           (core types, LatestValueBuffer, EngineFFI)
 │   ├── EngineKernel/         (boot → input → simulation → render submit tick loop)
 │   ├── ContextMemory/        (cross-session symbolic memory, reducers)
 │   ├── DenoiseBridge/        (OIDN / OptiX bridges)

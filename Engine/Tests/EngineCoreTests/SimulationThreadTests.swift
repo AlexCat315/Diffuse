@@ -10,14 +10,14 @@ import SIMDCompat
 struct SimulationThreadTests {
     @Test("SimulationThread publishes render packets extracted from SceneRuntime")
     func simulationThreadPublishesExtractedScene() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let runtime = IdleRuntime()
         let frameReady = DispatchSemaphore(value: 0)
         let packetPublished = DispatchSemaphore(value: 0)
 
         let thread = SimulationThread(
             runtime: runtime,
-            ringBuffer: ring,
+            packetBuffer: buffer,
             onFrameReady: { _ in
                 frameReady.signal()
             },
@@ -40,7 +40,7 @@ struct SimulationThreadTests {
         let publishResult = packetPublished.wait(timeout: .now() + 2)
         #expect(publishResult == .success)
 
-        guard let packet = ring.consumeLatest() else {
+        guard let packet = buffer.consumeLatest() else {
             Issue.record("expected a render packet from the simulation thread")
             thread.shutdown()
             return
@@ -59,13 +59,13 @@ struct SimulationThreadTests {
 
     @Test("jointPaletteOverride in request takes precedence over internal scene palette")
     func jointPaletteOverrideAppearsInPublishedPacket() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let runtime = IdleRuntime()
         let packetPublished = DispatchSemaphore(value: 0)
 
         let thread = SimulationThread(
             runtime: runtime,
-            ringBuffer: ring,
+            packetBuffer: buffer,
             onFrameReady: { _ in },
             onPacketPublished: { packetPublished.signal() }
         )
@@ -89,7 +89,7 @@ struct SimulationThreadTests {
 
         #expect(packetPublished.wait(timeout: .now() + 2) == .success)
 
-        guard let packet = ring.consumeLatest() else {
+        guard let packet = buffer.consumeLatest() else {
             Issue.record("expected a render packet")
             thread.shutdown()
             return
@@ -103,11 +103,11 @@ struct SimulationThreadTests {
 
     @Test("external scene frames publish their own snapshot and canvas")
     func externalSceneFrameOwnsPacketMetadata() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let packetPublished = DispatchSemaphore(value: 0)
         let thread = SimulationThread(
             runtime: IdleRuntime(),
-            ringBuffer: ring,
+            packetBuffer: buffer,
             onFrameReady: { _ in },
             onPacketPublished: { packetPublished.signal() }
         )
@@ -130,7 +130,7 @@ struct SimulationThreadTests {
         )
 
         #expect(packetPublished.wait(timeout: .now() + 2) == .success)
-        let packet = ring.consumeLatest()
+        let packet = buffer.consumeLatest()
         #expect(packet?.sceneSnapshot == snapshot)
         #expect(packet?.inGameCanvas.commands.count == 1)
         thread.shutdown()
@@ -158,13 +158,13 @@ struct SimulationThreadTests {
             }),
             for: emitterEntity
         )
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let packetPublished = DispatchSemaphore(value: 0)
         let reportRecorder = ParticleSimulationEventApplyReportRecorder()
         let reportApplied = DispatchSemaphore(value: 0)
         let thread = SimulationThread(
             runtime: IdleRuntime(),
-            ringBuffer: ring,
+            packetBuffer: buffer,
             onFrameReady: { _ in },
             onParticleSimulationEventsApplied: { report in
                 reportRecorder.append(report)
@@ -230,7 +230,7 @@ struct SimulationThreadTests {
         #expect(report?.gpuCompactedParticleCount == 4)
         #expect(report?.droppedSpawnCount == 1)
 
-        guard let packet = ring.consumeLatest() else {
+        guard let packet = buffer.consumeLatest() else {
             Issue.record("expected a render packet from the simulation thread")
             thread.shutdown()
             return
@@ -246,12 +246,12 @@ struct SimulationThreadTests {
 
     @Test("SimulationThread reports dropped GPU particle events when readback has no records")
     func simulationThreadReportsDroppedGPUParticleEventsWithoutRecords() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let reportRecorder = ParticleSimulationEventApplyReportRecorder()
         let reportApplied = DispatchSemaphore(value: 0)
         let thread = SimulationThread(
             runtime: IdleRuntime(),
-            ringBuffer: ring,
+            packetBuffer: buffer,
             onFrameReady: { _ in },
             onParticleSimulationEventsApplied: { report in
                 reportRecorder.append(report)
@@ -296,7 +296,7 @@ struct SimulationThreadTests {
 
     @Test("SimulationThread forwards input events into input phase and SceneRuntime tick")
     func simulationThreadForwardsInputEvents() {
-        let ring = RingBuffer<RenderPacket>()
+        let buffer = LatestValueBuffer<RenderPacket>()
         let runtime = RecordingRuntime()
         let frameReady = DispatchSemaphore(value: 0)
         let packetPublished = DispatchSemaphore(value: 0)
@@ -308,7 +308,7 @@ struct SimulationThreadTests {
 
         let thread = SimulationThread(
             runtime: runtime,
-            ringBuffer: ring,
+            packetBuffer: buffer,
             onKernelPhase: { phase, context in
                 phaseRecorder.append(phase: phase, context: context)
             },
@@ -338,7 +338,7 @@ struct SimulationThreadTests {
         #expect(recordedInput?.deltaTime == 1.0 / 30.0)
         #expect(recordedInput?.eventCount == inputEvents.count)
 
-        guard let packet = ring.consumeLatest() else {
+        guard let packet = buffer.consumeLatest() else {
             Issue.record("expected a render packet from the simulation thread")
             thread.shutdown()
             return

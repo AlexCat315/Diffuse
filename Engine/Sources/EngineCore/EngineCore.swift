@@ -108,7 +108,7 @@ public final class EngineHost: @unchecked Sendable {
     /// sessions return nil because they do not construct a WGPU device.
     public var wgpuBackend: WGPUBackend? { renderDevice.wgpuBackend }
 
-    private var ringBuffer: RingBuffer<RenderPacket>?
+    private var packetBuffer: LatestValueBuffer<RenderPacket>?
     private var simulationThread: SimulationThread?
     private var renderThread: RenderThread?
 
@@ -156,8 +156,8 @@ public final class EngineHost: @unchecked Sendable {
             }
         }
 
-        let ringBuffer = RingBuffer<RenderPacket>()
-        self.ringBuffer = ringBuffer
+        let packetBuffer = LatestValueBuffer<RenderPacket>()
+        self.packetBuffer = packetBuffer
 
         let consumer: (any RenderPacketConsumer)?
         if let renderConsumer {
@@ -189,7 +189,7 @@ public final class EngineHost: @unchecked Sendable {
         let renderThread = consumer.map {
             RenderThread(
                 runtime: runtime,
-                ringBuffer: ringBuffer,
+                packetBuffer: packetBuffer,
                 onKernelPhase: { [weak self] phase, context in
                     self?.kernel.withLock { kernel in
                         _ = kernel.tick(phase: phase, context: context)
@@ -206,7 +206,7 @@ public final class EngineHost: @unchecked Sendable {
 
         self.simulationThread = SimulationThread(
             runtime: runtime,
-            ringBuffer: ringBuffer,
+            packetBuffer: packetBuffer,
             onKernelPhase: { [weak self] phase, context in
                 self?.kernel.withLock { kernel in
                     _ = kernel.tick(phase: phase, context: context)
@@ -304,7 +304,7 @@ public final class EngineHost: @unchecked Sendable {
         renderThread?.shutdown()
         simulationThread = nil
         renderThread = nil
-        ringBuffer = nil
+        packetBuffer = nil
 
         kernel.withLock { $0.shutdown() }
         if shutdownBackend, let backend = renderDevice.wgpuBackend {

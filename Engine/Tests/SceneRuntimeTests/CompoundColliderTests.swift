@@ -66,7 +66,7 @@ struct CompoundColliderTests {
         _ = runtime.setLocalTransform(.identity, for: entity)
         _ = runtime.setComponent(Collider(shapes: []), for: entity)
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError?.code == .invalidShape)
+        #expect(report.physics.error?.code == .invalidShape)
     }
 
     @Test("unified queries return stable all-hit ordering")

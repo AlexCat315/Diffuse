@@ -82,7 +82,7 @@ struct VehicleAcceptanceTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
     }
 
@@ -144,7 +144,7 @@ struct VehicleAcceptanceTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
             let state = runtime.vehicleStateFrame.states[car]
             let hasContact = state?.wheels.contains(where: \.hasContact) == true
             hadGroundContact = hadGroundContact || hasContact
@@ -176,7 +176,7 @@ struct VehicleAcceptanceTests {
         for frame in 90..<420 {
             runtime.submitVehicleCommand(VehicleCommand(throttle: 1), for: car)
             let report = runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame))
-            #expect(report.physicsError == nil)
+            #expect(report.physics.error == nil)
             hitWall = hitWall || runtime.physicsEventFrame.contacts.contains { event in
                 (event.entityA == car && event.entityB == wall)
                     || (event.entityA == wall && event.entityB == car)
@@ -229,7 +229,7 @@ struct VehicleAcceptanceTests {
             #expect(runtime.tick(
                 deltaTime: 1.0 / 60.0,
                 frameIndex: UInt64(frame)
-            ).physicsError == nil)
+            ).physics.error == nil)
         }
         let after = runtime.worldTransform(for: car)?.translation.x ?? 0
 

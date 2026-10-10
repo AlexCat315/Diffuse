@@ -118,10 +118,10 @@ struct PhysicsBackendSelectionTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
 
-        #expect(report.physicsBackendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "jolt")
         #expect(runtime.physicsFrameState.backendIdentifier == "jolt")
-        #expect(report.physicsBodyCount == 1)
-        #expect(report.physicsConstraintCount == 0)
+        #expect(report.physics.bodyCount == 1)
+        #expect(report.physics.constraintCount == 0)
     }
 
     @Test("default backendKind selects Jolt when simulation runs")
@@ -146,8 +146,8 @@ struct PhysicsBackendSelectionTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
 
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsBodyCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.bodyCount == 1)
     }
 
     @Test("manual backend override still wins over backendKind")
@@ -174,7 +174,7 @@ struct PhysicsBackendSelectionTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
 
-        #expect(report.physicsBackendIdentifier == "recording")
+        #expect(report.physics.backendIdentifier == "recording")
         #expect(backend.prepareContexts.count == 1)
     }
 
@@ -216,8 +216,8 @@ struct PhysicsBackendSelectionTests {
         let expectedVelocityY = Float(-9.81 / 60.0)
         let expectedPositionY = expectedVelocityY / 60.0
 
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsWritebackCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.writebackCount == 1)
         #expect(abs((runtime.worldTransform(for: entity)?.translation.y ?? 0) - expectedPositionY) < 0.000_01)
         #expect(abs((runtime.component(RigidBody.self, for: entity)?.linearVelocity.y ?? 0) - expectedVelocityY) < 0.000_01)
         #expect(runtime.component(RigidBody.self, for: entity)?.isSleeping == false)
@@ -263,8 +263,8 @@ struct PhysicsBackendSelectionTests {
         let actualRotation = quaternion(from: runtime.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4)
         let alignment = abs(simd_dot(expectedRotation.vector, actualRotation.vector))
 
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsWritebackCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.writebackCount == 1)
         #expect(alignment > 0.999_99)
         #expect(runtime.component(RigidBody.self, for: entity)?.angularVelocity == SIMD3<Float>(0, .pi, 0))
     }
@@ -325,8 +325,8 @@ struct PhysicsBackendSelectionTests {
         // Angular impulse (0,0,0.2)     →Δω = 0.2/0.2 = 1 in z
         // Torque (0,0,120) for dt=1/60 →Δω = 120/0.2 · 1/60 = 10 in z
         let expectedAngularZ: Float = 11
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsWritebackCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.writebackCount == 1)
         #expect(abs((body?.linearVelocity.x ?? 0) - 1) < 0.001)
         #expect(abs((body?.linearVelocity.y ?? 0) - 1) < 0.001)
         #expect(abs((body?.angularVelocity.z ?? 0) - expectedAngularZ) < 0.01)
@@ -355,8 +355,8 @@ struct PhysicsBackendSelectionTests {
                 || ($0.entityA == wall && $0.entityB == mover)
         }
 
-        #expect(firstReport.physicsBackendIdentifier == "jolt")
-        #expect(firstReport.physicsContactCount >= 1)
+        #expect(firstReport.physics.backendIdentifier == "jolt")
+        #expect(firstReport.physics.contactCount >= 1)
         #expect(runtime.physicsFrameState.contactCount >= 1)
         #expect(firstPair != nil)
         #expect(firstPair.map { simd_length($0.normal) > 0.5 } ?? false)
@@ -415,7 +415,7 @@ struct PhysicsBackendSelectionTests {
         }
 
         #expect(runtime.physicsSettings.collisionSteps == 2)
-        #expect(report.physicsContactCount >= 1)
+        #expect(report.physics.contactCount >= 1)
         #expect(hitPair != nil)
         #expect(fastX < 0.25, "CCD body should not tunnel past the static collider (x=\(fastX))")
     }
@@ -493,8 +493,8 @@ struct PhysicsBackendSelectionTests {
         // Real Jolt's iterative constraint solver converges over several frames
         // (vs. the fake impl's single-frame projection). Tick until convergence.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsConstraintCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
         }
@@ -579,8 +579,8 @@ struct PhysicsBackendSelectionTests {
         // follower target: pos + pivotB = (1,0,0) ⇒pos = (2,0,0)
         // Iterative solver —converge over several frames.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsConstraintCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
         }
@@ -665,8 +665,8 @@ struct PhysicsBackendSelectionTests {
         //   - equalize velocities via momentum conservation (1·1 + 5·1)/(1+1) = 3
         // Iterative solver converges over many frames.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsConstraintCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
         }
@@ -757,8 +757,8 @@ struct PhysicsBackendSelectionTests {
         // After a few frames the perpendicular y velocity is killed and y
         // settles back near 0; x continues unconstrained until limits engage.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsConstraintCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.constraintCount == 1)
         for _ in 0..<60 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
         }
@@ -792,8 +792,8 @@ struct PhysicsBackendSelectionTests {
         )
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsConstraintCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.constraintCount == 1)
     }
 
     @Test("configured Jolt backend applies fixed constraints")
@@ -817,8 +817,8 @@ struct PhysicsBackendSelectionTests {
         )
 
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsBackendIdentifier == "jolt")
-        #expect(report.physicsConstraintCount == 1)
+        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
         }
