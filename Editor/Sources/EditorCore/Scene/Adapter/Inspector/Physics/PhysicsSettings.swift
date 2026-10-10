@@ -21,7 +21,7 @@ extension EditorSceneAdapter {
                 EditorInspectorField(
                     id: "physics-simulation-mode",
                     label: L("Simulation Mode"),
-                    value: .physicsSimulationMode(physicsSimulationModeBinding())
+                    value: .options(physicsSimulationModeBinding())
                 ),
                 EditorInspectorField(
                     id: "physics-gravity",

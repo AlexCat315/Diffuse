@@ -390,85 +390,6 @@ struct InspectorPanel: View {
         }
     }
 
-    private struct InspectorPhysicsSimulationModeValue: View {
-        let binding: Binding<PhysicsSimulationMode>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .off: return L("Off")
-                case .preview: return L("Preview")
-                case .play: return L("Play")
-                case .bake: return L("Bake")
-                }
-            }
-        }
-    }
-
-    private struct InspectorVehicleControllerKindValue: View {
-        let binding: Binding<VehicleControllerKind>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { kind in
-                switch kind {
-                case .wheeled: return L("Wheeled")
-                case .tracked: return L("Tracked")
-                case .motorcycle: return L("Motorcycle")
-                }
-            }
-        }
-    }
-
-    private struct InspectorColliderShapeKindValue: View {
-        let binding: Binding<ColliderShapeKind>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { kind in
-                switch kind {
-                case .box: return L("Box")
-                case .sphere: return L("Sphere")
-                case .capsule: return L("Capsule")
-                case .cylinder: return L("Cylinder")
-                case .heightField: return L("Height Field")
-                case .mesh: return L("Mesh")
-                case .convex: return L("Convex")
-                }
-            }
-        }
-    }
-
-    private struct InspectorPhysicsJointKindValue: View {
-        let binding: Binding<PhysicsJointKind>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { kind in
-                switch kind {
-                case .pointToPoint: return L("Point")
-                case .fixed: return L("Fixed")
-                case .distance: return L("Distance")
-                case .hinge: return L("Hinge")
-                case .slider: return L("Slider")
-                case .cone: return L("Cone / Swing Twist")
-                case .sixDOF: return L("Six DOF")
-                }
-            }
-        }
-    }
-
-    private struct InspectorPhysicsJointMotorModeValue: View {
-        let binding: Binding<PhysicsJointMotorMode>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .disabled: return L("Disabled")
-                case .position: return L("Position")
-                case .velocity: return L("Velocity")
-                }
-            }
-        }
-    }
-
     private struct InspectorEntityReferenceValue: View {
         let binding: Binding<UInt64>
         let options: [EditorInspectorEntityOption]
@@ -677,49 +598,13 @@ struct InspectorPanel: View {
                                                              valid: L("Valid JSON"), empty: L("Empty saves as {}"),
                                                              expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel")))
                 .id(identity).debugName("inspector-json-\(identity)"))
-        case let .physicsSimulationMode(binding):
-            return AnyView(InspectorPhysicsSimulationModeValue(binding: binding))
-        case let .vehicleControllerKind(binding):
-            return AnyView(InspectorVehicleControllerKindValue(binding: binding))
-        case let .colliderShapeKind(binding):
-            return AnyView(InspectorColliderShapeKindValue(binding: binding))
         case let .colliderShapeInstances(binding):
             return AnyView(InspectorColliderShapeInstancesValue(
                 binding: binding, session: sessionState.colliderState(for: identity)))
         case let .entityReference(binding, options):
             return AnyView(InspectorEntityReferenceValue(binding: binding, options: options))
-        case let .physicsJointKind(binding):
-            return AnyView(InspectorPhysicsJointKindValue(binding: binding))
-        case let .physicsJointMotorMode(binding):
-            return AnyView(InspectorPhysicsJointMotorModeValue(binding: binding))
-        case let .particleEmissionShape(binding):
-            return AnyView(InspectorParticleEmissionShapeValue(binding: binding))
-        case let .particleCollisionMode(binding):
-            return AnyView(InspectorParticleCollisionModeValue(binding: binding))
-        case let .particleSimulationSpace(binding):
-            return AnyView(InspectorParticleSimulationSpaceValue(binding: binding))
-        case let .particleSimulationBackend(binding):
-            return AnyView(InspectorParticleSimulationBackendValue(binding: binding))
         case let .particleCurve(binding):
             return AnyView(InspectorParticleCurveValue(binding: binding))
-        case let .particleBlendMode(binding):
-            return AnyView(InspectorParticleBlendModeValue(binding: binding))
-        case let .particleRenderMode(binding):
-            return AnyView(InspectorParticleRenderModeValue(binding: binding))
-        case let .particleSortMode(binding):
-            return AnyView(InspectorParticleSortModeValue(binding: binding))
-        case let .particleTextureSheetPlaybackMode(binding):
-            return AnyView(InspectorParticleTextureSheetPlaybackModeValue(binding: binding))
-        case let .particleRenderAlignment(binding):
-            return AnyView(InspectorParticleRenderAlignmentValue(binding: binding))
-        case let .particleRenderBoundsMode(binding):
-            return AnyView(InspectorParticleRenderBoundsModeValue(binding: binding))
-        case let .particleForceMode(binding):
-            return AnyView(InspectorParticleForceModeValue(binding: binding))
-        case let .particleVectorFieldMode(binding):
-            return AnyView(InspectorParticleVectorFieldModeValue(binding: binding))
-        case let .particleSubEmitterTrigger(binding):
-            return AnyView(InspectorParticleSubEmitterTriggerValue(binding: binding))
         case let .particleSubEmitters(binding):
             return AnyView(InspectorParticleSubEmittersValue(binding: binding))
         case let .particleModuleStack(binding):
@@ -909,29 +794,11 @@ private extension EditorInspectorFieldValue {
             return String(format: "RGBA %.2f, %.2f, %.2f, %.2f",
                           value.r, value.g, value.b, value.a)
         case let .json(binding, _): return binding.wrappedValue
-        case let .physicsSimulationMode(binding): return String(describing: binding.wrappedValue)
-        case let .vehicleControllerKind(binding): return String(describing: binding.wrappedValue)
-        case let .colliderShapeKind(binding): return String(describing: binding.wrappedValue)
         case let .colliderShapeInstances(binding): return "\(binding.wrappedValue.count)"
         case let .entityReference(binding, options):
             return options.first(where: { $0.id == binding.wrappedValue })?.name
                 ?? String(binding.wrappedValue)
-        case let .physicsJointKind(binding): return String(describing: binding.wrappedValue)
-        case let .physicsJointMotorMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleEmissionShape(binding): return String(describing: binding.wrappedValue)
-        case let .particleCollisionMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleSimulationSpace(binding): return String(describing: binding.wrappedValue)
-        case let .particleSimulationBackend(binding): return String(describing: binding.wrappedValue)
         case let .particleCurve(binding): return String(describing: binding.wrappedValue)
-        case let .particleBlendMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleRenderMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleSortMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleTextureSheetPlaybackMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleRenderAlignment(binding): return String(describing: binding.wrappedValue)
-        case let .particleRenderBoundsMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleForceMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleVectorFieldMode(binding): return String(describing: binding.wrappedValue)
-        case let .particleSubEmitterTrigger(binding): return String(describing: binding.wrappedValue)
         case let .particleSubEmitters(binding): return "\(binding.wrappedValue.count)"
         case let .particleModuleStack(binding): return "\(binding.wrappedValue.modules.count)"
         case let .asset(binding, _, placeholder):

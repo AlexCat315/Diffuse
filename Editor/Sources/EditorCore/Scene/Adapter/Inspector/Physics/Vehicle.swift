@@ -19,7 +19,7 @@ extension EditorSceneAdapter {
             ),
             EditorInspectorField(
                 id: "vehicle-controller", label: L("Controller"),
-                value: .vehicleControllerKind(vehicleControllerKindBinding(for: entity))
+                value: .options(vehicleControllerKindBinding(for: entity))
             ),
             EditorInspectorField(
                 id: "vehicle-wheels", label: L("Wheels"),
