@@ -197,6 +197,7 @@ public final class LayerAwareNodeRenderer {
         if let overlay = node.overlayDraw {
             overlay(list, CGPoint(x: Double(originX), y: Double(originY)))
         }
+        emitHighlight(node, into: list, x: originX, y: originY, w: width, h: height)
 
         list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)
         if clipped {
@@ -208,35 +209,17 @@ public final class LayerAwareNodeRenderer {
 
     private func emitShadow(_ node: Node, into list: DrawList,
                             x: Float, y: Float, w: Float, h: Float) {
-        guard let shadowColor = node.shadowColor, shadowColor.a > 0,
-              w > 0, h > 0 else { return }
-        let blur = max(0, node.shadowBlur)
-        let radius = max(node.cornerRadius, 0)
-        let steps = blur > 0 ? 6 : 1
-        for i in 0..<steps {
-            let t = Float(i) / Float(max(1, steps - 1))
-            let inset = -blur * (1 - t)
-            let weight = blur > 0 ? (t + 0.15) * (t + 0.15) : 1
-            let alpha = shadowColor.a * weight / Float(steps)
-            let rect = UIRect(
-                x: x + node.shadowOffsetX + inset,
-                y: y + node.shadowOffsetY + inset,
-                width: w - 2 * inset,
-                height: h - 2 * inset
-            )
-            let stepColor = Color(
-                r: shadowColor.r,
-                g: shadowColor.g,
-                b: shadowColor.b,
-                a: min(1, alpha) * node.opacity
-            )
-            let stepRadius = radius + max(0, -inset)
-            if stepRadius > 0 {
-                list.addRoundedRect(rect, radius: stepRadius, color: stepColor)
-            } else {
-                list.addRect(rect, color: stepColor)
-            }
-        }
+        list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
+                       rect: UIRect(x: x, y: y, width: w, height: h),
+                       cornerRadius: node.cornerRadius, opacity: node.opacity)
+    }
+
+    private func emitHighlight(_ node: Node, into list: DrawList,
+                               x: Float, y: Float, w: Float, h: Float) {
+        let borderInset = (node.borderColor != nil && node.borderWidth > 0) ? node.borderWidth : 0
+        list.addHighlight(node.highlight, rect: UIRect(x: x, y: y, width: w, height: h),
+                          cornerRadius: node.cornerRadius, borderWidth: borderInset,
+                          opacity: node.opacity)
     }
 
     private func emitBorder(_ node: Node, into list: DrawList,

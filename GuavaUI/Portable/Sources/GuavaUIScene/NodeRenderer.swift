@@ -39,48 +39,15 @@ public struct NodeRenderer {
             list.pushClip(UIRect(x: absX, y: absY, width: width, height: height))
         }
 
-        // 2. Drop shadow (painted before background so it sits behind).
-        if let shadowColor = node.shadowColor, shadowColor.a > 0,
-           width > 0, height > 0 {
-            let blur = max(0, node.shadowBlur)
-            let radius = max(node.cornerRadius, 0)
-            // Cheap fake-blur: emit `steps` concentric expanded rects with
-            // decreasing alpha. Cost is bounded (≤ 6 per node). 6 steps with a
-            // quadratic weight give a smoother gradient than 4 linear steps at
-            // typical 8–12 px blur radii used for tool-chrome elevation.
-            let steps = blur > 0 ? 6 : 1
-            for i in 0..<steps {
-                let t = Float(i) / Float(max(1, steps - 1))
-                let inset = -blur * (1 - t)
-                // Largest rect is the faint outer edge; smaller rects build
-                // density towards the surface, not the other way around.
-                let weight = blur > 0 ? (t + 0.15) * (t + 0.15) : 1
-                let alpha = shadowColor.a * weight / Float(steps)
-                let rect = UIRect(
-                    x: absX + node.shadowOffsetX + inset,
-                    y: absY + node.shadowOffsetY + inset,
-                    width:  width  - 2 * inset,
-                    height: height - 2 * inset
-                )
-                let stepColor = Color(
-                    r: shadowColor.r,
-                    g: shadowColor.g,
-                    b: shadowColor.b,
-                    a: min(1, alpha) * node.opacity
-                )
-                let stepRadius = radius + max(0, -inset)
-                if stepRadius > 0 {
-                    list.addRoundedRect(rect, radius: stepRadius, color: stepColor)
-                } else {
-                    list.addRect(rect, color: stepColor)
-                }
-            }
-        }
+        // 2. Drop shadow (painted before background so it sits behind). The
+        //    ambient halo goes down first; the tighter key shadow lands on it.
+        let rect = UIRect(x: absX, y: absY, width: width, height: height)
+        list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
+                       rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity)
 
         // 3. Border ring, including when the background is transparent.
         if let bc = node.borderColor, node.borderWidth > 0,
            width > 0, height > 0 {
-            let rect = UIRect(x: absX, y: absY, width: width, height: height)
             let color = applyOpacity(bc, node.opacity)
             list.addRoundedRectStroke(rect, radius: node.cornerRadius,
                                       width: node.borderWidth, color: color)
@@ -132,11 +99,15 @@ public struct NodeRenderer {
             }
         }
 
-        // 7. Overlay (scrollbars, focus rings drawn above content).
+        // 7. Overlay (scrollbars, focus rings drawn above content), then the
+        //    rim light: the edge belongs to the surface, so it goes on last.
         list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)
         if let overlay = node.overlayDraw {
             overlay(list, CGPoint(x: Double(absX), y: Double(absY)))
         }
+        let borderInset = (node.borderColor != nil && node.borderWidth > 0) ? node.borderWidth : 0
+        list.addHighlight(node.highlight, rect: rect, cornerRadius: node.cornerRadius,
+                          borderWidth: borderInset, opacity: node.opacity)
 
         list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)
         // 8. Pop clip.

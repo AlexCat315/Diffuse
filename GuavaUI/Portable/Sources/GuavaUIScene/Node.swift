@@ -192,35 +192,33 @@ public final class Node: @unchecked Sendable {
         }
     }
 
-    /// Drop-shadow colour painted under the background fill. `nil` (default)
-    /// or zero-alpha skips shadow rendering.
-    public var shadowColor: Color? {
+    /// The shadow that defines the surface: a tighter, darker layer offset
+    /// below the node. Painted under the background fill.
+    public var shadow = SurfaceShadow() {
         didSet {
-            if oldValue != shadowColor {
-                markRenderDirty(reason: .styleSet(field: "shadowColor"))
+            if oldValue != shadow {
+                markRenderDirty(reason: .styleSet(field: "shadow"))
             }
         }
     }
-    public var shadowOffsetX: Float = 0 {
+
+    /// A wider, fainter halo under `shadow`. Empty (default) for surfaces that
+    /// sit *in* the chrome; set it for surfaces that float above it, where the
+    /// separation has to read before the contact shadow does.
+    public var ambientShadow = SurfaceShadow() {
         didSet {
-            if oldValue != shadowOffsetX {
-                markRenderDirty(reason: .styleSet(field: "shadowOffsetX"))
+            if oldValue != ambientShadow {
+                markRenderDirty(reason: .styleSet(field: "ambientShadow"))
             }
         }
     }
-    public var shadowOffsetY: Float = 0 {
+
+    /// Light rim along the inside of the top edge. Empty (default) paints
+    /// nothing. Drawn last, over children, so content cannot cover the edge.
+    public var highlight = SurfaceHighlight() {
         didSet {
-            if oldValue != shadowOffsetY {
-                markRenderDirty(reason: .styleSet(field: "shadowOffsetY"))
-            }
-        }
-    }
-    /// Logical blur radius. The current renderer downgrades this to a stack
-    /// of expanded translucent rounded rects (cheap fake shadow).
-    public var shadowBlur: Float = 0 {
-        didSet {
-            if oldValue != shadowBlur {
-                markRenderDirty(reason: .styleSet(field: "shadowBlur"))
+            if oldValue != highlight {
+                markRenderDirty(reason: .styleSet(field: "highlight"))
             }
         }
     }
@@ -620,7 +618,8 @@ public final class Node: @unchecked Sendable {
         guard case .styleSet(let field) = reason else { return false }
         return field == "clipsToBounds"
             || field == "opacity"
-            || field == "shadowColor"
+            || field == "shadow"
+            || field == "ambientShadow"
             || field == "draw"
             || field == "overlayDraw"
     }

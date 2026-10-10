@@ -61,6 +61,7 @@ private struct _StatefulColorField: View {
                 .background(.materialFloating)
                 .cornerRadius(8)
                 .backdropBlur(14)
+                .border(.border, width: 1).floatingSurface()
         })
     }
 }
