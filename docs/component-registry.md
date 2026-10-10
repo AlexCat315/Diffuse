@@ -140,8 +140,25 @@ is built with `EditorInspectorFieldValue.options(_:)`. Enum fields therefore sha
 one control, one search description, one read-only rendering and one
 multi-selection merge instead of a dedicated case, view and merge rule each.
 Compound editors — collider shape instances, particle curves, sub-emitters, module
-stacks and entity references — remain dedicated field values; they are genuinely
-compound editors rather than a fixed set of choices.
+stacks and entity references — are genuinely compound, so they keep a dedicated
+field value that carries its own `EditorInspectorControlID`. The property grid
+resolves those IDs through `EditorInspectorFieldControlRegistry`, which also owns
+their row layout, sizing and height; the field dispatcher no longer switches on
+them. A registration pairs a control ID with a typed view builder and a fallback
+value used to restore the type of the erased binding:
+
+```swift
+var controls = EditorInspectorFieldControlRegistry()
+try controls.register(controlID: "module.terrain.layers", fallback: [TerrainLayer](),
+                      layout: .fullWidth) { binding, context in
+    AnyView(TerrainLayerListValue(binding: binding))
+}
+```
+
+Controls are UI widgets rather than session data, so `EditorInspectorFieldControlRegistry.builtIn`
+is built once for the app. Duplicate IDs are rejected; remove a control before
+replacing it. Asset references stay in the panel itself: they need the active drag
+payload and the catalog picker, not just the field value.
 
 `isNullable` string fields write JSON null when cleared, letting the owning codec
 restore an absent optional key. Color presentation limits RGB channels to 0...1

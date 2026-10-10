@@ -390,7 +390,8 @@ struct InspectorPanel: View {
         }
     }
 
-    private struct InspectorEntityReferenceValue: View {
+    /// Registered as the `entity.reference` control; internal so the registry can build it.
+    struct InspectorEntityReferenceValue: View {
         let binding: Binding<UInt64>
         let options: [EditorInspectorEntityOption]
         @State private var isPresented: Bool = false
@@ -565,6 +566,12 @@ struct InspectorPanel: View {
     private func fieldView(_ value: EditorInspectorFieldValue,
                            identity: String, isMixed: Bool = false,
                            mixedAxes: Set<String> = []) -> some View {
+        if let control = EditorInspectorFieldControlRegistry.builtIn.view(for: value, context: .init(
+            identity: identity,
+            colliderState: sessionState.colliderState(for: identity),
+            entityOptions: value.entityOptions ?? [])) {
+            return control
+        }
         switch value {
         case let .readOnly(text):
             return AnyView(InspectorReadOnlyValue(text: text))
@@ -598,17 +605,10 @@ struct InspectorPanel: View {
                                                              valid: L("Valid JSON"), empty: L("Empty saves as {}"),
                                                              expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel")))
                 .id(identity).debugName("inspector-json-\(identity)"))
-        case let .colliderShapeInstances(binding):
-            return AnyView(InspectorColliderShapeInstancesValue(
-                binding: binding, session: sessionState.colliderState(for: identity)))
-        case let .entityReference(binding, options):
-            return AnyView(InspectorEntityReferenceValue(binding: binding, options: options))
-        case let .particleCurve(binding):
-            return AnyView(InspectorParticleCurveValue(binding: binding))
-        case let .particleSubEmitters(binding):
-            return AnyView(InspectorParticleSubEmittersValue(binding: binding))
-        case let .particleModuleStack(binding):
-            return AnyView(InspectorParticleModuleStackValue(binding: binding))
+        case .colliderShapeInstances, .entityReference, .particleCurve, .particleSubEmitters, .particleModuleStack:
+            // Compound editors resolve through the control registry above; reaching
+            // the switch means no control is registered for their ID.
+            return AnyView(InspectorReadOnlyValue(text: value.readOnlyDescription))
         case let .asset(binding, acceptedKinds, placeholder):
             return AnyView(AssetRefField(value: assetRefBinding(binding),
                                          activePayload: activeAssetDropPayload,
@@ -807,39 +807,35 @@ private extension EditorInspectorFieldValue {
     }
 
     var preferredRowLayout: PropertyGridRowLayout {
+        if let metrics = EditorInspectorFieldControlRegistry.builtIn.metrics(for: self) {
+            return metrics.layout
+        }
         switch self {
-        case .json, .colliderShapeInstances, .particleCurve, .particleSubEmitters, .particleModuleStack:
-            return .fullWidth
-        default:
-            return .twoColumn
+        case .json: return .fullWidth
+        default: return .twoColumn
         }
     }
 
     var preferredRowSizing: PropertyGridRowSizing {
+        if let metrics = EditorInspectorFieldControlRegistry.builtIn.metrics(for: self) {
+            return metrics.sizing
+        }
         switch self {
-        case .colliderShapeInstances, .json: return .intrinsic
+        case .json: return .intrinsic
         default: return .fixed
         }
     }
 
     func preferredRowHeight(defaultHeight: Float) -> Float? {
+        if let metrics = EditorInspectorFieldControlRegistry.builtIn.metrics(for: self),
+           let binding = erasedBinding {
+            return metrics.height(binding, defaultHeight)
+        }
         switch self {
         case .vector3:
             return max(defaultHeight, 30)
         case .asset:
             return max(defaultHeight, 34)
-        case .colliderShapeInstances: return nil
-        case let .particleCurve(binding):
-            if case .keyframes(let keyframes) = binding.wrappedValue {
-                return max(defaultHeight, ParticleCurveEditorLayout.rowHeight(keyframeCount: keyframes.count))
-            }
-            return max(defaultHeight, ParticleCurveEditorLayout.linearRowHeight)
-        case let .particleSubEmitters(binding):
-            return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
-        case let .particleModuleStack(binding):
-            return max(defaultHeight,
-                       ParticleModuleStackEditorLayout.rowHeight(stack: binding.wrappedValue))
-        case .json: return nil
         default:
             return nil
         }
