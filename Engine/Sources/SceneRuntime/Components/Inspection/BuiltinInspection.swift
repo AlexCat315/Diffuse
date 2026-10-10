@@ -10,7 +10,7 @@ extension ComponentInspection {
                 var field = field
                 if field.path == ["type"] {
                     field.kind = .options
-                    field.choices = PhysicsJointKind.allCases.map(\.rawValue)
+                    field.choices = PhysicsJointKind.allCases.map { ComponentFieldChoice($0.rawValue) }
                 } else if field.path == ["entityA"] || field.path == ["entityB"] {
                     field.kind = .integer
                     field.documentation = "Document-local entity index; transaction edits use generation-qualified entity IDs."
@@ -84,7 +84,8 @@ extension ComponentInspection {
         min: Double? = nil, max: Double? = nil, step: Double? = nil, scale: Double = 1,
         kind: ComponentFieldKind = .automatic, choices: [String] = []) -> ComponentFieldDescriptor {
         ComponentFieldDescriptor([key]) { field in
-            field.id = id ?? key; field.label = label; field.kind = kind; field.choices = choices
+            field.id = id ?? key; field.label = label; field.kind = kind
+            field.choices = choices.map { ComponentFieldChoice($0) }
             field.numeric = ComponentNumericPresentation {
                 $0.minimum = min; $0.maximum = max; $0.step = step; $0.scale = scale
             }

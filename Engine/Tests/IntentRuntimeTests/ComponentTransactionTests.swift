@@ -7,6 +7,73 @@ import Testing
 
 @Suite("Registry component transactions")
 struct ComponentTransactionTests {
+    @Test("normalized verification follows removal, default insertion and later indexed edits", arguments: [false, true])
+    func normalizedComponentRecreation(existing: Bool) throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        if existing { _ = scene.setComponent(Cloth(gridSizeX: 3, gridSizeZ: 2, fixedVertexIndices: [0, 2, 5]), for: entity) }
+        let index: ComponentValue = .object(["fixedVertexIndices": .object(["0": .number(5)])])
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let removal: [TransactionOperation] = existing ? [.scene(.removeComponentData(entityID: entity.rawValue, typeID: "cloth"))] : []
+        let absent: [TransactionVerificationAssertion] = existing ? [.componentPresence(entityID: entity.rawValue, typeID: "cloth", isPresent: false)] : []
+        _ = try TransactionExecutor().apply(TransactionIR(summary: "Recreate cloth", operations: removal + [
+            .scene(.addComponent(entityID: entity.rawValue, typeID: "cloth")),
+            .scene(.setComponentData(entityID: entity.rawValue, typeID: "cloth", value: index, mode: .merge)),
+        ], verificationAssertions: absent + [
+            .componentPresence(entityID: entity.rawValue, typeID: "cloth", isPresent: true),
+            .componentData(entityID: entity.rawValue, typeID: "cloth", value: index, mode: .merge),
+        ], provenance: .authored), to: &context)
+        #expect(context.sceneRuntime?.component(Cloth.self, for: entity)?.fixedVertexIndices == Array(1..<16))
+        #expect(context.sceneRuntime?.component(Cloth.self, for: entity)?.gridSizeX == 16)
+    }
+
+    @Test("normalized component input verifies canonical arrays and publishes canonical events")
+    func normalizedInputVerification() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Cloth(gridSizeX: 3, gridSizeZ: 2, fixedVertexIndices: [0, 2, 5]), for: entity)
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let patch: ComponentValue = .object(["fixedVertexIndices": .object(["2": .number(1)])])
+        let result = try TransactionExecutor().apply(TransactionIR(summary: "Edit fixed points",
+            operations: [.scene(.setComponentData(entityID: entity.rawValue, typeID: "cloth", value: patch, mode: .merge))],
+            verificationAssertions: [.componentData(entityID: entity.rawValue, typeID: "cloth", value: patch, mode: .merge)],
+            provenance: .authored), to: &context)
+        #expect(context.sceneRuntime?.component(Cloth.self, for: entity)?.fixedVertexIndices == [0, 1, 2])
+        #expect(result.worldEvents.contains {
+            if case let .entityAuthoredChanged(_, "components.cloth", .json(data)) = $0 {
+                return data.value(at: ["fixedVertexIndices"]) == .array([0, 1, 2].map { .number(Double($0)) })
+            }
+            return false
+        })
+        let edits: [ComponentValue] = [
+            .object(["fixedVertexIndices": .object(["2": .number(0)])]),
+            .object(["fixedVertexIndices": .object(["1": .number(4)])]),
+        ]
+        _ = try TransactionExecutor().apply(TransactionIR(summary: "Sequential canonical indices",
+            operations: edits.map { .scene(.setComponentData(entityID: entity.rawValue, typeID: "cloth", value: $0, mode: .merge)) },
+            verificationAssertions: edits.map { .componentData(entityID: entity.rawValue, typeID: "cloth", value: $0, mode: .merge) },
+            provenance: .authored), to: &context)
+        #expect(context.sceneRuntime?.component(Cloth.self, for: entity)?.fixedVertexIndices == [0, 4])
+        let fixed: ComponentValue = .object(["fixedVertexIndices": .array([5, 2, -1, 2, 999].map { .number(Double($0)) })])
+        let grid: ComponentValue = .object(["gridSizeX": .number(2)])
+        _ = try TransactionExecutor().apply(TransactionIR(summary: "Resize edited topology", operations: [
+            .scene(.setComponentData(entityID: entity.rawValue, typeID: "cloth", value: fixed, mode: .merge)),
+            .scene(.setComponentData(entityID: entity.rawValue, typeID: "cloth", value: grid, mode: .merge)),
+        ], verificationAssertions: [
+            .componentData(entityID: entity.rawValue, typeID: "cloth", value: fixed, mode: .merge),
+            .componentData(entityID: entity.rawValue, typeID: "cloth", value: grid, mode: .merge),
+        ], provenance: .authored), to: &context)
+        #expect(context.sceneRuntime?.component(Cloth.self, for: entity)?.fixedVertexIndices == [2])
+        let before = try SceneSerializer.serialize(try #require(context.sceneRuntime))
+        #expect(throws: TransactionExecutorError.self) {
+            try TransactionExecutor().apply(TransactionIR(summary: "Incorrect postcondition",
+                operations: [.scene(.setComponentData(entityID: entity.rawValue, typeID: "cloth", value: grid, mode: .merge))],
+                verificationAssertions: [.componentData(entityID: entity.rawValue, typeID: "cloth",
+                    value: .object(["gridSizeX": .number(4)]), mode: .merge)], provenance: .authored), to: &context)
+        }
+        #expect(try SceneSerializer.serialize(try #require(context.sceneRuntime)) == before)
+    }
+
     @Test("component dependencies participate in transactions and produce component events")
     func requiredComponentEvents() throws {
         var scene = SceneRuntime()

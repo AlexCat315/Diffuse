@@ -37,7 +37,9 @@ public extension SceneRuntime {
         guard value.isFiniteJSON else { throw ComponentEditError.invalidValue(typeID) }
         let previous = componentData(typeID, for: entity)
         if mode == .merge, previous == nil { throw ComponentEditError.missingComponent(typeID) }
-        let data = mode == .merge ? try schema.merge(previous!, value) : value
+        let changes = mode == .merge ? try (schema.normalizeChanges?(previous!, value) ?? value) : value
+        guard changes.isFiniteJSON else { throw ComponentEditError.invalidValue(typeID) }
+        let data = mode == .merge ? try schema.merge(previous!, changes) : changes
         var context = ComponentDecodeContext(entityMap: Dictionary(uniqueKeysWithValues:
             entities().map { (Int(bitPattern: UInt($0.rawValue)), $0) }))
         var edited = self
@@ -51,7 +53,7 @@ public extension SceneRuntime {
             schema.applyEdit(data, entity, &context, &world)
             guard schema.has(world, entity) else { throw ComponentEditError.invalidValue(typeID) }
         }
-        guard edited.componentData(typeID, for: entity)?.containsFields(value) == true else {
+        guard edited.componentData(typeID, for: entity)?.containsFields(changes) == true else {
             throw ComponentEditError.invalidValue(typeID)
         }
         self = edited

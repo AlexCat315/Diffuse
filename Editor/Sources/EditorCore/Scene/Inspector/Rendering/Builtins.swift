@@ -3,7 +3,6 @@ public extension EditorInspectorRendererRegistry {
     static var builtIn: Self {
         var registry = Self()
         let renderers: [(String, Renderer)] = [
-            ("rigidbody", { $0.rigidBodySection(for: $1) }),
             ("collider", { $0.colliderSection(for: $1) }),
             ("destructible", { $0.destructibleSection(for: $1) }),
             ("vehicle", { $0.vehicleSection(for: $1) }),

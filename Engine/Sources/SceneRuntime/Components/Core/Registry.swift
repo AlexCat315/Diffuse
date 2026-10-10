@@ -49,6 +49,9 @@ public struct ComponentSchema: Sendable {
     public let decode: @Sendable (ComponentValue, EntityID, inout ComponentDecodeContext, inout RuntimeWorld) -> Void
     public var applyEdit: @Sendable (ComponentValue, EntityID, inout ComponentDecodeContext, inout RuntimeWorld) -> Void
     public var afterDuplicate: @Sendable (EntityID, inout RuntimeWorld) -> Void = { _, _ in }
+    /// Canonicalizes accepted partial input before merging and codec validation.
+    /// Full replacement and disk decoding remain exact and bypass this hook.
+    public var normalizeChanges: (@Sendable (ComponentValue, ComponentValue) throws -> ComponentValue)?
     public var merge: @Sendable (ComponentValue, ComponentValue) throws -> ComponentValue = { try $0.merging($1) }
     public let makeDefault: @Sendable (EntityID, inout RuntimeWorld) -> Void
     public let remove: @Sendable (EntityID, inout RuntimeWorld) -> Void

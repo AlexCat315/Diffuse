@@ -127,8 +127,11 @@ Fields without presentation overrides are inferred from that document, including
 nested objects and numeric vectors. Overrides provide labels, groups, enum
 choices, visibility conditions, read-only access and numeric display constraints.
 Numeric `scale` converts stored units to display units, such as camera radians
-to degrees; field paths and defaults always use stored units. Exact integer
-fields use text editing to preserve seeds beyond Float precision.
+to degrees; field paths and defaults always use stored units. Integer fields
+with explicit integral bounds inside Float's exact range use rounded, bounded
+number controls. Other integers use text editing to preserve large seeds and
+handles. Enum choices carry a control ID, label and typed `ComponentValue`;
+numeric enums such as cloth bend types retain their numeric disk representation.
 
 `isNullable` string fields write JSON null when cleared, letting the owning codec
 restore an absent optional key. Color presentation limits RGB channels to 0...1
@@ -138,8 +141,11 @@ keeps additional codec fields behind the advanced form without maintaining a
 second field list. Explicit descriptors control read-only runtime or asset data.
 
 The editor traverses the registry to build component sections. Camera, light,
-audio source/listener, character controller, render mesh, render material and
-animation player use the generic form. New module
+audio source/listener, character controller, render mesh, render material,
+animation player and rigid body use the generic form. Soft body, cloth and
+soft-body mesh also generate their authored controls from the schema; small
+renderers append read-only simulation and geometry diagnostics without adding
+those values to persisted components. New module
 registrations obtain the same form automatically. Each `EditorSceneAdapter` owns
 an `EditorInspectorRendererRegistry` keyed directly by component `typeID`. Its
 built-in registrations provide rich controls for particles, scripts, compound
@@ -173,6 +179,17 @@ resets its playhead unless the caller also supplies a time. Speed, loop and play
 controls retain playback progress. Full document replacement and loading still
 preserve the stored time. Optional clip names, HDR emission and imported mesh /
 material references retain the existing component disk format.
+
+Rigid-body merge rules synchronize motion quality when CCD is toggled, preserving
+explicit quality overrides and unrelated state. `normalizeChanges` canonicalizes
+accepted partial input before merge and codec validation: deformable fixed-point
+lists are sorted, deduplicated and filtered by the typed topology, and optional
+mesh resource IDs are trimmed. Wrong JSON types and unknown fields still reject
+the complete transaction. Full document replacement and loading bypass partial
+input normalization. Transaction postconditions replay normalized requests on
+value snapshots from the original document, preserving sequential array-index
+semantics and checking only asserted fields. Published events contain canonical
+component data.
 
 Generic bindings patch one document path through component transactions. Undo,
 redo, interactive cancellation and multi-selection use the existing history

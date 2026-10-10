@@ -142,9 +142,6 @@ private final class InspectorFieldBatch {
         case .vehicleControllerKind:
             guard let binding: Binding<VehicleControllerKind> = merge({ if case .vehicleControllerKind(let b) = $0 { return b }; return nil }) else { return nil }
             return .vehicleControllerKind(binding)
-        case .rigidBodyMotion:
-            guard let binding: Binding<RigidBodyMotionType> = merge({ if case .rigidBodyMotion(let b) = $0 { return b }; return nil }) else { return nil }
-            return .rigidBodyMotion(binding)
         case .colliderShapeKind:
             guard let binding: Binding<ColliderShapeKind> = merge({ if case .colliderShapeKind(let b) = $0 { return b }; return nil }) else { return nil }
             return .colliderShapeKind(binding)

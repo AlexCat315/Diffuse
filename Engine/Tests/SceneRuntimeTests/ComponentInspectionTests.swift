@@ -4,6 +4,31 @@ import Testing
 
 @Suite("Registry field descriptions")
 struct ComponentInspectionTests {
+    @Test("physics descriptions retain bounded integers, numeric enum storage and read-only simulation fields")
+    func physicsDescriptions() throws {
+        let scene = SceneRuntime()
+        let descriptions = scene.componentDescriptions()
+        let body = try #require(descriptions.first { $0.typeID == "rigidbody" })
+        #expect(body.fields.first { $0.path == ["motionType"] }?.choices ==
+            RigidBodyMotionType.allCases.map { ComponentFieldChoice($0.rawValue) })
+        for key in ["isSleeping", "accumulatedForce", "accumulatedTorque", "kinematicTarget"] {
+            #expect(body.fields.first { $0.path == [key] }?.isReadOnly == true)
+        }
+        let soft = try #require(descriptions.first { $0.typeID == "softBody" })
+        let iterations = try #require(soft.fields.first { $0.path == ["solverIterations"] })
+        #expect(iterations.kind == .integer && iterations.numeric.minimum == 1 && iterations.numeric.maximum == 128)
+        #expect(!soft.fields.contains { $0.path == ["positions"] || $0.id == "soft-body-streamed-vertices" })
+        let cloth = try #require(descriptions.first { $0.typeID == "cloth" })
+        let bend = try #require(cloth.fields.first { $0.path == ["bendType"] })
+        #expect(bend.kind == .options)
+        #expect(bend.choices.map(\.id) == ["none", "distance", "dihedral"])
+        #expect(bend.choices.map(\.value) == [0, 1, 2].map { .number(Double($0)) })
+        let mesh = try #require(descriptions.first { $0.typeID == "softBodyMesh" })
+        #expect(mesh.fields.first { $0.path == ["resourceID"] }?.isNullable == true)
+        #expect(try JSONDecoder().decode([ComponentDescription].self,
+            from: JSONEncoder().encode(descriptions)) == descriptions)
+    }
+
     @Test("descriptions use codec defaults and never mutate the inspected scene")
     func registryDescriptions() throws {
         var scene = SceneRuntime()
