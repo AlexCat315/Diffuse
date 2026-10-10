@@ -217,12 +217,15 @@ struct NativeDrawListBenchmarkTests {
         list.resources.forEach(of: ImageAssetRegistry.Asset.self) { asset in
             assetCount += 1; assetBytes += asset.image.pixels.count
         }
-        for size in [SIMD2(1280, 720), SIMD2(1920, 1080)] {
+        for size in [SIMD2(1280, 720), SIMD2(1920, 1080), SIMD2(2560, 1440), SIMD2(3840, 2160)] {
             let viewport = NativeUIViewport(pixels: size, logical: SIMD2(1280, 720))
             let (actual, statistics) = try context.nativeImage(list: list, format: format, samples: 4, viewport: viewport)
             let expected = try context.referenceImage(list: list, format: format, samples: 4, viewport: viewport)
             try expectNativeUIParity(actual, expected, format: format, label: "benchmark/\(size)")
-            #expect(statistics.drawCalls == list.batches.filter { $0.indexCount > 0 && $0.scissor?.width != 0 }.count)
+            // Native now coalesces runs of same-texture batches into single draws,
+            // so its draw count is at most the batch count (and far below it once
+            // image assets share an atlas or solids share the fallback).
+            #expect(statistics.drawCalls <= list.batches.filter { $0.indexCount > 0 && $0.scissor?.width != 0 }.count)
             try context.native.configure(format: format.native, sampleCount: 4)
             try context.reference.configure(format: format.reference, sampleCount: 4)
             let output = try context.nativeOutput(format: format.native, size: size)
@@ -261,7 +264,11 @@ struct NativeDrawListBenchmarkTests {
                     storeOp: .discard, clearColor: GPUColor(r: 0.07, g: 0.09, b: 0.12, a: 0.5))
                 let draws = try context.reference.render(list: list, pass: pass, viewportPx: (UInt32(size.x), UInt32(size.y)),
                     coordinateSpace: (viewport.logical.x, viewport.logical.y))
-                guard draws == statistics.drawCalls else { throw RHIError.invalidArgument("reference UI draw count changed") }
+                // The reference (wgpu) renderer still emits one draw per batch; it
+                // is the native baseline we compare against, not a coalescing peer.
+                guard draws == list.batches.filter({ $0.indexCount > 0 && $0.scissor?.width != 0 }).count else {
+                    throw RHIError.invalidArgument("reference UI draw count changed")
+                }
                 pass.end(); let buffer = try encoder.finish()
                 let recorded = DispatchTime.now().uptimeNanoseconds
                 context.backend.submit(buffer)

@@ -300,3 +300,30 @@ CPU 后续工作改为整体命令路径对照与优化：先分开 frontend 校
 | 96-image（ownedImages） | 0.99 | 1.06 |
 
 图片负载从原先高 WGPU 21%–35% 降到约 ±6% 以内（720p 已达 parity，1080p 受同机调度波动在 1.0–1.06 之间）。UI widget 与 command-count 负载稳定低于 WGPU（0.46–0.83）。绝对 CPU 数值仍随本机调度波动，判定仍以 native/wgpu 同机比值与 ±5% 容差为准。Metal 端的本机功能／画面／性能门槛（除 1080p 图片偶发 ±6%）已满足。应用层默认（GuavaPlayer/EditorApp 的 renderer 名、AppRenderingContext 的 device 兜底）已于 2026-10-10 切到 NativeRHI；WGPU 作为可选 fallback 与对照 harness 保留（仍可由 `--renderer wgpu` / `GUAVA_RENDERER=wgpu` 显式选用）。完整的 WGPU 删除仍取决于 Windows DX12 与 Windows/Linux Vulkan 在各自平台编译／运行验证完成。
+
+## 2026-10-10：图片资产 atlas 与 draw 合并
+
+图片负载此前仍是唯一没拉开差距的场景：96 张图各有一张独立纹理，因而 96 个独立 binding set、96 次 `setBindingSet + drawIndexed`。这两处会把收益定死：
+
+- 只做 atlas（图片共享一张纹理）而**不合并 draw**：native/wgpu 比值约 1.0，CPU 上没有收益。
+- atlas ＋ 合并 draw：draw call 从 96 降到 1，收益几乎全部来自合并这一步。
+
+`NativeUITextureStore` 增加图片 atlas 子系统，并让 `NativeDrawListRenderer.record` 合并 draw：
+
+- **Atlas 打包**：只打包经 `prepareAssets` 新注册、且各轴 ≤512 的图片资产；shelf 装箱按 `(w+2)×(h+2)` 分配，多出的一圈是**重复边缘像素**，使子矩形边界的线性采样等价于独立纹理的 clamp-to-edge。外部注册纹理（`registerTexture` / `registerExternalColorTexture`）和字体 atlas 不进 atlas，保持原有语义。
+- **UV 改写**：上传顶点时就地把该 batch 的 UV 映射到 atlas 子矩形，DrawList 的几何构建与生产调用点完全不变。UV 的整数部分（彩色图 `+10`、alpha mask `+20`）是 shader 解码的**模式哨兵**，只映射小数部分并原样保留哨兵。共享顶点（扇形中心、strip 接缝）在同一索引段内会被多次引用，因此必须从**未改写的原始顶点**取值，否则映射会被反复叠加而塌缩到图像边缘。
+- **上传所有权**：待上传项像 per-asset slot 的 patch 一样留在队列里，只在 `NativeUIDrawFrame.didSubmit()` 成功确认后释放；录制抛错或被放弃时保留，下一帧重试。`textureUploadBytes` 统计**资产本身的字节**，不含重复边缘 padding。
+- **Draw 合并**：只有同时满足以下四点才把相邻 batch 合成一次 `drawIndexed`：共享同一 binding set、索引区间严格相邻（不能跨越因 scissor 为空而被跳过的 batch，否则会把已裁剪的几何“复活”）、且**两者的 scissor 都没有真正裁剪几何**。最后一条是硬性要求：部分 batch 的 scissor 是真正的裁剪（父容器 clip、ViewportHost 分数frame），改成并集 scissor 会把本应裁掉的像素画出来。多数 batch 的 scissor 只是自身几何包围盒，合并前用顶点包围盒判断是否真有裁剪。
+
+像素 parity 保持原有门限，覆盖 720p / 1080p / 1440p / 2160p 四档，最大通道误差均为 1（正常的舍入级别）。Apple M1 Release，validation 关闭，60 帧预热、6×180 帧交替配对。绝对数值每次运行会浮动几个 µs，判定以 native/wgpu 同机比值为准：
+
+| 分辨率 | native CPU p50 | wgpu CPU p50 | native/wgpu | native completed p50 | wgpu completed p50 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1280×720 | 137.375 µs | 191.250 µs | **0.72** | 0.572 ms | 0.758 ms |
+| 1920×1080 | 143.250 µs | 199.500 µs | **0.72** | 0.791 ms | 1.260 ms |
+| 2560×1440 | 145.708 µs | 202.208 µs | **0.72** | 0.839 ms | 1.633 ms |
+| 3840×2160 | 149.375 µs | 204.916 µs | **0.73** | 1.165 ms | 1.481 ms |
+
+图片负载从 ±6% 进一步降到稳定的 **0.72–0.73×**，且 native CPU 随分辨率几乎不变（137→149 µs），说明开销来自 draw 数而非像素数——这也解释了为什么「2K/4K/8K 会明显更慢」不成立：这些 CPU 阶段与分辨率无关。
+
+**已知独立问题（与本次改动无关）**：`NativeUIBindingReuseTests · image bindings survive viewport, color-space and frame-ring changes` 在当前 HEAD 就已失败——把两个渲染源文件 `git checkout` 回 HEAD 后，`bindingSetCacheStats` 数值（frame 0 为 hits=0 / misses=1，随后全 0）与失败信息与改动后完全一致。该测试的期望值已与引擎实际行为脱节，不应误判为本次回归。
