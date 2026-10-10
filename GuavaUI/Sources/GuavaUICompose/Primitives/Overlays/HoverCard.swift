@@ -65,7 +65,7 @@ public struct HoverCard<Label: View, Content: View>: View {
                 ThemeReader { theme in
                     Box(direction: .column, alignItems: .stretch, spacing: 0) { content }
                         .padding(theme.spacing.md)
-                        .background(SemanticColorRef.surfaceRaised)
+                        .background(.materialFloating)
                         .cornerRadius(theme.radius.md)
                         .border(SemanticColorRef.border, width: 1)
                         .onHover { cardHovered = $0 }
