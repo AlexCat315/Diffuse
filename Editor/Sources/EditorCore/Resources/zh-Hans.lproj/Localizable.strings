@@ -70,7 +70,7 @@
 "Range" = "范围";
 "Inner Angle" = "内角";
 "Outer Angle" = "外角";
-"Cone" = "光锥";
+"Cone" = "圆锥";
 
 /* Script fields */
 "Script %d" = "脚本 %d";
@@ -152,3 +152,52 @@
 "Select one entity to edit script behaviors." = "选择一个实体以编辑脚本行为。";
 "Not Built" = "尚未构建";
 "Reload Pending" = "等待重载";
+
+/* Inspector enum choices */
+"Off" = "关闭";
+"Preview" = "预览";
+"Play" = "播放";
+"Bake" = "烘焙";
+"Wheeled" = "轮式";
+"Tracked" = "履带式";
+"Motorcycle" = "摩托车";
+"Capsule" = "胶囊体";
+"Cylinder" = "圆柱体";
+"Height Field" = "高度场";
+"Mesh" = "网格";
+"Convex" = "凸包";
+"Point" = "点";
+"Fixed" = "固定";
+"Distance" = "距离";
+"Hinge" = "铰链";
+"Slider" = "滑块";
+"Cone / Swing Twist" = "锥形 / 摆动扭转";
+"Six DOF" = "六自由度";
+"Position" = "位置";
+"Velocity" = "速度";
+"None" = "无";
+"Local Plane" = "局部平面";
+"World Plane" = "世界平面";
+"CPU" = "CPU";
+"GPU Preferred" = "优先使用 GPU";
+"GPU Required" = "必须使用 GPU";
+"Alpha" = "透明度";
+"Additive" = "叠加";
+"Billboard" = "面向相机";
+"Ribbon" = "条带";
+"Back to Front" = "从后到前";
+"Front to Back" = "从前到后";
+"Oldest First" = "最旧优先";
+"Youngest First" = "最新优先";
+"Auto" = "自动";
+"Play Once" = "播放一次";
+"Loop" = "循环";
+"Single Frame" = "单帧";
+"Manual" = "手动";
+"Automatic" = "自动";
+"Radial" = "径向";
+"Vortex" = "涡旋";
+"Uniform" = "均匀";
+"Curl" = "卷曲";
+"Death" = "死亡";
+"Collision" = "碰撞";

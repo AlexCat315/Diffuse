@@ -119,13 +119,13 @@ struct InspectorRendererRegistryTests {
         let rich = try #require(adapter.inspectorSections(for: entity.rawValue).first {
             $0.componentTypeID == "collider"
         })
-        #expect(rich.fields.contains { if case .colliderShapeKind = $0.value { return true }; return false })
+        #expect(rich.fields.contains { if case .colliderShapeInstances = $0.value { return true }; return false })
         #expect(adapter.inspectorRenderers.remove(componentTypeID: "collider") != nil)
         let generated = try #require(adapter.inspectorSections(for: entity.rawValue).first {
             $0.componentTypeID == "collider"
         })
         #expect(!generated.fields.isEmpty)
-        #expect(!generated.fields.contains { if case .colliderShapeKind = $0.value { return true }; return false })
+        #expect(!generated.fields.contains { if case .colliderShapeInstances = $0.value { return true }; return false })
         #expect(adapter.inspectorRenderers.remove(componentTypeID: "collider") == nil)
     }
 }

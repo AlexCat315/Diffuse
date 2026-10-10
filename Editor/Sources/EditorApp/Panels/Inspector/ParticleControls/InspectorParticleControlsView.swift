@@ -162,60 +162,9 @@ extension InspectorPanel {
         }
     }
 
-    struct InspectorParticleEmissionShapeValue: View {
-        let binding: Binding<ParticleEmissionShape>
 
-        var body: some View {
-            EnumField(value: binding, width: 150) { shape in
-                switch shape {
-                case .sphere: return L("Sphere")
-                case .box: return L("Box")
-                case .cone: return L("Cone")
-                }
-            }
-        }
-    }
 
-    struct InspectorParticleCollisionModeValue: View {
-        let binding: Binding<ParticleCollisionMode>
 
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .none: return L("None")
-                case .localPlane: return L("Local Plane")
-                case .worldPlane: return L("World Plane")
-                }
-            }
-        }
-    }
-
-    struct InspectorParticleSimulationSpaceValue: View {
-        let binding: Binding<ParticleSimulationSpace>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { space in
-                switch space {
-                case .local: return L("Local")
-                case .world: return L("World")
-                }
-            }
-        }
-    }
-
-    struct InspectorParticleSimulationBackendValue: View {
-        let binding: Binding<ParticleSimulationBackend>
-
-        var body: some View {
-            EnumField(value: binding, width: 170) { backend in
-                switch backend {
-                case .cpu: return L("CPU")
-                case .gpuIfSupported: return L("GPU Preferred")
-                case .gpuRequired: return L("GPU Required")
-                }
-            }
-        }
-    }
 
     struct InspectorParticleCurveValue: View {
         let binding: Binding<ParticleCurve>
@@ -329,131 +278,14 @@ extension InspectorPanel {
 
     }
 
-    struct InspectorParticleBlendModeValue: View {
-        let binding: Binding<ParticleBlendMode>
 
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .alpha: return L("Alpha")
-                case .additive: return L("Additive")
-                }
-            }
-        }
-    }
 
-    struct InspectorParticleRenderAlignmentValue: View {
-        let binding: Binding<ParticleRenderAlignment>
 
-        var body: some View {
-            EnumField(value: binding, width: 150) { alignment in
-                switch alignment {
-                case .billboard: return L("Billboard")
-                case .velocity: return L("Velocity")
-                }
-            }
-        }
-    }
 
-    struct InspectorParticleRenderModeValue: View {
-        let binding: Binding<ParticleRenderMode>
 
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .billboard: return L("Billboard")
-                case .ribbon: return L("Ribbon")
-                }
-            }
-        }
-    }
 
-    struct InspectorParticleSortModeValue: View {
-        let binding: Binding<ParticleSortMode>
 
-        var body: some View {
-            EnumField(value: binding, width: 190) { mode in
-                switch mode {
-                case .distanceDescending: return L("Back to Front")
-                case .distanceAscending: return L("Front to Back")
-                case .oldestFirst: return L("Oldest First")
-                case .youngestFirst: return L("Youngest First")
-                }
-            }
-        }
-    }
 
-    struct InspectorParticleTextureSheetPlaybackModeValue: View {
-        let binding: Binding<ParticleTextureSheetPlaybackMode>
-
-        var body: some View {
-            EnumField(value: binding, width: 170) { mode in
-                switch mode {
-                case .automatic: return L("Auto")
-                case .lifetime: return L("Lifetime")
-                case .playOnce: return L("Play Once")
-                case .loop: return L("Loop")
-                case .singleFrame: return L("Single Frame")
-                }
-            }
-        }
-    }
-
-    struct InspectorParticleRenderBoundsModeValue: View {
-        let binding: Binding<ParticleRenderBoundsMode>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .disabled: return L("Disabled")
-                case .manual: return L("Manual")
-                case .automatic: return L("Automatic")
-                }
-            }
-        }
-    }
-
-    struct InspectorParticleForceModeValue: View {
-        let binding: Binding<ParticleForceMode>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .none: return L("None")
-                case .radial: return L("Radial")
-                case .vortex: return L("Vortex")
-                }
-            }
-        }
-    }
-
-    struct InspectorParticleVectorFieldModeValue: View {
-        let binding: Binding<ParticleVectorFieldMode>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { mode in
-                switch mode {
-                case .none: return L("None")
-                case .uniform: return L("Uniform")
-                case .curl: return L("Curl")
-                }
-            }
-        }
-    }
-
-    struct InspectorParticleSubEmitterTriggerValue: View {
-        let binding: Binding<ParticleSubEmitterTrigger>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { trigger in
-                switch trigger {
-                case .none: return L("None")
-                case .death: return L("Death")
-                case .collision: return L("Collision")
-                }
-            }
-        }
-    }
 
     struct InspectorParticleSubEmittersValue: View {
         let binding: Binding<[ParticleSubEmitter]>

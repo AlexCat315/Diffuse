@@ -17,7 +17,7 @@ extension EditorSceneAdapter {
             EditorInspectorField(
                 id: "shape-kind",
                 label: L("Shape"),
-                value: .colliderShapeKind(colliderShapeKindBinding(for: entity))
+                value: .options(colliderShapeKindBinding(for: entity))
             ),
         ]
 

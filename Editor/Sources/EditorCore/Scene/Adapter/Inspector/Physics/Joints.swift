@@ -18,7 +18,7 @@ extension EditorSceneAdapter {
             EditorInspectorField(
                 id: "joint-type",
                 label: L("Type"),
-                value: .physicsJointKind(physicsJointKindBinding(for: entity))
+                value: .options(physicsJointKindBinding(for: entity))
             ),
             EditorInspectorField(
                 id: "joint-entity-a",
@@ -209,7 +209,7 @@ extension EditorSceneAdapter {
             EditorInspectorField(
                 id: "joint-\(prefix)-mode",
                 label: "\(label) \(L("Mode"))",
-                value: .physicsJointMotorMode(physicsJointMotorModeBinding(for: entity, slot: slot))
+                value: .options(physicsJointMotorModeBinding(for: entity, slot: slot))
             ),
             EditorInspectorField(
                 id: "joint-\(prefix)-target-position",
