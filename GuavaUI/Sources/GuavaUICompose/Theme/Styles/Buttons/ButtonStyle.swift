@@ -20,6 +20,10 @@ public struct ButtonStyleConfiguration {
     public let role: ButtonRole
     public let isPressed: Bool
     public let isHovered: Bool
+    /// Focus worth drawing: true only while the button holds focus *and* the
+    /// last focus change came from the keyboard. Pointer focus shares the same
+    /// keyboard routing but never leaves a ring behind, so a style can paint
+    /// `isFocused` unconditionally without special-casing the input device.
     public let isFocused: Bool
     public let isEnabled: Bool
     /// On/off state for toggle-shaped buttons (tool chips, segmented choices,

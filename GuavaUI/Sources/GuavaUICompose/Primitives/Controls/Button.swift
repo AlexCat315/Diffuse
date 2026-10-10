@@ -171,6 +171,14 @@ struct _StatefulButton: View {
 
     @State var isPressed: Bool = false
     @State var isHovered: Bool = false
+    /// Focus that deserves to be drawn.
+    ///
+    /// A declarative style reads the focus flag during composition, so the
+    /// transition has to be a state change: the focus chain notifies the host
+    /// node, and this flag is what re-renders styles that paint a ring.
+    /// Visibility is folded in here (not read at compose time) because
+    /// `isFocusVisible` flips without the focused node changing.
+    @State var showsFocusRing: Bool = false
 
     var body: some View {
         ButtonHost(
@@ -180,6 +188,7 @@ struct _StatefulButton: View {
             tooltip: tooltip,
             isPressed: isEnabled ? isPressed : false,
             isHovered: isEnabled ? isHovered : false,
+            showsFocusRing: isEnabled && showsFocusRing,
             label: label,
             onHoverChange: { hovered in
                 if isHovered != hovered {
@@ -194,6 +203,12 @@ struct _StatefulButton: View {
             onPressChange: { pressed in
                 if isPressed != pressed {
                     isPressed = pressed
+                }
+            },
+            onFocusChange: { focused in
+                let visible = focused && (FocusChainHolder.current?.isFocusVisible == true)
+                if showsFocusRing != visible {
+                    showsFocusRing = visible
                 }
             },
             action: { [action] in
@@ -214,10 +229,14 @@ struct ButtonHost: _PrimitiveView {
     let tooltip: String?
     let isPressed: Bool
     let isHovered: Bool
+    /// Whether this button should paint a focus ring. Owned by `_StatefulButton`
+    /// so a focus change re-renders declarative styles reliably.
+    let showsFocusRing: Bool
     let label: AnyView
     let onHoverChange: (Bool) -> Void
     let onDown: () -> Void
     let onPressChange: (Bool) -> Void
+    let onFocusChange: (Bool) -> Void
     let action: () -> Void
 
     func _makeNode() -> Node {
@@ -235,16 +254,22 @@ struct ButtonHost: _PrimitiveView {
         }
         node.accessibilityActions = AccessibilityActions()
         if isEnabled { node.accessibilityActions.activate = action }
-        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] (_: Bool) in
-            guard let node else { return }
-            updateBuiltinButtonChromeDescendants(of: node, animated: true)
-            node.firstResource(TooltipSession.self)?.setFocused(
-                FocusChainHolder.current?.focused === node && FocusChainHolder.current?.isFocusVisible == true)
-        }
         node.attachments[ButtonHost.markerKey] = true
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
         let requiresInteractionRecompose = style.requiresInteractionRecompose
         node.attachments[ButtonHost.requiresInteractionRecomposeKey] = requiresInteractionRecompose
+        // A declarative style only learns about focus by being rebuilt, so the
+        // host lifts the focus change into view state — for those styles alone.
+        // Node-driven chrome repaints itself in place and must not pay for a
+        // rebuild on every Tab.
+        let focusChange = onFocusChange
+        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] (focused: Bool) in
+            guard let node else { return }
+            updateBuiltinButtonChromeDescendants(of: node, animated: true)
+            node.firstResource(TooltipSession.self)?.setFocused(
+                focused && FocusChainHolder.current?.isFocusVisible == true)
+            if requiresInteractionRecompose { focusChange(focused) }
+        }
         if requiresInteractionRecompose {
             node.attachments[ButtonHost.pressedKey] = isEnabled ? isPressed : false
             node.attachments[ButtonHost.hoveredKey] = isEnabled ? isHovered : false
@@ -408,7 +433,10 @@ struct ButtonHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
         let theme = node.theme
-        let isFocused = (FocusChainHolder.current?.focused === node)
+        // Split from pointer focus on purpose: a click focuses the control but
+        // must not leave a ring behind. `showsFocusRing` is fed by the focus
+        // chain through `onFocusChange`.
+        let isFocused = showsFocusRing
         let configPressed = style.requiresInteractionRecompose
             ? isPressed
             : (node.attachments[ButtonHost.pressedKey] as? Bool == true)
