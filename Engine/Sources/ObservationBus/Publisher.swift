@@ -39,7 +39,6 @@ public enum SubscriptionStartFrom: Sendable, Equatable {
 }
 
 public enum SubscriptionBufferPolicy: Sendable, Equatable {
-    case boundedQueue(size: Int)
     case dropOldest(size: Int)
     case dropNewest(size: Int)
     case coalesce(size: Int, keyFields: [String])
@@ -136,19 +135,8 @@ public final class ObservationSubscription: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         switch spec.bufferPolicy {
-        case let .boundedQueue(size):
-            let capacity = max(1, size)
-            if queue.count >= capacity {
-                queue.removeFirst(queue.count - capacity + 1)
-            }
-            queue.append(envelope)
-
         case let .dropOldest(size):
-            let capacity = max(1, size)
-            if queue.count >= capacity {
-                queue.removeFirst(queue.count - capacity + 1)
-            }
-            queue.append(envelope)
+            appendTrimmingOldest(envelope, capacity: size)
 
         case let .dropNewest(size):
             guard queue.count < max(1, size) else {
@@ -157,19 +145,27 @@ public final class ObservationSubscription: @unchecked Sendable {
             queue.append(envelope)
 
         case let .coalesce(size, keyFields):
-            let capacity = max(1, size)
-            if let newKey = envelope.payloadRef.inlineRecord?.coalesceKey(for: keyFields),
-               let index = queue.lastIndex(where: { existing in
-                   existing.payloadRef.inlineRecord?.coalesceKey(for: keyFields) == newKey
-               }) {
+            guard let newKey = envelope.payloadRef.inlineRecord?.coalesceKey(for: keyFields) else {
+                appendTrimmingOldest(envelope, capacity: size)
+                return
+            }
+            if let index = queue.lastIndex(where: { existing in
+                existing.payloadRef.inlineRecord?.coalesceKey(for: keyFields) == newKey
+            }) {
                 queue[index] = envelope
                 return
             }
-            if queue.count >= capacity {
-                queue.removeFirst(queue.count - capacity + 1)
-            }
-            queue.append(envelope)
+            appendTrimmingOldest(envelope, capacity: size)
         }
+    }
+
+    /// Requires `lock` to be held.
+    private func appendTrimmingOldest(_ envelope: EventEnvelope, capacity: Int) {
+        let limit = max(1, capacity)
+        if queue.count >= limit {
+            queue.removeFirst(queue.count - limit + 1)
+        }
+        queue.append(envelope)
     }
 }
 
@@ -199,27 +195,22 @@ public final class ObservationBus: @unchecked Sendable {
     }
 
     public func subscribe(spec: SubscriptionSpec) -> ObservationSubscription {
-        lock.lock()
-        let initialEvents = initialEventsLocked(for: spec)
-        let subscription = ObservationSubscription(spec: spec, initialEvents: initialEvents)
-        subscriptions[subscription.id] = subscription
-        lock.unlock()
-        return subscription
+        withLock {
+            let subscription = ObservationSubscription(spec: spec, initialEvents: initialEventsLocked(for: spec))
+            subscriptions[subscription.id] = subscription
+            return subscription
+        }
     }
 
     public func unsubscribe(_ subscriptionID: String) {
-        lock.lock()
-        subscriptions.removeValue(forKey: subscriptionID)
-        lock.unlock()
+        withLock { subscriptions.removeValue(forKey: subscriptionID) }
     }
 
     // MARK: - Snapshot resync (§8)
 
     /// Register a snapshot provider for a given scope (e.g. "scene", "sequence").
     public func registerSnapshotProvider(_ provider: some SnapshotProvider, forScope scope: String) {
-        lock.lock()
-        snapshotProviders[scope] = provider
-        lock.unlock()
+        withLock { snapshotProviders[scope] = provider }
     }
 
     /// Materialize a snapshot for `scope` and record its cursor so that subscribers
@@ -259,42 +250,45 @@ public final class ObservationBus: @unchecked Sendable {
                         provenance: EventProvenance,
                         schemaVersion: UInt32 = 1) throws -> EventEnvelope {
         let spec = registry.spec(for: kind)
-        let envelope: EventEnvelope
-        let matchedSubscriptions: [ObservationSubscription]
-
-        lock.lock()
-        let nextSeq = (nextSeqByStream[streamID] ?? 0) + 1
-        nextSeqByStream[streamID] = nextSeq
-        envelope = EventEnvelope(
-            eventID: "\(streamID)#\(nextSeq)",
-            kind: kind,
-            streamID: streamID,
-            seq: nextSeq,
-            causalSeq: causalSeq,
-            monotonicTimestampNS: DispatchTime.now().uptimeNanoseconds,
-            wallTimestampUTCMS: Int64(Date().timeIntervalSince1970 * 1000),
-            origin: origin,
-            causationID: causationID,
-            correlationID: correlationID,
-            provenance: provenance,
-            payloadRef: payload,
-            schemaVersion: schemaVersion,
-            replay: false
-        )
-        var streamEvents = eventsByStream[streamID, default: []]
-        streamEvents.append(envelope)
-        if streamEvents.count > ringLimit {
-            streamEvents.removeFirst(streamEvents.count - ringLimit)
+        // The bus lock guards sequence allocation and the stream ring only. Filter
+        // matching runs outside it, so concurrent publishers are not serialized by
+        // subscriber count or filter complexity. A subscription unsubscribing during
+        // that window may still receive this envelope, which is within best-effort.
+        let published = withLock { () -> (envelope: EventEnvelope, candidates: [ObservationSubscription]) in
+            let nextSeq = (nextSeqByStream[streamID] ?? 0) + 1
+            nextSeqByStream[streamID] = nextSeq
+            let envelope = EventEnvelope(
+                eventID: "\(streamID)#\(nextSeq)",
+                kind: kind,
+                streamID: streamID,
+                seq: nextSeq,
+                causalSeq: causalSeq,
+                monotonicTimestampNS: DispatchTime.now().uptimeNanoseconds,
+                wallTimestampUTCMS: Int64(Date().timeIntervalSince1970 * 1000),
+                origin: origin,
+                causationID: causationID,
+                correlationID: correlationID,
+                provenance: provenance,
+                payloadRef: payload,
+                schemaVersion: schemaVersion,
+                replay: false
+            )
+            var streamEvents = eventsByStream[streamID, default: []]
+            streamEvents.append(envelope)
+            if streamEvents.count > ringLimit {
+                streamEvents.removeFirst(streamEvents.count - ringLimit)
+            }
+            eventsByStream[streamID] = streamEvents
+            return (envelope, Array(subscriptions.values))
         }
-        eventsByStream[streamID] = streamEvents
-        matchedSubscriptions = subscriptions.values.filter { $0.spec.filter.matches(envelope) }
-        lock.unlock()
 
         if spec.replayable, spec.retention != .ephemeral {
-            try coldLog?.append(envelope)
+            try coldLog?.append(published.envelope)
         }
-        matchedSubscriptions.forEach { $0.enqueue(envelope) }
-        return envelope
+        for subscription in published.candidates where subscription.spec.filter.matches(published.envelope) {
+            subscription.enqueue(published.envelope)
+        }
+        return published.envelope
     }
 
     public func publish(_ draft: EventDraft) throws -> EventEnvelope {
@@ -314,10 +308,7 @@ public final class ObservationBus: @unchecked Sendable {
     }
 
     public func events(in streamID: String) -> [EventEnvelope] {
-        lock.lock()
-        let snapshot = eventsByStream[streamID] ?? []
-        lock.unlock()
-        return snapshot
+        withLock { eventsByStream[streamID] ?? [] }
     }
 
     public func replay(streamID: String,
@@ -330,8 +321,9 @@ public final class ObservationBus: @unchecked Sendable {
                 return replayed
             }
         }
+        let upperBound = toSeq ?? UInt64.max
         return events(in: streamID)
-            .filter { $0.seq >= fromSeq && (toSeq == nil || $0.seq <= toSeq!) }
+            .filter { $0.seq >= fromSeq && $0.seq <= upperBound }
             .map { envelope in
                 var replayed = envelope
                 replayed.replay = true
