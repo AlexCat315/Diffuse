@@ -319,6 +319,9 @@ public struct RuntimeWorld: @unchecked Sendable {
     private var slots: [EntitySlot] = []
     private var freeIndices: [Int] = []
     private var components = ComponentStores()
+    /// Components registered from data instead of a Swift type keep their authored
+    /// document here: there is no type to key a typed store by.
+    private var documentComponents: [String: [EntityID: ComponentValue]] = [:]
     private var resources = ResourceStorage()
     private var rootEntities: [EntityID] = []
     private var dirtyHierarchyEntities: Set<EntityID> = []
@@ -410,10 +413,49 @@ public struct RuntimeWorld: @unchecked Sendable {
         freeIndices.append(index)
         entityCount -= 1
         components.removeAll(for: entity)
+        removeDocumentComponents(for: entity)
         dirtyHierarchyEntities.remove(entity)
         revision &+= 1
         physicsRevision &+= 1
         return true
+    }
+
+    // MARK: - Document components
+
+    /// Storage for schema-registered components that have no Swift type, such as
+    /// plugin declarations. The registry codec reads and writes these documents.
+    public func documentComponent(_ typeID: String, for entity: EntityID) -> ComponentValue? {
+        guard contains(entity) else { return nil }
+        return documentComponents[typeID]?[entity]
+    }
+
+    public func hasDocumentComponent(_ typeID: String, for entity: EntityID) -> Bool {
+        documentComponent(typeID, for: entity) != nil
+    }
+
+    @discardableResult
+    public mutating func setDocumentComponent(_ typeID: String,
+                                              _ value: ComponentValue,
+                                              for entity: EntityID) -> Bool {
+        guard contains(entity) else { return false }
+        documentComponents[typeID, default: [:]][entity] = value
+        revision &+= 1
+        return true
+    }
+
+    @discardableResult
+    public mutating func removeDocumentComponent(_ typeID: String, from entity: EntityID) -> ComponentValue? {
+        guard contains(entity), documentComponents[typeID]?[entity] != nil else { return nil }
+        let removed = documentComponents[typeID]?.removeValue(forKey: entity)
+        if documentComponents[typeID]?.isEmpty == true { documentComponents.removeValue(forKey: typeID) }
+        revision &+= 1
+        return removed
+    }
+
+    private mutating func removeDocumentComponents(for entity: EntityID) {
+        for typeID in documentComponents.keys where documentComponents[typeID]?.removeValue(forKey: entity) != nil {
+            if documentComponents[typeID]?.isEmpty == true { documentComponents[typeID] = nil }
+        }
     }
 
     public func contains(_ entity: EntityID) -> Bool {
