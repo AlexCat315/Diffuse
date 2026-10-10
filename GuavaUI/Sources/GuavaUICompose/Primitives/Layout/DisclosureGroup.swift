@@ -25,7 +25,7 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
                 isExpanded.wrappedValue.toggle()
             }) {
                 Row(alignment: .center, spacing: 5) {
-                    Icon(isExpanded.wrappedValue ? UICommonIcons.chevronDown : UICommonIcons.chevronRight,
+                    Icon(isExpanded.wrappedValue ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight,
                          size: 12, color: .onSurfaceVariant)
                     label.flex(1, shrink: 1, basis: 0)
                 }

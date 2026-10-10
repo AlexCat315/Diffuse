@@ -27,7 +27,7 @@ public struct Dialog<Content: View, Footer: View>: View {
                         if !options.description.isEmpty { Text(options.description).font(.caption).foregroundColor(.onSurfaceMuted) }
                     }.flex(1, shrink: 1)
                     if options.showsCloseButton {
-                        Button(icon: .resource(UICommonIcons.close), size: 14, tooltip: "Close dialog") { isPresented.wrappedValue = false }.buttonStyle(.ghost)
+                        Button(icon: .resource(UIIcons.Action.x), size: 14, tooltip: "Close dialog") { isPresented.wrappedValue = false }.buttonStyle(.ghost)
                     }
                 }.padding(18).flex(0, shrink: 0)
                 Divider()

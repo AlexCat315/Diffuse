@@ -18,14 +18,25 @@ struct PanelStory: View {
 
 struct SplitStory: View {
     @State private var fraction = 0.4
+    @State private var resizable: Float = 0.35
     var body: some View {
-        StorySection("Proportional split", "The slider updates the fraction. Draggable split handles live in Workspace.") {
-            Slider(value: $fraction, range: 0.1...0.9)
-            SplitView(.horizontal, fraction: Float(fraction), first: {
-                Text("Leading").padding(24).background(.surfaceVariant)
-            }, second: {
-                SplitView(.vertical, first: { Text("Top").padding(20) }, second: { Text("Bottom").padding(20).background(.surfaceVariant) })
-            }).frame(height: 210)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Proportional split", "The slider updates the fraction; the divider is a plain separator because the application owns the layout.") {
+                Slider(value: $fraction, range: 0.1...0.9)
+                SplitView(.horizontal, fraction: Float(fraction), first: {
+                    Text("Leading").padding(24).background(.surfaceVariant)
+                }, second: {
+                    SplitView(.vertical, first: { Text("Top").padding(20) }, second: { Text("Bottom").padding(20).background(.surfaceVariant) })
+                }).frame(height: 210)
+            }
+            StorySection("Resizable split", "Drag the divider, or focus it and use the arrow keys. The fraction is clamped and written back through the binding, so it can be persisted.") {
+                SplitView(.horizontal, fraction: $resizable, minFraction: 0.2, maxFraction: 0.75, first: {
+                    Text("Sidebar").padding(24).background(.surfaceVariant)
+                }, second: {
+                    Text("Content").padding(24).background(.surface)
+                }).frame(height: 210)
+                Text("Fraction: \(Int(resizable * 100))% · clamped to 20–75%").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
         }
     }
 }

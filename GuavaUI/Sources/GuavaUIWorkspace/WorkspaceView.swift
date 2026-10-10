@@ -798,7 +798,7 @@ private struct _WorkspaceTabBar: View {
             tabButtons
             Spacer(minLength: 0)
             if let panelID = group.activePanelID {
-                Button(icon: .resource(UICommonIcons.expand), size: 12, tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
+                Button(icon: .resource(UIIcons.Navigation.expand), size: 12, tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
                     .buttonStyle(.ghost).frame(width: 24, height: 24)
                     .debugName("workspace-maximize-\(group.id.rawValue)")
             }

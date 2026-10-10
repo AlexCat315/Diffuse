@@ -52,7 +52,7 @@ private struct ToastCard: View {
                 if !notification.message.isEmpty { Text(notification.message).font(.body).foregroundColor(.onSurfaceVariant) }
             }.flex(1, shrink: 1, basis: 0)
             if notification.isDismissible {
-                Button(icon: .resource(UICommonIcons.close), size: 12, tooltip: "Dismiss notification") { controller.dismiss(notification.id) }
+                Button(icon: .resource(UIIcons.Action.x), size: 12, tooltip: "Dismiss notification") { controller.dismiss(notification.id) }
                     .buttonStyle(.ghost).controlSize(.small)
             }
         }.padding(14).background(.surfaceFloating).cornerRadius(8).border(.border, width: 1)

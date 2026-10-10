@@ -98,7 +98,7 @@ public struct AssetRefField: View {
                             isEnabled: isEnabled,
                             width: 240,
                             placement: .end) {
-                        Icon(isPickerPresented ? UICommonIcons.chevronUp : UICommonIcons.chevronDown,
+                        Icon(isPickerPresented ? UIIcons.Navigation.chevronUp : UIIcons.Navigation.chevronDown,
                              size: 10,
                              color: .onSurfaceMuted)
                             .frame(width: 22, height: 22)
