@@ -181,6 +181,7 @@ private extension AccessibilityRole {
         case .dialog, .group: return .group
         case .progress: return .progressIndicator
         case .image: return .image
+        case .link: return .link
         }
     }
 }

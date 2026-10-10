@@ -181,6 +181,9 @@ public extension GalleryPage {
         case .hoverCard: AnyView(HoverCardStory())
         case .timeline: AnyView(TimelineStory())
         case .toolbar: AnyView(ToolbarStory(options: options))
+        case .link: AnyView(LinkStory(options: options))
+        case .statusBar: AnyView(StatusBarStory(options: options))
+        case .carousel: AnyView(CarouselStory(options: options))
         }
     }
 }
