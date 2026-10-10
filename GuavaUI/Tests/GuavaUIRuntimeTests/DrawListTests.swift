@@ -46,6 +46,31 @@ struct DrawListTests {
         #expect(list.batches[0].indexCount == 12)
     }
 
+    @Test("A backdrop request rides on its own batch")
+    func backdropStartsOwnBatch() {
+        let list = DrawList()
+        // The shadow behind a panel: solid colour, same texture, same scissor,
+        // and exactly the kind of draw a frosted fill would otherwise merge
+        // into — which would put the blur behind the shadow instead of the fill.
+        list.addRect(UIRect(x: 0, y: 0, width: 40, height: 40), color: .black)
+        list.beginBackdrop(UIBackdrop(rect: UIRect(x: 4, y: 4, width: 32, height: 32),
+                                      cornerRadius: 6, blurRadius: 12))
+        list.addRoundedRect(UIRect(x: 4, y: 4, width: 32, height: 32), radius: 6, color: .white)
+        // And the request is consumed: the row after the fill merges as usual.
+        list.addRect(UIRect(x: 4, y: 4, width: 32, height: 32), color: .white)
+
+        #expect(list.batches.count == 2)
+        #expect(list.batches[0].backdrop == nil)
+        #expect(list.batches[0].indexCount == 6)
+        let frosted = list.batches[1]
+        #expect(frosted.backdrop == UIBackdrop(rect: UIRect(x: 4, y: 4, width: 32, height: 32),
+                                               cornerRadius: 6, blurRadius: 12))
+        #expect(frosted.indexOffset == 6)
+        // The rounded fill plus the rect that follows it: one batch, as if no
+        // request had ever been made.
+        #expect(frosted.indexCount == UInt32(list.indices.count - 6))
+    }
+
     @Test("Different textureID splits batches")
     func textureSplitsBatches() {
         let list = DrawList()

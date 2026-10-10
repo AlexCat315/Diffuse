@@ -178,6 +178,20 @@ public final class Node: @unchecked Sendable {
         }
     }
 
+    /// Frosted backdrop behind the background fill, in logical points. `0`
+    /// (default) paints the fill over whatever is already on screen.
+    ///
+    /// This is a request: renderers with an offscreen pass blur the frame
+    /// inside the node's box and composite it before the fill, which is why
+    /// the fill above it is a translucent material rather than a solid.
+    public var backdropBlur: Float = 0 {
+        didSet {
+            if oldValue != backdropBlur {
+                markRenderDirty(reason: .styleSet(field: "backdropBlur"))
+            }
+        }
+    }
+
     /// Drop-shadow colour painted under the background fill. `nil` (default)
     /// or zero-alpha skips shadow rendering.
     public var shadowColor: Color? {

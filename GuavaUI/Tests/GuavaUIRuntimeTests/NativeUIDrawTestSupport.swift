@@ -51,7 +51,8 @@ final class NativeUIDrawTestContext {
     }
 
     func nativeImage(list: DrawList, format: NativeUITestFormat, samples: Int, viewport: NativeUIViewport,
-        renderer: NativeDrawListRenderer? = nil) throws -> (Data, NativeUIDrawStatistics) {
+        renderer: NativeDrawListRenderer? = nil, backdropSource: Bool = false)
+        throws -> (Data, NativeUIDrawStatistics) {
         let renderer = renderer ?? native
         try renderer.configure(format: format.native, sampleCount: samples)
         let output = try nativeOutput(format: format.native, size: viewport.pixels)
@@ -62,7 +63,10 @@ final class NativeUIDrawTestContext {
         try device.beginFrame()
         do {
             let commands = CommandBuffer()
-            let frame = try renderer.record(list: list, into: commands, target: target, viewport: viewport)
+            // The frame the panel can sample is this recording's own output:
+            // a real window keeps one owned for exactly this reason.
+            let frame = try renderer.record(list: list, into: commands, target: target, viewport: viewport,
+                backdropSource: backdropSource ? output.texture : nil)
             try device.submit(commands); frame.didSubmit()
             device.endFrame()
             try device.waitUntilIdle()

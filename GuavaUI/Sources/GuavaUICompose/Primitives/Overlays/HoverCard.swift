@@ -67,6 +67,7 @@ public struct HoverCard<Label: View, Content: View>: View {
                         .padding(theme.spacing.md)
                         .background(.materialFloating)
                         .cornerRadius(theme.radius.md)
+                        .backdropBlur(14)
                         .border(SemanticColorRef.border, width: 1)
                         .onHover { cardHovered = $0 }
                 }
