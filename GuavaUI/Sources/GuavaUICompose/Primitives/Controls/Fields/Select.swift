@@ -150,6 +150,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
     let select: Select<Value>
 
     @State var isPresented: Bool = false
+    @State var isHovered: Bool = false
 
     var body: some View {
         ThemeReader { theme in
@@ -161,6 +162,11 @@ private struct _StatefulSelect<Value: Hashable>: View {
             // radius the TextField/NumberField use (theme.inputs), so a Select
             // sits flush with the fields around it in a property grid instead
             // of looking like a lighter pill from an older style.
+            //
+            // Open state changes the border *colour* at the normal hairline
+            // width. It used to widen to the 2pt focus ring, which read as a
+            // second, louder control sitting under the popup; the ring is now
+            // reserved for keyboard focus, which the trigger style draws.
             Row(alignment: .center, spacing: 8) {
                 Text(selectedLabel)
                     .font(.body)
@@ -172,9 +178,12 @@ private struct _StatefulSelect<Value: Hashable>: View {
             .frame(height: 28)
             .background(theme.inputs.background)
             .cornerRadius(theme.inputs.radius)
-            .border(isPresented ? theme.inputs.borderFocused : theme.inputs.borderColor,
-                    width: isPresented ? theme.inputs.focusRingWidth : theme.inputs.borderWidth)
+            .border(borderColor(theme), width: theme.inputs.borderWidth)
             .animation(.semantic(.fast, in: theme), value: isPresented)
+            .animation(.semantic(.fast, in: theme), value: isHovered)
+            .onHover { hovered in
+                if isHovered != hovered { isHovered = hovered }
+            }
         }, content: {
             Menu(menuEntries,
                  width: select.width,
@@ -184,6 +193,14 @@ private struct _StatefulSelect<Value: Hashable>: View {
             })
         })
         }
+    }
+
+    /// Open beats hover: the popup is open because of the trigger, so the
+    /// trigger has to explain it even while the pointer has moved into the menu.
+    private func borderColor(_ theme: Theme) -> Color {
+        guard select.isEnabled else { return theme.inputs.borderDisabled }
+        if isPresented { return theme.inputs.borderFocused }
+        return isHovered ? theme.inputs.borderHover : theme.inputs.borderColor
     }
 
     private var selectedLabel: String {

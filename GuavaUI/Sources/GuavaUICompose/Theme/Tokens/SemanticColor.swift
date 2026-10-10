@@ -21,6 +21,10 @@ public struct SemanticColorRef: Sendable {
 }
 
 public extension SemanticColorRef {
+    /// Nothing at all. Lets a state-driven fill stay type-consistent —
+    /// `background(isSelected ? .selection : .clear)` — instead of dropping to
+    /// a `Color` and losing the theme-bound branch.
+    static let clear            = SemanticColorRef { _ in .clear }
     static let background       = SemanticColorRef { $0.colors.background }
     static let surface          = SemanticColorRef { $0.colors.surface }
     static let surfaceVariant   = SemanticColorRef { $0.colors.surfaceVariant }
@@ -28,6 +32,18 @@ public extension SemanticColorRef {
     static let surfaceRaised    = SemanticColorRef { $0.colors.surfaceRaised }
     static let surfaceFloating  = SemanticColorRef { $0.colors.surfaceFloating }
     static let surfaceOverlay   = SemanticColorRef { $0.colors.surfaceOverlay }
+
+    /// Fill for panels that float over content: menus, popovers, popup editors.
+    ///
+    /// Deliberately a *material* rather than a solid, and deliberately still
+    /// near-opaque. The renderer has no backdrop blur, so every point of
+    /// transparency here is sharp leakage, not frost; at 92% the panel picks up
+    /// a hint of what it covers (a blue button behind a menu cools the white,
+    /// body text greys it) while text inside keeps full contrast. When a real
+    /// backdrop pass lands — render the layer below into a texture, blur it,
+    /// then composite this fill over the result — this alpha can drop to ~0.8
+    /// and the blur can take over.
+    static let materialFloating = SemanticColorRef { $0.colors.surfaceFloating.multipliedAlpha(0.92) }
 
     static let onBackground     = SemanticColorRef { $0.colors.onBackground }
     static let onSurface        = SemanticColorRef { $0.colors.onSurface }

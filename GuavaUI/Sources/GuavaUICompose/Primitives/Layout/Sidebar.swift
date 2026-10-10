@@ -36,7 +36,10 @@ public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
             header.flex(0, shrink: 0)
             RovingFocusHost(enabledItems: enabled.map { AnyHashable($0) }, selection: { selection.wrappedValue.map { AnyHashable($0) } },
                             onSelect: { if let id = $0.base as? ID { selection.wrappedValue = id } }) {
-                ScrollView(.vertical, scrollbarGutter: .stable) {
+                // Overlay gutter: a reserved lane insets only the trailing edge,
+                // which would make every selected destination sit 12pt further
+                // from the right edge than from the left.
+                ScrollView(.vertical, scrollbarGutter: .overlay) {
                     Box(direction: .column, alignItems: .stretch, spacing: 10) {
                         for section in sections {
                             AnyView(Box(direction: .column, alignItems: .stretch, spacing: 3) {
@@ -77,7 +80,18 @@ private struct SidebarItemStyle: ButtonStyle {
         Row(alignment: .center) { AnyView(c.label) }.flex(1, shrink: 1)
             .foregroundColor(c.isEnabled ? c.isSelected ? .onSurface : .onSurfaceVariant : .onSurfaceDisabled)
             .padding(horizontal: 8, vertical: 7)
-            .background(c.isSelected ? c.theme.colors.surfaceVariant : c.isHovered ? c.theme.colors.stateLayerHover : .clear)
+            .background(fill(for: c))
             .cornerRadius(6).border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
+    }
+
+    /// Selection is a resting state, not a replacement for feedback: a selected
+    /// destination still answers hover and press, by layering the same state
+    /// layer over the selection fill. Disabled rows answer nothing.
+    private func fill(for c: ButtonStyleConfiguration) -> Color {
+        let base: Color = c.isSelected ? c.theme.colors.surfaceVariant : .clear
+        guard c.isEnabled else { return base }
+        if c.isPressed { return base.composited(over: c.theme.colors.stateLayerPressed) }
+        if c.isHovered { return base.composited(over: c.theme.colors.stateLayerHover) }
+        return base
     }
 }

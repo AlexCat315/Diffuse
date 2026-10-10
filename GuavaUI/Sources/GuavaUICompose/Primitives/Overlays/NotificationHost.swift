@@ -55,6 +55,7 @@ private struct ToastCard: View {
                 Button(icon: .resource(UIIcons.Action.x), size: 12, tooltip: "Dismiss notification") { controller.dismiss(notification.id) }
                     .buttonStyle(.ghost).controlSize(.small)
             }
+        // Opaque on purpose: a toast must stay readable over whatever it covers.
         }.padding(14).background(.surfaceFloating).cornerRadius(8).border(.border, width: 1)
             .onHover { controller.setPaused($0, id: notification.id) }
     }

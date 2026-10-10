@@ -239,4 +239,30 @@ struct MenuHierarchyTests: GuavaUIComposeSerializedSuite {
         let lines = nodes(graph.tree.root).filter { $0.backgroundColor == $0.theme.colors.divider && $0.frame.height > 0 }
         #expect(lines.count == 1 && lines[0].frame.height == 1)
     } }
+
+    @Test("A row highlight is inset the same on both sides of the panel")
+    func rowHighlightSymmetry() throws { try scene { graph, _, _, _, _ in
+        graph.install(root: Menu([.item(MenuItem(id: "mini", title: "Mini") {}),
+                                 .item(MenuItem(id: "medium", title: "Medium", isSelected: true) {}),
+                                 .item(MenuItem(id: "large", title: "Large") {})], width: 180))
+        settle(graph)
+        let target = try row("medium", graph: graph)
+        // The panel is the bordered box the rows live in. A scrollbar gutter
+        // reserved inside it is trailing-only, so that is where the highlight
+        // would lose its symmetry.
+        let panel = try #require(ancestors(of: target).first { $0.borderWidth > 0 })
+        let leading = target.absoluteFrame.minX - panel.absoluteFrame.minX
+        let trailing = panel.absoluteFrame.maxX - target.absoluteFrame.maxX
+        #expect(abs(leading - trailing) < 0.5)
+    } }
+
+    private func ancestors(of node: Node) -> [Node] {
+        var chain: [Node] = []
+        var current = node.parent
+        while let candidate = current {
+            chain.append(candidate)
+            current = candidate.parent
+        }
+        return chain
+    }
 }

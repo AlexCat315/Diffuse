@@ -58,7 +58,7 @@ private struct _StatefulColorField: View {
             ColorPickerPanel(color: field.color, showAlpha: field.showAlpha)
                 .padding(10)
                 .frame(width: 220)
-                .background(.surfaceFloating)
+                .background(.materialFloating)
                 .cornerRadius(8)
         })
     }

@@ -46,7 +46,7 @@ public struct Popover<Label: View, Content: View>: View {
                    action: { isPresented.wrappedValue.toggle() }) {
                 label
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PopoverTriggerStyle())
 
             _PopoverOverlayHost(isPresented: isPresented.wrappedValue,
                                 width: width,
@@ -60,6 +60,24 @@ public struct Popover<Label: View, Content: View>: View {
             }
         }
         .zIndex(isPresented.wrappedValue ? 10_000 : 0)
+    }
+}
+
+/// Trigger chrome for popovers.
+///
+/// A trigger owns its own look — a select pill, a colour well, an icon button,
+/// a "…" menu — so this style contributes no fill, padding or hover tint. It
+/// adds exactly one thing: the keyboard focus ring, drawn outside the trigger's
+/// box. Pointer focus is invisible, which is why an open popover never shows a
+/// ring around the control that opened it.
+private struct PopoverTriggerStyle: ButtonStyle {
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        let theme = configuration.theme
+        return AnyView(configuration.label)
+            .cornerRadius(theme.inputs.radius)
+            .border(configuration.isFocused ? theme.colors.focusRing : .clear,
+                    width: configuration.isFocused ? 2 : 0)
+            .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
 }
 
