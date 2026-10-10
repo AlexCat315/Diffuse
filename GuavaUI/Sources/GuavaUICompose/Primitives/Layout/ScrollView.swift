@@ -23,6 +23,23 @@ private enum _ScrollViewAttachmentKeys {
     static let isHovered = "__scrollview_scrollbar_is_hovered"
     static let chromeOpacity = "__scrollview_scrollbar_chrome_opacity"
     static let contentSize = "__scrollview_content_size"
+    static let rubberBand = "__scrollview_rubber_band"
+    static let report = "__scrollview_report"
+
+    static func rubberBandAnimator(for node: Node,
+                                   physics: ScrollPhysics) -> ScrollRubberBandAnimator {
+        if let existing = node.attachments[rubberBand] as? ScrollRubberBandAnimator {
+            existing.physics = physics
+            return existing
+        }
+        let animator = ScrollRubberBandAnimator(physics: physics) { [weak node] offset in
+            guard let node else { return }
+            node.contentOffset = offset
+            (node.attachments[report] as? (Node) -> Void)?(node)
+        }
+        node.attachments[rubberBand] = animator
+        return animator
+    }
 }
 
 private struct _ScrollViewScrollbarGeometry {
@@ -116,6 +133,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: size,
                                             contentSize: Self.cachedScrollableContentSize(for: node)))
         }
+        node.attachments[_ScrollViewAttachmentKeys.report] = report
         if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset { node.contentOffset = desired }
         let axes = self.axes
         let step = self.wheelStep
@@ -123,6 +141,15 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let trackThickness: Float = 8
         let trackInset: Float = 2
         let trackHitSlop: Float = 6
+
+        // Owns the overscroll state for this container. Created once and kept
+        // in attachments so the return spring survives recomposes; the report
+        // closure above is re-published every update so it always sees the
+        // current callbacks instead of capturing a stale one.
+        let overscroll = _ScrollViewAttachmentKeys.rubberBandAnimator(for: node,
+                                                                     physics: node.scrollPhysics)
+        Self.publishScrollRange(to: overscroll, on: node)
+        overscroll.adopt(node.contentOffset)
 
         if node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] == nil {
             node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] = Float(0)
@@ -160,23 +187,17 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 if dx == 0 && dy == 0 { return .ignored }
 
                 let previousOffset = node.contentOffset
-                var nextOffset = previousOffset
-                nextOffset.x += CGFloat(dx)
-                nextOffset.y += CGFloat(dy)
 
-                // Clamp to [0, max(0, contentSize - viewSize)] using the full
-                // content subtree. The direct wrapper can be flex-clamped to
-                // the viewport while its descendants still overflow.
-                let viewSize = Self.visibleViewportRect(for: node).size
-                let contentSize = Self.cachedScrollableContentSize(for: node)
-                if contentSize.width > 0 || contentSize.height > 0 {
-                    nextOffset.x = max(0, min(nextOffset.x, max(0, contentSize.width  - viewSize.width)))
-                    nextOffset.y = max(0, min(nextOffset.y, max(0, contentSize.height - viewSize.height)))
-                } else {
-                    nextOffset = .zero
+                // Nothing measured yet — keep letting the event bubble.
+                guard Self.publishScrollRange(to: overscroll, on: node) else {
+                    return consumePolicy.result(didScroll: false)
                 }
-                node.contentOffset = nextOffset
-                report(node)
+
+                // Rubber band instead of a hard clamp: `overscroll` keeps the
+                // raw requested position, returns the compressed visible one,
+                // and springs it back once the input stops.
+                overscroll.adopt(previousOffset)
+                let nextOffset = overscroll.scroll(by: CGPoint(x: CGFloat(dx), y: CGFloat(dy)))
                 return consumePolicy.result(didScroll: nextOffset != previousOffset)
             }
             registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
@@ -195,6 +216,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            local: local,
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
+                                                           overscroll: overscroll,
                                                            node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
@@ -205,6 +227,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            local: local,
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
+                                                           overscroll: overscroll,
                                                            node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
@@ -218,6 +241,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     }
                     node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
                     PointerCaptureHolder.current?.release()
+                    // Release whatever the drag stretched past the end.
+                    overscroll.settle()
                     let isHovered = node.attachments[_ScrollViewAttachmentKeys.isHovered] as? Bool ?? false
                     Self.setScrollbarChromeVisible(isHovered, on: node)
                     return .handled
@@ -228,21 +253,23 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                         as? _ScrollViewDragState else {
                     return .ignored
                 }
+                guard Self.publishScrollRange(to: overscroll, on: node) else { return .handled }
+                overscroll.adopt(node.contentOffset)
                 let local = Self.localPoint(x: event.x, y: event.y, in: node)
                 let pointer = state.axis == .vertical ? local.y : local.x
                 let availableTrack = max(1, state.trackLength - state.thumbLength)
+                // Unclamped on purpose: dragging past either end of the track
+                // is what feeds the rubber band.
                 let rawOffset = state.offsetStart
                     + ((pointer - state.pointerStart) / availableTrack) * state.maxOffset
-                let clampedOffset = max(0, min(rawOffset, state.maxOffset))
-                var nextOffset = node.contentOffset
+                var nextPosition = overscroll.position
                 switch state.axis {
                 case .vertical:
-                    nextOffset.y = clampedOffset
+                    nextPosition.y = rawOffset
                 case .horizontal:
-                    nextOffset.x = clampedOffset
+                    nextPosition.x = rawOffset
                 }
-                node.contentOffset = nextOffset
-                report(node)
+                overscroll.move(to: nextPosition)
                 return .handled
             }
         }
@@ -266,16 +293,18 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             let contentH = Float(contentSize.height)
             guard contentW > 0 || contentH > 0 else { return }
 
-            // A layout/content change can shrink the scrollable range while
-            // the offset still points past the new end (cleared console,
-            // filtered list, enlarged viewport) — stranding the viewport on
-            // blank space until the user scrolls. The interaction handlers
-            // only clamp during wheel/drag, so re-clamp here: this hook runs
-            // after every layout with fresh geometry, and the conditional
-            // write converges in one frame.
+            // Keep the overscroll bounds in step with layout. `update` also
+            // covers what this block used to do by hand: when the scrollable
+            // range shrinks out from under an offset that still points past
+            // the new end (cleared console, filtered list, enlarged viewport),
+            // the stranded offset snaps back within the same frame.
             let maxOffsetX = CGFloat(max(0, contentW - viewW))
             let maxOffsetY = CGFloat(max(0, contentH - viewH))
-            if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
+            if let overscroll = node.attachments[_ScrollViewAttachmentKeys.rubberBand]
+                as? ScrollRubberBandAnimator {
+                overscroll.update(maximumOffset: CGPoint(x: maxOffsetX, y: maxOffsetY),
+                                  viewportSize: viewport.size)
+            } else if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
                 node.contentOffset = CGPoint(x: min(node.contentOffset.x, maxOffsetX),
                                              y: min(node.contentOffset.y, maxOffsetY))
             }
@@ -298,10 +327,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     radius: trackThickness / 2,
                     color: visibleTrackColor
                 )
-                let thumbH = max(trackThickness * 2, trackH * (viewH / contentH))
                 let maxOff = contentH - viewH
-                let t = maxOff > 0 ? offY / maxOff : 0
-                let thumbY = trackY + (trackH - thumbH) * t
+                let shrink = Self.thumbShrink(offset: CGFloat(offY),
+                                              maximumOffset: CGFloat(maxOff),
+                                              viewport: viewport.height)
+                let thumbH = max(trackThickness, max(trackThickness * 2, trackH * (viewH / contentH)) * Float(shrink))
+                let t = Self.thumbFraction(offset: CGFloat(offY), maximumOffset: CGFloat(maxOff))
+                let thumbY = trackY + (trackH - thumbH) * Float(t)
                 list.addRoundedRect(
                     UIRect(x: trackX, y: thumbY,
                            width: trackThickness, height: thumbH),
@@ -321,10 +353,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     radius: trackThickness / 2,
                     color: visibleTrackColor
                 )
-                let thumbW = max(trackThickness * 2, trackW * (viewW / contentW))
                 let maxOff = contentW - viewW
-                let t = maxOff > 0 ? offX / maxOff : 0
-                let thumbX = trackX + (trackW - thumbW) * t
+                let shrink = Self.thumbShrink(offset: CGFloat(offX),
+                                              maximumOffset: CGFloat(maxOff),
+                                              viewport: viewport.width)
+                let thumbW = max(trackThickness, max(trackThickness * 2, trackW * (viewW / contentW)) * Float(shrink))
+                let t = Self.thumbFraction(offset: CGFloat(offX), maximumOffset: CGFloat(maxOff))
+                let thumbX = trackX + (trackW - thumbW) * Float(t)
                 list.addRoundedRect(
                     UIRect(x: thumbX, y: trackY,
                            width: thumbW, height: trackThickness),
@@ -349,8 +384,44 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
     public var _children: [any View] { [content] }
 
+    /// Push the scrollable range measured right now into `animator`.
+    ///
+    /// Returns `false` when the content has no measurable extent yet, in which
+    /// case there are no bounds to bounce against and callers should leave the
+    /// event unconsumed rather than inventing a rubber band out of nothing.
+    @discardableResult
+    private static func publishScrollRange(to animator: ScrollRubberBandAnimator,
+                                           on node: Node) -> Bool {
+        let viewport = visibleViewportRect(for: node).size
+        let content = cachedScrollableContentSize(for: node)
+        guard content.width > 0 || content.height > 0 else { return false }
+        animator.update(maximumOffset: CGPoint(x: max(0, content.width - viewport.width),
+                                               y: max(0, content.height - viewport.height)),
+                        viewportSize: viewport)
+        return true
+    }
+
     private static func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {
         node.convertFromWindow(CGPoint(x: CGFloat(x), y: CGFloat(y)))
+    }
+
+    /// Thumb travel fraction, held inside the track even while a rubber band
+    /// pushes the offset past either end.
+    private static func thumbFraction(offset: CGFloat, maximumOffset: CGFloat) -> CGFloat {
+        guard maximumOffset > 0 else { return 0 }
+        return max(0, min(1, offset / maximumOffset))
+    }
+
+    /// Thumb length multiplier while overscrolled. The bar shrinks as content
+    /// is pulled past the end so it keeps reading as "how much of the content
+    /// is visible", instead of sitting at full length beyond the track.
+    private static func thumbShrink(offset: CGFloat,
+                                    maximumOffset: CGFloat,
+                                    viewport: CGFloat) -> CGFloat {
+        guard viewport > 0 else { return 1 }
+        let excess = max(-offset, offset - maximumOffset)
+        guard excess > 0 else { return 1 }
+        return max(0.4, 1 - excess / viewport)
     }
 
     private static func visibleViewportRect(for node: Node) -> CGRect {
@@ -394,7 +465,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let viewport = visibleViewportRect(for: node).size
         let maxOffsetX = max(0, next.width - viewport.width)
         let maxOffsetY = max(0, next.height - viewport.height)
-        if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
+        if let overscroll = node.attachments[_ScrollViewAttachmentKeys.rubberBand]
+            as? ScrollRubberBandAnimator {
+            overscroll.update(maximumOffset: CGPoint(x: maxOffsetX, y: maxOffsetY),
+                              viewportSize: viewport)
+        } else if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
             node.contentOffset = CGPoint(x: min(node.contentOffset.x, maxOffsetX),
                                          y: min(node.contentOffset.y, maxOffsetY))
         }
@@ -445,6 +520,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                            local: CGPoint,
                                            geometry: _ScrollViewScrollbarGeometry,
                                            hitSlop: CGFloat,
+                                           overscroll: ScrollRubberBandAnimator,
                                            node: Node) -> _ScrollViewDragState? {
         let track: CGRect?
         let thumb: CGRect?
@@ -475,14 +551,19 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             return nil
         }
 
-        var nextOffset = node.contentOffset
+        // A grab anywhere cancels whatever the previous gesture left behind —
+        // including the return spring of an earlier overscroll.
+        overscroll.adopt(node.contentOffset)
+
         if !thumb.contains(local) {
             let availableTrack = max(1, Self.trackLength(for: axis, track: track) - Self.trackLength(for: axis, track: thumb))
             let centeredThumbStart = pointer - Self.trackLength(for: axis, track: thumb) / 2
             let rawOffset = ((centeredThumbStart - Self.trackStart(for: axis, track: track))
                              / availableTrack) * maxOffset
+            var nextOffset = node.contentOffset
             nextOffset[keyPath: offsetKeyPath] = max(0, min(rawOffset, maxOffset))
             node.contentOffset = nextOffset
+            overscroll.adopt(nextOffset)
         }
 
         return _ScrollViewDragState(
@@ -521,8 +602,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                y: viewport.minY + inset,
                                width: thickness,
                                height: max(0, viewH - 2 * inset))
-            let thumbH = max(thickness * 2, track.height * (viewH / contentH))
-            let t = maxOffsetY > 0 ? node.contentOffset.y / maxOffsetY : 0
+            let shrink = thumbShrink(offset: node.contentOffset.y,
+                                     maximumOffset: maxOffsetY,
+                                     viewport: viewH)
+            let thumbH = max(thickness, max(thickness * 2, track.height * (viewH / contentH)) * shrink)
+            let t = thumbFraction(offset: node.contentOffset.y, maximumOffset: maxOffsetY)
             verticalTrack = track
             verticalThumb = CGRect(x: track.minX,
                                    y: track.minY + (track.height - thumbH) * t,
@@ -535,8 +619,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                y: viewport.maxY - thickness - inset,
                                width: max(0, viewW - 2 * inset),
                                height: thickness)
-            let thumbW = max(thickness * 2, track.width * (viewW / contentW))
-            let t = maxOffsetX > 0 ? node.contentOffset.x / maxOffsetX : 0
+            let shrink = thumbShrink(offset: node.contentOffset.x,
+                                     maximumOffset: maxOffsetX,
+                                     viewport: viewW)
+            let thumbW = max(thickness, max(thickness * 2, track.width * (viewW / contentW)) * shrink)
+            let t = thumbFraction(offset: node.contentOffset.x, maximumOffset: maxOffsetX)
             horizontalTrack = track
             horizontalThumb = CGRect(x: track.minX + (track.width - thumbW) * t,
                                      y: track.minY,

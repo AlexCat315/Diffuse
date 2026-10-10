@@ -179,7 +179,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(registry.handlers(for: sv).wheel != nil)
     } }
 
-    @Test("ScrollView wheel handler clamps and updates contentOffset")
+    @Test("ScrollView wheel clamps mid-range and rubber-bands past either bound")
     func scrollViewClamps() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
@@ -214,18 +214,25 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         _ = wheel(MouseWheelEvent(x: 0, y: -1), .target)
         #expect(sv.contentOffset.y > 0)
 
-        // Try to over-scroll: many notches down.
+        // Try to over-scroll: many notches down. The offset stretches past
+        // `maxOffset` rather than stopping dead, but never further than one
+        // viewport — then springs back on its own once input stops.
         for _ in 0..<100 {
             _ = wheel(MouseWheelEvent(x: 0, y: -1), .target)
         }
-        // Clamped to contentSize - viewSize.
         let maxOffset = inner.frame.height - sv.frame.height
+        #expect(sv.contentOffset.y > maxOffset)
+        #expect(sv.contentOffset.y < maxOffset + sv.frame.height)
+        for _ in 0..<120 { AnimatorScheduler.current.tick(deltaTime: 1.0 / 60.0) }
         #expect(sv.contentOffset.y == maxOffset)
 
-        // Scroll back to 0 and overshoot upward.
+        // Overshoot the leading bound the same way.
         for _ in 0..<100 {
             _ = wheel(MouseWheelEvent(x: 0, y: 1), .target)
         }
+        #expect(sv.contentOffset.y < 0)
+        #expect(sv.contentOffset.y > -sv.frame.height)
+        for _ in 0..<120 { AnimatorScheduler.current.tick(deltaTime: 1.0 / 60.0) }
         #expect(sv.contentOffset.y == 0)
     } }
 
