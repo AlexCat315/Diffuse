@@ -83,6 +83,22 @@ public struct CornerRadiusModifier: ViewModifier {
     }
 }
 
+/// Frosted glass: blur whatever sits behind this node's box before its own
+/// background is painted.
+///
+/// Pair it with a translucent fill (`.materialFrosted`) — the blur alone only
+/// softens what is underneath, the fill on top is what turns it into a
+/// surface. Renderers without an offscreen pass (WGPU) skip the blur, so the
+/// fill must stay readable without it.
+public struct BackdropBlurModifier: ViewModifier {
+    public let radius: Float
+    public init(_ radius: Float) { self.radius = max(0, radius) }
+
+    public func apply(node: Node) {
+        node.animatableSet(\.backdropBlur, to: radius)
+    }
+}
+
 public struct BorderModifier: ViewModifier {
     public let color: Color
     public let width: Float
@@ -183,6 +199,12 @@ public extension View {
 
     func cornerRadius(_ radius: Float) -> some View {
         modifier(CornerRadiusModifier(radius))
+    }
+
+    /// Blur the content behind this view before its own background is painted.
+    /// Combine with a translucent fill for a frosted-glass panel.
+    func backdropBlur(_ radius: Float) -> some View {
+        modifier(BackdropBlurModifier(radius))
     }
 
     func border(_ color: Color, width: Float = 1) -> some View {

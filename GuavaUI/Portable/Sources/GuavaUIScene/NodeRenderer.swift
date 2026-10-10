@@ -97,6 +97,14 @@ public struct NodeRenderer {
                                   width: bgWidth, height: bgHeight)
                 let color = applyOpacity(bg, node.opacity)
                 let bgRadius = max(0, node.cornerRadius - inset)
+                // The backdrop covers the whole node, not just the fill: the
+                // border ring is drawn on top of it and must stay crisp.
+                if node.backdropBlur > 0 {
+                    list.beginBackdrop(UIBackdrop(
+                        rect: UIRect(x: absX, y: absY, width: width, height: height),
+                        cornerRadius: node.cornerRadius,
+                        blurRadius: node.backdropBlur))
+                }
                 if bgRadius > 0 {
                     list.addRoundedRect(rect, radius: bgRadius, color: color)
                 } else {

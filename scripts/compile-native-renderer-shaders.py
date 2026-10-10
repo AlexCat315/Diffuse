@@ -48,6 +48,8 @@ def main():
     programs = [(shaders, *program) for program in programs] if not args.ui_only else []
     ui_shaders = ROOT / 'GuavaUI/Sources/GuavaUIRuntime/Resources/Shaders'
     programs.append((ui_shaders, 'ui', 'ui.slang', [('vertex', 'uiVertex'), ('fragment', 'uiFragment')]))
+    programs.append((ui_shaders, 'ui_backdrop', 'ui_backdrop.slang',
+                     [('vertex', 'backdropVertex'), ('fragment', 'backdropFragment')]))
     for target in args.targets:
         for shaders, name, source, stages in programs:
             for stage, entry in stages:
@@ -55,6 +57,7 @@ def main():
                 variable = name in specialized
                 defines = {'PARTICLE_WORKGROUP_SIZE': 64} if target == 'dxil' and name in particle_kernels else None
                 if name == 'ui': defines = {'UI_VERTEX_SHADER': int(stage == 'vertex')}
+                if name == 'ui_backdrop': defines = {'BACKDROP_VERTEX_SHADER': int(stage == 'vertex')}
                 artifact = SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, target, output, args.slangc,
                     threadgroup_size=[64,1,1] if variable else None, line_directives=False,
                     threadgroup_constants=[0,None,None] if variable and target != 'dxil' else None,

@@ -1,0 +1,22 @@
+{
+  "stage": "vertex",
+  "format": "mslSource",
+  "entryPoint": "backdropVertex",
+  "code": "I2luY2x1ZGUgPG1ldGFsX3N0ZGxpYj4KI2luY2x1ZGUgPG1ldGFsX21hdGg+CiNpbmNsdWRlIDxtZXRhbF90ZXh0dXJlPgp1c2luZyBuYW1lc3BhY2UgbWV0YWw7CnN0cnVjdCBiYWNrZHJvcFZlcnRleF9SZXN1bHRfMAp7CiAgICBmbG9hdDQgcG9zaXRpb25fMCBbW3Bvc2l0aW9uXV07CiAgICBmbG9hdDIgdXZfMCBbW3VzZXIoVEVYQ09PUkQpXV07Cn07CgpzdHJ1Y3QgdmVydGV4SW5wdXRfMAp7CiAgICBmbG9hdDIgcG9zaXRpb25fMSBbW2F0dHJpYnV0ZSgwKV1dOwogICAgZmxvYXQyIHV2XzEgW1thdHRyaWJ1dGUoMSldXTsKfTsKCnN0cnVjdCBCYWNrZHJvcFZlcnRleF8wCnsKICAgIGZsb2F0NCBwb3NpdGlvbl8yOwogICAgZmxvYXQyIHV2XzI7Cn07CgpbW3ZlcnRleF1dIGJhY2tkcm9wVmVydGV4X1Jlc3VsdF8wIGJhY2tkcm9wVmVydGV4KHZlcnRleElucHV0XzAgX1MxIFtbc3RhZ2VfaW5dXSkKewogICAgdGhyZWFkIEJhY2tkcm9wVmVydGV4XzAgb3V0cHV0XzA7CiAgICAoJm91dHB1dF8wKS0+cG9zaXRpb25fMiA9IGZsb2F0NChfUzEucG9zaXRpb25fMSwgMC4wZiwgMS4wZik7CiAgICAoJm91dHB1dF8wKS0+dXZfMiA9IF9TMS51dl8xOwogICAgdGhyZWFkIGJhY2tkcm9wVmVydGV4X1Jlc3VsdF8wIF9TMjsKICAgICgmX1MyKS0+cG9zaXRpb25fMCA9IG91dHB1dF8wLnBvc2l0aW9uXzI7CiAgICAoJl9TMiktPnV2XzAgPSBvdXRwdXRfMC51dl8yOwogICAgcmV0dXJuIF9TMjsKfQoK",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [],
+    "specializationConstants": [],
+    "threadgroupSpecialization": {
+      "x": null,
+      "y": null,
+      "z": null
+    },
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19"
+}
