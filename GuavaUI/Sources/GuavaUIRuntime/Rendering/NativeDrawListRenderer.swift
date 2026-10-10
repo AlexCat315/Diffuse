@@ -50,6 +50,9 @@ private struct NativeUIBatch {
     /// (e.g. a parent container clip). Such batches must keep their own scissor
     /// and therefore cannot be folded into a merged draw.
     let reliesOnClip: Bool
+    /// A frosted panel starts here: the frame behind it is blurred before this
+    /// batch draws, so it can never be merged into the draw behind it either.
+    var backdrop: UIBackdrop? { indices.backdrop }
 }
 
 extension NativeDrawListRenderer {
@@ -78,29 +81,51 @@ extension NativeDrawListRenderer {
 public final class NativeDrawListRenderer {
     private let device: Device
     private let shaders: NativeUIShaderResources
+    /// Optional: a backend without the offline backdrop artifact (DXIL is not
+    /// generated here yet) keeps every panel, they just lose the frost.
+    private let backdropShaders: NativeUIBackdropShaders?
     let textureStore: NativeUITextureStore
     private var pipeline: NativeUIPipeline?
+    private var backdropPass: NativeUIBackdropPass?
 
     public init(device: Device) throws {
         self.device = device
         shaders = try NativeUIShaderResources(device: device)
+        backdropShaders = try? NativeUIBackdropShaders(device: device)
         textureStore = try NativeUITextureStore(device: device, shaders: shaders)
     }
-    private init(device: Device, shaders: NativeUIShaderResources) throws {
-        self.device = device; self.shaders = shaders
+    private init(device: Device, shaders: NativeUIShaderResources,
+                 backdropShaders: NativeUIBackdropShaders?) throws {
+        self.device = device; self.shaders = shaders; self.backdropShaders = backdropShaders
         textureStore = try NativeUITextureStore(device: device, shaders: shaders)
     }
 
     public func configure(format: TextureFormat, sampleCount: Int = 1) throws {
         if pipeline?.format == format && pipeline?.samples == sampleCount { return }
         pipeline = try NativeUIPipeline(shaders: shaders, format: format, samples: sampleCount)
+        backdropPass = try backdropShaders.map {
+            try NativeUIBackdropPass(device: device, shaders: $0, format: format, samples: sampleCount)
+        }
     }
 
     public func makeSibling(format: TextureFormat, sampleCount: Int = 1) throws -> NativeDrawListRenderer {
-        let sibling = try NativeDrawListRenderer(device: device, shaders: shaders)
+        let sibling = try NativeDrawListRenderer(device: device, shaders: shaders,
+                                                backdropShaders: backdropShaders)
         try sibling.configure(format: format, sampleCount: sampleCount)
         try sibling.synchronizeTextures(from: self)
         return sibling
+    }
+
+    /// Whether frosted panels can be drawn: false on a backend whose offline
+    /// backdrop artifact is missing. Panels still render, without the frost.
+    public var supportsBackdrop: Bool { backdropPass != nil }
+
+    /// Hands an owned frame to the swapchain, which is a render target only and
+    /// must never be sampled by a backdrop. No-op without `supportsBackdrop`;
+    /// a caller that switched its frame into an owned texture must branch on it.
+    public func recordBlit(source: Texture, into commands: CommandBuffer,
+                           target: RenderColorTarget, size: SIMD2<Int>) throws {
+        try backdropPass?.recordBlit(source: source, into: commands, target: target, size: size)
     }
 
     public func synchronizeTextures(from source: NativeDrawListRenderer) throws {
@@ -138,8 +163,11 @@ public final class NativeDrawListRenderer {
         atlas.markClean()
     }
 
+    /// - Parameter backdropSource: the texture holding this frame so far, when
+    ///   the caller renders into one it owns. `nil` disables frosted panels: the
+    ///   blur needs to sample the frame, and a swapchain image cannot be.
     public func record(list: DrawList, into commands: CommandBuffer, target: RenderColorTarget,
-        viewport: NativeUIViewport) throws -> NativeUIDrawFrame {
+        viewport: NativeUIViewport, backdropSource: Texture? = nil) throws -> NativeUIDrawFrame {
         guard let pipeline else { throw RHIError.invalidArgument("configure the native UI renderer before recording") }
         try viewport.validate()
         try validate(list)
@@ -195,34 +223,73 @@ public final class NativeDrawListRenderer {
         let coalesced = coalesceDraws(draws)
         // Append only after all validation, allocations and bindings succeed.
         if !uploads.isEmpty { commands.copyPass { pass in uploads.forEach { pass.uploadBufferToTexture($0) } } }
-        commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [target])) { pass in
-            pass.setPipeline(pipeline.handle)
-            pass.setViewport(Viewport(width: Double(viewport.pixels.x), height: Double(viewport.pixels.y)))
-            if let vertices, let indices, !coalesced.isEmpty {
-                pass.setVertexBuffer(vertices.buffer, offset: vertices.offset)
-                pass.setIndexBuffer(indices.buffer, offset: indices.offset, type: .uint32)
-                // Constants belong to this recording. Image bindings have no
-                // frame-dependent buffers and can hit the Device's cache even
-                // as upload chunks, viewports and target formats change.
-                pass.pushConstant(stage: .vertex, slot: shaders.constants.slot,
-                    value: SIMD4(viewport.logical.x, viewport.logical.y, pipeline.srgb, Float(0)))
-                var boundSet: BindingSet?
-                var scissor: ScissorRect?
-                for draw in coalesced {
-                    if boundSet != draw.bindings {
-                        pass.setBindingSet(draw.bindings); boundSet = draw.bindings
-                    }
-                    if scissor != draw.scissor {
-                        pass.setScissor(draw.scissor); scissor = draw.scissor
-                    }
-                    pass.drawIndexed(DrawIndexedArguments(indexCount: Int(draw.indices.indexCount), firstIndex: Int(draw.indices.indexOffset)))
-                }
-            }
+        // A frosted panel cannot be drawn in the same pass that captures its
+        // backdrop, so the frame is recorded as segments split around them.
+        var segmentStart = 0
+        var pending: NativeUIBackdropComposite?
+        var frosted = 0
+        for (index, draw) in coalesced.enumerated() {
+            guard let backdrop = draw.backdrop, let backdropPass, let backdropSource else { continue }
+            try recordSegment(coalesced[segmentStart..<index], composite: pending,
+                loadAction: segmentStart == 0 ? target.loadAction : .load, isFirst: segmentStart == 0,
+                into: commands, target: target, viewport: viewport, pipeline: pipeline,
+                vertices: vertices, indices: indices, backdropPass: backdropPass)
+            segmentStart = index
+            pending = try backdropPass.record(backdrop, source: backdropSource,
+                frame: viewport.pixels, logical: viewport.logical, into: commands)
+            if pending != nil { frosted += 1 }
         }
-        statistics.drawCalls = coalesced.count
+        try recordSegment(coalesced[segmentStart...], composite: pending,
+            loadAction: segmentStart == 0 ? target.loadAction : .load, isFirst: segmentStart == 0,
+            into: commands, target: target, viewport: viewport, pipeline: pipeline,
+            vertices: vertices, indices: indices, backdropPass: backdropPass)
+        statistics.drawCalls = coalesced.count + frosted
         return NativeUIDrawFrame(statistics: statistics, pipeline: pipeline, textures: slots, commits: commits,
             atlasCommit: atlasUploads.sequence == 0 ? nil
                 : NativeUIAtlasCommit(store: textureStore, sequence: atlasUploads.sequence))
+    }
+
+    /// One slice of the frame between two backdrop captures.
+    private func recordSegment(_ draws: ArraySlice<NativeUIBatch>,
+        composite: NativeUIBackdropComposite?, loadAction: ColorLoadAction, isFirst: Bool,
+        into commands: CommandBuffer, target: RenderColorTarget, viewport: NativeUIViewport,
+        pipeline: NativeUIPipeline, vertices: UploadLocation?, indices: UploadLocation?,
+        backdropPass: NativeUIBackdropPass?) throws {
+        // The first segment runs even with nothing to draw: it carries the
+        // clear, and an empty frame still has to show the clear colour.
+        guard composite != nil || !draws.isEmpty || isFirst else { return }
+        var colorTarget = target
+        colorTarget.loadAction = loadAction
+        // Keep the multisampled attachment: every segment after the first
+        // resumes it with `.load`, and discarding it would drop the geometry
+        // those segments are meant to draw over.
+        colorTarget.store = true
+        try commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [colorTarget])) { pass in
+            pass.setViewport(Viewport(width: Double(viewport.pixels.x), height: Double(viewport.pixels.y)))
+            if let composite, let backdropPass {
+                try backdropPass.draw(composite, in: &pass)
+            }
+            guard let vertices, let indices, !draws.isEmpty else { return }
+            pass.setPipeline(pipeline.handle)
+            pass.setVertexBuffer(vertices.buffer, offset: vertices.offset)
+            pass.setIndexBuffer(indices.buffer, offset: indices.offset, type: .uint32)
+            // Constants belong to this recording. Image bindings have no
+            // frame-dependent buffers and can hit the Device's cache even
+            // as upload chunks, viewports and target formats change.
+            pass.pushConstant(stage: .vertex, slot: shaders.constants.slot,
+                value: SIMD4(viewport.logical.x, viewport.logical.y, pipeline.srgb, Float(0)))
+            var boundSet: BindingSet?
+            var scissor: ScissorRect?
+            for draw in draws {
+                if boundSet != draw.bindings {
+                    pass.setBindingSet(draw.bindings); boundSet = draw.bindings
+                }
+                if scissor != draw.scissor {
+                    pass.setScissor(draw.scissor); scissor = draw.scissor
+                }
+                pass.drawIndexed(DrawIndexedArguments(indexCount: Int(draw.indices.indexCount), firstIndex: Int(draw.indices.indexOffset)))
+            }
+        }
     }
 
     /// Merge consecutive draws that bind the same set into one draw covering
@@ -234,6 +301,9 @@ public final class NativeDrawListRenderer {
             if let last = result.last,
                last.bindings == draw.bindings,
                !last.reliesOnClip, !draw.reliesOnClip,
+               // A frosted panel needs a pass boundary in front of it, so it
+               // stays its own draw even when it shares a binding set.
+               draw.backdrop == nil,
                // Nothing may sit between the two index ranges: batches skipped
                // above (clipped away) must stay undrawn, and a gap would
                // resurrect their geometry inside the merged range.
