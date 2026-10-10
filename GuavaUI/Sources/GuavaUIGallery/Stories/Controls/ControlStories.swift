@@ -197,3 +197,32 @@ struct JsonStory: View {
         }
     }
 }
+
+struct LinkStory: View {
+    let options: GalleryOptions
+    @State private var lastOpened = "none"
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Inside body copy", "A link keeps the surrounding type size and stays in the reading flow; the underline is what makes it findable before the pointer arrives.") {
+                Row(alignment: .center, spacing: 2) {
+                    Text("Read the")
+                    Link("style guide", isEnabled: options.isEnabled) { lastOpened = "style guide" }
+                    Text("and the")
+                    Link("contribution policy", isEnabled: options.isEnabled, configure: { $0.isExternal = true }) { lastOpened = "contribution policy" }
+                    Text("before opening a pull request.")
+                }
+                Text("Last opened: \(lastOpened)").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+            StorySection("Underline on hover", "Dense surfaces keep the text clean: the rule appears on hover and on keyboard focus, so keyboard users are not left guessing.") {
+                Row(alignment: .center, spacing: 16) {
+                    Link("Reset layout", isEnabled: options.isEnabled, configure: { $0.underline = .hover }) { lastOpened = "reset layout" }
+                    Link("Copy build log", isEnabled: options.isEnabled, configure: { $0.underline = .hover; $0.icon = UIIcons.Action.copy }) { lastOpened = "copy build log" }
+                    Link("Unavailable", isEnabled: false, configure: { $0.underline = .hover }) { }
+                }
+            }
+            StorySection("Never underlined", "Colour alone carries the affordance — only defensible where the surrounding text is clearly not interactive.") {
+                Link("Skip onboarding", isEnabled: options.isEnabled, configure: { $0.underline = .never }) { lastOpened = "skip onboarding" }
+            }
+        }
+    }
+}

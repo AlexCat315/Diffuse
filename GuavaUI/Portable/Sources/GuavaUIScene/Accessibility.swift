@@ -3,7 +3,7 @@ import Foundation
 /// Platform-neutral meaning of a scene element. Geometry and actions remain runtime data.
 public enum AccessibilityRole: String, Sendable, Codable {
     case group, button, staticText, textField, checkbox, toggle, slider, radio, tab
-    case list, listItem, tree, treeItem, table, row, cell, dialog, status, progress, image
+    case list, listItem, tree, treeItem, table, row, cell, dialog, status, progress, image, link
 }
 
 public struct AccessibilityState: Sendable, Equatable, Codable {
