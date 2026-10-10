@@ -12,6 +12,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case table, dataTable, calendar, datePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet
     case commandPalette, hoverCard, timeline, toolbar
+    case link, statusBar, carousel
 
     public var entry: GalleryEntry { GalleryCatalog.entries.first { $0.page == self }! }
 }
@@ -94,7 +95,10 @@ public enum GalleryCatalog {
         .init(.commandPalette, "Command Palette", "Overlays", "Ranked fuzzy search over commands with keyboard-first selection."),
         .init(.hoverCard, "HoverCard", "Overlays", "Delayed hover detail that survives the pointer moving onto the card."),
         .init(.timeline, "Timeline", "Data", "Ordered events on a rail with per-event outcome glyphs."),
-        .init(.toolbar, "Toolbar", "Controls", "One height and spacing rhythm, grouped controls and separators.")
+        .init(.toolbar, "Toolbar", "Controls", "One height and spacing rhythm, grouped controls and separators."),
+        .init(.link, "Link", "Controls", "In-flow navigation with contextual underlines, external hints and a link role."),
+        .init(.statusBar, "StatusBar", "Layout", "A single-height window footer with leading and trailing context cells."),
+        .init(.carousel, "Carousel", "Layout", "Paged content with drag, arrows, indicators and keyboard paging.")
     ]
     public static var categories: [String] {
         entries.reduce(into: []) { result, entry in if !result.contains(entry.category) { result.append(entry.category) } }

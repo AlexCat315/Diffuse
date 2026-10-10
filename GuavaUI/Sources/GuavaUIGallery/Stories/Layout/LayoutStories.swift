@@ -185,3 +185,109 @@ struct ThemeStory: View {
         }
     }
 }
+
+struct StatusBarStory: View {
+    let options: GalleryOptions
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Window footer", "Every cell shares one height, so swapping a branch name for a build state never reflows the content above.") {
+                Column(spacing: 0) {
+                    Box(direction: .column, alignItems: .center, justifyContent: .center) {}
+                        .frame(height: 84)
+                        .background(.surface)
+                    StatusBar(isEnabled: options.isEnabled) {
+                        StatusBarText("main", icon: UIIcons.Editor.gitBranch)
+                        StatusBarText("UTF-8", isMonospaced: true)
+                        StatusBarText("2 warnings", tone: .warning)
+                        StatusBarText("Spaces", detail: "2")
+                    } trailing: {
+                        StatusBarText("Ln 12", detail: "Col 4", isMonospaced: true)
+                        StatusBarText("Connected", tone: .success)
+                    }
+                }
+                .border(.border, width: 1)
+                .cornerRadius(8)
+                .clipped()
+            }
+            StorySection("Single slot", "A bar with only trailing cells still keeps its hairline and height; leading and trailing are both optional.") {
+                StatusBar(showsDivider: false, isEnabled: options.isEnabled) {
+                    StatusBarText("Indexing", detail: "1,204 files", icon: UIIcons.File.fileCode)
+                } trailing: {
+                    StatusBarText("Disconnected", tone: .danger)
+                }
+                .border(.border, width: 1)
+                .cornerRadius(8)
+            }
+        }
+    }
+}
+
+struct CarouselStory: View {
+    let options: GalleryOptions
+    @State private var page = "themes"
+    @State private var showsArrows = true
+    @State private var showsIndicators = true
+    @State private var allowsWrap = true
+
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Paged content", "Drag the page horizontally, use the arrows, click an indicator, or press Left/Right/Home/End while the carousel has focus.") {
+                Carousel(pages: Self.pages, selection: $page) {
+                    $0.isEnabled = options.isEnabled
+                    $0.showsArrows = showsArrows
+                    $0.showsIndicators = showsIndicators
+                    $0.allowsWrap = allowsWrap
+                    $0.height = 176
+                }
+                Row(alignment: .center, spacing: 16) {
+                    Checkbox(isOn: $showsArrows, isEnabled: options.isEnabled); Text("Arrows").font(.caption)
+                    Checkbox(isOn: $showsIndicators, isEnabled: options.isEnabled); Text("Indicators").font(.caption)
+                    Checkbox(isOn: $allowsWrap, isEnabled: options.isEnabled); Text("Wrap").font(.caption)
+                    Text("Page: \(page)").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+            }
+            StorySection("No wrap, no chrome", "Onboarding flows end where the last page ends: wrapping off, controls reduced to the indicators.") {
+                Carousel(pages: Self.pages) {
+                    $0.isEnabled = options.isEnabled
+                    $0.showsArrows = false
+                    $0.allowsWrap = false
+                    $0.height = 120
+                }
+            }
+        }
+    }
+
+    private static var pages: [CarouselPage<String>] {[
+        CarouselPage("welcome", caption: "Welcome — start with the component catalog") {
+            CarouselCard("Welcome", detail: "GuavaUI is declarative, themed and testable.", tint: Color(r: 0.30, g: 0.55, b: 0.95))
+        },
+        CarouselPage("themes", caption: "Themes — semantic tokens, light and dark") {
+            CarouselCard("Themes", detail: "Colours describe roles, never raw values.", tint: Color(r: 0.42, g: 0.36, b: 0.88))
+        },
+        CarouselPage("input", caption: "Input — pointer, keyboard and accessibility") {
+            CarouselCard("Input", detail: "Every control is reachable without a mouse.", tint: Color(r: 0.24, g: 0.66, b: 0.52))
+        },
+        CarouselPage("ship", caption: "Ship — one framework, many surfaces") {
+            CarouselCard("Ship", detail: "Editor, runtime and in-game UI share the code.", tint: Color(r: 0.88, g: 0.52, b: 0.28))
+        }
+    ]}
+}
+
+private struct CarouselCard: View {
+    let title: String
+    let detail: String
+    let tint: Color
+
+    init(_ title: String, detail: String, tint: Color) {
+        self.title = title; self.detail = detail; self.tint = tint
+    }
+
+    var body: some View {
+        Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 6) {
+            Text(title).font(.headline).foregroundColor(.white)
+            Text(detail).font(.caption).foregroundColor(Color.white.multipliedAlpha(0.85))
+        }
+        .flex()
+        .background(tint)
+    }
+}
