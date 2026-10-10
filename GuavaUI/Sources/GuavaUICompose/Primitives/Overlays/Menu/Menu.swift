@@ -106,7 +106,11 @@ struct MenuLevel: View {
     var body: some View {
         MenuLevelHost(hoverIntent: session.hoverIntent, onKey: handleKey, onText: handleText) {
             Box(direction: .column, alignItems: .stretch) {
-                ScrollView(.vertical, consumePolicy: .always, scrollbarGutter: .stable,
+                // Overlay, not `stable`: a reserved lane is a right-only inset, so
+                // every row highlight would sit 12pt closer to the left edge than
+                // to the right. Menus fill their panel edge to edge and only need
+                // the bar while the pointer is over them.
+                ScrollView(.vertical, consumePolicy: .always, scrollbarGutter: .overlay,
                     scrollOffset: Binding(get: { session.scrollOffset }, set: { if session.scrollOffset != $0 { session.scrollOffset = $0 } })) {
                     Box(direction: .column, alignItems: .stretch, spacing: 1) { rows() }
                 }
@@ -114,7 +118,7 @@ struct MenuLevel: View {
                 .modifier(MenuWindowBounds())
                 .modifier(MenuScrollMarker())
             }
-            .background(.surfaceFloating).cornerRadius(6).border(.border, width: 1).surfaceFinish()
+            .background(.materialFloating).cornerRadius(6).border(.border, width: 1).surfaceFinish()
             .frame(width: configuration.width)
         }
     }

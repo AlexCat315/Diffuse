@@ -55,7 +55,7 @@ public struct CompletionPopover: View {
                 Text("\(selectedIndex + 1) / \(items.count)").font(.caption).foregroundColor(.onSurfaceMuted)
                     .padding(horizontal: 10, vertical: 4)
             }
-        }.padding(3).background(.surfaceFloating).border(.border, width: 1).cornerRadius(6)
+        }.padding(3).background(.materialFloating).border(.border, width: 1).cornerRadius(6)
             .accessibility { $0.role = .list; $0.label = "Completions" }
     }
 }
@@ -78,10 +78,12 @@ private struct CompletionRow: _PrimitiveView {
         }
     }
     var _children: [any View] {
+        // Unselected rows stay transparent so the panel's material shows
+        // through; an opaque row fill would tile the glass out of existence.
         [Row(alignment: .center, spacing: 10) {
             Text(item.label, lineLimit: 1).font(.body).foregroundColor(.onSurface).flex(1, shrink: 1)
             if let detail = item.detail { Text(detail, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted) }
-        }.padding(horizontal: 9, vertical: 5).background(isSelected ? SemanticColorRef.selection : .surfaceFloating).cornerRadius(3)]
+        }.padding(horizontal: 9, vertical: 5).background(isSelected ? SemanticColorRef.selection : .clear).cornerRadius(3)]
     }
 }
 
