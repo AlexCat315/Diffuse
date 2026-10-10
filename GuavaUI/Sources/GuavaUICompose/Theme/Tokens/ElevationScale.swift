@@ -1,36 +1,24 @@
 import GuavaUIRuntime
 
-/// A single drop shadow specification. The Phase 7 renderer does not yet
-/// emit blurred shadows; until then `DrawList` may downgrade these to a
-/// 1px border. The token shape is forward-compatible.
-public struct Shadow: Sendable {
-    public var color: Color
-    public var offsetX: Float
-    public var offsetY: Float
-    public var blur: Float
-
-    public init(color: Color, offsetX: Float, offsetY: Float, blur: Float) {
-        self.color = color
-        self.offsetX = offsetX
-        self.offsetY = offsetY
-        self.blur = blur
-    }
-
-    public static let none = Shadow(color: .clear, offsetX: 0, offsetY: 0, blur: 0)
-}
-
 /// Four-step elevation scale matching common surface tiers in tooling UI:
-/// no shadow, panel edge, floating popover, and dragged / context-menu.
+/// no shadow, panel edge, floating popover, and dragged / context-menu, plus
+/// the two-layer shadow every floating surface actually wants.
 public struct ElevationScale: Sendable {
-    public var none: Shadow
-    public var low: Shadow
-    public var medium: Shadow
-    public var high: Shadow
+    public var none: SurfaceShadow
+    public var low: SurfaceShadow
+    public var medium: SurfaceShadow
+    public var high: SurfaceShadow
+    /// Menus, popovers and hover cards: a broad ambient halo under a tighter
+    /// key shadow. `low`/`medium`/`high` stay single-layer because a surface
+    /// that sits *in* the chrome only needs one.
+    public var floating: LayeredShadow
 
-    public init(none: Shadow, low: Shadow, medium: Shadow, high: Shadow) {
+    public init(none: SurfaceShadow, low: SurfaceShadow, medium: SurfaceShadow,
+                high: SurfaceShadow, floating: LayeredShadow) {
         self.none = none
         self.low = low
         self.medium = medium
         self.high = high
+        self.floating = floating
     }
 }

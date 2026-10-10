@@ -62,9 +62,19 @@ public enum DefaultDarkTheme {
         radius:    RadiusScale(none: 0, sm: 5, md: 7, lg: 10, xl: 12, pill: 9999),
         elevation: ElevationScale(
             none:   .none,
-            low:    Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x50), offsetX: 0, offsetY: 1, blur: 2),
-            medium: Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x72), offsetX: 0, offsetY: 4, blur: 12),
-            high:   Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x96), offsetX: 0, offsetY: 12, blur: 32)
+            low:    SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x50), offsetX: 0, offsetY: 1, blur: 2),
+            medium: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x72), offsetX: 0, offsetY: 4, blur: 12),
+            high:   SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x96), offsetX: 0, offsetY: 12, blur: 32),
+            // A floating panel reads as lifted only when a wide, faint halo
+            // separates the whole shape before a tighter shadow under it says
+            // how high it is. One layer has to choose, and either choice alone
+            // looks wrong: broad-only is fog, tight-only is a sticker.
+            floating: LayeredShadow(
+                ambient: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x4D),
+                                       offsetX: 0, offsetY: 3, blur: 24),
+                key:     SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x99),
+                                       offsetX: 0, offsetY: 6, blur: 8)
+            )
         ),
         motion: MotionScale(
             fast:           .milliseconds(80),
