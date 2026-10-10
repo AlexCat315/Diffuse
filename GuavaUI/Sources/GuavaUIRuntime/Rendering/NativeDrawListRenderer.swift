@@ -128,20 +128,19 @@ public final class NativeDrawListRenderer {
         draws.reserveCapacity(list.batches.count)
         var vertices: UploadLocation?, indices: UploadLocation?
         if !list.indices.isEmpty && !list.batches.isEmpty {
-            vertices = try list.vertices.withUnsafeBytes { try device.uploadTransient(Data($0)) }
-            indices = try list.indices.withUnsafeBytes { try device.uploadTransient(Data($0)) }
-            var sets: [TextureID: BindingSet] = [:]
+            vertices = try list.vertices.withUnsafeBytes { try device.uploadTransient($0) }
+            indices = try list.indices.withUnsafeBytes { try device.uploadTransient($0) }
             for batch in list.batches {
                 guard batch.indexCount > 0, let scissor = try viewport.scissor(batch.scissor) else { continue }
                 let bindings: BindingSet
-                if let cached = sets[batch.textureID] { bindings = cached }
+                let slot = textureStore.textures[batch.textureID] ?? textureStore.fallback
+                if let cached = slot.cachedBindingSet { bindings = cached }
                 else {
-                    let slot = textureStore.textures[batch.textureID] ?? textureStore.fallback
                     bindings = try device.makeBindingSet(layout: shaders.bindings, descriptor: BindingSetDescriptor(entries: [
                         BindingSetEntry(slot: 1, resource: .texture(slot.resource.texture)),
                         BindingSetEntry(slot: 2, resource: .sampler(shaders.sampler))
                     ]))
-                    sets[batch.textureID] = bindings
+                    slot.cachedBindingSet = bindings
                 }
                 draws.append(NativeUIBatch(indices: batch, scissor: scissor, bindings: bindings))
             }

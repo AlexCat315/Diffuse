@@ -5,7 +5,9 @@ import NativeRHI
 import RHIWGPU
 
 /// Inject the same device used by the scene renderer to compose its viewport
-/// without copying pixels. Omitting this option retains the WGPU default.
+/// without copying pixels. When no device is supplied, a NativeRHI device for
+/// the current platform is created; pass an explicit `.wgpu(...)` to opt into
+/// the WGPU backend (still supported as a fallback).
 public typealias AppRendererDevice = EngineRenderDevice
 
 struct AppWindowRenderSettings {
@@ -32,7 +34,16 @@ final class AppRenderingContext {
     let viewportTextures: ViewportTextureRegistry
 
     init(device: AppRendererDevice?, config: AppConfig) throws {
-        switch device ?? .wgpu(WGPUBackend(config: config.backendConfig)) {
+        let resolvedDevice: AppRendererDevice
+        if let device {
+            resolvedDevice = device
+        } else {
+            resolvedDevice = .native(try Device.make(DeviceConfig(
+                preferredBackends: NativeRHI.platformDefaultBackends,
+                enableValidation: true,
+                framesInFlight: 3)))
+        }
+        switch resolvedDevice {
         case .wgpu(let backend):
             let ui = DrawListRenderer(backend: backend)
             renderer = .wgpu(backend, ui)

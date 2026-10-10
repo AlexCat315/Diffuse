@@ -28,9 +28,41 @@ struct MetalBoundEntry {
     let resource: MetalBoundResource
 }
 
+/// One already-resolved (stage, index, resource) binding. The encoder replays
+/// this list directly, so it never intersects visibility per draw or builds
+/// per-entry closures while binding.
+struct MetalBindingApply {
+    let stage: ShaderStage
+    let index: Int
+    let resource: MetalBoundResource.Value
+}
+
 final class MetalBindingSet {
     let entries: [MetalBoundEntry]
-    init(entries: [MetalBoundEntry]) { self.entries = entries }
+    /// Raster visibility: vertex and fragment stages.
+    let graphicsApplies: [MetalBindingApply]
+    /// Mesh pipeline visibility: task, mesh and fragment stages.
+    let meshApplies: [MetalBindingApply]
+    /// Compute visibility.
+    let computeApplies: [MetalBindingApply]
+
+    init(entries: [MetalBoundEntry]) {
+        self.entries = entries
+        graphicsApplies = MetalBindingSet.applies(entries, stages: [.vertex, .fragment])
+        meshApplies = MetalBindingSet.applies(entries, stages: [.task, .mesh, .fragment])
+        computeApplies = MetalBindingSet.applies(entries, stages: [.compute])
+    }
+
+    private static func applies(_ entries: [MetalBoundEntry], stages: [ShaderStage]) -> [MetalBindingApply] {
+        var result: [MetalBindingApply] = []
+        for entry in entries {
+            for stage in stages where entry.visibility.contains(ShaderVisibility(stage)) {
+                result.append(MetalBindingApply(stage: stage, index: Int(entry.slot),
+                                                resource: entry.resource.value))
+            }
+        }
+        return result
+    }
 }
 
 struct MetalGraphicsPipeline {

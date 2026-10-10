@@ -510,6 +510,15 @@ public final class Device {
         }
     }
 
+    /// Copies `bytes` into per-frame storage without an intermediate `Data`.
+    /// The pointer is only read before this call returns.
+    public func uploadTransient(_ bytes: UnsafeRawBufferPointer, alignment: Int = 256) throws -> UploadLocation {
+        try locked {
+            guard let uploader = currentUploader else { throw RHIError.frameNotActive }
+            return try uploader.write(bytes, alignment: alignment)
+        }
+    }
+
     // MARK: Submission
 
     /// Plans and submits a recorded command buffer. Submission is asynchronous;
@@ -567,7 +576,8 @@ public final class Device {
     }
 
     private func validateCommands(_ commandBuffer: CommandBuffer, queue: QueueClass) throws {
-        try interfaces.validateCommands(commandBuffer, caches: caches)
+        // Pass-level capability checks first; per-command capability checks ride
+        // along with the layout walk so each pass body is traversed once.
         for command in commandBuffer.commands {
             if case .accelerationStructureBuild = command, queue == .transfer { throw RHIError.invalidArgument("acceleration builds require graphics or compute queue") }
             if case .accelerationStructureBuild = command, !capabilities.rayTracing.accelerationStructures {
@@ -579,22 +589,15 @@ public final class Device {
             if case .computePass = command, queue == .transfer {
                 throw RHIError.invalidArgument("compute passes cannot execute on a transfer queue")
             }
-            if case .renderPass(let record) = command {
+            if case .renderPass = command {
                 try rhiRequire(queue == .graphics, "render passes require the graphics queue")
                 guard capabilities.graphics else {
                     throw RHIError.unsupportedFeature("graphics commands are not implemented by this backend")
                 }
-                for item in record.body {
-                    switch item {
-                    case .setMeshPipeline, .drawMeshTasks:
-                        guard capabilities.meshShading.mesh else {
-                            throw RHIError.unsupportedFeature("mesh commands are not implemented by this backend")
-                        }
-                    default: break
-                    }
-                }
             }
         }
+        try interfaces.validateCommands(commandBuffer, caches: caches,
+                                       meshShadingEnabled: capabilities.meshShading.mesh)
     }
 
     // MARK: Swapchain
