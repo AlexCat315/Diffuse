@@ -50,21 +50,46 @@ struct ButtonGroupStory: View {
 struct TagStory: View {
     let options: GalleryOptions
     @State private var tags = ["Swift", "Rendering", "Editor"]
+    @State private var filters = ["metal", "vulkan"]
     var body: some View {
-        StorySection("Removable tags", "Each remove action is an independent control. Reset restores the tags.") {
-            Row(alignment: .center, spacing: 8) {
-                for title in tags {
-                    AnyView(Tag(title) { $0.tone = .info; $0.isEnabled = options.isEnabled; $0.onRemove = { tags.removeAll { $0 == title } } })
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Removable tags", "Each remove action is an independent control. Reset restores the tags.") {
+                Row(alignment: .center, spacing: 8) {
+                    for title in tags {
+                        AnyView(Tag(title) { $0.tone = .info; $0.isEnabled = options.isEnabled; $0.onRemove = { tags.removeAll { $0 == title } } })
+                    }
+                }
+                if tags.isEmpty { Text("No tags selected").font(.caption).foregroundColor(.onSurfaceMuted) }
+            }
+            StorySection("Variants & glyphs", "Soft reads inside dense content; solid is a single callout; outline sits beside an already-bordered surface.") {
+                Row(alignment: .center, spacing: 8) {
+                    Tag("metal") { $0.variant = .soft; $0.isEnabled = options.isEnabled }
+                    Tag("vulkan") { $0.variant = .solid; $0.tone = .info; $0.isEnabled = options.isEnabled }
+                    Tag("deprecated") { $0.variant = .outline; $0.tone = .warning; $0.isEnabled = options.isEnabled }
+                    Tag("renderer") { $0.icon = UIIcons.Editor.box; $0.variant = .outline; $0.isEnabled = options.isEnabled }
+                    Tag("3 failures") { $0.showsDot = true; $0.tone = .danger; $0.isEnabled = options.isEnabled }
+                }
+                Row(alignment: .center, spacing: 8) {
+                    for title in filters {
+                        AnyView(Tag(title) { $0.variant = .outline; $0.isEnabled = options.isEnabled; $0.onRemove = { filters.removeAll { $0 == title } } })
+                    }
                 }
             }
-            if tags.isEmpty { Text("No tags selected").font(.caption).foregroundColor(.onSurfaceMuted) }
         }
     }
 }
+
 struct KeyCapStory: View {
     var body: some View {
         StorySection("Keyboard hints", "Platform-aware shortcut text uses the same formatter as command menus.") {
-            Row(alignment: .center, spacing: 12) { KeyCap(.primary("S")); Text("Save").font(.label); KeyCap("Esc"); Text("Dismiss").font(.label); KeyCap("↑ ↓"); Text("Navigate").font(.label) }
+            Column(alignment: .leading, spacing: 10) {
+                Row(alignment: .center, spacing: 12) { KeyCap(.primary("S")); Text("Save").font(.label) }
+                Row(alignment: .center, spacing: 12) { KeyCap(.primaryShift("P")); Text("Command palette").font(.label) }
+                Row(alignment: .center, spacing: 12) { KeyCap(.primary("K"), platform: .windows); Text("Same shortcut on Windows").font(.label) }
+                Row(alignment: .center, spacing: 12) { KeyCap("Esc"); Text("Dismiss").font(.label) }
+                Row(alignment: .center, spacing: 12) { KeyCap(["↑", "↓"]); Text("Navigate").font(.label) }
+                Row(alignment: .center, spacing: 12) { KeyCap("⏎") { $0.isEnabled = false }; Text("Disabled hint").font(.label) }
+            }
         }
     }
 }

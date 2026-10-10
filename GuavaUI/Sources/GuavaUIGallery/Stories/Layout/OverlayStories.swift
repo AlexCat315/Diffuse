@@ -40,7 +40,7 @@ struct MenuStory: View {
     var body: some View {
         StorySection("Nested commands", "Use Up/Down, Home/End or type a label. Right opens a branch; Left and Escape return one level. A leaf closes the entire popup.") {
             Popover(isPresented: $open, isEnabled: options.isEnabled, width: 260) {
-                Row(alignment: .center, spacing: 8) { Text("Workspace commands").font(.body); Icon(UICommonIcons.chevronDown, size: 12) }
+                Row(alignment: .center, spacing: 8) { Text("Workspace commands").font(.body); Icon(UIIcons.Navigation.chevronDown, size: 12) }
             } content: { Menu(entries, width: 260, onItemActivated: { open = false }) }
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted)
         }
@@ -49,7 +49,7 @@ struct MenuStory: View {
         }
         StorySection("Scrollable menu", "100 commands with nested branches. Keyboard navigation reveals the active row; a child closes when its anchor scrolls away.") {
             Popover(isPresented: $manyOpen, isEnabled: options.isEnabled, width: 240) {
-                Row(alignment: .center, spacing: 8) { Text("100 commands").font(.body); Icon(UICommonIcons.chevronDown, size: 12) }
+                Row(alignment: .center, spacing: 8) { Text("100 commands").font(.body); Icon(UIIcons.Navigation.chevronDown, size: 12) }
             } content: { Menu(manyEntries, width: 240, maxVisibleRows: 6, onItemActivated: { manyOpen = false }) }
         }
     }
@@ -85,7 +85,7 @@ struct PopoverStory: View {
     var body: some View {
         StorySection("Anchored form", "The overlay escapes clipping and repositions near viewport edges.") {
             Popover(isPresented: $open, isEnabled: options.isEnabled, width: 300, label: {
-                Row(alignment: .center, spacing: 6) { Text("Project settings"); Icon(UICommonIcons.chevronDown, size: 12) }
+                Row(alignment: .center, spacing: 6) { Text("Project settings"); Icon(UIIcons.Navigation.chevronDown, size: 12) }
             }, content: {
                 Box(direction: .column, alignItems: .stretch, spacing: 12) {
                     Text("Project name").font(.bodyStrong)
@@ -139,15 +139,138 @@ struct DisclosureStory: View {
 
 struct TabsStory: View {
     @State private var selection = "overview"
+    @State private var segment = "day"
+    @State private var documents = ["Scene.guava", "Material.guava", "Notes.md"]
     var body: some View {
-        StorySection("Content tabs", "Arrow keys wrap among enabled tabs and move actual focus. Home and End choose the edges.") {
-            TabView(selection: $selection, tabs: [
-                TabItem("Overview", id: "overview") { Text("Project overview").padding(20) },
-                TabItem("Unavailable", id: "disabled", isEnabled: false) { Text("Disabled content") },
-                TabItem("Activity", id: "activity") { Text("Recent activity").padding(20) },
-                TabItem("Settings", id: "settings") { Text("Project settings").padding(20) }
-            ]).frame(height: 220)
-            Text("Active tab: \(selection)").font(.caption).foregroundColor(.onSurfaceMuted)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Content tabs", "Arrow keys wrap among enabled tabs and move actual focus. Home and End choose the edges.") {
+                TabView(selection: $selection, tabs: [
+                    TabItem("Overview", id: "overview") { $0.icon = UIIcons.File.file } content: { Text("Project overview").padding(20) },
+                    TabItem("Unavailable", id: "disabled", isEnabled: false) { Text("Disabled content") },
+                    TabItem("Activity", id: "activity") { $0.icon = UIIcons.Data.activity; $0.badge = "3" } content: { Text("Recent activity").padding(20) },
+                    TabItem("Settings", id: "settings") { $0.icon = UIIcons.Action.settings } content: { Text("Project settings").padding(20) }
+                ]).frame(height: 220)
+                Text("Active tab: \(selection)").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+            StorySection("Variants", "A segmented strip picks a value; a card strip keeps folder semantics; both use the same items.") {
+                TabView(selection: $segment, tabs: [
+                    TabItem("Day", id: "day") { Text("Day view").padding(16) },
+                    TabItem("Week", id: "week") { Text("Week view").padding(16) },
+                    TabItem("Month", id: "month") { Text("Month view").padding(16) }
+                ]) { $0.variant = .segmented }
+                TabView(selection: $segment, tabs: [
+                    TabItem("Day", id: "day") { Text("Day view").padding(16) },
+                    TabItem("Week", id: "week") { Text("Week view").padding(16) },
+                    TabItem("Month", id: "month") { Text("Month view").padding(16) }
+                ]) { $0.variant = .card }.frame(height: 120)
+            }
+            StorySection("Closable tabs", "A tab with a close action renders its own close control; closing falls back to the nearest remaining tab.") {
+                TabView(selection: .constant("Scene.guava"), tabs: documents.map { name in
+                    TabItem(name, id: name) { $0.icon = UIIcons.File.fileText; $0.onClose = { documents.removeAll { $0 == name } } } content: { Text("Editing \(name)").padding(20) }
+                }).frame(height: 160)
+                if documents.isEmpty { Text("All documents closed — reset the example to restore them.").font(.caption).foregroundColor(.onSurfaceMuted) }
+            }
+        }
+    }
+}
+
+struct CommandPaletteStory: View {
+    @State private var isPresented = false
+    @State private var lastRun = "none"
+
+    private var items: [CommandItem] {
+        [
+            CommandItem("Toggle Theme", group: "View", keywords: ["dark", "light", "appearance"],
+                        icon: UIIcons.Device.moon, shortcut: .primaryShift("L")) { lastRun = "Toggle Theme" },
+            CommandItem("Go to File", group: "Navigate", keywords: ["jump", "search"],
+                        icon: UIIcons.File.folderOpen, shortcut: .primary("P")) { lastRun = "Go to File" },
+            CommandItem("Go to Line", group: "Navigate", keywords: ["jump"],
+                        icon: UIIcons.Editor.code, shortcut: .primary("G")) { lastRun = "Go to Line" },
+            CommandItem("Format Document", group: "Edit", keywords: ["pretty", "reindent"],
+                        icon: UIIcons.Action.format, shortcut: .primaryShift("F")) { lastRun = "Format Document" },
+            CommandItem("Rename Symbol", group: "Edit", keywords: ["refactor"],
+                        icon: UIIcons.Action.pencil) { lastRun = "Rename Symbol" },
+            CommandItem("Run Build", group: "Build", keywords: ["compile"],
+                        icon: UIIcons.Editor.hammer, shortcut: .primary("B")) { lastRun = "Run Build" },
+            CommandItem("Clean Build Folder", group: "Build", keywords: ["wipe"],
+                        icon: UIIcons.Action.trash) { lastRun = "Clean Build Folder" },
+            CommandItem("Deploy to Device", group: "Build", keywords: ["ship"],
+                        icon: UIIcons.File.package, isEnabled: false) { lastRun = "Deploy to Device" }
+        ]
+    }
+
+    var body: some View {
+        StorySection("Command palette", "Open it and type a fragment such as “go f” or “theme”. Up and Down move the highlight, Return runs it, Escape closes.") {
+            Row(alignment: .center, spacing: 12) {
+                Button("Open command palette") { isPresented = true }
+                KeyCap(.primaryShift("P"))
+                Text("Last run: \(lastRun)").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+            CommandPalette(isPresented: $isPresented, items: items)
+        }
+    }
+}
+
+struct HoverCardStory: View {
+    var body: some View {
+        StorySection("Hover card", "Rest the pointer on a name to read its detail. The card opens after a short delay and stays open while the pointer is over it.") {
+            Column(alignment: .leading, spacing: 12) {
+                HoverCard(width: 320, label: {
+                    Text("@ada").font(.bodyStrong).foregroundColor(.accent)
+                }) {
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("Ada Lovelace").font(.bodyStrong)
+                        Text("Analytical Engine · contributor since 1843").font(.caption).foregroundColor(.onSurfaceMuted)
+                        Row(alignment: .center, spacing: 6) {
+                            Badge("Maintainer", tone: .success)
+                            Badge("Offline", tone: .neutral)
+                        }
+                    }
+                }
+                HoverCard(width: 300, label: {
+                    Row(alignment: .center, spacing: 6) {
+                        Icon(UIIcons.Editor.box, size: 14, color: .onSurfaceMuted)
+                        Text("MeshRenderer").font(.bodyStrong)
+                    }
+                }) {
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("Renders a mesh with a material").font(.body)
+                        Text("Costs one draw call per submesh.").font(.caption).foregroundColor(.onSurfaceMuted)
+                    }
+                }
+                Text("Hover cards are a pointer affordance — the same detail must be reachable another way.").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+        }
+    }
+}
+
+struct ToolbarStory: View {
+    let options: GalleryOptions
+    @State private var isPlaying = false
+    @State private var isBold = true
+    var body: some View {
+        StorySection("Toolbar", "One height, one spacing rhythm, and separators between groups — the bar owns the frame so every toolbar lines up.") {
+            Toolbar {
+                ToolbarGroup {
+                    Button(icon: .resource(UIIcons.Editor.play), isEnabled: options.isEnabled, isSelected: isPlaying, tooltip: "Play", action: { isPlaying = true })
+                    Button(icon: .resource(UIIcons.Editor.stop), isEnabled: options.isEnabled, isSelected: !isPlaying, tooltip: "Stop", action: { isPlaying = false })
+                }
+                ToolbarSeparator()
+                ToolbarGroup(isBordered: true) {
+                    Button(icon: .resource(UIIcons.Text.bold), isEnabled: options.isEnabled, isSelected: isBold, tooltip: "Bold", action: { isBold.toggle() })
+                    Button(icon: .resource(UIIcons.Text.italic), isEnabled: options.isEnabled, tooltip: "Italic", action: {})
+                }
+                Spacer()
+                ToolbarGroup {
+                    Button(icon: .resource(UIIcons.Action.zoomOut), isEnabled: options.isEnabled, tooltip: "Zoom out", action: {})
+                    Button(icon: .resource(UIIcons.Action.zoomIn), isEnabled: options.isEnabled, tooltip: "Zoom in", action: {})
+                }
+            }
+            Toolbar { $0.divider = .top } content: {
+                Text("A bar below its content puts the divider on top.").font(.caption).foregroundColor(.onSurfaceMuted)
+                Spacer()
+                Button("Apply", isEnabled: options.isEnabled) {}
+            }
         }
     }
 }

@@ -53,9 +53,9 @@ public struct CalendarView: View {
         let tabDay = monthDays.first(where: { options.calendar.isDate($0, inSameDayAs: session.focusedDay) }) ?? monthDays.first
         return Box(direction: .column, alignItems: .stretch, spacing: 6) {
             Row(alignment: .center, spacing: 4) {
-                Button(icon: .resource(UICommonIcons.chevronLeft), size: 12, isEnabled: options.presentation.isEnabled && index == 0) { browse(-1) }.buttonStyle(.ghost).accessibilityLabel("Previous month")
+                Button(icon: .resource(UIIcons.Navigation.chevronLeft), size: 12, isEnabled: options.presentation.isEnabled && index == 0) { browse(-1) }.buttonStyle(.ghost).accessibilityLabel("Previous month")
                 Text(formatter.string(from: date)).font(.bodyStrong).flex(1).padding(horizontal: 4)
-                Button(icon: .resource(UICommonIcons.chevronRight), size: 12, isEnabled: options.presentation.isEnabled && index == options.presentation.numberOfMonths - 1) { browse(1) }.buttonStyle(.ghost).accessibilityLabel("Next month")
+                Button(icon: .resource(UIIcons.Navigation.chevronRight), size: 12, isEnabled: options.presentation.isEnabled && index == options.presentation.numberOfMonths - 1) { browse(1) }.buttonStyle(.ghost).accessibilityLabel("Next month")
             }
             Row(alignment: .center, spacing: 2) {
                 for weekday in 0..<7 {

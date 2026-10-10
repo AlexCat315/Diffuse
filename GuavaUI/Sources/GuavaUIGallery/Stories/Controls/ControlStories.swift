@@ -21,11 +21,11 @@ struct ButtonStory: View {
             StorySection("Icons & tooltips", "Labels can include real bundled icons. Hover to inspect the tooltip.") {
                 Row(alignment: .center, spacing: 12) {
                     Button(isEnabled: options.isEnabled, tooltip: "Confirm changes", action: { clicks += 1 }) {
-                        Row(alignment: .center, spacing: 6) { Icon(UICommonIcons.checkmark, size: 14); Text("Confirm") }
+                        Row(alignment: .center, spacing: 6) { Icon(UIIcons.Action.check, size: 14); Text("Confirm") }
                     }
-                    Button(icon: .resource(UICommonIcons.close), isEnabled: options.isEnabled, tooltip: "Close") { clicks += 1 }.buttonStyle(.secondary)
+                    Button(icon: .resource(UIIcons.Action.x), isEnabled: options.isEnabled, tooltip: "Close") { clicks += 1 }.buttonStyle(.secondary)
                     Button(isEnabled: options.isEnabled, action: { clicks += 1 }) {
-                        Row(alignment: .center, spacing: 6) { Text("Custom content"); Icon(UICommonIcons.chevronDown, size: 12) }
+                        Row(alignment: .center, spacing: 6) { Text("Custom content"); Icon(UIIcons.Navigation.chevronDown, size: 12) }
                     }.buttonStyle(.secondary)
                 }
             }

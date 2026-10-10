@@ -62,7 +62,7 @@ struct ImageStory: View {
             if case .failure(let error) = phase { failed = true; detail = error.description }
             else { failed = false; detail = "Choose an image source" }
             return AnyView(Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 8) {
-                Icon(UICommonIcons.user, size: 28, color: .onSurfaceMuted)
+                Icon(UIIcons.User.user, size: 28, color: .onSurfaceMuted)
                 Text(failed ? "Image unavailable" : "No image").font(.caption)
             }.frame(width: width, height: height).tooltip(detail)
                 .accessibility { $0.label = failed ? "Image unavailable" : "No image"; $0.help = detail; $0.combinesChildren = true })
