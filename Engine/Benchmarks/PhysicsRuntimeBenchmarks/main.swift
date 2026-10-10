@@ -370,14 +370,14 @@ for offset in 0..<configuration.sampleFrames {
         || configuration.scenario == .destructionIslands) && offset == 0 {
         destructionActivationNanoseconds = DispatchTime.now().uptimeNanoseconds - frameStarted
     }
-    stepSamples.append(report.physicsStepNanoseconds)
-    syncSamples.append(report.physicsSynchronizationNanoseconds)
-    contactTotal += report.physicsContactCount
+    stepSamples.append(report.physics.stepNanoseconds)
+    syncSamples.append(report.physics.synchronizationNanoseconds)
+    contactTotal += report.physics.contactCount
     activeBodyPeak = max(activeBodyPeak, runtime.physicsFrameState.activeBodyCount)
     activeSoftBodyPeak = max(
         activeSoftBodyPeak, runtime.physicsFrameState.activeSoftBodyCount
     )
-    droppedSteps += report.physicsDroppedStepCount
+    droppedSteps += report.physics.droppedStepCount
     activeFragmentPeak = max(activeFragmentPeak, runtime.destructionStateFrame.activeFragmentCount)
     destructionEventTotal += runtime.destructionEventFrame.events.count
     let destructionStates = runtime.destructionStateFrame.sources.values

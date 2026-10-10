@@ -97,8 +97,8 @@ struct AdvancedRigidBodyTests {
         ), for: entity)
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsBodyCount == 1)
-        #expect(report.physicsWritebackCount == 0)
+        #expect(report.physics.bodyCount == 1)
+        #expect(report.physics.writebackCount == 0)
     }
 
     @Test("independent same-build simulations produce identical state hashes")
@@ -167,16 +167,16 @@ struct AdvancedRigidBodyTests {
 
         let first = runtime.tick(deltaTime: 1.0 / 60.0)
         let firstY = runtime.worldTransform(for: entity)?.translation.y ?? 3
-        #expect(first.physicsError == nil)
-        #expect(first.physicsBodyCount == 1)
+        #expect(first.physics.error == nil)
+        #expect(first.physics.bodyCount == 1)
 
         var settings = runtime.physicsSettings
         settings.capacity.maxBodies = 128
         runtime.setPhysicsSettings(settings)
         let second = runtime.tick(deltaTime: 1.0 / 60.0)
         let secondY = runtime.worldTransform(for: entity)?.translation.y ?? 3
-        #expect(second.physicsError == nil)
-        #expect(second.physicsBodyCount == 1)
+        #expect(second.physics.error == nil)
+        #expect(second.physics.bodyCount == 1)
         #expect(secondY < firstY)
     }
 
