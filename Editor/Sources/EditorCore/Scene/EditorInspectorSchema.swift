@@ -106,7 +106,6 @@ public enum EditorInspectorFieldValue {
     case json(Binding<String>, minHeight: Float)
     case physicsSimulationMode(Binding<PhysicsSimulationMode>)
     case vehicleControllerKind(Binding<VehicleControllerKind>)
-    case rigidBodyMotion(Binding<RigidBodyMotionType>)
     case colliderShapeKind(Binding<ColliderShapeKind>)
     case colliderShapeInstances(Binding<[ColliderShapeInstance]>)
     case entityReference(Binding<UInt64>, options: [EditorInspectorEntityOption])

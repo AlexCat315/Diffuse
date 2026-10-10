@@ -253,7 +253,7 @@ public struct TransactionExecutor {
                                                 worldEvents: derivedWorldEvents)
             try verify(transaction.verificationAssertions,
                        result: result,
-                       context: context)
+                       context: context, originalScene: originalScene)
             try publishSuccessEvents(for: transaction,
                                      result: result,
                                      sceneOps: sceneOps,
@@ -270,7 +270,7 @@ public struct TransactionExecutor {
 
     private func verify(_ assertions: [TransactionVerificationAssertion],
                         result: TransactionApplyResult,
-                        context: TransactionExecutionContext) throws {
+                        context: TransactionExecutionContext, originalScene: SceneRuntime?) throws {
         var retainedSceneStateIndices = Set<Int>()
         var seenSceneStateKeys = Set<String>()
         var supersededSceneStateKeys = Set<String>()
@@ -282,10 +282,25 @@ public struct TransactionExecutor {
             supersededSceneStateKeys.formUnion(state.supersededVerificationKeys)
         }
         var componentChecks: [SceneComponentKey: TransactionVerificationAssertion] = [:]
+        var normalizedStates: [SceneComponentKey: SceneRuntime] = [:]
         for assertion in assertions {
             switch assertion {
             case let .componentData(entityID, typeID, value, mode):
                 let key = SceneComponentKey(entityID: entityID, typeID: typeID)
+                var value = value
+                if let scene = context.sceneRuntime, let normalize = scene.componentRegistry[typeID]?.normalizeChanges {
+                    let entity = self.entityID(fromRaw: entityID)
+                    let baseline = originalScene.flatMap { $0.hasComponent(typeID: typeID, for: entity) ? $0 : nil } ?? scene
+                    var expected = normalizedStates[key] ?? baseline
+                    let requested = value
+                    if mode == .merge, let previous = expected.componentData(typeID, for: entity) {
+                        value = try normalize(previous, value)
+                    }
+                    // Replay assertions on a value snapshot: normalization can
+                    // reorder arrays, so later indices address the updated list.
+                    try expected.setComponentData(requested, typeID: typeID, for: entity, mode: mode)
+                    normalizedStates[key] = expected
+                }
                 if mode == .merge,
                    case let .componentData(_, _, previous, previousMode) = componentChecks[key] {
                     let merged = previousMode == .replace
@@ -293,9 +308,27 @@ public struct TransactionExecutor {
                         : try previous.merging(value)
                     componentChecks[key] = .componentData(entityID: entityID, typeID: typeID,
                         value: merged, mode: previousMode)
-                } else { componentChecks[key] = assertion }
-            case let .componentPresence(entityID, typeID, _):
-                componentChecks[SceneComponentKey(entityID: entityID, typeID: typeID)] = assertion
+                } else {
+                    componentChecks[key] = .componentData(entityID: entityID, typeID: typeID, value: value, mode: mode)
+                }
+            case let .componentPresence(entityID, typeID, isPresent):
+                let key = SceneComponentKey(entityID: entityID, typeID: typeID)
+                if let scene = context.sceneRuntime, scene.componentRegistry[typeID]?.normalizeChanges != nil {
+                    let entity = self.entityID(fromRaw: entityID)
+                    let existed = originalScene?.hasComponent(typeID: typeID, for: entity) == true
+                    var expected = normalizedStates[key] ?? (existed ? originalScene! : scene)
+                    if isPresent, !existed, normalizedStates[key] == nil, expected.hasComponent(typeID: typeID, for: entity) {
+                        // A newly inserted component starts with registry defaults,
+                        // even when the actual document already contains later edits.
+                        try expected.removeComponentData(typeID: typeID, for: entity)
+                    }
+                    if expected.hasComponent(typeID: typeID, for: entity) != isPresent {
+                        if isPresent { try expected.addComponent(typeID: typeID, for: entity) }
+                        else { try expected.removeComponentData(typeID: typeID, for: entity) }
+                    }
+                    normalizedStates[key] = expected
+                }
+                componentChecks[key] = assertion
             default: break
             }
         }
@@ -305,7 +338,11 @@ public struct TransactionExecutor {
             let matched: Bool
             switch assertion {
             case let .componentData(_, _, expected, mode):
-                matched = mode == .merge ? actual?.containsFields(expected) == true : actual == expected
+                // Check only asserted paths, using their final canonical values.
+                // A later topology resize can prune a previously asserted list.
+                let canonical = normalizedStates[key]?.componentData(key.typeID, for: entityID(fromRaw: key.entityID))
+                let normalized = canonical.map { componentExpectation(expected, from: $0) } ?? expected
+                matched = mode == .merge ? actual?.containsFields(normalized) == true : actual == normalized
             case let .componentPresence(_, _, isPresent): matched = (actual != nil) == isPresent
             default: preconditionFailure("Unexpected component assertion")
             }
@@ -359,6 +396,14 @@ public struct TransactionExecutor {
                 }
             }
         }
+    }
+
+    private func componentExpectation(_ mask: ComponentValue, from value: ComponentValue) -> ComponentValue {
+        guard case let .object(fields) = mask else { return value }
+        return .object(Dictionary(uniqueKeysWithValues: fields.map { key, field in
+            let canonical = value.value(at: [key]).map { componentExpectation(field, from: $0) } ?? field
+            return (key, canonical)
+        }))
     }
 
     private func validate(_ transaction: TransactionIR,

@@ -37,34 +37,57 @@ extension EditorSceneAdapter {
                 let maximum = field.numeric.maximumPath.flatMap { read($0).numericValue }.map { $0 * field.numeric.scale }
                     ?? field.numeric.maximum
                 if let maximum { value = min(maximum, value) }
+                if field.kind == .integer {
+                    guard let integer = Int64(exactly: value.rounded()) else { return }
+                    write(.signedInteger(integer), path: path)
+                    return
+                }
                 write(.number(value / field.numeric.scale), path: path)
             })
         }
-        if field.isReadOnly { return .readOnly(componentText(read())) }
-        switch field.kind {
-        case .boolean:
-            return .bool(Binding(get: { if case let .bool(value) = read() { return value }; return false },
-                                 set: { write(.bool($0)) }))
-        case .string, .options:
-            let binding = Binding<String>(get: { if case let .string(value) = read() { return value }; return "" },
-                                          set: { next in
-                if next.isEmpty && field.isNullable { write(.null) }
-                else if field.choices.isEmpty || field.choices.contains(next) { write(.string(next)) }
-            })
-            if field.kind == .options {
-                return .stringOptions(binding, options: field.choices.map {
-                    EditorInspectorStringOption(value: $0, label: ComponentFieldDescriptor.displayLabel($0))
-                })
-            }
-            return .text(binding)
-        case .number:
+        func numberControl() -> EditorInspectorFieldValue {
             let binding = number(field.path)
             if field.numeric.minimum != nil || field.numeric.maximum != nil || field.numeric.step != nil {
                 return .constrainedNumber(binding, min: field.numeric.minimum.map(Float.init),
                     max: field.numeric.maximum.map(Float.init), step: field.numeric.step.map(Float.init), showsStepper: true)
             }
             return .number(binding)
+        }
+        if field.isReadOnly {
+            switch read() {
+            case let .bool(value): return .readOnly(value ? L("Yes") : L("No"))
+            case let .string(value): return .readOnly(value)
+            default: return .readOnly(componentText(read()))
+            }
+        }
+        switch field.kind {
+        case .boolean:
+            return .bool(Binding(get: { if case let .bool(value) = read() { return value }; return false },
+                                 set: { write(.bool($0)) }))
+        case .string:
+            let binding = Binding<String>(get: { if case let .string(value) = read() { return value }; return "" },
+                                          set: { next in
+                if next.isEmpty && field.isNullable { write(.null) }
+                else { write(.string(next)) }
+            })
+            return .text(binding)
+        case .options:
+            let binding = Binding<String>(get: { field.choices.first { $0.value == read() }?.id ?? "" }, set: { next in
+                guard let choice = field.choices.first(where: { $0.id == next }) else { return }
+                write(choice.value)
+            })
+            return .stringOptions(binding, options: field.choices.map {
+                EditorInspectorStringOption(value: $0.id, label: $0.label)
+            })
+        case .number:
+            return numberControl()
         case .integer:
+            // Bounded counts fit exactly in Float; seeds and handles retain text editing.
+            if let minimum = field.numeric.minimum, let maximum = field.numeric.maximum,
+               minimum.isFinite, maximum.isFinite, minimum.rounded() == minimum, maximum.rounded() == maximum,
+               minimum <= maximum, minimum >= -16_777_216, maximum <= 16_777_216, field.numeric.scale == 1 {
+                return numberControl()
+            }
             // A Float control cannot represent integer seeds or handles exactly.
             return .text(Binding(get: { self.componentText(read()) }, set: { text in
                 if let value = UInt64(text) { write(.unsignedInteger(value)) }
