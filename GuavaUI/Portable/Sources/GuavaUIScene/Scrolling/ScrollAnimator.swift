@@ -176,11 +176,18 @@ public final class ScrollAnimator: AnyAnimationController {
     public func scroll(by delta: CGPoint) -> CGPoint {
         let time = clock()
         synchronizeRawPosition()
+        // Input arriving while content is still coasting is a brake, not a
+        // continuation. The samples behind that glide belong to a gesture the
+        // user just ended by scrolling again, and keeping them would relaunch
+        // the glide the moment this notch stopped it — the reason a notch used
+        // to feel like it made things worse instead of stopping them.
+        let wasCoasting = isGliding
         stopAnimation()
         // The pending release belongs to the previous input: once motion is
         // handed to the return spring there is nothing left to coast into, and
         // leaving it armed would stall that spring until it expired.
         releaseDeadline = nil
+        if wasCoasting { resetTracking() }
         position = capped(CGPoint(x: position.x + delta.x, y: position.y + delta.y))
         recordInput(time: time)
         setOffset(visibleOffset(for: position))
@@ -206,7 +213,11 @@ public final class ScrollAnimator: AnyAnimationController {
     public func move(to newPosition: CGPoint) -> CGPoint {
         releaseDeadline = nil
         synchronizeRawPosition()
+        // A thumb landing on coasting content is a grab, not a continuation:
+        // see `scroll(by:)`.
+        let wasCoasting = isGliding
         stopAnimation()
+        if wasCoasting { resetTracking() }
         position = capped(newPosition)
         recordInput(time: clock())
         setOffset(visibleOffset(for: position))
@@ -225,14 +236,33 @@ public final class ScrollAnimator: AnyAnimationController {
     public func settle() {
         releaseDeadline = nil
         let launch = currentVelocity()
+        // A nudge is not a throw. One or two samples describe the gap between
+        // two events rather than a gesture, and launching from them is what
+        // made a notch meant to stop the content send it off again.
+        let floor = physics.momentum.minimumSampleCount
+        var thrown = launch
+        if trackerX.sampleCount < floor { thrown.x = 0 }
+        if trackerY.sampleCount < floor { thrown.y = 0 }
         resetTracking()
 
-        let enoughThrow = hypot(launch.x, launch.y) > CGFloat(physics.momentum.minimumVelocity)
+        let enoughThrow = hypot(thrown.x, thrown.y) > CGFloat(physics.momentum.minimumVelocity)
         guard physics.momentum.isEnabled, !isOverscrolled, enoughThrow else {
-            settleNow(velocity: launch)
+            settleNow(velocity: thrown)
             return
         }
-        beginGlide(velocity: launch)
+        beginGlide(velocity: thrown)
+    }
+
+    /// Stop a glide dead where it is, leaving the current offset alone.
+    ///
+    /// Touching content that is still moving is how a user says "here", so the
+    /// pointer going down anywhere inside the container counts. The return
+    /// spring is deliberately left running: it already knows where it is
+    /// going, and stopping it would strand the content out of bounds.
+    public func stopCoasting() {
+        guard isGliding else { return }
+        stopGlide()
+        isFinished = true
     }
 
     // MARK: - AnyAnimationController

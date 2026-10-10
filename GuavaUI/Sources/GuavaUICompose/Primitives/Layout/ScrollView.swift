@@ -205,6 +205,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 switch pointerPhase {
                 case .down:
                     guard event.button == .left else { return .ignored }
+                    // Pressing anywhere inside the container grabs content that
+                    // is still coasting — the same "touch to stop" every
+                    // scrollable surface has. Never consumes the event, so a
+                    // press that was meant for a child still reaches it.
+                    motion.stopCoasting()
                     guard eventPhase == .capture || eventPhase == .target else {
                         return .ignored
                     }

@@ -82,19 +82,35 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
     public var isEnabled: Bool = true
 
     /// Decay rate in nepers per second: velocity is multiplied by `e^-rate`
-    /// each second. `2.2` matches `UIScrollView.DecelerationRate.normal`
-    /// (0.998 per millisecond ≈ e^-2.0 per second), leaving about 11% of the
-    /// launch speed after one second. Higher stops sooner.
-    public var deceleration: Float = 2.2
+    /// each second. Together with `maximumVelocity` this decides how far the
+    /// hardest possible throw travels — `(v₀ - minimumVelocity) / rate`, so
+    /// `4.2` and `1100` take a full-strength flick about 250pt further (roughly
+    /// a quarter of a typical viewport) over three quarters of a second. iOS'
+    /// `DecelerationRate.normal` (≈ e^-2.0 per second) is tuned for a finger on
+    /// glass and reads as "launched" with a mouse: several viewports of travel
+    /// and a tail that drifts for two seconds. Higher stops sooner.
+    public var deceleration: Float = 4.2
 
     /// Launch speed, in points per second, below which the gesture counts as
-    /// placed rather than thrown and no glide starts.
-    public var minimumVelocity: Float = 18
+    /// placed rather than thrown and no glide starts. High enough that nudging
+    /// content into place — the thing you do once it is nearly right — never
+    /// sets it moving again.
+    public var minimumVelocity: Float = 50
 
-    /// Ceiling on the launch speed. A pathological device can report a huge
-    /// slope for one frame; without a ceiling one such sample would throw the
-    /// viewport across the whole document.
-    public var maximumVelocity: Float = 4_200
+    /// Ceiling on the launch speed. Wheel notches arrive milliseconds apart, so
+    /// the measured slope of even a modest burst is enormous; without a ceiling
+    /// one such burst throws the viewport across the whole document.
+    public var maximumVelocity: Float = 1_100
+
+    /// Samples a gesture must have produced inside `trackingWindow` before it
+    /// counts as a throw.
+    ///
+    /// Two notches landing close together describe the gap between two events,
+    /// not a gesture — and measuring that gap is what made content impossible
+    /// to stop with a notch: "braking" kept reading as a fresh, very fast
+    /// gesture. A trackpad run produces a dozen samples in the same window, so
+    /// this costs flings nothing.
+    public var minimumSampleCount: Int = 3
 
     /// Quiet period, in seconds, after the newest wheel sample before the
     /// glide launches. Must outlast the gap between two notches of the same
@@ -114,9 +130,10 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
     public var staleWindow: TimeInterval = 0.25
 
     public init(isEnabled: Bool = true,
-                deceleration: Float = 2.2,
-                minimumVelocity: Float = 18,
-                maximumVelocity: Float = 4_200,
+                deceleration: Float = 4.2,
+                minimumVelocity: Float = 50,
+                maximumVelocity: Float = 1_100,
+                minimumSampleCount: Int = 3,
                 idleWindow: TimeInterval = 0.09,
                 trackingWindow: TimeInterval = 0.1,
                 staleWindow: TimeInterval = 0.25) {
@@ -124,6 +141,7 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
         self.deceleration = deceleration
         self.minimumVelocity = minimumVelocity
         self.maximumVelocity = maximumVelocity
+        self.minimumSampleCount = minimumSampleCount
         self.idleWindow = idleWindow
         self.trackingWindow = trackingWindow
         self.staleWindow = staleWindow
