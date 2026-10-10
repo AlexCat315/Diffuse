@@ -23,21 +23,21 @@ private enum _ScrollViewAttachmentKeys {
     static let isHovered = "__scrollview_scrollbar_is_hovered"
     static let chromeOpacity = "__scrollview_scrollbar_chrome_opacity"
     static let contentSize = "__scrollview_content_size"
-    static let rubberBand = "__scrollview_rubber_band"
+    static let motion = "__scrollview_motion"
     static let report = "__scrollview_report"
 
-    static func rubberBandAnimator(for node: Node,
-                                   physics: ScrollPhysics) -> ScrollRubberBandAnimator {
-        if let existing = node.attachments[rubberBand] as? ScrollRubberBandAnimator {
+    static func motionAnimator(for node: Node,
+                               physics: ScrollPhysics) -> ScrollAnimator {
+        if let existing = node.attachments[motion] as? ScrollAnimator {
             existing.physics = physics
             return existing
         }
-        let animator = ScrollRubberBandAnimator(physics: physics) { [weak node] offset in
+        let animator = ScrollAnimator(physics: physics) { [weak node] offset in
             guard let node else { return }
             node.contentOffset = offset
             (node.attachments[report] as? (Node) -> Void)?(node)
         }
-        node.attachments[rubberBand] = animator
+        node.attachments[motion] = animator
         return animator
     }
 }
@@ -142,14 +142,14 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let trackInset: Float = 2
         let trackHitSlop: Float = 6
 
-        // Owns the overscroll state for this container. Created once and kept
-        // in attachments so the return spring survives recomposes; the report
-        // closure above is re-published every update so it always sees the
-        // current callbacks instead of capturing a stale one.
-        let overscroll = _ScrollViewAttachmentKeys.rubberBandAnimator(for: node,
-                                                                     physics: node.scrollPhysics)
-        Self.publishScrollRange(to: overscroll, on: node)
-        overscroll.adopt(node.contentOffset)
+        // Owns this container's motion — inertia, rubber band, return spring.
+        // Created once and kept in attachments so a glide or a spring survives
+        // recomposes; the report closure above is re-published every update so
+        // it always sees the current callbacks instead of a stale one.
+        let motion = _ScrollViewAttachmentKeys.motionAnimator(for: node,
+                                                             physics: node.scrollPhysics)
+        Self.publishScrollRange(to: motion, on: node)
+        motion.adopt(node.contentOffset)
 
         if node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] == nil {
             node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] = Float(0)
@@ -189,15 +189,16 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 let previousOffset = node.contentOffset
 
                 // Nothing measured yet — keep letting the event bubble.
-                guard Self.publishScrollRange(to: overscroll, on: node) else {
+                guard Self.publishScrollRange(to: motion, on: node) else {
                     return consumePolicy.result(didScroll: false)
                 }
 
-                // Rubber band instead of a hard clamp: `overscroll` keeps the
-                // raw requested position, returns the compressed visible one,
-                // and springs it back once the input stops.
-                overscroll.adopt(previousOffset)
-                let nextOffset = overscroll.scroll(by: CGPoint(x: CGFloat(dx), y: CGFloat(dy)))
+                // Rubber band instead of a hard clamp: `motion` keeps the raw
+                // requested position and returns the compressed visible one.
+                // Once the notches stop arriving it also decides by itself,
+                // from how fast they were coming, whether to coast onward.
+                motion.adopt(previousOffset)
+                let nextOffset = motion.scroll(by: CGPoint(x: CGFloat(dx), y: CGFloat(dy)))
                 return consumePolicy.result(didScroll: nextOffset != previousOffset)
             }
             registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
@@ -216,7 +217,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            local: local,
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
-                                                           overscroll: overscroll,
+                                                           motion: motion,
                                                            node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
@@ -227,7 +228,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            local: local,
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
-                                                           overscroll: overscroll,
+                                                           motion: motion,
                                                            node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
@@ -241,8 +242,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     }
                     node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
                     PointerCaptureHolder.current?.release()
-                    // Release whatever the drag stretched past the end.
-                    overscroll.settle()
+                    // Hand the gesture over: anything stretched past the end
+                    // springs back, anything still moving keeps coasting.
+                    motion.settle()
                     let isHovered = node.attachments[_ScrollViewAttachmentKeys.isHovered] as? Bool ?? false
                     Self.setScrollbarChromeVisible(isHovered, on: node)
                     return .handled
@@ -253,8 +255,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                         as? _ScrollViewDragState else {
                     return .ignored
                 }
-                guard Self.publishScrollRange(to: overscroll, on: node) else { return .handled }
-                overscroll.adopt(node.contentOffset)
+                guard Self.publishScrollRange(to: motion, on: node) else { return .handled }
+                motion.adopt(node.contentOffset)
                 let local = Self.localPoint(x: event.x, y: event.y, in: node)
                 let pointer = state.axis == .vertical ? local.y : local.x
                 let availableTrack = max(1, state.trackLength - state.thumbLength)
@@ -262,14 +264,14 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 // is what feeds the rubber band.
                 let rawOffset = state.offsetStart
                     + ((pointer - state.pointerStart) / availableTrack) * state.maxOffset
-                var nextPosition = overscroll.position
+                var nextPosition = motion.position
                 switch state.axis {
                 case .vertical:
                     nextPosition.y = rawOffset
                 case .horizontal:
                     nextPosition.x = rawOffset
                 }
-                overscroll.move(to: nextPosition)
+                motion.move(to: nextPosition)
                 return .handled
             }
         }
@@ -293,17 +295,17 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             let contentH = Float(contentSize.height)
             guard contentW > 0 || contentH > 0 else { return }
 
-            // Keep the overscroll bounds in step with layout. `update` also
-            // covers what this block used to do by hand: when the scrollable
-            // range shrinks out from under an offset that still points past
-            // the new end (cleared console, filtered list, enlarged viewport),
-            // the stranded offset snaps back within the same frame.
+            // Keep the scroll bounds in step with layout. `update` also covers
+            // what this block used to do by hand: when the scrollable range
+            // shrinks out from under an offset that still points past the new
+            // end (cleared console, filtered list, enlarged viewport), the
+            // stranded offset snaps back within the same frame, and any flight
+            // aimed at the old range is dropped with it.
             let maxOffsetX = CGFloat(max(0, contentW - viewW))
             let maxOffsetY = CGFloat(max(0, contentH - viewH))
-            if let overscroll = node.attachments[_ScrollViewAttachmentKeys.rubberBand]
-                as? ScrollRubberBandAnimator {
-                overscroll.update(maximumOffset: CGPoint(x: maxOffsetX, y: maxOffsetY),
-                                  viewportSize: viewport.size)
+            if let motion = node.attachments[_ScrollViewAttachmentKeys.motion] as? ScrollAnimator {
+                motion.update(maximumOffset: CGPoint(x: maxOffsetX, y: maxOffsetY),
+                              viewportSize: viewport.size)
             } else if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
                 node.contentOffset = CGPoint(x: min(node.contentOffset.x, maxOffsetX),
                                              y: min(node.contentOffset.y, maxOffsetY))
@@ -390,7 +392,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     /// case there are no bounds to bounce against and callers should leave the
     /// event unconsumed rather than inventing a rubber band out of nothing.
     @discardableResult
-    private static func publishScrollRange(to animator: ScrollRubberBandAnimator,
+    private static func publishScrollRange(to animator: ScrollAnimator,
                                            on node: Node) -> Bool {
         let viewport = visibleViewportRect(for: node).size
         let content = cachedScrollableContentSize(for: node)
@@ -465,10 +467,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let viewport = visibleViewportRect(for: node).size
         let maxOffsetX = max(0, next.width - viewport.width)
         let maxOffsetY = max(0, next.height - viewport.height)
-        if let overscroll = node.attachments[_ScrollViewAttachmentKeys.rubberBand]
-            as? ScrollRubberBandAnimator {
-            overscroll.update(maximumOffset: CGPoint(x: maxOffsetX, y: maxOffsetY),
-                              viewportSize: viewport)
+        if let motion = node.attachments[_ScrollViewAttachmentKeys.motion] as? ScrollAnimator {
+            motion.update(maximumOffset: CGPoint(x: maxOffsetX, y: maxOffsetY),
+                          viewportSize: viewport)
         } else if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
             node.contentOffset = CGPoint(x: min(node.contentOffset.x, maxOffsetX),
                                          y: min(node.contentOffset.y, maxOffsetY))
@@ -520,7 +521,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                            local: CGPoint,
                                            geometry: _ScrollViewScrollbarGeometry,
                                            hitSlop: CGFloat,
-                                           overscroll: ScrollRubberBandAnimator,
+                                           motion: ScrollAnimator,
                                            node: Node) -> _ScrollViewDragState? {
         let track: CGRect?
         let thumb: CGRect?
@@ -552,8 +553,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
 
         // A grab anywhere cancels whatever the previous gesture left behind —
-        // including the return spring of an earlier overscroll.
-        overscroll.adopt(node.contentOffset)
+        // glide or return spring alike. Tracking starts empty, so this drag
+        // cannot inherit the previous one's velocity either.
+        motion.adopt(node.contentOffset)
 
         if !thumb.contains(local) {
             let availableTrack = max(1, Self.trackLength(for: axis, track: track) - Self.trackLength(for: axis, track: thumb))
@@ -563,7 +565,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             var nextOffset = node.contentOffset
             nextOffset[keyPath: offsetKeyPath] = max(0, min(rawOffset, maxOffset))
             node.contentOffset = nextOffset
-            overscroll.adopt(nextOffset)
+            motion.adopt(nextOffset)
         }
 
         return _ScrollViewDragState(
