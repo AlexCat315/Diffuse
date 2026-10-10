@@ -119,7 +119,7 @@ struct MenuLevel: View {
                 .modifier(MenuScrollMarker())
             }
             .background(.materialFloating).cornerRadius(6).backdropBlur(14)
-            .border(.border, width: 1).surfaceFinish()
+            .border(.border, width: 1).floatingSurface()
             .frame(width: configuration.width)
         }
     }

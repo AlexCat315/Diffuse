@@ -52,7 +52,7 @@ enum EditorVisualTheme {
                 $0.placeholder = EditorCodePalette.muted
                 $0.disabled = Color(red: 0x50, green: 0x56, blue: 0x53)
             }
-            theme.elevation.low = Shadow(color: Color.black.multipliedAlpha(0.25), offsetX: 0, offsetY: 1, blur: 2)
+            theme.elevation.low = SurfaceShadow(color: Color.black.multipliedAlpha(0.25), offsetX: 0, offsetY: 1, blur: 2)
         }
         theme.motion.fast = .milliseconds(120)
         theme.motion.standard = .milliseconds(220)
