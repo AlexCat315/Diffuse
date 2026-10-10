@@ -390,20 +390,6 @@ struct InspectorPanel: View {
         }
     }
 
-    private struct InspectorRigidBodyMotionValue: View {
-        let binding: Binding<RigidBodyMotionType>
-
-        var body: some View {
-            EnumField(value: binding, width: 150) { type in
-                switch type {
-                case .static: return L("Static")
-                case .dynamic: return L("Dynamic")
-                case .kinematic: return L("Kinematic")
-                }
-            }
-        }
-    }
-
     private struct InspectorPhysicsSimulationModeValue: View {
         let binding: Binding<PhysicsSimulationMode>
 
@@ -725,8 +711,6 @@ struct InspectorPanel: View {
             return AnyView(InspectorPhysicsSimulationModeValue(binding: binding))
         case let .vehicleControllerKind(binding):
             return AnyView(InspectorVehicleControllerKindValue(binding: binding))
-        case let .rigidBodyMotion(binding):
-            return AnyView(InspectorRigidBodyMotionValue(binding: binding))
         case let .colliderShapeKind(binding):
             return AnyView(InspectorColliderShapeKindValue(binding: binding))
         case let .colliderShapeInstances(binding):
@@ -976,7 +960,6 @@ private extension EditorInspectorFieldValue {
         case let .json(binding, _): return binding.wrappedValue
         case let .physicsSimulationMode(binding): return String(describing: binding.wrappedValue)
         case let .vehicleControllerKind(binding): return String(describing: binding.wrappedValue)
-        case let .rigidBodyMotion(binding): return String(describing: binding.wrappedValue)
         case let .colliderShapeKind(binding): return String(describing: binding.wrappedValue)
         case let .colliderShapeInstances(binding): return "\(binding.wrappedValue.count)"
         case let .entityReference(binding, options):

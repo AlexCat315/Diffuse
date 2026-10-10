@@ -175,7 +175,9 @@ private let probeSchema = ComponentSchema(InspectorProbe.self,
     configure: { schema in
         schema.inspection.fields = [
             ComponentFieldDescriptor(["settings", "gain"]) { $0.numeric.minimum = 0; $0.numeric.maximum = 5 },
-            ComponentFieldDescriptor(["settings", "mode"]) { $0.kind = .options; $0.choices = ["normal", "fast"] },
+            ComponentFieldDescriptor(["settings", "mode"]) {
+                $0.kind = .options; $0.choices = ["normal", "fast"].map { ComponentFieldChoice($0) }
+            },
             ComponentFieldDescriptor(["source"]) { $0.isReadOnly = true },
         ]
     })

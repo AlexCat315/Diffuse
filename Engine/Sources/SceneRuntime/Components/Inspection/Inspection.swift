@@ -27,6 +27,19 @@ public struct ComponentFieldVisibility: Codable, Sendable, Equatable {
     public init(path: [String], values: [ComponentValue]) { self.path = path; self.values = values }
 }
 
+/// The control's stable ID is independent of the codec's string or numeric enum value.
+public struct ComponentFieldChoice: Codable, Sendable, Equatable {
+    public let id: String
+    public let label: String
+    public let value: ComponentValue
+
+    public init(_ id: String, value: ComponentValue? = nil, label: String? = nil) {
+        self.id = id
+        self.label = label ?? ComponentFieldDescriptor.displayLabel(id)
+        self.value = value ?? .string(id)
+    }
+}
+
 /// Presentation metadata addresses the codec document, never a second copy of
 /// the runtime model. Unspecified fields are inferred from that same document.
 public struct ComponentFieldDescriptor: Codable, Sendable, Equatable {
@@ -38,7 +51,7 @@ public struct ComponentFieldDescriptor: Codable, Sendable, Equatable {
     public var color = ComponentColorPresentation()
     /// Clearing a nullable string writes null; the codec may omit that key.
     public var isNullable = false
-    public var choices: [String] = []
+    public var choices: [ComponentFieldChoice] = []
     public var visibility: ComponentFieldVisibility?
     public var isReadOnly = false
     public var isAdvanced = false

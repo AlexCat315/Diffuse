@@ -18,7 +18,11 @@ public extension ComponentRegistry {
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRigidBody(dictionary), for: entity)
             }, makeDefault: { entity, world in
                 _ = world.setComponent(BuiltinComponentCodecs.deserializeRigidBody([:]), for: entity)
-            }, configure: { $0.requires = ["localTransform"] }))
+            }, configure: {
+                $0.requires = ["localTransform"]
+                $0.inspection = .rigidBody
+                $0.merge = BuiltinComponentCodecs.mergeRigidBody
+            }))
         registry.register(ComponentSchema(Collider.self, typeID: "collider", displayName: "Collider", category: .physics,
             encode: { world, entity, context in
                 let component: Collider? = BuiltinComponentCodecs.authoredComponent(
@@ -38,17 +42,25 @@ public extension ComponentRegistry {
             configure: { $0.requires = ["localTransform"] }))
         registry.register(ComponentSchema(SoftBody.self, typeID: "softBody", displayName: "Soft Body", category: .physics,
             encode: BuiltinComponentCodecs.serializeSoftBody, decode: BuiltinComponentCodecs.deserializeSoftBody,
-            configure: { $0.requires = ["localTransform"] }))
+            configure: { $0.requires = ["localTransform"]; $0.inspection = .softBody }))
         registry.register(ComponentSchema(Cloth.self, typeID: "cloth", displayName: "Cloth", category: .physics,
             encode: BuiltinComponentCodecs.serializeCloth, decode: BuiltinComponentCodecs.deserializeCloth,
             makeDefault: { entity, world in _ = world.setComponent(Cloth.fixedTopEdge(), for: entity) },
-            configure: { $0.requires = ["localTransform"]; $0.incompatibleWith = ["softBodyMesh"] }))
+            configure: {
+                $0.requires = ["localTransform"]; $0.incompatibleWith = ["softBodyMesh"]
+                $0.inspection = .cloth
+                $0.normalizeChanges = BuiltinComponentCodecs.normalizeClothChanges
+            }))
         registry.register(ComponentSchema(SoftBodyMesh.self, typeID: "softBodyMesh", displayName: "Soft Body Mesh", category: .physics,
             encode: BuiltinComponentCodecs.serializeSoftBodyMesh, decode: BuiltinComponentCodecs.deserializeSoftBodyMesh,
             makeDefault: { entity, world in
                 let resourceID = world.component(AssetReferenceComponent.self, for: entity).map { "meshIndex:\($0.meshIndex)" }
                 _ = world.setComponent(SoftBodyMesh(resourceID: resourceID), for: entity)
-            }, configure: { $0.requires = ["localTransform"]; $0.incompatibleWith = ["cloth"] }))
+            }, configure: {
+                $0.requires = ["localTransform"]; $0.incompatibleWith = ["cloth"]
+                $0.inspection = .softBodyMesh
+                $0.normalizeChanges = BuiltinComponentCodecs.normalizeSoftBodyMeshChanges
+            }))
         registry.register(ComponentSchema(Destructible.self, typeID: "destructible", displayName: "Destructible", category: .physics,
             encode: BuiltinComponentCodecs.serializeDestructible, decode: BuiltinComponentCodecs.deserializeDestructible,
             configure: { $0.requires = ["localTransform"] }))

@@ -305,7 +305,7 @@ struct EditorInspectorSectionsTests {
                 field(adapter, id, section: "cloth", field: "cloth-grid-x"),
               case let .json(fixedVertices, _) =
                 field(adapter, id, section: "cloth", field: "cloth-fixed-vertices"),
-              case let .text(bendType) =
+              case let .stringOptions(bendType, _) =
                 field(adapter, id, section: "cloth", field: "cloth-bend-type") else {
             Issue.record("expected soft-body and cloth authored controls"); return
         }
@@ -376,7 +376,7 @@ struct EditorInspectorSectionsTests {
                 field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-compliance"),
               case let .constrainedNumber(volumeCompliance, _, _, _, _) =
                 field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-volume"),
-              case let .text(bendType) =
+              case let .stringOptions(bendType, _) =
                 field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-bend-type"),
               case let .readOnly(tetrahedronCount) =
                 field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-tetrahedra") else {
