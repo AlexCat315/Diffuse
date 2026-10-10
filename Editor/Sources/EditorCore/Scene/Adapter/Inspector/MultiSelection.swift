@@ -137,66 +137,12 @@ private final class InspectorFieldBatch {
         case .color:
             guard let binding: Binding<Color> = merge({ if case .color(let b) = $0 { return b }; return nil }) else { return nil }
             return .color(binding)
-        case .physicsSimulationMode:
-            guard let binding: Binding<PhysicsSimulationMode> = merge({ if case .physicsSimulationMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .physicsSimulationMode(binding)
-        case .vehicleControllerKind:
-            guard let binding: Binding<VehicleControllerKind> = merge({ if case .vehicleControllerKind(let b) = $0 { return b }; return nil }) else { return nil }
-            return .vehicleControllerKind(binding)
-        case .colliderShapeKind:
-            guard let binding: Binding<ColliderShapeKind> = merge({ if case .colliderShapeKind(let b) = $0 { return b }; return nil }) else { return nil }
-            return .colliderShapeKind(binding)
         case .colliderShapeInstances:
             guard let binding: Binding<[ColliderShapeInstance]> = merge({ if case .colliderShapeInstances(let b) = $0 { return b }; return nil }) else { return nil }
             return .colliderShapeInstances(binding)
-        case .physicsJointKind:
-            guard let binding: Binding<PhysicsJointKind> = merge({ if case .physicsJointKind(let b) = $0 { return b }; return nil }) else { return nil }
-            return .physicsJointKind(binding)
-        case .physicsJointMotorMode:
-            guard let binding: Binding<PhysicsJointMotorMode> = merge({ if case .physicsJointMotorMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .physicsJointMotorMode(binding)
-        case .particleEmissionShape:
-            guard let binding: Binding<ParticleEmissionShape> = merge({ if case .particleEmissionShape(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleEmissionShape(binding)
-        case .particleCollisionMode:
-            guard let binding: Binding<ParticleCollisionMode> = merge({ if case .particleCollisionMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleCollisionMode(binding)
-        case .particleSimulationSpace:
-            guard let binding: Binding<ParticleSimulationSpace> = merge({ if case .particleSimulationSpace(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleSimulationSpace(binding)
-        case .particleSimulationBackend:
-            guard let binding: Binding<ParticleSimulationBackend> = merge({ if case .particleSimulationBackend(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleSimulationBackend(binding)
         case .particleCurve:
             guard let binding: Binding<ParticleCurve> = merge({ if case .particleCurve(let b) = $0 { return b }; return nil }) else { return nil }
             return .particleCurve(binding)
-        case .particleBlendMode:
-            guard let binding: Binding<ParticleBlendMode> = merge({ if case .particleBlendMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleBlendMode(binding)
-        case .particleRenderMode:
-            guard let binding: Binding<ParticleRenderMode> = merge({ if case .particleRenderMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleRenderMode(binding)
-        case .particleSortMode:
-            guard let binding: Binding<ParticleSortMode> = merge({ if case .particleSortMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleSortMode(binding)
-        case .particleTextureSheetPlaybackMode:
-            guard let binding: Binding<ParticleTextureSheetPlaybackMode> = merge({ if case .particleTextureSheetPlaybackMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleTextureSheetPlaybackMode(binding)
-        case .particleRenderAlignment:
-            guard let binding: Binding<ParticleRenderAlignment> = merge({ if case .particleRenderAlignment(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleRenderAlignment(binding)
-        case .particleRenderBoundsMode:
-            guard let binding: Binding<ParticleRenderBoundsMode> = merge({ if case .particleRenderBoundsMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleRenderBoundsMode(binding)
-        case .particleForceMode:
-            guard let binding: Binding<ParticleForceMode> = merge({ if case .particleForceMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleForceMode(binding)
-        case .particleVectorFieldMode:
-            guard let binding: Binding<ParticleVectorFieldMode> = merge({ if case .particleVectorFieldMode(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleVectorFieldMode(binding)
-        case .particleSubEmitterTrigger:
-            guard let binding: Binding<ParticleSubEmitterTrigger> = merge({ if case .particleSubEmitterTrigger(let b) = $0 { return b }; return nil }) else { return nil }
-            return .particleSubEmitterTrigger(binding)
         case .particleSubEmitters:
             guard let binding: Binding<[ParticleSubEmitter]> = merge({ if case .particleSubEmitters(let b) = $0 { return b }; return nil }) else { return nil }
             return .particleSubEmitters(binding)

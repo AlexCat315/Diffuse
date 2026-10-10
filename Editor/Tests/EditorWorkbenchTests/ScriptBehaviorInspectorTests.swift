@@ -62,7 +62,9 @@ struct ScriptBehaviorInspectorTests {
         _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "guava.mover")
         _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "guava.rotator")
         let section = try #require(adapter.inspectorSections(for: entity.rawValue).first { $0.id == "scripts" })
-        let filtered = try #require(InspectorSectionFilter.filter([section], query: "velocity").first)
+        // Search by the behavior name: it is unique per binding in every UI language.
+        let query = try #require(section.groups.first).title
+        let filtered = try #require(InspectorSectionFilter.filter([section], query: query).first)
         #expect(filtered.groups.count == 1)
         #expect(filtered.groups.first?.id == section.groups.first?.id)
         #expect(filtered.fields.contains { $0.id == "script-0-enabled" })

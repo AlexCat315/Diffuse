@@ -138,7 +138,7 @@ struct EditorInspectorSectionsTests {
         let id = makeEntity(in: adapter)
         #expect(hasSection(adapter, id, "physics-settings"))
 
-        guard case let .physicsSimulationMode(mode) =
+        guard case let .stringOptions(mode, _) =
                 field(adapter, id, section: "physics-settings", field: "physics-simulation-mode"),
               case let .vector3(gravityX, gravityY, gravityZ) =
                 field(adapter, id, section: "physics-settings", field: "physics-gravity"),
@@ -153,7 +153,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected complete physics settings fields"); return
         }
 
-        mode.wrappedValue = .preview
+        mode.wrappedValue = PhysicsSimulationMode.preview.inspectorOptionID
         gravityX.wrappedValue = 1
         gravityY.wrappedValue = -20
         gravityZ.wrappedValue = 2
@@ -230,7 +230,7 @@ struct EditorInspectorSectionsTests {
                 field(adapter, id, section: "vehicle", field: "vehicle-max-torque"),
               case let .constrainedNumber(clutchStrength, _, _, _, _) =
                 field(adapter, id, section: "vehicle", field: "vehicle-clutch-strength"),
-              case let .vehicleControllerKind(controllerKind) =
+              case let .stringOptions(controllerKind, _) =
                 field(adapter, id, section: "vehicle", field: "vehicle-controller") else {
             Issue.record("expected vehicle authored controls"); return
         }
@@ -243,7 +243,7 @@ struct EditorInspectorSectionsTests {
         #expect(vehicle.engine.maxTorque == 780)
         #expect(vehicle.transmission.clutchStrength == 18)
 
-        controllerKind.wrappedValue = .tracked
+        controllerKind.wrappedValue = VehicleControllerKind.tracked.inspectorOptionID
         guard case let .constrainedNumber(trackForwardFriction, _, _, _, _) =
                 field(adapter, id, section: "vehicle", field: "vehicle-track-longitudinal-friction"),
               case let .constrainedNumber(trackSideFriction, _, _, _, _) =
@@ -259,11 +259,11 @@ struct EditorInspectorSectionsTests {
         #expect(tracked.longitudinalFriction == 5)
         #expect(tracked.lateralFriction == 2.5)
 
-        guard case let .vehicleControllerKind(updatedControllerKind) =
+        guard case let .stringOptions(updatedControllerKind, _) =
                 field(adapter, id, section: "vehicle", field: "vehicle-controller") else {
             Issue.record("expected updated controller selector"); return
         }
-        updatedControllerKind.wrappedValue = .motorcycle
+        updatedControllerKind.wrappedValue = VehicleControllerKind.motorcycle.inspectorOptionID
         guard case let .constrainedNumber(maxLean, _, _, _, _) =
                 field(adapter, id, section: "vehicle", field: "vehicle-motorcycle-max-lean"),
               case let .bool(leanEnabled) =
@@ -548,12 +548,12 @@ struct EditorInspectorSectionsTests {
         #expect(field(adapter, id, section: "collider", field: "shape-cylinder-half-height") != nil)
         #expect(field(adapter, id, section: "collider", field: "shape-capsule-half-height") == nil)
 
-        guard case let .colliderShapeKind(kind) =
+        guard case let .stringOptions(kind, _) =
                 field(adapter, id, section: "collider", field: "shape-kind") else {
             Issue.record("expected collider shape kind field")
             return
         }
-        kind.wrappedValue = .heightField
+        kind.wrappedValue = ColliderShapeKind.heightField.inspectorOptionID
         #expect(field(adapter, id, section: "collider", field: "shape-heightfield-resource") != nil)
         #expect(field(adapter, id, section: "collider", field: "shape-capsule-half-height") == nil)
         #expect(field(adapter, id, section: "collider", field: "shape-cylinder-half-height") == nil)
@@ -602,13 +602,13 @@ struct EditorInspectorSectionsTests {
         endpointA.wrappedValue = bodyC.rawValue
         #expect(adapter.scene.component(PhysicsJoint.self, for: jointEntity)?.entityA == bodyC)
 
-        guard case let .physicsJointKind(kind) =
+        guard case let .stringOptions(kind, _) =
                 field(adapter, id, section: "constraint", field: "joint-type"),
               case let .vector3(axisX, axisY, axisZ) =
                 field(adapter, id, section: "constraint", field: "joint-axis-a"),
               case let .constrainedNumber(minimumAngle, _, _, _, _) =
                 field(adapter, id, section: "constraint", field: "joint-minimum-angle"),
-              case let .physicsJointMotorMode(motorMode) =
+              case let .stringOptions(motorMode, _) =
                 field(adapter, id, section: "constraint", field: "joint-motor-mode"),
               case let .number(targetVelocity) =
                 field(adapter, id, section: "constraint", field: "joint-motor-target-velocity"),
@@ -622,7 +622,7 @@ struct EditorInspectorSectionsTests {
         axisY.wrappedValue = 0
         axisZ.wrappedValue = 1
         minimumAngle.wrappedValue = -0.25
-        motorMode.wrappedValue = .position
+        motorMode.wrappedValue = PhysicsJointMotorMode.position.inspectorOptionID
         targetVelocity.wrappedValue = 6
         springDamping.wrappedValue = 0.8
 
@@ -637,10 +637,10 @@ struct EditorInspectorSectionsTests {
         #expect(editedHinge.motor.targetVelocity == 6)
         #expect(editedHinge.spring.damping == 0.8)
 
-        kind.wrappedValue = .sixDOF
+        kind.wrappedValue = PhysicsJointKind.sixDOF.inspectorOptionID
         guard case let .vector3(linearMinX, linearMinY, linearMinZ) =
                 field(adapter, id, section: "constraint", field: "joint-linear-minimum"),
-              case let .physicsJointMotorMode(angularMotorMode) =
+              case let .stringOptions(angularMotorMode, _) =
                 field(adapter, id, section: "constraint", field: "joint-angular-mode") else {
             Issue.record("expected SixDOF-specific fields after type change")
             return
@@ -648,7 +648,7 @@ struct EditorInspectorSectionsTests {
         linearMinX.wrappedValue = -1
         linearMinY.wrappedValue = -2
         linearMinZ.wrappedValue = -3
-        angularMotorMode.wrappedValue = .velocity
+        angularMotorMode.wrappedValue = PhysicsJointMotorMode.velocity.inspectorOptionID
 
         guard case let .sixDOF(sixDOF)? =
                 adapter.scene.component(PhysicsJoint.self, for: jointEntity)?.configuration else {
@@ -1358,9 +1358,9 @@ struct EditorInspectorSectionsTests {
             ]))
         } else { Issue.record("missing distance rate curve field") }
 
-        if case let .particleSubEmitterTrigger(trigger) =
+        if case let .stringOptions(trigger, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitter-trigger") {
-            trigger.wrappedValue = .collision
+            trigger.wrappedValue = ParticleSubEmitterTrigger.collision.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyTrigger == .collision)
         } else { Issue.record("missing sub-emitter trigger field") }
 
@@ -1489,9 +1489,9 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.frameRate == 12)
         } else { Issue.record("missing texture sheet fps field") }
 
-        if case let .particleTextureSheetPlaybackMode(playback) =
+        if case let .stringOptions(playback, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-playback") {
-            playback.wrappedValue = .loop
+            playback.wrappedValue = ParticleTextureSheetPlaybackMode.loop.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.playbackMode == .loop)
         } else { Issue.record("missing texture sheet playback field") }
 
@@ -1536,27 +1536,27 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.isEmitting == false)
         } else { Issue.record("missing emitting field") }
 
-        if case let .particleEmissionShape(shape) =
+        if case let .stringOptions(shape, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-shape") {
-            shape.wrappedValue = .cone
+            shape.wrappedValue = ParticleEmissionShape.cone.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.shape.emissionShape == .cone)
         } else { Issue.record("missing shape field") }
 
-        if case let .particleCollisionMode(mode) =
+        if case let .stringOptions(mode, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-collision-mode") {
-            mode.wrappedValue = .worldPlane
+            mode.wrappedValue = ParticleCollisionMode.worldPlane.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.collision.collisionMode == .worldPlane)
         } else { Issue.record("missing collision mode field") }
 
-        if case let .particleSimulationSpace(space) =
+        if case let .stringOptions(space, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-simulation-space") {
-            space.wrappedValue = .world
+            space.wrappedValue = ParticleSimulationSpace.world.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationSpace == .world)
         } else { Issue.record("missing simulation space field") }
 
-        if case let .particleSimulationBackend(backend) =
+        if case let .stringOptions(backend, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-simulation-backend") {
-            backend.wrappedValue = .gpuRequired
+            backend.wrappedValue = ParticleSimulationBackend.gpuRequired.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.gpuSimulation.simulationBackend == .gpuRequired)
         } else { Issue.record("missing simulation backend field") }
 
@@ -1597,9 +1597,9 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.noiseSpeed == 0.75)
         } else { Issue.record("missing noise speed field") }
 
-        if case let .particleForceMode(forceMode) =
+        if case let .stringOptions(forceMode, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-force-mode") {
-            forceMode.wrappedValue = .vortex
+            forceMode.wrappedValue = ParticleForceMode.vortex.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceMode == .vortex)
         } else { Issue.record("missing force mode field") }
 
@@ -1621,9 +1621,9 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceFalloff == 2.5)
         } else { Issue.record("missing force falloff field") }
 
-        if case let .particleVectorFieldMode(vectorFieldMode) =
+        if case let .stringOptions(vectorFieldMode, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-vector-field-mode") {
-            vectorFieldMode.wrappedValue = .curl
+            vectorFieldMode.wrappedValue = ParticleVectorFieldMode.curl.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.vectorFieldMode == .curl)
         } else { Issue.record("missing vector field mode field") }
 
@@ -1708,15 +1708,15 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.colorCurve == .easeOut)
         } else { Issue.record("missing color curve field") }
 
-        if case let .particleBlendMode(blendMode) =
+        if case let .stringOptions(blendMode, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-blend-mode") {
-            blendMode.wrappedValue = .additive
+            blendMode.wrappedValue = ParticleBlendMode.additive.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.appearance.blendMode == .additive)
         } else { Issue.record("missing blend mode field") }
 
-        if case let .particleRenderAlignment(alignment) =
+        if case let .stringOptions(alignment, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-alignment") {
-            alignment.wrappedValue = .velocity
+            alignment.wrappedValue = ParticleRenderAlignment.velocity.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderAlignment == .velocity)
         } else { Issue.record("missing render alignment field") }
 
@@ -1762,9 +1762,9 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderLODMinParticleScale == 0.3)
         } else { Issue.record("missing render LOD scale field") }
 
-        if case let .particleRenderBoundsMode(boundsMode) =
+        if case let .stringOptions(boundsMode, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-render-bounds-mode") {
-            boundsMode.wrappedValue = .automatic
+            boundsMode.wrappedValue = ParticleRenderBoundsMode.automatic.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.renderBoundsMode == .automatic)
         } else { Issue.record("missing render bounds mode field") }
 

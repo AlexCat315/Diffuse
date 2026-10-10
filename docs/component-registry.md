@@ -133,6 +133,16 @@ number controls. Other integers use text editing to preserve large seeds and
 handles. Enum choices carry a control ID, label and typed `ComponentValue`;
 numeric enums such as cloth bend types retain their numeric disk representation.
 
+Behaviors that still hand-build a section use the same choices control for their
+enum fields: the engine type conforms to `EditorInspectorEnumOption` in the editor
+(option ID plus localized label, declared in `Inspector/Choices/`) and the field
+is built with `EditorInspectorFieldValue.options(_:)`. Enum fields therefore share
+one control, one search description, one read-only rendering and one
+multi-selection merge instead of a dedicated case, view and merge rule each.
+Compound editors — collider shape instances, particle curves, sub-emitters, module
+stacks and entity references — remain dedicated field values; they are genuinely
+compound editors rather than a fixed set of choices.
+
 `isNullable` string fields write JSON null when cleared, letting the owning codec
 restore an absent optional key. Color presentation limits RGB channels to 0...1
 by default; an absent `color.maximum` retains HDR values, while alpha stays in
