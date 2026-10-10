@@ -156,7 +156,7 @@ struct DestructionTests {
         #expect(event.cause == .damage)
         #expect(event.fragmentIDs == [0, 1, 2])
         #expect(event.brokenConnectionIDs == [10, 11])
-        #expect(report.physicsBodyCount == 3)
+        #expect(report.physics.bodyCount == 3)
         #expect(runtime.component(Collider.self, for: source) == nil)
         #expect(runtime.component(RigidBody.self, for: source) == nil)
         #expect(runtime.component(RenderMeshComponent.self, for: source)?.isVisible == false)
@@ -256,7 +256,7 @@ struct DestructionTests {
         #expect(event.cause == .connectionBreak)
         #expect(event.fragmentIDs == [1, 2])
         #expect(event.brokenConnectionIDs == [11, 12])
-        #expect(partialReport.physicsBodyCount == 3)
+        #expect(partialReport.physics.bodyCount == 3)
         let state = try #require(runtime.destructionStateFrame.sources[source])
         #expect(state.hasFractured)
         #expect(!state.isFullyFractured)
@@ -409,7 +409,7 @@ struct DestructionTests {
         var destructionEvent: DestructionEvent?
         for frame in 0..<30 where destructionEvent == nil {
             let report = runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame))
-            #expect(report.physicsError == nil)
+            #expect(report.physics.error == nil)
             destructionEvent = runtime.destructionEventFrame.events.first
         }
         let event = try #require(destructionEvent)

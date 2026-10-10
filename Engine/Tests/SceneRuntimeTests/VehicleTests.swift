@@ -59,7 +59,7 @@ struct VehicleTests {
         for frame in 0..<90 {
             runtime.submitVehicleCommand(VehicleCommand(), for: vehicle)
             let report = runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame))
-            #expect(report.physicsError == nil)
+            #expect(report.physics.error == nil)
         }
 
         let settled = runtime.vehicleStateFrame.states[vehicle]
@@ -70,7 +70,7 @@ struct VehicleTests {
         for frame in 90..<270 {
             runtime.submitVehicleCommand(VehicleCommand(throttle: 1), for: vehicle)
             let report = runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame))
-            #expect(report.physicsError == nil)
+            #expect(report.physics.error == nil)
         }
 
         let after = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
@@ -88,13 +88,13 @@ struct VehicleTests {
 
         for frame in 0..<120 {
             runtime.submitVehicleCommand(VehicleCommand(), for: vehicle)
-            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physics.error == nil)
         }
         #expect(runtime.vehicleStateFrame.states[vehicle]?.wheels.contains(where: \.hasContact) == true)
         let before = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
         for frame in 120..<300 {
             runtime.submitVehicleCommand(VehicleCommand(throttle: 1), for: vehicle)
-            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physics.error == nil)
         }
         let after = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
         let drivenState = runtime.vehicleStateFrame.states[vehicle]
@@ -105,7 +105,7 @@ struct VehicleTests {
         let rotationBefore = runtime.worldTransform(for: vehicle)?.matrix
         for frame in 300..<390 {
             runtime.submitVehicleCommand(VehicleCommand(steering: 1), for: vehicle)
-            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physics.error == nil)
         }
         let rotationAfter = runtime.worldTransform(for: vehicle)?.matrix
         #expect(rotationBefore != rotationAfter)
@@ -136,12 +136,12 @@ struct VehicleTests {
 
         for frame in 0..<120 {
             runtime.submitVehicleCommand(VehicleCommand(), for: vehicle)
-            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physics.error == nil)
         }
         let before = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
         for frame in 120..<300 {
             runtime.submitVehicleCommand(VehicleCommand(throttle: 1, steering: 0.1), for: vehicle)
-            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physics.error == nil)
         }
         let after = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
         let state = runtime.vehicleStateFrame.states[vehicle]
@@ -155,19 +155,19 @@ struct VehicleTests {
     func incrementalRebuildAndRemoval() {
         var (runtime, vehicle) = makeRuntime()
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError == nil)
+        #expect(report.physics.error == nil)
         #expect(runtime.vehicleStateFrame.states[vehicle]?.wheels.count == 4)
 
         _ = runtime.updateComponent(Vehicle.self, for: vehicle) {
             $0.engine.maxTorque = 900
         }
         report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError == nil)
+        #expect(report.physics.error == nil)
         #expect(runtime.vehicleStateFrame.states[vehicle]?.wheels.count == 4)
 
         _ = runtime.removeComponent(Vehicle.self, from: vehicle)
         report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError == nil)
+        #expect(report.physics.error == nil)
         #expect(runtime.vehicleStateFrame.states[vehicle] == nil)
     }
 
@@ -201,7 +201,7 @@ struct VehicleTests {
             Vehicle(wheels: [], differentials: [], antiRollBars: []), for: vehicle
         )
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError?.code == .invalidArgument)
+        #expect(report.physics.error?.code == .invalidArgument)
     }
 
     @Test("tracked controller rejects a track that does not contain its driven wheel")
@@ -217,7 +217,7 @@ struct VehicleTests {
         _ = runtime.setComponent(tracked, for: vehicle)
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError?.code == .invalidArgument)
+        #expect(report.physics.error?.code == .invalidArgument)
     }
 
     @Test("manual gear commands are checked against the configured transmission")
@@ -236,7 +236,7 @@ struct VehicleTests {
         )
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError?.code == .invalidArgument)
+        #expect(report.physics.error?.code == .invalidArgument)
     }
 
     @Test("vehicle configuration survives Scene v2 round-trip")

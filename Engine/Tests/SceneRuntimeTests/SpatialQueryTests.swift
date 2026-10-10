@@ -83,8 +83,8 @@ struct SpatialQueryTests {
 
         let report = runtime.tick()
 
-        #expect(report.parallelPhases.contains(.spatialIndexUpdate))
-        #expect(report.jobCount(for: .spatialIndexUpdate) >= entities.count)
+        #expect(report.jobs.parallelPhases.contains(.spatialIndexUpdate))
+        #expect(report.jobs.jobCount(for: .spatialIndexUpdate) >= entities.count)
         #expect(runtime.spatialIndex.entries.count == entities.count)
         #expect(runtime.spatialIndex.entries.first { $0.entity == entities[0] }?.bounds.halfExtents.x == 1)
     }

@@ -1,12 +1,14 @@
 import Foundation
 
-/// Single-producer / single-consumer triple buffer.
+/// Single-producer / single-consumer handoff that keeps only the newest value.
 ///
-/// The queue handoff stays bounded to three slots so producer and consumer
-/// never allocate in the hot path. Slot selection is coordinated under one
-/// short critical section, which keeps the implementation compatible with
-/// macOS 14 while preserving the "latest packet wins" semantics Phase 2 needs.
-public final class RingBuffer<Value: Sendable>: @unchecked Sendable {
+/// This is a latest-wins mailbox, not a FIFO queue: `publish` never blocks and
+/// `consumeLatest` returns the most recently published value, dropping anything
+/// the consumer did not pick up in between. The handoff stays bounded to a small
+/// slot count (three by default) so producer and consumer never allocate in the
+/// hot path. Slot selection is coordinated under one short critical section,
+/// which keeps the implementation compatible with macOS 14.
+public final class LatestValueBuffer<Value: Sendable>: @unchecked Sendable {
     private struct State {
         var publishedIndex = -1
         var publishedSequence = 0
@@ -34,7 +36,7 @@ public final class RingBuffer<Value: Sendable>: @unchecked Sendable {
     private let state = LockedState(State())
 
     public init(slotCount: Int = 3) {
-        precondition(slotCount >= 3, "RingBuffer requires at least three slots")
+        precondition(slotCount >= 3, "LatestValueBuffer requires at least three slots")
         self.slots = (0..<slotCount).map { _ in Slot() }
     }
 

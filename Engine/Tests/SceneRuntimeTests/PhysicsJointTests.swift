@@ -102,7 +102,7 @@ struct PhysicsJointTests {
             $0.shape = .sphere(radius: 0.6, center: .zero)
         }
         let recreated = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(recreated.physicsError == nil)
+        #expect(recreated.physics.error == nil)
         #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
         #expect(runtime.physicsFrameState.synchronizedConstraintCount == 1)
 
@@ -202,8 +202,8 @@ struct PhysicsJointTests {
         ), for: jointEntity)
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physicsError == nil)
-        #expect(report.physicsConstraintCount == 1)
+        #expect(report.physics.error == nil)
+        #expect(report.physics.constraintCount == 1)
         #expect(runtime.physicsFrameState.constraintCount == 1)
     }
 }

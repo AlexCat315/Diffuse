@@ -35,7 +35,7 @@ final class RenderThread: @unchecked Sendable {
     }
 
     private let runtime: any EngineRuntime
-    private let ringBuffer: RingBuffer<RenderPacket>
+    private let packetBuffer: LatestValueBuffer<RenderPacket>
     private let onKernelPhase: @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void
     private let consumer: any RenderPacketConsumer
     private let queue = DispatchQueue(label: "com.guava.engine.render", qos: .userInitiated)
@@ -44,13 +44,13 @@ final class RenderThread: @unchecked Sendable {
 
     init(
         runtime: any EngineRuntime,
-        ringBuffer: RingBuffer<RenderPacket>,
+        packetBuffer: LatestValueBuffer<RenderPacket>,
         onKernelPhase: @escaping @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void = { _, _ in },
         consumer: any RenderPacketConsumer,
         onFrameRendered: @escaping @Sendable (RenderThreadReport) -> Void
     ) {
         self.runtime = runtime
-        self.ringBuffer = ringBuffer
+        self.packetBuffer = packetBuffer
         self.onKernelPhase = onKernelPhase
         self.consumer = consumer
         self.onFrameRendered = onFrameRendered
@@ -93,7 +93,7 @@ final class RenderThread: @unchecked Sendable {
                 return
             }
 
-            guard let packet = ringBuffer.consumeLatest() else {
+            guard let packet = packetBuffer.consumeLatest() else {
                 let shouldContinue = state.withLock { state -> Bool in
                     if state.rerenderRequested {
                         state.rerenderRequested = false

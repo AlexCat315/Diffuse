@@ -384,8 +384,8 @@ struct RuntimeWorldTests {
         let report = runtime.tick()
 
         #expect(report.phases == RuntimeSystemPhase.allCases)
-        #expect(report.appliedCommandCount == 1)
-        #expect(report.createdEntities.count == 1)
+        #expect(report.commands.appliedCount == 1)
+        #expect(report.commands.createdEntities.count == 1)
         #expect(runtime.snapshot.entityCount == 1)
     }
 
@@ -401,7 +401,7 @@ struct RuntimeWorldTests {
 
         let report = runtime.tick()
 
-        #expect(report.appliedCommandCount == 3)
+        #expect(report.commands.appliedCount == 3)
         #expect(runtime.parent(of: child) == parent)
         #expect(runtime.worldTransform(for: child)?.translation == SIMD3<Float>(5, 2, 0))
     }
@@ -430,10 +430,10 @@ struct RuntimeWorldTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 30.0)
 
-        #expect(report.physicsBackendIdentifier == "recording")
-        #expect(report.physicsStepCount == 2)
-        #expect(report.physicsWritebackCount == 1)
-        #expect(report.physicsBodyCount == 1)
+        #expect(report.physics.backendIdentifier == "recording")
+        #expect(report.physics.stepCount == 2)
+        #expect(report.physics.writebackCount == 1)
+        #expect(report.physics.bodyCount == 1)
         #expect(runtime.physicsClock.lastStepCount == 2)
         #expect(runtime.physicsClock.simulatedSteps == 2)
         #expect(runtime.physicsFrameState.contactCount == 2)
@@ -524,16 +524,16 @@ struct RuntimeWorldTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
 
-        #expect(report.jobWorkerCount == 4)
-        #expect(report.scheduledJobCount >= 4)
-        #expect(report.scheduledJobCount == report.phaseJobCounts.values.reduce(0, +))
-        #expect(report.jobCount(for: .hierarchyPropagate) > 0)
-        #expect(report.jobCount(for: .fixedPhysicsPrepare) > 0)
-        #expect(report.jobCount(for: .spatialIndexUpdate) > 0)
-        #expect(report.jobCount(for: .renderExtract) > 0)
-        #expect(report.parallelPhases.contains(.hierarchyPropagate))
-        #expect(report.parallelPhases.contains(.fixedPhysicsPrepare))
-        #expect(report.parallelPhases.contains(.spatialIndexUpdate))
-        #expect(report.parallelPhases.contains(.renderExtract))
+        #expect(report.jobs.workerCount == 4)
+        #expect(report.jobs.scheduledCount >= 4)
+        #expect(report.jobs.scheduledCount == report.jobs.phaseJobCounts.values.reduce(0, +))
+        #expect(report.jobs.jobCount(for: .hierarchyPropagate) > 0)
+        #expect(report.jobs.jobCount(for: .fixedPhysicsPrepare) > 0)
+        #expect(report.jobs.jobCount(for: .spatialIndexUpdate) > 0)
+        #expect(report.jobs.jobCount(for: .renderExtract) > 0)
+        #expect(report.jobs.parallelPhases.contains(.hierarchyPropagate))
+        #expect(report.jobs.parallelPhases.contains(.fixedPhysicsPrepare))
+        #expect(report.jobs.parallelPhases.contains(.spatialIndexUpdate))
+        #expect(report.jobs.parallelPhases.contains(.renderExtract))
     }
 }
