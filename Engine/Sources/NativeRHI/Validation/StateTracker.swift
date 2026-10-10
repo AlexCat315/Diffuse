@@ -25,6 +25,15 @@ public struct ResourceRef: Hashable, Sendable {
         self.subresourceBase = subresourceBase
         self.subresourceCount = subresourceCount
     }
+
+    /// Collision-free packed key for the internal tracker dictionaries. IDs are
+    /// handed out by a single global pool, so (kind, id) uniquely identifies a
+    /// resource. Subresource is intentionally dropped: resources that differ
+    /// only in subresource collapse to one key, which at worst over-orders a
+    /// barrier — safe, never incorrect.
+    var trackerKey: UInt64 {
+        (UInt64(kind.rawValue) << 32) | UInt64(id)
+    }
 }
 
 public struct Barrier: Sendable {
@@ -42,7 +51,7 @@ public struct Barrier: Sendable {
 }
 
 struct StateTracker {
-    private var currentStates: [ResourceRef: ResourceState] = [:]
+    private var currentStates: [UInt64: ResourceState] = [:]
     private(set) var pendingBarriers: [Barrier] = []
 
     mutating func clear() {
@@ -51,28 +60,32 @@ struct StateTracker {
     }
 
     mutating func setInitialState(_ resource: ResourceRef, _ state: ResourceState) {
-        currentStates[resource] = state
+        currentStates[resource.trackerKey] = state
     }
 
     mutating func setCurrentState(_ resource: ResourceRef, _ state: ResourceState) {
-        currentStates[resource] = state
+        currentStates[resource.trackerKey] = state
     }
 
     func currentState(_ resource: ResourceRef) -> ResourceState {
-        currentStates[resource] ?? []
+        currentStates[resource.trackerKey] ?? []
     }
 
     mutating func removeResource(_ resource: ResourceRef) {
-        currentStates.removeValue(forKey: resource)
+        currentStates.removeValue(forKey: resource.trackerKey)
     }
 
     /// Records a required state. If it differs from the current state, a
-    /// barrier is queued and the tracked state is advanced immediately.
-    mutating func requireState(_ resource: ResourceRef, _ desired: ResourceState) {
-        let current = currentStates[resource] ?? []
-        if current == desired { return }
+    /// barrier is queued and the tracked state is advanced immediately. Returns
+    /// the state prior to the transition so callers can capture it once.
+    @discardableResult
+    mutating func requireState(_ resource: ResourceRef, _ desired: ResourceState) -> ResourceState {
+        let key = resource.trackerKey
+        let current = currentStates[key] ?? []
+        if current == desired { return current }
         pendingBarriers.append(Barrier(resource: resource, before: current, after: desired))
-        currentStates[resource] = desired
+        currentStates[key] = desired
+        return current
     }
 
     /// Drains the queued barriers, merging multiple transitions of the same
@@ -80,12 +93,13 @@ struct StateTracker {
     mutating func commitBarriers() -> [Barrier] {
         if pendingBarriers.isEmpty { return [] }
 
-        var merged: [ResourceRef: Barrier] = [:]
+        var merged: [UInt64: Barrier] = [:]
         for barrier in pendingBarriers {
-            if let existing = merged[barrier.resource] {
-                merged[barrier.resource]?.after = existing.after.union(barrier.after)
+            let key = barrier.resource.trackerKey
+            if let existing = merged[key] {
+                merged[key]?.after = existing.after.union(barrier.after)
             } else {
-                merged[barrier.resource] = barrier
+                merged[key] = barrier
             }
         }
         pendingBarriers.removeAll(keepingCapacity: true)

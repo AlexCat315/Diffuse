@@ -91,7 +91,7 @@ private func requestedEditorRendererName() throws -> String {
         }
         return CommandLine.arguments[index + 1].lowercased()
     }
-    return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "wgpu"
+    return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "native"
 }
 
 private func makeEditorRenderDevice(config: WGPUDeviceConfig) throws -> EngineRenderDevice {

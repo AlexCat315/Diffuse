@@ -142,7 +142,7 @@ struct AccessTracker {
         var reads: [ReadKey: AccessStage] = [:]
     }
 
-    private var memories: [ResourceRef: Memory] = [:]
+    private var memories: [UInt64: Memory] = [:]
 
     init() {}
 
@@ -151,7 +151,7 @@ struct AccessTracker {
     }
 
     mutating func removeResource(_ resource: ResourceRef) {
-        memories.removeValue(forKey: resource)
+        memories.removeValue(forKey: resource.trackerKey)
     }
 
     /// Records an access and returns the hazards against prior overlapping
@@ -159,25 +159,26 @@ struct AccessTracker {
     /// reads and becomes the new last write.
     @discardableResult
     mutating func observe(_ access: ResourceAccess, on queue: QueueClass) -> [Hazard] {
-        var memory = memories[access.resource] ?? Memory()
+        let key = access.resource.trackerKey
+        var memory = memories[key] ?? Memory()
         var hazards: [Hazard] = []
         let range = access.range ?? .whole
 
         switch access.kind {
         case .read:
-            let key = ReadKey(queue: queue, range: range)
+            let readKey = ReadKey(queue: queue, range: range)
             // The first read ordered the last write for this queue/range and
             // these stages. Later covered reads reuse that dependency. A new
             // write clears the window; new queues, ranges or stages still
             // require their own RAW dependency.
-            if let previous = memory.reads[key], previous.isSuperset(of: access.stage) { return [] }
+            if let previous = memory.reads[readKey], previous.isSuperset(of: access.stage) { return [] }
             if let write = memory.lastWrite, Self.overlaps(write.range, range) {
                 hazards.append(Hazard(
                     resource: access.resource, kind: .readAfterWrite,
                     sourceStage: write.stage, destinationStage: access.stage,
                     sourceQueue: write.queue, destinationQueue: queue, range: access.range))
             }
-            memory.reads[key, default: []].formUnion(access.stage)
+            memory.reads[readKey, default: []].formUnion(access.stage)
 
         case .write:
             if let write = memory.lastWrite, Self.overlaps(write.range, range) {
@@ -186,17 +187,17 @@ struct AccessTracker {
                     sourceStage: write.stage, destinationStage: access.stage,
                     sourceQueue: write.queue, destinationQueue: queue, range: access.range))
             }
-            for (key, stage) in memory.reads where key.range.overlaps(range) {
+            for (readKey, stage) in memory.reads where readKey.range.overlaps(range) {
                 hazards.append(Hazard(
                     resource: access.resource, kind: .writeAfterRead,
                     sourceStage: stage, destinationStage: access.stage,
-                    sourceQueue: key.queue, destinationQueue: queue, range: access.range))
+                    sourceQueue: readKey.queue, destinationQueue: queue, range: access.range))
             }
             memory.lastWrite = Record(stage: access.stage, queue: queue, range: access.range)
             memory.reads.removeAll(keepingCapacity: true)
         }
 
-        memories[access.resource] = memory
+        memories[key] = memory
         return hazards
     }
 

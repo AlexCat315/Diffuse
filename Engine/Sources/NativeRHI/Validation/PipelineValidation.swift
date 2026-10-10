@@ -7,10 +7,13 @@ struct PipelineUse {
 }
 
 extension PipelineInterfaces {
-    func validateCommands(_ buffer: CommandBuffer, caches: DeviceCaches) throws {
+    /// One traversal per pass body. Pass-level capability checks belong to the
+    /// caller, but per-command capability checks ride along here so the body is
+    /// never walked twice.
+    func validateCommands(_ buffer: CommandBuffer, caches: DeviceCaches, meshShadingEnabled: Bool) throws {
         for command in buffer.commands {
             switch command {
-            case .renderPass(let pass): try validateRender(pass.body, caches: caches)
+            case .renderPass(let pass): try validateRender(pass.body, caches: caches, meshShadingEnabled: meshShadingEnabled)
             case .computePass(let pass): try validateCompute(pass.body, caches: caches)
             default: break
             }
@@ -33,13 +36,17 @@ extension PipelineInterfaces {
             throw RHIError.layoutMismatch("push constant data must match a declared range in the active pipeline")
         }
     }
-    private func validateRender(_ commands: [RenderCommand], caches: DeviceCaches) throws {
+    private func validateRender(_ commands: [RenderCommand], caches: DeviceCaches, meshShadingEnabled: Bool) throws {
         var pipeline: PipelineUse?
         var indexed = false
         for command in commands {
             switch command {
             case .setPipeline(let handle): pipeline = try use(handle.id, kind: .graphics)
-            case .setMeshPipeline(let handle): pipeline = try use(handle.id, kind: .mesh)
+            case .setMeshPipeline(let handle):
+                guard meshShadingEnabled else {
+                    throw RHIError.unsupportedFeature("mesh commands are not implemented by this backend")
+                }
+                pipeline = try use(handle.id, kind: .mesh)
             case .setBindingSet(let slot, let handle): try binding(handle.id, slot: slot, pipeline: pipeline, caches: caches)
             case .pushConstant(let stage, let slot, let data): try constants(data, slot: slot, stage: stage, pipeline: pipeline)
             case .setIndexBuffer(_, let offset, let type):
@@ -55,6 +62,9 @@ extension PipelineInterfaces {
             case .drawIndirect(_, let offset, let count):
                 try rhiRequire(pipeline?.kind == .graphics && offset >= 0 && offset % 4 == 0, "invalid indirect draw pipeline or offset"); _ = try rhiCount(count)
             case .drawMeshTasks(let groups):
+                guard meshShadingEnabled else {
+                    throw RHIError.unsupportedFeature("mesh commands are not implemented by this backend")
+                }
                 try rhiRequire(pipeline?.kind == .mesh, "mesh dispatch requires a mesh pipeline"); try groups.validate()
             case .setScissor(let rect):
                 try rhiRequire(rect.x >= 0 && rect.y >= 0 && rect.width >= 0 && rect.height >= 0

@@ -10,6 +10,10 @@ struct NativeUITexturePatch {
 final class NativeUITextureSlot {
     var acceptsUploads = true
     let resource: TextureResource
+    /// Cached (texture, sampler) binding set for this slot's resource. The slot
+    /// owns one texture for its lifetime, so the set is stable until the slot is
+    /// replaced with a new resource. Populated lazily by the renderer.
+    var cachedBindingSet: BindingSet?
     private let lock = NSLock()
     private var patches: [NativeUITexturePatch] = []
     private var sequence: UInt64 = 0

@@ -24,7 +24,8 @@ extension MetalDevice {
             commandBuffer.encodeWaitForEvent(event, value: semaphore.value)
         }
 
-        var encoder = MetalPassEncoder(device: device, registries: registries, commandBuffer: commandBuffer)
+        var encoder = MetalPassEncoder(device: device, registries: registries,
+                                       commandBuffer: commandBuffer, cpuProfile: cpuProfile)
         defer { encoder.endActiveEncoders() }
         for command in submit.commands {
             try encoder.encode(command)
@@ -74,6 +75,7 @@ private struct MetalPassEncoder {
     let device: MTLDevice
     let registries: MetalRegistries
     let commandBuffer: MTLCommandBuffer
+    let cpuProfile: SubmissionCPUProfile?
 
     // Current encoder state.
     private var renderEncoder: MTLRenderCommandEncoder?
@@ -86,10 +88,12 @@ private struct MetalPassEncoder {
     private var currentIndexOffset: Int = 0
     private var currentIndexType: MTLIndexType = .uint32
 
-    init(device: MTLDevice, registries: MetalRegistries, commandBuffer: MTLCommandBuffer) {
+    init(device: MTLDevice, registries: MetalRegistries, commandBuffer: MTLCommandBuffer,
+         cpuProfile: SubmissionCPUProfile?) {
         self.device = device
         self.registries = registries
         self.commandBuffer = commandBuffer
+        self.cpuProfile = cpuProfile
     }
 
     mutating func encode(_ command: PlannedCommand) throws {
@@ -171,6 +175,7 @@ private struct MetalPassEncoder {
     }
 
     private mutating func encodeRenderPass(_ record: RenderPassRecord) throws {
+        let setupStart = cpuProfile?.beginDetail(.passSetup)
         try validateRenderAttachments(record)
         let rpd = MTLRenderPassDescriptor()
 
@@ -203,6 +208,8 @@ private struct MetalPassEncoder {
             }
         }
 
+        cpuProfile?.endDetail(.passSetup, since: setupStart ?? 0)
+        let createStart = cpuProfile?.beginDetail(.encoderCreation)
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: rpd) else {
             throw RHIError.submitFailed("cannot create render command encoder")
         }
@@ -210,10 +217,13 @@ private struct MetalPassEncoder {
         renderBindings = MetalRenderBindings()
         currentIndexBuffer = nil
         currentMeshPipeline = nil
+        cpuProfile?.endDetail(.encoderCreation, since: createStart ?? 0)
 
+        let replayStart = cpuProfile?.beginDetail(.commandReplay)
         for renderCommand in record.body {
             try encodeRenderCommand(renderCommand)
         }
+        cpuProfile?.endDetail(.commandReplay, since: replayStart ?? 0)
     }
 
     private mutating func encodeRenderCommand(_ command: RenderCommand) throws {
@@ -255,7 +265,9 @@ private struct MetalPassEncoder {
 
         case .setBindingSet(let slot, let set):
             try rhiRequire(slot == 0, "Metal direct binding currently supports set 0 only")
-            try bindRenderBindingSet(set, encoder: encoder)
+            let bindStart = cpuProfile?.beginDetail(.bindingApply)
+            try bindRenderBindingSet(set)
+            cpuProfile?.endDetail(.bindingApply, since: bindStart ?? 0)
 
         case .setVertexBuffer(let slot, let buffer, let offset):
             guard let mtlBuffer = registries.buffers[buffer.id] else { throw RHIError.invalidArgument("unknown buffer or texture") }
@@ -340,55 +352,71 @@ private struct MetalPassEncoder {
         }
     }
 
-    private func bindRenderBindingSet(_ handle: BindingSet, encoder: MTLRenderCommandEncoder) throws {
-        guard let bindingSet = registries.bindingSets[handle.id] else { throw RHIError.invalidArgument("unknown render binding set") }
-        guard let bindings = renderBindings else { throw RHIError.invalidArgument("render binding state is not active") }
-        let active: ShaderVisibility = currentMeshPipeline == nil ? .graphics : [.task, .mesh, .fragment]
-        for entry in bindingSet.entries {
-            let stages = entry.visibility.intersection(active)
-            guard !stages.isEmpty else { continue }
-            // Native resources and ranges were resolved at registration.
-            bindEntry(entry,
-                buffer: { buffer, offset in
-                    if stages.contains(.vertex), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .vertex) {
-                        encoder.setVertexBuffer(buffer, offset: offset, index: Int(entry.slot))
-                    }
-                    if stages.contains(.fragment), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .fragment) {
-                        encoder.setFragmentBuffer(buffer, offset: offset, index: Int(entry.slot))
-                    }
-                    if stages.contains(.mesh), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .mesh) {
-                        encoder.setMeshBuffer(buffer, offset: offset, index: Int(entry.slot))
-                    }
-                    if stages.contains(.task), bindings.bufferChanged(buffer, offset: offset, slot: entry.slot, stage: .task) {
-                        encoder.setObjectBuffer(buffer, offset: offset, index: Int(entry.slot))
-                    }
-                }, texture: { texture in
-                    if stages.contains(.vertex), bindings.textureChanged(texture, slot: entry.slot, stage: .vertex) {
-                        encoder.setVertexTexture(texture, index: Int(entry.slot))
-                    }
-                    if stages.contains(.fragment), bindings.textureChanged(texture, slot: entry.slot, stage: .fragment) {
-                        encoder.setFragmentTexture(texture, index: Int(entry.slot))
-                    }
-                    if stages.contains(.mesh), bindings.textureChanged(texture, slot: entry.slot, stage: .mesh) {
-                        encoder.setMeshTexture(texture, index: Int(entry.slot))
-                    }
-                    if stages.contains(.task), bindings.textureChanged(texture, slot: entry.slot, stage: .task) {
-                        encoder.setObjectTexture(texture, index: Int(entry.slot))
-                    }
-                }, sampler: { sampler in
-                    if stages.contains(.vertex), bindings.samplerChanged(sampler, slot: entry.slot, stage: .vertex) {
-                        encoder.setVertexSamplerState(sampler, index: Int(entry.slot))
-                    }
-                    if stages.contains(.fragment), bindings.samplerChanged(sampler, slot: entry.slot, stage: .fragment) {
-                        encoder.setFragmentSamplerState(sampler, index: Int(entry.slot))
-                    }
-                    if stages.contains(.mesh), bindings.samplerChanged(sampler, slot: entry.slot, stage: .mesh) {
-                        encoder.setMeshSamplerState(sampler, index: Int(entry.slot))
-                    }
-                    if stages.contains(.task), bindings.samplerChanged(sampler, slot: entry.slot, stage: .task) {
-                        encoder.setObjectSamplerState(sampler, index: Int(entry.slot))
-                    }
-                })
+    /// Replays a pre-resolved apply list. Resources, offsets and stage
+    /// visibility were resolved when the set was registered, so the hot path
+    /// only compares against the encoder's current bindings.
+    private func bindRenderBindingSet(_ handle: BindingSet) throws {
+        guard let bindingSet = registries.bindingSets[handle.id] else {
+            throw RHIError.invalidArgument("unknown render binding set")
+        }
+        guard renderEncoder != nil else { throw RHIError.invalidArgument("render encoder is not active") }
+        guard renderBindings != nil else { throw RHIError.invalidArgument("render binding state is not active") }
+        let applies = currentMeshPipeline == nil ? bindingSet.graphicsApplies : bindingSet.meshApplies
+        for apply in applies {
+            switch apply.resource {
+            case .sampler(let state): applySampler(state, stage: apply.stage, index: apply.index)
+            case .texture(let texture): applyTexture(texture, stage: apply.stage, index: apply.index)
+            case .buffer(let buffer, let offset): applyBuffer(buffer, offset: offset, stage: apply.stage, index: apply.index)
+            case .accelerationStructure: break
+            }
+        }
+    }
+
+    private func applySampler(_ state: MTLSamplerState, stage: ShaderStage, index: Int) {
+        guard let encoder = renderEncoder, let bindings = renderBindings else { return }
+        let slot = UInt32(index)
+        switch stage {
+        case .vertex:
+            if bindings.samplerChanged(state, slot: slot, stage: .vertex) { encoder.setVertexSamplerState(state, index: index) }
+        case .fragment:
+            if bindings.samplerChanged(state, slot: slot, stage: .fragment) { encoder.setFragmentSamplerState(state, index: index) }
+        case .mesh:
+            if bindings.samplerChanged(state, slot: slot, stage: .mesh) { encoder.setMeshSamplerState(state, index: index) }
+        case .task:
+            if bindings.samplerChanged(state, slot: slot, stage: .task) { encoder.setObjectSamplerState(state, index: index) }
+        case .compute: break
+        }
+    }
+
+    private func applyTexture(_ texture: MTLTexture, stage: ShaderStage, index: Int) {
+        guard let encoder = renderEncoder, let bindings = renderBindings else { return }
+        let slot = UInt32(index)
+        switch stage {
+        case .vertex:
+            if bindings.textureChanged(texture, slot: slot, stage: .vertex) { encoder.setVertexTexture(texture, index: index) }
+        case .fragment:
+            if bindings.textureChanged(texture, slot: slot, stage: .fragment) { encoder.setFragmentTexture(texture, index: index) }
+        case .mesh:
+            if bindings.textureChanged(texture, slot: slot, stage: .mesh) { encoder.setMeshTexture(texture, index: index) }
+        case .task:
+            if bindings.textureChanged(texture, slot: slot, stage: .task) { encoder.setObjectTexture(texture, index: index) }
+        case .compute: break
+        }
+    }
+
+    private func applyBuffer(_ buffer: MTLBuffer, offset: Int, stage: ShaderStage, index: Int) {
+        guard let encoder = renderEncoder, let bindings = renderBindings else { return }
+        let slot = UInt32(index)
+        switch stage {
+        case .vertex:
+            if bindings.bufferChanged(buffer, offset: offset, slot: slot, stage: .vertex) { encoder.setVertexBuffer(buffer, offset: offset, index: index) }
+        case .fragment:
+            if bindings.bufferChanged(buffer, offset: offset, slot: slot, stage: .fragment) { encoder.setFragmentBuffer(buffer, offset: offset, index: index) }
+        case .mesh:
+            if bindings.bufferChanged(buffer, offset: offset, slot: slot, stage: .mesh) { encoder.setMeshBuffer(buffer, offset: offset, index: index) }
+        case .task:
+            if bindings.bufferChanged(buffer, offset: offset, slot: slot, stage: .task) { encoder.setObjectBuffer(buffer, offset: offset, index: index) }
+        case .compute: break
         }
     }
 
@@ -419,17 +447,16 @@ private struct MetalPassEncoder {
             guard let bindingSet = registries.bindingSets[set.id] else {
                 throw RHIError.invalidArgument("unknown compute binding set")
             }
-            for entry in bindingSet.entries where entry.visibility.contains(.compute) {
-                if case .accelerationStructure(let native) = entry.resource.value {
-                    encoder.setAccelerationStructure(native.structure, bufferIndex: Int(entry.slot))
+            for apply in bindingSet.computeApplies {
+                switch apply.resource {
+                case .accelerationStructure(let native):
+                    encoder.setAccelerationStructure(native.structure, bufferIndex: apply.index)
                     // TLAS traversal indirectly references each BLAS.
                     for resource in native.dependencies { encoder.useResource(resource, usage: .read) }
-                    continue
+                case .sampler(let state): encoder.setSamplerState(state, index: apply.index)
+                case .texture(let texture): encoder.setTexture(texture, index: apply.index)
+                case .buffer(let buffer, let offset): encoder.setBuffer(buffer, offset: offset, index: apply.index)
                 }
-                bindEntry(entry,
-                          buffer: { buf, offset in encoder.setBuffer(buf, offset: offset, index: Int(entry.slot)) },
-                          texture: { tex in encoder.setTexture(tex, index: Int(entry.slot)) },
-                          sampler: { sampler in encoder.setSamplerState(sampler, index: Int(entry.slot)) })
             }
 
         case .pushConstant(_, let slot, let data):
@@ -525,26 +552,6 @@ private struct MetalPassEncoder {
         }
     }
 
-    // MARK: Resolved bindings
-
-    private func bindEntry(
-        _ entry: MetalBoundEntry,
-        buffer: (MTLBuffer, Int) -> Void,
-        texture: (MTLTexture) -> Void,
-        sampler: (MTLSamplerState) -> Void
-    ) {
-        switch entry.resource.value {
-        case .sampler(let state):
-            sampler(state)
-        case .texture(let tex):
-            texture(tex)
-        case .buffer(let mtlBuffer, let offset):
-            buffer(mtlBuffer, offset)
-        case .accelerationStructure:
-            // Not used by the current pipeline model.
-            break
-        }
-    }
 }
 
 #endif

@@ -72,7 +72,7 @@ private func requestedRendererName() throws -> String {
         }
         return CommandLine.arguments[index + 1].lowercased()
     }
-    return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "wgpu"
+    return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "native"
 }
 
 private func makeRenderDevice() throws -> EngineRenderDevice {

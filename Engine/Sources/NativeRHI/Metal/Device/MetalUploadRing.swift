@@ -41,7 +41,13 @@ final class MetalFrameUploader: FrameUploader {
     }
 
     func write(_ data: Data, alignment: Int) throws -> UploadLocation {
-        let allocation = try allocator.write(data, alignment: alignment)
+        try data.withUnsafeBytes { try write($0, alignment: alignment) }
+    }
+
+    /// Zero-copy fast path: copies the caller's memory straight into ring
+    /// storage without building an intermediate `Data`.
+    func write(_ bytes: UnsafeRawBufferPointer, alignment: Int) throws -> UploadLocation {
+        let allocation = try allocator.write(bytes, alignment: alignment)
         return UploadLocation(buffer: allocation.chunk.bufferHandle, offset: allocation.offset)
     }
 }

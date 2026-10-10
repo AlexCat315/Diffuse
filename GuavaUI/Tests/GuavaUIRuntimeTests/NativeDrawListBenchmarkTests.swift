@@ -31,12 +31,20 @@ private struct NativeUISubmissionPhases: Encodable {
     let planning: NativeUITiming
     let encoding: NativeUITiming
     let queueSubmit: NativeUITiming
+    let passSetup: NativeUITiming
+    let encoderCreation: NativeUITiming
+    let commandReplay: NativeUITiming
+    let bindingApply: NativeUITiming
 
     init(_ profiles: [SubmissionCPUProfile]) {
         validation = NativeUITiming(profiles.map { Double($0.validationNanoseconds) / 1000 })
         planning = NativeUITiming(profiles.map { Double($0.planningNanoseconds) / 1000 })
         encoding = NativeUITiming(profiles.map { Double($0.encodingNanoseconds) / 1000 })
         queueSubmit = NativeUITiming(profiles.map { Double($0.queueSubmitNanoseconds) / 1000 })
+        passSetup = NativeUITiming(profiles.map { Double($0.passSetupNanoseconds) / 1000 })
+        encoderCreation = NativeUITiming(profiles.map { Double($0.encoderCreationNanoseconds) / 1000 })
+        commandReplay = NativeUITiming(profiles.map { Double($0.commandReplayNanoseconds) / 1000 })
+        bindingApply = NativeUITiming(profiles.map { Double($0.bindingApplyNanoseconds) / 1000 })
     }
 }
 
@@ -234,7 +242,7 @@ struct NativeDrawListBenchmarkTests {
                     }
                     lastStatistics = frame.statistics
                     let recorded = DispatchTime.now().uptimeNanoseconds
-                    let profile = profileEnabled ? SubmissionCPUProfile() : nil
+                    let profile = profileEnabled ? SubmissionCPUProfile(recordsEncodingDetail: true) : nil
                     try context.device.submit(commands, cpuProfile: profile); frame.didSubmit()
                     context.device.endFrame()
                     return NativeUIFrameTiming(recordNanoseconds: recorded - start,

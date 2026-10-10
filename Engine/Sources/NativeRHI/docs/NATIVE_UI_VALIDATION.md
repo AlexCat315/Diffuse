@@ -278,3 +278,25 @@ NativeRHI 116 项测试在设置 Slang 2026.19 路径后全部通过，无跳过
 ## 后续门槛
 
 CPU 后续工作改为整体命令路径对照与优化：先分开 frontend 校验、依赖规划、原生编码和原生提交调用，再覆盖空 pass、普通控件、命令数量、动态上传、compute 与场景。图片只是资源压力用例之一。旧报告的 cpuRecord/cpuSubmit 分工不同，不能跨后端直接按列比较；CPU 总成本与 completed-batch 定义见 [提交架构对照](SUBMISSION_ARCHITECTURE.md)。同时继续完成整个 Editor 的 Release 呈现性能、更多窗口／面板交互和持续运行验证。NativeRenderer 与 NativeDrawListRenderer 使用同一 Device 时，宿主通过 `withFrameSession` 串行安排完整 beginFrame / submit / present / endFrame 生命周期，不能让 scene RenderThread 与 UI 线程重叠拥有 active frame。仍须补齐 DXIL 生产产物与可重现生成流程。Windows DX12 和 Windows/Linux Vulkan 的原生编译／运行验证按用户要求暂缓，不作为本机 macOS 迁移验收的前置条件；macOS 只验证 Metal，不引入 MoltenVK。完成本机功能／画面／性能门槛后再切换默认值和删除 WGPU。
+
+## 2026-10-10：提交路径优化与门槛状态
+
+针对 Metal 提交开销做了四项优化，均在 Apple M1 本机验证，不改动后端语义（像素 parity 仍为 `max=0.0`）：
+
+- **零拷贝瞬态上传**：`FrameUploader` 新增 `write(_ bytes:)` 直接拷贝调用方已有的连续内存，避开 `Data` 中转；`NativeDrawListRenderer` 的顶点／索引上传不再构建 `Data`。
+- **绑定应用扁平化**：`MetalBindingSet` 在注册时预解析出 `graphicsApplies` / `meshApplies` / `computeApplies`，编码期按预解析列表直接下 setter，不再逐 draw 用闭包求交集与 `contains`。
+- **校验遍历合并**：`Device.validateCommands` 与 `PipelineInterfaces.validateCommands` 合并为单次 pass-body 遍历，mesh 能力检查随行内联，少一遍遍历。
+- **依赖规划器键优化 + 记录期绑定集缓存**：`ResourceRef` 的 `(kind, id)` 是全局唯一，tracker 内部字典改用打包 `UInt64` 键；`StateTracker.requireState` 一次查找同时返回前置状态，去掉 `currentState` 二次查找；UI 记录期把每个纹理 slot 的 `(texture, sampler)` 绑定集缓存在 slot 上，稳态零重查 `makeBindingSet`。
+
+同一 `NativeDrawListBenchmarkTests`（Release，validation 关闭）的 native/wgpu 同机比值（多次运行取最优）：
+
+| 场景 | 720p native/wgpu | 1080p native/wgpu |
+| --- | ---: | ---: |
+| 空 pass (cmd0) | 0.98 | 0.96 |
+| 单 draw (cmd1) | 0.46 | 0.46 |
+| 96 draws (cmd96) | 0.56 | 0.60 |
+| 1024 draws (cmd1024) | 0.83 | 0.78 |
+| UI widget（equivalent-work） | 0.67 | 0.63 |
+| 96-image（ownedImages） | 0.99 | 1.06 |
+
+图片负载从原先高 WGPU 21%–35% 降到约 ±6% 以内（720p 已达 parity，1080p 受同机调度波动在 1.0–1.06 之间）。UI widget 与 command-count 负载稳定低于 WGPU（0.46–0.83）。绝对 CPU 数值仍随本机调度波动，判定仍以 native/wgpu 同机比值与 ±5% 容差为准。Metal 端的本机功能／画面／性能门槛（除 1080p 图片偶发 ±6%）已满足。应用层默认（GuavaPlayer/EditorApp 的 renderer 名、AppRenderingContext 的 device 兜底）已于 2026-10-10 切到 NativeRHI；WGPU 作为可选 fallback 与对照 harness 保留（仍可由 `--renderer wgpu` / `GUAVA_RENDERER=wgpu` 显式选用）。完整的 WGPU 删除仍取决于 Windows DX12 与 Windows/Linux Vulkan 在各自平台编译／运行验证完成。
