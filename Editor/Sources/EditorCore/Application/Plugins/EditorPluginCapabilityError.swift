@@ -26,6 +26,9 @@ public enum EditorPluginCapabilityError: Error, Sendable, Equatable, LocalizedEr
     case noPendingPluginApproval
     case missingExposureSnapshot
     case sceneRevisionChanged(expected: UInt64, actual: UInt64)
+    /// The plugin declares components but returned something other than a read payload.
+    case unexpectedComponentDeclarationResult(String)
+    case invalidComponentDeclaration(String)
 
     public var errorDescription: String? {
         switch self {
@@ -41,6 +44,10 @@ public enum EditorPluginCapabilityError: Error, Sendable, Equatable, LocalizedEr
             return "The plugin plan is missing its capability exposure snapshot."
         case let .sceneRevisionChanged(expected, actual):
             return "The scene changed while preparing plugin data (expected \(expected), actual \(actual))."
+        case let .unexpectedComponentDeclarationResult(id):
+            return "Plugin capability '\(id)' must return a read payload of component descriptions."
+        case let .invalidComponentDeclaration(id):
+            return "Plugin '\(id)' declared components the host rejected. Its other capabilities stay enabled."
         }
     }
 }
