@@ -245,10 +245,36 @@ install a provider for the current scene registry, including module registration
 This query creates no write drafts. Write capabilities retain their existing
 contracts and authorization.
 
-WASM plugin-defined component storage/registration and migration of the remaining
-rich component forms to shared field metadata remain separate follow-up work.
-The current module registration API is native Swift; because a registration is a
-value (`EditorInspectorRendererRegistration`) rather than a string-keyed entry in
-a fixed table, a plugin host can install one once it owns a component type ID.
-Adding a layout case still requires an editor change, so plugin-defined forms
-should keep using `.standard` until layouts become registrable.
+## Plugin-declared components
+
+A WASM plugin contributes components as data, never as native code. It exports the
+reserved capability `components` — full ID `<pluginID>.components` — declared as:
+
+```wit
+record components-input { include-all: bool }
+components: func(input: components-input) -> string;
+```
+
+The returned string is a JSON array of `ComponentDescription`, the same Codable
+value `scene.describe_components` reports to AI and MCP. The host invokes it once
+when the plugin is enabled, then `ComponentDeclarations.decode(_:limits:)` and
+`ComponentRegistry.register(contentsOf:)` install it.
+
+Declared components are document-backed (`DocumentComponentSchema`): the authored
+document is the storage, keyed by type ID in `RuntimeWorld`, so serialization,
+prefabs, game saves, duplication, the generated inspector form and
+`componentDescriptions` all work without a Swift type. Declarations are untrusted:
+
+- the payload, component count and field count are bounded;
+- type IDs must be namespaced (`namespace.name`), so a plugin can never shadow a
+  built-in such as `collider`;
+- `defaults` must be an object, and `requires` must resolve.
+
+Rejections throw; the plugin keeps its other capabilities but contributes no
+components. Declarations are session state: they are not serialized with the
+scene, every new scene receives the current set, and disabling a plugin
+withdraws them. A plugin that declares a bad payload never reaches the registry.
+
+Plugin components use the generated form and the `.standard` layout: rich controls
+still require a native `EditorInspectorRendererRegistration`, and exposing GuavaUI
+widgets across the wasm ABI remains out of scope.

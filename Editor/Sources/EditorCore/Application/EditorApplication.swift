@@ -33,6 +33,8 @@ public final class EditorApplication: @unchecked Sendable {
     public let store: EditorStore
     public let inputState: InputState
     public let scene: EditorSceneAdapter
+    /// Plugin session state: bindings, authorizations and declared components.
+    let pluginSession: PluginSession
     /// Manages dynamically compiled Swift scripts in the project.
     public let dynamicScriptManager: DynamicScriptManager
     /// Canonical editor-facing state for script documents, diagnostics, and builds.
@@ -68,12 +70,8 @@ public final class EditorApplication: @unchecked Sendable {
     public var isActive: Bool { !isShuttingDown }
     let mcpBridge = MCPBridge()
     let mcpCapabilitySessions = CapabilityExposureSessionStore()
-    var pluginHostClient: PluginHostProcessClient?
-    var pluginBindings: [String: PluginExecutionBinding] = [:]
     var pluginCapabilityExecutor: PluginCapabilityExecutor?
-    let pluginAuthorizationStore: EditorPluginAuthorizationStore
     let trustedPluginHostExecutableURL: URL?
-    var pendingPluginApproval: PendingPluginApproval?
     let editLog: EditLog
     let contextMemoryStore: ContextMemoryStore?
     var physicsPlaySnapshot: SceneRuntime?
@@ -114,7 +112,9 @@ public final class EditorApplication: @unchecked Sendable {
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
-        let scene = EditorSceneAdapter(seedPreviewScene: seedPreviewScene)
+        let pluginSession = PluginSession(projectDirectory: projectDirectory)
+        let scene = EditorSceneAdapter(seedPreviewScene: seedPreviewScene,
+                                       componentRegistry: pluginSession.components.registry())
         scene.setEditorViewportCameraEnabled(true)
         scene.scriptRuntime.isGameplayExecutionEnabled = false
         let observationDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
@@ -190,7 +190,7 @@ public final class EditorApplication: @unchecked Sendable {
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
         self.contextMemoryStore = contextMemoryStore
-        self.pluginAuthorizationStore = pluginAuthorizationStore
+        self.pluginSession = pluginSession
         self.projectScriptCatalogMonitor = projectScriptCatalogMonitor
         self.trustedPluginHostExecutableURL = EditorPluginHostLocator.resolve(
             injectedURL: trustedPluginHostExecutableURL
@@ -398,11 +398,8 @@ public final class EditorApplication: @unchecked Sendable {
         flushContextMemoryBeforeShutdown()
         logConsole("Editor runtime shutdown")
         mcpBridge.stop()
-        pluginHostClient?.stop()
-        pluginHostClient = nil
-        pluginBindings.removeAll()
+        pluginSession.stop()
         pluginCapabilityExecutor = nil
-        pendingPluginApproval = nil
         if let eventToken {
             events.unsubscribe(eventToken)
             self.eventToken = nil
