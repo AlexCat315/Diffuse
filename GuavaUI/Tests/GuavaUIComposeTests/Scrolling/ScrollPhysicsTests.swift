@@ -185,15 +185,57 @@ struct ScrollPhysicsTests {
 
         fixture.tick(frames: 600)
         let coasted = fixture.contentOffset
-        #expect(coasted > delivered + 400)
+        #expect(coasted > delivered + 180)
+        // Carries on, but does not launch: a burst of notches is worth roughly
+        // a quarter of a viewport more, not several screens.
+        #expect(coasted < delivered + 320)
         #expect(coasted < 40 * 100 - 150) // room left in the range
         #expect(fixture.animator.isFinished)
     } }
 
+    @Test("A notch while content is coasting stops it for good")
+    func notchDuringCoastStopsIt() { GlobalTestLock.locked {
+        let fixture = installedScrollView(rows: 40)
+        for _ in 0..<5 { fixture.wheel(y: -1) }
+
+        fixture.tick(frames: 30)
+        #expect(fixture.animator.isGliding)
+
+        // One notch: "here". It has to stop the coast and not start another.
+        fixture.wheel(y: -1)
+        let braked = fixture.contentOffset
+        #expect(!fixture.animator.isGliding)
+
+        fixture.tick(frames: 600)
+        #expect(fixture.contentOffset == braked)
+    } }
+
+    @Test("Pressing inside the container grabs coasting content")
+    func pressStopsTheCoast() { GlobalTestLock.locked {
+        let fixture = installedScrollView(rows: 40)
+        for _ in 0..<5 { fixture.wheel(y: -1) }
+
+        fixture.tick(frames: 30)
+        #expect(fixture.animator.isGliding)
+        let origin = absoluteOrigin(of: fixture.view)
+
+        // Anywhere inside, not just on the scrollbar: the press must still
+        // reach whatever is under the pointer.
+        let result = fixture.pointer(
+            MouseButtonEvent(button: .left, x: Float(origin.x + 40), y: Float(origin.y + 40),
+                             clicks: 1), phase: .down)
+        #expect(result != .handled)
+        #expect(!fixture.animator.isGliding)
+        let caught = fixture.contentOffset
+
+        fixture.tick(frames: 200)
+        #expect(fixture.contentOffset == caught)
+    } }
+
     @Test("A throw into the end of the range rebounds instead of sticking")
     func throwIntoTheEndRebounds() { GlobalTestLock.locked {
-        let fixture = installedScrollView(rows: 10)
-        let maximumOffset = CGFloat(10 * 100 - 150)
+        let fixture = installedScrollView(rows: 4)
+        let maximumOffset = CGFloat(4 * 100 - 150)
         for _ in 0..<3 { fixture.wheel(y: -1) }
 
         var furthest: CGFloat = 0
@@ -229,10 +271,10 @@ struct ScrollPhysicsTests {
 
     @Test(".clamped coasts but stops dead at the edge")
     func clampedStopsAtTheEdge() { GlobalTestLock.locked {
-        let fixture = installedScrollView(physics: .clamped, rows: 10)
+        let fixture = installedScrollView(physics: .clamped, rows: 4)
         for _ in 0..<3 { fixture.wheel(y: -1) }
 
-        let maximumOffset = CGFloat(10 * 100 - 150)
+        let maximumOffset = CGFloat(4 * 100 - 150)
         for _ in 0..<600 {
             fixture.tick(frames: 1)
             #expect(fixture.contentOffset <= maximumOffset)
