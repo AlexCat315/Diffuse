@@ -48,6 +48,7 @@ public final class TextShaper {
         }
         self.rasterScale = max(1, rasterScale)
         hbFont = hb_ft_font_create_referenced(ftFace)
+        if let hbFont { hb_ft_font_set_load_flags(hbFont, FT_Int32(FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP)) }
     }
 
     /// Shapes a string of text and returns positioned glyphs.

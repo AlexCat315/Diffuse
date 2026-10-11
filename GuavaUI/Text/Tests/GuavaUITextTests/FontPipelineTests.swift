@@ -4,6 +4,20 @@ import GuavaUICore
 @testable import GuavaUIText
 
 final class FontPipelineTests: XCTestCase {
+    func testRasterizationDoesNotChangeLayoutMetrics() throws {
+        let fonts = try collection()
+        fonts.configure(size: 13, rasterScale: 2)
+        let glyphs = fonts.shape("English office AV 0123 中文")
+        for glyph in glyphs {
+            let before = try XCTUnwrap(fonts.atlas.glyphMetrics(glyphIndex: glyph.glyphID, fontID: glyph.fontID))
+            _ = try XCTUnwrap(fonts.atlas.rasterizeGlyph(glyphIndex: glyph.glyphID, fontID: glyph.fontID))
+            let after = try XCTUnwrap(fonts.atlas.glyphMetrics(glyphIndex: glyph.glyphID, fontID: glyph.fontID))
+            XCTAssertEqual([before.advance, before.width, before.height, before.bearingX, before.bearingY],
+                           [after.advance, after.width, after.height, after.bearingX, after.bearingY],
+                           "Drawing must not change wrapping/caret metrics on the next layout")
+        }
+    }
+
     private func bytes(_ name: String) throws -> [UInt8] {
         let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Fonts")
