@@ -479,6 +479,9 @@ host.onFrame = { native in
 
     // 2. Walk node tree -> draw list.
     drawList.reset()
+    // Snapping happens as edges are emitted, so the scale has to be known here
+    // rather than at record time.
+    drawList.pixelScale = Float(host.contentScaleFactor)
     let drawTrace = tree.timeline.begin()
     nodeRenderer.render(root: root, into: drawList)
     tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")

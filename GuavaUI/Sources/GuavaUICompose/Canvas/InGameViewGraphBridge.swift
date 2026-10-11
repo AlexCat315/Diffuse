@@ -71,6 +71,7 @@ public final class InGameViewGraphBridge {
             _ = recomposer.commitAll()
             _ = graph.computeLayoutIfNeeded(width: Float(width), height: Float(height))
             drawList.reset()
+            drawList.pixelScale = Float(contentScale)
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
 

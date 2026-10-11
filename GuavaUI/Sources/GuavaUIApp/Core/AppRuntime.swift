@@ -520,6 +520,9 @@ public final class AppRuntime {
         let layoutEnd = TimingTrace.now()
 
         drawList.reset()
+        // Edges are snapped to the physical pixel grid as they are emitted; see
+        // `DrawList.pixelScale`. Set before drawing, not at record time.
+        drawList.pixelScale = Float(host.contentScaleFactor)
         let drawTrace = tree.timeline.begin()
         if useLegacyRenderer {
             nodeRenderer.render(root: root, into: drawList)
@@ -953,6 +956,7 @@ private final class AuxiliaryAppWindow {
             syncWindowChromeHitTest()
             NativeAccessibility.synchronize(host: host, session: session, root: root)
             drawList.reset()
+            drawList.pixelScale = Float(session.contentScaleFactor)
             if useLegacyRenderer {
                 nodeRenderer.render(root: root, into: drawList)
             } else {
