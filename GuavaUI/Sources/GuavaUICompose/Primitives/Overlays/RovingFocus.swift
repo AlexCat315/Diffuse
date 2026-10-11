@@ -33,6 +33,16 @@ struct RovingItemModifier: ViewModifier {
     let isTabStop: Bool
     func apply(node: Node) {
         node.attachments["__roving.item"] = id
+        // A caller modifier can replay after the button updates locally.
+        // Resolve the current group selection instead of restoring its old snapshot.
+        var ancestor = node.parent
+        while let parent = ancestor {
+            if let current = parent.attachments["__roving.tabStop"] as? () -> AnyHashable? {
+                node.isTabStop = current() == id
+                return
+            }
+            ancestor = parent.parent
+        }
         node.isTabStop = isTabStop
     }
 }
@@ -54,6 +64,10 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
+        node.attachments["__roving.tabStop"] = {
+            let selected = selection()
+            return selected.flatMap { enabledItems.contains($0) ? $0 : nil } ?? enabledItems.first
+        } as () -> AnyHashable?
         InteractionRegistryHolder.current?.setKey(node) { [weak node] event, phase in
             guard phase == .bubble, let command = command(event), let node else { return .ignored }
             var source = selection()

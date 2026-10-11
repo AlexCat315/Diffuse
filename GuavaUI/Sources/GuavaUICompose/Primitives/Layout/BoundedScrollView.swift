@@ -1,7 +1,7 @@
 import GuavaUIRuntime
 
 public struct BoundedScrollView: View {
-    public let axes: ScrollView<AnyView>.Axis
+    public let axes: ScrollAxis
     public let contentHeight: Float
     public let minHeight: Float
     public let maxHeight: Float
@@ -9,7 +9,7 @@ public struct BoundedScrollView: View {
     public let scrollbarGutter: ScrollView<AnyView>.ScrollbarGutter
     public let content: AnyView
 
-    public init<Content: View>(_ axes: ScrollView<AnyView>.Axis = .vertical,
+    public init<Content: View>(_ axes: ScrollAxis = .vertical,
                                contentHeight: Float,
                                minHeight: Float,
                                maxHeight: Float,

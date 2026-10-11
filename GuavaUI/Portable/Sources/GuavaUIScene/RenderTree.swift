@@ -44,6 +44,10 @@ public final class RenderObject {
     /// Non-layer RenderObjects don't cache (this stays nil).
     public var cachedLayerList: DrawList?
 
+    /// Bounds of actual cached leaf vertices, including overdraw and shadows.
+    /// Node.frame alone is not a safe culling boundary for custom painters.
+    var cachedPaintBounds: UIRect?
+
     /// Parent clip stack snapshot at last record. Cache is only valid when
     /// the current parent clip stack equals this snapshot, otherwise scissor
     /// rects baked into `cachedLayerList.batches` are stale.

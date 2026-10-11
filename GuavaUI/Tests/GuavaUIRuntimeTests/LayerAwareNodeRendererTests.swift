@@ -54,6 +54,25 @@ struct LayerAwareNodeRendererTests {
         #expect(layerList.vertices.last?.posY == referenceList.vertices.last?.posY)
     }
 
+    @Test("Retained geometry uses the current pixel density and refreshes when density changes")
+    func pixelDensityParity() {
+        let t = Tree()
+        t.a.frame.origin = CGPoint(x: 10.26, y: 10.26)
+        let renderer = LayerAwareNodeRenderer()
+        for scale: Float in [1, 2, 2, 1] {
+            let reference = DrawList()
+            reference.pixelScale = scale
+            NodeRenderer().render(root: t.root, into: reference)
+            for _ in 0..<2 {
+                let actual = DrawList()
+                actual.pixelScale = scale
+                renderer.render(tree: t.render, into: actual)
+                #expect(actual.vertices.map { [$0.posX, $0.posY] } == reference.vertices.map { [$0.posX, $0.posY] })
+            }
+            #expect(t.render.root?.cachedLayerList?.pixelScale == scale)
+        }
+    }
+
     @Test("subtree fades preserve RGB and match cached and uncached rendering")
     func subtreeFadeParity() {
         let t = Tree()
@@ -379,8 +398,86 @@ struct LayerAwareNodeRendererTests {
             legacy.render(root: root, into: legacyFrame)
         }
 
-        #expect(retainedFrame.vertices.count == legacyFrame.vertices.count)
-        #expect(retainedFrame.indices.count == legacyFrame.indices.count)
+        let visibleLegacy = legacyFrame.vertices.filter { $0.posY >= 0 && $0.posY <= 720 }
+        let visibleRetained = retainedFrame.vertices.filter { $0.posY >= 0 && $0.posY <= 720 }
+        #expect(visibleRetained.map(\.posX) == visibleLegacy.map(\.posX))
+        #expect(visibleRetained.map(\.posY) == visibleLegacy.map(\.posY))
+        #expect(retainedFrame.vertices.count < legacyFrame.vertices.count / 5)
         #expect(painterCalls == callsAfterWarmup + 300 * 30)
     }
+    @Test("Initially offscreen leaves do not enter ancestor caches and reappear without repainting")
+    func initiallyOffscreenLeaf() {
+        let root = Node(); root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        root.clipsToBounds = true
+        let leaf = Node(); leaf.frame = CGRect(x: 0, y: 140, width: 20, height: 20)
+        var paints = 0
+        leaf.draw = { list, origin in
+            paints += 1
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 20, height: 20), color: .white)
+        }
+        root.addChild(leaf)
+        let tree = RenderTree(); tree.install(rootNode: root)
+        let renderer = LayerAwareNodeRenderer()
+        for _ in 0..<3 {
+            let frame = DrawList(); renderer.render(tree: tree, into: frame)
+            #expect(frame.vertices.isEmpty)
+        }
+        #expect(paints == 1)
+        root.contentOffset.y = 100
+        let visible = DrawList(); renderer.render(tree: tree, into: visible)
+        #expect(visible.vertices.count == 4)
+        #expect(paints == 1)
+    }
+
+    @Test("Offscreen cached leaves are culled and reappear without losing overflow paint")
+    func cachedLeafVisibility() {
+        let root = Node(); root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        root.clipsToBounds = true
+        let leaf = Node(); leaf.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
+        var paints = 0
+        leaf.draw = { list, origin in
+            paints += 1
+            // The painter intentionally extends beyond its Node.frame.
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 20, height: 60), color: .white)
+        }
+        root.addChild(leaf)
+        let tree = RenderTree(); tree.install(rootNode: root)
+        let renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: tree, into: DrawList())
+        root.contentOffset.y = 100
+        let outside = DrawList(); renderer.render(tree: tree, into: outside)
+        #expect(outside.vertices.isEmpty)
+        root.contentOffset.y = 30
+        let overflow = DrawList(); renderer.render(tree: tree, into: overflow)
+        #expect(!overflow.vertices.isEmpty) // frame is outside, actual painter is visible
+        #expect(paints == 1)
+        root.contentOffset.y = 0
+        let returned = DrawList(); renderer.render(tree: tree, into: returned)
+        #expect(returned.vertices.count == 4)
+        #expect(paints == 1)
+    }
+
+    @Test("A clipped offscreen subtree avoids painter work until it enters the viewport")
+    func clippedSubtreeVisibility() {
+        let root = Node(); root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let clipped = Node(); clipped.frame = CGRect(x: 0, y: 120, width: 100, height: 80)
+        clipped.clipsToBounds = true
+        let child = Node(); child.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
+        var paints = 0
+        child.draw = { list, origin in
+            paints += 1
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 50, height: 50), color: .white)
+        }
+        root.addChild(clipped); clipped.addChild(child)
+        let tree = RenderTree(); tree.install(rootNode: root)
+        let renderer = LayerAwareNodeRenderer()
+        let first = DrawList(); renderer.render(tree: tree, into: first)
+        #expect(paints == 0)
+        #expect(first.vertices.isEmpty)
+        root.contentOffset.y = 100
+        let next = DrawList(); renderer.render(tree: tree, into: next)
+        #expect(paints == 1)
+        #expect(next.vertices.count == 4)
+    }
+
 }

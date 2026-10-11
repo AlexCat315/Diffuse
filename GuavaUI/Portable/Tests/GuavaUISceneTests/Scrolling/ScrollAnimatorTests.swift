@@ -503,4 +503,101 @@ private final class ManualClock {
             #expect(animator.offset.y - delivered < 300)
         }
     }
+    @Test("Click during the quiet window cancels the pending throw immediately")
+    func stopBeforeGlideLaunch() {
+        withIsolatedScheduler {
+            let clock = ManualClock()
+            let animator = makeCoastingAnimator(clock: clock)
+            wheel(animator, clock, samples: 6)
+            let held = animator.offset
+            animator.stopCoasting()
+            #expect(AnimatorScheduler.current.activeCount == 0)
+            clock.run(frames: 120)
+            #expect(animator.offset == held)
+            #expect(animator.isFinished)
+        }
+    }
+
+    @Test("Authoritative writes clear pending release and cancellation clears old samples")
+    func pendingReleaseAndCancel() {
+        withIsolatedScheduler {
+            let clock = ManualClock()
+            let animator = makeCoastingAnimator(clock: clock)
+            wheel(animator, clock, samples: 6)
+            animator.adopt(CGPoint(x: 0, y: 200.25))
+            clock.run(frames: 120)
+            #expect(animator.offset.y == 200.25)
+            wheel(animator, clock, samples: 6)
+            animator.cancel()
+            animator.scroll(by: CGPoint(x: 0, y: 1))
+            let held = animator.offset
+            clock.run(frames: 120)
+            #expect(animator.offset == held)
+        }
+    }
+
+    @Test("One edge rebounds while the other axis continues gliding")
+    func diagonalEdgeHandoff() {
+        withIsolatedScheduler {
+            let clock = ManualClock()
+            let animator = ScrollAnimator(maximumOffset: CGPoint(x: 75, y: 2000),
+                viewportSize: CGSize(width: 100, height: 100))
+            animator.clock = { clock.now }
+            for _ in 0..<6 {
+                clock.now += 1.0 / 60
+                animator.scroll(by: CGPoint(x: 10, y: 10))
+            }
+            animator.settle()
+            clock.run(frames: 5)
+            #expect(animator.isSettling)
+            #expect(animator.isGliding)
+            #expect(animator.offset.x > 75)
+            let y = animator.offset.y
+            clock.run(frames: 30)
+            #expect(abs(animator.offset.x - 75) < 1)
+            #expect(animator.offset.y > y)
+            clock.run(frames: 120)
+            #expect(animator.isFinished)
+            #expect(AnimatorScheduler.current.activeCount == 0)
+        }
+    }
+
+    @Test("A glide decelerates through the slow tail without rounding or reversal")
+    func slowTailIsContinuous() {
+        withIsolatedScheduler {
+            let clock = ManualClock()
+            let animator = makeCoastingAnimator(clock: clock)
+            wheel(animator, clock, samples: 6)
+            animator.settle()
+            var previous = animator.offset.y
+            var distance = CGFloat.greatestFiniteMagnitude
+            var lastDistance: CGFloat = 0
+            while !animator.isFinished {
+                clock.run(frames: 1, interval: 1.0 / 120)
+                let next = animator.offset.y - previous
+                #expect(next >= 0)
+                #expect(next <= distance + 0.0001)
+                previous = animator.offset.y; distance = next; lastDistance = next
+            }
+            #expect(lastDistance < 0.03)
+        }
+    }
+
+    @Test("A glide crossing its edge follows the same path at 30Hz and 240Hz")
+    func edgeHandoffFramePartition() {
+        func sample(interval: Double) -> CGPoint {
+            withIsolatedScheduler {
+                let clock = ManualClock()
+                let animator = makeCoastingAnimator(clock: clock, maximum: 100)
+                wheel(animator, clock, samples: 6, step: 10)
+                animator.settle()
+                clock.run(frames: Int((0.3 / interval).rounded()), interval: interval)
+                return animator.offset
+            }
+        }
+        let coarse = sample(interval: 1.0 / 30)
+        let fine = sample(interval: 1.0 / 240)
+        #expect(abs(coarse.y - fine.y) < 0.001)
+    }
+
 }

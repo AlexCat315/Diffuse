@@ -17,7 +17,7 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    private func mounted(_ test: (ViewGraph, inout String?) -> Void) {
+    private func mounted(_ test: (ViewGraph) -> Void) {
         GlobalTestLock.locked {
             let oldChain = FocusChainHolder.current
             FocusChainHolder.current = FocusChain()
@@ -30,7 +30,7 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
                                             SidebarItem("checkbox", "Checkbox")
                                         ])]))
             graph.computeLayout(width: 226, height: 400)
-            test(graph, &selection)
+            test(graph)
         }
     }
 
@@ -40,7 +40,7 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
 
     @Test("A destination highlight is inset the same on both sides")
     func highlightIsSymmetric() {
-        mounted { graph, _ in
+        mounted { graph in
             let sidebar = graph.tree.root!
             let item = row(graph, "button")!
             let leading = item.absoluteFrame.minX - sidebar.absoluteFrame.minX
@@ -52,7 +52,7 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
 
     @Test("Rows reach the trailing edge of the pane, not of a scrollbar lane")
     func rowsFillThePane() {
-        mounted { graph, _ in
+        mounted { graph in
             let sidebar = graph.tree.root!
             let item = row(graph, "checkbox")!
             // A reserved scrollbar lane is trailing-only, so the row would stop
@@ -63,7 +63,7 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
 
     @Test("A destination rings for the keyboard and stays quiet for the pointer")
     func ringFollowsTheKeyboard() {
-        mounted { graph, _ in
+        mounted { graph in
             let item = row(graph, "button")!
             FocusChainHolder.current!.focus(item, visible: false)
             graph.recomposer.commitAll()

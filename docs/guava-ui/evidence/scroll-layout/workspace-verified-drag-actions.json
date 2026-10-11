@@ -1,0 +1,41 @@
+[
+  {
+    "kind": "pointerMove",
+    "x": 336,
+    "y": 270
+  },
+  {
+    "kind": "pointerDown",
+    "x": 336,
+    "y": 270,
+    "button": 0
+  },
+  {
+    "kind": "pointerUp",
+    "x": 336,
+    "y": 270,
+    "button": 0
+  },
+  {
+    "kind": "pointerMove",
+    "x": 876.0,
+    "y": 506.5
+  },
+  {
+    "kind": "pointerDown",
+    "x": 876.0,
+    "y": 506.5,
+    "button": 0
+  },
+  {
+    "kind": "pointerMove",
+    "x": 876.0,
+    "y": 456.5
+  },
+  {
+    "kind": "pointerUp",
+    "x": 876.0,
+    "y": 456.5,
+    "button": 0
+  }
+]

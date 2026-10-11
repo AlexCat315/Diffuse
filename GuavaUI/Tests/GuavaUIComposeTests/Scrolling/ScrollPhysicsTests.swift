@@ -362,4 +362,74 @@ struct ScrollPhysicsTests {
         #expect(dippedBelowBound)
         #expect(fixture.contentOffset == 150)
     } }
+    @Test("Click during the wheel idle deadline prevents a later launch")
+    func pointerCancelsPendingThrow() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let fixture = installedScrollView(rows: 20)
+            for _ in 0..<6 { fixture.wheel(y: -0.2) }
+            let held = fixture.contentOffset
+            _ = fixture.pointer(MouseButtonEvent(button: .left, x: 60, y: 60, clicks: 1), phase: .down)
+            fixture.tick()
+            #expect(fixture.contentOffset == held)
+            #expect(fixture.animator.isFinished)
+        }
+    } }
+
+    @Test("Removing a scrolling subtree immediately releases its scheduler entry")
+    func unmountCancelsMotion() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let fixture = installedScrollView(rows: 20)
+            for _ in 0..<6 { fixture.wheel(y: -0.2) }
+            #expect(scheduler.activeCount == 1)
+            let parent = fixture.view.parent ?? Node()
+            if fixture.view.parent == nil { parent.addChild(fixture.view) }
+            parent.removeChild(fixture.view)
+            #expect(scheduler.activeCount == 0)
+            let held = fixture.contentOffset
+            fixture.tick()
+            #expect(fixture.contentOffset == held)
+        }
+    } }
+
+    @Test("Nested edge hands outward input to the outer scroll surface")
+    func nestedBoundaryHandoff() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: ScrollView {
+            Box(direction: .column, alignItems: .stretch) {
+                ScrollView { Box {}.frame(height: 500) }.frame(height: 150).debugName("inner-scroll")
+                Box {}.frame(height: 600)
+            }.flex(0, shrink: 0)
+        }.frame(width: 200, height: 300))
+        graph.computeLayout(width: 200, height: 300)
+        let inner = firstNode(in: tree.root, where: { ($0.attachments[LayoutDebugAttachmentKey.debugName] as? String) == "inner-scroll" })!
+        let result = registry.handlers(for: inner).wheel!(MouseWheelEvent(x: 0, y: 1), .target)
+        #expect(result == .ignored)
+        #expect(inner.contentOffset == .zero)
+        #expect(registry.handlers(for: inner).wheel!(MouseWheelEvent(x: 0, y: -1), .target) == .handled)
+        #expect(inner.contentOffset.y > 0)
+    } }
+
+    @Test("Reduced motion removes added momentum and elastic displacement")
+    func reducedMotionScrollsPrecisely() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: ScrollView { Box {}.frame(height: 800) }
+            .frame(width: 200, height: 150).reducedMotion())
+        graph.computeLayout(width: 200, height: 150)
+        let node = firstNode(in: tree.root, where: { registry.handlers(for: $0).wheel != nil })!
+        let animator = node.attachments.values.compactMap { $0 as? ScrollAnimator }.first!
+        #expect(!animator.physics.momentum.isEnabled)
+        #expect(!animator.physics.rubberBand.isEnabled)
+        for _ in 0..<6 { _ = registry.handlers(for: node).wheel!(MouseWheelEvent(x: 0, y: -1), .target) }
+        #expect(animator.isFinished)
+        #expect(node.contentOffset.y == 180)
+    } }
+
 }

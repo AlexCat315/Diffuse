@@ -97,6 +97,7 @@ public enum WorkspaceCommand: Sendable, Equatable {
     case moveFloatingWindow(WorkspaceFloatingWindowID, frame: WorkspaceRect)
     case focusFloatingWindow(WorkspaceFloatingWindowID)
     case resizeSplit(WorkspaceSplitID, fraction: Float)
+    case resizeLayoutSplit(WorkspaceLayoutSplit, fraction: Float)
 }
 
 public struct WorkspaceTransactionResult: Sendable, Equatable {
@@ -237,6 +238,13 @@ public final class WorkspaceController: @unchecked Sendable {
             return focusFloatingWindow(windowID)
         case .resizeSplit(let splitID, let fraction):
             return resizeSplit(splitID, fraction: fraction)
+        case .resizeLayoutSplit(let address, let fraction):
+            var slot = document.slot(address.slot)
+            guard fraction.isFinite, let next = slot.layout?.resizing(address, to: fraction) else { return .unchanged }
+            slot.layout = next
+            document.setSlot(slot)
+            return WorkspaceTransactionResult(didChange: true, changedSlots: [address.slot],
+                                              focusPanelID: nil, persistenceDirty: true)
         }
     }
 

@@ -89,7 +89,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | DescriptionList | PropertyGrid | 编辑型属性网格存在；缺独立只读描述列表 |
 | Dialog | Dialog / Modal | 标题、描述、内容/操作槽、关闭策略、焦点约束与模态辅助功能隔离已有 |
 | Diff | — | 缺少差异编辑器 |
-| Dock | GuavaUIWorkspace | 已有拖拽、拆分、布局序列化和测试；不能据此声称大规模性能相同 |
+| Dock | GuavaUIWorkspace | 外层区域、标签拖拽和序列化已有；本轮补内部拆分的 pointer/键盘/辅助功能与持久化，移除重复 layoutTree；面板尺寸协议、标签溢出、跨窗口仍不完整，见 [Workspace](../components/workspace.md) |
 | DropdownButton | Button + Popover | 可组合；没有标准分裂按钮 |
 | Editor | TextField codeEditing / ScriptCodeEditor | 已迁移 Binding<TextBuffer>、可见行布局与共享根历史；后台 Tree-sitter、真实 LSP 诊断/补全/hover 已接线；200K 行原生连续输入 30 秒、撤销/重做与 Instruments 采样已验证；已验证真实进程中断、有限重连、未保存根保留和手动恢复。仍缺搜索/替换、多光标、折叠和完整 snippet 导航，不能等同上游成熟度 |
 | Empty | EmptyState | 已有标题、说明和操作槽；仍需更多图形/紧凑场景和窄宽布局验收 |
@@ -117,8 +117,8 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | Questionnaire | — | 缺少问卷 |
 | Radio | RadioGroup | 受控选择、禁用、单 Tab 停靠及箭头实际焦点移动已有 |
 | Rating | Rating / RatingSelection / RatingAppearance | 新增整星/半星、预览、捕获取消、单个 Tab 停靠点、键盘边界、只读分数及 SVG 密度；原生明暗展示/键盘/辅助功能写入及鼠标命中/预览/拖动/取消已验证；不含 RTL/其他评分图形 |
-| Resizable | SplitView / ResizableEditor / Workspace | SplitView 已有 Binding 比例、拖动分隔符、键盘和边界，并非静态布局；仍缺通用多面板缩放模型、像素最小宽度/折叠等完整协议 |
-| Scrollbar | ScrollView 内置 | 已有拖动/稳定 gutter；无独立滚动条 API |
+| Resizable | SplitView / ResizableEditor / Workspace | SplitView 原已有 Binding/拖动/键盘，本轮补逻辑点双面板最小尺寸、窗口不足时的退让及精确拖动分母；Workspace 内部拆分现在可调整；仍缺 N 面板联动、Workspace 面板尺寸协议和吸附/折叠阈值 |
+| Scrollbar | ScrollView 内置 | 惯性/回弹并非完整平滑滚动协议。本轮修复待起滑停止、逐轴交接、尾段阈值、弹簧帧一致性、卸载和 reduced motion，补实际绘制缓存剔除；缺原生 phase/单位、统一 ScrollHandle、独立滚动条及公开 smooth scrollTo |
 | Select | Select / EnumField | 已有类型化单选和键盘；缺多选、搜索、异步选项 |
 | Separator | Divider | 已有水平/垂直分隔 |
 | Settings | PropertyGrid / Editor SettingsPanel | 属性编辑和业务设置存在；缺通用设置页模型 |
@@ -211,3 +211,28 @@ Gallery 主导航直接使用原生图标项；Sidebar 页重写为可操作的�
 Sidebar 仍不能宣称与上游等价：折叠为纯图标、嵌套分支、上下文菜单、项级操作和自定义 leading/trailing View 是明确剩余项。[使用方法与边界](../components/sidebar.md)。
 
 原生 200% 检查另发现 Tree 示例直接固定 Tree 高度而没有滚动宿主，尾行会压到选择摘要。本轮改为有界 ScrollView，Tree 保留完整内容布局和统一缩放几何，补齐视口裁剪与摘要分离验证。
+
+
+## 滚动、布局与 docking 复核（2026-10-12）
+
+本轮沿 `ScrollView → ScrollAnimator → ScrollAxisMotion / ScrollSpring → LayerAwareNodeRenderer` 阅读实际代码并验证。原先存在真实缺陷：
+
+1. 容器内点击只停止已起滑的惯性，quiet window 内的待起滑任务仍可在点击后发动；权威偏移也未完整清理待释放状态。
+2. 双轴惯性必须等两个轴均耗尽速度后才回弹，可能导致已到边界的轴继续拉伸或停留。现在在抵达边界的实际时间逐轴交接，另一轴独立继续。
+3. 同一个 50pt/s 阈值用于起滑与停止，慢速尾段过早截断；结束整点取整会带来微小反向跳动。现停止阈值独立为 2pt/s，保留最终小数位置。
+4. 弹簧在 dt <= 0 时会 snap；数值积分轨迹受切分影响，错误 maximumTimeStep 甚至可能让循环无法退出。现使用解析阻尼解并移除该配置，覆盖临界、欠阻尼、过阻尼、非均匀帧。
+5. 节点移除未拥有滚动动画生命周期；现在绑定 NodeResource 与创建时的调度器，卸载立即取消。减少动态效果关闭附加惯性/弹性；嵌套同轴边界向外交接，无溢出的轴不消费事件。回归还发现泛型内部 Axis 无法在不同 Content 类型间转换，已抽为共享 ScrollAxis 并迁移 BoundedScrollView。
+6. 渲染器复用了绘制缓存，却仍反复追加完全离屏的文字等叶子。现使用缓存实际顶点边界剔除，避免把 Node.frame 当成自定义 painter 的硬边界，保留溢出内容；首次记录的离屏叶子也不进入祖先缓存，明确裁剪的离屏子树可整体跳过。缓存同时继承 pixelScale，密度切换重新记录。
+7. 原生测量进一步确认 Demo 仍走 NodeRenderer 全树绘制，没有走 AppRuntime 默认的 LayerAwareNodeRenderer。已统一到生产路径，保留与 AppRuntime 相同的 GUAVAUI_LEGACY_RENDERER=1 对照开关；第一次采样仍提交 323 批的中间结果也纳入证据。
+
+原生拖动还暴露了基础重组缺陷：组件自己的 body 更新会覆盖软件施加的外层 frame/style，Workspace 示例声明 360pt 却增高到 577pt。已在透明组件边界记录并按声明顺序重放调用方修饰器，重组更换布局根也重新应用；回归覆盖嵌套透明包装、局部状态、外部修饰器值变更、固定尺寸及样式。AnyView 擦除类型后的同型修饰器按每个声明保留，父更新替换整份声明列表，避免类型去重丢失内部尺寸。完整回归还暴露了 frame 省略高度清掉内容自有高度、roving 焦点重放旧选择的缺陷，已一并修正；显式 `.auto` 与全部第一方动态尺寸调用同步迁移。
+
+这些修复不代表已实现完整系统触控板体验。输入仍只有 x/y 增量和指针位置，没有设备种类、单位、phase/system momentum；最后输入后 90ms 猜测释放仍是缺口。普通 ScrollView 也不自动虚拟化内容。
+
+本地上游实际入口已下沉到 `crates/base/src/scrollbar.rs` 与 `crates/base/src/resizable/`：ScrollbarHandle 对接普通/列表/统一滚动状态，条的样式、显示、hover/active/motion 独立配置；ResizablePanel 支持尺寸区间。其 ScrollbarMotion 主要控制条的显示/形态过渡，不能仅凭名字认定内容滚动或帧率优于 GuavaUI。上游 DockArea/Panel 更完整的组合契约值得吸收，但本轮未做相同机器负载下的 GPUI 原生性能比较。
+
+GuavaUI docking 实际公开 API 已是 Workspace，没有必要改回 Dock。旧 dock.md 仍描述已删除类型和旧能力状态，本轮替换为 workspace.md。实际代码进一步确认内部 split 只有布局空隙；本轮补调整柄、持久化目标地址、失效目标处理和真实事件回归，并删除未被使用且会脱节的重复 layoutTree，迁移 Editor、Gallery、测试中的所有初始化。
+
+布局能力与缺口详见 [布局容器](../components/layout.md)。已有 Flex/换行、双面板、滚动、工作区和专用窗口化；缺 Grid/LazyGrid、公开自定义 measure/propose/place、GeometryReader、统一容器查询/ViewThatFits、可变行高窗口化、公共层叠容器、SafeArea 与 RTL。PropertyGrid 是专用属性编辑布局，不能充当通用 Grid。
+
+原生测量、环境、统计及边界见 [本轮证据](evidence/scroll-layout/README.md)。不能把确定性运动测试通过、离屏剔除生效或单个 Release 场景的数据写成“所有滚动均不掉帧”。
