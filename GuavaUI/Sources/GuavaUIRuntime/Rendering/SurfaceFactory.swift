@@ -7,8 +7,8 @@ import RHIWGPU
 /// per-platform `switch` lives in one place instead of being copy-pasted into
 /// every demo / app entry point.
 @MainActor
-enum SurfaceFactory {
-    static func nativeDescriptor(native: NativeRenderSurface, size: SIMD2<UInt32>, vsync: Bool) -> SurfaceDescriptor {
+public enum SurfaceFactory {
+    public static func nativeDescriptor(native: NativeRenderSurface, size: SIMD2<UInt32>, vsync: Bool) -> SurfaceDescriptor {
         var result: SurfaceDescriptor
         switch native {
         case .metalLayer(let pointer):
@@ -29,7 +29,7 @@ enum SurfaceFactory {
         return result
     }
 
-    static func make(backend: WGPUBackend, native: NativeRenderSurface) throws -> GPUSurface {
+    public static func make(backend: WGPUBackend, native: NativeRenderSurface) throws -> GPUSurface {
         switch native {
         case .metalLayer(let ptr):
             return try backend.createSurfaceMetal(layer: ptr)
