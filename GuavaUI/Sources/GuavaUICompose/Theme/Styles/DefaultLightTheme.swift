@@ -39,7 +39,10 @@ public enum DefaultLightTheme {
             border:           Color(red: 0xC9, green: 0xCD, blue: 0xD4),
             borderStrong:     Color(red: 0xB4, green: 0xBA, blue: 0xC2),
             divider:          Color(red: 0xC9, green: 0xCD, blue: 0xD4, alpha: 0x7A),
-            focusRing:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0xAA),
+            // Near-opaque on purpose. At 0xAA the ring is a wash of blue over
+            // whatever it crosses, which on a light canvas reads as a glow
+            // around the control rather than as a ring drawn around it.
+            focusRing:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0xE6),
             selection:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x30),
             overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0x55)
         ),

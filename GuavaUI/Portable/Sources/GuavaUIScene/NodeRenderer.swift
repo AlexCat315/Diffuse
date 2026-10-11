@@ -90,8 +90,11 @@ public struct NodeRenderer {
         }
 
         // 6. Children — translated by -contentOffset for scrollable containers.
-        let childOriginX = absX - Float(node.contentOffset.x)
-        let childOriginY = absY - Float(node.contentOffset.y)
+        // The offset is rounded to whole pixels first: a continuous offset puts
+        // every child edge and glyph on a fraction of a pixel, which undoes the
+        // snapping the draw list does and makes a scrolled list look soft.
+        let childOriginX = absX - Float(node.contentOffset.x).snappedToPixel(scale: list.pixelScale)
+        let childOriginY = absY - Float(node.contentOffset.y).snappedToPixel(scale: list.pixelScale)
         let descendantStart = list.vertices.count
         if node.childrenMayNeedZSort {
             for child in renderOrderedChildren(of: node) {
