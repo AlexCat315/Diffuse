@@ -4,7 +4,7 @@ import NativeRHI
 import Testing
 @testable import GuavaUIRuntime
 
-@Suite("Native draw list GPU parity", .serialized)
+@Suite("Native draw list recording determinism", .serialized)
 struct NativeDrawListParityTests {
     @Test("fractional scissor boundaries preserve Float rounding on both axes")
     func fractionalBoundaryRounding() throws {
@@ -27,7 +27,7 @@ struct NativeDrawListParityTests {
         }
     }
 
-    @Test("real fonts, color glyphs, patches, sentinel modes, scissor and MSAA match WGPU")
+    @Test("real fonts, color glyphs, patches, sentinel modes, scissor and MSAA remain deterministic across recordings")
     func formatsAndScales() throws {
         let context = try NativeUIDrawTestContext()
         let list = try nativeUIScene(context)

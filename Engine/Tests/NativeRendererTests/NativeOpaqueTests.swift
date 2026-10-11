@@ -9,10 +9,10 @@ import XCTest
 
 final class NativeOpaqueTests: XCTestCase {
     #if os(macOS)
-    func testMetalMatchesProductionWGPUScene() throws { try parity(.metal) }
+    func testMetalIsDeterministicAcrossSessions() throws { try parity(.metal) }
     #endif
     #if os(Windows) || os(Linux)
-    func testVulkanMatchesProductionWGPUScene() throws { try parity(.vulkan) }
+    func testVulkanIsDeterministicAcrossSessions() throws { try parity(.vulkan) }
     #endif
     #if os(macOS)
     func testMetalResourceReplacementAndRemoval() throws { try lifecycle(.metal) }
@@ -39,7 +39,7 @@ final class NativeOpaqueTests: XCTestCase {
         let cube = BuiltinMesh.cube(color: SIMD3(repeating: 1))
         var simplified = cube; simplified.indices = Array(cube.indices.prefix(3))
         assets.registerForTesting(cube, at: 45); assets.registerForTesting(simplified, at: 46)
-        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api], enableValidation: false))
         let renderer = try NativeRenderer(device: device, assets: assets)
         var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: 96,height: 96))
         packet.scene.camera = RenderCamera(eye: SIMD3(0,0,5),target: .zero,near: 0.1,far: 100)
@@ -69,9 +69,9 @@ final class NativeOpaqueTests: XCTestCase {
         XCTAssertEqual(asset.submeshes.count, 2); XCTAssertEqual(asset.textures.count, 1)
         AssetRegistry.shared.registerForTesting(asset, at: 2)
         defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
-        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
         let renderer = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let reference = try SceneCapture(validation: true, api: api)
         var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: 192,height: 128))
         // The production renderer publishes its offscreen texture from r3.
         // One-pass/depth-prepass equivalence is checked separately in parity.
@@ -98,7 +98,7 @@ final class NativeOpaqueTests: XCTestCase {
             let dir = URL(fileURLWithPath: "/tmp/guava-native-mask-\(api.rawValue)")
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             try GridImage.writePPM(image,size: packet.drawableSize,to: dir.appendingPathComponent("frame-\(frame).ppm"))
-            try GridImage.writePPM(expected,size: packet.drawableSize,to: dir.appendingPathComponent("wgpu-\(frame).ppm"))
+            try GridImage.writePPM(expected,size: packet.drawableSize,to: dir.appendingPathComponent("repeat-\(frame).ppm"))
             let delta = try GridImage.difference(image,expected)
             XCTAssertLessThan(delta.meanAbsoluteChannelError, 0.5, "textured \(api): \(delta)")
             XCTAssertLessThan(delta.pixelsOverThree, delta.pixelCount/100)
@@ -118,9 +118,9 @@ final class NativeOpaqueTests: XCTestCase {
     }
 
     private func parity(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
         let renderer = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let reference = try SceneCapture(validation: true, api: api)
         var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: 256, height: 192))
         for mode in [RenderSettings.DebugViewMode.unlit, .baseColor, .worldNormal, .roughness, .metallic] {
             packet.renderSettings.debugViewMode = mode; packet.frameIndex += 1
@@ -149,7 +149,7 @@ final class NativeOpaqueTests: XCTestCase {
 
     private func lifecycle(_ api: GraphicsAPI) throws {
         let assets = AssetRegistry()
-        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
         let renderer = try NativeRenderer(device: device, assets: assets)
         var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: 96, height: 96))
         var asset = BuiltinMesh.cube(color: SIMD3(repeating: 1))

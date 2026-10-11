@@ -1,6 +1,6 @@
 import GuavaUIRuntime
 import GuavaUIDevTools
-import RHIWGPU
+import NativeRHI
 
 public enum AppWindowTitleBarStyle: Sendable, Equatable {
     case standard
@@ -32,9 +32,9 @@ public struct AppConfig: Sendable {
     /// 默认行高。
     public var defaultLineHeight: Float
     /// 清屏颜色（默认接近 `Theme.defaultDark` 的 background）。
-    public var clearColor: GPUColor
-    /// wgpu 后端配置。
-    public var backendConfig: WGPUDeviceConfig
+    public var clearColor: SIMD4<Float>
+    /// NativeRHI device configuration.
+    public var backendConfig: DeviceConfig
     /// UI 渲染 MSAA 采样数。1 表示关闭，常用值是 4。
     public var msaaSampleCount: UInt32
     /// Native window titlebar behavior. macOS maps `.hiddenInset` to a
@@ -45,10 +45,6 @@ public struct AppConfig: Sendable {
     public var targetFrameRate: Double?
     /// Frame scheduling after present. `.continuous` keeps legacy behavior.
     public var frameDrivePolicy: AppFrameDrivePolicy
-    /// Present mode used while VSync is enabled. `.fifo` is the portable default;
-    /// interactive tools can opt into `.mailbox` to avoid FIFO back-pressure on
-    /// the main UI loop.
-    public var vsyncPresentMode: GPUPresentMode
     /// DevTools 配置。`nil` 关闭。默认从 `GUAVA_DEVTOOLS=1` env var 读取，
     /// 这样 release 构建不会意外开启服务端。
     public var devTools: DevToolsConfig?
@@ -57,13 +53,12 @@ public struct AppConfig: Sendable {
                 primaryFontName: String = SystemFontDefaults.primaryFontName,
                 defaultFontSize: Float = 14,
                 defaultLineHeight: Float = 20,
-                clearColor: GPUColor = GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1),
-                backendConfig: WGPUDeviceConfig = WGPUDeviceConfig(),
+                clearColor: SIMD4<Float> = SIMD4(0.05, 0.06, 0.08, 1),
+                backendConfig: DeviceConfig = DeviceConfig(),
                 msaaSampleCount: UInt32 = 4,
                 titleBarStyle: AppWindowTitleBarStyle = .standard,
                 targetFrameRate: Double? = nil,
                 frameDrivePolicy: AppFrameDrivePolicy = .continuous,
-                vsyncPresentMode: GPUPresentMode = .fifo,
                 devTools: DevToolsConfig? = nil) {
         self.title = title
         self.primaryFontName = primaryFontName
@@ -79,7 +74,6 @@ public struct AppConfig: Sendable {
             self.targetFrameRate = nil
         }
         self.frameDrivePolicy = frameDrivePolicy
-        self.vsyncPresentMode = vsyncPresentMode
         self.devTools = devTools ?? DevToolsConfig.fromEnvironment(appTitle: title)
     }
 }

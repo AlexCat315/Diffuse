@@ -2,9 +2,8 @@
 """Validate real Editor windows, MCP compilation/reload, playback, and export.
 
 Runs both idle/event-driven and continuous frame loops on NativeRHI by default.
-Use --renderer wgpu for the reference path. The disposable bundle,
+The disposable bundle,
 project, trust decision, logs and transcript stay in a new temporary directory.
-Use --renderer both to compare the two paused Editor window captures as well.
 macOS currently provides the native editor TCP bridge used by this test.
 """
 import argparse
@@ -48,7 +47,7 @@ def wait_for_bridge(child, port, log, renderer):
             with socket.create_connection(("127.0.0.1", port), timeout=0.2):
                 # Bridge startup can precede scene renderer initialization.
                 startup = log.read_text()
-                if renderer == "wgpu" or "NativeRenderer ready" in startup:
+                if "NativeRenderer ready" in startup:
                     return
         except OSError:
             pass
@@ -137,12 +136,8 @@ def validate(directory, continuous, renderer, configuration="debug", timing_fram
     client = None
     try:
         wait_for_bridge(child, port, log, renderer)
-        if renderer != "wgpu":
-            # Validate the renderer used by the actual application process;
-            # successful simulation/MCP traffic alone cannot prove GPU startup.
-            startup = log.read_text()
-            assert "NativeRenderer ready" in startup, startup[-8192:]
-            assert "[RHIWGPU]" not in startup, startup[-8192:]
+        startup = log.read_text()
+        assert "NativeRenderer ready" in startup, startup[-8192:]
         # The listener can accept connections before the first UI layout and
         # font rasterization finishes. Wait for a real window frame before
         # applying the bridge's normal interactive-response deadline.
@@ -225,11 +220,10 @@ def validate(directory, continuous, renderer, configuration="debug", timing_fram
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("both", "event-driven", "continuous"), default="both")
-    parser.add_argument("--renderer", choices=("native", "metal", "wgpu", "both"), default="native")
+    parser.add_argument("--renderer", choices=("native", "metal"), default="native")
     parser.add_argument("--configuration", choices=("debug", "release"), default="debug")
     parser.add_argument("--timing-frames", type=int, default=0,
                         help="Record presented window timings after 60 warmup frames; requires --mode continuous")
-    parser.add_argument("--wgpu-first", action="store_true", help="Measure WGPU first with --renderer both")
     options = parser.parse_args()
     if options.timing_frames < 0 or (options.timing_frames and options.mode != "continuous"):
         parser.error("--timing-frames requires a positive count and --mode continuous")
@@ -239,29 +233,12 @@ def main():
     print("Validation artifacts:", directory, flush=True)
     modes = [continuous for continuous in (False, True)
              if options.mode == "both" or (options.mode == "continuous") == continuous]
-    renderers = ("native", "wgpu") if options.renderer == "both" else (options.renderer,)
-    if options.wgpu_first:
-        renderers = tuple(reversed(renderers))
-    for renderer in renderers:
+    for renderer in (options.renderer,):
         renderer_directory = directory / renderer
         renderer_directory.mkdir()
         for continuous in modes:
             validate(renderer_directory / ("continuous" if continuous else "event-driven"),
                      continuous, renderer, options.configuration, options.timing_frames)
-    if options.renderer == "both":
-        for continuous in modes:
-            mode = "continuous" if continuous else "event-driven"
-            captures = [directory / renderer / mode / "paused-editor.jpg" for renderer in renderers]
-            comparison = subprocess.run(["swift", str(ROOT / "scripts/compare-editor-captures.swift"),
-                                         *map(str, captures)], capture_output=True, text=True, timeout=30)
-            assert comparison.returncode == 0, comparison.stderr
-            report = json.loads(comparison.stdout)
-            (directory / f"{mode}-comparison.json").write_text(json.dumps(report, indent=2) + "\n")
-            # Allow a small amount of dynamic status text. Component tests use
-            # lossless readbacks; these JPEG mirrors cover the assembled window.
-            assert report["meanAbsoluteRGBByteError"] < 0.25, report
-            assert report["pixelsOverThree"] / report["pixelCount"] < 0.001, report
-            print(f"{mode} Editor window comparison passed: {report}", flush=True)
 
 
 if __name__ == "__main__":

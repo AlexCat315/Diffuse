@@ -151,7 +151,7 @@ func prewarmDemoTextGlyphs() {
 
 // MARK: - GPU stack
 
-// NativeRHI rather than WGPU: the demo is where the frost is looked at, and
+// NativeRHI: the demo is where the frost is looked at, and
 // the backdrop pass that blurs what is behind a panel only exists here.
 let device = try Device.make(DeviceConfig(
     preferredBackends: NativeRHI.platformDefaultBackends,

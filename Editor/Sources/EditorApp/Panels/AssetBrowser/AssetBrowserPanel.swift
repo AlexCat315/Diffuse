@@ -686,7 +686,7 @@ private struct AssetSortSelector: View {
                 Text(label(for: sortMode.wrappedValue), lineLimit: 1)
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
-                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 7, vertical: 4)
             .background(.surfaceSunken)
@@ -721,7 +721,7 @@ private struct AssetBreadcrumbSegment: View {
     var body: some View {
         Row(alignment: .center, spacing: 4) {
             if showSeparator {
-                Icon(UICommonIcons.chevronRight, size: 8, color: .onSurfaceMuted)
+                Icon(UIIcons.Navigation.chevronRight, size: 8, color: .onSurfaceMuted)
             }
             Button(action: action) {
                 Text(label, lineLimit: 1)

@@ -1,4 +1,5 @@
 import Testing
+import NativeRHI
 @testable import RenderBackend
 
 @Suite("ViewportTargetAllocation")
@@ -46,16 +47,15 @@ struct ViewportTargetAllocationTests {
                 == RenderDrawableSize(width: ViewportTargetAllocation.maxDimension, height: 4))
     }
 
-    @Test("fullscreen post shaders sample through the PostFrame sub-region uniforms")
+    @Test("fullscreen post artifacts bind the viewport sub-region uniform")
     func postShadersCarrySubRegionUniforms() throws {
-        let catalog = try ShaderCatalog()
-        for name in ["tonemap", "fxaa", "bloom", "taa", "ssao", "ssr", "ink_paper_post"] {
-            let source = try catalog.loadWGSLRenderModule(named: name)
-            #expect(source.contains("var<uniform> frame_u : PostFrame"), "\(name) missing PostFrame uniform")
-            #expect(source.contains("frame_u.uv_scale"), "\(name) not scaling sample UVs")
-            // Regression: ssao/ssr previously referenced a nonexistent
-            // `u.resolution` member, which fails WGSL validation.
-            #expect(!source.contains("u.resolution;"), "\(name) references stale u.resolution")
+        for api in [GraphicsAPI.metal, .vulkan] {
+            for name in ["tonemap", "fxaa", "bloom", "taa", "ssao", "ssr", "ink_paper_post"] {
+                let shader = try NativeShaderLibrary.artifact(name: name, api: api, stage: .fragment)
+                let frame = try #require(shader.interface.bindings.first { $0.name == "frame" }, "\(name)")
+                #expect(frame.type == .uniformBuffer)
+                _ = try shader.bindingLayoutDescriptor()
+            }
         }
     }
 }

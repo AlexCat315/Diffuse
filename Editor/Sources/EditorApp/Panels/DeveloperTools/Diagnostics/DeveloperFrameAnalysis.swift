@@ -20,7 +20,7 @@ struct DeveloperFrameTrendSummary: Equatable {
     var peakWorkSampleIndex: UInt64
     var maxDrawCallCount: Int
     var maxPassCount: Int
-    var maxRenderBundleCount: Int
+    var maxMeshBatchCount: Int
 }
 
 func makeDeveloperFrameTrendSummary(
@@ -36,7 +36,7 @@ func makeDeveloperFrameTrendSummary(
     var pacingDominatedSamples = 0
     var maxDrawCallCount = 0
     var maxPassCount = 0
-    var maxRenderBundleCount = 0
+    var maxMeshBatchCount = 0
     var peakWorkSample = history[0]
     var workMsValues: [Double] = []
     workMsValues.reserveCapacity(history.count)
@@ -56,7 +56,7 @@ func makeDeveloperFrameTrendSummary(
         }
         maxDrawCallCount = max(maxDrawCallCount, stats.drawCallCount)
         maxPassCount = max(maxPassCount, stats.passCount)
-        maxRenderBundleCount = max(maxRenderBundleCount, stats.renderBundleCount)
+        maxMeshBatchCount = max(maxMeshBatchCount, stats.meshBatchCount)
         workMsValues.append(stats.workMs)
     }
 
@@ -76,6 +76,6 @@ func makeDeveloperFrameTrendSummary(
         peakWorkSampleIndex: peakWorkSample.sampleIndex,
         maxDrawCallCount: maxDrawCallCount,
         maxPassCount: maxPassCount,
-        maxRenderBundleCount: maxRenderBundleCount
+        maxMeshBatchCount: maxMeshBatchCount
     )
 }

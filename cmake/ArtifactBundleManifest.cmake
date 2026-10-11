@@ -29,11 +29,8 @@ function(guava_add_artifact_build_manifest)
         SOURCE_REVISION
         C_COMPILER
         CXX_COMPILER
-        RUSTC
-        CARGO
         C_FLAGS_RELEASE
         CXX_FLAGS_RELEASE
-        RUST_FLAGS
         NOTES
     )
     set(_multi_value_args DEPENDS)
@@ -93,11 +90,8 @@ function(guava_add_artifact_build_manifest)
             "-DLIB_REL_PATH=${ARG_LIB_REL_PATH}"
             "-DC_COMPILER=${ARG_C_COMPILER}"
             "-DCXX_COMPILER=${ARG_CXX_COMPILER}"
-            "-DRUSTC=${ARG_RUSTC}"
-            "-DCARGO=${ARG_CARGO}"
             "-DC_FLAGS_RELEASE=${ARG_C_FLAGS_RELEASE}"
             "-DCXX_FLAGS_RELEASE=${ARG_CXX_FLAGS_RELEASE}"
-            "-DRUST_FLAGS=${ARG_RUST_FLAGS}"
             "-DNOTES=${ARG_NOTES}"
             -P "${GUAVA_MANIFEST_WRITER}"
         DEPENDS ${ARG_DEPENDS}

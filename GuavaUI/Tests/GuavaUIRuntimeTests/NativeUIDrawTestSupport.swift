@@ -1,48 +1,34 @@
 #if os(macOS)
 import Foundation
 import NativeRHI
-import RHIWGPU
 import Testing
 @testable import GuavaUIRuntime
 
 struct NativeUITestFormat {
     let native: TextureFormat
-    let reference: GPUTextureFormat
     var bytesPerPixel: Int { native == .rgba16Float ? 8 : 4 }
     static let cases: [Self] = [
-        Self(native: .rgba8Unorm, reference: .rgba8Unorm), Self(native: .bgra8Unorm, reference: .bgra8Unorm),
-        Self(native: .rgba8UnormSRGB, reference: .rgba8UnormSrgb), Self(native: .bgra8UnormSRGB, reference: .bgra8UnormSrgb),
-        Self(native: .rgba16Float, reference: .rgba16Float)
+        Self(native: .rgba8Unorm), Self(native: .bgra8Unorm),
+        Self(native: .rgba8UnormSRGB), Self(native: .bgra8UnormSRGB),
+        Self(native: .rgba16Float)
     ]
 }
 
 final class NativeUIDrawTestContext {
     let device: Device
-    let backend: WGPUBackend
     let native: NativeDrawListRenderer
-    let reference: DrawListRenderer
+    let reference: NativeDrawListRenderer
 
     init(validation: Bool = true) throws {
         device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: validation, framesInFlight: 3))
-        backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: validation, preferredBackends: [.metal]))
-        try backend.initialize()
         native = try NativeDrawListRenderer(device: device)
-        reference = DrawListRenderer(backend: backend)
+        reference = try NativeDrawListRenderer(device: device)
         try native.configure(format: .bgra8Unorm); try reference.configure(format: .bgra8Unorm)
     }
 
     func stage(id: TextureID, pixels: Data, size: SIMD2<Int>, region: TextureUploadRegion, format: TextureFormat) throws {
         try native.registerTexture(id: id, pixels: pixels, size: size, region: region, format: format)
-        try pixels.withUnsafeBytes { raw in
-            let pointer = try #require(raw.baseAddress?.assumingMemoryBound(to: UInt8.self))
-            if format == .r8Unorm {
-                try reference.registerAlphaTexture(id: id, pixels: pointer, width: UInt32(region.width), height: UInt32(region.height),
-                    originX: UInt32(region.origin.x), originY: UInt32(region.origin.y), textureWidth: UInt32(size.x), textureHeight: UInt32(size.y))
-            } else {
-                try reference.registerColorTexture(id: id, pixels: pointer, width: UInt32(region.width), height: UInt32(region.height),
-                    originX: UInt32(region.origin.x), originY: UInt32(region.origin.y), textureWidth: UInt32(size.x), textureHeight: UInt32(size.y))
-            }
-        }
+        try reference.registerTexture(id: id, pixels: pixels, size: size, region: region, format: format)
     }
 
     func nativeOutput(format: TextureFormat, size: SIMD2<Int>) throws -> TextureResource {
@@ -85,32 +71,8 @@ final class NativeUIDrawTestContext {
     }
 
     func referenceImage(list: DrawList, format: NativeUITestFormat, samples: Int, viewport: NativeUIViewport,
-        renderer: DrawListRenderer? = nil) throws -> Data {
-        let renderer = renderer ?? reference
-        try renderer.configure(format: format.reference, sampleCount: UInt32(samples))
-        let w = UInt32(viewport.pixels.x), h = UInt32(viewport.pixels.y)
-        let output = try backend.createTexture(width: w, height: h, format: format.reference, usage: [.renderAttachment, .copySrc])
-        let multisample = samples > 1 ? try backend.createTexture(width: w, height: h, format: format.reference,
-            usage: .renderAttachment, sampleCount: UInt32(samples)) : nil
-        let encoder = try backend.createCommandEncoder()
-        let pass = try encoder.beginRenderPass(colorView: (multisample ?? output).createView(),
-            resolveTargetView: multisample != nil ? output.createView() : nil,
-            storeOp: multisample != nil ? .discard : .store, clearColor: GPUColor(r: 0.07, g: 0.09, b: 0.12, a: 0.5))
-        try renderer.render(list: list, pass: pass, viewportPx: (w, h), coordinateSpace: (viewport.logical.x, viewport.logical.y))
-        pass.end()
-        let row = UInt32((viewport.pixels.x * format.bytesPerPixel + 255) / 256 * 256)
-        let buffer = try backend.createBuffer(size: UInt64(row * h), usage: [.copyDst, .mapRead])
-        encoder.copyTextureToBuffer(source: output, destination: buffer, bytesPerRow: row, rowsPerImage: h, width: w, height: h)
-        backend.submit(try encoder.finish())
-        try backend.bufferMapSync(buffer)
-        defer { buffer.unmap() }
-        let pointer = try #require(buffer.getMappedRange())
-        var data = Data()
-        for y in 0..<viewport.pixels.y {
-            data.append(pointer.advanced(by: y * Int(row)).assumingMemoryBound(to: UInt8.self),
-                        count: viewport.pixels.x * format.bytesPerPixel)
-        }
-        return data
+        renderer: NativeDrawListRenderer? = nil) throws -> Data {
+        try nativeImage(list: list, format: format, samples: samples, viewport: viewport, renderer: renderer ?? reference).0
     }
 }
 
@@ -180,16 +142,15 @@ func nativeUIScene(_ context: NativeUIDrawTestContext) throws -> DrawList {
     try context.native.uploadFontAtlas(atlas, textureID: 1)
     #expect(!atlas.isDirty)
     if let alpha {
-        try alpha.pixels.withUnsafeBufferPointer { bytes in
-            try context.reference.registerAlphaTexture(id: 1, pixels: bytes.baseAddress!, width: UInt32(alpha.region.width), height: UInt32(alpha.region.height),
-                originX: UInt32(alpha.region.x), originY: UInt32(alpha.region.y), textureWidth: 512, textureHeight: 512)
-        }
+        var region = TextureUploadRegion(width: alpha.region.width, height: alpha.region.height)
+        region.origin = SIMD2(alpha.region.x, alpha.region.y)
+        try context.reference.registerTexture(id: 1, pixels: Data(alpha.pixels), size: SIMD2(512, 512), region: region, format: .r8Unorm)
     }
     if let color {
-        try color.pixels.withUnsafeBufferPointer { bytes in
-            try context.reference.registerColorTexture(id: TextureID(1).colorGlyphAtlasID, pixels: bytes.baseAddress!, width: UInt32(color.region.width), height: UInt32(color.region.height),
-                originX: UInt32(color.region.x), originY: UInt32(color.region.y), textureWidth: UInt32(color.textureWidth), textureHeight: UInt32(color.textureHeight))
-        }
+        var region = TextureUploadRegion(width: color.region.width, height: color.region.height)
+        region.origin = SIMD2(color.region.x, color.region.y)
+        try context.reference.registerTexture(id: TextureID(1).colorGlyphAtlasID, pixels: Data(color.pixels),
+            size: SIMD2(color.textureWidth, color.textureHeight), region: region, format: .rgba8Unorm)
     }
     // Retain unused vertex/index prefixes, exercising firstIndex and packed stride.
     let prefix = DrawList(); prefix.addRect(UIRect(x: -50, y: -50, width: 1, height: 1), color: .white)

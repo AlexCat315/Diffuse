@@ -6,7 +6,7 @@ import GuavaUIRuntime
 
 /// Bitmap image primitive backed by an owned CPU asset or a registered GPU texture.
 ///
-/// File images retain their decoded asset with the draw list. Native and WGPU
+/// File images retain their decoded asset with the draw list. NativeRHI
 /// renderers upload it on first use. Hosts can also supply a manually registered
 /// `TextureID`. Layout uses the explicit logical `width` and `height`.
 ///

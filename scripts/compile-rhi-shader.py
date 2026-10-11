@@ -94,7 +94,6 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
     version = run([compiler, '-version'])
     if version != SLANG_VERSION:
         raise ValueError(f'Expected Slang {SLANG_VERSION}, got {version!r}')
-    output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='guava-rhi-shader-') as directory:
         temp = Path(directory)
         code = temp / {'metal': 'shader.metal', 'spirv': 'shader.spv', 'dxil': 'shader.dxil'}[target]
@@ -157,9 +156,17 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
                           'pushConstants': [{k: v for k, v in c.items() if k != 'name'} for c in constants]},
             'compiler': f'Slang {version}',
         }
-        # Compilation must finish before an artifact is published.
-        output.with_suffix('.reflection.json').write_text(json.dumps(reflection, indent=2) + '\n')
-        output.write_text(json.dumps(artifact, indent=2) + '\n')
+        # Serialize and stage both outputs before replacing a previous artifact.
+        # The artifact is the commit point; interrupted writes never truncate it.
+        artifact_json = json.dumps(artifact, indent=2) + '\n'
+        reflection_json = json.dumps(reflection, indent=2) + '\n'
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.rhi-publish-', dir=output.parent) as staging:
+            staged = Path(staging)
+            (staged / 'artifact.json').write_text(artifact_json)
+            (staged / 'reflection.json').write_text(reflection_json)
+            os.replace(staged / 'reflection.json', output.with_suffix('.reflection.json'))
+            os.replace(staged / 'artifact.json', output)
     return artifact
 
 

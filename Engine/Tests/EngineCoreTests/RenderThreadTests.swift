@@ -36,9 +36,8 @@ struct RenderThreadTests {
         #expect(surface.region.size == packet.drawableSize)
         let reported = try #require(reportRecorder.snapshot().first?.viewportSurfaceState)
         #expect(reported == surface && reported.image === surface.image)
-        if case .native(let resource) = surface.image?.storage {
-            #expect(resource.texture == consumer.colorTexture)
-        } else { Issue.record("render thread must publish an owned native image") }
+        let resource = try #require(surface.image?.resource)
+        #expect(resource.texture == consumer.colorTexture)
     }
     @Test("RenderThread consumes indexed scene packets through NativeRenderer",
           .enabled(if: ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1",

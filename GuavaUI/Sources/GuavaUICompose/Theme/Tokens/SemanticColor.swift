@@ -42,8 +42,7 @@ public extension SemanticColorRef {
     /// higher alpha looked like a painted panel that happened to be
     /// translucent, not like glass.
     ///
-    /// The floor is legibility where the blur is absent (WGPU has no offscreen
-    /// pass): over pure white the panel still lands near 5.9:1 against label
+    /// The floor is legibility where the backdrop program is unavailable: over pure white the panel still lands near 5.9:1 against label
     /// text, so the material can carry its own labels either way.
     static let materialFloating = SemanticColorRef { $0.colors.surfaceFloating.multipliedAlpha(0.76) }
 

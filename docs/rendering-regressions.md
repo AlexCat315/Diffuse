@@ -19,7 +19,7 @@ glTF 导入遵循 `alphaMode`、`alphaCutoff` 和 `doubleSided`：默认 OPAQUE 
 
 ## 大场景设置
 
-`RenderSettings.enableFrustumCulling`、`enableMeshInstancing`、`enableDistanceLOD` 默认开启。视锥剔除适用于透视与正交相机，保守保留未知包围盒或骨骼模型。阴影独立绘制全部可投影物体，防止视口外物体的阴影消失。同一网格、子网格和材质的静态实例合并绘制，颜色可逐实例变化；透明、骨骼与软体实例独立绘制。渲染 bundle 使用同一批次，因此保留材质与实例化行为。
+`RenderSettings.enableFrustumCulling`、`enableMeshInstancing`、`enableDistanceLOD` 默认开启。视锥剔除适用于透视与正交相机，保守保留未知包围盒或骨骼模型。阴影独立绘制全部可投影物体，防止视口外物体的阴影消失。同一网格、子网格和材质的静态实例合并绘制，颜色可逐实例变化；透明、骨骼与软体实例独立绘制。性能面板使用 NativeRenderer 实际上报的网格批次数。
 
 LOD 需要提供作者制作的简化网格，避免自动减面破坏 UV、材质边界或模型轮廓。将这些网格注册到同一网格表，在运行时或场景文件配置距离：
 
@@ -36,12 +36,12 @@ ECS 使用 `RenderMeshComponent.levelsOfDetail`，编辑器场景 JSON 的 `rend
 
 ## 自动真实 GPU 回归
 
-新增 `.github/workflows/ci-gpu.yml`，覆盖透明混合、裁切深度与阴影、双面材质、实例化、LOD、阴影图集、骨骼、网格与正交视口，并上传像素 PPM、设备日志和 xUnit 报告。脚本检查 GPU 用例数量及跳过状态；无法获得显卡或编译管线会失败。
+`.github/workflows/ci-gpu.yml` 使用 NativeRHI，覆盖材质与阴影、实例化、骨骼、PBR、后处理、粒子模拟、编辑器网格、视口，以及 GuavaUI 多窗口和 HUD，并上传像素 PPM、设备日志和 xUnit 报告。脚本同时校验 Swift Testing 和 XCTest 的执行清单；缺项、跳过、无法获得显卡或编译管线都会失败。离线 shader 检查使用固定 Slang 2026.19，并检查已提交产物与反射是否一致。
 
 接入步骤：
 
 1. 在 GitHub 仓库 **Settings → Actions → Runners** 查看是否已有 runner。没有时，点击 **New self-hosted runner**，选择 macOS ARM64，按页面命令在带 Metal GPU 的 Mac 上注册。可以使用专用 Mac mini。
-2. 添加 `guava-gpu` 标签，安装 Swift 6.1 或更新版本、Xcode 命令行工具、CMake、Rust/Cargo、Python 3；确保 runner 账户可以使用 Metal。
+2. 添加 `guava-gpu` 标签，安装 Swift 6.4.0、对应的 Xcode 命令行工具、CMake、Python 3；确保 runner 账户可以使用 Metal。工作流校验并安装固定 Slang 离线编译器。
 3. 在 Actions 中手动运行 **GPU rendering regression**，确认测试及报告通过。
 4. 在 **Settings → Secrets and variables → Actions → Variables** 添加 `GUAVA_GPU_CI_ENABLED=true`。随后 main 分支相关推送和每日定时任务自动运行。变量未设置时自动任务跳过，避免没有机器时长时间排队。
 
@@ -53,4 +53,4 @@ ECS 使用 `RenderMeshComponent.levelsOfDetail`，编辑器场景 JSON 的 `rend
 bash scripts/test-gpu-regression.sh
 ```
 
-可以设置 `GUAVA_SWIFT_EXECUTABLE` 指定 Swift 路径，或用 `GUAVA_GPU_TEST_OUTPUT_DIR` 指定报告目录。
+可以设置 `GUAVA_SWIFT_EXECUTABLE` 指定 Swift 路径，或用 `GUAVA_GPU_TEST_OUTPUT_DIR` 指定报告目录。每次运行在该目录下建立独立的 `run-*` 子目录，保存日志与报告，避免使用旧报告满足清单检查。

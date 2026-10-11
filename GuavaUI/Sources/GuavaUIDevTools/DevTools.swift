@@ -2,7 +2,7 @@ import GuavaUIDevToolsProtocol
 import GuavaUIDevToolsScene
 import Foundation
 import Logging
-import RHIWGPU
+import NativeRHI
 import GuavaUIRuntime
 import EngineKernel
 
@@ -134,15 +134,6 @@ public final class DevTools {
         frameTapSink.deliver = nil
     }
 
-    /// Hook the FrameTap to the host's wgpu backend + draw list renderer.
-    /// Must be called after `WGPUBackend.initialize()` and before the
-    /// first `mirrorCapture(...)`.
-    public func attachFrameTap(backend: WGPUBackend, renderer: DrawListRenderer) {
-        guard FrameTap.isSupported else { return }
-        frameTap = FrameTap(sink: frameTapSink, backend: backend, renderer: renderer)
-    }
-
-    /// Hosts may provide an owned pixel capture using their selected renderer.
     public func attachFrameTap(capture: @escaping FrameTap.Capture, reset: @escaping () -> Void = {}) {
         guard FrameTap.isSupported else { return }
         frameTap = FrameTap(sink: frameTapSink, capture: capture, reset: reset)

@@ -2,7 +2,6 @@ import Foundation
 import NativeRHI
 import NativeRendererValidation
 @testable import RenderBackend
-import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 import XCTest
@@ -44,12 +43,12 @@ final class NativeParticleSimulationTests: XCTestCase {
         XCTAssertThrowsError(try NativePacketValidation.validate(packet))
     }
     #if os(macOS)
-    func testMetalPhysicsAndEventsMatchWGPUAcrossWorkgroups() throws { try physics(.metal) }
+    func testMetalPhysicsAndEventsAreWorkgroupInvariantAcrossWorkgroups() throws { try physics(.metal) }
     func testMetalResidencyResetFailedRecordingAndBoundedSnapshots() throws { try lifecycle(.metal) }
     func testMetalRendererPublishesSimulationEvents() throws { try rendererEvents(.metal) }
     #endif
     #if os(Windows) || os(Linux)
-    func testVulkanPhysicsAndEventsMatchWGPUAcrossWorkgroups() throws { try physics(.vulkan) }
+    func testVulkanPhysicsAndEventsAreWorkgroupInvariantAcrossWorkgroups() throws { try physics(.vulkan) }
     func testVulkanResidencyResetFailedRecordingAndBoundedSnapshots() throws { try lifecycle(.vulkan) }
     func testVulkanRendererPublishesSimulationEvents() throws { try rendererEvents(.vulkan) }
     #endif
@@ -73,9 +72,9 @@ final class NativeParticleSimulationTests: XCTestCase {
             collisionMode: .localPlane,collisionPlaneY: 0,collisionRestitution: 0.5,collisionDamping: 0.25)
     }
     private func physics(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
         let simulation = NativeParticleSimulation(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let comparison = NativeParticleSimulation(device: device)
         for (scenario,pair) in [(1,257),(37,257),(64,131),(255,257),(256,513)].enumerated() {
             var batch = makeBatch(group: pair.0,count: pair.1)
             if scenario%2 == 1 {
@@ -91,15 +90,19 @@ final class NativeParticleSimulationTests: XCTestCase {
             let update = try simulation.prepare(scene: scene,deltaTime: 0.2,elapsedTime: 1.7,into: commands)
             try device.submit(commands); simulation.commit(update); device.endFrame()
             let native = try XCTUnwrap(simulation.entries[.anonymous(0)]?.state)
-            let encoder = try reference.backend.createCommandEncoder()
-            let wgpu = try XCTUnwrap(reference.renderer.encodeParticleSimulationPass(encoder: encoder,batch: batch,deltaTime: 0.2,elapsedTime: 1.7)).resources
-            reference.backend.submit(try encoder.finish())
+            var comparisonBatch = batch
+            comparisonBatch.plan.workgroupSize = 64
+            let comparisonScene = RenderScene(camera: scene.camera, particleSimulationBatches: [comparisonBatch])
+            try device.beginFrame(); let expectedCommands = CommandBuffer()
+            let expectedUpdate = try comparison.prepare(scene: comparisonScene, deltaTime: 0.2, elapsedTime: 1.7, into: expectedCommands)
+            try device.submit(expectedCommands); comparison.commit(expectedUpdate); device.endFrame()
+            let expectedState = try XCTUnwrap(comparison.entries[.anonymous(0)]?.state)
             let rawStates = try nativeStates(device: device,state: native)
             for state in rawStates where state.positionLifetime.w == 0 {
                 XCTAssertTrue(withUnsafeBytes(of: state) { $0.allSatisfy { $0 == 0 } })
             }
             let actual = rawStates.filter { $0.positionLifetime.w > 0 }.sorted { $0.params.z < $1.params.z }
-            let expected: [GPUParticleSimulationState] = try wgpuRead(reference.backend,buffer: wgpu.stateBuffer,count: wgpu.capacity)
+            let expected: [GPUParticleSimulationState] = try nativeRead(device,buffer: expectedState.state,count: expectedState.capacity)
             let live = expected.filter { $0.positionLifetime.w > 0 }.sorted { $0.params.z < $1.params.z }
             XCTAssertEqual(actual.count,live.count)
             for (a,b) in zip(actual,live) {
@@ -108,12 +111,12 @@ final class NativeParticleSimulationTests: XCTestCase {
             }
             let snapshots = try simulation.drain(maxSnapshots: 1)
             let snapshot = try XCTUnwrap(snapshots.first)
-            let counters: [GPUParticleSimulationMetadata] = try wgpuRead(reference.backend,buffer: wgpu.metadataBuffer,count: 1)
+            let counters: [GPUParticleSimulationMetadata] = try nativeRead(device,buffer: expectedState.metadata,count: 1)
             let m = try XCTUnwrap(counters.first)
             XCTAssertEqual(snapshot.aliveParticleCount,Int(m.aliveCount)); XCTAssertEqual(snapshot.expiredParticleCount,Int(m.expiredCount))
             XCTAssertEqual(snapshot.collisionEventCount,Int(m.collisionCount)); XCTAssertEqual(snapshot.totalEventCount,Int(m.eventCount))
             XCTAssertEqual(snapshot.compactedParticleCount,Int(m.compactedCount))
-            let events: [GPUParticleSimulationEvent] = try wgpuRead(reference.backend,buffer: wgpu.eventBuffer,count: Int(m.eventCount))
+            let events: [GPUParticleSimulationEvent] = try nativeRead(device,buffer: expectedState.events,count: Int(m.eventCount))
             let ordered = events.map(\.record).sorted(by: eventOrder), records = snapshot.records.sorted(by: eventOrder)
             XCTAssertEqual(records.count,ordered.count)
             for (a,b) in zip(records,ordered) {
@@ -138,7 +141,7 @@ final class NativeParticleSimulationTests: XCTestCase {
         a.sourceIndex == b.sourceIndex ? a.trigger.rawValue < b.trigger.rawValue : a.sourceIndex < b.sourceIndex
     }
     private func lifecycle(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
         let simulation = NativeParticleSimulation(device: device)
         let a = EntityID(rawValue: 11), b = EntityID(rawValue: 22)
         let plan = ParticleEmitter(settings: .init {
@@ -197,7 +200,7 @@ final class NativeParticleSimulationTests: XCTestCase {
         XCTAssertTrue(try simulation.drain(maxSnapshots: Int.max).isEmpty)
     }
     private func rendererEvents(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
         let renderer = try NativeRenderer(device: device)
         var packet = MeshProbeScene.packet(size: .init(width: 64,height: 64))
         packet.scene.particleSimulationBatches = [makeBatch(group: 37,count: 3)]; packet.deltaTime = 0.2
@@ -222,14 +225,13 @@ final class NativeParticleSimulationTests: XCTestCase {
         try data.withUnsafeMutableBytes { try device.readBufferData(state.state,into: $0) }
         return data.withUnsafeBytes { raw in (0..<state.capacity).map { raw.loadUnaligned(fromByteOffset: $0*80,as: GPUParticleSimulationState.self) } }
     }
-    private func wgpuRead<T>(_ backend: WGPUBackend, buffer: GPUBuffer, count: Int) throws -> [T] {
+    private func nativeRead<T>(_ device: Device, buffer: Buffer, count: Int) throws -> [T] {
         guard count > 0 else { return [] }
-        let size = UInt64(count*MemoryLayout<T>.stride)
-        let readback = try backend.createBuffer(size: size,usage: [.copyDst,.mapRead]), encoder = try backend.createCommandEncoder()
-        encoder.copyBufferToBuffer(source: buffer,destination: readback,size: size); backend.submit(try encoder.finish())
-        try backend.bufferMapSync(readback,size: size); defer { readback.unmap() }
-        let pointer = try XCTUnwrap(readback.getMappedRange(size: size))
-        return (0..<count).map { pointer.loadUnaligned(fromByteOffset: $0*MemoryLayout<T>.stride,as: T.self) }
+        var data = Data(count: count * MemoryLayout<T>.stride)
+        try data.withUnsafeMutableBytes { try device.readBufferData(buffer, into: $0) }
+        return data.withUnsafeBytes { raw in
+            (0..<count).map { raw.loadUnaligned(fromByteOffset: $0 * MemoryLayout<T>.stride, as: T.self) }
+        }
     }
     private func compare(_ a: SIMD4<Float>, _ b: SIMD4<Float>, file: StaticString = #filePath, line: UInt = #line) {
         for axis in 0..<4 { XCTAssertEqual(a[axis],b[axis],accuracy: 0.0005,file: file,line: line) }

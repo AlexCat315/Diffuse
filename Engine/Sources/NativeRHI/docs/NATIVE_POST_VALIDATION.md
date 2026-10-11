@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRenderer r5 后处理与历史缓存
 
 NativeRenderer 已通过 NativeRHI 执行生产 r5 的 SSAO、SSR、TAA、Bloom、tonemap 与 FXAA。相同 RenderFramePlanner 决定执行顺序，PostEffectUniforms 直接提供两条 renderer 的生产参数；Metal 与 SPIR-V 离线产物一起更新。macOS 仅使用 Metal，Windows/Linux Vulkan 与 Windows DX12 的原生验证按用户要求暂缓。

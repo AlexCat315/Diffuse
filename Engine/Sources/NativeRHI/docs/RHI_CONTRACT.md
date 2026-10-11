@@ -4,7 +4,7 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-现有 renderer 默认仍使用 `RHIWGPU`。`RenderBackend.NativeEditorGridPass` 和 `NativeGridRenderer` 已接入 NativeRHI，复用真实 RenderPacket、相机和网格参数；EngineHost 可通过 `renderConsumer` 注入该独立 consumer。接入、画面与性能记录见 [网格 pass 验证](NATIVE_GRID_VALIDATION.md)。NativeRenderer 也已迁移静态场景的深度和不透明/遮罩几何 pass，资源重载与实例化通过本机验证，详见 [场景迁移验证](NATIVE_SCENE_VALIDATION.md)。PBR、级联/多光源阴影、HDR 天空与 tonemap 已接入，见 [PBR 验证](NATIVE_PBR_VALIDATION.md)。透明/蒙皮/变形网格、r5 post/history/cache、风格化及 CPU 粒子绘制也已通过本机对照。resident GPU 粒子物理与事件迁移见 [模拟验证](NATIVE_PARTICLE_SIMULATION_VALIDATION.md)；GPU 排序/appearance/实例转换、GuavaUI viewport、游戏内 HUD 及主/辅助窗口已接入可选 NativeRHI 路径，见 [UI 验证](NATIVE_UI_VALIDATION.md)。默认切换与 WGPU 依赖移除仍待完整性能门槛。
+NativeRHI 是唯一的桌面图形后端。EngineHost、编辑器、播放器、GuavaUI 主/辅助窗口和 HUD 共享 NativeRHI Device；无设备的 EngineHost 用于无 GPU 仿真。macOS 默认使用 Metal，Windows 优先使用 DX12、设备创建失败时尝试 Vulkan，Linux 默认使用原生 Vulkan。DX12 打包 shader 仍待 Windows 工具链生成。旧后端已移除；下列迁移报告及 benchmarks 保留当时的历史测量，不能作为当前可运行的对照命令。当前迁移结果见 [独立运行验证](validation/Standalone.md)。
 
 Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上原点、+Y 向下。Vulkan backend 通过负高度 viewport 统一这一约定，shader 不再自行翻转 Y。
 
@@ -15,7 +15,7 @@ Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上
 | Buffer / Texture / Sampler、上传与读回 | 本机验证 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
 | Raster / Compute、绑定、indirect、copy | 本机验证核心路径 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
 | 纹理局部上传、打包顶点颜色、MSAA color resolve | 本机验证；见 [UI 绘制验证](NATIVE_UI_VALIDATION.md) | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
-| GuavaUI Native DrawList 绘制器 | 30 组画面对照与资源生命周期验证；窗口宿主待接入 | SPIR-V 离线产物已生成，宿主与 GPU 待验证 | 共用绘制路径；DXIL 产物与 GPU 待验证 |
+| GuavaUI Native DrawList 绘制器 | 已接入主/辅助窗口与 HUD，绘制、MSAA、缩放和资源生命周期本机验证 | SPIR-V 离线产物已生成，GPU 待验证 | 共用绘制路径；DXIL 产物与 GPU 待验证 |
 | 窗口呈现与 resize | 本机验证 | Win32 / Xlib / Wayland 原生实现，待验证 | HWND swapchain 实现，待验证 |
 | 帧上传、延迟销毁、跨队列同步 | 本机验证 | 原生实现，独立 queue family 待验证 | 原生实现，待验证 |
 | Mesh / task | Mesh 已验证；task 关闭 | EXT 管线与直接 dispatch 实现，设备功能链控制，GPU 待验证 | MS / AS 管线与直接 dispatch 实现，GPU 待验证 |
@@ -102,6 +102,8 @@ python3 scripts/bootstrap-rhi-slang.py
 export SLANGC="$PWD/Engine/vendor/slang/bin/slangc"
 swift test --package-path Engine --filter 'NativeRHITests\.' --jobs 4
 python3 scripts/test-rhi-shader-toolchain.py
+python3 scripts/compile-native-renderer-shaders.py --check
+bash scripts/test-gpu-regression.sh
 python3 scripts/check-swift-maintainability.py
 ```
 

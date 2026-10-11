@@ -32,8 +32,7 @@ extension MetalDevice {
         layoutEntries: [BindingLayoutEntry],
         setEntries: [BindingSetEntry]
     ) throws {
-        // Resolve immutable bindings once, as WGPU's Metal BindGroup and
-        // slang-rhi's BindingData do. Encoding no longer looks up each resource.
+        // Resolve immutable bindings once. Encoding reuses the resolved resources.
         for entry in layoutEntries {
             if entry.type == .uniformBuffer || entry.type == .storageBuffer || entry.type == .accelerationStructure {
                 try rhiRequire(entry.slot < UInt32(kMetalVertexBufferBaseIndex),

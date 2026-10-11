@@ -88,7 +88,7 @@ public struct CornerRadiusModifier: ViewModifier {
 ///
 /// Pair it with a translucent fill (`.materialFrosted`) — the blur alone only
 /// softens what is underneath, the fill on top is what turns it into a
-/// surface. Renderers without an offscreen pass (WGPU) skip the blur, so the
+/// surface. Renderers without a backdrop program skip the blur, so the
 /// fill must stay readable without it.
 public struct BackdropBlurModifier: ViewModifier {
     public let radius: Float

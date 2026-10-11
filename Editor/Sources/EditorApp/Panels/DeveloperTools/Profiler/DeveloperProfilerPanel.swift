@@ -64,7 +64,7 @@ enum DeveloperPerformanceMonitorID: String, Hashable, CaseIterable {
     case gpuPresentMs
     case renderDrawCalls
     case renderPasses
-    case renderBundles
+    case renderMeshBatches
     case renderEncodeMs
     case particlesLive
     case particlesSpawnDrops
@@ -89,7 +89,7 @@ enum DeveloperPerformanceMonitorID: String, Hashable, CaseIterable {
             return .cpu
         case .gpuPresentMs:
             return .gpu
-        case .renderDrawCalls, .renderPasses, .renderBundles, .renderEncodeMs:
+        case .renderDrawCalls, .renderPasses, .renderMeshBatches, .renderEncodeMs:
             return .render
         case .particlesLive, .particlesSpawnDrops, .particlesGPUSimulated, .particlesRenderInstances:
             return .particles
@@ -122,8 +122,8 @@ enum DeveloperPerformanceMonitorID: String, Hashable, CaseIterable {
             return "Draw Calls"
         case .renderPasses:
             return "Passes"
-        case .renderBundles:
-            return "Render Bundles"
+        case .renderMeshBatches:
+            return "Mesh Batches"
         case .renderEncodeMs:
             return "Encode"
         case .particlesLive:
@@ -157,7 +157,7 @@ enum DeveloperPerformanceMonitorID: String, Hashable, CaseIterable {
             return .fps
         case .renderDrawCalls,
              .renderPasses,
-             .renderBundles,
+             .renderMeshBatches,
              .particlesLive,
              .particlesSpawnDrops,
              .particlesGPUSimulated,
@@ -172,7 +172,7 @@ enum DeveloperPerformanceMonitorID: String, Hashable, CaseIterable {
         switch self {
         case .renderDrawCalls,
              .renderPasses,
-             .renderBundles,
+             .renderMeshBatches,
              .particlesSpawnDrops,
              .consoleErrors,
              .consoleWarnings:
@@ -1231,7 +1231,7 @@ private struct DeveloperProfilerPhaseBreakdown: View {
                 DeveloperProfilerSection(title: "Render") {
                     DeveloperProfilerValueRow(label: "Draw Calls", value: "\(stats.drawCallCount)")
                     DeveloperProfilerValueRow(label: "Passes", value: "\(stats.passCount)")
-                    DeveloperProfilerValueRow(label: "Bundles", value: "\(stats.renderBundleCount)")
+                    DeveloperProfilerValueRow(label: "Mesh Batches", value: "\(stats.meshBatchCount)")
                     DeveloperProfilerValueRow(label: "Encode", value: developerProfilerFormatNs(renderStats.cpuEncodeNS))
                     DeveloperProfilerValueRow(label: "Present", value: developerProfilerFormatMs(stats.gpuPresentSeconds * 1000))
                 }
@@ -1787,8 +1787,8 @@ private func developerPerformanceMonitorSeries(
         return frameSeries(frameSamples) { Float($0.drawCallCount) }
     case .renderPasses:
         return frameSeries(frameSamples) { Float($0.passCount) }
-    case .renderBundles:
-        return frameSeries(frameSamples) { Float($0.renderBundleCount) }
+    case .renderMeshBatches:
+        return frameSeries(frameSamples) { Float($0.meshBatchCount) }
     case .renderEncodeMs:
         let fromFrameStats = frameSeries(frameSamples) { stats in
             Float(stats.cpuSkyboxEncodeNS + stats.cpuBaseEncodeNS + stats.cpuPostProcessEncodeNS) / 1_000_000

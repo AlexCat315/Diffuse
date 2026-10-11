@@ -16,7 +16,6 @@ runs:
       if: runner.os != 'macOS'
       with:
         swift-version: '6.4.0'
-    - uses: dtolnay/rust-toolchain@1.99.0
     - uses: actions/setup-python@v7.0.0
       with:
         python-version: '3.14.8'
@@ -34,8 +33,25 @@ runs:
         if not re.search(r"Swift version 6\.4(?:\.0)?(?:\s|$)", actual):
             raise SystemExit("Expected Swift 6.4.0")
         PY
-        rustc --version
-        cargo --version
         cmake --version
         ninja --version
         python --version
+
+    - name: Install native Vulkan headers and loader on Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
+    - name: Install pinned native Vulkan headers and loader on Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        python scripts/bootstrap-rhi-vulkan.py --destination "$RUNNER_TEMP/guava-vulkan-sdk"
+        echo "VULKAN_SDK=$RUNNER_TEMP/guava-vulkan-sdk" >> "$GITHUB_ENV"
+        echo "$RUNNER_TEMP/guava-vulkan-sdk/bin" >> "$GITHUB_PATH"
+    - name: Validate shader toolchain and GPU regression contracts
+      shell: bash
+      run: |
+        python scripts/test-rhi-shader-toolchain.py
+        python scripts/test-gpu-regression-verifier.py

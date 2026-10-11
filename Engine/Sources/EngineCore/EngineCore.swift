@@ -2,7 +2,6 @@ import EngineKernel
 import Foundation
 import NativeRHI
 import RenderBackend
-import RHIWGPU
 import SceneRuntime
 
 public enum TickPhase: CaseIterable, Sendable {
@@ -102,27 +101,16 @@ public final class EngineHost: @unchecked Sendable {
     private let state = LockedState(EngineHostState())
     private let timings = LockedState(FrameTimingLedger())
 
-    public let renderDevice: EngineRenderDevice
-
-    /// Compatibility access for callers that inspect the WGPU backend. Native
-    /// sessions return nil because they do not construct a WGPU device.
-    public var wgpuBackend: WGPUBackend? { renderDevice.wgpuBackend }
+    /// Shared rendering device; nil runs simulation without a GPU.
+    public let renderDevice: Device?
 
     private var packetBuffer: LatestValueBuffer<RenderPacket>?
     private var simulationThread: SimulationThread?
     private var renderThread: RenderThread?
 
-    public init(runtime: any EngineRuntime, renderDevice: EngineRenderDevice) {
+    public init(runtime: any EngineRuntime, renderDevice: Device? = nil) {
         self.runtime = runtime
         self.renderDevice = renderDevice
-    }
-
-    public convenience init(runtime: any EngineRuntime, wgpuBackend: WGPUBackend = WGPUBackend()) {
-        self.init(runtime: runtime, renderDevice: .wgpu(wgpuBackend))
-    }
-
-    public convenience init(runtime: any EngineRuntime, nativeDevice: Device) {
-        self.init(runtime: runtime, renderDevice: .native(nativeDevice))
     }
 
     public var lastTimings: PhaseTimings {
@@ -148,42 +136,21 @@ public final class EngineHost: @unchecked Sendable {
         runtime.initialize()
         kernel.withLock { $0.boot() }
 
-        if case .wgpu(let backend) = renderDevice {
-            do {
-                try backend.initialize()
-            } catch {
-                FileHandle.standardError.write(Data("[EngineHost] WGPU backend initialization failed: \(error)\n".utf8))
-            }
-        }
-
         let packetBuffer = LatestValueBuffer<RenderPacket>()
         self.packetBuffer = packetBuffer
 
         let consumer: (any RenderPacketConsumer)?
         if let renderConsumer {
             consumer = renderConsumer
-        } else {
-            switch renderDevice {
-            case .wgpu(let backend):
-                if let renderSurface {
-                    consumer = WGPURenderer(backend: backend, renderSurface: renderSurface)
-                } else if enableViewportSurface {
-                    consumer = WGPURenderer(backend: backend)
-                } else {
-                    consumer = nil
-                }
-            case .native(let device):
-                if renderSurface != nil || enableViewportSurface {
-                    do {
-                        consumer = try NativeRenderer(device: device, surface: renderSurface)
-                    } catch {
-                        FileHandle.standardError.write(Data("[EngineHost] NativeRHI renderer initialization failed: \(error)\n".utf8))
-                        consumer = nil
-                    }
-                } else {
-                    consumer = nil
-                }
+        } else if let device = renderDevice, renderSurface != nil || enableViewportSurface {
+            do {
+                consumer = try NativeRenderer(device: device, surface: renderSurface)
+            } catch {
+                FileHandle.standardError.write(Data("[EngineHost] NativeRHI renderer initialization failed: \(error)\n".utf8))
+                consumer = nil
             }
+        } else {
+            consumer = nil
         }
 
         let renderThread = consumer.map {
@@ -290,8 +257,7 @@ public final class EngineHost: @unchecked Sendable {
         }
     }
 
-    /// Shared editor UI backends outlive individual project runtimes.
-    public func shutdown(shutdownBackend: Bool = true) {
+    public func shutdown() {
         let shouldShutdown = state.withLock { state -> Bool in
             guard state.started else { return false }
             state.started = false
@@ -307,13 +273,6 @@ public final class EngineHost: @unchecked Sendable {
         packetBuffer = nil
 
         kernel.withLock { $0.shutdown() }
-        if shutdownBackend, let backend = renderDevice.wgpuBackend {
-            do {
-                try backend.shutdown()
-            } catch {
-                // Do not crash process during teardown.
-            }
-        }
         runtime.shutdown()
     }
 

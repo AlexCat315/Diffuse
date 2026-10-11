@@ -9,7 +9,7 @@ import Logging
 #if canImport(UniformTypeIdentifiers)
 import UniformTypeIdentifiers
 #endif
-import RHIWGPU
+import NativeRHI
 import GuavaUIRuntime
 
 /// Owned BGRA8 pixels supplied by a host renderer. Padding may follow each row.
@@ -34,10 +34,7 @@ public final class FrameTap {
     public static let isSupported = true
     public typealias Pixels = FrameTapPixels
     public typealias Capture = (DrawList, UInt32, UInt32, (width: Float, height: Float)) throws -> Pixels
-    private enum CaptureSource {
-        case wgpu(WGPUBackend, DrawListRenderer)
-        case host(Capture, () -> Void)
-    }
+
 
     public final class Sink: @unchecked Sendable {
         public init() {}
@@ -45,13 +42,9 @@ public final class FrameTap {
         public var deliver: ((MirrorFramePayload) -> Void)?
     }
 
-    /// wgpu requires `bytesPerRow` to be a multiple of this value when
-    /// copying texture → buffer.
-    private static let copyBytesPerRowAlignment: Int = 256
-
     private let sink: Sink
-    private let source: CaptureSource
-    private var captureRenderer: DrawListRenderer?
+    private let capturePixels: Capture
+    private let resetCapture: () -> Void
 
     private var enabled = false
     private var quality: Double = 0.7
@@ -59,14 +52,6 @@ public final class FrameTap {
     private var lastCaptureAt: TimeInterval = 0
 
     private var seq: UInt64 = 0
-    private var widthPx: UInt32 = 0
-    private var heightPx: UInt32 = 0
-    private var bytesPerRow: Int = 0
-
-    private var texture: GPUTexture?
-    private var textureView: GPUTextureView?
-    private var readback: GPUBuffer?
-
     #if canImport(Logging)
     private let log = Logger(label: "guava.devtools.frameTap")
     #endif
@@ -74,14 +59,11 @@ public final class FrameTap {
     private var consecutiveErrors: Int = 0
     private var capturesSinceStart: Int = 0
 
-    public init(sink: Sink, backend: WGPUBackend, renderer: DrawListRenderer) {
-        self.sink = sink
-        source = .wgpu(backend, renderer)
-    }
 
     public init(sink: Sink, capture: @escaping Capture, reset: @escaping () -> Void = {}) {
         self.sink = sink
-        source = .host(capture, reset)
+        capturePixels = capture
+        resetCapture = reset
     }
 
     public var isActive: Bool { enabled }
@@ -104,14 +86,7 @@ public final class FrameTap {
         #if canImport(Logging)
         log.info("mirror stop after \(capturesSinceStart) captures, errors=\(consecutiveErrors)")
         #endif
-        // Drop GPU resources so the next start() picks up the latest size.
-        texture = nil
-        textureView = nil
-        readback = nil
-        widthPx = 0
-        heightPx = 0
-        bytesPerRow = 0
-        if case .host(_, let reset) = source { reset() }
+        resetCapture()
     }
 
     /// Render the same draw list through the selected capture source and
@@ -161,19 +136,12 @@ public final class FrameTap {
         lastCaptureAt = now
 
         do {
-            let pixels: Pixels
-            switch source {
-            case .wgpu(let backend, let renderer):
-                pixels = try captureWGPU(backend: backend, renderer: renderer, drawList: drawList,
-                    captureWidthPx: captureWidthPx, captureHeightPx: captureHeightPx, logical: logical)
-            case .host(let capture, _):
-                pixels = try capture(drawList, captureWidthPx, captureHeightPx, logical)
-            }
+            let pixels = try capturePixels(drawList, captureWidthPx, captureHeightPx, logical)
             let height = Int(captureHeightPx)
             guard pixels.bytesPerRow >= Int(captureWidthPx) * 4,
                   pixels.bytesPerRow <= Int.max / height,
                   pixels.data.count >= pixels.bytesPerRow * height else {
-                throw WGPUBackendError.initFailed("mirror pixel buffer is incomplete")
+                throw RHIError.invalidArgument("mirror pixel buffer is incomplete")
             }
             let jpeg = pixels.data.withUnsafeBytes { bytes in
                 bytes.baseAddress.flatMap { encodeJPEG(bgra: $0, width: Int(captureWidthPx), height: height,
@@ -200,98 +168,13 @@ public final class FrameTap {
         } catch {
             consecutiveErrors &+= 1
             // Log the first 3 failures and every 60th after that to avoid
-            // flooding the host log when wgpu is in a permanently bad state.
+            // flooding the host log when capture keeps failing.
             if consecutiveErrors <= 3 || consecutiveErrors % 60 == 0 {
                 #if canImport(Logging)
                 log.warning("mirror capture failed (#\(consecutiveErrors)): \(error)")
                 #endif
             }
         }
-    }
-
-    private func captureWGPU(backend: WGPUBackend, renderer: DrawListRenderer, drawList: DrawList,
-        captureWidthPx: UInt32, captureHeightPx: UInt32, logical: (width: Float, height: Float)) throws -> Pixels {
-        try ensureResources(backend: backend, widthPx: captureWidthPx, heightPx: captureHeightPx)
-        if captureRenderer == nil {
-            captureRenderer = try renderer.makeSibling(
-                format: .bgra8Unorm,
-                sampleCount: 1
-            )
-        } else if let captureRenderer {
-            try captureRenderer.synchronizeTextures(from: renderer)
-        }
-        guard let captureRenderer, let texture, let textureView, let readback else { throw WGPUBackendError.initFailed("mirror resources unavailable") }
-
-        let encoder = try backend.createCommandEncoder()
-        let pass = try encoder.beginRenderPass(
-            colorView: textureView,
-            loadOp: .clear,
-            storeOp: .store,
-            clearColor: .black
-        )
-        try captureRenderer.render(
-            list: drawList,
-            pass: pass,
-            viewportPx: (captureWidthPx, captureHeightPx),
-            coordinateSpace: (logical.width, logical.height)
-        )
-        pass.end()
-        encoder.copyTextureToBuffer(
-            source: texture,
-            destination: readback,
-            bufferOffset: 0,
-            bytesPerRow: UInt32(bytesPerRow),
-            rowsPerImage: captureHeightPx,
-            width: captureWidthPx,
-            height: captureHeightPx
-        )
-        let commandBuffer = try encoder.finish()
-        backend.submit(commandBuffer)
-
-        try backend.bufferMapSync(readback)
-        defer { readback.unmap() }
-        guard let mapped = readback.getMappedRange(offset: 0, size: UInt64(bytesPerRow * Int(captureHeightPx))) else {
-            throw WGPUBackendError.initFailed("mirror buffer mapping unavailable")
-        }
-
-        return Pixels(data: Data(bytes: mapped, count: bytesPerRow * Int(captureHeightPx)), bytesPerRow: bytesPerRow)
-    }
-
-    // MARK: - Resources
-
-    private func ensureResources(backend: WGPUBackend, widthPx: UInt32, heightPx: UInt32) throws {
-        if texture != nil, self.widthPx == widthPx, self.heightPx == heightPx {
-            return
-        }
-        // Recreate at the new size.
-        let stride = Self.alignedRowStride(width: Int(widthPx))
-        let tex = try backend.createTexture(
-            width: widthPx,
-            height: heightPx,
-            format: .bgra8Unorm,
-            usage: [.renderAttachment, .copySrc],
-            mipLevels: 1,
-            depthOrLayers: 1
-        )
-        let view = try tex.createView()
-        let buf = try backend.createBuffer(
-            size: UInt64(stride * Int(heightPx)),
-            usage: [.mapRead, .copyDst],
-            mappedAtCreation: false
-        )
-        self.texture = tex
-        self.textureView = view
-        self.readback = buf
-        self.widthPx = widthPx
-        self.heightPx = heightPx
-        self.bytesPerRow = stride
-    }
-
-    private static func alignedRowStride(width: Int) -> Int {
-        let raw = width * 4
-        let remainder = raw % copyBytesPerRowAlignment
-        if remainder == 0 { return raw }
-        return raw + (copyBytesPerRowAlignment - remainder)
     }
 
     private static func targetSize(logical: (width: Float, height: Float)) -> (width: UInt32, height: UInt32) {
@@ -312,8 +195,7 @@ public final class FrameTap {
                             bytesPerRow: Int,
                             quality: Double) -> Data? {
         let totalBytes = bytesPerRow * height
-        // CGDataProvider needs ownership of a copy because the wgpu mapping
-        // is unmapped synchronously after this function returns.
+        // CGDataProvider needs ownership of a copy for the duration of image encoding.
         let copy = Data(bytes: bgra, count: totalBytes)
         guard let provider = CGDataProvider(data: copy as CFData) else { return nil }
 
@@ -377,7 +259,6 @@ public final class FrameTap {
 
     public var isActive: Bool { false }
 
-    public init(sink: Sink, backend: WGPUBackend, renderer: DrawListRenderer) {}
     public init(sink: Sink, capture: @escaping Capture, reset: @escaping () -> Void = {}) {}
     public func start(fps: Double, quality: Double) {}
     public func stop() {}
