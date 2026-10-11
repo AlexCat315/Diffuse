@@ -23,7 +23,7 @@ extension DrawList {
         let blur = max(0, layer.blur)
         let hole = frostedRect.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
         paintSteps(layer, rect: rect, cornerRadius: cornerRadius,
-                   opacity: opacity, count: Self.stepCount(for: blur), hole: hole)
+                   opacity: opacity, count: Self.stepCount(for: layer), hole: hole)
     }
 
     /// Paint a layered shadow: ambient halo first, key shadow over it.
@@ -37,33 +37,47 @@ extension DrawList {
 
     // MARK: - Cheap blur
 
-    /// Steps dense enough that one rect's hard edge is a fraction of a pixel
-    /// from the next.
+    /// Steps dense enough that a single step's alpha rounds to nothing.
     ///
-    /// Each step is an opaque-edged rect, so the gap between them is what shows
-    /// as banding, and the height of each ridge is one step's alpha — which
-    /// shrinks with the step count but not with the blur. A 6pt key shadow
-    /// looks worse than a 24pt halo at the same step count, so the count
-    /// follows the blur: roughly one rect every eighth of a pixel.
+    /// Each step is an opaque-edged rect, so what shows as banding is the alpha
+    /// *one* step adds, and that scales with the layer's alpha — not with the
+    /// blur. Counting by blur (one rect per eighth of a pixel) put even a faint
+    /// 24pt halo at the ceiling: ~190 quads per component, spent on gradient
+    /// resolution far below the 8-bit floor, which is most of what made a
+    /// screenful of components slow to record.
     ///
-    /// The densest rect — the one hugging the surface — carries the most alpha,
-    /// so its edge is the tallest ridge and the one that has to be paid for:
-    /// halving the step spacing is what takes its edge under the 8-bit floor.
-    private static func stepCount(for blur: Float) -> Int {
-        guard blur > 0 else { return 1 }
-        return max(2, min(128, Int((blur * 8).rounded(.up)) + 1))
+    /// Steps are spread so each one adds the *same* alpha (see `paintSteps`),
+    /// which makes the tallest step `alpha * 1.3 / count`. Spacing them evenly
+    /// in `t` instead concentrates the tolerance on the inner edge and costs
+    /// roughly three times as many rects for the same gradient — ~190 per
+    /// component, which is what made recording a screenful slow.
+    private static func stepCount(for layer: SurfaceShadow) -> Int {
+        let alpha = max(0, layer.color?.a ?? 0)
+        guard alpha > 0, layer.blur > 0 else { return 1 }
+        return max(2, min(128, Int((alpha * Self.weightSpan / Self.bandTolerance).rounded(.up)) + 1))
     }
+
+    /// `(t + 0.15)^2` over `t` in 0...1 — the range each step's alpha is drawn
+    /// from, and the span that gets divided into equal alpha steps.
+    private static let weightSpan: Float = 1.3225 - 0.0225
+
+    /// How much of a colour step one rect may add before it can be seen,
+    /// in units of `1/255`.
+    private static let bandTolerance: Float = 1.5 / 255
 
     private func paintSteps(_ layer: SurfaceShadow, rect: UIRect, cornerRadius: Float,
                             opacity: Float, count: Int, hole: UIRect?) {
         let blur = max(0, layer.blur)
         let radius = max(cornerRadius, 0)
         for i in 0..<count {
-            let t = Float(i) / Float(max(1, count - 1))
+            // Equal steps in the weight, not in `t`: the profile is (t + 0.15)^2,
+            // so equal alpha steps mean `t` bunches towards the surface where
+            // the profile is steep and spreads out over the faint outer fringe.
+            let weight = 0.0225 + Self.weightSpan * (Float(i) / Float(max(1, count - 1)))
+            let t = weight.squareRoot() - 0.15
             let inset = -blur * (1 - t)
             // Largest rect is the faint outer edge; smaller rects build density
             // towards the surface, not the other way around.
-            let weight = blur > 0 ? (t + 0.15) * (t + 0.15) : 1
             let alpha = layer.color!.a * weight / Float(count)
             let stepColor = Color(r: layer.color!.r, g: layer.color!.g, b: layer.color!.b,
                                   a: min(1, alpha) * opacity)
