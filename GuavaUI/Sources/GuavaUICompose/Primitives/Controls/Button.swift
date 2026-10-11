@@ -156,6 +156,13 @@ public extension Button where Label == ButtonIcon {
     }
 }
 
+/// Internal presentation semantics shared by action controls such as Link.
+/// A provider survives child-only recomposition, unlike a one-time node write.
+enum ActionControlAccessibility {
+    static let role = CompositionLocal<AccessibilityRole>(defaultValue: .button)
+    static let value = CompositionLocal<String>(defaultValue: "")
+}
+
 // MARK: - StatefulButton
 
 /// User-view wrapper around `ButtonHost` that keeps the compatibility state
@@ -248,8 +255,9 @@ struct ButtonHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.isFocusable = isEnabled
-        node.accessibility = AccessibilitySemantics(.button) {
+        node.accessibility = AccessibilitySemantics(node.compositionValue(of: ActionControlAccessibility.role)) {
             $0.state.isEnabled = isEnabled; $0.state.isSelected = isSelected
+            $0.value = node.compositionValue(of: ActionControlAccessibility.value)
             $0.help = tooltip ?? ""; $0.combinesChildren = true
         }
         node.accessibilityActions = AccessibilityActions()
@@ -317,6 +325,12 @@ struct ButtonHost: _PrimitiveView {
         let down = onDown
         let pressChange = onPressChange
         let activate = action
+        node.attachments[PointerCaptureAttachmentKey.didLoseCapture] = { [weak node] in
+            guard let node else { return }
+            node.attachments.removeValue(forKey: ButtonHost.activePressKey)
+            setButtonInteraction(node, key: ButtonHost.pressedKey, value: false,
+                                 requiresRecompose: requiresInteractionRecompose, onChange: pressChange)
+        } as () -> Void
         registry.setHover(node) { phase in
             node.firstResource(TooltipSession.self)?.setHovered(phase == .enter)
             switch phase {
