@@ -116,7 +116,7 @@ final class NativeUIBackdropPass {
     /// luma, then the whole result up a little, which keeps the frost visible
     /// over any backdrop.
     private static let saturation: Float = 1.8
-    private static let lift: Float = 0.06
+    private static let lift: Float = 0.08
 
     private struct Params {
         var uvTransform: SIMD4<Float>  // xy = scale, zw = offset
