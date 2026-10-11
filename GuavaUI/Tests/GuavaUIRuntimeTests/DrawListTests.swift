@@ -118,21 +118,33 @@ struct DrawListTests {
         #expect(clip == UIRect(x: 50, y: 50, width: 50, height: 50))
     }
 
-    @Test("Rounded rect emits anti-aliased centre quads, edges, and corner fans")
+    @Test("Rounded fill coverage stays within half a physical pixel and preserves source alpha")
     func roundedRectGeometry() {
-        let list = DrawList()
-        list.addRoundedRect(UIRect(x: 0, y: 0, width: 100, height: 60), radius: 10, color: .white)
-
-        let expected = roundedRectGeometryCounts(radii: [11, 12, 10])
-        #expect(list.vertices.count == expected.vertices)
-        #expect(list.indices.count == expected.indices)
-        // All in one batch (same textureID/scissor).
-        #expect(list.batches.count == 1)
-        #expect(list.batches[0].indexCount == UInt32(expected.indices))
-
-        #expect(list.vertices.contains { $0.color == Color.white.rgba8 })
-        #expect(list.vertices.contains { $0.color == Color.white.multipliedAlpha(0.22).rgba8 })
-        #expect(list.vertices.contains { $0.color == Color.white.multipliedAlpha(0.08).rgba8 })
+        for scale: Float in [1, 1.5, 2, 3] {
+            let list = DrawList()
+            list.pixelScale = scale
+            let tint = Color(red: 40, green: 90, blue: 180, alpha: 128)
+            list.addRoundedRect(UIRect(x: 0, y: 0, width: 100, height: 60), radius: 10, color: tint)
+            #expect(list.batches.count == 1)
+            #expect(list.batches[0].indexCount == UInt32(list.indices.count))
+            #expect(list.indices.allSatisfy { $0 < list.vertices.count })
+            #expect(list.vertices.allSatisfy { ($0.color >> 24) == 128 || ($0.color >> 24) == 0 })
+            let left = list.vertices.map(\.posX).min()!
+            let right = list.vertices.map(\.posX).max()!
+            #expect(abs(left + 0.5 / scale) < 0.001)
+            #expect(abs(right - 100 - 0.5 / scale) < 0.001)
+            // No triangle interiors overlap: translucent fills must be painted
+            // once, not made more opaque by the antialiasing implementation.
+            let area = stride(from: 0, to: list.indices.count, by: 3).reduce(Float.zero) { sum, index in
+                let a = list.vertices[Int(list.indices[index])]
+                let b = list.vertices[Int(list.indices[index + 1])]
+                let c = list.vertices[Int(list.indices[index + 2])]
+                return sum + abs((b.posX - a.posX) * (c.posY - a.posY) - (b.posY - a.posY) * (c.posX - a.posX)) * 0.5
+            }
+            let outerRadius: Float = 10 + 0.5 / scale
+            let expectedArea = (100 + 1 / scale) * (60 + 1 / scale) - (4 - Float.pi) * outerRadius * outerRadius
+            #expect(abs(area - expectedArea) < 0.5)
+        }
     }
 
     @Test("addText produces glyph quads with atlas UVs")
@@ -254,17 +266,4 @@ struct DrawListTests {
         #expect(source.indices.count == 6)
     }
 
-    private func roundedRectGeometryCounts(radii: [Float]) -> (vertices: Int, indices: Int) {
-        radii.reduce(into: (vertices: 0, indices: 0)) { result, radius in
-            let segments = cornerSegmentCount(radius: radius)
-            result.vertices += 12 + 4 * (segments + 2)
-            result.indices += 18 + 4 * segments * 3
-        }
-    }
-
-    private func cornerSegmentCount(radius: Float) -> Int {
-        let quarterArc = (.pi / 2) * max(0, radius)
-        let estimated = Int(ceil(quarterArc / 0.8))
-        return max(10, min(48, estimated))
-    }
 }
