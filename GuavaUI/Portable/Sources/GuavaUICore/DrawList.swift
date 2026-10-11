@@ -825,18 +825,3 @@ private func intersect(_ a: UIRect, _ b: UIRect) -> UIRect {
     return UIRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
 }
 
-public extension Float {
-    /// Round a *translation* onto the physical pixel grid.
-    ///
-    /// Snapping a rectangle is not enough when the whole subtree is translated
-    /// first: a scroll offset is continuous, so `origin - contentOffset` puts
-    /// every edge and every glyph on a fraction of a pixel, and the snapping
-    /// done inside the draw list is undone by the translation. Text then
-    /// resamples on every frame of a scroll, and hairlines jitter between two
-    /// half-covered pixels.
-    @inline(__always)
-    func snappedToPixel(scale: Float) -> Float {
-        guard scale > 0 else { return self }
-        return (self * scale).rounded() / scale
-    }
-}
