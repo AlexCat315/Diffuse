@@ -3,16 +3,60 @@ import GuavaUIRuntime
 
 struct AccordionStory: View {
     let options: GalleryOptions
-    @State private var expanded: Set<String> = ["overview"]
+    @State private var expanded: Set<String> = ["project"]
     @State private var multiple = false
+    @State private var reduceMotion = false
+    @State private var project: TextBuffer = "Guava Studio"
+    @State private var autosave = true
+    @State private var diagnostics = false
     var body: some View {
-        StorySection("Grouped disclosures", "Arrows move between headers. Return or Space expands a section. Switching the mode changes whether several sections may remain open.") {
-            Row(alignment: .center, spacing: 8) { Checkbox(isOn: $multiple); Text("Allow multiple sections").font(.caption) }
+        StorySection("Project preferences", "Up / Down and Home / End move between headers. Return or Space expands a section. Try reversing an animation or changing the scale while it is open.") {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) {
+                Row(alignment: .center, spacing: 8) {
+                    Checkbox(isOn: Binding(get: { multiple }, set: {
+                        multiple = $0
+                        if !$0 && expanded.count > 1 { expanded = ["project"] }
+                    }), isEnabled: options.isEnabled).debugName("accordion-multiple")
+                    Text("Multiple sections").font(.caption)
+                }
+                Row(alignment: .center, spacing: 8) {
+                    Checkbox(isOn: $reduceMotion, isEnabled: options.isEnabled).debugName("accordion-reduced-motion")
+                    Text("Reduce motion").font(.caption)
+                }
+                Button(expanded.isEmpty ? "Open project" : "Collapse all", isEnabled: options.isEnabled) {
+                    expanded = expanded.isEmpty ? ["project"] : []
+                }.buttonStyle(.ghost).debugName("accordion-collapse-all")
+            }
             Accordion([
-                AccordionItem("overview", "Overview") { Text("Authored expansion is owned by the caller.").font(.body) },
-                AccordionItem("details", "Details") { Text("Expanded content uses the shared visibility and focus lifecycle.").font(.body) },
-                AccordionItem("unavailable", "Unavailable", isEnabled: false) { EmptyView() }
-            ], expanded: $expanded) { $0.allowsMultiple = multiple; $0.isEnabled = options.isEnabled }.frame(width: 520)
+                AccordionItem("project", "Project") {
+                    Box(direction: .column, alignItems: .stretch, spacing: 12) {
+                        Text("Keep the project name and preferences together. Editing stays caller-owned when a section closes.")
+                            .foregroundColor(.onSurfaceMuted)
+                        TextField("Project name", text: $project) { $0.behavior.disabled = !options.isEnabled }
+                            .debugName("accordion-project-name")
+                        Row(alignment: .center, spacing: 10) {
+                            Checkbox(isOn: $autosave, isEnabled: options.isEnabled)
+                            Text("Save changes automatically")
+                        }
+                    }
+                },
+                AccordionItem("diagnostics", "Diagnostics & activity") {
+                    Box(direction: .column, alignItems: .stretch, spacing: 12) {
+                        Row(alignment: .center, spacing: 10) {
+                            Checkbox(isOn: $diagnostics, isEnabled: options.isEnabled).debugName("accordion-diagnostics")
+                            Text("Include diagnostic details")
+                        }
+                        Text(diagnostics ? "Verbose diagnostics enabled. Render timing and asset events appear in the project log." : "Only warnings and errors are recorded.")
+                            .foregroundColor(.onSurfaceMuted)
+                        Alert("Everything is up to date", message: "Your project has no pending imports.", tone: .success)
+                    }
+                },
+                AccordionItem("unavailable", "Team permissions · unavailable", isEnabled: false) { EmptyView() }
+            ], expanded: $expanded) {
+                $0.allowsMultiple = multiple; $0.isEnabled = options.isEnabled
+            }.reducedMotion(reduceMotion).frame(minWidth: 0, maxWidth: 680).debugName("accordion-preview")
+            Text("\(expanded.count) sections open · \(autosave ? "Autosave on" : "Autosave off")")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }
 }

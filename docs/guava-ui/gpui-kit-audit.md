@@ -66,7 +66,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | GPUI Kit Story | GuavaUI 对应 | 评估与仍有差距的部分 |
 | --- | --- | --- |
 | Welcome | Introduction | 已有独立总览和导航 |
-| Accordion | Accordion / DisclosureGroup | 已有受控单开/多开、禁用、组内键盘焦点与展开语义；仍需更多视觉和动画验证 |
+| Accordion | Accordion / DisclosureGroup | 受控单开/多开、禁用、垂直组内键盘焦点、稳定展开语义；本轮补自然高度、收起动画测量、减少动态效果与可编辑示例 |
 | Alert | Alert | 已有状态色、样式、图标、关闭和泛型操作槽；旧记录“无操作槽”错误。尚缺动态公告/live-region 语义及窄宽度长内容专项验收 |
 | AlertDialog | AlertDialog | 已有确认/取消、危险操作、提交中禁用及关闭策略；需继续验证业务异步场景 |
 | Attachment | — | 缺少附件展示、上传状态与操作组件 |
@@ -80,7 +80,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | Chart | MonitorChart / Sparkline / BarChart | 基础监控图；缺分类坐标、图例、饼图、堆叠与复杂交互 |
 | Checkbox | Checkbox | 半选、禁用清理、拖出取消、辅助功能角色/动作已有；关联标签通过 FieldLabel/Form 提供 |
 | Clipboard | ClipboardHolder | 部分；平台适配器存在，无独立复制组件/反馈 |
-| Collapsible | DisclosureGroup | caller-owned 展开、动画与 expanded 辅助功能语义已有 |
+| Collapsible | DisclosureGroup | caller-owned 展开；标题随文字/图标增长，内容按自然高度收起，反向复用未卸载子树，展开语义经焦点重组仍稳定 |
 | ColorPicker | ColorField | 部分；RGBA/Hex 存在，无 HSV 面板、取色器等完整选择器 |
 | Combobox | Combobox | 受控选择、Unicode 搜索、清空、键盘高亮/确认已有；缺多选和异步选项协议 |
 | Command | CommandPalette | 原已有可复用面板，旧记录错误。本轮统一搜索投影/显示/选择/滚动，修复大小写、宽字符/重音归一化、重复分组和 PageUp 越界，保留输入焦点。仍缺内联 Command、异步 query 协议、可配置 header/footer/empty 视图及大结果集窗口化 |
@@ -125,7 +125,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | Shell | — | 缺 GPUI Shell 那样的 UI JavaScript 扩展层；引擎脚本运行时不是等价物 |
 | Sheet | Sheet | 四侧放置/大小、各自边缘进入/退出、模态焦点与恢复已有；四方向生命周期测试和原生顶部/右侧展示已验证 |
 | Shimmer | — | 缺少流光占位 |
-| Sidebar | Sidebar | 公开受控导航、分组、header/footer、禁用、Badge 与组内焦点；画廊已复用 |
+| Sidebar | Sidebar | 原生图标与开放尺寸角色、混合项对齐、长标题换行、徽标、独立头尾插槽、禁用/选中/hover/pressed/键盘焦点；默认图标随文字缩放，键盘显露滚动项。缺纯图标折叠、嵌套菜单、项级操作和任意前后槽位 |
 | Skeleton | Skeleton | 原已有形状/样式/动画配置组、节点时钟和减少动画，只缺独立画廊页。本轮补真实 loading/content 切换示例及停用/恢复/卸载测试。脉冲占位不等同 Shimmer |
 | Slider | Slider | 本次补方向键/Home/End、禁用清理、只响应左键；缺范围双滑块/刻度 |
 | Speech | — | 缺少语音输入组件 |
@@ -185,3 +185,29 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 4. 继续补齐 Attachment、Bubble/Message、MessageScroller、OtpInput、DescriptionList、DropdownButton、Shimmer、Questionnaire 等组件，以及 Diff/富文本/复杂图表。Carousel、Command、HoverCard、Skeleton 已存在，Stepper 本轮新增；这些仍有明确缺口，不能再次把它们简单列为“没有”或“已完全完成”。
 
 已有测试验证本仓库行为，不是上游性能或品质等价证明。缺失/部分项继续保持明确，避免外观占位或仅注册 Story 就宣布完成。
+
+
+### 后续修正：图标缩放与折叠容器（2026-10-11）
+
+实际代码确认，上轮 TextScaler 只影响文字；Icon / ButtonIcon 没有消费它。这不是字体渲染问题。本轮图标语义角色、任意数值、自定义角色及三种 ButtonIcon 来源默认统一随 TextScaler 缩放，提供 Theme 全局策略与 `.iconScaling(.fixed / .factor(...))` 局部覆盖。SVG 本身与外部布局槽分开，避免 `.frame` 将小图标强行撑大或改变比例；图标按钮采用对称留白、正方形最小点击区，loading 替换图标并保留辅助功能名称。
+
+菜单选择槽、Stepper 标记及垂直连线、Timeline 轨道、NumberField 步进按钮、DatePicker 触发器和 Panel 标题同步调整。Tree 的虚拟化行高、缩进、箭头槽、拖动/命中几何使用同一份解析结果。固定尺寸 Avatar 的 fallback 作为图片内容保持固定比例。
+
+AnimatedVisibility 原先通过 `node.children.first.frame.height` 读取高度，遇到透明包装节点时会得到 0，使部分布局只淡出、不收起。现在测量真实布局子节点，并使完整内容在裁剪容器中保持自然高度；测试覆盖途中增高、缩短、反向、减少动态效果立即到终点、完成回调去重及卸载清理。浮层继承图标策略和减少动态效果；减少动态效果时不保留退出动画。
+
+Accordion / DisclosureGroup 去掉标题固定高度，保持 caller-owned 展开；Accordion 的 Up / Down / Home / End 从实际焦点出发，跳过禁用项，展开独立于焦点。组内普通编辑控件保留自己的按键。示例重写为项目设置：可编辑名称、自动保存、诊断信息、多开/单开与减少动态效果。
+
+这些修正不代表所有历史控件已经通过 200%：Calendar 日期格、CommandPalette 行预算、PropertyGrid 固定行槽、任意高度虚拟列表，以及通用外部 accessibility modifier 的子重组覆盖问题仍需分别处理。
+
+
+### 后续修正：原生 SidebarItem 图标（2026-10-11）
+
+用户发现的缺口经实际代码确认：旧 SidebarItem 只有 title/badge/isEnabled，没有 icon API。本轮增加 BundleImageResource 图标与开放的 iconSize 角色；同组按最大图标宽度保留槽位，文字项保留对齐位置，徽标不挤入标题，长标题按可用宽度换行。图标继承每一行的主题前景色、资源替换和缩放策略。行高保留 38pt 下限，按放大后的内容自然增长。
+
+独立 Box 包装 header/footer，修复多 View 插槽在动态缩放后相互覆盖；目的地仍单独滚动。Up/Down/Home/End 从实际焦点移动，跳过禁用项，更新唯一 Tab 停靠点，并通过 ScrollView 的真实运动控制器显露目标，同步滚动绑定。初始/外部选择会在本侧边栏中显露一次，不会在每帧拉回用户滚动。辅助功能保留完整标题、徽标 value、选中和启用状态，焦点/hover 重组不会覆盖这些语义。框架按 Items / Sidebar / Destination 分离责任，未引入旧 API 别名。
+
+Gallery 主导航直接使用原生图标项；Sidebar 页重写为可操作的工作区导航，包含有/无图标混合、计数徽标、禁用长标题、图标/徽标开关以及响应选择的内容区域。测试覆盖动态 100%→200% 的尺寸、居中与对齐、长标题与徽标分离、浅深主题、键盘滚动、禁用点击、焦点语义以及多子视图头尾插槽。
+
+Sidebar 仍不能宣称与上游等价：折叠为纯图标、嵌套分支、上下文菜单、项级操作和自定义 leading/trailing View 是明确剩余项。[使用方法与边界](../components/sidebar.md)。
+
+原生 200% 检查另发现 Tree 示例直接固定 Tree 高度而没有滚动宿主，尾行会压到选择摘要。本轮改为有界 ScrollView，Tree 保留完整内容布局和统一缩放几何，补齐视口裁剪与摘要分离验证。

@@ -123,7 +123,7 @@ private struct _StatefulNumberField: View {
                                title: "Decrement",
                                isEnabled: canStepDown) { decrement() }
                 }
-                .frame(width: 22)
+                .frame(minWidth: 22)
             }
         )
     }
@@ -138,8 +138,7 @@ private struct _StatefulNumberField: View {
                action: action) {
             Icon(icon, size: .small, color: .onSurfaceVariant)
         }
-        .buttonStyle(.ghost)
-        .frame(height: 15)
+        .buttonStyle(NumberStepButtonStyle())
         .accessibility { $0.label = title }
     }
 
@@ -213,5 +212,16 @@ private struct _StatefulNumberField: View {
             out = min(maxValue, out)
         }
         return out
+    }
+}
+
+private struct NumberStepButtonStyle: ButtonStyle {
+    func makeBody(configuration c: ButtonStyleConfiguration) -> some View {
+        Box(direction: .row, alignItems: .center, justifyContent: .center) { AnyView(c.label) }
+            .padding(horizontal: 5, vertical: 1).frame(minHeight: 15)
+            .background(c.isPressed ? c.theme.colors.stateLayerPressed : c.isHovered ? c.theme.colors.stateLayerHover : .clear)
+            .cornerRadius(c.theme.radius.sm)
+            .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: 1)
+            .opacity(c.isEnabled ? 1 : 0.45)
     }
 }

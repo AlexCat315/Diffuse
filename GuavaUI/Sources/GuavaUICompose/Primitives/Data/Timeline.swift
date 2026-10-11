@@ -83,6 +83,7 @@ private struct _TimelineRow: View {
 
     var body: some View {
         ThemeReader { theme in
+            IconMetricsReader { metrics in
             Box(direction: .row, alignItems: .stretch, spacing: theme.spacing.sm) {
                 Box(direction: .column, alignItems: .center, spacing: 4) {
                     AnyView(node(theme))
@@ -93,7 +94,7 @@ private struct _TimelineRow: View {
                             .background(SemanticColorRef.border))
                     }
                 }
-                .frame(width: 22)
+                .frame(width: max(22, metrics.size(.medium)))
                 Column(alignment: .leading, spacing: 2) {
                     Row(alignment: .center, spacing: theme.spacing.sm) {
                         Text(event.title).font(.bodyStrong).foregroundColor(.onSurface)
@@ -109,6 +110,7 @@ private struct _TimelineRow: View {
                 .flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
             }
             .accessibility { $0.role = .listItem; $0.label = event.title; $0.help = event.detail }
+            }
         }
     }
 
