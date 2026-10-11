@@ -18,9 +18,9 @@ AppRoot().theme(theme)
 // 任意页面或子树可以 .theme(pageTheme)，不会修改旁边的主题。
 ```
 
-`.theme(theme)` 为普通 Text 和输入框提供 body 默认值；`Text(...).font(.body)` 显式读取当前主题的 body。组件或祖先上的显式字体/样式优先于默认值，最近的显式样式优先。直接使用未提供 Theme 的 Compose 时保留宿主 TextEnvironment 默认值。`Icon(resource)` 和图标按钮默认读取 icon.medium。框架控件中的普通方向/状态图标消费 small/medium 槽位。`IconTheme.replace` 一步替换资源，不递归追踪替换链。
+`.theme(theme)` 为普通 Text 和输入框提供 body 默认值；`Text(...).font(.body)` 显式读取当前主题的 body。组件或祖先上的显式字体/样式优先于默认值，最近的显式样式优先。直接使用未提供 Theme 的 Compose 时保留宿主 TextEnvironment 默认值。`Icon(resource)` 和图标按钮默认读取 icon.medium，并跟随最近 TextScaler 放大。框架控件中的普通方向/状态图标消费 small/medium 槽位。`IconTheme.replace` 一步替换资源，不递归追踪替换链。
 
-任意值仍可直接使用：`.font(.named("Menlo", size: 17))`、`.textStyle(TextStyleToken(...))`、`Icon(resource, size: 31)`、`.padding(19)`、`.cornerRadius(13)`。显式字体族优先于主题字体族；仅指定 `.font(.system(size: 17))` 时仍继承主题的普通字体族，等宽槽位不受普通字体族覆盖。系统 fallback 继续处理主字体缺少的 grapheme。
+任意值仍可直接使用：`.font(.named("Menlo", size: 17))`、`.textStyle(TextStyleToken(...))`、`Icon(resource, size: 31)`（缩放前逻辑点）、`.padding(19)`、`.cornerRadius(13)`。显式字体族优先于主题字体族；仅指定 `.font(.system(size: 17))` 时仍继承主题的普通字体族，等宽槽位不受普通字体族覆盖。系统 fallback 继续处理主字体缺少的 grapheme。
 
 只有字号覆盖而没有显式行高时，主题默认 body 行高按字号比例计算，避免大字号被固定的默认行高压住。显式 `.lineHeight(...)` 和语义 TextStyleToken 携带的行高保持其优先级；需要完全指定排版时直接传 `.textStyle(...)`。
 
@@ -53,11 +53,31 @@ config.textScaler = TextScaler(1.5) // 主窗口和辅助窗口共用宿主偏�
 Page().textScaler(TextScaler(1.25))
 ```
 
-TextScaler 的最近作用域覆盖外层，不把倍率连乘。字体、显式行高和字距只缩放一次，测量与绘制使用同一结果；TextField 光标/选区与渲染缓存消费相同字体。Button（含状态色、Tab 和分段样式）、TextField、Select、Menu、Toolbar、ButtonGroup 允许按内容增长；Combobox 同步虚拟列表的行高。Menu 默认使用不透明浮层表面，行预算和高亮跟随实际文字高度。明确指定的 `.frame(height:)` 仍是应用约束，可能限制内容。
+TextScaler 的最近作用域覆盖外层，不把倍率连乘。字体、显式行高和字距只缩放一次，测量与绘制使用同一结果；TextField 光标/选区与渲染缓存消费相同字体。Button（含状态色、Tab 和分段样式）、TextField、Select、Menu、Toolbar、ButtonGroup、DisclosureGroup、Accordion 和 Panel 标题允许按内容增长；Combobox 与 Tree 同步虚拟列表的行高。Menu 默认使用不透明浮层表面，行预算和高亮跟随实际文字高度。明确指定的 `.frame(height:)` 仍是应用约束，可能限制内容。
+
+图标默认使用 `theme.icons.scaling = .text`：语义尺寸、自定义角色和直接传入的数值都会跟随 TextScaler，资源包、文件和纹理来源一致，且只缩放一次。图标按钮使用对称留白和正方形最小点击区；loading 时用同尺寸 Spinner 替换图标，并保留 tooltip 提供的辅助功能名称。普通文字按钮仍在文字旁显示 Spinner。
+
+```swift
+// 全局设计系统可以选择固定图标。
+theme.icons.scaling = .fixed
+
+// 局部覆盖优先于主题；倍率是替代值，不与文字倍率连乘。
+Icon(MyIcons.logo, size: 31).iconScaling(.fixed)
+Page().iconScaling(.factor(1.5))
+
+// 推荐让图标与它的预留槽使用同一尺寸来源。
+IconMetricsReader { metrics in
+    Box(direction: .row, alignItems: .center, justifyContent: .center) {
+        Icon(MyIcons.check, size: .small)
+    }.frame(width: metrics.size(.small))
+}
+```
+
+`.frame` 和 `.padding` 作用在 Icon 的容器上，内部 SVG 保持所请求的尺寸和比例。不要把 `metrics.size(...)` 的结果再次传给默认会缩放的 Icon；需要传入已经计算好的最终尺寸时，局部使用 `.iconScaling(.fixed)`。固定尺寸的 Avatar 属于图像容器，其 fallback 图标和 initials 保持在头像内部；需要放大头像时由调用方改变头像尺寸。
 
 应用编写固定行高的自定义列表时，可用 `TextScalerReader { scaler in ... }` 计算行高。普通布局无需手动乘 DPI：宿主按屏幕密度重建字体栅格，SVG 按物理像素重新取图；光学字号保持逻辑点，因此 13pt 在 2× 屏幕仍使用 13pt 的字形设计。
 
-当前 TextScaler 是线性倍率，非法/非有限倍率回退 1。宿主需将自己的辅助功能或用户偏好交给框架；尚无 Windows/Linux 系统文字大小变化的自动订阅，也没有非线性动态字号曲线。部分历史组件仍有固定行高、固定图标槽或虚拟化几何，不能据此宣称整个目录已通过 200% 大字体。画廊的 Text 控件用于逐页暴露和验证这些缺口。
+当前 TextScaler 是线性倍率，非法/非有限倍率回退 1。宿主需将自己的辅助功能或用户偏好交给框架；尚无 Windows/Linux 系统文字大小变化的自动订阅，也没有非线性动态字号曲线。部分历史组件（例如 CommandPalette 行预算、Calendar 日期格、PropertyGrid 行槽）仍有固定行高或虚拟化几何，不能据此宣称整个目录已通过 200% 大字体。画廊的 Text 控件用于逐页暴露和验证这些缺口。
 
 ## 验证
 

@@ -95,7 +95,7 @@ private struct StepperVerticalConnector: _PrimitiveView {
         let size = node.compositionValue(of: ControlSizeEnvironment.key)
         node.layoutNode?.height = 16
         node.layoutNode?.flexDirection = .row
-        node.layoutNode?.setPadding(9 + size.buttonHeight / 2, edge: .left)
+        node.layoutNode?.setPadding(9 + node.iconMetrics.size(size.buttonHeight) / 2, edge: .left)
     }
     var _children: [any View] { [Box {}.frame(width: 1, height: 16).background(color)] }
 }
@@ -107,7 +107,7 @@ private struct StepperMarker: _PrimitiveView {
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
     func _updateNode(_ node: Node) {
-        let diameter = node.compositionValue(of: ControlSizeEnvironment.key).buttonHeight
+        let diameter = node.iconMetrics.size(node.compositionValue(of: ControlSizeEnvironment.key).buttonHeight)
         let color = isSelected && status == .pending ? node.theme.colors.accent : status.tone.color.resolve(node.theme)
         node.layoutNode?.width = diameter; node.layoutNode?.height = diameter
         node.layoutNode?.flexShrink = 0; node.layoutNode?.alignItems = .center; node.layoutNode?.justifyContent = .center
@@ -116,11 +116,11 @@ private struct StepperMarker: _PrimitiveView {
         node.borderColor = color; node.borderWidth = isSelected ? 1.5 : 1
     }
     func _children(for node: Node) -> [any View] {
-        let diameter = node.compositionValue(of: ControlSizeEnvironment.key).buttonHeight
+        let diameter = node.iconMetrics.size(node.compositionValue(of: ControlSizeEnvironment.key).buttonHeight)
         let color = isSelected && status == .pending ? node.theme.colors.accent : status.tone.color.resolve(node.theme)
         switch status {
-        case .completed: return [Icon(UIIcons.Action.check, size: diameter * 0.5).foregroundColor(color)]
-        case .failed: return [Icon(UIIcons.Action.x, size: diameter * 0.5).foregroundColor(color)]
+        case .completed: return [Icon(UIIcons.Action.check, size: diameter * 0.5).iconScaling(.fixed).foregroundColor(color)]
+        case .failed: return [Icon(UIIcons.Action.x, size: diameter * 0.5).iconScaling(.fixed).foregroundColor(color)]
         case .inProgress: return [Spinner(size: diameter * 0.55).foregroundColor(color)]
         case .pending: return [Text("\(number)").font(.label).foregroundColor(color)]
         }

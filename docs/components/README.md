@@ -43,6 +43,7 @@
 | SplitView | 文档已写 | [splitview.md](splitview.md) |
 | ScrollView | 文档已写 | [scrollview.md](scrollview.md) |
 | Tab | 文档已写 | [tab.md](tab.md) |
+| Sidebar | 实现与验证边界 | [sidebar.md](sidebar.md) |
 | Box / Row / Column | 文档已写 | [layout.md](layout.md) |
 
 ## 通用约定

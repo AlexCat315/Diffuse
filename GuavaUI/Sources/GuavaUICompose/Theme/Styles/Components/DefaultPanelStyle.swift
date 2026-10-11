@@ -4,8 +4,8 @@ import GuavaUIRuntime
 /// rounded (radius.xl) slab of `surfaceSunken`, *darker* than the window
 /// canvas, with NO border and no header fill. Separation between neighbouring
 /// panels comes from the canvas showing through the gutters, not from lines.
-/// The header is a 34px row with a muted 12px title; active panels brighten
-/// the title rather than repainting the header.
+/// The header has a 34pt minimum and grows with its title and accessories.
+/// Active panels brighten the title rather than repainting the header.
 public struct DefaultPanelStyle: PanelStyle {
     public init() {}
 
@@ -21,8 +21,8 @@ public struct DefaultPanelStyle: PanelStyle {
                 Spacer(minLength: 0)
                 configuration.accessory
             }
-            .padding(horizontal: t.spacing.lg)
-            .frame(height: 34)
+            .padding(horizontal: t.spacing.lg, vertical: 8)
+            .frame(minHeight: 34)
 
             Box(direction: .column, alignItems: .stretch) {
                 configuration.content

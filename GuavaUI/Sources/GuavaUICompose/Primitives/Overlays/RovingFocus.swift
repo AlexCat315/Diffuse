@@ -55,8 +55,21 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
         InteractionRegistryHolder.current?.setKey(node) { [weak node] event, phase in
-            guard phase == .bubble, let command = command(event),
-                  let target = command.destination(in: enabledItems, from: selection(), wraps: wraps), let node else { return .ignored }
+            guard phase == .bubble, let command = command(event), let node else { return .ignored }
+            var source = selection()
+            if let focused = FocusChainHolder.current?.focused {
+                var candidate: Node? = focused
+                var focusedItem: AnyHashable?
+                while let current = candidate, current !== node {
+                    if let id = current.attachments["__roving.item"] as? AnyHashable { focusedItem = id; break }
+                    candidate = current.parent
+                }
+                // Text fields and other controls inside a panel keep their
+                // unhandled arrow keys; only group headers participate here.
+                guard let focusedItem, enabledItems.contains(focusedItem) else { return .ignored }
+                source = focusedItem
+            }
+            guard let target = command.destination(in: enabledItems, from: source, wraps: wraps) else { return .ignored }
             onSelect(target)
             func updateTabStops(_ candidate: Node) {
                 if let id = candidate.attachments["__roving.item"] as? AnyHashable { candidate.isTabStop = id == target }
@@ -67,7 +80,10 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
                 if candidate.attachments["__roving.item"] as? AnyHashable == target, candidate.isFocusable { return candidate }
                 return candidate.children.lazy.compactMap(locate).first
             }
-            if let targetNode = locate(node) { FocusChainHolder.current?.focus(targetNode) }
+            if let targetNode = locate(node) {
+                FocusChainHolder.current?.focus(targetNode)
+                ScrollReveal.reveal(targetNode)
+            }
             return .handled
         }
     }
