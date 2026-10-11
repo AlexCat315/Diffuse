@@ -6,7 +6,7 @@ import GuavaUIRuntime
 /// (`background`) with floating panel bodies that sit *darker* than the canvas
 /// (`surfaceSunken`), visible high-contrast borders, a saturated cool blue as
 /// the single interactive accent, and a purple secondary accent for content
-/// classification. Chrome typography runs at 11–12px.
+/// classification. Typography separates page headings from controls and supporting text.
 public enum DefaultDarkTheme {
     public static let value: Theme = Theme(
         colors: ColorScheme(
@@ -49,19 +49,18 @@ public enum DefaultDarkTheme {
             overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0xB8)
         ),
         typography: Typography(
-            // Chrome type ramp: titles/labels 12, body 13, captions 11.
-            display:    TextStyleToken(font: .system(size: 18, weight: .semibold), lineHeight: 24),
-            title:      TextStyleToken(font: .system(size: 16, weight: .semibold), lineHeight: 22),
-            headline:   TextStyleToken(font: .system(size: 14, weight: .semibold), lineHeight: 19),
-            body:       TextStyleToken(font: .system(size: 13, weight: .regular),  lineHeight: 18),
-            bodyStrong: TextStyleToken(font: .system(size: 13, weight: .semibold), lineHeight: 18),
-            caption:    TextStyleToken(font: .system(size: 11, weight: .regular),  lineHeight: 15),
-            label:      TextStyleToken(font: .system(size: 12, weight: .medium),   lineHeight: 16),
-            mono:       TextStyleToken(font: .monospaced(size: 12), lineHeight: 18)
+            display:    TextStyleToken(font: .system(size: 32, weight: .bold), lineHeight: 38, letterSpacing: -0.6),
+            title:      TextStyleToken(font: .system(size: 24, weight: .bold), lineHeight: 30, letterSpacing: -0.4),
+            headline:   TextStyleToken(font: .system(size: 17, weight: .semibold), lineHeight: 23, letterSpacing: -0.15),
+            body:       TextStyleToken(font: .system(size: 14), lineHeight: 20),
+            bodyStrong: TextStyleToken(font: .system(size: 14, weight: .semibold), lineHeight: 20),
+            caption:    TextStyleToken(font: .system(size: 12), lineHeight: 17),
+            label:      TextStyleToken(font: .system(size: 13, weight: .medium), lineHeight: 18),
+            mono:       TextStyleToken(font: .monospaced(size: 13), lineHeight: 20)
         ),
         spacing:   SpacingScale(xs: 4, sm: 6, md: 8, lg: 12, xl: 16, xxl: 24),
         // Radii: rows 5, controls 7, grouped chrome 10, panels 12.
-        radius:    RadiusScale(none: 0, sm: 5, md: 7, lg: 10, xl: 12, pill: 9999),
+        radius:    RadiusScale(none: 0, sm: 5, md: 8, lg: 12, xl: 16, pill: 9999),
         elevation: ElevationScale(
             none:   .none,
             low:    SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x50), offsetX: 0, offsetY: 1, blur: 2),

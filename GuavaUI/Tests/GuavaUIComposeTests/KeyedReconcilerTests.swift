@@ -226,6 +226,9 @@ struct KeyedReconcilerTests {
         let scoped = _TaggedNode(payload: "A").id("child").theme(.defaultDark).frame(height: 30)
         let animated = _TaggedNode(payload: "A").id("child").animation(nil, value: 0).frame(height: 30)
         let views: [any View] = [scoped, animated]
+        func keyedDescendants(_ node: Node) -> [Node] {
+            (node.key == AnyHashable("child") ? [node] : []) + node.children.flatMap(keyedDescendants)
+        }
         for view in views {
             let tree = NodeTree()
             let graph = ViewGraph(tree: tree, recomposer: Recomposer())
@@ -233,9 +236,11 @@ struct KeyedReconcilerTests {
             let original = tree.root!.children[0]
             #expect(original.key == nil)
             #expect(ViewGraph.slotKey(view) == nil)
+            let keyed = keyedDescendants(original)
+            #expect(keyed.count == 1)
             graph.reconcileChildren(parent: tree.root!, layoutParent: graph.layoutRoot, newViews: [view])
             #expect(tree.root!.children[0] === original)
-            #expect(original.children[0].key == AnyHashable("child"))
+            #expect(keyedDescendants(original).first === keyed.first)
         }
     } }
 }

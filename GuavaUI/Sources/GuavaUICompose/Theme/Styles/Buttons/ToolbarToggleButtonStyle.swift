@@ -18,7 +18,7 @@ public struct ToolbarToggleButtonStyle: ButtonStyle {
                     : configuration.isSelected ? SemanticColorRef.accent : .onSurfaceVariant)
         }
         .padding(horizontal: 6)
-        .frame(height: height, minWidth: minWidth)
+        .padding(vertical: 4).frame(minWidth: minWidth, minHeight: height)
         .background(fill).cornerRadius(configuration.theme.radius.sm)
         .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
         .animation(.semantic(.fast, in: configuration.theme), value: configuration.interactionKey)

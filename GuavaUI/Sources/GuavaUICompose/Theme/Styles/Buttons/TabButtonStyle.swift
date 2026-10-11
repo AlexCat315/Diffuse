@@ -19,8 +19,8 @@ public struct TabButtonStyle: ButtonStyle, Hashable {
                     .foregroundColor(!configuration.isEnabled ? .onSurfaceDisabled
                         : configuration.isSelected ? .onSurface : .onSurfaceVariant)
             }
-            .padding(horizontal: 10)
-            .frame(height: height - 2)
+            .padding(horizontal: 10, vertical: 4)
+            .frame(minHeight: max(0, height - 2))
             Box { EmptyView() }
                 .frame(height: 2)
                 .background(configuration.isSelected ? colors.accent : .clear)

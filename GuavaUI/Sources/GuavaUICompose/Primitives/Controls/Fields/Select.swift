@@ -172,10 +172,10 @@ private struct _StatefulSelect<Value: Hashable>: View {
                     .font(.body)
                     .foregroundColor(select.isEnabled ? .onSurface : .onSurfaceDisabled)
                     .flex()
-                Icon(isPresented ? UIIcons.Navigation.chevronUp : UIIcons.Navigation.chevronDown, size: 10, color: .onSurfaceMuted)
+                Icon(isPresented ? UIIcons.Navigation.chevronUp : UIIcons.Navigation.chevronDown, size: .small, color: .onSurfaceMuted)
             }
-            .padding(horizontal: 8)
-            .frame(height: 28)
+            .padding(horizontal: 10, vertical: 6)
+            .frame(minHeight: 32)
             .background(theme.inputs.background)
             .cornerRadius(theme.inputs.radius)
             .border(borderColor(theme), width: theme.inputs.borderWidth)

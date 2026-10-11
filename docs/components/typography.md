@@ -2,6 +2,14 @@
 
 `Text`、`TextField`、头像首字母和游戏内文字共用 shaping、`TextLayout` 与 `DrawList`。使用主题的字体、行高与字距；混合字体共用基线，换行不拆开一个 shaping cluster。源坐标保持 UTF-8，编辑选区和光标以 Swift grapheme 为单位。
 
+## 普通字体与设计系统
+
+主题提供 display、title、headline、body、bodyStrong、caption、label 和 mono 语义角色，应用可以替换每个完整 TextStyleToken，指定 `Typography.family`，或通过 ThemeExtension 定义自己的角色。`Font.named` 和显式 TextStyleToken 保留任意字体族/字号出口。最近 Theme 为没有显式字体的文字和输入框提供 body 默认值，显式样式优先。TextScaler 对字号、行高和字距只缩放一次，测量、绘制和编辑使用一致结果；DPI 只改变栅格密度。[设计系统契约](design-system.md)有可运行的 API 示例与限制。
+
+本轮检查真实系统字体发现三个问题：CoreText 字体描述符在数组中的位置被误当作 FreeType collection face index，SF 的 Medium/Semibold/Bold 因此可能加载失败并静默回退；可变字体轴没有传入 FreeType；CoreText 使用物理字号选择字体，令光学尺寸随 DPI 改变。现在按 face/named instance 查找字体，复制 CoreText 已解析的设计坐标，并在逻辑字号下选择光学尺寸。HarfBuzz 使用未 hint 的布局 advance，字形图集保留同一布局 metrics，栅格化不再用 bitmap bearing/advance 覆盖测量缓存。
+
+`SystemFontInstanceTests` 检查真实 SF 的字重坐标、实际轮廓覆盖量，以及 1×/2× 的光学坐标和 advance；`FontPipelineTests` 检查首次栅格化前后 metrics 不变。这些证明修复了字体实例与测量路径，没有宣称自定义 FreeType 灰度栅格与系统原生文字的每个像素相同。
+
 ## 彩色字体
 
 macOS 上由 `FontProvider` 识别 FreeType color face，交给 `NativeColorGlyphFont` 的 CoreText shaping/metrics/rasterizer。平台 rasterizer 通过 `ColorGlyphSource` 提供逻辑 metrics、line metrics 和 straight-alpha sRGB RGBA bitmap；通用 `FontAtlas` 不依赖 CoreText。
@@ -18,7 +26,7 @@ macOS 上由 `FontProvider` 识别 FreeType color face，交给 `NativeColorGlyp
 
 ## 示例与验证
 
-画廊 `Theme / Typography` 有 14/24/40 点中文、带重音姓名与彩色 emoji 混排，以及红色文字/半透明示例；`TextField` 有可编辑的 `A👩🏽‍💻中🙂B` 和实时 grapheme/字节计数；`Avatar` 保留 `👩🏽‍💻 coder`。macOS Retina 已在明暗主题实际检查方向、颜色、基线和显示，输入框实际验证删除一次、完整撤销、按字符选区替换及再撤销。原生检查记录见 [color-glyph-native.json](../guava-ui/evidence/color-glyph-native.json)。
+画廊 `Theme / Typography` 展示语义层级、英文字距/连字样例、中文、带重音姓名和彩色 emoji，以及红色文字/半透明示例；上半部分可修改局部主题并编辑/保存。`TextField` 有可编辑的 `A👩🏽‍💻中🙂B` 和实时 grapheme/字节计数；`Avatar` 保留 `👩🏽‍💻 coder`。此前 macOS Retina 已在明暗主题实际检查 14/24/40 点混排的方向、颜色、基线和显示，输入框实际验证删除一次、完整撤销、按字符选区替换及再撤销；这份历史原生检查记录见 [color-glyph-native.json](../guava-ui/evidence/color-glyph-native.json)，不代表所有新页面的完整回归。
 
 `ColorGlyphTests` 使用真实系统字体验证上述五种 emoji、metrics/raster 分离、全局 UTF-8 cluster、alpha/RGBA batch、缓存/reset 和 1×/2× 稳定 advance。`ColorGlyphAtlasTests` 使用独立数据验证 RGBA 行/间距/脏区域、非法数据、图集耗尽/reset。`InGameDrawListSourceTests` 与 `ScriptCanvasTests` 验证双图集和跳帧传输；`TextFieldNavigationTests` 验证实际布局下的 emoji 光标/删除/撤销。
 

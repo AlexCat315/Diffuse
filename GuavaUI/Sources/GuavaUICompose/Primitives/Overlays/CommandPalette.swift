@@ -262,7 +262,7 @@ public struct CommandPalette: View {
         let isHighlighted = item.id == effectiveHighlight
         return Button(isEnabled: item.isEnabled, isSelected: isHighlighted, action: { run(item) }) {
             Row(alignment: .center, spacing: 10) {
-                Icon(item.icon ?? UIIcons.Navigation.arrowRight, size: 16)
+                Icon(item.icon ?? UIIcons.Navigation.arrowRight, size: .medium)
                     .foregroundColor(isHighlighted ? SemanticColorRef.onSurface : .onSurfaceMuted)
                     .accessibilityHidden()
                 Text(item.title).font(.label)

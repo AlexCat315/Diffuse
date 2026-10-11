@@ -29,7 +29,7 @@ public struct GalleryEntry: Sendable {
 
 public enum GalleryCatalog {
     public static let entries: [GalleryEntry] = [
-        .init(.introduction, "Introduction", "Overview", "A living catalog of real GuavaUI components and their interaction states."),
+        .init(.introduction, "Dashboard", "Overview", "A working composition of GuavaUI typography, surfaces, controls and live state."),
         .init(.button, "Button", "Controls", "Action hierarchy, semantic variants, icons, loading and control density."),
         .init(.checkbox, "Checkbox", "Controls", "Unchecked, checked, mixed and disabled selection."),
         .init(.toggle, "Toggle / Switch", "Controls", "Boolean settings with pointer capture and keyboard activation."),

@@ -37,9 +37,16 @@ public struct Combobox<Value: Hashable>: View {
         return options.filter { option in terms.allSatisfy { option.label.localizedCaseInsensitiveContains($0) } }
     }
     public var body: some View {
+        ThemeReader { theme in
+            TextScalerReader { scaler in
+                content(rowHeight: max(32, scaler.scale(theme.typography.label.lineHeight) + 12))
+            }
+        }
+    }
+    private func content(rowHeight: Float) -> some View {
         let matches = Self.matching(options, query: session.query.stringValue)
         let title = options.first { $0.value == selection.wrappedValue }?.label ?? presentation.placeholder
-        Popover(isPresented: Binding(get: { session.isPresented }, set: { open in
+        return Popover(isPresented: Binding(get: { session.isPresented }, set: { open in
             if open && !session.isPresented {
                 session.query = ""; session.highlighted = selection.wrappedValue; session.focusRequest += 1
             }
@@ -66,8 +73,8 @@ public struct Combobox<Value: Hashable>: View {
                            tooltip: "Clear selection") { selection.wrappedValue = nil }
                         .buttonStyle(.ghost).controlSize(.mini)
                 }
-                Icon(UIIcons.Navigation.chevronDown, size: 10)
-            }.padding(horizontal: 10).frame(height: 32).background(.surface).cornerRadius(6).border(.border, width: 1)
+                Icon(UIIcons.Navigation.chevronDown, size: .small)
+            }.padding(horizontal: 10, vertical: 4).frame(minHeight: rowHeight).background(.surface).cornerRadius(6).border(.border, width: 1)
         }, content: {
             Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 TextField(presentation.searchPlaceholder, text: Binding(get: { session.query }, set: { query in
@@ -91,15 +98,15 @@ public struct Combobox<Value: Hashable>: View {
                 else {
                     List(matches, id: \.value, selection: Binding(get: { session.highlighted }, set: { value in
                         session.highlighted = value
-                    }), rowHeight: 32, onActivate: { if $0.isEnabled { choose($0.value) } }) { option, _ in
+                    }), rowHeight: rowHeight, onActivate: { if $0.isEnabled { choose($0.value) } }) { option, _ in
                         Row(alignment: .center, spacing: 8) {
                             Text(option.label).font(.label).foregroundColor(option.isEnabled ? .onSurface : .onSurfaceDisabled)
                             Spacer()
-                            if option.value == selection.wrappedValue { Icon(UIIcons.Action.check, size: 12) }
+                            if option.value == selection.wrappedValue { Icon(UIIcons.Action.check, size: .small) }
                         }
-                    }.frame(height: Float(min(presentation.maxVisibleRows, matches.count)) * 32).flex(0, shrink: 0)
+                    }.frame(height: Float(min(presentation.maxVisibleRows, matches.count)) * rowHeight).flex(0, shrink: 0)
                 }
-            }.padding(8).background(.materialFloating).cornerRadius(8).backdropBlur(14)
+            }.padding(8).background(.surfaceFloating).cornerRadius(.controlRadius)
             .border(.border, width: 1).floatingSurface()
         }).frame(width: presentation.width)
     }

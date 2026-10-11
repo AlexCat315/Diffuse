@@ -59,9 +59,9 @@ struct ControlDensityTests {
         }.controlSize(.small))
         graph.computeLayout(width: 320, height: 240)
         let snapshot = graph.layoutSnapshot()
-        #expect(snapshot.first { $0.debugName == "small-button" }?.absoluteFrame.height == 24)
-        #expect(snapshot.first { $0.debugName == "inherited-field" }?.absoluteFrame.height == 24)
+        #expect(snapshot.first { $0.debugName == "small-button" }?.absoluteFrame.height == 28)
+        #expect(snapshot.first { $0.debugName == "inherited-field" }?.absoluteFrame.height == 28)
         #expect(snapshot.first { $0.debugName == "explicit-field" }?.absoluteFrame.height == 40)
-        #expect(snapshot.first { $0.debugName == "large-button" }?.absoluteFrame.height == 36)
+        #expect(snapshot.first { $0.debugName == "large-button" }?.absoluteFrame.height == 40)
     } }
 }

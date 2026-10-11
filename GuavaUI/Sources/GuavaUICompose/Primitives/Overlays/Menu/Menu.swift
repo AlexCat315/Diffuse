@@ -114,11 +114,10 @@ struct MenuLevel: View {
                     scrollOffset: Binding(get: { session.scrollOffset }, set: { if session.scrollOffset != $0 { session.scrollOffset = $0 } })) {
                     Box(direction: .column, alignItems: .stretch, spacing: 1) { rows() }
                 }
-                .frame(maxHeight: Float(configuration.maxVisibleRows) * 32)
-                .modifier(MenuWindowBounds())
+                .modifier(MenuWindowBounds(maxVisibleRows: configuration.maxVisibleRows))
                 .modifier(MenuScrollMarker())
             }
-            .background(.materialFloating).cornerRadius(6).backdropBlur(14)
+            .background(.surfaceFloating).cornerRadius(.controlRadius)
             .border(.border, width: 1).floatingSurface()
             .frame(width: configuration.width)
         }

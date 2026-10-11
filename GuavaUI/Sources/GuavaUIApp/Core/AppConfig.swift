@@ -1,4 +1,5 @@
 import GuavaUIRuntime
+import GuavaUICompose
 import GuavaUIDevTools
 import NativeRHI
 
@@ -25,6 +26,8 @@ public enum AppFrameDrivePolicy: Sendable, Equatable {
 public struct AppConfig: Sendable {
     /// 窗口标题。
     public var title: String
+    /// Host accessibility/user preference, separate from raster density.
+    public var textScaler = TextScaler.identity
     /// 主字体名称。默认使用当前平台的系统 UI 字体。
     public var primaryFontName: String
     /// 默认字号。
