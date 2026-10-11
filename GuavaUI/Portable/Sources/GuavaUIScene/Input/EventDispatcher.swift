@@ -66,6 +66,8 @@ public final class EventDispatcher {
     public func dispatch(_ event: InputEvent) -> Bool {
         if eventInterceptor?(event) == true { return false }
         eventSink?(event)
+        if let target = capture.target, !target.acceptsSubtreeInput { capture.release() }
+        if let focused = focusChain.focused, !focused.acceptsSubtreeInput { focusChain.clear() }
         switch event {
         case .mouseButtonDown(let e): dispatchPointerDown(e)
         case .mouseButtonUp(let e):   dispatchPointerUp(e)
@@ -436,6 +438,7 @@ public final class EventDispatcher {
     }
 
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {
+        guard node.acceptsSubtreeInput else { return .ignored }
         let handlers = interactions.handlers(for: node)
         let result: EventResult = switch kind {
         case .pointer(let e, let pp): handlers.pointer?(e, pp, phase) ?? .ignored

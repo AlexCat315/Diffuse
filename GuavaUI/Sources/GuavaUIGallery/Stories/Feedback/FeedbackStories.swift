@@ -177,13 +177,15 @@ public extension GalleryPage {
         case .dialog: AnyView(DialogStory())
         case .alertDialog: AnyView(AlertDialogStory())
         case .sheet: AnyView(SheetStory(options: options))
-        case .commandPalette: AnyView(CommandPaletteStory())
-        case .hoverCard: AnyView(HoverCardStory())
+        case .commandPalette: AnyView(CommandPaletteStory(options: options))
+        case .hoverCard: AnyView(HoverCardStory(options: options))
         case .timeline: AnyView(TimelineStory())
         case .toolbar: AnyView(ToolbarStory(options: options))
         case .link: AnyView(LinkStory(options: options))
         case .statusBar: AnyView(StatusBarStory(options: options))
         case .carousel: AnyView(CarouselStory(options: options))
+        case .skeleton: AnyView(SkeletonStory(options: options))
+        case .stepper: AnyView(StepperStory(options: options))
         }
     }
 }

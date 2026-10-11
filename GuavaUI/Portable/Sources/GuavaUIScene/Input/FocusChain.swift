@@ -26,6 +26,20 @@ public final class FocusChain {
         }
     }
     private var scopes: [Scope] = []
+    private final class Accessory {
+        weak var root: Node?
+        weak var owner: Node?
+        weak var previous: Node?
+        weak var previousTreeRoot: Node?
+        let visible: Bool
+        init(root: Node, owner: Node, previous: Node?, visible: Bool) {
+            self.root = root; self.owner = owner; self.previous = previous; self.visible = visible
+            var treeRoot = previous
+            while let parent = treeRoot?.parent { treeRoot = parent }
+            previousTreeRoot = treeRoot
+        }
+    }
+    private var accessories: [Accessory] = []
     private let registrar = ObservableStateRegistrar()
     public var activeScopeRoot: Node? { scopes.last?.root }
     public var hasModalScope: Bool { scopes.contains { !$0.restoresCommands && $0.root != nil } }
@@ -52,15 +66,57 @@ public final class FocusChain {
         // return to an earlier column without escaping the dialog itself.
         for scope in scopes.reversed() {
             guard scope.restoresCommands else { break }
-            if let root = scope.root, isDescendant(node, of: root) { return true }
+            if let root = scope.root, belongsToScope(node, root: root) { return true }
         }
         guard let root = scopes.last(where: { !$0.restoresCommands })?.root else { return true }
-        return isDescendant(node, of: root)
+        return belongsToScope(node, root: root)
     }
 
     public func permitsKeyboardInput(_ node: Node) -> Bool {
         guard let root = activeScopeRoot else { return true }
-        return isDescendant(node, of: root)
+        return belongsToScope(node, root: root)
+    }
+
+    /// A detached interactive portal belongs to its trigger's scope without
+    /// taking keyboard focus merely because the pointer revealed it.
+    public func attachAccessory(_ root: Node, owner: Node) {
+        accessories.removeAll { $0.root == nil || $0.owner == nil }
+        guard !accessories.contains(where: { $0.root === root }) else { return }
+        accessories.append(Accessory(root: root, owner: owner, previous: focused, visible: isFocusVisible))
+    }
+
+    public func detachAccessory(_ root: Node) {
+        guard let index = accessories.firstIndex(where: { $0.root === root }) else { return }
+        let accessory = accessories.remove(at: index)
+        // Child teardown clears its focus before the portal resource unmounts.
+        guard focused == nil || focused.map({ isDescendant($0, of: root) }) == true else { return }
+        if let previous = accessory.previous, let treeRoot = accessory.previousTreeRoot,
+           previous.parent != nil, isDescendant(previous, of: treeRoot), previous.isFocusable, previous.acceptsSubtreeInput,
+           permitsInput(previous), permitsKeyboardInput(previous) {
+            focus(previous, visible: accessory.visible)
+        } else { clear() }
+    }
+
+    /// Native accessibility starts at the modal root. Include only accessory
+    /// portals owned by that scope, so unrelated background UI stays isolated.
+    public var accessoryRoots: [Node] {
+        accessories.compactMap { accessory in
+            guard let root = accessory.root, let owner = accessory.owner,
+                  owner.acceptsSubtreeInput, permitsInput(owner) else { return nil }
+            if let modalRoot, isDescendant(root, of: modalRoot) { return nil }
+            return root
+        }
+    }
+
+    private func belongsToScope(_ node: Node, root: Node, visited: Set<ElementID> = []) -> Bool {
+        if isDescendant(node, of: root) { return true }
+        guard !visited.contains(node.id) else { return false }
+        let visited = visited.union([node.id])
+        return accessories.contains { accessory in
+            guard let accessoryRoot = accessory.root, let owner = accessory.owner,
+                  owner.acceptsSubtreeInput, isDescendant(node, of: accessoryRoot) else { return false }
+            return belongsToScope(owner, root: root, visited: visited)
+        }
     }
 
     public func pushScope(_ root: Node, restoresCommands: Bool = false) {

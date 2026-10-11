@@ -16,6 +16,7 @@ struct GalleryTests {
             #expect(GalleryCatalog.search(entry.title).contains { $0.page == entry.page })
         }
         #expect(GalleryCatalog.search("keyboard slider").map(\.page) == [.slider])
+        #expect(GalleryCatalog.search("CommandPalette").map(\.page) == [.commandPalette])
         #expect(GalleryCatalog.search("no-such-component").isEmpty)
     }
 

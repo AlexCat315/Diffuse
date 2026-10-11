@@ -231,7 +231,7 @@ struct CarouselStory: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Paged content", "Drag the page horizontally, use the arrows, click an indicator, or press Left/Right/Home/End while the carousel has focus.") {
+            StorySection("Paged content", "Tap the page action or drag horizontally across it. A swipe cancels the button press and changes one page on release; vertical movement does not page. Left/Right/Home/End also navigate.") {
                 Carousel(pages: Self.pages, selection: $page) {
                     $0.isEnabled = options.isEnabled
                     $0.showsArrows = showsArrows
@@ -253,6 +253,9 @@ struct CarouselStory: View {
                     $0.allowsWrap = false
                     $0.height = 120
                 }
+            }
+            StorySection("Empty collection", "An empty carousel has no page action or keyboard stop. A missing selection falls back to the first available page without rewriting the binding.") {
+                Carousel<String>(pages: []) { $0.height = 72 }
             }
         }
     }
@@ -277,6 +280,7 @@ private struct CarouselCard: View {
     let title: String
     let detail: String
     let tint: Color
+    @State private var clicks = 0
 
     init(_ title: String, detail: String, tint: Color) {
         self.title = title; self.detail = detail; self.tint = tint
@@ -286,6 +290,7 @@ private struct CarouselCard: View {
         Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 6) {
             Text(title).font(.headline).foregroundColor(.white)
             Text(detail).font(.caption).foregroundColor(Color.white.multipliedAlpha(0.85))
+            Button("Page action · \(clicks)") { clicks += 1 }.buttonStyle(.secondary)
         }
         .flex()
         .background(tint)
