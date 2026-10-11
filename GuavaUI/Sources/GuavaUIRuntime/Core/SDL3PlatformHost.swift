@@ -289,6 +289,14 @@ public final class SDL3PlatformHost: PlatformHost {
         shell?.restoreWindow(windowID)
     }
 
+    public func hideWindow(_ windowID: WindowID) {
+        shell?.hideWindow(windowID)
+    }
+
+    public func showWindow(_ windowID: WindowID) {
+        shell?.showWindow(windowID)
+    }
+
     public func isWindowMaximized(_ windowID: WindowID) -> Bool {
         shell?.isWindowMaximized(windowID) ?? false
     }

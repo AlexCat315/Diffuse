@@ -43,6 +43,11 @@ public struct AppConfig: Sendable {
     /// Native window titlebar behavior. macOS maps `.hiddenInset` to a
     /// transparent full-size content titlebar.
     public var titleBarStyle: AppWindowTitleBarStyle
+    /// 是否在 Dock / 任务栏显示应用图标。
+    ///
+    /// 常驻型应用（只有状态栏或托盘图标，关掉窗口后进程继续跑）要设 `false`：
+    /// 进程从启动就是 accessory，Dock 图标不会先闪一下再消失。
+    public var showsDockIcon: Bool
     /// Optional UI frame-rate cap. `nil` uses the selected frame-drive policy's
     /// default cadence.
     public var targetFrameRate: Double?
@@ -60,6 +65,7 @@ public struct AppConfig: Sendable {
                 backendConfig: DeviceConfig = DeviceConfig(),
                 msaaSampleCount: UInt32 = 4,
                 titleBarStyle: AppWindowTitleBarStyle = .standard,
+                showsDockIcon: Bool = true,
                 targetFrameRate: Double? = nil,
                 frameDrivePolicy: AppFrameDrivePolicy = .continuous,
                 devTools: DevToolsConfig? = nil) {
@@ -71,6 +77,7 @@ public struct AppConfig: Sendable {
         self.backendConfig = backendConfig
         self.msaaSampleCount = max(1, msaaSampleCount)
         self.titleBarStyle = titleBarStyle
+        self.showsDockIcon = showsDockIcon
         if let targetFrameRate, targetFrameRate.isFinite, targetFrameRate > 0 {
             self.targetFrameRate = max(1.0, min(240.0, targetFrameRate))
         } else {

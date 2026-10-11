@@ -46,6 +46,8 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var minimizeMainWindowAction: (@MainActor () -> Void)?
     private var maximizeMainWindowAction: (@MainActor () -> Void)?
     private var restoreMainWindowAction: (@MainActor () -> Void)?
+    private var hideMainWindowAction: (@MainActor () -> Void)?
+    private var showMainWindowAction: (@MainActor () -> Void)?
     private var closeMainWindowAction: (@MainActor () -> Void)?
     private var mainWindowMaximizedQuery: (@MainActor () -> Bool)?
     private var setMainWindowChromeHitTestAction: (@MainActor (WindowChromeHitTest?) -> Void)?
@@ -122,6 +124,21 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     public func restoreWindow() {
         restoreMainWindowAction?()
+    }
+
+    /// 把主窗口完全收起——不是最小化。
+    ///
+    /// 最小化会在 Dock 里留一个入口，隐藏不会。只有状态栏/托盘图标的常驻型
+    /// 应用关掉窗口时应该用这个，否则窗口会赖在 Dock 里。
+    @MainActor
+    public func hideWindow() {
+        hideMainWindowAction?()
+    }
+
+    /// 重新显示被 `hideWindow()` 收起的主窗口。
+    @MainActor
+    public func showWindow() {
+        showMainWindowAction?()
     }
 
     @MainActor
@@ -280,6 +297,8 @@ public final class AppDisplayHandle: @unchecked Sendable {
                                 minimizeWindow: @escaping @MainActor () -> Void,
                                 maximizeWindow: @escaping @MainActor () -> Void,
                                 restoreWindow: @escaping @MainActor () -> Void,
+                                hideWindow: @escaping @MainActor () -> Void,
+                                showWindow: @escaping @MainActor () -> Void,
                                 closeWindow: @escaping @MainActor () -> Void,
                                 isWindowMaximized: @escaping @MainActor () -> Bool,
                                 minimizeWindowByID: @escaping @MainActor (WindowID) -> Void,
@@ -297,6 +316,8 @@ public final class AppDisplayHandle: @unchecked Sendable {
         minimizeMainWindowAction = minimizeWindow
         maximizeMainWindowAction = maximizeWindow
         restoreMainWindowAction = restoreWindow
+        hideMainWindowAction = hideWindow
+        showMainWindowAction = showWindow
         closeMainWindowAction = closeWindow
         mainWindowMaximizedQuery = isWindowMaximized
         minimizeWindowByIDAction = minimizeWindowByID
