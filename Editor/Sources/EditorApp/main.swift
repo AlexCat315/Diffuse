@@ -6,7 +6,6 @@ import GuavaUIApp
 import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
-import RHIWGPU
 import NativeRHI
 import RenderBackend
 import CardBattleRuntime
@@ -87,24 +86,18 @@ private func requestedEditorRendererName() throws -> String {
     if let index = CommandLine.arguments.firstIndex(of: "--renderer") {
         guard CommandLine.arguments.indices.contains(index + 1) else {
             throw NSError(domain: "EditorApp", code: 3,
-                          userInfo: [NSLocalizedDescriptionKey: "--renderer requires wgpu, native, metal, vulkan, or dx12."])
+                          userInfo: [NSLocalizedDescriptionKey: "--renderer requires native, metal, vulkan, or dx12."])
         }
         return CommandLine.arguments[index + 1].lowercased()
     }
     return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "native"
 }
 
-private func makeEditorRenderDevice(config: WGPUDeviceConfig) throws -> EngineRenderDevice {
+private func makeEditorRenderDevice(config: DeviceConfig) throws -> Device {
     let requested = try requestedEditorRendererName()
-    guard requested != "wgpu" else { return .wgpu(WGPUBackend(config: config)) }
     let api: GraphicsAPI
     switch requested {
-    case "native":
-        guard let platformAPI = NativeRHI.platformDefaultBackends.first else {
-            throw NSError(domain: "EditorApp", code: 4,
-                          userInfo: [NSLocalizedDescriptionKey: "NativeRHI has no backend for this platform."])
-        }
-        api = platformAPI
+    case "native": return try Device.make(config)
     case "metal": api = .metal
     case "vulkan": api = .vulkan
     case "dx12", "d3d12": api = .dx12
@@ -112,8 +105,9 @@ private func makeEditorRenderDevice(config: WGPUDeviceConfig) throws -> EngineRe
         throw NSError(domain: "EditorApp", code: 5,
                       userInfo: [NSLocalizedDescriptionKey: "Unknown renderer '\(requested)'."])
     }
-    let nativeConfig = DeviceConfig(preferredBackends: [api], enableValidation: true, framesInFlight: 3)
-    return .native(try Device.make(nativeConfig))
+    var nativeConfig = config
+    nativeConfig.preferredBackends = [api]
+    return try Device.make(nativeConfig)
 }
 
 @MainActor
@@ -128,7 +122,6 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     let shellState = EditorRootViewFactory.loadShellState()
 
     let context = EditorLaunchContext(
-        backendConfig: launchOptions.backendConfig,
         renderDevice: renderDevice,
         events: events,
         shellState: shellState
@@ -139,11 +132,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         try context.loadProject(directory: dir)
     }
 
-    let inGameUIHost: InGameUIHost
-    switch renderDevice {
-    case .wgpu(let backend): inGameUIHost = InGameUIHost(backend: backend)
-    case .native(let device): inGameUIHost = try InGameUIHost(device: device)
-    }
+    let inGameUIHost = try InGameUIHost(device: renderDevice)
     InGameUIRegistry.shared.provider = inGameUIHost
     if ProcessInfo.processInfo.environment["GUAVA_EDITOR_SAMPLE_HUD"] == "1" {
         let host = inGameUIHost
@@ -167,8 +156,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                           // Surface clear = the theme canvas, so resize
                           // flicker and any uncovered sliver show the canvas
                           // instead of an off-palette dark blue.
-                          clearColor: GPUColor(r: 0x1E / 255, g: 0x1F / 255, b: 0x22 / 255, a: 1),
-                          backendConfig: launchOptions.backendConfig,
+                          clearColor: SIMD4(0x1E / 255, 0x1F / 255, 0x22 / 255, 1),
                           titleBarStyle: .hiddenInset,
                           // Editor chrome follows the active display refresh
                           // rate. Capping it at 60Hz makes every panel feel
@@ -178,12 +166,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                           // EditorViewportRenderGate.
                           targetFrameRate: nil,
                           frameDrivePolicy: .eventDriven,
-                          // FIFO present can block the main UI loop for multiple
-                          // refresh intervals, which makes Inspector/DevTools
-                          // input feel laggy. Mailbox keeps VSync-style pacing
-                          // while letting the compositor consume the latest UI
-                          // frame instead of back-pressuring the editor loop.
-                          vsyncPresentMode: .mailbox),
+                          devTools: nil),
         backend: renderDevice,
         events: events,
         onTick: { dt in

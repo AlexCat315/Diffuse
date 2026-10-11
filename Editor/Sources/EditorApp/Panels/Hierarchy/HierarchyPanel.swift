@@ -151,14 +151,14 @@ struct HierarchyPanel: View {
                         }
                     })
                     if !trimmedSearchQuery.isEmpty {
-                        EditorPanelIconButton(UICommonIcons.chevronUp,
+                        EditorPanelIconButton(UIIcons.Navigation.chevronUp,
                                               tooltip: L("Previous Match"),
                                               isEnabled: !matchingEntityIDs.isEmpty) {
                             selectSearchMatch(.previous,
                                               matchingIDs: matchingEntityIDs,
                                               roots: hierarchyRoots)
                         }
-                        EditorPanelIconButton(UICommonIcons.chevronDown,
+                        EditorPanelIconButton(UIIcons.Navigation.chevronDown,
                                               tooltip: L("Next Match"),
                                               isEnabled: !matchingEntityIDs.isEmpty) {
                             selectSearchMatch(.next,

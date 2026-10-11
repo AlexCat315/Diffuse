@@ -6,7 +6,7 @@ import ImageIO
 import CoreGraphics
 
 guard CommandLine.arguments.count == 3 else {
-    fatalError("Usage: swift compare-editor-captures.swift NATIVE.jpg WGPU.jpg")
+    fatalError("Usage: swift compare-editor-captures.swift FIRST.jpg SECOND.jpg")
 }
 func pixels(_ path: String) -> (width: Int, height: Int, bytes: [UInt8]) {
     guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),

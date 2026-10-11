@@ -23,7 +23,7 @@ struct ViewportProjectionSelector: View {
                 onKey: viewportPopoverDismissOnEscape($isPresented)) {
             Row(alignment: .center, spacing: 5) {
                 Text(label, lineLimit: 1).font(.caption)
-                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8)
             .frame(height: 24)
@@ -86,7 +86,7 @@ struct ViewportSnapSelector: View {
                 Row(alignment: .center, spacing: 5) {
                     Text(L("Snapping"), lineLimit: 1).font(.caption)
                         .foregroundColor(translate || rotate || scale ? .accent : .onSurface)
-                    Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                    Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
                 }
                 .padding(horizontal: 8)
             .frame(height: 24)

@@ -16,7 +16,7 @@ Swift package manifests are the source of truth for module boundaries.
 ## Engine
 
 - **Foundation and platform**: `SIMDCompat`, `EngineMath`, `EngineCore`, `EngineKernel`, `PlatformShell`
-- **Graphics**: `RHIWGPU`, `RenderBackend`, `ImageDecodeBridge`
+- **Graphics**: `NativeRHI`, `RenderBackend`, `ImageDecodeBridge`
 - **World runtime**: `SceneRuntime`, `ScriptRuntime`, `AudioRuntime`, `AssetPipeline`
 - **AI and semantics**: `ObservationBus`, `CapabilityRuntime`, `IntentRuntime`, `PerceptionRuntime`, `AIRuntime`, `ContextMemory`, `SemanticPipeline`
 - **Film**: `SequenceRuntime`, `ColorPipeline`, `EXRIO`, `CinematicRenderer`

@@ -23,7 +23,7 @@ EditorApp
 
 Engine
 ├── SceneRuntime / ScriptRuntime / AudioRuntime
-├── RHIWGPU / RenderBackend / PlatformShell
+├── NativeRHI / RenderBackend / PlatformShell
 ├── AssetPipeline / SequenceRuntime / CinematicRenderer
 └── IntentRuntime / CapabilityRuntime / AIRuntime / ObservationBus
 ```

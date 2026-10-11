@@ -1,7 +1,5 @@
 # Downloads the fixed official Wasmtime Component C API dynamic library and
-# packages it as an XCFramework. A dynamic artifact keeps Wasmtime's Rust
-# runtime out of the final static link, where it would otherwise collide with
-# wgpu-native's independent Rust runtime.
+# packages the prebuilt C API as an XCFramework; no local Rust toolchain is required.
 
 if(NOT APPLE)
     message(STATUS "Embedded Wasmtime PluginHost is currently unavailable on this host (fail closed)")

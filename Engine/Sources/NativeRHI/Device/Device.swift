@@ -68,6 +68,7 @@ public final class Device {
     /// Creates a device, trying the configured backends in order and using the
     /// first that constructs successfully.
     public static func make(_ config: DeviceConfig = DeviceConfig()) throws -> Device {
+        try config.validate()
         var lastError: Error?
 
         for api in config.preferredBackends {

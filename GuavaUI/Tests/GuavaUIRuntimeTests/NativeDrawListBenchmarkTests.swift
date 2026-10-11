@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 import NativeRHI
-import RHIWGPU
 import Testing
 @testable import GuavaUIRuntime
 
@@ -53,7 +52,7 @@ private struct NativeUISubmissionPhases: Encodable {
     }
 }
 
-/// Each index identifies the same paired block in both backend reports.
+/// Each block measures the same native workload after warmup.
 private struct NativeUIBenchmarkBlock: Encodable {
     let cpuFrame: NativeUITiming
     let cpuRecord: NativeUITiming
@@ -110,8 +109,6 @@ private struct NativeUIFrameTiming {
 private struct NativeUIBenchmarkScopes: Encodable {
     let nativeRecord = "UI preparation and abstract command recording"
     let nativeSubmit = "validation, dependency planning, native encoding and queue submission; includes frame acknowledgment/end"
-    let wgpuRecord = "UI preparation, abstract recording and CommandEncoder.finish (validation, local tracking, native encoding)"
-    let wgpuSubmit = "global state reconciliation, pending writes, lifetime tracking and queue submission"
     let comparableCPU = "cpuFrame includes frame setup and recording/submission; excludes explicit three-frame GPU drains"
     let nativePhaseProfiling = ProcessInfo.processInfo.environment["GUAVA_NATIVE_SUBMISSION_PROFILE"] == "1"
 }
@@ -227,17 +224,12 @@ struct NativeDrawListBenchmarkTests {
             // image assets share an atlas or solids share the fallback).
             #expect(statistics.drawCalls <= list.batches.filter { $0.indexCount > 0 && $0.scissor?.width != 0 }.count)
             try context.native.configure(format: format.native, sampleCount: 4)
-            try context.reference.configure(format: format.reference, sampleCount: 4)
+            try context.reference.configure(format: format.native, sampleCount: 4)
             let output = try context.nativeOutput(format: format.native, size: size)
             let multisample = try TextureResource(device: context.device, descriptor: TextureDescriptor(width: size.x, height: size.y,
                 format: format.native, usage: .colorTarget, sampleCount: 4))
             var target = RenderColorTarget(texture: multisample.texture, loadAction: .clear(SIMD4(0.07, 0.09, 0.12, 0.5)), store: false)
             target.resolveTexture = output.texture
-            let referenceOutput = try context.backend.createTexture(width: UInt32(size.x), height: UInt32(size.y),
-                format: format.reference, usage: .renderAttachment)
-            let referenceMS = try context.backend.createTexture(width: UInt32(size.x), height: UInt32(size.y),
-                format: format.reference, usage: .renderAttachment, sampleCount: 4)
-            let referenceOutputView = try referenceOutput.createView(), referenceMSView = try referenceMS.createView()
             var lastStatistics = statistics
             let native = NativeUIBenchmarkBackend(name: "native-metal", render: {
                 try context.device.beginFrame()
@@ -257,25 +249,7 @@ struct NativeDrawListBenchmarkTests {
                         submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded, profile: profile)
                 } catch { context.device.endFrame(); throw error }
             }, finish: { try context.device.waitUntilIdle() })
-            let reference = NativeUIBenchmarkBackend(name: "wgpu-metal", render: {
-                let start = DispatchTime.now().uptimeNanoseconds
-                let encoder = try context.backend.createCommandEncoder()
-                let pass = try encoder.beginRenderPass(colorView: referenceMSView, resolveTargetView: referenceOutputView,
-                    storeOp: .discard, clearColor: GPUColor(r: 0.07, g: 0.09, b: 0.12, a: 0.5))
-                let draws = try context.reference.render(list: list, pass: pass, viewportPx: (UInt32(size.x), UInt32(size.y)),
-                    coordinateSpace: (viewport.logical.x, viewport.logical.y))
-                // The reference (wgpu) renderer still emits one draw per batch; it
-                // is the native baseline we compare against, not a coalescing peer.
-                guard draws == list.batches.filter({ $0.indexCount > 0 && $0.scissor?.width != 0 }).count else {
-                    throw RHIError.invalidArgument("reference UI draw count changed")
-                }
-                pass.end(); let buffer = try encoder.finish()
-                let recorded = DispatchTime.now().uptimeNanoseconds
-                context.backend.submit(buffer)
-                return NativeUIFrameTiming(recordNanoseconds: recorded - start,
-                    submitNanoseconds: DispatchTime.now().uptimeNanoseconds - recorded)
-            }, finish: { try context.backend.waitUntilIdle() })
-            let results = try measurePair(native, reference)
+            let results = try measure(native)
             #expect(lastStatistics.drawCalls == statistics.drawCalls && lastStatistics.textureUploads == 0)
             let report = NativeUIBenchmarkReport(device: context.device.deviceName, scenario: name, width: size.x, height: size.y,
                 work: NativeUIBenchmarkWork(vertices: list.vertices.count, indices: list.indices.count, draws: statistics.drawCalls,
@@ -318,17 +292,12 @@ struct NativeDrawListBenchmarkTests {
 
     /// Alternate the first backend of six equal blocks so one API does not
     /// consistently receive the colder CPU/GPU or the earlier scheduler slot.
-    private func measurePair(_ native: NativeUIBenchmarkBackend, _ reference: NativeUIBenchmarkBackend) throws -> [NativeUIBenchmarkResult] {
-        for backend in [native, reference] {
-            for frame in 0..<60 { _ = try backend.render(); if (frame + 1) % 3 == 0 { try backend.finish() } }
-            try backend.finish()
-        }
-        var a = NativeUIBenchmarkSamples(), b = NativeUIBenchmarkSamples()
-        for block in 0..<6 {
-            if block.isMultiple(of: 2) { try a.measure(native); try b.measure(reference) }
-            else { try b.measure(reference); try a.measure(native) }
-        }
-        return [a.result(native.name), b.result(reference.name)]
+    private func measure(_ backend: NativeUIBenchmarkBackend) throws -> [NativeUIBenchmarkResult] {
+        for frame in 0..<30 { _ = try backend.render(); if (frame + 1) % 3 == 0 { try backend.finish() } }
+        try backend.finish()
+        var accumulator = NativeUIBenchmarkSamples()
+        for _ in 0..<9 { try accumulator.measure(backend) }
+        return [accumulator.result(backend.name)]
     }
 }
 #endif

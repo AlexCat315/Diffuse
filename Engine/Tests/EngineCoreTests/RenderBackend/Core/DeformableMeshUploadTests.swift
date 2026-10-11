@@ -1,6 +1,6 @@
 import AssetPipeline
 import Foundation
-import RHIWGPU
+import NativeRHI
 import SceneRuntime
 import SIMDCompat
 import Testing
@@ -42,19 +42,12 @@ struct DeformableMeshUploadTests {
         )
     )
     func uploadsOncePerRevision() throws {
-        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true))
-        try backend.initialize()
-        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
-        defer {
-            renderer = nil
-            try? backend.shutdown()
-        }
-        let activeRenderer = try #require(renderer)
-        activeRenderer.initialize()
+        let device = try Device.make(DeviceConfig(enableValidation: true))
+        let activeRenderer = try NativeRenderer(device: device)
 
         let entity = EntityID(index: 1, generation: 0)
         var mesh = Self.makeQuad(entity: entity, revision: 1)
-        activeRenderer.render(packet: Self.packet(entity: entity, mesh: mesh, frame: 0))
+        try activeRenderer.renderChecked(packet: Self.packet(entity: entity, mesh: mesh, frame: 0))
         var stats = activeRenderer.currentFrameStats()
         #expect(stats.deformableMeshCount == 1)
         #expect(stats.deformableVertexCount == 4)
@@ -62,7 +55,7 @@ struct DeformableMeshUploadTests {
         #expect(stats.deformableRejectedMeshCount == 0)
         #expect(stats.deformableUploadedBytes == 408)
 
-        activeRenderer.render(packet: Self.packet(entity: entity, mesh: mesh, frame: 1))
+        try activeRenderer.renderChecked(packet: Self.packet(entity: entity, mesh: mesh, frame: 1))
         stats = activeRenderer.currentFrameStats()
         #expect(stats.deformableUploadedBytes == 0)
 
@@ -72,7 +65,7 @@ struct DeformableMeshUploadTests {
             positions: mesh.positions,
             triangleIndices: mesh.triangleIndices
         )
-        activeRenderer.render(packet: Self.packet(entity: entity, mesh: mesh, frame: 2))
+        try activeRenderer.renderChecked(packet: Self.packet(entity: entity, mesh: mesh, frame: 2))
         stats = activeRenderer.currentFrameStats()
         #expect(stats.deformableUploadedBytes == UInt64(4 * MeshAsset.vertexStride))
     }

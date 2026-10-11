@@ -401,7 +401,7 @@ struct DeveloperParticleDiagnosticsTests {
                                         gpuPresentSeconds: 0.006,
                                         drawCallCount: 30,
                                         passCount: 3,
-                                        renderBundleCount: 2)
+                                        meshBatchCount: 2)
             ),
             EditorFrameStatsHistorySample(
                 sampleIndex: 3,
@@ -412,7 +412,7 @@ struct DeveloperParticleDiagnosticsTests {
                                         gpuPresentSeconds: 0.005,
                                         drawCallCount: 20,
                                         passCount: 2,
-                                        renderBundleCount: 1)
+                                        meshBatchCount: 1)
             ),
         ]
 
@@ -427,7 +427,7 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(summary?.pacingDominatedSamples == 1)
         #expect(summary?.maxDrawCallCount == 30)
         #expect(summary?.maxPassCount == 3)
-        #expect(summary?.maxRenderBundleCount == 2)
+        #expect(summary?.maxMeshBatchCount == 2)
     }
 
     @Test("empty frame trend history has no summary")
@@ -910,7 +910,7 @@ struct DeveloperParticleDiagnosticsTests {
                                     gpuPresentSeconds: 0.002,
                                     drawCallCount: 8,
                                     passCount: 2,
-                                    renderBundleCount: 1)
+                                    meshBatchCount: 1)
         let slow = EditorFrameStats(frameSeconds: 0.045,
                                     simulationSeconds: 0.018,
                                     renderPrepareSeconds: 0.006,
@@ -918,7 +918,7 @@ struct DeveloperParticleDiagnosticsTests {
                                     gpuPresentSeconds: 0.012,
                                     drawCallCount: 42,
                                     passCount: 5,
-                                    renderBundleCount: 3)
+                                    meshBatchCount: 3)
 
         let monitors = makeDeveloperPerformanceMonitors(
             frameStats: slow,

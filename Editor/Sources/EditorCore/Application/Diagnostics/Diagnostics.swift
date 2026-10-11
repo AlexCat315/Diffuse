@@ -11,7 +11,7 @@ import PerceptionRuntime
 import PluginRuntime
 import SemanticPipeline
 import RenderBackend
-import RHIWGPU
+import NativeRHI
 import SceneRuntime
 import GuavaUICompose
 import GuavaUIRuntime
@@ -115,7 +115,7 @@ extension EditorApplication {
             gpuPresentSeconds: lastRenderSubmitSeconds,
             drawCallCount: renderStats.drawCallCount,
             passCount: renderStats.passCount,
-            renderBundleCount: renderStats.renderBundleCount,
+            meshBatchCount: renderStats.meshBatchCount,
             shadowedLightCount: renderStats.shadowedLightCount,
             shadowCascadeCount: renderStats.shadowCascadeCount,
             shadowMapResolution: renderStats.shadowMapResolution,

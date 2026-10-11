@@ -60,7 +60,7 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         let encoded = DispatchTime.now().uptimeNanoseconds
         try device.submit(commands)
         if let output = targets.color {
-            viewportPublication.publish(storage: .native(output),
+            viewportPublication.publish(resource: output,
                 region: ViewportSamplingRegion(size: packet.drawableSize, capacity: targets.size))
         } else { viewportPublication.clear() }
         if let image { try device.present(image) }

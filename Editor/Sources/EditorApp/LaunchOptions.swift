@@ -1,8 +1,8 @@
 import Foundation
-import RHIWGPU
+import NativeRHI
 
 struct EditorAppLaunchOptions {
-    let backendConfig: WGPUDeviceConfig
+    let backendConfig: DeviceConfig
     let projectDirectory: String?
     let useLegacy: Bool
     let validateInstall: Bool
@@ -13,19 +13,18 @@ struct EditorAppLaunchOptions {
     ) throws -> EditorAppLaunchOptions {
         let commandLine = try ParsedCommandLine(arguments: arguments)
         let configPath = commandLine.configPath
-            ?? environment["GUAVA_WGPU_CONFIG"]
+            ?? environment["GUAVA_RHI_CONFIG"]
 
         let fileConfig = try configPath.map(Self.loadConfigFile)
 
         let preferredBackends = try resolvePreferredBackends(
             commandLineValue: commandLine.backendList,
-            environmentValue: environment["GUAVA_WGPU_BACKENDS"],
-            fileValue: fileConfig?.wgpu?.preferredBackends
+            environmentValue: environment["GUAVA_RHI_BACKENDS"],
+            fileValue: fileConfig?.rhi?.preferredBackends
         )
 
-        let validationEnabled = fileConfig?.wgpu?.validationEnabled ?? true
-        let framesInFlight = fileConfig?.wgpu?.framesInFlight ?? 2
-        let libraryPath = fileConfig?.wgpu?.libraryPath
+        let validationEnabled = fileConfig?.rhi?.validationEnabled ?? true
+        let framesInFlight = fileConfig?.rhi?.framesInFlight ?? 2
         let projectDirectory = commandLine.projectDirectory
             ?? environment["GUAVA_PROJECT_DIR"]
 
@@ -33,11 +32,10 @@ struct EditorAppLaunchOptions {
             || environment["GUAVA_LEGACY"] == "1"
 
         return EditorAppLaunchOptions(
-            backendConfig: WGPUDeviceConfig(
-                validationEnabled: validationEnabled,
-                framesInFlight: framesInFlight,
-                libraryPath: libraryPath,
-                preferredBackends: preferredBackends
+            backendConfig: DeviceConfig(
+                preferredBackends: preferredBackends,
+                enableValidation: validationEnabled,
+                framesInFlight: framesInFlight
             ),
             projectDirectory: projectDirectory,
             useLegacy: useLegacy,
@@ -49,7 +47,7 @@ struct EditorAppLaunchOptions {
         commandLineValue: String?,
         environmentValue: String?,
         fileValue: [String]?
-    ) throws -> [WGPUBackendPreference] {
+    ) throws -> [GraphicsAPI] {
         if let commandLineValue {
             return try parseBackendList(commandLineValue)
         }
@@ -62,10 +60,10 @@ struct EditorAppLaunchOptions {
             return try fileValue.map(parseBackendName)
         }
 
-        return WGPUBackendPreference.platformDefaultOrder
+        return NativeRHI.platformDefaultBackends
     }
 
-    private static func parseBackendList(_ rawValue: String) throws -> [WGPUBackendPreference] {
+    private static func parseBackendList(_ rawValue: String) throws -> [GraphicsAPI] {
         let names = rawValue
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -78,22 +76,14 @@ struct EditorAppLaunchOptions {
         return try names.map(parseBackendName)
     }
 
-    private static func parseBackendName(_ rawName: String) throws -> WGPUBackendPreference {
+    private static func parseBackendName(_ rawName: String) throws -> GraphicsAPI {
         switch rawName.lowercased() {
-            case "auto", "automatic":
-                return .automatic
-            case "d3d11", "dx11":
-                return .d3d11
-            case "d3d12", "dx12":
-                return .d3d12
+            case "dx12":
+                return .dx12
             case "metal":
                 return .metal
             case "vulkan":
                 return .vulkan
-            case "opengl", "gl":
-                return .openGL
-            case "opengles", "gles":
-                return .openGLES
             default:
                 throw EditorAppLaunchError.invalidBackendName(rawName)
         }
@@ -128,25 +118,25 @@ private struct ParsedCommandLine {
         while index < arguments.count {
             let argument = arguments[index]
             switch argument {
-                case "--wgpu-backends":
+                case "--rhi-backends":
                     index += 1
                     guard index < arguments.count else {
                         throw EditorAppLaunchError.missingValue(argument)
                     }
                     backendList = arguments[index]
 
-                case let value where value.hasPrefix("--wgpu-backends="):
-                    backendList = String(value.dropFirst("--wgpu-backends=".count))
+                case let value where value.hasPrefix("--rhi-backends="):
+                    backendList = String(value.dropFirst("--rhi-backends=".count))
 
-                case "--wgpu-config":
+                case "--rhi-config":
                     index += 1
                     guard index < arguments.count else {
                         throw EditorAppLaunchError.missingValue(argument)
                     }
                     configPath = arguments[index]
 
-                case let value where value.hasPrefix("--wgpu-config="):
-                    configPath = String(value.dropFirst("--wgpu-config=".count))
+                case let value where value.hasPrefix("--rhi-config="):
+                    configPath = String(value.dropFirst("--rhi-config=".count))
 
                 case "--project-dir":
                     index += 1
@@ -179,13 +169,12 @@ private struct ParsedCommandLine {
 }
 
 private struct EditorAppConfigFile: Decodable {
-    let wgpu: WGPUSection?
+    let rhi: RHISection?
 
-    struct WGPUSection: Decodable {
+    struct RHISection: Decodable {
         let preferredBackends: [String]?
         let validationEnabled: Bool?
-        let framesInFlight: UInt32?
-        let libraryPath: String?
+        let framesInFlight: Int?
     }
 }
 

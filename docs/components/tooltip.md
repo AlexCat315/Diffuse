@@ -4,7 +4,7 @@
 
 ```swift
 LayerRoot {
-    Button(icon: .resource(UICommonIcons.close), tooltip: "Close panel") { close() }
+    Button(icon: .resource(UIIcons.Action.x), tooltip: "Close panel") { close() }
     Text("Status").tooltip("The current background task status.") {
         $0.delay = 0.45
         $0.maxWidth = 280

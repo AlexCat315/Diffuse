@@ -60,11 +60,6 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
 # ============================================================================
-# wgpu-native (downloaded at configure time — Rust project, can't be source-built here)
-# ============================================================================
-include(${CMAKE_SOURCE_DIR}/cmake/FetchWgpu.cmake)
-
-# ============================================================================
 # SDL3
 # ============================================================================
 include(${CMAKE_SOURCE_DIR}/cmake/BuildSDL3.cmake)

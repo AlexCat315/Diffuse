@@ -16,8 +16,8 @@ public final class NativeInGameUIRenderer: InGameUIProviding, @unchecked Sendabl
         renderer = try NativeDrawListRenderer(device: device)
     }
 
-    public func recordInGameUI(packet: RenderPacket, target: InGameUIRenderTarget) throws -> InGameUIRecording? {
-        guard case .native(let target) = target, target.device === device else {
+    public func recordInGameUI(packet: RenderPacket, target: NativeInGameUITarget) throws -> InGameUIRecording? {
+        guard target.device === device else {
             throw RHIError.invalidArgument("native HUD requires the scene's NativeRHI device")
         }
         guard let snapshot = source.consume() else { list.reset(); return nil }

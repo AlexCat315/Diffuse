@@ -9,7 +9,7 @@ import EngineKernel
 
 /// Integration tests for the mirror.input bridge and state.checkpoint /
 /// state.restore round trip. These exercise the full DevServer dispatch
-/// path without the GPU side of the FrameTap (which requires a live wgpu
+/// path without the GPU side of the FrameTap (which requires a live native GPU
 /// context not available in the test process).
 final class DevServerInputAndStateTests: XCTestCase {
 

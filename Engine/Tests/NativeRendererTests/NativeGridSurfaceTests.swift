@@ -20,7 +20,7 @@ final class NativeGridSurfaceTests: XCTestCase {
         window.isReleasedWhenClosed = false; defer { window.close() }
         let layer = CAMetalLayer(); layer.device = MTLCreateSystemDefaultDevice(); layer.pixelFormat = .bgra8Unorm
         let view = try XCTUnwrap(window.contentView); view.wantsLayer = true; view.layer = layer; layer.frame = view.bounds
-        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
         let renderer = try NativeRenderer(device: device, surface: .metalLayer(Unmanaged.passUnretained(layer).toOpaque()))
         for frame in 0..<6 {
             let size: UInt32 = frame < 3 ? 96 : 64
@@ -66,7 +66,7 @@ final class NativeGridSurfaceTests: XCTestCase {
         let layer = CAMetalLayer(); layer.device = MTLCreateSystemDefaultDevice(); layer.pixelFormat = .bgra8Unorm
         let view = try XCTUnwrap(window.contentView); view.wantsLayer = true; view.layer = layer
         layer.frame = view.bounds
-        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
         let renderer = try NativeGridRenderer(device: device, surface: .metalLayer(Unmanaged.passUnretained(layer).toOpaque()))
         for frame in 0..<6 {
             let size: UInt32 = frame < 3 ? 96 : 64

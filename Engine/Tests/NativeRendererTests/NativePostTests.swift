@@ -54,7 +54,7 @@ final class NativePostTests: XCTestCase {
 
     private func effects(_ api: GraphicsAPI) throws {
         let device = try makeDevice(api), renderer = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let reference = try SceneCapture(validation: true, api: api)
         var packet = PostProbeScene.packet(size: .init(width: 256,height: 192))
         clearEffects(&packet); packet.renderSettings.enableEditorGrid = false
         let baseline = try compare(packet,renderer: renderer,reference: reference,label: "baseline")
@@ -75,7 +75,7 @@ final class NativePostTests: XCTestCase {
     }
     private func parity(_ api: GraphicsAPI) throws {
         let device = try makeDevice(api), renderer = try NativeRenderer(device: device)
-        var reference = try WGPUSceneReference(validation: true)
+        var reference = try SceneCapture(validation: true, api: api)
         var packet = PostProbeScene.packet(size: .init(width: 256,height: 192))
         clearEffects(&packet)
         var previousColor: Texture?
@@ -97,7 +97,7 @@ final class NativePostTests: XCTestCase {
                 invalid.scene.instances.append(RenderInstance(meshIndex: 999,transform: matrix_identity_float4x4))
                 XCTAssertThrowsError(try renderer.renderChecked(packet: invalid))
                 // Recreated targets require a fresh history after recovery.
-                reference = try WGPUSceneReference(validation: true)
+                reference = try SceneCapture(validation: true, api: api)
             case 22: clearEffects(&packet); packet.renderSettings.stage = .r4LightingPBRShadow
             case 23:
                 packet.renderSettings.stage = .r5PostProcess; packet.renderSettings.enableTAA = true
@@ -121,9 +121,9 @@ final class NativePostTests: XCTestCase {
         packet.renderSettings.enableTAA = false; packet.renderSettings.enableBloom = false; packet.renderSettings.enableFXAA = false
     }
     private func makeDevice(_ api: GraphicsAPI) throws -> Device {
-        try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
+        try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
     }
-    private func compare(_ packet: RenderPacket, renderer: NativeRenderer, reference: WGPUSceneReference, label: String) throws -> Data {
+    private func compare(_ packet: RenderPacket, renderer: NativeRenderer, reference: SceneCapture, label: String) throws -> Data {
         try renderer.renderChecked(packet: packet); _ = try reference.render(packet: packet)
         let native = try GridImage.readback(device: renderer.device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
         let expected = try reference.readback(), delta = try GridImage.difference(native,expected)
@@ -132,7 +132,7 @@ final class NativePostTests: XCTestCase {
         let directory = URL(fileURLWithPath: "/tmp/guava-native-post")
         try FileManager.default.createDirectory(at: directory,withIntermediateDirectories: true)
         try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("\(label).ppm"))
-        try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("wgpu-\(label).ppm"))
+        try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(label).ppm"))
         return native
     }
 }

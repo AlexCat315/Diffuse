@@ -1,8 +1,10 @@
 # CPU 命令路径对照与提交计时
 
+> 历史对照记录：2026-10-11 已移除 WGPU 后端及其构建依赖，当前默认使用 NativeRHI。下文的 WGPU 版本、对照数据和复现命令描述移除前的实现；原始报告保留用于追溯。
+
 本次以提供的本地 NRI、NVRHI、slang-rhi 源码，以及本机 Cargo 缓存中的
 wgpu-core/wgpu-hal 29.0.3 实现为依据。三个参考目录是源码快照，没有 Git 元数据；
-不能据此声称它们是最新版本。本项目 WGPU 二进制的构建清单记录的是 wgpu-native
+不能据此声称它们是最新版本。当时项目 WGPU 二进制的构建清单记录的是 wgpu-native
 v29.0.1.1，revision `6aed50955d934ac36049ba8d002034841633ae02`；缓存中的
 wgpu-core 源码 revision 为 `4cbe6232b2d7c289b6e1a38416a6ae1461a22e81`。
 这里对照工作分工，不把参考实现当作已在本机运行过的性能基线。
@@ -131,4 +133,4 @@ Slang 路径，含真实 Metal 队列与存储读写）；GuavaUI Release 14 项
 窗口计时脚本支持 Release、交替 renderer 顺序及无镜像 readback 的 DevTools 采样，
 并在任何样本未提交/呈现时保留原始报告并拒绝结果。Editor Native 连续窗口功能流程
 及两组 300 帧采样已完成；配对 WGPU 的一次运行返回未呈现帧，随后单独 120 帧正常，
-原因尚未稳定复现，因此这组窗口数据不作为性能通过证据，默认 renderer 继续保持 WGPU。
+原因尚未稳定复现，因此这组窗口数据不作为性能通过证据，当时的默认 renderer 保持 WGPU。

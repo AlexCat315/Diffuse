@@ -286,7 +286,7 @@ struct ScriptPanel: View {
                             .background(.warning)
                             .cornerRadius(3)
                     }
-                    Icon(UICommonIcons.chevronDown, size: 8,
+                    Icon(UIIcons.Navigation.chevronDown, size: 8,
                          color: .onSurfaceVariant)
                 }
                 .padding(horizontal: 10, vertical: 6)

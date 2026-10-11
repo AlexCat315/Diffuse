@@ -18,7 +18,7 @@ Guava's core thesis is that creative intent, world state, runtime execution, and
 | Area | Current implementation |
 | --- | --- |
 | Primary language | Swift 6.1+ |
-| Graphics | WebGPU through wgpu-native |
+| Graphics | NativeRHI through Metal / Vulkan / DX12 |
 | Physics | Jolt Physics |
 | Platform | SDL3 and native adapters |
 | UI layout and text | Yoga, HarfBuzz, FreeType |

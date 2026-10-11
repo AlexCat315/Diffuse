@@ -101,7 +101,7 @@ func makeDeveloperWorkbenchIssues(
             evidence: [
                 "Draw calls \(renderStats.drawCallCount)",
                 "Passes \(renderStats.passCount)",
-                "Bundles \(renderStats.renderBundleCount)",
+                "Mesh batches \(renderStats.meshBatchCount)",
             ],
             recommendation: "Open the render debugger and inspect pass encode time before reducing scene content broadly.",
             target: DeveloperDiagnosticTarget(tab: .render,

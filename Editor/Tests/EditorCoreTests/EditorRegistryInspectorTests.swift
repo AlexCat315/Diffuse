@@ -129,7 +129,10 @@ struct EditorRegistryInspectorTests {
             $0.id == "module-form"
         })
         #expect(section.componentTypeID == "test.probe")
-        #expect(adapter.manifest() == before)
+        let after = adapter.manifest()
+        // Export timestamps describe each snapshot, not an authored scene edit.
+        #expect(after.roots == before.roots)
+        #expect(after.revision == before.revision)
         let field = try #require(section.fields.first { $0.id == "settings.gain" })
         #expect(field.isMixed)
         guard case let .constrainedNumber(gain, _, _, _, _) = field.value else {

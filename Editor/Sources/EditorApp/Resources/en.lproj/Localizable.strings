@@ -576,7 +576,7 @@
 "Pacing Gap" = "Pacing Gap";
 "Draw Calls" = "Draw Calls";
 "Passes" = "Passes";
-"Render Bundles" = "Render Bundles";
+"Mesh Batches" = "Mesh Batches";
 "CPU Encode" = "CPU Encode";
 "Render Scale" = "Render Scale";
 "Shading" = "Shading";

@@ -216,7 +216,7 @@ private struct ChatBubble: View {
                         .foregroundColor(.warning)
                 case .applied:
                     Row(alignment: .center, spacing: 4) {
-                        Icon(UICommonIcons.checkmark, size: 10, color: .success)
+                        Icon(UIIcons.Action.check, size: 10, color: .success)
                         Text(L("Applied"))
                             .font(.caption)
                             .foregroundColor(.success)

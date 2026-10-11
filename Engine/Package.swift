@@ -58,7 +58,6 @@ let package = Package(
         .library(name: "SIMDCompat", targets: ["SIMDCompat"]),
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
         .library(name: "EngineMath", targets: ["EngineMath"]),
-        .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
         .library(name: "NativeRHI", targets: ["NativeRHI"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "ImageDecodeBridge", targets: ["CImageDecodeBridge"]),
@@ -156,34 +155,6 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .binaryTarget(
-            name: "wgpu_native",
-            path: "vendor/wgpu_native.artifactbundle"
-        ),
-        .target(
-            name: "CWGPUBridge",
-            dependencies: ["wgpu_native"],
-            path: "Sources/Bridge/CWGPUBridge",
-            publicHeadersPath: "include",
-            linkerSettings: [
-                // wgpu_native (static) needs platform graphics frameworks linked at the app level.
-                .linkedFramework("Metal", .when(platforms: [.macOS])),
-                .linkedFramework("QuartzCore", .when(platforms: [.macOS])),
-                .linkedFramework("IOKit", .when(platforms: [.macOS])),
-                .linkedFramework("IOSurface", .when(platforms: [.macOS])),
-                // wgpu_native (static) needs these Win32 system libraries.
-                .linkedLibrary("d3d12", .when(platforms: [.windows])),
-                .linkedLibrary("d3d11", .when(platforms: [.windows])),
-                .linkedLibrary("dxgi", .when(platforms: [.windows])),
-                .linkedLibrary("dxguid", .when(platforms: [.windows])),
-                .linkedLibrary("userenv", .when(platforms: [.windows])),
-                .linkedLibrary("ws2_32", .when(platforms: [.windows])),
-                .linkedLibrary("bcrypt", .when(platforms: [.windows])),
-                .linkedLibrary("ntdll", .when(platforms: [.windows])),
-                .linkedLibrary("opengl32", .when(platforms: [.windows])),
-                .linkedLibrary("propsys", .when(platforms: [.windows])),
-            ]
-        ),
-        .binaryTarget(
             name: "Jolt",
             path: "vendor/Jolt.artifactbundle"
         ),
@@ -254,15 +225,6 @@ let package = Package(
         .target(name: "EngineMath", dependencies: ["SIMDCompat"]),
 
         // MARK: - Rendering
-        .target(
-            name: "RHIWGPU",
-            dependencies: [
-                "CWGPUBridge",
-                .product(name: "Logging", package: "swift-log"),
-            ]
-        ),
-
-        // MARK: - Native RHI (Metal implementation and backend foundations)
         .target(
             name: "NativeRHI",
             dependencies: nativeRHIInteropDependencies,
@@ -394,7 +356,6 @@ let package = Package(
                 "SIMDCompat",
                 "EngineKernel",
                 "EngineMath",
-                "RHIWGPU",
                 "NativeRHI",
                 "AssetPipeline",
                 "SceneRuntime",
@@ -425,7 +386,6 @@ let package = Package(
                 "CEngineBridge",
                 "EngineKernel",
                 "NativeRHI",
-                "RHIWGPU",
                 "RenderBackend",
                 "SceneRuntime",
                 "AssetPipeline",
@@ -454,12 +414,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "RenderBackendBenchmarks",
-            dependencies: [
-                "SIMDCompat",
-                "RenderBackend",
-                "RHIWGPU",
-                "SceneRuntime",
-            ],
+            dependencies: ["NativeRendererValidation"],
             path: "Benchmarks/RenderBackendBenchmarks"
         ),
         .executableTarget(
@@ -467,7 +422,6 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "RenderBackend",
-                "RHIWGPU",
                 "SceneRuntime",
             ],
             path: "Demos/StylizedCharacterPreviewDemo"
@@ -483,6 +437,7 @@ let package = Package(
         .testTarget(
             name: "EngineCoreTests",
             dependencies: [
+                "NativeRendererValidation",
                 "NativeRHI",
                 "SIMDCompat",
                 "EngineCore",
@@ -647,9 +602,9 @@ let package = Package(
         .executableTarget(name: "NativeRHIPassProbe",
             dependencies: ["NativeRendererValidation"]),
         .target(name: "NativeRendererValidation",
-            dependencies: ["RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat", "AssetPipeline"]),
+            dependencies: ["RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
         .testTarget(name: "NativeRendererTests",
-            dependencies: ["NativeRendererValidation", "RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "RHIWGPU", "SIMDCompat", "AssetPipeline"]),
+            dependencies: ["NativeRendererValidation", "RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
         .testTarget(
             name: "NativeRHITests",
             dependencies: [

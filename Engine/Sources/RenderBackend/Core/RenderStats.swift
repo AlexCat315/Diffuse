@@ -91,8 +91,6 @@ public struct RenderFrameStats: Sendable {
     public var passCount: Int
     public var drawCallCount: Int
     public var passDrawCallCounts: [RenderPassKind: Int]
-    public var renderBundleCount: Int
-    public var renderBundleParallelJobs: Int
     public var gpuParticleSimulationBatchCount: Int
     public var gpuParticleSimulationParticleCount: Int
     public var gpuParticleSimulationDispatchWorkgroups: Int
@@ -136,8 +134,6 @@ public struct RenderFrameStats: Sendable {
         passCount: Int = 0,
         drawCallCount: Int = 0,
         passDrawCallCounts: [RenderPassKind: Int] = [:],
-        renderBundleCount: Int = 0,
-        renderBundleParallelJobs: Int = 0,
         gpuParticleSimulationBatchCount: Int = 0,
         gpuParticleSimulationParticleCount: Int = 0,
         gpuParticleSimulationDispatchWorkgroups: Int = 0,
@@ -180,8 +176,6 @@ public struct RenderFrameStats: Sendable {
         self.passCount = passCount
         self.drawCallCount = drawCallCount
         self.passDrawCallCounts = passDrawCallCounts
-        self.renderBundleCount = renderBundleCount
-        self.renderBundleParallelJobs = renderBundleParallelJobs
         self.gpuParticleSimulationBatchCount = gpuParticleSimulationBatchCount
         self.gpuParticleSimulationParticleCount = gpuParticleSimulationParticleCount
         self.gpuParticleSimulationDispatchWorkgroups = gpuParticleSimulationDispatchWorkgroups

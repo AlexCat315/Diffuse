@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRHI 编辑器网格 pass
 
 `NativeEditorGridPass` 将现有 editor_grid pass 接入 NativeRHI，复用 `RenderPacket`、`RenderCameraMatrices`、`EditorGridPlane` 和 `EditorGridUniforms`。Slang 与 WGSL 执行相同的平面射线求交、抗锯齿、网格 LOD、轴线颜色和深度计算。两个后端均以一个 fullscreen triangle、相同 BGRA8 / Depth32 单采样目标及 alpha blend 执行。

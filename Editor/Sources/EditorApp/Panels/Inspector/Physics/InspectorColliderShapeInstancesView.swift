@@ -101,7 +101,7 @@ extension InspectorPanel {
                         selectedIndex.wrappedValue = isExpanded ? nil : index
                     }) {
                         Row(alignment: .center, spacing: 5) {
-                            Icon(isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight,
+                            Icon(isExpanded ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight,
                                  size: 10, color: .onSurfaceVariant)
                             Text("#\(index + 1)  \(shapeKindLabel(instance?.shape.kind ?? .box))")
                                 .lineLimit(1)
@@ -115,18 +115,18 @@ extension InspectorPanel {
                     .controlSize(.small)
                     .flex(1, shrink: 1, basis: 0)
                     .debugName("collider-shape-\(index)-disclosure")
-                    Button(icon: .resource(UICommonIcons.chevronUp), size: 10,
+                    Button(icon: .resource(UIIcons.Navigation.chevronUp), size: 10,
                            isEnabled: index > 0, tooltip: L("Move shape up"), action: moveUp)
                         .buttonStyle(.ghost)
                         .frame(width: 20, height: 24)
                         .debugName("collider-shape-\(index)-up")
-                    Button(icon: .resource(UICommonIcons.chevronDown), size: 10,
+                    Button(icon: .resource(UIIcons.Navigation.chevronDown), size: 10,
                            isEnabled: index + 1 < binding.wrappedValue.count,
                            tooltip: L("Move shape down"), action: moveDown)
                         .buttonStyle(.ghost)
                         .frame(width: 20, height: 24)
                         .debugName("collider-shape-\(index)-down")
-                    Button(icon: .resource(UICommonIcons.close),
+                    Button(icon: .resource(UIIcons.Action.x),
                            size: 10,
                            isEnabled: binding.wrappedValue.count > 1,
                            tooltip: L("Remove shape"),

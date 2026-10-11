@@ -29,8 +29,8 @@ final class NativeStylizedTests: XCTestCase {
     func testVulkanStylizedThinBackfacesAndMirrors() throws { try backfaces(.vulkan) }
     #endif
     private func defaults(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
-        let renderer = try NativeRenderer(device: device), reference = try WGPUSceneReference(validation: true)
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
+        let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         var packet = PBRProbeScene.packet(size: .init(width: 320,height: 192))
         packet.renderSettings.enableStylizedCharacterShading = true
         _ = try compare(packet,renderer: renderer,reference: reference,label: "default")
@@ -46,8 +46,8 @@ final class NativeStylizedTests: XCTestCase {
         for vertex in 0..<mesh.vertexCount { mesh.vertices[vertex*MeshAsset.vertexFloatCount+1] = 0 }
         AssetRegistry.shared.registerForTesting(mesh,at: 2)
         defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
-        let renderer = try NativeRenderer(device: device), reference = try WGPUSceneReference(validation: true)
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
+        let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         var packet = MeshProbeScene.packet(size: .init(width: 128,height: 96))
         packet.renderSettings.enableStylizedCharacterShading = true
         packet.scene.camera = RenderCamera(eye: SIMD3(0,-3,4),target: .zero,near: 0.1,far: 100)
@@ -76,8 +76,8 @@ final class NativeStylizedTests: XCTestCase {
             AssetRegistry.shared.registerForTesting(asset,at: index)
         }
         defer { for index in 2...5 { AssetRegistry.shared.unregisterTestingMesh(at: index) } }
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
-        let renderer = try NativeRenderer(device: device), reference = try WGPUSceneReference(validation: true)
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
+        let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         var packet = PBRProbeScene.packet(size: .init(width: 256,height: 192))
         packet.renderSettings.enableEditorGrid = false
         let actor = EntityID(rawValue: 300), deformable = EntityID(rawValue: 301)
@@ -147,14 +147,14 @@ final class NativeStylizedTests: XCTestCase {
             XCTAssertGreaterThan(try GridImage.difference(snapshots[a],snapshots[b]).pixelsOverThree,20,"stylized setting \(a)→\(b) must change pixels")
         }
     }
-    private func compare(_ packet: RenderPacket, renderer: NativeRenderer, reference: WGPUSceneReference, label: String) throws -> Data {
+    private func compare(_ packet: RenderPacket, renderer: NativeRenderer, reference: SceneCapture, label: String) throws -> Data {
         try renderer.renderChecked(packet: packet); _ = try reference.render(packet: packet)
         let native = try GridImage.readback(device: renderer.device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
         let expected = try reference.readback(), delta = try GridImage.difference(native,expected)
         let directory = URL(fileURLWithPath: "/tmp/guava-native-stylized")
         try FileManager.default.createDirectory(at: directory,withIntermediateDirectories: true)
         try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("\(label).ppm"))
-        try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("wgpu-\(label).ppm"))
+        try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(label).ppm"))
         XCTAssertLessThan(delta.meanAbsoluteChannelError,0.5,"\(label): \(delta)")
         XCTAssertLessThan(delta.pixelsOverThree,max(1,delta.pixelCount/100),"\(label): \(delta)")
         return native

@@ -27,8 +27,7 @@ public enum NativePassBenchmark {
             if options.scene == .post { return PostProbeScene.packet(size: options.size,frame: frame) }
             if options.scene == .animated { return AnimatedProbeScene.packet(size: options.size,frame: frame) }
             var p = packet; p.frameIndex = frame
-            // Exercise the complete HDR frame on both renderers. A static WGPU
-            // view would reuse its opaque snapshot and measure a different workload.
+            // Move the camera to measure the complete HDR frame rather than the opaque cache.
             if options.scene == .pbr { p.scene.camera.eye.x += Float(frame % 11)*0.002 }
             return p
         }
@@ -59,68 +58,19 @@ public enum NativePassBenchmark {
             results.append(result)
             print("\(result.backend): CPU p50 \(String(format: "%.1f", result.cpuFrame.p50Microseconds)) us, completed batch \(String(format: "%.3f", result.completedBatch.p50Microseconds / 1000)) ms/frame")
         }
-        let renderReference: (Int) throws -> RenderFrameStats
-        let finishReference: () throws -> Void
-        let readReference: () throws -> Data
-        if options.scene == .grid {
-            let reference = try WGPUGridReference(size: options.size)
-            renderReference = { frame in let p = framePacket(frame); return try reference.render(packet: p) }
-            finishReference = { try reference.finish() }; readReference = { try reference.readback() }
-        } else {
-            let reference = try WGPUSceneReference()
-            renderReference = { frame in
-                let result = try reference.render(packet: framePacket(frame))
-                if (options.scene == .pbr || options.scene == .animated || options.scene == .stylized) && reference.renderer.lastFrameUsedOpaqueCache {
-                    throw RHIError.invalidArgument("scene reference unexpectedly reused an opaque snapshot")
-                }
-                return result
-            }
-            finishReference = { try reference.finish() }; readReference = { try reference.readback() }
+        guard let baseline = results.first, let expected = images[baseline.backend] else {
+            throw RHIError.invalidArgument("benchmark needs a native backend")
         }
-        let result = try measure(name: WGPUReferenceConfiguration.name, device: "wgpu-native \(WGPUReferenceConfiguration.preference.rawValue)", options: options,
-            render: renderReference, finish: finishReference)
-        let expected = try readReference(); images[result.backend] = expected; results.append(result)
-        if options.scene == .post {
-            for native in results where native.backend != result.backend {
-                for kind in [RenderPassKind.ssao,.ssr,.taa,.bloom,.fxaa,.tonemap] {
-                    guard native.passFrames[kind.rawValue] == result.passFrames[kind.rawValue],
-                          (native.passFrames[kind.rawValue] ?? 0) > 0 else {
-                        throw RHIError.invalidArgument("post benchmark pass workload differs: \(native.backend) \(kind)")
-                    }
-                }
-            }
-        }
-        if options.scene == .stylized {
-            for native in results where native.backend != result.backend {
-                for kind in [RenderPassKind.outline,.inkPaperPost] {
-                    guard native.passFrames[kind.rawValue] == result.passFrames[kind.rawValue],
-                          native.passDraws[kind.rawValue] == result.passDraws[kind.rawValue],
-                          (native.passDraws[kind.rawValue] ?? 0) > 0 else {
-                        throw RHIError.invalidArgument("stylized benchmark workload differs: \(native.backend) \(kind)")
-                    }
-                }
-            }
-        }
-        if options.scene == .particles || options.scene == .simulation {
-            for native in results where native.backend != result.backend {
-                guard native.particleWork == result.particleWork, native.particleWork.candidates > 0,
-                      native.particleWork.indirectDraws > 0,
-                      native.passFrames == result.passFrames, native.passDraws == result.passDraws else {
-                    throw RHIError.invalidArgument("particle benchmark compute/indirect workloads differ: \(native.backend)")
-                }
-                if options.scene == .simulation {
-                    guard native.simulationWork == result.simulationWork,
-                          native.simulationWork.particles > 0, native.simulationWork.sortPasses > 0,
-                          native.simulationWork.renderInstances > 0 else {
-                        throw RHIError.invalidArgument("resident particle benchmark workloads differ: \(native.backend)")
-                    }
-                }
+        for result in results.dropFirst() {
+            guard result.passFrames == baseline.passFrames, result.passDraws == baseline.passDraws,
+                  result.particleWork == baseline.particleWork, result.simulationWork == baseline.simulationWork else {
+                throw RHIError.invalidArgument("native backend workloads differ")
             }
         }
         var differences: [String: GridImageDifference] = [:]
         for (name, image) in images {
             try GridImage.writePPM(image, size: options.size, to: options.output.appendingPathComponent("\(name).ppm"))
-            if name != result.backend { differences[name] = try GridImage.difference(image, expected) }
+            if name != baseline.backend { differences[name] = try GridImage.difference(image, expected) }
         }
         let report = PassBenchmarkReport(scene: options.scene.rawValue, size: options.size, frames: options.frames, warmup: options.warmup,
             repeats: options.repeats, results: results, imageDifferences: differences)
@@ -130,7 +80,7 @@ public enum NativePassBenchmark {
         for (name, difference) in differences {
             guard difference.meanAbsoluteChannelError < 0.5,
                   difference.pixelsOverThree < max(1, difference.pixelCount / 100) else {
-                throw RHIError.invalidArgument("\(name) image differs from WGPU: \(difference)")
+                throw RHIError.invalidArgument("\(name) image differs from the first native backend: \(difference)")
             }
         }
     }
