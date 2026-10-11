@@ -39,14 +39,16 @@ struct TreeStory: View {
     var body: some View {
         StorySection("Scene hierarchy", "Search keeps matching ancestors. Use arrows to expand and navigate; Command-click selects multiple nodes.") {
             TextField("Search nodes…", text: $search) { $0.behavior.clearable = true }.frame(width: 300)
-            Tree(galleryTree, id: \.id, children: { $0.children }, configure: { tree in
-                tree.selection.primary = $selection
-                tree.selection.multiple = $selectedIDs
-                tree.selection.expanded = $expanded
-                tree.search.query = search.stringValue
-                tree.search.text = { $0.title }
-            }) { node, _, _, _ in
-                Text(node.title).font(.body)
+            ScrollView(.vertical, scrollbarGutter: .stable) {
+                Tree(galleryTree, id: \.id, children: { $0.children }, configure: { tree in
+                    tree.selection.primary = $selection
+                    tree.selection.multiple = $selectedIDs
+                    tree.selection.expanded = $expanded
+                    tree.search.query = search.stringValue
+                    tree.search.text = { $0.title }
+                }) { node, _, _, _ in
+                    Text(node.title).font(.body)
+                }.flex(0, shrink: 0)
             }.frame(height: 250).flex(0, shrink: 0).debugName("gallery-tree")
             Text("Selected: \(selectedIDs.sorted().joined(separator: ", "))").font(.caption).foregroundColor(.onSurfaceMuted)
         }
@@ -98,11 +100,31 @@ struct ChartStory: View {
 /// has to survive. A catalog page is the only way to notice that one glyph went
 /// muddy at 12px before it ships inside a control.
 struct IconStory: View {
+    let options: GalleryOptions
+    @State private var actions = 0
     @State private var query: TextBuffer = ""
     @State private var size: Double = 20
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Accessible icon sizing", "Icons and icon buttons follow the Scale control above. A local policy can keep artwork fixed without changing text.") {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 20) {
+                    Icon(UIIcons.File.folder, size: .small).debugName("icon-small")
+                    Icon(UIIcons.File.folder, size: .medium).debugName("icon-medium")
+                    Icon(UIIcons.File.folder, size: .large).debugName("icon-large")
+                    Icon(UIIcons.File.folder, size: 31).debugName("icon-explicit")
+                    Text("small · medium · large · 31 pt").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) {
+                    Button(icon: .resource(UIIcons.Action.settings), isEnabled: options.isEnabled, tooltip: "Project settings") { actions += 1 }.buttonStyle(.secondary)
+                        .debugName("icon-button-adaptive")
+                    Button(icon: .resource(UIIcons.Action.settings), isEnabled: options.isEnabled, tooltip: "Fixed icon") { actions += 1 }.buttonStyle(.secondary)
+                        .iconScaling(.fixed).debugName("icon-button-fixed")
+                    Button(icon: .resource(UIIcons.Action.settings), isLoading: true, tooltip: "Loading settings") {}
+                        .buttonStyle(.secondary).debugName("icon-button-loading")
+                    Text("Adaptive · fixed · loading · \(actions) actions").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+            }
             StorySection("Semantic SVG icons", "Alpha-mask assets inherit foreground color and follow light/dark themes.") {
                 Row(alignment: .center, spacing: 20) {
                     Icon(UIIcons.Action.check, size: 20, color: .success)

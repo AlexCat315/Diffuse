@@ -76,7 +76,7 @@ public enum GalleryCatalog {
         .init(.combobox, "Combobox", "Inputs", "Searchable typed options, keyboard highlight, empty results and clearing."),
         .init(.notification, "Notification", "Feedback", "Stable-ID replacement, queued toasts, expiry, hover pause and dismissal."),
         .init(.tooltip, "Tooltip", "Overlays", "Delayed pointer and keyboard-focus descriptions outside clipping."),
-        .init(.sidebar, "Sidebar", "Navigation", "Grouped destinations, badges, disabled items and header/footer slots."),
+        .init(.sidebar, "Sidebar", "Navigation", "Themed icons, aligned destinations, badges, keyboard scrolling and header/footer slots."),
         .init(.table, "Table", "Data", "Virtualized rows, stable sorting, selection, fixed headers and resizable columns."),
         .init(.dataTable, "DataTable", "Data", "Persistent large-data model, background sorting, frozen columns, multi-selection and cell editing."),
         .init(.calendar, "Calendar", "Inputs", "Calendar-aware month grids, disabled dates and keyboard day navigation."),

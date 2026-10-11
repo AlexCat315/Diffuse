@@ -51,11 +51,17 @@ public struct Icon: View {
 
     public var body: some View {
         ThemeReader { theme in
-            let resolved: Float = switch size {
-            case .points(let value): value
-            case .semantic(let role): role.resolve(theme)
+            IconMetricsReader { metrics in
+                let resolved: Float = switch size {
+                case .points(let value): metrics.size(value)
+                case .semantic(let role): metrics.size(role)
+                }
+                // Keep layout slots/padding separate from the SVG's own size.
+                // A surrounding .frame is a container, not a glyph resize.
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    image(resource: theme.icons.resolve(resource), size: resolved)
+                }
             }
-            image(resource: theme.icons.resolve(resource), size: resolved.isFinite ? max(1, resolved) : 16)
         }
     }
 

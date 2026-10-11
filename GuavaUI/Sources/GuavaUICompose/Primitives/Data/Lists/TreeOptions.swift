@@ -19,6 +19,17 @@ public struct TreeLayout: Equatable {
     public var showsIndentGuides = true
     public var trailingSlotWidth: Float = 64
     public init() {}
+    /// Virtualization, hit testing, indentation guides and disclosure slots
+    /// consume one resolved geometry, so scaling cannot drift between them.
+    func resolved(textScaler: TextScaler, icons: IconMetrics) -> Self {
+        var result = self
+        result.rowHeight = max(textScaler.scale(rowHeight), icons.size(.small) + 4)
+        result.rowSpacing = textScaler.scale(rowSpacing)
+        result.indentation = indentation * max(textScaler.factor, icons.factor)
+        result.disclosureWidth = disclosureWidth > 0 ? max(icons.size(disclosureWidth), icons.size(.small)) : 0
+        result.trailingSlotWidth = textScaler.scale(trailingSlotWidth)
+        return result
+    }
     mutating func validate() {
         rowHeight = max(1, rowHeight)
         rowSpacing = max(0, rowSpacing)

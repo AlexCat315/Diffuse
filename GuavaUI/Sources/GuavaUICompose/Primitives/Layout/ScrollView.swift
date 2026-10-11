@@ -150,6 +150,19 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                              physics: node.scrollPhysics)
         Self.publishScrollRange(to: motion, on: node)
         motion.adopt(node.contentOffset)
+        node.attachments[ScrollReveal.handlerKey] = { [weak node] (target: CGRect) in
+            guard let node else { return }
+            Self.publishScrollRange(to: motion, on: node)
+            let viewport = Self.visibleViewportRect(for: node).offsetBy(dx: node.absoluteOrigin.x, dy: node.absoluteOrigin.y)
+            var offset = node.contentOffset
+            if axes != .vertical {
+                offset.x += ScrollReveal.delta(start: target.minX, end: target.maxX, viewportStart: viewport.minX, viewportEnd: viewport.maxX)
+            }
+            if axes != .horizontal {
+                offset.y += ScrollReveal.delta(start: target.minY, end: target.maxY, viewportStart: viewport.minY, viewportEnd: viewport.maxY)
+            }
+            motion.adopt(offset)
+        } as (CGRect) -> Void
 
         if node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] == nil {
             node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] = Float(0)

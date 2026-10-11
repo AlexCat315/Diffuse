@@ -111,6 +111,7 @@ struct AvatarFallback: View {
                     .foregroundColor(colors.foreground)
             }
         }.frame(width: diameter, height: diameter).background(colors.background).cornerRadius(radius).clipped()
+            .iconScaling(.fixed).textScaler(.identity)
     }
 }
 

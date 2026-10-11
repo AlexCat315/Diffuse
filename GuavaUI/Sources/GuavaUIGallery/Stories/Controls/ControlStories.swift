@@ -8,7 +8,7 @@ struct ButtonStory: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Variants", "Visual treatments communicate action priority.") {
-                Row(alignment: .center, spacing: 10) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 10) {
                     Button("Primary", isEnabled: options.isEnabled) { clicks += 1 }.debugName("gallery-primary-button")
                     Button("Secondary", isEnabled: options.isEnabled) { clicks += 1 }.buttonStyle(.secondary)
                     Button("Danger", isEnabled: options.isEnabled) { clicks += 1 }.buttonStyle(.destructive)
@@ -23,7 +23,7 @@ struct ButtonStory: View {
                     Button(isEnabled: options.isEnabled, tooltip: "Confirm changes", action: { clicks += 1 }) {
                         Row(alignment: .center, spacing: 6) { Icon(UIIcons.Action.check, size: 14); Text("Confirm") }
                     }
-                    Button(icon: .resource(UIIcons.Action.x), isEnabled: options.isEnabled, tooltip: "Close") { clicks += 1 }.buttonStyle(.secondary)
+                    Button(icon: .resource(UIIcons.Action.x), isEnabled: options.isEnabled, tooltip: "Close") { clicks += 1 }.buttonStyle(.secondary).debugName("gallery-icon-button")
                     Button(isEnabled: options.isEnabled, action: { clicks += 1 }) {
                         Row(alignment: .center, spacing: 6) { Text("Custom content"); Icon(UIIcons.Navigation.chevronDown, size: 12) }
                     }.buttonStyle(.secondary)
