@@ -16,6 +16,8 @@ public struct Theme: Sendable {
     public var motion: MotionScale
     public var inputs: InputAppearance
     public var textEmphasis = TextEmphasis()
+    public var icons = IconTheme()
+    public var extensions = ThemeExtensions()
 
     public init(colors: ColorScheme,
                 typography: Typography,

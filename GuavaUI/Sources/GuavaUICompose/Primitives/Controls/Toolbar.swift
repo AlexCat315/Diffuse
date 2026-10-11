@@ -1,7 +1,7 @@
 import GuavaUIRuntime
 
 public enum ToolbarMetrics {
-    public static let height: Float = 36
+    public static var height: Float { height(for: .regular) }
     public static var controlHeight: Float { height - 8 }
     public static func height(for size: ControlSize) -> Float { size.buttonHeight + 8 }
 }
@@ -71,7 +71,7 @@ private struct ToolbarHost<Content: View>: _PrimitiveView {
         return [Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if options.divider == .top { Divider() }
             Row(alignment: .center, spacing: theme.spacing.xs) { content }
-                .padding(horizontal: theme.spacing.sm).frame(height: ToolbarMetrics.height(for: size))
+                .padding(horizontal: theme.spacing.sm, vertical: 4).frame(minHeight: ToolbarMetrics.height(for: size))
             if options.divider == .bottom { Divider() }
         }.buttonStyle(.ghost).background(SemanticColorRef.surface).opacity(options.isEnabled ? 1 : 0.6)]
     }
@@ -103,7 +103,7 @@ private struct ToolbarGroupHost<Content: View>: _PrimitiveView {
             .padding(horizontal: isBordered ? 2 : 0)
             .background(isBordered ? theme.colors.surfaceVariant : .clear)
             .cornerRadius(isBordered ? theme.radius.sm : 0)
-            .frame(height: size.buttonHeight)]
+            .frame(minHeight: size.buttonHeight)]
     }
 }
 

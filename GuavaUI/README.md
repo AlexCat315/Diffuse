@@ -11,7 +11,9 @@ swift run --package-path GuavaUI GuavaUIDemo --component workspace
 swift run --package-path GuavaUI GuavaUIDemo --component dataTable
 ```
 
-画廊提供 72 个 Story、搜索、尺寸切换、禁用示例、明暗主题和独立重置。示例代码在 `Sources/GuavaUIGallery/`，宿主代码在 `Sources/GuavaUIDemo/`。Story 数量不是独立组件数量。
+画廊默认打开由真实组件组成的 Dashboard，提供 72 个 Story、搜索、尺寸切换、100–200% 文字缩放、禁用示例、明暗主题和独立重置。Theme 页可现场修改字体族、body 字号、图标和圆角，并操作局部主题下的输入框与按钮。示例代码在 `Sources/GuavaUIGallery/`，宿主代码在 `Sources/GuavaUIDemo/`。Story 数量不是独立组件数量。
+
+应用可以全局或局部设置 `Theme`，普通文字和输入默认继承 body；显式语义角色或任意值优先。`ThemeExtension`、`SemanticFontRef`、`SemanticColorRef`、`SemanticIconSize` 和 `ThemeMetric` 允许定义自己的设计系统，`IconTheme` 支持尺寸槽与资源替换。`AppConfig.textScaler` 与屏幕 DPI 独立，主窗口和辅助窗口共用宿主偏好。[设计系统契约](../docs/components/design-system.md)说明完整 API、覆盖优先级与系统适配边界。
 
 运行接入真实 SourceKit-LSP 的代码编辑器：
 

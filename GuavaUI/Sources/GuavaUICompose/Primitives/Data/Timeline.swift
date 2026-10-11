@@ -120,7 +120,7 @@ private struct _TimelineRow: View {
                 .cornerRadius(3.5)
                 .accessibilityHidden()
         } else {
-            Icon(event.icon ?? event.tone.icon, size: 18, color: event.tone.color)
+            Icon(event.icon ?? event.tone.icon, size: .medium, color: event.tone.color)
                 .accessibilityHidden()
         }
     }

@@ -15,8 +15,8 @@ enum DemoVSyncHolder {
     nonisolated(unsafe) static var enabled = !CommandLine.arguments.contains("--no-vsync")
 }
 let initialGalleryPage: GalleryPage = {
-    guard let index = CommandLine.arguments.firstIndex(of: "--component"), CommandLine.arguments.indices.contains(index + 1) else { return .button }
-    return GalleryCatalog.page(named: CommandLine.arguments[index + 1]) ?? .button
+    guard let index = CommandLine.arguments.firstIndex(of: "--component"), CommandLine.arguments.indices.contains(index + 1) else { return .introduction }
+    return GalleryCatalog.page(named: CommandLine.arguments[index + 1]) ?? .introduction
 }()
 
 // MARK: - Compose graph

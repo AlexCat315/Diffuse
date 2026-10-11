@@ -8,8 +8,9 @@ public struct GalleryView: View {
     @State private var appearance: Appearance
     @State private var options = GalleryOptions()
     @State private var resetGeneration = 0
+    @State private var textScale: Double? = 1
 
-    public init(initialPage: GalleryPage = .button, appearance: Appearance = .light) {
+    public init(initialPage: GalleryPage = .introduction, appearance: Appearance = .light) {
         _page = State(wrappedValue: initialPage)
         _appearance = State(wrappedValue: appearance)
     }
@@ -17,7 +18,7 @@ public struct GalleryView: View {
     public var body: some View {
         LayerRoot {
             Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                sidebar.frame(width: 226).flex(0, shrink: 0)
+                sidebar.frame(width: 240).flex(0, shrink: 0)
                 Divider(axis: .vertical)
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     header
@@ -27,6 +28,7 @@ public struct GalleryView: View {
                         page.makeStory(options: options)
                             .id("\(page.rawValue)-\(resetGeneration)")
                             .controlSize(options.size)
+                            .textScaler(TextScaler(Float(textScale ?? 1)))
                             .padding(24)
                             .flex(0, shrink: 0)
                             .frame(minWidth: 0)
@@ -84,6 +86,11 @@ public struct GalleryView: View {
                 SelectOption(value: .mini, label: "Mini"), SelectOption(value: .small, label: "Small"),
                 SelectOption(value: .regular, label: "Medium"), SelectOption(value: .large, label: "Large")
             ]).frame(width: 118).debugName("gallery-size")
+            Text("Text").font(.caption).foregroundColor(.onSurfaceMuted)
+            Select(selection: $textScale, options: [
+                SelectOption(value: 1.0, label: "100%"), SelectOption(value: 1.25, label: "125%"),
+                SelectOption(value: 1.5, label: "150%"), SelectOption(value: 2.0, label: "200%")
+            ]).frame(width: 86).debugName("gallery-text-scale")
             Checkbox(isOn: Binding(get: { !options.isEnabled }, set: { options.isEnabled = !$0 }))
             Text("Disabled").font(.caption).foregroundColor(.onSurfaceVariant)
             Spacer()
@@ -101,10 +108,10 @@ struct StorySection<Content: View>: View {
     }
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 8) {
-            Text(title).font(.bodyStrong).foregroundColor(.onSurface)
-            Text(detail).font(.caption).foregroundColor(.onSurfaceMuted)
+            Text(title).font(.headline).foregroundColor(.onSurface)
+            Text(detail).font(.body).foregroundColor(.onSurfaceMuted)
             Box(direction: .column, alignItems: .stretch, spacing: 12) { content }
-                .padding(18).background(.surface).cornerRadius(8).border(.border, width: 1)
+                .padding(22).background(.surfaceRaised).cornerRadius(12).border(.border, width: 1)
         }.flex(0, shrink: 0).frame(minWidth: 0).debugName("story-section-\(title)")
     }
 }

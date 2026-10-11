@@ -30,7 +30,7 @@ public struct Accordion<ID: Hashable>: View {
                         Button(isEnabled: isEnabled && item.isEnabled, action: { toggle(item.id); focused = item.id }) {
                             Row(alignment: .center, spacing: 8) {
                                 Text(item.title).font(.label).flex(1, shrink: 1)
-                                Icon(expanded.wrappedValue.contains(item.id) ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight, size: 12)
+                                Icon(expanded.wrappedValue.contains(item.id) ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight, size: .small)
                             }.padding(12)
                         }.buttonStyle(AccordionHeaderStyle())
                             .accessibility { $0.state.isExpanded = expanded.wrappedValue.contains(item.id) }
@@ -79,12 +79,12 @@ public struct Breadcrumb<ID: Hashable>: View {
         return Row(alignment: .center, spacing: 4) {
             for (index, item) in items.enumerated() where !collapsed || index == 0 || index >= trailingStart {
                 AnyView(Row(alignment: .center, spacing: 4) {
-                    if index > 0 { Icon(UIIcons.Navigation.chevronRight, size: 10, color: .onSurfaceMuted).accessibilityHidden() }
+                    if index > 0 { Icon(UIIcons.Navigation.chevronRight, size: .small, color: .onSurfaceMuted).accessibilityHidden() }
                     if collapsed && index == trailingStart {
                         Popover(isPresented: $isPresented, width: 240, label: { Text("…").font(.label).padding(horizontal: 8) }) {
                             Menu(items[1..<trailingStart].map { entry in .item(MenuItem(id: entry.id, title: entry.title, isEnabled: entry.isEnabled, action: { onSelect(entry.id); isPresented = false })) }, width: 240)
                         }.accessibilityLabel("Hidden path items")
-                        Icon(UIIcons.Navigation.chevronRight, size: 10, color: .onSurfaceMuted).accessibilityHidden()
+                        Icon(UIIcons.Navigation.chevronRight, size: .small, color: .onSurfaceMuted).accessibilityHidden()
                     }
                     if index == items.count - 1 { Text(item.title).font(.label).foregroundColor(.onSurface) }
                     else { Button(item.title, isEnabled: item.isEnabled) { onSelect(item.id) }.buttonStyle(.ghost).controlSize(.small) }
@@ -159,7 +159,7 @@ public struct ButtonGroup<ID: Hashable>: View {
             Row(alignment: .center, spacing: 2) {
                 for item in items {
                     AnyView(Button(item.title, isEnabled: isEnabled && item.isEnabled, isSelected: selection.wrappedValue == item.id) { selection.wrappedValue = item.id }
-                        .buttonStyle(.toggle).modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: tabStop == item.id)))
+                        .buttonStyle(SegmentButtonStyle()).modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: tabStop == item.id)))
                 }
             }.padding(3).background(.surfaceVariant).cornerRadius(8)
         }

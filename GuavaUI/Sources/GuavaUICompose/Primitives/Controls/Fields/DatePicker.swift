@@ -33,7 +33,7 @@ public struct DatePicker: View {
                     Button(icon: .resource(UIIcons.Action.x), size: 12, isEnabled: options.presentation.isEnabled,
                            tooltip: "Clear date") { selection.wrappedValue = nil }.buttonStyle(.ghost).controlSize(.mini)
                 }
-                Icon(UIIcons.Navigation.chevronDown, size: 10)
+                Icon(UIIcons.Navigation.chevronDown, size: .small)
             }.padding(horizontal: 10).frame(height: 34).background(.surface).cornerRadius(6).border(.border, width: 1)
         }, content: {
             CalendarView(selection: Binding(get: { selection.wrappedValue }, set: { selection.wrappedValue = $0; isPresented = false })) {

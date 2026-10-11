@@ -895,7 +895,7 @@ private struct _TreeDisclosureSlotHost: View {
                         disclosureContent(isExpanded)
                             .frame(width: width, height: rowHeight)
                     } else {
-                        Icon(isExpanded ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight, size: 10, color: .onSurfaceVariant)
+                        Icon(isExpanded ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight, size: .small, color: .onSurfaceVariant)
                             .frame(width: width, height: rowHeight)
                     }
                 }

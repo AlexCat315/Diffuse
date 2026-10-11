@@ -141,8 +141,10 @@ struct MenuScrollMarker: ViewModifier {
 }
 
 struct MenuWindowBounds: ViewModifier {
+    let maxVisibleRows: Int
     func apply(node: Node) {
-        let preferredHeight = node.layoutNode?.maxHeight ?? .greatestFiniteMagnitude
+        let rowHeight = max(32, node.textScaler.scale(node.theme.typography.body.lineHeight) + 12)
+        let preferredHeight = Float(maxVisibleRows) * rowHeight
         func constrain(_ node: Node) {
             let height = min(preferredHeight, max(0, Float(portalWindowBounds(node).height) - 12))
             if node.layoutNode?.maxHeight != height { node.layoutNode?.maxHeight = height }
