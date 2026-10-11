@@ -292,6 +292,20 @@ public final class SDL3Shell: Shell {
             return window.isZoomed || window.styleMask.contains(.fullScreen)
         }
 
+        /// 完全收起：窗口从屏幕和 Dock 上一起消失，但进程继续跑。
+        /// 这是常驻型应用关窗口要的效果，最小化会把入口留在 Dock 里。
+        func hideNativeWindow() {
+            cocoaWindow?.orderOut(nil)
+        }
+
+        func showNativeWindow() {
+            guard let window = cocoaWindow else { return }
+            window.makeKeyAndOrderFront(nil)
+            // accessory 应用不在 Dock 里，显示之后要主动抢焦点，
+            // 否则窗口会开在别的窗口后面。
+            NSApp.activate(ignoringOtherApps: true)
+        }
+
         func performNativeWindowShortcut(scancode: UInt32, modifiers: UInt16) -> Bool {
             guard let window = cocoaWindow else { return false }
             let command = modifiers & (UInt16(GUAVA_SDL_KMOD_LGUI) | UInt16(GUAVA_SDL_KMOD_RGUI)) != 0
@@ -462,7 +476,9 @@ public final class SDL3Shell: Shell {
         isQuitting = false
 
 #if os(macOS)
-        NSApplication.shared.setActivationPolicy(.regular)
+        // 常驻型应用从建窗口起就不进 Dock，否则图标会先冒出来再被改回去，
+        // 看起来像闪了一下。
+        NSApplication.shared.setActivationPolicy(options.showsDockIcon ? .regular : .accessory)
 #endif
 
 #if os(macOS)
@@ -848,6 +864,26 @@ public final class SDL3Shell: Shell {
         handle.restoreNativeWindow()
 #else
         _ = SDL_RestoreWindow(handle.window)
+#endif
+    }
+
+    /// 完全收起窗口（进程继续跑）。macOS 上走 AppKit，
+    /// 这样窗口是真的从屏幕上移除，而不是在 Dock 里留一个最小化入口。
+    public func hideWindow(_ windowID: WindowID) {
+        guard let handle = windows[windowID] else { return }
+#if os(macOS)
+        handle.hideNativeWindow()
+#else
+        _ = SDL_HideWindow(handle.window)
+#endif
+    }
+
+    public func showWindow(_ windowID: WindowID) {
+        guard let handle = windows[windowID] else { return }
+#if os(macOS)
+        handle.showNativeWindow()
+#else
+        _ = SDL_ShowWindow(handle.window)
 #endif
     }
 
