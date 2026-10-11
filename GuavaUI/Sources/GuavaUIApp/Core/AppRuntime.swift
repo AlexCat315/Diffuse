@@ -153,7 +153,8 @@ public final class AppRuntime {
         mainInputContext.addScopedAmbient(PortalStoreAmbient(mainPortalStore))
         self.host = SDL3PlatformHost(
             title: config.title,
-            mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle),
+            mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle,
+                                             showsDockIcon: config.showsDockIcon),
             inputContext: mainInputContext
         )
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
@@ -352,6 +353,14 @@ public final class AppRuntime {
             restoreWindow: { [weak self] in
                 guard let id = self?.host.mainSession?.id else { return }
                 self?.host.restoreWindow(id)
+            },
+            hideWindow: { [weak self] in
+                guard let id = self?.host.mainSession?.id else { return }
+                self?.host.hideWindow(id)
+            },
+            showWindow: { [weak self] in
+                guard let id = self?.host.mainSession?.id else { return }
+                self?.host.showWindow(id)
             },
             closeWindow: { [weak self] in
                 guard let self, let id = self.host.mainSession?.id else { return }
