@@ -14,7 +14,8 @@ struct NativeUIBackdropTests {
 
     /// 8px bars: wide enough that simply reading the frame at a lower
     /// resolution still leaves a ripple, so only a real blur can flatten it.
-    private func stripedList(frosted: Bool) -> DrawList {
+    private func stripedList(frosted: Bool,
+                             fill: Color = Color(r: 1, g: 1, b: 1, a: 0.02)) -> DrawList {
         let list = DrawList()
         for x in stride(from: 0, to: 64, by: 16) {
             list.addRect(UIRect(x: Float(x), y: 0, width: 8, height: 64),
@@ -23,8 +24,9 @@ struct NativeUIBackdropTests {
         if frosted {
             list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 8))
         }
-        // Almost no fill: the test measures the backdrop, not the tint.
-        list.addRoundedRect(panel, radius: 4, color: Color(r: 1, g: 1, b: 1, a: 0.02))
+        // Almost no fill by default: those tests measure the backdrop, not the
+        // tint. A real panel passes its own material instead.
+        list.addRoundedRect(panel, radius: 4, color: fill)
         return list
     }
 
@@ -50,6 +52,50 @@ struct NativeUIBackdropTests {
         let inside = try contrast(pixels, row: 32, from: 20, to: 44)
         #expect(outside > 0.8)
         #expect(inside < outside * 0.5)
+    }
+
+    @Test("a material panel over content still shows it, softened")
+    func materialPanelTransmitsBlurredBackdrop() throws {
+        let context = try NativeUIDrawTestContext()
+        // The material's own colour, so the stripes behind it are not lifted by
+        // a white tint on the way through.
+        let material = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.76)
+        func measure(frosted: Bool, fill: Color) throws -> Float {
+            let (pixels, _) = try context.nativeImage(list: stripedList(frosted: frosted, fill: fill),
+                format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
+            return try contrast(pixels, row: 32, from: 20, to: 44)
+        }
+        let frosted = try measure(frosted: true, fill: material)
+        let plain = try measure(frosted: false, fill: material)
+        let clear = try measure(frosted: true, fill: Color(r: 1, g: 1, b: 1, a: 0.02))
+        print("frost-transmit frosted=\(frosted) plain=\(plain) clear=\(clear)")
+        #expect(frosted < plain * 0.5)
+    }
+
+    /// A flat backdrop is the case that exposed the frost as missing: a blurred
+    /// plain window is *identical* to a solid fill, so a menu over one reads as
+    /// paint rather than glass. Frost has to change what the panel looks like
+    /// even when there is no structure behind it to blur away.
+    @Test("frost is visible over a flat backdrop too")
+    func frostShowsOverAFlatBackdrop() throws {
+        let context = try NativeUIDrawTestContext()
+        let material = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.76)
+        // A plain mid-grey window: nothing to blur into anything else.
+        func panelPixel(frosted: Bool) throws -> (Float, Float, Float) {
+            let list = DrawList()
+            list.addRect(UIRect(x: 0, y: 0, width: 64, height: 64), color: Color(r: 0.62, g: 0.63, b: 0.66, a: 1))
+            if frosted { list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 8)) }
+            list.addRoundedRect(panel, radius: 4, color: material)
+            let (pixels, _) = try context.nativeImage(list: list, format: NativeUITestFormat.cases[0],
+                                                      samples: 1, viewport: viewport, backdropSource: true)
+            let offset = (32 * 64 + 32) * 4
+            return (Float(pixels[offset]) / 255, Float(pixels[offset + 1]) / 255, Float(pixels[offset + 2]) / 255)
+        }
+        let frosted = try panelPixel(frosted: true)
+        let plain = try panelPixel(frosted: false)
+        let delta = abs(frosted.0 - plain.0) + abs(frosted.1 - plain.1) + abs(frosted.2 - plain.2)
+        print("frost-flat frosted=\(frosted) plain=\(plain) delta=\(delta)")
+        #expect(delta > 0.02)
     }
 
     @Test("the same panel stays sharp when there is nothing to sample")
