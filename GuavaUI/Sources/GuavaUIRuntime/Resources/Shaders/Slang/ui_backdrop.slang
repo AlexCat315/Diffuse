@@ -93,7 +93,16 @@ float4 composite(BackdropVertex input) {
     // carries the two strengths here (they are unused by this mode).
     float3 backdrop = source.SampleLevel(sourceSampler, uv, 0).rgb;
     float luma = dot(backdrop, float3(0.2126, 0.7152, 0.0722));
-    backdrop = saturate(luma + (backdrop - luma) * params.blur.y + params.blur.w);
+    // The lift is mirrored around mid-luma. Over a dark backdrop glass reads as
+    // lit, so pushing up is right; over a light one the same push runs into
+    // white and does nothing at all — which is why the frost showed on the dark
+    // theme and went missing on the light one. Mid-grey is where any
+    // directional push is weakest, so it keeps a floor rather than collapsing
+    // to nothing and taking the frost with it.
+    float direction = 1 - 2 * luma;
+    direction = sign(direction) * max(abs(direction), 0.4);
+    backdrop = saturate(luma + (backdrop - luma) * params.blur.y
+                        + params.blur.w * direction);
     return float4(backdrop, coverage);
 }
 
