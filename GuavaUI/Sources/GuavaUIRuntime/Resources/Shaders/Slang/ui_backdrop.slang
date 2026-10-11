@@ -3,7 +3,8 @@
 // One program, three jobs, chosen by `params.blur.x`:
 //   0 — downsample the frame region behind a panel into a quarter-size target
 //   1 — separable gaussian, the direction coming from `params.blur.yz`
-//   2 — composite: the blurred result, masked to the panel's rounded rect
+//   2 — composite: the blurred result, lifted and masked to the panel's rect
+//       (`params.blur.yw` carry the lift here, see `composite`)
 //
 // The renderer ping-pongs two scratch textures and sizes them to the panel, so
 // a frosted menu costs four small passes instead of a full-frame copy. Sampling
@@ -83,7 +84,17 @@ float4 composite(BackdropVertex input) {
     // The margin captured around the panel keeps clamped edge pixels out of
     // the blur, so the composite can clamp without smearing them inward.
     float2 uv = clamp(sourceUV(input), float2(0, 0), float2(1, 1));
-    return float4(source.SampleLevel(sourceSampler, uv, 0).rgb, coverage);
+    // Blur alone is not a material. Over a plain window the blurred frame is
+    // the same colour as the fill, so the panel is indistinguishable from
+    // paint; the frost is only ever visible where the backdrop happened to
+    // have structure. Real glass also lifts what it passes: colour is pushed
+    // away from its own luma and the whole result comes up a little, so the
+    // material reads as glass over any backdrop, plain or busy. `blur.yw`
+    // carries the two strengths here (they are unused by this mode).
+    float3 backdrop = source.SampleLevel(sourceSampler, uv, 0).rgb;
+    float luma = dot(backdrop, float3(0.2126, 0.7152, 0.0722));
+    backdrop = saturate(luma + (backdrop - luma) * params.blur.y + params.blur.w);
+    return float4(backdrop, coverage);
 }
 
 [shader("fragment")]

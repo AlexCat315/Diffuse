@@ -109,6 +109,15 @@ final class NativeUIBackdropPass {
         case blit = 3
     }
 
+    /// Frost is more than a blur. Over a plain backdrop a blurred frame is the
+    /// same colour as the fill, so the panel is indistinguishable from paint —
+    /// the material would only ever show where the frame behind it happened to
+    /// have structure. Glass lifts what it passes: colour away from its own
+    /// luma, then the whole result up a little, which keeps the frost visible
+    /// over any backdrop.
+    private static let saturation: Float = 1.8
+    private static let lift: Float = 0.06
+
     private struct Params {
         var uvTransform: SIMD4<Float>  // xy = scale, zw = offset
         var blur: SIMD4<Float>         // x = mode, yz = uv step, w = sigma
@@ -227,7 +236,7 @@ final class NativeUIBackdropPass {
                                Float(panel.height) / Float(capture.height),
                                Float(panel.x - capture.x) / Float(capture.width),
                                Float(panel.y - capture.y) / Float(capture.height)),
-            blur: SIMD4(Mode.composite.rawValue, 0, 0, 0),
+            blur: SIMD4(Mode.composite.rawValue, Self.saturation, 0, Self.lift),
             shape: SIMD4(Float(panel.width) / 2, Float(panel.height) / 2, radius, 0),
             x0: clipX(panel.x, frame: frame.x), y0: clipY(panel.y, frame: frame.y),
             x1: clipX(panel.x + panel.width, frame: frame.x), y1: clipY(panel.y + panel.height, frame: frame.y))
