@@ -1,113 +1,54 @@
 # ScrollView
 
-可滚动视图。支持 `.vertical` / `.horizontal` / `.both`，根据内容尺寸自动决定是否绘制滚动条。
-
-## Anatomy
-
-```
-┌────────────────────────────────┐
-│                              ▲ │
-│                              █ │ ← vertical thumb (仅 contentH > viewH 时绘制)
-│         content              ░ │
-│                              ░ │
-│                              ▼ │
-└────────────────────────────────┘
-   ◀ ░░░░██████░░░ ▶                ← horizontal thumb (同条件)
-```
-
-## API
+可裁剪的纵向、横向或双轴滚动容器。内容尺寸由真实布局测量；普通 ScrollView 不会自动把大量内容变成虚拟列表。
 
 ```swift
-ScrollView {                  // 默认 .vertical
-    Box(.column, .stretch, spacing: 8) { … }
-}
-
-ScrollView(.horizontal) { Row { … } }
-ScrollView(.both) { … }
+ScrollView(.vertical, scrollbarGutter: .stable,
+           scrollOffset: $offset,
+           onGeometryChange: { geometry in /* offset / viewportSize / contentSize */ }) {
+    Box(direction: .column, alignItems: .stretch, spacing: 8) {
+        rows
+    }.flex(0, shrink: 0)
+}.frame(height: 280)
 ```
 
-| 参数 | 默认 | 说明 |
-| ---- | ---- | ---- |
-| `axes` | `.vertical` | `.vertical` / `.horizontal` / `.both` |
-| `content` | 必填 | 子视图，按指定 axes 自由溢出 |
+`scrollOffset`、`onViewportChange`、`onGeometryChange` 均可省略。程序写入不同的绑定偏移会中断旧运动并夹到有效范围；这是立即定位，尚无公开的带时长 scrollTo 动画协议。回调可能在布局/绘制时运行，应用应比较快照后才更新状态，避免每帧重组不相关的内容。
 
-## Tokens
+## 滚动与停止
 
-| 槽位 | 默认 | Token |
-| ---- | ---- | ----- |
-| track | `theme.colors.surfaceVariant` | theme |
-| thumb | `theme.colors.onSurfaceMuted` | theme |
+- wheel 的小数增量保持原精度，目前乘 `wheelStep`（默认 30 个逻辑点）；平台尚未提供设备种类、像素/行单位和手势阶段。
+- 框架用最后一个样本后 90ms 的 quiet window 推断释放。至少三个有效样本且速度超过 `minimumVelocity` 才起惯性；单次拨动只移动输入距离。这种推断仍存在交接停顿的可能，不能代替触控板原生 phase/momentum 协议。
+- 惯性按指数解析积分；起滑阈值 50pt/s 与停止阈值 `restVelocity = 2pt/s` 分离，避免在慢速尾段突然截断。不对运动或停止位置做整点取整。
+- 每个轴在抵达自己的边界时把速度交给自己的弹簧；另一个轴继续滑行，不等待两轴一起耗尽。弹簧使用解析阻尼解，零/负数/非有限时间步不改变位置；长帧不会触发不稳定积分。
+- 新滚轮输入中断旧惯性、清除旧采样并从当前位置继续。容器内按下鼠标取消正在运行和等待起滑的惯性；回弹仍返回边界，子控件照常收到按下事件。
+- thumb 拖动捕获指针，松开后根据新采样决定惯性或回弹；停止拖动一段时间后才松开不会产生旧速度甩动。
+- 权威偏移、内容缩小导致的夹取和取消清除待释放任务；节点卸载立即取消动画并解除原调度器注册。
+- `.reducedMotion()` 保留直接滚动，关闭框架添加的惯性与弹性，并结束旧运动。
 
-## Behavior
+## 嵌套与滚动条
 
-- **wheel**：`SDL_MOUSEWHEEL` 路由到 hit 命中的 ScrollView，按轴位移
-- **momentum / 惯性**：输入停止后按手势速度继续滑一段再慢慢停下；撞到边界时剩余速度交给回弹
-- **overscroll / 橡皮筋**：推过任意一端时在边界外继续拉伸一小段，输入停止后由弹簧拉回；拉伸距离永远不会超过一个视口（`RubberBand`），且只在 `[0, max]` 之外生效
-- **clipping**：`clipsToBounds = true`，超出视口的内容被裁剪
-- **scrollbar**：仅在 `contentSize > viewSize` 时绘制（内容能完全显示则不显示条）；`overscroll` 期间 thumb 按比例缩短并停在轨道内
-- **拖动 thumb**：按下 thumb 或轨道任意位置皆可拖动；拖出轨道末端同样进入 overscroll，松手才回弹
+`.overlay` 将滚动条置于内容上方；`.stable` 在纵向 trailing 预留 12pt 槽，避免盖住尾部控件。只有内容溢出才绘制条；hover/拖动显示，离开淡出。越界时 thumb 缩短且仍位于轨道内。
 
-## Momentum / 惯性 + Overscroll / 橡皮筋
+默认 `.whenOffsetChanged` 下，同轴子 ScrollView 在边界向外滚动时把事件交给滚动祖先；无溢出的轴不会凭空产生橡皮筋。`.always` 允许显式截住事件。当前以完整事件交接，尚未把一次大增量的“边界剩余距离”拆分给父级，也未提供统一 scroll-chain policy。
 
-默认都开启。三个阶段串成一条链，每一段把自己剩下的速度交给下一段：
+## 性能边界
 
-| 阶段 | 做什么 | 配置 |
-| ---- | ------ | ---- |
-| 滑行 | `ScrollVelocityTracker` 估出手势速度，按 `v(t) = v₀·e^(-deceleration·t)` 继续位移 | `ScrollPhysics.momentum` |
-| 拉伸 | `RubberBand.project` 把越界量压成越推越紧的可见位移 | `ScrollPhysics.rubberBand` |
-| 回弹 | `ScrollSpring` 以临界阻尼把越界偏移拉回边界 | `ScrollPhysics.settle` |
+内容偏移改变绘制/命中几何，稳定内容不需要每帧重跑 Yoga。保留渲染器可复用文字等叶子的绘制缓存；本轮新增实际缓存顶点边界与视口/裁剪相交判断，不再把完全不可见的缓存叶子反复追加到帧列表。自定义 painter 超出 Node.frame 的实际绘制仍被保留；有明确裁剪边界的离屏子树可整体跳过。
 
-滚轮没有"松手"事件，所以滑行是这样起步的：最后一次输入之后安静 `idleWindow`（默认 90ms）即视为手势结束，用窗口内记录的速度甩出去。于是滚轮连打一串会顺势滑一段，触控板抬手立刻起滑，而慢慢拨一档则原地停下：`trackingWindow` 之外的采样不参与，`staleWindow` 之外的采样一律判定为"早就松手了"。thumb 拖拽有真正的松手事件，走同一个出口。
+这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；可变行高虚拟列表仍缺失。原生测量方法和数值见 [滚动与布局验证记录](../guava-ui/evidence/scroll-layout/README.md)。
 
-**停下它**有三种方式，都是"就地停住"而不是"再滑一点"：
+## 尚未完成
 
-| 做法 | 语义 |
-| ---- | ---- |
-| 滑行中再滚一档 | 刹车。这一档照常位移，同时丢掉滑行背后的采样 —— 否则"停一下"会被读成一次新的甩动 |
-| 在容器内按下鼠标 | 抓取。等同于滚动面上的 touch-to-stop；事件不消费，按下时想点的子控件照常收到 |
-| 抓住并拖动 thumb | 也是抓取，松手时按拖动速度决定要不要继续滑 |
+- 原生触控板 phase、系统 momentum 与框架 momentum 的互斥，以及像素/行单位、时间戳、输入设备信息。
+- 离散滚轮的可打断平滑目标插值、显式开始/结束/停止控制器和带时长的程序定位。
+- 独立 Scrollbar/统一 ScrollHandle、显示策略/尺寸/配色主题、可访问性滚动条语义与键盘 Page/Home/End 操作。
+- touch/pan、滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接。
+- Windows/Linux、120Hz、真实触控板长时间操作以及 GPU/合成器完成时间证据。
 
-力度是为了"送一程"而不是"扔出去"：`maximumVelocity` 1100 + `deceleration` 4.2 让最猛的一甩也只多走约 250pt（约四分之一个视口）并在 0.85s 内停住 —— iOS 那套 `DecelerationRate.normal`（≈ e^-2.0/s）是给手指在玻璃上用的，换成鼠标读起来就是"飞了"。只有 1-2 档的轻拨（`minimumSampleCount`）和低于 `minimumVelocity` 的慢速移动都不算甩，原地停下。要更长/更短的惯性，改 `momentum` 里这几个数即可。
+## 实现
 
-```swift
-ScrollView { rows }
-    .scrollPhysics(.bouncy)   // 回弹时越过边界一次
-    .scrollPhysics(.clamped)  // 橡皮筋关掉，滑到边缘直接停住
-    .scrollPhysics(.precise)  // 连惯性一起关：每一档滚轮落在哪里就是哪里
-```
+- [容器与 chrome](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/ScrollView.swift)
+- [运动控制](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/ScrollAnimator.swift)、[逐轴交接](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/AxisMotion.swift)、[弹簧](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/ScrollSpring.swift)
+- [可配置物理组](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/ScrollPhysics.swift)
 
-`ScrollPhysics` 通过 `CompositionLocal` 下发，子树里更近的 provider 覆盖外层，所以嵌套的横向 carousel 可以单独关掉惯性。
-
-自己维护偏移的组件不必重复这套耦合 —— 见 `ScrollAnimator`（`GuavaUIScene/Scrolling`）：建立实例后用 `scroll(by:)` / `move(to:)` 喂输入，可见偏移从 `change` 回调里取。滚轮那种没有松手事件的输入连 `settle()` 都不用调，动画器自己会判断什么时候开始滑行。
-
-## Known issues / TODO
-
-- 没有内容 pan 手势：能喂出惯性的输入目前只有滚轮和 thumb 拖拽
-- 没有 scroll-linked 动画钩子：滚动进度还不能驱动别的东西
-- 没有"是否显示滚动条"开关 —— 目前完全自动
-
-## Authoring rules
-
-✅ 应当：
-- 把 ScrollView 作为 Tree / List / 长内容的外层
-- 给 ScrollView `.flex()` 让它撑满父容器
-- 内容用 `Box(.column, .stretch)` 而不是 `Column(.leading)`（后者不撑宽）
-
-❌ 不应：
-- 嵌套 ScrollView（同轴）
-- 给 ScrollView 加 `.frame(height: 内容高度)` —— 那就不需要 ScrollView 了
-
-## References
-
-| 设计系统 | 借鉴点 |
-| -------- | ------ |
-| SwiftUI | `ScrollView(_:)` API 形态 |
-| macOS | overlay scrollbar (Lion+) |
-| Web overflow | `overflow: auto` 的"按需显示"语义 |
-| UIKit | `UIScrollView` 的 deceleration rate 与 least-squares 速度估计 |
-
-## File map
-
-- 主体: [GuavaUICompose/Primitives/Layout/ScrollView.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/ScrollView.swift)
-- 物理配置: [GuavaUICompose/Scrolling/ScrollPhysicsEnvironment.swift](../../GuavaUI/Sources/GuavaUICompose/Scrolling/ScrollPhysicsEnvironment.swift)
-- 运动本体: [GuavaUIScene/Scrolling/](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling) —— `ScrollAnimator` / `ScrollVelocityTracker` / `ScrollSpring` / `RubberBand`
+Demo 默认使用与 AppRuntime 相同的 LayerAwareNodeRenderer；`GUAVAUI_LEGACY_RENDERER=1` 可用于原始全树绘制对照。保留路径的缓存继承屏幕 pixelScale，密度改变重新记录；第一次记录的离屏叶子也不会被追加进祖先缓存。原生测量发现并修正了 Demo 曾绕过此路径的问题，测量范围详见审计证据。

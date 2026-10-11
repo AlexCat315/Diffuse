@@ -81,7 +81,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             Box {
                 if useAuto {
                     _DebugNode(label: "leaf")
-                        .frame(height: 20)
+                        .frame(width: .auto, height: .points(20))
                 } else {
                     _DebugNode(label: "leaf")
                         .frame(width: .percent(20),
@@ -110,7 +110,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             Box {
                 if useAuto {
                     _DebugNode(label: "leaf")
-                        .frame(width: 40)
+                        .frame(width: .points(40), height: .auto)
                 } else {
                     _DebugNode(label: "leaf")
                         .frame(width: .points(40),
@@ -144,7 +144,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             Box {
                 if useAuto {
                     _DebugNode(label: "leaf")
-                        .frame(height: 20, minWidth: 70)
+                        .frame(width: .auto, height: .points(20), minWidth: 70)
                 } else {
                     _DebugNode(label: "leaf")
                         .frame(width: .percent(20),

@@ -34,7 +34,7 @@ import Foundation
 /// document must not slow down just because the visible offset is compressed
 /// near an edge.
 ///
-/// Phases run in a fixed order — input, then glide, then the return spring —
+/// Each axis runs input, glide, then its own return spring —
 /// and each one hands its leftover velocity to the next, which is what makes a
 /// throw into the end of a list bounce instead of stopping.
 ///
@@ -64,7 +64,9 @@ public final class ScrollAnimator: AnyAnimationController {
 
     /// Velocity of the current glide, in points per second. Zero unless
     /// coasting.
-    public private(set) var velocity: CGPoint = .zero
+    public var velocity: CGPoint {
+        CGPoint(x: CGFloat(xMotion.glide ?? 0), y: CGFloat(yMotion.glide ?? 0))
+    }
 
     /// Monotonic seconds. Replaceable so tests can drive time instead of
     /// waiting for it; nothing else should need to touch it.
@@ -77,10 +79,10 @@ public final class ScrollAnimator: AnyAnimationController {
     }
 
     /// `true` while the return spring owns `offset`.
-    public var isSettling: Bool { springX != nil || springY != nil }
+    public var isSettling: Bool { xMotion.spring != nil || yMotion.spring != nil }
 
     /// `true` while inertia owns `offset`.
-    public var isGliding: Bool { glideX != nil || glideY != nil }
+    public var isGliding: Bool { xMotion.glide != nil || yMotion.glide != nil }
 
     /// `true` while any axis is past its bound, regardless of whether the
     /// return spring has started.
@@ -91,11 +93,9 @@ public final class ScrollAnimator: AnyAnimationController {
 
     public private(set) var isFinished: Bool = true
 
-    private var springX: ScrollSpring?
-    private var springY: ScrollSpring?
-
-    private var glideX: Float?
-    private var glideY: Float?
+    private var xMotion = ScrollAxisMotion()
+    private var yMotion = ScrollAxisMotion()
+    private weak var scheduler: AnimatorScheduler? = AnimatorScheduler.current
 
     private var trackerX = ScrollVelocityTracker()
     private var trackerY = ScrollVelocityTracker()
@@ -149,6 +149,7 @@ public final class ScrollAnimator: AnyAnimationController {
     /// over an animation that is only cleaning up after a gesture.
     public func adopt(_ newOffset: CGPoint) {
         guard newOffset != offset else { return }
+        releaseDeadline = nil
         stopAnimation()
         resetTracking()
         position = Self.constrain(newOffset, to: maximumOffset)
@@ -198,8 +199,7 @@ public final class ScrollAnimator: AnyAnimationController {
             beginSettling(velocity: launch)
         } else if physics.momentum.isEnabled {
             releaseDeadline = time + max(0, physics.momentum.idleWindow)
-            isFinished = false
-            AnimatorScheduler.current.register(self)
+            startDrivingFrames()
         }
         return offset
     }
@@ -260,9 +260,10 @@ public final class ScrollAnimator: AnyAnimationController {
     /// spring is deliberately left running: it already knows where it is
     /// going, and stopping it would strand the content out of bounds.
     public func stopCoasting() {
-        guard isGliding else { return }
+        releaseDeadline = nil
+        resetTracking()
         stopGlide()
-        isFinished = true
+        if !isSettling { stopDrivingFrames() }
     }
 
     // MARK: - AnyAnimationController
@@ -274,54 +275,32 @@ public final class ScrollAnimator: AnyAnimationController {
             settle()
             return
         }
-        if isGliding {
-            advanceGlide(deltaTime: Float(deltaTime))
-            return
-        }
-        guard isSettling else {
-            isFinished = true
-            return
-        }
-
+        guard deltaTime.isFinite, deltaTime > 0 else { return }
         let step = Float(deltaTime)
-        if var x = springX {
-            x.advance(deltaTime: step)
-            springX = x
-        }
-        if var y = springY {
-            y.advance(deltaTime: step)
-            springY = y
-        }
-
-        let xAtRest = springX?.isAtRest ?? true
-        let yAtRest = springY?.isAtRest ?? true
-        guard xAtRest, yAtRest else {
-            setOffset(CGPoint(x: CGFloat(springX?.value ?? Float(offset.x)),
-                              y: CGFloat(springY?.value ?? Float(offset.y))))
-            return
-        }
-
-        position = Self.constrain(position, to: maximumOffset)
-        stopSettling()
-        restOnWholePoints()
-        isFinished = true
+        let x = xMotion.advance(position: position.x, offset: offset.x, maximum: maximumOffset.x,
+                                extent: viewportSize.width, physics: physics, duration: step)
+        let y = yMotion.advance(position: position.y, offset: offset.y, maximum: maximumOffset.y,
+                                extent: viewportSize.height, physics: physics, duration: step)
+        position = CGPoint(x: x.0, y: y.0)
+        setOffset(CGPoint(x: x.1, y: y.1))
+        if !isGliding && !isSettling { stopDrivingFrames() }
     }
 
     /// Land immediately on the in-bounds position.
     public func finishImmediately() {
-        guard isSettling || isGliding || releaseDeadline != nil else { return }
+        guard isSettling || isGliding || isOverscrolled || releaseDeadline != nil else { return }
         releaseDeadline = nil
         position = Self.constrain(position, to: maximumOffset)
         stopAnimation()
-        restOnWholePoints()
+        landAtCurrentPosition()
         isFinished = true
     }
 
     /// Drop whatever motion is running without applying anything further.
     public func cancel() {
         releaseDeadline = nil
+        resetTracking()
         stopAnimation()
-        isFinished = true
     }
 
     // MARK: - Velocity
@@ -376,7 +355,7 @@ public final class ScrollAnimator: AnyAnimationController {
 
     private func startDrivingFrames() {
         isFinished = false
-        AnimatorScheduler.current.register(self)
+        scheduler?.register(self)
     }
 
     private func beginGlide(velocity launch: CGPoint) {
@@ -384,103 +363,14 @@ public final class ScrollAnimator: AnyAnimationController {
             settleNow(velocity: .zero)
             return
         }
-        glideX = Float(launch.x)
-        glideY = Float(launch.y)
-        velocity = launch
+        xMotion.glide = Float(launch.x)
+        yMotion.glide = Float(launch.y)
         startDrivingFrames()
     }
 
     private func stopGlide() {
-        glideX = nil
-        glideY = nil
-        velocity = .zero
-    }
-
-    /// Per-axis result of one glide frame.
-    private struct AxisStep {
-        var position: CGFloat
-        /// Velocity carried into the next frame; `nil` once this axis is done.
-        var velocity: Float?
-        /// Speed still left at the moment this axis stopped — handed to the
-        /// return spring so the handover has no seam.
-        var remaining: Float
-    }
-
-    private func advanceGlide(deltaTime: Float) {
-        let settings = physics.momentum
-        let rate = max(0.1, settings.deceleration)
-        let decay = exp(-rate * deltaTime)
-        // Exact closed-form integral of `v(t) = v0·e^(-rate·t)`, so the
-        // distance travelled does not depend on how frames were cut.
-        let travel = (1 - decay) / rate
-
-        let allowsStretch = physics.rubberBand.isEnabled
-        let x = glideAxis(position: position.x,
-                          maximum: maximumOffset.x,
-                          glide: glideX,
-                          decay: decay,
-                          travel: travel,
-                          settings: settings,
-                          allowsOverscroll: allowsStretch)
-        let y = glideAxis(position: position.y,
-                          maximum: maximumOffset.y,
-                          glide: glideY,
-                          decay: decay,
-                          travel: travel,
-                          settings: settings,
-                          allowsOverscroll: allowsStretch)
-
-        glideX = x.velocity
-        glideY = y.velocity
-        velocity = CGPoint(x: CGFloat(x.velocity ?? 0), y: CGFloat(y.velocity ?? 0))
-        position = capped(CGPoint(x: x.position, y: y.position))
-        setOffset(visibleOffset(for: position))
-
-        guard x.velocity == nil && y.velocity == nil else { return }
-
-        let leftover = CGPoint(x: CGFloat(x.remaining), y: CGFloat(y.remaining))
-        stopGlide()
-        guard allowsStretch else {
-            // Nothing may stretch, so the coast ended right at the edge.
-            restOnWholePoints()
-            isFinished = true
-            return
-        }
-        // Whatever overscroll the glide ran into springs back; the leftover
-        // speed, small by now, goes along so the handover has no seam.
-        settleNow(velocity: leftover)
-        if !isSettling { isFinished = true }
-    }
-
-    /// Move one axis of the glide by its own share of this frame.
-    ///
-    /// Each axis keeps coasting in raw space until it runs out of speed — even
-    /// past its own bound, which is what lets a flick into the end of a list
-    /// lean into it and then rebound rather than stopping short. The raw cap in
-    /// `capped(_:)` keeps that lean bounded, and compression turns it into the
-    /// visible stretch.
-    ///
-    /// Without a rubber band to absorb it there is nothing to lean against, so
-    /// the axis lands exactly on its bound and stops instead.
-    private func glideAxis(position: CGFloat,
-                           maximum: CGFloat,
-                           glide: Float?,
-                           decay: Float,
-                           travel: Float,
-                           settings: ScrollMomentumSettings,
-                           allowsOverscroll: Bool) -> AxisStep {
-        guard let glide else {
-            return AxisStep(position: position, velocity: nil, remaining: 0)
-        }
-        let next = position + CGFloat(glide * travel)
-        let remaining = glide * decay
-        let exhausted = abs(remaining) < settings.minimumVelocity
-        let atEdge = !allowsOverscroll && (next < 0 || next > maximum)
-        guard exhausted || atEdge else {
-            return AxisStep(position: next, velocity: remaining, remaining: remaining)
-        }
-        let landed = allowsOverscroll ? next : Self.constrainAxis(next, maximum: maximum)
-        return AxisStep(position: landed, velocity: nil, remaining: remaining)
+        xMotion.glide = nil
+        yMotion.glide = nil
     }
 
     private func settleNow(velocity launch: CGPoint) {
@@ -501,14 +391,15 @@ public final class ScrollAnimator: AnyAnimationController {
         releaseDeadline = nil
         let target = Self.constrain(position, to: maximumOffset)
         let settings = physics.settle
-        springX = ScrollSpring(value: Float(offset.x),
+        stopGlide()
+        xMotion.spring = position.x < 0 || position.x > maximumOffset.x ? ScrollSpring(value: Float(offset.x),
                                velocity: Float(velocity.x),
                                target: Float(target.x),
-                               settings: settings)
-        springY = ScrollSpring(value: Float(offset.y),
+                               settings: settings) : nil
+        yMotion.spring = position.y < 0 || position.y > maximumOffset.y ? ScrollSpring(value: Float(offset.y),
                                velocity: Float(velocity.y),
                                target: Float(target.y),
-                               settings: settings)
+                               settings: settings) : nil
         guard physics.rubberBand.isEnabled else {
             // Nothing was ever stretched — land directly to avoid the host
             // producing frames for a spring with zero travel.
@@ -519,31 +410,31 @@ public final class ScrollAnimator: AnyAnimationController {
     }
 
     private func stopSettling() {
-        springX = nil
-        springY = nil
+        xMotion.spring = nil
+        yMotion.spring = nil
     }
 
     private func stopAnimation() {
         stopSettling()
         stopGlide()
+        stopDrivingFrames()
+    }
+
+    private func stopDrivingFrames() {
+        isFinished = true
+        scheduler?.unregister(self)
     }
 
     private func setOffset(_ next: CGPoint) {
+        guard next != offset else { return }
         offset = next
         onChange(next)
     }
 
-    /// Come to rest on whole points, so content that has stopped is drawn on
-    /// whole pixels: a fractional origin puts every glyph on a fraction of a
-    /// pixel, and stopped content is where that shows.
-    ///
-    /// Deliberately *not* applied while content moves. Near the end of a glide
-    /// a frame travels about 1.7 pixels, and rounding those to 2, 1, 2, 1
-    /// makes the tail stutter — a third of the speed arriving as jitter, right
-    /// where the motion is slow enough to read frame by frame.
-    private func restOnWholePoints() {
-        let rounded = CGPoint(x: position.x.rounded(), y: position.y.rounded())
-        position = Self.constrain(rounded, to: maximumOffset)
+    private func landAtCurrentPosition() {
+        // Preserve the final subpixel position. Rounding here causes a visible
+        // backward nudge on Retina displays and on interrupted motion.
+        position = Self.constrain(position, to: maximumOffset)
         setOffset(position)
     }
 

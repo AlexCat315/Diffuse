@@ -15,7 +15,7 @@ struct EditorProductivityWorkflowTests {
             panels: ["viewport": WorkspacePanel(id: "viewport", title: "Viewport"),
                      "scripts": WorkspacePanel(id: "scripts", title: "Scripts")],
             groups: ["center": WorkspaceTabGroup(id: "center", panels: ["viewport", "scripts"], activePanelID: "viewport")],
-            slots: WorkspaceSlot.standardEditorSlots(center: .group("center")), layoutTree: .group("center"))
+            slots: WorkspaceSlot.standardEditorSlots(center: .group("center")))
     }
 
     @Test("maximizing and restoring preserve docking and do not persist a temporary layout")

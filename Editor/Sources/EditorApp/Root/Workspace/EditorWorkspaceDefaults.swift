@@ -46,7 +46,7 @@ enum EditorWorkspaceDefaults {
                 center: center,
                 trailing: groups["trailing"]?.panels.isEmpty == false ? .group("trailing") : nil,
                 bottom: groups["bottom"]?.panels.isEmpty == false ? bottom : nil),
-            layoutTree: center, splitFractions: defaultFractions(for: preset))
+            splitFractions: defaultFractions(for: preset))
         let controller = WorkspaceController(document: document)
         if preset == .levelDefault || preset == .modelingDefault {
             _ = controller.dispatch(.collapse("bottom"))

@@ -470,6 +470,7 @@ public final class ViewGraph {
         }
 
         if let prim = view as? any _PrimitiveView {
+            ModifierReplay.reset(on: node)
             prim._updateNode(node)
             let myLayout = layoutOf[ObjectIdentifier(node)]
             if let ln = myLayout { prim._updateLayout(ln) }
@@ -488,6 +489,7 @@ public final class ViewGraph {
         // Note: any `@State` storage in the new view value is discarded; the
         // existing scope keeps its previously-wired storage so state survives.
         if let scope = scopes[ObjectIdentifier(node)] {
+            ModifierReplay.reset(on: node)
             scope.replaceView(with: view)
             scope.recompose(reasons: [.init(kind: "parent", originScope: activeRecompositionScope)] + environmentReasons)
         }
@@ -765,6 +767,7 @@ final class ViewScope {
         graph.reconcileChildren(parent: anchor,
                                 layoutParent: layoutParent,
                                 newViews: [body])
+        ModifierReplay.apply(from: anchor, graph: graph)
         recordTiming(start: start, initial: false, reasons: reasons)
     }
 

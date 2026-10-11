@@ -44,9 +44,7 @@ final class PanelWorkspaceIntegrationTests: XCTestCase {
                 "bottom": WorkspaceTabGroup(id: "bottom", panels: ["console"], activePanelID: "console"),
             ],
             slots: WorkspaceSlot.standardEditorSlots(center: .group("center"),
-                                                     bottom: .group("bottom")),
-            layoutTree: .group("center")
-        ))
+                                                     bottom: .group("bottom"))))
 
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: PanelWorkspace(controller: controller, registry: registry))

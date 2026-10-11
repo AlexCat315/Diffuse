@@ -72,7 +72,8 @@ extension ModifiedContent: _AnyModifiedContent {
             // reconciler knows this slot carries a particular modifier
             // combination.
             n.viewTag = ViewGraph.slotTag(self)
-            for target in modifierTargets(for: n, graph: graph) {
+            retainModifier(on: n, graph: graph)
+            for target in Self.modifierTargets(for: n, graph: graph) {
                 modifier.apply(node: target)
                 if let ln = graph.layoutNode(for: target) {
                     modifier.apply(layout: ln)
@@ -89,6 +90,7 @@ extension ModifiedContent: _AnyModifiedContent {
         // synthetic anchor whose single child carries the wrapped content.
         if let scopeApply = modifier as? _ScopeApplyingModifier {
             node.viewTag = ViewGraph.slotTag(self)
+            ModifierReplay.reset(on: node)
             // The content must reconcile even when the provided value is
             // unchanged: this slot was handed a NEW content value (fresh
             // closures and bindings into the owning scope's current @State
@@ -107,6 +109,7 @@ extension ModifiedContent: _AnyModifiedContent {
 
         if let around = modifier as? _AroundApplyingModifier {
             node.viewTag = ViewGraph.slotTag(self)
+            ModifierReplay.reset(on: node)
             around._aroundApply(node: node) {
                 graph.reconcileChildren(parent: node,
                                         layoutParent: layoutParent,
@@ -122,7 +125,8 @@ extension ModifiedContent: _AnyModifiedContent {
         // have left the inner tag in place if it called something that wrote
         // viewTag; safe to overwrite unconditionally).
         node.viewTag = ViewGraph.slotTag(self)
-        for target in modifierTargets(for: node, graph: graph) {
+        retainModifier(on: node, graph: graph)
+        for target in Self.modifierTargets(for: node, graph: graph) {
             modifier.apply(node: target)
             if let ln = graph.layoutNode(for: target) {
                 modifier.apply(layout: ln)
@@ -130,12 +134,23 @@ extension ModifiedContent: _AnyModifiedContent {
         }
     }
 
-    private func modifierTargets(for node: Node,
+    private func retainModifier(on node: Node, graph: ViewGraph) {
+        guard graph.layoutNode(for: node) == nil, !node.children.isEmpty else { return }
+        ModifierReplay.install(on: node) { [weak node, weak graph, modifier] in
+            guard let node, let graph else { return }
+            for target in Self.modifierTargets(for: node, graph: graph) {
+                modifier.apply(node: target)
+                if let layout = graph.layoutNode(for: target) { modifier.apply(layout: layout) }
+            }
+        }
+    }
+
+    private static func modifierTargets(for node: Node,
                                  graph: ViewGraph) -> [Node] {
         if graph.layoutNode(for: node) != nil || node.children.isEmpty {
             return [node]
         }
 
-        return node.children.flatMap { modifierTargets(for: $0, graph: graph) }
+        return node.children.flatMap { Self.modifierTargets(for: $0, graph: graph) }
     }
 }

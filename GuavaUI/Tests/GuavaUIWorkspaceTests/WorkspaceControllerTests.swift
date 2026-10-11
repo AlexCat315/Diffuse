@@ -2,6 +2,39 @@ import XCTest
 import GuavaUIWorkspace
 
 final class WorkspaceControllerTests: XCTestCase {
+    func testNestedSplitResizePersistsAndRejectsStaleAddresses() throws {
+        var document = makeDocument()
+        var center = document.slot(.center)
+        center.layout = .split(axis: .vertical, fraction: 0.4, first: .group("center"),
+            second: .split(axis: .horizontal, fraction: 0.6, first: .group("leading"), second: .group("trailing")))
+        document.setSlot(center)
+        let controller = WorkspaceController(document: document)
+        let address = WorkspaceLayoutSplit(slot: .center, firstGroup: "leading", secondGroup: "trailing")
+        let result = controller.dispatch(.resizeLayoutSplit(address, fraction: 0.7))
+        XCTAssertTrue(result.persistenceDirty)
+        XCTAssertEqual(result.changedSlots, [.center])
+        guard case let .split(_, outer, _, .split(_, inner, _, _)) = controller.document.slot(.center).layout else {
+            return XCTFail("Nested layout was lost")
+        }
+        XCTAssertEqual(outer, 0.4)
+        XCTAssertEqual(inner, 0.7)
+        let encoded = try JSONEncoder().encode(controller.document)
+        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("layoutTree"))
+        XCTAssertEqual(try JSONDecoder().decode(WorkspaceDocument.self, from: encoded), controller.document)
+        XCTAssertFalse(controller.dispatch(.resizeLayoutSplit(address, fraction: 0.7)).didChange)
+        let stale = WorkspaceLayoutSplit(slot: .center, firstGroup: "missing", secondGroup: "trailing")
+        XCTAssertFalse(controller.dispatch(.resizeLayoutSplit(stale, fraction: 0.2)).didChange)
+        XCTAssertFalse(controller.dispatch(.resizeLayoutSplit(address, fraction: .nan)).didChange)
+        _ = controller.dispatch(.collapse("leading"))
+        let outerAddress = WorkspaceLayoutSplit(slot: .center, firstGroup: "center", secondGroup: "trailing")
+        XCTAssertTrue(controller.dispatch(.resizeLayoutSplit(outerAddress, fraction: 0.55)).didChange)
+        guard case let .split(_, nextOuter, _, .split(_, nextInner, _, _)) = controller.document.slot(.center).layout else {
+            return XCTFail("Hidden branches must remain authored")
+        }
+        XCTAssertEqual(nextOuter, 0.55)
+        XCTAssertEqual(nextInner, 0.7)
+    }
+
     func testCollapseExpandLeftRightBottomInAnyOrderPreservesSlots() {
         let controller = WorkspaceController(document: makeDocument())
 
@@ -432,7 +465,6 @@ final class WorkspaceControllerTests: XCTestCase {
                                                      center: .group("center"),
                                                      trailing: .group("trailing"),
                                                      bottom: .group("bottom")),
-            layoutTree: .group("center"),
             splitFractions: WorkspaceSplitFractions(leading: 0.24,
                                                     centerTrailing: 0.72,
                                                     topBottom: 0.68)

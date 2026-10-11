@@ -601,8 +601,8 @@ private struct _WorkspaceRailReserve: View {
     var body: some View {
         let horizontal = slot.edge == .top || slot.edge == .bottom
         Box { EmptyView() }
-            .frame(width: horizontal ? nil : slot.thickness,
-                   height: horizontal ? slot.thickness : nil)
+            .frame(width: horizontal ? .auto : .points(slot.thickness),
+                   height: horizontal ? .points(slot.thickness) : .auto)
             .layoutRole("workspace-rail-reserve")
             .semanticRole("workspace.rail.reserve.\(slot.edge.rawValue)")
             .debugName("workspace-rail-reserve-\(slot.edge.rawValue)")
@@ -629,8 +629,8 @@ private struct _WorkspaceChromeSlot: View {
                 .id("workspace-rail-\(slot.id.rawValue)")
         }
         .background(.background)
-        .frame(width: horizontal ? nil : slot.thickness,
-               height: horizontal ? slot.thickness : nil)
+        .frame(width: horizontal ? .auto : .points(slot.thickness),
+               height: horizontal ? .points(slot.thickness) : .auto)
         .layoutRole("workspace-chrome-slot")
         .semanticRole("workspace.chrome.\(slot.id.rawValue)")
         .debugName("workspace-chrome-\(slot.id.rawValue)")
@@ -670,6 +670,7 @@ private struct _WorkspaceSlotView: View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if let layout = renderableLayout(in: slotID, document: document) {
                 _WorkspaceLayoutNodeView(node: layout,
+                                         slotID: slotID,
                                          document: document,
                                          controller: controller,
                                          content: content)
@@ -687,52 +688,7 @@ private struct _WorkspaceSlotView: View {
     }
 }
 
-private struct _WorkspaceLayoutNodeView: View {
-    let node: WorkspaceLayoutNode
-    let document: WorkspaceDocument
-    let controller: WorkspaceController
-    let content: (WorkspacePanelID) -> AnyView
-
-    var body: some View {
-        switch node {
-        case .group(let groupID):
-            if let group = document.groups[groupID] {
-                _WorkspaceTabGroupView(group: group,
-                                       document: document,
-                                       controller: controller,
-                                       content: content)
-                    .id(group.id)
-                    .flex()
-                    .frame(minWidth: 0, minHeight: 0)
-            } else {
-                EmptyView()
-                    .flex()
-            }
-        case .split(let axis, let fraction, let first, let second):
-            Box(direction: axis == .horizontal ? .row : .column,
-                alignItems: .stretch,
-                spacing: 8) {
-                _WorkspaceLayoutNodeView(node: first,
-                                         document: document,
-                                         controller: controller,
-                                         content: content)
-                    .flex(fraction, shrink: 1, basis: 0)
-                    .frame(minWidth: 0, minHeight: 0)
-                _WorkspaceLayoutNodeView(node: second,
-                                         document: document,
-                                         controller: controller,
-                                         content: content)
-                    .flex(1 - fraction, shrink: 1, basis: 0)
-                    .frame(minWidth: 0, minHeight: 0)
-            }
-            .frame(minWidth: 0, minHeight: 0)
-            .layoutRole("workspace-split")
-            .semanticRole("workspace.split.\(axis.rawValue)")
-        }
-    }
-}
-
-private struct _WorkspaceTabGroupView: View {
+struct _WorkspaceTabGroupView: View {
     let group: WorkspaceTabGroup
     let document: WorkspaceDocument
     let controller: WorkspaceController

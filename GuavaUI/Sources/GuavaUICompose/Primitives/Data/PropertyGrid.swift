@@ -351,13 +351,12 @@ private struct _StatefulPropertyGrid: View {
             .padding(horizontal: 7, vertical: 0)
         }
         .padding(vertical: verticalPadding)
-        .frame(height: row.sizing == .fixed ? rowHeight : nil,
-               minHeight: row.sizing == .intrinsic ? rowHeight : nil)
+        .frame(height: row.sizing == .fixed ? .points(rowHeight) : .auto,
+               minHeight: row.sizing == .intrinsic ? rowHeight : 0)
     }
 
     private func sizedValue(for row: PropertyGridRow, height: Float?) -> AnyView {
-        // frame(height: nil) clears an existing content frame in GuavaUI.
-        // Intrinsic rows must leave their value's own sizing untouched.
+        // Intrinsic rows leave their value's own sizing untouched.
         if let height { return AnyView(row.value.frame(height: height)) }
         return row.value
     }
