@@ -303,7 +303,7 @@ public final class ScrollAnimator: AnyAnimationController {
 
         position = Self.constrain(position, to: maximumOffset)
         stopSettling()
-        setOffset(position)
+        restOnWholePoints()
         isFinished = true
     }
 
@@ -313,7 +313,7 @@ public final class ScrollAnimator: AnyAnimationController {
         releaseDeadline = nil
         position = Self.constrain(position, to: maximumOffset)
         stopAnimation()
-        setOffset(position)
+        restOnWholePoints()
         isFinished = true
     }
 
@@ -442,8 +442,7 @@ public final class ScrollAnimator: AnyAnimationController {
         stopGlide()
         guard allowsStretch else {
             // Nothing may stretch, so the coast ended right at the edge.
-            position = Self.constrain(position, to: maximumOffset)
-            setOffset(position)
+            restOnWholePoints()
             isFinished = true
             return
         }
@@ -486,6 +485,10 @@ public final class ScrollAnimator: AnyAnimationController {
 
     private func settleNow(velocity launch: CGPoint) {
         guard isOverscrolled else {
+            // Braking is not coming to rest: the user put the content here, so
+            // it stays exactly here. Aligning it would move it by up to half a
+            // point under them, which reads as a stutter on the notch they
+            // meant as a stop.
             stopAnimation()
             position = Self.constrain(position, to: maximumOffset)
             return
@@ -528,6 +531,20 @@ public final class ScrollAnimator: AnyAnimationController {
     private func setOffset(_ next: CGPoint) {
         offset = next
         onChange(next)
+    }
+
+    /// Come to rest on whole points, so content that has stopped is drawn on
+    /// whole pixels: a fractional origin puts every glyph on a fraction of a
+    /// pixel, and stopped content is where that shows.
+    ///
+    /// Deliberately *not* applied while content moves. Near the end of a glide
+    /// a frame travels about 1.7 pixels, and rounding those to 2, 1, 2, 1
+    /// makes the tail stutter — a third of the speed arriving as jitter, right
+    /// where the motion is slow enough to read frame by frame.
+    private func restOnWholePoints() {
+        let rounded = CGPoint(x: position.x.rounded(), y: position.y.rounded())
+        position = Self.constrain(rounded, to: maximumOffset)
+        setOffset(position)
     }
 
     /// Project a raw position onto the visible one, applying rubber-band
