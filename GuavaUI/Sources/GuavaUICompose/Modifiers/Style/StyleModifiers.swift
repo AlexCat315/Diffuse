@@ -7,8 +7,19 @@ enum StyleAttachmentKey {
 }
 
 extension Node {
+    private func rawTextStyleValue<T>(_ key: String) -> T? {
+        (attachments[key] as? T) ?? parent?.rawTextStyleValue(key)
+    }
+
+    var textScaler: TextScaler { compositionValue(of: TextScalerEnvironment.key) }
+
     func textStyleValue<T>(_ key: String) -> T? {
-        (attachments[key] as? T) ?? parent?.textStyleValue(key)
+        guard let value: T = rawTextStyleValue(key) ?? compositionValue(of: ThemeEnvironment.bodyStyle)?.value(
+            for: key, fontOverride: rawTextStyleValue(StyleAttachmentKey.font)) else { return nil }
+        if key == StyleAttachmentKey.font, let font = value as? Font { return textScaler.scale(font) as? T }
+        if key == StyleAttachmentKey.lineHeight || key == StyleAttachmentKey.letterSpacing,
+           let points = value as? Float { return textScaler.scale(points) as? T }
+        return value
     }
 
     func invalidateTextStyle() {
@@ -19,8 +30,19 @@ extension Node {
 }
 
 extension LayoutNode {
+    private func rawTextStyleValue<T>(_ key: String) -> T? {
+        (attachments[key] as? T) ?? parent?.rawTextStyleValue(key)
+    }
+
+    var textScaler: TextScaler { rawTextStyleValue(TextScalerModifier.key) ?? .identity }
+
     func textStyleValue<T>(_ key: String) -> T? {
-        (attachments[key] as? T) ?? parent?.textStyleValue(key)
+        guard let value: T = rawTextStyleValue(key) ?? (attachments[ThemeEnvironment.bodyStyleAttachment] as? TextStyleToken)?.value(
+            for: key, fontOverride: rawTextStyleValue(StyleAttachmentKey.font)) else { return nil }
+        if key == StyleAttachmentKey.font, let font = value as? Font { return textScaler.scale(font) as? T }
+        if key == StyleAttachmentKey.lineHeight || key == StyleAttachmentKey.letterSpacing,
+           let points = value as? Float { return textScaler.scale(points) as? T }
+        return value
     }
 
     func invalidateTextMeasurements() {
@@ -139,18 +161,14 @@ public struct FontModifier: ViewModifier {
     public init(_ font: Font) { self.font = font }
 
     public func apply(node: Node) {
-        guard node.attachments[StyleAttachmentKey.font] as? Font != font else { return }
-        node.attachments[StyleAttachmentKey.font] = font
-        node.invalidateTextStyle()
-    }
-
-    public func apply(layout: LayoutNode) {
-        if let previous = layout.attachments[StyleAttachmentKey.font] as? Font,
-           previous == font {
-            return
+        let resolved = font.resolvingFamily(node.theme.typography.family)
+        let changed = node.attachments[StyleAttachmentKey.font] as? Font != resolved
+        node.attachments[StyleAttachmentKey.font] = resolved
+        if let layout = node.layoutNode {
+            layout.attachments[StyleAttachmentKey.font] = resolved
+            if changed { layout.invalidateTextMeasurements() }
         }
-        layout.attachments[StyleAttachmentKey.font] = font
-        layout.invalidateTextMeasurements()
+        if changed { node.invalidateTextStyle() }
     }
 }
 

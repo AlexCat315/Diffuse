@@ -44,7 +44,7 @@ public struct SemanticFontModifier: ViewModifier {
     public init(_ ref: SemanticFontRef) { self.ref = ref }
 
     public func apply(node: Node) {
-        let token = ref.resolve(node.theme)
+        let token = ref.resolve(node.theme).resolvingFamily(node.theme.typography.family)
         let changed = node.attachments[StyleAttachmentKey.font] as? Font != token.font
             || node.attachments[StyleAttachmentKey.lineHeight] as? Float != token.lineHeight
             || node.attachments[StyleAttachmentKey.letterSpacing] as? Float != token.letterSpacing

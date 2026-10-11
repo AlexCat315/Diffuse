@@ -245,6 +245,7 @@ public struct Text: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
+        node.syncTextStyleEnvironment()
         node.accessibility = AccessibilitySemantics(.staticText) { $0.label = string }
         // Bind the draw callback. Captures `string` etc by value.
         let snapshot = self
@@ -255,7 +256,7 @@ public struct Text: _PrimitiveView {
             guard let env = TextEnvironmentHolder.current else { return }
             let fontOverride = node.textStyleValue(StyleAttachmentKey.font) as Font?
             let lineHeightOverride = node.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
-            let resolvedFont = env.resolvedFont(fontOverride)
+            let resolvedFont = fontOverride ?? node.textScaler.scale(env.defaultFont)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
             let padding = node.layoutNode?.resolvedPadding
@@ -314,7 +315,7 @@ public struct Text: _PrimitiveView {
             let constraint: Float = (widthMode == .undefined) ? .infinity : width
             let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
             let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
-            let resolvedFont = env.resolvedFont(fontOverride)
+            let resolvedFont = fontOverride ?? (layout?.textScaler ?? .identity).scale(env.defaultFont)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
             let result = Text.cachedLayout(

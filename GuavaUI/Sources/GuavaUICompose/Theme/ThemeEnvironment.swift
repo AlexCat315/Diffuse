@@ -5,6 +5,8 @@ import GuavaUIRuntime
 /// modifier see `Theme.defaultDark`.
 public enum ThemeEnvironment {
     public static let key = CompositionLocal<Theme>(defaultValue: .defaultDark)
+    static let bodyStyle = CompositionLocal<TextStyleToken?>(defaultValue: nil)
+    static let bodyStyleAttachment = "__theme_body_style"
 }
 
 public extension View {
@@ -17,6 +19,7 @@ public extension View {
     /// ```
     func theme(_ theme: Theme) -> some View {
         compositionLocal(ThemeEnvironment.key, theme)
+            .compositionLocal(ThemeEnvironment.bodyStyle, theme.typography.body.resolvingFamily(theme.typography.family))
     }
 }
 

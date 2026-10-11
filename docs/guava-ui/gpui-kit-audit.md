@@ -1,6 +1,6 @@
 # GuavaUI 与 GPUI Kit 对照审计
 
-审计更新：2026-10-11（重新阅读实际实现；2026-10-08 的部分结论已过时）。参照 [GPUI Kit](https://gpui-kit.com/)、[上游代码](https://github.com/longbridge/gpui-kit) 和本机 `/Users/alex/gpui-kit-main` 快照。逐项清单来自该快照 `crates/story/src/gallery.rs` 的 79 个 Story 注册项；Story 包含欢迎页、主题页和平台特定功能，不能当作 79 个独立组件。GuavaUI 在本轮修改前有 70 个 Story，本轮补 Skeleton 展示与 Stepper 后有 72 个 Story，同样不是 63 个完全独立组件。
+审计更新：2026-10-11（重新阅读实际实现；2026-10-08 的部分结论已过时）。参照 [GPUI Kit](https://gpui-kit.com/)、[上游代码](https://github.com/longbridge/gpui-kit) 和本机 `/Users/alex/gpui-kit-main` 快照。逐项清单来自该快照 `crates/story/src/gallery.rs` 的 79 个 Story 注册项；Story 包含欢迎页、主题页和平台特定功能，不能当作 79 个独立组件。GuavaUI 在本轮修改前有 70 个 Story，本轮补 Skeleton 展示与 Stepper 后有 72 个 Story，同样不是 72 个完全独立组件。
 
 **结论：GuavaUI 目前没有 GPUI Kit 那样完整，也没有足够依据声称质量相当。** GuavaUI 已有可用的输入编辑、虚拟化、浮层、树和工作区基础；更大的差距在完整的产品组件、统一状态契约、辅助功能、性能证据和示例覆盖。旧组件文档的“✅”仅代表写过设计文档，不代表行为完成或生产成熟度。
 
@@ -29,6 +29,20 @@
 | Skeleton | 实现已存在但无独立展示，缺少清晰的生命周期回归证据 | [示例](../../GuavaUI/Sources/GuavaUIGallery/Stories/Feedback/SkeletonStory.swift)；停止/重启/减少动画/卸载与装饰语义测试 |
 
 主要行为回归在 [ProductInteractionRegressionTests](../../GuavaUI/Tests/GuavaUIComposeTests/ProductInteractionRegressionTests.swift)，输入基础另有 [CaptureCancellationTests](../../GuavaUI/Portable/Tests/GuavaUISceneTests/Input/CaptureCancellationTests.swift) 和 [FocusAccessoryTests](../../GuavaUI/Portable/Tests/GuavaUISceneTests/Input/FocusAccessoryTests.swift)。交互浮层通过 [FocusChain](../../GuavaUI/Portable/Sources/GuavaUIScene/Input/FocusChain.swift) 的 accessory 关系属于触发器的模态范围，显示时不抢走焦点；解除关系时恢复仍有效的原焦点。macOS 辅助功能桥接包含允许的 accessory 根。验收走真实 EventDispatcher 路径；会话时钟等确定性测试单独控制时间。两者不替代原生指针、IME、辅助技术和视觉验收。
+
+## 设计系统、字体与视觉细节（2026-10-11 继续推进）
+
+重新阅读 `/Users/alex/motrix-mygo-main/theme.go`、`dashboard.go` 和 `widgets.go`：它是 MyGo 原生 Go UI，采用可替换 palette/theme、白色卡片、18 点卡片圆角、两层低透明阴影、24 点标题和带负字距的 34 点指标；状态按钮、统计标签和普通正文有各自明确的层级。这些设计值得吸收，不能仅把 GuavaUI 的某个字号调大后就称为相同效果。
+
+本轮新增开放的 `ThemeExtension`、`IconTheme`、`SemanticIconSize`、`ThemeMetric`、字体族与 `TextScaler`。原有语义颜色/排版角色继续保留，所有角色允许应用决定具体值；局部 Theme 提供普通文字和输入的 body 默认值，显式样式优先。Portal 继承呈现节点的主题与文字缩放，动态倍率改变会更新已经打开的浮层。类型化扩展承担原生设计变量的职责；目前没有 CSS 文本引擎。[设计系统契约](../components/design-system.md)记录覆盖与扩展规则。
+
+英文观感异常有真实字体加载缺陷：CoreText 描述符序号误作 FreeType face index，部分 SF 字重静默回退到 Helvetica；可变字体坐标没有传给 FreeType；物理字号影响了 optical size。现在正确选择 face/named instance，传递设计轴并保持逻辑光学字号；布局 advance/metrics 不再受 hint 或首次 bitmap 栅格化污染。见 [字体契约](../components/typography.md)、[字体实例测试](../../GuavaUI/Tests/GuavaUIRuntimeTests/SystemFontInstanceTests.swift)。
+
+默认预设重新调整层级、32 点常规控件、间距、浅色底与表面/边框/阴影。ButtonGroup 改为共享底槽内的选中滑块；文字增大时 Button、TextField、Select、Menu 和 Toolbar 允许按内容增高，Combobox 同步虚拟行几何。圆角填充去除两层扩大后的透明填充，改为一个物理像素宽的覆盖边缘，避免半透明区域叠加和控件周围的光晕。真实 Metal 读回测试覆盖 1×/1.5×/2×/3×，不把几何数量测试当作像素效果证据。
+
+Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间切换和 Reset 修改真实状态，统计 trace 明确标为样例。Theme 页提供局部字体族、body 字号、图标、圆角、输入和保存的现场调整；画廊新增 100–200% 文字缩放。尚未逐个验收所有历史组件的大字体布局，不能宣称整个目录无截断。仍需补全系统无障碍文字偏好的自动订阅、非线性动态字号、OpenType feature/可变字体轴的应用 API，以及历史固定行高/图标槽的系统审查。
+
+原生操作、截图与验证口径见 [设计系统视觉记录](evidence/design-system-native.json)。200% 按钮页还暴露并修复了状态色按钮固定 32 点高度的细节差异；Menu/Combobox 默认改为不透明表面，Menu 可见行预算和高亮跟随实际高度。新增测试通过 EventDispatcher 完整执行放大后的 Combobox 打开、搜索、空结果和回车提交，保留输入焦点。
 
 ## 框架层仍有的缺口
 

@@ -119,7 +119,7 @@ public struct Carousel<ID: Hashable>: View {
         return Button(isEnabled: isEnabled,
                       tooltip: delta < 0 ? "Previous" : "Next",
                       action: { move(delta) }) {
-            Icon(delta < 0 ? UIIcons.Navigation.chevronLeft : UIIcons.Navigation.chevronRight, size: 14)
+            Icon(delta < 0 ? UIIcons.Navigation.chevronLeft : UIIcons.Navigation.chevronRight, size: .medium)
         }
         .buttonStyle(.ghost)
         .controlSize(.small)

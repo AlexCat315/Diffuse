@@ -1,19 +1,6 @@
 import GuavaUICompose
 import GuavaUIRuntime
 
-struct IntroductionStory: View {
-    var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Explore the catalog", "Choose a component in the sidebar or search by name, category or behavior.") {
-                Text("GuavaUI component showcase").font(.title)
-                Text("Each page renders the real component. Change density, disable controls, switch theme or reset the example.").font(.body).foregroundColor(.onSurfaceVariant)
-                Row(alignment: .center, spacing: 12) { Badge("\(GalleryCatalog.entries.count) stories", tone: .info); Badge("Light + dark", tone: .success); Badge("Keyboard + pointer", tone: .neutral) }
-            }
-            Alert("Scope of this catalog", message: "GuavaUI focuses on engine and editor interfaces. Rich text, diff editing and advanced charts are still areas of work; each component page shows its current capabilities.", tone: .info)
-        }
-    }
-}
-
 struct BadgeStory: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
@@ -114,7 +101,7 @@ struct SliderStory: View {
 public extension GalleryPage {
     func makeStory(options: GalleryOptions = GalleryOptions()) -> AnyView {
         switch self {
-        case .introduction: AnyView(IntroductionStory())
+        case .introduction: AnyView(IntroductionStory(options: options))
         case .button: AnyView(ButtonStory(options: options))
         case .checkbox: AnyView(CheckboxStory(options: options))
         case .toggle: AnyView(ToggleStory(options: options))

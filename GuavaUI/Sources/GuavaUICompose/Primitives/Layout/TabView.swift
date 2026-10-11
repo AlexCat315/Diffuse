@@ -168,7 +168,7 @@ private struct _TabBarItem: View {
         Button(isEnabled: isEnabled, isSelected: isSelected, action: onSelect) {
             Row(alignment: .center, spacing: 6) {
                 if let icon {
-                    Icon(icon, size: 14).accessibilityHidden()
+                    Icon(icon, size: .medium).accessibilityHidden()
                 }
                 Text(label).font(.label)
                 if let badge {

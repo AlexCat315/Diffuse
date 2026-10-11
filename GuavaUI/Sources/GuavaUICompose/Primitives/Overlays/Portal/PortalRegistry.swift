@@ -281,6 +281,7 @@ final class PortalResource: NodeResource {
             entryID = nil
         }
         store = current
+        let content = AnyView(content.theme(owner?.theme ?? .defaultDark).textScaler(owner?.textScaler ?? .identity))
         self.content = content
         self.transition = transition
         isDismissing = false

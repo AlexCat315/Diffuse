@@ -136,7 +136,7 @@ private struct _StatefulNumberField: View {
                isEnabled: isEnabled,
                tooltip: title,
                action: action) {
-            Icon(icon, size: 10, color: .onSurfaceVariant)
+            Icon(icon, size: .small, color: .onSurfaceVariant)
         }
         .buttonStyle(.ghost)
         .frame(height: 15)

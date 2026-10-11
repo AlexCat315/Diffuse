@@ -61,7 +61,7 @@ public struct Alert<Actions: View>: View {
             let style = resolvedStyle(theme)
             Row(alignment: .top, spacing: theme.spacing.sm) {
                 if showsIcon {
-                    Icon(icon ?? tone.icon, size: 18, color: style.ink)
+                    Icon(icon ?? tone.icon, size: .medium, color: style.ink)
                 }
                 Column(alignment: .leading, spacing: 4) {
                     Text(title).font(.bodyStrong).foregroundColor(style.ink)

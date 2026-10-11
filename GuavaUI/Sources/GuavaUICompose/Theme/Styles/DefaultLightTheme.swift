@@ -7,9 +7,9 @@ import GuavaUIRuntime
 public enum DefaultLightTheme {
     public static let value: Theme = Theme(
         colors: ColorScheme(
-            background:       Color(red: 0xF2, green: 0xF3, blue: 0xF5), // canvas
-            surface:          Color(red: 0xF7, green: 0xF8, blue: 0xFA), // tab strips / chips
-            surfaceVariant:   Color(red: 0xEB, green: 0xEC, blue: 0xF0), // wells / badges
+            background:       Color(red: 0xF3, green: 0xF6, blue: 0xF8), // canvas
+            surface:          Color(red: 0xF0, green: 0xF4, blue: 0xF6), // tab strips / chips
+            surfaceVariant:   Color(red: 0xE9, green: 0xED, blue: 0xF1), // wells / badges
             surfaceSunken:    Color(red: 0xFF, green: 0xFF, blue: 0xFF), // island bodies
             surfaceRaised:    Color(red: 0xFF, green: 0xFF, blue: 0xFF),
             surfaceFloating:  Color(red: 0xFF, green: 0xFF, blue: 0xFF),
@@ -18,7 +18,7 @@ public enum DefaultLightTheme {
             onBackground:     Color(red: 0x1E, green: 0x1F, blue: 0x22),
             onSurface:        Color(red: 0x2B, green: 0x2D, blue: 0x30),
             onSurfaceVariant: Color(red: 0x5A, green: 0x5D, blue: 0x63),
-            onSurfaceMuted:   Color(red: 0x81, green: 0x85, blue: 0x94),
+            onSurfaceMuted:   Color(red: 0x69, green: 0x71, blue: 0x7D),
 
             accent:           Color(red: 0x35, green: 0x74, blue: 0xF0),
             accentHover:      Color(red: 0x2A, green: 0x62, blue: 0xD8),
@@ -36,9 +36,9 @@ public enum DefaultLightTheme {
             error:            Color(red: 0xD6, green: 0x45, blue: 0x41),
             info:             Color(red: 0x2E, green: 0x70, blue: 0xD6),
 
-            border:           Color(red: 0xC9, green: 0xCD, blue: 0xD4),
-            borderStrong:     Color(red: 0xB4, green: 0xBA, blue: 0xC2),
-            divider:          Color(red: 0xC9, green: 0xCD, blue: 0xD4, alpha: 0x7A),
+            border:           Color(red: 0xDA, green: 0xE0, blue: 0xE6),
+            borderStrong:     Color(red: 0xB9, green: 0xC2, blue: 0xCC),
+            divider:          Color(red: 0xDA, green: 0xE0, blue: 0xE6, alpha: 0x7A),
             // Near-opaque on purpose. At 0xAA the ring is a wash of blue over
             // whatever it crosses, which on a light canvas reads as a glow
             // around the control rather than as a ring drawn around it.
@@ -56,13 +56,13 @@ public enum DefaultLightTheme {
         // the alpha at roughly half the spread — enough to lift, not to smudge.
         elevation: ElevationScale(
             none:   .none,
-            low:    SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x2E), offsetX: 0, offsetY: 1, blur: 2),
-            medium: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x40), offsetX: 0, offsetY: 3, blur: 8),
-            high:   SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x54), offsetX: 0, offsetY: 8, blur: 18),
+            low:    SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x14), offsetX: 0, offsetY: 1, blur: 2),
+            medium: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x24), offsetX: 0, offsetY: 3, blur: 8),
+            high:   SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x34), offsetX: 0, offsetY: 8, blur: 18),
             floating: LayeredShadow(
-                ambient: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x26),
+                ambient: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x1C),
                                        offsetX: 0, offsetY: 2, blur: 12),
-                key:     SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x59),
+                key:     SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x30),
                                        offsetX: 0, offsetY: 4, blur: 5)
             )
         ),
