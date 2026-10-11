@@ -1,7 +1,6 @@
 import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime
-import RHIWGPU
 import NativeRHI
 import RenderBackend
 
@@ -12,7 +11,7 @@ import RenderBackend
 ///
 /// ```swift
 /// // During editor / game bootstrap (main thread):
-/// let host = InGameUIHost(backend: wgpuBackend)
+/// let host = try InGameUIHost(device: device)
 /// InGameUIRegistry.shared.provider = host
 /// host.setRootView(MyGameHUD())
 ///
@@ -31,13 +30,6 @@ public final class InGameUIHost: InGameUIProviding, @unchecked Sendable {
 
     private let bridge: InGameViewGraphBridge
     private let renderer: any InGameUIProviding
-
-    public init(backend: WGPUBackend) {
-        let source = InGameDrawListSource()
-        let drawListRenderer = DrawListRenderer(backend: backend)
-        self.bridge = InGameViewGraphBridge(source: source)
-        self.renderer = WGPUInGameUIRenderer(renderer: drawListRenderer, source: source)
-    }
 
     /// Native HUD and scene must share the same device and active frame.
     public init(device: Device) throws {
@@ -65,7 +57,7 @@ public final class InGameUIHost: InGameUIProviding, @unchecked Sendable {
 
     // MARK: - InGameUIProviding (render thread)
 
-    public func recordInGameUI(packet: RenderPacket, target: InGameUIRenderTarget) throws -> InGameUIRecording? {
+    public func recordInGameUI(packet: RenderPacket, target: NativeInGameUITarget) throws -> InGameUIRecording? {
         try renderer.recordInGameUI(packet: packet, target: target)
     }
 }

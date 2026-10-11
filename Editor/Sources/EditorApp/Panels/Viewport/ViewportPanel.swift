@@ -1741,7 +1741,7 @@ private struct PhysicsDebugSelector: View {
                         .font(.caption)
                         .foregroundColor(options.isEmpty ? .onSurfaceMuted : .onSurface)
                 }
-                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 4)
             .background(options.isEmpty ? .surfaceSunken : .surfaceVariant)
@@ -1824,7 +1824,7 @@ private struct PhysicsDebugLegend: View {
                 Row(alignment: .center, spacing: 6) {
                     Text("\(L("Physics Debug")) · \(scope == .scene ? L("Scene") : L("Selected"))")
                         .font(.caption).foregroundColor(.onSurface)
-                    Icon(showsDetails ? UICommonIcons.chevronDown : UICommonIcons.chevronRight,
+                    Icon(showsDetails ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight,
                          size: 8, color: .onSurfaceMuted)
                 }
             }
@@ -2002,7 +2002,7 @@ private struct RenderScaleSelector: View {
                 Text("\(percent)%", lineLimit: 1)
                     .font(.caption)
                     .foregroundColor(.onSurface)
-                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 4)
             .background(.surfaceSunken)
@@ -2047,7 +2047,7 @@ private struct ViewModeSelector: View {
                 Text(Self.label(for: shadingMode), lineLimit: 1)
                     .font(.caption)
                     .foregroundColor(.onSurface)
-                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 4)
             .background(.surfaceSunken)

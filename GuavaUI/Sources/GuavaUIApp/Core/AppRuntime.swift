@@ -5,6 +5,7 @@ import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIDevTools
 import Logging
+import NativeRHI
 import PlatformShell
 
 /// 高层应用宿主。隐藏窗口、设备、DrawList 绘制器、
@@ -19,7 +20,7 @@ import PlatformShell
 /// ```
 ///
 /// 主窗口与辅助窗口共享 UI 资源，各自拥有 presentation target。
-/// `backend: .native(device)` 可与生产 NativeRenderer 共享设备与 viewport。
+/// `backend: device` 可与生产 NativeRenderer 共享设备与 viewport。
 @MainActor
 public final class AppRuntime {
 
@@ -28,7 +29,7 @@ public final class AppRuntime {
     /// `onTick` 会在每一帧 layout 之前调用，用于把外部子系统（例如游戏引擎
     /// `EngineHost`）按 UI 帧率推进。`deltaTime` 是上一帧到这一帧之间的秒数。
     public static func run<Root: View>(config: AppConfig = AppConfig(),
-                                       backend: AppRendererDevice? = nil,
+                                       backend: Device? = nil,
                                        events: PlatformEventBridge = PlatformEventBridge(),
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
                                        onDisplayReady: ((AppDisplayHandle) -> Void)? = nil,
@@ -131,7 +132,7 @@ public final class AppRuntime {
     private var devTools: DevTools?
 
     private init(config: AppConfig,
-                 backend: AppRendererDevice?,
+                 backend: Device?,
                  events: PlatformEventBridge,
                  onTick: ((Double) -> Void)?,
                  onDisplayReady: ((AppDisplayHandle) -> Void)?,
@@ -180,7 +181,7 @@ public final class AppRuntime {
 
     private func start<Root: View>(rootView: Root) throws {
         BundledFonts.register()
-        try rendering.initialize()
+
 
         if let devConfig = config.devTools {
             let dev = DevTools(config: devConfig,
@@ -399,7 +400,7 @@ public final class AppRuntime {
     }
 
     /// Release every GPU surface (main window + auxiliary windows) before the host
-    /// shell destroys its windows and quits SDL. A `GPUSurface` built from a
+    /// shell destroys its windows and quits SDL. A swapchain built from a
     /// Wayland window holds the `wl_display`/`wl_surface`; releasing it after
     /// `SDL_Quit` has disconnected Wayland dereferences freed proxies and crashes
     /// in libwayland-client. Wired to `host.onTeardown`, which fires after the run
@@ -452,7 +453,7 @@ public final class AppRuntime {
 
         try uploadAtlasIfNeeded()
         lastFrameTime = TimingTrace.now()
-        
+
         // Request an initial frame to ensure surfaces like viewport have
         // time to initialize before the first render.
         host.requestDisplay()

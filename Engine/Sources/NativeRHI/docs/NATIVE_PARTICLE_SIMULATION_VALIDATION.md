@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRenderer resident GPU 粒子模拟
 
 NativeRHI 已接入 GPU spawn append、物理模拟、存活状态压缩、metadata reset/finalize 与逐帧事件回读。`renderOnGPU` 现可直接从 resident state 执行 GPU 排序、appearance/curve、texture-sheet 与 trail/instance 转换，再进入稳定可见性压缩和 indirect draw。默认 renderer 仍为 WGPU。

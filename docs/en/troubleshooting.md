@@ -1,7 +1,7 @@
 ---
 path: /en/docs/troubleshooting
 title: Troubleshooting
-description: Native dependencies, WebGPU backends, project directories, and MCP connectivity.
+description: Native dependencies, NativeRHI backends, project directories, and MCP connectivity.
 locale: en
 translationKey: docs.troubleshooting
 category: Community
@@ -20,15 +20,28 @@ git submodule update --init --recursive
 python bootstrap.py --force
 ```
 
-## WebGPU backend selection
+## NativeRHI backend selection
 
-Use `--wgpu-backends` to select candidates such as `metal` or `d3d12`:
+Use `--rhi-backends` to select candidates such as `metal`, `dx12`, or `vulkan`:
 
 ```bash
-swift run --package-path Editor EditorApp --wgpu-backends metal
+swift run --package-path Editor EditorApp --rhi-backends metal
 ```
 
-`GUAVA_WGPU_BACKENDS` and a JSON file passed with `--wgpu-config` are also supported.
+`GUAVA_RHI_BACKENDS` and a JSON file passed with `--rhi-config` are also supported.
+
+```json
+{"rhi":{"preferredBackends":["metal"],"validationEnabled":true,"framesInFlight":3}}
+```
+
+macOS defaults to Metal, Windows to DX12, and Linux to Vulkan. Windows tries Vulkan if DX12 device creation fails. DX12 requires offline DXIL artifacts generated with a Windows toolchain that provides DXC; Vulkan needs a native loader and driver.
+
+## Shader toolchain
+
+On macOS arm64, install the pinned compiler with `python3 scripts/bootstrap-rhi-slang.py`; on other hosts supply Slang 2026.19 via `SLANGC`.
+
+Use `python3 scripts/compile-native-renderer-shaders.py --check` to check bundled artifacts against source. Omit `--check` to regenerate them. Compilation failures preserve existing artifacts.
+
 
 ## MCP connection errors
 

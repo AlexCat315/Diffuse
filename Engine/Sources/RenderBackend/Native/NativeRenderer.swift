@@ -204,9 +204,8 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passDraws[kind] = draws; active.append(kind)
         }
         let uiStart = DispatchTime.now().uptimeNanoseconds
-        let ui = try uiProvider?.recordInGameUI(packet: packet, target: .native(
-            NativeInGameUITarget(device: device, commands: commands,
-                color: RenderColorTarget(texture: color, loadAction: .load), format: .bgra8Unorm)))
+        let ui = try uiProvider?.recordInGameUI(packet: packet, target: NativeInGameUITarget(device: device, commands: commands,
+                color: RenderColorTarget(texture: color, loadAction: .load), format: .bgra8Unorm))
         if let ui {
             active.append(.inGameUI)
             passTimes[.inGameUI] = DispatchTime.now().uptimeNanoseconds - uiStart
@@ -216,7 +215,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         try device.submit(commands); ui?.didSubmit()
         deformables.commit(dynamic); particleSimulation.commit(simulation); frameState = nextFrame
         if let output = targets.color {
-            viewportPublication.publish(storage: .native(output),
+            viewportPublication.publish(resource: output,
                 region: ViewportSamplingRegion(size: packet.drawableSize, capacity: targets.size))
         } else { viewportPublication.clear() }
         if let image { try device.present(image) }

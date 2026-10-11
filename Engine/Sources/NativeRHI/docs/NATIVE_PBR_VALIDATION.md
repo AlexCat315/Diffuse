@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRenderer PBR、阴影与 HDR
 
 NativeRenderer 的 r4 路径已执行实际 PBR 光照、法线/金属粗糙度纹理、studio IBL、多光源级联阴影、HDR 天空、HDR 编辑器网格和 ACES/sRGB tonemap。深度/阴影/相机 pass 共享静态网格资源和材质分组；两条 renderer 共享 ShadowAtlasPlanner，直接使用原 RenderPacket、SceneLightUniforms 和 ShadowUniforms。

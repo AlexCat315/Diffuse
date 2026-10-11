@@ -31,7 +31,7 @@ final class NativeLightingResources {
 
     func ensureEnvironment() throws {
         guard environment == nil else { return }
-        let levels = StudioEnvironmentIBL.generate()
+        let levels = StudioEnvironmentIBL.levels
         let texture = try device.makeTexture(TextureDescriptor(width: StudioEnvironmentIBL.baseWidth,
             height: StudioEnvironmentIBL.baseHeight, format: .rgba16Float, usage: [.sampled,.transferDestination],
             mipLevels: StudioEnvironmentIBL.mipCount, label: "native-studio-ibl"))

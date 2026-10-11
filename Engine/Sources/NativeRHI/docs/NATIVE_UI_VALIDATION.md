@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRHI UI 迁移验证
 
 默认 UI 和 renderer 当前仍使用 WGPU。GuavaUIRuntime 已新增 `NativeDrawListRenderer`，直接消费现有 DrawList，在调用方管理的 NativeRHI frame / command buffer 内上传和绘制。Metal 的独立 UI、生产场景＋ViewportHost 与游戏内 HUD 对照已通过。NativeRHI 已提供多个窗口的 swapchain 所有权与帧协调，GuavaUI `AppRuntime` 现在支持可选的 `.native(Device)` 路径；Editor／Player 默认仍显式选择 WGPU。

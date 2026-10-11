@@ -1,6 +1,6 @@
 ﻿@testable import RenderBackend
 import SceneRuntime
-import RHIWGPU
+import NativeRHI
 import SIMDCompat
 import Testing
 
@@ -30,22 +30,21 @@ struct RenderCameraMatricesTests {
 
     @Test("orthographic shadow cascades follow visible height and carry parallel shading with shadows off")
     func orthographicShadowFrustum() {
-        let renderer = WGPURenderer(backend: WGPUBackend(config: .init()))
         var scene = RenderScene(camera: RenderCamera(eye: SIMD3<Float>(0, 0, 8), target: .zero,
             near: 0.1, far: 30, projection: .orthographic, orthographicHeight: 6), instances: [],
             lights: [RenderLight(type: .directional, direction: SIMD3<Float>(-1, -2, -1))])
         let size = RenderDrawableSize(width: 800, height: 600)
         let settings = RenderShadowSettings(enabled: true, directionalCascadeCount: 3)
-        let disabled = renderer.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: false, settings: settings)
+        let disabled = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: false, settings: settings, meshBounds: { _ in nil })
         #expect(!disabled.uniforms.isEnabled)
         #expect(disabled.uniforms.cameraPositionAndPadding == SIMD4<Float>(0, 0, 8, 1))
-        let initial = renderer.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: true, settings: settings)
+        let initial = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: true, settings: settings, meshBounds: { _ in nil })
         #expect(initial.lights.count == 3)
         scene.camera.fovYRadians = .pi / 3
-        let differentFOV = renderer.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: true, settings: settings)
+        let differentFOV = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: true, settings: settings, meshBounds: { _ in nil })
         #expect(initial.uniforms.lightViewProjection0 == differentFOV.uniforms.lightViewProjection0)
         scene.camera.orthographicHeight *= 2
-        let expanded = renderer.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: true, settings: settings)
+        let expanded = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: scene, drawableSize: size, enabled: true, settings: settings, meshBounds: { _ in nil })
         #expect(initial.uniforms.lightViewProjection0 != expanded.uniforms.lightViewProjection0)
     }
 

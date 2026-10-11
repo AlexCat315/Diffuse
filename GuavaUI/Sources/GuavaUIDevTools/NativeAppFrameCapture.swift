@@ -1,6 +1,5 @@
 import Foundation
 import GuavaUIRuntime
-import GuavaUIDevTools
 import NativeRHI
 
 /// DevTools capture uses the same owned bindings as window presentation and

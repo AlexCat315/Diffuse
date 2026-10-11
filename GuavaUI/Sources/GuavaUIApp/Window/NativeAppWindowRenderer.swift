@@ -44,6 +44,8 @@ final class NativeAppWindowRenderer: AppWindowRenderer {
     func draw(list: DrawList, logical: SIMD2<Float>) throws -> Bool {
         try device.withFrameSession {
             guard let swapchain, size.x > 0 && size.y > 0 else { return false }
+            // Each window reapplies its own pipeline state to the shared UI renderer.
+            try renderer.configure(format: .bgra8UnormSRGB, sampleCount: Int(settings.samples))
             try device.beginFrame()
             defer { device.endFrame() }
             let image = try device.acquireSwapchainImage(swapchain.swapchain)
@@ -70,14 +72,14 @@ final class NativeAppWindowRenderer: AppWindowRenderer {
             }
             let surface = framebuffer?.texture ?? image.texture
             var target = RenderColorTarget(texture: multisample?.texture ?? surface,
-                loadAction: .clear(SIMD4(Float(clear.r), Float(clear.g), Float(clear.b), Float(clear.a))))
+                loadAction: .clear(clear))
             target.resolveTexture = multisample == nil ? nil : surface
             let commands = CommandBuffer()
             let frame = try renderer.record(list: list, into: commands, target: target,
                 viewport: NativeUIViewport(pixels: pixels, logical: logical),
                 backdropSource: framebuffer?.texture)
             if let source = framebuffer?.texture {
-                var present = RenderColorTarget(texture: image.texture, loadAction: .dontCare, store: true)
+                let present = RenderColorTarget(texture: image.texture, loadAction: .dontCare, store: true)
                 try renderer.recordBlit(source: source, into: commands, target: present, size: pixels)
             }
             try device.submit(commands)

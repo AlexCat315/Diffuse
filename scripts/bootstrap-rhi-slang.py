@@ -8,6 +8,8 @@ import argparse
 import hashlib
 from pathlib import Path
 import platform
+import os
+import subprocess
 import tarfile
 import tempfile
 import urllib.request
@@ -31,9 +33,17 @@ def main():
         urllib.request.urlretrieve(URL, archive)
         if hashlib.sha256(archive.read_bytes()).hexdigest() != SHA256:
             raise RuntimeError('Slang release checksum mismatch')
-        args.destination.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(archive) as bundle:
-            bundle.extractall(args.destination, filter='data')
+        args.destination.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.slang-install-', dir=args.destination.parent) as staging:
+            installed = Path(staging) / 'toolchain'
+            installed.mkdir()
+            with tarfile.open(archive) as bundle:
+                bundle.extractall(installed, filter='data')
+            version = subprocess.check_output([str(installed / 'bin/slangc'), '-version'],
+                                              stderr=subprocess.STDOUT, text=True).strip()
+            if version != VERSION:
+                raise RuntimeError(f'Expected Slang {VERSION}, got {version!r}')
+            os.rename(installed, args.destination)
     print(args.destination.resolve() / 'bin/slangc')
 
 

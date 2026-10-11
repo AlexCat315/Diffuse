@@ -457,7 +457,7 @@ public struct EditorFrameStats: Sendable, Equatable, Codable {
     // MARK: - Render Stats
     public var drawCallCount: Int
     public var passCount: Int
-    public var renderBundleCount: Int
+    public var meshBatchCount: Int
     public var shadowedLightCount: Int
     public var shadowCascadeCount: Int
     public var shadowMapResolution: UInt32
@@ -506,7 +506,7 @@ public struct EditorFrameStats: Sendable, Equatable, Codable {
         gpuPresentSeconds: Double = 0,
         drawCallCount: Int = 0,
         passCount: Int = 0,
-        renderBundleCount: Int = 0,
+        meshBatchCount: Int = 0,
         shadowedLightCount: Int = 0,
         shadowCascadeCount: Int = 0,
         shadowMapResolution: UInt32 = 0,
@@ -524,7 +524,7 @@ public struct EditorFrameStats: Sendable, Equatable, Codable {
         self.gpuPresentSeconds = gpuPresentSeconds
         self.drawCallCount = drawCallCount
         self.passCount = passCount
-        self.renderBundleCount = renderBundleCount
+        self.meshBatchCount = meshBatchCount
         self.shadowedLightCount = shadowedLightCount
         self.shadowCascadeCount = shadowCascadeCount
         self.shadowMapResolution = shadowMapResolution

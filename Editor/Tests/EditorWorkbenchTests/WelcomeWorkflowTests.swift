@@ -2,7 +2,7 @@ import EditorCore
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
-import RHIWGPU
+import NativeRHI
 import EngineKernel
 import Testing
 @testable import EditorApp
@@ -12,7 +12,7 @@ import Testing
 struct WelcomeWorkflowTests {
     @Test("blank and sample creation forms remain interactive through open and cancel")
     func creationForms() throws { try WorkbenchUITestSupport.withEnvironment { registry, _ in
-        let context = EditorLaunchContext(backendConfig: .init(), backend: WGPUBackend(config: .init()),
+        let context = EditorLaunchContext(renderDevice: try Device.make(),
                                           events: PlatformEventBridge(), shellState: nil)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: WelcomeView(context: context).theme(EditorVisualTheme.make(dark: false)))
@@ -52,10 +52,10 @@ struct WelcomeWorkflowTests {
         }
         try #require(WorkbenchUITestSupport.setEnvironmentValue(parent.appendingPathComponent("editor-state").path,
                                                                for: stateKey))
-        let backend = WGPUBackend(config: .init())
-        let context = EditorLaunchContext(backendConfig: .init(), backend: backend,
+        let backend = try Device.make()
+        let context = EditorLaunchContext(renderDevice: backend,
                                           events: PlatformEventBridge(), shellState: nil)
-        defer { context.shutdown(); try? backend.shutdown() }
+        defer { context.shutdown(); try? backend.waitUntilIdle() }
         try context.createProject(name: "Empty", parent: parent, template: .blank)
         let app = try #require(context.bundle?.app)
         #expect(app.scene.entityCount == 0)
@@ -101,10 +101,10 @@ struct WelcomeWorkflowTests {
             else { UserDefaults.standard.removeObject(forKey: "GuavaRecentProjects") }
             try? FileManager.default.removeItem(at: parent)
         }
-        let backend = WGPUBackend(config: .init())
-        let context = EditorLaunchContext(backendConfig: .init(), backend: backend,
+        let backend = try Device.make()
+        let context = EditorLaunchContext(renderDevice: backend,
                                           events: PlatformEventBridge(), shellState: nil)
-        defer { context.shutdown(); try? backend.shutdown() }
+        defer { context.shutdown(); try? backend.waitUntilIdle() }
         try context.createProject(name: "Crystal Sample", parent: parent, template: .crystalRush)
         let app = try #require(context.bundle?.app)
         for _ in 0..<400 {
@@ -126,7 +126,7 @@ struct WelcomeWorkflowTests {
         app.scriptWorkspace.setProjectTrusted(false)
         context.closeProject()
         #expect(!context.isProjectLoaded)
-        #expect(backend.state == .deviceReady)
+        #expect(backend.backendAPI == .metal)
         try context.createProject(name: "Empty", parent: parent, template: .blank)
         let empty = try #require(context.bundle?.app)
         #expect(empty.store.state.themeMode == .light)

@@ -1,7 +1,7 @@
 ---
 path: /zh/docs/troubleshooting
 title: 故障排查
-description: 原生依赖、WebGPU 后端、项目目录与 MCP 连接的常见问题。
+description: 原生依赖、NativeRHI 后端、项目目录与 MCP 连接的常见问题。
 locale: zh
 translationKey: docs.troubleshooting
 category: 社区
@@ -20,15 +20,28 @@ git submodule update --init --recursive
 python bootstrap.py --force
 ```
 
-## WebGPU 后端
+## NativeRHI 后端
 
-编辑器支持通过 `--wgpu-backends` 指定候选后端，例如 macOS 的 `metal` 或 Windows 的 `d3d12`：
+编辑器支持通过 `--rhi-backends` 指定候选后端，例如 macOS 的 `metal` 或 Windows 的 `dx12`：
 
 ```bash
-swift run --package-path Editor EditorApp --wgpu-backends metal
+swift run --package-path Editor EditorApp --rhi-backends metal
 ```
 
-也可使用 `GUAVA_WGPU_BACKENDS` 环境变量或 `--wgpu-config` JSON 配置文件。
+也可使用 `GUAVA_RHI_BACKENDS` 环境变量或 `--rhi-config` JSON 配置文件。
+
+```json
+{"rhi":{"preferredBackends":["metal"],"validationEnabled":true,"framesInFlight":3}}
+```
+
+macOS 默认使用 Metal，Windows 优先使用 DX12，Linux 默认使用 Vulkan。Windows 在 DX12 设备创建失败时尝试 Vulkan。DX12 需先使用具备 DXC 的 Windows 工具链生成 DXIL 着色器产物；Vulkan 需要原生 loader 和驱动。
+
+## 着色器工具链
+
+macOS arm64 可运行 `python3 scripts/bootstrap-rhi-slang.py` 安装固定版本编译器；其他平台通过 `SLANGC` 指定 Slang 2026.19。
+
+运行 `python3 scripts/compile-native-renderer-shaders.py --check` 检查打包产物是否与源码一致；去掉 `--check` 可重新生成。编译失败会保留现有产物。
+
 
 ## MCP 无法连接
 

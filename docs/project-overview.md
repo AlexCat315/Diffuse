@@ -18,7 +18,7 @@ Guava 的核心主张是：创作意图、世界状态、运行时执行和 AI �
 | 领域 | 当前实现 |
 | --- | --- |
 | 主语言 | Swift 6.1+ |
-| 图形接口 | WebGPU（wgpu-native） |
+| 图形接口 | NativeRHI（Metal / Vulkan / DX12） |
 | 物理 | Jolt Physics |
 | 平台层 | SDL3 与原生平台适配 |
 | UI 布局与文本 | Yoga、HarfBuzz、FreeType |

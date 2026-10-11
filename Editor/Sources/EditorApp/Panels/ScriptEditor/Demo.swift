@@ -4,7 +4,7 @@ import ScriptRuntime
 import GuavaUIApp
 import GuavaUICompose
 import GuavaUIRuntime
-import RHIWGPU
+import NativeRHI
 #if os(macOS)
 import Darwin
 #endif
@@ -12,7 +12,7 @@ import Darwin
 /// A standalone host for the production editing surface and language client.
 /// Its temporary project and preferences are independent of the user's project.
 @MainActor
-func runScriptEditorDemo(backendConfig: WGPUDeviceConfig) throws {
+func runScriptEditorDemo(backendConfig: DeviceConfig) throws {
     // A profiling run can retain the existing runtime FPS output when launched
     // as a native .app, whose output would otherwise belong to LaunchServices.
     #if os(macOS)
@@ -28,7 +28,7 @@ func runScriptEditorDemo(backendConfig: WGPUDeviceConfig) throws {
         try? FileManager.default.removeItem(at: root)
     }
     try AppRuntime.run(config: AppConfig(title: "Guava — Swift Code Editor", backendConfig: backendConfig,
-        frameDrivePolicy: .eventDriven, vsyncPresentMode: .fifo)) {
+        frameDrivePolicy: .eventDriven)) {
             ScriptEditorDemoView(session: session)
         }
 }

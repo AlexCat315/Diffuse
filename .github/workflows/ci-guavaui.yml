@@ -27,7 +27,7 @@ jobs:
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
 
-      - name: Build Engine native deps via CMake (SDL3 + Imath + OpenEXR + wgpu)
+      - name: Build Engine native deps via CMake (SDL3 + Imath + OpenEXR)
         run: |
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
           cmake --build Engine/build/native --parallel --config Release

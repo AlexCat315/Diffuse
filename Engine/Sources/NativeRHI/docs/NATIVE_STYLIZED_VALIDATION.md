@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRenderer 风格化角色路径
 
 NativeRenderer 已迁移生产的 toon 角色着色、inverted-hull 描边和 ink paper HDR 后处理。Metal 和 SPIR-V 离线产物一同更新；macOS 仅使用 Metal，Windows/Linux Vulkan 与 Windows DX12 的原生验证按用户要求暂缓。

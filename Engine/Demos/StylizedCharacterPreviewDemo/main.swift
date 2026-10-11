@@ -1,6 +1,6 @@
 ﻿import Foundation
 import RenderBackend
-import RHIWGPU
+import NativeRHI
 import SceneRuntime
 import SIMDCompat
 
@@ -97,11 +97,10 @@ func makeScene(state: CharacterPreviewState, phase: Float) -> RenderScene {
 }
 
 let config = parseConfig(arguments: CommandLine.arguments)
-let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: false))
-try backend.initialize()
-defer { try? backend.shutdown() }
+let device = try Device.make(DeviceConfig(enableValidation: false))
+    defer { try? device.waitUntilIdle() }
 
-let renderer = WGPURenderer(backend: backend, renderSurface: nil)
+let renderer = try NativeRenderer(device: device)
 renderer.initialize()
 
 let settings = RenderSettings(
@@ -125,7 +124,7 @@ for state in CharacterPreviewState.allCases {
             renderSettings: settings,
             simulationTimeSeconds: Double(frameIndex) / 60.0
         )
-        renderer.render(packet: packet)
+        try renderer.renderChecked(packet: packet)
         frameIndex += 1
     }
     let stats = renderer.currentFrameStats()

@@ -6,7 +6,6 @@ import GuavaUICompose
 import GuavaUIRuntime
 import EngineKernel
 import RenderBackend
-import RHIWGPU
 import NativeRHI
 
 // MARK: - Observable viewport state
@@ -68,33 +67,26 @@ private func requestedRendererName() throws -> String {
     if let index = CommandLine.arguments.firstIndex(of: "--renderer") {
         guard CommandLine.arguments.indices.contains(index + 1) else {
             throw NSError(domain: "GuavaPlayer", code: 3,
-                          userInfo: [NSLocalizedDescriptionKey: "--renderer requires wgpu, native, metal, vulkan, or dx12."])
+                          userInfo: [NSLocalizedDescriptionKey: "--renderer requires native, metal, vulkan, or dx12."])
         }
         return CommandLine.arguments[index + 1].lowercased()
     }
     return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "native"
 }
 
-private func makeRenderDevice() throws -> EngineRenderDevice {
+private func makeRenderDevice() throws -> Device {
     let requested = try requestedRendererName()
-    guard requested != "wgpu" else { return .wgpu(WGPUBackend()) }
-    let api: GraphicsAPI
+    var config = DeviceConfig(enableValidation: true, framesInFlight: 3)
     switch requested {
-    case "native":
-        guard let platformAPI = NativeRHI.platformDefaultBackends.first else {
-            throw NSError(domain: "GuavaPlayer", code: 4,
-                          userInfo: [NSLocalizedDescriptionKey: "NativeRHI has no backend for this platform."])
-        }
-        api = platformAPI
-    case "metal": api = .metal
-    case "vulkan": api = .vulkan
-    case "dx12", "d3d12": api = .dx12
+    case "native": break
+    case "metal": config.preferredBackends = [.metal]
+    case "vulkan": config.preferredBackends = [.vulkan]
+    case "dx12", "d3d12": config.preferredBackends = [.dx12]
     default:
         throw NSError(domain: "GuavaPlayer", code: 5,
                       userInfo: [NSLocalizedDescriptionKey: "Unknown renderer '\(requested)'."])
     }
-    let config = DeviceConfig(preferredBackends: [api], enableValidation: true, framesInFlight: 3)
-    return .native(try Device.make(config))
+    return try Device.make(config)
 }
 
 @MainActor
@@ -112,18 +104,13 @@ private func runPlayer() throws {
     app.bootstrap()
     defer { app.shutdown() }
 
-    let inGameUIHost: InGameUIHost
-    switch renderDevice {
-    case .wgpu(let backend): inGameUIHost = InGameUIHost(backend: backend)
-    case .native(let device): inGameUIHost = try InGameUIHost(device: device)
-    }
+    let inGameUIHost = try InGameUIHost(device: renderDevice)
     InGameUIRegistry.shared.provider = inGameUIHost
 
     try AppRuntime.run(
         config: AppConfig(
             title: "Guava Player",
-            clearColor: GPUColor(r: 0, g: 0, b: 0, a: 1),
-            backendConfig: WGPUDeviceConfig(),
+            clearColor: SIMD4(0, 0, 0, 1),
             titleBarStyle: .standard,
             targetFrameRate: 60
         ),

@@ -11,7 +11,7 @@ import PerceptionRuntime
 import PluginRuntime
 import SemanticPipeline
 import RenderBackend
-import RHIWGPU
+import NativeRHI
 import SceneRuntime
 import GuavaUICompose
 import GuavaUIRuntime
@@ -25,7 +25,7 @@ import SIMDCompat
 ///   2. 在 `AppRuntime.run` 的 `onTick` 回调里调用 `tick(deltaTime:)` 推进引擎；
 ///   3. 退出主循环后调用 `shutdown()` 清理引擎资源。
 ///
-/// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
+/// 自身不持有窗口 / native surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication: @unchecked Sendable {
     public let engine: EngineHost
@@ -56,7 +56,6 @@ public final class EditorApplication: @unchecked Sendable {
     var lastQueuedRenderSettings = RenderSettings()
     private var openSettingsWindowHandler: (() -> Void)?
     var closeProjectHandler: (() -> Void)?
-    private let ownsBackend: Bool
     var displayInvalidationHandler: (() -> Void)?
     var activatePanelHandler: ((String) -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
@@ -99,16 +98,11 @@ public final class EditorApplication: @unchecked Sendable {
 
     public init(projectDirectory: String,
                 seedPreviewScene: Bool = false,
-                backendConfig: WGPUDeviceConfig? = nil,
-                backend: WGPUBackend? = nil,
-                renderDevice: EngineRenderDevice? = nil,
+                renderDevice: Device? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default,
                 initialCapabilitySettings: EditorCapabilitySettings = .default,
                 trustedPluginHostExecutableURL: URL? = nil) throws {
-        let resolvedBackendConfig = backendConfig ?? .init()
-        let resolvedRenderDevice = renderDevice ?? .wgpu(backend ?? WGPUBackend(config: resolvedBackendConfig))
-        self.ownsBackend = backend == nil && renderDevice == nil && resolvedRenderDevice.wgpuBackend != nil
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
@@ -154,7 +148,7 @@ public final class EditorApplication: @unchecked Sendable {
         let projectScriptCatalogMonitor = ProjectScriptCatalogMonitor(
             projectDirectory: projectDirectory
         )
-        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: resolvedRenderDevice)
+        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: renderDevice)
         self.projectDirectory = projectDirectory
         self.store = store
         self.inputState = InputState()
@@ -408,7 +402,7 @@ public final class EditorApplication: @unchecked Sendable {
             store.unsubscribe(snapSettingsToken)
             self.snapSettingsToken = nil
         }
-        engine.shutdown(shutdownBackend: ownsBackend)
+        engine.shutdown()
     }
 
     public func setOpenSettingsWindowHandler(_ handler: (() -> Void)?) {

@@ -28,9 +28,9 @@ final class NativePBRTests: XCTestCase {
     #endif
 
     private func parity(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api], enableValidation: false, framesInFlight: 3))
         let renderer = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let reference = try SceneCapture(validation: true, api: api)
         var asset = try MeshProbeScene.importedFixture()
         for index in asset.materials.indices {
             asset.materials[index].normalTextureIndex = 0
@@ -73,7 +73,7 @@ final class NativePBRTests: XCTestCase {
             let directory = URL(fileURLWithPath: "/tmp/guava-native-pbr-\(api.rawValue)")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("frame-\(frame).ppm"))
-            try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("wgpu-\(frame).ppm"))
+            try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(frame).ppm"))
         }
         // Shadow enablement must change actual receiver pixels, and clearing all
         // light/ambient inputs must leave no stale shaded objects in the frame.

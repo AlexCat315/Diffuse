@@ -2,7 +2,7 @@ import EditorCore
 import EngineCore
 import EngineKernel
 import Foundation
-import RHIWGPU
+import NativeRHI
 import RenderBackend
 import ScriptRuntime
 
@@ -41,9 +41,8 @@ public final class GameApplication: @unchecked Sendable {
     public var onViewportSurfaceChanged: ((ViewportSurfaceState) -> Void)?
 
     public init(projectDirectory: String? = nil,
-                backend: WGPUBackend? = nil,
-                renderDevice: EngineRenderDevice? = nil) throws {
-        let resolvedRenderDevice = renderDevice ?? .wgpu(backend ?? WGPUBackend())
+                renderDevice: Device? = nil) throws {
+        let resolvedRenderDevice = renderDevice
         let scene = EditorSceneAdapter()
         let scriptLoader = GameProjectScriptLoader()
         var compiledScriptCount = 0

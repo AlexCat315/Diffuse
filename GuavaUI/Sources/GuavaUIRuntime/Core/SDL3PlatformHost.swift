@@ -205,7 +205,7 @@ public final class SDL3PlatformHost: PlatformHost {
     /// windows and quits SDL. The symmetric counterpart to `onInit`: consumers
     /// must release any GPU surfaces created from a window handle here, while the
     /// native windowing system (e.g. the Wayland display) is still alive.
-    /// Releasing a wgpu/Vulkan surface after `SDL_Quit` has disconnected the
+    /// Releasing a native graphics surface after `SDL_Quit` has disconnected the
     /// Wayland display dereferences freed Wayland proxies and crashes in
     /// libwayland-client.
     public var onTeardown: (@MainActor () -> Void)?

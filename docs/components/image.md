@@ -16,7 +16,7 @@ AsyncImage(url: photoURL, width: 160, height: 100,
 
 默认策略为 15 秒超时、20 MiB 文件/下载上限、3200 万源像素上限，可通过同步 `inout ImageLoadingPolicy` 调整。HTTP 同时检查状态、已知 Content-Length 与实际流式累积大小；本地文件在读取前后检查大小。取消也覆盖任务创建前的竞态。支持 file/http/https。
 
-解码在 worker 完成，捕获的宿主调度器负责注册 CPU 图片和阶段发布。`ImageAssetRegistry()` 不需要 GPU renderer；不可变图片随节点、DrawList 和 snapshot 保留，NativeRHI 与 WGPU 绘制器在各自的录制线程首次上传，后续帧复用纹理。节点更换 URL/尺寸/密度/策略/重试身份时取消旧请求；结果通过 generation 校验，卸载后丢弃。失败不会因每次 body 更新反复重试；改变 `retryID` 发起重试，已成功的相同缓存键可以直接复用。
+解码在 worker 完成，捕获的宿主调度器负责注册 CPU 图片和阶段发布。`ImageAssetRegistry()` 不需要 GPU renderer；不可变图片随节点、DrawList 和 snapshot 保留，NativeRHI 绘制器在各自的录制线程首次上传，后续帧复用纹理。节点更换 URL/尺寸/密度/策略/重试身份时取消旧请求；结果通过 generation 校验，卸载后丢弃。失败不会因每次 body 更新反复重试；改变 `retryID` 发起重试，已成功的相同缓存键可以直接复用。
 
 文件图片在没有 registry 时也可直接解码。`Image(source: .asset(asset), width:height:)` 接收拥有 CPU 像素的图片；`Image(textureID:width:height:)` 仍可使用宿主手动注册的 GPU 纹理。`registry.clear()` 释放缓存引用，已保留的节点与在途帧仍能显示旧图；相同键的新图取得独立 TextureID，可与旧图同时绘制。最后一个 CPU 引用释放后，绘制器在下次录制时清理对应 GPU slot；尚未提交的 frame token 保留它使用的 GPU 资源。
 

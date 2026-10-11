@@ -17,6 +17,14 @@ final class NativeRHISmokeTests: XCTestCase {
         XCTAssertFalse(NativeRHI.platformDefaultBackends.isEmpty)
     }
 
+    func testInvalidConfigurationFailsBeforeBackendCreation() {
+        for config in [DeviceConfig(preferredBackends: []), DeviceConfig(framesInFlight: 0), DeviceConfig(framesInFlight: -1)] {
+            XCTAssertThrowsError(try Device.make(config)) { error in
+                guard case RHIError.invalidArgument = error else { return XCTFail("unexpected error: \(error)") }
+            }
+        }
+    }
+
     #if os(macOS)
     func testMacUsesMetalWithoutVulkanFallback() throws {
         XCTAssertEqual(NativeRHI.platformDefaultBackends, [.metal])

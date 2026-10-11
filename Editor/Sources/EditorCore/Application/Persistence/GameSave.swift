@@ -11,7 +11,7 @@ import PerceptionRuntime
 import PluginRuntime
 import SemanticPipeline
 import RenderBackend
-import RHIWGPU
+import NativeRHI
 import SceneRuntime
 import GuavaUICompose
 import GuavaUIRuntime

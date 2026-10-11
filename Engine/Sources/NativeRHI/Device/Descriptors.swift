@@ -22,6 +22,11 @@ public struct DeviceConfig: Sendable {
         self.preferLowPower = preferLowPower
         self.vsyncEnabled = vsyncEnabled
     }
+
+    func validate() throws {
+        try rhiRequire(!preferredBackends.isEmpty, "choose at least one graphics backend")
+        try rhiRequire(framesInFlight > 0, "frames in flight must be positive")
+    }
 }
 
 /// Maximum number of queues per class the backend can expose simultaneously.

@@ -42,7 +42,6 @@ private struct HUDBenchmarkReport: Encodable {
     let warmup = 30
     let repeats = 3
     let results: [HUDBenchmarkResult]
-    let difference: GridImageDifference
 }
 
 final class NativeInGameUIBenchmarkTests: XCTestCase {
@@ -56,9 +55,8 @@ final class NativeInGameUIBenchmarkTests: XCTestCase {
         #else
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false, framesInFlight: 3))
         let scene = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: false)
-        let nativeHUD = try InGameUIHost(device: device), wgpuHUD = InGameUIHost(backend: reference.backend)
-        nativeHUD.setRootView(Text("Guava NativeRHI HUD 中🙂")); wgpuHUD.setRootView(Text("Guava NativeRHI HUD 中🙂"))
+        let nativeHUD = try InGameUIHost(device: device)
+        nativeHUD.setRootView(Text("Guava NativeRHI HUD 中🙂"))
         let old = InGameUIRegistry.shared.provider
         defer { InGameUIRegistry.shared.provider = old }
         for post in [false, true] { for size in [RenderDrawableSize(width: 1280, height: 720), .init(width: 1920, height: 1080)] {
@@ -84,28 +82,15 @@ final class NativeInGameUIBenchmarkTests: XCTestCase {
                 return scene.lastFrameStats
             }, finish: { try device.waitUntilIdle() })
             let actual = try GridImage.readback(device: device, texture: XCTUnwrap(scene.colorTexture), size: size)
-            InGameUIRegistry.shared.provider = wgpuHUD
-            let wgpu = try measure("wgpu-metal", render: { frame in
-                let p = packet(frame)
-                wgpuHUD.tick(width: 1280, height: 720, contentScale: scale, canvas: p.inGameCanvas)
-                let stats = try reference.render(packet: p)
-                XCTAssertFalse(reference.renderer.lastFrameUsedOpaqueCache)
-                return stats
-            }, finish: { try reference.finish() })
-            XCTAssertEqual(native.passFrames, wgpu.passFrames)
-            XCTAssertEqual(native.passDraws, wgpu.passDraws)
             XCTAssertGreaterThan(native.passDraws[RenderPassKind.inGameUI.rawValue] ?? 0, 540)
-            let delta = try GridImage.difference(actual, reference.readback())
-            XCTAssertLessThan(delta.meanAbsoluteChannelError, 0.5)
-            XCTAssertLessThan(Double(delta.pixelsOverThree) / Double(delta.pixelCount), 0.01)
+            XCTAssertEqual(actual.count, Int(size.width * size.height * 4))
             let report = HUDBenchmarkReport(device: device.deviceName, width: size.width, height: size.height, post: post,
-                results: [native, wgpu], difference: delta)
+                results: [native])
             let root = ProcessInfo.processInfo.environment["GUAVA_NATIVE_HUD_BENCHMARK_OUTPUT"] ?? "/tmp/guava-native-hud-benchmark"
             let directory = URL(fileURLWithPath: root)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(report).write(to: directory.appendingPathComponent("native-hud-\(post ? "post" : "mesh")-m1-\(size.height).json"))
-            print("native-hud-benchmark post=\(post) size=\(size) nativeCPU=\(native.cpuTickAndScene.p50Microseconds) wgpuCPU=\(wgpu.cpuTickAndScene.p50Microseconds) nativeCompleted=\(native.completedBatch.p50Microseconds) wgpuCompleted=\(wgpu.completedBatch.p50Microseconds)")
         } }
         #endif
     }

@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRenderer 透明、蒙皮和变形网格
 
 NativeRenderer 的 r1–r4 网格路径现已包含透明绘制、实体独立 joint palette，以及由 RenderDeformableMesh 驱动的动态几何。Metal 和 SPIR-V 离线 shader 一起更新；macOS 实际验证使用 Metal。Windows/Linux 的 Vulkan 与 Windows DX12 原生编译和运行验证按用户要求暂缓。
