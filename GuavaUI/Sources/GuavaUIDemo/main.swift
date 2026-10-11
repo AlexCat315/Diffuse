@@ -165,6 +165,8 @@ AssetDropRegistryHolder.current = demoAssetDrops
 UIWorkSchedulerHolder.enqueue = { [weak host] work in host?.enqueueMainThreadWork(work) }
 let drawList = DrawList()
 let nodeRenderer = NodeRenderer()
+let layerRenderer = LayerAwareNodeRenderer()
+let useLegacyRenderer = ProcessInfo.processInfo.environment["GUAVAUI_LEGACY_RENDERER"] == "1"
 let demoMSAASampleCount: UInt32 = 4
 
 var devTools: DevTools?
@@ -485,7 +487,11 @@ host.onFrame = { native in
     // rather than at record time.
     drawList.pixelScale = Float(host.contentScaleFactor)
     let drawTrace = tree.timeline.begin()
-    nodeRenderer.render(root: root, into: drawList)
+    if useLegacyRenderer {
+        nodeRenderer.render(root: root, into: drawList)
+    } else {
+        layerRenderer.render(tree: graph.renderTree, into: drawList)
+    }
     tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")
     if CommandLine.arguments.contains("--performance-hud") { appendPerformanceHUD(to: drawList) }
     appendDevToolsSelectionOverlay(to: drawList)

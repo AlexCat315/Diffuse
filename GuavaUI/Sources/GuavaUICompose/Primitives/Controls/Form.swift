@@ -75,7 +75,7 @@ private struct FormFieldView: View {
     var body: some View {
         Box(direction: layout.horizontalLabels ? .row : .column, alignItems: .stretch, spacing: 7) {
             FieldLabel(field.label) { $0.isRequired = field.presentation.isRequired; $0.targetID = field.id; $0.help = field.presentation.help }
-                .frame(width: layout.horizontalLabels ? layout.labelWidth : nil)
+                .frame(width: layout.horizontalLabels ? .points(layout.labelWidth) : .auto)
                 .flex(0, shrink: 0)
             Box(direction: .column, alignItems: .stretch, spacing: 5) {
                 field.content.accessibility {

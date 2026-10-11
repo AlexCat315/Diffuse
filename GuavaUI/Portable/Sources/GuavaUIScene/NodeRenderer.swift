@@ -90,8 +90,7 @@ public struct NodeRenderer {
         }
 
         // 6. Children — translated by -contentOffset for scrollable containers.
-        // The offset stays fractional while content moves — see
-        // `ScrollAnimator.restOnWholePoints`, which aligns it once at rest.
+        // The offset stays fractional throughout motion and at rest.
         let childOriginX = absX - Float(node.contentOffset.x)
         let childOriginY = absY - Float(node.contentOffset.y)
         let descendantStart = list.vertices.count

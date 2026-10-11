@@ -36,13 +36,13 @@ import GuavaUIScene
         #expect(spring.value == -100)
     }
 
-    @Test("A single large frame is split and lands the same as 60 small ones")
-    func largeFramesAreSubstepped() {
+    @Test("A large frame follows the same trajectory as many small frames")
+    func largeFramesAreAnalytic() {
         var coarse = ScrollSpring(value: 100, target: 0, settings: ScrollSettleSettings())
         var fine = ScrollSpring(value: 100, target: 0, settings: ScrollSettleSettings())
         coarse.advance(deltaTime: 0.25)
         for _ in 0..<15 { fine.advance(deltaTime: 0.25 / 15) }
-        #expect(abs(coarse.value - fine.value) < 2)
+        #expect(abs(coarse.value - fine.value) < 0.0001)
         #expect(coarse.value < 100)
         #expect(coarse.value >= 0)
     }
@@ -68,4 +68,25 @@ import GuavaUIScene
         #expect(spring.value == 0)
         #expect(spring.velocity == 0)
     }
+    @Test("Zero, negative and nonfinite frame durations leave the spring unchanged")
+    func invalidTimeDoesNotSnap() {
+        for time: Float in [0, -1, .nan, .infinity] {
+            var spring = ScrollSpring(value: 80, velocity: 120, target: 0)
+            let before = spring
+            spring.advance(deltaTime: time)
+            #expect(spring == before)
+        }
+    }
+
+    @Test("All damping regimes follow the same path across uneven frames", arguments: [Float(0.5), 1, 1.8])
+    func unevenFramePartition(ratio: Float) {
+        let settings = ScrollSettleSettings(dampingFraction: ratio)
+        var coarse = ScrollSpring(value: 80, velocity: 420, target: 0, settings: settings)
+        var uneven = coarse
+        coarse.advance(deltaTime: 0.3)
+        for dt: Float in [0.005, 0.045, 0.1, 0.002, 0.148] { uneven.advance(deltaTime: dt) }
+        #expect(abs(coarse.value - uneven.value) < 0.0001)
+        #expect(abs(coarse.velocity - uneven.velocity) < 0.001)
+    }
+
 }

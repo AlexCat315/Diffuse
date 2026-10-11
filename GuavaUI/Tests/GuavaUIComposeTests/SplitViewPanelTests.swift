@@ -74,6 +74,48 @@ struct SplitViewPanelTests {
         #expect(content.frame.origin.y == 34)
     } }
 
+
+    @Test("Pane minimums, fraction bounds and cramped windows have deterministic constraints")
+    func splitConstraints() {
+        let constraints = SplitConstraints(fraction: 0.2...0.75, minimumFirst: 150, minimumSecond: 220)
+        #expect(constraints.range(available: 500) == 0.3...0.56)
+        let cramped = constraints.range(available: 200)
+        #expect(abs(cramped.lowerBound - Float(150) / 370) < 0.00001)
+        #expect(cramped.lowerBound == cramped.upperBound)
+        #expect(constraints.range(available: .nan) == 0.2...0.75)
+    }
+
+    @Test("Minimum pane sizes adapt to shrinking windows and preserve the requested fraction")
+    func minimumPaneGeometry() { GlobalTestLock.locked {
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        let fraction: Float = 0.2
+        graph.install(root: SplitView(.horizontal,
+            fraction: Binding(get: { fraction }, set: { _ in }), spacing: 10,
+            constraints: .init(fraction: 0.2...0.75, minimumFirst: 150, minimumSecond: 220)) {
+                Box {}.debugName("split-first")
+            } second: { Box {}.debugName("split-second") }
+            .frame(width: .percent(100), height: .points(120)))
+        func find(_ name: String, _ node: Node) -> Node? {
+            if (node.attachments[LayoutDebugAttachmentKey.debugName] as? String) == name { return node }
+            return node.children.lazy.compactMap { find(name, $0) }.first
+        }
+        for width: Float in [500, 250, 800] {
+            for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 120) }
+            let first = find("split-first", tree.root!)!
+            let second = find("split-second", tree.root!)!
+            let available = width - 7 - 20
+            #expect(abs(first.frame.width + second.frame.width - CGFloat(available)) <= 1)
+            if width == 250 {
+                #expect(abs(first.frame.width / CGFloat(available) - 150 / 370) < 0.01)
+            } else {
+                #expect(first.frame.width >= 149)
+                #expect(second.frame.width >= 219)
+            }
+            #expect(fraction == 0.2)
+        }
+    } }
+
     private func materialisedRoot(in tree: NodeTree) -> Node {
         tree.root!.children.first!.children.first!
     }

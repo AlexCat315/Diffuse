@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import GuavaUIRuntime
@@ -25,6 +25,7 @@ private enum _ScrollViewAttachmentKeys {
     static let contentSize = "__scrollview_content_size"
     static let motion = "__scrollview_motion"
     static let report = "__scrollview_report"
+    static let axes = "__scrollview_axes"
 
     static func motionAnimator(for node: Node,
                                physics: ScrollPhysics) -> ScrollAnimator {
@@ -38,8 +39,16 @@ private enum _ScrollViewAttachmentKeys {
             (node.attachments[report] as? (Node) -> Void)?(node)
         }
         node.attachments[motion] = animator
+        node.addResource(_ScrollMotionLifetime(animator))
         return animator
     }
+}
+
+private final class _ScrollMotionLifetime: NodeResource {
+    let animator: ScrollAnimator
+    init(_ animator: ScrollAnimator) { self.animator = animator }
+    func mount(node: Node) {}
+    func unmount(node: Node) { animator.cancel() }
 }
 
 private struct _ScrollViewScrollbarGeometry {
@@ -56,22 +65,18 @@ private struct _ScrollViewContentSizeCache {
     var structureVersion: UInt64
 }
 
+public enum ScrollAxis: Sendable, Equatable { case vertical, horizontal, both }
+
 public struct ScrollGeometry: Equatable, Sendable {
     public let offset: CGPoint
     public let viewportSize: CGSize
     public let contentSize: CGSize
 }
 
-/// Clipping container that scrolls its content via mouse wheel input.
-///
-/// v1 limitations:
-/// - Content is laid out within the ScrollView's box. To enable real overflow
-///   the inner content must use explicit sizes that exceed the ScrollView's
-///   frame; flex-grown children will be compressed by Yoga.
-/// - Wheel routing requires the cursor to be over the ScrollView (handled by
-///   `EventDispatcher`'s wheel hit-test).
+/// Clipped scrolling with optional offset binding and viewport observations.
+/// Content must retain its natural extent on the scrolling axis, e.g. a
+/// no-shrink column. Use a virtualized collection for large datasets.
 public struct ScrollView<Content: View>: _PrimitiveView {
-    public enum Axis: Sendable, Equatable { case vertical, horizontal, both }
 
     /// How the vertical scrollbar relates to the content area.
     /// `.overlay` floats the bar over the content (default; canvas-style
@@ -81,12 +86,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public enum ScrollbarGutter: Sendable, Equatable { case overlay, stable }
 
     private struct PaintIdentity: Equatable {
-        let axes: Axis
+        let axes: ScrollAxis
         let trackColor: Color
         let thumbColor: Color
     }
 
-    public let axes: Axis
+    public let axes: ScrollAxis
     public let content: Content
     public var onViewportChange: ((ScrollViewport) -> Void)?
     public var scrollOffset: Binding<CGPoint>?
@@ -100,7 +105,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     /// Width of the reserved lane under `.stable`: track + inset each side.
     static var scrollbarGutterWidth: Float { 12 }
 
-    public init(_ axes: Axis = .vertical,
+    public init(_ axes: ScrollAxis = .vertical,
                 consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
                 scrollbarGutter: ScrollbarGutter = .overlay,
                 scrollOffset: Binding<CGPoint>? = nil,
@@ -134,6 +139,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                             contentSize: Self.cachedScrollableContentSize(for: node)))
         }
         node.attachments[_ScrollViewAttachmentKeys.report] = report
+        node.attachments[_ScrollViewAttachmentKeys.axes] = axes
         if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset { node.contentOffset = desired }
         let axes = self.axes
         let step = self.wheelStep
@@ -147,7 +153,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // recomposes; the report closure above is re-published every update so
         // it always sees the current callbacks instead of a stale one.
         let motion = _ScrollViewAttachmentKeys.motionAnimator(for: node,
-                                                             physics: node.scrollPhysics)
+                                                             physics: Self.resolvedPhysics(on: node))
+        if node.prefersReducedMotion { motion.finishImmediately() }
         Self.publishScrollRange(to: motion, on: node)
         motion.adopt(node.contentOffset)
         node.attachments[ScrollReveal.handlerKey] = { [weak node] (target: CGRect) in
@@ -195,8 +202,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     }
                 }
                 // Wheel up (positive Y) scrolls content up — i.e. offset.y decreases.
-                let dx: Float = (axes == .horizontal || axes == .both) ? -event.x * step : 0
-                let dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
+                var dx: Float = (axes == .horizontal || axes == .both) ? -event.x * step : 0
+                var dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
                 if dx == 0 && dy == 0 { return .ignored }
 
                 let previousOffset = node.contentOffset
@@ -205,6 +212,19 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 guard Self.publishScrollRange(to: motion, on: node) else {
                     return consumePolicy.result(didScroll: false)
                 }
+
+                // A surface with no overflow cannot consume a wheel or invent
+                // elastic space. At a nested edge, hand outward input to the
+                // nearest scroll ancestor instead of trapping it in a bounce.
+                if motion.maximumOffset.x <= 0 { dx = 0 }
+                if motion.maximumOffset.y <= 0 { dy = 0 }
+                if consumePolicy == .whenOffsetChanged {
+                    if Self.hasScrollAncestor(node, horizontal: true),
+                       Self.pointsOutward(dx, at: previousOffset.x, maximum: motion.maximumOffset.x) { dx = 0 }
+                    if Self.hasScrollAncestor(node, horizontal: false),
+                       Self.pointsOutward(dy, at: previousOffset.y, maximum: motion.maximumOffset.y) { dy = 0 }
+                }
+                guard dx != 0 || dy != 0 else { return consumePolicy.result(didScroll: false) }
 
                 // Rubber band instead of a hard clamp: `motion` keeps the raw
                 // requested position and returns the compressed visible one.
@@ -421,6 +441,29 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         return true
     }
 
+    private static func resolvedPhysics(on node: Node) -> ScrollPhysics {
+        var physics = node.scrollPhysics
+        if node.prefersReducedMotion {
+            physics.momentum.isEnabled = false
+            physics.rubberBand.isEnabled = false
+        }
+        return physics
+    }
+
+    private static func pointsOutward(_ delta: Float, at offset: CGFloat, maximum: CGFloat) -> Bool {
+        (delta < 0 && offset <= 0) || (delta > 0 && offset >= maximum)
+    }
+
+    private static func hasScrollAncestor(_ node: Node, horizontal: Bool) -> Bool {
+        var parent = node.parent
+        while let ancestor = parent {
+            if let axes = ancestor.attachments[_ScrollViewAttachmentKeys.axes] as? ScrollAxis,
+               horizontal ? axes != .vertical : axes != .horizontal { return true }
+            parent = ancestor.parent
+        }
+        return false
+    }
+
     private static func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {
         node.convertFromWindow(CGPoint(x: CGFloat(x), y: CGFloat(y)))
     }
@@ -598,7 +641,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     }
 
     private static func scrollbarGeometry(for node: Node,
-                                          axes: Axis,
+                                          axes: ScrollAxis,
                                           trackThickness: Float,
                                           trackInset: Float) -> _ScrollViewScrollbarGeometry {
         let viewport = visibleViewportRect(for: node)

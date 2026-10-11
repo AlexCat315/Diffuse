@@ -75,4 +75,31 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 
 ## File map
 
-- 全部在 [GuavaUICompose/Primitives/Box.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Box.swift)
+- 全部在 [GuavaUICompose/Primitives/Box.swift](../../GuavaUI/Portable/Sources/GuavaUIComposeCore/Box.swift)
+
+
+## 能力边界（实际代码复核）
+
+| 需求 | 当前情况 |
+| --- | --- |
+| Flex / 横纵排列 / 对齐 / gap / 反向排列 | Box / Row / Column / Spacer 已有 |
+| 流式换行 | Box 的 `wrap: .wrap` 已有，包装行向起点收拢；不是二维轨道 Grid |
+| 裁剪与滚动 | ScrollView / BoundedScrollView；测量真实内容，支持惯性/回弹和稳定 gutter |
+| 双面板与 IDE 工作区 | SplitView 与 Workspace；详见各自的约束与缺口 |
+| 层叠内容 | absolutePosition / zIndex 与 Portal 支持绘制层级；缺独立公共 ZStack/Overlay 布局容器 |
+| 大集合 | VirtualStack 固定行高；Tree/List/DataTable 各有专门模型；缺可变行高虚拟布局 |
+| 响应式候选布局 | 软件可根据已知窗口宽度切换；缺统一断点/容器查询/ViewThatFits 协议 |
+| Grid | 缺显式/自适应列轨道、跨行跨列、intrinsic 内容轨道及 LazyGrid |
+| 软件自定义布局 | 还没有公开 measure/propose/place Layout 协议与通用 GeometryReader |
+| 表单/属性布局 | Form / PropertyGrid 已有专门用途；不能代替通用约束或网格系统 |
+| 特殊布局 | Anchor/约束布局、Masonry、SafeArea/insets、RTL 逻辑方向未成套完成 |
+
+下一步应先打通 proposal/measurement/placement 与布局方向契约，再实现 Grid、响应式候选布局和可变行高窗口化；直接添加名称相似的容器会留下测量、缓存和交互不一致的问题。已有 Yoga Flex 不必重新命名或重复包装。
+
+## 尺寸修饰器与局部重组
+
+`frame(width: 300)` 只覆盖宽度，保留组件自己的高度；省略的 min/max 也不清除已有约束。恢复某个轴的 intrinsic 尺寸请显式使用 `frame(width: .auto)` 或 `frame(height: .auto)`，百分比用 `.percent(100)`。动态方向切换需要显式 `.auto` 清理旧轴，Form、PropertyGrid 和 Workspace 的调用已同步迁移。
+
+组件局部状态更新、更换内部布局根时，ComposeCore 会按声明顺序重新施加调用方修饰器，避免组件内部的百分比尺寸覆盖调用方固定尺寸。AnyView 包装的多次同型修饰器也逐个保留；父更新替换该声明列表，避免保存过期值或无限追加。重放不会把键盘导航组的过期 tab-stop 恢复回来，焦点以当前组状态为准。
+
+本地 Motrix MyGo 的 `dashboard.go`、`downloads.go`、`widgets.go` 主要通过 Row/Column、Grow、MinWidth(0)、滚动视口与裁剪卡片组织界面；其层次还依赖 palette、间距、圆角和文字字距。GuavaUI 已有相应 Flex 原语，不需要为相同几何再增加一套容器名称。但它的产品级 28/36pt 固定高度不能直接成为通用框架的行高契约，仍需按字体缩放与内容测量调整。

@@ -28,8 +28,8 @@ public struct SplitView<First: View, Second: View>: View {
     public let spacing: Float
     public let dividerThickness: Float
     public let dividerColor: Color?
-    public let minFraction: Float
-    public let maxFraction: Float
+    public let constraints: SplitConstraints
+    @State private var measuredExtent: Float = 0
     public let first: First
     public let second: Second
 
@@ -43,6 +43,7 @@ public struct SplitView<First: View, Second: View>: View {
                 spacing: Float = 0,
                 dividerThickness: Float = 1,
                 dividerColor: Color? = nil,
+                constraints: SplitConstraints = .init(fraction: 0.05...0.95),
                 @ViewBuilder first: () -> First,
                 @ViewBuilder second: () -> Second) {
         self.axis = axis
@@ -51,8 +52,7 @@ public struct SplitView<First: View, Second: View>: View {
         self.spacing = spacing
         self.dividerThickness = dividerThickness
         self.dividerColor = dividerColor
-        self.minFraction = 0.05
-        self.maxFraction = 0.95
+        self.constraints = constraints
         self.first = first()
         self.second = second()
     }
@@ -64,8 +64,7 @@ public struct SplitView<First: View, Second: View>: View {
                 spacing: Float = 0,
                 dividerThickness: Float = 1,
                 dividerColor: Color? = nil,
-                minFraction: Float = 0.1,
-                maxFraction: Float = 0.9,
+                constraints: SplitConstraints = .init(),
                 @ViewBuilder first: () -> First,
                 @ViewBuilder second: () -> Second) {
         self.axis = axis
@@ -74,21 +73,25 @@ public struct SplitView<First: View, Second: View>: View {
         self.spacing = spacing
         self.dividerThickness = dividerThickness
         self.dividerColor = dividerColor
-        let low = max(0, min(1, minFraction))
-        self.minFraction = low
-        self.maxFraction = max(low, min(1, maxFraction))
+        self.constraints = constraints
         self.first = first()
         self.second = second()
     }
 
     private static func clampBounds(_ value: Float) -> Float {
         guard value.isFinite else { return 0.5 }
-        return max(0.05, min(0.95, value))
+        return max(0, min(1, value))
     }
 
     private var clampedFraction: Float {
-        guard let fractionBinding else { return staticFraction }
-        return max(minFraction, min(maxFraction, fractionBinding.wrappedValue))
+        let proposed = fractionBinding?.wrappedValue ?? staticFraction
+        let value = proposed.isFinite ? proposed : 0.5
+        return max(resolvedRange.lowerBound, min(resolvedRange.upperBound, value))
+    }
+
+    private var handleThickness: Float { fractionBinding == nil ? dividerThickness : max(dividerThickness, 7) }
+    private var resolvedRange: ClosedRange<Float> {
+        constraints.range(available: measuredExtent - handleThickness - 2 * spacing)
     }
 
     public var body: some View {
@@ -97,6 +100,8 @@ public struct SplitView<First: View, Second: View>: View {
             AnyView(divider)
             second.flex(1 - clampedFraction, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
         }
+        .clipped()
+        .modifier(_SplitExtentObserver(axis: axis, extent: $measuredExtent))
     }
 
     @ViewBuilder private var divider: some View {
@@ -105,7 +110,8 @@ public struct SplitView<First: View, Second: View>: View {
                          thickness: max(dividerThickness, 7),
                          color: dividerColor,
                          fraction: fractionBinding,
-                         range: minFraction...maxFraction)
+                         constraints: constraints,
+                         spacing: spacing)
         } else {
             Divider(color: dividerColor, thickness: dividerThickness, axis: axis.dividerAxis)
         }
@@ -148,7 +154,8 @@ private struct _SplitHandle: _PrimitiveView {
     let thickness: Float
     let color: Color?
     let fraction: Binding<Float>
-    let range: ClosedRange<Float>
+    let constraints: SplitConstraints
+    let spacing: Float
 
     func _makeNode() -> Node { Node() }
 
@@ -168,7 +175,8 @@ private struct _SplitHandle: _PrimitiveView {
         node.isFocusable = true
         node.isTabStop = true
         node.cursor = axis.resizeCursor
-        let current = max(range.lowerBound, min(range.upperBound, fraction.wrappedValue))
+        let range = constraints.range(available: containerExtent(node))
+        let current = max(range.lowerBound, min(range.upperBound, fraction.wrappedValue.isFinite ? fraction.wrappedValue : 0.5))
         node.accessibility = AccessibilitySemantics(.slider) {
             $0.label = "Resize split"
             $0.value = "\(Int((current * 100).rounded()))%"
@@ -199,7 +207,10 @@ private struct _SplitHandle: _PrimitiveView {
             switch phase {
             case .down:
                 let extent = containerExtent(node)
-                node.attachments[Keys.start] = Start(fraction: fraction.wrappedValue,
+                let range = constraints.range(available: extent)
+                let proposed = fraction.wrappedValue.isFinite ? fraction.wrappedValue : 0.5
+                let resolved = max(range.lowerBound, min(range.upperBound, proposed))
+                node.attachments[Keys.start] = Start(fraction: resolved,
                                                      position: axis == .horizontal ? event.x : event.y,
                                                      extent: extent)
                 PointerCaptureHolder.current?.acquire(node)
@@ -214,7 +225,7 @@ private struct _SplitHandle: _PrimitiveView {
                   let start = node.attachments[Keys.start] as? Start,
                   start.extent > 1 else { return .ignored }
             let position: Float = axis == .horizontal ? event.x : event.y
-            write(start.fraction + (position - start.position) / start.extent)
+            write(start.fraction + (position - start.position) / start.extent, node: node)
             return .handled
         }
         registry.setKey(node) { event, phase in
@@ -257,19 +268,53 @@ private struct _SplitHandle: _PrimitiveView {
 
     private func containerExtent(_ node: Node) -> Float {
         let container = node.parent?.frame ?? node.frame
-        switch axis {
-        case .horizontal: return Float(container.width)
-        case .vertical: return Float(container.height)
-        }
+        let extent = axis == .horizontal ? Float(container.width) : Float(container.height)
+        return max(0, extent - thickness - 2 * spacing)
     }
 
-    private func write(_ value: Float) {
+    private func write(_ value: Float, node: Node) {
         guard value.isFinite else { return }
+        let range = constraints.range(available: containerExtent(node))
         let clamped = max(range.lowerBound, min(range.upperBound, value))
         if fraction.wrappedValue != clamped { fraction.wrappedValue = clamped }
     }
 
     private func adjust(node: Node, by delta: Float) {
-        write(fraction.wrappedValue + delta)
+        let range = constraints.range(available: containerExtent(node))
+        let proposed = fraction.wrappedValue.isFinite ? fraction.wrappedValue : 0.5
+        let current = max(range.lowerBound, min(range.upperBound, proposed))
+        write(current + delta, node: node)
+    }
+}
+
+private final class _SplitMeasurement {
+    var axis: SplitAxis
+    var extent: Binding<Float>
+    init(axis: SplitAxis, extent: Binding<Float>) { self.axis = axis; self.extent = extent }
+    func update(_ node: Node) {
+        let next = axis == .horizontal ? Float(node.frame.width) : Float(node.frame.height)
+        if extent.wrappedValue != next { extent.wrappedValue = next }
+    }
+}
+
+private struct _SplitExtentObserver: ViewModifier {
+    let axis: SplitAxis
+    let extent: Binding<Float>
+    private static var key: String { "GuavaUI.split.measurement" }
+    func apply(node: Node) {
+        if let measurement = node.attachments[Self.key] as? _SplitMeasurement {
+            measurement.axis = axis
+            measurement.extent = extent
+            return
+        }
+        let measurement = _SplitMeasurement(axis: axis, extent: extent)
+        node.attachments[Self.key] = measurement
+        let previous = node.layoutDidUpdate
+        // Install once; repeated recomposition updates the owner above instead
+        // of retaining a growing chain of obsolete measurement callbacks.
+        node.layoutDidUpdate = { node in
+            previous?(node)
+            measurement.update(node)
+        }
     }
 }

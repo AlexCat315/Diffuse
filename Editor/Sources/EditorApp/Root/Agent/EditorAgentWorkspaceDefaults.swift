@@ -18,7 +18,7 @@ enum EditorAgentWorkspaceDefaults {
         let controller = WorkspaceController(document: WorkspaceDocument(panels: panels, groups: groups,
             slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"), center: .group("center"),
                                                      trailing: .group("trailing")),
-            layoutTree: .group("center"), splitFractions: .init(leading: 0.17, centerTrailing: 0.74)))
+            splitFractions: .init(leading: 0.17, centerTrailing: 0.74)))
         _ = controller.dispatch(.collapse("leading"))
         return controller
     }

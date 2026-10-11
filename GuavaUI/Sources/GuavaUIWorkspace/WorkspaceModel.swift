@@ -420,7 +420,6 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
     public var panels: [WorkspacePanelID: WorkspacePanel]
     public var groups: [WorkspaceTabGroupID: WorkspaceTabGroup]
     public var slots: [WorkspaceSlotID: WorkspaceSlot]
-    public var layoutTree: WorkspaceLayoutNode?
     public var collapsed: [WorkspaceCollapsedItem]
     public var floatingWindows: [WorkspaceFloatingWindow]
     public var splitFractions: WorkspaceSplitFractions
@@ -429,7 +428,6 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
     public init(panels: [WorkspacePanelID: WorkspacePanel],
                 groups: [WorkspaceTabGroupID: WorkspaceTabGroup],
                 slots: [WorkspaceSlotID: WorkspaceSlot],
-                layoutTree: WorkspaceLayoutNode? = nil,
                 collapsed: [WorkspaceCollapsedItem] = [],
                 floatingWindows: [WorkspaceFloatingWindow] = [],
                 splitFractions: WorkspaceSplitFractions = WorkspaceSplitFractions(),
@@ -437,7 +435,6 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
         self.panels = panels
         self.groups = groups
         self.slots = slots
-        self.layoutTree = layoutTree ?? slots[.center]?.layout ?? slots[.content]?.layout
         self.collapsed = collapsed
         self.floatingWindows = floatingWindows
         self.splitFractions = splitFractions
