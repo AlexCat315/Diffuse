@@ -81,13 +81,20 @@ public struct WindowOptions: Sendable, Equatable {
     public var width: Int32
     public var height: Int32
     public var titleBarStyle: WindowTitleBarStyle
+    /// 是否在 Dock / 任务栏显示应用图标。
+    ///
+    /// 常驻型应用（只有状态栏或托盘图标）要设 `false`：进程从建窗口那一刻起
+    /// 就是 accessory，Dock 图标不会先冒出来再消失。
+    public var showsDockIcon: Bool
 
     public init(width: Int32 = 1280,
                 height: Int32 = 720,
-                titleBarStyle: WindowTitleBarStyle = .standard) {
+                titleBarStyle: WindowTitleBarStyle = .standard,
+                showsDockIcon: Bool = true) {
         self.width = width
         self.height = height
         self.titleBarStyle = titleBarStyle
+        self.showsDockIcon = showsDockIcon
     }
 }
 
@@ -208,6 +215,17 @@ public protocol Shell: AnyObject {
     func minimizeWindow(_ windowID: WindowID)
     func maximizeWindow(_ windowID: WindowID)
     func restoreWindow(_ windowID: WindowID)
+
+    /// 把窗口从屏幕和 Dock 上完全收起，进程继续跑。
+    ///
+    /// 和 `minimizeWindow` 的差别在 Dock：最小化会在 Dock 里留一个入口，
+    /// 隐藏不会。只有状态栏/托盘图标的常驻型应用关掉窗口时要走这个，
+    /// 否则窗口会以最小化的形式赖在 Dock 里。
+    func hideWindow(_ windowID: WindowID)
+
+    /// 重新显示被 `hideWindow` 收起的窗口。
+    func showWindow(_ windowID: WindowID)
+
     func isWindowMaximized(_ windowID: WindowID) -> Bool
     func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float)
     func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?)
@@ -303,6 +321,10 @@ public extension Shell {
     func minimizeWindow(_ windowID: WindowID) {}
     func maximizeWindow(_ windowID: WindowID) {}
     func restoreWindow(_ windowID: WindowID) {}
+    /// 默认降级成最小化：没有原生隐藏能力的 shell 至少也能把窗口收起来，
+    /// 不至于让调用方的隐藏请求整个落空。
+    func hideWindow(_ windowID: WindowID) { minimizeWindow(windowID) }
+    func showWindow(_ windowID: WindowID) { restoreWindow(windowID) }
     func isWindowMaximized(_ windowID: WindowID) -> Bool { false }
     func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float) {}
     func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {}
@@ -392,7 +414,7 @@ public final class AppKitShell: Shell {
         }
 
         let app = NSApplication.shared
-        app.setActivationPolicy(.regular)
+        app.setActivationPolicy(options.showsDockIcon ? .regular : .accessory)
 
         let frame = NSRect(x: 100, y: 100,
                            width: Int(options.width),
@@ -477,6 +499,17 @@ public final class AppKitShell: Shell {
     public func minimizeWindow(_ windowID: WindowID) {
         guard windowID == .main else { return }
         window?.performMiniaturize(nil)
+    }
+
+    public func hideWindow(_ windowID: WindowID) {
+        guard windowID == .main else { return }
+        window?.orderOut(nil)
+    }
+
+    public func showWindow(_ windowID: WindowID) {
+        guard windowID == .main, let window else { return }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     public func maximizeWindow(_ windowID: WindowID) {
