@@ -345,6 +345,7 @@ public final class FontProvider {
             return nil
         }
 
+        hb_ft_font_set_load_flags(hbFont, FT_Int32(FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP))
         let id = nextFontID
         nextFontID += 1
 
@@ -443,14 +444,14 @@ public final class FontProvider {
                                      in fullText: String,
                                      range: NSRange,
                                      primary: CTFont) -> ManagedFont? {
-        let scaledSize = CGFloat(size * rasterScale)
+        let logicalSize = CGFloat(size)
         let direct = CTFontCreateForString(primary,
                                            fullText as CFString,
                                            CFRange(location: range.location, length: range.length))
 
         var candidates: [CTFont] = [direct, primary]
         candidates.append(contentsOf: SystemFontDefaults.fontStack.map {
-            CTFontCreateWithName($0 as CFString, scaledSize, nil)
+            CTFontCreateWithName($0 as CFString, logicalSize, nil)
         })
 
         var seenPostScriptNames: Set<String> = []
@@ -482,7 +483,7 @@ public final class FontProvider {
             }
 
             let candidateCTFont = CTFontCreateWithName(candidateName as CFString,
-                                                       CGFloat(size * rasterScale),
+                                                       CGFloat(size),
                                                        nil)
             if let loaded = makeManagedFont(from: candidateCTFont,
                                             cacheAliases: [psName, candidateName]) {
@@ -509,7 +510,6 @@ public final class FontProvider {
         guard let data = try? Data(contentsOf: url) else { return nil }
 
         let resolvedFaceIndex = findFaceIndex(in: data, targetPSName: actualPSName)
-            ?? descriptorFaceIndex(at: url, targetPSName: actualPSName)
         let faceIndex = resolvedFaceIndex ?? 0
 
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
@@ -532,6 +532,11 @@ public final class FontProvider {
             }
         }
 
+        guard applyFontVariations(from: ctFont, to: ftFace, library: ftLibrary) else {
+            FT_Done_Face(ftFace)
+            buffer.deallocate()
+            return nil
+        }
         _ = FT_Select_Charmap(ftFace, FT_ENCODING_UNICODE)
         FT_Set_Char_Size(ftFace, 0, FT_F26Dot6(size * rasterScale * 64), 72, 72)
 
@@ -541,6 +546,7 @@ public final class FontProvider {
             return nil
         }
 
+        hb_ft_font_set_load_flags(hbFont, FT_Int32(FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP))
         let id = nextFontID
         nextFontID += 1
 
@@ -560,13 +566,13 @@ public final class FontProvider {
 
     private func configuredCTFont(named name: String,
                                   weight: FontWeight) -> CTFont {
-        let scaledSize = CGFloat(size * rasterScale)
+        let logicalSize = CGFloat(size)
         let base: CTFont
         if name == ".AppleSystemUIFont" {
-            base = CTFontCreateUIFontForLanguage(.system, scaledSize, nil)
-                ?? CTFontCreateWithName("Helvetica Neue" as CFString, scaledSize, nil)
+            base = CTFontCreateUIFontForLanguage(.system, logicalSize, nil)
+                ?? CTFontCreateWithName("Helvetica Neue" as CFString, logicalSize, nil)
         } else {
-            base = CTFontCreateWithName(name as CFString, scaledSize, nil)
+            base = CTFontCreateWithName(name as CFString, logicalSize, nil)
         }
         guard weight != .regular else { return base }
 
@@ -577,7 +583,7 @@ public final class FontProvider {
             CTFontCopyFontDescriptor(base),
             attrs as CFDictionary
         )
-        return CTFontCreateWithFontDescriptor(descriptor, scaledSize, nil)
+        return CTFontCreateWithFontDescriptor(descriptor, logicalSize, nil)
     }
 
     private func fallbackPostScriptCandidates(for ctFont: CTFont,
@@ -627,15 +633,6 @@ public final class FontProvider {
         candidates.append(candidate)
     }
 
-    private func descriptorFaceIndex(at url: URL,
-                                     targetPSName: String) -> Int? {
-        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor] else {
-            return nil
-        }
-        return descriptors.firstIndex(where: {
-            (CTFontDescriptorCopyAttribute($0, kCTFontNameAttribute) as? String) == targetPSName
-        })
-    }
 #endif
 
     // MARK: - FreeType utilities (shared)
@@ -658,26 +655,26 @@ public final class FontProvider {
         let err = FT_New_Memory_Face(ftLibrary, probe, FT_Long(data.count), 0, &face)
         guard err == 0, let f = face else { return nil }
         let numFaces = Int(f.pointee.num_faces)
-
-        if let namePtr = FT_Get_Postscript_Name(f), String(cString: namePtr) == targetPSName {
-            FT_Done_Face(f)
-            return 0
-        }
         FT_Done_Face(f)
+        for index in 0..<numFaces {
+            var candidate: FT_Face?
+            guard FT_New_Memory_Face(ftLibrary, probe, FT_Long(data.count), FT_Long(index), &candidate) == 0,
+                  let face = candidate else { continue }
+            defer { FT_Done_Face(face) }
+            if let name = FT_Get_Postscript_Name(face), String(cString: name) == targetPSName { return index }
 
-        guard numFaces > 1 else { return nil }
-
-        for i in 1..<numFaces {
-            var fi: FT_Face?
-            let e = FT_New_Memory_Face(ftLibrary, probe, FT_Long(data.count), FT_Long(i), &fi)
-            guard e == 0, let ff = fi else { continue }
-            defer { FT_Done_Face(ff) }
-
-            if let namePtr = FT_Get_Postscript_Name(ff), String(cString: namePtr) == targetPSName {
-                return i
+            // CoreText's descriptor array includes named variable instances;
+            // its array index is NOT a FreeType collection face index.
+            var variation: UnsafeMutablePointer<FT_MM_Var>?
+            guard FT_Get_MM_Var(face, &variation) == 0, let variation else { continue }
+            defer { FT_Done_MM_Var(ftLibrary, variation) }
+            for instance in 1...max(1, Int(variation.pointee.num_namedstyles)) {
+                guard FT_Set_Named_Instance(face, FT_UInt(instance)) == 0 else { continue }
+                if let name = FT_Get_Postscript_Name(face), String(cString: name) == targetPSName {
+                    return index | (instance << 16)
+                }
             }
         }
-
         return nil
     }
 }
