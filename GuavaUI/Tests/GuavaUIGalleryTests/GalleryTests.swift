@@ -142,7 +142,7 @@ struct GalleryTests {
         PointerCaptureHolder.current = capture
         AnimatorScheduler.$current.withValue(AnimatorScheduler()) {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-            graph.install(root: GalleryView())
+            graph.install(root: GalleryView(initialPage: .button))
             let dispatcher = EventDispatcher(tree: graph.tree, interactions: interactions, capture: capture, focusChain: focus)
             func settle() { graph.recomposer.commitAll(); graph.computeLayout(width: 1280, height: 820) }
             func click(_ name: String) {

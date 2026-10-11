@@ -17,14 +17,15 @@ public struct Icon: View {
     }
 
     private let resource: BundleImageResource
-    private let size: Float
+    private enum Size { case points(Float), semantic(SemanticIconSize) }
+    private let size: Size
     private let fill: Fill
 
     public init(_ resource: BundleImageResource,
                 size: Float,
                 color: SemanticColorRef? = nil) {
         self.resource = resource
-        self.size = size
+        self.size = .points(size)
         self.fill = color.map(Fill.semantic) ?? .inherited
     }
 
@@ -32,11 +33,34 @@ public struct Icon: View {
                 size: Float,
                 color: Color) {
         self.resource = resource
-        self.size = size
+        self.size = .points(size)
         self.fill = .concrete(color)
     }
 
-    public var body: AnyView {
+    public init(_ resource: BundleImageResource, size: SemanticIconSize = .medium, color: SemanticColorRef? = nil) {
+        self.resource = resource
+        self.size = .semantic(size)
+        self.fill = color.map(Fill.semantic) ?? .inherited
+    }
+
+    public init(_ resource: BundleImageResource, size: SemanticIconSize, color: Color) {
+        self.resource = resource
+        self.size = .semantic(size)
+        self.fill = .concrete(color)
+    }
+
+    public var body: some View {
+        ThemeReader { theme in
+            let resolved: Float = switch size {
+            case .points(let value): value
+            case .semantic(let role): role.resolve(theme)
+            }
+            image(resource: theme.icons.resolve(resource), size: resolved.isFinite ? max(1, resolved) : 16)
+        }
+    }
+
+    private func image(resource: BundleImageResource, size: Float) -> AnyView {
+
         let image = Image(resource: resource,
                           width: size,
                           height: size,

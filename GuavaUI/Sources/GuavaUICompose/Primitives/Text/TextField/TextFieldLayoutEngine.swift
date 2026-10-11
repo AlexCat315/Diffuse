@@ -88,7 +88,7 @@ extension TextField {
                                 font: Font, lineHeight: Float, availableTextWidth: Float) -> RenderCacheEntry {
             let document = document(in: renderState.buffer, node: node, env: env, font: font, lineHeight: lineHeight,
                                     availableTextWidth: availableTextWidth, placeholder: renderState.showsPlaceholder)
-            state.scroll.visibleHeight = max(lineHeight, Float(node.frame.height) - TextField.verticalInset(for: lineHeight) * 2)
+            state.scroll.visibleHeight = max(lineHeight, Float(node.frame.height) - textField.verticalInset(for: lineHeight) * 2)
             var revealCaretX: Float?
             if state.scroll.horizontal.viewportWidth != availableTextWidth, FocusChainHolder.current?.focused === node {
                 revealCaretX = document.caret(atCharacter: renderState.cursorIndex,
@@ -219,7 +219,7 @@ extension TextField {
                 thumbRect: UIRect(x: x + (width - thumb) * scroll.offset / scroll.maximum, y: y, width: thumb, height: thickness))
         }
         func refreshScrollMetrics(node: Node, state: FieldState, renderCache: RenderCacheEntry, lineHeight: Float) {
-            state.scroll.visibleHeight = max(lineHeight, Float(node.frame.height) - TextField.verticalInset(for: lineHeight) * 2)
+            state.scroll.visibleHeight = max(lineHeight, Float(node.frame.height) - textField.verticalInset(for: lineHeight) * 2)
             updateScroll(state, document: renderCache.document, lineHeight: lineHeight)
             node.contentOffset = CGPoint(x: CGFloat(state.scroll.horizontal.offset), y: CGFloat(state.scroll.offsetY))
         }

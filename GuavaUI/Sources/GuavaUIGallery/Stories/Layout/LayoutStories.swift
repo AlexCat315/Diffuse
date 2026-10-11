@@ -151,41 +151,6 @@ struct AnimationStory: View {
     }
 }
 
-struct ThemeStory: View {
-    var body: some View {
-        ThemeReader { theme in
-            Box(direction: .column, alignItems: .stretch, spacing: 24) {
-                StorySection("Surfaces", "Semantic tokens describe roles; change the theme using the sidebar.") {
-                    Row(alignment: .center, spacing: 12) {
-                        Text("Background").padding(16).background(.background).border(.border, width: 1)
-                        Text("Surface").padding(16).background(.surface).border(.border, width: 1)
-                        Text("Variant").padding(16).background(.surfaceVariant)
-                        Text("Floating").padding(16).background(.surfaceFloating).border(.border, width: 1)
-                    }
-                    Row(alignment: .center, spacing: 10) { for tone in StatusTone.allCases { Badge(String(describing: tone).capitalized, tone: tone) } }
-                }
-                StorySection("Typography", "The same hierarchy uses each theme's font and line-height tokens.") {
-                    Text("Display").font(.display)
-                    Text("Title").font(.title)
-                    Text("Headline").font(.headline)
-                    Text("Body text").font(.body)
-                    Text("Caption and secondary information").font(.caption).foregroundColor(.onSurfaceMuted)
-                    Text("let value = 42").font(.mono)
-                    Text("Base spacing: \(theme.spacing.sm) pt").font(.caption).foregroundColor(.onSurfaceMuted)
-                }
-                StorySection("Multilingual text & emoji", "Chinese, accented names and emoji share one line. Text size and opacity apply consistently.") {
-                    Text("Émile · 中文 · 🙂 👩🏽‍💻 🇨🇳 ❤️").font(.system(size: 14)).lineHeight(22)
-                    Text("Émile · 中文 · 🙂 👩🏽‍💻 🇨🇳 ❤️").font(.system(size: 24)).lineHeight(36)
-                    Text("中文 🙂 👨‍👩‍👧‍👦").font(.system(size: 40)).lineHeight(58)
-                    Text("Colored text 🙂 👩🏽‍💻 keeps its emoji colors").font(.system(size: 20))
-                        .foregroundColor(Color(r: 0.8, g: 0.15, b: 0.2)).lineHeight(30)
-                    Text("Half opacity 🙂 👩🏽‍💻").font(.system(size: 20)).lineHeight(30).opacity(0.5)
-                }
-            }
-        }
-    }
-}
-
 struct StatusBarStory: View {
     let options: GalleryOptions
     var body: some View {

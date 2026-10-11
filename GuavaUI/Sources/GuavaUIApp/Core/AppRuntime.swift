@@ -441,7 +441,7 @@ public final class AppRuntime {
 
         if !didInstallRoot {
             withWindowChromeContext(host.mainSession?.id) {
-                graph.install(root: rootView.compositionLocal(
+                graph.install(root: rootView.textScaler(config.textScaler).compositionLocal(
                     PortalStoreEnvironment.key,
                     mainPortalStore
                 ))
@@ -884,7 +884,7 @@ private final class AuxiliaryAppWindow {
             configureTextEnvironment(session.contentScaleFactor)
             if !didInstallRoot {
                 withWindowChromeContext(session.id) {
-                    graph.install(root: rootView.compositionLocal(
+                    graph.install(root: rootView.textScaler(config.textScaler).compositionLocal(
                         PortalStoreEnvironment.key,
                         portalStore
                     ))

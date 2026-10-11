@@ -70,39 +70,33 @@ public struct ButtonIcon: View {
     }
 
     public let source: Source
-    public let size: Float
+    public let size: Float?
     public let tint: Color?
 
-    public init(_ source: Source,
-                size: Float = 16,
-                tint: Color? = nil) {
+    public init(_ source: Source, size: Float? = nil, tint: Color? = nil) {
         self.source = source
         self.size = size
         self.tint = tint
     }
 
     public var body: some View {
+        ThemeReader { theme in
+            let points = size ?? theme.icons.medium
+            image(size: points.isFinite ? max(1, points) : 16)
+        }
+    }
+
+    private func image(size: Float) -> AnyView {
         switch source {
         case .texture(let id):
-            Image(textureID: id,
-                  width: size,
-                  height: size,
-                  tint: tint ?? .white,
-                  renderingMode: .alphaMask)
+            return AnyView(Image(textureID: id, width: size, height: size,
+                                 tint: tint ?? .white, renderingMode: .alphaMask))
         case .file(let path):
-            Image(file: path,
-                  width: size,
-                  height: size,
-                  tint: tint ?? .white,
-                  contentMode: .fit,
-                  renderingMode: .alphaMask)
+            return AnyView(Image(file: path, width: size, height: size,
+                                 tint: tint ?? .white, contentMode: .fit, renderingMode: .alphaMask))
         case .resource(let resource):
-            Image(resource: resource,
-                  width: size,
-                  height: size,
-                  tint: tint ?? .white,
-                  contentMode: .fit,
-                  renderingMode: .alphaMask)
+            if let tint { return AnyView(Icon(resource, size: size, color: tint)) }
+            return AnyView(Icon(resource, size: size))
         }
     }
 }
@@ -141,7 +135,7 @@ public extension Button where Label == ButtonIcon {
     /// Icon-only convenience initializer. Use the regular `Button` style
     /// pipeline; this only supplies a square image label.
     init(icon source: ButtonIcon.Source,
-         size: Float = 16,
+         size: Float? = nil,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
                 isLoading: Bool = false,
@@ -555,11 +549,11 @@ struct BuiltinButtonChrome: _PrimitiveView {
         // retaining its intrinsic label width when the host is unconstrained.
         layout.flexGrow = 1
         layout.flexShrink = 1
-        layout.height = metrics.height
+        layout.minHeight = metrics.height
         layout.minWidth = metrics.minWidth
-        layout.setPadding(0, edge: .top)
+        layout.setPadding(metrics.verticalPadding, edge: .top)
         layout.setPadding(metrics.horizontalPadding, edge: .left)
-        layout.setPadding(0, edge: .bottom)
+        layout.setPadding(metrics.verticalPadding, edge: .bottom)
         layout.setPadding(metrics.horizontalPadding, edge: .right)
     }
 
@@ -586,6 +580,7 @@ private struct BuiltinButtonChromeMetrics {
     let minWidth: Float?
     let horizontalPadding: Float
     let radius: Float
+    let verticalPadding: Float
 }
 
 private struct BuiltinButtonChromeValues {
@@ -603,12 +598,14 @@ private extension BuiltinButtonChromeKind {
             return BuiltinButtonChromeMetrics(height: size.buttonHeight,
                                               minWidth: nil,
                                               horizontalPadding: size.horizontalPadding,
-                                              radius: theme.radius.md)
+                                              radius: theme.radius.md,
+                                              verticalPadding: max(2, (size.buttonHeight - theme.typography.label.lineHeight) / 2))
         case .toggle(let minWidth, let height):
             return BuiltinButtonChromeMetrics(height: height,
                                               minWidth: minWidth,
                                               horizontalPadding: 7,
-                                              radius: 6)
+                                              radius: 6,
+                                              verticalPadding: max(2, (height - theme.typography.label.lineHeight) / 2))
         }
     }
 }

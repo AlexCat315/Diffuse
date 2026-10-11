@@ -7,19 +7,19 @@ public enum ControlSize: Sendable, Hashable, CaseIterable {
 
     public var buttonHeight: Float {
         switch self {
-        case .mini: 20
-        case .small: 24
-        case .regular: 28
-        case .large: 36
+        case .mini: 22
+        case .small: 28
+        case .regular: 32
+        case .large: 40
         }
     }
 
     public var horizontalPadding: Float {
         switch self {
-        case .mini: 5
-        case .small: 7
-        case .regular: 8
-        case .large: 12
+        case .mini: 6
+        case .small: 9
+        case .regular: 12
+        case .large: 16
         }
     }
 

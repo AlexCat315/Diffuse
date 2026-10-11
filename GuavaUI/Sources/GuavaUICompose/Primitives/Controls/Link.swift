@@ -56,9 +56,9 @@ public struct Link<Label: View>: View {
             Row(alignment: .center, spacing: 4) {
                 label
                 if let icon {
-                    Icon(icon, size: 12)
+                    Icon(icon, size: .small)
                 } else if isExternal {
-                    Icon(UIIcons.Action.externalLink, size: 12)
+                    Icon(UIIcons.Action.externalLink, size: .small)
                 }
             }
         }

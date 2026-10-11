@@ -78,7 +78,7 @@ struct MenuItemRowHost: _PrimitiveView {
             let rect = UIRect(x: Float(origin.x) + 4,
                               y: Float(origin.y) + 2,
                               width: width,
-                              height: 28)
+                              height: max(0, Float(node.frame.height) - 4))
             list.addRoundedRect(rect,
                                 radius: 5,
                                 color: background.multipliedAlpha(node.opacity))
@@ -142,14 +142,14 @@ struct MenuItemRowHost: _PrimitiveView {
         let layout = LayoutNode()
         layout.flexDirection = .column
         layout.alignItems = .stretch
-        layout.height = 32
+        layout.minHeight = 32
         return layout
     }
 
     func _updateLayout(_ layout: LayoutNode) {
         layout.flexDirection = .column
         layout.alignItems = .stretch
-        layout.height = 32
+        layout.minHeight = 32
     }
 
     func _children(for node: Node) -> [any View] {
@@ -159,7 +159,7 @@ struct MenuItemRowHost: _PrimitiveView {
             : item.role == .destructive ? theme.colors.error : theme.colors.onSurface
         let textOpacity: Float = 1
 
-        let checkmarkSize: Float = 10
+        let checkmarkSize = theme.icons.small.isFinite ? max(1, theme.icons.small) : 12
         let row = Row(alignment: .center, spacing: 8) {
             if showsSelectionColumn {
                 // Fixed-width slot — a grow-able Spacer here pushes every
@@ -180,7 +180,7 @@ struct MenuItemRowHost: _PrimitiveView {
                 .clipped()
                 .flex()
             if item.hasSubmenu {
-                Icon(UIIcons.Navigation.chevronRight, size: 12, color: titleColor)
+                Icon(UIIcons.Navigation.chevronRight, size: .small, color: titleColor)
             } else if let shortcut = item.shortcut {
                 Text(shortcut)
                     .lineLimit(1)
@@ -190,8 +190,8 @@ struct MenuItemRowHost: _PrimitiveView {
                     .clipped()
             }
         }
-        .padding(horizontal: 16, vertical: 2)
-        .frame(height: 32)
+        .padding(horizontal: 16, vertical: 6)
+        .frame(minHeight: 32)
 
         return [row]
     }

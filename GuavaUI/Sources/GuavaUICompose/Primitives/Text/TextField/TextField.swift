@@ -92,15 +92,14 @@ public struct TextField: View {
         let isFocused: Bool
     }
 
-    private static let minimumFieldHeightDefault: Float = 32
     static let multilineWheelStep: Float = 30
     static let scrollbarTrackThickness: Float = 6
     static let scrollbarInset: Float = 3
-    private var minimumFieldHeight: Float {
+    var minimumFieldHeight: Float {
         switch decoration.size {
         case .large:   return 40
         case .automatic, .regular: return 32
-        case .small:   return 24
+        case .small:   return 28
         }
     }
     /// Optional intrinsic font size override applied per `Size` so an
@@ -144,6 +143,7 @@ public struct TextField: View {
                            interactionState: _TextFieldInteractionState,
                            onFocusChange: @escaping (Bool) -> Void,
                            onEditingChange: @escaping (Bool) -> Void) {
+        node.syncTextStyleEnvironment()
         node.accessibility = AccessibilitySemantics(.textField) {
             $0.label = placeholder
             $0.state.isEnabled = !behavior.disabled; $0.state.isReadOnly = behavior.readOnly
@@ -329,8 +329,8 @@ public struct TextField: View {
             layout.height = nil
             layout.minHeight = minimumFieldHeight
         } else {
-            layout.minHeight = nil
-            layout.height = resolvedFieldHeight(layout: layout)
+            layout.minHeight = minimumFieldHeight
+            layout.height = nil
         }
         return layout
     }
@@ -350,8 +350,8 @@ public struct TextField: View {
             layout.height = nil
             layout.minHeight = minimumFieldHeight
         } else {
-            layout.minHeight = nil
-            layout.height = resolvedFieldHeight(layout: layout)
+            layout.minHeight = minimumFieldHeight
+            layout.height = nil
         }
         if self.layout.axis == .vertical {
             if previous != nil, previous != next {
@@ -1110,13 +1110,13 @@ public struct TextField: View {
 
     func textOriginYOffset(frameHeight: Float, lineHeight: Float) -> Float {
         if self.layout.axis == .vertical {
-            return Self.verticalInset(for: lineHeight)
+            return verticalInset(for: lineHeight)
         }
         return max(0, (frameHeight - lineHeight) / 2)
     }
 
-    static func verticalInset(for lineHeight: Float) -> Float {
-        max(4, (minimumFieldHeightDefault - lineHeight) * 0.5)
+    func verticalInset(for lineHeight: Float) -> Float {
+        max(4, (minimumFieldHeight - lineHeight) * 0.5)
     }
 
     /// Render the clear affordance at `(x, y)` using the bundled close SVG so
@@ -1159,7 +1159,7 @@ public struct TextField: View {
             }
             let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
             let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
-            let resolvedFont = env.resolvedFont(fontOverride ?? snapshot.sizeFontSize.map { Font.system(size: $0) })
+            let resolvedFont = fontOverride ?? (layout?.textScaler ?? .identity).scale(snapshot.sizeFontSize.map { Font.system(size: $0) } ?? env.defaultFont)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
             let buffer = snapshot.text.wrappedValue.isEmpty ? TextBuffer(snapshot.placeholder) : snapshot.text.wrappedValue
@@ -1177,7 +1177,7 @@ public struct TextField: View {
             }
             let layoutResult = document.visibleLayout(firstRow: 0, rowCount: snapshot.layout.maxVisibleLines + 1, environment: env)
 
-            let insetY = verticalInset(for: resolvedLineHeight)
+            let insetY = snapshot.verticalInset(for: resolvedLineHeight)
             let contentHeight = max(resolvedLineHeight, layoutResult.totalHeight)
             let measuredWidth = layoutResult.totalWidth + 16
             let resolvedWidth: Float
@@ -1205,19 +1205,16 @@ public struct TextField: View {
             return minimumFieldHeight
         }
         let lineCount = text.wrappedValue.isEmpty ? TextBuffer(placeholder).lineCount : text.wrappedValue.lineCount
-        guard self.layout.axis == .vertical || lineCount > 1 else {
-            return minimumFieldHeight
-        }
         guard let env = TextEnvironmentHolder.current else {
             return minimumFieldHeight
         }
 
         let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
         let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
-        let resolvedFont = env.resolvedFont(fontOverride ?? sizeFontSize.map { Font.system(size: $0) })
+        let resolvedFont = fontOverride ?? (layout?.textScaler ?? .identity).scale(sizeFontSize.map { Font.system(size: $0) } ?? env.defaultFont)
         let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                         override: lineHeightOverride)
-        let insetY = Self.verticalInset(for: resolvedLineHeight)
+        let insetY = verticalInset(for: resolvedLineHeight)
         let contentHeight = Float(lineCount) * resolvedLineHeight
         let maxHeight = max(minimumFieldHeight,
                             resolvedLineHeight * Float(self.layout.maxVisibleLines) + insetY * 2)
@@ -1225,8 +1222,8 @@ public struct TextField: View {
     }
 
     func resolvedFont(node: Node, env: TextEnvironment) -> Font {
-        env.resolvedFont((node.textStyleValue(StyleAttachmentKey.font) as Font?)
-            ?? sizeFontSize.map { Font.system(size: $0) })
+        (node.textStyleValue(StyleAttachmentKey.font) as Font?)
+            ?? node.textScaler.scale(sizeFontSize.map { Font.system(size: $0) } ?? env.defaultFont)
     }
 
     func resolvedLineHeight(node: Node, env: TextEnvironment) -> Float {
