@@ -11,7 +11,7 @@ swift run --package-path GuavaUI GuavaUIDemo --component workspace
 swift run --package-path GuavaUI GuavaUIDemo --component dataTable
 ```
 
-画廊提供 63 个 Story、搜索、尺寸切换、禁用示例、明暗主题和独立重置。示例代码在 `Sources/GuavaUIGallery/`，宿主代码在 `Sources/GuavaUIDemo/`。Story 数量不是独立组件数量。
+画廊提供 72 个 Story、搜索、尺寸切换、禁用示例、明暗主题和独立重置。示例代码在 `Sources/GuavaUIGallery/`，宿主代码在 `Sources/GuavaUIDemo/`。Story 数量不是独立组件数量。
 
 运行接入真实 SourceKit-LSP 的代码编辑器：
 

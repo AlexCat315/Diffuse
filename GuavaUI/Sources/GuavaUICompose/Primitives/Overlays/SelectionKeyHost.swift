@@ -2,9 +2,11 @@ import GuavaUIRuntime
 
 /// A local keyboard boundary shared by collection controls. Child inputs get first refusal.
 struct SelectionKeyHost<Content: View>: _PrimitiveView {
+    let isEnabled: Bool
     let onKey: (KeyEvent) -> Bool
     let content: Content
-    init(onKey: @escaping (KeyEvent) -> Bool, @ViewBuilder content: () -> Content) {
+    init(isEnabled: Bool = true, onKey: @escaping (KeyEvent) -> Bool, @ViewBuilder content: () -> Content) {
+        self.isEnabled = isEnabled
         self.onKey = onKey
         self.content = content()
     }
@@ -15,8 +17,16 @@ struct SelectionKeyHost<Content: View>: _PrimitiveView {
         return node
     }
     func _updateNode(_ node: Node) {
+        node.isFocusable = isEnabled
+        node.allowsHitTesting = isEnabled
+        if !isEnabled {
+            if let captured = PointerCaptureHolder.current?.target,
+               FocusChainHolder.current?.contains(captured, in: node) == true { PointerCaptureHolder.current?.release() }
+            if let focused = FocusChainHolder.current?.focused,
+               FocusChainHolder.current?.contains(focused, in: node) == true { FocusChainHolder.current?.clear() }
+        }
         InteractionRegistryHolder.current?.setKey(node) { event, phase in
-            guard phase != .capture else { return .ignored }
+            guard isEnabled, phase != .capture else { return .ignored }
             return onKey(event) ? .handled : .ignored
         }
     }

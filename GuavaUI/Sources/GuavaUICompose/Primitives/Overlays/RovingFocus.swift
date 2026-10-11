@@ -42,18 +42,21 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
     let enabledItems: [AnyHashable]
     let selection: () -> AnyHashable?
     let onSelect: (AnyHashable) -> Void
+    let wraps: Bool
+    let command: (KeyEvent) -> SelectionNavigation?
     let content: Content
     init(enabledItems: [AnyHashable], selection: @escaping () -> AnyHashable?, onSelect: @escaping (AnyHashable) -> Void,
+         wraps: Bool = true, command: @escaping (KeyEvent) -> SelectionNavigation? = { SelectionNavigation.command(for: $0.scancode) },
          @ViewBuilder content: () -> Content) {
         self.enabledItems = enabledItems; self.selection = selection
-        self.onSelect = onSelect; self.content = content()
+        self.onSelect = onSelect; self.wraps = wraps; self.command = command; self.content = content()
     }
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
         InteractionRegistryHolder.current?.setKey(node) { [weak node] event, phase in
-            guard phase == .bubble, let command = SelectionNavigation.command(for: event.scancode),
-                  let target = command.destination(in: enabledItems, from: selection()), let node else { return .ignored }
+            guard phase == .bubble, let command = command(event),
+                  let target = command.destination(in: enabledItems, from: selection(), wraps: wraps), let node else { return .ignored }
             onSelect(target)
             func updateTabStops(_ candidate: Node) {
                 if let id = candidate.attachments["__roving.item"] as? AnyHashable { candidate.isTabStop = id == target }

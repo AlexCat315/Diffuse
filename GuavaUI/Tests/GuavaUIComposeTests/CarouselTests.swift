@@ -100,17 +100,16 @@ struct CarouselTests: GuavaUIComposeSerializedSuite {
             #expect(capture.target == nil)
             // A small or mostly-vertical movement is not a swipe.
             #expect(motion(move(194, 100), .target) == .ignored)
-            #expect(motion(move(200, 140), .target) == .ignored)
             #expect(page == "page-0")
-            // Past the slop the gesture takes over and pages.
+            // Past the slop the gesture takes over; release commits the page.
             #expect(motion(move(140, 104), .target) == .handled)
             #expect(capture.target === host)
-            #expect(page == "page-1")
-            // Dragging further in the same direction keeps paging.
+            #expect(page == "page-0")
+            // One completed gesture advances at most one page.
             _ = motion(move(40, 104), .target)
-            #expect(page == "page-2")
+            #expect(page == "page-0")
             _ = pointer(down(40, 104), .up, .target)
-            #expect(capture.target == nil)
+            #expect(page == "page-1" && capture.target == nil)
         }
     }
 

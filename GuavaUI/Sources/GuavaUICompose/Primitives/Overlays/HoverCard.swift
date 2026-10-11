@@ -1,37 +1,13 @@
 import Foundation
 import GuavaUIRuntime
 
-/// Detail card shown while the pointer rests on a trigger, without a click.
-///
-/// Two details separate a hover card from a tooltip: it survives the pointer
-/// moving onto the card itself, and it waits before appearing. The waits are
-/// asymmetric — a long open delay so passing the pointer across a dense list
-/// does not flash cards, and a short close delay so the brief gap between
-/// trigger and card does not dismiss it.
-///
-/// Hover cards are a pointer affordance and must not be the only path to the
-/// information they carry; pair one with a click target or an inline detail
-/// view so keyboard and touch users reach the same content.
-///
-/// ```swift
-/// HoverCard(width: 320, label: { Text("@ada").font(.label) }) {
-///     Column(alignment: .leading, spacing: 6) {
-///         Text("Ada Lovelace").font(.bodyStrong)
-///         Text("Analytical Engine · since 1843").font(.caption).foregroundColor(.onSurfaceMuted)
-///     }
-/// }
-/// ```
+/// Pointer detail with delayed opening and a grace period for crossing onto
+/// interactive content. Provide a click or inline equivalent for keyboard users.
 public struct HoverCard<Label: View, Content: View>: View {
-    @State private var isPresented = false
-    @State private var triggerHovered = false
-    @State private var cardHovered = false
-
-    /// Seconds the pointer must rest on the trigger before the card opens.
-    public var openDelay: Double
-    /// Grace period after the pointer leaves before the card closes.
-    public var closeDelay: Double
-    public var width: Float?
-    public var isEnabled: Bool
+    public var openDelay = 0.3
+    public var closeDelay = 0.15
+    public var width: Float? = 300
+    public var isEnabled = true
     public let label: Label
     public let content: Content
 
@@ -39,100 +15,142 @@ public struct HoverCard<Label: View, Content: View>: View {
                 configure: (inout Self) -> Void = { _ in },
                 @ViewBuilder label: () -> Label,
                 @ViewBuilder content: () -> Content) {
-        self.width = width
-        self.openDelay = 0.3
-        self.closeDelay = 0.15
-        self.isEnabled = true
-        self.label = label()
-        self.content = content()
+        self.width = width; self.label = label(); self.content = content()
         configure(&self)
     }
 
     public var body: some View {
-        Box(direction: .column, alignItems: .flexStart, spacing: 0) {
-            label.onHover { triggerHovered = $0 }
-            // Zero-sized, and placed before the overlay host so the host's
-            // "nearest visible preceding sibling" anchor still resolves to the
-            // label rather than to this bookkeeping node.
-            _HoverIntent(wantsPresented: isEnabled && (triggerHovered || cardHovered),
-                         isPresented: $isPresented,
-                         openDelay: openDelay,
-                         closeDelay: closeDelay)
-            _PopoverOverlayHost(isPresented: isPresented && isEnabled,
-                                width: width,
-                                placement: .start,
-                                onDismiss: { isPresented = false }) {
-                ThemeReader { theme in
-                    Box(direction: .column, alignItems: .stretch, spacing: 0) { content }
-                        .padding(theme.spacing.md)
-                        .background(.materialFloating)
-                        .cornerRadius(theme.radius.md)
-                        .backdropBlur(14)
-                        .border(SemanticColorRef.border, width: 1)
-                        .floatingSurface()
-                        .onHover { cardHovered = $0 }
-                }
-            }
-        }
-        .zIndex(isPresented ? 10_000 : 0)
+        HoverCardHost(label: label, content: AnyView(content), options: HoverCardTiming(
+            openDelay: openDelay, closeDelay: closeDelay, width: width, isEnabled: isEnabled))
     }
 }
 
-/// Turns hover intent into presentation after a delay.
-///
-/// The delay runs on the animation scheduler rather than a timer: it advances
-/// with the frame clock, so it pauses with the window and needs no thread hop
-/// to write the binding.
-private struct _HoverIntent: _PrimitiveView {
-    let wantsPresented: Bool
-    let isPresented: Binding<Bool>
-    let openDelay: Double
-    let closeDelay: Double
-
-    private enum Keys {
-        static let target = "hoverCard.intentTarget"
-        static let controller = "hoverCard.controller"
+struct HoverCardTiming {
+    var openDelay: Double
+    var closeDelay: Double
+    var width: Float?
+    var isEnabled: Bool
+    mutating func validate() {
+        openDelay = openDelay.isFinite ? min(60, max(0, openDelay)) : 0.3
+        closeDelay = closeDelay.isFinite ? min(60, max(0, closeDelay)) : 0.15
+        width = width.map { $0.isFinite ? min(4096, max(80, $0)) : 300 }
     }
+}
 
+private struct HoverCardHost<Label: View>: _PrimitiveView {
+    let label: Label
+    let content: AnyView
+    let options: HoverCardTiming
     func _makeNode() -> Node {
         let node = Node()
-        node.isHitTestable = false
+        node.addResource(PortalResource()); node.addResource(HoverCardSession())
+        node.attachments["hoverCard.host"] = true
         return node
     }
-
-    func _makeLayoutNode() -> LayoutNode? {
-        let layout = LayoutNode()
-        layout.width = 0
-        layout.height = 0
-        return layout
-    }
-
+    func _makeLayoutNode() -> LayoutNode? { let layout = LayoutNode(); layout.alignItems = .flexStart; return layout }
     func _updateNode(_ node: Node) {
-        guard node.attachments[Keys.target] as? Bool != wantsPresented else { return }
-        node.attachments[Keys.target] = wantsPresented
-        cancelPending(in: node)
-        guard wantsPresented != isPresented.wrappedValue else { return }
-        let delay = wantsPresented ? openDelay : closeDelay
-        guard delay > 0 else {
-            isPresented.wrappedValue = wantsPresented
-            return
+        let session = node.firstResource(HoverCardSession.self)!
+        session.configure(content: content, options: options)
+        InteractionRegistryHolder.current?.setHover(node) { session.setTriggerHovered($0 == .enter) }
+        InteractionRegistryHolder.current?.setKey(node) { event, phase in
+            guard phase != .capture, event.scancode == Scancode.escape else { return .ignored }
+            return session.dismiss() ? .handled : .ignored
         }
-        let controller = AnimationController<Float>(
-            from: 0,
-            to: 1,
-            animation: Animation(duration: delay, curve: .linear),
-            apply: { value in
-                guard value >= 1 else { return }
-                if isPresented.wrappedValue != wantsPresented { isPresented.wrappedValue = wantsPresented }
-            })
-        node.attachments[Keys.controller] = controller
-        AnimatorScheduler.current.register(controller)
+        node.layoutDidUpdate = { _ in session.updatePosition() }
     }
+    var _children: [any View] { [label] }
+}
 
-    private func cancelPending(in node: Node) {
-        guard let controller = node.attachments[Keys.controller] as? AnyAnimationController else { return }
-        controller.cancel()
-        AnimatorScheduler.current.unregister(controller)
-        node.attachments.removeValue(forKey: Keys.controller)
+/// Delays, hover intent and portal ownership share the node's lifetime.
+final class HoverCardSession: NodeResource, AnyAnimationController {
+    private weak var node: Node?
+    private weak var scheduler: AnimatorScheduler?
+    private var content: AnyView?
+    private var options = HoverCardTiming(openDelay: 0.3, closeDelay: 0.15, width: 300, isEnabled: true)
+    private var triggerHovered = false
+    private var cardHovered = false
+    private var dismissedUntilLeave = false
+    private var presented = false
+    private var pending: Bool?
+    private var elapsed = 0.0
+    private(set) var isFinished = true
+
+    func mount(node: Node) { self.node = node; scheduler = AnimatorScheduler.current }
+    func unmount(node: Node) { hide(); self.node = nil; scheduler = nil; content = nil }
+    func configure(content: AnyView, options: HoverCardTiming) {
+        self.content = content; self.options = options; self.options.validate()
+        if !options.isEnabled { triggerHovered = false; cardHovered = false; hide(); return }
+        if presented { show() }
+        refresh()
     }
+    func setTriggerHovered(_ value: Bool) { triggerHovered = value; refresh() }
+    func setCardHovered(_ value: Bool) { cardHovered = value; refresh() }
+
+    private func refresh() {
+        let hovered = triggerHovered || cardHovered
+        if !hovered { dismissedUntilLeave = false }
+        let wanted = options.isEnabled && hovered && !dismissedUntilLeave
+        guard wanted != presented else { stopWaiting(); return }
+        if pending != wanted { stopWaiting(); pending = wanted }
+        let delay = wanted ? options.openDelay : options.closeDelay
+        if elapsed >= delay { stopWaiting(); if wanted { show() } else { hide() }; return }
+        if isFinished { isFinished = false; scheduler?.register(self) }
+    }
+    func tick(deltaTime: Double) {
+        guard !isFinished, node != nil, deltaTime.isFinite, deltaTime > 0 else { return }
+        elapsed += min(60, deltaTime); refresh()
+    }
+    private func stopWaiting() {
+        isFinished = true; pending = nil; elapsed = 0; scheduler?.unregister(self)
+    }
+    private func show() {
+        guard let node, let content, options.isEnabled else { return }
+        presented = true
+        let surface = ThemeReader { [weak self] theme in
+            HoverCardAccessory(owner: node, content: AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                ShortcutHost(route: .overlay, onKeyDown: { [weak self] event in
+                    guard event.scancode == Scancode.escape else { return false }
+                    return self?.dismiss() ?? false
+                })
+                content
+            }
+                .padding(theme.spacing.md).background(.surfaceFloating).cornerRadius(theme.radius.md)
+                .border(SemanticColorRef.border, width: 1).floatingSurface()
+                .onHover { [weak self] in self?.setCardHovered($0) }))
+        }
+        let portal = node.firstResource(PortalResource.self)!
+        portal.present(in: node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current,
+                       position: position(node), width: options.width, content: AnyView(surface.theme(node.theme)))
+        portal.setDismissal(anchor: { [weak node] in node?.absoluteFrame ?? .zero },
+                            dismiss: { [weak self] in self?.dismiss() })
+    }
+    private func position(_ node: Node) -> CGPoint { CGPoint(x: node.absoluteFrame.minX, y: node.absoluteFrame.maxY + 6) }
+    func updatePosition() {
+        guard presented, let node, let id = node.firstResource(PortalResource.self)?.entryID else { return }
+        let store = node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
+        store.updatePosition(id, position: position(node))
+    }
+    @discardableResult
+    func dismiss() -> Bool {
+        let wasPresented = presented
+        dismissedUntilLeave = true; hide(); return wasPresented
+    }
+    private func hide() {
+        stopWaiting(); presented = false; cardHovered = false
+        if let node { node.firstResource(PortalResource.self)?.unmount(node: node) }
+    }
+    func cancel() { hide() }
+    func finishImmediately() { hide() }
+}
+
+private struct HoverCardAccessory: _PrimitiveView {
+    let owner: Node
+    let content: AnyView
+    func _makeNode() -> Node {
+        let node = Node(); node.isHitTestable = false
+        node.addResource(FocusAccessoryResource(owner: owner)); return node
+    }
+    func _makeLayoutNode() -> LayoutNode? { nil }
+    func _updateNode(_ node: Node) {}
+    var _children: [any View] { [content] }
 }

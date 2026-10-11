@@ -23,17 +23,19 @@ public enum LinkUnderline: Sendable, Hashable {
 /// as a button.
 ///
 /// ```swift
-/// Text("Licensed under ")
-/// + Link("Apache 2.0", isExternal: true) { openLicense() }
+/// Row {
+///     Text("Licensed under ")
+///     Link("Apache 2.0", configure: { $0.isExternal = true }) { openLicense() }
+/// }
 ///
 /// Link("Reset layout", underline: .hover) { reset() }
 /// ```
 public struct Link<Label: View>: View {
     public let label: Label
     public let action: () -> Void
-    public var isEnabled: Bool
-    public var isExternal: Bool
-    public var underline: LinkUnderline
+    public var isEnabled = true
+    public var isExternal = false
+    public var underline: LinkUnderline = .always
     /// Overrides the trailing glyph. `nil` falls back to the external-link
     /// arrow when `isExternal` is set.
     public var icon: BundleImageResource?
@@ -46,10 +48,6 @@ public struct Link<Label: View>: View {
         self.tooltip = tooltip
         self.action = action
         self.label = label()
-        self.isEnabled = true
-        self.isExternal = false
-        self.underline = .always
-        self.icon = nil
         configure(&self)
     }
 
@@ -65,7 +63,7 @@ public struct Link<Label: View>: View {
             }
         }
         .buttonStyle(LinkStyle(underline: underline))
-        .accessibility { $0.role = .link }
+        .compositionLocal(ActionControlAccessibility.role, .link)
     }
 }
 
@@ -99,11 +97,11 @@ private struct LinkStyle: ButtonStyle {
         }
         return Box(direction: .column, alignItems: .stretch, spacing: 2) {
             AnyView(c.label)
-            if showsRule {
-                AnyView(Box(direction: .row, alignItems: .center, spacing: 0) {}
-                    .frame(height: max(1, c.theme.radius.sm * 0.25))
-                    .background(ink))
-            }
+            // Reserve the same rule geometry in every interaction state.
+            // Revealing an underline must never move neighbouring text.
+            Box(direction: .row, alignItems: .center, spacing: 0) {}
+                .frame(height: 1)
+                .background(showsRule ? ink : .clear)
         }
         .foregroundColor(ink)
         .cornerRadius(c.theme.radius.sm)

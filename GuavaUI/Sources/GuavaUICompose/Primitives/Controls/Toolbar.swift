@@ -1,118 +1,118 @@
 import GuavaUIRuntime
 
-/// Shared metrics for toolbar chrome.
-///
-/// Kept outside `Toolbar` so `Toolbar`, `ToolbarGroup` and `ToolbarSeparator`
-/// agree on one height without any of them owning it — a `static let` on a
-/// generic type cannot be shared, and a bar with two control heights looks
-/// broken.
 public enum ToolbarMetrics {
     public static let height: Float = 36
-    /// Height of the controls inside a group: the bar height minus its padding.
     public static var controlHeight: Float { height - 8 }
+    public static func height(for size: ControlSize) -> Float { size.buttonHeight + 8 }
 }
 
-/// Which edge of a `Toolbar` is separated from the content.
 public enum ToolbarDividerEdge: Sendable, Hashable {
-    case none
-    /// Separator under the bar. Use it when the bar sits above content.
-    case bottom
-    /// Separator above the bar. Use it when the bar sits below content.
-    case top
+    case none, bottom, top
 }
 
-/// Horizontal bar of controls above or beside the content they act on.
-///
-/// A toolbar is mostly about what it enforces: one height, one spacing rhythm,
-/// and consistent separators. Callers supply the items; the bar owns the frame,
-/// the divider and the enabled state so every toolbar in an app lines up.
-///
-/// ```swift
-/// Toolbar {
-///     ToolbarGroup { playButton; stopButton }
-///     ToolbarSeparator()
-///     Spacer()
-///     ToolbarGroup(isBordered: true) { zoomOutButton; zoomInButton }
-/// }
-/// ```
+/// Groups controls with shared density and horizontal keyboard navigation.
+/// Child inputs get first refusal for caret movement. Disabling the toolbar
+/// blocks all hosted input and removes its descendants from focus traversal.
+public struct ToolbarOptions {
+    public var divider: ToolbarDividerEdge = .bottom
+    public var isEnabled = true
+    public var label = "Toolbar"
+    public init() {}
+}
+
 public struct Toolbar<Content: View>: View {
-    public var divider: ToolbarDividerEdge
-    public var isEnabled: Bool
+    public var options = ToolbarOptions()
     public let content: Content
-
-    public init(configure: (inout Self) -> Void = { _ in },
-                @ViewBuilder content: () -> Content) {
-        self.divider = .bottom
-        self.isEnabled = true
-        self.content = content()
-        configure(&self)
+    public init(configure: (inout ToolbarOptions) -> Void = { _ in }, @ViewBuilder content: () -> Content) {
+        self.content = content(); configure(&options)
     }
+    public var body: some View { ToolbarHost(options: options, content: content) }
+}
 
-    public var body: some View {
-        ThemeReader { theme in
-            Column(alignment: .leading, spacing: 0) {
-                if divider == .top {
-                    AnyView(Divider())
-                }
-                AnyView(Row(alignment: .center, spacing: theme.spacing.xs) { content }
-                    .padding(horizontal: theme.spacing.sm, vertical: 0)
-                    .frame(height: ToolbarMetrics.height))
-                if divider == .bottom {
-                    AnyView(Divider())
-                }
+private struct ToolbarHost<Content: View>: _PrimitiveView {
+    let options: ToolbarOptions
+    let content: Content
+    func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
+    func _makeLayoutNode() -> LayoutNode? { nil }
+    func _updateNode(_ node: Node) {
+        node.allowsHitTesting = options.isEnabled
+        node.accessibility = AccessibilitySemantics(.toolbar) { $0.label = options.label; $0.state.isEnabled = options.isEnabled }
+        if !options.isEnabled {
+            if let captured = PointerCaptureHolder.current?.target,
+               FocusChainHolder.current?.contains(captured, in: node) == true { PointerCaptureHolder.current?.release() }
+            if let focused = FocusChainHolder.current?.focused,
+               FocusChainHolder.current?.contains(focused, in: node) == true { FocusChainHolder.current?.clear() }
+        }
+        InteractionRegistryHolder.current?.setKey(node) { [weak node] event, phase in
+            guard options.isEnabled, phase == .bubble, event.modifiers.isEmpty, let node,
+                  let focused = FocusChainHolder.current?.focused else { return .ignored }
+            let command: SelectionNavigation
+            switch event.scancode {
+            case Scancode.arrowLeft: command = .previous
+            case Scancode.arrowRight: command = .next
+            case Scancode.home: command = .first
+            case Scancode.end: command = .last
+            default: return .ignored
             }
-            .background(SemanticColorRef.surface)
-            .opacity(isEnabled ? 1 : 0.6)
-            .accessibility { $0.role = .group; $0.label = "Toolbar"; $0.state.isEnabled = isEnabled }
+            func items(in candidate: Node) -> [Node] {
+                guard candidate.acceptsSubtreeInput else { return [] }
+                return (candidate.isFocusable && candidate.isTabStop ? [candidate] : []) + candidate.children.flatMap(items)
+            }
+            let candidates = items(in: node)
+            guard let index = command.destination(in: Array(candidates.indices),
+                from: candidates.firstIndex(where: { $0 === focused })) else { return .ignored }
+            FocusChainHolder.current?.focus(candidates[index])
+            return .handled
         }
+    }
+    func _children(for node: Node) -> [any View] {
+        let theme = node.theme
+        let size = node.compositionValue(of: ControlSizeEnvironment.key)
+        return [Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            if options.divider == .top { Divider() }
+            Row(alignment: .center, spacing: theme.spacing.xs) { content }
+                .padding(horizontal: theme.spacing.sm).frame(height: ToolbarMetrics.height(for: size))
+            if options.divider == .bottom { Divider() }
+        }.buttonStyle(.ghost).background(SemanticColorRef.surface).opacity(options.isEnabled ? 1 : 0.6)]
     }
 }
 
-/// Runs of controls that belong together, separated from their neighbours.
-///
-/// Grouping is what makes a toolbar scannable: without it a row of ten icons
-/// reads as ten unrelated actions.
 public struct ToolbarGroup<Content: View>: View {
-    /// Paints a container so the group reads as one segmented control.
-    public var isBordered: Bool
+    public var isBordered = false
+    public var label = ""
     public let content: Content
-
-    public init(isBordered: Bool = false,
-                @ViewBuilder content: () -> Content) {
-        self.isBordered = isBordered
-        self.content = content()
+    public init(isBordered: Bool = false, label: String = "", @ViewBuilder content: () -> Content) {
+        self.isBordered = isBordered; self.label = label; self.content = content()
     }
+    public var body: some View { ToolbarGroupHost(isBordered: isBordered, label: label, content: content) }
+}
 
-    public var body: some View {
-        ThemeReader { theme in
-            let fill: Color = isBordered ? SemanticColorRef.surfaceVariant.resolve(theme) : .clear
-            Row(alignment: .center, spacing: 2) { content }
-                .padding(horizontal: isBordered ? 2 : 0, vertical: 0)
-                .background(fill)
-                .cornerRadius(isBordered ? theme.radius.sm : 0)
-                .frame(height: ToolbarMetrics.controlHeight)
-                .accessibility { $0.role = .group; $0.combinesChildren = true }
-        }
+private struct ToolbarGroupHost<Content: View>: _PrimitiveView {
+    let isBordered: Bool
+    let label: String
+    let content: Content
+    func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
+    func _makeLayoutNode() -> LayoutNode? { nil }
+    func _updateNode(_ node: Node) {
+        node.accessibility = AccessibilitySemantics(.group) { $0.label = label }
+    }
+    func _children(for node: Node) -> [any View] {
+        let size = node.compositionValue(of: ControlSizeEnvironment.key)
+        let theme = node.theme
+        return [Row(alignment: .center, spacing: 2) { content }
+            .padding(horizontal: isBordered ? 2 : 0)
+            .background(isBordered ? theme.colors.surfaceVariant : .clear)
+            .cornerRadius(isBordered ? theme.radius.sm : 0)
+            .frame(height: size.buttonHeight)]
     }
 }
 
-/// Vertical rule that separates toolbar groups.
-///
-/// Inset from the bar's edges rather than full height: a full-height rule
-/// collides visually with the bar's own bottom divider and makes the bar look
-/// like a table header.
 public struct ToolbarSeparator: View {
     public init() {}
-
     public var body: some View {
         ThemeReader { theme in
-            Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 0) {
-                Box(direction: .row) { EmptyView() }
-                    .frame(width: 1, height: 18)
-                    .background(SemanticColorRef.border)
-            }
-            .frame(width: theme.spacing.sm, height: ToolbarMetrics.height)
-            .accessibilityHidden()
+            Divider(axis: .vertical).frame(width: 1, height: 18)
+                .padding(horizontal: theme.spacing.xs).accessibilityHidden()
         }
     }
 }

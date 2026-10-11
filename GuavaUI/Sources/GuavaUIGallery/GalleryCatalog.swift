@@ -12,7 +12,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case table, dataTable, calendar, datePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet
     case commandPalette, hoverCard, timeline, toolbar
-    case link, statusBar, carousel
+    case link, statusBar, carousel, skeleton, stepper
 
     public var entry: GalleryEntry { GalleryCatalog.entries.first { $0.page == self }! }
 }
@@ -98,7 +98,9 @@ public enum GalleryCatalog {
         .init(.toolbar, "Toolbar", "Controls", "One height and spacing rhythm, grouped controls and separators."),
         .init(.link, "Link", "Controls", "In-flow navigation with contextual underlines, external hints and a link role."),
         .init(.statusBar, "StatusBar", "Layout", "A single-height window footer with leading and trailing context cells."),
-        .init(.carousel, "Carousel", "Layout", "Paged content with drag, arrows, indicators and keyboard paging.")
+        .init(.carousel, "Carousel", "Layout", "Paged content with drag, arrows, indicators and keyboard paging."),
+        .init(.skeleton, "Skeleton", "Feedback", "Shaped loading placeholders, reduced motion and content transitions."),
+        .init(.stepper, "Stepper", "Navigation", "Controlled workflow steps, independent outcomes, locked steps and keyboard navigation.")
     ]
     public static var categories: [String] {
         entries.reduce(into: []) { result, entry in if !result.contains(entry.category) { result.append(entry.category) } }
@@ -106,7 +108,7 @@ public enum GalleryCatalog {
     public static func search(_ query: String) -> [GalleryEntry] {
         let terms = query.split(whereSeparator: \.isWhitespace)
         return entries.filter { entry in
-            let text = entry.title + " " + entry.category + " " + entry.summary
+            let text = entry.title + " " + entry.page.rawValue + " " + entry.category + " " + entry.summary
             return terms.allSatisfy { text.localizedCaseInsensitiveContains($0) }
         }
     }
