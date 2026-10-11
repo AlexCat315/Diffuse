@@ -82,5 +82,83 @@ struct NativeUIBackdropTests {
         #expect(outside > 0.8)
         #expect(inside < outside * 0.5)
     }
+
+    // MARK: - A floating panel: shadow and frost together
+
+    private let panelViewport = NativeUIViewport(pixels: SIMD2(128, 128), logical: SIMD2(128, 128))
+
+    /// The panel every measurement below shares: frosted, and carrying the
+    /// layered shadow a floating surface gets.
+    private func floatingPanel(shadow: Bool, backdrop: Color) throws -> Data {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 128, height: 128)
+        root.backgroundColor = backdrop
+        let panel = Node()
+        panel.frame = CGRect(x: 48, y: 40, width: 32, height: 32)
+        panel.cornerRadius = 6
+        panel.backdropBlur = 8
+        panel.backgroundColor = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.76)
+        if shadow {
+            panel.ambientShadow = SurfaceShadow(color: Color(r: 0, g: 0, b: 0, a: 0.3), offsetY: 3, blur: 16)
+            panel.shadow = SurfaceShadow(color: Color(r: 0, g: 0, b: 0, a: 0.6), offsetY: 6, blur: 6)
+        }
+        root.addChild(panel)
+        let list = DrawList()
+        NodeRenderer().render(root: root, into: list)
+        let context = try NativeUIDrawTestContext()
+        let (pixels, _) = try context.nativeImage(list: list, format: NativeUITestFormat.cases[0],
+                                                 samples: 1, viewport: panelViewport, backdropSource: true)
+        return pixels
+    }
+
+    private func luma(_ pixels: Data, x: Int, y: Int) -> Float {
+        let offset = (y * 128 + x) * 4
+        guard offset + 2 < pixels.count else { return 0 }
+        return Float(pixels[offset]) / 255
+    }
+
+    private func panelLuma(_ pixels: Data) -> Float {
+        var total: Float = 0, count = 0
+        for y in 44..<68 { for x in 52..<76 { total += luma(pixels, x: x, y: y); count += 1 } }
+        return total / Float(count)
+    }
+
+    @Test("a panel's own shadow stays out of the frost it samples")
+    func shadowDoesNotGreyTheFrost() throws {
+        let clean = try panelLuma(floatingPanel(shadow: false, backdrop: Color(r: 1, g: 1, b: 1, a: 1)))
+        let shadowed = try panelLuma(floatingPanel(shadow: true, backdrop: Color(r: 1, g: 1, b: 1, a: 1)))
+        // The shadow falls behind the panel, so the frost must not eat it:
+        // sampling it greys the panel by 17%, which reads as dirt.
+        #expect(clean - shadowed < 0.02)
+    }
+
+    @Test("the shadow falloff has no ridges")
+    func shadowFalloffIsSmooth() throws {
+        let pixels = try floatingPanel(shadow: true, backdrop: Color(r: 1, g: 1, b: 1, a: 1))
+        // Down the middle, just under the panel's bottom edge: every rect in
+        // the cheap-blur stack ends somewhere along here, and a stack that is
+        // too coarse leaves a step at each one.
+        var deltas: [Float] = []
+        for y in 75..<92 {
+            deltas.append(luma(pixels, x: 64, y: y) - luma(pixels, x: 64, y: y - 1))
+        }
+        // A coarse stack puts a hard edge every few pixels and the falloff
+        // stutters: its second difference peaks at 0.11 with six steps, against
+        // 0.055 now. The rest is the falloff's own curvature, which is the
+        // shape of the shadow and not a defect.
+        var ridge: Float = 0
+        for i in 1..<deltas.count { ridge = max(ridge, abs(deltas[i] - deltas[i - 1])) }
+        #expect(ridge < 0.07)
+    }
+
+    @Test("frost answers to what is behind it")
+    func frostFollowsTheBackdrop() throws {
+        let onWhite = try panelLuma(floatingPanel(shadow: false, backdrop: Color(r: 1, g: 1, b: 1, a: 1)))
+        let onBlack = try panelLuma(floatingPanel(shadow: false, backdrop: Color(r: 0, g: 0, b: 0, a: 1)))
+        // What makes a panel read as glass rather than paint is this swing.
+        // An 0.84 fill leaves only 0.12 of it, which looked like a solid that
+        // happened to be translucent.
+        #expect(onWhite - onBlack > 0.15)
+    }
 }
 #endif

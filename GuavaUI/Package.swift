@@ -124,6 +124,7 @@ let package = Package(
                 .product(name: "GuavaUIDevToolsProtocol", package: "Portable"),
                 "GuavaUIRuntime",
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
             ]
@@ -139,6 +140,7 @@ let package = Package(
             name: "GuavaUIDemo",
             dependencies: [
                 .product(name: "GuavaUISharedDemo", package: "Portable"),
+                .product(name: "NativeRHI", package: "Engine"),
                 "GuavaUIRuntime",
                 "GuavaUICompose",
                 "GuavaUIWorkspace",
