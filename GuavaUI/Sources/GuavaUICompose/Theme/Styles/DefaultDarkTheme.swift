@@ -42,7 +42,9 @@ public enum DefaultDarkTheme {
             border:           Color(red: 0x42, green: 0x46, blue: 0x4E),
             borderStrong:     Color(red: 0x50, green: 0x54, blue: 0x5D),
             divider:          Color(red: 0x42, green: 0x46, blue: 0x4E, alpha: 0x5C),
-            focusRing:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0xAA),
+            // Matches the light theme: a ring that can be told apart from the
+            // fill it crosses, instead of a translucent wash.
+            focusRing:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0xE6),
             selection:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x38),
             overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0xB8)
         ),
