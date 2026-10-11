@@ -209,9 +209,11 @@ public final class LayerAwareNodeRenderer {
 
     private func emitShadow(_ node: Node, into list: DrawList,
                             x: Float, y: Float, w: Float, h: Float) {
+        let rect = UIRect(x: x, y: y, width: w, height: h)
+        let frosted: UIRect? = node.backdropBlur > 0 ? rect : nil
         list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
-                       rect: UIRect(x: x, y: y, width: w, height: h),
-                       cornerRadius: node.cornerRadius, opacity: node.opacity)
+                       rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity,
+                       frostedRect: frosted)
     }
 
     private func emitHighlight(_ node: Node, into list: DrawList,

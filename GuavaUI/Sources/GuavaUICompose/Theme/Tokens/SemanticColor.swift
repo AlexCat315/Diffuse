@@ -36,12 +36,16 @@ public extension SemanticColorRef {
     /// Fill for panels that float over content: menus, popovers, popup editors.
     ///
     /// A *material*, not a solid: it is meant to sit over a blurred backdrop
-    /// (`View.backdropBlur`). The blur that lands underneath is what stops the
-    /// transparency from reading as sharp leakage, so this stays high enough
-    /// to carry text on renderers that skip the offscreen pass (WGPU): a menu
-    /// over a blue button cools the panel, over body text it greys it, and the
-    /// panel's own labels keep full contrast either way.
-    static let materialFloating = SemanticColorRef { $0.colors.surfaceFloating.multipliedAlpha(0.84) }
+    /// (`View.backdropBlur`). What reads as frost is the panel answering to
+    /// whatever is behind it — measured as the luma swing between a black and a
+    /// white backdrop, which is 0.18 at this alpha and only 0.12 at 0.84. That
+    /// higher alpha looked like a painted panel that happened to be
+    /// translucent, not like glass.
+    ///
+    /// The floor is legibility where the blur is absent (WGPU has no offscreen
+    /// pass): over pure white the panel still lands near 5.9:1 against label
+    /// text, so the material can carry its own labels either way.
+    static let materialFloating = SemanticColorRef { $0.colors.surfaceFloating.multipliedAlpha(0.76) }
 
     static let onBackground     = SemanticColorRef { $0.colors.onBackground }
     static let onSurface        = SemanticColorRef { $0.colors.onSurface }

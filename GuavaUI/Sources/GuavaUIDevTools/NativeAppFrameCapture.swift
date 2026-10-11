@@ -6,20 +6,20 @@ import NativeRHI
 /// DevTools capture uses the same owned bindings as window presentation and
 /// performs its synchronous readback after the window's frame has ended.
 @MainActor
-final class NativeAppFrameCapture {
+public final class NativeAppFrameCapture {
     private let device: Device
     private let source: NativeDrawListRenderer
     private let renderer: NativeDrawListRenderer
     private var target: TextureResource?
 
-    init(device: Device, renderer: NativeDrawListRenderer) throws {
+    public init(device: Device, renderer: NativeDrawListRenderer) throws {
         self.device = device; source = renderer
         self.renderer = try device.withFrameSession { try renderer.makeSibling(format: .bgra8Unorm) }
     }
 
-    func reset() { device.withFrameSession { target = nil } }
+    public func reset() { device.withFrameSession { target = nil } }
 
-    func capture(list: DrawList, size: SIMD2<Int>, logical: SIMD2<Float>) throws -> FrameTap.Pixels {
+    public func capture(list: DrawList, size: SIMD2<Int>, logical: SIMD2<Float>) throws -> FrameTap.Pixels {
         try device.withFrameSession {
             guard size.x > 0 && size.y > 0 && size.x <= 1_920 && size.y <= 1_080 else {
                 throw RHIError.invalidArgument("mirror capture extent exceeds 1920x1080")
