@@ -164,9 +164,11 @@ public final class LayerAwareNodeRenderer {
             draw(list, CGPoint(x: Double(originX), y: Double(originY)))
         }
 
-        // Children. Translate by -contentOffset for scrollable containers.
-        let childX = originX - Float(node.contentOffset.x)
-        let childY = originY - Float(node.contentOffset.y)
+        // Children. Translate by -contentOffset for scrollable containers,
+        // rounded to whole pixels: a continuous offset puts every child edge
+        // and glyph on a fraction of a pixel, undoing the draw list's snapping.
+        let childX = originX - Float(node.contentOffset.x).snappedToPixel(scale: list.pixelScale)
+        let childY = originY - Float(node.contentOffset.y).snappedToPixel(scale: list.pixelScale)
         let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack
         let children = node.childrenMayNeedZSort ? renderOrderedChildren(of: obj) : obj.children
         let descendantStart = list.vertices.count

@@ -233,19 +233,37 @@ struct BoolControlHost: _PrimitiveView {
                                width: thumbDiameter,
                                height: thumbDiameter)
 
-        let isFocused = (FocusChainHolder.current?.focused === node)
-        let thumbBorderColor = isFocused ? colors.focusRing : colors.border
-        let thumbBorderWidth: Float = isFocused ? 2 : 1
+        // The thumb keeps a static hairline rim so it reads as a disc sitting on
+        // the track. Focus used to widen this rim into the focus colour, which
+        // flushed a translucent blue plate against the fill — the two merge and
+        // it looks like the control is glowing.
+        let thumbBorderWidth: Float = 1
         let outerRect = UIRect(x: thumbRect.minX - thumbBorderWidth,
                                y: thumbRect.minY - thumbBorderWidth,
                                width: thumbRect.width + 2 * thumbBorderWidth,
                                height: thumbRect.height + 2 * thumbBorderWidth)
         list.addRoundedRect(outerRect,
                             radius: outerRect.height * 0.5,
-                            color: thumbBorderColor)
+                            color: colors.border)
         list.addRoundedRect(thumbRect,
                             radius: thumbRect.height * 0.5,
                             color: resolvedToggleThumbColor(colors: colors))
+
+        // The ring belongs outside the whole control, drawn as a ring and with a
+        // gap: flush against the fill it cannot be told apart from it.
+        if FocusChainHolder.current?.focused === node {
+            let gap: Float = 1
+            let ring: Float = 2
+            let outset = gap + ring
+            let ringRect = UIRect(x: trackRect.minX - outset,
+                                  y: trackRect.minY - outset,
+                                  width: trackRect.width + 2 * outset,
+                                  height: trackRect.height + 2 * outset)
+            list.addRoundedRectStroke(ringRect,
+                                      radius: ringRect.height * 0.5,
+                                      width: ring,
+                                      color: colors.focusRing)
+        }
     }
 
     private func renderCheckbox(node: Node, origin: CGPoint, list: DrawList) {
@@ -263,18 +281,32 @@ struct BoolControlHost: _PrimitiveView {
                              width: edge,
                              height: edge)
         let isFocused = (FocusChainHolder.current?.focused === node)
-        let boxBorderColor = isFocused ? colors.focusRing : colors.border
-        let boxBorderWidth: Float = isFocused ? 2 : 1
+        // Static hairline for the box itself; the focus ring is drawn outside
+        // it with a gap rather than replacing this rim — see `renderToggle`.
+        let boxBorderWidth: Float = 1
         let outerRect = UIRect(x: boxRect.minX - boxBorderWidth,
                                y: boxRect.minY - boxBorderWidth,
                                width: boxRect.width + 2 * boxBorderWidth,
                                height: boxRect.height + 2 * boxBorderWidth)
         list.addRoundedRect(outerRect,
                             radius: 5,
-                            color: boxBorderColor)
+                            color: colors.border)
         list.addRoundedRect(boxRect,
                             radius: 4,
                             color: resolvedFillColor(node: node, colors: colors))
+        if isFocused {
+            let gap: Float = 1
+            let ring: Float = 2
+            let outset = gap + ring
+            let ringRect = UIRect(x: boxRect.minX - outset,
+                                  y: boxRect.minY - outset,
+                                  width: boxRect.width + 2 * outset,
+                                  height: boxRect.height + 2 * outset)
+            list.addRoundedRectStroke(ringRect,
+                                      radius: 4 + outset,
+                                      width: ring,
+                                      color: colors.focusRing)
+        }
 
         let checkProgress = node.attachments["__bool_visual_progress"] as? Float ?? (isOn.wrappedValue ? 1 : 0)
         if checkProgress > 0 {

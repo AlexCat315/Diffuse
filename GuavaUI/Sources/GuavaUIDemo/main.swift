@@ -59,6 +59,8 @@ var demoRenderedFrameCount = 0
 var demoFrameAttemptCount = 0
 var demoSurfaceWasUnavailable = false
 nonisolated(unsafe) var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
+/// Timestamp of the previous submitted frame, for the cadence diagnostic below.
+nonisolated(unsafe) var lastFrameSubmitTime = ProcessInfo.processInfo.systemUptime
 nonisolated(unsafe) var hudTickFrameCount: Int = 0
 nonisolated(unsafe) var hudRenderFrameCount: Int = 0
 nonisolated(unsafe) var hudTickFPS: Int = 0
@@ -518,6 +520,19 @@ host.onFrame = { native in
         print("[demo] frame submit failed: \(error)")
     }
     timing.mark("gpuSubmit")
+
+    // A frame that misses the display cadence gets a line of its own. The
+    // breakdown is what separates the three candidates: time spent encoding the
+    // list (sceneRender), time spent submitting and waiting (gpuSubmit), or a
+    // gap that neither explains — which points at presentation pacing.
+    let submitNow = ProcessInfo.processInfo.systemUptime
+    let frameInterval = submitNow - lastFrameSubmitTime
+    lastFrameSubmitTime = submitNow
+    if frameInterval > 0.025, demoRenderedFrameCount > 5 {
+        print(timing.summary(extra: [
+            "interval=\(String(format: "%.1f", frameInterval * 1000))ms",
+        ]))
+    }
 
     if let tools = devTools {
         // Recorded after presenting the primary swapchain image: capturing
