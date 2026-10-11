@@ -43,7 +43,7 @@ public struct CommandItem: Identifiable {
 ///
 /// A palette is worth more than the menu it replaces only if finding a command
 /// is faster than looking for it, so ranking is deliberately aggressive: a
-/// title prefix outranks a substring, which outranks a word start, which
+/// title prefix outranks a word start, which outranks a substring, which
 /// outranks a subsequence match. Typing three letters should put the intended
 /// command first without requiring the exact wording.
 ///
@@ -123,108 +123,29 @@ public struct CommandPalette: View {
 
     private var visible: [CommandItem] { Self.ranked(items, query: trimmedQuery) }
 
-    /// Ranks `items` against `query`.
-    ///
-    /// Split out from the view so the scoring table is exercised directly: a
-    /// palette that only looks right in the gallery is a palette nobody can
-    /// regression-test.
     static func ranked(_ items: [CommandItem], query: String) -> [CommandItem] {
-        let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard !terms.isEmpty else { return items }
-        var scored: [(score: Int, order: Int, item: CommandItem)] = []
-        for (order, item) in items.enumerated() {
-            guard let score = score(item: item, terms: terms) else { continue }
-            scored.append((score, order, item))
-        }
-        scored.sort { lhs, rhs in
-            lhs.score == rhs.score ? lhs.order < rhs.order : lhs.score > rhs.score
-        }
-        return scored.map(\.item)
+        CommandSearch.ranked(items, query: query)
     }
 
-    private static func score(item: CommandItem, terms: [String]) -> Int? {
-        let title = item.title.lowercased()
-        let haystack = ([item.title, item.subtitle, item.group] + item.keywords)
-            .joined(separator: " ").lowercased()
-        var total = 0
-        for term in terms {
-            let best: Int
-            if title.hasPrefix(term) {
-                best = 1000
-            } else if title.contains(term) {
-                best = 700
-            } else if title.split(whereSeparator: \.isWhitespace).contains(where: { $0.hasPrefix(term) }) {
-                best = 520
-            } else if let fuzzy = subsequenceScore(title, term) {
-                best = 200 + fuzzy
-            } else if item.keywords.contains(where: { $0.lowercased().contains(term) }) {
-                best = 300
-            } else if haystack.contains(term) {
-                best = 120
-            } else {
-                return nil
-            }
-            total += best
-        }
-        // Disabled commands stay visible — hiding them makes the palette feel
-        // broken when the user knows the command exists — but always sort last.
-        return item.isEnabled ? total : total - 10_000
+    private var entries: [CommandEntry] {
+        CommandSearch.entries(visible, groupsResults: trimmedQuery.isEmpty)
     }
 
-    /// Score for a non-contiguous match.
-    ///
-    /// The penalty is proportional to how many characters were *skipped*, not
-    /// to how many gaps there were: with a per-gap penalty "gt" ties "Git
-    /// Toggle" and "Generate Textures" at one gap each, even though the second
-    /// jumps across eight characters to make the match.
-    private static func subsequenceScore(_ text: String, _ term: String) -> Int? {
-        var cursor = text.startIndex
-        var skipped = 0
-        var previous: String.Index?
-        for character in term {
-            guard let found = text[cursor...].firstIndex(of: character) else { return nil }
-            if let previous { skipped += text.distance(from: previous, to: found) - 1 }
-            previous = found
-            cursor = text.index(after: found)
-        }
-        return max(20, 90 - skipped * 5)
+    private var selectable: [CommandItem] {
+        entries.compactMap { if case .item(let item) = $0, item.isEnabled { item } else { nil } }
     }
-
-    // MARK: - Rows
-
-    private enum Entry {
-        case header(String)
-        case item(CommandItem)
+    private var effectiveHighlight: String? {
+        selectable.first(where: { $0.id == highlightedID })?.id ?? firstSelectable?.id
     }
-
-    private var entries: [Entry] {
-        let visible = visible
-        let groups = Set(visible.map(\.group))
-        guard groups.count > 1 else { return visible.map { .item($0) } }
-        var out: [Entry] = []
-        var current = ""
-        for item in visible where item.group != current || out.isEmpty {
-            current = item.group
-            out.append(.header(current))
-            out.append(contentsOf: visible.filter { $0.group == current }.map { .item($0) })
-        }
-        return out
-    }
-
-    private var selectable: [CommandItem] { visible.filter(\.isEnabled) }
     private var firstSelectable: CommandItem? { selectable.first }
 
-    private func move(_ delta: Int) {
+    private func move(_ delta: Int, wraps: Bool = true) {
         let candidates = selectable
-        guard !candidates.isEmpty else { highlightedID = nil; return }
-        let currentIndex = candidates.firstIndex { $0.id == highlightedID }
-        let nextIndex: Int
-        if let currentIndex {
-            nextIndex = (currentIndex + delta + candidates.count) % candidates.count
-        } else {
-            nextIndex = delta > 0 ? 0 : candidates.count - 1
+        guard let index = CommandSearch.destination(count: candidates.count,
+            current: candidates.firstIndex { $0.id == effectiveHighlight }, delta: delta, wraps: wraps) else {
+            highlightedID = nil; return
         }
-        highlightedID = candidates[nextIndex].id
+        highlightedID = candidates[index].id
         scrollHighlightIntoView()
     }
 
@@ -235,7 +156,7 @@ public struct CommandPalette: View {
     }
 
     private func runHighlighted() {
-        guard let item = selectable.first(where: { $0.id == highlightedID }) else { return }
+        guard let item = selectable.first(where: { $0.id == effectiveHighlight }) else { return }
         run(item)
     }
 
@@ -243,7 +164,7 @@ public struct CommandPalette: View {
     /// measured geometry pass: the list is uniform by design, so the arithmetic
     /// is exact and never lags a frame behind the selection.
     private func scrollHighlightIntoView() {
-        guard let highlightedID, viewportHeight > 1 else { return }
+        guard let highlightedID = effectiveHighlight, viewportHeight > 1 else { return }
         var y: Float = 0
         for entry in entries {
             switch entry {
@@ -288,8 +209,8 @@ public struct CommandPalette: View {
                 switch event.scancode {
                 case Scancode.arrowDown: move(1); return true
                 case Scancode.arrowUp: move(-1); return true
-                case Scancode.pageDown: move(10); return true
-                case Scancode.pageUp: move(-10); return true
+                case Scancode.pageDown: move(10, wraps: false); return true
+                case Scancode.pageUp: move(-10, wraps: false); return true
                 case Scancode.return, Scancode.keypadEnter: runHighlighted(); return true
                 case Scancode.escape: close(); return true
                 default: return false
@@ -338,7 +259,7 @@ public struct CommandPalette: View {
     }
 
     private func row(_ item: CommandItem) -> some View {
-        let isHighlighted = item.id == highlightedID
+        let isHighlighted = item.id == effectiveHighlight
         return Button(isEnabled: item.isEnabled, isSelected: isHighlighted, action: { run(item) }) {
             Row(alignment: .center, spacing: 10) {
                 Icon(item.icon ?? UIIcons.Navigation.arrowRight, size: 16)
@@ -355,6 +276,7 @@ public struct CommandPalette: View {
             }
         }
         .buttonStyle(CommandRowStyle())
+        .modifier(CommandResultModifier())
         .frame(height: Self.rowHeight)
         .onHover { hovered in
             if hovered, item.isEnabled { highlightedID = item.id }
@@ -439,4 +361,9 @@ private struct _PresentationWatcher: _PrimitiveView {
         node.attachments["commandPalette.settled"] = true
         if isPresented.wrappedValue { onPresent() }
     }
+}
+
+/// Search remains the sole Tab stop; pointer actions still execute each result.
+private struct CommandResultModifier: ViewModifier {
+    func apply(node: Node) { node.isTabStop = false }
 }

@@ -43,7 +43,8 @@ final class MacAccessibilityBridge: NodeResource {
     }
     func update(root: Node, focus: FocusChain, perform: @escaping (() -> Void) -> Void) {
         guard let view, let window = view.window else { return }
-        let snapshot = AccessibilityTree.snapshot(root: focus.modalRoot ?? root, viewport: root.absoluteFrame, resolveValues: false)
+        let roots = focus.modalRoot.map { [$0] + focus.accessoryRoots } ?? [root]
+        let snapshot = roots.flatMap { AccessibilityTree.snapshot(root: $0, viewport: root.absoluteFrame, resolveValues: false) }
         var next: [ElementID: MacSceneAccessibilityElement] = [:]
         func materialize(_ item: AccessibilityElement, parent: Any) -> MacSceneAccessibilityElement {
             let element = elements[item.id] ?? MacSceneAccessibilityElement()
@@ -179,6 +180,7 @@ private extension AccessibilityRole {
         case .row, .listItem, .treeItem: return .row
         case .cell: return .cell
         case .dialog, .group: return .group
+        case .toolbar: return .toolbar
         case .progress: return .progressIndicator
         case .image: return .image
         case .link: return .link
