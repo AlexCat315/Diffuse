@@ -44,9 +44,22 @@ private final class VisibilityState: NodeResource {
     var expandedHeight: Float = 0
     var controller: AnimationController<Float>?
     var onFinished: () -> Void = {}
+    private weak var scheduler: AnimatorScheduler?
 
-    func mount(node: Node) {}
-    func unmount(node: Node) { controller?.cancel(); onFinished = {} }
+    func mount(node: Node) { scheduler = AnimatorScheduler.current }
+    func unmount(node: Node) { cancel(); onFinished = {}; scheduler = nil }
+    func cancel() {
+        guard let controller else { return }
+        controller.cancel(); scheduler?.unregister(controller); self.controller = nil
+    }
+    func animate(_ controller: AnimationController<Float>) {
+        self.controller = controller
+        if !controller.isFinished { scheduler?.register(controller) }
+    }
+    func settleImmediately() {
+        guard let controller, !controller.isFinished else { return }
+        controller.finishImmediately(); scheduler?.unregister(controller); self.controller = nil
+    }
 }
 
 private struct _VisibilityHost<Content: View>: _PrimitiveView {
@@ -70,6 +83,7 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
     func _updateNode(_ node: Node) {
         guard let state = node.firstResource(VisibilityState.self) else { return }
         state.onFinished = onFinished
+        node.clipsToBounds = collapses
         node.allowsHitTesting = isVisible
         node.isInteractionEnabled = isVisible
         if !isVisible {
@@ -82,18 +96,27 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
         }
         node.layoutDidUpdate = { [weak state] node in
             guard let state else { return }
-            if let child = node.children.first {
+            if let child = node.layoutNode?.children.first {
                 let height = Float(child.frame.height)
-                state.expandedHeight = state.progress >= 1 ? height : max(state.expandedHeight, height)
+                state.expandedHeight = height
             }
             Self.apply(state, to: node, collapses: collapses)
         }
-        guard state.target != isVisible else { return }
+        if state.target == isVisible {
+            if node.prefersReducedMotion { state.settleImmediately() }
+            return
+        }
         let wasMounted = state.target != nil
         state.target = isVisible
-        state.controller?.cancel()
+        state.cancel()
         let target: Float = isVisible ? 1 : 0
         let goal = isVisible ? Transition.Effect() : transition.removal
+        if node.prefersReducedMotion {
+            state.progress = target; state.visual = goal
+            Self.apply(state, to: node, collapses: collapses)
+            if wasMounted || (animateOnMount && isVisible) { state.onFinished() }
+            return
+        }
         if !wasMounted {
             state.progress = isVisible && animateOnMount ? 0 : target
             state.visual = isVisible && animateOnMount ? transition.insertion : goal
@@ -116,8 +139,7 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
             Self.apply(state, to: node, collapses: collapses)
             if amount == 1 { state.onFinished() }
         }
-        state.controller = controller
-        AnimatorScheduler.current.register(controller)
+        state.animate(controller)
         Self.apply(state, to: node, collapses: collapses)
     }
 
@@ -143,6 +165,15 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         _ = revision
         let state = node.firstResource(VisibilityState.self)
-        return isVisible || (state?.progress ?? 0) > 0 ? [content] : []
+        // Measure the full content while the host clips its animated height.
+        // Shrinking the child to that height feeds a smaller measurement back
+        // into the next animation frame and causes a reveal to stall.
+        guard isVisible || (state?.progress ?? 0) > 0 else { return [] }
+        if collapses {
+            return [Box(direction: .column, alignItems: .stretch) { content }.flex(0, shrink: 0)]
+        }
+        // Translation/opacity transitions keep the child's flex contract.
+        // Full-window modal content must still fill its assigned viewport.
+        return [content]
     }
 }

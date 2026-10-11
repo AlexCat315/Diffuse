@@ -9,12 +9,14 @@ public struct StatusButtonStyle: ButtonStyle, Hashable {
         let background = !c.isEnabled ? c.theme.colors.surfaceSunken
             : c.isPressed ? fill.composited(over: c.theme.colors.stateLayerPressed)
             : c.isHovered ? fill.composited(over: c.theme.colors.stateLayerHover) : fill
+        let verticalPadding = max(2, (c.controlSize.buttonHeight - c.theme.typography.label.lineHeight) * 0.5)
         return Row(alignment: .center) { AnyView(c.label) }
             .flex(1, shrink: 1)
             .font(.label).foregroundColor(c.isEnabled ? tone.color : .onSurfaceDisabled)
-            .padding(horizontal: c.controlSize.horizontalPadding,
-                     vertical: max(2, (c.controlSize.buttonHeight - c.theme.typography.label.lineHeight) * 0.5))
-            .frame(minHeight: c.controlSize.buttonHeight).background(background).cornerRadius(c.theme.radius.md)
+            .padding(horizontal: c.isIconOnly ? verticalPadding : c.controlSize.horizontalPadding,
+                     vertical: verticalPadding)
+            .frame(minWidth: c.isIconOnly ? c.controlSize.buttonHeight : nil, minHeight: c.controlSize.buttonHeight)
+            .background(background).cornerRadius(c.theme.radius.md)
             .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
     }
 }

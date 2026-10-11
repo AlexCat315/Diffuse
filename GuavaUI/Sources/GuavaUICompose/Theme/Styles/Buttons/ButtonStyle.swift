@@ -32,6 +32,7 @@ public struct ButtonStyleConfiguration {
     public let isSelected: Bool
     public let theme: Theme
     public let controlSize: ControlSize
+    public var isIconOnly = false
 
     public init(label: any View,
                 role: ButtonRole,
@@ -41,7 +42,8 @@ public struct ButtonStyleConfiguration {
                 isEnabled: Bool,
                 isSelected: Bool = false,
                 theme: Theme,
-                controlSize: ControlSize = .regular) {
+                controlSize: ControlSize = .regular,
+                isIconOnly: Bool = false) {
         self.label = label
         self.role = role
         self.isPressed = isPressed
@@ -51,6 +53,7 @@ public struct ButtonStyleConfiguration {
         self.isSelected = isSelected
         self.theme = theme
         self.controlSize = controlSize
+        self.isIconOnly = isIconOnly
     }
 }
 

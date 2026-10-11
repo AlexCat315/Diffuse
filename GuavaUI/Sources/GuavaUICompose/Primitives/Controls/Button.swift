@@ -49,13 +49,21 @@ public struct Button<Label: View>: View {
         _StatefulButton(role: role,
                         isEnabled: isEnabled && !isLoading,
                         isSelected: isSelected,
+                        isIconOnly: Label.self == ButtonIcon.self,
                         tooltip: tooltip,
                         action: action,
                         label: loadingLabel)
     }
     private var loadingLabel: AnyView {
         guard isLoading else { return AnyView(label) }
-        return AnyView(Row(alignment: .center, spacing: 6) { Spinner(size: 14); label })
+        if let icon = label as? ButtonIcon {
+            return AnyView(ThemeReader { theme in
+                IconMetricsReader { metrics in Spinner(size: metrics.size(icon.size ?? theme.icons.medium)) }
+            })
+        }
+        return AnyView(IconMetricsReader { metrics in
+            Row(alignment: .center, spacing: 6) { Spinner(size: metrics.size(.medium)); label }
+        })
     }
 }
 
@@ -81,23 +89,29 @@ public struct ButtonIcon: View {
 
     public var body: some View {
         ThemeReader { theme in
-            let points = size ?? theme.icons.medium
-            image(size: points.isFinite ? max(1, points) : 16)
+            IconMetricsReader { metrics in
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    image(size: metrics.size(size ?? theme.icons.medium), theme: theme)
+                }
+            }
         }
     }
 
-    private func image(size: Float) -> AnyView {
+    private func image(size: Float, theme: Theme) -> AnyView {
+        let image: Image
         switch source {
         case .texture(let id):
-            return AnyView(Image(textureID: id, width: size, height: size,
-                                 tint: tint ?? .white, renderingMode: .alphaMask))
+            image = Image(textureID: id, width: size, height: size, renderingMode: .alphaMask)
         case .file(let path):
-            return AnyView(Image(file: path, width: size, height: size,
-                                 tint: tint ?? .white, contentMode: .fit, renderingMode: .alphaMask))
+            image = Image(file: path, width: size, height: size, contentMode: .fit, renderingMode: .alphaMask)
         case .resource(let resource):
-            if let tint { return AnyView(Icon(resource, size: size, color: tint)) }
-            return AnyView(Icon(resource, size: size))
+            // The size is already resolved. Use the same Image path for all
+            // sources so bundle icons cannot accidentally scale twice.
+            image = Image(resource: theme.icons.resolve(resource), width: size, height: size,
+                          contentMode: .fit, renderingMode: .alphaMask)
         }
+        if let tint { return AnyView(image.foregroundColor(tint)) }
+        return AnyView(image)
     }
 }
 
@@ -154,7 +168,9 @@ public extension Button where Label == ButtonIcon {
 /// A provider survives child-only recomposition, unlike a one-time node write.
 enum ActionControlAccessibility {
     static let role = CompositionLocal<AccessibilityRole>(defaultValue: .button)
+    static let label = CompositionLocal<String?>(defaultValue: nil)
     static let value = CompositionLocal<String>(defaultValue: "")
+    static let isExpanded = CompositionLocal<Bool?>(defaultValue: nil)
 }
 
 // MARK: - StatefulButton
@@ -166,6 +182,7 @@ struct _StatefulButton: View {
     let role: ButtonRole
     let isEnabled: Bool
     let isSelected: Bool
+    let isIconOnly: Bool
     let tooltip: String?
     let action: () -> Void
     let label: AnyView
@@ -186,6 +203,7 @@ struct _StatefulButton: View {
             role: role,
             isEnabled: isEnabled,
             isSelected: isSelected,
+            isIconOnly: isIconOnly,
             tooltip: tooltip,
             isPressed: isEnabled ? isPressed : false,
             isHovered: isEnabled ? isHovered : false,
@@ -227,6 +245,7 @@ struct ButtonHost: _PrimitiveView {
     let role: ButtonRole
     let isEnabled: Bool
     let isSelected: Bool
+    let isIconOnly: Bool
     let tooltip: String?
     let isPressed: Bool
     let isHovered: Bool
@@ -251,8 +270,11 @@ struct ButtonHost: _PrimitiveView {
         node.isFocusable = isEnabled
         node.accessibility = AccessibilitySemantics(node.compositionValue(of: ActionControlAccessibility.role)) {
             $0.state.isEnabled = isEnabled; $0.state.isSelected = isSelected
+            $0.state.isExpanded = node.compositionValue(of: ActionControlAccessibility.isExpanded)
             $0.value = node.compositionValue(of: ActionControlAccessibility.value)
             $0.help = tooltip ?? ""; $0.combinesChildren = true
+            if let label = node.compositionValue(of: ActionControlAccessibility.label) { $0.label = label }
+            else if isIconOnly { $0.label = tooltip ?? "" }
         }
         node.accessibilityActions = AccessibilityActions()
         if isEnabled { node.accessibilityActions.activate = action }
@@ -460,7 +482,8 @@ struct ButtonHost: _PrimitiveView {
             isEnabled:  isEnabled,
             isSelected: isSelected,
             theme:      theme,
-            controlSize: node.compositionValue(of: ControlSizeEnvironment.key)
+            controlSize: node.compositionValue(of: ControlSizeEnvironment.key),
+            isIconOnly: isIconOnly
         )
         return [style.makeBody(config)]
     }
@@ -517,7 +540,7 @@ struct BuiltinButtonChrome: _PrimitiveView {
         self.isSelected = configuration.isSelected
         self.foreground = foreground
         self.label = configuration.label
-        self.metrics = kind.metrics(in: configuration.theme, size: configuration.controlSize)
+        self.metrics = kind.metrics(in: configuration.theme, size: configuration.controlSize, isIconOnly: configuration.isIconOnly)
     }
 
     func _makeNode() -> Node {
@@ -592,12 +615,12 @@ private struct BuiltinButtonChromeValues {
 }
 
 private extension BuiltinButtonChromeKind {
-    func metrics(in theme: Theme, size: ControlSize) -> BuiltinButtonChromeMetrics {
+    func metrics(in theme: Theme, size: ControlSize, isIconOnly: Bool) -> BuiltinButtonChromeMetrics {
         switch self {
         case .primary, .secondary, .ghost, .destructive:
             return BuiltinButtonChromeMetrics(height: size.buttonHeight,
-                                              minWidth: nil,
-                                              horizontalPadding: size.horizontalPadding,
+                                              minWidth: isIconOnly ? size.buttonHeight : nil,
+                                              horizontalPadding: isIconOnly ? max(2, (size.buttonHeight - theme.typography.label.lineHeight) / 2) : size.horizontalPadding,
                                               radius: theme.radius.md,
                                               verticalPadding: max(2, (size.buttonHeight - theme.typography.label.lineHeight) / 2))
         case .toggle(let minWidth, let height):

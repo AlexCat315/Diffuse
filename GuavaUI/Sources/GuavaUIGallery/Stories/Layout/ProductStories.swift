@@ -98,18 +98,3 @@ struct TooltipStory: View {
         }
     }
 }
-
-struct SidebarStory: View {
-    @State private var selection: String? = "projects"
-    var body: some View {
-        StorySection("Grouped navigation", "The same public Sidebar powers this component gallery. Tab enters the destination group once; arrows select and move focus.") {
-            Sidebar(selection: $selection, sections: [
-                SidebarSection("workspace", title: "Workspace", items: [SidebarItem("projects", "Projects") { $0.badge = "8" }, SidebarItem("recent", "Recent")]),
-                SidebarSection("settings", title: "Settings", items: [SidebarItem("general", "General"), SidebarItem("unavailable", "Unavailable") { $0.isEnabled = false }])
-            ], header: { Text("My workspace").font(.bodyStrong).padding(14) },
-               footer: { Text("Connected").font(.caption).foregroundColor(.success).padding(14) })
-                .frame(width: 260, height: 360).border(.border, width: 1)
-            Text("Destination: \(selection ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
-        }
-    }
-}

@@ -30,7 +30,7 @@ struct ThemeInteractionRegressionTests: GuavaUIComposeSerializedSuite {
         #expect(chrome.backgroundColor == theme.colors.accent)
         #expect(abs(icon.absoluteFrame.midX - chrome.absoluteFrame.midX) < 0.5)
         #expect(abs(icon.absoluteFrame.midY - chrome.absoluteFrame.midY) < 0.5)
-        #expect(icon.foregroundColor == theme.colors.onAccent)
+        #expect(icon.inheritedForegroundColor == theme.colors.onAccent)
         #expect(chrome.opacity == 0.75)
     } }
 

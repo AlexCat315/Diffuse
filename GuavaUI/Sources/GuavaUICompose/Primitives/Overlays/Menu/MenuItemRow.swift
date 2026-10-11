@@ -159,14 +159,14 @@ struct MenuItemRowHost: _PrimitiveView {
             : item.role == .destructive ? theme.colors.error : theme.colors.onSurface
         let textOpacity: Float = 1
 
-        let checkmarkSize = theme.icons.small.isFinite ? max(1, theme.icons.small) : 12
+        let checkmarkSize = node.iconMetrics.size(.small)
         let row = Row(alignment: .center, spacing: 8) {
             if showsSelectionColumn {
                 // Fixed-width slot — a grow-able Spacer here pushes every
                 // unchecked title toward the centre of the menu.
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
                     if item.isSelected {
-                        Icon(UIIcons.Action.check, size: checkmarkSize, color: titleColor)
+                        Icon(UIIcons.Action.check, size: .small, color: titleColor)
                             .opacity(textOpacity)
                     }
                 }

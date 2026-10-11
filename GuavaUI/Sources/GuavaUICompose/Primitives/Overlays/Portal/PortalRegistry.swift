@@ -281,14 +281,17 @@ final class PortalResource: NodeResource {
             entryID = nil
         }
         store = current
-        let content = AnyView(content.theme(owner?.theme ?? .defaultDark).textScaler(owner?.textScaler ?? .identity))
+        let content = AnyView(content.theme(owner?.theme ?? .defaultDark).textScaler(owner?.textScaler ?? .identity)
+            .iconScaling(owner?.iconScalingOverride ?? owner?.theme.icons.scaling ?? .text)
+            .reducedMotion(owner?.prefersReducedMotion ?? false))
         self.content = content
         self.transition = transition
         isDismissing = false
         generation &+= 1
         let presented = transition.map { effect in
             AnyView(AnimatedVisibility(isVisible: true, transition: effect,
-                animation: Self.appearAnimation, animateOnMount: true) { content })
+                animation: Self.appearAnimation, animateOnMount: true) { content }
+                .reducedMotion(owner?.prefersReducedMotion ?? false))
         } ?? content
         if let id = entryID, current.contains(id) {
             current.updatePresentation(id, position: position, width: width, content: presented)
@@ -315,7 +318,7 @@ final class PortalResource: NodeResource {
     /// short exit; node teardown still unregisters synchronously.
     func dismiss(node: Node) {
         guard !isDismissing, let id = entryID, let store else { return }
-        guard let content, let transition else { unmount(node: node); return }
+        guard let content, let transition, !node.prefersReducedMotion else { unmount(node: node); return }
         isDismissing = true
         generation &+= 1
         let expected = generation
@@ -325,7 +328,7 @@ final class PortalResource: NodeResource {
                 onVisibilitySettled: { [weak self, weak node] visible in
                     guard !visible, let self, let node, self.generation == expected else { return }
                     self.unmount(node: node)
-                }) { content }
+                }) { content }.reducedMotion(node.prefersReducedMotion)
         ))
     }
 

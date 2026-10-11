@@ -20,27 +20,26 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
     }
 
     public var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Button(isEnabled: isEnabled, action: {
                 isExpanded.wrappedValue.toggle()
             }) {
                 Row(alignment: .center, spacing: 5) {
                     Icon(isExpanded.wrappedValue ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight,
-                         size: 12, color: .onSurfaceVariant)
-                    label.flex(1, shrink: 1, basis: 0)
+                         size: .small, color: .onSurfaceVariant).accessibilityHidden()
+                    label.flex(1, shrink: 1)
                 }
                 .padding(horizontal: 2)
-                .frame(height: 24, minWidth: 0)
-                .flex(1, shrink: 1, basis: 0)
+                .frame(minWidth: 0)
+                .flex(1, shrink: 1)
             }
-            .accessibility { $0.state.isExpanded = isExpanded.wrappedValue }
+            .compositionLocal(ActionControlAccessibility.isExpanded, isExpanded.wrappedValue)
             .buttonStyle(.ghost)
             .controlSize(.small)
-            .frame(height: 24)
             .debugName("disclosure-header")
 
             AnimatedVisibility(isVisible: isExpanded.wrappedValue) {
-                content
+                content.padding(EdgeInsets(top: 6))
             }
         }
         .frame(minWidth: 0)
@@ -53,7 +52,7 @@ public extension DisclosureGroup where Label == AnyView {
          isEnabled: Bool = true,
          @ViewBuilder content: () -> Content) {
         self.init(isExpanded: isExpanded, isEnabled: isEnabled, content: content) {
-            AnyView(Text(title).lineLimit(1).font(.caption).foregroundColor(.onSurfaceVariant)
+            AnyView(Text(title).font(.label).foregroundColor(.onSurfaceVariant)
                 .debugName("disclosure-label"))
         }
     }

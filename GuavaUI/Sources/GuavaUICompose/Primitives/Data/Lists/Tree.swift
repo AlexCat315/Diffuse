@@ -60,6 +60,9 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         let entries = visibleEntries(using: treeState)
         let entriesByToken = Dictionary(uniqueKeysWithValues: entries.map { ($0.nodeKey, $0) })
         let activeDrag = session.dragState
+        return TextScalerReader { scaler in
+        IconMetricsReader { icons in
+        let layout = options.layout.resolved(textScaler: scaler, icons: icons)
         _TreeKeyboardHost(onKey: { event in
             session.activeModifiers = event.modifiers
             if options.events.onKeyCommand?(event, treeState.selectedIDs) == true { return true }
@@ -78,15 +81,15 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             return true
         }) {
         _TreeGhostContainer(dragCursorPos: activeDrag != nil ? session.dragCursorPos : nil,
-                            rowHeight: options.layout.rowHeight) {
-        VirtualStack(entries, id: \.nodeKey, rowHeight: options.layout.rowHeight, spacing: options.layout.rowSpacing,
+                            rowHeight: layout.rowHeight) {
+        VirtualStack(entries, id: \.nodeKey, rowHeight: layout.rowHeight, spacing: layout.rowSpacing,
                      scrollToIndex: entries.firstIndex { $0.nodeKey == options.selection.primaryKey.wrappedValue || $0.id == options.selection.primary.wrappedValue }) { entry in
             _TreeGuideOverlayHost(rows: [_TreeGuideRowSnapshot(depth: entry.depth,
                                   ancestorHasNextSiblings: entry.ancestorHasNextSiblings,
                                   hasNextSibling: entry.hasNextSibling, hasChildren: entry.hasChildren,
                                   isExpanded: entry.isExpanded)],
-                                  rowHeight: options.layout.rowHeight, rowSpacing: 0, indentation: options.layout.indentation,
-                                  showsIndentGuides: options.layout.showsIndentGuides) {
+                                  rowHeight: layout.rowHeight, rowSpacing: 0, indentation: layout.indentation,
+                                  showsIndentGuides: layout.showsIndentGuides) {
                         let token = entry.nodeKey
                         let isSel = treeState.usesNodeKeySelection
                             ? treeState.selectedNodeKeys.contains(token)
@@ -100,11 +103,11 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                                 propagateHoverState: options.slots.trailing != nil,
                                 dropPosition: session.dragState?.targetID == token ? session.dragState?.position : nil),
                             geometry: TreeRowGeometry(depth: entry.depth,
-                                rowHeight: options.layout.rowHeight,
-                                indentation: options.layout.indentation,
-                                disclosureWidth: options.layout.disclosureWidth),
+                                rowHeight: layout.rowHeight,
+                                indentation: layout.indentation,
+                                disclosureWidth: layout.disclosureWidth),
                             slots: TreeRowSlots(disclosureContent: options.slots.disclosure,
-                                trailingSlotWidth: options.slots.trailing == nil ? nil : options.layout.trailingSlotWidth,
+                                trailingSlotWidth: options.slots.trailing == nil ? nil : layout.trailingSlotWidth,
                                 trailingContent: options.slots.trailing.map {
                                 $0(entry.element,
                                    isSel,
@@ -166,6 +169,8 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         }
         } // _TreeGhostContainer
         } // persistent keyboard target
+        } // icon geometry
+        } // text geometry
     }
 
     private var expandedNodeKeys: Set<TreeNodeKey<ID>> {

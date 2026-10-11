@@ -47,7 +47,9 @@ public struct GalleryView: View {
         let sections = GalleryCatalog.categories.compactMap { category -> SidebarSection<GalleryPage>? in
             let entries = matches.filter { $0.category == category }
             guard !entries.isEmpty else { return nil }
-            return SidebarSection(category, title: category, items: entries.map { SidebarItem($0.page, $0.title) })
+            return SidebarSection(category, title: category, items: entries.map { entry in
+                SidebarItem(entry.page, entry.title) { $0.icon = entry.page.navigationIcon }
+            })
         }
         return Sidebar(selection: Binding(get: { page }, set: { if let selected = $0 { page = selected } }), sections: sections, header: {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
@@ -86,7 +88,7 @@ public struct GalleryView: View {
                 SelectOption(value: .mini, label: "Mini"), SelectOption(value: .small, label: "Small"),
                 SelectOption(value: .regular, label: "Medium"), SelectOption(value: .large, label: "Large")
             ]).frame(width: 118).debugName("gallery-size")
-            Text("Text").font(.caption).foregroundColor(.onSurfaceMuted)
+            Text("Scale").font(.caption).foregroundColor(.onSurfaceMuted)
             Select(selection: $textScale, options: [
                 SelectOption(value: 1.0, label: "100%"), SelectOption(value: 1.25, label: "125%"),
                 SelectOption(value: 1.5, label: "150%"), SelectOption(value: 2.0, label: "200%")
