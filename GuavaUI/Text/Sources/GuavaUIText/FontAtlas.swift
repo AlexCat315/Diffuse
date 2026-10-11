@@ -219,7 +219,7 @@ public final class FontAtlas {
         if let cached = metricsCache[key] { return cached }
 
         let face = resolved.face
-        let loadFlags = FT_LOAD_DEFAULT | FT_Int32(FT_LOAD_COMPUTE_METRICS)
+        let loadFlags = FT_Int32(FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP | FT_LOAD_COMPUTE_METRICS)
         let err = FT_Load_Glyph(face, FT_UInt(glyphIndex), loadFlags)
         guard err == 0, let glyphSlot = face.pointee.glyph else { return nil }
 
@@ -298,6 +298,7 @@ public final class FontAtlas {
         )
         if let cached = rasterCache[key] { return cached }
 
+        _ = glyphMetrics(glyphIndex: glyphIndex, fontID: fontID)
         let face = resolved.face
 
         // FT_LOAD_TARGET_LIGHT  = (1 & 15) << 16 = 0x10000: lighter vertical hinting,
@@ -351,14 +352,8 @@ public final class FontAtlas {
             uvMaxY: Float(y + h) / Float(atlasHeight)
         )
 
-        metricsCache[key] = GlyphMetrics(
-            glyphIndex: glyphIndex,
-            width: logicalWidth,
-            height: logicalHeight,
-            bearingX: bearingX,
-            bearingY: bearingY,
-            advance: advance
-        )
+        // Raster bearings and bitmap bounds belong to painting. Keep layout
+        // metrics independent of whether this glyph was drawn in a prior frame.
         rasterCache[key] = info
         if w > 0, h > 0 {
             mergeDirtyRegion(x: x, y: y, width: w, height: h)

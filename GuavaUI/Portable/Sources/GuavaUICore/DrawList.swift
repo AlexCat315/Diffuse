@@ -272,8 +272,8 @@ public final class DrawList {
         appendQuad(v0, v1, v2, v3, textureID: .none)
     }
 
-    /// Append a rounded rectangle, decomposed into a centre quad, two edge quads
-    /// and four corner triangle fans. Avoids any SDF work in the shader.
+    /// Append a convex rounded fill with a one-physical-pixel coverage edge.
+    /// The interior and fringe do not overlap, including for translucent fills.
     public func addRoundedRect(_ rect: UIRect, radius: Float, color: Color) {
         let rect = snapped(rect)
         let r = max(0, min(radius, min(rect.width, rect.height) * 0.5))
@@ -541,41 +541,43 @@ public final class DrawList {
         }
     }
 
-    /// Emit a rounded rectangle as a centre quad, four edge quads, and four
-    /// triangle fans for the corners. Avoids needing an SDF in the shader.
     private func emitRoundedRectGeometry(rect: UIRect, radius r: Float, color packed: UInt32) {
-        // Single-sample rasterization can make hard rounded edges look jagged.
-        // Paint a very small low-alpha fringe first so the final edge has a
-        // smoother coverage transition without requiring MSAA.
-        let fringe1 = scaledAlpha(packed, factor: 0.22)
-        if alphaByte(fringe1) > 0 {
-            let expanded1 = UIRect(x: rect.minX - 1, y: rect.minY - 1,
-                                   width: rect.width + 2, height: rect.height + 2)
-            emitRoundedRectCore(rect: expanded1, radius: r + 1, color: fringe1)
+        // Alpha interpolates across a single physical pixel centred on the
+        // requested boundary. Expanded translucent fills accumulate opacity
+        // over the whole shape and produce a glow rather than antialiasing.
+        let halfPixel = min(0.5 / max(1, pixelScale), min(rect.width, rect.height) * 0.5)
+        let inner = UIRect(x: rect.minX + halfPixel, y: rect.minY + halfPixel,
+                           width: rect.width - 2 * halfPixel, height: rect.height - 2 * halfPixel)
+        let outer = UIRect(x: rect.minX - halfPixel, y: rect.minY - halfPixel,
+                           width: rect.width + 2 * halfPixel, height: rect.height + 2 * halfPixel)
+        let innerRadius = max(0, r - halfPixel), outerRadius = r + halfPixel
+        let segments = cornerSegmentCount(for: outerRadius)
+        let transparent = packed & 0x00FF_FFFF
+        let baseVertex = UInt32(vertices.count), baseIndex = UInt32(indices.count)
+        vertices.append(UIVertex(posX: rect.minX + rect.width * 0.5,
+                                 posY: rect.minY + rect.height * 0.5, u: -1, v: 0, color: packed))
+        for corner in 0..<4 {
+            let right = corner == 1 || corner == 2, bottom = corner >= 2
+            let innerX = right ? inner.maxX - innerRadius : inner.minX + innerRadius
+            let innerY = bottom ? inner.maxY - innerRadius : inner.minY + innerRadius
+            let outerX = right ? outer.maxX - outerRadius : outer.minX + outerRadius
+            let outerY = bottom ? outer.maxY - outerRadius : outer.minY + outerRadius
+            let start = Float(corner) * .pi / 2 + .pi
+            for step in 0...segments {
+                let angle = start + Float(step) / Float(segments) * .pi / 2
+                vertices.append(UIVertex(posX: innerX + cos(angle) * innerRadius,
+                                         posY: innerY + sin(angle) * innerRadius, u: -1, v: 0, color: packed))
+                vertices.append(UIVertex(posX: outerX + cos(angle) * outerRadius,
+                                         posY: outerY + sin(angle) * outerRadius, u: -1, v: 0, color: transparent))
+            }
         }
-
-        let fringe2 = scaledAlpha(packed, factor: 0.08)
-        if alphaByte(fringe2) > 0 {
-            let expanded2 = UIRect(x: rect.minX - 2, y: rect.minY - 2,
-                                   width: rect.width + 4, height: rect.height + 4)
-            emitRoundedRectCore(rect: expanded2, radius: r + 2, color: fringe2)
+        let pairs = UInt32(4 * (segments + 1))
+        for pair in 0..<pairs {
+            let a = baseVertex + 1 + pair * 2
+            let b = baseVertex + 1 + ((pair + 1) % pairs) * 2
+            indices.append(contentsOf: [baseVertex, a, b, a, a + 1, b, b, a + 1, b + 1])
         }
-
-        emitRoundedRectCore(rect: rect, radius: r, color: packed)
-    }
-
-    private func emitRoundedRectCore(rect: UIRect, radius r: Float, color packed: UInt32) {
-        let x0 = rect.minX, y0 = rect.minY, x1 = rect.maxX, y1 = rect.maxY
-        // Centre rectangle (full vertical span, horizontally inset by r).
-        emitSolidQuadRaw(x: x0 + r, y: y0, width: rect.width - 2 * r, height: rect.height, color: packed)
-        // Left and right edge rectangles (inset vertically by r).
-        emitSolidQuadRaw(x: x0,       y: y0 + r, width: r, height: rect.height - 2 * r, color: packed)
-        emitSolidQuadRaw(x: x1 - r,   y: y0 + r, width: r, height: rect.height - 2 * r, color: packed)
-        // Four corners as triangle fans.
-        emitCornerFan(centerX: x0 + r, centerY: y0 + r, radius: r, startAngle: .pi,             color: packed)
-        emitCornerFan(centerX: x1 - r, centerY: y0 + r, radius: r, startAngle: -.pi / 2,        color: packed)
-        emitCornerFan(centerX: x1 - r, centerY: y1 - r, radius: r, startAngle: 0,               color: packed)
-        emitCornerFan(centerX: x0 + r, centerY: y1 - r, radius: r, startAngle: .pi / 2,         color: packed)
+        recordIndices(at: baseIndex, count: pairs * 9, textureID: .none)
     }
 
     private func emitRoundedImageGeometry(rect: UIRect,
@@ -690,30 +692,6 @@ public final class DrawList {
         appendQuad(v0, v1, v2, v3, textureID: textureID)
     }
 
-    private func emitCornerFan(centerX: Float, centerY: Float, radius r: Float,
-                               startAngle: Float, color packed: UInt32) {
-        let segmentCount = cornerSegmentCount(for: r)
-        let baseVertex = UInt32(vertices.count)
-        let baseIndex = UInt32(indices.count)
-        // Centre vertex.
-        vertices.append(UIVertex(posX: centerX, posY: centerY, u: -1, v: 0, color: packed))
-        // Arc vertices.
-        for i in 0...segmentCount {
-            let t = Float(i) / Float(segmentCount)
-            let angle = startAngle + t * (.pi / 2)
-            let vx = centerX + cos(angle) * r
-            let vy = centerY + sin(angle) * r
-            vertices.append(UIVertex(posX: vx, posY: vy, u: -1, v: 0, color: packed))
-        }
-        // Triangle indices: (centre, i, i+1).
-        for i in 0..<UInt32(segmentCount) {
-            indices.append(baseVertex)
-            indices.append(baseVertex + 1 + i)
-            indices.append(baseVertex + 2 + i)
-        }
-        recordIndices(at: baseIndex, count: UInt32(segmentCount) * 3, textureID: .none)
-    }
-
     private func emitTexturedCornerFan(centerX: Float,
                                        centerY: Float,
                                        radius r: Float,
@@ -803,16 +781,7 @@ public final class DrawList {
                       width: max(0, maxX - minX), height: max(0, maxY - minY))
     }
 
-    private func alphaByte(_ packed: UInt32) -> UInt32 {
-        (packed >> 24) & 0xFF
-    }
 
-    private func scaledAlpha(_ packed: UInt32, factor: Float) -> UInt32 {
-        let base = Float(alphaByte(packed)) / 255
-        let scaled = max(0, min(1, base * factor))
-        let scaledByte = UInt32(max(0, min(255, Int((scaled * 255).rounded()))))
-        return (packed & 0x00FF_FFFF) | (scaledByte << 24)
-    }
 }
 
 // MARK: - Helpers
