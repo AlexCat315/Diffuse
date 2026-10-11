@@ -179,7 +179,10 @@ private struct _StatefulSelect<Value: Hashable>: View {
             .background(theme.inputs.background)
             .cornerRadius(theme.inputs.radius)
             .border(borderColor(theme), width: theme.inputs.borderWidth)
-            .animation(.semantic(.fast, in: theme), value: isPresented)
+            // Presentation is not a hover: 80ms is under five frames at 60Hz,
+            // so opening and closing a menu reads as a few discrete steps
+            // rather than as a transition.
+            .animation(.semantic(.medium, in: theme), value: isPresented)
             .animation(.semantic(.fast, in: theme), value: isHovered)
             .onHover { hovered in
                 if isHovered != hovered { isHovered = hovered }
