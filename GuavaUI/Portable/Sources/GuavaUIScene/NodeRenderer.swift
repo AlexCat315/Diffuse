@@ -42,8 +42,12 @@ public struct NodeRenderer {
         // 2. Drop shadow (painted before background so it sits behind). The
         //    ambient halo goes down first; the tighter key shadow lands on it.
         let rect = UIRect(x: absX, y: absY, width: width, height: height)
+        // A frosted panel samples the frame behind it, so keep its own shadow
+        // out of the band it samples — otherwise the frost eats the shadow.
+        let frosted: UIRect? = node.backdropBlur > 0 ? rect : nil
         list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
-                       rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity)
+                       rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity,
+                       frostedRect: frosted)
 
         // 3. Border ring, including when the background is transparent.
         if let bc = node.borderColor, node.borderWidth > 0,

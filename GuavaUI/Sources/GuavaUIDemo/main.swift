@@ -5,7 +5,7 @@ import GuavaUISharedDemo
 import GuavaUIGallery
 import GuavaUIDevTools
 import PlatformShell
-import RHIWGPU
+import NativeRHI
 
 enum DemoFrameMode { case idle, benchmark }
 enum DemoFrameModeHolder {
@@ -149,9 +149,13 @@ func prewarmDemoTextGlyphs() {
 
 // MARK: - GPU stack
 
-let backend = WGPUBackend()
-try backend.initialize()
-let renderer = DrawListRenderer(backend: backend)
+// NativeRHI rather than WGPU: the demo is where the frost is looked at, and
+// the backdrop pass that blurs what is behind a panel only exists here.
+let device = try Device.make(DeviceConfig(
+    preferredBackends: NativeRHI.platformDefaultBackends,
+    enableValidation: true,
+    framesInFlight: 3))
+let renderer = try device.withFrameSession { try NativeDrawListRenderer(device: device) }
 let demoImageAssets = ImageAssetRegistry()
 let demoAssetDrops = AssetDropRegistry()
 ImageAssetRegistryHolder.current = demoImageAssets
@@ -169,7 +173,15 @@ if let config = demoDevToolsConfig {
                          renderTree: graph.renderTree,
                          logSink: demoDevToolsLogSink ?? LogTap.Sink())
     tools.stateRegistry = graph.stateRegistry
-    tools.attachFrameTap(backend: backend, renderer: renderer)
+    do {
+        let capture = try NativeAppFrameCapture(device: device, renderer: renderer)
+        tools.attachFrameTap(capture: { list, width, height, logical in
+            try capture.capture(list: list, size: SIMD2(Int(width), Int(height)),
+                logical: SIMD2(logical.width, logical.height))
+        }, reset: { capture.reset() })
+    } catch {
+        print("[demo] frame tap unavailable: \(error)")
+    }
     tools.server.hostMainExecutor = { operation in
         host.enqueueMainThreadWork {
             MainActor.assumeIsolated {
@@ -225,15 +237,17 @@ if let config = demoDevToolsConfig {
     }
 }
 
-var surface: GPUSurface?
+var swapchain: SwapchainResource?
+var surfaceNative: NativeRenderSurface?
+var surfaceVSync = DemoVSyncHolder.enabled
 var configured = false
 var drawableW: UInt32 = 0
 var drawableH: UInt32 = 0
 var logicalW: UInt32 = 0
 var logicalH: UInt32 = 0
-var msaaColorTexture: GPUTexture?
-var msaaColorView: GPUTextureView?
-var msaaTargetSize: (width: UInt32, height: UInt32)?
+var multisample: TextureResource?
+/// Owned copy of the presented frame, so a panel can blur it.
+var framebuffer: TextureResource?
 
 @MainActor
 func appendDevToolsSelectionOverlay(to list: DrawList) {
@@ -245,74 +259,42 @@ func demoNodeCount(_ node: Node) -> Int {
 }
 
 @MainActor
-func ensureDemoMSAATarget(width: UInt32, height: UInt32) throws {
-    guard demoMSAASampleCount > 1 else {
-        msaaColorTexture = nil
-        msaaColorView = nil
-        msaaTargetSize = nil
-        return
-    }
-
-    if msaaColorTexture != nil,
-       msaaColorView != nil,
-       msaaTargetSize?.width == width,
-       msaaTargetSize?.height == height {
-        return
-    }
-
-    let texture = try backend.createTexture(
-        width: width,
-        height: height,
-        format: .bgra8Unorm,
-        usage: [.renderAttachment],
-        mipLevels: 1,
-        depthOrLayers: 1,
-        sampleCount: demoMSAASampleCount
-    )
-    let view = try texture.createView()
-    msaaColorTexture = texture
-    msaaColorView = view
-    msaaTargetSize = (width, height)
-}
-
-@MainActor
 func uploadAtlas() throws {
     guard let atlas else { return }
-    try renderer.uploadFontAtlas(atlas, textureID: atlasTextureID)
+    try device.withFrameSession { try renderer.uploadFontAtlas(atlas, textureID: atlasTextureID) }
 }
 
 @MainActor
 func uploadPreviewTexture() throws {
     guard !previewTexturePixels.isEmpty else { return }
-    try previewTexturePixels.withUnsafeBufferPointer { buf in
-        try renderer.registerColorTexture(
-            id: previewTextureID,
-            pixels: buf.baseAddress!,
-            width: previewTextureSize.width,
-            height: previewTextureSize.height
-        )
+    let width = Int(previewTextureSize.width)
+    let height = Int(previewTextureSize.height)
+    try device.withFrameSession {
+        var region = TextureUploadRegion(width: width, height: height)
+        region.origin = .zero
+        try renderer.registerTexture(id: previewTextureID, pixels: Data(previewTexturePixels),
+            size: SIMD2(width, height), region: region, format: .rgba8Unorm)
     }
 }
 
 @MainActor
 @discardableResult
 func presentBootClearFrame() throws -> Bool {
-    guard let surface else { return false }
-    guard let frame = try surface.getCurrentTextureView() else {
-        host.requestDisplay()
-        return false
+    guard let resource = swapchain, drawableW > 0, drawableH > 0 else { return false }
+    try device.withFrameSession {
+        try device.beginFrame()
+        defer { device.endFrame() }
+        let image = try device.acquireSwapchainImage(resource.swapchain)
+        let commands = CommandBuffer()
+        let frame = try renderer.record(list: DrawList(), into: commands,
+            target: RenderColorTarget(texture: image.texture,
+                loadAction: .clear(SIMD4<Float>(0.05, 0.06, 0.08, 1)), store: true),
+            viewport: NativeUIViewport(pixels: SIMD2(Int(image.width), Int(image.height)),
+                logical: SIMD2(Float(logicalW), Float(logicalH))))
+        try device.submit(commands)
+        frame.didSubmit()
+        try device.present(image)
     }
-    let encoder = try backend.createCommandEncoder()
-    let pass = try encoder.beginRenderPass(
-        colorView: frame.view,
-        loadOp: .clear,
-        storeOp: .store,
-        clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1)
-    )
-    pass.end()
-    let buffer = try encoder.finish()
-    backend.submit(buffer)
-    surface.present()
     didPresentBootClear = true
     return true
 }
@@ -372,22 +354,22 @@ host.onInit = { native, w, h in
     }
     drawableW = w; drawableH = h
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
-    let presentMode: GPUPresentMode = DemoVSyncHolder.enabled ? .fifo : .immediate
     let isVSyncOn = DemoVSyncHolder.enabled
     do {
         var timing = TimingTrace(label: "[timing] demo.boot.main")
-        surface = try makeSurface(backend: backend, native: native)
-        try surface?.configure(
-            device: backend.rawDevice!,
-            format: .bgra8Unorm,
-            width: w, height: h,
-            presentMode: presentMode)
+        swapchain = try device.withFrameSession {
+            try SwapchainResource(device: device, descriptor: SurfaceFactory.nativeDescriptor(
+                native: native, size: SIMD2(w, h), vsync: isVSyncOn))
+        }
+        surfaceNative = native
+        surfaceVSync = isVSyncOn
         if !isVSyncOn { native.disableDisplaySync() }
-        storedNativeSurface = native
-        usedPresentMode = presentMode
-        try renderer.configure(format: .bgra8Unorm,
-                               sampleCount: demoMSAASampleCount)
-        try ensureDemoMSAATarget(width: w, height: h)
+        try device.withFrameSession {
+            try renderer.configure(format: .bgra8UnormSRGB, sampleCount: Int(demoMSAASampleCount))
+        }
+        // Without the backdrop program there is no frost, and the panels are
+        // just translucent — worth knowing which one is on screen.
+        print("[demo] NativeRHI ready: frost=\(renderer.supportsBackdrop) msaa=\(demoMSAASampleCount)x")
         timing.mark("surface")
         if !didPresentBootClear {
             _ = try presentBootClearFrame()
@@ -426,14 +408,17 @@ host.onInit = { native, w, h in
 host.onResize = { w, h in
     drawableW = w; drawableH = h
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
-    guard let surface, let device = backend.rawDevice else { return }
+    guard let resource = swapchain, let native = surfaceNative else { return }
     do {
-        let presentMode: GPUPresentMode = DemoVSyncHolder.enabled ? .fifo : .immediate
-        usedPresentMode = presentMode
-        try surface.configure(
-            device: device, format: .bgra8Unorm,
-            width: w, height: h, presentMode: presentMode)
-        try ensureDemoMSAATarget(width: w, height: h)
+        let isVSyncOn = DemoVSyncHolder.enabled
+        try device.withFrameSession {
+            // Minimized windows have no drawable extent; keep the current pool
+            // and reconfigure once a positive size comes back.
+            guard w > 0 && h > 0 else { return }
+            try device.configureSwapchain(resource.swapchain,
+                descriptor: SurfaceFactory.nativeDescriptor(native: native, size: SIMD2(w, h), vsync: isVSyncOn))
+        }
+        surfaceVSync = isVSyncOn
         let previousScale = activeTextScale
         configureTextEnvironment(scale: host.contentScaleFactor)
         if abs(previousScale - activeTextScale) >= 0.01 {
@@ -445,27 +430,23 @@ host.onResize = { w, h in
     }
 }
 
-var usedPresentMode: GPUPresentMode = .fifo
-var storedNativeSurface: NativeRenderSurface? = nil
-
 host.onFrame = { native in
-    guard configured, let surface, let root = tree.root else { return false }
+    surfaceNative = native
+    guard configured, swapchain != nil, let root = tree.root else { return false }
     let devToolsFrameStart = TimingTrace.now()
     hudTickFrameCount += 1
 
-    // Reconfigure surface if vsync state changed since last frame.
-    let desired: GPUPresentMode = DemoVSyncHolder.enabled ? .fifo : .immediate
-    if usedPresentMode != desired, let device = backend.rawDevice {
+    // Reconfigure the swapchain if vsync state changed since last frame.
+    if surfaceVSync != DemoVSyncHolder.enabled, let resource = swapchain {
         do {
-            try surface.configure(
-                device: device, format: .bgra8Unorm,
-                width: drawableW, height: drawableH,
-                presentMode: desired)
-            if !DemoVSyncHolder.enabled {
-                storedNativeSurface?.disableDisplaySync()
+            try device.withFrameSession {
+                try device.configureSwapchain(resource.swapchain,
+                    descriptor: SurfaceFactory.nativeDescriptor(native: native,
+                        size: SIMD2(drawableW, drawableH), vsync: DemoVSyncHolder.enabled))
             }
-            usedPresentMode = desired
-            print("[demo] vsync changed: presentMode=\(desired) vsync=\(DemoVSyncHolder.enabled)")
+            if !DemoVSyncHolder.enabled { native.disableDisplaySync() }
+            surfaceVSync = DemoVSyncHolder.enabled
+            print("[demo] vsync changed: vsync=\(DemoVSyncHolder.enabled)")
         } catch {
             print("[demo] vsync reconfig failed: \(error)")
         }
@@ -523,32 +504,42 @@ host.onFrame = { native in
         }
     }
 
-    // 3. Submit to wgpu.
-    let acquired: (texture: GPUTexture, view: GPUTextureView)?
+    // 3. Submit to the GPU.
+    var presented = false
+    var devToolsPresentEnd = devToolsDrawEnd
     do {
-        acquired = try surface.getCurrentTextureView()
+        presented = try submitDemoFrame()
+        devToolsPresentEnd = TimingTrace.now()
     } catch {
-        print("[demo] surface acquire failed: \(error)")
-        return false
+        print("[demo] frame submit failed: \(error)")
     }
-    guard let frame = acquired else {
-        devTools?.mirrorCapture(
+    timing.mark("gpuSubmit")
+
+    if let tools = devTools {
+        // Recorded after presenting the primary swapchain image: capturing
+        // first can starve the swapchain and leave the window on an older frame.
+        tools.mirrorCapture(
             drawList: drawList,
             widthPx: drawableW,
             heightPx: drawableH,
             logical: (Float(logicalW), Float(logicalH))
         )
-        let devToolsFrameEnd = TimingTrace.now()
-        devTools?.timing.record(
+        if tools.mirrorIsActive {
+            host.requestDisplay()
+        }
+        tools.timing.record(
             layoutMs: (devToolsLayoutEnd - devToolsLayoutStart) * 1_000,
             drawMs: (devToolsDrawEnd - devToolsLayoutEnd) * 1_000,
-            presentMs: 0,
-            totalMs: (devToolsFrameEnd - devToolsFrameStart) * 1_000,
+            presentMs: (devToolsPresentEnd - devToolsDrawEnd) * 1_000,
+            totalMs: (devToolsPresentEnd - devToolsFrameStart) * 1_000,
             nodeCount: demoNodeCount(root),
             batchCount: drawList.batches.count,
-            presented: false
+            presented: presented
         )
-        devTools?.notifyFrameFinished()
+        tools.notifyFrameFinished()
+    }
+
+    guard presented else {
         if !demoSurfaceWasUnavailable || didAtlasUpload || didPreviewUpload {
             print(timing.summary(extra: [
                 "frameAttempt=\(demoFrameAttemptCount)",
@@ -561,87 +552,34 @@ host.onFrame = { native in
         demoSurfaceWasUnavailable = true
         return false
     }
-    timing.mark("acquireSurface")
 
-    do {
-        let encoder = try backend.createCommandEncoder()
-        // Compare against the allocated target, since onResize has already
-        // updated drawableW/drawableH before the target is recreated.
-        try ensureDemoMSAATarget(width: drawableW, height: drawableH)
-        let passColorView = msaaColorView ?? frame.view
-        let passResolveView = msaaColorView == nil ? nil : frame.view
-        let pass = try encoder.beginRenderPass(
-            colorView: passColorView,
-            resolveTargetView: passResolveView,
-            loadOp: .clear, storeOp: .store,
-            clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1)
-        )
-        try renderer.render(
-            list: drawList, pass: pass,
-            viewportPx: (drawableW, drawableH),
-            coordinateSpace: (Float(logicalW), Float(logicalH)))
-        pass.end()
-        let buffer = try encoder.finish()
-        backend.submit(buffer)
-        surface.present()
-        let devToolsPresentEnd = TimingTrace.now()
-        if let tools = devTools {
-            // Acquire and present the primary swapchain image before doing the
-            // synchronous mirror readback. Capturing first can starve the
-            // swapchain and leave the native window stuck on an older frame.
-            tools.mirrorCapture(
-                drawList: drawList,
-                widthPx: drawableW,
-                heightPx: drawableH,
-                logical: (Float(logicalW), Float(logicalH))
-            )
-            if tools.mirrorIsActive {
-                host.requestDisplay()
-            }
-        }
-        hudRenderFrameCount += 1
-        demoRenderedFrameCount = nextFrameIndex
-        timing.mark("gpuSubmit")
-        let now = ProcessInfo.processInfo.systemUptime
-        let elapsed = now - lastHUDSampleTime
-        if elapsed >= 0.5 {
-            hudRenderFPS = Int(Double(hudRenderFrameCount) / elapsed)
-            hudTickFPS = Int(Double(hudTickFrameCount) / elapsed)
-            lastHUDSampleTime = now
-            hudRenderFrameCount = 0
-            hudTickFrameCount = 0
-        }
-        if demoSurfaceWasUnavailable || shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
-                                        didAtlasUpload: didAtlasUpload,
-                                        didPreviewUpload: didPreviewUpload) {
-            print(timing.summary(extra: [
-                "frame=\(demoRenderedFrameCount)",
-                "surfaceRecovered=\(demoSurfaceWasUnavailable)",
-                "layoutUpdated=\(didLayout)",
-                "atlasUploaded=\(didAtlasUpload)",
-                "previewUploaded=\(didPreviewUpload)",
-            ]))
-        }
-        demoSurfaceWasUnavailable = false
-        if let tools = devTools {
-            tools.timing.record(
-                layoutMs: (devToolsLayoutEnd - devToolsLayoutStart) * 1_000,
-                drawMs: (devToolsDrawEnd - devToolsLayoutEnd) * 1_000,
-                presentMs: (devToolsPresentEnd - devToolsDrawEnd) * 1_000,
-                totalMs: (devToolsPresentEnd - devToolsFrameStart) * 1_000,
-                nodeCount: demoNodeCount(root),
-                batchCount: drawList.batches.count
-            )
-            tools.notifyFrameFinished()
-        }
-        if DemoFrameModeHolder.current == .benchmark || !DemoVSyncHolder.enabled {
-            host.requestDisplay()
-        }
-        return true
-    } catch {
-        print("[demo] frame submit failed: \(error)")
-        return false
+    hudRenderFrameCount += 1
+    demoRenderedFrameCount = nextFrameIndex
+    let now = ProcessInfo.processInfo.systemUptime
+    let elapsed = now - lastHUDSampleTime
+    if elapsed >= 0.5 {
+        hudRenderFPS = Int(Double(hudRenderFrameCount) / elapsed)
+        hudTickFPS = Int(Double(hudTickFrameCount) / elapsed)
+        lastHUDSampleTime = now
+        hudRenderFrameCount = 0
+        hudTickFrameCount = 0
     }
+    if demoSurfaceWasUnavailable || shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
+                                    didAtlasUpload: didAtlasUpload,
+                                    didPreviewUpload: didPreviewUpload) {
+        print(timing.summary(extra: [
+            "frame=\(demoRenderedFrameCount)",
+            "surfaceRecovered=\(demoSurfaceWasUnavailable)",
+            "layoutUpdated=\(didLayout)",
+            "atlasUploaded=\(didAtlasUpload)",
+            "previewUploaded=\(didPreviewUpload)",
+        ]))
+    }
+    demoSurfaceWasUnavailable = false
+    if DemoFrameModeHolder.current == .benchmark || !DemoVSyncHolder.enabled {
+        host.requestDisplay()
+    }
+    return true
 }
 
 host.onTeardown = {
@@ -651,18 +589,51 @@ host.onTeardown = {
 
 host.run(tree: tree)
 
-// MARK: - Surface helper
+// MARK: - Frame submission
 
+/// Renders the recorded draw list into the swapchain. Returns false while the
+/// window has no drawable to present to.
 @MainActor
-func makeSurface(backend: WGPUBackend, native: NativeRenderSurface) throws -> GPUSurface {
-    switch native {
-    case .metalLayer(let ptr):
-        return try backend.createSurfaceMetal(layer: ptr)
-    case .win32Window(let hwnd, let hinstance):
-        return try backend.createSurfaceWin32(hwnd: hwnd, hinstance: hinstance)
-    case .waylandSurface(let display, let surface):
-        return try backend.createSurfaceWayland(display: display, surface: surface)
-    case .xlibWindow(let display, let window):
-        return try backend.createSurfaceXlib(display: display, window: window)
+func submitDemoFrame() throws -> Bool {
+    guard let resource = swapchain else { return false }
+    return try device.withFrameSession { () throws -> Bool in
+        try device.beginFrame()
+        defer { device.endFrame() }
+        let image = try device.acquireSwapchainImage(resource.swapchain)
+        let pixels = SIMD2(image.width, image.height)
+        if demoMSAASampleCount > 1,
+           multisample?.descriptor.width != pixels.x || multisample?.descriptor.height != pixels.y {
+            var descriptor = TextureDescriptor(width: pixels.x, height: pixels.y,
+                format: .bgra8UnormSRGB, usage: [.colorTarget])
+            descriptor.sampleCount = Int(demoMSAASampleCount)
+            multisample = try TextureResource(device: device, descriptor: descriptor)
+        }
+        // With frost the frame goes into an owned texture instead of straight
+        // into the drawable: a panel samples what is already behind it, and a
+        // swapchain image is a render target that cannot be sampled.
+        let frosted = renderer.supportsBackdrop
+        if !frosted {
+            framebuffer = nil
+        } else if framebuffer?.descriptor.width != pixels.x || framebuffer?.descriptor.height != pixels.y {
+            framebuffer = try TextureResource(device: device, descriptor: TextureDescriptor(
+                width: pixels.x, height: pixels.y, format: .bgra8UnormSRGB,
+                usage: [.colorTarget, .sampled], label: "demo-framebuffer"))
+        }
+        let surface = framebuffer?.texture ?? image.texture
+        var target = RenderColorTarget(texture: multisample?.texture ?? surface,
+            loadAction: .clear(SIMD4<Float>(0.05, 0.06, 0.08, 1)))
+        target.resolveTexture = multisample == nil ? nil : surface
+        let commands = CommandBuffer()
+        let frame = try renderer.record(list: drawList, into: commands, target: target,
+            viewport: NativeUIViewport(pixels: pixels, logical: SIMD2(Float(logicalW), Float(logicalH))),
+            backdropSource: framebuffer?.texture)
+        if let source = framebuffer?.texture {
+            var present = RenderColorTarget(texture: image.texture, loadAction: .dontCare, store: true)
+            try renderer.recordBlit(source: source, into: commands, target: present, size: pixels)
+        }
+        try device.submit(commands)
+        frame.didSubmit()
+        try device.present(image)
+        return true
     }
 }
