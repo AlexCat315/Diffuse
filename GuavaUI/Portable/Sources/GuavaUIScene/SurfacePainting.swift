@@ -37,47 +37,36 @@ extension DrawList {
 
     // MARK: - Cheap blur
 
-    /// Steps dense enough that a single step's alpha rounds to nothing.
+    /// Steps spaced evenly in *space*, one every `stepSpacing` points.
     ///
-    /// Each step is an opaque-edged rect, so what shows as banding is the alpha
-    /// *one* step adds, and that scales with the layer's alpha — not with the
-    /// blur. Counting by blur (one rect per eighth of a pixel) put even a faint
-    /// 24pt halo at the ceiling: ~190 quads per component, spent on gradient
-    /// resolution far below the 8-bit floor, which is most of what made a
-    /// screenful of components slow to record.
-    ///
-    /// Steps are spread so each one adds the *same* alpha (see `paintSteps`),
-    /// which makes the tallest step `alpha * 1.3 / count`. Spacing them evenly
-    /// in `t` instead concentrates the tolerance on the inner edge and costs
-    /// roughly three times as many rects for the same gradient — ~190 per
-    /// component, which is what made recording a screenful slow.
+    /// What shows as banding is where consecutive rects land, not how much
+    /// alpha a single one adds. Spacing them by equal alpha instead bunches `t`
+    /// towards the surface and stretches the faint outer fringe into ridges a
+    /// few pixels apart — measurably worse than the even spacing it replaced,
+    /// because the gradient's curvature is in space and its steps have to be
+    /// too. Space is also what bounds the count: a 24pt halo wants ~96 rects,
+    /// a 2pt one wants 8, and neither pays for the other's resolution.
     private static func stepCount(for layer: SurfaceShadow) -> Int {
-        let alpha = max(0, layer.color?.a ?? 0)
-        guard alpha > 0, layer.blur > 0 else { return 1 }
-        return max(2, min(128, Int((alpha * Self.weightSpan / Self.bandTolerance).rounded(.up)) + 1))
+        let blur = max(0, layer.blur)
+        guard (layer.color?.a ?? 0) > 0, blur > 0 else { return 1 }
+        return max(2, min(128, Int((blur / Self.stepSpacing).rounded(.up)) + 1))
     }
 
-    /// `(t + 0.15)^2` over `t` in 0...1 — the range each step's alpha is drawn
-    /// from, and the span that gets divided into equal alpha steps.
-    private static let weightSpan: Float = 1.3225 - 0.0225
-
-    /// How much of a colour step one rect may add before it can be seen,
-    /// in units of `1/255`.
-    private static let bandTolerance: Float = 1.5 / 255
+    /// Distance between neighbouring rects in the stack. A quarter of a point
+    /// is half a pixel on a 2x display, so the edges blend into each other
+    /// instead of stacking up into ridges.
+    private static let stepSpacing: Float = 0.25
 
     private func paintSteps(_ layer: SurfaceShadow, rect: UIRect, cornerRadius: Float,
                             opacity: Float, count: Int, hole: UIRect?) {
         let blur = max(0, layer.blur)
         let radius = max(cornerRadius, 0)
         for i in 0..<count {
-            // Equal steps in the weight, not in `t`: the profile is (t + 0.15)^2,
-            // so equal alpha steps mean `t` bunches towards the surface where
-            // the profile is steep and spreads out over the faint outer fringe.
-            let weight = 0.0225 + Self.weightSpan * (Float(i) / Float(max(1, count - 1)))
-            let t = weight.squareRoot() - 0.15
+            let t = Float(i) / Float(max(1, count - 1))
             let inset = -blur * (1 - t)
             // Largest rect is the faint outer edge; smaller rects build density
             // towards the surface, not the other way around.
+            let weight = blur > 0 ? (t + 0.15) * (t + 0.15) : 1
             let alpha = layer.color!.a * weight / Float(count)
             let stepColor = Color(r: layer.color!.r, g: layer.color!.g, b: layer.color!.b,
                                   a: min(1, alpha) * opacity)
