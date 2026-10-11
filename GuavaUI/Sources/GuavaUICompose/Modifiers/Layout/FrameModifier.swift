@@ -26,48 +26,30 @@ private enum FrameDimensionSpec: Equatable {
     case percent(Float)
 }
 
+/// Omitted dimensions preserve the content's own sizing. Use `.auto` to
+/// explicitly return an axis to intrinsic sizing.
 public struct FrameModifier: ViewModifier {
-    public let width: Float?
-    public let height: Float?
-    public let widthPercent: Float?
-    public let heightPercent: Float?
+    public let width: FrameDimension?
+    public let height: FrameDimension?
     public let minWidth: Float?
     public let minHeight: Float?
     public let maxWidth: Float?
     public let maxHeight: Float?
 
-    public init(width: Float? = nil,
-                height: Float? = nil,
-                widthPercent: Float? = nil,
-                heightPercent: Float? = nil,
-                minWidth: Float? = nil,
-                minHeight: Float? = nil,
-                maxWidth: Float? = nil,
-                maxHeight: Float? = nil) {
-        precondition(width == nil || widthPercent == nil,
-                     "frame(width:widthPercent:) does not allow both width and widthPercent")
-        precondition(height == nil || heightPercent == nil,
-                     "frame(height:heightPercent:) does not allow both height and heightPercent")
-        self.width = width
-        self.height = height
-        self.widthPercent = widthPercent
-        self.heightPercent = heightPercent
-        self.minWidth = minWidth
-        self.minHeight = minHeight
-        self.maxWidth = maxWidth
-        self.maxHeight = maxHeight
+    public init(width: FrameDimension? = nil, height: FrameDimension? = nil,
+                minWidth: Float? = nil, minHeight: Float? = nil,
+                maxWidth: Float? = nil, maxHeight: Float? = nil) {
+        self.width = width; self.height = height
+        self.minWidth = minWidth; self.minHeight = minHeight
+        self.maxWidth = maxWidth; self.maxHeight = maxHeight
     }
 
-    private func widthSpec() -> FrameDimensionSpec {
-        if let value = widthPercent { return .percent(value) }
-        if let value = width { return .points(value) }
-        return .auto
-    }
-
-    private func heightSpec() -> FrameDimensionSpec {
-        if let value = heightPercent { return .percent(value) }
-        if let value = height { return .points(value) }
-        return .auto
+    private func spec(_ dimension: FrameDimension) -> FrameDimensionSpec {
+        switch dimension {
+        case .auto: .auto
+        case .points(let value): .points(value)
+        case .percent(let value): .percent(value)
+        }
     }
 
     private func applyWidth(_ spec: FrameDimensionSpec, to layout: LayoutNode) {
@@ -96,54 +78,60 @@ public struct FrameModifier: ViewModifier {
 
     public func apply(node: Node) {
         guard let layout = node.layoutNode else { return }
-        let targetWidth = widthSpec()
-        let targetHeight = heightSpec()
 
         let currentWidth = (layout.attachments[FrameAttachmentKey.widthSpec] as? FrameDimensionSpec)
             ?? (layout.width.map { .points($0) } ?? .auto)
         let currentHeight = (layout.attachments[FrameAttachmentKey.heightSpec] as? FrameDimensionSpec)
             ?? (layout.height.map { .points($0) } ?? .auto)
 
-        switch (currentWidth, targetWidth) {
-        case (.points(let from), .points(let to)):
-            node.animatableSet(propertyKey: FrameAnimationPropertyKey.width,
-                               current: from,
-                               to: to) { applyWidth(.points($0), to: layout) }
-        case (.percent(let from), .percent(let to)):
-            node.animatableSet(propertyKey: FrameAnimationPropertyKey.width,
-                               current: from,
-                               to: to) { applyWidth(.percent($0), to: layout) }
-        default:
-            node.cancelAnimation(for: FrameAnimationPropertyKey.width)
-            applyWidth(targetWidth, to: layout)
+        if let width {
+            let targetWidth = spec(width)
+            switch (currentWidth, targetWidth) {
+            case (.points(let from), .points(let to)):
+                node.animatableSet(propertyKey: FrameAnimationPropertyKey.width,
+                                   current: from,
+                                   to: to) { applyWidth(.points($0), to: layout) }
+            case (.percent(let from), .percent(let to)):
+                node.animatableSet(propertyKey: FrameAnimationPropertyKey.width,
+                                   current: from,
+                                   to: to) { applyWidth(.percent($0), to: layout) }
+            default:
+                node.cancelAnimation(for: FrameAnimationPropertyKey.width)
+                applyWidth(targetWidth, to: layout)
+            }
         }
-
-        switch (currentHeight, targetHeight) {
-        case (.points(let from), .points(let to)):
-            node.animatableSet(propertyKey: FrameAnimationPropertyKey.height,
-                               current: from,
-                               to: to) { applyHeight(.points($0), to: layout) }
-        case (.percent(let from), .percent(let to)):
-            node.animatableSet(propertyKey: FrameAnimationPropertyKey.height,
-                               current: from,
-                               to: to) { applyHeight(.percent($0), to: layout) }
-        default:
-            node.cancelAnimation(for: FrameAnimationPropertyKey.height)
-            applyHeight(targetHeight, to: layout)
+        if let height {
+            let targetHeight = spec(height)
+            switch (currentHeight, targetHeight) {
+            case (.points(let from), .points(let to)):
+                node.animatableSet(propertyKey: FrameAnimationPropertyKey.height,
+                                   current: from,
+                                   to: to) { applyHeight(.points($0), to: layout) }
+            case (.percent(let from), .percent(let to)):
+                node.animatableSet(propertyKey: FrameAnimationPropertyKey.height,
+                                   current: from,
+                                   to: to) { applyHeight(.percent($0), to: layout) }
+            default:
+                node.cancelAnimation(for: FrameAnimationPropertyKey.height)
+                applyHeight(targetHeight, to: layout)
+            }
         }
-
-        node.animatableSet(propertyKey: FrameAnimationPropertyKey.minWidth,
-                           current: layout.minWidth,
-                           to: minWidth) { layout.minWidth = $0 }
-        node.animatableSet(propertyKey: FrameAnimationPropertyKey.minHeight,
-                           current: layout.minHeight,
-                           to: minHeight) { layout.minHeight = $0 }
-        node.animatableSet(propertyKey: FrameAnimationPropertyKey.maxWidth,
-                   current: layout.maxWidth,
-                   to: maxWidth) { layout.maxWidth = $0 }
-        node.animatableSet(propertyKey: FrameAnimationPropertyKey.maxHeight,
-                   current: layout.maxHeight,
-                   to: maxHeight) { layout.maxHeight = $0 }
+        if let minWidth {
+            node.animatableSet(propertyKey: FrameAnimationPropertyKey.minWidth,
+                               current: layout.minWidth, to: minWidth) { layout.minWidth = $0 }
+        }
+        if let minHeight {
+            node.animatableSet(propertyKey: FrameAnimationPropertyKey.minHeight,
+                               current: layout.minHeight, to: minHeight) { layout.minHeight = $0 }
+        }
+        if let maxWidth {
+            node.animatableSet(propertyKey: FrameAnimationPropertyKey.maxWidth,
+                               current: layout.maxWidth, to: maxWidth) { layout.maxWidth = $0 }
+        }
+        if let maxHeight {
+            node.animatableSet(propertyKey: FrameAnimationPropertyKey.maxHeight,
+                               current: layout.maxHeight, to: maxHeight) { layout.maxHeight = $0 }
+        }
     }
 
     public func apply(layout: LayoutNode) {
@@ -160,42 +148,9 @@ public extension View {
                minHeight: Float? = nil,
                maxWidth: Float? = nil,
                maxHeight: Float? = nil) -> some View {
-        let resolvedWidth: Float?
-        let resolvedWidthPercent: Float?
-        switch width {
-        case .points(let value):
-            resolvedWidth = value
-            resolvedWidthPercent = nil
-        case .percent(let value):
-            resolvedWidth = nil
-            resolvedWidthPercent = value
-        case .auto, .none:
-            resolvedWidth = nil
-            resolvedWidthPercent = nil
-        }
-
-        let resolvedHeight: Float?
-        let resolvedHeightPercent: Float?
-        switch height {
-        case .points(let value):
-            resolvedHeight = value
-            resolvedHeightPercent = nil
-        case .percent(let value):
-            resolvedHeight = nil
-            resolvedHeightPercent = value
-        case .auto, .none:
-            resolvedHeight = nil
-            resolvedHeightPercent = nil
-        }
-
-        return modifier(FrameModifier(width: resolvedWidth,
-                          height: resolvedHeight,
-                          widthPercent: resolvedWidthPercent,
-                          heightPercent: resolvedHeightPercent,
-                          minWidth: minWidth,
-                          minHeight: minHeight,
-                          maxWidth: maxWidth,
-                          maxHeight: maxHeight))
+        modifier(FrameModifier(width: width, height: height,
+                               minWidth: minWidth, minHeight: minHeight,
+                               maxWidth: maxWidth, maxHeight: maxHeight))
     }
 
     func framePercent(width: Float? = nil,
@@ -218,50 +173,8 @@ public extension View {
                minHeight: Float? = nil,
                maxWidth: Float? = nil,
                maxHeight: Float? = nil) -> some View {
-        modifier(FrameModifier(width: width,
-                               height: height,
-                       minWidth: minWidth,
-                       minHeight: minHeight,
-                       maxWidth: maxWidth,
-                       maxHeight: maxHeight))
-        }
-
-            @available(*, deprecated, message: "Use frame(width: FrameDimension?, height: FrameDimension?, ...) or framePercent(width:height:...).")
-            func frame(width: Float? = nil,
-                 height: Float? = nil,
-                 widthPercent: Float,
-                 heightPercent: Float? = nil,
-                 minWidth: Float? = nil,
-                 minHeight: Float? = nil,
-                 maxWidth: Float? = nil,
-                 maxHeight: Float? = nil) -> some View {
-             modifier(FrameModifier(width: width,
-                           height: height,
-                           widthPercent: widthPercent,
-                           heightPercent: heightPercent,
-                           minWidth: minWidth,
-                           minHeight: minHeight,
-                           maxWidth: maxWidth,
-                           maxHeight: maxHeight))
-            }
-
-            @available(*, deprecated, message: "Use frame(width: FrameDimension?, height: FrameDimension?, ...) or framePercent(width:height:...).")
-            func frame(width: Float? = nil,
-                 height: Float? = nil,
-                 widthPercent: Float? = nil,
-                 heightPercent: Float,
-                 minWidth: Float? = nil,
-                 minHeight: Float? = nil,
-                 maxWidth: Float? = nil,
-                 maxHeight: Float? = nil) -> some View {
-             modifier(FrameModifier(width: width,
-                           height: height,
-                           widthPercent: widthPercent,
-                           heightPercent: heightPercent,
-                           minWidth: minWidth,
-                           minHeight: minHeight,
-                           maxWidth: maxWidth,
-                           maxHeight: maxHeight))
-            }
+        modifier(FrameModifier(width: width.map { .points($0) }, height: height.map { .points($0) },
+                               minWidth: minWidth, minHeight: minHeight,
+                               maxWidth: maxWidth, maxHeight: maxHeight))
+    }
 }
-

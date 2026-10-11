@@ -19,8 +19,7 @@ struct EditorPersistenceTests {
                      "console": WorkspacePanel(id: "console", title: "Console")],
             groups: ["a": WorkspaceTabGroup(id: "a", panels: ["developer-tools"], activePanelID: "developer-tools"),
                      "bottom": WorkspaceTabGroup(id: "bottom", panels: ["console", "profiler"], activePanelID: "profiler")],
-            slots: WorkspaceSlot.standardEditorSlots(center: .group("a"), bottom: .group("bottom")),
-            layoutTree: .group("a"))
+            slots: WorkspaceSlot.standardEditorSlots(center: .group("a"), bottom: .group("bottom")))
         let migrated = EditorRootViewFactory.reconciledWorkspaceDocument(document, registry: registry)
         #expect(migrated.group("bottom")?.activePanelID == "developer-tools")
         #expect(migrated.groups.values.flatMap(\.panels).filter { $0 == "developer-tools" }.count == 1)
@@ -126,9 +125,7 @@ struct EditorPersistenceTests {
                 "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
                 "bottom": WorkspaceTabGroup(id: "bottom", panels: ["assets", "scripts"], activePanelID: "scripts"),
             ],
-            slots: WorkspaceSlot.standardEditorSlots(center: .group("center"), bottom: .group("bottom")),
-            layoutTree: .group("center")
-        )
+            slots: WorkspaceSlot.standardEditorSlots(center: .group("center"), bottom: .group("bottom")))
 
         let reconciled = EditorRootViewFactory.reconciledWorkspaceDocument(document, registry: registry)
 

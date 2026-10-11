@@ -17,10 +17,9 @@ import Foundation
 /// re-recording. Their cached vertices are translated while being appended;
 /// this is the common path for text and controls moving during scrolling.
 ///
-/// Behavioral parity with `NodeRenderer`: the emitted vertex/index/batch
-/// stream matches `NodeRenderer.render(root:into:)` for the same Node tree,
-/// modulo batch merging at layer boundaries (cached layers append as
-/// independent batch runs rather than coalescing across the boundary).
+/// Visible geometry matches `NodeRenderer` for the same tree. Completely
+/// clipped subtrees and cached offscreen leaves can be omitted. Cached layers
+/// append as independent batch runs rather than coalescing across boundaries.
 public final class LayerAwareNodeRenderer {
 
     public init() {}
@@ -50,6 +49,11 @@ public final class LayerAwareNodeRenderer {
         let absY = parentOriginY + Float(f.origin.y)
         let origin = CGPoint(x: CGFloat(absX), y: CGFloat(absY))
 
+        if node.clipsToBounds, f.width > 0, f.height > 0,
+           RenderCulling.isOutside(UIRect(x: absX, y: absY, width: Float(f.width), height: Float(f.height)), list: frame) {
+            return
+        }
+
         if obj.isLayerRoot {
             // Try to reuse a cached layer DrawList.
             let originUnchanged = obj.lastAbsoluteOrigin.map {
@@ -58,7 +62,14 @@ public final class LayerAwareNodeRenderer {
             let clipUnchanged = obj.lastClipStack == parentClipStack
             if !obj.cacheInvalid,
                clipUnchanged,
-               let cached = obj.cachedLayerList {
+               let cached = obj.cachedLayerList,
+               cached.pixelScale == frame.pixelScale {
+                if obj.children.isEmpty, let bounds = obj.cachedPaintBounds {
+                    let translated = UIRect(x: bounds.x + Float(origin.x - (obj.lastAbsoluteOrigin?.x ?? origin.x)),
+                                            y: bounds.y + Float(origin.y - (obj.lastAbsoluteOrigin?.y ?? origin.y)),
+                                            width: bounds.width, height: bounds.height)
+                    if RenderCulling.isOutside(translated, list: frame) { return }
+                }
                 if originUnchanged {
                     frame.append(cached)
                     return
@@ -101,6 +112,7 @@ public final class LayerAwareNodeRenderer {
             // Re-record. Use a fresh per-layer DrawList so the cache is
             // independent of the frame DrawList and reusable next time.
             let layerList = DrawList()
+            layerList.pixelScale = frame.pixelScale
             layerList.setViewportBounds(frame.viewportBounds)
             // Push the parent clip stack so nested clips intersect properly.
             for rect in parentClipStack { layerList.pushClip(rect) }
@@ -114,9 +126,14 @@ public final class LayerAwareNodeRenderer {
             )
             for _ in parentClipStack { layerList.popClip() }
             obj.cachedLayerList = layerList
+            obj.cachedPaintBounds = obj.children.isEmpty ? RenderCulling.bounds(of: layerList) : nil
             obj.lastAbsoluteOrigin = origin
             obj.lastClipStack = parentClipStack
             obj.cacheInvalid = false
+            // Do not bake an offscreen leaf into its ancestor's first cache.
+            // Its painter runs once to establish actual bounds, then the
+            // cached geometry remains available when it enters the viewport.
+            if let bounds = obj.cachedPaintBounds, RenderCulling.isOutside(bounds, list: frame) { return }
             frame.append(layerList)
             return
         }
@@ -165,8 +182,7 @@ public final class LayerAwareNodeRenderer {
         }
 
         // Children. Translate by -contentOffset for scrollable containers. The
-        // offset stays fractional while content moves — see
-        // `ScrollAnimator.restOnWholePoints`, which aligns it once at rest.
+        // offset stays fractional throughout motion and at rest.
         let childX = originX - Float(node.contentOffset.x)
         let childY = originY - Float(node.contentOffset.y)
         let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack

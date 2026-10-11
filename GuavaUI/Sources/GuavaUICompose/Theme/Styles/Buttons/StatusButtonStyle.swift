@@ -15,7 +15,7 @@ public struct StatusButtonStyle: ButtonStyle, Hashable {
             .font(.label).foregroundColor(c.isEnabled ? tone.color : .onSurfaceDisabled)
             .padding(horizontal: c.isIconOnly ? verticalPadding : c.controlSize.horizontalPadding,
                      vertical: verticalPadding)
-            .frame(minWidth: c.isIconOnly ? c.controlSize.buttonHeight : nil, minHeight: c.controlSize.buttonHeight)
+            .frame(minWidth: c.isIconOnly ? c.controlSize.buttonHeight : 0, minHeight: c.controlSize.buttonHeight)
             .background(background).cornerRadius(c.theme.radius.md)
             .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
     }

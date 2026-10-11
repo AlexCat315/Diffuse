@@ -10,6 +10,42 @@ import GuavaUIRuntime
 import GuavaUIWorkspace
 
 final class WorkspaceViewTests: XCTestCase {
+    func testInternalDockSplitResizesWithPointerAndKeyboardAndRestores() throws {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+        _ = rig.controller.dispatch(.movePanel("hierarchy", to: .split(slot: .center, anchorGroupID: "center", edge: .trailing)))
+        for _ in 0..<4 { rig.pump() }
+        let saved = try JSONEncoder().encode(rig.controller.document)
+        guard case let .split(_, original, first, second) = rig.controller.document.slot(.center).layout,
+              let firstID = first.leafGroupIDs.first, let secondID = second.leafGroupIDs.first else {
+            return XCTFail("Move must create a dock split")
+        }
+        let split = rig.node(named: "workspace-layout-split-center-\(firstID.rawValue)-\(secondID.rawValue)")
+        func handle(in node: Node) -> Node? {
+            if node.isFocusable, node.cursor == .resizeHorizontal { return node }
+            return node.children.lazy.compactMap { handle(in: $0) }.first
+        }
+        let divider = try XCTUnwrap(handle(in: split))
+        let point = divider.absoluteFrame.center
+        rig.drag(from: point, to: CGPoint(x: point.x + 40, y: point.y))
+        guard case let .split(_, dragged, _, _) = rig.controller.document.slot(.center).layout else {
+            return XCTFail("Drag must preserve split")
+        }
+        XCTAssertGreaterThan(dragged, original)
+        rig.focus.focus(divider)
+        rig.dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.arrowLeft, keycode: 0, modifiers: [], isRepeat: false)))
+        for _ in 0..<4 { rig.pump() }
+        guard case let .split(_, keyed, _, _) = rig.controller.document.slot(.center).layout else {
+            return XCTFail("Keyboard must preserve split")
+        }
+        XCTAssertLessThan(keyed, dragged)
+        rig.controller.replace(try JSONDecoder().decode(WorkspaceDocument.self, from: saved))
+        for _ in 0..<4 { rig.pump() }
+        guard case let .split(_, restored, _, _) = rig.controller.document.slot(.center).layout else {
+            return XCTFail("Restore must preserve split")
+        }
+        XCTAssertEqual(restored, original)
+    }
+
     func testClosingLastPanelAnimatesTheVacatedRegionAndKeepsTheDocumentClosed() {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
@@ -725,7 +761,6 @@ final class WorkspaceViewTests: XCTestCase {
                                                      center: .group("center"),
                                                      trailing: .group("trailing"),
                                                      bottom: .group("bottom")),
-            layoutTree: .group("center"),
             splitFractions: WorkspaceSplitFractions(leading: 0.22,
                                                     centerTrailing: 0.78,
                                                     topBottom: 0.74)

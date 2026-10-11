@@ -417,7 +417,6 @@ enum EditorRootViewFactory {
         return WorkspaceDocument(panels: next.panels,
                                  groups: next.groups,
                                  slots: next.slots,
-                                 layoutTree: next.layoutTree,
                                  collapsed: next.collapsed,
                                  floatingWindows: next.floatingWindows,
                                  splitFractions: next.splitFractions,

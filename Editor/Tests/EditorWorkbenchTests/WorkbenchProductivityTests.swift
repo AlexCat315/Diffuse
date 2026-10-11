@@ -90,7 +90,7 @@ struct WorkbenchProductivityTests {
                      "scripts": WorkspacePanel(id: "scripts", title: "Scripts")],
             groups: ["center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
                      "bottom": WorkspaceTabGroup(id: "bottom", panels: ["scripts"], activePanelID: "scripts")],
-            slots: WorkspaceSlot.standardEditorSlots(center: .group("center"), bottom: .group("bottom")), layoutTree: .group("center"))
+            slots: WorkspaceSlot.standardEditorSlots(center: .group("center"), bottom: .group("bottom")))
         let controller = WorkspaceController(document: document)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: WorkspaceView(controller: controller, compact: true) { id in

@@ -40,7 +40,8 @@
 | Image / AsyncImage | 实现与验证边界 | [image.md](image.md) |
 | Tree / TreeRow | 文档已写 | [tree.md](tree.md) |
 | Panel | 文档已写 | [panel.md](panel.md) |
-| SplitView | 文档已写 | [splitview.md](splitview.md) |
+| SplitView | 比例/最小尺寸与交互 | [splitview.md](splitview.md) |
+| Workspace（Docking） | 布局模型/拖拽/内部拆分与缺口 | [workspace.md](workspace.md) |
 | ScrollView | 文档已写 | [scrollview.md](scrollview.md) |
 | Tab | 文档已写 | [tab.md](tab.md) |
 | Sidebar | 实现与验证边界 | [sidebar.md](sidebar.md) |

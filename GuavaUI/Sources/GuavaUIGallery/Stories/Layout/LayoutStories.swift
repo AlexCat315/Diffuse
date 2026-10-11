@@ -30,12 +30,12 @@ struct SplitStory: View {
                 }).frame(height: 210)
             }
             StorySection("Resizable split", "Drag the divider, or focus it and use the arrow keys. The fraction is clamped and written back through the binding, so it can be persisted.") {
-                SplitView(.horizontal, fraction: $resizable, minFraction: 0.2, maxFraction: 0.75, first: {
+                SplitView(.horizontal, fraction: $resizable, constraints: .init(fraction: 0.2...0.75, minimumFirst: 150, minimumSecond: 220), first: {
                     Text("Sidebar").padding(24).background(.surfaceVariant)
                 }, second: {
                     Text("Content").padding(24).background(.surface)
                 }).frame(height: 210)
-                Text("Fraction: \(Int(resizable * 100))% · clamped to 20–75%").font(.caption).foregroundColor(.onSurfaceMuted)
+                Text("Fraction: \(Int(resizable * 100))% · 20–75% · pane minimums 150 / 220pt").font(.caption).foregroundColor(.onSurfaceMuted)
             }
         }
     }
@@ -43,12 +43,12 @@ struct SplitStory: View {
 
 struct ScrollStory: View {
     var body: some View {
-        StorySection("Nested scroll surfaces", "The inner viewport consumes wheel input while it can move; the outer viewport receives overflow.") {
+        StorySection("Nested scroll surfaces", "Scroll or flick the list; click to stop even before momentum starts. At an edge, outward input passes to the outer viewport.") {
             ScrollView(.vertical, scrollbarGutter: .stable) {
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
                     for i in 0..<40 { AnyView(Text("Scrollable line \(i + 1)").font(.body).padding(10).background(i % 2 == 0 ? .surfaceVariant : .surface)) }
                 }.flex(0, shrink: 0)
-            }.frame(height: 280)
+            }.frame(height: 280).debugName("scroll-lab-viewport")
         }
     }
 }
@@ -99,12 +99,14 @@ struct WorkspaceStory: View {
             "preview": WorkspacePanel(id: "preview", title: "Preview")
         ], groups: [
             "left": WorkspaceTabGroup(id: "left", panels: ["files"], activePanelID: "files"),
-            "main": WorkspaceTabGroup(id: "main", panels: ["editor", "preview"], activePanelID: "editor")
-        ], slots: WorkspaceSlot.standardEditorSlots(leading: .group("left"), center: .group("main")),
-           layoutTree: .group("main"), splitFractions: WorkspaceSplitFractions(leading: 0.25))
+            "main": WorkspaceTabGroup(id: "main", panels: ["editor"], activePanelID: "editor"),
+            "preview": WorkspaceTabGroup(id: "preview", panels: ["preview"], activePanelID: "preview")
+        ], slots: WorkspaceSlot.standardEditorSlots(leading: .group("left"), center:
+            .split(axis: .vertical, fraction: 0.58, first: .group("main"), second: .group("preview"))),
+           splitFractions: WorkspaceSplitFractions(leading: 0.25))
     }
     var body: some View {
-        StorySection("Dock workspace", "Save a serialized document, rearrange panels, then restore it. Reset restores the authored layout.") {
+        StorySection("Dock workspace", "Drag tabs to an edge to create a split. Drag or focus the inner divider and use arrow keys. Save and restore persists the complete layout.") {
             Row(alignment: .center, spacing: 10) {
                 Button("Save layout") {
                     do { saved = try JSONEncoder().encode(controller.document); status = "Layout saved" }

@@ -51,21 +51,14 @@ public struct ScrollSettleSettings: Sendable, Equatable {
     /// Velocity (points per second) below which the spring stops.
     public var velocityTolerance: Float = 1
 
-    /// Largest frame delta handed to the integrator in one step. Large deltas
-    /// are split into several steps so a stalled frame cannot destabilise the
-    /// solution.
-    public var maximumTimeStep: Float = 1.0 / 120.0
-
     public init(response: Float = 0.34,
                 dampingFraction: Float = 1,
                 positionTolerance: Float = 0.05,
-                velocityTolerance: Float = 1,
-                maximumTimeStep: Float = 1.0 / 120.0) {
+                velocityTolerance: Float = 1) {
         self.response = response
         self.dampingFraction = dampingFraction
         self.positionTolerance = positionTolerance
         self.velocityTolerance = velocityTolerance
-        self.maximumTimeStep = maximumTimeStep
     }
 }
 
@@ -83,9 +76,9 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
 
     /// Decay rate in nepers per second: velocity is multiplied by `e^-rate`
     /// each second. Together with `maximumVelocity` this decides how far the
-    /// hardest possible throw travels — `(v₀ - minimumVelocity) / rate`, so
-    /// `4.2` and `1100` take a full-strength flick about 250pt further (roughly
-    /// a quarter of a typical viewport) over three quarters of a second. iOS'
+    /// hardest possible throw travels — `(v₀ - restVelocity) / rate`, so
+    /// `4.2` and `1100` take a full-strength flick about 261pt further, with
+    /// a gradual tail reaching 2pt/s after about 1.5 seconds. iOS'
     /// `DecelerationRate.normal` (≈ e^-2.0 per second) is tuned for a finger on
     /// glass and reads as "launched" with a mouse: several viewports of travel
     /// and a tail that drifts for two seconds. Higher stops sooner.
@@ -96,6 +89,10 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
     /// content into place — the thing you do once it is nearly right — never
     /// sets it moving again.
     public var minimumVelocity: Float = 50
+
+    /// Speed at which an existing glide comes to rest. Kept separate from the
+    /// launch threshold: stopping at 50pt/s visibly cuts off the slow tail.
+    public var restVelocity: Float = 2
 
     /// Ceiling on the launch speed. Wheel notches arrive milliseconds apart, so
     /// the measured slope of even a modest burst is enormous; without a ceiling
@@ -132,6 +129,7 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
     public init(isEnabled: Bool = true,
                 deceleration: Float = 4.2,
                 minimumVelocity: Float = 50,
+                restVelocity: Float = 2,
                 maximumVelocity: Float = 1_100,
                 minimumSampleCount: Int = 3,
                 idleWindow: TimeInterval = 0.09,
@@ -140,6 +138,7 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
         self.isEnabled = isEnabled
         self.deceleration = deceleration
         self.minimumVelocity = minimumVelocity
+        self.restVelocity = restVelocity
         self.maximumVelocity = maximumVelocity
         self.minimumSampleCount = minimumSampleCount
         self.idleWindow = idleWindow
