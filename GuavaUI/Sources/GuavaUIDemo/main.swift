@@ -487,6 +487,7 @@ host.onFrame = { native in
     let devToolsDrawEnd = TimingTrace.now()
     timing.mark("sceneRender")
 
+
     var didAtlasUpload = false
     do {
         if atlas?.isDirty == true {
@@ -610,8 +611,11 @@ func submitDemoFrame() throws -> Bool {
         }
         // With frost the frame goes into an owned texture instead of straight
         // into the drawable: a panel samples what is already behind it, and a
-        // swapchain image is a render target that cannot be sampled.
+        // swapchain image is a render target that cannot be sampled. Only pay
+        // for that texture — and the blit that follows — on frames that really
+        // have a panel doing the sampling; the rest go straight to the drawable.
         let frosted = renderer.supportsBackdrop
+            && drawList.batches.contains(where: { $0.backdrop != nil })
         if !frosted {
             framebuffer = nil
         } else if framebuffer?.descriptor.width != pixels.x || framebuffer?.descriptor.height != pixels.y {

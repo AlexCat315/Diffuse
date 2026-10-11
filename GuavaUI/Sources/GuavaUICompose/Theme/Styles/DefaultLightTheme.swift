@@ -46,7 +46,23 @@ public enum DefaultLightTheme {
         typography: DefaultDarkTheme.value.typography,
         spacing:    DefaultDarkTheme.value.spacing,
         radius:     DefaultDarkTheme.value.radius,
-        elevation:  DefaultDarkTheme.value.elevation,
+        // Not the dark theme's elevation. A black shadow over a near-white
+        // canvas has far more contrast to work with than over the dark one, so
+        // the same numbers that read as lift there read as dirt here: every
+        // component sat in a 24pt halo of ~15% black. Light gets roughly half
+        // the alpha at roughly half the spread — enough to lift, not to smudge.
+        elevation: ElevationScale(
+            none:   .none,
+            low:    SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x2E), offsetX: 0, offsetY: 1, blur: 2),
+            medium: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x40), offsetX: 0, offsetY: 3, blur: 8),
+            high:   SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x54), offsetX: 0, offsetY: 8, blur: 18),
+            floating: LayeredShadow(
+                ambient: SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x26),
+                                       offsetX: 0, offsetY: 2, blur: 12),
+                key:     SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x59),
+                                       offsetX: 0, offsetY: 4, blur: 5)
+            )
+        ),
         motion:     DefaultDarkTheme.value.motion
     )
 }

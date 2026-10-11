@@ -80,22 +80,32 @@ struct NativeUIBackdropTests {
     func frostShowsOverAFlatBackdrop() throws {
         let context = try NativeUIDrawTestContext()
         let material = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.76)
-        // A plain mid-grey window: nothing to blur into anything else.
-        func panelPixel(frosted: Bool) throws -> (Float, Float, Float) {
-            let list = DrawList()
-            list.addRect(UIRect(x: 0, y: 0, width: 64, height: 64), color: Color(r: 0.62, g: 0.63, b: 0.66, a: 1))
-            if frosted { list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 8)) }
-            list.addRoundedRect(panel, radius: 4, color: material)
-            let (pixels, _) = try context.nativeImage(list: list, format: NativeUITestFormat.cases[0],
-                                                      samples: 1, viewport: viewport, backdropSource: true)
-            let offset = (32 * 64 + 32) * 4
-            return (Float(pixels[offset]) / 255, Float(pixels[offset + 1]) / 255, Float(pixels[offset + 2]) / 255)
+        /// A plain window at `level`: nothing to blur into anything else.
+        func delta(over level: Float) throws -> Float {
+            func centre(frosted: Bool) throws -> (Float, Float, Float) {
+                let list = DrawList()
+                list.addRect(UIRect(x: 0, y: 0, width: 64, height: 64),
+                             color: Color(r: level, g: level, b: level, a: 1))
+                if frosted { list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 8)) }
+                list.addRoundedRect(panel, radius: 4, color: material)
+                let (pixels, _) = try context.nativeImage(list: list, format: NativeUITestFormat.cases[0],
+                                                          samples: 1, viewport: viewport, backdropSource: true)
+                let offset = (32 * 64 + 32) * 4
+                return (Float(pixels[offset]) / 255, Float(pixels[offset + 1]) / 255,
+                        Float(pixels[offset + 2]) / 255)
+            }
+            let frosted = try centre(frosted: true)
+            let plain = try centre(frosted: false)
+            return abs(frosted.0 - plain.0) + abs(frosted.1 - plain.1) + abs(frosted.2 - plain.2)
         }
-        let frosted = try panelPixel(frosted: true)
-        let plain = try panelPixel(frosted: false)
-        let delta = abs(frosted.0 - plain.0) + abs(frosted.1 - plain.1) + abs(frosted.2 - plain.2)
-        print("frost-flat frosted=\(frosted) plain=\(plain) delta=\(delta)")
-        #expect(delta > 0.02)
+        // Light and dark are the two a demo actually shows, and they are the
+        // two a one-way lift can only ever get right on one of. Mid-grey is
+        // where a directional push is weakest, so it is not the bar here.
+        let onLight = try delta(over: 0.94)
+        let onDark = try delta(over: 0.12)
+        print("frost-flat onLight=\(onLight) onDark=\(onDark)")
+        #expect(onLight > 0.02)
+        #expect(onDark > 0.02)
     }
 
     @Test("the same panel stays sharp when there is nothing to sample")
