@@ -63,6 +63,16 @@ public final class DrawList {
     public private(set) var batches: [DrawBatch] = []
     public private(set) var resources = DrawListResources()
 
+    /// Physical pixels per logical point, set by the renderer from the viewport
+    /// before anything is drawn.
+    ///
+    /// Edges are rounded to this grid. An edge landing *between* two pixels is
+    /// rasterised as two half-covered pixels, and that is what makes a 1pt
+    /// border read as a smudge instead of a line — worse on a 2x display, where
+    /// a centred layout puts nearly every edge on a half pixel. Zero (the
+    /// default, and what an offscreen test sees) leaves coordinates alone.
+    public var pixelScale: Float = 0
+
     /// Stack of clip rectangles applied via `pushClip` / `popClip`.
     private var clipStack: [UIRect] = []
     public private(set) var viewportBounds: UIRect?
@@ -252,6 +262,7 @@ public final class DrawList {
 
     /// Append a solid-color rectangle.
     public func addRect(_ rect: UIRect, color: Color) {
+        let rect = snapped(rect)
         let packed = color.rgba8
         // Sentinel uv (-1, 0) → solid color path in the shader.
         let v0 = UIVertex(posX: rect.minX, posY: rect.minY, u: -1, v: 0, color: packed)
@@ -264,6 +275,7 @@ public final class DrawList {
     /// Append a rounded rectangle, decomposed into a centre quad, two edge quads
     /// and four corner triangle fans. Avoids any SDF work in the shader.
     public func addRoundedRect(_ rect: UIRect, radius: Float, color: Color) {
+        let rect = snapped(rect)
         let r = max(0, min(radius, min(rect.width, rect.height) * 0.5))
         guard r > 0 else {
             addRect(rect, color: color)
@@ -276,6 +288,7 @@ public final class DrawList {
     /// underneath the background is incorrect for translucent/clear controls.
     public func addRoundedRectStroke(_ rect: UIRect, radius: Float, width: Float, color: Color) {
         guard rect.width > 0, rect.height > 0, width > 0, color.a > 0 else { return }
+        let rect = snapped(rect)
         let stroke = min(width, min(rect.width, rect.height) * 0.5)
         let outerRadius = max(0, min(radius, min(rect.width, rect.height) * 0.5))
         let inner = UIRect(x: rect.minX + stroke, y: rect.minY + stroke,
@@ -760,13 +773,34 @@ public final class DrawList {
     }
 
     private func cornerSegmentCount(for radius: Float) -> Int {
-        // Keep arc chord length around ~0.8 px to avoid visible faceting
-        // while capping vertex growth for large radii.
+        // The chord is measured in *physical* pixels. A fixed 0.8 *logical*
+        // points is 1.6 physical pixels on a 2x display, and a corner whose
+        // facets are wider than a pixel reads as a polygon rather than an arc —
+        // which is most of why small radii (a 4pt checkbox corner) look soft.
+        let chord = 0.8 / max(1, pixelScale)
         let clampedRadius = max(0, radius)
         guard clampedRadius > 0 else { return 10 }
         let quarterArc = (.pi / 2) * clampedRadius
-        let estimated = Int(ceil(quarterArc / 0.8))
-        return max(10, min(48, estimated))
+        let estimated = Int(ceil(quarterArc / chord))
+        return max(10, min(96, estimated))
+    }
+
+    /// Round a logical coordinate onto the physical pixel grid.
+    private func snapped(_ value: Float) -> Float {
+        guard pixelScale > 0 else { return value }
+        return (value * pixelScale).rounded() / pixelScale
+    }
+
+    /// Snap a rectangle by rounding both of its edges rather than its origin and
+    /// size: rounding the size is what would round a hairline's width away.
+    private func snapped(_ rect: UIRect) -> UIRect {
+        guard pixelScale > 0 else { return rect }
+        let minX = snapped(rect.minX)
+        let minY = snapped(rect.minY)
+        let maxX = snapped(rect.maxX)
+        let maxY = snapped(rect.maxY)
+        return UIRect(x: minX, y: minY,
+                      width: max(0, maxX - minX), height: max(0, maxY - minY))
     }
 
     private func alphaByte(_ packed: UInt32) -> UInt32 {
