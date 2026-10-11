@@ -35,12 +35,9 @@ public struct ViewportSurfaceState: Sendable, Equatable {
     }
     public var isValid: Bool {
         guard surfaceID != 0, let image, region.isValid else { return false }
-        if case .native(let resource) = image.storage {
-            let descriptor = resource.descriptor
-            return descriptor.dimension == .texture2D && descriptor.sampleCount == 1 && descriptor.usage.contains(.sampled)
-                && descriptor.width == Int(region.capacity.width) && descriptor.height == Int(region.capacity.height)
-        }
-        return true
+        let descriptor = image.resource.descriptor
+        return descriptor.dimension == .texture2D && descriptor.sampleCount == 1 && descriptor.usage.contains(.sampled)
+            && descriptor.width == Int(region.capacity.width) && descriptor.height == Int(region.capacity.height)
     }
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.surfaceID == rhs.surfaceID && lhs.image === rhs.image && lhs.region == rhs.region

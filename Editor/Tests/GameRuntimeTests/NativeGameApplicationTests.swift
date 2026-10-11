@@ -13,21 +13,20 @@ struct NativeGameApplicationTests {
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal],
                                                    enableValidation: true,
                                                    framesInFlight: 2))
-        let app = try GameApplication(renderDevice: .native(device))
+        let app = try GameApplication(renderDevice: device)
+        let completed = DispatchSemaphore(value: 0)
+        app.setViewportDrawableSize(.init(width: 128, height: 96))
         app.bootstrap()
+        app.engine.setRenderCompletionHandler { _ in completed.signal() }
         defer { app.shutdown() }
 
-        for _ in 0..<4 { app.tick(deltaTime: 1.0 / 60.0) }
-        for _ in 0..<40 where !app.currentViewportSurfaceState().isValid {
-            Thread.sleep(forTimeInterval: 0.25)
-        }
+        app.tick(deltaTime: 1.0 / 60.0)
+        try #require(completed.wait(timeout: .now() + 45) == .success)
         let surface = app.currentViewportSurfaceState()
         #expect(surface.isValid)
-        if case .native = surface.image?.storage {
-            // The scene worker and the UI compositor can now share this Device.
-        } else {
-            Issue.record("NativeRenderer did not publish a native viewport image")
-        }
+        #expect(surface.region.size == app.viewportDrawableSize)
+        let resource = try #require(surface.image?.resource)
+        #expect(resource.device === device)
     }
     #endif
 }

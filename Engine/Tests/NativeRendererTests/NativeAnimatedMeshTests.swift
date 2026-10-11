@@ -30,7 +30,7 @@ final class NativeAnimatedMeshTests: XCTestCase {
         AssetRegistry.shared.registerForTesting(Self.quad(), at: 2)
         defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
         let device = try Self.device(api), renderer = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let reference = try SceneCapture(validation: true, api: api)
         var packet = Self.packet()
         // The near pane is laterally offset: Euclidean-distance sorting would
         // invert these panes, while camera-axis depth keeps them correct.
@@ -69,7 +69,7 @@ final class NativeAnimatedMeshTests: XCTestCase {
         AssetRegistry.shared.registerForTesting(Self.quad(joint: 1), at: 2)
         defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
         let device = try Self.device(api), renderer = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let reference = try SceneCapture(validation: true, api: api)
         let a = EntityID(rawValue: 41), b = EntityID(rawValue: 42)
         var packet = Self.packet(); packet.renderSettings.stage = .r4LightingPBRShadow
         packet.renderSettings.debugViewMode = .shaded
@@ -126,7 +126,7 @@ final class NativeAnimatedMeshTests: XCTestCase {
         AssetRegistry.shared.registerForTesting(Self.quad(), at: 2)
         defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
         let device = try Self.device(api), renderer = try NativeRenderer(device: device)
-        let reference = try WGPUSceneReference(validation: true)
+        let reference = try SceneCapture(validation: true, api: api)
         let entity = EntityID(rawValue: 71)
         var packet = Self.packet()
         packet.scene.instances = [Self.pane(z: 0,color: SIMD4(0.7,0.6,0.2,1),entity: entity,scale: 1)]
@@ -167,7 +167,7 @@ final class NativeAnimatedMeshTests: XCTestCase {
         XCTAssertGreaterThan(try GridImage.difference(snapshots[1],snapshots[2]).pixelsOverThree,100)
     }
 
-    private func compare(_ packet: RenderPacket, renderer: NativeRenderer, reference: WGPUSceneReference, label: String) throws -> Data {
+    private func compare(_ packet: RenderPacket, renderer: NativeRenderer, reference: SceneCapture, label: String) throws -> Data {
         try renderer.renderChecked(packet: packet); _ = try reference.render(packet: packet)
         let native = try GridImage.readback(device: renderer.device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
         let expected = try reference.readback(), delta = try GridImage.difference(native,expected)
@@ -176,11 +176,11 @@ final class NativeAnimatedMeshTests: XCTestCase {
         let directory = URL(fileURLWithPath: "/tmp/guava-native-animation")
         try FileManager.default.createDirectory(at: directory,withIntermediateDirectories: true)
         try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("\(label).ppm"))
-        try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("wgpu-\(label).ppm"))
+        try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(label).ppm"))
         return native
     }
     private static func device(_ api: GraphicsAPI) throws -> Device {
-        try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
+        try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
     }
     private static func packet() -> RenderPacket {
         var packet = MeshProbeScene.packet(size: .init(width: 192,height: 192))

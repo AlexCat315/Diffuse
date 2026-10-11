@@ -92,7 +92,7 @@ export const copy = {
 export const capabilities = {
   zh: [
     ['语义世界', '场景不是静态快照，而是持续维护的语义图；属性、关系与变更都有明确含义。'],
-    ['实时 3D', 'WebGPU 渲染、Jolt 物理与 SDL 平台层组成跨平台运行时基础。'],
+    ['实时 3D', 'NativeRHI 渲染、Jolt 物理与 SDL 平台层组成跨平台运行时基础。'],
     ['GuavaUI', 'SwiftUI 风格的声明式 UI，与引擎共享设备、输入和渲染生命周期。'],
     ['AI 协作', 'Intent、Proposal 与 Edit 构成可验证、可预览、可追溯的创作变更。'],
     ['影视管线', '序列、路径追踪、EXR 与色彩模块为镜头级制作保留同一世界上下文。'],
@@ -100,7 +100,7 @@ export const capabilities = {
   ],
   en: [
     ['Semantic world', 'The scene is a continuously maintained semantic graph with explicit properties, relationships, and edits.'],
-    ['Real-time 3D', 'WebGPU rendering, Jolt physics, and an SDL platform layer form the cross-platform runtime foundation.'],
+    ['Real-time 3D', 'NativeRHI rendering, Jolt physics, and an SDL platform layer form the cross-platform runtime foundation.'],
     ['GuavaUI', 'A SwiftUI-style declarative UI sharing the engine device, input, and rendering lifecycle.'],
     ['AI collaboration', 'Intent, Proposal, and Edit create a validated, previewable, and traceable authoring loop.'],
     ['Film pipeline', 'Sequence, path tracing, EXR, and color modules preserve world context through shot production.'],

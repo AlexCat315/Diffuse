@@ -15,7 +15,7 @@ final class NativeInGameUIIntegrationTests: XCTestCase {
         let context = try NativeViewportTestContext()
         let scene = try NativeRenderer(device: context.device)
         let nativeHUD = try InGameUIHost(device: context.device)
-        let referenceHUD = InGameUIHost(backend: context.reference.backend)
+        let referenceHUD = try InGameUIHost(device: context.reference.device)
         nativeHUD.setRootView(Text("HUD 中🙂"))
         referenceHUD.setRootView(Text("HUD 中🙂"))
         let old = InGameUIRegistry.shared.provider
@@ -71,11 +71,11 @@ final class NativeInGameUIIntegrationTests: XCTestCase {
                     "mean": delta.meanAbsoluteChannelError, "maximum": delta.maximumChannelError,
                     "pixelsOverThree": delta.pixelsOverThree, "pixelCount": delta.pixelCount,
                     "nativeHUDDrawCalls": scene.lastFrameStats.passDrawCallCounts[.inGameUI] ?? 0,
-                    "wgpuHUDDrawCalls": stats.passDrawCallCounts[.inGameUI] ?? 0])
+                    "repeatHUDDrawCalls": stats.passDrawCallCounts[.inGameUI] ?? 0])
                 print("native-in-game-ui post=\(post) scale=\(scale) size=\(size) delta=\(delta)")
                 if post && index == 2 {
                     try GridImage.writePPM(native, size: size, to: URL(fileURLWithPath: "/tmp/guava-native-hud.ppm"))
-                    try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/guava-wgpu-hud.ppm"))
+                    try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/guava-repeat-hud.ppm"))
                 }
             }
         }

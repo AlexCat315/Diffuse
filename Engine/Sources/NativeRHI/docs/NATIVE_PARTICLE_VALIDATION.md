@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRenderer 粒子绘制与 GPU 压缩
 
 NativeRenderer 已接入 CPU authored / runtime 提取后的粒子绘制、GPU 稳定可见性压缩和 indirect draw。Metal 与 SPIR-V 离线着色器产物同时提供；macOS 只使用 Metal，不使用 MoltenVK。Windows/Linux Vulkan 和 Windows DX12 的原生编译及运行按用户要求暂缓。

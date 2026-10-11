@@ -53,7 +53,7 @@ struct CommandPaletteOverlay: View {
                     Button(L("Commands and Resources"), isSelected: !aiMode) { aiMode = false }.buttonStyle(.tab)
                     Button(L("AI Intent"), isSelected: aiMode) { aiMode = true }.buttonStyle(.tab)
                     Spacer(minLength: 0)
-                    Button(icon: .resource(UICommonIcons.close), size: 12, action: dismiss).buttonStyle(.ghost)
+                    Button(icon: .resource(UIIcons.Action.x), size: 12, action: dismiss).buttonStyle(.ghost)
                 }.padding(horizontal: 10, vertical: 8)
                 Divider()
                 if aiMode {

@@ -34,7 +34,7 @@ struct RuntimeDiagnosticsView: View {
                 StatGroup(title: L("Render")) {
                     StatRow(label: L("Draw Calls"), value: "\(renderStats.drawCallCount)")
                     StatRow(label: L("Passes"), value: "\(renderStats.passCount)")
-                    StatRow(label: L("Render Bundles"), value: "\(renderStats.renderBundleCount)")
+                    StatRow(label: L("Mesh Batches"), value: "\(renderStats.meshBatchCount)")
                     StatRow(label: L("CPU Encode"), value: formatNs(renderStats.cpuEncodeNS))
                 }
                 .frame(minWidth: 200, maxWidth: 280)

@@ -55,8 +55,7 @@ private struct RenderPipelineSummary: View {
             StatGroup(title: "Scene Work") {
                 StatRow(label: "Passes", value: "\(renderStats.passCount)")
                 StatRow(label: "Draw Calls", value: "\(renderStats.drawCallCount)")
-                StatRow(label: "Bundles", value: "\(renderStats.renderBundleCount)")
-                StatRow(label: "Bundle Jobs", value: "\(renderStats.renderBundleParallelJobs)")
+                StatRow(label: "Mesh Batches", value: "\(renderStats.meshBatchCount)")
                 StatRow(label: "Settings Gen", value: "\(renderStats.settingsGeneration)")
             }
             .flex(1, shrink: 1, basis: 150)

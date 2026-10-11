@@ -17,7 +17,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 | Layer | Technology |
 |-------|-----------|
 | Primary language | Swift 6.4.0 |
-| Render backend | WebGPU (wgpu-native) |
+| Render backend | NativeRHI (Metal / Vulkan / DX12) |
 | UI layout | Yoga (Meta) |
 | Text shaping / rendering | HarfBuzz + FreeType |
 | Physics | Jolt Physics |
@@ -27,7 +27,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 The repository ships three top-level SwiftPM packages plus an MCP server:
 
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
-- **`GuavaUI/`** — a declarative, SwiftUI-style UI framework with a wgpu renderer. Also the foundation of the in-game UI, injected into the engine via a protocol (no circular dependency).
+- **`GuavaUI/`** — a declarative, SwiftUI-style UI framework with a NativeRHI renderer. Also the foundation of the in-game UI, injected into the engine via a protocol (no circular dependency).
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
 - **`guava-mcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
 
@@ -39,13 +39,13 @@ The repository ships three top-level SwiftPM packages plus an MCP server:
 Editor (top-level app)
  ├─ EditorCore (state machine, panel registry, transaction host, AI UI)
  │  ├───► Engine (SceneRuntime, AssetPipeline, ObservationBus, CapabilityGraph)
- │  └───► GuavaUI (Compose API + wgpu renderer, shared WGPUDevice with Engine)
+ │  └───► GuavaUI (Compose API + NativeRHI renderer, shared NativeRHI Device with Engine)
  │
  GuavaUI (UI framework)
- └───► Engine.RHIWGPU (device & surface only; no hard dependency on 3D rendering)
+ └───► Engine.NativeRHI (device & surface only; no hard dependency on 3D rendering)
 
  Engine (core)
- ├── RHIWGPU / RenderBackend / SceneRuntime / ScriptRuntime
+ ├── NativeRHI / RenderBackend / SceneRuntime / ScriptRuntime
  ├── AIRuntime (Session, WorldView, Signal, Proposal, Edit)
  ├── ObservationBus (event bus, cross-process bridge at M11)
  └── (film) SequenceRuntime, CinematicRenderer, ColorPipeline, ImageIO, RenderFarm
@@ -64,7 +64,7 @@ Full design (in Chinese): [`docs/architecture.md`](docs/architecture.md).
 ### Roadmap
 
 - **M0 – foundation** ✅ three packages build cleanly with `swift build`.
-- **M1 – first 3D frame + UI data layer** ✅ first real wgpu scene; NodeTree + Recomposer.
+- **M1 – first 3D frame + UI data layer** ✅ first real GPU scene; NodeTree + Recomposer.
 - **M2 – visible UI frame** ✅ GuavaUI window renders real rectangles + text.
 - **M3 – editor UI takes shape** ✅ Hierarchy / Inspector / Console; theme & default styles system complete.
 - **M4 – full editing workflow** ✅ asset browser + viewport + gizmo; multi-threaded rendering.
@@ -90,10 +90,10 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
   - **macOS**: Xcode Command Line Tools
   - **Linux**: GCC or Clang
   - **Windows**: Visual Studio 2026 (C++ workload)
-- Rust 1.99.0 / Cargo
 - Python 3.14
 - Node.js 26.10.0 / npm (website)
 - Git
+- Graphics: system Metal on macOS; DX12 by default on Windows, with the Windows SDK and DXC for shader compilation; Vulkan on Linux (`libvulkan-dev`). Configure the Windows Vulkan fallback with `python scripts/bootstrap-rhi-vulkan.py` and `VULKAN_SDK`.
 
 ### First build
 
@@ -153,7 +153,6 @@ provides a WebGPU preview, node inspection and state checkpoints.
 | Imath | CMake source build | submodule under `Engine/third-party/imath` |
 | OpenEXR | CMake source build | submodule under `Engine/third-party/openexr` |
 | JoltPhysics | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/jolt` |
-| wgpu-native | Cargo source build from a pinned gfx-rs release tag | no submodule |
 | Wasmtime | pinned official C API dynamic library → `.xcframework` | Bytecode Alliance release (SHA-256 verified, macOS) |
 
 The pattern is uniform: each SPM package owns its native deps under `<package>/third-party/`, CMake builds them into `<package>/vendor/` (gitignored), and the package consumes them via `.binaryTarget(path:)`.
@@ -180,7 +179,7 @@ Guava-Engine/
 │   ├── PlatformShell/        (SDL3 + native platform abstraction, Cursor, logging)
 │   ├── RenderBackend/        (render packet, multi-threaded renderer scheduling)
 │   ├── RenderFarm/           (orchestrator, worker, job scheduler, result collector)
-│   ├── RHIWGPU/              (WebGPU RHI abstraction: BindGroup, Pipeline, Texture, etc.)
+│   ├── NativeRHI/              (native Metal / Vulkan / DX12 device, resources and command submission)
 │   ├── SceneRuntime/         (ECS, entities, components, audio, physics, prefabs, schedules)
 │   ├── SceneFromImage/       (reference image → layout inference → scene draft)
 │   ├── ScriptRuntime/        (script context, component, lifecycle, input, drawUI)
@@ -190,9 +189,9 @@ Guava-Engine/
 ├── GuavaUI/Sources/
 │   ├── Bridge/CYoga/         (C bindings for Yoga)
 │   ├── Font/                 (bundled fonts, FontAtlas, TextShaper)
-│   ├── GuavaUIApp/           (AppConfig, window host, WGPU surface assembly)
+│   ├── GuavaUIApp/           (AppConfig, window host, NativeRHI surface assembly)
 │   ├── GuavaUIDemo/          (runnable demo entry point)
-│   └── GuavaUIRuntime/       (Node, NodeTree, Layout, Color, State, Theme, DrawList wgpu renderer)
+│   └── GuavaUIRuntime/       (Node, NodeTree, Layout, Color, State, Theme, DrawList NativeRHI renderer)
 ├── Editor/Sources/
 │   ├── EditorApp/            (main.swift, MainWindow, panels)
 │   └── EditorCore/           (editor state, project manager, AI/EditLog, GizmoSystem, etc.)

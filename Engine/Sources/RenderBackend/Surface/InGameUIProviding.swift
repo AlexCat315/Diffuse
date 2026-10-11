@@ -1,6 +1,5 @@
 import Foundation
 import NativeRHI
-import RHIWGPU
 
 /// A borrowed target in the scene renderer's active NativeRHI frame. The
 /// provider records into these commands without beginning or submitting a frame.
@@ -14,22 +13,6 @@ public struct NativeInGameUITarget {
     public init(device: Device, commands: CommandBuffer, color: RenderColorTarget, format: TextureFormat) {
         self.device = device; self.commands = commands; self.color = color; self.format = format
     }
-}
-
-public struct WGPUInGameUITarget {
-    public let backend: WGPUBackend
-    public let encoder: GPUCommandEncoder
-    public let color: GPUTextureView
-    public let format: GPUTextureFormat
-
-    public init(backend: WGPUBackend, encoder: GPUCommandEncoder, color: GPUTextureView, format: GPUTextureFormat) {
-        self.backend = backend; self.encoder = encoder; self.color = color; self.format = format
-    }
-}
-
-public enum InGameUIRenderTarget {
-    case native(NativeInGameUITarget)
-    case wgpu(WGPUInGameUITarget)
 }
 
 /// Retains a recording's borrowed resources until submission. Acknowledge only
@@ -53,7 +36,7 @@ public final class InGameUIRecording {
 /// Called even when script canvas commands are empty: declarative HUDs can
 /// still have content. Recording errors abort the entire scene submission.
 public protocol InGameUIProviding: AnyObject, Sendable {
-    func recordInGameUI(packet: RenderPacket, target: InGameUIRenderTarget) throws -> InGameUIRecording?
+    func recordInGameUI(packet: RenderPacket, target: NativeInGameUITarget) throws -> InGameUIRecording?
 }
 
 public final class InGameUIRegistry: @unchecked Sendable {

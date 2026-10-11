@@ -23,7 +23,7 @@ let package = Package(
     targets: [
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。
-        // 依赖 Engine 的渲染抽象（RHIWGPU、PlatformShell、EngineKernel）。
+        // 依赖 Engine 的渲染抽象（NativeRHI、PlatformShell、EngineKernel）。
         .target(
             name: "GuavaUIRuntime",
             dependencies: [
@@ -34,7 +34,6 @@ let package = Package(
                 .product(name: "CFreeType", package: "Text"),
                 .product(name: "CHarfBuzz", package: "Text"),
                 "GuavaUIBundledFonts",
-                .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
@@ -89,9 +88,9 @@ let package = Package(
         ),
 
         // MARK: - App
-        // 高层应用宿主：把 Runtime（窗口、wgpu、文本）和 Compose 装配在一起，
+        // 高层应用宿主：把 Runtime（窗口、NativeRHI、文本）和 Compose 装配在一起，
         // 对调用方暴露 `AppRuntime.run(...)` 一行启动入口。Editor / 第三方 App
-        // 应优先依赖这一层，而不是直接拼装 SDL3PlatformHost + WGPUBackend。
+        // 应优先依赖这一层，而不是直接拼装 SDL3PlatformHost + Device。
         .target(
             name: "GuavaUIApp",
             dependencies: [
@@ -103,7 +102,6 @@ let package = Package(
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
@@ -125,7 +123,6 @@ let package = Package(
                 "GuavaUIRuntime",
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
             ]
         ),
@@ -158,7 +155,6 @@ let package = Package(
                 "GuavaUIRuntime",
                 "GuavaUIBundledFonts",
                 .product(name: "NativeRHI", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
             ]
         ),
@@ -183,7 +179,6 @@ let package = Package(
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "NativeRendererValidation", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
             ]
         ),
         .testTarget(

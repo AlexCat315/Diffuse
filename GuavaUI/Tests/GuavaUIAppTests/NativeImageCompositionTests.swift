@@ -28,7 +28,7 @@ final class NativeImageCompositionTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: path) }
         let context = try NativeViewportTestContext()
         let scene = try NativeRenderer(device: context.device)
-        let native = try InGameUIHost(device: context.device), reference = InGameUIHost(backend: context.reference.backend)
+        let native = try InGameUIHost(device: context.device), reference = try InGameUIHost(device: context.reference.device)
         let old = InGameUIRegistry.shared.provider
         defer { InGameUIRegistry.shared.provider = old }
         native.setRootView(ImageGalleryHUD(path: path.path)); reference.setRootView(ImageGalleryHUD(path: path.path))
@@ -51,7 +51,7 @@ final class NativeImageCompositionTests: XCTestCase {
                 "mean": delta.meanAbsoluteChannelError, "maximum": delta.maximumChannelError])
             if frame == 1 {
                 try GridImage.writePPM(pixels, size: size, to: URL(fileURLWithPath: "/tmp/guava-native-image-hud.ppm"))
-                try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/guava-wgpu-image-hud.ppm"))
+                try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/guava-repeat-image-hud.ppm"))
             }
         }
         try JSONSerialization.data(withJSONObject: reports, options: [.prettyPrinted, .sortedKeys])
@@ -95,7 +95,7 @@ final class NativeImageCompositionTests: XCTestCase {
         XCTAssertEqual(scene.lastFrameStats.activePasses.last, .inGameUI)
         let pixels = try GridImage.readback(device: device, texture: XCTUnwrap(scene.colorTexture), size: packet.drawableSize)
         // File pixels reach the worker recording thread without
-        // registering anything on a WGPU renderer during decode/publication.
+        // registering anything on a GPU renderer during decode/publication.
         let red = (24 * 256 + 48) * 4, green = (24 * 256 + 144) * 4
         XCTAssertGreaterThan(pixels[red + 2], 200); XCTAssertLessThan(pixels[red + 1], 30)
         XCTAssertGreaterThan(pixels[green + 1], 150); XCTAssertLessThan(pixels[green + 2], 30)

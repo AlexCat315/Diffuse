@@ -363,7 +363,7 @@ extension InspectorPanel {
                         .font(.bodyStrong)
                         .foregroundColor(.onSurface)
                     Spacer(minLength: 0)
-                    Button(icon: .resource(UICommonIcons.close),
+                    Button(icon: .resource(UIIcons.Action.x),
                            size: 10,
                            tooltip: L("Remove rule"),
                            action: removeRule)
@@ -828,7 +828,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                                 step: 0.05,
                                 showsStepper: false)
                     .frame(width: 74)
-                    Button(icon: .resource(UICommonIcons.close),
+                    Button(icon: .resource(UIIcons.Action.x),
                            size: 10,
                            isEnabled: isEnabled && keyframes.count > 2,
                            tooltip: L("Remove keyframe"),

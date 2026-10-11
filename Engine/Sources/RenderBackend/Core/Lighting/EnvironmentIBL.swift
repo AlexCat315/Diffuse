@@ -16,13 +16,18 @@ enum StudioEnvironmentIBL {
     static let maxLOD: Float = 5.0   // mipCount - 1
     static let prefilterSamples = 32
 
-    struct MipLevel {
+    struct MipLevel: Sendable {
         let width: Int
         let height: Int
         let halfRGBA: [UInt16]
     }
 
-    static func generate() -> [MipLevel] {
+    // The studio is fixed. Share immutable CPU pixels across renderer sessions;
+    // each Device still owns and uploads its own GPU texture. Swift initializes
+    // this once, including when scene workers start concurrently.
+    static let levels = generate()
+
+    private static func generate() -> [MipLevel] {
         var levels: [MipLevel] = []
         for level in 0..<mipCount {
             let w = max(1, baseWidth >> level)

@@ -36,7 +36,7 @@ final class NativeParticleTests: XCTestCase {
     func testVulkanBillboardsRibbonsBlendingDepthTexturesAndCacheParity() throws { try parity(.vulkan) }
     #endif
     private func compaction(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
         let pass = try NativeParticlePass(device: device)
         var scene = RenderScene(camera: RenderCamera(eye: SIMD3(0,0,5),target: .zero))
         let matrices = RenderCameraMatrices(projection: matrix_identity_float4x4,view: matrix_identity_float4x4,viewProjection: matrix_identity_float4x4)
@@ -69,8 +69,8 @@ final class NativeParticleTests: XCTestCase {
         return data
     }
     private func parity(_ api: GraphicsAPI) throws {
-        let device = try Device.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
-        let renderer = try NativeRenderer(device: device), reference = try WGPUSceneReference(validation: true)
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
+        let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         let textureURL = URL(fileURLWithPath: "/tmp/guava-native-particle-texture.bmp")
         let retryURL = URL(fileURLWithPath: "/tmp/guava-no-particle-texture")
         try? FileManager.default.removeItem(at: retryURL)
@@ -138,7 +138,7 @@ final class NativeParticleTests: XCTestCase {
             let directory = URL(fileURLWithPath: "/tmp/guava-native-particles")
             try FileManager.default.createDirectory(at: directory,withIntermediateDirectories: true)
             try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("frame-\(frame).ppm"))
-            try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("wgpu-\(frame).ppm"))
+            try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(frame).ppm"))
             snapshots.append(native)
         }
         for (a,b) in [(0,1),(1,2),(2,3),(3,4),(4,5),(20,21),(21,22),(22,23),(23,24)] {

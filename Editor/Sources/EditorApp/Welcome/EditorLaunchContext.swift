@@ -7,7 +7,7 @@ import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
 import PlatformShell
-import RHIWGPU
+import NativeRHI
 
 final class EditorLaunchContext: @unchecked Sendable {
     private(set) var bundle: EditorLaunchBundle?
@@ -20,32 +20,20 @@ final class EditorLaunchContext: @unchecked Sendable {
     private var settingsWindowID: WindowID?
     private var nativeMenuState: NativeMenuState?
 
-    let backendConfig: WGPUDeviceConfig
-    let renderDevice: EngineRenderDevice
-    var backend: WGPUBackend? { renderDevice.wgpuBackend }
+    let renderDevice: Device
     let events: PlatformEventBridge
     private(set) var shellState: EditorRootViewFactory.EditorShellState?
 
     var isProjectLoaded: Bool { bundle != nil }
     private let publisher = _ObservablePublisher<EditorLaunchContext>()
 
-    init(backendConfig: WGPUDeviceConfig,
-         renderDevice: EngineRenderDevice,
+    init(renderDevice: Device,
          events: PlatformEventBridge,
          shellState: EditorRootViewFactory.EditorShellState?) {
-        self.backendConfig = backendConfig
         self.renderDevice = renderDevice
         self.events = events
         self.shellState = shellState
         EditorLocalizationPreferences.language = shellState?.language ?? .system
-    }
-
-    convenience init(backendConfig: WGPUDeviceConfig,
-                     backend: WGPUBackend,
-                     events: PlatformEventBridge,
-                     shellState: EditorRootViewFactory.EditorShellState?) {
-        self.init(backendConfig: backendConfig, renderDevice: .wgpu(backend),
-                  events: events, shellState: shellState)
     }
 
     @MainActor func loadProject(directory: String) throws {
@@ -56,7 +44,6 @@ final class EditorLaunchContext: @unchecked Sendable {
         let directory = location.directory.path
         let app = try EditorApplication(
             projectDirectory: directory,
-            backendConfig: backendConfig,
             renderDevice: renderDevice,
             events: events,
             initialAISettings: shellState?.aiSettings ?? .default,

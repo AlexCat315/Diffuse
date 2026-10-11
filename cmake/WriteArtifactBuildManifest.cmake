@@ -34,11 +34,8 @@ foreach(_name
     LIB_SHA256
     C_COMPILER
     CXX_COMPILER
-    RUSTC
-    CARGO
     C_FLAGS_RELEASE
     CXX_FLAGS_RELEASE
-    RUST_FLAGS
     NOTES
     BUILT_AT_UTC
 )
@@ -65,14 +62,11 @@ file(WRITE "${MANIFEST_PATH}" "{
   },
   \"toolchain\": {
     \"cCompiler\": \"${C_COMPILER_JSON}\",
-    \"cxxCompiler\": \"${CXX_COMPILER_JSON}\",
-    \"rustc\": \"${RUSTC_JSON}\",
-    \"cargo\": \"${CARGO_JSON}\"
+    \"cxxCompiler\": \"${CXX_COMPILER_JSON}\"
   },
   \"flags\": {
     \"cRelease\": \"${C_FLAGS_RELEASE_JSON}\",
-    \"cxxRelease\": \"${CXX_FLAGS_RELEASE_JSON}\",
-    \"rust\": \"${RUST_FLAGS_JSON}\"
+    \"cxxRelease\": \"${CXX_FLAGS_RELEASE_JSON}\"
   },
   \"notes\": \"${NOTES_JSON}\",
   \"builtAtUtc\": \"${BUILT_AT_UTC_JSON}\"

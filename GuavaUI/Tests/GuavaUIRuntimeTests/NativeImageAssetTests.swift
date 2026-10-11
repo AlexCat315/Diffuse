@@ -1,7 +1,7 @@
 #if os(macOS)
 import Foundation
 import NativeRHI
-import enum RHIWGPU.WGPUBackendError
+import enum NativeRHI.RHIError
 import Testing
 @testable import GuavaUIRuntime
 
@@ -69,11 +69,11 @@ struct NativeImageAssetTests {
         #expect(stable.textureUploads == 0)
         let expected = try context.referenceImage(list: list, format: format, samples: 1, viewport: viewport)
         try expectNativeUIParity(first, expected, format: format, label: "owned-image-assets")
-        let referenceSibling = try context.reference.makeSibling(format: format.reference)
+        let referenceSibling = try context.reference.makeSibling(format: format.native)
         #expect(try context.referenceImage(list: list, format: format, samples: 1, viewport: viewport,
             renderer: referenceSibling) == expected)
         let foreign = try NativeUIDrawTestContext()
-        #expect(throws: WGPUBackendError.self) { try foreign.reference.synchronizeTextures(from: context.reference) }
+        #expect(throws: RHIError.self) { try foreign.reference.synchronizeTextures(from: context.reference) }
     }
 
     private func image(_ asset: ImageAssetRegistry.Asset, x: Float) -> DrawList {

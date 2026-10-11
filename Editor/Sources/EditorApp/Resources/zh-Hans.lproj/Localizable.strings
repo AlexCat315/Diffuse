@@ -576,7 +576,7 @@
 "Pacing Gap" = "帧节奏间隙";
 "Draw Calls" = "绘制调用";
 "Passes" = "通道数";
-"Render Bundles" = "渲染批次";
+"Mesh Batches" = "网格批次";
 "CPU Encode" = "CPU 编码";
 "Render Scale" = "渲染比例";
 "Shading" = "着色模式";

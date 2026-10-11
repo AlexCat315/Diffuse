@@ -7,7 +7,10 @@ on:
     paths:
       - 'Engine/**'
       - 'Editor/**'
-      - 'scripts/test-gpu-regression.sh'
+      - 'GuavaUI/**'
+      - 'scripts/*rhi*'
+      - 'scripts/compile-native-renderer-shaders.py'
+      - 'scripts/*gpu-regression*'
       - '.github/workflows/ci-gpu.yml'
       - '.github/actions/setup-toolchains/**'
       - 'bootstrap.py'
@@ -40,7 +43,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/guava-gpu-regression"
           swift --version
           cmake --version
-          cargo --version
           system_profiler SPDisplaysDataType > "$RUNNER_TEMP/guava-gpu-regression/device.log"
           cat "$RUNNER_TEMP/guava-gpu-regression/device.log"
 
@@ -51,6 +53,15 @@ jobs:
           cmake --build Engine/build/native --parallel --config Release --target stage_sdl3
           cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
           cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
+
+      - name: Verify pinned shader toolchain and bundled artifacts
+        run: |
+          python3 scripts/bootstrap-rhi-slang.py --destination "$RUNNER_TEMP/guava-slang"
+          export SLANGC="$RUNNER_TEMP/guava-slang/bin/slangc"
+          python3 scripts/test-rhi-shader-toolchain.py
+          python3 scripts/test-gpu-regression-verifier.py
+          python3 scripts/compile-native-renderer-shaders.py --check
+          SLANGC="$SLANGC" swift test --package-path Engine --filter NativeRHITests
 
       - name: Run actual GPU regressions
         env:

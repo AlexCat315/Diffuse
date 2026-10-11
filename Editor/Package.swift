@@ -52,7 +52,7 @@ let package = Package(
     targets: [
         // MARK: - Editor Domain
         // 编辑器状态、Store、引擎宿主。UI 通过 GuavaUICompose 构建，
-        // 窗口/wgpu 装配交给 EditorApp 那一层依赖的 GuavaUIApp。
+        // 窗口/NativeRHI 装配交给 EditorApp 那一层依赖的 GuavaUIApp。
         .target(
             name: "EditorCore",
             dependencies: [
@@ -71,7 +71,7 @@ let package = Package(
                 .product(name: "PluginRuntime", package: "Engine"),
                 .product(name: "SemanticPipeline", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
@@ -97,7 +97,7 @@ let package = Package(
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "EngineKernel", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "CardBattleRuntime", package: "Engine"),
@@ -121,7 +121,7 @@ let package = Package(
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
             ]
         ),
 
@@ -135,7 +135,7 @@ let package = Package(
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "NativeRHI", package: "Engine"),
             ],
             linkerSettings: guavaScriptExportLinkerSettings
         ),

@@ -104,12 +104,10 @@ public struct RenderSettings: Sendable, Equatable {
     public var enableSSR: Bool
     public var enableTAA: Bool
     public var enableBloom: Bool
-    public var enableRenderBundles: Bool
     public var enableFrustumCulling: Bool
     public var enableMeshInstancing: Bool
     public var enableDistanceLOD: Bool
     public var enableGroupedDrawByMesh: Bool
-    public var renderBundleChunkSize: Int
     public var shadowSettings: RenderShadowSettings
     public var enableShadows: Bool {
         get { shadowSettings.enabled }
@@ -131,12 +129,10 @@ public struct RenderSettings: Sendable, Equatable {
         enableSSR: Bool = false,
         enableTAA: Bool = false,
         enableBloom: Bool = false,
-        enableRenderBundles: Bool = false,
         enableFrustumCulling: Bool = true,
         enableMeshInstancing: Bool = true,
         enableDistanceLOD: Bool = true,
         enableGroupedDrawByMesh: Bool = false,
-        renderBundleChunkSize: Int = 0,
         enableShadows: Bool = false,
         shadowSettings: RenderShadowSettings? = nil,
         enableOffscreenViewport: Bool = false,
@@ -152,12 +148,10 @@ public struct RenderSettings: Sendable, Equatable {
         self.enableSSR = enableSSR
         self.enableTAA = enableTAA
         self.enableBloom = enableBloom
-        self.enableRenderBundles = enableRenderBundles
         self.enableFrustumCulling = enableFrustumCulling
         self.enableMeshInstancing = enableMeshInstancing
         self.enableDistanceLOD = enableDistanceLOD
         self.enableGroupedDrawByMesh = enableGroupedDrawByMesh
-        self.renderBundleChunkSize = max(renderBundleChunkSize, 0)
         self.shadowSettings = shadowSettings ?? RenderShadowSettings(enabled: enableShadows)
         self.enableOffscreenViewport = enableOffscreenViewport
         self.enableEditorGrid = enableEditorGrid

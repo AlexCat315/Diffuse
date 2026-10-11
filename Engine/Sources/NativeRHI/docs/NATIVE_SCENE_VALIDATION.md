@@ -1,3 +1,5 @@
+> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+
 # NativeRenderer 场景迁移
 
 NativeRenderer 已从独立网格 consumer 发展为真实场景 consumer，支持索引绘制、静态网格、子网格材质、不透明和 alpha mask、实例化、镜像变换、相机裁剪与距离 LOD。深度预通道只写 depth32，r1/r2/r3 基础几何 pass 写 BGRA8，并可以加载几何深度叠加编辑器网格。窗口与离屏目标共享资源管理，resize 会替换并延迟销毁旧目标。

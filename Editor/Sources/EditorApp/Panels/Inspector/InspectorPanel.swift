@@ -96,7 +96,7 @@ struct InspectorPanel: View {
                         onCancel: { updateSearchText("") }
                     ) {
                         let hasExpanded = sections.contains { !collapsedIDs.contains($0.id) }
-                        EditorPanelIconButton(hasExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight,
+                        EditorPanelIconButton(hasExpanded ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight,
                                               tooltip: hasExpanded ? L("Collapse All") : L("Expand All"),
                                               isEnabled: trimmedSearchText.isEmpty && !sections.isEmpty) {
                             setSections(sections, collapsed: hasExpanded)
@@ -324,7 +324,7 @@ struct InspectorPanel: View {
                         .font(.caption)
                         .foregroundColor(.onSurface)
                         .flex()
-                    Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                    Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
                 }
                 .padding(horizontal: 8, vertical: 4)
                 .background(.surfaceSunken)
@@ -403,7 +403,7 @@ struct InspectorPanel: View {
                         .font(.caption)
                         .foregroundColor(.onSurface)
                         .flex()
-                    Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                    Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
                 }
                 .padding(horizontal: 8, vertical: 4)
                 .background(.surfaceSunken)
@@ -544,7 +544,7 @@ struct InspectorPanel: View {
             Popover(isPresented: $isPresented, width: 300) {
                 Row(alignment: .center, spacing: 4) {
                     Text(L("Mixed value")).font(.caption).foregroundColor(.onSurfaceVariant).flex()
-                    Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                    Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
                 }
                 .padding(horizontal: 6, vertical: 4)
                 .background(.surfaceSunken)
