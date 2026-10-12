@@ -1,68 +1,79 @@
 package com.guava.probe;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
 import android.os.Bundle;
-import android.view.MotionEvent;
-import android.view.Surface;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.os.Build;
+import android.view.WindowInsets;
 import android.widget.FrameLayout;
-import android.widget.TextView;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-/** Thin platform host; all colored geometry is drawn by Swift NativeRHI/GuavaUI. */
+/** Android owns the surface and input bridge; the demo paints all UI in Swift. */
 public final class MainActivity extends Activity {
     static { System.loadLibrary("GuavaAndroidApp"); }
-    private static native long open(Surface surface, int width, int height, String resources);
-    private static native void draw(long session, float x, float y);
-    private static native void close(long session);
-    private long session;
-    private TextView status;
+    static native long open(android.view.Surface surface, int width, int height, float scale, String resources, String checkpoint);
+    static native int frame(long session);
+    static native void pointer(long session, int kind, float x, float y);
+    static native void text(long session, String text, boolean composing);
+    static native void key(long session, int scancode);
+    static native String snapshot(long session);
+    static native void close(long session);
+    private DemoSurfaceView surface;
+    private final BroadcastReceiver commands = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) { acceptCommand(intent); }
+    };
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
-        // Debug launch argument used by the device lifecycle smoke test.
         int orientation = getIntent().getIntExtra("orientation", -1);
         if (orientation >= 0) setRequestedOrientation(orientation);
         try { copyAssets("GuavaAndroid_GuavaUIRendering.bundle", getFilesDir()); }
         catch (IOException error) { throw new IllegalStateException("Cannot unpack shader bundle", error); }
+        surface = new DemoSurfaceView(this, savedState == null ? "" : savedState.getString("checkpoint", ""));
         FrameLayout root = new FrameLayout(this);
-        SurfaceView surface = new SurfaceView(this);
         root.addView(surface);
-        status = new TextView(this);
-        status.setTextColor(0xffffffff);
-        status.setTextSize(18);
-        status.setPadding(24, 32, 24, 0);
-        status.setText("GuavaUI · Native Vulkan\nSwift 6.4 · tap to redraw");
-        root.addView(status, new FrameLayout.LayoutParams(-1, -2));
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            } else {
+                view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                                insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            }
+            return insets;
+        });
         setContentView(root);
-        surface.getHolder().addCallback(new SurfaceHolder.Callback() {
-            @Override public void surfaceCreated(SurfaceHolder holder) {}
-            @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                releaseSurface();
-                session = open(holder.getSurface(), width, height, getFilesDir().getAbsolutePath());
-                if (session == 0) status.setText("Vulkan failed — inspect GuavaAndroid logcat");
-                else draw(session, -1, -1);
-            }
-            @Override public void surfaceDestroyed(SurfaceHolder holder) { releaseSurface(); }
-        });
-        surface.setOnTouchListener((view, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN && session != 0) {
-                draw(session, event.getX(), event.getY());
-                view.performClick();
-            }
-            return true;
-        });
+        IntentFilter filter = new IntentFilter("com.guava.probe.DEMO_INPUT");
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(commands, filter, Context.RECEIVER_EXPORTED);
+        else registerReceiver(commands, filter);
     }
 
-    private void releaseSurface() {
-        if (session != 0) { close(session); session = 0; }
+    @Override protected void onResume() { super.onResume(); surface.startFrames(); }
+    @Override protected void onPause() { surface.stopFrames(); super.onPause(); }
+    @Override protected void onDestroy() { unregisterReceiver(commands); surface.releaseSurface(); super.onDestroy(); }
+    @Override protected void onSaveInstanceState(Bundle state) {
+        state.putString("checkpoint", surface.checkpoint());
+        super.onSaveInstanceState(state);
     }
-
-    @Override public void onDestroy() { releaseSurface(); super.onDestroy(); }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        acceptCommand(intent);
+    }
+    private void acceptCommand(Intent intent) {
+        if (intent.hasExtra("orientation")) {
+            int orientation = intent.getIntExtra("orientation", -1);
+            getIntent().putExtra("orientation", orientation);
+            setRequestedOrientation(orientation);
+        }
+        if ("recreate".equals(intent.getStringExtra("demoAction"))) recreate();
+        else surface.debugInput(intent);
+    }
 
     private void copyAssets(String name, File parent) throws IOException {
         String[] children = getAssets().list(name);

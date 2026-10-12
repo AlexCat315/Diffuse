@@ -25,7 +25,7 @@ def main():
         if target.exists(): shutil.rmtree(target)
         target.mkdir()
     run(['javac', '--release', '8', '-Xlint:-options', '-classpath', android_jar, '-d', classes,
-        ROOT / 'Android/App/src/com/guava/probe/MainActivity.java'])
+        *sorted((ROOT / 'Android/App/src').rglob('*.java'))])
     run([tools / 'd8', '--min-api', '28', '--output', dex, *classes.rglob('*.class')])
     base = directory / 'base.apk'
     run([tools / 'aapt2', 'link', '-I', android_jar, '--manifest', ROOT / 'Android/App/AndroidManifest.xml', '-o', base])

@@ -8,7 +8,7 @@ let package = Package(
         .executable(name: "GuavaAndroidProbe", targets: ["GuavaAndroidProbe"]),
         .library(name: "GuavaAndroidApp", type: .dynamic, targets: ["GuavaAndroidApp"]),
     ],
-    dependencies: [.package(path: "../GuavaUI/Portable")],
+    dependencies: [.package(path: "../GuavaUI/Portable"), .package(path: "../GuavaUI/Text")],
     targets: [
         .target(name: "CVulkanHeaders", publicHeadersPath: "include", linkerSettings: [.linkedLibrary("vulkan")]),
         .target(name: "CDX12Bridge", publicHeadersPath: "include", cxxSettings: [.unsafeFlags(["-fexceptions"])]),
@@ -17,7 +17,7 @@ let package = Package(
                 resources: [.copy("Shaders")]),
         .target(name: "CAndroidHost", publicHeadersPath: "include", linkerSettings: [.linkedLibrary("android"), .linkedLibrary("log")]),
         .target(name: "GuavaAndroidApp", dependencies: ["NativeRHI", "GuavaUIRendering", "CAndroidHost",
-            .product(name: "GuavaUICore", package: "Portable")]),
+            .product(name: "GuavaUISharedDemo", package: "Portable"), .product(name: "GuavaUIText", package: "Text")]),
         .executableTarget(name: "GuavaAndroidProbe", dependencies: ["NativeRHI", "GuavaUIRendering", .product(name: "GuavaUIComposeCore", package: "Portable")]),
     ]
 )
