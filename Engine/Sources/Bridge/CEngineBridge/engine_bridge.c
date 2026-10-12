@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 typedef struct engine_runtime_state_t {
     bool initialized;
@@ -15,7 +14,6 @@ typedef struct engine_runtime_state_t {
     uint64_t submitted_frame_count;
     double total_simulated_seconds;
     double last_delta_time;
-    engine_render_replacement_stage_t render_stage;
 } engine_runtime_state_t;
 
 static engine_runtime_state_t g_engine = {
@@ -26,58 +24,7 @@ static engine_runtime_state_t g_engine = {
     .submitted_frame_count = 0,
     .total_simulated_seconds = 0.0,
     .last_delta_time = 0.0,
-    .render_stage = ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE,
 };
-
-static const char *engine_render_stage_name(engine_render_replacement_stage_t stage) {
-    switch (stage) {
-        case ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE:
-            return "R0 rainbow triangle";
-        case ENGINE_RENDER_STAGE_R1_MESH_CAMERA:
-            return "R1 mesh + camera";
-        case ENGINE_RENDER_STAGE_R2_MULTI_OBJECT_DEPTH:
-            return "R2 multi-object + depth";
-        case ENGINE_RENDER_STAGE_R3_VIEWPORT_INTEROP:
-            return "R3 viewport interop";
-        case ENGINE_RENDER_STAGE_R4_LIGHTING_PBR_SHADOW:
-            return "R4 lighting + PBR + shadow";
-        case ENGINE_RENDER_STAGE_R5_POST_PROCESS:
-            return "R5 post-process chain";
-    }
-
-    return "R0 rainbow triangle";
-}
-
-static engine_render_replacement_stage_t parse_render_stage(const char *raw) {
-    if (raw == NULL || raw[0] == '\0') {
-        return ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE;
-    }
-
-    if (strcmp(raw, "0") == 0 || strcmp(raw, "R0") == 0 || strcmp(raw, "r0") == 0) {
-        return ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE;
-    }
-    if (strcmp(raw, "1") == 0 || strcmp(raw, "R1") == 0 || strcmp(raw, "r1") == 0) {
-        return ENGINE_RENDER_STAGE_R1_MESH_CAMERA;
-    }
-    if (strcmp(raw, "2") == 0 || strcmp(raw, "R2") == 0 || strcmp(raw, "r2") == 0) {
-        return ENGINE_RENDER_STAGE_R2_MULTI_OBJECT_DEPTH;
-    }
-    if (strcmp(raw, "3") == 0 || strcmp(raw, "R3") == 0 || strcmp(raw, "r3") == 0) {
-        return ENGINE_RENDER_STAGE_R3_VIEWPORT_INTEROP;
-    }
-    if (strcmp(raw, "4") == 0 || strcmp(raw, "R4") == 0 || strcmp(raw, "r4") == 0) {
-        return ENGINE_RENDER_STAGE_R4_LIGHTING_PBR_SHADOW;
-    }
-    if (strcmp(raw, "5") == 0 || strcmp(raw, "R5") == 0 || strcmp(raw, "r5") == 0) {
-        return ENGINE_RENDER_STAGE_R5_POST_PROCESS;
-    }
-
-    fprintf(
-        stderr,
-        "[CEngineBridge] unknown GUAVA_ENGINE_RENDER_STAGE=%s, fallback to R0\n",
-        raw);
-    return ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE;
-}
 
 static double sanitize_delta_time(double delta_time) {
     if (!isfinite(delta_time) || delta_time <= 0.0) {
@@ -116,80 +63,8 @@ static bool can_tick_render_submit(void) {
     return g_engine.prepared_frame_count > g_engine.submitted_frame_count;
 }
 
-static bool should_emit_stage_log(uint64_t frame_count) {
+static bool should_emit_log(uint64_t frame_count) {
     return frame_count == 0 || ((frame_count + 1) % 120u) == 0;
-}
-
-static void render_prepare_for_stage(double delta_time) {
-    (void)delta_time;
-    uint64_t frame_index = g_engine.prepared_frame_count;
-
-    if (!should_emit_stage_log(frame_index)) {
-        return;
-    }
-
-    switch (g_engine.render_stage) {
-        case ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE:
-            printf("[CEngineBridge][R0] prepare frame=%llu: static rainbow triangle resources\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R1_MESH_CAMERA:
-            printf("[CEngineBridge][R1] prepare frame=%llu: mesh upload + view/proj uniforms\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R2_MULTI_OBJECT_DEPTH:
-            printf("[CEngineBridge][R2] prepare frame=%llu: scene extraction + depth prepass inputs\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R3_VIEWPORT_INTEROP:
-            printf("[CEngineBridge][R3] prepare frame=%llu: offscreen viewport texture export\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R4_LIGHTING_PBR_SHADOW:
-            printf("[CEngineBridge][R4] prepare frame=%llu: shadow cascade + PBR base uniforms\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R5_POST_PROCESS:
-            printf("[CEngineBridge][R5] prepare frame=%llu: post-process graph config (FXAA/SSAO/Bloom)\n",
-                   (unsigned long long)frame_index);
-            return;
-    }
-}
-
-static void render_submit_for_stage(double delta_time) {
-    (void)delta_time;
-    uint64_t frame_index = g_engine.submitted_frame_count;
-
-    if (!should_emit_stage_log(frame_index)) {
-        return;
-    }
-
-    switch (g_engine.render_stage) {
-        case ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE:
-            printf("[CEngineBridge][R0] submit frame=%llu: single pass present\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R1_MESH_CAMERA:
-            printf("[CEngineBridge][R1] submit frame=%llu: one mesh draw with camera matrices\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R2_MULTI_OBJECT_DEPTH:
-            printf("[CEngineBridge][R2] submit frame=%llu: depth + base pass for multiple objects\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R3_VIEWPORT_INTEROP:
-            printf("[CEngineBridge][R3] submit frame=%llu: viewport texture ready for editor sampling\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R4_LIGHTING_PBR_SHADOW:
-            printf("[CEngineBridge][R4] submit frame=%llu: shadow pass + PBR base pass\n",
-                   (unsigned long long)frame_index);
-            return;
-        case ENGINE_RENDER_STAGE_R5_POST_PROCESS:
-            printf("[CEngineBridge][R5] submit frame=%llu: post-process chain + final compose\n",
-                   (unsigned long long)frame_index);
-            return;
-    }
 }
 
 void engine_init(void) {
@@ -199,17 +74,7 @@ void engine_init(void) {
     }
 
     g_engine.initialized = true;
-    g_engine.input_frame_count = 0;
-    g_engine.sim_frame_count = 0;
-    g_engine.prepared_frame_count = 0;
-    g_engine.submitted_frame_count = 0;
-    g_engine.total_simulated_seconds = 0.0;
-    g_engine.last_delta_time = 0.0;
-    g_engine.render_stage = parse_render_stage(getenv("GUAVA_ENGINE_RENDER_STAGE"));
-
-    printf(
-        "[CEngineBridge] init: staged runtime enabled, render stage=%s\n",
-        engine_render_stage_name(g_engine.render_stage));
+    printf("[CEngineBridge] init: runtime ready\n");
 }
 
 void engine_tick_input(double delta_time) {
@@ -258,7 +123,10 @@ void engine_tick_render_prepare(double delta_time) {
     }
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
-    render_prepare_for_stage(g_engine.last_delta_time);
+    if (should_emit_log(g_engine.prepared_frame_count)) {
+        printf("[CEngineBridge] prepare frame=%llu\n",
+               (unsigned long long)g_engine.prepared_frame_count);
+    }
     g_engine.prepared_frame_count += 1;
 }
 
@@ -275,7 +143,10 @@ void engine_tick_render_submit(double delta_time) {
     }
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
-    render_submit_for_stage(g_engine.last_delta_time);
+    if (should_emit_log(g_engine.submitted_frame_count)) {
+        printf("[CEngineBridge] submit frame=%llu\n",
+               (unsigned long long)g_engine.submitted_frame_count);
+    }
     g_engine.submitted_frame_count += 1;
 }
 
@@ -286,13 +157,12 @@ void engine_shutdown(void) {
     }
 
     printf(
-        "[CEngineBridge] shutdown: input=%llu sim=%llu prepared=%llu submitted=%llu simulated=%.3fs stage=%s\n",
+        "[CEngineBridge] shutdown: input=%llu sim=%llu prepared=%llu submitted=%llu simulated=%.3fs\n",
         (unsigned long long)g_engine.input_frame_count,
         (unsigned long long)g_engine.sim_frame_count,
         (unsigned long long)g_engine.prepared_frame_count,
         (unsigned long long)g_engine.submitted_frame_count,
-        g_engine.total_simulated_seconds,
-        engine_render_stage_name(g_engine.render_stage));
+        g_engine.total_simulated_seconds);
 
     g_engine = (engine_runtime_state_t){
         .initialized = false,
@@ -302,6 +172,5 @@ void engine_shutdown(void) {
         .submitted_frame_count = 0,
         .total_simulated_seconds = 0.0,
         .last_delta_time = 0.0,
-        .render_stage = ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE,
     };
 }

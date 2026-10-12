@@ -119,7 +119,7 @@ public final class GameApplication: @unchecked Sendable {
     public func bootstrap() {
         engine.start(renderSurface: nil, enableViewportSurface: true)
         engine.queueRenderSettings(RenderSettings(
-            stage: .r4LightingPBRShadow,
+            enableFXAA: true,
             enableShadows: true,
             enableOffscreenViewport: true
         ))

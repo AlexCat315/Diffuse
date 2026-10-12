@@ -17,7 +17,7 @@ public enum MeshProbeScene {
     /// The bundled OBJ fixture, repeated cube instances and a mirrored transform
     /// exercise production mesh residency, indexed draws and material batches.
     public static func packet(size: RenderDrawableSize, frame: Int = 0) -> RenderPacket {
-        var settings = RenderSettings(stage: .r3ViewportInterop, debugViewMode: .unlit)
+        var settings = RenderSettings(enablePBR: false, enableDepthPrepass: true, debugViewMode: .unlit)
         settings.enableEditorGrid = false; settings.enableOffscreenViewport = true
         let colors: [SIMD4<Float>] = [SIMD4(0.75,0.25,0.15,1),SIMD4(0.2,0.7,0.35,1),SIMD4(0.2,0.4,0.8,1)]
         var instances: [RenderInstance] = []

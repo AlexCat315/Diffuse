@@ -7,6 +7,9 @@ import SIMDCompat
 struct NativePreparedMeshDraw {
     let batch: NativeMeshBatch
     let bindings: BindingSet
+    /// Per-draw offsets for the layout's dynamic slots, ordered by ascending
+    /// slot (draw/instances, scene lights, shadows, style).
+    let dynamicOffsets: [UInt32]
     let basePipeline: GraphicsPipeline
     let depthPipeline: GraphicsPipeline?
     let outlinePipeline: GraphicsPipeline?
@@ -22,6 +25,22 @@ private struct NativeMeshPipelineKey: Hashable {
     let mirrored: Bool
     let doubleSided: Bool
     let blend: Bool
+}
+
+/// A ring-backed uniform block resolved to its persistent chunk buffer and the
+/// offset of this frame's data. The descriptor binds the chunk at offset 0 and
+/// the per-frame offset is supplied as a dynamic offset at bind time.
+private struct NativeRingBlock {
+    let buffer: Buffer
+    let offset: UInt32
+    let size: Int
+}
+
+private func ringBlock(_ resource: BindingResource) throws -> NativeRingBlock {
+    guard case .uniformBuffer(let buffer, let offset, let size?) = resource else {
+        throw RHIError.layoutMismatch("expected a bounded ring uniform block")
+    }
+    return NativeRingBlock(buffer: buffer, offset: UInt32(offset), size: size)
 }
 
 /// Preparation resolves visibility/materials and allocates only frame-owned
@@ -45,34 +64,42 @@ final class NativeMeshPass {
                  matrices: RenderCameraMatrices, depthPrepass: Bool, hdr: Bool, lighting: NativeLightingBindings, skin: NativeSkinBindings,
                  deformables: [EntityID: NativeMeshGeometry]) throws -> (draws: [NativePreparedMeshDraw], visibility: MeshVisibilityPlan) {
         let prepared = try NativeMeshBatchPlanner.prepare(packet: packet, store: store, viewProjection: matrices.viewProjection, deformables: deformables)
-        let style = try NativeUniformUpload.binding(StylizedCharacterUniforms(style: packet.renderSettings.stylizedCharacterStyle),device: device)
+        let style = try ringBlock(NativeUniformUpload.binding(StylizedCharacterUniforms(style: packet.renderSettings.stylizedCharacterStyle), device: device))
+        let lights = try ringBlock(lighting.lights)
+        let shadows = try ringBlock(lighting.shadows)
         var draws: [NativePreparedMeshDraw] = []
         for batch in prepared.batches {
             let mesh = batch.mesh, key = batch.key, uniforms = batch.uniforms
             let bytes = uniforms.withUnsafeBytes { Data($0) }
-            let upload = try device.uploadTransient(bytes)
+            let instance = try device.uploadTransient(bytes)
+            let instanceOffset = UInt32(instance.offset)
             let bindings = try device.makeBindingSet(layout: shaders.bindings, descriptor: BindingSetDescriptor(entries: [
-                BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: upload.buffer, offset: upload.offset, size: MemoryLayout<MeshInstanceUniforms>.stride)),
-                BindingSetEntry(slot: 1, resource: .storageBuffer(buffer: upload.buffer, offset: upload.offset)),
+                BindingSetEntry(slot: 0, resource: .uniformBuffer(buffer: instance.buffer, offset: 0, size: MemoryLayout<MeshInstanceUniforms>.stride)),
+                BindingSetEntry(slot: 1, resource: .storageBuffer(buffer: instance.buffer, offset: 0)),
                 BindingSetEntry(slot: 2, resource: .sampler(store.sampler)),
                 BindingSetEntry(slot: 3, resource: .texture(key.baseTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[0])),
-                BindingSetEntry(slot: 4, resource: lighting.lights),
+                BindingSetEntry(slot: 4, resource: .uniformBuffer(buffer: lights.buffer, offset: 0, size: lights.size)),
                 BindingSetEntry(slot: 5, resource: .texture(key.normalTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[1])),
                 BindingSetEntry(slot: 6, resource: .texture(key.mrTexture.flatMap { mesh.textures[$0] } ?? store.fallbacks[2])),
-                BindingSetEntry(slot: 7, resource: lighting.shadows),
+                BindingSetEntry(slot: 7, resource: .uniformBuffer(buffer: shadows.buffer, offset: 0, size: shadows.size)),
                 BindingSetEntry(slot: 8, resource: .sampler(lighting.sampler)),
                 BindingSetEntry(slot: 9, resource: .texture(lighting.atlas)),
                 BindingSetEntry(slot: 10, resource: .texture(lighting.environment)),
                 BindingSetEntry(slot: 11, resource: skin[batch.skinEntity].parameters),
                 BindingSetEntry(slot: 12, resource: skin[batch.skinEntity].matrices),
-                BindingSetEntry(slot: 13, resource: style)
+                BindingSetEntry(slot: 13, resource: .uniformBuffer(buffer: style.buffer, offset: 0, size: style.size))
             ]))
+            let dynamicOffsets: [UInt32] = [
+                instanceOffset, instanceOffset,
+                lights.offset, shadows.offset, style.offset
+            ]
             let stylized = packet.renderSettings.enableStylizedCharacterShading
             let base = try pipeline(key: key,kind: .color,hdr: hdr,stylized: stylized)
             let depth = depthPrepass && key.mode != .blend ? try pipeline(key: key,kind: .depth,hdr: hdr,stylized: false) : nil
             let outline = stylized && key.mode != .blend && MeshOutlinePolicy.includes(bounds: batch.mesh.geometry.bounds)
                 ? try pipeline(key: key,kind: .outline,hdr: hdr,stylized: false) : nil
-            draws.append(NativePreparedMeshDraw(batch: batch, bindings: bindings, basePipeline: base, depthPipeline: depth,outlinePipeline: outline))
+            draws.append(NativePreparedMeshDraw(batch: batch, bindings: bindings, dynamicOffsets: dynamicOffsets,
+                basePipeline: base, depthPipeline: depth, outlinePipeline: outline))
         }
         return (draws, prepared.visibility)
     }
@@ -84,7 +111,7 @@ final class NativeMeshPass {
             pass.setScissor(ScissorRect(width: Int(size.width), height: Int(size.height)))
             for draw in draws {
                 pass.setPipeline(draw.pipeline(for: kind))
-                pass.setBindingSet(draw.bindings); pass.setVertexBuffer(draw.batch.geometry.vertices)
+                pass.setBindingSet(draw.bindings, dynamicOffsets: draw.dynamicOffsets); pass.setVertexBuffer(draw.batch.geometry.vertices)
                 pass.setIndexBuffer(draw.batch.geometry.indices, type: .uint32)
                 pass.drawIndexed(DrawIndexedArguments(indexCount: draw.batch.key.indexCount, instanceCount: draw.batch.uniforms.count, firstIndex: draw.batch.key.firstIndex))
             }

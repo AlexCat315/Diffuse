@@ -9,10 +9,8 @@ enum NativePacketValidation {
               packet.drawableSize.width <= ViewportTargetAllocation.maxDimension,
               packet.drawableSize.height <= ViewportTargetAllocation.maxDimension,
               !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
-        guard [.r1MeshCamera,.r2MultiObjectDepth,.r3ViewportInterop,.r4LightingPBRShadow,.r5PostProcess].contains(packet.renderSettings.stage) else {
-            throw RHIError.unsupportedFeature("unsupported native scene stage")
-        }
         try validateSimulation(packet)
+        try validateCapabilityDependencies(packet.renderSettings)
         let settings = packet.renderSettings
         let style = settings.stylizedCharacterStyle
         if settings.enableStylizedCharacterShading {
@@ -21,9 +19,6 @@ enum NativePacketValidation {
             guard values.allSatisfy({ vector in (0..<4).allSatisfy { vector[$0].isFinite } }) else {
                 throw RHIError.invalidArgument("non-finite stylized input")
             }
-        }
-        guard settings.stage == .r5PostProcess || !(settings.enableSSAO || settings.enableSSR || settings.enableTAA || settings.enableBloom || settings.enableFXAA) else {
-            throw RHIError.unsupportedFeature("post effects require the r5 stage")
         }
         let scene = packet.scene
         guard scene.particles.count <= Int(UInt32.max), scene.particles.allSatisfy({ particle in
@@ -94,6 +89,25 @@ enum NativePacketValidation {
                 }
                 instances = total
             }
+        }
+    }
+
+    /// Express the genuine capability dependencies up front so a bad combination
+    /// fails with an actionable message instead of a cryptic resource failure
+    /// mid-frame. Screen-space and temporal effects operate in the linear HDR
+    /// colour space, which the PBR path provides.
+    private static func validateCapabilityDependencies(_ settings: RenderSettings) throws {
+        guard !settings.enablePBR else { return }
+        let hdrEffects: [(String, Bool)] = [
+            ("SSAO", settings.enableSSAO),
+            ("SSR", settings.enableSSR),
+            ("TAA", settings.enableTAA),
+            ("Bloom", settings.enableBloom)
+        ]
+        if let effect = hdrEffects.first(where: { $0.1 }) {
+            throw RHIError.unsupportedFeature(
+                "\(effect.0) requires HDR rendering; enable the PBR path (enablePBR: true). "
+                + "For antialiasing in an LDR scene use enableFXAA instead.")
         }
     }
     private static func validateParticleRendering(_ batch: RenderParticleSimulationBatch) throws {

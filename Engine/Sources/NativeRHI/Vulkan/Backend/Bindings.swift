@@ -73,7 +73,9 @@ extension VulkanBackend {
             _ = context.auxiliary.freeDescriptorSets(context.device, descriptorPool, 1, &native)
             throw error
         }
-        registries.bindingSets[handle.id] = VulkanBindingSetRecord(descriptorSet: set, layoutID: layout.id)
+        let dynamicCount = UInt32(layoutEntries.filter { $0.buffer.hasDynamicOffset }.count)
+        registries.bindingSets[handle.id] = VulkanBindingSetRecord(descriptorSet: set,
+            layoutID: layout.id, dynamicOffsetCount: dynamicCount)
     }
 
     func unregisterBindingSet(_ handle: BindingSet) {
@@ -88,7 +90,8 @@ extension VulkanBackend {
         write.dstSet = set
         write.dstBinding = entry.slot
         write.descriptorCount = 1
-        write.descriptorType = VulkanLayoutFormats.descriptorType(declaration.type)
+        write.descriptorType = VulkanLayoutFormats.descriptorType(declaration.type,
+            dynamic: declaration.buffer.hasDynamicOffset)
         switch entry.resource {
         case .uniformBuffer(let buffer, let offset, _), .storageBuffer(let buffer, let offset):
             guard let record = registries.buffers[buffer.id], offset >= 0, offset < record.size else {

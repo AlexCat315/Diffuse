@@ -15,8 +15,8 @@ final class SubmissionPlannerTests: XCTestCase {
             BindingSetEntry(slot: 3, resource: .sampler(Sampler(id: 5)))], readOnlySlots: [2])
         planner.registerBindingSetEntries(writer.id, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: Buffer(id: 4)))])
         let render = RecordedCommand.renderPass(RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: []),
-            body: [.setBindingSet(slot: 0, set: set)]))
-        let compute = RecordedCommand.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: set)]))
+            body: [.setBindingSet(slot: 0, set: set, dynamicOffsets: [])]))
+        let compute = RecordedCommand.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: set, dynamicOffsets: [])]))
         for resource in resources { planner.recordImmediateWrite(resource) }
         let first = try planner.buildPlan(queue: .graphics, commands: [render], external: SubmitDescriptor())
         XCTAssertEqual(Set(barrierBlocks(in: first.submits[0]).flatMap { $0 }.map(\.resource)), Set(resources))
@@ -32,7 +32,7 @@ final class SubmissionPlannerTests: XCTestCase {
         XCTAssertEqual(Set(acquired.map(\.resource)), Set(resources))
         XCTAssertTrue(acquired.allSatisfy { $0.syncAction == .acquire })
         let written = try planner.buildPlan(queue: .compute, commands: [.computePass(ComputePassRecord(body: [
-            .setBindingSet(slot: 0, set: writer)]))], external: SubmitDescriptor())
+            .setBindingSet(slot: 0, set: writer, dynamicOffsets: [])]))], external: SubmitDescriptor())
         XCTAssertEqual(barrierBlocks(in: written.submits[0]).flatMap { $0 }.map(\.destinationState), [.unorderedAccess])
         let reread = try planner.buildPlan(queue: .compute, commands: [compute], external: SubmitDescriptor())
         XCTAssertEqual(barrierBlocks(in: reread.submits[0]).flatMap { $0 }.map(\.destinationState), [.shaderResource])
@@ -61,7 +61,7 @@ final class SubmissionPlannerTests: XCTestCase {
             BindingSetEntry(slot: 2, resource: .storageBuffer(buffer: storage))
         ])
         let pass = RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: [RenderColorTarget(texture: Texture(id: 1))]),
-            body: (0..<100).map { _ in .setBindingSet(slot: 0, set: set) })
+            body: (0..<100).map { _ in .setBindingSet(slot: 0, set: set, dynamicOffsets: []) })
         let result = try planner.buildPlan(queue: .graphics, commands: [.renderPass(pass), .renderPass(pass)], external: SubmitDescriptor())
         let blocks = barrierBlocks(in: result.submits[0])
         XCTAssertEqual(blocks.count, 2)
@@ -72,7 +72,7 @@ final class SubmissionPlannerTests: XCTestCase {
         XCTAssertEqual(ordered.sourceState, .unorderedAccess)
         XCTAssertEqual(ordered.destinationState, .unorderedAccess)
         let compute = try planner.buildPlan(queue: .compute,
-            commands: [.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: set)]))], external: SubmitDescriptor())
+            commands: [.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: set, dynamicOffsets: [])]))], external: SubmitDescriptor())
         XCTAssertEqual(compute.submits.count, 2)
         XCTAssertEqual(compute.submits[1].waitSemaphores, compute.submits[0].signalSemaphores)
         let acquire = barrierBlocks(in: compute.submits[1]).flatMap { $0 }.filter { $0.syncAction == .acquire }
@@ -91,14 +91,14 @@ final class SubmissionPlannerTests: XCTestCase {
             ])
         }
         let pass = RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: []),
-            body: sets.map { .setBindingSet(slot: 0, set: $0) })
+            body: sets.map { .setBindingSet(slot: 0, set: $0, dynamicOffsets: []) })
         let graphics = try planner.buildPlan(queue: .graphics, commands: [.renderPass(pass)], external: SubmitDescriptor())
         let barriers = barrierBlocks(in: graphics.submits[0]).flatMap { $0 }
         XCTAssertEqual(barriers.count, 97)
         let upload = try XCTUnwrap(barriers.first { $0.resource == resource })
         XCTAssertEqual(upload.sourceState, .copyDestination)
         XCTAssertEqual(upload.destinationState, .constantBuffer)
-        let computePass = ComputePassRecord(body: sets.map { .setBindingSet(slot: 0, set: $0) })
+        let computePass = ComputePassRecord(body: sets.map { .setBindingSet(slot: 0, set: $0, dynamicOffsets: []) })
         let compute = try planner.buildPlan(queue: .compute, commands: [.computePass(computePass)], external: SubmitDescriptor())
         XCTAssertEqual(compute.submits.count, 2)
         XCTAssertEqual(compute.submits[0].signalSemaphores, compute.submits[1].waitSemaphores)
@@ -108,7 +108,7 @@ final class SubmissionPlannerTests: XCTestCase {
         let writer = BindingSet(id: 200)
         planner.registerBindingSetEntries(writer.id, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: buffer))])
         let write = try planner.buildPlan(queue: .compute,
-            commands: [.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: writer)]))], external: SubmitDescriptor())
+            commands: [.computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: writer, dynamicOffsets: [])]))], external: SubmitDescriptor())
         XCTAssertEqual(barrierBlocks(in: write.submits[0]).first?.first?.destinationState, .unorderedAccess)
     }
 
@@ -123,14 +123,14 @@ final class SubmissionPlannerTests: XCTestCase {
             let commands: [RecordedCommand]
             if render {
                 commands = [.renderPass(RenderPassRecord(descriptor: RenderPassDescriptor(colorTargets: []), body: [
-                    .setBindingSet(slot: 0, set: sets[0]), .setVertexBuffer(slot: 0, buffer: buffer, offset: 0),
-                    .setBindingSet(slot: 0, set: sets[1]), .setBindingSet(slot: 0, set: sets[2]),
-                    .setBindingSet(slot: 0, set: sets[3]), .setBindingSet(slot: 0, set: sets[4])]))]
+                    .setBindingSet(slot: 0, set: sets[0], dynamicOffsets: []), .setVertexBuffer(slot: 0, buffer: buffer, offset: 0),
+                    .setBindingSet(slot: 0, set: sets[1], dynamicOffsets: []), .setBindingSet(slot: 0, set: sets[2], dynamicOffsets: []),
+                    .setBindingSet(slot: 0, set: sets[3], dynamicOffsets: []), .setBindingSet(slot: 0, set: sets[4], dynamicOffsets: [])]))]
             } else {
                 commands = [.computePass(ComputePassRecord(body: [
-                    .setBindingSet(slot: 0, set: sets[0]), .dispatchIndirect(buffer: buffer, offset: 0),
-                    .setBindingSet(slot: 0, set: sets[1]), .setBindingSet(slot: 0, set: sets[2]),
-                    .setBindingSet(slot: 0, set: sets[3]), .setBindingSet(slot: 0, set: sets[4])]))]
+                    .setBindingSet(slot: 0, set: sets[0], dynamicOffsets: []), .dispatchIndirect(buffer: buffer, offset: 0),
+                    .setBindingSet(slot: 0, set: sets[1], dynamicOffsets: []), .setBindingSet(slot: 0, set: sets[2], dynamicOffsets: []),
+                    .setBindingSet(slot: 0, set: sets[3], dynamicOffsets: []), .setBindingSet(slot: 0, set: sets[4], dynamicOffsets: [])]))]
             }
             let plan = try planner.buildPlan(queue: .graphics, commands: commands, external: SubmitDescriptor())
             let barriers = barrierBlocks(in: plan.submits[0]).flatMap { $0 }
@@ -148,7 +148,7 @@ final class SubmissionPlannerTests: XCTestCase {
         XCTAssertEqual(Set(barrierBlocks(in: producer.submits[0]).flatMap { $0 }.map(\.resource.id)), [1, 2])
         planner.registerBindingSetEntries(50, entries: [BindingSetEntry(slot: 0, resource: .texture(Texture(id: 2)))])
         let consumer = try planner.buildPlan(queue: .compute, commands: [.computePass(ComputePassRecord(body: [
-            .setBindingSet(slot: 0, set: BindingSet(id: 50))]))], external: SubmitDescriptor())
+            .setBindingSet(slot: 0, set: BindingSet(id: 50), dynamicOffsets: [])]))], external: SubmitDescriptor())
         XCTAssertEqual(consumer.submits.count, 2)
         XCTAssertEqual(consumer.submits[0].queue, .graphics)
         XCTAssertEqual(consumer.submits[1].waitSemaphores, consumer.submits[0].signalSemaphores)
@@ -233,7 +233,7 @@ final class SubmissionPlannerTests: XCTestCase {
             entries: [BindingSetEntry(slot: 0, resource: .texture(target))]
         )
         let computePass = ComputePassRecord(body: [
-            .setBindingSet(slot: 0, set: BindingSet(id: setID)),
+            .setBindingSet(slot: 0, set: BindingSet(id: setID), dynamicOffsets: []),
         ])
         let plan = try planner.buildPlan(
             queue: .compute,
@@ -285,7 +285,7 @@ final class SubmissionPlannerTests: XCTestCase {
 
     private func computePassBinding(setID: UInt32) -> ComputePassRecord {
         ComputePassRecord(body: [
-            .setBindingSet(slot: 0, set: BindingSet(id: setID)),
+            .setBindingSet(slot: 0, set: BindingSet(id: setID), dynamicOffsets: []),
         ])
     }
 
@@ -391,7 +391,7 @@ final class SubmissionPlannerTests: XCTestCase {
     func testReadOnlyStorageBindingsDoNotIntroduceWriteDependencies() throws {
         let planner = SubmissionPlanner()
         planner.registerBindingSetEntries(20, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: Buffer(id: 1)))], readOnlySlots: [0])
-        let pass = ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 20))])
+        let pass = ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 20), dynamicOffsets: [])])
         let first = try planner.buildPlan(queue: .compute, commands: [.computePass(pass)], external: SubmitDescriptor())
         XCTAssertEqual(barrierBlocks(in: first.submits[0]).first?.first?.destinationState, .shaderResource)
         let next = try planner.buildPlan(queue: .compute, commands: [.computePass(pass)], external: SubmitDescriptor())
@@ -403,7 +403,7 @@ final class SubmissionPlannerTests: XCTestCase {
         let planner = SubmissionPlanner()
         planner.recordImmediateWrite(ResourceRef(kind: .buffer, id: 1))
         planner.registerBindingSetEntries(20, entries: [BindingSetEntry(slot: 0, resource: .storageBuffer(buffer: Buffer(id: 1)))], readOnlySlots: [0])
-        let pass = ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 20))])
+        let pass = ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 20), dynamicOffsets: [])])
         let plan = try planner.buildPlan(queue: .compute, commands: [.computePass(pass)], external: SubmitDescriptor())
         XCTAssertEqual(plan.submits.count, 2)
         XCTAssertEqual(plan.submits[0].queue, .graphics)

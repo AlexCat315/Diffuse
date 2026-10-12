@@ -451,6 +451,15 @@ public final class Device {
                     "resource at slot \(layoutEntry.slot) does not match the declared binding type"
                 )
             }
+            if layoutEntry.buffer.hasDynamicOffset {
+                // Dynamic bindings bind the base buffer (offset 0); the per-frame
+                // offset is supplied when the set is bound.
+                guard entry.resource.bufferOffset == 0 else {
+                    throw RHIError.layoutMismatch(
+                        "dynamic binding at slot \(layoutEntry.slot) must use base offset 0"
+                    )
+                }
+            }
         }
     }
 

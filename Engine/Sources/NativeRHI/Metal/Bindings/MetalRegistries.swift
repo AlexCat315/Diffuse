@@ -38,6 +38,11 @@ struct MetalBindingApply {
 }
 
 final class MetalBindingSet {
+    struct DynamicKey: Hashable {
+        let stage: ShaderStage
+        let index: Int
+    }
+
     let entries: [MetalBoundEntry]
     /// Raster visibility: vertex and fragment stages.
     let graphicsApplies: [MetalBindingApply]
@@ -45,9 +50,22 @@ final class MetalBindingSet {
     let meshApplies: [MetalBindingApply]
     /// Compute visibility.
     let computeApplies: [MetalBindingApply]
+    /// Maps a dynamic buffer's (stage, index) to its offset position in the
+    /// dynamic offsets array supplied at bind time.
+    let dynamicOffsetIndex: [DynamicKey: Int]
 
-    init(entries: [MetalBoundEntry]) {
+    init(entries: [MetalBoundEntry], dynamicSlots: [UInt32: Int]) {
         self.entries = entries
+        var dynamicMap: [DynamicKey: Int] = [:]
+        for entry in entries {
+            guard let offsetIndex = dynamicSlots[entry.slot] else { continue }
+            for stage in [ShaderStage.vertex, .fragment, .task, .mesh, .compute] {
+                if entry.visibility.contains(ShaderVisibility(stage)) {
+                    dynamicMap[DynamicKey(stage: stage, index: Int(entry.slot))] = offsetIndex
+                }
+            }
+        }
+        self.dynamicOffsetIndex = dynamicMap
         graphicsApplies = MetalBindingSet.applies(entries, stages: [.vertex, .fragment])
         meshApplies = MetalBindingSet.applies(entries, stages: [.task, .mesh, .fragment])
         computeApplies = MetalBindingSet.applies(entries, stages: [.compute])

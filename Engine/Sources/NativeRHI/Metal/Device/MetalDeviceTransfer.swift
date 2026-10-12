@@ -39,6 +39,12 @@ extension MetalDevice {
                                "Metal buffer binding slots 24...31 are reserved for vertex inputs")
             }
         }
+        // Dynamic offset positions follow the ascending dynamic binding slot.
+        var dynamicSlots: [UInt32: Int] = [:]
+        for (index, entry) in layoutEntries.filter({ $0.buffer.hasDynamicOffset })
+            .sorted(by: { $0.slot < $1.slot }).enumerated() {
+            dynamicSlots[entry.slot] = index
+        }
         var resolved: [MetalBoundEntry] = []
         resolved.reserveCapacity(setEntries.count)
         for setEntry in setEntries {
@@ -51,7 +57,7 @@ extension MetalDevice {
                 resource: try resolveBindingResource(setEntry.resource)
             ))
         }
-        registries.bindingSets[handle.id] = MetalBindingSet(entries: resolved)
+        registries.bindingSets[handle.id] = MetalBindingSet(entries: resolved, dynamicSlots: dynamicSlots)
     }
 
     private func resolveBindingResource(_ resource: BindingResource) throws -> MetalBoundResource {

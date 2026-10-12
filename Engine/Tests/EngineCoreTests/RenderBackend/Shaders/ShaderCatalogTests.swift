@@ -4,25 +4,23 @@ import NativeRHI
 
 @Suite("ShaderCatalog")
 struct ShaderCatalogTests {
-    @Test("editor grid follows screen-space lighting and precedes particles in every stage")
+    @Test("editor grid follows screen-space lighting and precedes particles")
     func editorGridPassOrdering() throws {
         #expect(!RenderSettings().enableEditorGrid)
-        for stage in RenderSettings.ReplacementStage.allCases {
-            var settings = RenderSettings(stage: stage, enableSSAO: true,
-                                          enableSSR: true, enableTAA: true,
-                                          enableOffscreenViewport: true)
-            #expect(!RenderFramePlanner.makePlan(settings: settings).passes.contains(.editorGrid))
-            settings.enableEditorGrid = true
-            let passes = RenderFramePlanner.makePlan(settings: settings).passes
-            let gridIndex = try #require(passes.firstIndex(of: .editorGrid))
-            let particleIndex = try #require(passes.firstIndex(of: .particles))
-            #expect(gridIndex < particleIndex)
-            #expect(RenderPassKind.opaquePasses.contains(.editorGrid))
-            for pass in [RenderPassKind.basePass, .ssao, .ssr] {
-                if let index = passes.firstIndex(of: pass) { #expect(index < gridIndex) }
-            }
-            if let taa = passes.firstIndex(of: .taa) { #expect(gridIndex < taa) }
+        var settings = RenderSettings(enableSSAO: true,
+                                      enableSSR: true, enableTAA: true,
+                                      enableOffscreenViewport: true)
+        #expect(!RenderFramePlanner.makePlan(settings: settings).passes.contains(.editorGrid))
+        settings.enableEditorGrid = true
+        let passes = RenderFramePlanner.makePlan(settings: settings).passes
+        let gridIndex = try #require(passes.firstIndex(of: .editorGrid))
+        let particleIndex = try #require(passes.firstIndex(of: .particles))
+        #expect(gridIndex < particleIndex)
+        #expect(RenderPassKind.opaquePasses.contains(.editorGrid))
+        for pass in [RenderPassKind.basePass, .ssao, .ssr] {
+            if let index = passes.firstIndex(of: pass) { #expect(index < gridIndex) }
         }
+        if let taa = passes.firstIndex(of: .taa) { #expect(gridIndex < taa) }
     }
 
     @Test("bundled native shader inventory has code and reflected entry points")
@@ -49,18 +47,16 @@ struct ShaderCatalogTests {
         }
     }
 
-    @Test("r4 and r5 planner order matches the HDR frame graph")
+    @Test("capability switches assemble the HDR frame graph in the correct order")
     func plannerOrdersHDRPasses() {
-        let r4 = RenderFramePlanner.makePlan(
+        let shadowed = RenderFramePlanner.makePlan(
             settings: RenderSettings(
-                stage: .r4LightingPBRShadow,
                 enableShadows: true,
                 enableOffscreenViewport: true
             )
         )
-        let r5 = RenderFramePlanner.makePlan(
+        let withPost = RenderFramePlanner.makePlan(
             settings: RenderSettings(
-                stage: .r5PostProcess,
                 enableFXAA: true,
                 enableSSAO: true,
                 enableSSR: true,
@@ -70,11 +66,11 @@ struct ShaderCatalogTests {
             )
         )
 
-        let expectedR4: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .transparentMeshes, .particles, .tonemap, .viewportResolve]
-        let expectedR5: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .transparentMeshes, .particles, .bloom, .tonemap, .fxaa, .viewportResolve]
+        let expectedShadowed: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .transparentMeshes, .particles, .tonemap, .viewportResolve]
+        let expectedWithPost: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .transparentMeshes, .particles, .bloom, .tonemap, .fxaa, .viewportResolve]
 
-        #expect(r4.passes == expectedR4)
-        #expect(r5.passes == expectedR5)
+        #expect(shadowed.passes == expectedShadowed)
+        #expect(withPost.passes == expectedWithPost)
     }
 
     @Test("progressive refinement drops SSR only while the opaque scene is moving")
@@ -114,7 +110,6 @@ struct ShaderCatalogTests {
         #expect(settings.directionalCascadeSplitLambda == 0)
 
         var renderSettings = RenderSettings(
-            stage: .r4LightingPBRShadow,
             shadowSettings: .directionalPreview
         )
         #expect(renderSettings.enableShadows)
@@ -127,7 +122,6 @@ struct ShaderCatalogTests {
     func plannerSchedulesStylizedOutline() {
         let plan = RenderFramePlanner.makePlan(
             settings: RenderSettings(
-                stage: .r5PostProcess,
                 enableBloom: true,
                 enableStylizedCharacterShading: true
             )

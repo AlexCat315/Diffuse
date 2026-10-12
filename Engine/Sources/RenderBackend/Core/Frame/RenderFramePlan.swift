@@ -42,60 +42,37 @@ enum RenderFramePlanner {
     static func makePlan(settings: RenderSettings) -> RenderFramePlan {
         var passes: [RenderPassKind] = []
 
-        switch settings.stage {
-            case .r0RainbowTriangle, .r1MeshCamera:
-                passes.append(.basePass)
-                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
-
-            case .r2MultiObjectDepth:
-                passes.append(contentsOf: [.depthPrepass, .basePass])
-                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
-
-            case .r3ViewportInterop:
-                passes.append(contentsOf: [.depthPrepass, .basePass])
-                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
-                if settings.enableOffscreenViewport {
-                    passes.append(.viewportResolve)
-                }
-
-            case .r4LightingPBRShadow:
-                passes.append(.depthPrepass)
-                if settings.shadowSettings.enabled && settings.shadowSettings.maxShadowedDirectionalLights > 0 {
-                    passes.append(.shadowPass)
-                }
-                passes.append(contentsOf: [.skybox, .basePass])
-                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
-                passes.append(.tonemap)
-                if settings.enableOffscreenViewport {
-                    passes.append(.viewportResolve)
-                }
-
-            case .r5PostProcess:
-                passes.append(.depthPrepass)
-                if settings.shadowSettings.enabled && settings.shadowSettings.maxShadowedDirectionalLights > 0 {
-                    passes.append(.shadowPass)
-                }
-                passes.append(contentsOf: [.skybox, .basePass])
-                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
-                if settings.enableSSAO {
-                    passes.append(.ssao)
-                }
-                if settings.enableSSR {
-                    passes.append(.ssr)
-                }
-                if settings.enableTAA {
-                    passes.append(.taa)
-                }
-                if settings.enableBloom {
-                    passes.append(.bloom)
-                }
-                passes.append(.tonemap)
-                if settings.enableFXAA {
-                    passes.append(.fxaa)
-                }
-                if settings.enableOffscreenViewport {
-                    passes.append(.viewportResolve)
-                }
+        if settings.enableDepthPrepass {
+            passes.append(.depthPrepass)
+        }
+        if settings.shadowSettings.enabled && settings.shadowSettings.maxShadowedDirectionalLights > 0 {
+            passes.append(.shadowPass)
+        }
+        if settings.enablePBR {
+            passes.append(.skybox)
+        }
+        passes.append(.basePass)
+        appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
+        if settings.enableSSAO {
+            passes.append(.ssao)
+        }
+        if settings.enableSSR {
+            passes.append(.ssr)
+        }
+        if settings.enableTAA {
+            passes.append(.taa)
+        }
+        if settings.enableBloom {
+            passes.append(.bloom)
+        }
+        if settings.enablePBR {
+            passes.append(.tonemap)
+        }
+        if settings.enableFXAA {
+            passes.append(.fxaa)
+        }
+        if settings.enableOffscreenViewport {
+            passes.append(.viewportResolve)
         }
 
         // Reference lines use scene depth, without contributing to depth or
