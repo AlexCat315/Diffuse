@@ -223,19 +223,36 @@ public struct WorkspacePanel: Sendable, Codable, Equatable {
     public var isDraggable: Bool
     public var isCollapsible: Bool
     public var iconAssetKey: String?
+    public var sizing = WorkspacePanelSizing()
 
     public init(id: WorkspacePanelID,
                 title: String,
                 isClosable: Bool = true,
                 isDraggable: Bool = true,
                 isCollapsible: Bool = true,
-                iconAssetKey: String? = nil) {
+                iconAssetKey: String? = nil,
+                sizing: WorkspacePanelSizing = .init()) {
         self.id = id
         self.title = title
         self.isClosable = isClosable
         self.isDraggable = isDraggable
         self.isCollapsible = isCollapsible
         self.iconAssetKey = iconAssetKey
+        self.sizing = sizing
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, isClosable, isDraggable, isCollapsible, iconAssetKey, sizing
+    }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try values.decode(WorkspacePanelID.self, forKey: .id),
+                  title: try values.decode(String.self, forKey: .title),
+                  isClosable: try values.decodeIfPresent(Bool.self, forKey: .isClosable) ?? true,
+                  isDraggable: try values.decodeIfPresent(Bool.self, forKey: .isDraggable) ?? true,
+                  isCollapsible: try values.decodeIfPresent(Bool.self, forKey: .isCollapsible) ?? true,
+                  iconAssetKey: try values.decodeIfPresent(String.self, forKey: .iconAssetKey),
+                  sizing: try values.decodeIfPresent(WorkspacePanelSizing.self, forKey: .sizing) ?? .init())
     }
 }
 
@@ -344,21 +361,24 @@ public struct WorkspaceSlot: Sendable, Codable, Equatable {
     }
 }
 
+/// Nil preserves the panels' preferred initial size. A user resize writes an
+/// explicit fraction, which survives window changes and document round trips.
 public struct WorkspaceSplitFractions: Sendable, Codable, Equatable {
-    public var leading: Float
-    public var centerTrailing: Float
-    public var topBottom: Float
+    public var leading: Float?
+    public var centerTrailing: Float?
+    public var topBottom: Float?
+    public var top: Float?
 
-    public init(leading: Float = 0.22,
-                centerTrailing: Float = 0.78,
-                topBottom: Float = 0.74) {
-        self.leading = WorkspaceSplitFractions.clamp(leading)
-        self.centerTrailing = WorkspaceSplitFractions.clamp(centerTrailing)
-        self.topBottom = WorkspaceSplitFractions.clamp(topBottom)
+    public init(leading: Float? = nil, centerTrailing: Float? = nil,
+                topBottom: Float? = nil, top: Float? = nil) {
+        self.leading = leading.map(Self.clamp)
+        self.centerTrailing = centerTrailing.map(Self.clamp)
+        self.topBottom = topBottom.map(Self.clamp)
+        self.top = top.map(Self.clamp)
     }
 
     public static func clamp(_ value: Float) -> Float {
-        max(0.05, min(0.95, value))
+        value.isFinite ? max(0, min(1, value)) : 0.5
     }
 }
 
@@ -510,6 +530,7 @@ public struct WorkspacePanelDescriptor {
     public var isDraggable: Bool
     public var isCollapsible: Bool
     public var iconAssetKey: String?
+    public var sizing = WorkspacePanelSizing()
     public let factory: () -> AnyView
 
     public init(id: WorkspacePanelID,
@@ -519,6 +540,7 @@ public struct WorkspacePanelDescriptor {
                 isDraggable: Bool = true,
                 isCollapsible: Bool = true,
                 iconAssetKey: String? = nil,
+                sizing: WorkspacePanelSizing = .init(),
                 factory: @escaping () -> AnyView) {
         self.id = id
         self.title = title
@@ -527,6 +549,7 @@ public struct WorkspacePanelDescriptor {
         self.isDraggable = isDraggable
         self.isCollapsible = isCollapsible
         self.iconAssetKey = iconAssetKey
+        self.sizing = sizing
         self.factory = factory
     }
 
@@ -537,6 +560,7 @@ public struct WorkspacePanelDescriptor {
                                isDraggable: Bool = true,
                                isCollapsible: Bool = true,
                                iconAssetKey: String? = nil,
+                               sizing: WorkspacePanelSizing = .init(),
                                @ViewBuilder content: @escaping () -> Content) {
         self.init(id: id,
                   title: title,
@@ -545,6 +569,7 @@ public struct WorkspacePanelDescriptor {
                   isDraggable: isDraggable,
                   isCollapsible: isCollapsible,
                   iconAssetKey: iconAssetKey,
+                  sizing: sizing,
                   factory: { AnyView(content()) })
     }
 
@@ -554,7 +579,8 @@ public struct WorkspacePanelDescriptor {
                        isClosable: isClosable,
                        isDraggable: isDraggable,
                        isCollapsible: isCollapsible,
-                       iconAssetKey: iconAssetKey)
+                       iconAssetKey: iconAssetKey,
+                       sizing: sizing)
     }
 }
 

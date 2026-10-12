@@ -34,9 +34,9 @@ public struct PaddingModifier: ViewModifier {
                            to: insets) { value in
             layout.attachments[PaddingAnimationKeys.attachment] = value
             layout.setPadding(value.top, edge: .top)
-            layout.setPadding(value.leading, edge: .left)
+            layout.setPadding(value.leading, edge: .start)
             layout.setPadding(value.bottom, edge: .bottom)
-            layout.setPadding(value.trailing, edge: .right)
+            layout.setPadding(value.trailing, edge: .end)
         }
     }
 

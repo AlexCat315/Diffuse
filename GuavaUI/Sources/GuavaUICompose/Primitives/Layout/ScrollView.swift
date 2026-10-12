@@ -26,6 +26,7 @@ private enum _ScrollViewAttachmentKeys {
     static let motion = "__scrollview_motion"
     static let report = "__scrollview_report"
     static let axes = "__scrollview_axes"
+    static let pendingOffset = "__scrollview_pending_offset"
 
     static func motionAnimator(for node: Node,
                                physics: ScrollPhysics) -> ScrollAnimator {
@@ -140,7 +141,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
         node.attachments[_ScrollViewAttachmentKeys.report] = report
         node.attachments[_ScrollViewAttachmentKeys.axes] = axes
-        if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset { node.contentOffset = desired }
+        if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset {
+            // The child tree still has its previous layout at this point. A
+            // new binding offset may target newly grown content, so adopting
+            // it against that old range would discard the requested position.
+            node.attachments[_ScrollViewAttachmentKeys.pendingOffset] = desired
+            node.contentOffset = desired
+        }
         let axes = self.axes
         let step = self.wheelStep
         let consumePolicy = self.consumePolicy
@@ -154,9 +161,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // it always sees the current callbacks instead of a stale one.
         let motion = _ScrollViewAttachmentKeys.motionAnimator(for: node,
                                                              physics: Self.resolvedPhysics(on: node))
-        if node.prefersReducedMotion { motion.finishImmediately() }
-        Self.publishScrollRange(to: motion, on: node)
-        motion.adopt(node.contentOffset)
+        if node.attachments[_ScrollViewAttachmentKeys.pendingOffset] == nil {
+            if node.prefersReducedMotion { motion.finishImmediately() }
+            Self.publishScrollRange(to: motion, on: node)
+            motion.adopt(node.contentOffset)
+        }
         node.attachments[ScrollReveal.handlerKey] = { [weak node] (target: CGRect) in
             guard let node else { return }
             Self.publishScrollRange(to: motion, on: node)
@@ -179,6 +188,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
         node.layoutDidUpdate = { node in
             Self.refreshScrollableContentSize(on: node)
+            Self.publishScrollRange(to: motion, on: node)
+            if let desired = node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.pendingOffset) as? CGPoint {
+                motion.adopt(desired)
+            }
             report(node)
         }
 

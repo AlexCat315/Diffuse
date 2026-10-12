@@ -10,9 +10,7 @@ enum EditorWorkspaceDefaults {
         let registry = EditorWorkspacePanelPolicy.registry(for: mode, from: registry)
         let preset = requestedPreset.mode == mode ? requestedPreset : .default(for: mode)
         let panels = Dictionary(uniqueKeysWithValues: registry.descriptors.map { descriptor in
-            (descriptor.id, WorkspacePanel(id: descriptor.id, title: descriptor.title,
-                isClosable: descriptor.closable, isDraggable: true,
-                isCollapsible: descriptor.preferredSlot != .center, iconAssetKey: descriptor.iconAssetKey))
+            (descriptor.id, descriptor.workspaceDescriptor.panel)
         })
         var groups = baseGroups(preset: preset, registry: registry)
         var center: WorkspaceLayoutNode = .group("center")

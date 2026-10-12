@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import GuavaUICompose
@@ -51,9 +51,9 @@ public struct WorkspaceView: View {
             } else if compact {
                 _WorkspaceCompactView(document: document, controller: controller, content: content).flex()
             } else {
-            _WorkspaceShell(document: document,
-                            controller: controller,
-                            content: content)
+            WorkspaceMetricsReader { metrics in
+                _WorkspaceShell(document: document, controller: controller, content: content, metrics: metrics)
+            }
                 .flex()
                 .frame(minWidth: 0, minHeight: 0)
             _WorkspaceFloatingLayer(document: document,
@@ -174,29 +174,51 @@ private struct _WorkspaceShell: View {
     let document: WorkspaceDocument
     let controller: WorkspaceController
     let content: (WorkspacePanelID) -> AnyView
+    let metrics: WorkspaceLayoutMetrics
+    @State private var height: Float = 0
 
     var body: some View {
         let topVisible = !visibleGroups(in: .top, document: document).isEmpty
         let topCollapsed = !collapsedGroups(in: .top, document: document).isEmpty
         let topChrome = chromeRailSlots(edge: .top, document: document)
         let bottomChrome = visibleChromeRailSlots(edge: .bottom, document: document)
+        let reserve = topChrome.reduce(0) { $0 + $1.thickness }
+            + bottomChrome.reduce(0) { $0 + $1.thickness } + (topCollapsed ? 40 : 0)
+        let resolver = WorkspaceSizingResolver(document: document, metrics: metrics)
+        let centerBottom = resolver.combine(resolver.slot(.center, axis: .vertical),
+            resolver.slot(.bottom, axis: .vertical), stacked: true,
+            gap: visibleGroups(in: .bottom, document: document).isEmpty ? 0 : metrics.divider)
+        let mainSize = resolver.combine(centerBottom,
+            resolver.combine(resolver.slot(.leading, axis: .vertical),
+                             resolver.slot(.trailing, axis: .vertical), stacked: false), stacked: false)
+        let split = WorkspaceResolvedSplit(fraction: document.splitFractions.top, fallback: 0.25,
+            available: height - reserve - (topVisible ? metrics.divider : 0),
+            first: resolver.slot(.top, axis: .vertical), second: mainSize)
+        let phase = [topVisible]
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             topChrome.map { slot in
                 AnyView(_WorkspaceChromeSlot(slot: slot, document: document, controller: controller)
                     .id("workspace-chrome-\(slot.id.rawValue)"))
             }
-            if topVisible || topCollapsed {
-                _WorkspaceEdgeSlot(slotID: .top,
-                                   document: document,
-                                   controller: controller,
-                                   content: content)
-                    .id("workspace-slot-top")
+            WorkspaceRegionTransition(isVisible: topVisible, horizontal: false,
+                sizing: .fraction(split.fraction), phase: phase,
+                content: AnyView(_WorkspaceSlotView(slotID: .top, document: document,
+                    controller: controller, content: content).flex().frame(minWidth: 0, minHeight: 0)))
+                .id("workspace-region-top-transition")
+            WorkspaceRegionTransition(isVisible: topVisible, horizontal: false,
+                sizing: .divider, phase: phase,
+                content: AnyView(_WorkspaceSplitDivider(splitID: "top", axis: .horizontal,
+                    controller: controller).frame(width: .percent(100), height: .percent(100))
+                    .debugName("workspace-split-top")))
+                .id("workspace-split-top")
+            if topCollapsed {
+                _WorkspaceRail(slotID: .top, document: document, controller: controller)
+                    .id("workspace-rail-top")
             }
-            _WorkspaceMainRow(document: document,
-                              controller: controller,
-                              content: content)
-                .flex()
+            _WorkspaceMainRow(document: document, controller: controller, content: content, metrics: metrics)
+                .flex(topVisible ? 1 - split.fraction : 1, shrink: 1, basis: 0)
                 .frame(minWidth: 0, minHeight: 0)
+                .modifier(_WorkspaceLayoutAnimation(phase: phase))
             bottomChrome.map { slot in
                 AnyView(_WorkspaceChromeSlot(slot: slot, document: document, controller: controller)
                     .id("workspace-chrome-\(slot.id.rawValue)"))
@@ -205,6 +227,11 @@ private struct _WorkspaceShell: View {
         .background(.background)
         .flex()
         .frame(minWidth: 0, minHeight: 0)
+        .modifier(WorkspaceExtentObserver(horizontal: false, extent: $height))
+        .modifier(WorkspaceResizeGeometryModifier(values: [
+            WorkspaceResizeGeometry(splitID: "top", horizontal: false,
+                offset: topChrome.reduce(0) { $0 + $1.thickness } + metrics.divider / 2, split: split)
+        ]))
     }
 }
 
@@ -212,15 +239,29 @@ private struct _WorkspaceMainRow: View {
     let document: WorkspaceDocument
     let controller: WorkspaceController
     let content: (WorkspacePanelID) -> AnyView
+    let metrics: WorkspaceLayoutMetrics
+    @State private var width: Float = 0
 
     var body: some View {
         let leadingVisible = !visibleGroups(in: .leading, document: document).isEmpty
         let leadingRail = railPlan(edge: .leading, document: document)
         let trailingVisible = !visibleGroups(in: .trailing, document: document).isEmpty
         let trailingRail = railPlan(edge: .trailing, document: document)
-        let weights = WorkspaceShellWeights(document: document,
-                                            leadingVisible: leadingVisible,
-                                            trailingVisible: trailingVisible)
+        let resolver = WorkspaceSizingResolver(document: document, metrics: metrics)
+        let centerSize = resolver.combine(resolver.slot(.center, axis: .horizontal),
+                                          resolver.slot(.bottom, axis: .horizontal), stacked: false)
+        let leadingSize = resolver.slot(.leading, axis: .horizontal)
+        let trailingSize = resolver.slot(.trailing, axis: .horizontal)
+        let railWidth = (leadingRail?.slot.thickness ?? 0) + (trailingRail?.slot.thickness ?? 0)
+        let available = max(0, width - railWidth - metrics.divider * Float((leadingVisible ? 1 : 0) + (trailingVisible ? 1 : 0)))
+        let leadingSplit = WorkspaceResolvedSplit(fraction: document.splitFractions.leading,
+            fallback: 0.22, available: available, first: leadingSize,
+            second: trailingVisible ? resolver.combine(centerSize, trailingSize, stacked: true) : centerSize)
+        let leadingWeight = leadingVisible ? leadingSplit.fraction : 0
+        let trailingSplit = WorkspaceResolvedSplit(fraction: document.splitFractions.centerTrailing,
+            fallback: 0.78, available: available * (1 - leadingWeight), first: centerSize, second: trailingSize)
+        let centerWeight = (1 - leadingWeight) * (trailingVisible ? trailingSplit.fraction : 1)
+        let trailingWeight = (1 - leadingWeight) - centerWeight
         let phase = [leadingVisible, trailingVisible]
         Box(direction: .row, alignItems: .stretch, spacing: 0) {
             WorkspaceRegionTransition(isVisible: leadingRail != nil, horizontal: true,
@@ -234,7 +275,7 @@ private struct _WorkspaceMainRow: View {
                 }
             }))
             WorkspaceRegionTransition(isVisible: leadingVisible, horizontal: true,
-                                      sizing: .fraction(weights.leading), phase: phase,
+                                      sizing: .fraction(leadingWeight), phase: phase,
                                       content: AnyView(_WorkspaceSideRegion(slotID: .leading,
                                           document: document, controller: controller, content: content)
                                           .flex()
@@ -246,10 +287,10 @@ private struct _WorkspaceMainRow: View {
                                           controller: controller).frame(width: .percent(100), height: .percent(100))
                                           .debugName("workspace-split-leading")))
                 .id("workspace-split-leading")
-            _WorkspaceCenterColumn(document: document, controller: controller, content: content)
+            _WorkspaceCenterColumn(document: document, controller: controller, content: content, metrics: metrics)
                 .debugName("workspace-center-column")
                 .id("workspace-center-column")
-                .flex(weights.center, shrink: 1, basis: 0)
+                .flex(centerWeight, shrink: 1, basis: 0)
                 .frame(minWidth: 0, minHeight: 0)
                 .modifier(_WorkspaceLayoutAnimation(phase: phase))
             WorkspaceRegionTransition(isVisible: trailingVisible, horizontal: true,
@@ -259,7 +300,7 @@ private struct _WorkspaceMainRow: View {
                                           .debugName("workspace-split-centerTrailing")))
                 .id("workspace-split-centerTrailing")
             WorkspaceRegionTransition(isVisible: trailingVisible, horizontal: true,
-                                      sizing: .fraction(weights.trailing), phase: phase,
+                                      sizing: .fraction(trailingWeight), phase: phase,
                                       content: AnyView(_WorkspaceSideRegion(slotID: .trailing,
                                           document: document, controller: controller, content: content)
                                           .flex()
@@ -279,26 +320,14 @@ private struct _WorkspaceMainRow: View {
         .background(.background)
         .flex()
         .frame(minWidth: 0, minHeight: 0)
-    }
-}
-
-private struct WorkspaceShellWeights {
-    var leading: Float
-    var center: Float
-    var trailing: Float
-
-    init(document: WorkspaceDocument,
-         leadingVisible: Bool,
-         trailingVisible: Bool) {
-        leading = leadingVisible ? document.splitFractions.leading : 0
-        let remaining = max(0.05, 1 - leading)
-        if trailingVisible {
-            center = remaining * document.splitFractions.centerTrailing
-            trailing = remaining * (1 - document.splitFractions.centerTrailing)
-        } else {
-            center = remaining
-            trailing = 0
-        }
+        .modifier(WorkspaceExtentObserver(horizontal: true, extent: $width))
+        .modifier(WorkspaceResizeGeometryModifier(values: [
+            WorkspaceResizeGeometry(splitID: "leading", horizontal: true,
+                offset: (leadingRail?.slot.thickness ?? 0) + metrics.divider / 2, split: leadingSplit),
+            WorkspaceResizeGeometry(splitID: "centerTrailing", horizontal: true,
+                offset: (leadingRail?.slot.thickness ?? 0) + leadingWeight * available
+                    + (leadingVisible ? metrics.divider : 0) + metrics.divider / 2, split: trailingSplit)
+        ]))
     }
 }
 
@@ -338,7 +367,15 @@ private struct _WorkspaceFloatingWindowView: View {
     let content: (WorkspacePanelID) -> AnyView
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+        WorkspaceMetricsReader { metrics in
+            TextScalerReader { scaler in windowBody(metrics: metrics, titleHeight: scaler.scale(30)) }
+        }
+    }
+
+    private func windowBody(metrics: WorkspaceLayoutMetrics, titleHeight: Float) -> some View {
+        let frame = WorkspaceSizingResolver(document: document, metrics: metrics)
+            .floatingFrame(window.frame, groupID: group.id, titleHeight: titleHeight)
+        return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 6) {
                 _WorkspaceFloatingDragHandle(window: window,
                                              controller: controller)
@@ -354,13 +391,13 @@ private struct _WorkspaceFloatingWindowView: View {
                                                                                       placement: .tabGroup)))
                 }
                 .buttonStyle(.ghost)
-                .frame(width: 24, height: 24)
+                .frame(width: titleHeight - 6, height: titleHeight - 6)
                 .semanticRole("workspace.floating.redock")
                 .debugName("workspace-floating-redock-\(window.id.rawValue)")
             }
             .padding(horizontal: 6, vertical: 3)
             .background(.surfaceRaised)
-            .frame(height: 30)
+            .frame(height: titleHeight).flex(0, shrink: 0)
 
             _WorkspaceTabGroupView(group: group,
                                    document: document,
@@ -374,7 +411,7 @@ private struct _WorkspaceFloatingWindowView: View {
         .shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x96),
                 offsetY: 12,
                 blur: 32)
-        .frame(width: window.frame.width, height: window.frame.height)
+        .frame(width: frame.width, height: frame.height)
         .absolutePosition(left: window.frame.x, top: window.frame.y)
         .zIndex(Float(window.zIndex))
         .modifier(_WorkspaceFloatingWindowDragModifier(window: window,
@@ -413,7 +450,7 @@ private struct _WorkspaceFloatingWindowDragModifier: ViewModifier {
                 let titleBarFrame = CGRect(x: windowFrame.minX,
                                            y: windowFrame.minY,
                                            width: windowFrame.width,
-                                           height: 30)
+                                           height: CGFloat(node.compositionValue(of: TextScalerEnvironment.key).scale(30)))
                 guard titleBarFrame.contains(point) else {
                     return .ignored
                 }
@@ -489,7 +526,7 @@ private struct _WorkspaceFloatingDragHandle: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
-        [Text(window.title)
+        [Text(window.title).lineLimit(1)
             .font(SemanticFontRef.label)
             .foregroundColor(.onSurface)]
     }
@@ -513,14 +550,20 @@ private struct _WorkspaceCenterColumn: View {
     let document: WorkspaceDocument
     let controller: WorkspaceController
     let content: (WorkspacePanelID) -> AnyView
+    let metrics: WorkspaceLayoutMetrics
+    @State private var height: Float = 0
 
     var body: some View {
         let bottomVisible = !visibleGroups(in: .bottom, document: document).isEmpty
         let bottomRail = bottomVisible ? nil : railPlan(edge: .bottom, document: document)
+        let resolver = WorkspaceSizingResolver(document: document, metrics: metrics)
+        let split = WorkspaceResolvedSplit(fraction: document.splitFractions.topBottom,
+            fallback: 0.74, available: height - (bottomVisible ? metrics.divider : 0),
+            first: resolver.slot(.center, axis: .vertical), second: resolver.slot(.bottom, axis: .vertical))
         let phase = [bottomVisible]
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             _WorkspaceSlotView(slotID: .center, document: document, controller: controller, content: content)
-                .flex(bottomVisible ? document.splitFractions.topBottom : 1, shrink: 1, basis: 0)
+                .flex(bottomVisible ? split.fraction : 1, shrink: 1, basis: 0)
                 .frame(minWidth: 0, minHeight: 0)
                 .modifier(_WorkspaceLayoutAnimation(phase: phase))
             WorkspaceRegionTransition(isVisible: bottomVisible, horizontal: false,
@@ -530,7 +573,7 @@ private struct _WorkspaceCenterColumn: View {
                                           .debugName("workspace-split-topBottom")))
                 .id("workspace-split-topBottom")
             WorkspaceRegionTransition(isVisible: bottomVisible, horizontal: false,
-                                      sizing: .fraction(1 - document.splitFractions.topBottom), phase: phase,
+                                      sizing: .fraction(1 - split.fraction), phase: phase,
                                       content: AnyView(_WorkspaceBottomSlot(document: document,
                                           controller: controller, content: content)
                                           .flex()
@@ -548,6 +591,11 @@ private struct _WorkspaceCenterColumn: View {
         }
         .flex()
         .frame(minWidth: 0, minHeight: 0)
+        .modifier(WorkspaceExtentObserver(horizontal: false, extent: $height))
+        .modifier(WorkspaceResizeGeometryModifier(values: [
+            WorkspaceResizeGeometry(splitID: "topBottom", horizontal: false,
+                offset: metrics.divider / 2, split: split)
+        ]))
     }
 }
 
@@ -562,36 +610,6 @@ private struct _WorkspaceSideRegion: View {
                              document: document,
                              controller: controller,
                              content: content)
-    }
-}
-
-private struct _WorkspaceEdgeSlot: View {
-    let slotID: WorkspaceSlotID
-    let document: WorkspaceDocument
-    let controller: WorkspaceController
-    let content: (WorkspacePanelID) -> AnyView
-
-    var body: some View {
-        let visible = !visibleGroups(in: slotID, document: document).isEmpty
-        let collapsed = !collapsedGroups(in: slotID, document: document).isEmpty
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            if visible {
-                _WorkspaceSlotView(slotID: slotID,
-                                   document: document,
-                                   controller: controller,
-                                   content: content)
-                    .id("workspace-region-\(slotID.rawValue)")
-                    .frame(height: 160)
-            }
-            if collapsed {
-                _WorkspaceRail(slotID: slotID,
-                               document: document,
-                               controller: controller)
-                    .id("workspace-rail-\(slotID.rawValue)")
-            }
-        }
-        .layoutRole("workspace-edge-slot")
-        .debugName("workspace-slot-\(slotID.rawValue)")
     }
 }
 
@@ -732,55 +750,112 @@ private struct _WorkspaceTabBar: View {
     let group: WorkspaceTabGroup
     let document: WorkspaceDocument
     let controller: WorkspaceController
+    @State private var overflowPresented = false
 
     var body: some View {
+        TextScalerReader { scaler in tabBar(scaler: scaler) }
+    }
+
+    private func tabBar(scaler: TextScaler) -> some View {
         let slotID = document.slotContaining(groupID: group.id)
-        let canCollapse = slotID != nil && slotID != .center && group.panels.contains { panelID in
-            document.panels[panelID]?.isCollapsible == true
+        let canCollapse = slotID != nil && slotID != .center && group.panels.contains {
+            document.panels[$0]?.isCollapsible == true
         }
+        let control = max(24, scaler.scale(24))
         let tabButtons = group.panels.compactMap { panelID -> AnyView? in
-            guard document.panels[panelID] != nil else { return nil }
-            return AnyView(_WorkspaceTabButton(groupID: group.id,
-                                               panelID: panelID,
-                                               title: document.panels[panelID]!.title,
-                                               isActive: panelID == group.activePanelID,
-                                               isPinned: group.isPinned(panelID),
-                                               document: document,
-                                               controller: controller)
+            guard let panel = document.panels[panelID] else { return nil }
+            return AnyView(_WorkspaceTabButton(groupID: group.id, panelID: panelID, title: panel.title,
+                isActive: panelID == (group.activePanelID ?? group.panels.first), isPinned: group.isPinned(panelID),
+                document: document, controller: controller)
+                .flex(0, shrink: 0)
                 .semanticRole("workspace.tab")
                 .debugName("workspace-tab-\(panelID.rawValue)"))
         }
-        Row(alignment: .center, spacing: 0) {
-            tabButtons
-            Spacer(minLength: 0)
+        return Row(alignment: .center, spacing: 0) {
+            ScrollView(.horizontal) {
+                Row(alignment: .center, spacing: 0) { tabButtons }
+                    .flex(0, shrink: 0)
+            }
+            .flex(1, shrink: 1, basis: 0)
+            .frame(height: .percent(100), minWidth: 0)
+            .debugName("workspace-tabs-scroll-\(group.id.rawValue)")
+            if group.panels.count > 1 {
+                Popover(isPresented: $overflowPresented, width: max(240, scaler.scale(200)), placement: .end) {
+                    Icon(UIIcons.Action.moreHorizontal, size: 12)
+                        .frame(width: control, height: control)
+                        .accessibility { $0.label = "All panels" }
+                } content: {
+                    Menu(group.panels.compactMap { panelID in
+                        guard let panel = document.panels[panelID] else { return nil }
+                        return .item(MenuItem(id: panelID, title: panel.title,
+                            isSelected: panelID == group.activePanelID, action: {
+                                _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: panelID))
+                                overflowPresented = false
+                            }))
+                    }, width: max(240, scaler.scale(200)), onDismiss: { overflowPresented = false })
+                }
+                .flex(0, shrink: 0)
+                .semanticRole("workspace.tabs.overflow")
+                .debugName("workspace-tabs-overflow-\(group.id.rawValue)")
+            }
             if let panelID = group.activePanelID {
-                Button(icon: .resource(UIIcons.Navigation.expand), size: 12, tooltip: "Maximize") { _ = controller.dispatch(.toggleMaximize(panelID)) }
-                    .buttonStyle(.ghost).frame(width: 24, height: 24)
-                    .debugName("workspace-maximize-\(group.id.rawValue)")
+                Button(icon: .resource(UIIcons.Navigation.expand), size: 12, tooltip: "Maximize") {
+                    _ = controller.dispatch(.toggleMaximize(panelID))
+                }
+                .buttonStyle(.ghost).frame(width: control, height: control).flex(0, shrink: 0)
+                .debugName("workspace-maximize-\(group.id.rawValue)")
             }
             if canCollapse {
-                Button(icon: .resource(WorkspaceIcons.collapse(for: slotID)),
-                           size: 12,
-                           tooltip: "Collapse") {
+                Button(icon: .resource(WorkspaceIcons.collapse(for: slotID)), size: 12, tooltip: "Collapse") {
                     _ = controller.dispatch(.collapse(group.id))
                 }
-                .buttonStyle(.ghost)
-                .frame(width: 24, height: 24)
+                .buttonStyle(.ghost).frame(width: control, height: control).flex(0, shrink: 0)
                 .semanticRole("workspace.group.collapse")
                 .debugName("workspace-collapse-\(group.id.rawValue)")
             }
         }
         .padding(horizontal: 4, vertical: 0)
         .background(.surfaceRaised)
-        .frame(height: 32)
         .modifier(_WorkspaceTabBarHeight())
         .layoutRole("workspace-tab-bar")
+        .accessibility { $0.role = .group; $0.label = "Panel tabs" }
     }
 }
 
 private struct _WorkspaceTabBarHeight: ViewModifier {
     func apply(node: Node) {
-        node.layoutNode?.height = max(26, resolveWorkspaceTheme(on: node).tabBarHeight)
+        node.layoutNode?.height = max(26, node.compositionValue(of: TextScalerEnvironment.key).scale(resolveWorkspaceTheme(on: node).tabBarHeight))
+        node.layoutNode?.flexShrink = 0
+    }
+}
+
+/// The tab owns this callback, leaving ScrollView's measurement/motion callback
+/// intact. Only a new active tab or changed geometry moves the scroll position.
+private func updateWorkspaceTabReveal(_ node: Node, groupID: WorkspaceTabGroupID, isActive: Bool) {
+    let key = "workspace.tabs.revealedGeometry"
+    guard isActive else {
+        node.attachments.removeValue(forKey: key)
+        node.layoutDidUpdate = nil
+        return
+    }
+    node.layoutDidUpdate = { [weak node] _ in
+        guard let node else { return }
+        var ancestor = node.parent
+        while let current = ancestor {
+            if current.attachments[LayoutDebugAttachmentKey.debugName] as? String == "workspace-tabs-scroll-\(groupID.rawValue)" {
+                let geometry = CGSize(width: current.frame.width, height: node.frame.width)
+                guard geometry.width > 0, geometry.height > 0,
+                      node.attachments[key] as? CGSize != geometry else { return }
+                node.attachments[key] = geometry
+                let frame = node.absoluteFrame
+                let viewport = current.absoluteFrame
+                let delta = frame.minX < viewport.minX || frame.width > viewport.width ? frame.minX - viewport.minX
+                    : max(0, frame.maxX - viewport.maxX)
+                if abs(delta) > 0.01 { current.contentOffset.x = max(0, current.contentOffset.x + delta) }
+                return
+            }
+            ancestor = current.parent
+        }
     }
 }
 
@@ -860,6 +935,14 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.cursor = .pointer
+        node.isTabStop = isActive
+        updateWorkspaceTabReveal(node, groupID: groupID, isActive: isActive)
+        node.accessibility = AccessibilitySemantics(.tab) {
+            $0.label = title
+            $0.state.isSelected = isActive
+            $0.combinesChildren = true
+        }
+        node.accessibilityActions.activate = onClick
         guard let registry = InteractionRegistryHolder.current else {
             InteractionRegistryHolder.current?.remove(node)
             return
@@ -875,6 +958,22 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         let groupID = groupID
         let panelID = panelID
 
+        registry.setKey(node) { event, phase in
+            guard phase == .target, event.modifiers.isDisjoint(with: [.ctrl, .gui, .alt]) else { return .ignored }
+            if event.scancode == Scancode.return || event.scancode == Scancode.space { click(); return .handled }
+            guard [Scancode.arrowLeft, Scancode.arrowRight, Scancode.home, Scancode.end].contains(event.scancode),
+                  let command = SelectionNavigation.command(for: event.scancode),
+                  let group = controller.document.groups[groupID],
+                  let target = command.destination(in: group.panels, from: panelID) else { return .ignored }
+            _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: target))
+            if let root = workspaceRoot(from: node),
+               let targetNode = firstNode(rootedAt: root, debugName: "workspace-tab-\(target.rawValue)") {
+                node.isTabStop = false
+                targetNode.isTabStop = true
+                FocusChainHolder.current?.focus(targetNode)
+            }
+            return .handled
+        }
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
@@ -890,9 +989,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
-                guard document.panels[panelID]?.isDraggable != false else {
-                    return .ignored
-                }
+                FocusChainHolder.current?.focus(node, visible: false)
                 node.attachments[Self.pressKey] = _WorkspaceTabPressState(downX: event.x,
                                                                            downY: event.y,
                                                                            lastX: event.x,
@@ -946,7 +1043,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
             let dy = event.y - state.downY
             state.lastX = event.x
             state.lastY = event.y
-            if !state.didDrag, max(abs(dx), abs(dy)) >= 4 {
+            if !state.didDrag, document.panels[panelID]?.isDraggable != false, max(abs(dx), abs(dy)) >= 4 {
                 state.didDrag = true
                 cancelPress()
                 node.cursor = .move
@@ -980,7 +1077,8 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
-        let style = AnyButtonStyle(_WorkspaceTabButtonStyle())
+        let style = AnyButtonStyle(TabButtonStyle(height: max(26,
+            node.compositionValue(of: TextScalerEnvironment.key).scale(resolveWorkspaceTheme(on: node).tabBarHeight))))
         // Resolve the title color eagerly from this (parented) host node's theme
         // and pass it to `Text` directly. The button style's deferred
         // `.foregroundColor(.onSurface)` resolves against the *label* node's
@@ -997,7 +1095,8 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                                                   if isPinned {
                                                       Icon(WorkspaceIcons.pinDot, size: 6, color: titleColor)
                                                   }
-                                                  Text(title, color: titleColor).font(.label)
+                                                  Text(title, color: titleColor).lineLimit(1).font(.label)
+                                                      .frame(maxWidth: node.compositionValue(of: TextScalerEnvironment.key).scale(240))
                                               }),
                                               role: .normal,
                                               isPressed: isPressed,
@@ -1010,15 +1109,6 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     }
 
     static let pressKey = "__workspace_tab_press"
-}
-
-/// Tab look as one style keyed off `configuration.isSelected` (raised
-/// secondary chrome when active, ghost otherwise) instead of swapping whole
-/// styles around the state.
-private struct _WorkspaceTabButtonStyle: ButtonStyle {
-    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        TabButtonStyle(height: 32).makeBody(configuration: configuration)
-    }
 }
 
 private final class _WorkspaceTabPressState {
@@ -1226,45 +1316,91 @@ private struct _WorkspaceSplitDivider: _PrimitiveView {
         let theme = resolveWorkspaceTheme(on: node)
         let hitSize = max(1, theme.splitDividerThickness + theme.splitDividerHitSlop * 2)
         node.cursor = axis == .vertical ? .resizeHorizontal : .resizeVertical
+        node.isFocusable = true
+        node.isTabStop = true
         node.animatableSet(\.backgroundColor, to: nil)
         switch axis {
-        case .vertical:
-            node.layoutNode?.width = hitSize
-        case .horizontal:
-            node.layoutNode?.height = hitSize
+        case .vertical: node.layoutNode?.width = hitSize
+        case .horizontal: node.layoutNode?.height = hitSize
         }
-
-        let controller = controller
-        let splitID = splitID
-        let axis = axis
+        node.accessibility = AccessibilitySemantics(.slider) {
+            $0.label = "Resize \(splitID.rawValue) workspace region"
+            $0.help = axis == .vertical ? "Left and Right to resize; Home and End for limits" : "Up and Down to resize; Home and End for limits"
+        }
+        let available = workspaceResizeGeometry(splitID, from: node)?.1.split.available ?? 0
+        node.accessibilityValueProvider = AccessibilityValueProvider(
+            revision: AnyHashable(AccessibilityRevision(version: controller.version, available: available))) { [weak node] in
+            guard let node, let (_, geometry) = workspaceResizeGeometry(splitID, from: node) else { return "" }
+            return "\(Int((currentFraction(geometry) * 100).rounded()))%"
+        }
+        node.accessibilityActions.increment = { [weak node] in if let node { adjust(node, by: 0.02) } }
+        node.accessibilityActions.decrement = { [weak node] in if let node { adjust(node, by: -0.02) } }
         guard let registry = InteractionRegistryHolder.current else { return }
-        let route = InputHandlerRoute(role: .workspace,
-                                      priority: .capture,
-                                      debugName: "workspace.split")
-        registry.setPointer(node, route: route) { _, phase, _ in
+        let route = InputHandlerRoute(role: .workspace, priority: .capture, debugName: "workspace.split")
+        registry.setPointer(node, route: route) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
+                FocusChainHolder.current?.focus(node, visible: false)
                 PointerCaptureHolder.current?.acquire(node)
-                return .handled
             case .up:
-                if PointerCaptureHolder.current?.target === node {
-                    PointerCaptureHolder.current?.release()
-                }
-                return .handled
+                if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
             }
+            return .handled
         }
         registry.setMotion(node, route: route) { event, _ in
             guard PointerCaptureHolder.current?.target === node,
-                  let fraction = resolveWorkspaceSplitFraction(splitID: splitID,
-                                                               axis: axis,
-                                                               x: event.x,
-                                                               y: event.y,
-                                                               from: node) else {
-                return .ignored
-            }
-            _ = controller.dispatch(.resizeSplit(splitID, fraction: fraction))
+                  let (container, geometry) = workspaceResizeGeometry(splitID, from: node),
+                  geometry.split.available > 0 else { return .ignored }
+            let origin = container.absoluteOrigin
+            let position = geometry.horizontal ? event.x - Float(origin.x) : event.y - Float(origin.y)
+            write((position - geometry.offset) / geometry.split.available, geometry: geometry)
             return .handled
         }
+        registry.setKey(node) { event, phase in
+            guard phase == .target, event.modifiers.isDisjoint(with: [.ctrl, .gui, .alt]),
+                  let (_, geometry) = workspaceResizeGeometry(splitID, from: node) else { return .ignored }
+            let step: Float = event.modifiers.contains(.shift) ? 0.1 : 0.02
+            switch event.scancode {
+            case Scancode.home: write(geometry.split.range.lowerBound, geometry: geometry)
+            case Scancode.end: write(geometry.split.range.upperBound, geometry: geometry)
+            case Scancode.arrowLeft where axis == .vertical, Scancode.arrowUp where axis == .horizontal:
+                adjust(node, by: -step)
+            case Scancode.arrowRight where axis == .vertical, Scancode.arrowDown where axis == .horizontal:
+                adjust(node, by: step)
+            default: return .ignored
+            }
+            return .handled
+        }
+    }
+
+    private struct AccessibilityRevision: Hashable {
+        let version: UInt64
+        let available: Float
+    }
+
+    private func currentFraction(_ geometry: WorkspaceResizeGeometry) -> Float {
+        let saved: Float?
+        switch splitID.rawValue {
+        case "leading": saved = controller.document.splitFractions.leading
+        case "centerTrailing": saved = controller.document.splitFractions.centerTrailing
+        case "topBottom": saved = controller.document.splitFractions.topBottom
+        case "top": saved = controller.document.splitFractions.top
+        default: saved = nil
+        }
+        let value = saved ?? geometry.split.fraction
+        return max(geometry.split.range.lowerBound, min(geometry.split.range.upperBound, value))
+    }
+
+    private func write(_ value: Float, geometry: WorkspaceResizeGeometry) {
+        guard value.isFinite else { return }
+        _ = controller.dispatch(.resizeSplit(splitID,
+            fraction: max(geometry.split.range.lowerBound, min(geometry.split.range.upperBound, value))))
+    }
+
+    private func adjust(_ node: Node, by delta: Float) {
+        guard let (_, geometry) = workspaceResizeGeometry(splitID, from: node) else { return }
+        write(currentFraction(geometry) + delta, geometry: geometry)
     }
 
     func _makeLayoutNode() -> LayoutNode? {
@@ -1702,53 +1838,6 @@ private func railEdge(slotID: WorkspaceSlotID,
         return .top
     default:
         return .bottom
-    }
-}
-
-private func resolveWorkspaceSplitFraction(splitID: WorkspaceSplitID,
-                                           axis: _WorkspaceSplitAxis,
-                                           x: Float,
-                                           y: Float,
-                                           from node: Node) -> Float? {
-    guard let root = workspaceRoot(from: node) else { return nil }
-    let point = CGPoint(x: CGFloat(x), y: CGFloat(y))
-
-    switch splitID.rawValue {
-    case "leading":
-        guard axis == .vertical,
-              let leading = firstNode(rootedAt: root, debugName: "workspace-region-leading"),
-              let center = firstNode(rootedAt: root, debugName: "workspace-center-column") else {
-            return nil
-        }
-        let leadingFrame = absoluteFrame(of: leading)
-        let centerFrame = absoluteFrame(of: center)
-        let minX = leadingFrame.minX
-        let maxX = centerFrame.maxX
-        return Float((point.x - minX) / max(maxX - minX, 1))
-    case "centerTrailing":
-        guard axis == .vertical,
-              let center = firstNode(rootedAt: root, debugName: "workspace-center-column"),
-              let trailing = firstNode(rootedAt: root, debugName: "workspace-region-trailing") else {
-            return nil
-        }
-        let centerFrame = absoluteFrame(of: center)
-        let trailingFrame = absoluteFrame(of: trailing)
-        let minX = centerFrame.minX
-        let maxX = trailingFrame.maxX
-        return Float((point.x - minX) / max(maxX - minX, 1))
-    case "topBottom":
-        guard axis == .horizontal,
-              let center = firstNode(rootedAt: root, debugName: "workspace-region-center"),
-              let bottom = firstNode(rootedAt: root, debugName: "workspace-bottom-slot") else {
-            return nil
-        }
-        let centerFrame = absoluteFrame(of: center)
-        let bottomFrame = absoluteFrame(of: bottom)
-        let minY = centerFrame.minY
-        let maxY = bottomFrame.maxY
-        return Float((point.y - minY) / max(maxY - minY, 1))
-    default:
-        return nil
     }
 }
 
