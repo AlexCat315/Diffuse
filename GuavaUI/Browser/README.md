@@ -4,6 +4,8 @@
 ViewGraph、节点树、Yoga 布局、输入分发、State/Binding 和 DrawList。
 FreeType/HarfBuzz 字体管线也已共用，浏览器文字绘制为真实的图集字形四边形。
 Inspector 读取真实节点和失效记录，支持状态检查点、状态差异、输入录制和回放。
+同一组件也已接入 Android NativeRHI Vulkan 宿主，完成字体、触摸、IME 回调与
+窗口重建的真机验证，见 [Android SharedCounter](../../Android/README.md)。
 
 ## 构建与运行
 
