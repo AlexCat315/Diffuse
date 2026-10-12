@@ -71,3 +71,13 @@ GPU 回归报告和场景像素默认写入 `Engine/build/gpu-regression/`；每
 Swift 6.4.0 + Android SDK + NDK r30 已在 Android 16 / ARM64 / Adreno 710 上编译并运行 NativeRHI 与 GuavaUI 共享代码。设备 loader 为 Vulkan 1.4，物理驱动实际为 1.1.128。核心 render pass、timeline KHR feature 协商与 SPIR-V 1.3 UI 产物已接入，七项 GPU/布局检查及 APK 横竖屏、触摸、前后台 surface 重建检查通过。详见 [Android 复现与支持边界](../../../../../Android/README.md)。
 
 本轮 macOS 回归：121 项 NativeRHI 测试通过且无跳过；43 项相关 GuavaUI 测试通过；10 项 shader 工具链契约通过，86 份产物与反射重新编译一致。Swift 可维护性检查发现既有 `GuavaUI/Sources/GuavaUIApp/Core/AppDisplayHandle.swift` 为 29 个存储属性、既有上限为 27，本轮没有修改该文件，也没有扩大 baseline。
+
+### SharedCounter 真机接入
+
+Android APK 已进一步运行桌面和浏览器共用的 `SharedCounterView`。字体依赖由 NDK 从仓库固定的 FreeType / HarfBuzz 子模块构建，实际文字经共享 FontAtlas / DrawList / NativeDrawListRenderer 在 Vulkan 上呈现。Java 宿主管理 Choreographer、Surface 和 InputConnection。
+
+`scripts/android/verify-demo.py` 在同一台 Android 16 / Adreno 710 设备通过 22 个检查点，并检查计数字形截图变化、主题背景像素、拖出取消和空闲时停止 GPU 提交。真实 Android IME 绑定与英文按键提交通过；中文预编辑、提交、取消、代理对及组合字素通过 debug 广播调用同一 InputConnection 验证。后者是回调回放，尚不代表所有系统输入法的人工验收。
+
+Activity 重建、回到桌面再返回、横竖屏窗口重排均保留计数、主题与已提交文字；焦点、预编辑和 GPU 会话不进入持久状态。横竖屏截图也检查了平板兼容窗口中的真实 Surface 偏移。
+
+接入字体工具链后的七项 NativeRHI GPU/布局探针再次通过；GuavaUI Portable 96 项和 GuavaUIText 12 项主机测试通过。完整组件 Gallery 和完整 TextField 不在本轮范围内。复现命令、输出格式和限制见 [Android 文档](../../../../../Android/README.md)。
