@@ -184,9 +184,10 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertLessThan(bottomRail.minY, statusBar.minY)
     }
 
-    func testTopSlotAndBottomChromeSlotUseFixedWorkspaceSlots() {
+    func testTopSlotUsesPreferredContentHeightAndBottomChromeRemainsFixed() {
         var document = Self.makeDocument()
-        document.panels["timeline"] = WorkspacePanel(id: "timeline", title: "Timeline")
+        document.panels["timeline"] = WorkspacePanel(id: "timeline", title: "Timeline",
+            sizing: .init(height: .init(preferred: 126)))
         document.groups["timeline"] = WorkspaceTabGroup(id: "timeline",
                                                         panels: ["timeline"],
                                                         activePanelID: "timeline")
@@ -203,7 +204,8 @@ final class WorkspaceViewTests: XCTestCase {
                                    height: 640,
                                    root: Self.makeWorkspaceRoot(controller: controller))
 
-        let topSlot = rig.frame(named: "workspace-slot-top")
+        for _ in 0..<4 { rig.pump() }
+        let topSlot = rig.frame(named: "workspace-region-top")
         let bottomChrome = rig.frame(named: "workspace-chrome-\(toolbarID.rawValue)")
         XCTAssertEqual(topSlot.minY, 0, accuracy: 0.5)
         XCTAssertEqual(topSlot.height, 160, accuracy: 0.5)
@@ -555,23 +557,23 @@ final class WorkspaceViewTests: XCTestCase {
     func testDraggingWorkspaceSplitDividersUpdatesFractions() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 
-        let leadingBefore = rig.controller.document.splitFractions.leading
+        let leadingBefore = rig.controller.document.splitFractions.leading ?? -1
         let leadingSplit = rig.frame(named: "workspace-split-leading")
         rig.drag(from: leadingSplit.center,
                  to: CGPoint(x: leadingSplit.center.x + 70, y: leadingSplit.center.y))
-        XCTAssertGreaterThan(rig.controller.document.splitFractions.leading, leadingBefore)
+        XCTAssertGreaterThan(rig.controller.document.splitFractions.leading ?? -1, leadingBefore)
 
-        let centerTrailingBefore = rig.controller.document.splitFractions.centerTrailing
+        let centerTrailingBefore = rig.controller.document.splitFractions.centerTrailing ?? -1
         let centerTrailingSplit = rig.frame(named: "workspace-split-centerTrailing")
         rig.drag(from: centerTrailingSplit.center,
                  to: CGPoint(x: centerTrailingSplit.center.x - 60, y: centerTrailingSplit.center.y))
-        XCTAssertLessThan(rig.controller.document.splitFractions.centerTrailing, centerTrailingBefore)
+        XCTAssertLessThan(rig.controller.document.splitFractions.centerTrailing ?? -1, centerTrailingBefore)
 
-        let topBottomBefore = rig.controller.document.splitFractions.topBottom
+        let topBottomBefore = rig.controller.document.splitFractions.topBottom ?? -1
         let bottomSplit = rig.frame(named: "workspace-split-topBottom")
         rig.drag(from: bottomSplit.center,
                  to: CGPoint(x: bottomSplit.center.x, y: bottomSplit.center.y - 50))
-        XCTAssertLessThan(rig.controller.document.splitFractions.topBottom, topBottomBefore)
+        XCTAssertLessThan(rig.controller.document.splitFractions.topBottom ?? -1, topBottomBefore)
     }
 
     func testFloatingGroupRendersAboveWorkspaceWithoutChangingMainRegionFrames() {
@@ -946,5 +948,122 @@ private final class WorkspaceViewRig {
 private extension CGRect {
     var center: CGPoint {
         CGPoint(x: midX, y: midY)
+    }
+}
+
+extension WorkspaceViewTests {
+    func testPanelSizingAppliesToOuterPointerKeyboardAndAccessibilityAndRestores() throws {
+        var document = Self.makeDocument()
+        document.panels["hierarchy"]?.sizing.width = .init(minimum: 160, preferred: 200, maximum: 240)
+        document.panels["viewport"]?.sizing.width = .init(minimum: 300)
+        document.panels["inspector"]?.sizing.width = .init(minimum: 180, preferred: 220, maximum: 280)
+        document.panels["console"]?.sizing.height = .init(minimum: 90, preferred: 150, maximum: 200)
+        document.splitFractions = .init()
+        let controller = WorkspaceController(document: document)
+        let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 600,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+        for _ in 0..<5 { rig.pump() }
+        XCTAssertEqual(rig.frame(named: "workspace-region-leading").width, 200, accuracy: 1)
+        XCTAssertEqual(rig.frame(named: "workspace-region-trailing").width, 220, accuracy: 1)
+        XCTAssertEqual(rig.frame(named: "workspace-region-bottom").height, 184, accuracy: 1)
+        XCTAssertEqual(controller.document, document, "Measurement must not persist viewport state")
+        let divider = rig.node(named: "workspace-split-leading")
+        XCTAssertEqual(divider.accessibility?.role, .slider)
+        rig.click(divider.absoluteFrame.center)
+        XCTAssertTrue(rig.focus.focused === divider)
+        rig.dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.end, keycode: 0, modifiers: [], isRepeat: false)))
+        for _ in 0..<3 { rig.pump() }
+        XCTAssertEqual(rig.frame(named: "workspace-region-leading").width, 240, accuracy: 1)
+        divider.accessibilityActions.decrement?()
+        for _ in 0..<3 { rig.pump() }
+        XCTAssertLessThan(rig.frame(named: "workspace-region-leading").width, 240)
+        rig.drag(from: rig.frame(named: "workspace-split-leading").center, to: CGPoint(x: -500, y: 100))
+        XCTAssertEqual(rig.frame(named: "workspace-region-leading").width, 160, accuracy: 1)
+        let saved = try JSONEncoder().encode(controller.document)
+        let restored = try JSONDecoder().decode(WorkspaceDocument.self, from: saved)
+        controller.replace(restored)
+        for _ in 0..<3 { rig.pump() }
+        XCTAssertEqual(rig.frame(named: "workspace-region-leading").width, 160, accuracy: 1)
+        XCTAssertEqual(controller.document.panels["hierarchy"]?.sizing.width,
+                       .init(minimum: 160, preferred: 200, maximum: 240))
+    }
+
+    func testCrampedWorkspaceSharesMinimumsWithoutHorizontalOverflow() {
+        var document = Self.makeDocument()
+        document.panels["hierarchy"]?.sizing.width = .init(minimum: 160)
+        document.panels["viewport"]?.sizing.width = .init(minimum: 300)
+        document.panels["inspector"]?.sizing.width = .init(minimum: 180)
+        let controller = WorkspaceController(document: document)
+        let rig = WorkspaceViewRig(controller: controller, width: 380, height: 320,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+        for _ in 0..<5 { rig.pump() }
+        let leading = rig.frame(named: "workspace-region-leading")
+        let center = rig.frame(named: "workspace-region-center")
+        let trailing = rig.frame(named: "workspace-region-trailing")
+        XCTAssertGreaterThan(leading.width, 0)
+        XCTAssertGreaterThan(center.width, 0)
+        XCTAssertGreaterThan(trailing.width, 0)
+        XCTAssertGreaterThanOrEqual(leading.minX, 0)
+        XCTAssertLessThanOrEqual(trailing.maxX, 380.5)
+        XCTAssertEqual(leading.width / (center.width + trailing.width), 160 / 480, accuracy: 0.01)
+        XCTAssertEqual(controller.document, document)
+    }
+
+    func testTopRegionUsesTheSharedHeightContractAndKeyboard() {
+        var document = Self.makeDocument()
+        document.panels["top-panel"] = .init(id: "top-panel", title: "Top", sizing: .init(
+            height: .init(minimum: 80, preferred: 100, maximum: 160)))
+        document.groups["top-group"] = .init(id: "top-group", panels: ["top-panel"])
+        document.setSlot(.init(id: .top, layout: .group("top-group")))
+        let controller = WorkspaceController(document: document)
+        let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 800,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+        for _ in 0..<5 { rig.pump() }
+        XCTAssertEqual(rig.frame(named: "workspace-region-top").height, 134, accuracy: 1)
+        let divider = rig.node(named: "workspace-split-top")
+        rig.focus.focus(divider)
+        rig.dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.end, keycode: 0, modifiers: [], isRepeat: false)))
+        for _ in 0..<3 { rig.pump() }
+        XCTAssertEqual(rig.frame(named: "workspace-region-top").height, 194, accuracy: 1)
+        XCTAssertNotNil(controller.document.splitFractions.top)
+    }
+
+    func testTwoHundredPercentTabsKeepControlsReachableAndRevealKeyboardSelection() {
+        var document = Self.makeDocument()
+        for id in [WorkspaceSlotID.leading, .trailing, .bottom] { document.slots[id]?.layout = nil }
+        let panels = (0..<32).map { WorkspacePanelID(rawValue: "tab-\($0)") }
+        for panelID in panels {
+            document.panels[panelID] = .init(id: panelID, title: "A long translated panel title \(panelID.rawValue)")
+        }
+        document.groups["center"] = .init(id: "center", panels: panels, activePanelID: panels.first)
+        let controller = WorkspaceController(document: document)
+        let root = AnyView(Self.makeWorkspaceRoot(controller: controller).textScaler(.init(2)))
+        let rig = WorkspaceViewRig(controller: controller, width: 420, height: 400, root: root)
+        for _ in 0..<5 { rig.pump() }
+        let group = rig.frame(named: "workspace-group-center")
+        let content = rig.frame(named: "workspace-panel-tab-0")
+        XCTAssertEqual(content.minY - group.minY, 68, accuracy: 0.5)
+        let overflow = rig.frame(named: "workspace-tabs-overflow-center")
+        let maximize = rig.frame(named: "workspace-maximize-center")
+        XCTAssertGreaterThan(overflow.width, 0)
+        XCTAssertLessThanOrEqual(maximize.maxX, group.maxX)
+        let first = rig.node(named: "workspace-tab-tab-0")
+        XCTAssertTrue(first.isTabStop)
+        XCTAssertFalse(rig.node(named: "workspace-tab-tab-1").isTabStop)
+        let initialScroll = rig.node(named: "workspace-tabs-scroll-center")
+        let initialLast = rig.node(named: "workspace-tab-tab-31")
+        XCTAssertGreaterThan(initialLast.absoluteFrame.maxX, initialScroll.absoluteFrame.maxX,
+            "The overflow fixture must exceed the viewport even without a native font atlas")
+        rig.click(first.absoluteFrame.center)
+        XCTAssertTrue(rig.focus.focused === first)
+        rig.dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.end, keycode: 0, modifiers: [], isRepeat: false)))
+        for _ in 0..<4 { rig.pump() }
+        XCTAssertEqual(controller.document.groups["center"]?.activePanelID, panels.last)
+        let scroll = rig.node(named: "workspace-tabs-scroll-center")
+        let last = rig.node(named: "workspace-tab-tab-31")
+        XCTAssertGreaterThan(scroll.contentOffset.x, 0)
+        XCTAssertTrue(last.isTabStop)
+        XCTAssertEqual(last.accessibility?.state.isSelected, true)
+        XCTAssertGreaterThanOrEqual(last.absoluteFrame.minX, scroll.absoluteFrame.minX - 1)
     }
 }

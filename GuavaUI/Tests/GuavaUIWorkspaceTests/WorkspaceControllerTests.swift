@@ -59,8 +59,8 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertFalse(controller.document.groups["leading"]?.isCollapsed == true)
         XCTAssertFalse(controller.document.groups["trailing"]?.isCollapsed == true)
         XCTAssertFalse(controller.document.groups["bottom"]?.isCollapsed == true)
-        XCTAssertEqual(controller.document.splitFractions.leading, 0.24, accuracy: 0.0001)
-        XCTAssertEqual(controller.document.splitFractions.topBottom, 0.68, accuracy: 0.0001)
+        XCTAssertEqual(controller.document.splitFractions.leading ?? -1, 0.24, accuracy: 0.0001)
+        XCTAssertEqual(controller.document.splitFractions.topBottom ?? -1, 0.68, accuracy: 0.0001)
         XCTAssertTrue(controller.document.collapsed.isEmpty)
     }
 
@@ -252,7 +252,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
         XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["console", "assets"])
         XCTAssertEqual(controller.document.groups["bottom"]?.activePanelID, "assets")
-        XCTAssertEqual(controller.document.splitFractions.topBottom, 0.68, accuracy: 0.0001)
+        XCTAssertEqual(controller.document.splitFractions.topBottom ?? -1, 0.68, accuracy: 0.0001)
     }
 
     func testCenterRegionCannotCollapseEvenWithCollapsiblePanels() {

@@ -12,6 +12,7 @@ public struct PanelDescriptor {
     public var closable: Bool
     public var preferredSlot: PanelWorkspaceSlot
     public var iconAssetKey: String?
+    public var sizing = WorkspacePanelSizing()
     /// 视图构建闭包。GuavaUIApp 在 `Recomposer.commitAll()` /
     /// `ViewGraph.materialise` 路径上同步调用它，调用线程与窗口主循环线程
     /// 一致。闭包内可以自由读取主线程持有的 store / controller。
@@ -22,12 +23,14 @@ public struct PanelDescriptor {
                 closable: Bool = true,
                 preferredSlot: PanelWorkspaceSlot = .center,
                 iconAssetKey: String? = nil,
+                sizing: WorkspacePanelSizing = .init(),
                 factory: @escaping () -> AnyView) {
         self.id = id
         self.title = title
         self.closable = closable
         self.preferredSlot = preferredSlot
         self.iconAssetKey = iconAssetKey
+        self.sizing = sizing
         self.factory = factory
     }
 
@@ -37,12 +40,14 @@ public struct PanelDescriptor {
                                closable: Bool = true,
                                preferredSlot: PanelWorkspaceSlot = .center,
                                iconAssetKey: String? = nil,
+                               sizing: WorkspacePanelSizing = .init(),
                                @ViewBuilder content: @escaping () -> Content) {
         self.init(id: id,
                   title: title,
                   closable: closable,
                   preferredSlot: preferredSlot,
                   iconAssetKey: iconAssetKey,
+                  sizing: sizing,
                   factory: { AnyView(content()) })
     }
 
@@ -53,6 +58,7 @@ public struct PanelDescriptor {
                                  isClosable: closable,
                                  isCollapsible: preferredSlot != .center,
                                  iconAssetKey: iconAssetKey,
+                                 sizing: sizing,
                                  factory: factory)
     }
 }

@@ -4,7 +4,7 @@ GuavaUI 的 docking 系统公开名称是 `GuavaUIWorkspace` 模块和 `Workspac
 
 ## 模型与操作
 
-- `WorkspacePanel`：软件定义的稳定面板 ID、标题、图标键与关闭/拖拽/折叠能力。
+- `WorkspacePanel`：软件定义的稳定面板 ID、标题、图标键、关闭/拖拽/折叠能力与 `WorkspacePanelSizing` 内容尺寸契约。
 - `WorkspaceTabGroup`：面板顺序、activePanelID、折叠状态与 pinnedPanelIDs。
 - `WorkspaceSlot`：开放的槽 ID、kind、尺寸策略和该槽的布局树。软件可以新增区域或 chrome 槽。
 - `WorkspaceLayoutNode`：group 或横/纵 split，比例存储在实际拆分节点。
@@ -27,15 +27,29 @@ controller.replace(try JSONDecoder().decode(WorkspaceDocument.self, from: saved)
 
 标签点击、关闭、同组重排、跨组移动、边缘拆分、拖拽 ghost/落点预览；区域折叠/恢复与可选动画；聚焦/最大化/恢复；关闭其他/右侧、重开关闭面板、pin 的模型操作；浮动组的位置、层级与重新停靠；紧凑视图中的面板切换。
 
-外层区域分隔符修改 `WorkspaceSplitFractions`。内部 docking 拆分原来只渲染 8pt 空隙，没有拖动柄；本轮改用原生 SplitView，支持 pointer、箭头和辅助功能 increment/decrement。新的 `resizeLayoutSplit(WorkspaceLayoutSplit, fraction:)` 写回所属 slot 的实际树，触发订阅并标记 persistenceDirty。
+面板用 `WorkspacePanelSizing(width:height:)` 声明逻辑内容尺寸，每个轴拥有 `minimum / preferred / maximum`，直接随面板 Codable 持久化。约束跟随面板移动，分组综合所有标签的约束，避免换标签时跳动；同轴拆分累加最小/最大值和 divider，交叉轴取共同边界。标题栏高度额外计入垂直约束，200% 字体时同步扩高。初始化和解码会归一化非有限值、负值以及 min/max 冲突，缺失尺寸组使用独立默认值。
+
+```swift
+WorkspacePanel(id: "inspector", title: "Inspector", sizing: .init(
+    width: .init(minimum: 180, preferred: 260, maximum: 360),
+    height: .init(minimum: 90, preferred: 160, maximum: 240)))
+```
+
+外层 leading / trailing / top / bottom 与内部 docking 拆分使用同一尺寸范围解析。`WorkspaceSplitFractions` 的轴值为可选值：nil 使用面板 preferred 作为初始提示，没有提示时使用工作区默认比例；用户拖动后写入显式比例，恢复文档后继续尊重用户比例。测量到的窗口尺寸、动画、滚动位置、聚焦和 pointer 状态均留在运行时，不进入文档。外层区域的箭头、Shift + 箭头（大步长）、Home/End，以及辅助功能 increment/decrement 与指针写入相同边界。
+
+填满式拆分在约束可以同时满足时执行 min/max；窗口比总 minimum 还小时，按 minimum 比例压缩，保持区域不向窗口外溢出。总 maximum 小于可用空间时，填满容器会使上限不可同时满足，剩余空间按 maximum 比例分配。这是明确的冲突规则，不等同于自动折叠或吸附。浮动层也执行面板尺寸边界，但仍是当前应用窗口中的浮层。
+
+标签条采用水平滚动，长标题限制为单行，独立保留全部面板菜单、最大化和折叠按钮。活动标签切换或 viewport 改变时滚入可见区域，普通滚动不重置位置；一个 tab group 只有活动标签进入 Tab 顺序，Left/Right/Home/End 切换选择。菜单通过 portal 展开，不受面板 clipping 限制。标签高度与操作按钮消费文字缩放，200% 字体仍可操作。pin 当前继续使用图标标识。
+
+内部 docking 拆分使用原生 SplitView，支持 pointer、箭头和辅助功能 increment/decrement；`resizeLayoutSplit(WorkspaceLayoutSplit, fraction:)` 写回所属 slot 的实际树，触发订阅并标记 persistenceDirty。
 
 拆分地址用 slot 与两侧代表 group ID 定位其共同祖先，不依赖压缩后视图的数组下标；折叠隐藏分支仍保留在作者布局中。失效地址、非有限比例和相同比例不产生变化。测试覆盖嵌套树、隐藏分支、真实事件拖动/键盘及 JSON 恢复。
 
 ## 仍需完善
 
-- **尺寸协议**：内部拆分已经可调整，但 WorkspacePanel 还没有可序列化的 min/preferred/max 内容尺寸。外层区域仍只依赖比例，窗口很窄时可能挤压内容；通用 N 面板联动、折叠阈值与吸附尚缺。
-- **标签条**：当前标签条固定高度，200% 文字、超长标题、大量标签、可滚动条与 overflow 菜单、pin 的专属视觉区以及完整 roving keyboard 尚未统一完成。模型中有 pin/closeOthers 不代表 UI 已完整。
-- **主题**：WorkspaceTheme 存在，但一些 chrome/图标/高度仍硬编码，未全部消费 theme 字段与文字缩放。内部新分隔柄使用 SplitView 的主题线条；外层柄尚未统一到同一键盘/辅助功能协议。
+- **尺寸交互深化**：通用 N 面板联动、自动折叠阈值、吸附、最大值冲突时留白策略尚缺；当前二叉拆分按明确的填满规则退化。
+- **标签条**：滚动、全部面板菜单、活动标签键盘导航和 200% 尺寸已接入；pin 的专属视觉区、关闭其他/右侧的可见操作、长标题完整提示仍需完善。模型中有 pin/closeOthers 不代表 UI 已完整。
+- **主题**：WorkspaceTheme 存在，但一些 chrome/图标/高度仍硬编码，未全部消费 theme 字段与文字缩放。内部新分隔柄使用 SplitView 的主题线条；外层柄已共享尺寸范围与键盘/辅助功能调整。
 - **浮动**：WorkspaceFloatingWindow 是当前应用窗口中的浮动面板层，不能宣称具有独立 OS 窗口、跨窗口拖拽或多屏恢复。
 - **持久化边界**：比例/分组 round trip 已测试；整个 document 的外部不可信解码校验、重复引用/缺失 panel、屏幕变更后的位置修复及可版本化应用格式仍需成套实现。
 - **维护性与性能**：View/controller 仍有大型文件，需要继续按 shell、tabs、drag、floating 分域拆分；大型面板数、复杂内容、快速跨组拖动和长期运行需单独原生测量。

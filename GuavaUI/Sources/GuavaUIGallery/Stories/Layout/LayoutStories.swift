@@ -94,19 +94,21 @@ struct WorkspaceStory: View {
     @State private var status = "Drag a tab or a split divider"
     static func defaultDocument() -> WorkspaceDocument {
         WorkspaceDocument(panels: [
-            "files": WorkspacePanel(id: "files", title: "Files"),
+            "files": WorkspacePanel(id: "files", title: "Files", sizing: .init(width: .init(minimum: 160, preferred: 240, maximum: 340))),
+            "search": WorkspacePanel(id: "search", title: "Search across the entire workspace", sizing: .init(width: .init(minimum: 180, preferred: 260, maximum: 360))),
+            "history": WorkspacePanel(id: "history", title: "Version history and incoming changes"),
             "editor": WorkspacePanel(id: "editor", title: "Editor", isClosable: false, isCollapsible: false),
-            "preview": WorkspacePanel(id: "preview", title: "Preview")
+            "preview": WorkspacePanel(id: "preview", title: "Preview", sizing: .init(height: .init(minimum: 80, preferred: 140, maximum: 240)))
         ], groups: [
-            "left": WorkspaceTabGroup(id: "left", panels: ["files"], activePanelID: "files"),
+            "left": WorkspaceTabGroup(id: "left", panels: ["files", "search", "history"], activePanelID: "files"),
             "main": WorkspaceTabGroup(id: "main", panels: ["editor"], activePanelID: "editor"),
             "preview": WorkspaceTabGroup(id: "preview", panels: ["preview"], activePanelID: "preview")
         ], slots: WorkspaceSlot.standardEditorSlots(leading: .group("left"), center:
             .split(axis: .vertical, fraction: 0.58, first: .group("main"), second: .group("preview"))),
-           splitFractions: WorkspaceSplitFractions(leading: 0.25))
+           splitFractions: WorkspaceSplitFractions())
     }
     var body: some View {
-        StorySection("Dock workspace", "Drag tabs to an edge to create a split. Drag or focus the inner divider and use arrow keys. Save and restore persists the complete layout.") {
+        StorySection("Dock workspace", "Every panel owns persistent minimum, preferred and maximum sizes. Focus any divider for arrow/Home/End adjustment. Overflowing tabs scroll horizontally, including at 200%. Save and restore persists authored sizes and user splits.") {
             Row(alignment: .center, spacing: 10) {
                 Button("Save layout") {
                     do { saved = try JSONEncoder().encode(controller.document); status = "Layout saved" }
@@ -120,7 +122,7 @@ struct WorkspaceStory: View {
                 Button("Reset") { controller.replace(Self.defaultDocument()); status = "Layout reset" }.buttonStyle(.ghost)
             }
             WorkspaceView(controller: controller) { id in
-                AnyView(Text(id == "files" ? "Sources\nResources\nTests" : id == "editor" ? "Editable document workspace" : "Preview panel").padding(18))
+                AnyView(Text(id == "files" ? "Sources\nResources\nTests" : id == "editor" ? "Editable document workspace" : id == "search" ? "Search panel" : id == "history" ? "Version history" : "Preview panel").padding(18))
             }.frame(height: 360).border(.border, width: 1)
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted)
         }
@@ -129,7 +131,8 @@ struct WorkspaceStory: View {
 
 struct LayoutStory: View {
     var body: some View {
-        StorySection("Flex layout", "Layout containers arrange children; spacing and alignment belong to the owning container.") {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+          StorySection("Flex layout", "Layout containers arrange children; spacing and alignment belong to the owning container.") {
             Row(alignment: .center, spacing: 12) {
                 Badge("Leading", tone: .info); Spacer(); Badge("Trailing", tone: .success)
             }.padding(12).background(.surfaceVariant).cornerRadius(6)
@@ -137,6 +140,8 @@ struct LayoutStory: View {
             Box(direction: .row, alignItems: .stretch, spacing: 12) {
                 for i in 1...3 { AnyView(Text("Column \(i)").padding(24).background(.surfaceVariant).cornerRadius(6).flex(Float(i), shrink: 1, basis: 0)) }
             }
+          }
+          LayoutFoundationExamples()
         }
     }
 }
