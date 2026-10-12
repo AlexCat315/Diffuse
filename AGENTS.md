@@ -72,6 +72,24 @@ Default thresholds are below and may be adjusted by language and project:
 - Do not add old API aliases, legacy decoders, or migration layers just to support old call patterns; update callers and formats directly.
 - After migration, remove unused old paths and fields to avoid dual maintenance.
 
+## 6. API Surface and Non-Invasiveness
+
+- Keep the public API surface minimal and intentional. Default to the narrowest visibility; make something public only when a first-party caller must use it.
+- Do not leak internal types, storage, helpers, lifecycle details, or mutable state through the public API.
+- Design non-invasive APIs. An API must not require callers to:
+  - inherit from a framework/base type;
+  - conform to unrelated protocols;
+  - wrap, subclass, or restructure their own domain types;
+  - pass internal context, tokens, handles, or implementation details;
+  - register globals or mutate shared state;
+  - adopt framework-specific control flow, lifecycle, threading, or ordering just to use the API.
+- Prefer composition, plain values, functions, and narrow protocols over inheritance, global registration, and deep callback chains.
+- Let callers pass data in and receive results out. If a high-level operation needs multiple internal steps, expose a facade or entry point instead of forcing callers to orchestrate them.
+- Put any required adaptation in an adapter/facade at the boundary. Do not push framework details into caller code.
+- Keep dependencies directional. Public APIs must not force higher-level concepts into lower-level modules or leak domain-internal types across boundaries.
+- Adding or changing an API should not require invasive edits across many unrelated call sites. If it does, reconsider the boundary.
+- When in doubt, start with the smallest non-invasive API and expand only for proven caller needs.
+
 ## 6. Review Checklist
 
 When submitting or reviewing code, check the following:
@@ -93,3 +111,14 @@ When submitting or reviewing code, check the following:
 - [ ] Do API migrations cover all first-party callers, tests, and embedded templates?
 - [ ] Are compatibility layers, old aliases, and legacy decoders avoided?
 - [ ] Are unrelated working-tree changes preserved?
+- [ ] Is the public API surface minimal and intentional?
+- [ ] Are internal types, state, helpers, and lifecycle details hidden?
+- [ ] Can callers use the API without inheritance, wrapping, global registration, or restructuring?
+- [ ] Are multi-step internal workflows exposed as a facade/entry point rather than caller orchestration?
+- [ ] Is adaptation kept at the boundary?
+- [ ] Are dependencies directional and free of leaked internal types?
+- [ ] Does the API avoid exposing mutable internal state?
+- [ ] Could a smaller value/function/protocol-based API work instead?
+
+
+Keep public APIs minimal and non-invasive: expose only what callers need, and never require callers to inherit, conform, wrap, register, or restructure their code just to use the API.
