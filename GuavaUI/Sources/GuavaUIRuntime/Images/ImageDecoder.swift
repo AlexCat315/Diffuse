@@ -28,22 +28,6 @@ public enum ImageDecodeError: Error, CustomStringConvertible {
     }
 }
 
-/// Raw RGBA8 bitmap with straight (non-premultiplied) alpha. Width/height
-/// are in pixels; `pixels.count == width * height * 4`. The byte order is
-/// `[R, G, B, A]`, top-left origin, which matches what
-/// `DrawListRenderer.registerColorTexture(...)` expects.
-public struct DecodedImage: Sendable {
-    public let pixels: [UInt8]
-    public let width: Int
-    public let height: Int
-
-    public init(pixels: [UInt8], width: Int, height: Int) {
-        self.pixels = pixels
-        self.width = width
-        self.height = height
-    }
-}
-
 /// File → RGBA decoder. png/jpg/bmp/gif/tga (stb_image), webp (libwebp) and
 /// svg (lunasvg) all flow through the cross-platform native bridge, on every
 /// platform. Only genuinely Apple-only formats (PDF, HEIC, TIFF) keep an

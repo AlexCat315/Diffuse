@@ -1,4 +1,4 @@
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import Foundation
 
 final class VulkanSubmissionStatus: @unchecked Sendable {

@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUICore
 import NativeRHI
 
 final class NativeUIShaderResources {

@@ -65,3 +65,9 @@ GPU 回归报告和场景像素默认写入 `Engine/build/gpu-regression/`；每
 移除旧后端后，重复原生会话用于验证确定性、资源重建和历史状态。它不是独立 shader 正确性基准；实际像素变化、几何覆盖、粒子状态/事件、工作组一致性、视口所有权及失败恢复由专门断言验证。旧 WGPU 对照报告和 benchmark JSON 保留为历史证据，不代表当前可以运行的对照路径。
 
 本轮没有执行完整的 Editor 窗口/MCP 脚本编译、热重载和导出流程脚本 `scripts/validate-editor-native-loop.py`；相关包测试和 GPU 窗口集成分别验证。
+
+## Android 真机补充验证（2026-10-12）
+
+Swift 6.4.0 + Android SDK + NDK r30 已在 Android 16 / ARM64 / Adreno 710 上编译并运行 NativeRHI 与 GuavaUI 共享代码。设备 loader 为 Vulkan 1.4，物理驱动实际为 1.1.128。核心 render pass、timeline KHR feature 协商与 SPIR-V 1.3 UI 产物已接入，七项 GPU/布局检查及 APK 横竖屏、触摸、前后台 surface 重建检查通过。详见 [Android 复现与支持边界](../../../../../Android/README.md)。
+
+本轮 macOS 回归：121 项 NativeRHI 测试通过且无跳过；43 项相关 GuavaUI 测试通过；10 项 shader 工具链契约通过，86 份产物与反射重新编译一致。Swift 可维护性检查发现既有 `GuavaUI/Sources/GuavaUIApp/Core/AppDisplayHandle.swift` 为 29 个存储属性、既有上限为 27，本轮没有修改该文件，也没有扩大 baseline。

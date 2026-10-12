@@ -3,7 +3,7 @@
 // each submit gets its own fence, the GPU work is queued, and completion fires
 // from a background waiter. Acquired images are recycled from a fixed pool.
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -28,12 +28,14 @@ private final class VulkanFenceCompletion: @unchecked Sendable {
     private let fence: VkFence
     private let commandPool: VkCommandPool?
     private let completion: () -> Void
+    private var renderObjects: VulkanRenderPassObjects?
 
-    init(backend: VulkanBackend, fence: VkFence, commandPool: VkCommandPool? = nil, completion: @escaping () -> Void) {
+    init(backend: VulkanBackend, fence: VkFence, commandPool: VkCommandPool? = nil, renderObjects: VulkanRenderPassObjects? = nil, completion: @escaping () -> Void) {
         self.backend = backend
         self.fence = fence
         self.commandPool = commandPool
         self.completion = completion
+        self.renderObjects = renderObjects
     }
 
     func wait() {
@@ -42,6 +44,7 @@ private final class VulkanFenceCompletion: @unchecked Sendable {
         if result != VK_SUCCESS { backend.submissionStatus.record("vkWaitForFences failed: \(result)") }
         context.sync.destroyFence(context.device, fence, nil)
         if let commandPool { context.auxiliary.destroyCommandPool(context.device, commandPool, nil) }
+        renderObjects = nil
         completion()
     }
 }
@@ -144,9 +147,10 @@ extension VulkanBackend {
         guard draw.beginCommandBuffer(cmd, &begin) == VK_SUCCESS else {
             throw RHIError.submitFailed("vkBeginCommandBuffer failed")
         }
+        let renderObjects = VulkanRenderPassObjects(context: context)
         let previousTextures = registries.textures
         do {
-            try encode(cmd: cmd, commands: submit.commands)
+            try encode(cmd: cmd, commands: submit.commands, renderObjects: renderObjects)
         } catch {
             registries.textures = previousTextures
             throw error
@@ -187,7 +191,7 @@ extension VulkanBackend {
         for window in acquisitions { window.presentation.pendingAcquire = false }
         // Asynchronous completion: wait on a background thread, then fire the
         // callback. No queue idle on the hot path.
-        let waiter = VulkanFenceCompletion(backend: self, fence: fence, completion: completion)
+        let waiter = VulkanFenceCompletion(backend: self, fence: fence, renderObjects: renderObjects, completion: completion)
         DispatchQueue.global().async { waiter.wait() }
     }
 

@@ -1,4 +1,4 @@
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 
 /// Global commands are resolved before creation; instance commands are resolved
@@ -23,6 +23,11 @@ enum VulkanInstanceSetup {
                 throw RHIError.unsupportedBackend("Vulkan loader does not support Win32 presentation")
             }
             names.append("VK_KHR_win32_surface")
+            #elseif os(Android)
+            guard supported.contains("VK_KHR_android_surface") else {
+                throw RHIError.unsupportedBackend("Vulkan loader does not support Android presentation")
+            }
+            names.append("VK_KHR_android_surface")
             #else
             // Either WSI extension may be absent on a Linux installation.
             names += ["VK_KHR_xlib_surface", "VK_KHR_wayland_surface"].filter { supported.contains($0) }
@@ -30,7 +35,15 @@ enum VulkanInstanceSetup {
         }
         let arena = VulkanScratch()
         var app = VkApplicationInfo(); app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO
-        app.apiVersion = (1 << 22) | (3 << 12)
+        var version: UInt32 = (1 << 22)
+        if let pointer = loader.resolve(instance: nil, name: "vkEnumerateInstanceVersion") {
+            let enumerateVersion = unsafeBitCast(pointer, to: CVulkanHeaders.PFN_vkEnumerateInstanceVersion.self)
+            _ = enumerateVersion(&version)
+        }
+        guard version >= ((1 << 22) | (1 << 12)) else {
+            throw RHIError.unsupportedBackend("NativeRHI requires a Vulkan 1.1 loader")
+        }
+        app.apiVersion = min(version, (1 << 22) | (3 << 12))
         var info = VkInstanceCreateInfo(); info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
         info.pApplicationInfo = UnsafePointer(arena.make(app))
         info.enabledExtensionCount = UInt32(names.count)

@@ -1,6 +1,6 @@
 // NativeRHI Vulkan — resource creation, immediate transfers, surface configure.
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -13,7 +13,8 @@ extension VulkanBackend {
             case .win32Window: kind = GRHI_VULKAN_WIN32
             case .xlibWindow: kind = GRHI_VULKAN_XLIB
             case .waylandSurface: kind = GRHI_VULKAN_WAYLAND
-            case .metalLayer: throw RHIError.unsupportedBackend("Vulkan requires a native Windows/Linux surface")
+            case .androidWindow: kind = GRHI_VULKAN_ANDROID
+            case .metalLayer: throw RHIError.unsupportedBackend("Vulkan requires a native Windows/Linux/Android surface")
             }
             try waitUntilIdle()
             let generation = (swapchains[handle.id]?.generation ?? 0) + 1
@@ -245,6 +246,19 @@ extension VulkanBackend {
         try rhiRequire(descriptor.code.count >= 20 && descriptor.code.count % 4 == 0, "invalid SPIR-V byte count")
         let words = stride(from: 0, to: descriptor.code.count, by: 4).map { index in
             descriptor.code.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: index, as: UInt32.self) }
+        }
+        try rhiRequire(words[0] == 0x07230203, "invalid SPIR-V magic")
+        guard words[1] <= context.features.spirvVersion else {
+            throw RHIError.unsupportedFeature("SPIR-V version exceeds this Vulkan device; compile mobile shaders with -profile spirv_1_3")
+        }
+        var cursor = 5
+        while cursor < words.count {
+            let count = Int(words[cursor] >> 16)
+            try rhiRequire(count > 0 && count <= words.count - cursor, "malformed SPIR-V instruction")
+            if words[cursor] & 0xffff == 331, count >= 3, words[cursor + 2] == 38, !context.features.maintenance4 {
+                throw RHIError.unsupportedFeature("LocalSizeId requires Vulkan maintenance4; compile a fixed workgroup size for this device")
+            }
+            cursor += count
         }
         let arena = VulkanScratch()
         info.pCode = arena.store(words)

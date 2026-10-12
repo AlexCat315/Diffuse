@@ -1,6 +1,9 @@
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
+#if os(Android)
+import Android
+#endif
 import Foundation
 
 /// An axis changes from glide to spring at the time it reaches its edge,

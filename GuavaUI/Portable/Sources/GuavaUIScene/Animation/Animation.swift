@@ -1,4 +1,7 @@
 import GuavaUICore
+#if os(Android)
+import Android
+#endif
 import Foundation
 
 // MARK: - AnimationCurve

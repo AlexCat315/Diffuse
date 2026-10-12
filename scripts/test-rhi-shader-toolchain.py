@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Validate rejected shader interfaces and preservation of existing artifacts."""
 import importlib.util
+import base64
+import struct
 import os
 from pathlib import Path
 import tempfile
@@ -39,6 +41,24 @@ class ReflectionContractTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('SLANGC'), 'Set SLANGC to Slang 2026.19')
 class CompilationContractTests(unittest.TestCase):
+    def test_vulkan11_profile_emits_fixed_local_size_without_maintenance4(self):
+        with tempfile.TemporaryDirectory(prefix='guava-rhi-android-') as directory:
+            artifact = SHADER.compile_shader(ROOT / 'Engine/Tests/NativeRHITests/Fixtures/compute.slang',
+                'computeMain', 'compute', 'spirv', Path(directory) / 'compute.json', os.environ['SLANGC'],
+                spirv_profile='spirv_1_3')
+            code = base64.b64decode(artifact['code'])
+            words = struct.unpack('<' + 'I' * (len(code) // 4), code)
+            self.assertEqual(words[1], 0x00010300)
+            modes = []
+            cursor = 5
+            while cursor < len(words):
+                count, opcode = words[cursor] >> 16, words[cursor] & 0xffff
+                self.assertGreater(count, 0)
+                if opcode in (16, 331): modes.append((opcode, words[cursor + 2]))
+                cursor += count
+            self.assertIn((16, 17), modes)  # OpExecutionMode LocalSize
+            self.assertNotIn((331, 38), modes)  # LocalSizeId requires maintenance4
+
     def test_ui_constants_are_vertex_only_and_image_bindings_are_static(self):
         source = ROOT / 'GuavaUI/Sources/GuavaUIRuntime/Resources/Shaders/Slang/ui.slang'
         with tempfile.TemporaryDirectory(prefix='guava-rhi-ui-') as directory:

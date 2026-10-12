@@ -1,10 +1,10 @@
 // NativeRHI Vulkan — runtime loader and backend entry point.
 //
-// The native Windows/Linux Vulkan SDK provides the linked loader. Instance
+// The native Windows/Linux/Android Vulkan SDK provides the linked loader. Instance
 // and device commands are resolved through their respective dispatch tables.
 // A GPU driver is discovered by the loader at runtime. macOS uses Metal.
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 

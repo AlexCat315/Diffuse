@@ -4,7 +4,7 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-NativeRHI 是唯一的桌面图形后端。EngineHost、编辑器、播放器、GuavaUI 主/辅助窗口和 HUD 共享 NativeRHI Device；无设备的 EngineHost 用于无 GPU 仿真。macOS 默认使用 Metal，Windows 优先使用 DX12、设备创建失败时尝试 Vulkan，Linux 默认使用原生 Vulkan。DX12 打包 shader 仍待 Windows 工具链生成。旧后端已移除；下列迁移报告及 benchmarks 保留当时的历史测量，不能作为当前可运行的对照命令。当前迁移结果见 [独立运行验证](validation/Standalone.md)。
+NativeRHI 是唯一的图形后端。EngineHost、编辑器、播放器、GuavaUI 主/辅助窗口和 HUD 共享 NativeRHI Device；无设备的 EngineHost 用于无 GPU 仿真。macOS 默认使用 Metal，Windows 优先使用 DX12、设备创建失败时尝试 Vulkan，Linux / Android 默认使用原生 Vulkan。Android 的原生窗口与 GuavaUI 绘制验证见 [Android 入口](../../../../Android/README.md)。DX12 打包 shader 仍待 Windows 工具链生成。旧后端已移除；下列迁移报告及 benchmarks 保留当时的历史测量，不能作为当前可运行的对照命令。当前迁移结果见 [独立运行验证](validation/Standalone.md)。
 
 Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上原点、+Y 向下。Vulkan backend 通过负高度 viewport 统一这一约定，shader 不再自行翻转 Y。
 
@@ -12,11 +12,11 @@ Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上
 
 | 路径 | Metal | Vulkan | DX12 |
 | --- | --- | --- | --- |
-| Buffer / Texture / Sampler、上传与读回 | 本机验证 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
-| Raster / Compute、绑定、indirect、copy | 本机验证核心路径 | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
-| 纹理局部上传、打包顶点颜色、MSAA color resolve | 本机验证；见 [UI 绘制验证](NATIVE_UI_VALIDATION.md) | Windows/Linux 原生实现，待验证 | 原生实现，Windows 待验证 |
-| GuavaUI Native DrawList 绘制器 | 已接入主/辅助窗口与 HUD，绘制、MSAA、缩放和资源生命周期本机验证 | SPIR-V 离线产物已生成，GPU 待验证 | 共用绘制路径；DXIL 产物与 GPU 待验证 |
-| 窗口呈现与 resize | 本机验证 | Win32 / Xlib / Wayland 原生实现，待验证 | HWND swapchain 实现，待验证 |
+| Buffer / Texture / Sampler、上传与读回 | 本机验证 | Android 核心路径真机验证；Windows/Linux 待验证 | 原生实现，Windows 待验证 |
+| Raster / Compute、绑定、indirect、copy | 本机验证核心路径 | Android 核心路径真机验证；Windows/Linux 待验证 | 原生实现，Windows 待验证 |
+| 纹理局部上传、打包顶点颜色、MSAA color resolve | 本机验证；见 [UI 绘制验证](NATIVE_UI_VALIDATION.md) | Android 核心路径真机验证；Windows/Linux 待验证 | 原生实现，Windows 待验证 |
+| GuavaUI Native DrawList 绘制器 | 已接入主/辅助窗口与 HUD，绘制、MSAA、缩放和资源生命周期本机验证 | Android 颜色、图像、裁剪、1x/4x MSAA 真机验证；Windows/Linux 待验证 | 共用绘制路径；DXIL 产物与 GPU 待验证 |
+| 窗口呈现与 resize | 本机验证 | Android 横竖屏与 surface 重建真机验证；Win32 / Xlib / Wayland 待验证 | HWND swapchain 实现，待验证 |
 | 帧上传、延迟销毁、跨队列同步 | 本机验证 | 原生实现，独立 queue family 待验证 | 原生实现，待验证 |
 | Mesh / task | Mesh 已验证；task 关闭 | EXT 管线与直接 dispatch 实现，设备功能链控制，GPU 待验证 | MS / AS 管线与直接 dispatch 实现，GPU 待验证 |
 | BLAS / TLAS / compute ray query | 原生 MSL 命中与未命中已验证 | KHR 构建、地址、绑定实现，GPU 待验证 | DXR 构建、绑定实现；inline query 要求 tier 1.1，GPU 待验证 |
@@ -84,7 +84,7 @@ Metal 通过 graphics command buffer 排队 present，保证它在先前绘制�
 `ShaderArtifact` 包含 stage、格式、entry point、code、编译器标识，以及 local workgroup size、目标绑定、push constant ranges。RHI 不加载 Slang runtime 或 reflection 类型。
 
 - Metal：MSL source / metallib。
-- Vulkan：SPIR-V，保留实际 entry point 名称；要求 Vulkan 1.3 dynamic rendering 与 timeline semaphore。
+- Vulkan：SPIR-V，保留实际 entry point 名称；要求 Vulkan 1.1 与 timeline semaphore（1.2 核心或 KHR 扩展），使用核心 render pass。UI 产物为 SPIR-V 1.3；LocalSizeId 额外要求 maintenance4，超出物理设备版本的 shader 会在原生创建前拒绝。
 - DX12：DXIL，当前工具使用 shader model 6.6，后端检查相同要求。编译需要 DXC/dxcompiler；本机没有该依赖，DXIL 产物未验证。
 
 `scripts/compile-rhi-shader.py` 固定 Slang **2026.19**。编译器通过 `--slangc` 或 `SLANGC` 显式提供；编译时不下载。目标反射与 SPIR-V 逻辑反射用于区分普通资源和 push constant，原始目标 reflection 保留供检查。编译/反射失败不会覆盖已有产物。`ShaderInterface` 直接序列化 typed specialization constants 和工作组维度对应的 constant ID；Metal function constants 与 Vulkan VkSpecializationInfo 共用同一类型/值输入，物理 dispatch 和 LocalSizeId 一致。Vulkan 设备必须启用 maintenance4 才能使用 LocalSizeId。DXIL 不能运行时改 numthreads，粒子工具链在 Windows 编译完整的 1–256 离线代码族，Native loader 按工作组大小选择；缺失变体会明确失败。
@@ -108,6 +108,8 @@ python3 scripts/check-swift-maintainability.py
 ```
 
 macOS 只使用 Metal，不链接 Vulkan loader，不加载 Vulkan ICD，也不执行 Vulkan GPU 测试。Slang 是离线工具，产物无需运行时编译器。
+
+Android 使用 Swift 6.4.0 Android SDK、NDK r30 与系统 libvulkan，默认 RGBA8 surface；工具链和真机复现见 `Android/README.md`。
 
 Windows / Linux 使用安装的 Vulkan SDK，非系统位置设置 `VULKAN_SDK`。可在对应宿主上运行 `scripts/bootstrap-rhi-vulkan.py`，校验固定 Vulkan-Headers / Loader **1.4.328** 的 SHA-256 并安装到忽略的 `Engine/vendor/vulkan-sdk`；脚本在 macOS 明确拒绝运行。Windows 还需 Windows SDK 的 D3D12 / DXGI；DXIL shader 编译需 DXC。
 
