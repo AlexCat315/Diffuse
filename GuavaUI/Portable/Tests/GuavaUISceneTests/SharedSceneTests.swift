@@ -94,6 +94,8 @@ func protocolValidationDiffAndBoundedRecordingRoundTrip() throws {
     let recorder = InputRecorder()
     recorder.start(state: ["count":"0", "dark":"false"], focusTarget: "counter.increment")
     recorder.record(.textInput("中文🙂"))
+    recorder.record(.mouseWheel(.init(x: 0, y: 0, input: .init(unit: .points, device: .continuous,
+        phase: .ended, momentumPhase: .began, timestamp: 42.25))))
     for _ in 0..<InputRecorder.limit { recorder.record(.keyDown(KeyEvent(scancode: 40, keycode: 0, modifiers: [], isRepeat: false))) }
     let recording = try #require(recorder.stop())
     #expect(recording.events.count == InputRecorder.limit && recording.truncated)
@@ -101,7 +103,14 @@ func protocolValidationDiffAndBoundedRecordingRoundTrip() throws {
     let decoded = try JSONDecoder().decode(InputRecording.self, from: JSONEncoder().encode(recording))
     if case .textInput(let text) = decoded.events[0].event { #expect(text == "中文🙂") }
     else { Issue.record("Unicode input did not survive Codable round trip") }
+    if case .mouseWheel(let wheel) = decoded.events[1].event {
+        #expect(wheel.input.phase == .ended && wheel.input.momentumPhase == .began)
+        #expect(wheel.input.unit == .points && wheel.input.timestamp == 42.25)
+    } else { Issue.record("Scroll metadata did not survive recording") }
     var invalid = recording
+    invalid.events[1].event = .mouseWheel(.init(x: 0, y: 0, input: .init(timestamp: -1)))
+    #expect(!invalid.isValid)
+    invalid = recording
     invalid.events[0].milliseconds = -1
     #expect(!invalid.isValid)
     #expect(session.validate(DevToolsEnvelope(type:"input.replay", payload:DevToolsCodec.json(invalid)))?.type == "input.replay.err")

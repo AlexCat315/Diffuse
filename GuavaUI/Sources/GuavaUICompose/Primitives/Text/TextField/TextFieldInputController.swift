@@ -99,12 +99,14 @@ extension TextField {
                 textField.refreshScrollableMetrics(state: state, node: node)
                 let previousOffset = state.scroll.offsetY
                 let previousX = state.scroll.horizontal.offset
-                let nextOffset = clamp(state.scroll.offsetY - event.y * TextField.multilineWheelStep,
+                let delta = event.displacement(lineStep: TextField.multilineWheelStep,
+                                               pageWidth: Float(node.frame.width), pageHeight: Float(node.frame.height))
+                let nextOffset = clamp(state.scroll.offsetY - delta.y,
                                        0,
                                        state.scroll.maxY)
                 state.scroll.offsetY = nextOffset
-                let wheelX = event.x == 0 && textField.layout.axis == .horizontal ? event.y : event.x
-                state.scroll.horizontal.offset = clamp(previousX - wheelX * TextField.multilineWheelStep,
+                let wheelX = delta.x == 0 && textField.layout.axis == .horizontal ? delta.y : delta.x
+                state.scroll.horizontal.offset = clamp(previousX - wheelX,
                     0, state.scroll.horizontal.maximum)
                 state.scroll.needsCaretReveal = false
                 node.contentOffset = CGPoint(x: CGFloat(state.scroll.horizontal.offset), y: CGFloat(nextOffset))

@@ -1,4 +1,5 @@
 import Foundation
+import GuavaPlatformCore
 
 /// JSON wire-format types for the GuavaUI DevTools protocol v0.1.
 /// Mirror of GuavaUI-vscode/src/devtools/Protocol.ts and
@@ -361,6 +362,7 @@ public struct MirrorInputPayload: Codable, Sendable {
     public var modifiers: Int?
     public var clickCount: Int?
     public var isRepeat: Bool?
+    public var scroll: ScrollInput?
 
     public init(kind: String,
                 x: Float? = nil,
@@ -373,7 +375,8 @@ public struct MirrorInputPayload: Codable, Sendable {
                 text: String? = nil,
                 modifiers: Int? = nil,
                 clickCount: Int? = nil,
-                isRepeat: Bool? = nil) {
+                isRepeat: Bool? = nil,
+                scroll: ScrollInput? = nil) {
         self.kind = kind
         self.x = x
         self.y = y
@@ -386,6 +389,7 @@ public struct MirrorInputPayload: Codable, Sendable {
         self.modifiers = modifiers
         self.clickCount = clickCount
         self.isRepeat = isRepeat
+        self.scroll = scroll
     }
 }
 

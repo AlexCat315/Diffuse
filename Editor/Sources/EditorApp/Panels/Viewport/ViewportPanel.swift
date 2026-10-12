@@ -417,7 +417,7 @@ struct ViewportPanel: View {
                 return
             }
             // wheel.y > 0 表示向上滚（拉近）。每格缩放系数 ~0.9 / 1.1。
-            let step = wheel.y
+            let step = wheel.displacement(lineStep: 10, pageWidth: 30, pageHeight: 30).y / 10
             if abs(step) > 0 {
                 let factor = wheelZoomRatio(step)
                 scene.zoomCamera(factor: factor)

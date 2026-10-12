@@ -48,8 +48,10 @@ final class InputStateProcessor: @unchecked Sendable {
                 mouseDeltaX += e.deltaX
                 mouseDeltaY += e.deltaY
             case let .mouseWheel(e):
-                wheelDeltaX += e.x
-                wheelDeltaY += e.y
+                // Gameplay wheel actions are line increments, not UI points.
+                let delta = e.displacement(lineStep: 10, pageWidth: 30, pageHeight: 30)
+                wheelDeltaX += delta.x / 10
+                wheelDeltaY += delta.y / 10
             case .windowFocusLost, .windowMinimized:
                 // Platforms commonly stop delivering key/button-up events once
                 // the window loses input focus. Treat that boundary as an
