@@ -439,11 +439,13 @@ public struct ComputePipelineDescriptor: Sendable {
 
 /// The platform object represented by an unmanaged native surface handle.
 public enum NativeSurfaceKind: Sendable {
-    case metalLayer, win32Window, xlibWindow, waylandSurface
+    case metalLayer, win32Window, xlibWindow, waylandSurface, androidWindow
 
     public static var platformDefault: NativeSurfaceKind {
         #if os(Windows)
         return .win32Window
+        #elseif os(Android)
+        return .androidWindow
         #elseif os(Linux)
         return .xlibWindow
         #else
@@ -470,7 +472,7 @@ public struct SurfaceDescriptor: @unchecked Sendable {
         nativeHandle: UnsafeMutableRawPointer?,
         width: Int = 0,
         height: Int = 0,
-        colorFormat: TextureFormat = .bgra8UnormSRGB,
+        colorFormat: TextureFormat = NativeRHI.platformDefaultSurfaceFormat,
         vsyncEnabled: Bool = true
     ) {
         self.nativeHandle = nativeHandle

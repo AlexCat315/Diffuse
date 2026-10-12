@@ -31,25 +31,29 @@ let wasmtimeProducts: [Product] = []
 let wasmtimeTargets: [Target] = []
 #endif
 
-// Vulkan targets native Windows/Linux drivers. macOS uses Metal and has no
+// Vulkan targets native Windows/Linux/Android drivers. macOS uses Metal and has no
 // Vulkan loader, headers, portability surface, or driver dependency.
 #if os(Windows) || os(Linux)
 // Native hosts use the installed Vulkan SDK; set VULKAN_SDK for non-system paths.
 let vulkanSDKRoot = ProcessInfo.processInfo.environment["VULKAN_SDK"]
 let vulkanIncludeFlags = vulkanSDKRoot.map { ["-I", $0 + "/Include", "-I", $0 + "/include"] } ?? []
 let vulkanLibraryFlags = vulkanSDKRoot.map { ["-L", $0 + "/Lib", "-L", $0 + "/lib"] } ?? []
-let nativeRHIInteropDependencies: [Target.Dependency] = ["CVulkanHeaders", "CDX12Bridge"]
+#else
+let vulkanIncludeFlags: [String] = []
+let vulkanLibraryFlags: [String] = []
+#endif
+// A manifest executes on the host. Conditional target dependencies also cover
+// a macOS host cross-compiling for Android with the NDK sysroot.
+let nativeRHIInteropDependencies: [Target.Dependency] = [
+    .target(name: "CVulkanHeaders", condition: .when(platforms: [.windows, .linux, .android])), "CDX12Bridge",
+]
 let nativeRHIInteropTargets: [Target] = [
     .target(name: "CVulkanHeaders", path: "Sources/Bridge/CVulkanHeaders", publicHeadersPath: "include",
             cSettings: [.unsafeFlags(vulkanIncludeFlags)],
             linkerSettings: [.unsafeFlags(vulkanLibraryFlags),
                 .linkedLibrary("vulkan-1", .when(platforms: [.windows])),
-                .linkedLibrary("vulkan", .when(platforms: [.linux]))])
+                .linkedLibrary("vulkan", .when(platforms: [.linux, .android]))])
 ]
-#else
-let nativeRHIInteropDependencies: [Target.Dependency] = ["CDX12Bridge"]
-let nativeRHIInteropTargets: [Target] = []
-#endif
 
 let package = Package(
     name: "GuavaEngine",

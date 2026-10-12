@@ -90,7 +90,7 @@ def reflected_bindings(reflection, target='spirv', constants=()):
 
 
 def compile_shader(source, entry, stage, target, output, compiler, threadgroup_size=None, line_directives=True,
-                   threadgroup_constants=None, defines=None):
+                   threadgroup_constants=None, defines=None, spirv_profile="spirv_1_5"):
     version = run([compiler, '-version'])
     if version != SLANG_VERSION:
         raise ValueError(f'Expected Slang {SLANG_VERSION}, got {version!r}')
@@ -100,7 +100,7 @@ def compile_shader(source, entry, stage, target, output, compiler, threadgroup_s
         reflection_file = temp / 'reflection.json'
         arguments = [compiler, str(source.resolve()), '-entry', entry, '-stage', stage,
                      '-target', target, '-o', str(code), '-reflection-json', str(reflection_file)]
-        if target == 'spirv': arguments += ['-fvk-use-entrypoint-name']
+        if target == 'spirv': arguments += ['-fvk-use-entrypoint-name', '-profile', spirv_profile]
         if target == 'dxil': arguments += ['-profile', 'sm_6_6']
         if not line_directives: arguments += ['-line-directive-mode', 'none']
         arguments += [f'-D{name}={value}' for name, value in (defines or {}).items()]
@@ -179,6 +179,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--threadgroup-size', nargs=3, type=int)
     parser.add_argument('--threadgroup-constants', nargs=3, type=int, help='Specialized X/Y/Z IDs; -1 means fixed dimension')
+    parser.add_argument('--spirv-profile', choices=['spirv_1_3', 'spirv_1_5', 'spirv_1_6'], default='spirv_1_5')
     parser.add_argument('--no-line-directives', action='store_true', help='Omit absolute source paths from bundled shader code')
     parser.add_argument('--slangc', default=os.environ.get('SLANGC'))
     args = parser.parse_args()
@@ -187,7 +188,8 @@ def main():
     try:
         compile_shader(args.source, args.entry, args.stage, args.target, args.output, args.slangc, args.threadgroup_size,
                        not args.no_line_directives,
-                       None if args.threadgroup_constants is None else [None if i < 0 else i for i in args.threadgroup_constants])
+                       None if args.threadgroup_constants is None else [None if i < 0 else i for i in args.threadgroup_constants],
+                       spirv_profile=args.spirv_profile)
     except (RuntimeError, ValueError, OSError, KeyError, StopIteration) as error:
         parser.exit(1, f'Shader compilation failed: {error}\n')
     print(args.output)

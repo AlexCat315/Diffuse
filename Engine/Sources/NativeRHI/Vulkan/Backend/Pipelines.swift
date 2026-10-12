@@ -1,4 +1,4 @@
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -135,15 +135,11 @@ extension VulkanBackend {
         dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO
         dynamic.dynamicStateCount = 2
         dynamic.pDynamicStates = arena.store([VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR])
-        var rendering = VkPipelineRenderingCreateInfo()
-        rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO
-        rendering.colorAttachmentCount = UInt32(descriptor.colorAttachments.count)
-        rendering.pColorAttachmentFormats = arena.store(descriptor.colorAttachments.map { VulkanFormats.vkFormat($0.format) })
-        rendering.depthAttachmentFormat = descriptor.depthFormat.map(VulkanFormats.vkFormat) ?? VK_FORMAT_UNDEFINED
-        rendering.stencilAttachmentFormat = descriptor.stencilFormat.map(VulkanFormats.vkFormat) ?? VK_FORMAT_UNDEFINED
+        let renderObjects = VulkanRenderPassObjects(context: context)
+        let renderPass = try renderObjects.pipelinePass(descriptor)
         var info = VkGraphicsPipelineCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
-        info.pNext = UnsafeRawPointer(arena.make(rendering))
+        info.renderPass = renderPass
         info.stageCount = UInt32(stages.count)
         info.pStages = arena.store(stages)
         let isMesh = stages.contains { $0.stage == VK_SHADER_STAGE_MESH_BIT_EXT }
@@ -159,7 +155,7 @@ extension VulkanBackend {
         info.pDynamicState = UnsafePointer(arena.make(dynamic))
         info.layout = nativeLayout
         var pipeline: VkPipeline = vkNull()
-        let result = withExtendedLifetime(arena) {
+        let result = withExtendedLifetime((arena, renderObjects)) {
             context.resources.createGraphicsPipelines(context.device, vkNull(), 1, &info, nil, &pipeline)
         }
         guard result == VK_SUCCESS else { throw RHIError.invalidArgument("Vulkan graphics pipeline failed: \(result)") }

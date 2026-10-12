@@ -1,3 +1,6 @@
+#if os(Android)
+import Android
+#endif
 import Foundation
 
 /// Analytic damped spring in visible logical coordinates. Solving the motion

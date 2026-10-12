@@ -1,6 +1,9 @@
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
+#if os(Android)
+import Android
+#endif
 import Foundation
 
 /// Owns every kind of motion one scrollable offset can have: the inertia that

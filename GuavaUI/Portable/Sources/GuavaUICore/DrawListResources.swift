@@ -14,7 +14,7 @@ public struct DrawListResources: Sendable {
         for resource in other.retained { retain(resource) }
     }
     /// Inspect owned resources without exposing or mutating the ownership list.
-    public func forEach<T>(of type: T.Type, _ visit: (T) throws -> Void) rethrows where T: AnyObject, T: Sendable {
+    public func forEach<T>(of type: T.Type, _ visit: (T) throws -> Void) rethrows {
         for resource in retained { if let value = resource as? T { try visit(value) } }
     }
 

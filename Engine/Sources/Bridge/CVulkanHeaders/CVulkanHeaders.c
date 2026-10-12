@@ -28,6 +28,14 @@ VkResult grhi_vulkan_create_native_surface(VkInstance instance, GRHIVulkanSurfac
     if (!create) return VK_ERROR_EXTENSION_NOT_PRESENT;
     SurfaceInfo info = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, NULL, 0, GetModuleHandleW(NULL), (HWND)window};
     return create(instance, &info, NULL, surface);
+#elif defined(__ANDROID__)
+    if (kind != GRHI_VULKAN_ANDROID) return VK_ERROR_EXTENSION_NOT_PRESENT;
+    typedef struct { VkStructureType sType; const void* pNext; VkFlags flags; void* window; } AndroidInfo;
+    typedef VkResult (VKAPI_PTR *CreateAndroid)(VkInstance, const AndroidInfo*, const VkAllocationCallbacks*, VkSurfaceKHR*);
+    CreateAndroid create = (CreateAndroid)vkGetInstanceProcAddr(instance, "vkCreateAndroidSurfaceKHR");
+    if (!create) return VK_ERROR_EXTENSION_NOT_PRESENT;
+    AndroidInfo info = {VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR, NULL, 0, window};
+    return create(instance, &info, NULL, surface);
 #elif defined(__linux__)
     if (!display) return VK_ERROR_INITIALIZATION_FAILED;
     if (kind == GRHI_VULKAN_WAYLAND) {
