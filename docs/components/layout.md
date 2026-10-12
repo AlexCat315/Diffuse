@@ -87,14 +87,42 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | 裁剪与滚动 | ScrollView / BoundedScrollView；测量真实内容，原生滚动直接跟随平台，支持稳定 gutter；自定义手势可显式使用惯性/回弹 |
 | 双面板与 IDE 工作区 | SplitView 与 Workspace；详见各自的约束与缺口 |
 | 层叠内容 | absolutePosition / zIndex 与 Portal 支持绘制层级；缺独立公共 ZStack/Overlay 布局容器 |
-| 大集合 | VirtualStack 固定行高；Tree/List/DataTable 各有专门模型；缺可变行高虚拟布局 |
-| 响应式候选布局 | 软件可根据已知窗口宽度切换；缺统一断点/容器查询/ViewThatFits 协议 |
-| Grid | 缺显式/自适应列轨道、跨行跨列、intrinsic 内容轨道及 LazyGrid |
-| 软件自定义布局 | 还没有公开 measure/propose/place Layout 协议与通用 GeometryReader |
+| 大集合 | VariableVirtualStack 提供已知可变行高、稳定 ID 锚点及窗口化；仍缺未知高度估测和统一加载协议 |
+| 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；仍缺容器查询和多套内容的 ViewThatFits |
+| Grid | Grid/GridLayout 有 fixed/flexible/adaptive 列、测量行高及 RTL 对齐；LazyGrid 有等宽列与已知固定/可变行高窗口化；仍缺 span、显式 intrinsic 轨道和二维窗口化 |
+| 应用自定义布局 | 公开 Layout / ProposedViewSize / LayoutSubview / LayoutContainer；仍缺 GeometryReader、baseline/alignment guide API |
 | 表单/属性布局 | Form / PropertyGrid 已有专门用途；不能代替通用约束或网格系统 |
-| 特殊布局 | Anchor/约束布局、Masonry、SafeArea/insets、RTL 逻辑方向未成套完成 |
+| 特殊布局 | layoutDirection 贯通 Flex、自定义布局和逻辑 padding；SafeArea 嵌套消费宿主提供的逻辑 insets；平台自动 insets、完整组件 RTL/双向文字、Anchor/约束布局和 Masonry 仍缺 |
 
-下一步应先打通 proposal/measurement/placement 与布局方向契约，再实现 Grid、响应式候选布局和可变行高窗口化；直接添加名称相似的容器会留下测量、缓存和交互不一致的问题。已有 Yoga Flex 不必重新命名或重复包装。
+LazyGrid 的 `.variable(...)` 提供每行高度（含最后不完整行），数量必须等于 `ceil(itemCount / columns)`。数据、列数或文字缩放改变时，由调用方同步更新高度值；它没有 VariableVirtualStack 的内容宽度/TextScaler 高度回调。
+
+测量与尺寸基础已先于新容器落地。已有 Yoga Flex 不必重新命名或重复包装；StackLayout 提供自然尺寸算法供候选布局组合，伸展/压缩仍用 Box/Row/Column。
+
+## 自定义测量与放置（2026-10-12）
+
+应用实现 `Layout.sizeThatFits(proposal:subviews:) -> CGSize` 与 `placeSubviews(in:proposal:subviews:)`，然后直接 `MyLayout() { ordinaryViews }`。子视图保持普通 View，不需要 Node、全局注册或生命周期适配。`LayoutSubview.sizeThatFits(_:)` 返回自然测量结果，`place(at:proposal:)` 放置子视图；算法只能在这次测量/放置期间使用这些短期值，测量必须确定且不能改变 UI 状态。
+
+proposal 使用逻辑点；nil 是 intrinsic，非有限值归一化为 nil，负值为零。有限 proposal 是空间建议，不覆盖子视图的显式固定尺寸或 minimum；算法决定溢出、换行或退让。bounds 是扣除 padding/border 的内容区域，坐标相对容器。框架使用有界 proposal 缓存，子树变化跨自定义布局边界失效；普通 Flex 继续交给 Yoga。
+
+```swift
+Grid(columns: [.fixed(120), .flexible(minimum: 160)], columnSpacing: 12, rowSpacing: 8) {
+    Text("Label")
+    Text("A value that may wrap")
+}
+
+LayoutThatFits([StackLayout(.horizontal, spacing: 12), StackLayout(.vertical, spacing: 12)]) {
+    Button("Save") {}
+    Button("Restore") {}
+}
+
+SafeArea(.horizontal) { content }
+    .safeAreaInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 12))
+    .layoutDirection(.rtl)
+```
+
+SafeArea 的 insets 由宿主提供，桌面默认零；它不推断操作系统刘海、软键盘或窗口 chrome。嵌套容器只消费尚未使用的边。显式 left/right 定位保持物理方向；leading/trailing padding 使用 Yoga start/end。方向一致不等于所有控件的图标、键盘和 bidi 文本已经验收。
+
+大集合详见 [可变行高窗口化](../guava-ui/variable-virtual-layout.md)，候选算法详见 [响应式布局](../guava-ui/responsive-layout.md)。画廊 `--component layout` 展示测量 Grid、自适应列、候选切换、RTL/insets、100K LazyGrid 和 100K 可变行高列表。普通 ScrollView 不因此自动窗口化。
 
 ## 尺寸修饰器与局部重组
 

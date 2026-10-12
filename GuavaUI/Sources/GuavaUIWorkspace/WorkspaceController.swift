@@ -535,7 +535,7 @@ public final class WorkspaceController: @unchecked Sendable {
         document.floatingWindows.append(WorkspaceFloatingWindow(id: windowID,
                                                                 groupID: groupID,
                                                                 title: title,
-                                                                frame: frame,
+                                                                frame: WorkspaceSizingResolver(document: document).floatingFrame(frame, groupID: groupID),
                                                                 zIndex: zIndex))
         return WorkspaceTransactionResult(didChange: true,
                                           changedSlots: [slotID],
@@ -570,10 +570,10 @@ public final class WorkspaceController: @unchecked Sendable {
 
     private func moveFloatingWindow(_ windowID: WorkspaceFloatingWindowID,
                                     frame: WorkspaceRect) -> WorkspaceTransactionResult {
-        guard let index = document.floatingWindows.firstIndex(where: { $0.id == windowID }),
-              document.floatingWindows[index].frame != frame else {
-            return .unchanged
-        }
+        guard let index = document.floatingWindows.firstIndex(where: { $0.id == windowID }) else { return .unchanged }
+        let frame = WorkspaceSizingResolver(document: document).floatingFrame(frame,
+            groupID: document.floatingWindows[index].groupID)
+        guard document.floatingWindows[index].frame != frame else { return .unchanged }
         document.floatingWindows[index].frame = frame
         return WorkspaceTransactionResult(didChange: true,
                                           changedSlots: [],
@@ -854,6 +854,7 @@ public final class WorkspaceController: @unchecked Sendable {
 
     private func resizeSplit(_ splitID: WorkspaceSplitID,
                              fraction: Float) -> WorkspaceTransactionResult {
+        guard fraction.isFinite else { return .unchanged }
         let clamped = WorkspaceSplitFractions.clamp(fraction)
         let changed: Bool
         switch splitID.rawValue {
@@ -866,6 +867,9 @@ public final class WorkspaceController: @unchecked Sendable {
         case "topBottom":
             changed = document.splitFractions.topBottom != clamped
             document.splitFractions.topBottom = clamped
+        case "top":
+            changed = document.splitFractions.top != clamped
+            document.splitFractions.top = clamped
         default:
             return .unchanged
         }

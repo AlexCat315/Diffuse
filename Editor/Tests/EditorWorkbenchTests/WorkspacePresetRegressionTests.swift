@@ -8,6 +8,7 @@ import GuavaUIWorkspace
 import Testing
 
 @Suite("Workspace preset regression", .serialized)
+@MainActor
 struct WorkspacePresetRegressionTests {
     @Test("the workspace and layout labels are translated by the app resource bundle")
     func localizedMenus() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
