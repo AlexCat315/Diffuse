@@ -1,13 +1,13 @@
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
 extension VulkanBackend {
-    func encode(cmd: VkCommandBuffer, commands: [PlannedCommand]) throws {
+    func encode(cmd: VkCommandBuffer, commands: [PlannedCommand], renderObjects: VulkanRenderPassObjects) throws {
         for command in commands {
             switch command {
             case .accelerationStructureBuild(let build): try encodeAccelerationBuild(cmd: cmd, handle: build.structure)
-            case .renderPass(let record): try encodeRenderPass(cmd: cmd, record: record)
+            case .renderPass(let record): try encodeRenderPass(cmd: cmd, record: record, renderObjects: renderObjects)
             case .computePass(let record): try encodeComputePass(cmd: cmd, record: record)
             case .copyPass(let record): try encodeCopyPass(cmd: cmd, record: record)
             case .barriers(let barriers): try encodeBarriers(cmd: cmd, barriers: barriers)
@@ -15,7 +15,7 @@ extension VulkanBackend {
         }
     }
 
-    private func encodeRenderPass(cmd: VkCommandBuffer, record: RenderPassRecord) throws {
+    private func encodeRenderPass(cmd: VkCommandBuffer, record: RenderPassRecord, renderObjects: VulkanRenderPassObjects) throws {
         let signature = try renderPassSignature(record.descriptor)
         let arena = VulkanScratch()
         let targets = try record.descriptor.colorTargets.map { target -> VkRenderingAttachmentInfo in
@@ -71,10 +71,10 @@ extension VulkanBackend {
             rendering.pDepthAttachment = UnsafePointer(arena.make(depth))
 
         }
-        withExtendedLifetime(arena) { context.rendering.begin(cmd, &rendering) }
+        try withExtendedLifetime(arena) { try renderObjects.begin(cmd: cmd, rendering: rendering, signature: signature) }
         defer { context.rendering.end(cmd) }
         // NativeRHI clip space has +Y up and framebuffer coordinates have +Y down.
-        // Vulkan 1.3 supports the negative-height viewport transform directly.
+        // Vulkan 1.1 supports the negative-height viewport transform directly.
         var viewport = VkViewport(x: 0, y: Float(extent.height), width: Float(extent.width), height: -Float(extent.height), minDepth: 0, maxDepth: 1)
         var scissor = rendering.renderArea
         draw.cmdSetViewport(cmd, 0, 1, &viewport)

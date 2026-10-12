@@ -1,4 +1,4 @@
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -19,7 +19,8 @@ extension VulkanBackend {
         var info = VkBufferDeviceAddressInfo()
         info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO
         info.buffer = record.buffer
-        let address = context.advanced.bufferAddress(context.device, &info)
+        guard let query = context.advanced.bufferAddress else { throw RHIError.unsupportedFeature("Vulkan buffer device addresses are unavailable") }
+        let address = query(context.device, &info)
         try rhiRequire(address != 0, "buffer device address unavailable")
         return address
     }

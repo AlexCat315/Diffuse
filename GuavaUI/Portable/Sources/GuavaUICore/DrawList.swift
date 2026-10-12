@@ -1,3 +1,6 @@
+#if os(Android)
+import Android
+#endif
 import Foundation
 
 /// Logical texture identifier referenced from a draw batch.

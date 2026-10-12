@@ -4,7 +4,7 @@
 // a growing array. OUT_OF_DATE / SUBOPTIMAL triggers a recreate. Present has no
 // queue idle on the hot path.
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -178,7 +178,13 @@ final class VulkanSwapchain {
         }
         info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue
         info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE
-        info.preTransform = caps.currentTransform
+        // NativeRHI callers render in window coordinates. Passing a rotated
+        // currentTransform promises pre-rotated shader output, which our public
+        // render-pass contract does not provide. Let the compositor orient it.
+        guard caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR.rawValue != 0 else {
+            throw RHIError.unsupportedFeature("Vulkan surface requires an unsupported pre-rotation transform")
+        }
+        info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
         let alphaBits = caps.supportedCompositeAlpha
         info.compositeAlpha = VkCompositeAlphaFlagBitsKHR(rawValue: alphaBits & (~alphaBits &+ 1))
         info.presentMode = presentMode

@@ -4,7 +4,7 @@ import Foundation
 /// renderer uploads them on its own recording thread, without a main-thread GPU
 /// dependency. Clearing the cache does not invalidate retained nodes or frames.
 public final class ImageAssetRegistry: @unchecked Sendable {
-    public final class Asset: Sendable, Equatable {
+    public final class Asset: UITextureAsset, Equatable {
         public let textureID: TextureID
         public let image: DecodedImage
 

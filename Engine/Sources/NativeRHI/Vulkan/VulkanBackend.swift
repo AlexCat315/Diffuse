@@ -5,7 +5,7 @@
 // All Vulkan work is driven off the typed RHIBackend contract; this file wires
 // that contract to the loaded function-pointer table.
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 

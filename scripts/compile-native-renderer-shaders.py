@@ -68,7 +68,7 @@ def main():
                     artifact = SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, target, output, args.slangc,
                         threadgroup_size=[64,1,1] if variable else None, line_directives=False,
                         threadgroup_constants=[0,None,None] if variable and target != 'dxil' else None,
-                        defines=defines)
+                        defines=defines, spirv_profile="spirv_1_3" if name in ("ui", "ui_backdrop") else "spirv_1_5")
                     print(destination.relative_to(ROOT))
                     if variable and target == 'dxil':
                         # DXIL has fixed numthreads. Keep one reflected interface

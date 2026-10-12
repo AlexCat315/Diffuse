@@ -4,7 +4,7 @@
 // a one-shot transfer; host-visible destinations are mapped directly. The hot
 // per-frame path uses the persistently-mapped upload ring instead.
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 

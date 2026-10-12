@@ -17,10 +17,20 @@ public enum NativeRHI {
         return [.metal]
         #elseif os(Windows)
         return [.dx12, .vulkan]
-        #elseif os(Linux)
+        #elseif os(Linux) || os(Android)
         return [.vulkan]
         #else
         return []
+        #endif
+    }
+
+    /// Android presentation commonly exposes RGBA surfaces; desktop renderers
+    /// use the BGRA sRGB convention shared with Metal.
+    public static var platformDefaultSurfaceFormat: TextureFormat {
+        #if os(Android)
+        return .rgba8Unorm
+        #else
+        return .bgra8UnormSRGB
         #endif
     }
 
@@ -35,7 +45,7 @@ public enum NativeRHI {
             return false
             #endif
         case .vulkan:
-            #if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+            #if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
             return true
             #else
             return false
