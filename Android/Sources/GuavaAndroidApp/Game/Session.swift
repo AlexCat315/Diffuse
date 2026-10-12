@@ -37,7 +37,7 @@ final class GameSession {
         application = try GameApplication(projectDirectory: directory.path, renderDevice: device,
                                           registerProjectScripts: ProjectGameplay.register)
         #else
-        throw RHIError.unsupportedFeature("build this game's APK with scripts/android/export-game.py")
+        throw RHIError.unsupportedFeature("build this game's APK with GuavaAndroid export-game (Android/Tools)")
         #endif
         hud = InGameViewGraphBridge(source: source)
         provider = try NativeInGameUIRenderer(device: device, source: source)
