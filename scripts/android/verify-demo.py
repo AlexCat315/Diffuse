@@ -74,7 +74,7 @@ def main():
 
     try: old = read().get('session')
     except (ValueError, subprocess.CalledProcessError): old = None
-    shell('am', 'start', '-W', '-S', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 0)
+    shell('am', 'start', '-W', '-S', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 0, '--es', 'mode', 'counter')
     initial = wait(lambda s: s.get('session') != old and s['state'] == {'count': '0', 'dark': 'false', 'note': ''}, 'fresh shared Compose scene')
     assert initial['typography']['fonts'] >= 2 and initial['typography']['missingGlyphs'] == 0
     assert initial['typography']['atlasPixels'] > 1000 and initial['indices'] > 1000
@@ -129,11 +129,11 @@ def main():
     current = wait(lambda s: s['preedit'] == '未提交', 'pending text before recreation')
     expected = current['state']
     action('recreate')
-    recreated = wait(lambda s: s['session'] != current['session'] and s['state'] == expected and not s['preedit'], 'Activity recreation restores authored demo state only')
+    recreated = wait(lambda s: s['session'] == current['session'] and s['frames'] > current['frames'] and s['state'] == expected and not s['preedit'], 'Activity recreation retains scene and clears transient input')
     shell('input', 'keyevent', 'KEYCODE_HOME')
     time.sleep(0.5)
     shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity')
-    resumed = wait(lambda s: s['session'] != recreated['session'] and s['state'] == expected, 'foreground restores surface and demo state')
+    resumed = wait(lambda s: s['session'] == recreated['session'] and s['frames'] > recreated['frames'] and s['state'] == expected, 'foreground restores surface and demo state')
     shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 1)
     portrait = wait(lambda s: s['height'] > s['width'] and s['state'] == expected, 'portrait relayout retains demo state')
     screenshot('portrait')

@@ -4,6 +4,7 @@ import importlib.util
 import base64
 import struct
 import os
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -117,6 +118,35 @@ class CompilationContractTests(unittest.TestCase):
                 self.assertEqual(interface['threadgroupSpecialization'], {'x': 0,'y': None,'z': None})
                 self.assertEqual({item['id']: item['type'] for item in interface['specializationConstants']},
                                  {0:'uint32',1:'int32',2:'float32',3:'bool'})
+
+
+class AndroidArtifactTests(unittest.TestCase):
+    def test_mobile_programs_use_vulkan_11_spirv_without_local_size_id(self):
+        directory = ROOT / 'Engine/Sources/RenderBackend/Resources/Shaders/Native/spirv-mobile'
+        artifacts = list(directory.glob('*.json'))
+        self.assertGreater(len(artifacts), 40)
+        def inspect(code):
+            data = base64.b64decode(code)
+            words = struct.unpack('<' + 'I' * (len(data)//4), data)
+            self.assertEqual(words[0], 0x07230203)
+            self.assertLessEqual(words[1], 0x00010300)
+            index, local = 5, None
+            while index < len(words):
+                count, opcode = words[index] >> 16, words[index] & 0xffff
+                self.assertGreater(count, 0)
+                self.assertFalse(opcode == 331 and words[index+2] == 38, 'LocalSizeId requires maintenance4')
+                if opcode == 16 and words[index+2] == 17: local = list(words[index+3:index+6])
+                index += count
+            return local
+        families = 0
+        for file in artifacts:
+            value = json.loads(file.read_text())
+            if 'variants' in value:
+                families += 1
+                self.assertEqual(set(value['variants']), {str(n) for n in range(1, 257)})
+                for size, code in value['variants'].items(): self.assertEqual(inspect(code), [int(size), 1, 1])
+            elif 'code' in value: inspect(value['code'])
+        self.assertEqual(families, 7)
 
 
 if __name__ == '__main__':

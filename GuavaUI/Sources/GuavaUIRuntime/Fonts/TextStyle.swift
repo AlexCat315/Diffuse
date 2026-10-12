@@ -34,6 +34,8 @@ public enum SystemFontDefaults {
         return "Menlo"
         #elseif os(Windows)
         return "consola"
+        #elseif os(Android)
+        return "/system/fonts/DroidSansMono.ttf"
         #else
         return "DejaVuSansMono"
         #endif
@@ -73,6 +75,8 @@ public enum SystemFontDefaults {
         // `FontProvider.systemPrimaryFontPaths()`; this name is just a label.
         #if os(Windows)
         return "Segoe UI"
+        #elseif os(Android)
+        return "Roboto"
         #else
         return "DejaVu Sans"
         #endif

@@ -25,6 +25,9 @@ public enum PackageResourceBundle {
                               executableURL: URL? = Bundle.main.executableURL,
                               arguments: [String] = CommandLine.arguments) -> Bundle? {
         var roots: [URL] = []
+        if let path = ProcessInfo.processInfo.environment["PACKAGE_RESOURCE_BUNDLE_PATH"] {
+            roots.append(URL(fileURLWithPath: path, isDirectory: true))
+        }
         if let resourceURL = mainBundle.resourceURL {
             roots.append(resourceURL)
         }

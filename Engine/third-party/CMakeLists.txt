@@ -14,6 +14,12 @@ if(APPLE)
         CACHE STRING "" FORCE)
     set(GUAVA_PLATFORM_CMAKE_ARGS
         -DCMAKE_OSX_DEPLOYMENT_TARGET=${GUAVA_MACOS_DEPLOYMENT_TARGET})
+elseif(ANDROID)
+    set(GUAVA_PLATFORM_CMAKE_ARGS
+        -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+        -DANDROID_ABI=${ANDROID_ABI}
+        -DANDROID_PLATFORM=${ANDROID_PLATFORM}
+        -DANDROID_STL=${ANDROID_STL})
 else()
     set(GUAVA_PLATFORM_CMAKE_ARGS "")
 endif()
@@ -34,6 +40,12 @@ if(APPLE)
 elseif(WIN32)
     set(GUAVA_TRIPLE "windows-x86_64")
     set(GUAVA_SPM_TRIPLE "x86_64-unknown-windows-msvc")
+elseif(ANDROID)
+    if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
+        message(FATAL_ERROR "Guava Android artifacts currently require arm64-v8a")
+    endif()
+    set(GUAVA_TRIPLE "android-arm64")
+    set(GUAVA_SPM_TRIPLE "aarch64-unknown-linux-android")
 elseif(UNIX)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
         set(GUAVA_TRIPLE "linux-aarch64")
@@ -46,7 +58,7 @@ endif()
 
 message(STATUS "Guava third-party target triple: ${GUAVA_TRIPLE} (SPM: ${GUAVA_SPM_TRIPLE})")
 
-set(GUAVA_VENDOR_DIR ${CMAKE_SOURCE_DIR}/../vendor)
+set(GUAVA_VENDOR_DIR ${CMAKE_SOURCE_DIR}/../vendor CACHE PATH "Native artifact output directory")
 
 # ============================================================================
 # Wasmtime Component runtime (fixed official dynamic C API artifact on macOS)
@@ -67,7 +79,10 @@ include(${CMAKE_SOURCE_DIR}/cmake/BuildSDL3.cmake)
 # ============================================================================
 # OpenEXR + Imath
 # ============================================================================
-include(${CMAKE_SOURCE_DIR}/cmake/BuildOpenEXRStack.cmake)
+option(GUAVA_BUILD_OPENEXR "Build the desktop EXR import/export stack" ON)
+if(GUAVA_BUILD_OPENEXR)
+    include(${CMAKE_SOURCE_DIR}/cmake/BuildOpenEXRStack.cmake)
+endif()
 
 # ============================================================================
 # Jolt Physics

@@ -9,7 +9,7 @@ set(JOLT_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/jolt-install)
 
 # Architecture-specific SIMD switches. Jolt defaults x86 SSE/AVX flags ON;
 # on Apple Silicon those must be off (clang errors otherwise).
-if(GUAVA_TRIPLE STREQUAL "macos-arm64" OR GUAVA_TRIPLE STREQUAL "linux-aarch64")
+if(GUAVA_TRIPLE STREQUAL "macos-arm64" OR GUAVA_TRIPLE STREQUAL "linux-aarch64" OR GUAVA_TRIPLE STREQUAL "android-arm64")
     set(JOLT_SIMD_FLAGS
         -DUSE_SSE4_1=OFF -DUSE_SSE4_2=OFF
         -DUSE_AVX=OFF -DUSE_AVX2=OFF -DUSE_AVX512=OFF
