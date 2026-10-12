@@ -8,7 +8,7 @@ public struct RecordedInput: Codable, Sendable {
 }
 
 public struct InputRecording: Codable, Sendable {
-    public var version: Int = 1
+    public var version: Int = 2
     public var initialState: [String: String]
     public var focusTarget: String?
     public var events: [RecordedInput]
@@ -17,7 +17,7 @@ public struct InputRecording: Codable, Sendable {
         self.initialState = initialState; self.focusTarget = focusTarget; self.events = events
     }
     public var isValid: Bool {
-        guard version == 1, events.count <= InputRecorder.limit,
+        guard version == 2, events.count <= InputRecorder.limit,
               initialState.count <= 256, initialState.allSatisfy({ $0.key.utf8.count <= 1024 && $0.value.utf8.count <= 32768 }),
               (focusTarget?.utf8.count ?? 0) <= 1024 else { return false }
         var last = 0.0
@@ -65,7 +65,7 @@ private extension InputEvent {
         switch self {
         case .mouseButtonDown(let e), .mouseButtonUp(let e): return e.x.isFinite && e.y.isFinite
         case .mouseMotion(let e): return [e.x, e.y, e.deltaX, e.deltaY].allSatisfy(\.isFinite)
-        case .mouseWheel(let e): return [e.x, e.y, e.mouseX ?? 0, e.mouseY ?? 0].allSatisfy(\.isFinite)
+        case .mouseWheel(let e): return e.input.timestamp >= 0 && [Double(e.x), Double(e.y), Double(e.mouseX ?? 0), Double(e.mouseY ?? 0), e.input.timestamp].allSatisfy(\.isFinite)
         case .keyDown, .keyUp: return true
         case .textInput(let text): return text.utf8.count <= 32768
         case .textEditing(let e): return e.text.utf8.count <= 32768 && e.start >= 0 && e.length >= 0

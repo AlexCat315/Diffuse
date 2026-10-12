@@ -109,7 +109,7 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             }
             registry.setWheel(node, route: .viewport) { event, phase in
                 guard phase == .target else { return .ignored }
-                if let x = event.mouseX, let y = event.mouseY,
+                if !event.input.isContinuation, let x = event.mouseX, let y = event.mouseY,
                    !snap.imageFrame(in: node).contains(x: x, y: y) { return .ignored }
                 snap.onInputEvent?(.mouseWheel(event))
                 return .handled

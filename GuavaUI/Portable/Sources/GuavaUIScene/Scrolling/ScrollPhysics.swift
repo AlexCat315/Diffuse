@@ -65,11 +65,9 @@ public struct ScrollSettleSettings: Sendable, Equatable {
 /// Tuning for inertial scrolling — the glide that carries content along after
 /// the input that produced it has stopped.
 ///
-/// The wheel has no "release" event, so a glide can only be launched once it
-/// is known that no further input is coming: `idleWindow` is how long the last
-/// sample is given to arrive before the recorded velocity is handed to the
-/// glide. Trackpad users never notice because their samples are continuous;
-/// mouse users get a fling out of a fast burst of notches.
+/// Applies to explicitly managed custom gestures using `ScrollAnimator`.
+/// `idleWindow` infers release only for that API; native wheel/trackpad input
+/// follows the platform stream directly and does not use these settings.
 public struct ScrollMomentumSettings: Sendable, Equatable {
     /// `false` stops content dead the moment input stops.
     public var isEnabled: Bool = true
@@ -102,11 +100,8 @@ public struct ScrollMomentumSettings: Sendable, Equatable {
     /// Samples a gesture must have produced inside `trackingWindow` before it
     /// counts as a throw.
     ///
-    /// Two notches landing close together describe the gap between two events,
-    /// not a gesture — and measuring that gap is what made content impossible
-    /// to stop with a notch: "braking" kept reading as a fresh, very fast
-    /// gesture. A trackpad run produces a dozen samples in the same window, so
-    /// this costs flings nothing.
+    /// A short sample pair can exaggerate velocity; require enough samples
+    /// from the custom gesture to distinguish a throw from a placement.
     public var minimumSampleCount: Int = 3
 
     /// Quiet period, in seconds, after the newest wheel sample before the
@@ -169,8 +164,8 @@ public struct ScrollPhysics: Sendable, Equatable {
 }
 
 public extension ScrollPhysics {
-    /// Rubber band, critically damped return, momentum — the default
-    /// everywhere.
+    /// Default physics for custom gestures: rubber band, critically damped
+    /// return and momentum. Platform scrolling always follows direct input.
     static let `default` = ScrollPhysics()
 
     /// Hard clamping at both bounds: content stops dead instead of stretching.

@@ -565,8 +565,13 @@ function installMirrorInput() {
       kind: "wheel",
       x: point.x,
       y: point.y,
-      deltaX: event.deltaX * scale.x,
-      deltaY: event.deltaY * scale.y,
+      deltaX: -event.deltaX * (event.deltaMode === 0 ? scale.x : 1),
+      deltaY: -event.deltaY * (event.deltaMode === 0 ? scale.y : 1),
+      scroll: {
+        unit: ["points", "lines", "pages"][event.deltaMode] || "points",
+        device: "unknown", phase: "none", momentumPhase: "none",
+        timestamp: event.timeStamp / 1000,
+      },
       modifiers: modifiers(event),
     });
     event.preventDefault();

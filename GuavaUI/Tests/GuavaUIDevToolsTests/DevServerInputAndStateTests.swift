@@ -13,6 +13,20 @@ import EngineKernel
 /// context not available in the test process).
 final class DevServerInputAndStateTests: XCTestCase {
 
+    func test_wheel_metadata_survives_wire_decode_and_input_bridge() throws {
+        let scroll = ScrollInput(unit: .points, device: .continuous, phase: .ended,
+                                 momentumPhase: .began, timestamp: 42.25)
+        let payload = MirrorInputPayload(kind: "wheel", x: 10, y: 20,
+                                         deltaX: 0.25, deltaY: -8.5, scroll: scroll)
+        let decoded = try JSONDecoder().decode(MirrorInputPayload.self, from: JSONEncoder().encode(payload))
+        guard case .mouseWheel(let wheel)? = InputBridge.event(from: decoded) else {
+            return XCTFail("Expected a wheel event")
+        }
+        XCTAssertEqual(wheel.input, scroll)
+        XCTAssertEqual(wheel.x, 0.25)
+        XCTAssertEqual(wheel.y, -8.5)
+    }
+
     @MainActor
     func test_mirror_input_pointer_down_dispatches_to_handler() async throws {
         let tree = NodeTree()

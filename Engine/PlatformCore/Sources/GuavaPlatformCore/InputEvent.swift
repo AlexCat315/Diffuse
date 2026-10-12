@@ -124,22 +124,24 @@ public struct MouseButtonEvent: Codable, Sendable {
 }
 
 public struct MouseWheelEvent: Codable, Sendable {
-    /// Horizontal wheel delta. Positive/negative sign preserves the platform
-    /// event source, including any OS or driver scroll-direction preference.
+    /// Positive X translates content right (decreases a positive scroll offset).
+    /// Direction preferences are already reflected; do not flip them again.
     public var x: Float
-    /// Vertical wheel delta. Positive/negative sign preserves the platform
-    /// event source, including any OS or driver scroll-direction preference.
+    /// Positive Y translates content down (decreases a positive scroll offset).
     public var y: Float
     /// Optional cursor position in window-local logical coordinates at the
     /// moment the wheel event was produced.
     public var mouseX: Float?
     public var mouseY: Float?
+    public var input: ScrollInput
 
-    public init(x: Float, y: Float, mouseX: Float? = nil, mouseY: Float? = nil) {
+    public init(x: Float, y: Float, mouseX: Float? = nil, mouseY: Float? = nil,
+                input: ScrollInput = .init()) {
         self.x = x
         self.y = y
         self.mouseX = mouseX
         self.mouseY = mouseY
+        self.input = input
     }
 }
 
