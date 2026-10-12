@@ -1,12 +1,10 @@
-# Android NativeRHI / GuavaUI
+# Android NativeRHI / GuavaUI / GameRuntime
 
-Swift 6.4.0、Android NDK r30、ARM64、Android API 28 起的原生验证入口。`Sources` 中的符号链接直接编译 Engine NativeRHI 与 GuavaUI 绘制器，Swift 包依赖复用 GuavaUI Portable / Text。应用运行桌面 `GuavaUIDemo --shared-counter` 和浏览器使用的同一份 `SharedCounterView`，包括 Compose、State、ViewGraph、Yoga、事件分发和 DrawList。
-
-文字经共享的 HarfBuzz / FreeType / FontAtlas 管线生成字形，由 NativeRHI Vulkan 绘制。Java 宿主负责 Surface、vsync、触摸、IME 和生命周期；应用内容中的标题、按钮、计数与输入文字都由 GuavaUI 绘制。此包不引入桌面宿主的 SDL、物理和图像解码二进制依赖。
+Android 宿主直接依赖生产 Engine、GuavaUI Runtime / Compose / Gallery 和 GameRuntime。使用 Swift **6.4.0 release**、Android NDK r30、ARM64 和 API 28 起的系统接口；渲染使用 NativeRHI Vulkan。桌面与 Android 共用组件、项目场景、Swift 游戏脚本、物理、图像解码和 HUD 实现。
 
 ## 工具链
 
-使用 Swift.org 的 **6.4.0 release** 工具链，Android SDK 版本必须完全匹配。已装 Xcode 自带 Swift 不能代替相应的开源交叉编译 SDK。
+Swift 工具链与 Android SDK 必须完全匹配，Xcode 自带 Swift 不能代替对应的开源交叉编译工具链。
 
 ```sh
 swift sdk install https://download.swift.org/swift-6.4.0-release/android-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_android.artifactbundle.tar.gz --checksum 21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43
@@ -14,72 +12,100 @@ swift sdk list
 export ANDROID_NDK_HOME=/absolute/path/to/android-ndk-r30
 ```
 
-Android SDK 需要 platform-tools；构建 APK 还需要 `platforms;android-36`、`build-tools;36.1.0` 和 JDK（已用 JDK 21 验证）。NDK r30 在 SDK manager 中的版本为 `30.0.16248370`。主机需要 CMake、Ninja 和 Python 3；截图验收脚本还需要 Pillow。Slang 使用仓库固定的 2026.19，可通过 `python3 scripts/bootstrap-rhi-slang.py` 安装。
-
-先初始化字体子模块：
+主机需要 CMake、Ninja、Python 3，以及匹配的 Swift 6.4.0 release。已用 macOS ARM64 和 JDK 21 验证。Android SDK 需要 `platform-tools`、`platforms;android-36`、`build-tools;36.1.0`，NDK 版本为 `30.0.16248370`。`--android-sdk` / `--ndk` 可覆盖自动发现路径；`GUAVA_SWIFT_EXECUTABLE` 可指定 Swift 可执行文件。
 
 ```sh
-git submodule update --init GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
+git submodule update --init Engine/third-party/sdl3 Engine/third-party/jolt GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
 python3 -m venv Engine/build/android-validation/verify-venv
 Engine/build/android-validation/verify-venv/bin/python -m pip install Pillow
 ```
 
-构建脚本用 NDK 从仓库固定的 FreeType / HarfBuzz 源码构建 ARM64 静态库，生成 Text 包使用的 artifact bundle；输出位于 `Engine/build/android-validation/fonts/`。不会修改上游源码或覆盖桌面字体依赖。脚本校验 Swift release 版本，并通过 `GUAVA_TEXT_ARTIFACT_ROOT` 将 Android 字体产物传给本次 Swift 构建。`GUAVA_SWIFT_EXECUTABLE` 可指定匹配 SDK 的 Swift 可执行文件。
+构建脚本从仓库固定源码构建 SDL3、Jolt、lunasvg / plutovg、WebP、FreeType 和 HarfBuzz。Android artifact bundles 位于忽略的 `Engine/build/android-validation/native/vendor` 和 `fonts/vendor`，通过 `GUAVA_ENGINE_ARTIFACT_ROOT` / `GUAVA_TEXT_ARTIFACT_ROOT` 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
 
-参考 [Swift 官方安装说明](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html)、[NDK 下载](https://developer.android.com/ndk/downloads)。
+参考 [Swift Android SDK 官方说明](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html)、[Swift 6.4 发布说明](https://www.swift.org/blog/swift-6.4-released/)、[SDL Android 宿主约定](https://wiki.libsdl.org/SDL3/README-android)。
 
-## 真机验证
+## Gallery 与真机验收
 
-在仓库根目录执行，设备必须完成 USB 调试授权。多个设备时指定 `--serial`；`--android-sdk` / `--ndk` 可覆盖自动发现路径。
+在仓库根目录执行，设备须完成 USB 调试授权。多设备时指定 `--serial`。
 
 ```sh
-python3 scripts/android/validate.py --serial DEVICE_SERIAL
-python3 scripts/android/build-app.py --serial DEVICE_SERIAL --install
+python3 scripts/android/build-app.py --install --serial DEVICE_SERIAL
+Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-gallery.py --serial DEVICE_SERIAL
 Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-demo.py --serial DEVICE_SERIAL
+python3 scripts/android/validate.py --serial DEVICE_SERIAL
 ```
 
-- `validate.py` 构建 ARM64 Swift 可执行程序，编译 Vulkan 1.1 / SPIR-V 1.3 的测试 shader，推送到独立的 `/data/local/tmp` 目录并实际运行。七项检查全部通过才成功；返回本次 JSON 和 PPM 像素报告，成功后清理设备上的本次临时目录。
-- `build-app.py` 生成并校验 debug APK，`--install` 安装并启动 **GuavaUI SharedCounter**。Swift 静态 runtime、NDK 的 `libc++_shared.so` 与 shader 资源一起打包。
-- `verify-demo.py` 对已安装应用执行 SharedCounter 验收：真实触摸与拖出取消、计数重组、亮暗主题、字形像素变化、IME、Unicode、Activity 重建、前后台恢复、横竖屏窗口布局及空闲时停止 GPU 提交。每次运行建立独立的 `demo-run-*` 目录，成功时保存 JSON 快照报告、截图与本进程日志。
-- `smoke-app.py` 保留为较小的窗口生命周期冒烟入口；完整 SharedCounter 验收使用 `verify-demo.py`。
+默认 APK 运行完整 **GuavaUI Gallery（72 个页面）**。可用 `--component textField` 选择入口，或用 `--demo counter` 运行共享的 SharedCounter。Gallery 与桌面使用同一 `GalleryView` 和所有 story，没有另一份 Android 组件实现。
 
-验收会强制重启 demo，清空本次内存状态。英文输入先确认真实 Android IME 已绑定 `DemoInputConnection`，再通过 `adb input` 注入按键；测试设备上的输入法需要 Space 确认候选词。中文预编辑、提交、取消及 Unicode 边界检查由仅供 debug APK 的 `com.guava.probe.DEMO_INPUT` 广播调用同一个 InputConnection，不能将这些回调检查等同于所有系统输入法的人工验收。
+`verify-gallery.py` 遍历完整目录，为每页保存真实屏幕截图、像素检查和语义快照；另检查 Checkbox、Slider、长按 ContextMenu、TextField 选择替换 / 中文预编辑、前后台状态保留和手指滚动。`--pages` 可运行选定页面。语义快照来自共享 AccessibilityTree，包含可见控件的角色、标签、值和裁剪后的几何。
 
-横竖屏检查改变的是应用的方向请求；平板的系统兼容模式可能以竖向窗口加左右留白呈现。验收使用真实 Surface 的屏幕偏移计算触摸与截图坐标。成功结束时恢复应用的传感器方向选择；中途失败时可执行 `adb -s DEVICE_SERIAL shell am start -n com.guava.probe/.MainActivity --ei orientation -1` 恢复。脚本不修改系统的方向、GPU 驱动选择或全局调试设置。
+`--interactions-only` 可单独重跑组件交互。手指滑动转换为具有开始 / 改变 / 结束阶段的点单位滚动；长按在抬起时依据实际手势时长和移动距离确认，避免慢帧延迟事件投递后把滑动误判为长按。外接鼠标滚轮和键盘导航走共享事件路由。
 
-所有本机输出位于忽略的 `Engine/build/android-validation/`，包括 `GuavaAndroidProbe.apk`、字体库、各次 `run-*/results/report.json` 与 `demo-run-*/report.json`。APK 使用仅供验证的 debug 签名，启用调试快照和输入回放广播；生产应用需要独立的发布配置。
+`verify-demo.py` 回归 SharedCounter 的触摸、重组、字形像素、亮暗主题、IME、UTF-16 / 字素删除、Activity 重建、横竖屏、前后台和空闲停帧。`validate.py` 独立运行七项 GPU / 布局探针，检查 transfer、compute、1x / 4x raster、DrawList、深度、scissor 和数据读回。截图脚本需要 Pillow。
 
-## 宿主与状态边界
+真机报告与截图分别放在 `gallery-run-*`、`demo-run-*`、`game-run-*`、`run-*/results`。脚本通过 debug APK 的输入广播调用同一 InputConnection / 游戏按键路径。英文输入另外确认真实系统 IME 已连接；回调回放不等同于所有输入法的人工验收。测试会重新启动验证应用；方向检查只调整应用请求，结束时可用 `--ei orientation -1` 恢复传感器方向。
 
-`DemoScene` 安装共享组件，并拥有 Compose、布局、焦点和事件分发；`DemoTypography` 加载设备的 Roboto / Noto CJK 字体，使用共享文字管线；`SurfaceSession` 管理 RHI、swapchain、字体图集上传与呈现。JNI 使用 UTF-16 传递文字，保留中文和补充平面字符。
+## 导出完整游戏 APK
 
-`DemoSurfaceView` 通过 Choreographer 跟随 vsync。场景没有输入、重组或树更新时不提交 GPU 帧；`onPause` 释放 surface 会话和 GPU 资源，返回应用后重新创建。计数、主题和已提交 note 作为共享组件检查点保存，在 Surface 或 Activity 重建时恢复；焦点、IME 预编辑和 GPU 对象是临时状态，不进入检查点。检查点也经 `onSaveInstanceState` 写入 Activity Bundle。
+导出入口接受普通 Guava 项目目录。项目的 `.guava/editor-scene-manifest.json` 必须使用当前场景格式，脚本绑定必须可解析。
 
-## 已验证与边界
+```sh
+python3 scripts/android/export-game.py \
+  --project examples/CrystalRush \
+  --application-id com.guava.game.crystalrush \
+  --name 'Crystal Rush' \
+  --output Engine/build/android-validation/CrystalRush.apk \
+  --install --serial DEVICE_SERIAL
 
-2026-10-12，设备型号 2405CRPFDC，Android 16 / API 36，Adreno 710。loader 报告 Vulkan 1.4.0，**物理 GPU 驱动仅报告 Vulkan 1.1.128**，缺少 dynamic rendering、maintenance4；支持 `VK_KHR_timeline_semaphore`。因此设备能力判断必须以物理设备及 feature 查询为准。
+Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-game.py --serial DEVICE_SERIAL
+```
 
-| 检查 | 结果 |
-| --- | --- |
-| NativeRHI 默认后端、Android surface 默认值 | Vulkan / ANativeWindow / RGBA8 |
-| 纹理上传、transfer 队列复制与读回 | 256 字节全量相等 |
-| Compute storage buffer / indirect dispatch | 16 个 UInt32 结果全量相等 |
-| Raster、uniform binding、direct / indirect draw、深度、load/store、帧槽复用 | 1x / 4x 均通过，检查中心、背景及 MSAA 边缘像素 |
-| GuavaUI DrawList + NativeDrawListRenderer | 1x / 4x 颜色、scissor、保留图像上传与采样像素通过 |
-| GuavaUI Scene / Yoga | 布局、脏标记传播与重置通过；ComposeCore 同时完成 Android 编译 |
-| ANativeWindow / Vulkan swapchain | 横竖屏呈现、触摸重绘、surface 释放与重建通过 |
-| SharedCounter Compose / State / 输入 | 22 个真机验收检查点通过，包括计数、主题、按钮路由、IME 和重建后状态恢复 |
-| FreeType / HarfBuzz / R8 字体图集 | 真实计数字形像素随 State 改变；英文及中文绘制通过，最终场景缺失字形为 0 |
-| GuavaUI Portable / Text 主机回归 | Portable 96 项、Text 12 项测试通过 |
+导出先调用 `GuavaProjectExport` / `ProjectExporter`，校验场景、绑定及资源依赖，再生成移动端构建输入。每个项目 Swift 脚本独占一个模块，允许多个脚本都使用既有的 `GameScript` 约定；聚合注册器按稳定 asset ID 注册进 GameRuntime。SwiftPM 将这些模块与播放器一起交叉编译、静态链接进 APK。手机无需 Swift 编译器，不依赖桌面动态脚本库。源代码与 `.guava/static-scripts.json` 属于主机构建输入，打包时排除。
 
-22 个检查点之外，验收脚本还断言拖出取消、亮暗主题背景像素、计数字形截图变化、IME 绑定以及空闲帧计数不增长。成功的报告包含每个检查点的组件状态、控件布局、字体统计、帧计数和会话 ID。接入字体工具链后，七项 NativeRHI GPU/布局探针再次在真机通过。
+APK 包含 Player 可加载的场景 save document、asset index、模型及其外部纹理 / buffer、音频和项目 catalog。应用通过原有 GameApplication / EngineHost 驱动脚本、场景、物理、音频和 NativeRenderer，GuavaUI HUD 与三维画面一起合成。屏幕控制条提供 WASD、Sprint、Start、Restart，可同时按住移动与加速；硬件方向键、键盘和 A / B 手柄按钮也映射到这些输入。`verify-game.py` 专门验收 CrystalRush 的真实场景、中文 HUD、开始、持续移动、重开、后台停帧和横竖屏恢复。
 
-当前使用核心 render pass 接口，framebuffer/render pass 对象保留到提交 fence 完成；无需 dynamic rendering。Vulkan 1.1 驱动必须有时间线信号量扩展。UI 离线 shader 统一生成 SPIR-V 1.3；其他场景 shader 仍有 SPIR-V 1.5 与 LocalSizeId，不能直接认为完整游戏渲染器已支持这台 GPU。RHI 会在创建 shader 前拒绝超过设备版本的 SPIR-V 和未启用 maintenance4 的 LocalSizeId。
+Release 构建与签名：
 
-Surface 采用 identity transform，让系统合成器旋转窗口坐标中的图像。先前直接使用 `currentTransform` 会错误承诺 shader 已完成预旋转；真实截图验证并修正了这个问题。完整游戏可后续增加显式预旋转契约，减少系统合成开销，参考 [Android Vulkan 方向处理](https://developer.android.com/games/optimize/vulkan-prerotation)。
+```sh
+python3 scripts/android/export-game.py \
+  --project /absolute/path/to/MyGame \
+  --application-id com.example.mygame \
+  --output /absolute/path/to/MyGame.apk \
+  --configuration release \
+  --keystore /absolute/path/to/release.keystore \
+  --key-alias mygame \
+  --store-password-env GUAVA_ANDROID_STORE_PASSWORD \
+  --key-password-env GUAVA_ANDROID_KEY_PASSWORD
+```
 
-本轮没有启用 Khronos validation layer；验证依据是真实提交、完整数据/像素断言及窗口生命周期。设备上的 graphics/compute/transfer 使用同一通用 queue family，不能据此确认独立队列族同步。Windows/Linux 宿主、DX12、Vulkan RT/mesh 仍需各自的验证。
+密码从指定环境变量读取，命令与日志只包含变量名。未提供 keystore 时使用本机生成的开发签名；这也适用于本仓库的 Release 验证包。Release APK 禁用 `debuggable`、验证广播和快照写盘。所有 APK 均经 zipalign（16 KB 页对齐）与 apksigner 校验，并输出相邻 JSON 构建报告。这里只生成 APK，商店 AAB、Play 发布及用户生产签名不在此导出器中。
 
-SharedCounter 的 note 是在末尾追加、按字素删除的输入示例；完整 TextField 的光标、选择、撤销、滚动避让和无障碍语义尚未接入。当前字体入口读取两个设备系统字体路径；彩色 Emoji 和通用 Android 字体发现尚未实现。测试中的 🚀 检查 UTF-16 传输和删除，随后删除该字符，不代表彩色 Emoji 渲染已通过。
+## 移动 GPU shader
 
-本轮按约定完成 SharedCounter，没有移植完整组件 Gallery。完整游戏还需要接入持续更新的游戏循环、图像/SDL/物理/音频依赖、场景 shader 的移动 GPU profile / 固定工作组策略，以及 APK 资源与 release 签名发布流程。这里的实际 GPU、窗口和共享 UI 验证已建立可复用的移植基础，尚不把桌面 Player/Editor 声明为可直接导出 Android。
+场景 renderer 在 Android 选择 `Shaders/Native/spirv-mobile`，使用 Vulkan 1.1 可接收的 SPIR-V 1.3。七个可配置粒子 compute kernel 具有完整 1…256 固定工作组变体，保留共同反射 ABI，不要求 maintenance4 / LocalSizeId。桌面 Vulkan、Metal、DX12 的 shader profile 保持各自配置。UI 继续使用已有的 SPIR-V 1.3 产物。
+
+```sh
+python3 scripts/bootstrap-rhi-slang.py
+python3 scripts/compile-native-renderer-shaders.py --targets spirv-mobile
+python3 scripts/test-rhi-shader-toolchain.py
+```
+
+产物在仓库内随代码交付，APK 只打包对应的 Vulkan target。生成器使用固定 Slang 2026.19；基础编译、工作组变体 ABI 和整个批次全部成功后才发布产物。测试解析所有移动端 SPIR-V，包括每一个工作组变体，检查版本、LocalSizeId 和真实 LocalSize。
+
+## 状态与资源所有权
+
+`AndroidApplication` 拥有 Device、UI renderer、Compose scene 或 GameSession；Activity 使用 non-configuration instance 保留这一对象。`SurfaceSession` 只拥有当前 ANativeWindow 的 swapchain 和 framebuffer。暂停、旋转或 Surface 重建会等待并释放窗口 GPU 资源，保留 Gallery 控件和正在运行的游戏；暂停时清理焦点、预编辑、指针捕获和持续按键，返回后按新窗口大小布局。场景线程与窗口线程通过同一 Device 的 `withFrameSession` 串行安排完整 GPU 帧。
+
+APK 资源解包到应用私有 `files/runtime`，按安装版本替换，避免升级后留下旧资源或旧脚本库。debug 报告及玩家数据位于该目录之外。SharedCounter 的已提交状态与 Gallery 页码写入 Activity Bundle，进程销毁后可恢复；完整游戏模拟和 Gallery 各控件的内存状态只在存活进程中保留。游戏存档仍由项目自己的存档逻辑决定。
+
+UI / backdrop shader 与场景资源统一通过 `PackageResourceBundle` 查找宿主提供的解包根目录，Debug 和 Release 使用同一规则。SwiftPM 生成的 `Bundle.module` 环境覆盖仅在 Debug 生效，不能作为 Release APK 的资源定位入口。
+
+文字使用共享 HarfBuzz / FreeType / FontAtlas，优先采用设备 Roboto / Noto CJK / Symbols；APK 附带现有 Noto Emoji 轮廓字体及 OFL，覆盖设备系统彩色 Emoji 字体以外的符号。轮廓 Emoji 以文字颜色绘制；系统彩色 Emoji 的 PNG strike 尚未接入。IME 的光标、选择、预编辑、提交、删除、剪贴板和撤销使用同一 TextField 编辑状态，覆盖 TextArea / CodeEditor 的共享文本表面。控件语义用于自动化快照；Android TalkBack 桥接尚未实现。
+
+## 验证设备与边界
+
+2026-10-12，2405CRPFDC，Android 16 / API 36，Adreno 710。loader 报告 Vulkan 1.4.0，物理 GPU 驱动为 **Vulkan 1.1.128**，缺少 dynamic rendering / maintenance4，支持 timeline semaphore 和同步扩展。实际能力判断来自物理设备与 feature 查询。使用传统 render pass，不要求 dynamic rendering；NativeRHI 仍要求时间线信号量支持。
+
+已完成完整 Gallery 页面的真实绘制和 CrystalRush 完整场景的真机运行。验证不代表所有组件的所有交互组合、所有第三方项目资源或全部 Android GPU 已覆盖。当前未启用 Khronos validation layer；设备使用同一通用 queue family，独立队列族同步仍需专门设备。Windows / Linux 宿主、DX12、RT / mesh 不由 Android 结果代替。
+
+本轮验收：Gallery **72 页 + 6 项交互**、SharedCounter **22 项**、CrystalRush **8 项**和 NativeRHI **7 项**均通过。CrystalRush Release APK 也已安装，确认场景 / 中文 HUD、触控开始与移动、前后台恢复及禁用调试访问。主机侧 TextField 41 项、ProjectExporter 15 项、shader 工具链 11 项、UI renderer 生命周期 / backdrop 像素 15 项通过。CrystalRush 的胜负、超时、边界和重开另由主机玩法测试覆盖；Android 自动化没有穷举所有玩法路线。

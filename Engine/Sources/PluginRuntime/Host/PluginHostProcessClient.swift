@@ -3,6 +3,8 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Android)
+import Android
 #endif
 
 public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConvertible {
@@ -351,6 +353,8 @@ private func guavaSystemPoll(_ descriptor: UnsafeMutablePointer<pollfd>,
     Darwin.poll(descriptor, 1, timeout)
 #elseif canImport(Glibc)
     Glibc.poll(descriptor, 1, timeout)
+#elseif canImport(Android)
+    Android.poll(descriptor, 1, timeout)
 #endif
 }
 
@@ -362,6 +366,8 @@ private func guavaSystemRead(_ fileDescriptor: Int32,
     Darwin.read(fileDescriptor, buffer, count)
 #elseif canImport(Glibc)
     Glibc.read(fileDescriptor, buffer, count)
+#elseif canImport(Android)
+    Android.read(fileDescriptor, buffer, count)
 #endif
 }
 
@@ -373,6 +379,8 @@ private func guavaSystemWrite(_ fileDescriptor: Int32,
     Darwin.write(fileDescriptor, buffer, count)
 #elseif canImport(Glibc)
     Glibc.write(fileDescriptor, buffer, count)
+#elseif canImport(Android)
+    Android.write(fileDescriptor, buffer, count)
 #endif
 }
 #endif

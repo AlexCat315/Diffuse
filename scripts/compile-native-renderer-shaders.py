@@ -16,7 +16,7 @@ SPEC.loader.exec_module(SHADER)
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--slangc', default=os.environ.get('SLANGC'))
-    parser.add_argument('--targets', nargs='+', choices=['metal', 'spirv', 'dxil'], default=['metal', 'spirv'])
+    parser.add_argument('--targets', nargs='+', choices=['metal', 'spirv', 'spirv-mobile', 'dxil'], default=['metal', 'spirv'])
     parser.add_argument('--check', action='store_true', help='Compile into temporary storage and reject stale bundled artifacts')
     parser.add_argument('--ui-only', action='store_true', help='Rebuild only the GuavaUI artifacts')
     args = parser.parse_args()
@@ -56,31 +56,35 @@ def main():
     with tempfile.TemporaryDirectory(prefix='guava-native-shaders-') as staging:
         destinations = []
         for target in args.targets:
+            compiler_target = 'spirv' if target == 'spirv-mobile' else target
+            fixed_workgroups = target in ('dxil', 'spirv-mobile')
             for shaders, name, source, stages in programs:
+                if target == "spirv-mobile" and shaders == ui_shaders: continue
                 for stage, entry in stages:
                     destination = shaders / f'Native/{target}/{name}.{stage}.json'
                     output = Path(staging) / destination.relative_to(ROOT)
                     destinations.append((output, destination))
                     variable = name in specialized
-                    defines = {'PARTICLE_WORKGROUP_SIZE': 64} if target == 'dxil' and name in particle_kernels else None
+                    defines = {'PARTICLE_WORKGROUP_SIZE': 64} if fixed_workgroups and name in particle_kernels else None
                     if name == 'ui': defines = {'UI_VERTEX_SHADER': int(stage == 'vertex')}
                     if name == 'ui_backdrop': defines = {'BACKDROP_VERTEX_SHADER': int(stage == 'vertex')}
-                    artifact = SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, target, output, args.slangc,
+                    artifact = SHADER.compile_shader(shaders / 'Slang' / source, entry, stage, compiler_target, output, args.slangc,
                         threadgroup_size=[64,1,1] if variable else None, line_directives=False,
-                        threadgroup_constants=[0,None,None] if variable and target != 'dxil' else None,
-                        defines=defines, spirv_profile="spirv_1_3" if name in ("ui", "ui_backdrop") else "spirv_1_5")
+                        threadgroup_constants=[0,None,None] if variable and not fixed_workgroups else None,
+                        defines=defines, spirv_profile="spirv_1_3" if target == 'spirv-mobile' or name in ("ui", "ui_backdrop") else "spirv_1_5")
                     print(destination.relative_to(ROOT))
-                    if variable and target == 'dxil':
-                        # DXIL has fixed numthreads. Keep one reflected interface
+                    if variable and fixed_workgroups:
+                        # DXIL and mobile SPIR-V use fixed workgroups. Keep one reflected interface
                         # and a complete 1...256 code family, without 256 duplicate layouts.
                         codes = {'64': artifact['code']}
                         with tempfile.TemporaryDirectory(prefix='guava-dxil-workgroups-') as directory:
                             for size in range(1,257):
                                 if size == 64: continue
-                                variant = SHADER.compile_shader(shaders / 'Slang' / source,entry,stage,target,
-                                    Path(directory)/'shader.json',args.slangc,line_directives=False,defines={'PARTICLE_WORKGROUP_SIZE': size})
+                                variant = SHADER.compile_shader(shaders / 'Slang' / source,entry,stage,compiler_target,
+                                    Path(directory)/'shader.json',args.slangc,line_directives=False,defines={'PARTICLE_WORKGROUP_SIZE': size},
+                                    spirv_profile='spirv_1_3' if target == 'spirv-mobile' else 'spirv_1_5')
                                 interface = dict(variant['interface']); interface['threadgroupSize'] = artifact['interface']['threadgroupSize']
-                                if interface != artifact['interface']: raise ValueError('DXIL workgroup variant changes reflected ABI')
+                                if interface != artifact['interface']: raise ValueError(f'{target} workgroup variant changes reflected ABI')
                                 codes[str(size)] = variant['code']
                         family = output.with_name(f'{name}.compute.workgroups.json')
                         destinations.append((family, destination.with_name(f'{name}.compute.workgroups.json')))

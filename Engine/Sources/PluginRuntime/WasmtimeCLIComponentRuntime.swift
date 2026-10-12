@@ -3,6 +3,8 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Android)
+import Android
 #endif
 
 public enum WasmtimeCLIError: Error, Sendable, Equatable, CustomStringConvertible {

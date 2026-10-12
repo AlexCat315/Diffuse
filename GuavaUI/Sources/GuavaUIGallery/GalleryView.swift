@@ -15,6 +15,10 @@ public struct GalleryView: View {
         _appearance = State(wrappedValue: appearance)
     }
 
+    public var currentPage: GalleryPage { page }
+    public var isDark: Bool { appearance == .dark }
+    public func selectPage(_ page: GalleryPage) { self.page = page }
+
     public var body: some View {
         LayerRoot {
             Box(direction: .row, alignItems: .stretch, spacing: 0) {
