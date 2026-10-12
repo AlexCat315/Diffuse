@@ -113,7 +113,7 @@ final class NativeParticleTests: XCTestCase {
             case 10: packet.drawableSize = .init(width: 320,height: 200)
             case 11: packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 6
             case 12:
-                packet.renderSettings.stage = .r5PostProcess
+                packet.renderSettings.enablePBR = true
                 packet.renderSettings.enableBloom = true; packet.renderSettings.enableTAA = true; packet.renderSettings.enableFXAA = true
             case 21: packet.scene.particles[0].position.x += 0.5
             case 22: packet.scene.particles = []
@@ -122,7 +122,7 @@ final class NativeParticleTests: XCTestCase {
                 var invalid = packet; invalid.scene.particles[0].endColor.z = .infinity
                 XCTAssertThrowsError(try renderer.renderChecked(packet: invalid))
                 try textureFixture().write(to: retryURL)
-            case 25: packet.renderSettings.stage = .r3ViewportInterop; packet.renderSettings.enableBloom = false; packet.renderSettings.enableTAA = false; packet.renderSettings.enableFXAA = false
+            case 25: packet.renderSettings.enablePBR = false; packet.renderSettings.enableBloom = false; packet.renderSettings.enableTAA = false; packet.renderSettings.enableFXAA = false
             default: break
             }
             try renderer.renderChecked(packet: packet); _ = try reference.render(packet: packet)

@@ -97,8 +97,8 @@ extension VulkanBackend {
                 try validateRenderTargets(record.descriptor, pipeline: pipeline.descriptor)
                 layoutID = pipeline.descriptor.layout.id; meshBound = false
                 draw.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline)
-            case .setBindingSet(let slot, let handle):
-                try bindSet(cmd: cmd, bindPoint: VK_PIPELINE_BIND_POINT_GRAPHICS, layoutID: layoutID, slot: slot, handle: handle)
+            case .setBindingSet(let slot, let handle, let dynamicOffsets):
+                try bindSet(cmd: cmd, bindPoint: VK_PIPELINE_BIND_POINT_GRAPHICS, layoutID: layoutID, slot: slot, handle: handle, dynamicOffsets: dynamicOffsets)
             case .pushConstant(let stage, let slot, let data):
                 try pushConstants(cmd: cmd, layoutID: layoutID, stage: stage, slot: slot, data: data)
             case .setVertexBuffer(let slot, let handle, let offset):
@@ -144,8 +144,8 @@ extension VulkanBackend {
                 guard let pipeline = registries.computePipelines[handle.id] else { throw RHIError.invalidArgument("unknown compute pipeline") }
                 layoutID = pipeline.descriptor.layout.id
                 draw.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline)
-            case .setBindingSet(let slot, let handle):
-                try bindSet(cmd: cmd, bindPoint: VK_PIPELINE_BIND_POINT_COMPUTE, layoutID: layoutID, slot: slot, handle: handle)
+            case .setBindingSet(let slot, let handle, let dynamicOffsets):
+                try bindSet(cmd: cmd, bindPoint: VK_PIPELINE_BIND_POINT_COMPUTE, layoutID: layoutID, slot: slot, handle: handle, dynamicOffsets: dynamicOffsets)
             case .pushConstant(let stage, let slot, let data):
                 try pushConstants(cmd: cmd, layoutID: layoutID, stage: stage, slot: slot, data: data)
             case .dispatch(let x, let y, let z):
@@ -164,13 +164,20 @@ extension VulkanBackend {
         }
     }
 
-    private func bindSet(cmd: VkCommandBuffer, bindPoint: VkPipelineBindPoint, layoutID: UInt32?, slot: UInt32, handle: BindingSet) throws {
+    private func bindSet(cmd: VkCommandBuffer, bindPoint: VkPipelineBindPoint, layoutID: UInt32?, slot: UInt32, handle: BindingSet, dynamicOffsets: [UInt32]) throws {
         guard let layoutID, let layout = registries.pipelineLayouts[layoutID], let set = registries.bindingSets[handle.id],
               Int(slot) < layout.descriptor.setLayouts.count, layout.descriptor.setLayouts[Int(slot)].id == set.layoutID else {
             throw RHIError.layoutMismatch("binding set does not match the active pipeline layout")
         }
+        try rhiRequire(dynamicOffsets.count == set.dynamicOffsetCount,
+                       "dynamic offset count does not match the binding layout")
         var native = set.descriptorSet
-        draw.cmdBindDescriptorSets(cmd, bindPoint, layout.native, slot, 1, &native, 0, nil)
+        dynamicOffsets.withUnsafeBufferPointer { offsets in
+            offsets.baseAddress.map {
+                draw.cmdBindDescriptorSets(cmd, bindPoint, layout.native, slot, 1, &native,
+                                           UInt32(dynamicOffsets.count), $0)
+            } ?? draw.cmdBindDescriptorSets(cmd, bindPoint, layout.native, slot, 1, &native, 0, nil)
+        }
     }
 
     private func pushConstants(cmd: VkCommandBuffer, layoutID: UInt32?, stage: ShaderStage, slot: UInt32, data: Data) throws {

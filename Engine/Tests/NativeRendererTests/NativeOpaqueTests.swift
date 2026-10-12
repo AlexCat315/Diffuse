@@ -75,7 +75,7 @@ final class NativeOpaqueTests: XCTestCase {
         var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: 192,height: 128))
         // The production renderer publishes its offscreen texture from r3.
         // One-pass/depth-prepass equivalence is checked separately in parity.
-        packet.renderSettings.stage = .r3ViewportInterop
+        packet.renderSettings.enablePBR = false; packet.renderSettings.enableDepthPrepass = true
         packet.scene.camera = RenderCamera(eye: SIMD3(0,0,5), target: .zero, near: 0.1, far: 100)
         var back = matrix_identity_float4x4; back.columns.0.x = 2; back.columns.1.y = 2; back.columns.3.z = -1.5
         packet.scene.instances = [RenderInstance(meshIndex: 2, transform: matrix_identity_float4x4),
@@ -142,7 +142,7 @@ final class NativeOpaqueTests: XCTestCase {
         let native = try GridImage.readback(device: device, texture: XCTUnwrap(renderer.colorTexture), size: packet.drawableSize)
         XCTAssertLessThan(try GridImage.difference(native, reference.readback()).meanAbsoluteChannelError, 0.5)
         // One-pass base and depth+base must produce the same material/depth result.
-        packet.renderSettings.stage = .r1MeshCamera; packet.frameIndex += 1
+        packet.renderSettings.enablePBR = false; packet.renderSettings.enableDepthPrepass = false; packet.frameIndex += 1
         try renderer.renderChecked(packet: packet)
         XCTAssertEqual(native, try GridImage.readback(device: device, texture: XCTUnwrap(renderer.colorTexture), size: packet.drawableSize))
     }
@@ -178,14 +178,14 @@ final class NativeOpaqueTests: XCTestCase {
         XCTAssertThrowsError(try renderer.renderChecked(packet: packet))
         packet.scene.instances = []; try renderer.renderChecked(packet: packet)
         XCTAssertEqual(renderer.residentMeshCount, 2)
-        packet.renderSettings.stage = .r5PostProcess
+        packet.renderSettings.enablePBR = true
         try renderer.renderChecked(packet: packet)
         packet.renderSettings.enableStylizedCharacterShading = true
         try renderer.renderChecked(packet: packet)
         packet.renderSettings.stylizedCharacterStyle.outlineWidth = .nan
         XCTAssertThrowsError(try renderer.renderChecked(packet: packet))
         packet.renderSettings.enableStylizedCharacterShading = false
-        packet.renderSettings.stage = .r3ViewportInterop; try renderer.renderChecked(packet: packet)
+        packet.renderSettings.enablePBR = false; try renderer.renderChecked(packet: packet)
         try device.waitUntilIdle()
     }
 }

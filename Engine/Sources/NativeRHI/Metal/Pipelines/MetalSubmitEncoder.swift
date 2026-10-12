@@ -263,10 +263,10 @@ private struct MetalPassEncoder {
                 encoder.setTriangleFillMode(mtlTriangleFillMode(raster.fillMode))
             }
 
-        case .setBindingSet(let slot, let set):
+        case .setBindingSet(let slot, let set, let dynamicOffsets):
             try rhiRequire(slot == 0, "Metal direct binding currently supports set 0 only")
             let bindStart = cpuProfile?.beginDetail(.bindingApply)
-            try bindRenderBindingSet(set)
+            try bindRenderBindingSet(set, dynamicOffsets: dynamicOffsets)
             cpuProfile?.endDetail(.bindingApply, since: bindStart ?? 0)
 
         case .setVertexBuffer(let slot, let buffer, let offset):
@@ -355,18 +355,27 @@ private struct MetalPassEncoder {
     /// Replays a pre-resolved apply list. Resources, offsets and stage
     /// visibility were resolved when the set was registered, so the hot path
     /// only compares against the encoder's current bindings.
-    private func bindRenderBindingSet(_ handle: BindingSet) throws {
+    private func bindRenderBindingSet(_ handle: BindingSet, dynamicOffsets: [UInt32]) throws {
         guard let bindingSet = registries.bindingSets[handle.id] else {
             throw RHIError.invalidArgument("unknown render binding set")
         }
         guard renderEncoder != nil else { throw RHIError.invalidArgument("render encoder is not active") }
         guard renderBindings != nil else { throw RHIError.invalidArgument("render binding state is not active") }
+        try rhiRequire(dynamicOffsets.count == Set(bindingSet.dynamicOffsetIndex.values).count,
+                       "dynamic offset count does not match the binding layout")
         let applies = currentMeshPipeline == nil ? bindingSet.graphicsApplies : bindingSet.meshApplies
         for apply in applies {
             switch apply.resource {
             case .sampler(let state): applySampler(state, stage: apply.stage, index: apply.index)
             case .texture(let texture): applyTexture(texture, stage: apply.stage, index: apply.index)
-            case .buffer(let buffer, let offset): applyBuffer(buffer, offset: offset, stage: apply.stage, index: apply.index)
+            case .buffer(let buffer, let offset):
+                let resolvedOffset: Int
+                if let position = bindingSet.dynamicOffsetIndex[MetalBindingSet.DynamicKey(stage: apply.stage, index: apply.index)] {
+                    resolvedOffset = Int(dynamicOffsets[position])
+                } else {
+                    resolvedOffset = offset
+                }
+                applyBuffer(buffer, offset: resolvedOffset, stage: apply.stage, index: apply.index)
             case .accelerationStructure: break
             }
         }
@@ -442,11 +451,13 @@ private struct MetalPassEncoder {
             computeThreadgroupSize = registries.computeThreadgroupSizes[pipeline.id] ?? ThreadgroupSize()
             encoder.setComputePipelineState(state)
 
-        case .setBindingSet(let slot, let set):
+        case .setBindingSet(let slot, let set, let dynamicOffsets):
             try rhiRequire(slot == 0, "Metal direct binding currently supports set 0 only")
             guard let bindingSet = registries.bindingSets[set.id] else {
                 throw RHIError.invalidArgument("unknown compute binding set")
             }
+            try rhiRequire(dynamicOffsets.count == Set(bindingSet.dynamicOffsetIndex.values).count,
+                           "dynamic offset count does not match the binding layout")
             for apply in bindingSet.computeApplies {
                 switch apply.resource {
                 case .accelerationStructure(let native):
@@ -455,7 +466,14 @@ private struct MetalPassEncoder {
                     for resource in native.dependencies { encoder.useResource(resource, usage: .read) }
                 case .sampler(let state): encoder.setSamplerState(state, index: apply.index)
                 case .texture(let texture): encoder.setTexture(texture, index: apply.index)
-                case .buffer(let buffer, let offset): encoder.setBuffer(buffer, offset: offset, index: apply.index)
+                case .buffer(let buffer, let offset):
+                    let resolvedOffset: Int
+                    if let position = bindingSet.dynamicOffsetIndex[MetalBindingSet.DynamicKey(stage: apply.stage, index: apply.index)] {
+                        resolvedOffset = Int(dynamicOffsets[position])
+                    } else {
+                        resolvedOffset = offset
+                    }
+                    encoder.setBuffer(buffer, offset: resolvedOffset, index: apply.index)
                 }
             }
 

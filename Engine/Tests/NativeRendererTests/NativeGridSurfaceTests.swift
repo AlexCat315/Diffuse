@@ -45,7 +45,8 @@ final class NativeGridSurfaceTests: XCTestCase {
                 for kind in [RenderPassKind.ssao,.taa,.bloom,.fxaa] { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[kind],1) }
             }
             if stylized {
-                XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.outline],6)
+                // Outline follows the geometry batches (one per merged draw), not tint.
+                XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.outline],3)
                 XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.inkPaperPost],1)
             }
             if particles {
@@ -53,8 +54,10 @@ final class NativeGridSurfaceTests: XCTestCase {
                 XCTAssertEqual(renderer.lastFrameStats.gpuParticleIndirectDrawCount,16)
                 XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.particles],16)
             }
-            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], hdr ? 6 : 5)
-            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass], hdr ? 6 : 5)
+            // Material colors are per-instance uniforms now; instances sharing an
+            // imported material/geometry batch together regardless of tint.
+            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.basePass], 3)
+            XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.depthPrepass], 3)
         }
         try device.waitUntilIdle()
     }

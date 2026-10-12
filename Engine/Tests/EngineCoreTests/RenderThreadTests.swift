@@ -52,7 +52,7 @@ struct RenderThreadTests {
         thread.start(); defer { thread.shutdown() }
         var packet = Self.makePacket(frameIndex: 21)
         packet.drawableSize = RenderDrawableSize(width: 128, height: 96)
-        packet.renderSettings.stage = .r2MultiObjectDepth
+        packet.renderSettings.enablePBR = false; packet.renderSettings.enableDepthPrepass = true
         packet.renderSettings.debugViewMode = .unlit
         packet.renderSettings.enableEditorGrid = true
         buffer.publish(packet); thread.requestRender()

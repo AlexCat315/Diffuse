@@ -160,7 +160,7 @@ final class NativeParticleInstanceTests: XCTestCase {
             if frame == 10 { packet.drawableSize = .init(width: 320,height: 200) }
             if frame == 12 { packet.drawableSize = .init(width: 192,height: 128) }
             if frame >= 14 {
-                packet.renderSettings.stage = .r5PostProcess; packet.renderSettings.debugViewMode = .shaded
+                packet.renderSettings.enablePBR = true; packet.renderSettings.debugViewMode = .shaded
                 packet.renderSettings.enableBloom = true; packet.renderSettings.enableTAA = true; packet.renderSettings.enableFXAA = true
             }
             try renderer.renderChecked(packet: packet); let expectedStats = try reference.render(packet: packet)

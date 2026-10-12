@@ -98,9 +98,9 @@ final class NativePostTests: XCTestCase {
                 XCTAssertThrowsError(try renderer.renderChecked(packet: invalid))
                 // Recreated targets require a fresh history after recovery.
                 reference = try SceneCapture(validation: true, api: api)
-            case 22: clearEffects(&packet); packet.renderSettings.stage = .r4LightingPBRShadow
+            case 22: clearEffects(&packet)
             case 23:
-                packet.renderSettings.stage = .r5PostProcess; packet.renderSettings.enableTAA = true
+                packet.renderSettings.enableTAA = true
                 packet.renderSettings.enableSSAO = true; packet.renderSettings.enableSSR = true
                 packet.renderSettings.enableBloom = true; packet.renderSettings.enableFXAA = true
                 packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 14

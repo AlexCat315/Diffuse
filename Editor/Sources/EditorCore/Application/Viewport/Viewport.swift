@@ -250,7 +250,6 @@ extension EditorApplication {
         shadingMode: EditorViewportShadingMode
     ) -> RenderSettings {
         RenderSettings(
-            stage: .r4LightingPBRShadow,
             debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
             shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
             enableOffscreenViewport: true,

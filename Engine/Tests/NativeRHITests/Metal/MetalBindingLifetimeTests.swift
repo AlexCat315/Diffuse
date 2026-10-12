@@ -73,7 +73,7 @@ final class MetalBindingLifetimeTests: XCTestCase {
         XCTAssertNil(backend.registries.bindingSets[100])
         XCTAssertThrowsError(try bind(backend, id: 103, resources: [.uniformBuffer(buffer: first)]))
         let submit = PlannedSubmit(queue: .graphics, commands: [
-            .computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 100))]))])
+            .computePass(ComputePassRecord(body: [.setBindingSet(slot: 0, set: BindingSet(id: 100), dynamicOffsets: [])]))])
         var completed = false
         XCTAssertThrowsError(try backend.submit(submit) { completed = true }) { error in
             guard case RHIError.invalidArgument(let reason) = error else { return XCTFail("\(error)") }
