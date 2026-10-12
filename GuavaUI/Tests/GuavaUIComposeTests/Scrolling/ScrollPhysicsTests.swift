@@ -6,19 +6,14 @@ import Testing
 import GuavaUIRuntime
 @testable import GuavaUICompose
 
-/// Inertia, rubber band and the return spring as seen through `ScrollView` —
-/// the wheel path, the scrollbar drag path, and the `CompositionLocal`
-/// override.
-///
-/// The curves themselves are covered by the portable unit tests in
-/// `GuavaUISceneTests/Scrolling`; what belongs here is that they are wired into
-/// the input handlers.
+/// Platform wheel and scrollbar placement must stay direct, even when custom
+/// gesture physics are configured through CompositionLocal. Custom inertia
+/// and spring curves are also covered by GuavaUISceneTests/Scrolling.
 @Suite("ScrollPhysics")
 struct ScrollPhysicsTests {
 
-    /// Drives frames and time together. Both the idle window that decides a
-    /// wheel gesture has ended and the glide itself are defined in seconds, so
-    /// real time would make these tests race against the wall clock.
+    /// Drives frames and time deterministically, including silence that must
+    /// not launch a second fling after platform input.
     private final class ManualClock {
         var now: TimeInterval = 0
     }
@@ -30,10 +25,10 @@ struct ScrollPhysicsTests {
         let clock: ManualClock
 
         /// Feed the tree one wheel sample, as the platform does.
-        func wheel(x: Float = 0, y: Float) {
+        func wheel(x: Float = 0, y: Float, input: ScrollInput = .init()) {
             clock.now += 1.0 / 60.0
             let handler = handlers.wheel!
-            _ = handler(MouseWheelEvent(x: x, y: y), .target)
+            _ = handler(MouseWheelEvent(x: x, y: y, input: input), .target)
         }
 
         func pointer(_ event: MouseButtonEvent, phase: PointerPhase) -> EventResult {
@@ -126,33 +121,28 @@ struct ScrollPhysicsTests {
 
     // MARK: - Rubber band
 
-    @Test("Wheel past the end stretches past the bound, then springs back")
-    func wheelPastTheEndSettlesBack() { GlobalTestLock.locked {
+    @Test("Line wheel clamps at the end without adding elastic motion")
+    func wheelClampsAtEnd() { GlobalTestLock.locked {
         let fixture = installedScrollView()
         for _ in 0..<6 { fixture.wheel(y: -1) }
 
-        let stretched = fixture.contentOffset
-        #expect(stretched > 150)
-        // Never further than one viewport past the bound, however hard.
-        #expect(stretched < 150 + 150)
+        #expect(fixture.contentOffset == 150)
 
         fixture.tick()
         #expect(fixture.contentOffset == 150)
     } }
 
-    @Test("Wheel past the start pulls the content below zero and returns")
-    func wheelPastTheStartSettlesBack() { GlobalTestLock.locked {
+    @Test("Line wheel clamps at the start")
+    func wheelClampsAtStart() { GlobalTestLock.locked {
         let fixture = installedScrollView()
         for _ in 0..<2 { fixture.wheel(y: 1) }
-        let stretched = fixture.contentOffset
-        #expect(stretched < 0)
-        #expect(stretched > -60)
+        #expect(fixture.contentOffset == 0)
 
         fixture.tick()
         #expect(fixture.contentOffset == 0)
     } }
 
-    @Test("Repeated wheel input at the bound stays bounded and still settles")
+    @Test("Repeated wheel input at the bound stays bounded after silence")
     func repeatedInputStaysBounded() { GlobalTestLock.locked {
         let fixture = installedScrollView()
         for _ in 0..<5 { fixture.wheel(y: -1) }
@@ -161,7 +151,7 @@ struct ScrollPhysicsTests {
         for _ in 0..<40 {
             fixture.wheel(y: -1)
             fixture.tick(frames: 2)
-            #expect(fixture.contentOffset > 150)
+            #expect(fixture.contentOffset == 150)
             #expect(fixture.contentOffset < 150 + 150)
         }
 
@@ -171,32 +161,54 @@ struct ScrollPhysicsTests {
 
     // MARK: - Momentum
 
-    @Test("Content keeps travelling after the wheel stops")
-    func wheelCoastsOnceInputStops() { GlobalTestLock.locked {
+    @Test("Line wheel bursts never infer motion after silence, including uneven input gaps")
+    func wheelStopsWithInput() { GlobalTestLock.locked {
         let fixture = installedScrollView(rows: 40)
-        for _ in 0..<3 { fixture.wheel(y: -1) }
+        var expected: CGFloat = 0
+        for gap in [0.016, 0.018, 0.016, 0.12, 0.016, 0.15] {
+            fixture.wheel(y: -1)
+            expected += 30
+            fixture.tick(frames: max(1, Int((gap * 60).rounded(.up))))
+            #expect(fixture.contentOffset == expected)
+            #expect(fixture.animator.isFinished)
+        }
         let delivered = fixture.contentOffset
-        #expect(delivered == 90)
-
-        // Still inside the quiet window — nothing has budgeted yet.
-        fixture.tick(frames: 1)
-        #expect(fixture.contentOffset == delivered)
-        #expect(!fixture.animator.isGliding)
-
+        #expect(delivered == 180)
         fixture.tick(frames: 600)
-        let coasted = fixture.contentOffset
-        #expect(coasted > delivered + 180)
-        // Carries on, but does not launch: a burst of notches is worth roughly
-        // a quarter of a viewport more, not several screens.
-        #expect(coasted < delivered + 320)
-        #expect(coasted < 40 * 100 - 150) // room left in the range
+        #expect(fixture.contentOffset == delivered)
+    } }
+
+    @Test("Precise points and OS momentum are followed once with no second fling")
+    func platformMomentumIsNotSynthesizedAgain() { GlobalTestLock.locked {
+        let fixture = installedScrollView(rows: 40)
+        fixture.wheel(y: -12.5, input: .init(unit: .points, device: .continuous, phase: .began))
+        #expect(fixture.contentOffset == 12.5)
+        for delta: Float in [-8, -4, -2, -0.5] {
+            fixture.wheel(y: delta, input: .init(unit: .points, device: .continuous, momentumPhase: .changed))
+        }
+        fixture.wheel(y: 0, input: .init(unit: .points, momentumPhase: .ended))
+        #expect(fixture.contentOffset == 27)
+        fixture.tick(frames: 600)
+        #expect(fixture.contentOffset == 27)
         #expect(fixture.animator.isFinished)
+        fixture.wheel(y: 2.25, input: .init(unit: .points, phase: .began))
+        #expect(fixture.contentOffset == 24.75)
+    } }
+
+    @Test("Page units use the actual logical viewport")
+    func pageUnits() { GlobalTestLock.locked {
+        let fixture = installedScrollView(rows: 40)
+        fixture.wheel(y: -1, input: .init(unit: .pages))
+        #expect(fixture.contentOffset == 150)
     } }
 
     @Test("A notch while content is coasting stops it for good")
     func notchDuringCoastStopsIt() { GlobalTestLock.locked {
         let fixture = installedScrollView(rows: 40)
-        for _ in 0..<5 { fixture.wheel(y: -1) }
+        for _ in 0..<5 {
+            fixture.clock.now += 1.0 / 60
+            fixture.animator.scroll(by: CGPoint(x: 0, y: 30))
+        }
 
         fixture.tick(frames: 30)
         #expect(fixture.animator.isGliding)
@@ -213,7 +225,10 @@ struct ScrollPhysicsTests {
     @Test("Pressing inside the container grabs coasting content")
     func pressStopsTheCoast() { GlobalTestLock.locked {
         let fixture = installedScrollView(rows: 40)
-        for _ in 0..<5 { fixture.wheel(y: -1) }
+        for _ in 0..<5 {
+            fixture.clock.now += 1.0 / 60
+            fixture.animator.scroll(by: CGPoint(x: 0, y: 30))
+        }
 
         fixture.tick(frames: 30)
         #expect(fixture.animator.isGliding)
@@ -232,20 +247,18 @@ struct ScrollPhysicsTests {
         #expect(fixture.contentOffset == caught)
     } }
 
-    @Test("A throw into the end of the range rebounds instead of sticking")
-    func throwIntoTheEndRebounds() { GlobalTestLock.locked {
+    @Test("System momentum reaching the edge does not add a competing return spring")
+    func platformMomentumStopsAtEdge() { GlobalTestLock.locked {
         let fixture = installedScrollView(rows: 4)
-        let maximumOffset = CGFloat(4 * 100 - 150)
-        for _ in 0..<3 { fixture.wheel(y: -1) }
-
-        var furthest: CGFloat = 0
-        for _ in 0..<600 {
+        for _ in 0..<20 {
+            fixture.wheel(y: -30, input: .init(unit: .points, momentumPhase: .changed))
             fixture.tick(frames: 1)
-            furthest = max(furthest, fixture.contentOffset)
+            #expect(fixture.contentOffset <= 250)
+            #expect(!fixture.animator.isSettling)
         }
-        #expect(furthest > maximumOffset)
-        #expect(fixture.contentOffset == maximumOffset)
-        #expect(fixture.animator.isFinished)
+        #expect(fixture.contentOffset == 250)
+        fixture.tick()
+        #expect(fixture.contentOffset == 250)
     } }
 
     @Test("Deliberate slow notches rest where they land")
@@ -269,7 +282,7 @@ struct ScrollPhysicsTests {
         #expect(fixture.contentOffset == 90)
     } }
 
-    @Test(".clamped coasts but stops dead at the edge")
+    @Test("Wheel input does not synthesize inertia under clamped physics")
     func clampedStopsAtTheEdge() { GlobalTestLock.locked {
         let fixture = installedScrollView(physics: .clamped, rows: 4)
         for _ in 0..<3 { fixture.wheel(y: -1) }
@@ -279,13 +292,13 @@ struct ScrollPhysicsTests {
             fixture.tick(frames: 1)
             #expect(fixture.contentOffset <= maximumOffset)
         }
-        #expect(fixture.contentOffset == maximumOffset)
+        #expect(fixture.contentOffset == 90)
     } }
 
     // MARK: - Scrollbar drag
 
-    @Test("Dragging the thumb past the end holds the stretch until release")
-    func scrollbarDragBouncesBackOnRelease() { GlobalTestLock.locked {
+    @Test("Dragging a scrollbar thumb clamps at its absolute range")
+    func scrollbarDragClamps() { GlobalTestLock.locked {
         let fixture = installedScrollView()
         let origin = absoluteOrigin(of: fixture.view)
         let scrollbarX = Float(origin.x + fixture.view.frame.width - 6)
@@ -297,7 +310,7 @@ struct ScrollPhysicsTests {
                                         deltaX: 0, deltaY: 500))
 
         let stretched = fixture.contentOffset
-        #expect(stretched > 150)
+        #expect(stretched == 150)
         #expect(stretched < 150 + 150)
 
         // Nothing spring-loaded while the gesture is still held.
@@ -310,8 +323,8 @@ struct ScrollPhysicsTests {
         #expect(fixture.contentOffset == 150)
     } }
 
-    @Test("Flicking the thumb keeps the content moving after release")
-    func scrollbarFlickCoasts() { GlobalTestLock.locked {
+    @Test("Releasing a scrollbar thumb keeps the chosen position")
+    func scrollbarReleaseStaysPlaced() { GlobalTestLock.locked {
         let fixture = installedScrollView(rows: 10)
         let origin = absoluteOrigin(of: fixture.view)
         let scrollbarX = Float(origin.x + fixture.view.frame.width - 6)
@@ -330,9 +343,9 @@ struct ScrollPhysicsTests {
 
         _ = fixture.pointer(MouseButtonEvent(button: .left, x: scrollbarX, y: thumbY + 16,
                                             clicks: 1), phase: .up)
-        #expect(fixture.animator.isGliding)
+        #expect(!fixture.animator.isGliding)
         fixture.tick(frames: 900)
-        #expect(fixture.contentOffset > released + 100)
+        #expect(fixture.contentOffset == released)
         #expect(fixture.animator.isFinished)
     } }
 
@@ -348,10 +361,10 @@ struct ScrollPhysicsTests {
         #expect(fixture.contentOffset == 0)
     } }
 
-    @Test(".scrollPhysics(.bouncy) crosses the bound on the way back")
+    @Test("Custom low-level gestures retain bouncy physics without changing wheel semantics")
     func bouncyPhysics() { GlobalTestLock.locked {
         let fixture = installedScrollView(physics: .bouncy)
-        for _ in 0..<6 { fixture.wheel(y: -1) }
+        for _ in 0..<6 { fixture.animator.scroll(by: CGPoint(x: 0, y: 30)) }
         #expect(fixture.contentOffset > 150)
 
         var dippedBelowBound = false
@@ -362,12 +375,15 @@ struct ScrollPhysicsTests {
         #expect(dippedBelowBound)
         #expect(fixture.contentOffset == 150)
     } }
-    @Test("Click during the wheel idle deadline prevents a later launch")
+    @Test("Click cancels a custom gesture pending throw")
     func pointerCancelsPendingThrow() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let fixture = installedScrollView(rows: 20)
-            for _ in 0..<6 { fixture.wheel(y: -0.2) }
+            for _ in 0..<6 {
+                fixture.clock.now += 1.0 / 60
+                fixture.animator.scroll(by: CGPoint(x: 0, y: 6))
+            }
             let held = fixture.contentOffset
             _ = fixture.pointer(MouseButtonEvent(button: .left, x: 60, y: 60, clicks: 1), phase: .down)
             fixture.tick()
@@ -381,7 +397,10 @@ struct ScrollPhysicsTests {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let fixture = installedScrollView(rows: 20)
-            for _ in 0..<6 { fixture.wheel(y: -0.2) }
+            for _ in 0..<6 {
+                fixture.clock.now += 1.0 / 60
+                fixture.animator.scroll(by: CGPoint(x: 0, y: 6))
+            }
             #expect(scheduler.activeCount == 1)
             let parent = fixture.view.parent ?? Node()
             if fixture.view.parent == nil { parent.addChild(fixture.view) }

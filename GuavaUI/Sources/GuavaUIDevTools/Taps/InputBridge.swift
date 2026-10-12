@@ -38,7 +38,8 @@ public enum InputBridge {
                 x: payload.deltaX ?? 0,
                 y: payload.deltaY ?? 0,
                 mouseX: payload.x,
-                mouseY: payload.y
+                mouseY: payload.y,
+                input: payload.scroll ?? .init()
             ))
         case "text":
             guard let text = payload.text, !text.isEmpty else { return nil }

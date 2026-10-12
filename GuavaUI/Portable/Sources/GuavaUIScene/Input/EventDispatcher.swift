@@ -47,6 +47,7 @@ public final class EventDispatcher {
     /// hit-testing and diffed against the next motion path to synthesize
     /// enter / leave transitions.
     private var hoveredPath: [Node] = []
+    private let wheelGesture = WheelGesture()
 
     public init(tree: NodeTree,
                 interactions: InteractionRegistry,
@@ -69,7 +70,9 @@ public final class EventDispatcher {
         if let target = capture.target, !target.acceptsSubtreeInput { capture.release() }
         if let focused = focusChain.focused, !focused.acceptsSubtreeInput { focusChain.clear() }
         switch event {
-        case .mouseButtonDown(let e): dispatchPointerDown(e)
+        case .mouseButtonDown(let e):
+            wheelGesture.interrupt()
+            dispatchPointerDown(e)
         case .mouseButtonUp(let e):   dispatchPointerUp(e)
         case .mouseMotion(let e):     dispatchMotion(e)
         case .mouseWheel(let e):      dispatchWheel(e)
@@ -77,6 +80,8 @@ public final class EventDispatcher {
         case .keyUp(let e):           dispatchKey(e, phase: .up)
         case .textEditing(let e):     dispatchTextEditing(e)
         case .textInput(let s):       dispatchText(s)
+        case .windowFocusLost, .windowMinimized:
+            wheelGesture.interrupt()
         default:
             // Window lifecycle events are not handled here.
             break
@@ -164,6 +169,17 @@ public final class EventDispatcher {
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {
+        guard event.x.isFinite, event.y.isFinite, event.input.timestamp.isFinite,
+              event.input.timestamp >= 0,
+              event.mouseX?.isFinite != false, event.mouseY?.isFinite != false else { return }
+        guard wheelGesture.prepare(event.input) else { return }
+        defer { wheelGesture.finish(event.input) }
+        if let path = wheelGesture.path(in: tree) {
+            if let target = path.last, focusChain.permitsInput(target) {
+                _ = deliverWheel(path: path, event: event)
+            } else { wheelGesture.interrupt() }
+            return
+        }
         var event = event
         if let mouseX = event.mouseX, let mouseY = event.mouseY {
             if mouseX == 0, mouseY == 0, let lastCursor {
@@ -327,11 +343,13 @@ public final class EventDispatcher {
 
         if let target = path.last,
            invoke(node: target, kind: .wheel(event), phase: .target) == .handled {
+            wheelGesture.consumed(by: target, input: event.input)
             return .handled
         }
 
         for node in path.dropLast().reversed() {
             if invoke(node: node, kind: .wheel(event), phase: .bubble) == .handled {
+                wheelGesture.consumed(by: node, input: event.input)
                 return .handled
             }
         }
@@ -378,6 +396,9 @@ public final class EventDispatcher {
         for candidate in candidates.sorted(by: routeCandidateSort) {
             let phase: EventPhase = (role == .shortcut || role == .scrollChrome) ? .capture : .target
             if invoke(node: candidate.node, kind: kind, phase: phase) == .handled {
+                if case .wheel(let event) = kind {
+                    wheelGesture.consumed(by: candidate.node, input: event.input)
+                }
                 return .handled
             }
         }

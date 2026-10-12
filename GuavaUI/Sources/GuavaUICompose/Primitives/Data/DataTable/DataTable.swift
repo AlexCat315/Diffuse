@@ -221,8 +221,9 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
     }
     private func scrollWheel(_ event: MouseWheelEvent) -> Bool {
         let old = session.offset
-        session.offset.x = max(0, min(max(0, CGFloat(geometry.movingWidth) - session.viewport.size.width), old.x - CGFloat(event.x * 30)))
-        session.offset.y = max(0, min(max(0, CGFloat(Float(model.count) * options.layout.rowHeight) - session.viewport.size.height), old.y - CGFloat(event.y * 30)))
+        let delta = event.displacement(lineStep: 30, pageWidth: Float(session.viewport.size.width), pageHeight: Float(session.viewport.size.height))
+        session.offset.x = max(0, min(max(0, CGFloat(geometry.movingWidth) - session.viewport.size.width), old.x - CGFloat(delta.x)))
+        session.offset.y = max(0, min(max(0, CGFloat(Float(model.count) * options.layout.rowHeight) - session.viewport.size.height), old.y - CGFloat(delta.y)))
         return old != session.offset
     }
     private func handleKey(_ event: KeyEvent) -> Bool {

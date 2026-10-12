@@ -127,8 +127,12 @@ supports Capture/Restore/Diff and Record/Stop/Replay. `state.diff` accepts the b
 string dictionary and returns `{added, removed, changed: {key: {before, after}}}`.
 The tree invalidation log attributes State writes to their Compose scope.
 
-Input recordings use version 1 with `initialState`, optional `focusTarget`, `events`
-(`milliseconds`, Codable `event`) and `truncated`. Replay restores initial state and
+Input recordings use version 2 with `initialState`, optional `focusTarget`, `events`
+(`milliseconds`, Codable `event`) and `truncated`. Wheel events preserve the typed
+`scroll` group: points/lines/pages, stream precision, finger phase, independent
+momentum phase and monotonic timestamp. The browser mirror maps DOM `deltaMode`
+and direction into this protocol; native point input is not multiplied by a line
+step or display density. Version 1 recordings are not decoded. Replay restores initial state and
 focus, then dispatches events in order with composition/layout between events. It does
 not reproduce wall-clock delays. The limits are 4096 events and 768 KiB. Native recording is owned by
 one connection and is stopped on disconnect. Hosts provide `inputRecordingStart`,

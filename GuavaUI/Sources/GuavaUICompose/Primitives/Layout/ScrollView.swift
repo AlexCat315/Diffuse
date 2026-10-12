@@ -97,7 +97,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public var scrollOffset: Binding<CGPoint>?
     public let onGeometryChange: ((ScrollGeometry) -> Void)?
 
-    /// Pixels scrolled per wheel notch. SDL3 reports wheel deltas in lines.
+    /// Logical points per line increment. Precise point input bypasses this.
     public var wheelStep: Float = 30
     public let consumePolicy: ScrollConsumePolicy
     public let scrollbarGutter: ScrollbarGutter
@@ -195,21 +195,28 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 }
             }
             registry.setWheel(node, route: .scroll) { event, _ in
-                if let mouseX = event.mouseX, let mouseY = event.mouseY {
+                if !event.input.isContinuation, let mouseX = event.mouseX, let mouseY = event.mouseY {
                     let local = Self.localPoint(x: mouseX, y: mouseY, in: node)
                     guard Self.visibleViewportRect(for: node).contains(local) else {
                         return .ignored
                     }
                 }
                 // Wheel up (positive Y) scrolls content up — i.e. offset.y decreases.
-                var dx: Float = (axes == .horizontal || axes == .both) ? -event.x * step : 0
-                var dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
-                if dx == 0 && dy == 0 { return .ignored }
+                let viewport = Self.visibleViewportRect(for: node)
+                let delta = event.displacement(lineStep: step, pageWidth: Float(viewport.width), pageHeight: Float(viewport.height))
+                var dx: Float = axes != .vertical ? -delta.x : 0
+                var dy: Float = axes != .horizontal ? -delta.y : 0
 
                 let previousOffset = node.contentOffset
 
                 // Nothing measured yet — keep letting the event bubble.
                 guard Self.publishScrollRange(to: motion, on: node) else {
+                    return consumePolicy.result(didScroll: false)
+                }
+                if dx == 0 && dy == 0 {
+                    if event.input.phase != .none || event.input.momentumPhase != .none {
+                        motion.scrollDirectly(by: .zero)
+                    }
                     return consumePolicy.result(didScroll: false)
                 }
 
@@ -226,12 +233,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 }
                 guard dx != 0 || dy != 0 else { return consumePolicy.result(didScroll: false) }
 
-                // Rubber band instead of a hard clamp: `motion` keeps the raw
-                // requested position and returns the compressed visible one.
-                // Once the notches stop arriving it also decides by itself,
-                // from how fast they were coming, whether to coast onward.
+                // Precise input already contains the OS's acceleration and
+                // momentum. Line wheels are discrete placements. Neither may
+                // infer another fling or start a spring between input packets.
                 motion.adopt(previousOffset)
-                let nextOffset = motion.scroll(by: CGPoint(x: CGFloat(dx), y: CGFloat(dy)))
+                let nextOffset = motion.scrollDirectly(by: CGPoint(x: CGFloat(dx), y: CGFloat(dy)))
                 return consumePolicy.result(didScroll: nextOffset != previousOffset)
             }
             registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
@@ -280,9 +286,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     }
                     node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
                     PointerCaptureHolder.current?.release()
-                    // Hand the gesture over: anything stretched past the end
-                    // springs back, anything still moving keeps coasting.
-                    motion.settle()
+                    // A thumb release preserves its absolute placement.
+                    motion.finishImmediately()
                     let isHovered = node.attachments[_ScrollViewAttachmentKeys.isHovered] as? Bool ?? false
                     Self.setScrollbarChromeVisible(isHovered, on: node)
                     return .handled
@@ -298,8 +303,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 let local = Self.localPoint(x: event.x, y: event.y, in: node)
                 let pointer = state.axis == .vertical ? local.y : local.x
                 let availableTrack = max(1, state.trackLength - state.thumbLength)
-                // Unclamped on purpose: dragging past either end of the track
-                // is what feeds the rubber band.
+                // A scrollbar is an absolute placement, including release.
                 let rawOffset = state.offsetStart
                     + ((pointer - state.pointerStart) / availableTrack) * state.maxOffset
                 var nextPosition = motion.position
@@ -309,7 +313,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 case .horizontal:
                     nextPosition.x = rawOffset
                 }
-                motion.move(to: nextPosition)
+                motion.scrollDirectly(by: CGPoint(x: nextPosition.x - motion.offset.x,
+                                                 y: nextPosition.y - motion.offset.y))
                 return .handled
             }
         }
