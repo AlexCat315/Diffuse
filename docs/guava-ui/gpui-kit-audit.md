@@ -1,6 +1,6 @@
 # GuavaUI 与 GPUI Kit 对照审计
 
-审计更新：2026-10-11（重新阅读实际实现；2026-10-08 的部分结论已过时）。参照 [GPUI Kit](https://gpui-kit.com/)、[上游代码](https://github.com/longbridge/gpui-kit) 和本机 `/Users/alex/gpui-kit-main` 快照。逐项清单来自该快照 `crates/story/src/gallery.rs` 的 79 个 Story 注册项；Story 包含欢迎页、主题页和平台特定功能，不能当作 79 个独立组件。GuavaUI 在本轮修改前有 70 个 Story，本轮补 Skeleton 展示与 Stepper 后有 72 个 Story，同样不是 72 个完全独立组件。
+审计更新：2026-10-12（继续核对原生滚动输入；各阶段结论按文内日期区分，2026-10-08 的部分结论已过时）。参照 [GPUI Kit](https://gpui-kit.com/)、[上游代码](https://github.com/longbridge/gpui-kit) 和本机 `/Users/alex/gpui-kit-main` 快照。逐项清单来自该快照 `crates/story/src/gallery.rs` 的 79 个 Story 注册项；Story 包含欢迎页、主题页和平台特定功能，不能当作 79 个独立组件。GuavaUI 在本轮修改前有 70 个 Story，本轮补 Skeleton 展示与 Stepper 后有 72 个 Story，同样不是 72 个完全独立组件。
 
 **结论：GuavaUI 目前没有 GPUI Kit 那样完整，也没有足够依据声称质量相当。** GuavaUI 已有可用的输入编辑、虚拟化、浮层、树和工作区基础；更大的差距在完整的产品组件、统一状态契约、辅助功能、性能证据和示例覆盖。旧组件文档的“✅”仅代表写过设计文档，不代表行为完成或生产成熟度。
 
@@ -118,7 +118,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | Radio | RadioGroup | 受控选择、禁用、单 Tab 停靠及箭头实际焦点移动已有 |
 | Rating | Rating / RatingSelection / RatingAppearance | 新增整星/半星、预览、捕获取消、单个 Tab 停靠点、键盘边界、只读分数及 SVG 密度；原生明暗展示/键盘/辅助功能写入及鼠标命中/预览/拖动/取消已验证；不含 RTL/其他评分图形 |
 | Resizable | SplitView / ResizableEditor / Workspace | SplitView 原已有 Binding/拖动/键盘，本轮补逻辑点双面板最小尺寸、窗口不足时的退让及精确拖动分母；Workspace 内部拆分现在可调整；仍缺 N 面板联动、Workspace 面板尺寸协议和吸附/折叠阈值 |
-| Scrollbar | ScrollView 内置 | 惯性/回弹并非完整平滑滚动协议。本轮修复待起滑停止、逐轴交接、尾段阈值、弹簧帧一致性、卸载和 reduced motion，补实际绘制缓存剔除；缺原生 phase/单位、统一 ScrollHandle、独立滚动条及公开 smooth scrollTo |
+| Scrollbar | ScrollView 内置 | macOS 已补原生单位、finger/momentum phase 与直接位移，消除重复惯性；有 phase 的流保持消费者，thumb 释放原地停止。自定义手势保留解析物理，绘制缓存有离屏剔除。Windows/Linux 原生精确协议、真实设备验收、统一 ScrollHandle、独立滚动条及公开 smooth scrollTo 仍缺，见下方后续修正 |
 | Select | Select / EnumField | 已有类型化单选和键盘；缺多选、搜索、异步选项 |
 | Separator | Divider | 已有水平/垂直分隔 |
 | Settings | PropertyGrid / Editor SettingsPanel | 属性编辑和业务设置存在；缺通用设置页模型 |
@@ -227,7 +227,7 @@ Sidebar 仍不能宣称与上游等价：折叠为纯图标、嵌套分支、上
 
 原生拖动还暴露了基础重组缺陷：组件自己的 body 更新会覆盖软件施加的外层 frame/style，Workspace 示例声明 360pt 却增高到 577pt。已在透明组件边界记录并按声明顺序重放调用方修饰器，重组更换布局根也重新应用；回归覆盖嵌套透明包装、局部状态、外部修饰器值变更、固定尺寸及样式。AnyView 擦除类型后的同型修饰器按每个声明保留，父更新替换整份声明列表，避免类型去重丢失内部尺寸。完整回归还暴露了 frame 省略高度清掉内容自有高度、roving 焦点重放旧选择的缺陷，已一并修正；显式 `.auto` 与全部第一方动态尺寸调用同步迁移。
 
-这些修复不代表已实现完整系统触控板体验。输入仍只有 x/y 增量和指针位置，没有设备种类、单位、phase/system momentum；最后输入后 90ms 猜测释放仍是缺口。普通 ScrollView 也不自动虚拟化内容。
+以上是 c19d5303 阶段的修复。当时输入仍只有 x/y 和指针位置，缺单位、phase/system momentum，仍以 90ms 猜释放；这部分已由下方“滚动输入抖动复核”后续修正。完整跨平台/真实设备体验仍未验收。普通 ScrollView 也不自动虚拟化内容。
 
 本地上游实际入口已下沉到 `crates/base/src/scrollbar.rs` 与 `crates/base/src/resizable/`：ScrollbarHandle 对接普通/列表/统一滚动状态，条的样式、显示、hover/active/motion 独立配置；ResizablePanel 支持尺寸区间。其 ScrollbarMotion 主要控制条的显示/形态过渡，不能仅凭名字认定内容滚动或帧率优于 GuavaUI。上游 DockArea/Panel 更完整的组合契约值得吸收，但本轮未做相同机器负载下的 GPUI 原生性能比较。
 
@@ -236,3 +236,16 @@ GuavaUI docking 实际公开 API 已是 Workspace，没有必要改回 Dock。�
 布局能力与缺口详见 [布局容器](../components/layout.md)。已有 Flex/换行、双面板、滚动、工作区和专用窗口化；缺 Grid/LazyGrid、公开自定义 measure/propose/place、GeometryReader、统一容器查询/ViewThatFits、可变行高窗口化、公共层叠容器、SafeArea 与 RTL。PropertyGrid 是专用属性编辑布局，不能充当通用 Grid。
 
 原生测量、环境、统计及边界见 [本轮证据](evidence/scroll-layout/README.md)。不能把确定性运动测试通过、离屏剔除生效或单个 Release 场景的数据写成“所有滚动均不掉帧”。
+
+
+## 滚动输入抖动复核（2026-10-12，后续修正）
+
+用户反馈在加入“平滑滚动”后抖动。实际代码确认，上轮修正了运动积分与渲染路径，却仍把所有 wheel 包交给框架推算惯性：相邻包会停止已有运动，静默 90ms 后又推算起滑。macOS 精确增量在 SDL 中先缩为 0.1，再被组件统一乘 30，丢失单位、手指 phase 和系统 momentum。原先 SDL 的 AppleMomentumScrollSupported 默认关闭，macOS 惯性主要由框架猜测接管；若其他来源已含惯性，协议也无法识别。此次明确启用系统 momentum。此前单个 post-burst 场景计时不能排除这种输入节奏问题。
+
+先参考实际依赖：本地 GPUI Kit 指向 gpui-pre 0.3.8，其 div 将 pixel_delta 换算后直接累加 offset；本地 ScrollBounce 在桌面默认关闭，像素与行输入分别处理。Motrix 的 go.mod 固定 MyGo v0.4.1；该版本 darwin/surface.go 精确输入按点保留，只对行输入乘 40，ui/input.go 的 scrollBy 直接夹取/累加，并没有静默后的第二次 fling。当前 Zed macOS 适配也保留 Pixels/Lines 与 touch phase；它不是用来冒充 Kit 固定依赖版本的证据。
+
+本轮原生 wheel 改为直接跟随平台，points/lines/pages 只换算一次；macOS 保留原始 phase、独立 momentum phase、时间戳与精度来源，SDL 标记队列保持顺序并跳过重复包，零位移结束包不丢失。ScrollView、TextField、DataTable、DevTools 镜像以及 Editor/游戏 wheel action 的单位消费同步迁移，InputRecording 升级 version 2。Scrollbar thumb 释放保留绝对位置，不再额外甩动。
+
+有 phase 的滚动流保持消费者；点击、mayBegin、取消或失焦阻止旧系统惯性，移除目标或 modal 接管不把旧流交给其他视口。新手势可以立即反向开始。自定义手势仍可显式使用 ScrollAnimator 的惯性/弹簧；原生 wheel 不走 quiet-window 推断。
+
+最终完整回归包含 Runtime 259、Compose 588；原生 Demo 的 8 项合成输入位移/停止检查通过。活动输入两次采到 815/826 帧，draw P99 约 4.31ms；第一次有约 50ms 的宿主帧尖峰，复测未重现，来源未隔离。回归与原始记录见 [本轮证据](evidence/scroll-input/README.md)。这修复了可复现的输入叠加机制，不能据此声称真实设备上的所有视觉抖动均已排除。Windows/Linux 的 SDL 路径尚不能提供完整精确设备/phase；真实触控板、Magic Mouse、鼠标驱动、120Hz 和 compositor 时间证据仍缺。Workspace 面板尺寸协议、标签大字体，以及通用测量/放置、Grid、可变行高布局继续保留为后续项。

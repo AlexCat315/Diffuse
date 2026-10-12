@@ -1,6 +1,6 @@
-# 滚动、布局与 Workspace 原生验证
+# 滚动、布局与 Workspace 历史原生验证（c19d5303）
 
-日期：2026-10-12。代码基线与构建 SHA256、测试计数及限制见 [validation.json](validation.json)。这份记录区分确定性测试、原生输入与几何验证、原生计时和绘制列表回放。
+日期：2026-10-12。本页保存 c19d5303 的历史测量。后续 wheel 输入协议已改为直接跟随平台，见 [当前输入验证](../scroll-input/README.md)；本页的 post-burst 窗口不能用来证明当前滚动表现。代码基线与构建 SHA256、测试计数及限制见 [validation.json](validation.json)。这份记录区分确定性测试、原生输入与几何验证、原生计时和绘制列表回放。
 
 ## 环境与计时口径
 
@@ -50,7 +50,7 @@ Debug 仍超过 16.67ms 预算，且有 2 次客户端到达间隔超过 33.34ms
 
 ## 复现
 
-在仓库根目录构建并启动单个窗口，第二个终端运行采样。先退出其他 Demo/编译/测试，窗口保持 1280×720。
+复现本页旧数据需要使用 c19d5303 的源码与该提交内的采样脚本。当前 `record-scroll-timings.swift` 已改为测量活动的 point 输入，保留 1fps mirror 回读开销并明确标记，与本页统计口径不同。在相应版本的仓库根目录构建并启动单个窗口，第二个终端运行采样。先退出其他 Demo/编译/测试，窗口保持 1280×720。
 
 ```sh
 swift build --package-path GuavaUI -c release --product GuavaUIDemo --jobs 4

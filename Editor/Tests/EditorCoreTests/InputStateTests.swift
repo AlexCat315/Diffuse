@@ -5,6 +5,16 @@ import Testing
 
 @Suite("Editor input state")
 struct InputStateTests {
+    @Test("Precise point input keeps editor camera line sensitivity")
+    func preciseScrollUnits() {
+        let state = InputState()
+        state.process([.mouseWheel(.init(x: 5, y: -20, input: .init(unit: .points, device: .continuous)))])
+        #expect(state.scrollDeltaX == 0.5)
+        #expect(state.scrollDeltaY == -2)
+        state.process([.mouseWheel(.init(x: 0.5, y: -2))])
+        #expect(state.scrollDeltaX == 0.5)
+        #expect(state.scrollDeltaY == -2)
+    }
     @Test("focus loss clears held controls, modifiers, and transient deltas")
     func focusLossClearsInput() {
         let state = InputState()

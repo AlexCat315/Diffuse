@@ -452,6 +452,7 @@ public final class SDL3Shell: Shell {
     private var isQuitting = false
 #if os(macOS)
     private var titleBarDoubleClickMonitor: Any?
+    private var scrollInput: AppKitScrollInput?
 #endif
 
     public init(width: Int32 = 1280, height: Int32 = 720) throws {
@@ -548,6 +549,11 @@ public final class SDL3Shell: Shell {
             handle.activateNativeWindow()
 #endif
             windows[handle.id] = handle
+#if os(macOS)
+            if case .appKit(let pointer) = handle.nativeWindowReference {
+                scrollInput?.register(handle.id, window: Unmanaged<NSWindow>.fromOpaque(pointer).takeUnretainedValue())
+            }
+#endif
             windowOrder.removeAll { $0 == handle.id }
             windowOrder.append(handle.id)
             let sz = "\(handle.drawableSize.width)x\(handle.drawableSize.height)"
@@ -571,6 +577,9 @@ public final class SDL3Shell: Shell {
 
     public func destroyWindow(_ id: WindowID) {
         guard let handle = windows.removeValue(forKey: id) else { return }
+#if os(macOS)
+        scrollInput?.unregister(id)
+#endif
         windowOrder.removeAll { $0 == id }
         handle.shutdown()
         if windows.isEmpty {
@@ -599,6 +608,14 @@ public final class SDL3Shell: Shell {
         var event = SDL_Event()
 
         while SDL_PollEvent(&event) {
+#if os(macOS)
+            if event.type == scrollInput?.eventType {
+                if let input = scrollInput?.take(event.user.code), windows[input.windowID] != nil {
+                    collected.append(input)
+                }
+                continue
+            }
+#endif
             let eventType = event.type
 
             switch eventType {
@@ -719,8 +736,11 @@ public final class SDL3Shell: Shell {
             case UInt32(GUAVA_SDL_EVENT_MOUSE_WHEEL):
                 let windowID = WindowID(event.wheel.windowID)
                 guard let handle = windows[windowID] else { continue }
+#if os(macOS)
+                if scrollInput?.owns(windowID) == true { continue }
+#endif
                 let scale = handle.inputCoordinateScale
-                let wx = event.wheel.x
+                let wx = -event.wheel.x
                 let wy = event.wheel.y
                 var mouseX = event.wheel.mouse_x
                 var mouseY = event.wheel.mouse_y
@@ -735,7 +755,9 @@ public final class SDL3Shell: Shell {
                                                   event: .mouseWheel(MouseWheelEvent(x: wx,
                                                                                      y: wy,
                                                                                      mouseX: mouseX / scale,
-                                                                                     mouseY: mouseY / scale))))
+                                                                                     mouseY: mouseY / scale,
+                                                                                     input: .init(unit: .lines,
+                                                                                                  timestamp: Double(event.wheel.timestamp) / 1e9)))))
 
             case UInt32(GUAVA_SDL_EVENT_GAMEPAD_BUTTON_DOWN),
                  UInt32(GUAVA_SDL_EVENT_GAMEPAD_BUTTON_UP):
@@ -1116,11 +1138,15 @@ public final class SDL3Shell: Shell {
         let hintOk = SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
         Logger.platform.info("SDL_SetHint(DPI_AWARENESS=permonitorv2) -> \(hintOk)")
 #endif
+#if os(macOS)
+        _ = SDL_SetHint("SDL_MAC_SCROLL_MOMENTUM", "1")
+#endif
         guard SDL_Init(SDL_INIT_VIDEO) else {
             throw ShellError.initializationFailed(Self.lastSDLError())
         }
         didInitializeSDL = true
 #if os(macOS)
+        scrollInput = AppKitScrollInput()
         installTitleBarDoubleClickMonitor()
 #endif
     }
@@ -1128,6 +1154,8 @@ public final class SDL3Shell: Shell {
     private func tearDownSDLIfNeeded() {
         guard didInitializeSDL, windows.isEmpty else { return }
 #if os(macOS)
+        scrollInput?.stop()
+        scrollInput = nil
         if let titleBarDoubleClickMonitor {
             NSEvent.removeMonitor(titleBarDoubleClickMonitor)
             self.titleBarDoubleClickMonitor = nil

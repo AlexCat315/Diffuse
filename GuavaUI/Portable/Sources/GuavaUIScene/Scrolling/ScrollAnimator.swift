@@ -13,12 +13,10 @@ import Foundation
 /// ```swift
 /// animator.physics = node.scrollPhysics
 /// animator.update(maximumOffset: CGPoint(x: maxX, y: maxY), viewportSize: viewSize)
-/// // continuous input (wheel notch, trackpad sample):
-/// node.contentOffset = animator.scroll(by: delta)
-/// // the wheel never reports release — the glide launches on its own once
-/// // input has been quiet for `momentum.idleWindow`; a gesture with a real
-/// // end (scrollbar thumb) says so:
-/// animator.settle()
+/// // Platform wheel/trackpad packets already include OS momentum:
+/// node.contentOffset = animator.scrollDirectly(by: delta)
+/// // An application-owned gesture can explicitly use scroll(by:),
+/// // move(to:) and settle() when it needs framework physics instead.
 /// ```
 ///
 /// Two coordinate systems are kept apart on purpose:
@@ -100,8 +98,8 @@ public final class ScrollAnimator: AnyAnimationController {
     private var trackerX = ScrollVelocityTracker()
     private var trackerY = ScrollVelocityTracker()
 
-    /// Time after which the last wheel sample is treated as the end of the
-    /// gesture. `nil` when no release is pending.
+    /// Release deadline for an explicitly managed custom gesture.
+    /// Platform input never arms this timer.
     private var releaseDeadline: TimeInterval?
 
     public init(physics: ScrollPhysics = .default,
@@ -158,14 +156,22 @@ public final class ScrollAnimator: AnyAnimationController {
 
     // MARK: - Input
 
-    /// Apply one increment of continuous input (wheel notch, trackpad sample)
-    /// and return the visible offset.
-    ///
-    /// Wheel devices never announce that the gesture ended, so instead of
-    /// waiting for a release this arms one: if no further input arrives within
-    /// `momentum.idleWindow`, the recorded velocity launches a glide. A
-    /// discrete mouse wheel therefore coasts after a fast burst of notches,
-    /// and a trackpad gets its flick back the moment the fingers lift.
+    /// Follow a platform-owned wheel/trackpad stream exactly. Its packets
+    /// already include acceleration and OS momentum. Never arm a quiet-window
+    /// fling or insert a spring between packets, including phase-only packets.
+    @discardableResult
+    public func scrollDirectly(by delta: CGPoint) -> CGPoint {
+        guard delta.x.isFinite, delta.y.isFinite else { return offset }
+        cancel()
+        position = Self.constrain(CGPoint(x: offset.x + delta.x, y: offset.y + delta.y), to: maximumOffset)
+        setOffset(position)
+        return offset
+    }
+
+    /// Apply one increment from an application-owned gesture and return its
+    /// visible offset. With momentum enabled, silence for `idleWindow` infers
+    /// release. Do not use this method for platform wheel/trackpad packets;
+    /// use `scrollDirectly(by:)` to avoid adding inertia to OS momentum.
     ///
     /// Landing past a bound skips all of that and starts the return spring
     /// right away, so a single notch at the end of a list produces a short pull
@@ -204,11 +210,9 @@ public final class ScrollAnimator: AnyAnimationController {
         return offset
     }
 
-    /// Place the raw position directly — used while dragging a scrollbar
-    /// thumb, where the pointer maps onto a position rather than a delta.
-    ///
-    /// Samples are still recorded, so releasing a thumb that was moving
-    /// launches the same glide a flick does.
+    /// Place an application-owned gesture's raw position while recording
+    /// velocity for `settle()`. A scrollbar thumb instead uses direct,
+    /// clamped placement, without recording a throw.
     @discardableResult
     public func move(to newPosition: CGPoint) -> CGPoint {
         releaseDeadline = nil
@@ -230,9 +234,9 @@ public final class ScrollAnimator: AnyAnimationController {
     /// past a bound springs straight back, carrying whatever speed was left
     /// into the bounce.
     ///
-    /// Called at the end of a gesture by both paths: by this animator once
-    /// wheel input has been quiet for `momentum.idleWindow`, and by the owner
-    /// when a gesture that really does end (a scrollbar thumb) is let go.
+    /// Called by the custom gesture owner, or after `scroll(by:)` has been
+    /// quiet for `momentum.idleWindow`. Platform wheel and scrollbar thumb
+    /// handlers do not launch this physics path.
     public func settle() {
         releaseDeadline = nil
         let launch = currentVelocity()

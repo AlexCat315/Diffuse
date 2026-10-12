@@ -84,7 +84,7 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | --- | --- |
 | Flex / 横纵排列 / 对齐 / gap / 反向排列 | Box / Row / Column / Spacer 已有 |
 | 流式换行 | Box 的 `wrap: .wrap` 已有，包装行向起点收拢；不是二维轨道 Grid |
-| 裁剪与滚动 | ScrollView / BoundedScrollView；测量真实内容，支持惯性/回弹和稳定 gutter |
+| 裁剪与滚动 | ScrollView / BoundedScrollView；测量真实内容，原生滚动直接跟随平台，支持稳定 gutter；自定义手势可显式使用惯性/回弹 |
 | 双面板与 IDE 工作区 | SplitView 与 Workspace；详见各自的约束与缺口 |
 | 层叠内容 | absolutePosition / zIndex 与 Portal 支持绘制层级；缺独立公共 ZStack/Overlay 布局容器 |
 | 大集合 | VirtualStack 固定行高；Tree/List/DataTable 各有专门模型；缺可变行高虚拟布局 |

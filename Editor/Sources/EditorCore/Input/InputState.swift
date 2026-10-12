@@ -43,8 +43,9 @@ public final class InputState {
                 mouseY = e.y
                 modifiers = e.modifiers
             case .mouseWheel(let e):
-                scrollDeltaX += e.x
-                scrollDeltaY += e.y
+                let delta = e.displacement(lineStep: 10, pageWidth: 30, pageHeight: 30)
+                scrollDeltaX += delta.x / 10
+                scrollDeltaY += delta.y / 10
             case .windowFocusLost, .windowMinimized:
                 pressedKeys.removeAll(keepingCapacity: true)
                 pressedMouseButtons.removeAll(keepingCapacity: true)
