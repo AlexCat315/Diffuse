@@ -1,8 +1,8 @@
 import Foundation
 import GuavaUIComposeCore
 
-/// One Compose source used by both SDL and browser hosts. Text painting is the
-/// host boundary: both hosts can shape text into their shared font atlas.
+/// One Compose source used by desktop, browser and Android hosts.
+/// Each host shapes text into the shared font atlas at the painting boundary.
 public struct DemoText: Sendable {
     public var text: String
     public var size: Float
@@ -36,7 +36,7 @@ public struct SharedCounterView: View {
         let foreground = dark ? Color(red: 241, green: 245, blue: 249) : Color(red: 22, green: 35, blue: 56)
         let background = dark ? Color(red: 20, green: 29, blue: 45) : Color(red: 244, green: 247, blue: 252)
         Box(direction: .column, alignItems: .stretch, spacing: 12) {
-            DemoLabel("GuavaUI · Swift in your browser", size: 22, color: foreground, height: 36)
+            DemoLabel("GuavaUI · Shared Counter", size: 22, color: foreground, height: 36)
             DemoLabel("Shared Compose · ViewGraph · Yoga", size: 14, color: foreground, height: 24)
             Box(direction: .column, alignItems: .stretch, spacing: 8) {
                 DemoLabel("Counter", size: 14, color: foreground, height: 24)
@@ -50,7 +50,7 @@ public struct SharedCounterView: View {
             DemoButton(dark ? "Light theme" : "Dark theme", name: "counter.theme") { dark.toggle() }
             DemoNote(value: $note, color: foreground)
         }.modifier(DemoStyle(padding: 24, background: background, grow: 1))
-         .debugName("browser.root")
+         .debugName("counter.root")
     }
 }
 

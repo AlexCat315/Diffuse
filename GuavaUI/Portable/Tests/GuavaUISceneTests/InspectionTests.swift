@@ -26,7 +26,7 @@ func inspectionStylesSurviveComposeAndClearToLatestAppStyle() throws {
     try context.withCurrent {
         graph.install(root: counter); graph.computeLayout(width: 640, height: 460)
         let root = try #require(tree.root)
-        let container = try #require(named(root, "browser.root"))
+        let container = try #require(named(root, "counter.root"))
         let title = try #require(named(root, "counter.value"))
         let id = String(container.id.rawValue)
         inspector.editor.select(id)
@@ -38,7 +38,7 @@ func inspectionStylesSurviveComposeAndClearToLatestAppStyle() throws {
         #expect(title.absoluteFrame.minX == beforeX + 12)
         #expect(container.backgroundColor == Color(red: 255, green: 0, blue: 0, alpha: 128))
         counter.dark = true; counter.count = 8; recomposer.commitAll(); graph.computeLayoutIfNeeded(width: 640, height: 460)
-        #expect(named(root, "browser.root") === container)
+        #expect(named(root, "counter.root") === container)
         #expect(container.layoutNode?.resolvedPadding.left == 36)
         #expect(container.backgroundColor?.r == 1)
         #expect(inspector.snapshot().inspection?.selectedID == id)

@@ -7,6 +7,7 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [
         .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
+        .executable(name: "PetDemo", targets: ["PetDemo"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
         .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
@@ -143,6 +144,19 @@ let package = Package(
                 "GuavaUIWorkspace",
                 "GuavaUIDevTools",
                 "GuavaUIGallery",
+            ]
+        ),
+
+        // PetDemo — the software pet showcase (stands/sits on components,
+        // jumps between buttons). Uses the high-level AppRuntime host.
+        .executableTarget(
+            name: "PetDemo",
+            dependencies: [
+                "GuavaUIApp",
+                "GuavaUICompose",
+            ],
+            resources: [
+                .process("Resources"),
             ]
         ),
 

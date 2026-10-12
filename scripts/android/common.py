@@ -42,10 +42,15 @@ def ndk_host(ndk):
 def build(product, ndk):
     OUTPUT.mkdir(parents=True, exist_ok=True)
     swift = os.environ.get('GUAVA_SWIFT_EXECUTABLE', shutil.which('swift'))
+    if not swift:
+        raise ValueError('Install the Swift 6.4.0 release toolchain and add swift to PATH')
     version = subprocess.check_output([swift, '--version'], text=True)
     if 'swift-6.4-RELEASE' not in version and 'swift-6.4.0-RELEASE' not in version:
         raise ValueError('Select the Swift 6.4.0 release toolchain to match the Android SDK')
-    environment = dict(os.environ, ANDROID_NDK_HOME=str(ndk))
+    from fonts import prepare
+    font_vendor = prepare(ndk)
+    environment = dict(os.environ, ANDROID_NDK_HOME=str(ndk),
+                       GUAVA_TEXT_ARTIFACT_ROOT=os.path.relpath(font_vendor, ROOT / 'GuavaUI/Text'))
     arguments = [swift, 'build', '--package-path', ROOT / 'Android', '--swift-sdk', SDK_ID,
                  '--triple', TRIPLE, '--static-swift-stdlib']
     run(arguments + ['--product', product], env=environment)

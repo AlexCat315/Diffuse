@@ -68,7 +68,7 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
     page.wait_for_function("guavaDebug.snapshot.dark === true")
     inspector = page.frame_locator("#inspector")
     inspector.locator("#status").filter(has_text="Connected").wait_for()
-    inspector.locator("#tree").filter(has_text="browser.root").wait_for()
+    inspector.locator("#tree").filter(has_text="counter.root").wait_for()
     inspector.locator("#captureState").click()
     page.wait_for_function("document.querySelector('#inspector').contentDocument.querySelector('#stateSnapshot').value.includes('true')")
     captured = json.loads(inspector.locator("#stateSnapshot").input_value())

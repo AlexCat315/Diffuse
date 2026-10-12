@@ -134,3 +134,4 @@ examples/*/Scripts/.guava/
 
 # Versioned local Wasm development builds
 GuavaUI/Browser/.dev-builds/
+GuavaUI/Sources/PetDemo/Resources/*.png
