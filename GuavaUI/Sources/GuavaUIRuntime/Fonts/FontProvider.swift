@@ -266,10 +266,14 @@ public final class FontProvider {
 
 #if !canImport(CoreText)
     private func loadPrimaryFontDirect(name: String) -> ManagedFont? {
+        if name.hasPrefix("/"), let data = try? Data(contentsOf: URL(fileURLWithPath: name)) {
+            return loadFontFromData(data, psName: name, faceIndex: 0)
+        }
         // 1. If `name` happens to match a font file by basename, load it.
         if !name.isEmpty {
             let extensions = ["ttc", "ttf", "otf"]
             let systemDirs = [
+                "/system/fonts/",
                 "C:\\Windows\\Fonts\\",
                 "/usr/share/fonts/",
                 "/usr/share/fonts/truetype/dejavu/",
@@ -308,6 +312,8 @@ public final class FontProvider {
             "tahoma.ttf",
             "arial.ttf",
         ].map { dir + $0 }
+#elseif os(Android)
+        return ["/system/fonts/Roboto-Regular.ttf", "/system/fonts/NotoSans-Regular.ttf"]
 #elseif os(Linux)
         return [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -413,6 +419,12 @@ public final class FontProvider {
             "seguiemj.ttf",  // Segoe UI Emoji
             "arial.ttf",
         ].map { dir + $0 }
+#elseif os(Android)
+        let resources = ProcessInfo.processInfo.environment["PACKAGE_RESOURCE_BUNDLE_PATH"]
+        return ["/system/fonts/NotoSansCJK-Regular.ttc", "/system/fonts/NotoSansSymbols-Regular-Subsetted.ttf",
+                "/system/fonts/NotoSansSymbols-Regular-Subsetted2.ttf",
+                "/system/fonts/NotoSansArabic-Regular.ttf", "/system/fonts/NotoSansDevanagari-Regular.ttf"]
+            + (resources.map { [$0 + "/Fonts/NotoEmoji.ttf"] } ?? [])
 #elseif os(Linux)
         return [
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",

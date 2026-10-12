@@ -3,6 +3,8 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Android)
+import Android
 #elseif os(Windows)
 import WinSDK
 #endif
@@ -25,7 +27,7 @@ public final class SwiftScriptLoader: @unchecked Sendable {
 
     // MARK: - Platform handle
 
-    #if canImport(Darwin) || canImport(Glibc)
+    #if canImport(Darwin) || canImport(Glibc) || canImport(Android)
     private typealias LibraryHandle = UnsafeMutableRawPointer
     #elseif os(Windows)
     private typealias LibraryHandle = HMODULE
@@ -113,7 +115,7 @@ public final class SwiftScriptLoader: @unchecked Sendable {
     // MARK: - Platform abstraction
 
     private func openLibrary(path: String) throws -> LibraryHandle {
-        #if canImport(Darwin) || canImport(Glibc)
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Android)
         guard let handle = dlopen(path, RTLD_NOW) else {
             let msg = dlerror().map { String(cString: $0) } ?? "unknown dlopen error"
             throw ScriptLoadError.dlopenFailed(msg)
@@ -131,7 +133,7 @@ public final class SwiftScriptLoader: @unchecked Sendable {
     }
 
     private func lookupSymbol(handle: LibraryHandle, name: String) -> UnsafeMutableRawPointer? {
-        #if canImport(Darwin) || canImport(Glibc)
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Android)
         return name.withCString { dlsym(handle, $0) }
         #elseif os(Windows)
         return name.withCString {

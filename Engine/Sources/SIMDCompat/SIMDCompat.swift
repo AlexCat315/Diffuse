@@ -3,6 +3,9 @@
 // On Windows/Linux, provides equivalent types and functions.
 
 import Foundation
+#if os(Android)
+@_exported import Android
+#endif
 
 #if canImport(simd)
 @_exported import simd

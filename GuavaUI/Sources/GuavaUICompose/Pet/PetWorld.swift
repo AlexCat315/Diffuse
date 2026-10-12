@@ -15,6 +15,9 @@
 //
 
 import Foundation
+#if os(Android)
+import Android
+#endif
 import GuavaUICore
 import GuavaUIScene
 #if canImport(CoreGraphics)

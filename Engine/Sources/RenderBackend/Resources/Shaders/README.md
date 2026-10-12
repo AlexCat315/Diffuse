@@ -2,6 +2,7 @@ This directory contains offline NativeRHI shader assets.
 
 - `Slang/` is the authored source for scene, lighting, post, grid and particle passes.
 - `Native/metal/` and `Native/spirv/` contain ShaderArtifact JSON and target reflection. Runtime execution does not load Slang.
+- `Native/spirv-mobile/` contains Android Vulkan 1.1 / SPIR-V 1.3 artifacts. Particle compute shaders use offline fixed workgroup variants from 1 through 256, sharing the base reflection ABI, so mobile drivers do not need maintenance4 / LocalSizeId. Rebuild with `--targets spirv-mobile`; see [Android validation and export](../../../../../Android/README.md).
 
 Install the pinned Slang 2026.19 compiler with `python3 scripts/bootstrap-rhi-slang.py` on macOS arm64, or set `SLANGC` on other hosts. Rebuild all scene and GuavaUI artifacts with `python3 scripts/compile-native-renderer-shaders.py`. Use `--check` to compile and verify checked-in artifacts without changing them. A failed batch preserves existing artifacts.
 

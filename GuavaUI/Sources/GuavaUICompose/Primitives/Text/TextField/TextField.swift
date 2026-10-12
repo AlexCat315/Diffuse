@@ -213,6 +213,7 @@ public struct TextField: View {
                                           isFocused: interactionState.isFocused)
 
         updateInteractionHandlers(for: node, state: state)
+        node.attachments[TextInputAttachmentKey.client] = snapshot.platformInputClient(state)
         node.attachments[TextInputAttachmentKey.editActions] = TextEditActions(
             canPerform: { command in
                 state.transaction.history.synchronize(snapshot.text.wrappedValue)

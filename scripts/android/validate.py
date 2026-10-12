@@ -37,7 +37,7 @@ def main():
             line_directives=False, spirv_profile='spirv_1_3')
     remote = '/data/local/tmp/guava-rhi-' + directory.name
     run(adb + ['shell', 'mkdir', '-p', remote])
-    run(adb + ['push', products / 'GuavaAndroidProbe', products / 'GuavaAndroid_GuavaUIRendering.bundle',
+    run(adb + ['push', products / 'GuavaAndroidProbe', products / 'GuavaUI_GuavaUIRuntime.bundle',
         artifacts, ndk_host(ndk) / 'sysroot/usr/lib/aarch64-linux-android/libc++_shared.so', remote + '/'])
     command = f'cd {shlex.quote(remote)} && chmod 755 GuavaAndroidProbe && LD_LIBRARY_PATH=. ./GuavaAndroidProbe Artifacts results'
     status = subprocess.run(list(map(str, adb + ['shell', command])), capture_output=True, text=True, timeout=120)

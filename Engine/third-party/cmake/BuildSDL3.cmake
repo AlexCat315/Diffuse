@@ -100,6 +100,11 @@ install(CODE "
 # the default build pulls SDL3-static in, `--target stage_sdl3` resolves at the
 # build root on every generator, and manifest generation sees an already staged
 # artifact instead of waiting for the later install step.
+if(ANDROID)
+    # The final Swift shared library hides symbols from static archives. Its
+    # first-party JNI entry point forwards to SDL to register the Java methods.
+    target_compile_definitions(SDL3-static PRIVATE JNI_OnLoad=GuavaSDL_JNI_OnLoad)
+endif()
 add_custom_target(stage_sdl3 ALL
     DEPENDS SDL3-static
     BYPRODUCTS ${SDL3_VARIANT}/lib/${SDL3_LIB_FILENAME}

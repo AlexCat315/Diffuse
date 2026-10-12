@@ -3,6 +3,9 @@
 import PackageDescription
 import Foundation
 
+// Cross builds stage target archives separately from the host's vendor directory.
+let nativeArtifactRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ARTIFACT_ROOT"] ?? "vendor"
+
 #if os(macOS)
 let wasmtimeProducts: [Product] = [
     .library(name: "PluginWasmtimeRuntime", targets: ["PluginWasmtimeRuntime"]),
@@ -111,7 +114,7 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SDL3",
-            path: "vendor/SDL3.artifactbundle"
+            path: "\(nativeArtifactRoot)/SDL3.artifactbundle"
         ),
         .target(
             name: "CSDL3",
@@ -148,6 +151,12 @@ let package = Package(
                 .linkedLibrary("shell32", .when(platforms: [.windows])),
                 .linkedLibrary("user32", .when(platforms: [.windows])),
                 .linkedLibrary("gdi32", .when(platforms: [.windows])),
+                .linkedLibrary("android", .when(platforms: [.android])),
+                .linkedLibrary("log", .when(platforms: [.android])),
+                .linkedLibrary("OpenSLES", .when(platforms: [.android])),
+                .linkedLibrary("aaudio", .when(platforms: [.android])),
+                .linkedLibrary("EGL", .when(platforms: [.android])),
+                .linkedLibrary("GLESv2", .when(platforms: [.android])),
                 .linkedLibrary("dxgi", .when(platforms: [.windows])),
                 .linkedLibrary("d3d11", .when(platforms: [.windows])),
                 .linkedLibrary("d3d12", .when(platforms: [.windows])),
@@ -160,7 +169,7 @@ let package = Package(
         ),
         .binaryTarget(
             name: "Jolt",
-            path: "vendor/Jolt.artifactbundle"
+            path: "\(nativeArtifactRoot)/Jolt.artifactbundle"
         ),
         .target(
             name: "CJoltBridge",
@@ -189,19 +198,19 @@ let package = Package(
         ),
         .binaryTarget(
             name: "lunasvg",
-            path: "vendor/lunasvg.artifactbundle"
+            path: "\(nativeArtifactRoot)/lunasvg.artifactbundle"
         ),
         .binaryTarget(
             name: "plutovg",
-            path: "vendor/plutovg.artifactbundle"
+            path: "\(nativeArtifactRoot)/plutovg.artifactbundle"
         ),
         .binaryTarget(
             name: "webp",
-            path: "vendor/webp.artifactbundle"
+            path: "\(nativeArtifactRoot)/webp.artifactbundle"
         ),
         .binaryTarget(
             name: "sharpyuv",
-            path: "vendor/sharpyuv.artifactbundle"
+            path: "\(nativeArtifactRoot)/sharpyuv.artifactbundle"
         ),
         .target(
             name: "CImageDecodeBridge",

@@ -41,11 +41,12 @@ public final class GameApplication: @unchecked Sendable {
     public var onViewportSurfaceChanged: ((ViewportSurfaceState) -> Void)?
 
     public init(projectDirectory: String? = nil,
-                renderDevice: Device? = nil) throws {
+                renderDevice: Device? = nil,
+                registerProjectScripts: ((ScriptRuntime) -> Int)? = nil) throws {
         let resolvedRenderDevice = renderDevice
         let scene = EditorSceneAdapter()
         let scriptLoader = GameProjectScriptLoader()
-        var compiledScriptCount = 0
+        var compiledScriptCount = registerProjectScripts?(scene.scriptRuntime) ?? 0
         var scriptMonitor: ProjectScriptCatalogMonitor?
 
         if let dir = projectDirectory {
@@ -79,7 +80,7 @@ public final class GameApplication: @unchecked Sendable {
         if let dir = projectDirectory {
             let projectURL = URL(fileURLWithPath: dir, isDirectory: true)
             let entries = try scriptLoader.load(projectDirectory: projectURL, into: scene.scriptRuntime)
-            compiledScriptCount = entries.count
+            compiledScriptCount += entries.count
             for entry in entries {
                 scene.registerDynamicScriptOption(identifier: entry.identifier, displayName: entry.displayName)
             }

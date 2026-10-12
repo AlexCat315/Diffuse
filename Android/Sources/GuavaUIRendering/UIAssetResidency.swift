@@ -1,1 +1,0 @@
-../../../GuavaUI/Sources/GuavaUIRuntime/Images/UIAssetResidency.swift
