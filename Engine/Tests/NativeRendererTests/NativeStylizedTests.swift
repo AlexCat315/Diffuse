@@ -121,10 +121,10 @@ final class NativeStylizedTests: XCTestCase {
             case 14: packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 14
             case 15: packet.drawableSize = .init(width: 192,height: 128)
             case 16: packet.drawableSize = .init(width: 320,height: 200)
-            case 17: packet.renderSettings.stage = .r3ViewportInterop
-            case 18: packet.renderSettings.stage = .r4LightingPBRShadow
+            case 17: packet.renderSettings.enablePBR = false
+            case 18: packet.renderSettings.enablePBR = true
             case 19:
-                packet.renderSettings.stage = .r5PostProcess
+                packet.renderSettings.enablePBR = true
                 packet.renderSettings.enableSSAO = true; packet.renderSettings.enableSSR = true; packet.renderSettings.enableTAA = true
                 packet.renderSettings.enableBloom = true; packet.renderSettings.enableFXAA = true
             case 20: packet.scene.camera.eye.x += 0.2

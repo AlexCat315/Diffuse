@@ -21,7 +21,7 @@ extension DX12Device {
         try descriptor.code.withUnsafeBytes { try check(grhi_dx12_shader(native, handle.id, descriptor.stage.dx12, $0.baseAddress, $0.count)) }
     }
     public func registerBindingLayout(_ handle: BindingLayout, descriptor: BindingLayoutDescriptor) throws {
-        let entries = try descriptor.entries.map { try GRHI_BindingDecl(slot: $0.slot, type: $0.type.dx12, stages: $0.visibility.rawValue, read_only: $0.buffer.readOnly ? 1 : 0, element_stride: rhiCount($0.buffer.elementStride)) }
+        let entries = try descriptor.entries.map { try GRHI_BindingDecl(slot: $0.slot, type: $0.type.dx12, stages: $0.visibility.rawValue, read_only: $0.buffer.readOnly ? 1 : 0, dynamic: $0.buffer.hasDynamicOffset ? 1 : 0, element_stride: rhiCount($0.buffer.elementStride)) }
         try entries.withUnsafeBufferPointer { try check(grhi_dx12_binding_layout(native, handle.id, $0.baseAddress, $0.count)) }
     }
     public func registerPipelineLayout(_ handle: PipelineLayout, descriptor: PipelineLayoutDescriptor) throws {

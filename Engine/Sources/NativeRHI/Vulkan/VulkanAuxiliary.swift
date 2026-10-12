@@ -28,13 +28,13 @@ enum VulkanLayoutFormats {
         visibility.stages.reduce(0) { $0 | stageFlags($1) }
     }
 
-    static func descriptorType(_ type: BindingType) -> VkDescriptorType {
+    static func descriptorType(_ type: BindingType, dynamic: Bool = false) -> VkDescriptorType {
         switch type {
         case .sampler: return VK_DESCRIPTOR_TYPE_SAMPLER
         case .texture: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
         case .storageTexture: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-        case .uniformBuffer: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-        case .storageBuffer: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+        case .uniformBuffer: return dynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+        case .storageBuffer: return dynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
         case .accelerationStructure: return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
         }
     }

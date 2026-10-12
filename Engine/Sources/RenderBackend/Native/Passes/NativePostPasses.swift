@@ -15,11 +15,19 @@ final class NativePostPasses {
             addressModeU: .clampToEdge,addressModeV: .clampToEdge))
     }
     deinit { targets?.destroy(device: device); device.destroy(sampler) }
-    func ensureTargets(size: RenderDrawableSize) throws {
-        guard targets?.size != size else { return }
-        let replacement = try NativePostTargets.make(device: device,size: size)
+    func ensureTargets(size: RenderDrawableSize, requirements: NativePostRequirements) throws {
+        if let targets, targets.size == size, targets.requirements == requirements { return }
+        let replacement = try NativePostTargets.make(device: device, size: size, requirements: requirements)
         targets?.destroy(device: device); targets = replacement; revision &+= 1
     }
+    /// Allocates and returns the opaque-cache snapshot on first stable capture.
+    func ensureSnapshot() throws -> Texture {
+        guard var current = targets else { throw RHIError.outOfMemory }
+        let texture = try current.ensureSnapshot(device: device)
+        targets = current
+        return texture
+    }
+    var snapshot: Texture? { targets?.snapshot }
     func encode<T>(kind: RenderPassKind, input: Texture, secondary: Texture, output: Texture,
                    uniforms: T, size: RenderDrawableSize, into commands: CommandBuffer) throws {
         let pipeline: NativeFullscreenPass

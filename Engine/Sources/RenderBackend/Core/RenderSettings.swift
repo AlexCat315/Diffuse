@@ -76,15 +76,6 @@ public struct RenderShadowSettings: Sendable, Equatable {
 }
 
 public struct RenderSettings: Sendable, Equatable {
-    public enum ReplacementStage: Int, Sendable, CaseIterable {
-        case r0RainbowTriangle = 0
-        case r1MeshCamera = 1
-        case r2MultiObjectDepth = 2
-        case r3ViewportInterop = 3
-        case r4LightingPBRShadow = 4
-        case r5PostProcess = 5
-    }
-
     /// Viewport debug visualization (editor "view mode"). `.shaded` is the normal
     /// PBR result; the rest are G-buffer inspection modes like UE/Godot/Unity.
     /// The raw value is forwarded to the mesh shader via `exposure_light_count.z`.
@@ -97,7 +88,8 @@ public struct RenderSettings: Sendable, Equatable {
         case metallic = 5
     }
 
-    public var stage: ReplacementStage
+    public var enablePBR: Bool
+    public var enableDepthPrepass: Bool
     public var debugViewMode: DebugViewMode
     public var enableFXAA: Bool
     public var enableSSAO: Bool
@@ -122,7 +114,8 @@ public struct RenderSettings: Sendable, Equatable {
     public var stylizedCharacterStyle: StylizedCharacterStyle
 
     public init(
-        stage: ReplacementStage = .r1MeshCamera,
+        enablePBR: Bool = true,
+        enableDepthPrepass: Bool = true,
         debugViewMode: DebugViewMode = .shaded,
         enableFXAA: Bool = false,
         enableSSAO: Bool = false,
@@ -141,7 +134,8 @@ public struct RenderSettings: Sendable, Equatable {
         enableStylizedCharacterShading: Bool = false,
         stylizedCharacterStyle: StylizedCharacterStyle = .colorfulInkCard
     ) {
-        self.stage = stage
+        self.enablePBR = enablePBR
+        self.enableDepthPrepass = enableDepthPrepass
         self.debugViewMode = debugViewMode
         self.enableFXAA = enableFXAA
         self.enableSSAO = enableSSAO

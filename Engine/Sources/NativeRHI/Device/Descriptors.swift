@@ -241,6 +241,24 @@ public enum BindingResource: Hashable, Sendable {
         case .accelerationStructure(let a): return (a, .accelerationStructure)
         }
     }
+
+    /// Base offset of a buffer binding, or 0 for non-buffer resources.
+    var bufferOffset: Int {
+        switch self {
+        case .uniformBuffer(_, let offset, _): return offset
+        case .storageBuffer(_, let offset): return offset
+        default: return 0
+        }
+    }
+
+    /// The bound buffer handle, or nil for non-buffer resources.
+    var buffer: Buffer? {
+        switch self {
+        case .uniformBuffer(let b, _, _): return b
+        case .storageBuffer(let b, _): return b
+        default: return nil
+        }
+    }
 }
 
 public struct BindingSetEntry: Hashable, Sendable {

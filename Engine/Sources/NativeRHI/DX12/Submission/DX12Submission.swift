@@ -9,6 +9,15 @@ final class DX12Completion {
     init(backend: DX12Device, callback: @escaping () -> Void) { self.backend = backend; self.callback = callback }
 }
 
+/// Packs dynamic offsets as raw UInt32 bytes for the C++ bridge.
+private func dynamicOffsetData(_ offsets: [UInt32]) -> Data {
+    offsets.withUnsafeBufferPointer { pointer in
+        let raw = UnsafeRawBufferPointer(pointer)
+        guard let base = raw.baseAddress else { return Data() }
+        return Data(bytes: base, count: raw.count)
+    }
+}
+
 extension DX12Device {
     public func submit(_ submit: PlannedSubmit, cpuProfile: SubmissionCPUProfile? = nil, completion: @escaping () -> Void) throws {
         let encodingStart = cpuProfile?.begin()
@@ -80,7 +89,9 @@ extension DX12Device {
         case .setPipeline(let p): try emit(e, kind: 0, resource: p.id)
         case .setMeshPipeline(let p): try emit(e, kind: 2, resource: p.id)
         case .drawMeshTasks(let groups): try emit(e, kind: 14, a: UInt64(rhiCount(groups.x)), b: UInt64(rhiCount(groups.y)), c: UInt64(rhiCount(groups.z)))
-        case .setBindingSet(let slot, let set): try emit(e, kind: 3, resource: set.id, slot: slot)
+        case .setBindingSet(let slot, let set, let dynamicOffsets):
+            try emit(e, kind: 3, resource: set.id, slot: slot,
+                     data: dynamicOffsetData(dynamicOffsets))
         case .setVertexBuffer(let slot, let buffer, let offset): try emit(e, kind: 4, resource: buffer.id, slot: slot, a: nonnegative(offset))
         case .setIndexBuffer(let buffer, let offset, let type): try emit(e, kind: 5, resource: buffer.id, a: nonnegative(offset), b: type == .uint32 ? 1 : 0)
         case .pushConstant(let stage, let slot, let data): try emit(e, kind: 6, slot: slot, stage: stage.dx12, data: data)
@@ -98,7 +109,9 @@ extension DX12Device {
     private func compute(_ e: OpaquePointer, command: ComputeCommand) throws {
         switch command {
         case .setPipeline(let p): try emit(e, kind: 1, resource: p.id)
-        case .setBindingSet(let slot, let set): try emit(e, kind: 3, resource: set.id, slot: slot)
+        case .setBindingSet(let slot, let set, let dynamicOffsets):
+            try emit(e, kind: 3, resource: set.id, slot: slot,
+                     data: dynamicOffsetData(dynamicOffsets))
         case .pushConstant(let stage, let slot, let data): try emit(e, kind: 6, slot: slot, stage: stage.dx12, data: data)
         case .dispatch(let x, let y, let z): try emit(e, kind: 12, a: UInt64(rhiCount(x)), b: UInt64(rhiCount(y)), c: UInt64(rhiCount(z)))
         case .dispatchIndirect(let buffer, let offset): try emit(e, kind: 13, resource: buffer.id, a: nonnegative(offset))

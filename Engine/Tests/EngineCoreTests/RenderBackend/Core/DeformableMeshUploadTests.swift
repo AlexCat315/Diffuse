@@ -115,7 +115,8 @@ struct DeformableMeshUploadTests {
             ),
             sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: UInt64(frame)),
             renderSettings: RenderSettings(
-                stage: .r3ViewportInterop,
+                enablePBR: false,
+                enableDepthPrepass: true,
                 enableOffscreenViewport: true
             ),
             simulationTimeSeconds: Double(frame) / 60.0

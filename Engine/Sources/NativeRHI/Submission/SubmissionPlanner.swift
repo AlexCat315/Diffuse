@@ -230,7 +230,7 @@ final class SubmissionPlanner {
         var collectedReads: [UInt64: ResourceState] = [:]
         for renderCommand in record.body {
             switch renderCommand {
-            case .setBindingSet(slot: _, set: let set):
+            case .setBindingSet(slot: _, set: let set, dynamicOffsets: _):
                 guard collectedSets.insert(set.id).inserted else { continue }
                 collectBindingSetResources(
                     set, on: queue, stage: [.vertex, .fragment, .task, .mesh], scope: .beforePass,
@@ -286,7 +286,7 @@ final class SubmissionPlanner {
         var collectedReads: [UInt64: ResourceState] = [:]
         for computeCommand in record.body {
             switch computeCommand {
-            case .setBindingSet(slot: _, set: let set):
+            case .setBindingSet(slot: _, set: let set, dynamicOffsets: _):
                 collectBindingSetResources(
                     set, on: queue, stage: .compute, scope: .beforePass,
                     collectedReads: &collectedReads,

@@ -8,14 +8,14 @@ import SIMDCompat
 import XCTest
 
 final class NativePBRTests: XCTestCase {
-    func testSceneValidationAcceptsCanvasAndRejectsPostEffectsBeforeR5() throws {
+    func testSceneValidationAcceptsCanvasAndPostEffectsTogether() throws {
         var packet = PBRProbeScene.packet(size: RenderDrawableSize(width: 64, height: 64))
         _ = try NativePacketValidation.validate(packet)
         packet.inGameCanvas.rect(x: 0, y: 0, w: 10, h: 10, color: .white)
         _ = try NativePacketValidation.validate(packet)
         packet.inGameCanvas.commands = []
         packet.renderSettings.enableTAA = true
-        XCTAssertThrowsError(try NativePacketValidation.validate(packet))
+        _ = try NativePacketValidation.validate(packet)
         packet.renderSettings.enableTAA = false
         _ = try NativePacketValidation.validate(packet)
     }
@@ -52,7 +52,7 @@ final class NativePBRTests: XCTestCase {
             case 4: packet.renderSettings.debugViewMode = .shaded; packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 14
             case 5: packet.scene.camera.eye = SIMD3(-8,6,10); packet.scene.lights = []; packet.renderSettings.enableShadows = false
             case 6: packet.drawableSize = RenderDrawableSize(width: 192,height: 128); packet.scene.environment.ambientIntensity = 0; packet.scene.environment.exposure = 2.5
-            default: packet.renderSettings.stage = .r3ViewportInterop; packet.renderSettings.debugViewMode = .unlit
+            default: packet.renderSettings.enablePBR = false; packet.renderSettings.enableDepthPrepass = true; packet.renderSettings.debugViewMode = .unlit
             }
             try renderer.renderChecked(packet: packet); _ = try reference.render(packet: packet)
             let native = try GridImage.readback(device: device, texture: XCTUnwrap(renderer.colorTexture), size: packet.drawableSize)

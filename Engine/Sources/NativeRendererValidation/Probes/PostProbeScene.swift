@@ -7,7 +7,6 @@ public enum PostProbeScene {
     /// reuse, followed by camera motion which invalidates the cached image.
     public static func packet(size: RenderDrawableSize, frame: Int = 0) -> RenderPacket {
         var packet = PBRProbeScene.packet(size: size,frame: frame)
-        packet.renderSettings.stage = .r5PostProcess
         packet.renderSettings.enableSSAO = true; packet.renderSettings.enableSSR = true
         packet.renderSettings.enableTAA = true; packet.renderSettings.enableBloom = true; packet.renderSettings.enableFXAA = true
         packet.scene.camera.eye.x += Float((frame/12)%11)*0.04
