@@ -1,7 +1,7 @@
 import Foundation
 import NativeRHI
 import GuavaUICore
-import GuavaUIRendering
+import GuavaUIRuntime
 import GuavaUIComposeCore
 
 private final class ProbeImage: UITextureAsset {

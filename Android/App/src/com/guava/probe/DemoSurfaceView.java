@@ -20,17 +20,38 @@ import org.json.JSONObject;
 /** A vsync-driven host; Swift skips GPU work while Compose and the tree are clean. */
 final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callback, Choreographer.FrameCallback {
     private long session;
+    private long application;
     private String checkpoint;
     private boolean running;
     private boolean callbackPending;
     private DemoInputConnection connection;
+    private String configuration;
+    private long lastSnapshotTime;
+    private boolean gameMode;
+    private final boolean debugBuild;
+    private float touchX, touchY;
+    private boolean touchMoved;
+    private long touchStarted;
 
-    DemoSurfaceView(Context context, String checkpoint) {
+    DemoSurfaceView(Context context, String checkpoint, String configuration, long application) {
         super(context);
         this.checkpoint = checkpoint;
+        this.configuration = configuration;
+        this.application = application;
+        debugBuild = (context.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        gameMode = configuration.contains("\"game\"");
         setFocusable(true);
         setFocusableInTouchMode(true);
         getHolder().addCallback(this);
+    }
+    void configure(String configuration) {
+        releaseSurface();
+        closeApplication();
+        this.configuration = configuration;
+        gameMode = configuration.contains("\"game\"");
+        checkpoint = "";
+        openSurface();
+        schedule();
     }
 
     void startFrames() { running = true; openSurface(); schedule(); }
@@ -51,7 +72,9 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
         if (!running || session == 0) return;
         int result = MainActivity.frame(session);
         if (result < 0) { stopFrames(); return; }
-        if (result > 0) saveSnapshot();
+        if (result > 0 && debugBuild && (timestamp - lastSnapshotTime > 200000000L || !gameMode)) {
+            saveSnapshot(); lastSnapshotTime = timestamp;
+        }
         schedule();
     }
     @Override public void surfaceCreated(SurfaceHolder holder) {}
@@ -62,8 +85,9 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     }
     private void openSurface() {
         if (!running || session != 0 || getWidth() <= 0 || getHeight() <= 0 || !getHolder().getSurface().isValid()) return;
-        session = MainActivity.open(getHolder().getSurface(), getWidth(), getHeight(), getResources().getDisplayMetrics().density,
-                                    getContext().getFilesDir().getAbsolutePath(), checkpoint);
+        if (application == 0) application = MainActivity.createApplication(getResources().getDisplayMetrics().density,
+                AssetInstaller.root(getContext()).getAbsolutePath(), checkpoint, configuration);
+        if (application != 0) session = MainActivity.open(application, getHolder().getSurface(), getWidth(), getHeight());
     }
     @Override public void surfaceDestroyed(SurfaceHolder holder) { releaseSurface(); }
     void releaseSurface() {
@@ -74,6 +98,8 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
             connection = null;
         }
     }
+    void closeApplication() { if (application != 0) { MainActivity.destroyApplication(application); application = 0; } }
+    long detachApplication() { releaseSurface(); long retained = application; application = 0; return retained; }
     JSONObject state() {
         try { return new JSONObject(session == 0 ? "{}" : MainActivity.snapshot(session)); }
         catch (Exception error) { throw new IllegalStateException("Invalid Swift demo state", error); }
@@ -83,27 +109,42 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
         return value == null ? checkpoint : value.toString();
     }
     String note() { JSONObject value = state().optJSONObject("state"); return value == null ? "" : value.optString("note", ""); }
-    private boolean textFocused() { return "counter.note".equals(state().optString("focused", "")); }
+    JSONObject editor() { JSONObject editor = state().optJSONObject("editor"); return editor == null ? new JSONObject() : editor; }
+    private boolean textFocused() { return state().optJSONObject("editor") != null; }
+    void edit(int kind, int start, int end) { if (session != 0) MainActivity.edit(session, kind, start, end); }
     void text(String value, boolean composing) { if (session != 0) MainActivity.text(session, value, composing); }
-    void key(int scancode) { if (session != 0) MainActivity.key(session, scancode); }
+    void key(int scancode) { if (session != 0) MainActivity.key(session, scancode, 0); }
+    void keyState(int scancode, boolean down) { if (session != 0) MainActivity.keyState(session, scancode, down); }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (session == 0) return false;
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
+            touchX = event.getX(); touchY = event.getY(); touchMoved = false;
+            touchStarted = event.getEventTime();
             requestFocus();
             boolean previous = textFocused();
+            String previousID = state().optString("focused");
             MainActivity.pointer(session, 0, event.getX(), event.getY());
             InputMethodManager ime = (InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
             if (textFocused()) {
-                if (!previous) ime.restartInput(this);
+                if (!previous || !previousID.equals(state().optString("focused"))) { connection = null; ime.restartInput(this); }
                 ime.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
             } else if (previous) { ime.hideSoftInputFromWindow(getWindowToken(), 0); connection = null; }
         } else if (action == MotionEvent.ACTION_UP) {
-            MainActivity.pointer(session, 1, event.getX(), event.getY());
+            // Use the completed gesture's event times. A slow debug GPU frame
+            // can delay/coalesce MOVE delivery past a wall-clock long-press timer.
+            int slop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
+            boolean stationary = !touchMoved && Math.abs(event.getX()-touchX)+Math.abs(event.getY()-touchY)<=slop;
+            boolean contextPress = !gameMode && stationary && event.getEventTime()-touchStarted >= android.view.ViewConfiguration.getLongPressTimeout();
+            MainActivity.pointer(session, contextPress ? 4 : 1, event.getX(), event.getY());
+            if (connection != null) connection.updateSelection();
             performClick();
-        } else if (action == MotionEvent.ACTION_MOVE) MainActivity.pointer(session, 2, event.getX(), event.getY());
-        else if (action == MotionEvent.ACTION_CANCEL) MainActivity.pointer(session, 3, event.getX(), event.getY());
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            int slop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
+            if (Math.abs(event.getX()-touchX)+Math.abs(event.getY()-touchY)>slop) touchMoved = true;
+            MainActivity.pointer(session, 2, event.getX(), event.getY());
+        } else if (action == MotionEvent.ACTION_CANCEL) { MainActivity.pointer(session, 3, event.getX(), event.getY()); }
         return true;
     }
     @Override public boolean performClick() { super.performClick(); return true; }
@@ -112,11 +153,32 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
         if (!onCheckIsTextEditor()) return null;
         info.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES;
         info.imeOptions = EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI;
-        info.initialSelStart = info.initialSelEnd = note().length();
+        JSONObject editor = editor();
+        if (editor.optBoolean("isSecure")) info.inputType |= InputType.TYPE_TEXT_VARIATION_PASSWORD;
+        if (editor.optBoolean("isMultiline")) {
+            info.inputType |= InputType.TYPE_TEXT_FLAG_MULTI_LINE;
+            info.imeOptions = EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI;
+        }
+        info.initialSelStart = editor.optInt("selectionStart"); info.initialSelEnd = editor.optInt("selectionEnd");
         connection = new DemoInputConnection(this);
         return connection;
     }
     @Override public boolean onKeyDown(int code, KeyEvent event) {
+        int gameKey = GameControls.scancode(code);
+        if ("game".equals(state().optString("mode")) && gameKey != 0) { keyState(gameKey, true); return true; }
+        if (textFocused() && (event.isCtrlPressed() || event.isMetaPressed())) {
+            int action = code == KeyEvent.KEYCODE_A ? android.R.id.selectAll : code == KeyEvent.KEYCODE_C ? android.R.id.copy
+                : code == KeyEvent.KEYCODE_X ? android.R.id.cut : code == KeyEvent.KEYCODE_V ? android.R.id.paste : 0;
+            if (action != 0) {
+                if (connection == null) connection = new DemoInputConnection(this);
+                return connection.performContextMenuAction(action);
+            }
+        }
+        int navigation = AndroidKeys.scancode(code);
+        if (navigation != 0 || event.isCtrlPressed() || event.isMetaPressed()) {
+            int scan = navigation != 0 ? navigation : code >= KeyEvent.KEYCODE_A && code <= KeyEvent.KEYCODE_Z ? 4 + code - KeyEvent.KEYCODE_A : 0;
+            if (scan != 0) { MainActivity.key(session, scan, AndroidKeys.modifiers(event)); return true; }
+        }
         if (code == KeyEvent.KEYCODE_DEL) { key(42); return true; }
         if (code == KeyEvent.KEYCODE_TAB) { key(43); return true; }
         if (code == KeyEvent.KEYCODE_ENTER) { key(40); return true; }
@@ -128,8 +190,25 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
         }
         return super.onKeyDown(code, event);
     }
+    @Override public boolean onGenericMotionEvent(MotionEvent event) {
+        if (session == 0) return false;
+        if (event.getActionMasked() == MotionEvent.ACTION_SCROLL) {
+            MainActivity.scroll(session, event.getX(), event.getY(), event.getAxisValue(MotionEvent.AXIS_HSCROLL), event.getAxisValue(MotionEvent.AXIS_VSCROLL));
+            return true;
+        }
+        if (event.getActionMasked() == MotionEvent.ACTION_HOVER_MOVE) { MainActivity.pointer(session, 5, event.getX(), event.getY()); return true; }
+        return super.onGenericMotionEvent(event);
+    }
+    @Override public boolean onKeyUp(int code, KeyEvent event) {
+        int gameKey = GameControls.scancode(code);
+        if ("game".equals(state().optString("mode")) && gameKey != 0) { keyState(gameKey, false); return true; }
+        return super.onKeyUp(code, event);
+    }
     // Debug-only APK automation goes through the same InputConnection as the IME.
     void debugInput(Intent intent) {
+        if ("keyDown".equals(intent.getStringExtra("demoAction")) || "keyUp".equals(intent.getStringExtra("demoAction"))) {
+            keyState(intent.getIntExtra("scancode", 0), "keyDown".equals(intent.getStringExtra("demoAction"))); return;
+        }
         if (!textFocused()) return;
         if (connection == null) connection = new DemoInputConnection(this);
         String action = intent.getStringExtra("demoAction");
@@ -138,6 +217,7 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
         else if ("commit".equals(action)) connection.commitText(value == null ? "" : value, 1);
         else if ("finish".equals(action)) connection.finishComposingText();
         else if ("delete".equals(action)) connection.deleteSurroundingText(1, 0);
+        else if ("select".equals(action)) connection.setSelection(intent.getIntExtra("start", 0), intent.getIntExtra("end", 0));
     }
     private void saveSnapshot() {
         File destination = new File(getContext().getFilesDir(), "demo-state.json");

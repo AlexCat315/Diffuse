@@ -43,6 +43,7 @@ let package = Package(
         .executable(name: "EditorApp", targets: ["EditorApp"]),
         .library(name: "EditorCore", targets: ["EditorCore"]),
         .library(name: "GameRuntime", targets: ["GameRuntime"]),
+        .executable(name: "GuavaProjectExport", targets: ["GuavaProjectExport"]),
         .executable(name: "GuavaPlayer", targets: ["GuavaPlayer"]),
     ],
     dependencies: [
@@ -124,6 +125,8 @@ let package = Package(
                 .product(name: "NativeRHI", package: "Engine"),
             ]
         ),
+
+        .executableTarget(name: "GuavaProjectExport", dependencies: ["EditorCore"]),
 
         // MARK: - Standalone Game Player
         .executableTarget(

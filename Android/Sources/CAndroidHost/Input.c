@@ -4,8 +4,11 @@
 
 extern void guava_android_pointer(void* session, int kind, float x, float y);
 extern void guava_android_text(void* session, const uint16_t* text, int count, int composing);
-extern void guava_android_key(void* session, uint32_t scancode);
+extern void guava_android_key(void* session, uint32_t scancode, uint16_t modifiers);
+extern void guava_android_scroll(void* session, float x, float y, float dx, float dy);
+extern void guava_android_key_state(void* session, uint32_t scancode, int down);
 extern int guava_android_snapshot(void* session, uint16_t* output, int capacity);
+extern void guava_android_edit(void* session, int kind, int start, int end);
 
 JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_pointer(JNIEnv* env, jclass type, jlong value, jint kind, jfloat x, jfloat y) {
     (void)env; (void)type;
@@ -23,10 +26,16 @@ JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_text(JNIEnv* env, jclas
     (*env)->ReleaseStringChars(env, text, units);
 }
 
-JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_key(JNIEnv* env, jclass type, jlong value, jint scancode) {
+JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_key(JNIEnv* env, jclass type, jlong value, jint scancode, jint modifiers) {
     (void)env; (void)type;
     GuavaSurface* host = (GuavaSurface*)(uintptr_t)value;
-    if (host) guava_android_key(host->session, scancode);
+    if (host) guava_android_key(host->session, scancode, (uint16_t)modifiers);
+}
+
+JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_scroll(JNIEnv* env, jclass type, jlong value, jfloat x, jfloat y, jfloat dx, jfloat dy) {
+    (void)env; (void)type;
+    GuavaSurface* host = (GuavaSurface*)(uintptr_t)value;
+    if (host) guava_android_scroll(host->session, x, y, dx, dy);
 }
 
 JNIEXPORT jstring JNICALL Java_com_guava_probe_MainActivity_snapshot(JNIEnv* env, jclass type, jlong value) {
@@ -41,4 +50,16 @@ JNIEXPORT jstring JNICALL Java_com_guava_probe_MainActivity_snapshot(JNIEnv* env
     jstring result = (*env)->NewString(env, units, count);
     free(units);
     return result;
+}
+
+JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_keyState(JNIEnv* env, jclass type, jlong value, jint scancode, jboolean down) {
+    (void)env; (void)type;
+    GuavaSurface* host = (GuavaSurface*)(uintptr_t)value;
+    if (host) guava_android_key_state(host->session, scancode, down);
+}
+
+JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_edit(JNIEnv* env, jclass type, jlong value, jint kind, jint start, jint end) {
+    (void)env; (void)type;
+    GuavaSurface* host = (GuavaSurface*)(uintptr_t)value;
+    if (host) guava_android_edit(host->session, kind, start, end);
 }

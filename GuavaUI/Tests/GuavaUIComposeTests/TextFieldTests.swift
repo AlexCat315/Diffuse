@@ -11,6 +11,37 @@ import GuavaUIRuntime
 @Suite("Phase 6.4b TextField", .serialized)
 struct TextFieldTests: GuavaUIComposeSerializedSuite {
 
+    @Test("platform UTF-16 selection and deletion preserve joined graphemes and undo")
+    func platformEditorSelection() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "A👩🏽‍💻中B"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = fieldNode(in: rig.tree.root)
+        let client = node.attachments[TextInputAttachmentKey.client] as! TextInputClient
+        client.select(1, 7) // An endpoint inside the joined emoji rounds to its boundary.
+        #expect(client.snapshot().selectionStart == 1)
+        #expect(client.snapshot().selectionEnd == 1)
+        client.select(7, 7)
+        client.deleteSurrounding(0, 1)
+        #expect(rig.store.value.stringValue == "A中B")
+        #expect(client.snapshot().selectionStart == 1)
+        node.attachments[TextInputAttachmentKey.editActions].map { ($0 as! TextEditActions).perform(.undo) }
+        #expect(rig.store.value.stringValue == "A👩🏽‍💻中B")
+        client.select(1, 7)
+        let editing = rig.registry.handlers(for: node).editing!
+        _ = editing(TextEditingEvent(text: "你好", start: 0, length: 2), .target)
+        #expect(client.snapshot().compositionStart == 1)
+        #expect(client.snapshot().text.hasPrefix("A你好"))
+        #expect(rig.store.value.stringValue == "A👩🏽‍💻中B")
+        client.select(2, 2)
+        #expect(client.snapshot().selectionStart == 2)
+        #expect(client.snapshot().compositionEnd == 3)
+        #expect(rig.store.value.stringValue == "A👩🏽‍💻中B")
+        client.select(0, 0)
+        #expect(rig.store.value.stringValue == "A你好👩🏽‍💻中B")
+        #expect(client.snapshot().compositionStart == -1)
+    } }
+
     private func makeRig() -> (
         registry: InteractionRegistry,
         focus: FocusChain,

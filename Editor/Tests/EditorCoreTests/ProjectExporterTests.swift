@@ -7,6 +7,33 @@ import Testing
 @Suite("ProjectExporter", .serialized)
 struct ProjectExporterTests {
 
+    @Test("static gameplay export stages canonical source IDs and validates scene bindings")
+    func staticGameplaySources() throws {
+        let project = tempDir()
+        let output = project.appendingPathComponent("export")
+        defer { try? FileManager.default.removeItem(at: project) }
+        let scripts = project.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        let source = "import ScriptRuntime\nstruct GameScript: ScriptBehavior {}\n"
+        let file = scripts.appendingPathComponent("Player.swift")
+        try Data(source.utf8).write(to: file)
+        let asset = try #require(try ScriptAssetRegistry(projectDirectory: project.path).resolve([file]).first)
+        let binding = ScriptBinding(identifier: asset.id.runtimeIdentifier)
+        let node = EditorSceneManifestNode(id: 1, name: "Player", kind: "empty", components: [
+            ManifestComponent(type: "script", value: ComponentValue(jsonObject: ["bindings": [encodeScriptBinding(binding)]]))])
+        let manifest = EditorSceneManifest(revision: 0, entityCount: 1, roots: [node])
+        _ = try ProjectExporter.export(manifest: manifest, appName: "Mobile", sourceProjectDirectory: project,
+            scriptBuildConfiguration: ProjectScriptBuildConfiguration(engineModulePaths: [], delivery: .staticLink), to: output)
+        let index = try JSONDecoder().decode(ProjectStaticScripts.self,
+            from: Data(contentsOf: output.appendingPathComponent(ProjectStaticScripts.relativePath)))
+        let entry = try #require(index.entries.first)
+        #expect(entry.identifier == asset.id.runtimeIdentifier)
+        #expect(try String(contentsOf: output.appendingPathComponent(entry.source), encoding: .utf8) == source)
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent(ProjectCompiledScripts.relativePath).path))
+        let sceneURL = GameSaveDocument.url(slot: ProjectExporter.sceneSlot, projectDirectory: output.path)
+        #expect(try GameSaveDocument.read(from: sceneURL)?.manifest == manifest)
+    }
+
     @Test("Swift sources without a build SDK fail instead of disappearing from the game")
     func missingScriptSDKPreservesExport() throws {
         let project = tempDir()

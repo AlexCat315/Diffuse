@@ -39,4 +39,5 @@ public enum TextInputAttachmentKey {
     /// sink owned by the host view state.
     public static let editingChangeHandler = "__text_input_editing_change_handler"
     public static let editActions = "__text_input_edit_actions"
+    public static let client = "__text_input_client"
 }

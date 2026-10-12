@@ -4,6 +4,8 @@ import ScriptRuntime
 
 /// Host-owned compiler configuration. It is never read from project files.
 public struct ProjectScriptBuildConfiguration: Sendable {
+    public enum Delivery: Sendable { case dynamicLibrary, staticLink }
+    public var delivery: Delivery
     public var engineModulePaths: [String]
     public var clangModuleMapPaths: [String]
     public var clangIncludePaths: [String]
@@ -12,7 +14,8 @@ public struct ProjectScriptBuildConfiguration: Sendable {
     public init(engineModulePaths: [String],
                 clangModuleMapPaths: [String] = [],
                 clangIncludePaths: [String] = [],
-                swiftCompilerPath: String = "swiftc") {
+                swiftCompilerPath: String = "swiftc", delivery: Delivery = .dynamicLibrary) {
+        self.delivery = delivery
         self.engineModulePaths = engineModulePaths
         self.clangModuleMapPaths = clangModuleMapPaths
         self.clangIncludePaths = clangIncludePaths
@@ -125,7 +128,7 @@ public struct ProjectCompiledScripts: Codable, Sendable, Equatable {
                                                          includingPropertiesForKeys: [.isRegularFileKey])
             .filter { $0.pathExtension.lowercased() == "swift" }
         guard !sources.isEmpty else { return [] }
-        guard let configuration, !configuration.engineModulePaths.isEmpty else {
+        guard let configuration else {
             throw ProjectExporterError.missingScriptBuildConfiguration
         }
         // The existing Windows script bridge exports only a subset of C operations;
@@ -134,6 +137,10 @@ public struct ProjectCompiledScripts: Codable, Sendable, Equatable {
         throw ProjectExporterError.unsupportedScriptExportTarget(currentTarget)
         #else
         let assets = try ScriptAssetRegistry(projectDirectory: projectDirectory.path).resolve(sources)
+        if configuration.delivery == .staticLink {
+            return try ProjectStaticScripts.stage(assets, in: outputDirectory)
+        }
+        guard !configuration.engineModulePaths.isEmpty else { throw ProjectExporterError.missingScriptBuildConfiguration }
         let aliasCounts = assets.flatMap(\.legacyIdentifiers).reduce(into: [String: Int]()) {
             $0[$1, default: 0] += 1
         }
