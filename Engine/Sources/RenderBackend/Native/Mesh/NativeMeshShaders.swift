@@ -30,7 +30,16 @@ final class NativeMeshShaders {
             && $0.interface.bindings.allSatisfy { expected[$0.name] == $0.slot } }) else {
             throw RHIError.layoutMismatch("native mesh shader binding ABI mismatch")
         }
-        bindings = try device.makeBindingLayout(BindingLayoutDescriptor(reflecting: artifacts))
+        var layoutDescriptor = try BindingLayoutDescriptor(reflecting: artifacts)
+        // Ring-backed per-frame/per-batch blocks are bound with a dynamic
+        // offset (draw/instances + scene lights/shadows + style) so the
+        // binding set descriptor is stable across frames.
+        let dynamicSlots: Set<UInt32> = [0, 1, 4, 7, 13]
+        for index in layoutDescriptor.entries.indices
+        where dynamicSlots.contains(layoutDescriptor.entries[index].slot) {
+            layoutDescriptor.entries[index].buffer.hasDynamicOffset = true
+        }
+        bindings = try device.makeBindingLayout(layoutDescriptor)
         var created: [NativeMeshShaderRole: ShaderModule] = [:]
         do {
             for (role,artifact) in zip(roles,artifacts) { created[role] = try device.makeShaderModule(artifact.moduleDescriptor()) }

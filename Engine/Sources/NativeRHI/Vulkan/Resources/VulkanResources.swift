@@ -57,6 +57,7 @@ struct VulkanComputePipelineRecord {
 struct VulkanBindingSetRecord {
     let descriptorSet: VkDescriptorSet
     let layoutID: UInt32
+    let dynamicOffsetCount: UInt32
 }
 
 struct VulkanPushRange {

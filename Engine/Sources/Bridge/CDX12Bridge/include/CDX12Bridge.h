@@ -32,7 +32,7 @@ enum GRHI_ResourceKind { GRHI_RESOURCE_BUFFER, GRHI_RESOURCE_TEXTURE, GRHI_RESOU
 typedef struct { uint32_t ray_tier, mesh, task; } GRHI_DX12Capabilities;
 typedef struct { uint32_t width, height, depth, layers, mips, samples, format, usage, dimension; } GRHI_TextureDesc;
 typedef struct { uint32_t min_filter, mag_filter, mip_filter, address_u, address_v, address_w, compare_enabled, compare_op; } GRHI_SamplerDesc;
-typedef struct { uint32_t slot, type, stages, read_only, element_stride; } GRHI_BindingDecl;
+typedef struct { uint32_t slot, type, stages, read_only, dynamic, element_stride; } GRHI_BindingDecl;
 typedef struct { uint32_t slot, resource, type; uint64_t offset; } GRHI_BindingValue;
 typedef struct { uint32_t slot, stage, bytes; } GRHI_ConstantDecl;
 typedef struct { uint32_t format, enabled, source_rgb, destination_rgb, operation_rgb, source_alpha, destination_alpha, operation_alpha; } GRHI_ColorDesc;

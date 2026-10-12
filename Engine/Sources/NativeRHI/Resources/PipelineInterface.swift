@@ -2,9 +2,26 @@ import Foundation
 
 public struct BufferBindingLayout: Codable, Hashable, Sendable {
     public var readOnly = false
+    /// When true, the binding carries no base offset; the caller supplies a
+    /// dynamic offset at bind time (Vulkan *_DYNAMIC descriptor, Metal
+    /// setVertexBuffer offset, DX12 root offset). Used for per-frame ring data.
+    /// This is an RHI-side concept never reflected from shaders, so it defaults
+    /// to false when absent from a serialized shader interface.
+    public var hasDynamicOffset = false
     /// Zero denotes byte-address storage. Positive values describe structured elements.
     public var elementStride = 0
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case readOnly, hasDynamicOffset, elementStride
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        readOnly = try container.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
+        hasDynamicOffset = try container.decodeIfPresent(Bool.self, forKey: .hasDynamicOffset) ?? false
+        elementStride = try container.decodeIfPresent(Int.self, forKey: .elementStride) ?? 0
+    }
 }
 
 /// A logical small-constant slot. Vulkan packs ranges into push-constant bytes;

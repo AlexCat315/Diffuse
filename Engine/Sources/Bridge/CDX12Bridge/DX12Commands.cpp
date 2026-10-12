@@ -92,13 +92,27 @@ static void endRender(GRHI_DX12Encoder& e) {
     if (e.discardDepth) e.list->DiscardResource(e.state->textures.at(e.discardDepth).native.Get(), nullptr);
     e.renderColors.clear(); e.discardDepth = 0; e.rendering = false; e.pipeline = nullptr;
 }
-static void bindSet(GRHI_DX12Encoder& e, uint32_t slot, uint32_t id) {
+static void bindSet(GRHI_DX12Encoder& e, uint32_t slot, uint32_t id, const uint32_t* dynamicOffsets, size_t dynamicCount) {
     require(e.pipeline != nullptr, "bind a pipeline before binding resources"); auto& layout = e.state->layouts.at(e.pipeline->layout); auto& set = e.state->sets.at(id);
     require(slot < layout.sets.size() && layout.sets[slot] == set.layout, "binding set layout mismatch"); bool compute = e.pipeline->compute;
+    auto& declarations = e.state->bindingLayouts.at(set.layout);
+    // Dynamic offsets are ordered by ascending dynamic binding slot.
+    std::map<uint32_t, uint64_t> dynamicBySlot;
+    {
+        size_t index = 0;
+        for (auto d : declarations) {
+            if (!d.dynamic) continue;
+            require(index < dynamicCount, "missing dynamic offset");
+            dynamicBySlot[d.slot] = dynamicOffsets[index++];
+        }
+        require(index == dynamicCount, "too many dynamic offsets");
+    }
     for (auto v : set.values) { auto root = layout.roots.at({slot,v.slot});
+        auto dynamic = dynamicBySlot.find(v.slot);
+        uint64_t offset = dynamic != dynamicBySlot.end() ? dynamic->second : v.offset;
         if (root.type == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) { auto address = (v.type == GRHI_BIND_SAMPLER ? e.state->samplers : e.state->views).gpu(set.descriptors.at(v.slot));
             if (compute) e.list->SetComputeRootDescriptorTable(root.index,address); else e.list->SetGraphicsRootDescriptorTable(root.index,address);
-        } else { auto address = v.type == GRHI_BIND_AS ? e.state->acceleration.at(v.resource).result.native->GetGPUVirtualAddress() : e.state->buffers.at(v.resource).native->GetGPUVirtualAddress() + v.offset;
+        } else { auto address = v.type == GRHI_BIND_AS ? e.state->acceleration.at(v.resource).result.native->GetGPUVirtualAddress() : e.state->buffers.at(v.resource).native->GetGPUVirtualAddress() + offset;
             if (root.type == D3D12_ROOT_PARAMETER_TYPE_CBV) { if (compute) e.list->SetComputeRootConstantBufferView(root.index,address); else e.list->SetGraphicsRootConstantBufferView(root.index,address); }
             else if (root.type == D3D12_ROOT_PARAMETER_TYPE_UAV) { if (compute) e.list->SetComputeRootUnorderedAccessView(root.index,address); else e.list->SetGraphicsRootUnorderedAccessView(root.index,address); }
             else { if (compute) e.list->SetComputeRootShaderResourceView(root.index,address); else e.list->SetGraphicsRootShaderResourceView(root.index,address); }
@@ -112,7 +126,7 @@ int32_t grhi_dx12_encode(GRHI_DX12Encoder* encoder, const GRHI_DX12Command* comm
     case GRHI_CMD_GRAPHICS_PIPELINE: pipeline(e,s.graphics.at(c.resource)); break;
     case GRHI_CMD_COMPUTE_PIPELINE: pipeline(e,s.compute.at(c.resource)); break;
     case GRHI_CMD_MESH_PIPELINE: pipeline(e,s.mesh.at(c.resource)); break;
-    case GRHI_CMD_BIND_SET: bindSet(e,c.slot,c.resource); break;
+    case GRHI_CMD_BIND_SET: bindSet(e,c.slot,c.resource,(const uint32_t*)c.data,c.bytes/4); break;
     case GRHI_CMD_VERTEX_BUFFER: { require(e.pipeline && !e.pipeline->compute && !e.pipeline->mesh && c.slot < e.pipeline->strides.size(), "vertex buffer requires a graphics pipeline layout"); auto& r = s.buffers.at(c.resource); require(c.a < r.size && r.size - c.a <= UINT_MAX, "vertex buffer range invalid");
         D3D12_VERTEX_BUFFER_VIEW view{r.native->GetGPUVirtualAddress()+c.a,UINT(r.size-c.a),e.pipeline->strides[c.slot]}; e.list->IASetVertexBuffers(c.slot,1,&view); break; }
     case GRHI_CMD_INDEX_BUFFER: { auto& r = s.buffers.at(c.resource); require(c.a < r.size && r.size-c.a <= UINT_MAX && c.a % (c.b ? 4 : 2) == 0, "invalid index range"); D3D12_INDEX_BUFFER_VIEW view{r.native->GetGPUVirtualAddress()+c.a,UINT(r.size-c.a),c.b ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT}; e.list->IASetIndexBuffer(&view); break; }

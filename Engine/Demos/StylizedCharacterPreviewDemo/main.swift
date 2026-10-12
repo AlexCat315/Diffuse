@@ -104,7 +104,6 @@ let renderer = try NativeRenderer(device: device)
 renderer.initialize()
 
 let settings = RenderSettings(
-    stage: .r5PostProcess,
     enableBloom: false,
     enableOffscreenViewport: true,
     enableStylizedCharacterShading: true,

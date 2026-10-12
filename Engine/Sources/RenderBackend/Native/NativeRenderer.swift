@@ -6,7 +6,7 @@ import SIMDCompat
 
 /// Scene renderer recorded entirely through NativeRHI. The initial migration
 /// supports opaque/masked/transparent meshes and animation, PBR lighting, directional shadows,
-/// HDR sky/tonemap, stylized materials/outline/paper, r5 post effects, temporal
+/// HDR sky/tonemap, stylized materials/outline/paper, post-processing effects, temporal
 /// history/cache, the grid, CPU-authored particle draws and resident GPU particle
 /// physics/events, GPU sorting, simulated-particle instance conversion and
 /// the installed GuavaUI HUD provider after scene post-processing.
@@ -71,20 +71,25 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             throw RHIError.unsupportedFeature("script HUD requires an installed in-game UI provider")
         }
         try meshes.synchronize()
-        let hdr = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r4LightingPBRShadow.rawValue
+        let hdr = packet.renderSettings.enablePBR
         if hdr || packet.renderSettings.debugViewMode == .shaded { try lighting.ensureEnvironment() }
         let shadowPlan = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: packet.scene, drawableSize: packet.drawableSize,
             enabled: hdr, settings: packet.renderSettings.shadowSettings, palettes: packet.jointPaletteMap, meshBounds: { meshes[$0]?.geometry.bounds })
         try shadows.ensureTargets(plan: shadowPlan)
         try ensureTargets(size: packet.drawableSize, hdr: hdr)
         guard let targets else { throw RHIError.outOfMemory }
-        if hdr { try post.ensureTargets(size: targets.size) }
+        // Post targets back the HDR ping-pong chain and, for an LDR scene, the
+        // FXAA input. They are allocated whenever the assembled pipeline needs
+        // them, independent of whether PBR is enabled.
+        if hdr || packet.renderSettings.enableFXAA {
+            try post.ensureTargets(size: targets.size, requirements: .make(packet.renderSettings))
+        }
         var nextFrame = frameState
         nextFrame.prepare(packet: packet,resources: RenderFrameResourceVersion(meshRevision: meshes.revision,postRevision: post.revision,
             usedSize: packet.drawableSize),hdr: hdr)
         try device.beginFrame()
         defer { device.endFrame() }
-        let hasDepth = packet.renderSettings.stage.rawValue >= RenderSettings.ReplacementStage.r2MultiObjectDepth.rawValue
+        let hasDepth = packet.renderSettings.enableDepthPrepass
         let commands = CommandBuffer()
         let simulationStart = DispatchTime.now().uptimeNanoseconds
         let simulation = try particleSimulation.prepare(scene: packet.scene,deltaTime: Float(packet.deltaTime),
@@ -107,7 +112,11 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         var passTimes: [RenderPassKind: UInt64] = [:]
         var passDraws: [RenderPassKind: Int] = [:]
         var active: [RenderPassKind] = []
-        var current = targets.hdr?.texture ?? color
+        // An LDR scene with FXAA renders into the LDR target so FXAA can read
+        // it and write the final color (a pass cannot read and write the same
+        // texture). Otherwise the scene renders straight into the color target.
+        var current = targets.hdr?.texture
+            ?? (packet.renderSettings.enableFXAA ? post.targets?.ldr : nil) ?? color
         var bloom: Texture?
         let planned = RenderFramePlanner.makePlan(settings: packet.renderSettings).passes
         let passes = RenderFramePlanner.motionRefinedPasses(planned,opaqueMoving: nextFrame.moving)
@@ -149,19 +158,21 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                         depth: RenderDepthTarget(texture: targets.depth.texture,loadAction: .load),into: commands)
                 }
             case .taa:
-                guard let resources = post.targets else { throw RHIError.outOfMemory }
+                guard let resources = post.targets, let history = resources.history else { throw RHIError.outOfMemory }
                 let output = resources.next(after: current)
-                try post.encode(kind: kind,input: current,secondary: resources.history,output: output,
+                try post.encode(kind: kind,input: current,secondary: history,output: output,
                     uniforms: PostEffectUniforms.taa(size: resources.size,historyValid: nextFrame.historyValid),size: packet.drawableSize,into: commands)
-                commands.copyPass { $0.copyTexture(src: output,dst: resources.history,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
+                commands.copyPass { $0.copyTexture(src: output,dst: history,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
                 nextFrame.historyValid = true; current = output
             case .transparentMeshes:
-                if hdr, let resources = post.targets, let scene = targets.hdr?.texture {
+                if hdr, let scene = targets.hdr?.texture {
                     if nextFrame.cacheHit {
-                        commands.copyPass { $0.copyTexture(src: resources.snapshot,dst: scene,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
+                        guard let snapshot = post.snapshot else { throw RHIError.outOfMemory }
+                        commands.copyPass { $0.copyTexture(src: snapshot,dst: scene,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
                         current = scene
                     } else if nextFrame.canCapture(settings: packet.renderSettings) {
-                        commands.copyPass { $0.copyTexture(src: current,dst: resources.snapshot,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
+                        let snapshot = try post.ensureSnapshot()
+                        commands.copyPass { $0.copyTexture(src: current,dst: snapshot,width: Int(packet.drawableSize.width),height: Int(packet.drawableSize.height)) }
                         nextFrame.snapshotValid = true
                     }
                 }

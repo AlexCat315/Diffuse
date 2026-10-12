@@ -11,7 +11,7 @@ struct NativeMeshBatchKey: Hashable {
     var cutoff: Float
     var doubleSided: Bool
     var mirrored: Bool
-    var color: SIMD4<Float>
+    var materialIndex: Int
     var baseTexture: Int?
     var normalTexture: Int?
     var mrTexture: Int?
@@ -51,7 +51,7 @@ enum NativeMeshBatchPlanner {
                 let isolated = !packet.renderSettings.enableMeshInstancing || material.alphaMode == .blend || posed || dynamic != nil
                 let key = NativeMeshBatchKey(mesh: meshIndex, firstIndex: Int(part.indexStart), indexCount: Int(part.indexCount),
                     mode: material.alphaMode, cutoff: material.cutoff, doubleSided: material.doubleSided,
-                    mirrored: simd_determinant(instance.transform) < 0, color: material.color,
+                    mirrored: simd_determinant(instance.transform) < 0, materialIndex: part.materialIndex,
                     baseTexture: material.baseTexture, normalTexture: material.normalTexture, mrTexture: material.mrTexture,
                     uniqueInstance: isolated ? index : nil)
                 if members[key] == nil { order.append(key) }
@@ -67,11 +67,13 @@ enum NativeMeshBatchPlanner {
                 let first = packet.scene.instances[indices[start]]
                 let dynamic = first.entity.flatMap { deformables[$0] }
                 guard let mesh = store[key.mesh] ?? dynamic.map({ NativeMesh(geometry: $0, materials: [.fallback], textures: [:]) }) else { continue }
+                let imported = mesh.materials.indices.contains(key.materialIndex) ? mesh.materials[key.materialIndex] : MeshMaterial.fallback
                 let uniforms = indices[start..<min(start + 16_384, indices.count)].map { index in
                     let instance = packet.scene.instances[index]
                     let mode: Float = key.mode == .blend ? 2 : key.mode == .mask ? 1 : 0
+                    let color = ResolvedMeshMaterial(imported: imported, runtime: instance.material).color
                     return MeshInstanceUniforms(mvp: viewProjection * instance.transform, model: instance.transform,
-                        colorTint: SIMD4(instance.colorTint * SIMD3(key.color.x,key.color.y,key.color.z), key.color.w),
+                        colorTint: SIMD4(instance.colorTint * SIMD3(color.x,color.y,color.z), color.w),
                         material: SIMD4(mode, key.cutoff, key.doubleSided ? 1 : 0, 0))
                 }
                 let position = first.transform.columns.3

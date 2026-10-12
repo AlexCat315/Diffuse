@@ -112,7 +112,7 @@ public enum RenderCommand: Sendable {
     case setPipeline(GraphicsPipeline)
     case setMeshPipeline(MeshPipeline)
     case drawMeshTasks(ThreadgroupSize)
-    case setBindingSet(slot: UInt32, set: BindingSet)
+    case setBindingSet(slot: UInt32, set: BindingSet, dynamicOffsets: [UInt32])
     case setVertexBuffer(slot: UInt32, buffer: Buffer, offset: Int)
     case setIndexBuffer(buffer: Buffer, offset: Int, type: IndexType)
     /// Small constants copied into per-frame upload storage and bound at the
@@ -127,7 +127,7 @@ public enum RenderCommand: Sendable {
 
 public enum ComputeCommand: Sendable {
     case setPipeline(ComputePipeline)
-    case setBindingSet(slot: UInt32, set: BindingSet)
+    case setBindingSet(slot: UInt32, set: BindingSet, dynamicOffsets: [UInt32])
     case pushConstant(stage: ShaderStage, slot: UInt32, data: Data)
     case dispatch(groupsX: Int, groupsY: Int, groupsZ: Int)
     case dispatchIndirect(buffer: Buffer, offset: Int)
@@ -210,8 +210,8 @@ public struct RenderPassEncoder {
         body.append(.setPipeline(pipeline))
     }
 
-    public mutating func setBindingSet(_ set: BindingSet, slot: UInt32 = 0) {
-        body.append(.setBindingSet(slot: slot, set: set))
+    public mutating func setBindingSet(_ set: BindingSet, slot: UInt32 = 0, dynamicOffsets: [UInt32] = []) {
+        body.append(.setBindingSet(slot: slot, set: set, dynamicOffsets: dynamicOffsets))
     }
 
     public mutating func setVertexBuffer(_ buffer: Buffer, offset: Int = 0, slot: UInt32 = 0) {
@@ -256,8 +256,8 @@ public struct ComputePassEncoder {
         body.append(.setPipeline(pipeline))
     }
 
-    public mutating func setBindingSet(_ set: BindingSet, slot: UInt32 = 0) {
-        body.append(.setBindingSet(slot: slot, set: set))
+    public mutating func setBindingSet(_ set: BindingSet, slot: UInt32 = 0, dynamicOffsets: [UInt32] = []) {
+        body.append(.setBindingSet(slot: slot, set: set, dynamicOffsets: dynamicOffsets))
     }
 
     public mutating func pushConstant<T>(stage: ShaderStage = .compute, slot: UInt32, value: T) {

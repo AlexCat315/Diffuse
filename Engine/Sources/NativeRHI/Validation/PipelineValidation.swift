@@ -23,11 +23,16 @@ extension PipelineInterfaces {
         guard let use = uses[id], use.kind == kind else { throw RHIError.invalidArgument("unknown pipeline or incorrect pipeline kind") }
         return use
     }
-    private func binding(_ id: UInt32, slot: UInt32, pipeline: PipelineUse?, caches: DeviceCaches) throws {
+    private func binding(_ id: UInt32, slot: UInt32, dynamicOffsets: [UInt32],
+                         pipeline: PipelineUse?, caches: DeviceCaches) throws {
         guard let pipeline, let descriptor = pipelines[pipeline.layout.id], Int(slot) < descriptor.setLayouts.count,
               descriptor.setLayouts[Int(slot)].id == caches.bindingSetLayoutID(id) else {
             throw RHIError.layoutMismatch("binding set must match the active pipeline's declared set layout")
         }
+        let setLayout = descriptor.setLayouts[Int(slot)]
+        let dynamicCount = bindings[setLayout.id]?.entries.filter { $0.buffer.hasDynamicOffset }.count ?? 0
+        try rhiRequire(dynamicOffsets.count == dynamicCount,
+                       "dynamic offset count must match the binding layout")
     }
     private func constants(_ data: Data, slot: UInt32, stage: ShaderStage, pipeline: PipelineUse?) throws {
         guard let pipeline, let descriptor = pipelines[pipeline.layout.id],
@@ -47,7 +52,8 @@ extension PipelineInterfaces {
                     throw RHIError.unsupportedFeature("mesh commands are not implemented by this backend")
                 }
                 pipeline = try use(handle.id, kind: .mesh)
-            case .setBindingSet(let slot, let handle): try binding(handle.id, slot: slot, pipeline: pipeline, caches: caches)
+            case .setBindingSet(let slot, let handle, let dynamicOffsets):
+                try binding(handle.id, slot: slot, dynamicOffsets: dynamicOffsets, pipeline: pipeline, caches: caches)
             case .pushConstant(let stage, let slot, let data): try constants(data, slot: slot, stage: stage, pipeline: pipeline)
             case .setIndexBuffer(_, let offset, let type):
                 try rhiRequire(offset >= 0 && offset % (type == .uint32 ? 4 : 2) == 0, "invalid index buffer offset"); indexed = true
@@ -81,7 +87,8 @@ extension PipelineInterfaces {
         for command in commands {
             switch command {
             case .setPipeline(let handle): pipeline = try use(handle.id, kind: .compute)
-            case .setBindingSet(let slot, let handle): try binding(handle.id, slot: slot, pipeline: pipeline, caches: caches)
+            case .setBindingSet(let slot, let handle, let dynamicOffsets):
+                try binding(handle.id, slot: slot, dynamicOffsets: dynamicOffsets, pipeline: pipeline, caches: caches)
             case .pushConstant(let stage, let slot, let data): try constants(data, slot: slot, stage: stage, pipeline: pipeline)
             case .dispatch(let x, let y, let z):
                 try rhiRequire(pipeline != nil && x > 0 && y > 0 && z > 0, "dispatch requires a pipeline and positive workgroups")
