@@ -1,14 +1,14 @@
 """Shared tool discovery for the Swift 6.4 Android validation programs."""
+import json
 import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'Engine/build/android-validation'
-SDK_ID = 'swift-6.4.0-RELEASE_android'
-TRIPLE = 'aarch64-unknown-linux-android28'
 
 
 def run(arguments, **options):
@@ -44,20 +44,17 @@ def build(product, ndk, configuration='debug'):
     swift = os.environ.get('GUAVA_SWIFT_EXECUTABLE', shutil.which('swift'))
     if not swift:
         raise ValueError('Install the Swift 6.4.0 release toolchain and add swift to PATH')
-    version = subprocess.check_output([swift, '--version'], text=True)
-    if 'swift-6.4-RELEASE' not in version and 'swift-6.4.0-RELEASE' not in version:
-        raise ValueError('Select the Swift 6.4.0 release toolchain to match the Android SDK')
-    from fonts import prepare
-    font_vendor = prepare(ndk)
-    from native import prepare as prepare_native
-    engine_vendor = prepare_native(ndk)
-    environment = dict(os.environ, ANDROID_NDK_HOME=str(ndk),
-                       GUAVA_TEXT_ARTIFACT_ROOT=os.path.relpath(font_vendor, ROOT / 'GuavaUI/Text'),
-                       GUAVA_ENGINE_ARTIFACT_ROOT=os.path.relpath(engine_vendor, ROOT / 'Engine'))
-    arguments = [swift, 'build', '--package-path', ROOT / 'Android', '--swift-sdk', SDK_ID,
-                 '--triple', TRIPLE, '--static-swift-stdlib', '--configuration', configuration, '--jobs', '4']
-    run(arguments + ['--product', product], env=environment)
-    return Path(subprocess.check_output(list(map(str, arguments + ['--show-bin-path'])), env=environment, text=True).strip())
+    # Python is only used by repository verification. Production build ownership
+    # lives in the Swift CLI, including native dependencies and artifact staging.
+    descriptor, result_name = tempfile.mkstemp(prefix='compile-', suffix='.json', dir=OUTPUT)
+    os.close(descriptor)
+    result = Path(result_name)
+    arguments = [swift, 'run', '--package-path', ROOT / 'Android/Tools', 'GuavaAndroid', 'compile',
+                 '--product', product, '--ndk', ndk, '--configuration', configuration, '--result-file', result]
+    try:
+        run(arguments)
+        return Path(json.loads(result.read_text())['products'])
+    finally: result.unlink(missing_ok=True)
 
 
 def adb_device(sdk, serial=None):

@@ -1,0 +1,25 @@
+// swift-tools-version: 6.4
+import Foundation
+import PackageDescription
+
+let engineRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ROOT"] ?? {{ENGINE_ROOT}}
+
+let package = Package(
+    name: "GuavaAndroidContent",
+    products: [.library(name: "GuavaAndroidContent", targets: ["GuavaAndroidContent"])],
+    dependencies: [
+        .package(path: "\(engineRoot)/GuavaUI"),
+        .package(path: "\(engineRoot)/Engine"),
+    ],
+    targets: [
+        .target(
+            name: "GuavaAndroidContent",
+            dependencies: [
+                .product(name: "GuavaUICompose", package: "GuavaUI"),
+                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
+                .product(name: "EngineKernel", package: "Engine"),
+            ],
+            resources: [.copy("Assets")]
+        ),
+    ]
+)

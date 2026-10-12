@@ -12,24 +12,71 @@ swift sdk list
 export ANDROID_NDK_HOME=/absolute/path/to/android-ndk-r30
 ```
 
-主机需要 CMake、Ninja、Python 3，以及匹配的 Swift 6.4.0 release。已用 macOS ARM64 和 JDK 21 验证。Android SDK 需要 `platform-tools`、`platforms;android-36`、`build-tools;36.1.0`，NDK 版本为 `30.0.16248370`。`--android-sdk` / `--ndk` 可覆盖自动发现路径；`GUAVA_SWIFT_EXECUTABLE` 可指定 Swift 可执行文件。
+使用方构建需要 CMake、Ninja、JDK 21，以及匹配的 Swift 6.4.0 release；无需 Python。Android SDK 需要 `platform-tools`、`platforms;android-36`、`build-tools;36.1.0`，NDK 版本为 `30.0.16248370`。`--android-sdk` / `--ndk` 可覆盖自动发现路径；`GUAVA_SWIFT_EXECUTABLE` 可指定 Swift 可执行文件。Swift CLI 当前面向 macOS / Linux 构建主机；Windows 主机尚未接入。
 
 ```sh
 git submodule update --init Engine/third-party/sdl3 Engine/third-party/jolt GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
-python3 -m venv Engine/build/android-validation/verify-venv
-Engine/build/android-validation/verify-venv/bin/python -m pip install Pillow
 ```
 
-构建脚本从仓库固定源码构建 SDL3、Jolt、lunasvg / plutovg、WebP、FreeType 和 HarfBuzz。Android artifact bundles 位于忽略的 `Engine/build/android-validation/native/vendor` 和 `fonts/vendor`，通过 `GUAVA_ENGINE_ARTIFACT_ROOT` / `GUAVA_TEXT_ARTIFACT_ROOT` 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
+`Android/Tools` 是不依赖 UI / 引擎二进制的独立 Swift 工具包。它直接调用 SwiftPM、CMake、JDK 和 Android SDK，不调用 Python。原生依赖从仓库固定源码构建 SDL3、Jolt、lunasvg / plutovg、WebP、FreeType 和 HarfBuzz。Android artifact bundles 位于忽略的 `Engine/build/android-validation/native/vendor` 和 `fonts-cmake/vendor`，通过 `GUAVA_ENGINE_ARTIFACT_ROOT` / `GUAVA_TEXT_ARTIFACT_ROOT` 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
 
 参考 [Swift Android SDK 官方说明](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html)、[Swift 6.4 发布说明](https://www.swift.org/blog/swift-6.4-released/)、[SDL Android 宿主约定](https://wiki.libsdl.org/SDL3/README-android)。
+
+## 使用自己的 GuavaUI 根视图
+
+创建独立应用，无需修改引擎里的 Gallery 或 Android 宿主：
+
+```sh
+swift run --package-path Android/Tools GuavaAndroid create \
+  --directory /absolute/path/to/MyApp \
+  --application-id com.example.myapp --name 'My App'
+cd /absolute/path/to/MyApp
+swift android.swift --install --serial DEVICE_SERIAL
+```
+
+脚手架包含可编辑的根视图、按钮 / 状态 / 文本输入示例、资源目录、应用配置和构建入口。仓库中的 [GuavaUIStarter](../examples/GuavaUIStarter/README.md) 是同一模板生成的完整项目，可直接打开并修改。
+
+使用方只需在自己的 `GuavaAndroidContent` 模块导出入口：
+
+```swift
+import GuavaUICompose
+import GuavaUIRuntime
+
+public enum ApplicationContent {
+    public static func makeRoot() -> some View {
+        MyRootView()
+    }
+}
+```
+
+`MyRootView` 可以来自已有的桌面 / 共享 UI 模块。宿主在 Compose、文本、图像和输入环境中安装根视图，复用 Gallery 的 LayerAware renderer、触摸滚动、长按、TextField IME、窗口密度与生命周期处理。使用方无需自行操作 Device、JNI 或 ANativeWindow。
+
+`guava-android.json` 保存 `application_id` 与 `name`；`Package.swift` 导出名为 `GuavaAndroidContent` 的 library product / module，包目录可任意命名。已有 Swift Package 也可添加上述入口与配置后直接构建：
+
+```sh
+swift run --package-path Android/Tools GuavaAndroid build --app /absolute/path/to/MyApp \
+  --configuration release --output /absolute/path/to/MyApp.apk
+```
+
+项目内 `swift android.swift` 默认输出 `build/Application.apk` 及相邻 JSON 构建报告。可传 `--android-sdk`、`--ndk`、`--application-id`、`--name` 和与游戏导出相同的签名参数。自定义应用具有独立的 Swift 构建缓存，构建工具显式选择应用模块，避免从上一轮 Gallery / 游戏构建继承内容。
+
+SwiftPM resource bundles 自动打包并解包；模板的 `AppResources.bundle` 通过 `PackageResourceBundle` 定位，Debug / Release 通用。移动项目或引擎目录后，设置绝对路径 `GUAVA_ENGINE_ROOT` 即可让 launcher 与 SwiftPM 指向同一引擎。根视图状态在存活进程的暂停 / 旋转间保留，进程死亡后的业务状态持久化由应用负责。系统权限、图标、通知和商店发布需要应用进一步集成。
+
+Swift CLI、使用方脚手架、自定义根视图入口及字体 CMake 构建路径在停止验证后新增，本轮未编译或进行真机验证；下文的验收结果对应迁移前的 Gallery / SharedCounter / CrystalRush。
 
 ## Gallery 与真机验收
 
 在仓库根目录执行，设备须完成 USB 调试授权。多设备时指定 `--serial`。
 
 ```sh
-python3 scripts/android/build-app.py --install --serial DEVICE_SERIAL
+swift run --package-path Android/Tools GuavaAndroid build --install --serial DEVICE_SERIAL
+```
+
+以下仅为仓库内部验收，需要 Python 3；截图比较额外需要 Pillow。使用 GuavaUI 和构建 / 导出应用无需安装它们。
+
+```sh
+python3 -m venv Engine/build/android-validation/verify-venv
+Engine/build/android-validation/verify-venv/bin/python -m pip install Pillow
 Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-gallery.py --serial DEVICE_SERIAL
 Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-demo.py --serial DEVICE_SERIAL
 python3 scripts/android/validate.py --serial DEVICE_SERIAL
@@ -50,7 +97,7 @@ python3 scripts/android/validate.py --serial DEVICE_SERIAL
 导出入口接受普通 Guava 项目目录。项目的 `.guava/editor-scene-manifest.json` 必须使用当前场景格式，脚本绑定必须可解析。
 
 ```sh
-python3 scripts/android/export-game.py \
+swift run --package-path Android/Tools GuavaAndroid export-game \
   --project examples/CrystalRush \
   --application-id com.guava.game.crystalrush \
   --name 'Crystal Rush' \
@@ -67,7 +114,7 @@ APK 包含 Player 可加载的场景 save document、asset index、模型及其�
 Release 构建与签名：
 
 ```sh
-python3 scripts/android/export-game.py \
+swift run --package-path Android/Tools GuavaAndroid export-game \
   --project /absolute/path/to/MyGame \
   --application-id com.example.mygame \
   --output /absolute/path/to/MyGame.apk \

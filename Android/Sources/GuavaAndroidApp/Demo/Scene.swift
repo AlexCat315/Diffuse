@@ -6,6 +6,9 @@ import GuavaUICompose
 import GuavaUIGallery
 import GuavaUIRuntime
 import NativeRHI
+#if GUAVA_ANDROID_UI
+import GuavaAndroidContent
+#endif
 
 /// Owns Compose, layout and input state independently of an Android surface.
 final class DemoScene {
@@ -70,14 +73,23 @@ final class DemoScene {
             let values = try JSONDecoder().decode([String: String].self, from: data)
             if launch.mode == .counter {
                 guard counter.restore(values) else { throw CocoaError(.coderReadCorrupt) }
-            } else if let page = values["page"].flatMap(GalleryCatalog.page(named:)) { gallery.selectPage(page) }
+            } else if launch.mode == .gallery, let page = values["page"].flatMap(GalleryCatalog.page(named:)) { gallery.selectPage(page) }
         }
-        withCurrent {
-            if launch.mode == .gallery { graph.install(root: gallery) }
-            else if launch.mode == .counter { graph.install(root: counter.compositionLocal(SharedDemoText.painter, { [weak self] text, list, origin in
+        try withCurrent {
+            switch launch.mode {
+            case .gallery: graph.install(root: gallery)
+            case .counter: graph.install(root: counter.compositionLocal(SharedDemoText.painter, { [weak self] text, list, origin in
                 guard let self else { return }
                 typography.paint(text, into: list, origin: origin, scale: scale)
-            })) }
+            }))
+            case .application:
+                #if GUAVA_ANDROID_UI
+                graph.install(root: LayerRoot { ApplicationContent.makeRoot() })
+                #else
+                throw RHIError.unsupportedFeature("build this UI application's APK with GuavaAndroid build --app PATH (Android/Tools)")
+                #endif
+            case .game: break
+            }
         }
     }
 
@@ -134,8 +146,8 @@ final class DemoScene {
             list.pixelScale = self.scale
             typography.beginFrame()
             if let root = tree.root {
-                if launch.mode == .gallery { LayerAwareNodeRenderer().render(tree: graph.renderTree, into: list) }
-                else { NodeRenderer().render(root: root, into: list) }
+                if launch.mode == .counter { NodeRenderer().render(root: root, into: list) }
+                else { LayerAwareNodeRenderer().render(tree: graph.renderTree, into: list) }
             }
             if typography.fonts.atlas.isFull, let root = tree.root {
                 typography.fonts.atlas.reset()
@@ -207,7 +219,7 @@ final class DemoScene {
         }
         if let root = tree.root { visit(root) }
         let focus = context.focusChain.focused
-        let value = Snapshot(session: sessionID, state: launch.mode == .counter ? counter.checkpoint : ["page": gallery.currentPage.rawValue],
+        let value = Snapshot(session: sessionID, state: checkpointState,
             focused: focus.map { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String ?? "field.\($0.id)" },
             preedit: focus?.attachments["preedit"] as? String ?? "", controls: controls,
             width: size.x, height: size.y, scale: scale, typography: typography.statistics,
@@ -216,5 +228,13 @@ final class DemoScene {
             game: game?.snapshot(), editor: editorSnapshot, nodes: semanticNodes())
         guard let data = try? JSONEncoder().encode(value) else { return "{}" }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    private var checkpointState: [String: String] {
+        switch launch.mode {
+        case .counter: return counter.checkpoint
+        case .gallery: return ["page": gallery.currentPage.rawValue]
+        case .game, .application: return [:]
+        }
     }
 }
