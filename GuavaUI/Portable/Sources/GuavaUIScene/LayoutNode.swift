@@ -34,7 +34,7 @@ public final class LayoutNode: @unchecked Sendable {
     public private(set) var children: [LayoutNode] = []
 
     public private(set) weak var parent: LayoutNode?
-    private var subtreeLayoutDirtyHint = false
+    var calculation = LayoutCalculationState()
 
     /// Side table for style metadata that affects measurement but is not part
     /// of Yoga's native style surface.
@@ -107,14 +107,15 @@ public final class LayoutNode: @unchecked Sendable {
     // MARK: - Tree
 
     public func addChild(_ child: LayoutNode) {
-        YGNodeInsertChild(ygNode, child.ygNode, children.count)
+        if calculation.custom == nil { YGNodeInsertChild(ygNode, child.ygNode, children.count) }
         child.parent = self
         children.append(child)
         markLayoutDirtyHint()
     }
 
     public func removeChild(_ child: LayoutNode) {
-        YGNodeRemoveChild(ygNode, child.ygNode)
+        if calculation.custom == nil { YGNodeRemoveChild(ygNode, child.ygNode) }
+        calculation.custom?.remove(child)
         let previousCount = children.count
         children.removeAll { $0 === child }
         if children.count != previousCount {
@@ -141,11 +142,11 @@ public final class LayoutNode: @unchecked Sendable {
         // parent across the reorder; we rebuild the sequence under the same
         // YGNode. Children's heap allocations stay alive via `self.children`
         // throughout.
-        for c in children {
-            YGNodeRemoveChild(ygNode, c.ygNode)
-        }
-        for (index, c) in ordered.enumerated() {
-            YGNodeInsertChild(ygNode, c.ygNode, index)
+        if calculation.custom == nil {
+            for c in children { YGNodeRemoveChild(ygNode, c.ygNode) }
+            for (index, c) in ordered.enumerated() {
+                YGNodeInsertChild(ygNode, c.ygNode, index)
+            }
         }
         children = ordered
         markLayoutDirtyHint()
@@ -444,19 +445,25 @@ public final class LayoutNode: @unchecked Sendable {
         availableHeight: Float = Float.nan,
         direction: Direction = .ltr
     ) {
+        prepareCustomLayouts()
         YGNodeCalculateLayout(ygNode, availableWidth, availableHeight, direction.ygValue)
+        placeCustomLayouts()
         clearLayoutDirtyHints()
     }
 
     /// True when this node or any descendant still needs a Yoga layout pass.
     public var subtreeIsDirty: Bool {
-        subtreeLayoutDirtyHint || YGNodeIsDirty(ygNode)
+        calculation.subtreeDirty || YGNodeIsDirty(ygNode)
     }
 
     // MARK: - Layout readback
 
     /// The computed rectangle. Valid only after `calculateLayout()` has been called.
     public var frame: CGRect {
+        calculation.placedFrame ?? yogaFrame
+    }
+
+    var yogaFrame: CGRect {
         CGRect(
             x: Double(YGNodeLayoutGetLeft(ygNode)),
             y: Double(YGNodeLayoutGetTop(ygNode)),
@@ -550,16 +557,20 @@ public final class LayoutNode: @unchecked Sendable {
     }
 
     private func markLayoutDirtyHint() {
-        guard !subtreeLayoutDirtyHint else { return }
-        subtreeLayoutDirtyHint = true
+        // Custom containers are Yoga leaves; their authored children live in
+        // independent Yoga trees. Forward invalidation across that boundary.
+        if calculation.custom != nil, !YGNodeIsDirty(ygNode) { YGNodeMarkDirty(ygNode) }
+        calculation.custom?.invalidate()
+        guard !calculation.subtreeDirty else { return }
+        calculation.subtreeDirty = true
         parent?.markLayoutDirtyHint()
     }
 
     private func clearLayoutDirtyHints() {
-        guard subtreeLayoutDirtyHint else { return }
-        subtreeLayoutDirtyHint = false
+        guard calculation.subtreeDirty else { return }
+        calculation.subtreeDirty = false
         for child in children {
-            if child.subtreeLayoutDirtyHint {
+            if child.calculation.subtreeDirty {
                 child.clearLayoutDirtyHints()
             }
         }

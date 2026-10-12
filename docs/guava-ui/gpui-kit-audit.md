@@ -1,6 +1,6 @@
 # GuavaUI 与 GPUI Kit 对照审计
 
-审计更新：2026-10-12（继续核对原生滚动输入；各阶段结论按文内日期区分，2026-10-08 的部分结论已过时）。参照 [GPUI Kit](https://gpui-kit.com/)、[上游代码](https://github.com/longbridge/gpui-kit) 和本机 `/Users/alex/gpui-kit-main` 快照。逐项清单来自该快照 `crates/story/src/gallery.rs` 的 79 个 Story 注册项；Story 包含欢迎页、主题页和平台特定功能，不能当作 79 个独立组件。GuavaUI 在本轮修改前有 70 个 Story，本轮补 Skeleton 展示与 Stepper 后有 72 个 Story，同样不是 72 个完全独立组件。
+审计更新：2026-10-12（继续补齐 Workspace 尺寸与通用测量/容器；各阶段结论按文内日期区分，2026-10-08 的部分结论已过时）。参照 [GPUI Kit](https://gpui-kit.com/)、[上游代码](https://github.com/longbridge/gpui-kit) 和本机 `/Users/alex/gpui-kit-main` 快照。逐项清单来自该快照 `crates/story/src/gallery.rs` 的 79 个 Story 注册项；Story 包含欢迎页、主题页和平台特定功能，不能当作 79 个独立组件。GuavaUI 在本轮修改前有 70 个 Story，本轮补 Skeleton 展示与 Stepper 后有 72 个 Story，同样不是 72 个完全独立组件。
 
 **结论：GuavaUI 目前没有 GPUI Kit 那样完整，也没有足够依据声称质量相当。** GuavaUI 已有可用的输入编辑、虚拟化、浮层、树和工作区基础；更大的差距在完整的产品组件、统一状态契约、辅助功能、性能证据和示例覆盖。旧组件文档的“✅”仅代表写过设计文档，不代表行为完成或生产成熟度。
 
@@ -48,7 +48,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 
 - **跨平台辅助功能。** `NativeAccessibility.swift` 的桥接实现受 `#if os(macOS)` 限制；Windows UI Automation 和 Linux AT-SPI 尚无对应实现。macOS 有角色、动作及惰性文本值，不等于所有平台已完成。
 - **语义 modifier 的重组契约。** 本轮 Link/Stepper 用稳定的语义 provider 解决各自问题；普通外层 `.accessibility { ... }` 仍可能被内部 primitive 的独立重组写入覆盖。需要统一基础设施与移除 modifier 的清理规则，不能把逐控件 workaround 当成最终框架方案。
-- **本地化与 RTL。** `LocalizedStringKey` 解决 Bundle 文案查询，Calendar 有 locale；组件的内置标签/提示还大量使用英文，没有统一 locale 及布局方向契约。键盘方向、图标方向、数值/日期格式与文案都应成套验证。
+- **本地化与 RTL。** `LocalizedStringKey` 解决 Bundle 文案查询，Calendar 有 locale；组件的内置标签/提示还大量使用英文；已新增基础布局方向与逻辑 padding，但没有统一 locale，也未完成全部控件 RTL。键盘方向、图标方向、数值/日期格式与文案都应成套验证。
 - **动画和后台活动。** 本轮补会话取消证据，现有 Spinner/Progress/Skeleton 尊重减少动画；仍需整个框架的离屏/后台暂停策略及长时间资源曲线。
 - **动态数据与规模。** 搜索/选择组件尚无一致的加载、取消、错误、重试和旧结果丢弃协议；固定行高列表不能代替可变行高。图库/字体/图像长期缓存、长时间滚动及多个窗口资源隔离也需要进一步证据。
 - **浏览器和集成测试。** Portable/Wasm 有共享示例和测试，但还不是完整原生组件画廊的等价运行。现在有 dispatcher 测试和 DevTools 真实绘制回放，仍缺统一可维护的跨平台输入/语义/视觉回归矩阵。
@@ -57,7 +57,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 
 不能用“有同名类型”或“Story 能创建节点”判定完成。每个组件都要分别核查：默认值和非法输入；受控更新/动态删项/空数据；鼠标、捕获取消与键盘；禁用、只读、加载/错误和销毁；辅助功能；明暗主题、四档尺寸、长文案和窄宽度；需要异步时的取消/重试/旧结果；实际窗口中的完整示例与对应回归。
 
-后续按基础风险排序推进：先统一语义 modifier 与 locale/方向契约；再完善 Command/HoverCard/Toolbar/Carousel 的剩余扩展及原生验收；随后完成 OtpInput、DescriptionList、Clipboard/DropdownButton、Attachment；再做选择/范围输入、可变行高/远端数据；最后推进消息体系/富文本/Diff/复杂图表。每一步单独给出行为和视觉证据，尚未实现的项继续标为缺口。
+后续按基础风险排序推进：先统一语义 modifier 与 locale/方向契约；再完善 Command/HoverCard/Toolbar/Carousel 的剩余扩展及原生验收；随后完成 OtpInput、DescriptionList、Clipboard/DropdownButton、Attachment；再做选择/范围输入、未知高度自动估测/远端加载；最后推进消息体系/富文本/Diff/复杂图表。每一步单独给出行为和视觉证据，尚未实现的项继续标为缺口。
 
 ## 逐项对应
 
@@ -89,7 +89,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | DescriptionList | PropertyGrid | 编辑型属性网格存在；缺独立只读描述列表 |
 | Dialog | Dialog / Modal | 标题、描述、内容/操作槽、关闭策略、焦点约束与模态辅助功能隔离已有 |
 | Diff | — | 缺少差异编辑器 |
-| Dock | GuavaUIWorkspace | 外层区域、标签拖拽和序列化已有；本轮补内部拆分的 pointer/键盘/辅助功能与持久化，移除重复 layoutTree；面板尺寸协议、标签溢出、跨窗口仍不完整，见 [Workspace](../components/workspace.md) |
+| Dock | GuavaUIWorkspace | 已补 typed 面板 minimum/preferred/maximum 持久化、内外拆分限值与键盘/AX、标签溢出与字体缩放；浮动仍是宿主内面板，独立系统窗口和跨窗口拖拽未完成，见 [Workspace](../components/workspace.md) |
 | DropdownButton | Button + Popover | 可组合；没有标准分裂按钮 |
 | Editor | TextField codeEditing / ScriptCodeEditor | 已迁移 Binding<TextBuffer>、可见行布局与共享根历史；后台 Tree-sitter、真实 LSP 诊断/补全/hover 已接线；200K 行原生连续输入 30 秒、撤销/重做与 Instruments 采样已验证；已验证真实进程中断、有限重连、未保存根保留和手动恢复。仍缺搜索/替换、多光标、折叠和完整 snippet 导航，不能等同上游成熟度 |
 | Empty | EmptyState | 已有标题、说明和操作槽；仍需更多图形/紧凑场景和窄宽布局验收 |
@@ -117,7 +117,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | Questionnaire | — | 缺少问卷 |
 | Radio | RadioGroup | 受控选择、禁用、单 Tab 停靠及箭头实际焦点移动已有 |
 | Rating | Rating / RatingSelection / RatingAppearance | 新增整星/半星、预览、捕获取消、单个 Tab 停靠点、键盘边界、只读分数及 SVG 密度；原生明暗展示/键盘/辅助功能写入及鼠标命中/预览/拖动/取消已验证；不含 RTL/其他评分图形 |
-| Resizable | SplitView / ResizableEditor / Workspace | SplitView 原已有 Binding/拖动/键盘，本轮补逻辑点双面板最小尺寸、窗口不足时的退让及精确拖动分母；Workspace 内部拆分现在可调整；仍缺 N 面板联动、Workspace 面板尺寸协议和吸附/折叠阈值 |
+| Resizable | SplitView / ResizableEditor / Workspace | SplitView 原已有 Binding/拖动/键盘，本轮补逻辑点双面板最小尺寸、窗口不足时的退让及精确拖动分母；Workspace 内外拆分现共用面板尺寸协议；SplitConstraints 已有双面板 min/max 和不可满足时退让；仍缺 N 面板联动和吸附/折叠阈值 |
 | Scrollbar | ScrollView 内置 | macOS 已补原生单位、finger/momentum phase 与直接位移，消除重复惯性；有 phase 的流保持消费者，thumb 释放原地停止。自定义手势保留解析物理，绘制缓存有离屏剔除。Windows/Linux 原生精确协议、真实设备验收、统一 ScrollHandle、独立滚动条及公开 smooth scrollTo 仍缺，见下方后续修正 |
 | Select | Select / EnumField | 已有类型化单选和键盘；缺多选、搜索、异步选项 |
 | Separator | Divider | 已有水平/垂直分隔 |
@@ -143,7 +143,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | Toolbar | Toolbar / ToolbarGroup / ToolbarSeparator | 原已有组件；缺陷是禁用只改外观且无键盘策略。本轮补整树输入禁用、捕获/焦点取消、语义组、密度、Left/Right/Home/End，文本输入保留光标键优先级；默认 ghost 样式并修复 Spacer 伸展。仍缺响应式溢出菜单和单 Tab 停靠策略 |
 | Tooltip | Tooltip / Button.tooltip | 按钮与通用提示共用延迟、hover/键盘焦点及 Portal 会话；自然宽度/最大宽度、窗口翻转、Escape/点击关闭、禁用/卸载清理已有；坐标/范围锚定接入编辑器 hover |
 | Tree | Tree | 分组配置/会话、虚拟化、多选/搜索/拖拽与 treeItem/expanded 语义已有；仍需大规模实测和细节审查 |
-| VirtualList | VirtualList / VirtualStack | 已有固定行高窗口化和定位；缺可变行高与加载语义 |
+| VirtualList | VirtualList / VirtualStack / VariableVirtualStack | 已有固定行高；新增已知可变行高、累计索引窗口化、稳定 ID 锚点和文字缩放失效；未知高度自动测量、加载/取消/错误语义仍缺 |
 
 ## 既有实现记录（2026-10-08，性能证据按链接中的原口径）
 
@@ -185,6 +185,24 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 4. 继续补齐 Attachment、Bubble/Message、MessageScroller、OtpInput、DescriptionList、DropdownButton、Shimmer、Questionnaire 等组件，以及 Diff/富文本/复杂图表。Carousel、Command、HoverCard、Skeleton 已存在，Stepper 本轮新增；这些仍有明确缺口，不能再次把它们简单列为“没有”或“已完全完成”。
 
 已有测试验证本仓库行为，不是上游性能或品质等价证明。缺失/部分项继续保持明确，避免外观占位或仅注册 Story 就宣布完成。
+
+## Workspace 尺寸与通用布局续补（2026-10-12）
+
+本阶段继续阅读本机 GPUI Kit 的 `base/resizable/panel.rs`、`dock/` 与 `virtual_list.rs`，以及 Motrix MyGo 的 `dashboard.go`。吸收的是尺寸区间、已知各项大小的可见范围窗口化、Row/Column 与裁剪组合；没有机械移植 Rust/Go 类型。本节更新以下历史阶段曾标为缺失的项目，其余产品组件缺口继续有效。
+
+| 能力 | 本阶段实现 | 仍有边界 |
+| --- | --- | --- |
+| Workspace 面板尺寸 | width/height 各自的 minimum/preferred/maximum 值组，直接 Codable；内外拆分与浮动布局使用面板约束，保存的用户拆分优先于 preferred | preferred 是初始提示；填满式布局遇到总 minimum/maximum 不可满足时确定性退让；浮动面板仍不等于独立系统窗口 |
+| 外部区域调整 | 外层调整柄使用实际区域几何，与 pointer、方向键/Home/End、辅助功能增减共享限制 | 完整跨平台辅助技术与系统多窗口仍需验收 |
+| 标签与字体缩放 | 标签条可横向滚动，保留可访问的完整标题，标题/动作尺寸随文字缩放 | 全产品组件 200% 与完整 RTL 不因此完成 |
+| 公开布局契约 | Layout、ProposedViewSize、LayoutSubview 和 LayoutContainer；不暴露 Node/内部状态给使用者；嵌套布局与 Flex 组合，有界测量缓存与子树失效 | GeometryReader、baseline/alignment guides、Anchor/Masonry 仍缺 |
+| 通用 Grid | fixed/flexible/adaptive 列、真实内容行高、间距/对齐和基础 RTL；PropertyGrid 仍是专用属性编辑器 | span、显式 intrinsic 轨道、二维窗口化未实现 |
+| LazyGrid | 等宽列、已知固定/可变行高、仅可见行加 overscan 构建；固定行 O(1)、可变行累计索引 O(log n) 定位 | 未知高度自动估测、横向窗口化和加载协议未实现 |
+| 可变行高布局 | VariableVirtualStack 的 exact rowHeight 回调获得内容宽度与 TextScaler；Fenwick 索引、稳定 ID 锚点、数据/宽度/缩放失效、远端定位 | 数据/测量输入改变时 O(n) 同步；普通滚动不重扫；未知高度自动测量和远端加载仍缺 |
+| 响应式候选布局 | LayoutThatFits 为同一组子视图选择首个能容纳的 Layout，保留节点、焦点和状态；StackLayout 提供自然尺寸候选 | 不是多套内容的 ViewThatFits，也未提供通用 container query |
+| 方向与 insets | layoutDirection 贯通 Flex/自定义布局，padding leading/trailing 使用逻辑边；SafeArea 嵌套消费宿主 insets 一次 | 宿主需提供 insets；没有自动平台刘海/软键盘检测，组件键盘/图标方向和 bidi 文字仍需逐项补齐 |
+
+代码与使用边界见 [布局](../components/layout.md)、[Workspace](../components/workspace.md)、[可变行高](variable-virtual-layout.md)、[响应式布局](responsive-layout.md)。本轮画廊复用 Layout/Workspace 页提供真实示例，没有把新增类型数量作为完成度依据。Attachment、消息体系、OtpInput、DescriptionList、DropdownButton、Shimmer、Questionnaire、Diff/富内容等产品组件未在本阶段实现。
 
 
 ### 后续修正：图标缩放与折叠容器（2026-10-11）
@@ -233,7 +251,7 @@ Sidebar 仍不能宣称与上游等价：折叠为纯图标、嵌套分支、上
 
 GuavaUI docking 实际公开 API 已是 Workspace，没有必要改回 Dock。旧 dock.md 仍描述已删除类型和旧能力状态，本轮替换为 workspace.md。实际代码进一步确认内部 split 只有布局空隙；本轮补调整柄、持久化目标地址、失效目标处理和真实事件回归，并删除未被使用且会脱节的重复 layoutTree，迁移 Editor、Gallery、测试中的所有初始化。
 
-布局能力与缺口详见 [布局容器](../components/layout.md)。已有 Flex/换行、双面板、滚动、工作区和专用窗口化；缺 Grid/LazyGrid、公开自定义 measure/propose/place、GeometryReader、统一容器查询/ViewThatFits、可变行高窗口化、公共层叠容器、SafeArea 与 RTL。PropertyGrid 是专用属性编辑布局，不能充当通用 Grid。
+这是滚动与布局基础复核阶段的状态：当时已有 Flex/换行、双面板、滚动、工作区和专用窗口化。之后的 [Workspace 尺寸与通用布局续补](#workspace-尺寸与通用布局续补2026-10-12) 已新增公开 measure/propose/place、Grid/LazyGrid、已知可变行高窗口化、SafeArea 与基础 RTL；GeometryReader、统一容器查询、多套内容 ViewThatFits 和公共层叠容器仍缺。当前边界详见 [布局容器](../components/layout.md)。PropertyGrid 始终是专用属性编辑布局，不能充当通用 Grid。
 
 原生测量、环境、统计及边界见 [本轮证据](evidence/scroll-layout/README.md)。不能把确定性运动测试通过、离屏剔除生效或单个 Release 场景的数据写成“所有滚动均不掉帧”。
 
@@ -248,4 +266,4 @@ GuavaUI docking 实际公开 API 已是 Workspace，没有必要改回 Dock。�
 
 有 phase 的滚动流保持消费者；点击、mayBegin、取消或失焦阻止旧系统惯性，移除目标或 modal 接管不把旧流交给其他视口。新手势可以立即反向开始。自定义手势仍可显式使用 ScrollAnimator 的惯性/弹簧；原生 wheel 不走 quiet-window 推断。
 
-最终完整回归包含 Runtime 259、Compose 588；原生 Demo 的 8 项合成输入位移/停止检查通过。活动输入两次采到 815/826 帧，draw P99 约 4.31ms；第一次有约 50ms 的宿主帧尖峰，复测未重现，来源未隔离。回归与原始记录见 [本轮证据](evidence/scroll-input/README.md)。这修复了可复现的输入叠加机制，不能据此声称真实设备上的所有视觉抖动均已排除。Windows/Linux 的 SDL 路径尚不能提供完整精确设备/phase；真实触控板、Magic Mouse、鼠标驱动、120Hz 和 compositor 时间证据仍缺。Workspace 面板尺寸协议、标签大字体，以及通用测量/放置、Grid、可变行高布局继续保留为后续项。
+最终完整回归包含 Runtime 259、Compose 588；原生 Demo 的 8 项合成输入位移/停止检查通过。活动输入两次采到 815/826 帧，draw P99 约 4.31ms；第一次有约 50ms 的宿主帧尖峰，复测未重现，来源未隔离。回归与原始记录见 [本轮证据](evidence/scroll-input/README.md)。这修复了可复现的输入叠加机制，不能据此声称真实设备上的所有视觉抖动均已排除。Windows/Linux 的 SDL 路径尚不能提供完整精确设备/phase；真实触控板、Magic Mouse、鼠标驱动、120Hz 和 compositor 时间证据仍缺。这段记录对应滚动输入复核结束时的状态；随后 Workspace 面板尺寸协议、标签大字体、通用测量/放置、Grid 与已知可变行高布局已由上方“Workspace 尺寸与通用布局续补”推进，具体实现和剩余边界以该节为准。

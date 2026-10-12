@@ -424,12 +424,7 @@ enum EditorRootViewFactory {
     }
 
     private static func workspacePanel(for descriptor: PanelDescriptor) -> WorkspacePanel {
-        WorkspacePanel(id: descriptor.id,
-                       title: descriptor.title,
-                       isClosable: descriptor.closable,
-                       isDraggable: true,
-                       isCollapsible: descriptor.preferredSlot != .center,
-                       iconAssetKey: descriptor.iconAssetKey)
+        descriptor.workspaceDescriptor.panel
     }
 
     private static func defaultGroupID(for slot: WorkspaceSlotID) -> WorkspaceTabGroupID {
