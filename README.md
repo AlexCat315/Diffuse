@@ -66,7 +66,7 @@ GuavaUI 的[跨平台调试服务与共享核心](GuavaUI/Portable/README.md)可
 无需原生图形依赖；[浏览器 Wasm 原型](GuavaUI/Browser/README.md)提供 WebGPU 预览、
 节点检查和状态恢复。
 
-Android 使用 Swift 6.4.0 与 NativeRHI Vulkan，可运行完整 GuavaUI Gallery，并将项目场景、资源和 Swift 游戏脚本静态编译为 APK。工具链安装、真机验证和签名导出命令见 [Android 接入说明](Android/README.md)。
+Android 使用 Swift 6.4.0 与 NativeRHI Vulkan，可运行完整 GuavaUI Gallery，并将项目场景、资源和 Swift 游戏脚本静态编译为 APK。GuavaUI 使用方可通过 `swift run --package-path Android/Tools GuavaAndroid create` 创建独立应用，在自己的根视图入口编写 UI，并用项目内 `swift android.swift` 构建 / 安装 APK；使用方无需 Python。工具链、接入 API、真机验证和签名导出命令见 [Android 接入说明](Android/README.md)。
 
 ---
 
