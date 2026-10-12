@@ -1,4 +1,8 @@
+#if os(Android)
+import Android
+#endif
 import Foundation
+import GuavaUICore
 import NativeRHI
 
 public struct NativeUIViewport: Sendable {

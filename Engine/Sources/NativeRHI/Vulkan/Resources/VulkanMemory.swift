@@ -4,7 +4,7 @@
 // small number of large blocks. Host-visible blocks are persistently mapped;
 // device-local blocks back vertex/index buffers (staged via the upload ring).
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 

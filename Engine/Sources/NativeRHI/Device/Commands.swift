@@ -8,7 +8,6 @@
 // mis-nested passes unrepresentable.
 
 import Foundation
-import simd
 
 // MARK: - Render pass targets
 

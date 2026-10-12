@@ -3,7 +3,7 @@
 // reported capability set comes from the enumerated physical-device extensions
 // and queried feature chain.
 
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
 
@@ -62,8 +62,8 @@ enum VulkanDeviceSetup {
 
         var props = VkPhysicalDeviceProperties()
         instanceCommands.getPhysicalDeviceProperties(physicalDevice, &props)
-        guard props.apiVersion >= ((1 << 22) | (3 << 12)) else {
-            throw RHIError.unsupportedBackend("NativeRHI requires Vulkan 1.3")
+        guard props.apiVersion >= ((1 << 22) | (1 << 12)) else {
+            throw RHIError.unsupportedBackend("NativeRHI requires Vulkan 1.1")
         }
         let nameCapacity = MemoryLayout.size(ofValue: props.deviceName)
         let deviceName = withUnsafePointer(to: &props.deviceName) { namePtr in
@@ -85,7 +85,7 @@ enum VulkanDeviceSetup {
             physicalDevice: physicalDevice,
             families: families,
             uniqueFamilies: queueFamilies,
-            extensions: extensions
+            extensions: extensions, apiVersion: props.apiVersion
         )
         guard let device = createdDevice else {
             throw RHIError.unsupportedBackend("vkCreateDevice failed")
@@ -241,46 +241,64 @@ enum VulkanDeviceSetup {
 
     private static func createLogicalDevice(
         _ cmds: VulkanInstanceCommands, physicalDevice: VkPhysicalDevice,
-        families: QueueFamilies, uniqueFamilies: [UInt32], extensions: Set<String>
+        families: QueueFamilies, uniqueFamilies: [UInt32], extensions: Set<String>, apiVersion: UInt32
     ) throws -> (VkDevice?, VulkanFeatureSupport) {
         let arena = VulkanScratch()
+        let core12 = apiVersion >= ((1 << 22) | (2 << 12))
+        let maintenance = apiVersion >= ((1 << 22) | (3 << 12)) || extensions.contains("VK_KHR_maintenance4")
+        guard core12 || extensions.contains("VK_KHR_timeline_semaphore") else {
+            throw RHIError.unsupportedBackend("NativeRHI requires timeline semaphores (Vulkan 1.2 or VK_KHR_timeline_semaphore)")
+        }
+        // Query only structures supported by this device. Vulkan 1.1 drivers
+        // cannot consume the aggregate Vulkan 1.2/1.3 feature structures.
+        var tail: UnsafeMutableRawPointer?
+        func feature<Value>(_ value: Value) -> UnsafeMutablePointer<Value> {
+            arena.make(value)
+        }
         var mesh = VkPhysicalDeviceMeshShaderFeaturesEXT()
         mesh.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT
-        let nativeMesh = arena.make(mesh)
+        let nativeMesh = feature(mesh)
+        if extensions.contains("VK_EXT_mesh_shader") { nativeMesh.pointee.pNext = tail; tail = UnsafeMutableRawPointer(nativeMesh) }
         var query = VkPhysicalDeviceRayQueryFeaturesKHR()
         query.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
-        query.pNext = UnsafeMutableRawPointer(nativeMesh)
-        let nativeQuery = arena.make(query)
+        let nativeQuery = feature(query)
+        if core12 && extensions.contains("VK_KHR_ray_query") { nativeQuery.pointee.pNext = tail; tail = UnsafeMutableRawPointer(nativeQuery) }
         var structure = VkPhysicalDeviceAccelerationStructureFeaturesKHR()
         structure.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR
-        structure.pNext = UnsafeMutableRawPointer(nativeQuery)
-        let nativeStructure = arena.make(structure)
-        var vk13 = VkPhysicalDeviceVulkan13Features()
-        vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
-        vk13.pNext = UnsafeMutableRawPointer(nativeStructure)
-        let native13 = arena.make(vk13)
-        var vk12 = VkPhysicalDeviceVulkan12Features()
-        vk12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
-        vk12.pNext = UnsafeMutableRawPointer(native13)
-        let native12 = arena.make(vk12)
-        var vk11 = VkPhysicalDeviceVulkan11Features()
-        vk11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES
-        vk11.pNext = UnsafeMutableRawPointer(native12)
-        let native11 = arena.make(vk11)
+        let nativeStructure = feature(structure)
+        if core12 && extensions.contains("VK_KHR_acceleration_structure") { nativeStructure.pointee.pNext = tail; tail = UnsafeMutableRawPointer(nativeStructure) }
+        var address = VkPhysicalDeviceBufferDeviceAddressFeatures()
+        address.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES
+        let nativeAddress = feature(address)
+        if core12 { nativeAddress.pointee.pNext = tail; tail = UnsafeMutableRawPointer(nativeAddress) }
+        var localSize = VkPhysicalDeviceMaintenance4Features()
+        localSize.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES
+        let nativeLocalSize = feature(localSize)
+        if maintenance { nativeLocalSize.pointee.pNext = tail; tail = UnsafeMutableRawPointer(nativeLocalSize) }
+        var timeline = VkPhysicalDeviceTimelineSemaphoreFeatures()
+        timeline.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
+        timeline.pNext = tail
+        let nativeTimeline = feature(timeline)
+        var drawParameters = VkPhysicalDeviceShaderDrawParametersFeatures()
+        drawParameters.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES
+        drawParameters.pNext = UnsafeMutableRawPointer(nativeTimeline)
+        let nativeDraw = feature(drawParameters)
         var supported = VkPhysicalDeviceFeatures2()
         supported.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
-        supported.pNext = UnsafeMutableRawPointer(native11)
+        supported.pNext = UnsafeMutableRawPointer(nativeDraw)
         cmds.getPhysicalDeviceFeatures2(physicalDevice, &supported)
-        guard native12.pointee.timelineSemaphore != 0, native13.pointee.dynamicRendering != 0, native13.pointee.maintenance4 != 0 else {
-            throw RHIError.unsupportedBackend("NativeRHI requires Vulkan 1.3 dynamic rendering, maintenance4 and timeline semaphores")
+        guard nativeTimeline.pointee.timelineSemaphore != 0 else {
+            throw RHIError.unsupportedBackend("Vulkan timeline semaphore feature is unavailable")
         }
-        guard native11.pointee.shaderDrawParameters != 0, supported.features.drawIndirectFirstInstance != 0 else {
+        guard nativeDraw.pointee.shaderDrawParameters != 0, supported.features.drawIndirectFirstInstance != 0 else {
             throw RHIError.unsupportedBackend("NativeRHI requires shader draw parameters and indirect firstInstance")
         }
         var result = VulkanFeatureSupport()
-        result.dynamicRendering = true
+        result.spirvVersion = apiVersion >= ((1 << 22) | (3 << 12)) ? 0x00010600
+            : core12 ? 0x00010500 : extensions.contains("VK_KHR_spirv_1_4") ? 0x00010400 : 0x00010300
+        result.maintenance4 = nativeLocalSize.pointee.maintenance4 != 0
         result.nonSolidFill = supported.features.fillModeNonSolid != 0
-        result.accelerationStructures = native12.pointee.bufferDeviceAddress != 0 && nativeStructure.pointee.accelerationStructure != 0
+        result.accelerationStructures = core12 && nativeAddress.pointee.bufferDeviceAddress != 0 && nativeStructure.pointee.accelerationStructure != 0
             && extensions.contains("VK_KHR_acceleration_structure") && extensions.contains("VK_KHR_deferred_host_operations")
         result.rayQuery = result.accelerationStructures && nativeQuery.pointee.rayQuery != 0 && extensions.contains("VK_KHR_ray_query")
         result.mesh = nativeMesh.pointee.meshShader != 0 && extensions.contains("VK_EXT_mesh_shader")
@@ -295,48 +313,61 @@ enum VulkanDeviceSetup {
             return info
         }
         var names: [String] = []
+        if !core12 {
+            names.append("VK_KHR_timeline_semaphore")
+            if extensions.contains("VK_KHR_spirv_1_4") {
+                names += ["VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls"]
+            }
+        }
+        if result.maintenance4 && apiVersion < ((1 << 22) | (3 << 12)) { names.append("VK_KHR_maintenance4") }
         if extensions.contains("VK_KHR_swapchain") { names.append("VK_KHR_swapchain") }
         if extensions.contains("VK_KHR_portability_subset") { names.append("VK_KHR_portability_subset") }
         if result.accelerationStructures { names += ["VK_KHR_acceleration_structure", "VK_KHR_deferred_host_operations"] }
         if result.rayQuery { names.append("VK_KHR_ray_query") }
         if result.mesh { names.append("VK_EXT_mesh_shader") }
-        // Rebuild an enable chain from the small implemented feature set.
+        // Clear queried optional bits before enabling the implemented subset.
+        tail = nil
         mesh.meshShader = result.mesh ? VK_TRUE : VK_FALSE
         mesh.taskShader = result.task ? VK_TRUE : VK_FALSE
-        mesh.pNext = nil
+        mesh.pNext = tail
         nativeMesh.pointee = mesh
+        if result.mesh { tail = UnsafeMutableRawPointer(nativeMesh) }
         query.rayQuery = result.rayQuery ? VK_TRUE : VK_FALSE
-        query.pNext = result.mesh ? UnsafeMutableRawPointer(nativeMesh) : nil
+        query.pNext = tail
         nativeQuery.pointee = query
+        if result.rayQuery { tail = UnsafeMutableRawPointer(nativeQuery) }
         structure.accelerationStructure = result.accelerationStructures ? VK_TRUE : VK_FALSE
-        structure.pNext = result.rayQuery ? UnsafeMutableRawPointer(nativeQuery) : query.pNext
+        structure.pNext = tail
         nativeStructure.pointee = structure
-        vk13.pNext = result.accelerationStructures ? UnsafeMutableRawPointer(nativeStructure) : structure.pNext
-        vk13.dynamicRendering = VK_TRUE
-        vk13.maintenance4 = VK_TRUE
-        native13.pointee = vk13
-        vk12.timelineSemaphore = VK_TRUE
-        vk12.bufferDeviceAddress = result.accelerationStructures ? VK_TRUE : VK_FALSE
-        native12.pointee = vk12
-        vk11.shaderDrawParameters = VK_TRUE
-        native11.pointee = vk11
+        if result.accelerationStructures { tail = UnsafeMutableRawPointer(nativeStructure) }
+        address.bufferDeviceAddress = result.accelerationStructures ? VK_TRUE : VK_FALSE
+        address.pNext = tail
+        nativeAddress.pointee = address
+        if result.accelerationStructures { tail = UnsafeMutableRawPointer(nativeAddress) }
+        localSize.maintenance4 = result.maintenance4 ? VK_TRUE : VK_FALSE
+        localSize.pNext = tail
+        nativeLocalSize.pointee = localSize
+        if result.maintenance4 { tail = UnsafeMutableRawPointer(nativeLocalSize) }
+        timeline.timelineSemaphore = VK_TRUE
+        timeline.pNext = tail
+        nativeTimeline.pointee = timeline
+        drawParameters.shaderDrawParameters = VK_TRUE
+        nativeDraw.pointee = drawParameters
         var enabled = VkPhysicalDeviceFeatures()
         enabled.fillModeNonSolid = supported.features.fillModeNonSolid
         enabled.drawIndirectFirstInstance = VK_TRUE
         var info = VkDeviceCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
-        info.pNext = UnsafeRawPointer(native11)
+        info.pNext = UnsafeRawPointer(nativeDraw)
         info.queueCreateInfoCount = UInt32(queues.count)
         info.pQueueCreateInfos = arena.store(queues)
         info.enabledExtensionCount = UInt32(names.count)
         info.ppEnabledExtensionNames = arena.store(names.map { Optional(arena.string($0)) })
         info.pEnabledFeatures = UnsafePointer(arena.make(enabled))
-        let device: VkDevice? = withExtendedLifetime(arena) {
-            vkWithOutHandle { _ = cmds.createDevice(physicalDevice, &info, nil, $0) }
-        }
+        var device: VkDevice = vkNull()
+        let status = withExtendedLifetime(arena) { cmds.createDevice(physicalDevice, &info, nil, &device) }
+        guard status == VK_SUCCESS else { throw RHIError.unsupportedBackend("vkCreateDevice failed: \(status)") }
         return (device, result)
     }
-
 }
-
-#endif // canImport(CVulkanHeaders)
+#endif

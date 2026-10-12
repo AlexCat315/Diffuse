@@ -1,8 +1,8 @@
-#if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
+#if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 
 struct VulkanAdvancedCommands {
-    let bufferAddress: CVulkanHeaders.PFN_vkGetBufferDeviceAddress
+    let bufferAddress: CVulkanHeaders.PFN_vkGetBufferDeviceAddress?
     let createStructure: CVulkanHeaders.PFN_vkCreateAccelerationStructureKHR?
     let destroyStructure: CVulkanHeaders.PFN_vkDestroyAccelerationStructureKHR?
     let buildSizes: CVulkanHeaders.PFN_vkGetAccelerationStructureBuildSizesKHR?
@@ -12,11 +12,11 @@ struct VulkanAdvancedCommands {
     let scratchAlignment: VkDeviceSize
 
     init(_ resolve: VulkanResolver, features: VulkanFeatureSupport, commands: VulkanInstanceCommands, physicalDevice: VkPhysicalDevice) {
-        bufferAddress = vkFunction(resolve, "vkGetBufferDeviceAddress")
         func optional<Value>(_ name: String, enabled: Bool) -> Value? {
             guard enabled, let pointer = resolve(name) else { return nil }
             return unsafeBitCast(pointer, to: Value.self)
         }
+        bufferAddress = optional("vkGetBufferDeviceAddress", enabled: features.accelerationStructures)
         createStructure = optional("vkCreateAccelerationStructureKHR", enabled: features.accelerationStructures)
         destroyStructure = optional("vkDestroyAccelerationStructureKHR", enabled: features.accelerationStructures)
         buildSizes = optional("vkGetAccelerationStructureBuildSizesKHR", enabled: features.accelerationStructures)

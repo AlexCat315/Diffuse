@@ -1,4 +1,4 @@
-// Native Windows/Linux Vulkan SDK headers and loader interop.
+// Native Windows/Linux/Android Vulkan SDK headers and loader interop.
 #pragma once
 
 #include <vulkan/vulkan.h>
@@ -24,7 +24,8 @@ extern "C" {
 typedef enum GRHIVulkanSurfaceKind {
     GRHI_VULKAN_WIN32 = 1,
     GRHI_VULKAN_XLIB = 2,
-    GRHI_VULKAN_WAYLAND = 3
+    GRHI_VULKAN_WAYLAND = 3,
+    GRHI_VULKAN_ANDROID = 4
 } GRHIVulkanSurfaceKind;
 VkResult grhi_vulkan_create_native_surface(VkInstance instance, GRHIVulkanSurfaceKind kind, void* window, void* display, VkSurfaceKHR* surface);
 #ifdef __cplusplus
