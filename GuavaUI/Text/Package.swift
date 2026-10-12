@@ -2,7 +2,7 @@
 import PackageDescription
 import Foundation
 
-// Browser builds stage WASI artifacts separately from the desktop libraries.
+// Browser and Android builds stage target-specific artifacts separately from desktop libraries.
 let artifacts = ProcessInfo.processInfo.environment["GUAVA_TEXT_ARTIFACT_ROOT"] ?? "../vendor"
 let package = Package(
     name: "GuavaUIText",
