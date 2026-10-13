@@ -28,7 +28,7 @@ swift test --package-path GuavaUI/Portable
 swift run --package-path GuavaUI/Portable GuavaUIDevToolsProbe
 ```
 
-Open `GuavaUI/DevTools/index.html`, connect to `ws://127.0.0.1:9229/`.
+Open `GuavaUI/DevTools/Client/index.html`, connect to `ws://127.0.0.1:9229/`.
 Pass a port to the probe to override it. Port zero binds an available port;
 `DevServer.boundPort` reports it. The actual shared counter desktop host is
 `GUAVA_DEVTOOLS=1 swift run --package-path GuavaUI/Examples GuavaUIDemo --shared-counter`.
@@ -38,7 +38,7 @@ backpressure are supported. Streams remain opt-in per connection. Disconnecting
 clears that connection's selection/recording; the last mirror disconnect stops capture.
 Native callbacks use the UI-thread scheduler, including synchronous SDL loops.
 Temporary styles use an exclusive connection lease, are preserved across composition,
-and are discarded on disconnect/stop. See the [inspection protocol](../DevTools/protocol-inspection.md).
-Hosts can supply `stateRestoreResultHandler` to acknowledge only validated restores.
+and are discarded on disconnect/stop. See the [inspection protocol](../DevTools/Protocol/Inspection.md).
+Hosts can supply `host.checkpoint.restore` to acknowledge only validated restores.
 Input recording/replay requires host callbacks and advertises a separate `recording`
 capability; timestamps are metadata and replay currently delivers events in order.

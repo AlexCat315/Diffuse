@@ -105,7 +105,8 @@ adb logcat -s GuavaAndroid:I
 显示时钟与运行时选项的独立主机测试可运行：
 
 ```sh
-swiftc Platforms/Android/Sources/GuavaAndroidApp/Frame/Clock.swift \
+swiftc GuavaUI/Portable/Sources/GuavaUIDevToolsProtocol/Discovery.swift \
+  Platforms/Android/Sources/GuavaAndroidApp/Frame/Clock.swift \
   Platforms/Android/Sources/GuavaAndroidApp/Frame/RuntimeOptions.swift scripts/android/frame-clock-tests.swift \
   -o /tmp/guava-android-frame-clock-tests
 /tmp/guava-android-frame-clock-tests
@@ -177,3 +178,15 @@ UI / backdrop shader 与场景资源统一通过 `PackageResourceBundle` 查找�
 已完成完整 Gallery 页面的真实绘制和 CrystalRush 完整场景的真机运行。验证不代表所有组件的所有交互组合、所有第三方项目资源或全部 Android GPU 已覆盖。当前未启用 Khronos validation layer；设备使用同一通用 queue family，独立队列族同步仍需专门设备。Windows / Linux 宿主、DX12、RT / mesh 不由 Android 结果代替。
 
 本轮验收：Gallery **72 页 + 6 项交互**、SharedCounter **22 项**、CrystalRush **8 项**和 NativeRHI **7 项**均通过。CrystalRush Release APK 也已安装，确认场景 / 中文 HUD、触控开始与移动、前后台恢复及禁用调试访问。主机侧 TextField 41 项、ProjectExporter 15 项、shader 工具链 11 项、UI renderer 生命周期 / backdrop 像素 15 项通过。CrystalRush 的胜负、超时、边界和重开另由主机玩法测试覆盖；Android 自动化没有穷举所有玩法路线。
+
+
+应用开发入口和新电脑工具链安装见 [GuavaUI 入门](../../docs/getting-started.md)。应用自己的 `Platforms/Android` 是标准 Gradle 工程；SDK 的 `Runtime` 是共享 Android library，`App/src` 提供宿主实现而不拥有应用身份/版本/权限。CLI 与 Gradle preBuild 共用 Swift 准备操作。
+
+`guava run APP --android --devtools` 通过私有启动描述配置随机端口与令牌，读取应用私有会话描述并建立 ADB forwarding；Ctrl+C 撤销 forwarding。`--profile` 使用优化的 Swift 代码与可调试 Android build type；`--release` 不接受启动诊断描述。Android 暂不提供图像镜像，时间线为 CPU 生成时间，不冒充 Vulkan GPU 时间。
+
+
+## 原生应用会话验收（2026-10-14）
+
+Swift 6.4.1 / Profile 构建在 2405CRPFDC、Android 16、Adreno 710 上完成标准 AppContent 模板真机验收：应用启动、按钮 State 更新、输入法候选提交与文本联动均正常。通过 CLI 的随机端口会话和 ADB forwarding，Inspector 读取到 27 个真实节点；无令牌及错误令牌连接被拒绝，节点选择、样式编辑/撤销、状态列表、时间线和浏览器重连通过。应用切到后台后同组协议请求仍能响应，返回前台保持同一进程。Ctrl+C 后 CLI 退出成功，转发与主机/设备会话描述均清理。
+
+同一模板在 2560×1508、120Hz、VSync/FIFO、连续渲染、GPU 时间戳开启且未连接 Inspector 时采样约 14 秒。排除前 2 秒后保留 1,457 帧：成功渲染的回调速率约 119.7/s，CPU 帧工作平均 2.54ms（P95 3.09ms），drawableAcquire 平均 0.105ms（P95 0.128ms），GPU ui_segment 的每秒均值平均约 1.66ms，顶点数 1,547。这里的速率统计不是显示器实际呈现帧数，也不是完整 Gallery 页面或长时间热稳定性结论。

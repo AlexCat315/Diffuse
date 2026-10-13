@@ -20,6 +20,13 @@ public final class NodeTree: @unchecked Sendable {
         root?.renderDirty ?? false
     }
 
+    public var nodeCount: Int {
+        guard let root else { return 0 }
+        var pending = [root], count = 0
+        while let node = pending.popLast() { count += 1; pending.append(contentsOf: node.children) }
+        return count
+    }
+
     // MARK: - Dirty management
 
     /// Convenience wrapper around `Node.markDirty()`.

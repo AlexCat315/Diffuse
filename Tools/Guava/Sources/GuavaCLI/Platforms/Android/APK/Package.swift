@@ -1,49 +1,66 @@
 import GuavaAndroidContract
 import Foundation
 
+/// Swift prepares its libraries/resources. Gradle owns the native application build.
 struct APKPackage {
     let toolchain: AndroidToolchain
     let identity: ApplicationIdentity
-    let configuration: String
+    let mode: BuildConfiguration
     let signing: APKSigning?
+    var application: AppProject? = nil
 
-    func build(products: URL, launch: SceneLaunch, output: URL, project: URL? = nil, staging: URL? = nil) throws {
-        let directory = staging ?? toolchain.cache.appendingPathComponent("apk-" + identity.id)
+    func build(products: URL, launch: SceneLaunch, output: URL, project gameAssets: URL? = nil) throws {
+        let application = try packagingProject()
+        try stage(products: products, launch: launch, application: application, gameAssets: gameAssets)
+        let platform = application.directory.appendingPathComponent("Platforms/Android")
+        guard FileManager.default.fileExists(atPath: platform.appendingPathComponent("gradlew").path) else {
+            throw ToolError.invalid("Missing Platforms/Android/gradlew; this application requires a native Android project")
+        }
+        let credentials = try signing ?? APKSigning.development(toolchain: toolchain)
+        var environment = ProcessInfo.processInfo.environment
+        environment["GUAVA_ENGINE_ROOT"] = toolchain.root.path
+        environment["ANDROID_HOME"] = toolchain.sdk.path
+        if signing == nil {
+            environment[credentials.storePasswordVariable] = "android"
+            environment[credentials.keyPasswordVariable] = "android"
+        }
+        let task = "assemble" + mode.rawValue.capitalized
+        try Shell.run(["/bin/sh", platform.appendingPathComponent("gradlew").path, "-p", platform.path,
+            "--project-cache-dir", application.buildDirectory.appendingPathComponent("android/gradle-cache").path,
+            "--no-daemon", "--console=plain", "-PguavaPrepared=true",
+            "-PguavaKeystore=\(credentials.keystore.path)", "-PguavaKeyAlias=\(credentials.alias)",
+            "-PguavaStorePasswordEnv=\(credentials.storePasswordVariable)",
+            "-PguavaKeyPasswordEnv=\(credentials.keyPasswordVariable)", task], environment: environment)
+        let folder = application.buildDirectory.appendingPathComponent("android/gradle/app/outputs/apk/\(mode.rawValue)")
+        let metadata = try JSONDecoder().decode(GradleOutput.self, from: Data(contentsOf: folder.appendingPathComponent("output-metadata.json")))
+        guard metadata.elements.count == 1, let filename = metadata.elements.first?.outputFile,
+              filename == URL(fileURLWithPath: filename).lastPathComponent else {
+            throw ToolError.invalid("Expected a single ARM64 APK in Gradle output metadata")
+        }
+        try Files.copy(folder.appendingPathComponent(filename), to: output)
+        let verifier = toolchain.sdk.appendingPathComponent("build-tools/36.1.0/apksigner")
+        try Shell.run([verifier.path, "verify", output.path])
+        try Shell.run([toolchain.sdk.appendingPathComponent("build-tools/36.1.0/zipalign").path, "-c", "-P", "16", "4", output.path])
+        print("Built signed APK: \(output.path) (configuration=\(mode.rawValue))")
+    }
+
+    func stage(products: URL, launch: SceneLaunch, application: AppProject, gameAssets: URL? = nil) throws {
+        let directory = application.buildDirectory.appendingPathComponent("android/generated/\(mode.rawValue)")
         try Files.reset(directory)
-        let tools = toolchain.sdk.appendingPathComponent("build-tools/36.1.0")
-        let androidJar = toolchain.sdk.appendingPathComponent("platforms/android-36/android.jar")
-        let classes = directory.appendingPathComponent("classes"), stage = directory.appendingPathComponent("stage")
-        try Files.directory(classes); try Files.directory(stage)
-        let sources = try Files.files(toolchain.root.appendingPathComponent("Platforms/Android/App/src"))
-            + Files.files(toolchain.root.appendingPathComponent("Engine/third-party/sdl3/android-project/app/src/main/java"))
-        try Shell.run(["javac", "--release", "8", "-Xlint:-options", "-classpath", androidJar.path, "-d", classes.path]
-            + sources.filter { $0.pathExtension == "java" }.map(\.path))
-        try Shell.run([tools.appendingPathComponent("d8").path, "--min-api", "28", "--output", stage.path]
-            + Files.files(classes).filter { $0.pathExtension == "class" }.map(\.path))
-        let manifest = directory.appendingPathComponent("AndroidManifest.xml")
-        try writeManifest(to: manifest)
-        let base = directory.appendingPathComponent("base.apk"), aligned = directory.appendingPathComponent("aligned.apk")
-        try Shell.run([tools.appendingPathComponent("aapt2").path, "link", "-I", androidJar.path, "--manifest", manifest.path, "-o", base.path])
-        try APKAssets.stage(products: products, toolchain: toolchain, launch: launch, project: project, directory: stage)
-        // JDK's ZIP writer avoids introducing a separate archive or Python dependency.
-        try Shell.run(["jar", "uf", base.path, "-C", stage.path, "."])
-        try Shell.run([tools.appendingPathComponent("zipalign").path, "-f", "-P", "16", "4", base.path, aligned.path])
-        try Files.directory(output.deletingLastPathComponent())
-        try APKSigning.sign(aligned: aligned, output: output, toolchain: toolchain, signing: signing)
-        print("Built signed APK: \(output.path) (configuration=\(configuration))")
+        try APKAssets.stage(products: products, toolchain: toolchain, launch: launch, project: gameAssets, directory: directory)
     }
 
-    private func writeManifest(to destination: URL) throws {
-        let template = try String(contentsOf: toolchain.root.appendingPathComponent("Platforms/Android/App/AndroidManifest.xml"), encoding: .utf8)
-        let manifest = template.replacingOccurrences(of: "package=\"com.guava.probe\"", with: "package=\"\(identity.id)\"")
-            .replacingOccurrences(of: "android:label=\"GuavaUI Gallery\"", with: "android:label=\"\(xml(identity.name))\"")
-            .replacingOccurrences(of: "android:debuggable=\"true\"", with: "android:debuggable=\"\(configuration == "debug")\"")
-            .replacingOccurrences(of: "android:name=\".MainActivity\"", with: "android:name=\"com.guava.probe.MainActivity\"")
-        try Files.text(manifest, to: destination)
+    private func packagingProject() throws -> AppProject {
+        if let application { return application }
+        let directory = toolchain.cache.appendingPathComponent("packaging-" + identity.id)
+        let configuration = ProjectConfiguration(application: identity, toolchain: .init(enginePath: toolchain.root.path))
+        // This workspace is generated by the SDK, unlike a user's platform project.
+        try ApplicationTemplates.installAndroid(at: directory, configuration: configuration)
+        return try AppProject(at: directory)
     }
+}
 
-    private func xml(_ string: String) -> String {
-        string.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
-    }
+private struct GradleOutput: Decodable {
+    struct Element: Decodable { let outputFile: String }
+    let elements: [Element]
 }

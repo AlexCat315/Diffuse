@@ -5,6 +5,7 @@ import GuavaUIRuntime
 import CAndroidHost
 
 /// JNI serializes this surface's GPU and scene operations on the UI thread.
+@MainActor
 final class SurfaceSession {
     let application: AndroidApplication
     var device: Device { application.device }
@@ -80,7 +81,7 @@ final class SurfaceSession {
         return true
     }
 
-    deinit {
+    isolated deinit {
         device.withFrameSession {
             try? device.waitUntilIdle()
             device.destroy(swapchain)

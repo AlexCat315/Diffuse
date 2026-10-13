@@ -37,6 +37,7 @@ final class ContentSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
     ContentSurfaceView(Context context, String checkpoint, String configuration, RuntimeOptions options, long application) {
         super(context);
+        Diagnostics.attach(this);
         this.checkpoint = checkpoint;
         this.configuration = configuration;
         this.application = application;
@@ -114,6 +115,7 @@ final class ContentSurfaceView extends SurfaceView implements SurfaceHolder.Call
             connection = null;
         }
     }
+    void pumpDiagnostics(long value) { if (application != 0 && application == value) MainActivity.pumpDiagnostics(application); }
     void closeApplication() { if (application != 0) { MainActivity.destroyApplication(application); application = 0; } }
     long detachApplication() { releaseSurface(); long retained = application; application = 0; return retained; }
     private JSONObject state() {

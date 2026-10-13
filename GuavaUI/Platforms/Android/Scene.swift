@@ -1,9 +1,11 @@
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
+import GuavaUIDevTools
 
 /// Compose, input and font ownership for a native Android surface host.
 /// Application content supplies a View; the platform adapter supplies surface frames.
+@MainActor
 public final class AndroidContentSession {
     public enum Rendering { case layers, direct }
 
@@ -20,6 +22,7 @@ public final class AndroidContentSession {
     private lazy var dispatcher = EventDispatcher(tree: tree, interactions: context.interactions,
                                                   capture: context.pointerCapture, focusChain: context.focusChain)
     private var needsUpdate = true
+    private var diagnostics: AndroidDiagnostics?
     private let drawList = DrawList()
     public private(set) var logicalSize = SIMD2<Float>.zero
     public private(set) var scale: Float
@@ -30,6 +33,15 @@ public final class AndroidContentSession {
         environment.configure(scale: self.scale)
         withCurrent { graph.install(root: content()) }
     }
+
+    public func configureDiagnostics(_ config: DevToolsConfig, schedule: @escaping @Sendable () -> Void) throws {
+        diagnostics?.stop()
+        diagnostics = try AndroidDiagnostics(config: config, tree: tree, graph: graph, schedule: schedule,
+            invalidate: { [weak self] in self?.needsUpdate = true })
+    }
+
+    public func pumpDiagnostics() { withCurrent { diagnostics?.drain() } }
+    isolated deinit { diagnostics?.stop() }
 
     public var needsFrame: Bool {
         needsUpdate || recomposer.hasPending || tree.hasRenderUpdates || animations.hasActiveAnimations || environment.hasWork
@@ -53,13 +65,22 @@ public final class AndroidContentSession {
         self.scale = scale.isFinite ? min(4, max(1, scale)) : 1
         logicalSize = SIMD2(Float(pixels.x), Float(pixels.y)) / self.scale
         withCurrent {
+            diagnostics?.drain()
+            diagnostics?.beginFrame()
+            let layoutStart = DispatchTime.now().uptimeNanoseconds
             environment.drain()
             animations.tick(deltaTime: deltaTime)
             recomposer.commitAll()
             graph.computeLayoutIfNeeded(width: logicalSize.x, height: logicalSize.y)
+            let layoutEnd = DispatchTime.now().uptimeNanoseconds
+            let drawTrace = tree.timeline.begin()
             drawList.reset(); drawList.pixelScale = self.scale
             if rendering == .direct { if let root = tree.root { nodes.render(root: root, into: drawList) } }
             else { layers.render(tree: graph.renderTree, into: drawList) }
+            tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")
+            diagnostics?.overlay(into: drawList)
+            diagnostics?.prepared(layout: Double(layoutEnd - layoutStart) / 1_000_000,
+                draw: Double(DispatchTime.now().uptimeNanoseconds - layoutEnd) / 1_000_000)
         }
         let drawing = DrawList()
         drawing.load(vertices: drawList.vertices, indices: drawList.indices, batches: drawList.batches, resources: drawList.resources)
@@ -68,7 +89,7 @@ public final class AndroidContentSession {
         return drawing
     }
 
-    public func didPresent() { needsUpdate = false; tree.flush() }
+    public func didPresent() { diagnostics?.presented(tree: tree, list: drawList); needsUpdate = false; tree.flush() }
     public func invalidate() { needsUpdate = true }
     public func suspend() {
         withCurrent { context.pointerCapture.release(); context.focusChain.focus(nil) }
@@ -78,6 +99,10 @@ public final class AndroidContentSession {
         guard x.isFinite, y.isFinite else { return }
         let point = SIMD2(x, y) / scale
         withCurrent {
+            let button = MouseButtonEvent(button: .left, x: point.x, y: point.y, clicks: 1)
+            let event: InputEvent = kind == 0 ? .mouseButtonDown(button) : kind == 1 ? .mouseButtonUp(button)
+                : .mouseMotion(MouseMotionEvent(x: point.x, y: point.y, deltaX: 0, deltaY: 0))
+            if diagnostics?.intercept(event) == true { needsUpdate = true; return }
             if kind == 4 {
                 context.pointerCapture.release()
                 let event = MouseButtonEvent(button: .right, x: point.x, y: point.y, clicks: 1)

@@ -37,3 +37,11 @@ import Testing
 ]) func invalidCommandsFail(arguments: [String]) {
     #expect(throws: (any Error).self) { try Arguments(arguments) }
 }
+
+@Test func nativeTemplatesCanBeSelectedWithoutCreatingAPlatformSpecificApp() throws {
+    let request = try Arguments(["create", "app", "MyApp", "--platforms", "mac,android"])
+    #expect(request.operation == .create)
+    #expect(request.value(.platforms) == "mac,android")
+    let attach = try Arguments(["devtools", "MyApp", "--session", "session-id", "--no-open"])
+    #expect(attach.operation == .devtools && attach.value(.session) == "session-id")
+}

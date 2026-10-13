@@ -7,23 +7,23 @@ struct ProjectConfiguration: Codable, Equatable {
 
     struct Targets: Codable, Equatable {
         var platforms: [AppPlatform] = [.mac, .win, .linux, .android]
-        var desktopProduct = "DesktopApp"
+        var desktopExecutable: String? = nil
 
-        enum CodingKeys: CodingKey { case platforms, desktopProduct }
+        enum CodingKeys: CodingKey { case platforms, desktopExecutable }
         init() {}
         init(from decoder: Decoder) throws {
             self.init()
             let values = try decoder.container(keyedBy: CodingKeys.self)
             platforms = try values.decodeIfPresent([AppPlatform].self, forKey: .platforms) ?? platforms
-            desktopProduct = try values.decodeIfPresent(String.self, forKey: .desktopProduct) ?? desktopProduct
+            desktopExecutable = try values.decodeIfPresent(String.self, forKey: .desktopExecutable)
         }
 
         func validate() throws {
             guard !platforms.isEmpty, Set(platforms).count == platforms.count else {
                 throw ToolError.invalid("targets.platforms must contain unique platform names")
             }
-            guard desktopProduct.range(of: #"^[A-Za-z][A-Za-z0-9_-]*$"#, options: .regularExpression) != nil else {
-                throw ToolError.invalid("targets.desktopProduct must be an executable product name")
+            guard desktopExecutable == nil || desktopExecutable!.range(of: #"^[A-Za-z][A-Za-z0-9_-]*$"#, options: .regularExpression) != nil else {
+                throw ToolError.invalid("targets.desktopExecutable must be an executable product name")
             }
         }
     }
@@ -31,8 +31,9 @@ struct ProjectConfiguration: Codable, Equatable {
     var application: ApplicationIdentity
     var toolchain: Toolchain
     var targets = Targets()
+    var version = ApplicationVersion()
 
-    enum CodingKeys: CodingKey { case application, toolchain, targets }
+    enum CodingKeys: CodingKey { case application, toolchain, targets, version }
     init(application: ApplicationIdentity, toolchain: Toolchain) {
         self.application = application
         self.toolchain = toolchain
@@ -42,11 +43,13 @@ struct ProjectConfiguration: Codable, Equatable {
         application = try values.decode(ApplicationIdentity.self, forKey: .application)
         toolchain = try values.decode(Toolchain.self, forKey: .toolchain)
         targets = try values.decodeIfPresent(Targets.self, forKey: .targets) ?? targets
+        version = try values.decode(ApplicationVersion.self, forKey: .version)
     }
 
     func validate() throws {
         try application.validate()
         try targets.validate()
+        try version.validate()
         guard !toolchain.enginePath.isEmpty else { throw ToolError.invalid("toolchain.enginePath must name the Guava SDK checkout") }
     }
 }
@@ -54,6 +57,7 @@ struct ProjectConfiguration: Codable, Equatable {
 struct AppProject {
     let directory: URL
     let configuration: ProjectConfiguration
+    var desktopProduct: String { configuration.targets.desktopExecutable ?? "Application" }
     var buildDirectory: URL { directory.appendingPathComponent(".guava/build") }
 
     init(at directory: URL) throws {
@@ -75,6 +79,16 @@ struct AppProject {
     }
 
     func clean() throws {
+        let sessions = buildDirectory.appendingPathComponent("devtools")
+        if FileManager.default.fileExists(atPath: sessions.path) {
+            for directory in try Files.children(sessions) {
+                guard let data = try? Data(contentsOf: directory.appendingPathComponent("session.json")),
+                      let session = try? JSONDecoder().decode(ManagedSession.self, from: data) else { continue }
+                if (try? Inspector.isAlive(session)) == true {
+                    throw ToolError.invalid("Stop development session \(session.runtime.id) before cleaning this application's build cache")
+                }
+            }
+        }
         // Only this generated subtree is owned by the CLI. Other .guava data may be authored.
         let build = buildDirectory
         guard (try? build.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true,

@@ -81,7 +81,7 @@ Android 的平台基础设施放在 GuavaUI 内会把游戏播放器、APK 工�
 | 根目录 swift run EditorApp | swift run GuavaEditor（Editor 包仍提供 EditorApp） |
 | swift run --package-path GuavaUI GuavaUIDemo | swift run --package-path GuavaUI/Examples GuavaUIDemo |
 
-最小应用在 examples/HelloUI。跨桌面 / Android 项目在 examples/GuavaUIStarter：DesktopApp 调用 Application.run，Android 工具安装同一个 AppContent 根视图。
+最小应用在 examples/HelloUI。跨桌面 / Android 项目在 examples/GuavaUIStarter：CLI 生成的桌面入口调用 Application.run，Android 宿主安装同一个 AppContent 根视图。
 
 ## 约束检查
 
@@ -103,3 +103,12 @@ swift test --package-path Tools/Guava
 代码依赖为 `Editor → GuavaUI → Engine`。Engine 提供基础设施，GuavaUI 封装 UI 能力，Editor 是使用它们的桌面应用，不反向进入 UI 的默认依赖。Editor/guava.json 声明其桌面产品；统一 CLI 读取配置后构建，不把 Editor 特判写入命令层。
 
 一个应用由 guava create app 创建；guava build / run 选择目标，test 在主机运行单元测试，clean 只删除项目 .guava/build。application 身份、SDK 位置与目标配置集中在 guava.json，临时设备 / 签名参数不写回配置。桌面 Package.swift 与 CLI 读取同一个 SDK 路径；模板与仓库 Starter 由边界检查保持一致。详细命令、安装及支持边界见 [Guava CLI](../../Tools/Guava/README.md)。
+
+
+## Application platform ownership and development tools
+
+Application projects own their native `Platforms` directories: Android Gradle/Manifest/resources, macOS Info/entitlements/resources, Windows manifest and Linux desktop metadata. The SDK owns reusable platform runtime code. Ordinary UI projects export AppContent; the CLI generates the desktop launcher. Editor/Gallery explicitly select their own executable product with targets.desktopExecutable.
+
+The installed SDK selection is user state; each application's toolchain.enginePath remains authored configuration. Version metadata is owned once by guava.json and applied during native packaging. CLI build caches and authenticated DevTools session descriptors stay under .guava/build.
+
+DevTools has one Client tree consumed by native WebSocket hosts and the browser MessageChannel host. Protocol models, transport, session lifecycle and request domains have separate owners. Browser is a Swift/Wasm host prototype, not an implemented Web application target. Engine's Wasmtime plugin runtime currently ships only an Apple XCFramework; Portable UI/Wasm support does not imply cross-platform Wasmtime delivery.

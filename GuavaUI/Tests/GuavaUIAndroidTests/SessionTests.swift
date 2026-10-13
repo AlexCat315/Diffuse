@@ -13,7 +13,7 @@ private struct Content: View {
     }
 }
 
-@Test func androidHostRetainsContentButReleasesInputAcrossSurfaceLifetimes() throws {
+@Test @MainActor func androidHostRetainsContentButReleasesInputAcrossSurfaceLifetimes() throws {
     let previousText = TextEnvironmentHolder.current
     let previousFocus = FocusChainHolder.current
     let root = Content()

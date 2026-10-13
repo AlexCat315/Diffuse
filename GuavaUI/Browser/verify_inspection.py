@@ -22,20 +22,20 @@ def inspection_checks(page, inspector):
     inspector.locator("#selectionPath button").filter(has_text="counter.card").click()
     frame = page.locator("#inspector").element_handle().content_frame()
     page.wait_for_function("guavaDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.card').elementID")
-    frame.wait_for_function("!state.pendingSelectionId && findNode(state.tree,state.selectedId)?.debugName === 'counter.card'")
+    frame.wait_for_function("!inspector.session.tree.pendingSelectionId && inspector.tree.findNode(inspector.session.tree.tree,inspector.session.tree.selectedId)?.debugName === 'counter.card'")
     # A delayed snapshot from before selection must not erase a focused draft
     # or cancel the edit timer while the new selection is awaiting confirmation.
     # Confirm the real selection before simulating an acknowledgement so the
     # test cannot clear an actual pending request with its synthetic snapshot.
     frame.evaluate("""() => {
-      const node=findNode(state.tree,state.selectedId), previous=node.children[0];
-      state.pendingSelectionId=state.selectedId;
+      const node=inspector.tree.findNode(inspector.session.tree.tree,inspector.session.tree.selectedId), previous=node.children[0];
+      inspector.session.tree.pendingSelectionId=inspector.session.tree.selectedId;
       const input=document.querySelector('#paddingLeft'); input.focus();input.value='31';
-      syncInspection({...state.inspection,selectedID:previous.elementID});
-      if(state.selectedId!==node.elementID || input.value!=='31') throw Error('Stale selection erased draft');
-      syncInspection({...state.inspection,selectedID:node.elementID});
+      inspector.inspection.syncInspection({...inspector.session.tree.inspection,selectedID:previous.elementID});
+      if(inspector.session.tree.selectedId!==node.elementID || input.value!=='31') throw Error('Stale selection erased draft');
+      inspector.inspection.syncInspection({...inspector.session.tree.inspection,selectedID:node.elementID});
     }""")
-    profile_before = frame.evaluate("findNode(state.tree,findNode(state.tree,state.selectedId).ownerScopeID).recomposition.count")
+    profile_before = frame.evaluate("inspector.tree.findNode(inspector.session.tree.tree,inspector.tree.findNode(inspector.session.tree.tree,inspector.session.tree.selectedId).ownerScopeID).recomposition.count")
     inspector.locator("#paddingLeft").fill("32")
     page.wait_for_function("inspectedNode('counter.card').layout.padding.left === 32")
     assert page.evaluate("inspectedNode('counter.value').absoluteFrame.x-inspectedNode('counter.card').absoluteFrame.x") == 32
@@ -47,7 +47,7 @@ def inspection_checks(page, inspector):
     page.wait_for_function("inspectedNode('counter.card').style.foregroundColor === '#00ff00ff'")
     wait_pixels(page, "() => { const l=guavaDebug.snapshot.labels.find(l=>l.text===String(guavaDebug.snapshot.count));return [l.x,l.y,l.width,l.size*1.4]; }",
                 lambda pixels: sum(r < 80 and g > 180 and b < 80 for r, g, b, a in pixels) > 50)
-    assert frame.evaluate("findNode(state.tree,findNode(state.tree,state.selectedId).ownerScopeID).recomposition.count") == profile_before
+    assert frame.evaluate("inspector.tree.findNode(inspector.session.tree.tree,inspector.tree.findNode(inspector.session.tree.tree,inspector.session.tree.selectedId).ownerScopeID).recomposition.count") == profile_before
     # Composition retains debug values; clearing restores the latest theme.
     page.locator("#theme").click()
     page.wait_for_function("guavaDebug.snapshot.dark === false && inspectedNode('counter.card').layout.padding.left === 32")
@@ -80,17 +80,17 @@ def inspection_checks(page, inspector):
 
 def native_inspection_checks(page):
     page.locator("#pickNode").click()
-    page.evaluate("send('inspect.pick',{x:20,y:20})")
+    page.evaluate("inspector.connection.send('inspect.pick',{x:20,y:20})")
     page.wait_for_function("!document.querySelector('#paddingLeft').disabled")
     page.locator("#paddingLeft").fill("25")
-    page.wait_for_function("state.tree.layout.padding.left === 25")
+    page.wait_for_function("inspector.session.tree.tree.layout.padding.left === 25")
     page.locator("#backgroundColor").fill("#ff0000")
-    page.wait_for_function("state.tree.style.backgroundColor === '#ff0000ff'")
+    page.wait_for_function("inspector.session.tree.tree.style.backgroundColor === '#ff0000ff'")
     page.locator("#undoStyle").click()
-    page.wait_for_function("state.tree.style.backgroundColor === '#ffffffff'")
+    page.wait_for_function("inspector.session.tree.tree.style.backgroundColor === '#ffffffff'")
     page.locator("#redoStyle").click()
-    page.wait_for_function("state.tree.style.backgroundColor === '#ff0000ff'")
+    page.wait_for_function("inspector.session.tree.tree.style.backgroundColor === '#ff0000ff'")
     page.locator("#disconnect").click()
     page.locator("#connect").click()
     page.locator("#status").filter(has_text="Connected").wait_for()
-    page.wait_for_function("state.tree.layout.padding.left === 8 && state.snapshot.inspection.overrideCount === 0 && !state.snapshot.inspection.canUndo")
+    page.wait_for_function("inspector.session.tree.tree.layout.padding.left === 8 && inspector.session.tree.snapshot.inspection.overrideCount === 0 && !inspector.session.tree.snapshot.inspection.canUndo")

@@ -1,0 +1,21 @@
+{
+  "application": {
+    "id": "com.guava.gallery",
+    "name": "GuavaUI Gallery"
+  },
+  "version": {
+    "name": "0.1.0",
+    "build": 1
+  },
+  "toolchain": {
+    "enginePath": "../.."
+  },
+  "targets": {
+    "platforms": [
+      "mac",
+      "win",
+      "linux"
+    ],
+    "desktopExecutable": "GuavaUIDemo"
+  }
+}

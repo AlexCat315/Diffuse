@@ -40,7 +40,7 @@ GUAVA_FPS_LOG=1 swift run --package-path GuavaUI/Examples GuavaUIDemo --benchmar
 
 桌面宿主在 macOS 14 及以上使用 `NSWindow.displayLink`，macOS 13 使用随窗口换屏重新绑定的 `CVDisplayLink`。隐藏或最小化窗口暂停刷新，积压信号合并为最新一帧；呈现后没有额外的一周期 sleep 或忙等。尚未接入原生刷新源的平台会输出警告，并按绝对 deadline 回退；`.fixed(...)` 始终使用软件 deadline。
 
-DevTools 通过 `GUAVA_DEVTOOLS=1` 显式开启。Gallery 的 `--performance-hud` 启用宿主通用 HUD；CPU 帧分解可用 `GUAVA_FPS_LOG=1`，其中呈现时间包含 acquire / submit / present 等待，不等于 GPU 执行时间。
+DevTools 通过 `./guava run GuavaUI/Examples --devtools` 启动并自动连接；应用项目使用 `guava run --devtools`，真机使用 `--android --devtools`。`guava run --profile` 保留优化和按需诊断，`guava devtools` 可连接已有会话。直接启动框架示例时仍可用 `GUAVA_DEVTOOLS=1`。Gallery 的 `--performance-hud` 启用宿主通用 HUD；CPU 帧分解可用 `GUAVA_FPS_LOG=1`，其中呈现时间包含 acquire / submit / present 等待，不等于 GPU 执行时间。
 
 跨平台应用从统一 CLI 开始（仓库中使用 `./guava`；安装后使用 `guava`）：
 

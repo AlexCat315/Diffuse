@@ -12,7 +12,10 @@
       "win",
       "linux",
       "android"
-    ],
-    "desktopProduct": "DesktopApp"
+    ]
+  },
+  "version": {
+    "name": "0.1.0",
+    "build": 1
   }
 }

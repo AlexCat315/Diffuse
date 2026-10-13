@@ -14,3 +14,11 @@ for name in ["guava", "guava.exe", "GuavaTools_GuavaCLI.bundle", "GuavaTools_Gua
     try manager.copyItem(at: source, to: target)
 }
 print("Installed guava in \(destination.path). Add that directory to PATH.")
+
+let sdkRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+let userDirectory = ProcessInfo.processInfo.environment["GUAVA_HOME"].map { URL(fileURLWithPath: $0) }
+    ?? manager.homeDirectoryForCurrentUser.appendingPathComponent(".guava")
+try manager.createDirectory(at: userDirectory, withIntermediateDirectories: true)
+let selection = try JSONSerialization.data(withJSONObject: ["path": sdkRoot.path], options: [.sortedKeys])
+try selection.write(to: userDirectory.appendingPathComponent("sdk.json"), options: .atomic)
+print("Selected source SDK: \(sdkRoot.path). Run guava setup for your target platform.")

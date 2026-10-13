@@ -1,5 +1,7 @@
 # GuavaUI 浏览器 Wasm 原型
 
+此目录是浏览器宿主的独立验证工程，尚未成为 `guava build --web` 的完整应用目标。Swift/Wasm 模块通过 JavaScript 适配 Canvas、WebGPU 和 DOM 输入；它不依赖引擎的 Wasmtime 插件运行时。下述已验证工具链配对单独用于原型，不改变 Android 的 Swift 6.4.1 要求。
+
 浏览器和桌面现在运行同一份 `CounterView` Compose 源码，以及真实的
 ViewGraph、节点树、Yoga 布局、输入分发、State/Binding 和 DrawList。
 FreeType/HarfBuzz 字体管线也已共用，浏览器文字绘制为真实的图集字形四边形。
@@ -96,7 +98,7 @@ TCP。桌面 Inspector 连接 `ws://127.0.0.1:9229/`。两者使用同一套消�
 - **Undo / Redo / Clear selected / Clear all**：撤销、重做和清除临时样式覆盖；
   每个颜色和 padding 也可单独 Reset。重组保留覆盖，清除恢复应用最新样式；
   断开连接或开发重载会丢弃覆盖和历史。这些修改保存在内存中。
-  协议、坐标和限制见 [场景编辑协议](../DevTools/protocol-inspection.md)。
+  协议、坐标和限制见 [场景编辑协议](../DevTools/Protocol/Inspection.md)。
 
 - **Capture / Restore / Diff**：Diff 比较编辑框里的检查点与当前状态，列出新增、
   删除和变化字段。示例要求 `count` 为 0…999999、`dark` 为 `true`/`false` 字符串；
@@ -196,7 +198,7 @@ and build `GuavaUIDevToolsProbe` first. Full `verify.py` additionally exercises 
 Wasm renderer and input pipeline.
 
 For a live macOS GPU/mirror check, run `GUAVA_DEVTOOLS=1 swift run --package-path
-GuavaUI GuavaUIDemo --shared-counter` from the repository root, then
+GuavaUI/Examples GuavaUIDemo --shared-counter` from the repository root, then
 `python3 GuavaUI/Browser/verify_native_demo.py`. This checks live State values,
 actual padding-driven Yoga layout, CPU timeline spans, Metal mirror pixels and
 remote pointer input. The app remains running after the check.

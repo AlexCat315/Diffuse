@@ -35,15 +35,26 @@ enum Shell {
         throw ToolError.invalid("Executable not found on PATH: \(name)")
     }
 
+    static func start(_ arguments: [String], at directory: URL? = nil,
+                      environment: [String: String] = ProcessInfo.processInfo.environment) throws -> Process {
+        guard let command = arguments.first else { throw ToolError.invalid("Empty command") }
+        let process = Process()
+        process.executableURL = try executable(command, environment: environment)
+        process.arguments = Array(arguments.dropFirst()); process.currentDirectoryURL = directory
+        process.environment = environment
+        try process.run()
+        return process
+    }
+
     /// Passes arguments directly to the executable; never interprets a shell command.
     @discardableResult
     static func run(_ arguments: [String], at directory: URL? = nil,
                     environment: [String: String] = ProcessInfo.processInfo.environment,
-                    capture: Bool = false) throws -> String {
+                    capture: Bool = false, quiet: Bool = false) throws -> String {
         guard let command = arguments.first else { throw ToolError.invalid("Empty command") }
         let display = arguments.count > 16
             ? Array(arguments.prefix(10)) + ["… (\(arguments.count - 10) more arguments)"] : arguments
-        print("+ " + display.joined(separator: " "))
+        if !quiet { print("+ " + display.joined(separator: " ")) }
         let process = Process()
         process.executableURL = try executable(command, environment: environment)
         process.arguments = Array(arguments.dropFirst())

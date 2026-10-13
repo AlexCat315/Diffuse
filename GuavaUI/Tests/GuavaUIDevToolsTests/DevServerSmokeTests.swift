@@ -108,7 +108,7 @@ final class DevServerSmokeTests: XCTestCase {
         tree.root = Node()
         let dev = DevTools(config: DevToolsConfig(enabled: true), tree: tree)
         var snapshotCount = 0
-        dev.server.snapshotProvider = {
+        dev.server.host.scene.snapshot = {
             snapshotCount += 1
             return TreeSnapshotPayload(root: nil)
         }

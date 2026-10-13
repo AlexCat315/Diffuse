@@ -92,7 +92,7 @@ func largeTreeBroadcastCoalescesBurstsAndDeliversFinalIdleChange() async throws 
                     source: SourceLocationPayload(fileID: "Editor/Panel.swift", filePath: "/project/Panel.swift", line: index + 1, column: 2))
     }
     let revision = TreeTestRevision()
-    server.snapshotProvider = {
+    server.host.scene.snapshot = {
         revision.captures += 1
         return TreeSnapshotPayload(root: NodeSummary(id: "root", debugName: revision.name,
             frame: NodeFrame(x: 0, y: 0, w: 1280, h: 720), flags: flags, children: children))
@@ -129,7 +129,7 @@ func deeplyNestedEditorTreeEncodesOffTheSceneThread() async throws {
         root = NodeSummary(id: "wrapper.\(index)", frame: NodeFrame(x: 0, y: 0, w: 1, h: 1), flags: flags, children: [root])
     }
     let snapshot = TreeSnapshotPayload(root: root)
-    server.snapshotProvider = { snapshot }
+    server.host.scene.snapshot = { snapshot }
     try server.start(); defer { server.stop() }
     transport.onEvent?(.connected(connection)); _ = try await receive("hello", from: connection)
     try transport.request("tree.subscribe", connection: connection)
@@ -147,8 +147,8 @@ func staleTreeSubscribeCannotCaptureAfterServerRestart() async throws {
     let transport = TestTransport(), inbox = HostInbox(), old = TestConnection(), current = TestConnection()
     let server = DevServer(config: DevToolsConfig(), transport: transport)
     var captures = 0
-    server.hostMainExecutor = { inbox.add($0) }
-    server.snapshotProvider = { captures += 1; return TreeSnapshotPayload(root: nil) }
+    server.host.execute = { inbox.add($0) }
+    server.host.scene.snapshot = { captures += 1; return TreeSnapshotPayload(root: nil) }
     try server.start(); defer { server.stop() }
     transport.onEvent?(.connected(old)); _ = try await receive("hello", from: old)
     try transport.request("tree.subscribe", connection: old)
@@ -175,12 +175,12 @@ func subscriptionsStateAndDisconnectUseSharedProtocol() async throws {
     var restored: [String: String]?
     var selections = [String]()
     var mirrorStops = 0
-    server.snapshotProvider = { snapshots += 1; return TreeSnapshotPayload(root: nil) }
-    server.stateCheckpointHandler = { ["count": "7"] }
-    server.stateRestoreHandler = { restored = $0 }
-    server.selectionHandler = { selections.append($0) }
-    server.selectionClearHandler = { selections.append("clear") }
-    server.mirrorStopHandler = { mirrorStops += 1 }
+    server.host.scene.snapshot = { snapshots += 1; return TreeSnapshotPayload(root: nil) }
+    server.host.checkpoint.capture = { ["count": "7"] }
+    server.host.checkpoint.restore = { restored = $0; return true }
+    server.host.scene.select = { selections.append($0) }
+    server.host.scene.clearSelection = { selections.append("clear") }
+    server.host.mirror.stop = { mirrorStops += 1 }
     try server.start()
     defer { server.stop() }
     server.broadcastTreeDelta()
@@ -279,14 +279,14 @@ func stateDiffRestoreResultAndRecordingOwnership() async throws {
     var value = "2"
     var stops = 0
     var replays = 0
-    server.stateCheckpointHandler = { ["count": value] }
-    server.stateRestoreResultHandler = { state in
+    server.host.checkpoint.capture = { ["count": value] }
+    server.host.checkpoint.restore = { state in
         guard let next = state["count"], let integer = Int(next), integer >= 0 else { return false }
         value = next; return true
     }
-    server.recordingStartHandler = { true }
-    server.recordingStopHandler = { stops += 1; return InputRecording(initialState: ["count":"2"]) }
-    server.recordingReplayHandler = { recording in replays += 1; value = recording.initialState["count"]!; return true }
+    server.host.recording.start = { true }
+    server.host.recording.stop = { stops += 1; return InputRecording(initialState: ["count":"2"]) }
+    server.host.recording.replay = { recording in replays += 1; value = recording.initialState["count"]!; return true }
     try server.start(); defer { server.stop() }
     let owner = TestConnection()
     let other = TestConnection()
@@ -325,9 +325,9 @@ func temporaryInspectionIsExclusiveAndDisconnectCleansOnlyItsLease() async throw
     let transport = TestTransport(), inbox = HostInbox()
     let server = DevServer(config: DevToolsConfig(), transport: transport)
     var applied = 0, resets = 0
-    server.hostMainExecutor = { inbox.add($0) }
-    server.inspectionHandler = { request in applied += 1; return DevToolsEnvelope(type: request.type + ".ok", id: request.id) }
-    server.inspectionResetHandler = { resets += 1 }
+    server.host.execute = { inbox.add($0) }
+    server.host.scene.inspect = { request in applied += 1; return DevToolsEnvelope(type: request.type + ".ok", id: request.id) }
+    server.host.scene.reset = { resets += 1 }
     try server.start(); defer { server.stop(); inbox.drain() }
     let owner = TestConnection(), other = TestConnection()
     transport.onEvent?(.connected(owner)); _ = try await receive("hello", from: owner)
@@ -359,13 +359,13 @@ func observationStreamsAreIndependentAndTimelineStopsAfterLastDisconnect() async
     let server = DevServer(config: DevToolsConfig(), transport: transport)
     var reads = [[String]](), capture = false
     let value = ObservationTestValue()
-    server.stateObservationProvider = { ids in
+    server.host.observation.state = { ids in
         reads.append(ids)
         return StateObservationPayload(registered: [RegisteredStatePayload(id: "count", name: "count", valueType: "Int")],
             values: ids.contains("count") ? [ObservedStatePayload(id: "count", summary: value.number, truncated: false)] : [])
     }
-    server.timelineCaptureHandler = { capture = $0 }
-    server.timelineProvider = { _ in TimelineSnapshotPayload(events: [TimelineEventPayload(sequence: 1, phase: "draw", name: "Draw", scopeID: nil, startMs: 1, durationMs: 2)]) }
+    server.host.observation.capture = { capture = $0 }
+    server.host.observation.timeline = { _ in TimelineSnapshotPayload(events: [TimelineEventPayload(sequence: 1, phase: "draw", name: "Draw", scopeID: nil, startMs: 1, durationMs: 2)]) }
     try server.start(); defer { server.stop() }
     server.broadcastObservations(); #expect(reads.isEmpty && !capture)
     transport.onEvent?(.connected(one)); _ = try await receive("hello", from: one)

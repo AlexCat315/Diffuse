@@ -1,13 +1,13 @@
 import Foundation
 
 struct BuildOptions {
-    let configuration: String
+    let configuration: BuildConfiguration
     let signing: APKSigning?
     let install: Bool
     let serial: String?
 
     init(_ arguments: Arguments) throws {
-        configuration = arguments.configuration.rawValue
+        configuration = arguments.configuration
         signing = try APKSigning.parse(arguments)
         install = arguments.operation == .run || arguments.operation == .showcase
         serial = arguments.value(.device)

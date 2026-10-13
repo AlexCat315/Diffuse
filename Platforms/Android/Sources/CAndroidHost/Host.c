@@ -5,8 +5,12 @@
 #include <jni.h>
 #include <stdlib.h>
 
+static JavaVM* guava_vm;
+static jclass main_activity;
+static jmethodID schedule_diagnostics;
 extern jint GuavaSDL_JNI_OnLoad(JavaVM*, void*);
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    guava_vm = vm;
     return GuavaSDL_JNI_OnLoad(vm, reserved);
 }
 
@@ -22,7 +26,11 @@ void guava_android_log(const char* message) { __android_log_write(ANDROID_LOG_IN
 
 JNIEXPORT jlong JNICALL Java_com_guava_probe_MainActivity_createApplication(JNIEnv* env, jclass type,
         jfloat scale, jstring resources, jstring checkpoint, jstring configuration, jstring options) {
-    (void)type;
+    if (!main_activity) {
+        main_activity = (*env)->NewGlobalRef(env, type);
+        schedule_diagnostics = (*env)->GetStaticMethodID(env, type, "scheduleDiagnostics", "(J)V");
+        if (!main_activity || !schedule_diagnostics) return 0;
+    }
     const char* path = (*env)->GetStringUTFChars(env, resources, NULL);
     if (!path) return 0;
     setenv("PACKAGE_RESOURCE_BUNDLE_PATH", path, 1);
@@ -77,4 +85,20 @@ JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_close(JNIEnv* env, jcla
     guava_android_close(host->session);
     ANativeWindow_release(host->window);
     free(host);
+}
+
+extern void guava_android_pump_diagnostics(void* application);
+JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_pumpDiagnostics(JNIEnv* env, jclass type, jlong application) {
+    (void)env; (void)type;
+    guava_android_pump_diagnostics((void*)(uintptr_t)application);
+}
+
+void guava_android_schedule_diagnostics(void* application) {
+    if (!guava_vm || !main_activity || !schedule_diagnostics) return;
+    JNIEnv* env = NULL;
+    int attached = (*guava_vm)->GetEnv(guava_vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK;
+    if (attached && (*guava_vm)->AttachCurrentThread(guava_vm, &env, NULL) != JNI_OK) return;
+    (*env)->CallStaticVoidMethod(env, main_activity, schedule_diagnostics, (jlong)(uintptr_t)application);
+    if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); guava_android_log("FAIL diagnostics scheduling"); }
+    if (attached) (*guava_vm)->DetachCurrentThread(guava_vm);
 }

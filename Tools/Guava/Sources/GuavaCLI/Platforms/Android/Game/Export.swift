@@ -20,9 +20,9 @@ enum ExportGame {
         let package = directory.appendingPathComponent("GuavaAndroidGameplay")
         let count = try GameplayPackage.create(project: staged, destination: package, root: root)
         let products = try toolchain.compile(product: "GuavaAndroidApp", configuration: options.configuration, gameplay: package)
-        try APKPackage(toolchain: toolchain, identity: identity, configuration: options.configuration, signing: options.signing)
+        try APKPackage(toolchain: toolchain, identity: identity, mode: options.configuration, signing: options.signing)
             .build(products: products, launch: SceneLaunch(mode: .game, project: "GuavaProject"), output: output, project: staged)
-        let report = BuildReport(application: identity, source: project.path, apk: output.path, configuration: options.configuration,
+        let report = BuildReport(application: identity, source: project.path, apk: output.path, configuration: options.configuration.rawValue,
                                  signing: options.signing == nil ? "development" : "custom", scripts: count)
         try Files.json(report, to: output.deletingPathExtension().appendingPathExtension("json"))
         try Files.copy(staged.appendingPathComponent("build.json"), to: output.deletingPathExtension().appendingPathExtension("project.json"))

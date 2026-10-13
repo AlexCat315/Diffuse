@@ -14,7 +14,7 @@ struct AndroidToolchain {
         cache = root.appendingPathComponent("Engine/build/android-validation")
         let environment = ProcessInfo.processInfo.environment
         sdk = Self.sdkDirectory(arguments)
-        ndk = arguments.url(.ndk) ?? environment["ANDROID_NDK_HOME"].map { URL(fileURLWithPath: $0) } ?? cache.appendingPathComponent("android-ndk-r30")
+        ndk = Self.ndkDirectory(arguments, root: root)
         swift = environment["GUAVA_SWIFT_EXECUTABLE"] ?? "swift"
         let revision = try String(contentsOf: ndk.appendingPathComponent("source.properties"), encoding: .utf8)
         guard revision.range(of: #"Pkg.Revision\s*=\s*30\."#, options: .regularExpression) != nil else {
@@ -37,6 +37,14 @@ struct AndroidToolchain {
             .map { URL(fileURLWithPath: $0) } ?? fallback
     }
 
+    static func ndkDirectory(_ arguments: Arguments, root: URL) -> URL {
+        if let explicit = arguments.url(.ndk) { return explicit }
+        if let path = ProcessInfo.processInfo.environment["ANDROID_NDK_HOME"] { return URL(fileURLWithPath: path) }
+        let installed = (try? Files.children(sdkDirectory(arguments).appendingPathComponent("ndk"))) ?? []
+        if let selected = installed.filter({ $0.lastPathComponent.hasPrefix("30.") }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }).last { return selected }
+        return root.appendingPathComponent("Engine/build/android-validation/android-ndk-r30")
+    }
+
     func ndkHost() throws -> URL {
         let hosts = try Files.children(ndk.appendingPathComponent("toolchains/llvm/prebuilt"))
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
@@ -44,11 +52,12 @@ struct AndroidToolchain {
         return hosts[0]
     }
 
-    func compile(product: String, configuration: String, content: URL? = nil,
+    func compile(product: String, configuration: BuildConfiguration, content: URL? = nil,
                  gameplay: URL? = nil, scratch: URL? = nil) throws -> URL {
         try Files.directory(cache)
         let artifacts = try NativeDependencies(toolchain: self).prepare()
         var environment = ProcessInfo.processInfo.environment
+        environment["GUAVA_ENGINE_ROOT"] = root.path
         environment["ANDROID_NDK_HOME"] = ndk.path
         // SwiftPM resolves binary target paths against the consuming package root, so the
         // shared cache locations are passed relative to the package that reads them.
@@ -59,8 +68,10 @@ struct AndroidToolchain {
         environment["GUAVA_ANDROID_UI_PACKAGE"] = content?.path
         environment["GUAVA_ANDROID_GAME_PACKAGE"] = gameplay?.path
         var command = [swift, "build", "--package-path", root.appendingPathComponent("Platforms/Android").path,
-                       "--swift-sdk", Self.sdkID, "--triple", Self.triple, "--static-swift-stdlib",
-                       "--configuration", configuration, "--jobs", "4"]
+                       "--build-system", "native", "--swift-sdk", Self.sdkID, "--triple", Self.triple, "--static-swift-stdlib",
+                       "--configuration", configuration.swiftConfiguration, "--jobs", "4"]
+        command += try compilerOptions()
+        command += configuration.swiftFlags
         if let scratch { command += ["--scratch-path", scratch.path] }
         try Shell.run(command + ["--product", product], environment: environment)
         return URL(fileURLWithPath: try Shell.run(command + ["--show-bin-path"], environment: environment, capture: true))

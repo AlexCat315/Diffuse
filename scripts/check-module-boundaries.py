@@ -57,18 +57,20 @@ def check():
             continue
         relative = source.relative_to(template)
         destination = example / (str(relative)[:-3] if str(relative).endswith(".in") else relative)
-        expected = source.read_text()
-        assert destination.read_text() == expected, f"Starter drifted from its template: {relative}"
+        expected = source.read_bytes()
+        assert destination.read_bytes() == expected, f"Starter drifted from its template: {relative}"
     tools = manifest("Tools/Guava")
     assert {item["name"] for item in tools["products"]} == {"guava"}
-    assert local_dependencies(tools) == {ROOT / "Platforms/Android/Contract"}
+    assert local_dependencies(tools) == {ROOT / "Platforms/Android/Contract", ROOT / "GuavaUI/Portable"}
     assert not (ROOT / "Platforms/Android/Tools").exists(), "Android must not own a separate developer CLI"
     assert not (example / "android.swift").exists()
     assert not (example / "guava-android.json").exists()
     configuration = json.loads((example / "guava.json").read_text())
     assert set(configuration["targets"]["platforms"]) == {"mac", "win", "linux", "android"}
     assert (example / configuration["toolchain"]["enginePath"]).resolve() == ROOT
+    assert not (example / "Sources/DesktopApp").exists()
     starter = manifest("examples/GuavaUIStarter")
+    assert {product["name"] for product in starter["products"]} == {"AppContent"}
     resources = (example / "Sources/AppContent/AppResources.swift").read_text()
     assert f'{starter["name"]}_AppContent' in resources, "Resource lookup must match the actual SwiftPM package and target"
     print("Module boundaries passed: production UI, workspace launcher, Android application/game/showcase, and application templates")

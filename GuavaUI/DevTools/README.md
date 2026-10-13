@@ -9,11 +9,23 @@ The previous Network.framework-only server and non-Apple no-op were removed.
 1. Start a GuavaUI app with DevTools enabled:
 
    ```bash
-   GUAVA_DEVTOOLS=1 swift run GuavaUIDemo
+   ./guava run GuavaUI/Examples --devtools
+   # Application project:
+   ./guava run /path/to/MyApp --devtools
+   ./guava run /path/to/MyApp --android --devtools --device DEVICE_SERIAL
+   # Connect to an existing CLI-managed session:
+   ./guava devtools /path/to/MyApp
    ```
 
-2. Open `index.html` in a browser.
-3. Connect to `ws://127.0.0.1:9229/`.
+The CLI opens this Inspector with the runtime's authenticated endpoint. Dynamic
+ports and per-session tokens allow multiple apps/devices without a shared fixed port.
+Use `--no-open` for headless runs and `--session ID` to select an existing session.
+Android uses a CLI-owned ADB forwarding lifetime; Ctrl+C removes the forwarding.
+
+For direct framework development, `GUAVA_DEVTOOLS=1 swift run --package-path
+GuavaUI/Examples GuavaUIDemo` still enables the loopback service at the default
+port 9229. Open Client/index.html and connect manually in that workflow. Ordinary apps
+use the same runtime diagnostics service; no demo-specific API is required.
 
 The client can inspect and filter the live node tree, select a node, request
 configurable mirror frames, display timing/log/runtime inventory data, capture
@@ -61,7 +73,7 @@ layout/repaint. Hex colors accept alpha; color swatches choose opaque colors.
 temporary overrides. App recomposition preserves them; clearing restores current
 app styles. Disconnect/stop discards overrides and history. Changes stay in memory.
 Native `Text` and the shared demo honor foreground/padding; custom paint callbacks
-must read effective node styles. See [inspection protocol](protocol-inspection.md)
+must read effective node styles. See [inspection protocol](Protocol/Inspection.md)
 for messages, lifecycle, limits and custom host integration.
 
 ## Source location and component recomposition
@@ -102,7 +114,7 @@ frame time. Profiling is lightweight and enabled by default; custom hosts may se
 `graph.tracksRecomposition = false` before installation.
 
 Native and Wasm hosts publish identical additive snapshot fields. See
-[component analysis protocol](protocol-analysis.md). Editor jumps construct a
+[component analysis protocol](Protocol/Analysis.md). Editor jumps construct a
 client-side `vscode://file`/`cursor://file` link; the runtime never reads a source
 file or executes an editor command.
 
@@ -135,8 +147,8 @@ and direction into this protocol; native point input is not multiplied by a line
 step or display density. Version 1 recordings are not decoded. Replay restores initial state and
 focus, then dispatches events in order with composition/layout between events. It does
 not reproduce wall-clock delays. The limits are 4096 events and 768 KiB. Native recording is owned by
-one connection and is stopped on disconnect. Hosts provide `inputRecordingStart`,
-`inputRecordingStop`, `inputReplay` callbacks and observe input with the window
+one connection and is stopped on disconnect. Hosts provide `recording.start`,
+`recording.stop`, `recording.replay` callbacks and observe input with the window
 session's `inputObserver`; controls are enabled only with capability `recording`.
 
 Browser development reloads use `npm run dev`; successful complete builds restore
@@ -158,7 +170,7 @@ and bounded; parent and child durations overlap. GPU execution is excluded.
 **Add breakpoint** forwards the mapped source coordinates to the companion
 GuavaUI-vscode extension's existing VS Code/Cursor debugger API. Build and reload
 that extension to enable its URI handler and node-tree context command. See
-[observation protocol](protocol-observation.md) for registration APIs, lifecycle,
+[observation protocol](Protocol/Observation.md) for registration APIs, lifecycle,
 wire messages and bounds.
 
 The extension adds line breakpoints and reveals the original source column.
@@ -191,3 +203,37 @@ The Python runner needs the [Python requirements](../Browser/requirements-dev.tx
 and Chromium. It exercises real WebSocket
 source/profile, picking/styles, selected state values, timeline start/stop/export,
 breakpoint URLs and disconnect/reconnect cleanup.
+
+## Profile and platform adapters
+
+`guava run --profile` uses Swift Release optimization with GUAVA_PROFILE and
+keeps an opt-in diagnostics service. Streams are still subscription-driven;
+CPU instrumentation and picture mirroring have measurement overhead and should
+be enabled only for the investigation. CLI --release rejects --devtools, and
+fromEnvironment does not enable a production Release runtime.
+
+Android now connects the same scene protocol to its UI-thread Handler, including
+while the surface is paused. It advertises tree/selection/styles/source/component
+analysis/state observation/CPU timeline/timing. It does not advertise picture
+mirroring or arbitrary checkpoint/recording providers that its host has not
+installed. Its timing presentMs covers host work after draw-list preparation,
+including GPU command submission/waiting; it is not GPU execution duration.
+
+Run against an existing CLI-managed session:
+
+```sh
+node scripts/verify-development-session.mjs /path/to/MyApp mac
+node scripts/verify-development-session.mjs /path/to/MyApp android
+```
+
+
+## Ownership and directory structure
+
+- `Client/Connection` owns WebSocket and embedded browser transports and message dispatch.
+- `Client/Inspector` owns the tree, runtime inventory and temporary layout/style edits.
+- `Client/Analysis`, `Client/State`, `Client/Diagnostics`, and `Client/Mirror` own their respective panels.
+- `Client/Session` owns grouped session state and common controls; `Application.js` only composes factories and startup events. Factories receive explicit session/elements/peer operations.
+- `Protocol` documents the shared protocol. Swift message models remain canonical in Portable, separate from HTML rendering.
+- Portable server `Session`, `Transport`, `Tree` and `Requests` separate lifecycle, sockets, tree encoding and request domains. Typed host adapters group scene, checkpoints, recordings, observations and mirror callbacks.
+
+CLI discovery files, connection tokens, ADB forwarding and temporary edits are session data, never application manifest or authored checkpoint fields.

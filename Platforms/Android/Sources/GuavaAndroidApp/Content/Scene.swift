@@ -9,6 +9,7 @@ import AppContent
 #endif
 
 /// Selects application, showcase or game content without owning Compose internals.
+@MainActor
 final class HostedScene {
     struct Bounds: Codable {
         let x: Float

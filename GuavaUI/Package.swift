@@ -20,7 +20,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     ],
     targets: [
-        .target(name: "GuavaUIAndroid", dependencies: ["GuavaUICompose", "GuavaUIRuntime"], path: "Platforms/Android"),
+        .target(name: "GuavaUIAndroid", dependencies: ["GuavaUICompose", "GuavaUIRuntime", "GuavaUIDevTools"], path: "Platforms/Android"),
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。
         // 依赖 Engine 的渲染抽象（NativeRHI、PlatformShell、EngineKernel）。

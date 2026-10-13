@@ -29,4 +29,21 @@ enum AppPlatform: String, Codable, CaseIterable, Sendable {
     }
 }
 
-enum BuildConfiguration: String { case debug, release }
+enum BuildConfiguration: String, Codable {
+    case debug, profile, release
+    var swiftConfiguration: String { self == .debug ? "debug" : "release" }
+    var swiftFlags: [String] { self == .profile ? ["-Xswiftc", "-DGUAVA_PROFILE"] : [] }
+}
+
+extension AppPlatform {
+    var directoryName: String {
+        switch self {
+        case .mac: "macOS"
+        case .win: "Windows"
+        case .linux: "Linux"
+        case .android: "Android"
+        case .ios: "iOS"
+        case .web: "Web"
+        }
+    }
+}

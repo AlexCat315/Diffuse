@@ -9,23 +9,31 @@ let toolchain = document["toolchain"] as! [String: String]
 let engineRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ROOT"]
     ?? URL(fileURLWithPath: toolchain["enginePath"]!, relativeTo: directory).standardizedFileURL.path
 
+#if os(macOS)
+let nativeDirectory = "Platforms/macOS/Sources"
+#elseif os(Windows)
+let nativeDirectory = "Platforms/Windows/Sources"
+#else
+let nativeDirectory = "Platforms/Linux/Sources"
+#endif
+let hasNativeSources = FileManager.default.fileExists(atPath: directory.appendingPathComponent(nativeDirectory).path)
+let platformTargets: [Target] = hasNativeSources ? [
+    .target(name: "PlatformSupport", dependencies: [.product(name: "GuavaUI", package: "GuavaUI")], path: nativeDirectory)
+] : []
+
 let package = Package(
     name: "GuavaApplication",
     platforms: [.macOS(.v13)],
     products: [
         .library(name: "AppContent", targets: ["AppContent"]),
-        .executable(name: "DesktopApp", targets: ["DesktopApp"]),
     ],
     dependencies: [
         .package(path: "\(engineRoot)/GuavaUI"),
     ],
     targets: [
-        .executableTarget(name: "DesktopApp", dependencies: [
-            "AppContent", .product(name: "GuavaUI", package: "GuavaUI"),
-        ]),
         .target(name: "AppContent", dependencies: [
             .product(name: "GuavaUI", package: "GuavaUI"),
-        ], resources: [.copy("Assets")]),
+        ] + (hasNativeSources ? [.target(name: "PlatformSupport", condition: .when(platforms: [.macOS, .windows, .linux]))] : []), resources: [.copy("Assets")]),
         .testTarget(name: "AppContentTests", dependencies: ["AppContent"]),
-    ]
+    ] + platformTargets
 )

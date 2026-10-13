@@ -25,19 +25,14 @@ struct APKSigning {
         return signing
     }
 
-    static func sign(aligned: URL, output: URL, toolchain: AndroidToolchain, signing: Self?) throws {
-        let tools = toolchain.sdk.appendingPathComponent("build-tools/36.1.0")
-        let key = signing?.keystore ?? toolchain.cache.appendingPathComponent("debug.keystore")
-        if signing == nil, !FileManager.default.fileExists(atPath: key.path) {
+    static func development(toolchain: AndroidToolchain) throws -> Self {
+        let key = toolchain.cache.appendingPathComponent("debug.keystore")
+        if !FileManager.default.fileExists(atPath: key.path) {
+            try Files.directory(toolchain.cache)
             try Shell.run(["keytool", "-genkeypair", "-keystore", key.path, "-storepass", "android", "-keypass", "android",
                 "-alias", "androiddebugkey", "-dname", "CN=Guava Android,O=Guava,C=CN", "-keyalg", "RSA", "-keysize", "2048", "-validity", "3650"])
         }
-        let options: [String]
-        if let signing {
-            options = ["--ks", key.path, "--ks-key-alias", signing.alias, "--ks-pass", "env:" + signing.storePasswordVariable,
-                       "--key-pass", "env:" + signing.keyPasswordVariable]
-        } else { options = ["--ks", key.path, "--ks-pass", "pass:android"] }
-        try Shell.run([tools.appendingPathComponent("apksigner").path, "sign"] + options + ["--out", output.path, aligned.path])
-        try Shell.run([tools.appendingPathComponent("apksigner").path, "verify", output.path])
+        return Self(keystore: key, alias: "androiddebugkey", storePasswordVariable: "GUAVA_BUILD_STORE_PASSWORD",
+                    keyPasswordVariable: "GUAVA_BUILD_KEY_PASSWORD")
     }
 }

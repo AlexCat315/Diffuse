@@ -139,7 +139,7 @@ public final class Application {
             try rendering.attachFrameTap(to: dev)
             dev.stateRegistry = composition.graph.stateRegistry
             configureCheckpoint(dev)
-            dev.server.hostMainExecutor = { [weak self] operation in
+            dev.server.host.execute = { [weak self] operation in
                 self?.host.enqueueMainThreadWork {
                     MainActor.assumeIsolated {
                         operation()
@@ -519,7 +519,7 @@ public final class Application {
                 let frameEnd = TimingTrace.now()
                 devTools?.timing.record(layoutMs: (layoutEnd - layoutStart) * 1000,
                     drawMs: (drawEnd - layoutEnd) * 1000, presentMs: 0,
-                    totalMs: (frameEnd - frameStart) * 1000, nodeCount: countNodes(root),
+                    totalMs: (frameEnd - frameStart) * 1000, nodeCount: composition.tree.nodeCount,
                     batchCount: composition.drawList.batches.count, presented: false)
                 devTools?.notifyFrameFinished()
                 host.requestDisplay()
@@ -558,7 +558,7 @@ public final class Application {
                     drawMs: (drawEnd - layoutEnd) * 1000,
                     presentMs: (presentEnd - drawEnd) * 1000,
                     totalMs: (presentEnd - frameStart) * 1000,
-                    nodeCount: countNodes(root),
+                    nodeCount: composition.tree.nodeCount,
                     batchCount: composition.drawList.batches.count
                 )
                 dev.notifyFrameFinished()
@@ -584,15 +584,6 @@ public final class Application {
             metrics.fpsTickAccum += (TimingTrace.now() - tickStart) * 1000
         }
         syncAuxiliaryWindows()
-    }
-
-    /// Recursive scene-composition.graph node count used purely for the timing payload.
-    private func countNodes(_ node: Node) -> Int {
-        var n = 1
-        for child in node.children {
-            n += countNodes(child)
-        }
-        return n
     }
 
     private func drawDevToolsOverlay(into list: DrawList) {

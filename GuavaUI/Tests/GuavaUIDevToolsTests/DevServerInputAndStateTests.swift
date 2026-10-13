@@ -84,9 +84,10 @@ final class DevServerInputAndStateTests: XCTestCase {
         )
 
         let restored = RestoredSnapshot()
-        dev.stateCheckpointProvider = { ["foo": "bar", "scroll": "42"] }
-        dev.stateRestoreHandler = { snap in
+        dev.checkpoint.capture = { ["foo": "bar", "scroll": "42"] }
+        dev.checkpoint.restore = { snap in
             Task { @MainActor in restored.snapshot = snap }
+            return true
         }
         try dev.start()
         defer { dev.stop() }

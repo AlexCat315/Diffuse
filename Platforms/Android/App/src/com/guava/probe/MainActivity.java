@@ -19,6 +19,8 @@ public final class MainActivity extends Activity {
     private static boolean sdlReady;
     static native long createApplication(float scale, String resources, String checkpoint, String configuration, String options);
     static native void destroyApplication(long application);
+    static native void pumpDiagnostics(long application);
+    static void scheduleDiagnostics(long application) { Diagnostics.schedule(application); }
     static native long open(long application, android.view.Surface surface, int width, int height);
     static native int frame(long session, long displayTimeNanos);
     static native void pointer(long session, int kind, float x, float y);
@@ -63,7 +65,7 @@ public final class MainActivity extends Activity {
             if (debugBuild()) updateLaunch(getIntent());
         } catch (Exception error) { throw new IllegalStateException("Invalid Android launch configuration", error); }
         surface = new ContentSurfaceView(this, savedState == null ? "" : savedState.getString("checkpoint", ""), launch.toString(),
-                new RuntimeOptions(getIntent()), getLastNonConfigurationInstance() instanceof Long ? (Long)getLastNonConfigurationInstance() : 0);
+                new RuntimeOptions(this, getIntent()), getLastNonConfigurationInstance() instanceof Long ? (Long)getLastNonConfigurationInstance() : 0);
         FrameLayout root = new FrameLayout(this);
         root.addView(surface);
         if ("game".equals(launch.optString("mode"))) root.addView(new GameControls(this, surface), GameControls.layout());
@@ -104,7 +106,7 @@ public final class MainActivity extends Activity {
         if (sceneChanged || RuntimeOptions.updates(intent)) {
             updateLaunch(intent);
             RuntimeOptions.merge(intent, getIntent());
-            RuntimeOptions options = new RuntimeOptions(getIntent());
+            RuntimeOptions options = new RuntimeOptions(this, getIntent());
             if (sceneChanged) surface.configure(launch.toString(), options);
             else surface.configureRuntime(options);
         }

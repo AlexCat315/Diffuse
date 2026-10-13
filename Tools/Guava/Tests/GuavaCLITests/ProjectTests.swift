@@ -13,11 +13,11 @@ private func temporaryProject() throws -> URL {
 }
 
 @Test func manifestDefaultsAndRoundTrip() throws {
-    let data = Data(#"{"application":{"id":"com.example.app","name":"App"},"toolchain":{"enginePath":"../SDK"}}"#.utf8)
+    let data = Data(#"{"application":{"id":"com.example.app","name":"App"},"toolchain":{"enginePath":"../SDK"},"version":{}}"#.utf8)
     let configuration = try JSONDecoder().decode(ProjectConfiguration.self, from: data)
     try configuration.validate()
     #expect(configuration.targets.platforms == [.mac, .win, .linux, .android])
-    #expect(configuration.targets.desktopProduct == "DesktopApp")
+    #expect(configuration.targets.desktopExecutable == nil)
     let encoded = try JSONEncoder().encode(configuration)
     #expect(try JSONDecoder().decode(ProjectConfiguration.self, from: encoded) == configuration)
     #expect(!String(decoding: encoded, as: UTF8.self).contains("device"))

@@ -172,7 +172,7 @@ def native_checks(browser, base_url, native_port, client_path="devtools/index.ht
     try:
         native_observation_checks(page, screenshot)
     except Exception:
-        print(page.evaluate("({capabilities:[...state.capabilities], registered:observation.registered, log:state.logEntries})"), flush=True)
+        print(page.evaluate("({capabilities:[...inspector.session.connection.capabilities], registered:inspector.session.observation.registered, log:inspector.session.logs.logEntries})"), flush=True)
         page.screenshot(path="/tmp/guava-devtools-failure.png", full_page=True)
         raise
     page.locator("#disconnect").click()
@@ -231,7 +231,7 @@ def main():
                 try:
                     base_url = f"http://127.0.0.1:{server.server_port}/"
                     if options.native_only:
-                        native_checks(browser, base_url, native_port, "DevTools/index.html", options.screenshot)
+                        native_checks(browser, base_url, native_port, "DevTools/Client/index.html", options.screenshot)
                         return
                     preview_checks(browser, base_url, "canvas2d", None if strict_gpu else options.screenshot)
                     if options.require_hardware_gpu:

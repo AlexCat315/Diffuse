@@ -1,7 +1,8 @@
 import Foundation
+import GuavaUIDevToolsProtocol
 
 enum AndroidDevice {
-    static func install(_ apk: URL, toolchain: AndroidToolchain, serial: String?, identity: ApplicationIdentity) throws {
+    static func install(_ apk: URL, toolchain: AndroidToolchain, serial: String?, identity: ApplicationIdentity, launch: DevToolsLaunch? = nil) throws -> String {
         let adb = toolchain.sdk.appendingPathComponent("platform-tools/adb").path
         let listing = try Shell.run([adb, "devices"], capture: true)
         let ready = listing.split(separator: "\n").dropFirst().compactMap { line -> String? in
@@ -14,6 +15,20 @@ enum AndroidDevice {
         let command = [adb, "-s", device]
         try Shell.run(command + ["install", "--no-incremental", "-r", apk.path])
         try Shell.run(command + ["shell", "am", "force-stop", identity.id])
-        try Shell.run(command + ["shell", "am", "start", "-W", "-n", identity.id + "/com.guava.probe.MainActivity"])
+        let resolved = try Shell.run(command + ["shell", "cmd", "package", "resolve-activity", "--brief",
+            "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", identity.id], capture: true, quiet: true)
+        let activity = try launcher(resolved, applicationID: identity.id)
+        var start = command + ["shell", "am", "start", "-W", "-n", activity]
+        if let launch { start += ["--es", "guava_devtools", try JSONEncoder().encode(launch).base64EncodedString()] }
+        try Shell.run(start, quiet: launch != nil)
+        return device
     }
+    static func launcher(_ listing: String, applicationID: String) throws -> String {
+        guard let activity = listing.split(separator: "\n").map({ $0.trimmingCharacters(in: .whitespaces) })
+            .last(where: { $0.hasPrefix(applicationID + "/") && !$0.contains(" ") }) else {
+            throw ToolError.invalid("No launchable activity for \(applicationID); check Platforms/Android/app/src/main/AndroidManifest.xml")
+        }
+        return activity
+    }
+
 }

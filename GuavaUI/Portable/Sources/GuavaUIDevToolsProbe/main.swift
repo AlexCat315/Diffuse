@@ -30,22 +30,22 @@ struct DevToolsProbe {
         root.addChild(componentTree.root!)
         let inspector = SceneInspector(tree: tree)
         server.advertisedCapabilities = ["tree", "select", "log", "timing", "state", "inspect", "style", "source", "recomposition", "state.observe", "timeline"]
-        server.snapshotProvider = {
+        server.host.scene.snapshot = {
             layout.calculateLayout(availableWidth: 320, availableHeight: 180); root.frame = layout.frame
             return inspector.snapshot()
         }
-        server.selectionHandler = { inspector.editor.select($0) }
-        server.selectionClearHandler = { inspector.editor.select(nil) }
-        server.inspectionHandler = { inspector.editor.handle($0) }
-        server.inspectionResetHandler = { inspector.editor.reset() }
+        server.host.scene.select = { inspector.editor.select($0) }
+        server.host.scene.clearSelection = { inspector.editor.select(nil) }
+        server.host.scene.inspect = { inspector.editor.handle($0) }
+        server.host.scene.reset = { inspector.editor.reset() }
         inspector.editor.onChange = { [weak server] in MainActor.assumeIsolated { server?.broadcastTreeDelta() } }
-        server.stateObservationProvider = { graph.stateRegistry.observation(ids: $0) }
-        server.timelineProvider = { componentTree.timeline.snapshot(after: $0) }
-        server.timelineCaptureHandler = { tree.timeline.setEnabled($0); componentTree.timeline.setEnabled($0) }
-        server.stateCheckpointHandler = { state }
-        server.stateRestoreHandler = {
+        server.host.observation.state = { graph.stateRegistry.observation(ids: $0) }
+        server.host.observation.timeline = { componentTree.timeline.snapshot(after: $0) }
+        server.host.observation.capture = { tree.timeline.setEnabled($0); componentTree.timeline.setEnabled($0) }
+        server.host.checkpoint.capture = { state }
+        server.host.checkpoint.restore = {
             state = $0; component.count = $0["count"].flatMap(Int.init) ?? 0
-            recomposer.commitAll(); server.broadcastTreeDelta(); server.broadcastObservations()
+            recomposer.commitAll(); server.broadcastTreeDelta(); server.broadcastObservations(); return true
         }
         try server.start()
         defer { server.stop() }

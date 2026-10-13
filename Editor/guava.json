@@ -12,6 +12,10 @@
       "win",
       "linux"
     ],
-    "desktopProduct": "EditorApp"
+    "desktopExecutable": "EditorApp"
+  },
+  "version": {
+    "name": "0.1.0",
+    "build": 1
   }
 }
