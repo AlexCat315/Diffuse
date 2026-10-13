@@ -26,6 +26,10 @@ private final class PresentationBackend: RHIBackend, @unchecked Sendable {
     func queryCapabilities() -> Capabilities { Capabilities() }
     func queryAdapterCapabilities() -> AdapterCapabilities { AdapterCapabilities() }
     func configureSwapchain(_ handle: Swapchain, descriptor: SurfaceDescriptor) throws { lock.withLock { windows[handle.id] = descriptor } }
+    func presentationMode(for handle: Swapchain) throws -> PresentationMode {
+        let descriptor = try lock.withLock { try XCTUnwrap(windows[handle.id]) }
+        return descriptor.vsyncEnabled ? .fifo : .immediate
+    }
     func destroySwapchain(_ handle: Swapchain) { _ = lock.withLock { windows.removeValue(forKey: handle.id) } }
     func acquireSwapchainImage(_ handle: Swapchain) throws -> SwapchainImage {
         let descriptor = try lock.withLock { try XCTUnwrap(windows[handle.id]) }
@@ -93,6 +97,20 @@ final class SwapchainLifetimeTests: XCTestCase {
     }
     private func descriptor(_ id: Int = 1) -> SurfaceDescriptor {
         SurfaceDescriptor(nativeHandle: UnsafeMutableRawPointer(bitPattern: id), width: 16, height: 16)
+    }
+
+    func testPresentationModeFollowsOnlyItsWindowAndRejectsRetiredHandle() throws {
+        let (device, _) = try context()
+        let first = try device.makeSwapchain(descriptor()), second = try device.makeSwapchain(descriptor(2))
+        XCTAssertEqual(try device.presentationMode(for: first), .fifo)
+        var unsynchronized = descriptor(); unsynchronized.vsyncEnabled = false
+        try device.configureSwapchain(first, descriptor: unsynchronized)
+        XCTAssertEqual(try device.presentationMode(for: first), .immediate)
+        XCTAssertEqual(try device.presentationMode(for: second), .fifo)
+        device.destroy(first)
+        XCTAssertThrowsError(try device.presentationMode(for: first))
+        device.destroy(second)
+        try device.waitUntilIdle()
     }
 
     func testFrameSessionsSerializePreparationAndReleaseAfterErrors() throws {

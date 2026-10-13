@@ -26,6 +26,8 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     private boolean callbackPending;
     private DemoInputConnection connection;
     private String configuration;
+    private RuntimeOptions options;
+    private FramePacing pacing;
     private long lastSnapshotTime;
     private boolean gameMode;
     private final boolean debugBuild;
@@ -33,28 +35,39 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     private boolean touchMoved;
     private long touchStarted;
 
-    DemoSurfaceView(Context context, String checkpoint, String configuration, long application) {
+    DemoSurfaceView(Context context, String checkpoint, String configuration, RuntimeOptions options, long application) {
         super(context);
         this.checkpoint = checkpoint;
         this.configuration = configuration;
         this.application = application;
+        this.options = options;
+        pacing = new FramePacing(options.timings);
         debugBuild = (context.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
         gameMode = configuration.contains("\"game\"");
         setFocusable(true);
         setFocusableInTouchMode(true);
         getHolder().addCallback(this);
     }
-    void configure(String configuration) {
+    void configure(String configuration, RuntimeOptions options) {
         releaseSurface();
         closeApplication();
         this.configuration = configuration;
+        this.options = options;
+        pacing = new FramePacing(options.timings);
+        lastSnapshotTime = 0;
         gameMode = configuration.contains("\"game\"");
         checkpoint = "";
         openSurface();
         schedule();
     }
 
-    void startFrames() { running = true; openSurface(); schedule(); }
+    void configureRuntime(RuntimeOptions options) {
+        if (!this.options.sameNativeConfiguration(options)) { configure(configuration, options); return; }
+        this.options = options;
+        if (debugBuild && options.snapshots && !options.benchmark && session != 0) saveSnapshot();
+    }
+
+    void startFrames() { running = true; pacing = new FramePacing(options.timings); openSurface(); schedule(); }
     void stopFrames() {
         running = false;
         Choreographer.getInstance().removeFrameCallback(this);
@@ -70,11 +83,14 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     @Override public void doFrame(long timestamp) {
         callbackPending = false;
         if (!running || session == 0) return;
-        int result = MainActivity.frame(session);
+        long started = options.timings ? System.nanoTime() : 0;
+        int result = MainActivity.frame(session, timestamp);
         if (result < 0) { stopFrames(); return; }
-        if (result > 0 && debugBuild && (timestamp - lastSnapshotTime > 200000000L || !gameMode)) {
+        if (result > 0 && debugBuild && options.snapshots && !options.benchmark && (timestamp - lastSnapshotTime > 200000000L || !gameMode)) {
             saveSnapshot(); lastSnapshotTime = timestamp;
         }
+        if (options.timings) pacing.record(timestamp, started, System.nanoTime(), result > 0,
+                getDisplay() == null ? 60 : getDisplay().getRefreshRate());
         schedule();
     }
     @Override public void surfaceCreated(SurfaceHolder holder) {}
@@ -86,7 +102,7 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     private void openSurface() {
         if (!running || session != 0 || getWidth() <= 0 || getHeight() <= 0 || !getHolder().getSurface().isValid()) return;
         if (application == 0) application = MainActivity.createApplication(getResources().getDisplayMetrics().density,
-                AssetInstaller.root(getContext()).getAbsolutePath(), checkpoint, configuration);
+                AssetInstaller.root(getContext()).getAbsolutePath(), checkpoint, configuration, options.json());
         if (application != 0) session = MainActivity.open(application, getHolder().getSurface(), getWidth(), getHeight());
     }
     @Override public void surfaceDestroyed(SurfaceHolder holder) { releaseSurface(); }
@@ -206,6 +222,7 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     }
     // Debug-only APK automation goes through the same InputConnection as the IME.
     void debugInput(Intent intent) {
+        if ("snapshot".equals(intent.getStringExtra("demoAction"))) { saveSnapshot(); return; }
         if ("keyDown".equals(intent.getStringExtra("demoAction")) || "keyUp".equals(intent.getStringExtra("demoAction"))) {
             keyState(intent.getIntExtra("scancode", 0), "keyDown".equals(intent.getStringExtra("demoAction"))); return;
         }

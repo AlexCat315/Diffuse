@@ -7,6 +7,21 @@ import XCTest
 
 final class MacSurfaceTests: XCTestCase {
     @MainActor func testMetalSurfacePresentAndResize() async throws { try surface(.metal) }
+    @MainActor func testMetalPresentationModeReflectsAppliedLayerSetting() async throws {
+        let layer = CAMetalLayer()
+        let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false))
+        var descriptor = SurfaceDescriptor(nativeHandle: Unmanaged.passUnretained(layer).toOpaque(),
+            width: 16, height: 16, colorFormat: .bgra8Unorm)
+        let resource = try SwapchainResource(device: device, descriptor: descriptor)
+        XCTAssertTrue(layer.displaySyncEnabled)
+        XCTAssertEqual(try device.presentationMode(for: resource.swapchain), .fifo)
+        descriptor.vsyncEnabled = false
+        try device.configureSwapchain(resource.swapchain, descriptor: descriptor)
+        XCTAssertFalse(layer.displaySyncEnabled)
+        XCTAssertEqual(try device.presentationMode(for: resource.swapchain), .immediate)
+        try resource.close()
+        XCTAssertThrowsError(try device.presentationMode(for: resource.swapchain))
+    }
     @MainActor func testMetalWindowsHaveIndependentImagesAndBoundedRetainedPools() async throws {
         _ = NSApplication.shared
         func window(_ size: Int) throws -> (NSWindow, CAMetalLayer) {

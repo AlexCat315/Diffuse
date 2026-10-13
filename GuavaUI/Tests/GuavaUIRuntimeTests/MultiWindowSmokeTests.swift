@@ -182,6 +182,115 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Native display callbacks drive each window independently without timer polling")
+    func nativeDisplayRefreshUsesPerWindowSignals() throws {
+        let shell = MockShell(eventBatches: Array(repeating: [], count: 5))
+        shell.nativeRefresh.supported = true
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        host.setFrameRateMode(.displayRefresh)
+        let a = try host.openWindow(title: "A", tree: NodeTree())
+        let b = try host.openWindow(title: "B", tree: NodeTree())
+        (shell.window(for: a.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        (shell.window(for: b.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        var time = 100.0
+        host.frameClock = { time }
+        var poll = 0
+        shell.onPoll = {
+            defer { poll += 1; time += 0.004 }
+            let id: WindowID?
+            switch poll {
+            case 1, 4: id = a.id
+            case 3: id = b.id
+            default: id = nil
+            }
+            if let id {
+                let target = poll == 1 ? 100.040 : poll == 3 ? 100.030 : 100.060
+                shell.nativeRefresh.pending[id] = .init(timestamp: time, targetTimestamp: target)
+            }
+        }
+        var framesA = 0
+        var framesB = 0
+        var preparationDeltas: [Double] = []
+        a.onFrame = { _ in framesA += 1; return true }
+        b.onFrame = { _ in framesB += 1; return true }
+        host.onBeforeCommit = { preparationDeltas.append($0) }
+        host.run()
+        #expect(framesA == 2)
+        #expect(framesB == 1)
+        #expect(preparationDeltas.count == 3)
+        #expect(preparationDeltas[1] == 0)
+        #expect(abs(preparationDeltas[2] - 0.020) < 1e-9)
+        #expect(shell.waitTimeouts.allSatisfy { $0 == 0.25 })
+    }
+
+    @MainActor
+    @Test("Native callbacks queued during present trigger the next frame without another period wait")
+    func nativeRefreshAvoidsDoubleThrottle() throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        shell.nativeRefresh.supported = true
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        host.setFrameRateMode(.displayRefresh)
+        let session = try host.openWindow(title: "Blocked present", tree: NodeTree())
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        var time = 100.0
+        host.frameClock = { time }
+        shell.nativeRefresh.pending[session.id] = .init(timestamp: time, targetTimestamp: time + 0.016)
+        shell.onWait = { _ in
+            #expect(!shell.nativeRefresh.pending.isEmpty)
+            return true
+        }
+        var frameTimes: [Double] = []
+        session.onFrame = { _ in
+            frameTimes.append(time)
+            time += 0.020
+            shell.nativeRefresh.pending[session.id] = .init(timestamp: time, targetTimestamp: time + 0.016)
+            return true
+        }
+        host.run()
+        #expect(frameTimes.count == 3)
+        for (previous, current) in zip(frameTimes, frameTimes.dropFirst()) {
+            #expect(abs(current - previous - 0.020) < 1e-9)
+        }
+    }
+
+    @MainActor
+    @Test("Native animation ticks preserve input responsiveness and stop when animations finish")
+    func nativeAnimationInputAndStop() throws {
+        let shell = MockShell(eventBatches: [[], [], [], []])
+        shell.nativeRefresh.supported = true
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        let tree = NodeTree()
+        tree.root = Node()
+        let session = try host.openWindow(title: "Animation", tree: tree)
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        shell.eventBatches[1] = [
+            .init(windowID: session.id, event: .mouseMotion(.init(x: 8, y: 8, deltaX: 1, deltaY: 0))),
+        ]
+        var time = 100.0
+        var poll = 0
+        host.frameClock = { time }
+        shell.onPoll = {
+            defer { poll += 1; time += 0.003 }
+            if poll == 2 {
+                shell.nativeRefresh.pending[session.id] = .init(timestamp: time, targetTimestamp: time + 0.016)
+            }
+        }
+        let scheduler = AnimatorScheduler()
+        let controller = TickCountingController()
+        scheduler.register(controller)
+        var frameCount = 0
+        var ticksAtInput: Int?
+        session.onEvent = { _ in ticksAtInput = controller.tickCount }
+        session.onFrame = { _ in frameCount += 1; return true }
+        AnimatorScheduler.$current.withValue(scheduler) { host.run() }
+        #expect(ticksAtInput == 0)
+        #expect(controller.tickCount == 1)
+        #expect(frameCount == 2)
+        #expect(shell.nativeRefresh.requests[session.id]?.contains(false) == true)
+        #expect(shell.waitTimeouts.allSatisfy { $0 == 0.25 })
+    }
+
+    @MainActor
     @Test("Display-refresh frame-rate mode drives cadence frames")
     func displayRefreshModeDrivesCadenceFrames() throws {
         let shell = MockShell(eventBatches: Array(repeating: [], count: 32))
@@ -651,6 +760,12 @@ private final class MockShell: Shell {
         let cursor: SystemCursor
     }
 
+    struct NativeRefresh {
+        var supported = false
+        var pending: [WindowID: DisplayRefreshTick] = [:]
+        var requests: [WindowID: [Bool]] = [:]
+    }
+
     var eventBatches: [[WindowInputEvent]]
     var refreshRate: Double?
     var pollDelay: TimeInterval = 0
@@ -659,6 +774,7 @@ private final class MockShell: Shell {
     var waitTimeouts: [TimeInterval] = []
     var cursorRequests: [CursorRequest] = []
     var textInputAreas: [WindowID: TextInputArea?] = [:]
+    var nativeRefresh = NativeRefresh()
 
     private var handles: [WindowID: MockWindowHandle] = [:]
     private var order: [WindowID] = []
@@ -734,6 +850,16 @@ private final class MockShell: Shell {
     func displayRefreshRate(windowID: WindowID?) -> Double? {
         _ = windowID
         return refreshRate
+    }
+
+    func setDisplayRefreshEnabled(_ enabled: Bool, windowID: WindowID) -> Bool {
+        nativeRefresh.requests[windowID, default: []].append(enabled)
+        if !enabled { nativeRefresh.pending.removeValue(forKey: windowID) }
+        return nativeRefresh.supported
+    }
+
+    func takeDisplayRefresh(windowID: WindowID) -> DisplayRefreshTick? {
+        nativeRefresh.pending.removeValue(forKey: windowID)
     }
 
     func shutdown() {

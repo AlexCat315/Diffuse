@@ -8,7 +8,7 @@ swift android.swift --install --serial DEVICE_SERIAL
 swift android.swift --configuration release --output build/Application-release.apk
 ```
 
-默认输出为本项目 `build/Application.apk`，旁边的 JSON 记录应用 ID、构建配置、签名类型及源码位置。Swift 6.4.0 release、匹配 Android Swift SDK、NDK r30、Android SDK、JDK 21、CMake 和 Ninja 的准备步骤见 Guava-Engine 的 `Android/README.md`。创建、构建、打包和安装均由 Swift 工具完成，无需 Python 或验证脚本。
+默认输出为本项目 `build/Application.apk`，旁边的 JSON 记录应用 ID、构建配置、签名类型及源码位置。Swift 6.4.1 release、匹配 Android Swift SDK、NDK r30、Android SDK、JDK 21、CMake 和 Ninja 的准备步骤见 Guava-Engine 的 `Android/README.md`。创建、构建、打包和安装均由 Swift 工具完成，无需 Python 或验证脚本。
 
 - `Sources/GuavaAndroidContent/App.swift`：根视图入口及示例状态、按钮、文本输入。可将 `RootView()` 替换为已有共享 UI 模块中的视图，并在 `Package.swift` 声明该模块依赖。
 - `guava-android.json`：应用 ID 与显示名称。`--application-id` / `--name` 可临时覆盖，不改写该文件。

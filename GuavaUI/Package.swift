@@ -45,8 +45,8 @@ let package = Package(
             resources: [.copy("Resources/Shaders")],
             linkerSettings: [
                 // winmm provides timeBeginPeriod/timeEndPeriod, used by the run
-                // loop to raise the Windows timer resolution so Thread.sleep
-                // pacing isn't quantized to ~15.6ms (which caps fps at 64).
+                // loop to raise the Windows timer resolution so SDL's timed
+                // event waits aren't quantized to ~15.6ms for fixed rates.
                 .linkedLibrary("winmm", .when(platforms: [.windows])),
             ]
         ),

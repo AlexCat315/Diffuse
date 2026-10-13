@@ -100,8 +100,12 @@ public final class PlatformWindowSession {
 }
 
 public enum PlatformFrameRateMode: Sendable, Equatable {
+    /// Native input redraws immediately; animations follow native display ticks.
     case eventDriven
+    /// Follow per-window native display callbacks. A shell without native
+    /// support reports a warning and uses an absolute fixed-rate fallback.
     case displayRefresh
+    /// An explicit software deadline cadence, independent of presentation sync.
     case fixed(Double)
 }
 
@@ -116,8 +120,6 @@ public final class SDL3PlatformHost: PlatformHost {
     private static let focusedTextRefreshInterval: Double = 0.25
     private static let fallbackDisplayRefreshRate: Double = 60.0
     private static let minimumUsableDisplayRefreshRate: Double = 30.0
-    private static let maxCadenceSleepInterval: Double = 0.001
-    private static let cadenceSpinThreshold: Double = 0.0005
     private static let maxEventWaitInterval: Double = 0.25
     private static let frameTimingLogStride: Int = {
         guard let raw = ProcessInfo.processInfo.environment["GUAVAUI_FRAME_TIMING_LOG_STRIDE"],
@@ -419,11 +421,8 @@ public final class SDL3PlatformHost: PlatformHost {
         guard let shell else { return }
 
         #if os(Windows)
-        // Default Windows timer granularity is ~15.6ms, so the Thread.sleep
-        // frame pacing below rounds every sleep up to ~15.6ms and caps the loop
-        // at 64fps (1000/15.625) regardless of vsync/backend. Raise the
-        // multimedia timer resolution to 1ms for the loop's lifetime. macOS and
-        // Linux already have high-resolution sleep.
+        // SDL's timed event wait is also subject to Windows timer granularity.
+        // Raise resolution for explicitly fixed-rate / fallback deadlines.
         timeBeginPeriod(1)
         defer { timeEndPeriod(1) }
         #endif
@@ -432,6 +431,10 @@ public final class SDL3PlatformHost: PlatformHost {
         Logger.runtime.info("running — \(title)")
         var lastLoopTime = frameClock()
         var lastFramePreparationTime: Double?
+        var lastAnimationTickTime = lastLoopTime
+        var animationsPreviouslyActive = false
+        var fallbackDeadline = FrameDeadline()
+        var reportedFallback = false
 
         while _isRunning && shell.isRunning && !sessions.isEmpty {
             let frameStart = frameClock()
@@ -474,34 +477,64 @@ public final class SDL3PlatformHost: PlatformHost {
             let hasDisplayWork = sessions.values.contains { session in
                 session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
             }
-            let targetFrameInterval = currentFrameInterval(shell: shell)
-            let frameDue: Bool = {
-                guard let targetFrameInterval else { return hasDisplayWork }
-                guard let lastFramePreparationTime else { return true }
-                return frameStart - lastFramePreparationTime >= targetFrameInterval
+            let animationsWereActive = AnimatorScheduler.current.hasActiveAnimations
+            if !animationsPreviouslyActive || !animationsWereActive {
+                lastAnimationTickTime = frameStart
+            }
+            let wantsNativeRefresh = frameRateMode == .displayRefresh
+                || (frameRateMode == .eventDriven && animationsWereActive)
+            var nativeWindows = Set<WindowID>()
+            var refreshTicks: [WindowID: DisplayRefreshTick] = [:]
+            for id in sessionOrder {
+                if shell.setDisplayRefreshEnabled(wantsNativeRefresh, windowID: id), wantsNativeRefresh {
+                    nativeWindows.insert(id)
+                    if let tick = shell.takeDisplayRefresh(windowID: id) { refreshTicks[id] = tick }
+                }
+            }
+            let needsRefreshFallback = wantsNativeRefresh && nativeWindows.count < sessions.count
+            if needsRefreshFallback, !reportedFallback {
+                Logger.runtime.warning("native display refresh unavailable; using fixed-rate deadline fallback")
+                reportedFallback = true
+            }
+            let fallbackInterval: Double? = {
+                if case let .fixed(fps) = frameRateMode { return 1.0 / fps }
+                guard needsRefreshFallback else { return nil }
+                return 1.0 / Self.sanitizedDisplayRefreshRate(shell.displayRefreshRate(windowID: mainWindowID))
             }()
-            let isCadenceDriven = targetFrameInterval != nil
-            let shouldRunFramePreparation = frameDue
-            if isCadenceDriven,
-               frameDue,
-               let mainWindowID,
-               let session = sessions[mainWindowID] {
-                session.needsDisplay = true
+            fallbackDeadline.update(interval: fallbackInterval, now: frameStart)
+            let fallbackDue = fallbackDeadline.consumeIfDue(now: frameStart)
+            let hasRefreshTick = !refreshTicks.isEmpty
+            // Animate the frame for its predicted display time. CADisplayLink's
+            // timestamp describes the previous display, while targetTimestamp
+            // tracks the upcoming interval, including variable refresh rates.
+            let animationTickTime = refreshTicks.values.map(\.targetTimestamp).max() ?? frameStart
+            let isCadenceDriven = frameRateMode != .eventDriven
+            let frameDue = hasRefreshTick || fallbackDue
+            let shouldRunFramePreparation = frameDue || (!isCadenceDriven && hasDisplayWork)
+            if isCadenceDriven {
+                for id in sessionOrder where refreshTicks[id] != nil || (!nativeWindows.contains(id) && fallbackDue) {
+                    sessions[id]?.needsDisplay = true
+                }
             }
             if shouldRunFramePreparation {
-                if targetFrameInterval == nil {
+                let preparationTime = isCadenceDriven ? animationTickTime : frameStart
+                if !isCadenceDriven {
                     framePreparationDelta = loopDeltaTime
                 } else if let lastFramePreparationTime {
-                    framePreparationDelta = frameStart - lastFramePreparationTime
-                } else if let targetFrameInterval {
-                    framePreparationDelta = targetFrameInterval
+                    framePreparationDelta = max(0, preparationTime - lastFramePreparationTime)
+                } else {
+                    framePreparationDelta = fallbackInterval
+                        ?? refreshTicks.values.first.map { max(0, $0.targetTimestamp - $0.timestamp) }
+                        ?? 0
                 }
-                lastFramePreparationTime = frameStart
+                // Different displays can predict targets in a different order
+                // from callback delivery. Keep the shared update clock monotonic.
+                lastFramePreparationTime = max(lastFramePreparationTime ?? preparationTime, preparationTime)
                 onBeforeCommit?(framePreparationDelta)
             }
             timing.mark("prepare")
 
-            for id in sessionOrder {
+            for id in sessionOrder where shouldRunFramePreparation {
                 guard let session = sessions[id] else { continue }
                 let didCommit = session.withCurrent {
                     session.recomposer.commitAll()
@@ -512,8 +545,15 @@ public final class SDL3PlatformHost: PlatformHost {
             }
             timing.mark("commit")
 
-            AnimatorScheduler.current.tick(deltaTime: loopDeltaTime)
+            // Input can wake SDL and redraw immediately, without advancing the
+            // animation between native refresh callbacks. Missed callbacks are
+            // coalesced, so a blocked present never causes catch-up frames.
+            if frameDue || (shouldRunFramePreparation && !animationsWereActive) {
+                AnimatorScheduler.current.tick(deltaTime: max(0, animationTickTime - lastAnimationTickTime))
+                lastAnimationTickTime = max(lastAnimationTickTime, animationTickTime)
+            }
             let animationsActive = AnimatorScheduler.current.hasActiveAnimations
+            animationsPreviouslyActive = animationsActive
             timing.mark("animations")
 
             var renderedAnyFrame = false
@@ -545,9 +585,13 @@ public final class SDL3PlatformHost: PlatformHost {
                 }
 
                 let hasRenderInvalidation = session.tree.hasRenderUpdates
+                if nativeWindows.contains(id), refreshTicks[id] != nil {
+                    session.nextRenderAttemptTime = 0
+                }
                 let shouldRender = (session.needsDisplay || hasRenderInvalidation)
                     && frameStart >= session.nextRenderAttemptTime
-                    && (!isCadenceDriven || frameDue)
+                    && (!isCadenceDriven || refreshTicks[id] != nil || (!nativeWindows.contains(id) && fallbackDue))
+                    && (isCadenceDriven || !nativeWindows.contains(id) || refreshTicks[id] != nil || session.needsDisplay)
 
                 if shouldRender, let surface = handle.renderSurface {
                     var reasons: [String] = []
@@ -575,9 +619,15 @@ public final class SDL3PlatformHost: PlatformHost {
                         // An occluded/unavailable swapchain must remain pending,
                         // without redrawing the entire scene every 1 ms. Retry at
                         // display cadence; native events can still wake SDL.
-                        session.nextRenderAttemptTime = frameClock() + 1.0 / Self.sanitizedDisplayRefreshRate(
-                            shell.displayRefreshRate(windowID: id)
-                        )
+                        if nativeWindows.contains(id) {
+                            // The next native callback is itself the retry
+                            // deadline; do not add another software period.
+                            session.nextRenderAttemptTime = .infinity
+                        } else {
+                            session.nextRenderAttemptTime = frameClock() + 1.0 / Self.sanitizedDisplayRefreshRate(
+                                shell.displayRefreshRate(windowID: id)
+                            )
+                        }
                     }
                     let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
                     if didRender {
@@ -610,33 +660,30 @@ public final class SDL3PlatformHost: PlatformHost {
 
             pruneClosedSessions(using: shell)
 
-            if let targetFrameInterval, let lastFramePreparationTime {
-                // Sleep in short slices until the next cadence deadline.
-                // A single long Thread.sleep can be timer-coalesced by the OS
-                // into multiple refresh intervals, which shows up as 50ms+
-                // "pacing" gaps even when frame work itself is only a few ms.
-                let remaining = (lastFramePreparationTime + targetFrameInterval) - frameClock()
-                if remaining > Self.cadenceSpinThreshold {
-                    Thread.sleep(forTimeInterval: min(remaining - Self.cadenceSpinThreshold,
-                                                      Self.maxCadenceSleepInterval))
+            if _isRunning {
+                if frameRateMode == .eventDriven && !animationsActive {
+                    fallbackDeadline.update(interval: nil, now: frameStart)
+                    for id in nativeWindows { shell.setDisplayRefreshEnabled(false, windowID: id) }
                 }
-            } else if targetFrameInterval == nil {
                 let now = frameClock()
                 let hasImmediateWork = sessions.values.contains { session in
-                    session.recomposer.hasPending ||
-                        ((session.needsDisplay || session.tree.hasRenderUpdates) && now >= session.nextRenderAttemptTime)
+                    !isCadenceDriven && (session.recomposer.hasPending ||
+                        ((session.needsDisplay || (session.tree.hasRenderUpdates && !nativeWindows.contains(session.id)))
+                            && now >= session.nextRenderAttemptTime)
+                    )
                 }
                 var timeout = hasImmediateWork
-                    ? 0.001
-                    : eventWaitTimeout(shell: shell,
-                                       animationTickTime: animationsActive ? frameStart : nil,
-                                       now: now)
-                for session in sessions.values where session.needsDisplay || session.tree.hasRenderUpdates {
+                    ? 0
+                    : eventWaitTimeout(now: now)
+                if let remaining = fallbackDeadline.remaining(now: now) { timeout = min(timeout, remaining) }
+                for session in sessions.values where !isCadenceDriven && !nativeWindows.contains(session.id)
+                    && (session.needsDisplay || session.tree.hasRenderUpdates) {
                     timeout = min(timeout, max(0.001, session.nextRenderAttemptTime - now))
                 }
-                // Event-driven windows sleep inside SDL. Native input and
-                // cross-thread display requests both wake this wait immediately,
-                // eliminating the old 1 ms polling loop without adding latency.
+                // Display callbacks, input and cross-thread work all wake the
+                // same native wait. No sleep/spin follows a vsync-blocked frame:
+                // a queued callback wakes immediately, and fallback waits only
+                // for the remainder of its absolute deadline.
                 _ = shell.waitForEvents(timeout: timeout)
             }
         }
@@ -657,35 +704,8 @@ public final class SDL3PlatformHost: PlatformHost {
         Logger.runtime.info("stopped")
     }
 
-    private func currentFrameInterval(shell: any Shell) -> Double? {
-        switch frameRateMode {
-        case .eventDriven:
-            return nil
-        case .displayRefresh:
-            let refreshRate = Self.sanitizedDisplayRefreshRate(
-                shell.displayRefreshRate(windowID: mainWindowID)
-            )
-            return 1.0 / refreshRate
-        case let .fixed(framesPerSecond):
-            return 1.0 / Self.sanitizedFrameRate(framesPerSecond)
-        }
-    }
-
-    private func eventWaitTimeout(shell: any Shell,
-                                  animationTickTime: Double?,
-                                  now: Double) -> Double {
+    private func eventWaitTimeout(now: Double) -> Double {
         var timeout = Self.maxEventWaitInterval
-
-        if let animationTickTime {
-            let refreshRate = Self.sanitizedDisplayRefreshRate(
-                shell.displayRefreshRate(windowID: mainWindowID)
-            )
-            // Rendering (including a drawable's vsync wait) already consumes
-            // part of the animation interval. Wait only until the next tick
-            // deadline, or poll immediately when that deadline has passed.
-            let deadline = animationTickTime + 1.0 / refreshRate
-            timeout = min(timeout, max(0, deadline - now))
-        }
 
         for session in sessions.values where focusedTextInputArea(for: session) != nil {
             guard session.lastTextCursorAnimationTick > 0 else {

@@ -170,6 +170,11 @@ public final class MetalDevice: RHIBackend {
         swapchains[handle.id] = MetalWindowSwapchain(layer: layer, generation: generation)
     }
 
+    public func presentationMode(for handle: Swapchain) throws -> PresentationMode {
+        guard let window = swapchains[handle.id] else { throw RHIError.invalidArgument("query a live swapchain") }
+        return window.layer.displaySyncEnabled ? .fifo : .immediate
+    }
+
     public func destroySwapchain(_ handle: Swapchain) {
         guard let window = swapchains.removeValue(forKey: handle.id) else { return }
         for id in window.textureIDs.values { destroyTexture(Texture(id: id)) }

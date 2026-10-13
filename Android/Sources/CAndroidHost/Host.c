@@ -11,16 +11,17 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
 }
 
 extern void* guava_android_create_application(float scale, const uint16_t* checkpoint, int count,
-                                               const uint16_t* configuration, int configuration_count);
+                                               const uint16_t* configuration, int configuration_count,
+                                               const uint16_t* options, int options_count);
 extern void guava_android_destroy_application(void* application);
 extern void* guava_android_open(void* application, void* window, int width, int height);
-extern int guava_android_frame(void* session);
+extern int guava_android_frame(void* session, uint64_t timestamp);
 extern void guava_android_close(void* session);
 
 void guava_android_log(const char* message) { __android_log_write(ANDROID_LOG_INFO, "GuavaAndroid", message); }
 
 JNIEXPORT jlong JNICALL Java_com_guava_probe_MainActivity_createApplication(JNIEnv* env, jclass type,
-        jfloat scale, jstring resources, jstring checkpoint, jstring configuration) {
+        jfloat scale, jstring resources, jstring checkpoint, jstring configuration, jstring options) {
     (void)type;
     const char* path = (*env)->GetStringUTFChars(env, resources, NULL);
     if (!path) return 0;
@@ -30,8 +31,16 @@ JNIEXPORT jlong JNICALL Java_com_guava_probe_MainActivity_createApplication(JNIE
     if (!state) return 0;
     const jchar* launch = (*env)->GetStringChars(env, configuration, NULL);
     if (!launch) { (*env)->ReleaseStringChars(env, checkpoint, state); return 0; }
+    const jchar* runtime = (*env)->GetStringChars(env, options, NULL);
+    if (!runtime) {
+        (*env)->ReleaseStringChars(env, configuration, launch);
+        (*env)->ReleaseStringChars(env, checkpoint, state);
+        return 0;
+    }
     void* application = guava_android_create_application(scale, state, (*env)->GetStringLength(env, checkpoint),
-                                                        launch, (*env)->GetStringLength(env, configuration));
+                                                        launch, (*env)->GetStringLength(env, configuration),
+                                                        runtime, (*env)->GetStringLength(env, options));
+    (*env)->ReleaseStringChars(env, options, runtime);
     (*env)->ReleaseStringChars(env, configuration, launch);
     (*env)->ReleaseStringChars(env, checkpoint, state);
     return (jlong)(uintptr_t)application;
@@ -55,10 +64,10 @@ JNIEXPORT jlong JNICALL Java_com_guava_probe_MainActivity_open(JNIEnv* env, jcla
     return (jlong)(uintptr_t)host;
 }
 
-JNIEXPORT jint JNICALL Java_com_guava_probe_MainActivity_frame(JNIEnv* env, jclass type, jlong value) {
+JNIEXPORT jint JNICALL Java_com_guava_probe_MainActivity_frame(JNIEnv* env, jclass type, jlong value, jlong timestamp) {
     (void)env; (void)type;
     GuavaSurface* host = (GuavaSurface*)(uintptr_t)value;
-    return host ? guava_android_frame(host->session) : 0;
+    return host && timestamp >= 0 ? guava_android_frame(host->session, (uint64_t)timestamp) : 0;
 }
 
 JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_close(JNIEnv* env, jclass type, jlong value) {

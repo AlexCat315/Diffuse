@@ -13,10 +13,12 @@ private func string(_ pointer: UnsafePointer<UInt16>?, _ count: Int32) -> String
 
 @_cdecl("guava_android_create_application")
 func createApplication(_ scale: Float, _ checkpoint: UnsafePointer<UInt16>?, _ count: Int32,
-                       _ configuration: UnsafePointer<UInt16>?, _ configurationCount: Int32) -> UnsafeMutableRawPointer? {
+                       _ configuration: UnsafePointer<UInt16>?, _ configurationCount: Int32,
+                       _ options: UnsafePointer<UInt16>?, _ optionsCount: Int32) -> UnsafeMutableRawPointer? {
     do {
         let launch = try JSONDecoder().decode(SceneLaunch.self, from: Data(string(configuration, configurationCount).utf8))
-        let value = try AndroidApplication(scale: scale, checkpoint: string(checkpoint, count), launch: launch)
+        let runtime = try JSONDecoder().decode(RuntimeOptions.self, from: Data(string(options, optionsCount).utf8))
+        let value = try AndroidApplication(scale: scale, checkpoint: string(checkpoint, count), launch: launch, runtime: runtime)
         return Unmanaged.passRetained(value).toOpaque()
     } catch { guava_android_log("FAIL application: \(error)"); return nil }
 }
@@ -37,9 +39,9 @@ func openSurface(_ application: UnsafeMutableRawPointer?, _ window: UnsafeMutabl
 }
 
 @_cdecl("guava_android_frame")
-func renderFrame(_ pointer: UnsafeMutableRawPointer?) -> Int32 {
+func renderFrame(_ pointer: UnsafeMutableRawPointer?, _ timestamp: UInt64) -> Int32 {
     guard let pointer else { return 0 }
-    do { return try session(pointer).frame() ? 1 : 0 }
+    do { return try session(pointer).frame(timestamp: timestamp) ? 1 : 0 }
     catch { guava_android_log("FAIL frame: \(error)"); return -1 }
 }
 

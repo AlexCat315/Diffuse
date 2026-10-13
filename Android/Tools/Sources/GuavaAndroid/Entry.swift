@@ -55,7 +55,7 @@ enum GuavaAndroidCLI {
           --store-password-env NAME   --key-password-env NAME
 
         Engine checkout: GUAVA_ENGINE_ROOT or --engine-root PATH.
-        Android builds require Swift 6.4.0 release + matching Swift Android SDK,
+        Android builds require Swift 6.4.1 release + matching Swift Android SDK,
         NDK r30, Android SDK 36 / build-tools 36.1.0, JDK 21, CMake and Ninja.
         """
     }

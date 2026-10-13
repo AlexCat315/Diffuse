@@ -56,6 +56,13 @@ public final class DX12Device: RHIBackend {
         try check(id == 0 ? 0 : 1)
         return SwapchainImage(swapchain: handle, generation: generation, texture: Texture(id: id), width: Int(width), height: Int(height))
     }
+    public func presentationMode(for handle: Swapchain) throws -> PresentationMode {
+        switch grhi_dx12_presentation_interval(native, handle.id) {
+        case 0: return .compositor
+        case 1: return .fifo
+        default: throw RHIError.invalidArgument("query a live swapchain")
+        }
+    }
     public func destroySwapchain(_ handle: Swapchain) { grhi_dx12_destroy_surface(native, handle.id) }
     public func present(_ image: SwapchainImage, completion: @escaping () -> Void) throws {
         let retained = Unmanaged.passRetained(DX12Completion(backend: self, callback: completion)).toOpaque()

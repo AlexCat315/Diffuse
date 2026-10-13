@@ -238,6 +238,14 @@ public protocol Shell: AnyObject {
     /// Returns `nil` when the platform cannot report it.
     func displayRefreshRate(windowID: WindowID?) -> Double?
 
+    /// Enable native display callbacks for this window. Returns false when the
+    /// platform cannot provide a native source; callers must choose an explicit
+    /// fallback. Implementations pause callbacks while a window is not visible.
+    @discardableResult
+    func setDisplayRefreshEnabled(_ enabled: Bool, windowID: WindowID) -> Bool
+    /// Consume the newest callback, coalescing callbacks missed during rendering.
+    func takeDisplayRefresh(windowID: WindowID) -> DisplayRefreshTick?
+
     func shutdown()
 }
 
@@ -323,6 +331,9 @@ public extension Shell {
                             allowsMultiple: Bool,
                             accept: @escaping ([String]) -> Void) { accept([]) }
     func displayRefreshRate(windowID: WindowID? = nil) -> Double? { nil }
+    @discardableResult
+    func setDisplayRefreshEnabled(_ enabled: Bool, windowID: WindowID) -> Bool { false }
+    func takeDisplayRefresh(windowID: WindowID) -> DisplayRefreshTick? { nil }
 }
 
 @MainActor

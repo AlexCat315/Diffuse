@@ -20,6 +20,8 @@ swift run --package-path GuavaUI GuavaUIDemo --benchmark
 swift run --package-path GuavaUI GuavaUIDemo --benchmark --no-vsync
 ```
 
+桌面宿主的 `.displayRefresh` 和事件模式中的动画使用每个窗口的原生刷新信号：macOS 14 及以上使用 `NSWindow.displayLink`，随窗口所在屏幕和可变刷新率调整；macOS 13 使用 `CVDisplayLink`，窗口换屏时重新绑定。隐藏或最小化窗口暂停刷新，积压信号合并为最新一帧。输入、刷新信号和跨线程工作通过同一个 SDL 事件等待唤醒；呈现后没有额外的一周期 sleep 或忙等。暂未提供原生刷新源的平台会明确输出警告，并回退到按绝对 deadline 推进的固定频率；`.fixed(...)` 始终使用这一软件 deadline 模式。
+
 帧日志记录 CPU 墙钟时间：`sceneRender` 是生成 draw list，`frameSlot` 是准备帧槽，`drawableAcquire` 是获取可呈现图像，`renderTargets` 是准备目标纹理，`commandRecord` 是校验几何和录制命令，`queueSubmit` 是编码并提交，`present` 是排队呈现，`frameEnd` 是结束帧。GPU 异步执行，这些数值不是 GPU 执行耗时。普通模式只记录启动、资源更新和超过 25ms 的帧工作；benchmark 另每 60 帧记录一次。`interval` 包含等待输入的空闲时间，不能单独作为掉帧依据。
 
 Android 使用方可通过脚手架创建独立 Swift Package，在 `ApplicationContent.makeRoot() -> some View` 返回自己的根视图；Android 宿主负责 Vulkan、文本、触摸、IME 和生命周期。创建及构建入口：

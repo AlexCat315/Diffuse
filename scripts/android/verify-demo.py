@@ -74,7 +74,7 @@ def main():
 
     try: old = read().get('session')
     except (ValueError, subprocess.CalledProcessError): old = None
-    shell('am', 'start', '-W', '-S', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 0, '--es', 'mode', 'counter')
+    shell('am', 'start', '-W', '-S', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 0, '--es', 'mode', 'counter', '--ez', 'snapshots', 'true')
     initial = wait(lambda s: s.get('session') != old and s['state'] == {'count': '0', 'dark': 'false', 'note': ''}, 'fresh shared Compose scene')
     assert initial['typography']['fonts'] >= 2 and initial['typography']['missingGlyphs'] == 0
     assert initial['typography']['atlasPixels'] > 1000 and initial['indices'] > 1000
@@ -132,12 +132,12 @@ def main():
     recreated = wait(lambda s: s['session'] == current['session'] and s['frames'] > current['frames'] and s['state'] == expected and not s['preedit'], 'Activity recreation retains scene and clears transient input')
     shell('input', 'keyevent', 'KEYCODE_HOME')
     time.sleep(0.5)
-    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity')
+    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ez', 'snapshots', 'true')
     resumed = wait(lambda s: s['session'] == recreated['session'] and s['frames'] > recreated['frames'] and s['state'] == expected, 'foreground restores surface and demo state')
-    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 1)
+    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 1, '--ez', 'snapshots', 'true')
     portrait = wait(lambda s: s['height'] > s['width'] and s['state'] == expected, 'portrait relayout retains demo state')
     screenshot('portrait')
-    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 0)
+    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', 0, '--ez', 'snapshots', 'true')
     landscape = wait(lambda s: s['width'] > s['height'] and s['state'] == expected, 'landscape relayout retains demo state')
     tap(landscape, 'counter.reset')
     reset = wait(lambda s: s['state']['count'] == '0' and s['state']['note'] == expected['note'], 'reset changes only counter')
@@ -146,7 +146,7 @@ def main():
     assert read()['frames'] == reset['frames'], 'Idle scene keeps submitting GPU frames'
     screenshot('landscape')
     # Restore sensor orientation after the explicit orientation checks.
-    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', -1)
+    shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', -1, '--ez', 'snapshots', 'true')
     wait(lambda s: s['state']['count'] == '0' and s['state']['note'] == expected['note'], 'sensor orientation restored')
     pid = subprocess.check_output(list(map(str, adb + ['shell', 'pidof', 'com.guava.probe'])), text=True).strip()
     log = subprocess.check_output(list(map(str, adb + ['logcat', '-d', '--pid=' + pid, '-s', 'GuavaAndroid:I', '*:S'])), text=True)

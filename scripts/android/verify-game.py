@@ -44,7 +44,7 @@ def main():
     def action(name, scancode): shell('am', 'broadcast', '-a', 'com.guava.probe.DEMO_INPUT', '-p', args.package, '--es', 'demoAction', name, '--ei', 'scancode', scancode)
     try: old = read().get('session')
     except (ValueError, subprocess.CalledProcessError): old = None
-    shell('am', 'start', '-W', '-S', '-n', args.package + '/com.guava.probe.MainActivity', '--ei', 'orientation', 0)
+    shell('am', 'start', '-W', '-S', '-n', args.package + '/com.guava.probe.MainActivity', '--ei', 'orientation', 0, '--ez', 'snapshots', 'true')
     ready = wait(lambda s: s.get('session') != old and s.get('mode') == 'game' and s.get('game', {}).get('rendered') and any('按空格开始' in t for t in s['game']['hud']), 'exported scene and Chinese HUD render')
     assert ready['game']['scripts'] == 1 and ready['game']['entities'] == 60
     screenshot('ready')
@@ -69,13 +69,13 @@ def main():
     paused = read()
     time.sleep(.5)
     assert read()['frames'] == paused['frames'], 'background keeps ticking the game'
-    shell('am', 'start', '-W', '-n', args.package + '/com.guava.probe.MainActivity')
+    shell('am', 'start', '-W', '-n', args.package + '/com.guava.probe.MainActivity', '--ez', 'snapshots', 'true')
     resumed = wait(lambda s: s['session'] == moved['session'] and s['frames'] > paused['frames'], 'resume retains the live game session')
     assert resumed['game']['entities'] == 60
-    shell('am', 'start', '-W', '-n', args.package + '/com.guava.probe.MainActivity', '--ei', 'orientation', 1)
+    shell('am', 'start', '-W', '-n', args.package + '/com.guava.probe.MainActivity', '--ei', 'orientation', 1, '--ez', 'snapshots', 'true')
     portrait = wait(lambda s: s['height'] > s['width'] and s['session'] == resumed['session'] and s['game']['rendered'], 'rotation rebuilds Vulkan surface and retains simulation')
     screenshot('portrait')
-    shell('am', 'start', '-W', '-n', args.package + '/com.guava.probe.MainActivity', '--ei', 'orientation', 0)
+    shell('am', 'start', '-W', '-n', args.package + '/com.guava.probe.MainActivity', '--ei', 'orientation', 0, '--ez', 'snapshots', 'true')
     wait(lambda s: s['width'] > s['height'], 'landscape game surface restores')
     action('keyDown', 21); action('keyUp', 21)
     restarted = wait(lambda s: s['game']['player'] == [0, .6, 0] and any('50 秒' in t for t in s['game']['hud']), 'restart restores the round deterministically')

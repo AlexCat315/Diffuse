@@ -12,6 +12,11 @@ int32_t grhi_dx12_surface(GRHI_DX12Device* d, uint32_t swapchainID, void* hwnd, 
     for (UINT i = 0; i < 3; ++i) { Resource r; check(surface.native->GetBuffer(i,IID_PPV_ARGS(&r.native)), "GetBuffer swapchain"); r.state = D3D12_RESOURCE_STATE_PRESENT; r.texture = {width,height,1,1,1,1,f,(1 << 1)|(1 << 7),0}; r.usage = r.texture.usage; r.view = s.rtvs.allocate();
         D3D12_RENDER_TARGET_VIEW_DESC view{}; view.Format = format(f); view.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D; s.device->CreateRenderTargetView(r.native.Get(),&view,s.rtvs.cpu(r.view)); require(s.nextSwapchainTexture < 0xf0000000u, "swapchain texture IDs exhausted"); uint32_t id = s.nextSwapchainTexture++; surface.ids.push_back(id); s.textures.emplace(id,std::move(r)); }
 }); }
+int32_t grhi_dx12_presentation_interval(GRHI_DX12Device* d, uint32_t swapchainID) {
+    int32_t interval = -1;
+    run(d, [&](State& s) { const auto& surface = s.surfaces.at(swapchainID); require(bool(surface.native), "swapchain is missing"); interval = surface.vsync ? 1 : 0; });
+    return interval;
+}
 void grhi_dx12_destroy_surface(GRHI_DX12Device* d, uint32_t swapchainID) { run(d, [&](State& s) {
     auto found = s.surfaces.find(swapchainID); if (found == s.surfaces.end()) return;
     for (auto id : found->second.ids) { auto texture = s.textures.find(id); if (texture == s.textures.end()) continue;

@@ -1,18 +1,18 @@
 # Android NativeRHI / GuavaUI / GameRuntime
 
-Android 宿主直接依赖生产 Engine、GuavaUI Runtime / Compose / Gallery 和 GameRuntime。使用 Swift **6.4.0 release**、Android NDK r30、ARM64 和 API 28 起的系统接口；渲染使用 NativeRHI Vulkan。桌面与 Android 共用组件、项目场景、Swift 游戏脚本、物理、图像解码和 HUD 实现。
+Android 宿主直接依赖生产 Engine、GuavaUI Runtime / Compose / Gallery 和 GameRuntime。使用 Swift **6.4.1 release**、Android NDK r30、ARM64 和 API 28 起的系统接口；渲染使用 NativeRHI Vulkan。桌面与 Android 共用组件、项目场景、Swift 游戏脚本、物理、图像解码和 HUD 实现。
 
 ## 工具链
 
 Swift 工具链与 Android SDK 必须完全匹配，Xcode 自带 Swift 不能代替对应的开源交叉编译工具链。
 
 ```sh
-swift sdk install https://download.swift.org/swift-6.4.0-release/android-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_android.artifactbundle.tar.gz --checksum 21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43
+swift sdk install https://download.swift.org/swift-6.4.1-release/android-sdk/swift-6.4.1-RELEASE/swift-6.4.1-RELEASE_android.artifactbundle.tar.gz --checksum a356b79f8f1daa6ae3a66f4c556966ca20c0208b3659805cf30a83a0a31d6772
 swift sdk list
 export ANDROID_NDK_HOME=/absolute/path/to/android-ndk-r30
 ```
 
-使用方构建需要 CMake、Ninja、JDK 21，以及匹配的 Swift 6.4.0 release；无需 Python。Android SDK 需要 `platform-tools`、`platforms;android-36`、`build-tools;36.1.0`，NDK 版本为 `30.0.16248370`。`--android-sdk` / `--ndk` 可覆盖自动发现路径；`GUAVA_SWIFT_EXECUTABLE` 可指定 Swift 可执行文件。Swift CLI 当前面向 macOS / Linux 构建主机；Windows 主机尚未接入。
+使用方构建需要 CMake、Ninja、JDK 21，以及匹配的 Swift 6.4.1 release；无需 Python。Android SDK 需要 `platform-tools`、`platforms;android-36`、`build-tools;36.1.0`，NDK 版本为 `30.0.16248370`。`--android-sdk` / `--ndk` 可覆盖自动发现路径；`GUAVA_SWIFT_EXECUTABLE` 可指定 Swift 可执行文件。Swift CLI 当前面向 macOS / Linux 构建主机；Windows 主机尚未接入。
 
 ```sh
 git submodule update --init Engine/third-party/sdl3 Engine/third-party/jolt GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
@@ -89,6 +89,31 @@ python3 scripts/android/validate.py --serial DEVICE_SERIAL
 `--interactions-only` 可单独重跑组件交互。手指滑动转换为具有开始 / 改变 / 结束阶段的点单位滚动；长按在抬起时依据实际手势时长和移动距离确认，避免慢帧延迟事件投递后把滑动误判为长按。外接鼠标滚轮和键盘导航走共享事件路由。
 
 `verify-demo.py` 回归 SharedCounter 的触摸、重组、字形像素、亮暗主题、IME、UTF-16 / 字素删除、Activity 重建、横竖屏、前后台和空闲停帧。`validate.py` 独立运行七项 GPU / 布局探针，检查 transfer、compute、1x / 4x raster、DrawList、深度、scissor 和数据读回。截图脚本需要 Pillow。
+
+Android 由 `Choreographer` 显示刷新回调提供帧时机和动画时间戳，最多保留一个待处理回调；渲染完成后直接请求下次刷新，不追加 sleep。空闲回调跳过 GPU 工作，暂停时取消回调并释放窗口资源，恢复或 Surface 重建时重置动画时钟。Vulkan swapchain 的 VSync 设置只控制呈现模式，与是否持续重绘独立。
+
+可在 Debug / Release APK 启动时显式开启诊断；以下参数不写入场景、checkpoint 或 `launch.json`：
+
+```sh
+adb shell am force-stop com.guava.probe
+adb shell am start -W -n com.guava.probe/com.guava.probe.MainActivity \
+  --es mode gallery --es component introduction \
+  --ez benchmark true --ez timings true --ez vsync true
+adb logcat -s GuavaAndroid:I
+```
+
+`benchmark=true` 在每次显示回调绘制；关闭 benchmark 后保留按需绘制。Debug 默认也不生成语义快照或逐帧写盘；自动化脚本需要启动时显式传入 `--ez snapshots true` 才会在绘制后发布 `files/demo-state.json`。benchmark 始终关闭自动快照，即使 snapshots 为 true。此 Java 诊断选项在 Activity Intent 中跨前后台和配置变更保留，不进入 Swift 场景配置。`vsync=false` 请求后端关闭同步，启动日志报告实际 `presentMode` 和 `displaySynchronized`，回退到 MAILBOX / FIFO 时不能解释为真正关闭同步。Release APK 的页面来自构建配置，运行时 `mode` / `component` 和调试广播仅在 Debug 生效。
+
+`timings=true` 最多记录 1200 条 `android.frame`，包含 Compose / layout / 绘制列表准备、帧槽等待、drawable 获取、atlas 上传、命令录制、队列提交、呈现的 CPU 墙钟耗时，以及几何量。`android.pacing` 每秒报告显示回调、提交帧、空闲回调、按当前刷新率估算的遗漏刷新周期、回调耗时与投递延迟，最多 120 条。它们不代表 GPU 执行耗时或实际屏幕呈现帧率；显式启用后的 Debug 快照开销只计入 callbackWork。Debug 广播可设置运行参数重建场景并开始新的测量；仅切换 snapshots 不重建场景。仓库输入自动化已显式开启自动快照。需要检查状态时，也可发送 `--es demoAction snapshot` 的 `com.guava.probe.DEMO_INPUT` 广播写出一次快照，这不要求 snapshots=true，并可用于 benchmark。
+
+显示时钟与运行时选项的独立主机测试可运行：
+
+```sh
+swiftc Android/Sources/GuavaAndroidApp/Frame/Clock.swift \
+  Android/Sources/GuavaAndroidApp/Frame/RuntimeOptions.swift scripts/android/frame-clock-tests.swift \
+  -o /tmp/guava-android-frame-clock-tests
+/tmp/guava-android-frame-clock-tests
+```
 
 真机报告与截图分别放在 `gallery-run-*`、`demo-run-*`、`game-run-*`、`run-*/results`。脚本通过 debug APK 的输入广播调用同一 InputConnection / 游戏按键路径。英文输入另外确认真实系统 IME 已连接；回调回放不等同于所有输入法的人工验收。测试会重新启动验证应用；方向检查只调整应用请求，结束时可用 `--ei orientation -1` 恢复传感器方向。
 

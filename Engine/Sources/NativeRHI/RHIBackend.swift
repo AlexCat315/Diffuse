@@ -26,6 +26,7 @@ public protocol RHIBackend: AnyObject {
     /// Creates or resizes one window's swapchain. The frontend waits for idle
     /// before resizing; the platform handle must outlive deferred destruction.
     func configureSwapchain(_ handle: Swapchain, descriptor: SurfaceDescriptor) throws
+    func presentationMode(for handle: Swapchain) throws -> PresentationMode
     func destroySwapchain(_ handle: Swapchain)
 
     // MARK: Resource creation

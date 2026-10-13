@@ -14,6 +14,7 @@ final class VulkanSwapchain {
     private(set) var handle: VkSwapchainKHR
     private(set) var format: VkFormat
     private(set) var extent: VkExtent2D
+    private(set) var presentationMode: PresentationMode
     /// Fixed pool of swapchain images and their frontend texture IDs.
     private(set) var images: [VkImage]
     private(set) var textureIDs: [UInt32]
@@ -25,6 +26,7 @@ final class VulkanSwapchain {
                  handle: VkSwapchainKHR,
                  format: VkFormat,
                  extent: VkExtent2D,
+                 presentationMode: PresentationMode,
                  images: [VkImage],
                  textureIDs: [UInt32],
                  vsync: Bool, requestedColorFormat: TextureFormat) {
@@ -33,6 +35,7 @@ final class VulkanSwapchain {
         self.handle = handle
         self.format = format
         self.extent = extent
+        self.presentationMode = presentationMode
         self.images = images
         self.textureIDs = textureIDs
         self.vsync = vsync
@@ -72,6 +75,7 @@ final class VulkanSwapchain {
         handle = rebuilt.handle
         format = rebuilt.format
         extent = rebuilt.extent
+        presentationMode = rebuilt.presentationMode
         images = rebuilt.images
         textureIDs = rebuilt.textureIDs
         for id in oldIDs { if let record = registries.textures.removeValue(forKey: id) { context.core.destroyImageView(context.device, record.view, nil) } }
@@ -149,18 +153,21 @@ final class VulkanSwapchain {
             throw RHIError.unsupportedFeature("Vulkan surface cannot present the requested color format")
         }
 
-        // Present mode: FIFO for vsync, MAILBOX otherwise.
-        var modeCount: UInt32 = 0
-        _ = context.instanceCommands.getSurfacePresentModes(context.physicalDevice, surface, &modeCount, nil)
-        var modes: [VkPresentModeKHR] = Array(repeating: VK_PRESENT_MODE_FIFO_KHR, count: Int(modeCount))
-        _ = context.instanceCommands.getSurfacePresentModes(context.physicalDevice, surface, &modeCount, &modes)
+        let modes = try enumeratePresentModes(context: context, surface: surface)
+        let selectedMode = try VulkanPresentationPolicy.choose(vsyncEnabled: vsync, supportedModes: modes.compactMap {
+            switch $0 {
+            case VK_PRESENT_MODE_IMMEDIATE_KHR: return .immediate
+            case VK_PRESENT_MODE_MAILBOX_KHR: return .mailbox
+            case VK_PRESENT_MODE_FIFO_KHR: return .fifo
+            default: return nil
+            }
+        })
         let presentMode: VkPresentModeKHR
-        if vsync {
-            presentMode = VK_PRESENT_MODE_FIFO_KHR
-        } else if modes.contains(VK_PRESENT_MODE_MAILBOX_KHR) {
-            presentMode = VK_PRESENT_MODE_MAILBOX_KHR
-        } else {
-            presentMode = VK_PRESENT_MODE_FIFO_KHR
+        switch selectedMode {
+        case .immediate: presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR
+        case .mailbox: presentMode = VK_PRESENT_MODE_MAILBOX_KHR
+        case .fifo: presentMode = VK_PRESENT_MODE_FIFO_KHR
+        case .compositor: throw RHIError.unsupportedFeature("Vulkan requires an explicit presentation mode")
         }
 
         let imageCount = caps.maxImageCount == 0 ? caps.minImageCount + 1 : min(caps.minImageCount + 1, caps.maxImageCount)
@@ -246,10 +253,31 @@ final class VulkanSwapchain {
             handle: swapchain,
             format: chosen.format,
             extent: extent,
+            presentationMode: selectedMode,
             images: images,
             textureIDs: textureIDs,
             vsync: vsync, requestedColorFormat: colorFormat
         )
+    }
+
+    private static func enumeratePresentModes(context: VulkanContext, surface: VkSurfaceKHR) throws -> [VkPresentModeKHR] {
+        // The mode list may grow between the count and data queries. Retry
+        // VK_INCOMPLETE; never inspect unwritten array entries as capabilities.
+        for _ in 0..<4 {
+            var count: UInt32 = 0
+            let countResult = context.instanceCommands.getSurfacePresentModes(context.physicalDevice, surface, &count, nil)
+            guard countResult == VK_SUCCESS, count > 0 else {
+                throw RHIError.swapchainAcquireFailed("Vulkan present mode count query failed: \(countResult)")
+            }
+            var modes = [VkPresentModeKHR](repeating: VK_PRESENT_MODE_FIFO_KHR, count: Int(count))
+            let result = context.instanceCommands.getSurfacePresentModes(context.physicalDevice, surface, &count, &modes)
+            if result == VK_INCOMPLETE { continue }
+            guard result == VK_SUCCESS, count > 0, Int(count) <= modes.count else {
+                throw RHIError.swapchainAcquireFailed("Vulkan present mode enumeration failed: \(result)")
+            }
+            return Array(modes.prefix(Int(count)))
+        }
+        throw RHIError.swapchainAcquireFailed("Vulkan present mode enumeration remained incomplete")
     }
 }
 

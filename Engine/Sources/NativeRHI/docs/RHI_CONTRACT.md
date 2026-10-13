@@ -77,6 +77,8 @@ MSAA texture 当前要求一个 2D layer、一个 mip，并具备 color/depth at
 
 `makeSwapchain`／`configureSwapchain`／`destroy` 使用独立的 Swapchain 句柄，`SwapchainResource` 提供强引用所有权。平台窗口须保留到 swapchain 的 GPU 退休完成；关闭窗口前调用 `SwapchainResource.close()`，在串行 session 内等待并释放原生资源，再销毁平台窗口。close 幂等，即使 idle 后报告原生错误也会清理该窗口。创建／重配在 frame 外执行，重配只改变指定窗口，等待原生设备空闲后更新图像池。每个 native window 在同一 device 上只能有一个 swapchain，每个 swapchain 在一帧中只能 acquire 一次。SwapchainImage 是不可变 acquisition ticket；即使池内 texture ID 再次出现，旧 ticket 也不能呈现新图像。拒绝错误窗口、过期、重复 present，以及 active frame 内的重配。endFrame 自动归还放弃的 acquisition，并把归还命令计入完成跟踪；归还失败使设备阻止后续提交。
 
+`presentationMode(for:)` 返回指定窗口实际应用的模式，原生 swapchain 重建后也重新反映结果。Vulkan 开启 VSync 选择 FIFO；关闭时依次尝试 IMMEDIATE、MAILBOX、FIFO。MAILBOX 与 FIFO 仍在刷新时显示图像，不能把 `vsyncEnabled = false` 请求当成已关闭显示同步。Metal 报告 layer 当前应用的同步设置；DX12 的 interval 0 模式报告 `compositor`，不承诺可撕裂的即时扫描输出。`synchronizesToDisplay` 标识仍由显示刷新或窗口合成器控制呈现的模式。
+
 Metal 通过 graphics command buffer 排队 present，保证它在先前绘制之后；drawable texture ID 按 frame slot 复用，注册和 planner 历史保持有界。Vulkan 的每个窗口分别持有按 frame slot 组织的 acquire semaphore 和按 image 组织的 ready semaphore；第一次 graphics submission 消费所有待用 acquisition，直接 present 也会消费尚未使用的 acquisition。最终 layout transition 的 pool 保留到 fence 完成，该 completion 纳入 frame ring。OUT_OF_DATE／SUBOPTIMAL 延后到下次 acquire 重建，并改变 generation 以清除旧 planner 记录。DX12 每个 swapchain 保留自己的 back buffers、extent 和 vsync；最终 transition 的 fence completion 也纳入 frame ring。提交排队后的呈现错误保存到原生 execution status，completion 仍只发生一次。
 
 ## Shader 工具链

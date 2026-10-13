@@ -120,6 +120,15 @@ public final class Device {
 
     public func destroy(_ handle: Swapchain) { locked { destroySwapchainLocked(handle) } }
 
+    /// Queries the applied native mode, including a synchronized fallback when
+    /// disabling VSync is unsupported. Refreshes after native swapchain recreation.
+    public func presentationMode(for handle: Swapchain) throws -> PresentationMode {
+        try locked {
+            guard swapchains[handle.id] != nil else { throw RHIError.invalidArgument("query a live swapchain") }
+            return try backend.presentationMode(for: handle)
+        }
+    }
+
     private func destroySwapchainLocked(_ handle: Swapchain) {
         guard let previous = swapchains.removeValue(forKey: handle.id) else { return }
         for texture in previous.textures { planner.forgetResource(ResourceRef(kind: .texture, id: texture.id)) }

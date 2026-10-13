@@ -43,7 +43,7 @@ def build(product, ndk, configuration='debug'):
     OUTPUT.mkdir(parents=True, exist_ok=True)
     swift = os.environ.get('GUAVA_SWIFT_EXECUTABLE', shutil.which('swift'))
     if not swift:
-        raise ValueError('Install the Swift 6.4.0 release toolchain and add swift to PATH')
+        raise ValueError('Install the Swift 6.4.1 release toolchain and add swift to PATH')
     # Python is only used by repository verification. Production build ownership
     # lives in the Swift CLI, including native dependencies and artifact staging.
     descriptor, result_name = tempfile.mkstemp(prefix='compile-', suffix='.json', dir=OUTPUT)

@@ -40,6 +40,13 @@ extension VulkanBackend {
         }
     }
 
+    func presentationMode(for handle: Swapchain) throws -> PresentationMode {
+        try lock.withLock {
+            guard let window = swapchains[handle.id] else { throw RHIError.invalidArgument("query a live swapchain") }
+            return window.chain.presentationMode
+        }
+    }
+
     func destroySwapchain(_ handle: Swapchain) {
         guard let window = swapchains.removeValue(forKey: handle.id) else { return }
         // Present's queue wait must also retire before binary semaphores die.

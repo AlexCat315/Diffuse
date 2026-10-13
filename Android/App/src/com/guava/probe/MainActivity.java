@@ -17,10 +17,10 @@ import org.json.JSONObject;
 public final class MainActivity extends Activity {
     static { System.loadLibrary("GuavaAndroidApp"); }
     private static boolean sdlReady;
-    static native long createApplication(float scale, String resources, String checkpoint, String configuration);
+    static native long createApplication(float scale, String resources, String checkpoint, String configuration, String options);
     static native void destroyApplication(long application);
     static native long open(long application, android.view.Surface surface, int width, int height);
-    static native int frame(long session);
+    static native int frame(long session, long displayTimeNanos);
     static native void pointer(long session, int kind, float x, float y);
     static native void text(long session, String text, boolean composing);
     static native void key(long session, int scancode, int modifiers);
@@ -61,7 +61,8 @@ public final class MainActivity extends Activity {
             }
             if (debugBuild()) updateLaunch(getIntent());
         } catch (Exception error) { throw new IllegalStateException("Invalid Android launch configuration", error); }
-        surface = new DemoSurfaceView(this, savedState == null ? "" : savedState.getString("checkpoint", ""), launch.toString(), getLastNonConfigurationInstance() instanceof Long ? (Long)getLastNonConfigurationInstance() : 0);
+        surface = new DemoSurfaceView(this, savedState == null ? "" : savedState.getString("checkpoint", ""), launch.toString(),
+                new RuntimeOptions(getIntent()), getLastNonConfigurationInstance() instanceof Long ? (Long)getLastNonConfigurationInstance() : 0);
         FrameLayout root = new FrameLayout(this);
         root.addView(surface);
         if ("game".equals(launch.optString("mode"))) root.addView(new GameControls(this, surface), GameControls.layout());
@@ -98,9 +99,13 @@ public final class MainActivity extends Activity {
         if (debugBuild()) acceptCommand(intent);
     }
     private void acceptCommand(Intent intent) {
-        if (intent.hasExtra("mode") || intent.hasExtra("component")) {
+        boolean sceneChanged = intent.hasExtra("mode") || intent.hasExtra("component");
+        if (sceneChanged || RuntimeOptions.updates(intent)) {
             updateLaunch(intent);
-            surface.configure(launch.toString());
+            RuntimeOptions.merge(intent, getIntent());
+            RuntimeOptions options = new RuntimeOptions(getIntent());
+            if (sceneChanged) surface.configure(launch.toString(), options);
+            else surface.configureRuntime(options);
         }
         if (intent.hasExtra("orientation")) {
             int orientation = intent.getIntExtra("orientation", -1);

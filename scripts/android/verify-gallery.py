@@ -45,7 +45,7 @@ def main():
     def launch(page):
         try: old = read().get('session')
         except Exception: old = None
-        shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--es', 'mode', 'gallery', '--es', 'component', page, '--ei', 'orientation', 0)
+        shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--es', 'mode', 'gallery', '--es', 'component', page, '--ei', 'orientation', 0, '--ez', 'snapshots', 'true')
         return wait(lambda s: s.get('mode') == 'gallery' and s.get('page') == page and s.get('session') != old)
     def tap(snapshot, node):
         bounds, scale, surface = node['bounds'], snapshot['scale'], snapshot['surface']
@@ -107,7 +107,7 @@ def main():
         paused = read()
         time.sleep(.3)
         assert read()['frames'] == paused['frames'], 'background Gallery keeps submitting frames'
-        shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity')
+        shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ez', 'snapshots', 'true')
         resumed = wait(lambda s: s.get('session') == committed['session'] and s.get('page') == 'textField' and s['frames'] > paused['frames'])
         assert any(n['role'] == 'textField' and n['value'] == 'Android你好世界' for n in resumed['nodes'])
         checks.append({'check': 'background retains Gallery control state', 'snapshot': resumed})

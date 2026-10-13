@@ -453,6 +453,7 @@ public final class SDL3Shell: Shell {
 #if os(macOS)
     private var titleBarDoubleClickMonitor: Any?
     private var scrollInput: AppKitScrollInput?
+    private var displayRefreshSources: [WindowID: MacDisplayRefreshSource] = [:]
 #endif
 
     public init(width: Int32 = 1280, height: Int32 = 720) throws {
@@ -578,6 +579,7 @@ public final class SDL3Shell: Shell {
     public func destroyWindow(_ id: WindowID) {
         guard let handle = windows.removeValue(forKey: id) else { return }
 #if os(macOS)
+        displayRefreshSources.removeValue(forKey: id)?.stop()
         scrollInput?.unregister(id)
 #endif
         windowOrder.removeAll { $0 == id }
@@ -1106,6 +1108,37 @@ public final class SDL3Shell: Shell {
         // current mode whenever SDL reports it; use the maximum only when the
         // current rate is unavailable.
         validDisplayRefreshRate(current) ?? validDisplayRefreshRate(fallback)
+    }
+
+    @discardableResult
+    public func setDisplayRefreshEnabled(_ enabled: Bool, windowID: WindowID) -> Bool {
+#if os(macOS)
+        guard enabled else {
+            displayRefreshSources.removeValue(forKey: windowID)?.stop()
+            return true
+        }
+        guard let handle = windows[windowID],
+              case .appKit(let pointer) = handle.nativeWindowReference else { return false }
+        let source: MacDisplayRefreshSource
+        if let existing = displayRefreshSources[windowID] {
+            source = existing
+        } else {
+            source = MacDisplayRefreshSource { [weak self] in self?.wakeEventLoop() }
+            displayRefreshSources[windowID] = source
+        }
+        let window = Unmanaged<NSWindow>.fromOpaque(pointer).takeUnretainedValue()
+        return source.configure(window: window, active: !handle.isMinimized && !handle.isOccluded && window.isVisible)
+#else
+        return false
+#endif
+    }
+
+    public func takeDisplayRefresh(windowID: WindowID) -> DisplayRefreshTick? {
+#if os(macOS)
+        return displayRefreshSources[windowID]?.take()
+#else
+        return nil
+#endif
     }
 
     private static func validDisplayRefreshRate(_ refreshRate: Double?) -> Double? {
