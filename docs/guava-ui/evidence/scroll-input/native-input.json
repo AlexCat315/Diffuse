@@ -1,0 +1,85 @@
+{
+  "checks" : [
+    {
+      "actual" : 12.5,
+      "case" : "precise points are not multiplied by line step",
+      "expected" : 12.5,
+      "passed" : true
+    },
+    {
+      "actual" : 20.75,
+      "case" : "uneven input gap 16ms",
+      "expected" : 20.75,
+      "passed" : true
+    },
+    {
+      "actual" : 25.25,
+      "case" : "uneven input gap 130ms",
+      "expected" : 25.25,
+      "passed" : true
+    },
+    {
+      "actual" : 27.5,
+      "case" : "uneven input gap 150ms",
+      "expected" : 27.5,
+      "passed" : true
+    },
+    {
+      "actual" : 28,
+      "case" : "uneven input gap 16ms",
+      "expected" : 28,
+      "passed" : true
+    },
+    {
+      "actual" : 32.75,
+      "case" : "OS momentum ends without a second fling",
+      "expected" : 32.75,
+      "passed" : true
+    },
+    {
+      "actual" : 40.75,
+      "case" : "click suppresses remaining system momentum",
+      "expected" : 40.75,
+      "passed" : true
+    },
+    {
+      "actual" : 38.5,
+      "case" : "new reverse gesture resumes immediately",
+      "expected" : 38.5,
+      "passed" : true
+    }
+  ],
+  "hello" : {
+    "payload" : {
+      "capabilities" : [
+        "tree",
+        "select",
+        "log",
+        "timing",
+        "inspect",
+        "style",
+        "source",
+        "recomposition",
+        "timeline",
+        "state.observe",
+        "mirror"
+      ],
+      "host" : {
+        "appTitle" : "GuavaUI Demo",
+        "pid" : 38499,
+        "platform" : "macOS"
+      },
+      "protocol" : "guava-devtools\/0.1"
+    },
+    "type" : "hello"
+  },
+  "includesCompositorTiming" : false,
+  "physicalDeviceTrace" : false,
+  "source" : "Native Demo + synthetic DevTools phased input + actual ViewGraph offsets",
+  "viewport" : {
+    "h" : 280,
+    "w" : 935,
+    "x" : 287,
+    "y" : 274
+  }
+}

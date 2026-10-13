@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-08",
+  "platform": "macOS arm64, Retina native GuavaUIDemo, Swift 6.4",
+  "method": "CUA accessibility state, native keyboard actions and screenshots. Visual/interaction observations, not quantitative latency or performance measurements.",
+  "gallery_stories": 62,
+  "native_visual_verified": [
+    "Avatar displays the complete color woman technologist with skin tone in initials and in the name caption",
+    "Typography renders Chinese, accented Latin names, smile, joined technologist, Chinese flag and variation-selector heart in a shared line at 14 and 24 points",
+    "40 point Chinese, smile and family sequence render upright without clipped top/bottom",
+    "Red foreground text keeps the emoji's original colors",
+    "Node opacity 0.5 affects text and color glyphs together",
+    "All typography samples checked in both light and dark themes"
+  ],
+  "native_editing_verified": {
+    "initial": "A👩🏽‍💻中🙂B; 5 characters, 24 UTF8 bytes",
+    "navigation": "Command+Left then Right twice places the visible caret after the joined emoji",
+    "one_backspace": "A中🙂B; 4 characters, 9 UTF8 bytes",
+    "undo": "A👩🏽‍💻中🙂B; restores the whole joined emoji",
+    "selection_replace": "Shift+Left selects the emoji, typing Q produces AQ中🙂B; 5 characters, 10 UTF8 bytes",
+    "replacement_undo": "A👩🏽‍💻中🙂B; exact restoration"
+  },
+  "automated_verified": [
+    "Real CoreText font shaping/raster for smile, skin-tone ZWJ technologist, family, regional flag and variation-selector heart",
+    "UTF8 cluster positions, positive advance, metrics/raster separation, chromatic RGBA pixels, transparent padding, cache and reset",
+    "Logical advance stays stable at 1x/2x while physical raster resolution grows",
+    "Platform-independent RGBA shelf rows, transparent spacing, partial regions, malformed data, exhaustion and reset",
+    "In-game alpha and RGBA patches merge independently across skipped frames and reject malformed or oversized allocations",
+    "Actual ScriptCanvas bridge delivers both texture planes",
+    "Actual TextField layout and keyboard handlers preserve caret width, grapheme deletion and undo"
+  ],
+  "checks": {
+    "maintainability": "PASS; 46 existing over-limit metrics, baseline untouched by this batch",
+    "guava_ui_full": "PASS; test/suite groups 1/1, 207/28, 4/1, 1/0, 493/80, 2/2",
+    "editor_full": "PASS; test/suite groups 9/4, 18/5, 43/12, 296/44, 112/19",
+    "text_package": "PASS; 11 XCTest cases including 4 RGBA atlas cases",
+    "portable_package": "PASS; 21, 10 and 3 Swift Testing cases",
+    "native_build": "PASS; GuavaUIDemo",
+    "diff_whitespace": "PASS"
+  },
+  "limitations": [
+    "Native color source is wired only on macOS; Linux/Windows bitmap and COLR fonts are not claimed complete",
+    "Browser/Wasm font transport remains alpha-only",
+    "No automatic glyph atlas eviction/paging",
+    "In-game delivery is covered by bridge/source tests, not a new native GPU game capture",
+    "The first full UI test run hit the old 3-second asynchronous image test wait under shared main-actor load; the correctness wait now allows 30 seconds and the final full run passes. This is not an application latency result."
+  ]
+}

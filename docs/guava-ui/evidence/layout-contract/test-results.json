@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-12",
+  "GuavaUI": {
+    "command": "swift test --package-path GuavaUI --jobs 4",
+    "exitCode": 0,
+    "Compose": 624,
+    "Runtime": 259,
+    "Workspace": 59,
+    "optionalTestsSkipped": 4
+  },
+  "Portable": {
+    "command": "swift test --package-path GuavaUI/Portable --jobs 4",
+    "exitCode": 0,
+    "testGroups": [
+      81,
+      10,
+      5
+    ]
+  },
+  "Editor": {
+    "command": "swift test --package-path Editor --filter 'WorkspacePresetRegressionTests|AuthoringWorkspaceTests'",
+    "exitCode": 0,
+    "tests": 8,
+    "suites": 2
+  },
+  "maintainability": {
+    "changedSwiftFiles": 40,
+    "newViolations": 0,
+    "repositoryGuardExitCode": 1,
+    "existingViolations": [
+      "RenderSettings initializer_parameters 19 > 18",
+      "AppDisplayHandle stored_properties 29 > 27"
+    ]
+  }
+}

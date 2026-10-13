@@ -1,0 +1,36 @@
+{
+  "capture" : {
+    "distinctByteValues" : 215,
+    "height" : 720,
+    "logicalHeight" : 720,
+    "logicalWidth" : 1280,
+    "seq" : 32,
+    "width" : 1280
+  },
+  "captureIncludesCompositor" : false,
+  "hello" : {
+    "payload" : {
+      "capabilities" : [
+        "tree",
+        "select",
+        "log",
+        "timing",
+        "inspect",
+        "style",
+        "source",
+        "recomposition",
+        "timeline",
+        "state.observe",
+        "mirror"
+      ],
+      "host" : {
+        "appTitle" : "GuavaUI Demo",
+        "pid" : 81535,
+        "platform" : "macOS"
+      },
+      "protocol" : "guava-devtools\/0.1"
+    },
+    "type" : "hello"
+  },
+  "source" : "selected-renderer offscreen replay of the actual window draw list"
+}

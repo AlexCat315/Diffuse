@@ -1,0 +1,310 @@
+{
+  "date": "2026-10-11",
+  "source": "selected-renderer offscreen replay of the actual GuavaUI Demo window draw list; not an OS/compositor screenshot",
+  "platform": "macOS",
+  "logicalWindow": [
+    1280,
+    720
+  ],
+  "drawable": [
+    2560,
+    1440
+  ],
+  "contentScaleFactor": 2,
+  "mirrorJPEG": [
+    1280,
+    720
+  ],
+  "icons": {
+    "100": {
+      "icon-small": {
+        "h": 12,
+        "w": 12,
+        "x": 287,
+        "y": 264
+      },
+      "icon-medium": {
+        "h": 16,
+        "w": 16,
+        "x": 319,
+        "y": 262
+      },
+      "icon-large": {
+        "h": 24,
+        "w": 24,
+        "x": 355,
+        "y": 258
+      },
+      "icon-explicit": {
+        "h": 31,
+        "w": 31,
+        "x": 399,
+        "y": 254
+      },
+      "icon-button-adaptive": {
+        "h": 32,
+        "w": 32,
+        "x": 287,
+        "y": 297
+      },
+      "icon-button-fixed": {
+        "h": 32,
+        "w": 32,
+        "x": 331,
+        "y": 297
+      },
+      "icon-button-loading": {
+        "h": 32,
+        "w": 32,
+        "x": 375,
+        "y": 297
+      }
+    },
+    "200": {
+      "icon-small": {
+        "h": 24,
+        "w": 24,
+        "x": 287,
+        "y": 356
+      },
+      "icon-medium": {
+        "h": 32,
+        "w": 32,
+        "x": 331,
+        "y": 352
+      },
+      "icon-large": {
+        "h": 48,
+        "w": 48,
+        "x": 383,
+        "y": 344
+      },
+      "icon-explicit": {
+        "h": 62,
+        "w": 62,
+        "x": 451,
+        "y": 337
+      },
+      "icon-button-adaptive": {
+        "h": 46,
+        "w": 46,
+        "x": 287,
+        "y": 411
+      },
+      "icon-button-fixed": {
+        "h": 32,
+        "w": 32,
+        "x": 345,
+        "y": 418
+      },
+      "icon-button-loading": {
+        "h": 46,
+        "w": 46,
+        "x": 389,
+        "y": 411
+      }
+    }
+  },
+  "sidebar": {
+    "100": {
+      "sidebar-preview": {
+        "h": 360,
+        "w": 280,
+        "x": 287,
+        "y": 304
+      },
+      "sidebar-item-overview": {
+        "h": 38,
+        "w": 260,
+        "x": 297,
+        "y": 407
+      },
+      "sidebar-item-downloads": {
+        "h": 38,
+        "w": 260,
+        "x": 297,
+        "y": 448
+      },
+      "sidebar-title-downloads": {
+        "h": 18,
+        "w": 180,
+        "x": 333,
+        "y": 458
+      },
+      "sidebar-badge-downloads": {
+        "h": 24,
+        "w": 25,
+        "x": 522,
+        "y": 455
+      },
+      "sidebar-item-projects": {
+        "h": 38,
+        "w": 260,
+        "x": 297,
+        "y": 489
+      },
+      "sidebar-item-recent": {
+        "h": 38,
+        "w": 260,
+        "x": 297,
+        "y": 530
+      },
+      "sidebar-item-notifications": {
+        "h": 38,
+        "w": 260,
+        "x": 297,
+        "y": 614
+      },
+      "sidebar-item-settings": {
+        "h": 38,
+        "w": 260,
+        "x": 297,
+        "y": 655
+      },
+      "sidebar-item-permissions": {
+        "h": 38,
+        "w": 260,
+        "x": 297,
+        "y": 696
+      },
+      "sidebar-destination": {
+        "h": 23,
+        "w": 595,
+        "x": 607,
+        "y": 384
+      }
+    },
+    "200": {
+      "sidebar-preview": {
+        "h": 360,
+        "w": 280,
+        "x": 287,
+        "y": 383
+      },
+      "sidebar-item-overview": {
+        "h": 50,
+        "w": 260,
+        "x": 297,
+        "y": 293
+      },
+      "sidebar-item-downloads": {
+        "h": 56,
+        "w": 260,
+        "x": 297,
+        "y": 346
+      },
+      "sidebar-title-downloads": {
+        "h": 36,
+        "w": 156,
+        "x": 349,
+        "y": 356
+      },
+      "sidebar-badge-downloads": {
+        "h": 42,
+        "w": 32,
+        "x": 515,
+        "y": 353
+      },
+      "sidebar-item-projects": {
+        "h": 50,
+        "w": 260,
+        "x": 297,
+        "y": 405
+      },
+      "sidebar-item-recent": {
+        "h": 50,
+        "w": 260,
+        "x": 297,
+        "y": 458
+      },
+      "sidebar-item-notifications": {
+        "h": 56,
+        "w": 260,
+        "x": 297,
+        "y": 571
+      },
+      "sidebar-item-settings": {
+        "h": 50,
+        "w": 260,
+        "x": 297,
+        "y": 630
+      },
+      "sidebar-item-permissions": {
+        "h": 122,
+        "w": 260,
+        "x": 297,
+        "y": 683
+      },
+      "sidebar-destination": {
+        "h": 46,
+        "w": 595,
+        "x": 607,
+        "y": 463
+      }
+    }
+  },
+  "accordion": {
+    "edited": {
+      "accordion-preview": {
+        "h": 410,
+        "w": 680,
+        "x": 287,
+        "y": 399
+      },
+      "accordion-project-name": {
+        "h": 48,
+        "w": 656,
+        "x": 299,
+        "y": 567
+      }
+    },
+    "collapsed": {
+      "accordion-preview": {
+        "h": 194,
+        "w": 680,
+        "x": 287,
+        "y": 399
+      }
+    },
+    "reopened": {
+      "accordion-preview": {
+        "h": 410,
+        "w": 680,
+        "x": 287,
+        "y": 399
+      },
+      "accordion-project-name": {
+        "h": 48,
+        "w": 656,
+        "x": 299,
+        "y": 567
+      }
+    }
+  },
+  "observedInteractions": [
+    "Icon 200%: clicking adaptive icon button changes action counter to 1; fixed button remains 32x32; loading button grows to 46x46.",
+    "Sidebar 200%: End selects Settings, skips disabled permissions, reveals Settings in its scroll viewport and updates destination content; keyboard focus ring is visible.",
+    "Sidebar: light and dark theme, mixed icon/text rows, badges and separately laid-out header/footer inspected.",
+    "Accordion 200%: edited name to Guava Native 200%; collapsed from 410 to 194 and removed input; reopened to 410 retaining the edited value.",
+    "Tree 200%: native rows remain in their 250pt scroll viewport; tail rows are clipped and the selection summary is laid out below the viewport."
+  ],
+  "tests": {
+    "package": "swift test --package-path GuavaUI --jobs 4",
+    "compose": 576,
+    "runtime": 246,
+    "appXCTest": {
+      "executed": 24,
+      "skipped": 1,
+      "failures": 0
+    },
+    "galleryAfterFinalExampleChanges": {
+      "command": "swift test --package-path GuavaUI --jobs 4 --filter 'GalleryTests|NavigationStateTests'",
+      "passed": 7
+    },
+    "notes": [
+      "The opt-in release scene/HUD benchmark was not enabled.",
+      "These checks do not establish component parity with GPUI Kit or validate every component at 200%.",
+      "Whole-repository maintainability guard reports an unrelated unstaged AppDisplayHandle field-count increase; this change is checked separately with the same guard."
+    ]
+  }
+}

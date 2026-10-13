@@ -1,0 +1,40 @@
+{
+  "source": "Actual native Debug Demo via DevTools input and tree snapshots",
+  "waitAfterClickMs": 1000,
+  "viewport": "scroll-lab-viewport",
+  "cases": [
+    {
+      "name": "pending",
+      "offsets": {
+        "clicked": {
+          "x": 0,
+          "y": 657.6756828485522
+        },
+        "later": {
+          "x": 0,
+          "y": 657.6756828485522
+        }
+      },
+      "stableAfterClick": true
+    },
+    {
+      "name": "coast",
+      "offsets": {
+        "gliding": {
+          "x": 0,
+          "y": 819.4509275613818
+        },
+        "clicked": {
+          "x": 0,
+          "y": 870.195312803844
+        },
+        "later": {
+          "x": 0,
+          "y": 870.195312803844
+        }
+      },
+      "stableAfterClick": true
+    }
+  ],
+  "limitations": "Tree serialization and socket acknowledgements add latency; this validates stable post-click position, not input-to-photon latency or native device phase. Pending-release branch timing is additionally covered by deterministic ScrollAnimator tests."
+}

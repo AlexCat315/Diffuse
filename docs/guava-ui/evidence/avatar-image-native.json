@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-08",
+  "platform": "macOS arm64, Retina native GuavaUIDemo",
+  "method": "CUA accessibility state and screenshots; visual/interaction observations, not quantitative performance measurements",
+  "gallery_stories": 62,
+  "avatar": {
+    "verified": [
+      "Bundled SVG portrait inside a circular outline",
+      "GitHub remote photo replaces initials after loading",
+      "Missing file retains JL initials",
+      "Chinese initials 李小 and 陈珊",
+      "Stable light/dark name colors",
+      "Anonymous vector icon",
+      "Earlier group members paint above later members",
+      "Limit 0 displays +6 only",
+      "Maximum overlap 0.7 updates group geometry",
+      "16/24/48/80 point sizes; custom 100 point rounded portrait and 72 point square"
+    ],
+    "open_issue_at_capture": "Apple color emoji was invisible in the alpha glyph atlas. Grapheme preservation and source offsets passed data-level tests; emoji pixel rendering was not complete.",
+    "resolved_by": "color-glyph-native.json; later native capture verifies the shared macOS RGBA glyph pipeline"
+  },
+  "image": {
+    "verified": [
+      "Fit/fill/stretch render visibly distinct geometries",
+      "Fill crops within rounded container instead of painting outside",
+      "SVG fill rasterizes above its natural dimensions with sharper edges on Retina",
+      "Missing source displays vertically centered Image unavailable with help Image file not found",
+      "Retry increments request identity",
+      "Empty source displays No image and disables Retry",
+      "Remote source displays a centered Spinner and Loading image accessibility state before completion",
+      "The final build completes the remote request and displays the GitHub photo inside the rounded container"
+    ],
+    "open_issues": [
+      "No cache eviction or GPU release policy",
+      "No in-flight request coalescing",
+      "No animated images or EXIF orientation normalization",
+      "Extreme aspect ratio thumbnails can lose effective resolution"
+    ]
+  },
+  "checks": {
+    "maintainability": "PASS, 46 existing metrics; no baseline changes",
+    "guava_ui_full": "PASS; 1/1, 202/27, 4/1, 1/0, 490/80, 2/2 tests/suites before the final density refresh regression",
+    "editor_full": "PASS; 9/4, 18/5, 43/12, 296/44, 112/19 tests/suites",
+    "engine_image": "PASS; ImageIO 6 tests, ImageAssetDecoder 7 tests",
+    "final_selected": "PASS; ImageDecoder 4 tests, gallery 4 tests, Avatar/AsyncImage/Slider 22 tests including live density replacement",
+    "diff_whitespace": "PASS"
+  }
+}

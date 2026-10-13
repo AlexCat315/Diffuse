@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-12",
+  "baseCommit": "219f2ee38cafafb7dd1b7aaceba1a7f4929dd649",
+  "system": {
+    "model": "MacBookAir10,1 (Apple M1)",
+    "macOS": "27.0.1",
+    "logicalWindow": [
+      1280,
+      720
+    ],
+    "drawablePixels": [
+      2560,
+      1440
+    ],
+    "contentScaleFactor": 2,
+    "displayRefreshHz": 60,
+    "msaaSamples": 4,
+    "nativeDeviceValidation": true
+  },
+  "tests": {
+    "GuavaUI": {
+      "command": "swift test --package-path GuavaUI --jobs 4",
+      "exitCode": 0,
+      "composeSwiftTesting": 586,
+      "runtimeSwiftTesting": 250,
+      "gallerySwiftTesting": 7,
+      "workspaceXCTest": 51,
+      "devToolsXCTest": 10,
+      "appXCTest": 24,
+      "appXCTestSkipped": 1,
+      "skippedOptionalBenchmarks": [
+        "NativeInGameUIBenchmarkTests.testReleaseSceneAndHUDWorkload",
+        "NativeDrawListBenchmarkTests.commandScaling",
+        "NativeDrawListBenchmarkTests.equivalentWork",
+        "NativeDrawListBenchmarkTests.ownedImages"
+      ]
+    },
+    "portableMotion": {
+      "command": "swift test --package-path GuavaUI/Portable --jobs 4 --filter 'ScrollAnimatorTests|ScrollSpringTests'",
+      "exitCode": 0,
+      "tests": 40
+    },
+    "editorMigration": {
+      "command": "swift test --package-path Editor --jobs 4 --filter 'EditorPersistenceTests|WorkbenchProductivityTests|EditorProductivityWorkflowTests'",
+      "exitCode": 0,
+      "tests": 17,
+      "finalSourceRecheck": "Build complete! (8.86秒); 11 tests in 2 suites + 6 tests in 1 suite passed"
+    }
+  },
+  "builds": {
+    "debug": "Build complete! (1.76秒)",
+    "release": "Final-source recheck: Build complete! (1.76秒); cached build"
+  },
+  "binarySHA256": {
+    "debug": "a3e87849b7fed33d8774af95f1e64606eaa43df19a2fe3a01ea1fca26d55b446",
+    "release": "b106a90bb409b4c493a9d4655d079a61a27bb9d2b65ab50a083f64e13d0d9a56"
+  },
+  "maintainability": {
+    "changedSwiftFiles": 45,
+    "violations": [],
+    "wholeRepositoryExistingViolation": "GuavaUI/Sources/GuavaUIApp/Core/AppDisplayHandle.swift::AppDisplayHandle: stored_properties=29, allowed=27",
+    "baselineModified": false,
+    "changedSwiftFilesIncludesSamplingScript": true
+  },
+  "nativeFunctionalEvidence": [
+    "scroll-interruption.json",
+    "workspace-geometry.json"
+  ],
+  "timingLimitations": [
+    "Client WebSocket receipt intervals, not compositor timestamps",
+    "No GPU completion timestamps",
+    "Benchmark mode includes inertial decay and idle frames after bursts; live input frames are excluded to avoid mirror readback",
+    "Sequential runs on one machine; thermal and background OS activity not experimentally controlled",
+    "Before-debug is a process loaded before this turn's changes; no embedded revision or original executable hash is available",
+    "No equivalent GPUI Kit or Motrix native workload benchmark",
+    "No 120Hz, Windows, Linux, long-running or variable-height-list performance claim"
+  ]
+}

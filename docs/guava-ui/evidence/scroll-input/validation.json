@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-12",
+  "baseCommit": "c19d5303a30de4ca03579b6d571754e703a171c5",
+  "system": {
+    "model": "MacBookAir10,1",
+    "chip": "Apple M1",
+    "macOS": "27.0.1",
+    "swift": "6.4",
+    "logicalWindow": [
+      1280,
+      720
+    ],
+    "drawablePixels": [
+      2560,
+      1440
+    ],
+    "contentScaleFactor": 2,
+    "displayRefreshHz": 60,
+    "nativeRenderer": true,
+    "physicalInputTrace": false
+  },
+  "builds": {
+    "release": {
+      "command": "swift build --package-path GuavaUI -c release --product GuavaUIDemo --jobs 4",
+      "exitCode": 0,
+      "logFinalLine": "Build complete! (112.09秒)"
+    },
+    "debug": {
+      "command": "swift test --package-path GuavaUI --jobs 4",
+      "exitCode": 0
+    }
+  },
+  "binarySHA256": {
+    "debug": "a8d207679efbe40a85c1b6ad26b72066db9273527c8bf4f3a030cee7f90cafff",
+    "release": "14c534699ac657cf0bf8dace2052af640799a9ffc6174fc0c6602d81a7aa032b"
+  },
+  "tests": {
+    "GuavaUI": {
+      "command": "swift test --package-path GuavaUI --jobs 4",
+      "exitCode": 0,
+      "composeSwiftTesting": 588,
+      "runtimeSwiftTesting": 259,
+      "gallerySwiftTesting": 7,
+      "workspaceXCTest": 51,
+      "devToolsXCTest": 11,
+      "appXCTest": 24,
+      "appXCTestSkipped": 1,
+      "additionalSwiftTesting": {
+        "WorkspaceResources": 1,
+        "timingTap": 1,
+        "AppDisplayAndResources": 2
+      },
+      "skippedOptionalBenchmarks": 4,
+      "nativeScrollAdapter": 3,
+      "phasedRouting": 6,
+      "scrollComposePhysics": 20
+    },
+    "portableMotionAndRecording": {
+      "command": "swift test --package-path GuavaUI/Portable --jobs 4 --filter 'ScrollAnimatorTests|ScrollSpringTests|protocolValidationDiffAndBoundedRecordingRoundTrip'",
+      "exitCode": 0,
+      "tests": 41
+    },
+    "platformCore": {
+      "command": "swift test --package-path Engine/PlatformCore --jobs 4",
+      "exitCode": 0,
+      "tests": 2
+    },
+    "editor": {
+      "command": "swift test --package-path Editor --jobs 4 --filter 'InputStateTests|EditorPersistenceTests|WorkbenchProductivityTests|EditorProductivityWorkflowTests'",
+      "exitCode": 0,
+      "tests": 20
+    },
+    "scripts": {
+      "strictSwift6Compilation": true,
+      "browserJavaScriptSyntaxCheck": "node --check GuavaUI/DevTools/app.js",
+      "exitCode": 0
+    }
+  },
+  "maintainability": {
+    "checkedSwiftFiles": 30,
+    "newOrGrownViolations": [],
+    "unchangedOverLimitMetrics": [
+      {
+        "declaration": "Editor/Sources/EditorApp/Panels/Viewport/ViewportPanel.swift::ViewportInfoBar",
+        "metric": "stored_properties",
+        "actual": 27,
+        "head": 27
+      },
+      {
+        "declaration": "GuavaUI/Portable/Sources/GuavaUIDevToolsProtocol/Protocol.swift::NodeSummary",
+        "metric": "initializer_parameters",
+        "actual": 18,
+        "head": 18
+      }
+    ],
+    "wholeRepositoryExistingViolation": "GuavaUI/Sources/GuavaUIApp/Core/AppDisplayHandle.swift::AppDisplayHandle: stored_properties=29, allowed=27",
+    "baselineModified": false
+  },
+  "nativeFunctionalEvidence": "native-input.json",
+  "activeTimingEvidence": [
+    "active-release.json",
+    "active-release-repeat.json"
+  ],
+  "limitations": [
+    "Synthetic input, not a physical trackpad/mouse trace",
+    "AppKit adapter queue test uses SDL events only; no SDL video lifecycle in shared test process",
+    "Active benchmark includes 1fps mirror readback overhead",
+    "Host total/present spans include presentation waiting, not only CPU rendering work",
+    "Client arrival intervals are not compositor timestamps",
+    "No GPU completion timestamps",
+    "One approximately 50ms host frame in first run, not reproduced in second; cause not isolated",
+    "Not comparable to archived post-burst benchmark",
+    "No equivalent GPUI/MyGo workload benchmark",
+    "Windows/Linux phases, 120Hz, long-running/variable-height scenarios remain unverified"
+  ]
+}

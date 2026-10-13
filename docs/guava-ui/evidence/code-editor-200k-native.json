@@ -1,0 +1,306 @@
+{
+  "date": "2026-10-07",
+  "host": {
+    "model": "MacBookAir10,1",
+    "memoryGiB": 8,
+    "os": "macOS 27.0.1 (26A434)",
+    "swift": "6.4",
+    "architecture": "arm64",
+    "build": "Debug",
+    "drawablePixels": [
+      2560,
+      1496
+    ]
+  },
+  "scenario": {
+    "lines": 200000,
+    "editedLineOneBased": 100001,
+    "continuousInputSeconds": 30.18,
+    "charactersInserted": 357,
+    "inputMethod": "native single-character input through CUA",
+    "presentMode": "fifo",
+    "forcedFrameDrive": "displayRefresh",
+    "discardedSampleEdgesSeconds": 1
+  },
+  "summary": {
+    "fpsMin": 57.5,
+    "fpsMedian": 59.8,
+    "fpsMax": 60.6,
+    "sampledFrames": 1684,
+    "editorRSSMinMiB": 300.781,
+    "editorRSSMedianMiB": 302.6405,
+    "editorRSSMaxMiB": 308.094,
+    "layoutMeanMs": 1.28,
+    "drawMeanMs": 1.252,
+    "presentMeanMs": 0.51
+  },
+  "timeProfiler": {
+    "captureSeconds": 40,
+    "parserMainThreadSamples": 0,
+    "parserWorkerSamples": 26654,
+    "parserWorkerWeightMs": 26654.0,
+    "mainThreadFullTextSamples": 11,
+    "mainThreadFullTextWeightMs": 11.0,
+    "mainThreadFullTextCaller": "AppKit accessibilityValue request"
+  },
+  "samples": [
+    {
+      "secondsAfterInputStart": 1.47,
+      "fps": 57.5,
+      "frameCount": 58,
+      "layoutMeanMs": 1.51,
+      "drawMeanMs": 2.42,
+      "presentMeanMs": 0.57,
+      "editorRSSMiB": 307.422
+    },
+    {
+      "secondsAfterInputStart": 2.485,
+      "fps": 59.9,
+      "frameCount": 60,
+      "layoutMeanMs": 1.37,
+      "drawMeanMs": 2.22,
+      "presentMeanMs": 0.52,
+      "editorRSSMiB": 308.094
+    },
+    {
+      "secondsAfterInputStart": 3.501,
+      "fps": 60.4,
+      "frameCount": 61,
+      "layoutMeanMs": 1.32,
+      "drawMeanMs": 1.7,
+      "presentMeanMs": 0.52,
+      "editorRSSMiB": 305.297
+    },
+    {
+      "secondsAfterInputStart": 4.519,
+      "fps": 59.6,
+      "frameCount": 60,
+      "layoutMeanMs": 1.33,
+      "drawMeanMs": 1.65,
+      "presentMeanMs": 0.54,
+      "editorRSSMiB": 301.953
+    },
+    {
+      "secondsAfterInputStart": 5.535,
+      "fps": 59.0,
+      "frameCount": 60,
+      "layoutMeanMs": 1.48,
+      "drawMeanMs": 1.62,
+      "presentMeanMs": 0.56,
+      "editorRSSMiB": 300.781
+    },
+    {
+      "secondsAfterInputStart": 6.552,
+      "fps": 60.0,
+      "frameCount": 60,
+      "layoutMeanMs": 1.25,
+      "drawMeanMs": 1.4,
+      "presentMeanMs": 0.49,
+      "editorRSSMiB": 301.469
+    },
+    {
+      "secondsAfterInputStart": 7.571,
+      "fps": 59.9,
+      "frameCount": 60,
+      "layoutMeanMs": 1.28,
+      "drawMeanMs": 1.44,
+      "presentMeanMs": 0.49,
+      "editorRSSMiB": 301.641
+    },
+    {
+      "secondsAfterInputStart": 8.588,
+      "fps": 60.0,
+      "frameCount": 61,
+      "layoutMeanMs": 1.19,
+      "drawMeanMs": 1.23,
+      "presentMeanMs": 0.5,
+      "editorRSSMiB": 302.438
+    },
+    {
+      "secondsAfterInputStart": 9.609,
+      "fps": 59.9,
+      "frameCount": 60,
+      "layoutMeanMs": 1.26,
+      "drawMeanMs": 1.18,
+      "presentMeanMs": 0.54,
+      "editorRSSMiB": 302.812
+    },
+    {
+      "secondsAfterInputStart": 10.624,
+      "fps": 59.7,
+      "frameCount": 60,
+      "layoutMeanMs": 1.22,
+      "drawMeanMs": 1.18,
+      "presentMeanMs": 0.48,
+      "editorRSSMiB": 301.703
+    },
+    {
+      "secondsAfterInputStart": 11.64,
+      "fps": 59.4,
+      "frameCount": 60,
+      "layoutMeanMs": 1.26,
+      "drawMeanMs": 1.25,
+      "presentMeanMs": 0.49,
+      "editorRSSMiB": 302.172
+    },
+    {
+      "secondsAfterInputStart": 12.66,
+      "fps": 59.6,
+      "frameCount": 61,
+      "layoutMeanMs": 1.22,
+      "drawMeanMs": 1.13,
+      "presentMeanMs": 0.51,
+      "editorRSSMiB": 302.703
+    },
+    {
+      "secondsAfterInputStart": 13.673,
+      "fps": 60.4,
+      "frameCount": 61,
+      "layoutMeanMs": 1.14,
+      "drawMeanMs": 1.12,
+      "presentMeanMs": 0.48,
+      "editorRSSMiB": 302.547
+    },
+    {
+      "secondsAfterInputStart": 14.689,
+      "fps": 59.9,
+      "frameCount": 60,
+      "layoutMeanMs": 1.35,
+      "drawMeanMs": 1.15,
+      "presentMeanMs": 0.51,
+      "editorRSSMiB": 303.016
+    },
+    {
+      "secondsAfterInputStart": 15.71,
+      "fps": 59.1,
+      "frameCount": 60,
+      "layoutMeanMs": 1.24,
+      "drawMeanMs": 1.15,
+      "presentMeanMs": 0.46,
+      "editorRSSMiB": 304.234
+    },
+    {
+      "secondsAfterInputStart": 16.728,
+      "fps": 60.6,
+      "frameCount": 61,
+      "layoutMeanMs": 1.19,
+      "drawMeanMs": 1.04,
+      "presentMeanMs": 0.52,
+      "editorRSSMiB": 303.672
+    },
+    {
+      "secondsAfterInputStart": 17.76,
+      "fps": 59.6,
+      "frameCount": 60,
+      "layoutMeanMs": 1.29,
+      "drawMeanMs": 1.16,
+      "presentMeanMs": 0.5,
+      "editorRSSMiB": 303.5
+    },
+    {
+      "secondsAfterInputStart": 18.779,
+      "fps": 59.9,
+      "frameCount": 60,
+      "layoutMeanMs": 1.23,
+      "drawMeanMs": 0.99,
+      "presentMeanMs": 0.5,
+      "editorRSSMiB": 302.953
+    },
+    {
+      "secondsAfterInputStart": 19.79,
+      "fps": 59.5,
+      "frameCount": 60,
+      "layoutMeanMs": 1.17,
+      "drawMeanMs": 0.94,
+      "presentMeanMs": 0.49,
+      "editorRSSMiB": 303.172
+    },
+    {
+      "secondsAfterInputStart": 20.807,
+      "fps": 59.9,
+      "frameCount": 60,
+      "layoutMeanMs": 1.33,
+      "drawMeanMs": 1.1,
+      "presentMeanMs": 0.52,
+      "editorRSSMiB": 303.203
+    },
+    {
+      "secondsAfterInputStart": 21.847,
+      "fps": 59.0,
+      "frameCount": 60,
+      "layoutMeanMs": 1.33,
+      "drawMeanMs": 1.02,
+      "presentMeanMs": 0.51,
+      "editorRSSMiB": 302.484
+    },
+    {
+      "secondsAfterInputStart": 22.87,
+      "fps": 59.9,
+      "frameCount": 60,
+      "layoutMeanMs": 1.23,
+      "drawMeanMs": 1.07,
+      "presentMeanMs": 0.51,
+      "editorRSSMiB": 303.5
+    },
+    {
+      "secondsAfterInputStart": 23.891,
+      "fps": 59.8,
+      "frameCount": 60,
+      "layoutMeanMs": 1.31,
+      "drawMeanMs": 1.03,
+      "presentMeanMs": 0.52,
+      "editorRSSMiB": 302.891
+    },
+    {
+      "secondsAfterInputStart": 24.908,
+      "fps": 59.6,
+      "frameCount": 60,
+      "layoutMeanMs": 1.27,
+      "drawMeanMs": 0.87,
+      "presentMeanMs": 0.51,
+      "editorRSSMiB": 302.578
+    },
+    {
+      "secondsAfterInputStart": 25.93,
+      "fps": 60.3,
+      "frameCount": 61,
+      "layoutMeanMs": 1.29,
+      "drawMeanMs": 1.01,
+      "presentMeanMs": 0.54,
+      "editorRSSMiB": 302.375
+    },
+    {
+      "secondsAfterInputStart": 26.945,
+      "fps": 59.8,
+      "frameCount": 60,
+      "layoutMeanMs": 1.31,
+      "drawMeanMs": 1.05,
+      "presentMeanMs": 0.5,
+      "editorRSSMiB": 301.688
+    },
+    {
+      "secondsAfterInputStart": 27.962,
+      "fps": 59.3,
+      "frameCount": 60,
+      "layoutMeanMs": 1.24,
+      "drawMeanMs": 1.01,
+      "presentMeanMs": 0.48,
+      "editorRSSMiB": 302.438
+    },
+    {
+      "secondsAfterInputStart": 28.975,
+      "fps": 59.5,
+      "frameCount": 60,
+      "layoutMeanMs": 1.23,
+      "drawMeanMs": 0.98,
+      "presentMeanMs": 0.52,
+      "editorRSSMiB": 301.219
+    }
+  ],
+  "notes": [
+    "FPS and CPU timings are one-second runtime averages, not per-frame latency quantiles.",
+    "RSS covers only the EditorApp process, excluding SourceKit-LSP and profiling tools.",
+    "Time Profiler sampled the whole 40-second capture, including before/after typing.",
+    "The worker parser can read broad syntax context; this trace does not prove every edit reparses only one line."
+  ]
+}

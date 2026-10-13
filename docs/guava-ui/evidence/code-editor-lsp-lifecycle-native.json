@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-08",
+  "host": "macOS arm64",
+  "surface": "EditorApp production ScriptCodeEditor via --script-editor-demo",
+  "server": "Real SourceKit-LSP from the configured Swift toolchain",
+  "profiling_overrides": false,
+  "observations": {
+    "initial_diagnostics": 2,
+    "integer_fix": "let count: Int = 42",
+    "diagnostics_after_integer_fix": 1,
+    "unexpected_process_termination": "SIGTERM of only the disposable demo's language server child",
+    "automatic_reconnection_created_new_process": true,
+    "unsaved_integer_fix_retained": true,
+    "hover_after_reconnection": "func greet(name: String) -> String; Greets a person by name.",
+    "completion_after_reconnection": "message. -> prefix up -> Tab -> message.uppercased()",
+    "diagnostics_after_completion": 0,
+    "repeated_terminated_sessions": 4,
+    "automatic_recovery_limit": 3,
+    "processes_after_recovery_limit": 0,
+    "unavailable_message_and_retry_control_visible": true,
+    "manual_retry_restored_ready": true,
+    "final_unsaved_code_retained": true
+  },
+  "limits": [
+    "Single native macOS session, not long-running or cross-platform stability evidence.",
+    "The earlier false-ready observation does not by itself identify the exact triggering transport fault.",
+    "Ordered fragmented delivery, cancellation, retry bounds and latest-root reopening additionally use controllable process fixtures."
+  ]
+}

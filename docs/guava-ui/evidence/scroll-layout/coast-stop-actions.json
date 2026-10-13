@@ -1,0 +1,124 @@
+[
+  {
+    "kind": "pointerMove",
+    "x": 550,
+    "y": 390
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "kind": "wheel",
+    "x": 550,
+    "y": 390,
+    "deltaY": -0.5
+  },
+  {
+    "waitMs": 16
+  },
+  {
+    "waitMs": 160
+  },
+  {
+    "checkpoint": "gliding"
+  },
+  {
+    "kind": "pointerDown",
+    "x": 550,
+    "y": 390,
+    "button": 0
+  },
+  {
+    "kind": "pointerUp",
+    "x": 550,
+    "y": 390,
+    "button": 0
+  },
+  {
+    "checkpoint": "clicked"
+  },
+  {
+    "waitMs": 1000
+  },
+  {
+    "checkpoint": "later"
+  }
+]

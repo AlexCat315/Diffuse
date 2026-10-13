@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-08",
+  "platform": "macOS arm64, native Retina GuavaUIDemo, Swift 6.4",
+  "gallery_stories": 63,
+  "method": "CUA native accessibility actions, keyboard input and screenshots, plus real scene event-dispatch tests. Visual and functional verification; no latency measurements.",
+  "reference": "/Users/alex/gpui-kit-main/crates/component/src/rating.rs",
+  "native_visual_verified": [
+    "Gold whole and half stars, green read-only 4.25 rating and muted disabled 2.5 rating",
+    "Mini/small/regular/large SVG stars at 12/16/20/28 logical points and custom blue 36-point seven-star rating",
+    "All sizes and exact fractional filling inspected in light and dark themes",
+    "Whole, half and custom rating keyboard focus rings are visible",
+    "Gallery Disabled updates the interactive ratings, retaining the read-only examples",
+    "Independent Reset restores the custom rating from 7 to 3 and the half-star score to 2.5"
+  ],
+  "native_keyboard_verified": [
+    "Tab traversal reaches whole rating; Right changes 3 to 4",
+    "Tab traversal reaches half rating; Right changes 2.5 to 3",
+    "Half rating Home selects 0, End selects 5, Backspace clears and Right then selects 0.5",
+    "Tab skips the read-only average, disabled rating and four read-only density examples",
+    "Non-clearable custom rating Home selects 0.5; End selects 7 and Backspace preserves 7"
+  ],
+  "native_accessibility_verified": [
+    "Interactive ratings expose slider labels, numeric values and score help",
+    "A native accessibility value write changes Overall rating from 3 to 4 and updates the controlled readout",
+    "Read-only rating exposes image role and exact value 4.25; disabled ratings expose disabled state"
+  ],
+  "automated_verified": [
+    "Nine Rating tests cover independent group validation, non-finite inputs, density, intrinsic height and maximum counts",
+    "Real EventDispatcher pointer preview, complete click, a frame between press/release, repeat clear, drag back without clearing and outside cancellation",
+    "Half-star regions at an absolute padded origin, extreme coordinates, live binding replacement and external value change cancellation",
+    "Single Tab stop, half-step keyboard navigation, key-up exclusion, left/right modifier chords, Home/End/Delete/Escape",
+    "Accessibility snapping, invalid writes, non-clearable minimum and no actions for inactive controls",
+    "Configuration/disable/unmount cleanup releases capture and focus, removes handlers and permits node deallocation",
+    "Actual SVG decoding, partial-fill scissor bounds and focus-ring drawing",
+    "Additional gallery test dispatches a complete Rating click through nested scroll content, commits 4, then clears by repeated click"
+  ],
+  "checks": {
+    "maintainability": "PASS; 46 existing over-limit metrics, baseline untouched by the Rating batch",
+    "guava_ui_full": "PASS; test/suite groups 1/1, 207/28, 5/1, 1/0, 502/81, 2/2",
+    "editor_full": "PASS; test/suite groups 9/4, 18/5, 43/12, 296/44, 112/19",
+    "native_build_without_probe": "PASS; GuavaUIDemo",
+    "diff_whitespace": "PASS"
+  },
+  "limitations": [
+    "Full VoiceOver behavior has not been verified; CUA's focused UI element remains the window despite the working scene keyboard focus and visible focus ring",
+    "LTR horizontal star layout only; no RTL, alternate glyphs or dedicated touch gestures",
+    "No GPUI quality or performance equivalence claim"
+  ],
+  "native_pointer_verified": [
+    "Coordinate click on fourth whole star changes the readout from 3 to 4; repeated click clears to 0",
+    "Pointer movement to second star shows two filled stars while controlled value remains 0; right-click does not commit",
+    "Drag from first to fifth star commits 5 on release inside",
+    "Drag from third star to outside cancels, retains 5 and restores the current score painting",
+    "Right half of third star selects 3; left half selects 2.5",
+    "Disabled and read-only ratings ignore native coordinate clicks",
+    "Continuous Slider drag changes 0.6 to approximately 0.1996 and finishes in Idle state"
+  ]
+}

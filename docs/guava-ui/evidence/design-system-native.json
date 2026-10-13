@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-11",
+  "platform": "macOS arm64; GuavaUIDemo, NativeRHI Metal",
+  "method": "First-party DevTools WebSocket input injection through EventDispatcher, live node-tree queries, and mirror replay of the window draw list through its selected native renderer. 1280x720 JPEGs are the mirror output; they are not screenshots of the OS compositor.",
+  "baseline": "button-before.jpg was captured before this typography/theme pass, after the interaction/component changes in bbc3a489.",
+  "reference": "Read local motrix-mygo-main/theme.go, dashboard.go and widgets.go; native Go/MyGo UI. Referenced typography, surface hierarchy, card radius/shadows and controls; no copied assets.",
+  "observations": [
+    {
+      "image": "design-system/dashboard-light.jpg",
+      "verified": [
+        "SF title/value weight hierarchy",
+        "Cool light canvas and white cards with separated border/shadow",
+        "Inset selected period control",
+        "Explicitly labelled sample frame-time trace"
+      ]
+    },
+    {
+      "image": "design-system/dashboard-200.jpg",
+      "verified": [
+        "The same story at 200% text scale",
+        "Metrics reflow from four cards to two columns",
+        "Story scales while the gallery chrome keeps its own scale"
+      ]
+    },
+    {
+      "image": "design-system/theme-custom-dark.jpg",
+      "verified": [
+        "Local Menlo family, body 18pt and larger icons",
+        "Gallery outside the preview retains its original typography",
+        "TextField accepts Guava 设计系统",
+        "Save changes increments the custom-token counter to 1"
+      ]
+    },
+    {
+      "image": "design-system/button-200.jpg",
+      "verified": [
+        "Primary/Secondary/Danger/Warning/Success/Info grow with scaled labels",
+        "All state-color variants retain vertical padding",
+        "Icons remain independently controlled by IconTheme or explicit points"
+      ]
+    },
+    {
+      "image": "design-system/menu-light.jpg",
+      "verified": [
+        "Default menu surface is opaque over labels and buttons",
+        "Selection, checkmark and keyboard-highlight styling remain legible"
+      ]
+    }
+  ],
+  "dashboard_input_sequence": {
+    "actions": [
+      "Pause",
+      "Resume",
+      "Advance"
+    ],
+    "observed_final_progress": "76% imported, from the initial 64%",
+    "observed_activity": "Imported next batch · just now"
+  },
+  "automated_contracts": {
+    "DesignSystemTests": "7 tests: default/local theme, explicit styles/families, custom extension/metrics, icon replacement/size, scaling once in layout/paint/edit, live open-portal update, scaled menu geometry, real Combobox search/empty/commit",
+    "SystemFontInstanceTests": "Real SF variation axes and weight raster coverage; logical optical size and advances remain stable at 1x/2x",
+    "NativeRoundedFillTests": "Metal single-sample readback at 1x/1.5x/2x/3x: no halo beyond the physical coverage edge, smooth fractional corner coverage, source alpha is never accumulated",
+    "FontPipelineTests": "Layout glyph metrics stay identical before and after bitmap rasterization"
+  },
+  "limitations": [
+    "This is visual and interaction evidence, not a quantitative FPS/performance comparison with GPUI Kit or Motrix.",
+    "No claim of OS-native text raster pixel identity or acceptance of every component at 200%.",
+    "No automatic Windows/Linux system accessibility text-scale subscription; TextScaler currently uses a host-provided linear factor.",
+    "The typed Swift theme API does not provide a CSS parser/cascade or complete browser theme parity.",
+    "Other platform color glyphs, native accessibility bridges, RTL/locale, variable-height/async data contracts and remaining missing components stay open in gpui-kit-audit.md."
+  ],
+  "checks": {
+    "maintainability": "PASS; 32 existing over-limit metrics, baseline unchanged",
+    "guava_ui": "PASS; full package including 246 Runtime Swift tests and 560 Compose Swift tests; final typography fallback follow-up re-ran all 560 Compose tests",
+    "portable": "PASS; 74 + 10 + 5 tests",
+    "text": "PASS; 12 tests",
+    "optional_benchmarks": "Opt-in release scene/HUD and command scaling benchmarks were skipped by default; no performance-equivalence claim",
+    "whitespace": "PASS"
+  }
+}

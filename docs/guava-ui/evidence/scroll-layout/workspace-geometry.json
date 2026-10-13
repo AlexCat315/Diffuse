@@ -1,0 +1,151 @@
+{
+  "source": "Actual native Demo ViewGraph snapshots via DevTools",
+  "actions": [
+    "initial",
+    "Save layout; drag inner separator up 50pt",
+    "ArrowDown on focused separator",
+    "Restore saved JSON layout"
+  ],
+  "phases": [
+    {
+      "phase": "initial",
+      "workspace": {
+        "h": 360,
+        "w": 935,
+        "x": 287,
+        "y": 298
+      },
+      "innerSplit": {
+        "h": 360,
+        "w": 692,
+        "x": 530,
+        "y": 298
+      },
+      "handle": {
+        "h": 7,
+        "w": 692,
+        "x": 530,
+        "y": 503
+      },
+      "editor": {
+        "h": 171,
+        "w": 692,
+        "x": 530,
+        "y": 332
+      },
+      "preview": {
+        "h": 114,
+        "w": 692,
+        "x": 530,
+        "y": 544
+      },
+      "rawSnapshotSHA256": "991efbeeb2f9b6e33ac88facee3399a29b94682e4baafc614afc94f29b597e71",
+      "rawSnapshot": "workspace-initial.tree.json.gz"
+    },
+    {
+      "phase": "dragged",
+      "workspace": {
+        "h": 360,
+        "w": 935,
+        "x": 287,
+        "y": 298
+      },
+      "innerSplit": {
+        "h": 360,
+        "w": 692,
+        "x": 530,
+        "y": 298
+      },
+      "handle": {
+        "h": 7,
+        "w": 692,
+        "x": 530,
+        "y": 453
+      },
+      "editor": {
+        "h": 121,
+        "w": 692,
+        "x": 530,
+        "y": 332
+      },
+      "preview": {
+        "h": 164,
+        "w": 692,
+        "x": 530,
+        "y": 494
+      },
+      "rawSnapshotSHA256": "2a527d2582674d7b7bf59712558adc10679437a944703688ea71aed61cf87cb8",
+      "rawSnapshot": "workspace-dragged.tree.json.gz"
+    },
+    {
+      "phase": "keyboard",
+      "workspace": {
+        "h": 360,
+        "w": 935,
+        "x": 287,
+        "y": 298
+      },
+      "innerSplit": {
+        "h": 360,
+        "w": 692,
+        "x": 530,
+        "y": 298
+      },
+      "handle": {
+        "h": 7,
+        "w": 692,
+        "x": 530,
+        "y": 460
+      },
+      "editor": {
+        "h": 128,
+        "w": 692,
+        "x": 530,
+        "y": 332
+      },
+      "preview": {
+        "h": 157,
+        "w": 692,
+        "x": 530,
+        "y": 501
+      },
+      "rawSnapshotSHA256": "ac6636b9f925240d0773b7c8999e50c0d52a8faae8b04c17a31bcbb906c6a8d3",
+      "rawSnapshot": "workspace-keyboard.tree.json.gz"
+    },
+    {
+      "phase": "restored",
+      "workspace": {
+        "h": 360,
+        "w": 935,
+        "x": 287,
+        "y": 298
+      },
+      "innerSplit": {
+        "h": 360,
+        "w": 692,
+        "x": 530,
+        "y": 298
+      },
+      "handle": {
+        "h": 7,
+        "w": 692,
+        "x": 530,
+        "y": 503
+      },
+      "editor": {
+        "h": 171,
+        "w": 692,
+        "x": 530,
+        "y": 332
+      },
+      "preview": {
+        "h": 114,
+        "w": 692,
+        "x": 530,
+        "y": 544
+      },
+      "rawSnapshotSHA256": "c13159ad87f68b70bdb0be6deede0fb735a33c04ac0e3d31aaa0dc3b60d188f2",
+      "rawSnapshot": "workspace-restored.tree.json.gz"
+    }
+  ]
+}
