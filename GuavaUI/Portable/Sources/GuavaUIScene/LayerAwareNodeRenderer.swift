@@ -228,16 +228,14 @@ public final class LayerAwareNodeRenderer {
     private func emitShadow(_ node: Node, into list: DrawList,
                             x: Float, y: Float, w: Float, h: Float) {
         let rect = UIRect(x: x, y: y, width: w, height: h)
-        // The blur is faked with nested rects, and an opaque background is
-        // painted over this node immediately after. Every step's interior is
-        // therefore covered a moment later, so passing the fill as the hole
-        // keeps only the fringe that can actually be seen. Without this a
-        // `blur: 8` shadow costs 33 full-surface fills, which dominates GPU
-        // time on card-dense layouts.
-        let hole = node.backgroundColor.map { _ in rect }
+        // An opaque background is painted over this node immediately after, so
+        // the shadow's interior is never visible. Clipping to it keeps the
+        // fringe and drops the wasted fills.
+        let occluded = node.backgroundColor != nil ? rect : nil
         list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
                        rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity,
-                       frostedRect: node.backdropBlur > 0 ? rect : hole)
+                       frostedRect: node.backdropBlur > 0 ? rect : nil,
+                       occludedRect: occluded)
     }
 
     private func emitHighlight(_ node: Node, into list: DrawList,

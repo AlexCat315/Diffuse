@@ -1,3 +1,7 @@
+#if os(Android)
+import Android
+#endif
+import Foundation
 import GuavaUICore
 
 /// How a `SurfaceShadow` / `SurfaceHighlight` becomes geometry.
@@ -17,21 +21,32 @@ extension DrawList {
     /// The shadow is then clipped to the band outside it: a panel's own shadow
     /// falls on what is *behind* the panel, so letting the frost sample it
     /// greys the panel from the inside — measured at −17% luma on white.
+    ///
+    /// `occludedRect` is a surface that will be painted opaquely over this node
+    /// straight after, so the shadow's interior can never be seen. Skipping it
+    /// keeps a `blur: 8` shadow from costing 33 full-surface fills, which
+    /// dominated GPU time on card-dense layouts. Corners stay rounded there;
+    /// clipping to plain bands would square the card's outline.
     public func addShadow(_ layer: SurfaceShadow, rect: UIRect, cornerRadius: Float,
-                          opacity: Float = 1, frostedRect: UIRect? = nil) {
+                          opacity: Float = 1, frostedRect: UIRect? = nil,
+                          occludedRect: UIRect? = nil) {
         guard !layer.isEmpty, rect.width > 0, rect.height > 0 else { return }
-        let hole = frostedRect.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
-        paintSteps(layer, rect: rect, cornerRadius: cornerRadius,
-                   opacity: opacity, count: Self.stepCount(for: layer), hole: hole)
+        let frost = frostedRect.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+        // A frosted panel samples what is behind it, so its shadow has to stay
+        // outside even when nothing opaque covers it — that clip wins.
+        let occluded = frost == nil ? occludedRect.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil } : nil
+        paintSteps(layer, rect: rect, cornerRadius: cornerRadius, opacity: opacity,
+                   count: Self.stepCount(for: layer), frost: frost, occluded: occluded)
     }
 
     /// Paint a layered shadow: ambient halo first, key shadow over it.
     public func addShadow(_ layers: LayeredShadow, rect: UIRect, cornerRadius: Float,
-                          opacity: Float = 1, frostedRect: UIRect? = nil) {
+                          opacity: Float = 1, frostedRect: UIRect? = nil,
+                          occludedRect: UIRect? = nil) {
         addShadow(layers.ambient, rect: rect, cornerRadius: cornerRadius,
-                  opacity: opacity, frostedRect: frostedRect)
+                  opacity: opacity, frostedRect: frostedRect, occludedRect: occludedRect)
         addShadow(layers.key, rect: rect, cornerRadius: cornerRadius,
-                  opacity: opacity, frostedRect: frostedRect)
+                  opacity: opacity, frostedRect: frostedRect, occludedRect: occludedRect)
     }
     // MARK: - Cheap blur
 
@@ -56,7 +71,7 @@ extension DrawList {
     private static let stepSpacing: Float = 0.25
 
     private func paintSteps(_ layer: SurfaceShadow, rect: UIRect, cornerRadius: Float,
-                            opacity: Float, count: Int, hole: UIRect?) {
+                            opacity: Float, count: Int, frost: UIRect?, occluded: UIRect?) {
         let blur = max(0, layer.blur)
         let radius = max(cornerRadius, 0)
         for i in 0..<count {
@@ -76,21 +91,112 @@ extension DrawList {
                                   y: rect.minY + layer.offsetY + inset,
                                   width: rect.width - 2 * inset,
                                   height: rect.height - 2 * inset)
-            if let hole {
-                // Rect bands, not rounded ones: the hole is the panel the frost
-                // samples, and four quads per step cost less than clipping a
-                // rounded rect into four pieces.
-                for band in Self.bands(around: hole, in: stepRect) {
+            let stepRadius = radius + max(0, -inset)
+            if let frost {
+                for band in Self.bands(around: frost, in: stepRect) {
                     addRect(band, color: stepColor)
                 }
-            } else {
-                let stepRadius = radius + max(0, -inset)
+            } else if let occluded {
                 if stepRadius > 0 {
-                    addRoundedRect(stepRect, radius: stepRadius, color: stepColor)
+                    // Only the fringe outside the surface can be seen; a `blur: 8`
+                    // shadow is 33 nested rects, and repainting the covered
+                    // interior each time dominated GPU time on card layouts.
+                    for edge in Self.fringeEdges(around: occluded, in: stepRect, radius: stepRadius) {
+                        addRect(edge, color: stepColor)
+                    }
+                    addCornerFringe(step: stepRect, stepRadius: stepRadius, color: stepColor)
                 } else {
-                    addRect(stepRect, color: stepColor)
+                    for band in Self.bands(around: occluded, in: stepRect) {
+                        addRect(band, color: stepColor)
+                    }
                 }
-            }        }
+            } else if stepRadius > 0 {
+                addRoundedRect(stepRect, radius: stepRadius, color: stepColor)
+            } else {
+                addRect(stepRect, color: stepColor)
+            }
+        }
+    }
+
+    /// Straight parts of `outer` outside `hole`, shortened so the corner arcs —
+    /// not these quads — own the corners.
+    ///
+    /// The corners are shortened by exactly one `radius`, because that is where a
+    /// step's corner arc reaches: `outer.minY + radius` is the arc's centre, and
+    /// the arc sweeps from there back to the step's edge. Shortening by more
+    /// leaves a gap along the straight edges, and by less leaves the band painting
+    /// square corners where the arc has already curved in.
+    private static func fringeEdges(around hole: UIRect, in outer: UIRect,
+                                    radius: Float) -> [UIRect] {
+        let reach = radius
+        let top = max(outer.minY, hole.minY)
+        let bottom = min(outer.maxY, hole.maxY)
+        let left = max(outer.minX, hole.minX)
+        let right = min(outer.maxX, hole.maxX)
+        guard top < bottom || left < right else { return [] }
+        let midX0 = min(outer.minX + reach, outer.maxX)
+        let midX1 = max(midX0, outer.maxX - reach)
+        let midY0 = min(outer.minY + reach, outer.maxY)
+        let midY1 = max(midY0, outer.maxY - reach)
+        var edges: [UIRect] = []
+        if top < bottom {
+            edges.append(UIRect(x: midX0, y: outer.minY, width: midX1 - midX0, height: top - outer.minY))
+            edges.append(UIRect(x: midX0, y: bottom, width: midX1 - midX0, height: outer.maxY - bottom))
+        }
+        if left < right {
+            edges.append(UIRect(x: outer.minX, y: midY0, width: left - outer.minX, height: midY1 - midY0))
+            edges.append(UIRect(x: right, y: midY0, width: outer.maxX - right, height: midY1 - midY0))
+        }
+        return edges.filter { $0.width > 0 && $0.height > 0 }
+    }
+
+    /// The visible part of each corner: the step's own quarter disc.
+    ///
+    /// The surface is painted opaque over this shadow, so anything drawn inside it
+    /// is never seen. That makes the inner bound free — the corner only has to
+    /// reach as far as the step's arc, and the part that spills under the surface
+    /// costs nothing visually. Fanning from the step's own arc centre therefore
+    /// lands the outer edge exactly on the rounded-rect boundary, whatever the
+    /// shadow's offset is. An earlier version clipped the disc down to a strip
+    /// between two arcs, which had to assume the step's and the surface's arc were
+    /// concentric; a shadow offset makes them differ, and the corners came out
+    /// wrong.
+    private func addCornerFringe(step: UIRect, stepRadius: Float, color: Color) {
+        // Corner arc centres, paired with the two bounding edges their arc sweeps
+        // between, as unit vectors.
+        let corners: [(x: Float, y: Float, quadrant: (Float, Float, Float, Float))] = [
+            (step.minX + stepRadius, step.minY + stepRadius, (-1, 0, 0, -1)),
+            (step.maxX - stepRadius, step.minY + stepRadius, (0, -1, 1, 0)),
+            (step.minX + stepRadius, step.maxY - stepRadius, (-1, 0, 0, 1)),
+            (step.maxX - stepRadius, step.maxY - stepRadius, (0, 1, 1, 0))
+        ]
+        let segments = fanSegments(for: stepRadius)
+        for corner in corners {
+            let (cx, cy) = (corner.x, corner.y)
+            let (ax, ay, bx, by) = corner.quadrant
+            var previous = (x: cx + ax * stepRadius, y: cy + ay * stepRadius)
+            for index in 1...segments {
+                let angle = Float(index) / Float(segments) * (.pi / 2)
+                let (sine, cosine) = (sin(angle), cos(angle))
+                let point = (x: cx + (ax * cosine + bx * sine) * stepRadius,
+                             y: cy + (ay * cosine + by * sine) * stepRadius)
+                addTriangle(cx, cy, previous.x, previous.y, point.x, point.y, color: color)
+                previous = point
+            }
+        }
+    }
+
+    /// Triangles per corner fan.
+    ///
+    /// A chord cuts inside the arc by `r * (1 - cos(step / 2))`, which for a small
+    /// step is `r * step^2 / 8`. Holding that under `tolerance` bounds the step at
+    /// `sqrt(8 * tolerance / r)`, so a quarter arc needs
+    /// `(pi / 2) / sqrt(8 * tolerance / r)` segments.
+    private func fanSegments(for radius: Float) -> Int {
+        guard radius > 0 else { return 1 }
+        let tolerance: Float = 0.05 / max(1, pixelScale)
+        let count = (.pi / (4 * Float(2).squareRoot())) * (radius / tolerance).squareRoot()
+        return max(2, min(32, Int(count.rounded(.up))))
     }
 
     /// The four bands of `outer` that lie outside `hole`.
