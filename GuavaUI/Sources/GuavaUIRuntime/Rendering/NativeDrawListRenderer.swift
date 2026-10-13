@@ -253,7 +253,7 @@ public final class NativeDrawListRenderer {
         // resumes it with `.load`, and discarding it would drop the geometry
         // those segments are meant to draw over.
         colorTarget.store = true
-        try commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [colorTarget])) { pass in
+        try commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [colorTarget], label: "ui-segment")) { pass in
             pass.setViewport(Viewport(width: Double(viewport.pixels.x), height: Double(viewport.pixels.y)))
             if let composite, let backdropPass {
                 try backdropPass.draw(composite, in: &pass)

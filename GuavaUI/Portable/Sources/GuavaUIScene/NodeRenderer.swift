@@ -44,10 +44,12 @@ public struct NodeRenderer {
         let rect = UIRect(x: absX, y: absY, width: width, height: height)
         // A frosted panel samples the frame behind it, so keep its own shadow
         // out of the band it samples — otherwise the frost eats the shadow.
-        let frosted: UIRect? = node.backdropBlur > 0 ? rect : nil
+        // An opaque background covers the shadow's interior the moment it is
+        // painted, so clip to it too and keep only the visible fringe.
+        let hole: UIRect? = node.backdropBlur > 0 || node.backgroundColor != nil ? rect : nil
         list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
                        rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity,
-                       frostedRect: frosted)
+                       frostedRect: hole)
 
         // 3. Border ring, including when the background is transparent.
         if let bc = node.borderColor, node.borderWidth > 0,

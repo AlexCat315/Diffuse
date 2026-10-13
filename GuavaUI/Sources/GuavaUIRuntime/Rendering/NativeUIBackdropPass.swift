@@ -217,6 +217,7 @@ final class NativeUIBackdropPass {
                                                   Float(capture.y) / Float(frame.y)),
                                 blur: SIMD4(Mode.downsample.rawValue, 1 / Float(frame.x), 1 / Float(frame.y), 0),
                                 shape: .zero),
+                 label: "backdrop-downsample",
                  into: commands)
         // Horizontal, then vertical: two 13-tap passes instead of one 169-tap
         // square, and the quarter-size target makes each tap reach four pixels.
@@ -225,12 +226,14 @@ final class NativeUIBackdropPass {
                  params: Params(uvTransform: SIMD4(1, 1, 0, 0),
                                 blur: SIMD4(Mode.blur.rawValue, tapStep / Float(width), 0, sigma),
                                 shape: .zero),
+                 label: "backdrop-blur-h",
                  into: commands)
         try draw(target: a, pipeline: offscreen, binding: try bindingSet(for: b.resource.texture),
                  quad: try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1),
                  params: Params(uvTransform: SIMD4(1, 1, 0, 0),
                                 blur: SIMD4(Mode.blur.rawValue, 0, tapStep / Float(height), sigma),
                                 shape: .zero),
+                 label: "backdrop-blur-v",
                  into: commands)
 
         let radius = backdrop.cornerRadius * min(scaleX, scaleY)
@@ -264,7 +267,7 @@ final class NativeUIBackdropPass {
                     size: SIMD2<Int>) throws {
         let quad = try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1)
         let binding = try bindingSet(for: source)
-        commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [target])) { pass in
+        commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [target], label: "backdrop-blit")) { pass in
             pass.setPipeline(blit)
             pass.setViewport(Viewport(width: Double(size.x), height: Double(size.y)))
             pass.setVertexBuffer(quad.buffer, offset: quad.offset)
@@ -312,9 +315,11 @@ final class NativeUIBackdropPass {
     }
 
     private func draw(target: Scratch, pipeline: GraphicsPipeline, binding: BindingSet,
-                      quad: UploadLocation, params: Params, into commands: CommandBuffer) throws {
+                      quad: UploadLocation, params: Params, label: String,
+                      into commands: CommandBuffer) throws {
         let descriptor = RenderPassDescriptor(colorTargets: [
-            RenderColorTarget(texture: target.resource.texture, loadAction: .dontCare, store: true)])
+            RenderColorTarget(texture: target.resource.texture, loadAction: .dontCare, store: true)],
+            label: label)
         commands.renderPass(descriptor: descriptor) { pass in
             pass.setPipeline(pipeline)
             pass.setViewport(Viewport(width: Double(target.width), height: Double(target.height)))

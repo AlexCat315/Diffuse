@@ -3,15 +3,54 @@ import CVulkanHeaders
 import Foundation
 
 extension VulkanBackend {
-    func encode(cmd: VkCommandBuffer, commands: [PlannedCommand], renderObjects: VulkanRenderPassObjects) throws {
-        for command in commands {
-            switch command {
-            case .accelerationStructureBuild(let build): try encodeAccelerationBuild(cmd: cmd, handle: build.structure)
-            case .renderPass(let record): try encodeRenderPass(cmd: cmd, record: record, renderObjects: renderObjects)
-            case .computePass(let record): try encodeComputePass(cmd: cmd, record: record)
-            case .copyPass(let record): try encodeCopyPass(cmd: cmd, record: record)
-            case .barriers(let barriers): try encodeBarriers(cmd: cmd, barriers: barriers)
+    /// Encodes planned commands, bracketing each with a GPU timestamp when a
+    /// profile is attached. Returns the recording the caller must hand to the
+    /// fence completion, or `nil` when nothing was recorded.
+    func encode(cmd: VkCommandBuffer, commands: [PlannedCommand],
+                renderObjects: VulkanRenderPassObjects) throws -> VulkanTimestampRecording? {
+        // Timestamps bracket each command so a slow pass is attributed to itself
+        // rather than to the whole submission.
+        let timing = beginGPUTimestamps(cmd: cmd, markerCount: commands.count, labels: encodeLabels(commands))
+        for (index, command) in commands.enumerated() {
+            if let timing {
+                writeGPUTimestampBegin(cmd: cmd, recording: timing, query: UInt32(index * 2))
             }
+            try encodeCommand(cmd: cmd, command: command, renderObjects: renderObjects)
+            if let timing {
+                writeGPUTimestampEnd(cmd: cmd, recording: timing, query: UInt32(index * 2 + 1))
+            }
+        }
+        return timing
+    }
+
+    /// Diagnostic names for the markers `encode` wrote, in the same order.
+    private func encodeLabels(_ commands: [PlannedCommand]) -> [String] {
+        var counters: [String: Int] = [:]
+        return commands.map { command in
+            let kind: String
+            let name: String?
+            switch command {
+            case .renderPass(let record): kind = "renderPass"; name = record.descriptor.label
+            case .computePass: kind = "computePass"; name = nil
+            case .copyPass: kind = "copyPass"; name = nil
+            case .barriers: kind = "barriers"; name = nil
+            case .accelerationStructureBuild: kind = "asBuild"; name = nil
+            }
+            let ordinal = counters[kind, default: 0]
+            counters[kind] = ordinal + 1
+            if let name, !name.isEmpty { return name }
+            return "\(kind)#\(ordinal)"
+        }
+    }
+
+    private func encodeCommand(cmd: VkCommandBuffer, command: PlannedCommand,
+                               renderObjects: VulkanRenderPassObjects) throws {
+        switch command {
+        case .accelerationStructureBuild(let build): try encodeAccelerationBuild(cmd: cmd, handle: build.structure)
+        case .renderPass(let record): try encodeRenderPass(cmd: cmd, record: record, renderObjects: renderObjects)
+        case .computePass(let record): try encodeComputePass(cmd: cmd, record: record)
+        case .copyPass(let record): try encodeCopyPass(cmd: cmd, record: record)
+        case .barriers(let barriers): try encodeBarriers(cmd: cmd, barriers: barriers)
         }
     }
 

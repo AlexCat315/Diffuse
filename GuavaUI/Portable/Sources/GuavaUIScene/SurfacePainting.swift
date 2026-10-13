@@ -33,7 +33,6 @@ extension DrawList {
         addShadow(layers.key, rect: rect, cornerRadius: cornerRadius,
                   opacity: opacity, frostedRect: frostedRect)
     }
-
     // MARK: - Cheap blur
 
     /// Steps spaced evenly in *space*, one every `stepSpacing` points.
@@ -91,8 +90,7 @@ extension DrawList {
                 } else {
                     addRect(stepRect, color: stepColor)
                 }
-            }
-        }
+            }        }
     }
 
     /// The four bands of `outer` that lie outside `hole`.

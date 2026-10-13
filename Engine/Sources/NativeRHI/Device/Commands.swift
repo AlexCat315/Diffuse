@@ -52,10 +52,14 @@ public struct RenderDepthTarget: Sendable {
 public struct RenderPassDescriptor: Sendable {
     public var colorTargets: [RenderColorTarget]
     public var depthTarget: RenderDepthTarget?
+    /// Names this pass in GPU timing and validation output. Purely diagnostic, so
+    /// it carries no rendering behaviour.
+    public var label: String?
 
-    public init(colorTargets: [RenderColorTarget], depthTarget: RenderDepthTarget? = nil) {
+    public init(colorTargets: [RenderColorTarget], depthTarget: RenderDepthTarget? = nil, label: String? = nil) {
         self.colorTargets = colorTargets
         self.depthTarget = depthTarget
+        self.label = label
     }
 }
 

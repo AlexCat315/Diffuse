@@ -14,6 +14,12 @@ final class VulkanFrame {
     let index: Int
     let uploader: VulkanFrameUploader
     var commandPools: [UInt32: VkCommandPool] = [:]
+    /// Timestamp queries for this slot, created only while GPU timing is sampled.
+    var queryPool: VkQueryPool?
+    /// Result of the last creation attempt, kept only to explain a failure.
+    var queryPoolFailure: VkResult = VK_SUCCESS
+    /// Whether the last attempt returned no handle despite its result.
+    var queryPoolHandleWasNil = false
 
     init(index: Int, uploader: VulkanFrameUploader) {
         self.index = index; self.uploader = uploader
@@ -29,13 +35,18 @@ private final class VulkanFenceCompletion: @unchecked Sendable {
     private let commandPool: VkCommandPool?
     private let completion: () -> Void
     private var renderObjects: VulkanRenderPassObjects?
+    /// Read after the GPU signals; never touched on the hot path.
+    private let timestamps: VulkanTimestampRecording?
 
-    init(backend: VulkanBackend, fence: VkFence, commandPool: VkCommandPool? = nil, renderObjects: VulkanRenderPassObjects? = nil, completion: @escaping () -> Void) {
+    init(backend: VulkanBackend, fence: VkFence, commandPool: VkCommandPool? = nil,
+         renderObjects: VulkanRenderPassObjects? = nil, timestamps: VulkanTimestampRecording? = nil,
+         completion: @escaping () -> Void) {
         self.backend = backend
         self.fence = fence
         self.commandPool = commandPool
         self.completion = completion
         self.renderObjects = renderObjects
+        self.timestamps = timestamps
     }
 
     func wait() {
@@ -44,6 +55,7 @@ private final class VulkanFenceCompletion: @unchecked Sendable {
         if result != VK_SUCCESS { backend.submissionStatus.record("vkWaitForFences failed: \(result)") }
         context.sync.destroyFence(context.device, fence, nil)
         if let commandPool { context.auxiliary.destroyCommandPool(context.device, commandPool, nil) }
+        if let timestamps { backend.recordGPUTimestamps(timestamps) }
         renderObjects = nil
         completion()
     }
@@ -149,8 +161,9 @@ extension VulkanBackend {
         }
         let renderObjects = VulkanRenderPassObjects(context: context)
         let previousTextures = registries.textures
+        var timestamps: VulkanTimestampRecording?
         do {
-            try encode(cmd: cmd, commands: submit.commands, renderObjects: renderObjects)
+            timestamps = try encode(cmd: cmd, commands: submit.commands, renderObjects: renderObjects)
         } catch {
             registries.textures = previousTextures
             throw error
@@ -191,7 +204,8 @@ extension VulkanBackend {
         for window in acquisitions { window.presentation.pendingAcquire = false }
         // Asynchronous completion: wait on a background thread, then fire the
         // callback. No queue idle on the hot path.
-        let waiter = VulkanFenceCompletion(backend: self, fence: fence, renderObjects: renderObjects, completion: completion)
+        let waiter = VulkanFenceCompletion(backend: self, fence: fence, renderObjects: renderObjects,
+                                           timestamps: timestamps, completion: completion)
         DispatchQueue.global().async { waiter.wait() }
     }
 

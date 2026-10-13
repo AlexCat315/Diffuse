@@ -540,6 +540,18 @@ public final class Device {
 
     // MARK: Submission
 
+    /// Whether this backend can timestamp GPU execution for queued submissions.
+    public var supportsGPUTimestamps: Bool {
+        backend is GPUTimestampRecording
+    }
+
+    /// Attaches a GPU timing profile, or `nil` to stop recording. Sampling starts
+    /// with the next submission; results arrive asynchronously on the backend's
+    /// completion thread, so read them once the sampled frames have retired.
+    public func setGPUTimestampProfile(_ profile: GPUTimestampProfile?) {
+        (backend as? GPUTimestampRecording)?.gpuTimestampProfile = profile
+    }
+
     /// Plans and submits a recorded command buffer. Submission is asynchronous;
     /// completion is tracked against the current frame slot.
     public func submit(

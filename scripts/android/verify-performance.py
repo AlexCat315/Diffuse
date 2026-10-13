@@ -157,9 +157,19 @@ def main():
     measurement = text.split('MEASURE_BEGIN', 1)[-1].split('MEASURE_END', 1)[0]
     frames = [numeric_fields(line) for line in measurement.splitlines() if '[timing] android.frame ' in line]
     pacing = [numeric_fields(line) for line in measurement.splitlines() if '[timing] android.pacing ' in line]
+    gpu = [numeric_fields(line) for line in measurement.splitlines() if '[timing] android.gpu ' in line]
     timestamps = [frame['displayTime'] for frame in frames]
     phases = ['scenePrepare', 'frameSlot', 'drawableAcquire', 'atlasUpload', 'commandRecord', 'queueSubmit', 'present', 'total']
     actual = sorted(presentations)
+    # Per-pass GPU intervals arrive from the RHI timestamp profile. The log line
+    # carries one average and one worst value per pass label, so aggregate each
+    # key separately. `ms` is the unit on the value, not part of the key.
+    gpu_passes = {}
+    for window in gpu:
+        for key, value in window.items():
+            if key in ('window', 'passes'):
+                continue
+            gpu_passes.setdefault(key, []).append(value)
     # The rolling history can contain frames before measurement. Native callback
     # and SurfaceFlinger times share CLOCK_MONOTONIC; crop to observed work.
     if timestamps:
@@ -174,6 +184,7 @@ def main():
         'callbackIntervalMilliseconds': distribution([(b - a) / 1_000_000 for a, b in zip(timestamps, timestamps[1:])]),
         'geometry': {key: distribution([frame[key] for frame in frames]) for key in ['vertices', 'indices']},
         'pacingWindows': pacing,
+        'gpuMilliseconds': {key: distribution(values) for key, values in gpu_passes.items()},
         'presentation': {'samples': len(actual), 'refreshPeriodMilliseconds': distribution(refresh_periods),
                          'intervalMilliseconds': distribution(intervals),
                          'observedFramesPerSecond': (len(actual) - 1) * 1e9 / (actual[-1] - actual[0]) if len(actual) > 1 else None},
@@ -181,7 +192,9 @@ def main():
                   'Callback work includes telemetry; callback cadence is not displayed FPS.',
                   'SurfaceFlinger samples are actual presentation timestamps from the native SurfaceView.',
                   'Release component is selected in APK launch.json; its Intent component override is disabled.',
-                  'Native phase logging is capped at 1200 samples per surface.'],
+                  'Native phase logging is capped at 1200 samples per surface.',
+                  'gpuMilliseconds are GPU execution intervals between timestamp pairs; they exclude queue wait,'
+                  ' swapchain acquire and present, and cover only the passes reported by the RHI profile.'],
     }
     (directory / 'thermal-after.txt').write_text(device.shell('dumpsys', 'thermalservice'))
     device.shell('am', 'force-stop', PACKAGE)

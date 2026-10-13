@@ -545,6 +545,9 @@ struct VulkanDeviceResourceCommands {
     let destroyFramebuffer: PFN_vkDestroyFramebuffer
     let createCommandPool: PFN_vkCreateCommandPool
     let allocateCommandBuffers: PFN_vkAllocateCommandBuffers
+    let createQueryPool: PFN_vkCreateQueryPool
+    let destroyQueryPool: PFN_vkDestroyQueryPool
+    let getQueryPoolResults: PFN_vkGetQueryPoolResults
 
     init(_ resolve: VulkanResolver) {
         createGraphicsPipelines = Self.bind(resolve("vkCreateGraphicsPipelines"))
@@ -564,6 +567,9 @@ struct VulkanDeviceResourceCommands {
         destroyFramebuffer = Self.bind(resolve("vkDestroyFramebuffer"))
         createCommandPool = Self.bind(resolve("vkCreateCommandPool"))
         allocateCommandBuffers = Self.bind(resolve("vkAllocateCommandBuffers"))
+        createQueryPool = Self.bind(resolve("vkCreateQueryPool"))
+        destroyQueryPool = Self.bind(resolve("vkDestroyQueryPool"))
+        getQueryPoolResults = Self.bind(resolve("vkGetQueryPoolResults"))
     }
 
     private static func bind<F>(_ ptr: UnsafeRawPointer?) -> F {
@@ -594,6 +600,8 @@ struct VulkanDeviceDrawCommands {
     let cmdCopyBufferToImage: PFN_vkCmdCopyBufferToImage
     let cmdCopyImageToBuffer: PFN_vkCmdCopyImageToBuffer
     let cmdPipelineBarrier: PFN_vkCmdPipelineBarrier
+    let cmdResetQueryPool: PFN_vkCmdResetQueryPool
+    let cmdWriteTimestamp: PFN_vkCmdWriteTimestamp
 
     init(_ resolve: VulkanResolver) {
         freeCommandBuffers = Self.bind(resolve("vkFreeCommandBuffers"))
@@ -616,6 +624,8 @@ struct VulkanDeviceDrawCommands {
         cmdCopyBufferToImage = Self.bind(resolve("vkCmdCopyBufferToImage"))
         cmdCopyImageToBuffer = Self.bind(resolve("vkCmdCopyImageToBuffer"))
         cmdPipelineBarrier = Self.bind(resolve("vkCmdPipelineBarrier"))
+        cmdResetQueryPool = Self.bind(resolve("vkCmdResetQueryPool"))
+        cmdWriteTimestamp = Self.bind(resolve("vkCmdWriteTimestamp"))
     }
 
     private static func bind<F>(_ ptr: UnsafeRawPointer?) -> F {

@@ -34,6 +34,9 @@ final class VulkanBackend: RHIBackend {
     var scratchCommandPool: VkCommandPool?
     var scratchFence: VkFence?
 
+    /// Set through `GPUTimestampRecording` to sample GPU execution.
+    var gpuTimestampProfile: GPUTimestampProfile?
+
     let lock = NSLock()
 
     // Convenience aliases so transfer/render extensions can name command
