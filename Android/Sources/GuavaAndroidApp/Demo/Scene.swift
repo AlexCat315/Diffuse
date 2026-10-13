@@ -155,7 +155,9 @@ final class DemoScene {
                 typography.beginFrame()
                 NodeRenderer().render(root: root, into: list)
             }
-            typography.finishFrame()
+            // Gallery paints with environment.text's atlas. Its unused counter
+            // atlas never uploads, so its upload-dirty flag never becomes clean.
+            if launch.mode == .counter { typography.finishFrame() }
         }
     }
 
@@ -220,7 +222,7 @@ final class DemoScene {
         if let root = tree.root { visit(root) }
         let focus = context.focusChain.focused
         let value = Snapshot(session: sessionID, state: checkpointState,
-            focused: focus.map { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String ?? "field.\($0.id)" },
+            focused: focusedID,
             preedit: focus?.attachments["preedit"] as? String ?? "", controls: controls,
             width: size.x, height: size.y, scale: scale, typography: typography.statistics,
             vertices: list.vertices.count, indices: list.indices.count, frames: frames,

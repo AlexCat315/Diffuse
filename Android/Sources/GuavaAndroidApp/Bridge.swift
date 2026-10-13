@@ -78,7 +78,17 @@ func heldKeyEvent(_ pointer: UnsafeMutableRawPointer?, _ scancode: UInt32, _ dow
 @_cdecl("guava_android_snapshot")
 func copySnapshot(_ pointer: UnsafeMutableRawPointer?, _ output: UnsafeMutablePointer<UInt16>?, _ capacity: Int32) -> Int32 {
     guard let pointer else { return 0 }
-    let value = Array(session(pointer).scene.snapshot().utf16)
+    return copyText(session(pointer).scene.snapshot(), output, capacity)
+}
+
+@_cdecl("guava_android_input_snapshot")
+func copyInputSnapshot(_ pointer: UnsafeMutableRawPointer?, _ output: UnsafeMutablePointer<UInt16>?, _ capacity: Int32) -> Int32 {
+    guard let pointer else { return 0 }
+    return copyText(session(pointer).scene.inputSnapshot(), output, capacity)
+}
+
+private func copyText(_ text: String, _ output: UnsafeMutablePointer<UInt16>?, _ capacity: Int32) -> Int32 {
+    let value = Array(text.utf16)
     if let output, capacity >= value.count { output.update(from: value, count: value.count) }
     return Int32(value.count)
 }

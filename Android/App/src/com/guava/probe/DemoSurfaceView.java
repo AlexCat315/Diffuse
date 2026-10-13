@@ -116,17 +116,20 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     }
     void closeApplication() { if (application != 0) { MainActivity.destroyApplication(application); application = 0; } }
     long detachApplication() { releaseSurface(); long retained = application; application = 0; return retained; }
-    JSONObject state() {
+    private JSONObject state() {
         try { return new JSONObject(session == 0 ? "{}" : MainActivity.snapshot(session)); }
         catch (Exception error) { throw new IllegalStateException("Invalid Swift demo state", error); }
+    }
+    JSONObject inputState() {
+        try { return new JSONObject(session == 0 ? "{}" : MainActivity.inputSnapshot(session)); }
+        catch (Exception error) { throw new IllegalStateException("Invalid Swift input state", error); }
     }
     String checkpoint() {
         JSONObject value = state().optJSONObject("state");
         return value == null ? checkpoint : value.toString();
     }
-    String note() { JSONObject value = state().optJSONObject("state"); return value == null ? "" : value.optString("note", ""); }
-    JSONObject editor() { JSONObject editor = state().optJSONObject("editor"); return editor == null ? new JSONObject() : editor; }
-    private boolean textFocused() { return state().optJSONObject("editor") != null; }
+    private JSONObject editor() { JSONObject editor = inputState().optJSONObject("editor"); return editor == null ? new JSONObject() : editor; }
+    private boolean textFocused() { return inputState().optJSONObject("editor") != null; }
     void edit(int kind, int start, int end) { if (session != 0) MainActivity.edit(session, kind, start, end); }
     void text(String value, boolean composing) { if (session != 0) MainActivity.text(session, value, composing); }
     void key(int scancode) { if (session != 0) MainActivity.key(session, scancode, 0); }
@@ -139,12 +142,14 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
             touchX = event.getX(); touchY = event.getY(); touchMoved = false;
             touchStarted = event.getEventTime();
             requestFocus();
-            boolean previous = textFocused();
-            String previousID = state().optString("focused");
+            JSONObject previousState = inputState();
+            boolean previous = previousState.optJSONObject("editor") != null;
+            String previousID = previousState.optString("focused");
             MainActivity.pointer(session, 0, event.getX(), event.getY());
+            JSONObject currentState = inputState();
             InputMethodManager ime = (InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (textFocused()) {
-                if (!previous || !previousID.equals(state().optString("focused"))) { connection = null; ime.restartInput(this); }
+            if (currentState.optJSONObject("editor") != null) {
+                if (!previous || !previousID.equals(currentState.optString("focused"))) { connection = null; ime.restartInput(this); }
                 ime.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
             } else if (previous) { ime.hideSoftInputFromWindow(getWindowToken(), 0); connection = null; }
         } else if (action == MotionEvent.ACTION_UP) {
@@ -181,7 +186,7 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     }
     @Override public boolean onKeyDown(int code, KeyEvent event) {
         int gameKey = GameControls.scancode(code);
-        if ("game".equals(state().optString("mode")) && gameKey != 0) { keyState(gameKey, true); return true; }
+        if (gameMode && gameKey != 0) { keyState(gameKey, true); return true; }
         if (textFocused() && (event.isCtrlPressed() || event.isMetaPressed())) {
             int action = code == KeyEvent.KEYCODE_A ? android.R.id.selectAll : code == KeyEvent.KEYCODE_C ? android.R.id.copy
                 : code == KeyEvent.KEYCODE_X ? android.R.id.cut : code == KeyEvent.KEYCODE_V ? android.R.id.paste : 0;
@@ -217,7 +222,7 @@ final class DemoSurfaceView extends SurfaceView implements SurfaceHolder.Callbac
     }
     @Override public boolean onKeyUp(int code, KeyEvent event) {
         int gameKey = GameControls.scancode(code);
-        if ("game".equals(state().optString("mode")) && gameKey != 0) { keyState(gameKey, false); return true; }
+        if (gameMode && gameKey != 0) { keyState(gameKey, false); return true; }
         return super.onKeyUp(code, event);
     }
     // Debug-only APK automation goes through the same InputConnection as the IME.

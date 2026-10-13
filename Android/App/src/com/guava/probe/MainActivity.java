@@ -28,6 +28,7 @@ public final class MainActivity extends Activity {
     static native void keyState(long session, int scancode, boolean down);
     static native void edit(long session, int kind, int start, int end);
     static native String snapshot(long session);
+    static native String inputSnapshot(long session);
     static native void close(long session);
     private DemoSurfaceView surface;
     private JSONObject launch;

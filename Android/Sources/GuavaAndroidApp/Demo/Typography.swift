@@ -22,7 +22,11 @@ final class DemoTypography {
         guard fonts.fontCount > 0 else { throw CocoaError(.fileReadNoSuchFile) }
     }
 
-    func beginFrame() { statistics = Statistics(fonts: fonts.fontCount) }
+    func beginFrame() {
+        statistics.fonts = fonts.fontCount
+        statistics.glyphs = 0
+        statistics.missingGlyphs = 0
+    }
 
     func paint(_ text: DemoText, into list: DrawList, origin: CGPoint, scale: Float) {
         fonts.configure(size: text.size, rasterScale: scale)
@@ -33,7 +37,10 @@ final class DemoTypography {
                    x: Float(origin.x) + text.inset, y: Float(origin.y) + (text.inset > 0 ? 10 : 2), color: text.color)
     }
 
+    /// Occupancy changes only when glyph pixels change. Keep the cached count
+    /// across frames so input and diagnostic snapshots also remain cheap.
     func finishFrame() {
+        guard fonts.atlas.isDirty else { return }
         statistics.atlasPixels = fonts.atlas.atlasData.reduce(0) { $0 + ($1 > 0 ? 1 : 0) }
     }
 }

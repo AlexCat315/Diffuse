@@ -29,6 +29,9 @@ public protocol FrameUploader: AnyObject {
     func reset()
     /// Suballocates `data` from GPU-visible ring storage and copies it there.
     func write(_ data: Data, alignment: Int) throws -> UploadLocation
+    /// Copies borrowed contiguous bytes before returning. A protocol requirement
+    /// makes backend fast paths dispatch through the uploader existential.
+    func write(_ bytes: UnsafeRawBufferPointer, alignment: Int) throws -> UploadLocation
 }
 
 public extension FrameUploader {

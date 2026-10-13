@@ -17,9 +17,13 @@ final class DemoInputConnection extends BaseInputConnection {
     private String composing = "";
     private final String editorID;
 
-    DemoInputConnection(DemoSurfaceView view) { super(view, true); this.view = view; editorID = view.state().optString("focused"); }
-    private boolean valid() { return editorID.equals(view.state().optString("focused")); }
-    private JSONObject state() { return valid() ? view.editor() : new JSONObject(); }
+    DemoInputConnection(DemoSurfaceView view) { super(view, true); this.view = view; editorID = view.inputState().optString("focused"); }
+    private boolean valid() { return editorID.equals(view.inputState().optString("focused")); }
+    private JSONObject state() {
+        JSONObject input = view.inputState();
+        JSONObject editor = editorID.equals(input.optString("focused")) ? input.optJSONObject("editor") : null;
+        return editor == null ? new JSONObject() : editor;
+    }
     private int start(JSONObject state) { return Math.min(state.optInt("selectionStart"), state.optInt("selectionEnd")); }
     private int end(JSONObject state) { return Math.max(state.optInt("selectionStart"), state.optInt("selectionEnd")); }
     @Override public Editable getEditable() {

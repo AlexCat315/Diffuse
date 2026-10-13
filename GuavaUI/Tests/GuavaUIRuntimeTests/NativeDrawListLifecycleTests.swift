@@ -217,5 +217,37 @@ struct NativeDrawListLifecycleTests {
         #expect(throws: RHIError.self) { try context.native.uploadFontAtlas(atlas, textureID: .none) }
         #expect(atlas.isDirty)
     }
+
+    @Test("cached validation rejects changed contents with unchanged buffer counts")
+    func cachedValidationTracksValueStorage() throws {
+        let context = try NativeUIDrawTestContext()
+        let output = try context.nativeOutput(format: .bgra8Unorm, size: viewport.pixels)
+        let list = DrawList()
+        list.addRect(UIRect(x: 0, y: 0, width: 12, height: 10), color: .white)
+        let vertices = list.vertices, indices = list.indices, batches = list.batches
+        let geometry = try NativeUIGeometry(validating: list)
+        try context.device.beginFrame(); defer { context.device.endFrame() }
+        for variant in 0..<3 {
+            let warmup = CommandBuffer()
+            _ = try context.native.record(list: list, into: warmup,
+                target: RenderColorTarget(texture: output.texture), viewport: viewport)
+            #expect(geometry.matches(list))
+            var changedVertices = vertices, changedIndices = indices, changedBatches = batches
+            switch variant {
+            case 0: changedVertices[0].posX = .nan
+            case 1: changedIndices[0] = UInt32(vertices.count)
+            default: changedBatches[0].indexCount = 4
+            }
+            list.load(vertices: changedVertices, indices: changedIndices, batches: changedBatches)
+            #expect(!geometry.matches(list))
+            let commands = CommandBuffer()
+            #expect(throws: RHIError.self) {
+                try context.native.record(list: list, into: commands,
+                    target: RenderColorTarget(texture: output.texture), viewport: viewport)
+            }
+            #expect(commands.commands.isEmpty)
+            list.load(vertices: vertices, indices: indices, batches: batches)
+        }
+    }
 }
 #endif

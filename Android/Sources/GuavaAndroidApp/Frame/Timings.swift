@@ -4,6 +4,7 @@ import CAndroidHost
 /// Bounded CPU wall-clock samples. Queue and presentation may include waiting;
 /// none of these values claim to measure GPU execution or displayed frames.
 final class FrameTimings {
+    private static let sampleLimit = 6000
     enum Phase: String, CaseIterable {
         case scenePrepare, frameSlot, drawableAcquire, atlasUpload, commandRecord, queueSubmit, present
     }
@@ -15,7 +16,7 @@ final class FrameTimings {
 
     init(enabled: Bool) { self.enabled = enabled }
 
-    var isSampling: Bool { enabled && samples < 1200 }
+    var isSampling: Bool { enabled && samples < Self.sampleLimit }
 
     func begin() {
         guard isSampling else { return }

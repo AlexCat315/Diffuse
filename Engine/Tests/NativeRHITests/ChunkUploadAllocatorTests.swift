@@ -18,7 +18,33 @@ private final class TestChunk: UploadRingChunk {
     deinit { backing.deallocate() }
 }
 
+private final class BorrowedBytesUploader: FrameUploader {
+    var copied: [UInt8] = []
+
+    func reset() { copied.removeAll() }
+
+    func write(_ data: Data, alignment: Int) throws -> UploadLocation {
+        XCTFail("Borrowed bytes must not take the intermediate Data path")
+        throw RHIError.outOfMemory
+    }
+
+    func write(_ bytes: UnsafeRawBufferPointer, alignment: Int) throws -> UploadLocation {
+        copied = Array(bytes)
+        return UploadLocation(buffer: Buffer(id: 1), offset: alignment)
+    }
+}
+
 final class ChunkUploadAllocatorTests: XCTestCase {
+    func testBorrowedBytesDispatchToBackendThroughProtocol() throws {
+        let backend = BorrowedBytesUploader()
+        let uploader: any FrameUploader = backend
+        var source: [UInt8] = [17, 29, 41, 53]
+        let location = try source.withUnsafeBytes { try uploader.write($0, alignment: 64) }
+        source[0] = 99
+        XCTAssertEqual(backend.copied, [17, 29, 41, 53])
+        XCTAssertEqual(location.offset, 64)
+    }
+
     private func makeAllocator(chunkSize: Int = 1024) -> ChunkUploadAllocator<TestChunk> {
         ChunkUploadAllocator(defaultChunkSize: chunkSize) { TestChunk(capacity: $0) }
     }

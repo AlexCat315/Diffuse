@@ -13,7 +13,7 @@ import Foundation
 final class VulkanFrame {
     let index: Int
     let uploader: VulkanFrameUploader
-    var commandPools: [UInt32: VkCommandPool] = [:]
+    var commandPools: [UInt32: VulkanCommandPool] = [:]
     /// Timestamp queries for this slot, created only while GPU timing is sampled.
     var queryPool: VkQueryPool?
     /// Result of the last creation attempt, kept only to explain a failure.
@@ -32,18 +32,16 @@ private final class VulkanFenceCompletion: @unchecked Sendable {
     private let backend: VulkanBackend
     private var context: VulkanContext { backend.context }
     private let fence: VkFence
-    private let commandPool: VkCommandPool?
     private let completion: () -> Void
     private var renderObjects: VulkanRenderPassObjects?
     /// Read after the GPU signals; never touched on the hot path.
     private let timestamps: VulkanTimestampRecording?
 
-    init(backend: VulkanBackend, fence: VkFence, commandPool: VkCommandPool? = nil,
+    init(backend: VulkanBackend, fence: VkFence,
          renderObjects: VulkanRenderPassObjects? = nil, timestamps: VulkanTimestampRecording? = nil,
          completion: @escaping () -> Void) {
         self.backend = backend
         self.fence = fence
-        self.commandPool = commandPool
         self.completion = completion
         self.renderObjects = renderObjects
         self.timestamps = timestamps
@@ -54,7 +52,6 @@ private final class VulkanFenceCompletion: @unchecked Sendable {
         let result = context.sync.waitForFences(context.device, 1, &fenceSlot, VK_TRUE, UInt64.max)
         if result != VK_SUCCESS { backend.submissionStatus.record("vkWaitForFences failed: \(result)") }
         context.sync.destroyFence(context.device, fence, nil)
-        if let commandPool { context.auxiliary.destroyCommandPool(context.device, commandPool, nil) }
         if let timestamps { backend.recordGPUTimestamps(timestamps) }
         renderObjects = nil
         completion()
@@ -78,7 +75,11 @@ final class VulkanFrameUploader: FrameUploader {
     }
 
     func write(_ data: Data, alignment: Int) throws -> UploadLocation {
-        let placement = try allocator.write(data, alignment: alignment)
+        try data.withUnsafeBytes { try write($0, alignment: alignment) }
+    }
+
+    func write(_ bytes: UnsafeRawBufferPointer, alignment: Int) throws -> UploadLocation {
+        let placement = try allocator.write(bytes, alignment: alignment)
         let bufferID = backend.registerTransientBuffer(placement.chunk)
         return UploadLocation(buffer: Buffer(id: bufferID), offset: placement.offset)
     }
@@ -92,7 +93,8 @@ extension VulkanBackend {
             if slot < frames.count {
                 let frame = frames[slot]
                 for pool in frame.commandPools.values {
-                    try rhiRequire(draw.resetCommandPool(context.device, pool, 0) == VK_SUCCESS, "vkResetCommandPool failed")
+                    try rhiRequire(draw.resetCommandPool(context.device, pool.handle, 0) == VK_SUCCESS, "vkResetCommandPool failed")
+                    pool.rewind()
                 }
                 frame.uploader.reset()
                 return frame.uploader
@@ -105,13 +107,14 @@ extension VulkanBackend {
         }
     }
 
-    private func commandPool(frame: VulkanFrame, family: UInt32) throws -> VkCommandPool {
+    private func commandPool(frame: VulkanFrame, family: UInt32) throws -> VulkanCommandPool {
         if let existing = frame.commandPools[family] { return existing }
         var info = VkCommandPoolCreateInfo()
         info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
         info.queueFamilyIndex = family
-        info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT.rawValue
-        guard let pool = vkWithOutHandle({ _ = context.resources.createCommandPool(context.device, &info, nil, $0) }) else { throw RHIError.outOfMemory }
+        info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT.rawValue
+        guard let handle = vkWithOutHandle({ _ = context.resources.createCommandPool(context.device, &info, nil, $0) }) else { throw RHIError.outOfMemory }
+        let pool = VulkanCommandPool(handle: handle)
         frame.commandPools[family] = pool
         return pool
     }
@@ -143,15 +146,8 @@ extension VulkanBackend {
 
         // Per-frame command buffer from this slot's pool.
         let frame = frames[activeSlot]
-        var cmd: VkCommandBuffer = vkNull()
-        var allocInfo = VkCommandBufferAllocateInfo()
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-        allocInfo.commandPool = try commandPool(frame: frame, family: nativeQueue.family)
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
-        allocInfo.commandBufferCount = 1
-        guard context.resources.allocateCommandBuffers(context.device, &allocInfo, &cmd) == VK_SUCCESS else {
-            throw RHIError.submitFailed("vkAllocateCommandBuffers failed")
-        }
+        let pool = try commandPool(frame: frame, family: nativeQueue.family)
+        let cmd = try pool.commandBuffer(context: context)
 
         var begin = VkCommandBufferBeginInfo()
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
@@ -226,6 +222,7 @@ extension VulkanBackend {
         guard result.result == VK_SUCCESS || result.result == VK_SUBOPTIMAL_KHR else {
             throw RHIError.swapchainAcquireFailed("vkAcquireNextImageKHR: \(result.result)")
         }
+        if result.result == VK_SUBOPTIMAL_KHR { window.needsRecreate = swapchain.surfaceChanged() }
         let image = makeSwapchainImage(handle: handle, window: window, index: result.index)
         window.presentation.acquiredID = image.texture.id; window.presentation.pendingAcquire = true
         return image
@@ -238,18 +235,14 @@ extension VulkanBackend {
         let ready: VkSemaphore
         if let existing = window.presentation.ready[image.texture.id] { ready = existing }
         else { ready = try binarySemaphore(); window.presentation.ready[image.texture.id] = ready }
-        // Presentation owns an independent pool; a frame slot may complete and
-        // reset its pools before the final transition/present wait has finished.
-        let transient = VulkanFrame(index: -1, uploader: frames[activeSlot].uploader)
-        let pool = try commandPool(frame: transient, family: context.queues.graphics.family)
+        // Device registers presentation with the active frame slot, so its pool
+        // cannot reset until this transition's completion has also retired.
+        // Reuse that pool rather than create/destroy a pool on every present.
+        let pool = try commandPool(frame: frames[activeSlot], family: context.queues.graphics.family)
         var submitted = false
-        defer { if !submitted { context.auxiliary.destroyCommandPool(context.device, pool, nil) } }
-        var cmd: VkCommandBuffer = vkNull()
-        var allocation = VkCommandBufferAllocateInfo()
-        allocation.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-        allocation.commandPool = pool; allocation.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; allocation.commandBufferCount = 1
-        try rhiRequire(context.resources.allocateCommandBuffers(context.device, &allocation, &cmd) == VK_SUCCESS, "present command allocation failed")
+        let cmd = try pool.commandBuffer(context: context)
         var begin = VkCommandBufferBeginInfo(); begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue
         try rhiRequire(draw.beginCommandBuffer(cmd, &begin) == VK_SUCCESS, "present command begin failed")
         let previous = registries.textures[image.texture.id]!
         try transitionTexture(cmd: cmd, handle: image.texture, state: .present)
@@ -265,10 +258,13 @@ extension VulkanBackend {
         }
         guard result == VK_SUCCESS else { sync.destroyFence(context.device, fence, nil); throw RHIError.presentFailed("present transition submit failed: \(result)") }
         submitted = true; window.presentation.pendingAcquire = false; window.presentation.acquiredID = nil
-        let waiter = VulkanFenceCompletion(backend: self, fence: fence, commandPool: pool, completion: completion)
+        let waiter = VulkanFenceCompletion(backend: self, fence: fence, completion: completion)
         DispatchQueue.global().async { waiter.wait() }
         let status = window.chain.present(queue: context.queues.graphics.handle, semaphore: ready, index: UInt32(index))
-        if status == VK_ERROR_OUT_OF_DATE_KHR || status == VK_SUBOPTIMAL_KHR { window.needsRecreate = true }
+        if status == VK_ERROR_OUT_OF_DATE_KHR { window.needsRecreate = true }
+        else if status == VK_SUBOPTIMAL_KHR {
+            if !window.needsRecreate { window.needsRecreate = window.chain.surfaceChanged() }
+        }
         else if status != VK_SUCCESS { submissionStatus.record("vkQueuePresentKHR: \(status)") }
     }
 

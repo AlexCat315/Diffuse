@@ -56,33 +56,6 @@ private struct NativeUIBatch {
     var backdrop: UIBackdrop? { indices.backdrop }
 }
 
-extension NativeDrawListRenderer {
-    /// Detects whether a batch's scissor performs a real clip. Most batches carry
-    /// a scissor equal to their own geometry bounds, which clips nothing; only
-    /// those can safely share a draw with a neighbour.
-    static func reliesOnScissorClip(list: DrawList, batch: DrawBatch) -> Bool {
-        guard let rect = batch.scissor else { return false }
-        let tolerance: Float = 0.01
-        let minX = rect.minX - tolerance, minY = rect.minY - tolerance
-        let maxX = rect.maxX + tolerance, maxY = rect.maxY + tolerance
-        // Borrow the arrays once. Repeated cross-module getters and generic
-        // collection iteration are costly for every index in debug builds.
-        return list.vertices.withUnsafeBufferPointer { vertices in
-            list.indices.withUnsafeBufferPointer { indices in
-                var index = Int(batch.indexOffset)
-                let end = index + Int(batch.indexCount)
-                while index < end {
-                    let vertex = vertices[Int(indices[index])]
-                    if vertex.posX < minX || vertex.posY < minY
-                        || vertex.posX > maxX || vertex.posY > maxY { return true }
-                    index += 1
-                }
-                return false
-            }
-        }
-    }
-}
-
 /// Consumes GuavaUI geometry on a caller-owned NativeRHI frame and command list.
 /// Call methods serially per renderer. Siblings share immutable GPU resources;
 /// their frame uploads and pending-patch acknowledgements remain independent.
@@ -93,6 +66,7 @@ public final class NativeDrawListRenderer {
     /// generated here yet) keeps every panel, they just lose the frost.
     private let backdropShaders: NativeUIBackdropShaders?
     let textureStore: NativeUITextureStore
+    private var geometry: NativeUIGeometry?
     private var pipeline: NativeUIPipeline?
     private var backdropPass: NativeUIBackdropPass?
 
@@ -159,7 +133,8 @@ public final class NativeDrawListRenderer {
         viewport: NativeUIViewport, backdropSource: Texture? = nil) throws -> NativeUIDrawFrame {
         guard let pipeline else { throw RHIError.invalidArgument("configure the native UI renderer before recording") }
         try viewport.validate()
-        try validate(list)
+        if geometry?.matches(list) != true { geometry = try NativeUIGeometry(validating: list) }
+        let clipReliance = geometry!.reliesOnClip
         try textureStore.prepareAssets(list.resources)
         var statistics = NativeUIDrawStatistics()
         statistics.vertices = list.vertices.count; statistics.indices = list.indices.count
@@ -198,10 +173,10 @@ public final class NativeDrawListRenderer {
                 vertices = try list.vertices.withUnsafeBytes { try device.uploadTransient($0) }
             }
             indices = try list.indices.withUnsafeBytes { try device.uploadTransient($0) }
-            for batch in list.batches {
+            for (index, batch) in list.batches.enumerated() {
                 guard batch.indexCount > 0, let scissor = try viewport.scissor(batch.scissor) else { continue }
                 let bindings = textureStore.bindingSet(for: batch.textureID)
-                let reliesOnClip = Self.reliesOnScissorClip(list: list, batch: batch)
+                let reliesOnClip = clipReliance[index]
                 draws.append(NativeUIBatch(indices: batch, scissor: scissor, bindings: bindings, reliesOnClip: reliesOnClip))
             }
         }
@@ -315,37 +290,5 @@ public final class NativeDrawListRenderer {
             }
         }
         return result
-    }
-
-    private func validate(_ list: DrawList) throws {
-        let vertexCount = list.vertices.count, indexCount = list.indices.count
-        // Keep complete validation even for unused geometry, but walk concrete
-        // contiguous storage. Sequence.allSatisfy uses unspecialized iterator
-        // witnesses and per-element allocation in an unoptimized Swift build.
-        try list.vertices.withUnsafeBufferPointer { vertices in
-            var index = 0
-            while index < vertices.count {
-                let vertex = vertices[index]
-                guard vertex.posX.isFinite && vertex.posY.isFinite && vertex.u.isFinite && vertex.v.isFinite else {
-                    throw RHIError.invalidArgument("invalid UI vertices or indices")
-                }
-                index += 1
-            }
-        }
-        try list.indices.withUnsafeBufferPointer { indices in
-            var index = 0
-            while index < indices.count {
-                guard Int(indices[index]) < vertexCount else {
-                    throw RHIError.invalidArgument("invalid UI vertices or indices")
-                }
-                index += 1
-            }
-        }
-        for batch in list.batches {
-            let offset = Int(batch.indexOffset), count = Int(batch.indexCount)
-            guard offset <= indexCount && count <= indexCount - offset && count % 3 == 0 else {
-                throw RHIError.invalidArgument("UI batch index range exceeds the draw list")
-            }
-        }
     }
 }

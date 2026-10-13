@@ -8,6 +8,7 @@ extern void guava_android_key(void* session, uint32_t scancode, uint16_t modifie
 extern void guava_android_scroll(void* session, float x, float y, float dx, float dy);
 extern void guava_android_key_state(void* session, uint32_t scancode, int down);
 extern int guava_android_snapshot(void* session, uint16_t* output, int capacity);
+extern int guava_android_input_snapshot(void* session, uint16_t* output, int capacity);
 extern void guava_android_edit(void* session, int kind, int start, int end);
 
 JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_pointer(JNIEnv* env, jclass type, jlong value, jint kind, jfloat x, jfloat y) {
@@ -38,18 +39,26 @@ JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_scroll(JNIEnv* env, jcl
     if (host) guava_android_scroll(host->session, x, y, dx, dy);
 }
 
-JNIEXPORT jstring JNICALL Java_com_guava_probe_MainActivity_snapshot(JNIEnv* env, jclass type, jlong value) {
-    (void)type;
-    GuavaSurface* host = (GuavaSurface*)(uintptr_t)value;
+static jstring copy_snapshot(JNIEnv* env, GuavaSurface* host, int (*copy)(void*, uint16_t*, int)) {
     if (!host) return (*env)->NewStringUTF(env, "{}");
-    int count = guava_android_snapshot(host->session, NULL, 0);
+    int count = copy(host->session, NULL, 0);
     if (count <= 0 || count > 1024 * 1024) return NULL;
     uint16_t* units = malloc((size_t)count * sizeof(uint16_t));
     if (!units) return NULL;
-    guava_android_snapshot(host->session, units, count);
-    jstring result = (*env)->NewString(env, units, count);
+    int written = copy(host->session, units, count);
+    jstring result = written >= 0 && written <= count ? (*env)->NewString(env, units, written) : NULL;
     free(units);
     return result;
+}
+
+JNIEXPORT jstring JNICALL Java_com_guava_probe_MainActivity_snapshot(JNIEnv* env, jclass type, jlong value) {
+    (void)type;
+    return copy_snapshot(env, (GuavaSurface*)(uintptr_t)value, guava_android_snapshot);
+}
+
+JNIEXPORT jstring JNICALL Java_com_guava_probe_MainActivity_inputSnapshot(JNIEnv* env, jclass type, jlong value) {
+    (void)type;
+    return copy_snapshot(env, (GuavaSurface*)(uintptr_t)value, guava_android_input_snapshot);
 }
 
 JNIEXPORT void JNICALL Java_com_guava_probe_MainActivity_keyState(JNIEnv* env, jclass type, jlong value, jint scancode, jboolean down) {

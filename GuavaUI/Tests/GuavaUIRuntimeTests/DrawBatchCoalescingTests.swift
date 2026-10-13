@@ -25,13 +25,13 @@ struct DrawBatchCoalescingTests {
                 vertices[vertexIndex].posX = position.x; vertices[vertexIndex].posY = position.y
                 let list = DrawList()
                 list.load(vertices: vertices, indices: geometry.indices, batches: [batch])
-                #expect(NativeDrawListRenderer.reliesOnScissorClip(list: list, batch: batch) == expected)
+                #expect(NativeUIGeometry.reliesOnScissorClip(list: list, batch: batch) == expected)
             }
         }
         var unrestricted = batch; unrestricted.scissor = nil
-        #expect(!NativeDrawListRenderer.reliesOnScissorClip(list: geometry, batch: unrestricted))
+        #expect(!NativeUIGeometry.reliesOnScissorClip(list: geometry, batch: unrestricted))
         var empty = batch; empty.indexCount = 0
-        #expect(!NativeDrawListRenderer.reliesOnScissorClip(list: geometry, batch: empty))
+        #expect(!NativeUIGeometry.reliesOnScissorClip(list: geometry, batch: empty))
     }
 
     @Test("merged draws preserve real clips and skipped index gaps")

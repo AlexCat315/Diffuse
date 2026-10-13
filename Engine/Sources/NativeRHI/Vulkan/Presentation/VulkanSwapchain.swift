@@ -20,6 +20,7 @@ final class VulkanSwapchain {
     private(set) var textureIDs: [UInt32]
     private let vsync: Bool
     private let requestedColorFormat: TextureFormat
+    private var surfaceState: VulkanSurfaceState
 
     private init(context: VulkanContext,
                  surface: VkSurfaceKHR,
@@ -29,7 +30,7 @@ final class VulkanSwapchain {
                  presentationMode: PresentationMode,
                  images: [VkImage],
                  textureIDs: [UInt32],
-                 vsync: Bool, requestedColorFormat: TextureFormat) {
+                 vsync: Bool, requestedColorFormat: TextureFormat, surfaceState: VulkanSurfaceState) {
         self.context = context
         self.surface = surface
         self.handle = handle
@@ -40,6 +41,7 @@ final class VulkanSwapchain {
         self.textureIDs = textureIDs
         self.vsync = vsync
         self.requestedColorFormat = requestedColorFormat
+        self.surfaceState = surfaceState
     }
 
     static func create(context: VulkanContext,
@@ -78,6 +80,7 @@ final class VulkanSwapchain {
         presentationMode = rebuilt.presentationMode
         images = rebuilt.images
         textureIDs = rebuilt.textureIDs
+        surfaceState = rebuilt.surfaceState
         for id in oldIDs { if let record = registries.textures.removeValue(forKey: id) { context.core.destroyImageView(context.device, record.view, nil) } }
         context.sync.destroySwapchain(context.device, old, nil)
     }
@@ -99,6 +102,25 @@ final class VulkanSwapchain {
         info.swapchainCount = 1; info.pSwapchains = arena.store([Optional(handle)])
         info.pImageIndices = arena.store([index])
         return withExtendedLifetime(arena) { context.sync.queuePresent(queue, &info) }
+    }
+
+    /// SUBOPTIMAL is advisory. Android can return it on every landscape frame
+    /// when identity preTransform intentionally leaves rotation to the compositor.
+    /// Rebuilding the identical chain cannot resolve that condition.
+    func surfaceChanged() -> Bool {
+        var caps = VkSurfaceCapabilitiesKHR()
+        guard context.instanceCommands.getSurfaceCapabilities(context.physicalDevice, surface, &caps) == VK_SUCCESS else {
+            // Present may already be queued; throwing here would cancel its
+            // frontend completion registration while its fence is still live.
+            // Let the next recreation report an unavailable/lost surface.
+            return true
+        }
+        return surfaceState != Self.state(caps)
+    }
+
+    private static func state(_ caps: VkSurfaceCapabilitiesKHR) -> VulkanSurfaceState {
+        VulkanSurfaceState(extent: SIMD2(caps.currentExtent.width, caps.currentExtent.height),
+                           transform: caps.currentTransform.rawValue)
     }
 
     func destroy(registries: VulkanRegistries) {
@@ -256,7 +278,7 @@ final class VulkanSwapchain {
             presentationMode: selectedMode,
             images: images,
             textureIDs: textureIDs,
-            vsync: vsync, requestedColorFormat: colorFormat
+            vsync: vsync, requestedColorFormat: colorFormat, surfaceState: state(caps)
         )
     }
 
