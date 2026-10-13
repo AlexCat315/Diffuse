@@ -59,6 +59,7 @@ struct StyleSkeletonTests {
         let cfg = ListRowStyleConfiguration(
             content: AnyView(EmptyView()),
             isSelected: true, isHovered: false, isEnabled: true,
+            rowHeight: 30,
             theme: .defaultDark)
         // Smoke: body should be produced without crashing.
         _ = any.makeBody(cfg)

@@ -55,18 +55,10 @@ struct SidebarItemStyle: ButtonStyle {
             .flex(1, shrink: 1).frame(minWidth: 0, minHeight: 38)
             .foregroundColor(c.isEnabled ? c.isSelected ? .onSurface : .onSurfaceVariant : .onSurfaceDisabled)
             .padding(horizontal: 10, vertical: 7)
-            .background(fill(for: c))
-            .cornerRadius(c.theme.radius.md).border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
-    }
-
-    /// Selection is a resting state, not a replacement for feedback: a selected
-    /// destination still answers hover and press, by layering the same state
-    /// layer over the selection fill. Disabled rows answer nothing.
-    private func fill(for c: ButtonStyleConfiguration) -> Color {
-        let base: Color = c.isSelected ? c.theme.colors.surfaceVariant : .clear
-        guard c.isEnabled else { return base }
-        if c.isPressed { return base.composited(over: c.theme.colors.stateLayerPressed) }
-        if c.isHovered { return base.composited(over: c.theme.colors.stateLayerHover) }
-        return base
+            .selectionHighlight(.navigation,
+                                isSelected: c.isSelected,
+                                isHovered: c.isHovered,
+                                isPressed: c.isPressed)
+            .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
     }
 }

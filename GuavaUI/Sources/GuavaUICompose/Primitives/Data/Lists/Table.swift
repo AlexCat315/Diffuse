@@ -253,9 +253,12 @@ struct TableHeaderStyle: ButtonStyle {
     }
 }
 
+/// Table rows are a grid: the highlight has to stay edge to edge so the column
+/// boundaries keep reading straight across every row.
 private struct TableRowStyle: ListRowStyle {
     func makeBody(configuration c: ListRowStyleConfiguration) -> some View {
         Box(direction: .column, alignItems: .stretch) { c.content }
-            .flex(1, shrink: 1).background(c.isSelected ? c.theme.colors.selection : .clear)
+            .flex(1, shrink: 1)
+            .selectionHighlight(.dataRow, isSelected: c.isSelected)
     }
 }
