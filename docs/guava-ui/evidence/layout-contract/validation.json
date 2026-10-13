@@ -1,0 +1,1168 @@
+{
+  "date": "2026-10-12",
+  "platform": "macOS arm64, SDL3 NativeRHI, logical 1280x720, content scale 2",
+  "sourceRevision": "3f77f0a2",
+  "input": "DevTools mirror.input synthetic pointer/key/wheel events into running native application",
+  "imageSource": "actual window draw list replayed by selected renderer into JPEG; excludes compositor",
+  "captures": {
+    "workspace-100": {
+      "workspace-region-leading": {
+        "frame": {
+          "h": 360,
+          "w": 260,
+          "x": 287,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 69
+      },
+      "workspace-group-left": {
+        "frame": {
+          "h": 360,
+          "w": 260,
+          "x": 287,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 65
+      },
+      "workspace-tabs-scroll-left": {
+        "frame": {
+          "h": 34,
+          "w": 180,
+          "x": 291,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 26
+      },
+      "workspace-tab-files": {
+        "frame": {
+          "h": 34,
+          "w": 49,
+          "x": 291,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-tab-search": {
+        "frame": {
+          "h": 34,
+          "w": 244,
+          "x": 340,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-tab-history": {
+        "frame": {
+          "h": 34,
+          "w": 258,
+          "x": 584,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-tabs-overflow-left": {
+        "frame": {
+          "h": 24,
+          "w": 24,
+          "x": 471,
+          "y": 323
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 12
+      },
+      "workspace-maximize-left": {
+        "frame": {
+          "h": 24,
+          "w": 24,
+          "x": 495,
+          "y": 323
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-collapse-left": {
+        "frame": {
+          "h": 24,
+          "w": 24,
+          "x": 519,
+          "y": 323
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-panel-files": {
+        "frame": {
+          "h": 326,
+          "w": 260,
+          "x": 287,
+          "y": 352
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-split-leading": {
+        "frame": {
+          "h": 360,
+          "w": 12,
+          "x": 547,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-center-column": {
+        "frame": {
+          "h": 360,
+          "w": 663,
+          "x": 559,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 73
+      },
+      "workspace-region-center": {
+        "frame": {
+          "h": 360,
+          "w": 663,
+          "x": 559,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 64
+      },
+      "workspace-layout-split-center-main-preview": {
+        "frame": {
+          "h": 360,
+          "w": 663,
+          "x": 559,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 60
+      },
+      "workspace-group-main": {
+        "frame": {
+          "h": 202,
+          "w": 663,
+          "x": 559,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 26
+      },
+      "workspace-tabs-scroll-main": {
+        "frame": {
+          "h": 34,
+          "w": 631,
+          "x": 563,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 10
+      },
+      "workspace-tab-editor": {
+        "frame": {
+          "h": 34,
+          "w": 57,
+          "x": 563,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-maximize-main": {
+        "frame": {
+          "h": 24,
+          "w": 24,
+          "x": 1194,
+          "y": 323
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-panel-editor": {
+        "frame": {
+          "h": 168,
+          "w": 663,
+          "x": 559,
+          "y": 352
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-group-preview": {
+        "frame": {
+          "h": 146,
+          "w": 663,
+          "x": 559,
+          "y": 532
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 26
+      },
+      "workspace-tabs-scroll-preview": {
+        "frame": {
+          "h": 34,
+          "w": 631,
+          "x": 563,
+          "y": 532
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 10
+      },
+      "workspace-tab-preview": {
+        "frame": {
+          "h": 34,
+          "w": 69,
+          "x": 563,
+          "y": 532
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-maximize-preview": {
+        "frame": {
+          "h": 24,
+          "w": 24,
+          "x": 1194,
+          "y": 537
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-panel-preview": {
+        "frame": {
+          "h": 112,
+          "w": 663,
+          "x": 559,
+          "y": 566
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-floating-layer": {
+        "frame": {
+          "h": 360,
+          "w": 935,
+          "x": 287,
+          "y": 318
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 1
+      }
+    },
+    "workspace-tabs-200": {
+      "workspace-region-leading": {
+        "frame": {
+          "h": 360,
+          "w": 260,
+          "x": 287,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 69
+      },
+      "workspace-group-left": {
+        "frame": {
+          "h": 360,
+          "w": 260,
+          "x": 287,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 65
+      },
+      "workspace-tabs-scroll-left": {
+        "frame": {
+          "h": 68,
+          "w": 108,
+          "x": 291,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 494,
+          "y": 0
+        },
+        "subtreeNodes": 26
+      },
+      "workspace-tab-files": {
+        "frame": {
+          "h": 68,
+          "w": 72,
+          "x": -203,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-tab-search": {
+        "frame": {
+          "h": 68,
+          "w": 422,
+          "x": -131,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-tab-history": {
+        "frame": {
+          "h": 68,
+          "w": 449,
+          "x": 291,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-tabs-overflow-left": {
+        "frame": {
+          "h": 48,
+          "w": 48,
+          "x": 399,
+          "y": 244
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 12
+      },
+      "workspace-maximize-left": {
+        "frame": {
+          "h": 48,
+          "w": 48,
+          "x": 447,
+          "y": 244
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-collapse-left": {
+        "frame": {
+          "h": 48,
+          "w": 48,
+          "x": 495,
+          "y": 244
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-panel-history": {
+        "frame": {
+          "h": 292,
+          "w": 260,
+          "x": 287,
+          "y": 302
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-split-leading": {
+        "frame": {
+          "h": 360,
+          "w": 12,
+          "x": 547,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-center-column": {
+        "frame": {
+          "h": 360,
+          "w": 663,
+          "x": 559,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 73
+      },
+      "workspace-region-center": {
+        "frame": {
+          "h": 360,
+          "w": 663,
+          "x": 559,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 64
+      },
+      "workspace-layout-split-center-main-preview": {
+        "frame": {
+          "h": 360,
+          "w": 663,
+          "x": 559,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 60
+      },
+      "workspace-group-main": {
+        "frame": {
+          "h": 200,
+          "w": 663,
+          "x": 559,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 26
+      },
+      "workspace-tabs-scroll-main": {
+        "frame": {
+          "h": 68,
+          "w": 607,
+          "x": 563,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 10
+      },
+      "workspace-tab-editor": {
+        "frame": {
+          "h": 68,
+          "w": 87,
+          "x": 563,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-maximize-main": {
+        "frame": {
+          "h": 48,
+          "w": 48,
+          "x": 1170,
+          "y": 244
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-panel-editor": {
+        "frame": {
+          "h": 132,
+          "w": 663,
+          "x": 559,
+          "y": 302
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-group-preview": {
+        "frame": {
+          "h": 148,
+          "w": 663,
+          "x": 559,
+          "y": 446
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 26
+      },
+      "workspace-tabs-scroll-preview": {
+        "frame": {
+          "h": 68,
+          "w": 607,
+          "x": 563,
+          "y": 446
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 10
+      },
+      "workspace-tab-preview": {
+        "frame": {
+          "h": 68,
+          "w": 109,
+          "x": 563,
+          "y": 446
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-maximize-preview": {
+        "frame": {
+          "h": 48,
+          "w": 48,
+          "x": 1170,
+          "y": 456
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 7
+      },
+      "workspace-panel-preview": {
+        "frame": {
+          "h": 80,
+          "w": 663,
+          "x": 559,
+          "y": 514
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 2
+      },
+      "workspace-floating-layer": {
+        "frame": {
+          "h": 360,
+          "w": 935,
+          "x": 287,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 1
+      }
+    },
+    "grid-200": {
+      "layout-measured-grid": {
+        "frame": {
+          "h": 392,
+          "w": 935,
+          "x": 287,
+          "y": 280
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-adaptive-grid": {
+        "frame": {
+          "h": 284,
+          "w": 935,
+          "x": 287,
+          "y": 684
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-candidates": {
+        "frame": {
+          "h": 174,
+          "w": 180,
+          "x": 287,
+          "y": 1240
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-safe-area": {
+        "frame": {
+          "h": 82,
+          "w": 935,
+          "x": 287,
+          "y": 1686
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 12
+      },
+      "layout-lazy-grid": {
+        "frame": {
+          "h": 240,
+          "w": 935,
+          "x": 287,
+          "y": 1978
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 32,
+        "mountedGalleryItems": 16
+      },
+      "layout-variable-stack": {
+        "frame": {
+          "h": 260,
+          "w": 935,
+          "x": 287,
+          "y": 2490
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 4,
+        "mountedGalleryItems": 0
+      }
+    },
+    "candidates-100": {
+      "layout-measured-grid": {
+        "frame": {
+          "h": 159,
+          "w": 935,
+          "x": 287,
+          "y": -128
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-adaptive-grid": {
+        "frame": {
+          "h": 142,
+          "w": 935,
+          "x": 287,
+          "y": 43
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-candidates": {
+        "frame": {
+          "h": 32,
+          "w": 620,
+          "x": 287,
+          "y": 356
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-safe-area": {
+        "frame": {
+          "h": 64,
+          "w": 935,
+          "x": 287,
+          "y": 559
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 12
+      },
+      "layout-lazy-grid": {
+        "frame": {
+          "h": 240,
+          "w": 935,
+          "x": 287,
+          "y": 750
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 32,
+        "mountedGalleryItems": 16
+      },
+      "layout-variable-stack": {
+        "frame": {
+          "h": 260,
+          "w": 935,
+          "x": 287,
+          "y": 1181
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 4,
+        "mountedGalleryItems": 0
+      }
+    },
+    "candidates-200": {
+      "layout-measured-grid": {
+        "frame": {
+          "h": 392,
+          "w": 935,
+          "x": 287,
+          "y": -620
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-adaptive-grid": {
+        "frame": {
+          "h": 284,
+          "w": 935,
+          "x": 287,
+          "y": -216
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-candidates": {
+        "frame": {
+          "h": 174,
+          "w": 180,
+          "x": 287,
+          "y": 340
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-safe-area": {
+        "frame": {
+          "h": 82,
+          "w": 935,
+          "x": 287,
+          "y": 786
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 12
+      },
+      "layout-lazy-grid": {
+        "frame": {
+          "h": 240,
+          "w": 935,
+          "x": 287,
+          "y": 1078
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 32,
+        "mountedGalleryItems": 16
+      },
+      "layout-variable-stack": {
+        "frame": {
+          "h": 260,
+          "w": 935,
+          "x": 287,
+          "y": 1590
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 4,
+        "mountedGalleryItems": 0
+      }
+    },
+    "rtl-dark-200": {
+      "layout-measured-grid": {
+        "frame": {
+          "h": 392,
+          "w": 935,
+          "x": 287,
+          "y": -1020
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-adaptive-grid": {
+        "frame": {
+          "h": 284,
+          "w": 935,
+          "x": 287,
+          "y": -616
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-candidates": {
+        "frame": {
+          "h": 174,
+          "w": 180,
+          "x": 287,
+          "y": -60
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-safe-area": {
+        "frame": {
+          "h": 82,
+          "w": 935,
+          "x": 287,
+          "y": 386
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 12
+      },
+      "layout-lazy-grid": {
+        "frame": {
+          "h": 240,
+          "w": 935,
+          "x": 287,
+          "y": 678
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 32,
+        "mountedGalleryItems": 16
+      },
+      "layout-variable-stack": {
+        "frame": {
+          "h": 260,
+          "w": 935,
+          "x": 287,
+          "y": 1190
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 5499858
+        },
+        "subtreeNodes": 18,
+        "mountedGalleryItems": 7
+      }
+    },
+    "variable-reveal-200": {
+      "layout-measured-grid": {
+        "frame": {
+          "h": 392,
+          "w": 935,
+          "x": 287,
+          "y": -1830
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-adaptive-grid": {
+        "frame": {
+          "h": 284,
+          "w": 935,
+          "x": 287,
+          "y": -1426
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-candidates": {
+        "frame": {
+          "h": 174,
+          "w": 180,
+          "x": 287,
+          "y": -870
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 19
+      },
+      "layout-safe-area": {
+        "frame": {
+          "h": 82,
+          "w": 935,
+          "x": 287,
+          "y": -424
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 12
+      },
+      "layout-lazy-grid": {
+        "frame": {
+          "h": 240,
+          "w": 935,
+          "x": 287,
+          "y": -132
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "subtreeNodes": 32,
+        "mountedGalleryItems": 16
+      },
+      "layout-variable-stack": {
+        "frame": {
+          "h": 260,
+          "w": 935,
+          "x": 287,
+          "y": 380
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 5499858
+        },
+        "subtreeNodes": 24,
+        "mountedGalleryItems": 10
+      }
+    },
+    "workspace-maximum": {
+      "workspace-region-leading": {
+        "frame": {
+          "h": 360,
+          "w": 340,
+          "x": 287,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "workspace-tabs-scroll-left": {
+        "frame": {
+          "h": 68,
+          "w": 188,
+          "x": 291,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 494,
+          "y": 0
+        }
+      }
+    },
+    "workspace-saved-minimum": {
+      "workspace-region-leading": {
+        "frame": {
+          "h": 360,
+          "w": 180,
+          "x": 287,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "workspace-tabs-scroll-left": {
+        "frame": {
+          "h": 68,
+          "w": 28,
+          "x": 291,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 494,
+          "y": 0
+        }
+      }
+    },
+    "workspace-restored": {
+      "workspace-region-leading": {
+        "frame": {
+          "h": 360,
+          "w": 180,
+          "x": 287,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "workspace-tabs-scroll-left": {
+        "frame": {
+          "h": 68,
+          "w": 28,
+          "x": 291,
+          "y": 234
+        },
+        "contentOffset": {
+          "x": 494,
+          "y": 0
+        }
+      }
+    },
+    "lazy-grid-200": {
+      "layout-lazy-grid": {
+        "frame": {
+          "h": 240,
+          "w": 935,
+          "x": 287,
+          "y": 278
+        },
+        "contentOffset": {
+          "x": 0,
+          "y": 1300000
+        },
+        "subtreeNodes": 67,
+        "mountedGalleryItems": 36
+      }
+    }
+  },
+  "menuFix": "Natural wrapping title in existing MenuItemRow; full labels visible at 200% without new public API"
+}

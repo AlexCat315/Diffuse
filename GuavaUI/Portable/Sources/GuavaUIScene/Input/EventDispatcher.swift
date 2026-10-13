@@ -196,7 +196,7 @@ public final class EventDispatcher {
             hitTest(point: cursor)?.path
         }
         let focusedPath = focusChain.focused.map(pathFromRoot)
-        let preferredFocusedPath = preferredFocusedWheelPath(from: focusedPath)
+        let preferredFocusedPath = preferredFocusedWheelPath(from: focusedPath, at: lastCursor)
         let preferredHitPath = hitPath?.contains {
             $0.attachments[WheelRoutingAttachmentKey.priority] as? WheelRoutingPriority == .preferHit
         } == true ? hitPath : nil
@@ -442,7 +442,7 @@ public final class EventDispatcher {
         return deliver(path: path, kind: kind)
     }
 
-    private func preferredFocusedWheelPath(from focusedPath: [Node]?) -> [Node]? {
+    private func preferredFocusedWheelPath(from focusedPath: [Node]?, at pointer: CGPoint?) -> [Node]? {
         guard let focusedPath,
               let focused = focusedPath.last,
               let priority = focused.attachments[WheelRoutingAttachmentKey.priority]
@@ -450,6 +450,7 @@ public final class EventDispatcher {
               priority == .preferFocused else {
             return nil
         }
+        if let pointer, !focused.absoluteFrame.contains(pointer) { return nil }
         return focusedPath
     }
 

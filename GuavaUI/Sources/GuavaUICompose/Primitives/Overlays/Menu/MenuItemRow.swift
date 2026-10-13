@@ -173,11 +173,9 @@ struct MenuItemRowHost: _PrimitiveView {
                 .frame(width: checkmarkSize)
             }
             Text(item.title)
-                .lineLimit(1)
                 .font(.body)
                 .foregroundColor(titleColor)
                 .opacity(textOpacity)
-                .clipped()
                 .flex()
             if item.hasSubmenu {
                 Icon(UIIcons.Navigation.chevronRight, size: .small, color: titleColor)

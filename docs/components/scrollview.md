@@ -35,13 +35,15 @@ DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMod
 
 `.overlay` 将滚动条置于内容上方；`.stable` 在纵向 trailing 预留 12pt 槽，避免盖住尾部控件。只有内容溢出才绘制条；hover/拖动显示，离开淡出。软件自定义手势若产生越界位移，thumb 缩短且仍位于轨道内。
 
-默认 `.whenOffsetChanged` 下，同轴子 ScrollView 在边界向外滚动时把事件交给滚动祖先；无溢出的轴不会凭空产生橡皮筋。`.always` 允许显式截住事件。当前以完整事件交接，尚未把一次大增量的“边界剩余距离”拆分给父级，也未提供统一 scroll-chain policy。
+ScrollView / BoundedScrollView 默认 `.whenScrollable`：当前输入轴有内容溢出时，子视口在顶部和底部仍消费滚动，重复滚动或开启新手势都不会带动父级。指针移到父视口后，新手势可以正常滚动父级；已有 phase / 系统 momentum 流继续保留原消费者。没有溢出的轴允许事件交给父级，横向标签条不会截住纯纵向滚动。零增量的生命周期包不推测输入轴，也不会抢先锁定视口。
+
+TextField 与 CodeEditor 的内部视口采用同样的有溢出边界隔离；有坐标的新手势按指针所在视口处理，没有可用坐标时保留焦点编辑器回退。`.whenOffsetChanged` 供调用方显式启用边界冒泡；`.always` 即使没有溢出也截住事件，适合菜单等临时浮层；`.never` 供显式透传。链式策略仍以完整事件交接，尚未把一次大增量的“边界剩余距离”拆分给父级。
 
 ## 性能边界
 
 内容偏移改变绘制/命中几何，稳定内容不需要每帧重跑 Yoga。保留渲染器可复用文字等叶子的绘制缓存；本轮新增实际缓存顶点边界与视口/裁剪相交判断，不再把完全不可见的缓存叶子反复追加到帧列表。自定义 painter 超出 Node.frame 的实际绘制仍被保留；有明确裁剪边界的离屏子树可整体跳过。
 
-这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；可变行高虚拟列表仍缺失。此前版本的原生绘制计时方法和数值见 [滚动与布局历史验证记录](../guava-ui/evidence/scroll-layout/README.md)。
+这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；已知可变行高可使用 [VariableVirtualStack](../guava-ui/variable-virtual-layout.md)，未知高度的自动测量仍缺失。此前版本的原生绘制计时方法和数值见 [滚动与布局历史验证记录](../guava-ui/evidence/scroll-layout/README.md)。
 
 ## 尚未完成
 

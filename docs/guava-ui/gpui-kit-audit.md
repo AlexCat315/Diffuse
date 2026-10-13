@@ -194,7 +194,7 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | --- | --- | --- |
 | Workspace 面板尺寸 | width/height 各自的 minimum/preferred/maximum 值组，直接 Codable；内外拆分与浮动布局使用面板约束，保存的用户拆分优先于 preferred | preferred 是初始提示；填满式布局遇到总 minimum/maximum 不可满足时确定性退让；浮动面板仍不等于独立系统窗口 |
 | 外部区域调整 | 外层调整柄使用实际区域几何，与 pointer、方向键/Home/End、辅助功能增减共享限制 | 完整跨平台辅助技术与系统多窗口仍需验收 |
-| 标签与字体缩放 | 标签条可横向滚动，保留可访问的完整标题，标题/动作尺寸随文字缩放 | 全产品组件 200% 与完整 RTL 不因此完成 |
+| 标签与字体缩放 | 标签条可横向滚动，保留可访问的完整标题，标题/动作尺寸随文字缩放；溢出菜单长标题自然换行，点击标签/调整柄后可直接键盘操作 | 全产品组件 200% 与完整 RTL 不因此完成 |
 | 公开布局契约 | Layout、ProposedViewSize、LayoutSubview 和 LayoutContainer；不暴露 Node/内部状态给使用者；嵌套布局与 Flex 组合，有界测量缓存与子树失效 | GeometryReader、baseline/alignment guides、Anchor/Masonry 仍缺 |
 | 通用 Grid | fixed/flexible/adaptive 列、真实内容行高、间距/对齐和基础 RTL；PropertyGrid 仍是专用属性编辑器 | span、显式 intrinsic 轨道、二维窗口化未实现 |
 | LazyGrid | 等宽列、已知固定/可变行高、仅可见行加 overscan 构建；固定行 O(1)、可变行累计索引 O(log n) 定位 | 未知高度自动估测、横向窗口化和加载协议未实现 |
@@ -203,6 +203,8 @@ Demo 默认打开可操作的 Dashboard；Pause/Resume、分批导入、期间�
 | 方向与 insets | layoutDirection 贯通 Flex/自定义布局，padding leading/trailing 使用逻辑边；SafeArea 嵌套消费宿主 insets 一次 | 宿主需提供 insets；没有自动平台刘海/软键盘检测，组件键盘/图标方向和 bidi 文字仍需逐项补齐 |
 
 代码与使用边界见 [布局](../components/layout.md)、[Workspace](../components/workspace.md)、[可变行高](variable-virtual-layout.md)、[响应式布局](responsive-layout.md)。本轮画廊复用 Layout/Workspace 页提供真实示例，没有把新增类型数量作为完成度依据。Attachment、消息体系、OtpInput、DescriptionList、DropdownButton、Shimmer、Questionnaire、Diff/富内容等产品组件未在本阶段实现。
+
+本轮完整 GuavaUI 回归通过（Compose 624、Runtime 259、Workspace 59；另有其他目标和显式跳过的可选测试），Portable 81 + 10 + 5 项、Editor 工作区集成 8 项通过。原生检查覆盖 100%/200% 字体、Grid 内容行高、候选切换、RTL/insets、100K 可变行高定位、Workspace 标签/外层键盘边界及保存/恢复。检查中修复了 Yoga 测量探针几何丢失、自然尺寸重新约束造成的按钮截尾，以及拖动捕获绕过焦点的问题。截图、布局树、挂载数量、测试记录与限制见 [验证证据](evidence/layout-contract/README.md)；截图不包含 compositor，未据此宣称 FPS 或上游性能等价。
 
 
 ### 后续修正：图标缩放与折叠容器（2026-10-11）
