@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+GUAVA_CHECKOUT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "${GUAVA_SWIFT_EXECUTABLE:-swift}" run --package-path "$GUAVA_CHECKOUT/Tools/Guava" guava "$@"

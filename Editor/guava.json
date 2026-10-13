@@ -1,0 +1,17 @@
+{
+  "application": {
+    "id": "com.guava.editor",
+    "name": "Guava Editor"
+  },
+  "toolchain": {
+    "enginePath": ".."
+  },
+  "targets": {
+    "platforms": [
+      "mac",
+      "win",
+      "linux"
+    ],
+    "desktopProduct": "EditorApp"
+  }
+}

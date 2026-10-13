@@ -45,20 +45,29 @@ def check():
     showcase = manifest("Platforms/Android")
     assert ROOT / "GuavaUI/Examples" in local_dependencies(showcase)
     assert ROOT / "Editor" not in local_dependencies(showcase)
-    for base in (ROOT / "examples/GuavaUIStarter/Sources", ROOT / "Platforms/Android/Tools/Sources/GuavaAndroid/Templates/UI/Sources"):
+    for base in (ROOT / "examples/GuavaUIStarter/Sources", ROOT / "Tools/Guava/Sources/GuavaCLI/Templates/UI/Sources"):
         content = (base / "AppContent/App.swift").read_text()
         assert "import GuavaUI\n" in content
         assert "import NativeRHI" not in content and "import GuavaUIRuntime" not in content
         assert "makeApplicationContent()" in content
-    template = ROOT / "Platforms/Android/Tools/Sources/GuavaAndroid/Templates/UI"
+    template = ROOT / "Tools/Guava/Sources/GuavaCLI/Templates/UI"
     example = ROOT / "examples/GuavaUIStarter"
     for source in template.rglob("*"):
         if not source.is_file():
             continue
         relative = source.relative_to(template)
         destination = example / (str(relative)[:-3] if str(relative).endswith(".in") else relative)
-        expected = source.read_text().replace("{{ENGINE_ROOT}}", '"../.."')
+        expected = source.read_text()
         assert destination.read_text() == expected, f"Starter drifted from its template: {relative}"
+    tools = manifest("Tools/Guava")
+    assert {item["name"] for item in tools["products"]} == {"guava"}
+    assert local_dependencies(tools) == {ROOT / "Platforms/Android/Contract"}
+    assert not (ROOT / "Platforms/Android/Tools").exists(), "Android must not own a separate developer CLI"
+    assert not (example / "android.swift").exists()
+    assert not (example / "guava-android.json").exists()
+    configuration = json.loads((example / "guava.json").read_text())
+    assert set(configuration["targets"]["platforms"]) == {"mac", "win", "linux", "android"}
+    assert (example / configuration["toolchain"]["enginePath"]).resolve() == ROOT
     starter = manifest("examples/GuavaUIStarter")
     resources = (example / "Sources/AppContent/AppResources.swift").read_text()
     assert f'{starter["name"]}_AppContent' in resources, "Resource lookup must match the actual SwiftPM package and target"

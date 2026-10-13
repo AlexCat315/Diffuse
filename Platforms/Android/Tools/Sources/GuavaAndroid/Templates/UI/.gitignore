@@ -1,6 +1,0 @@
-.build/
-.swiftpm/
-build/
-*.apk
-*.apk.idsig
-*.keystore

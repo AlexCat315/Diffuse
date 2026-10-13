@@ -1,33 +1,33 @@
-# {{APP_NAME}}
+# Guava application
 
-独立 GuavaUI Swift Package。业务代码只需提供普通函数 `makeApplicationContent() -> some View`；Android 宿主负责窗口、Vulkan、字体、触摸、IME 和前后台 / 旋转生命周期。
+这一项目共享 `Sources/AppContent` 根视图与资源，桌面与 Android 使用同一份业务代码。
+
+先在 Guava SDK 仓库运行 `Tools/Guava/install.sh`，将安装目录的 `bin` 加入 PATH；也可以使用仓库根目录的 `./guava`（Windows 为 `guava.cmd`）。
 
 ```sh
-swift run DesktopApp
-swift android.swift
-swift android.swift --install --serial DEVICE_SERIAL
-swift android.swift --configuration release --output build/Application-release.apk
+guava run                         # 当前主机，默认 Debug
+guava build --release              # macOS .app / Windows、Linux 应用目录
+guava run --android --device DEVICE_SERIAL
+guava build --android --release
+guava test
+guava clean
 ```
 
-默认输出为本项目 `build/Application.apk`，旁边的 JSON 记录应用 ID、构建配置、签名类型及源码位置。Swift 6.4.1 release、匹配 Android Swift SDK、NDK r30、Android SDK、JDK 21、CMake 和 Ninja 的准备步骤见 Guava-Engine 的 `Platforms/Android/README.md`。创建、构建、打包和安装均由 Swift 工具完成，无需 Python 或验证脚本。
+- `guava.json`：application 管理 ID / 名称，toolchain 管理 SDK 位置，targets 管理平台与桌面产品。移动项目或 SDK 后只需修改 enginePath，或设置 `GUAVA_ENGINE_ROOT`。
+- `Sources/AppContent/App.swift`：`makeApplicationContent()` 返回共享 View。
+- `Sources/AppContent/Assets`：共享资源；资源测试同时验证打包后的文本可读。
+- `Sources/DesktopApp/main.swift`：桌面入口，只调用 `Application.run`。
+- `.guava/build`：SwiftPM 缓存与应用产物。`guava clean` 只删除这一生成目录，保留其他 `.guava` 数据。
 
-- `Sources/AppContent/App.swift`：根视图入口及示例状态、按钮、文本输入。可将 `RootView()` 替换为已有共享 UI 模块中的视图，并在 `Package.swift` 声明该模块依赖。
-- `guava-android.json`：应用 ID 与显示名称。`--application-id` / `--name` 可临时覆盖，不改写该文件。
-- `Sources/AppContent/Assets`：SwiftPM 资源，自动随 APK 安装。使用 `AppResources.bundle` 查找；Release 的资源定位不要使用 SwiftPM 默认 `Bundle.module`。
-- `android.swift`：调用引擎的 Swift 构建入口，接受其全部参数。移动此项目或引擎仓库后，可设置 `GUAVA_ENGINE_ROOT=/absolute/path/to/Guava-Engine`，供 launcher 和 SwiftPM 使用。
+默认目标为 mac、win、linux、android。桌面构建需要对应主机及 SDK 原生依赖；Android 需要 Swift 6.4.1 release、匹配的 Swift Android SDK、NDK r30、Android SDK 36 / build-tools 36.1.0、JDK 21、CMake 和 Ninja。iOS / Web 应用宿主尚未实现，相关命令会明确报错。
 
-已有包接入时需要导出名为 `AppContent` 的 library product / module，以及 `public func makeApplicationContent() -> some View`。包目录名称可以自定义。入口在宿主提供的 Compose / 文本环境中调用；不要自行创建 Device、Surface 或事件循环。根视图可以复用桌面组件，但依赖 macOS / Windows 专用 API 的业务模块需要由使用方提供 Android 实现。
-
-Debug 和 Release 默认使用本机开发签名。正式签名传入：
+Android Debug 与 Release 均使用相同资源定位规则。未指定签名时 APK 使用开发密钥；生产签名使用环境变量传入密码：
 
 ```sh
-swift android.swift --configuration release \
+guava build --android --release \
   --keystore /absolute/path/to/release.keystore --key-alias myapp \
   --store-password-env GUAVA_ANDROID_STORE_PASSWORD \
   --key-password-env GUAVA_ANDROID_KEY_PASSWORD
 ```
 
-密码从指定环境变量读取。Release 禁用宿主的调试广播、快照写盘和 Android `debuggable`。
-
-当前导出目标为 arm64-v8a / Android API 28+，GPU 需满足 NativeRHI 的 Vulkan 与时间线信号量要求。暂停和旋转保留存活进程中的根视图状态；进程被系统回收后的业务状态恢复由应用自己实现。系统权限、图标、通知、TalkBack 与 AAB 发布目前需要额外集成。
-
+`--output` 可指定产物位置；项目外的输出不由 `guava clean` 删除。CLI 目前生成本地桌面应用与 APK，不提供商店发布、macOS 公证、AAB 或自动热重载。

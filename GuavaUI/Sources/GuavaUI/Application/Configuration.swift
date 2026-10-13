@@ -1,3 +1,4 @@
+import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIDevTools
@@ -19,7 +20,8 @@ public enum AppFrameDrivePolicy: Sendable, Equatable {
 /// Configure only the groups your application needs; native GPU setup is optional.
 public struct ApplicationConfiguration: Sendable {
     public struct Window: Sendable {
-        public var title = "GuavaUI"
+        public var title = (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? "GuavaUI"
         public var width: Int32 = 1280
         public var height: Int32 = 720
         public var titleBarStyle = AppWindowTitleBarStyle.standard
@@ -66,9 +68,9 @@ public struct ApplicationConfiguration: Sendable {
     public var frames = Frames()
     public var diagnostics = Diagnostics()
 
-    public init(title: String = "GuavaUI", configure: (inout Self) -> Void = { _ in }) {
-        window.title = title
-        diagnostics.devTools = DevToolsConfig.fromEnvironment(appTitle: title)
+    public init(title: String? = nil, configure: (inout Self) -> Void = { _ in }) {
+        if let title { window.title = title }
+        diagnostics.devTools = DevToolsConfig.fromEnvironment(appTitle: window.title)
         configure(&self)
     }
 }

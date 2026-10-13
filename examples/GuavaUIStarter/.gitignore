@@ -1,6 +1,6 @@
 .build/
 .swiftpm/
-build/
+.guava/build/
 *.apk
 *.apk.idsig
 *.keystore

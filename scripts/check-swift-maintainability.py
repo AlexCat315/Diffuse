@@ -119,7 +119,7 @@ def measure(source):
 
 def inventory():
     result = {}
-    for package in ("Engine", "Editor", "GuavaUI"):
+    for package in ("Engine", "Editor", "GuavaUI", "Tools/Guava", "Platforms/Android", "Platforms/Android/Contract", "GuavaUI/Platforms/Android"):
         for path in sorted((ROOT / package / "Sources").rglob("*.swift")):
             for name, metrics in measure(path.read_text()).items():
                 result[f"{path.relative_to(ROOT).as_posix()}::{name}"] = metrics

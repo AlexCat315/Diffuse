@@ -24,7 +24,8 @@ SwiftUI 也把默认使用入口收敛到 `import SwiftUI`、App / Scene / View�
 | `GuavaUIAndroid` | 与 Surface 生命周期独立的 Compose / 输入会话 | JNI Surface 宿主使用 |
 | `GuavaUI/Examples` | GalleryContent、Gallery / Pet 可执行程序 | 示例包，生产框架不依赖它 |
 | `examples/Counter` | 浏览器与原生共用的 Counter 示例及其验收 | 示例包，Portable 不依赖它 |
-| `Platforms/Android` | JNI、Java Surface / IME、APK 构建、设备安装 | 平台基础设施同时服务 UI 与游戏 |
+| `Platforms/Android` | JNI、Java Surface / IME、应用 / 游戏宿主 | 平台基础设施同时服务 UI 与游戏 |
+| `Tools/Guava` | 统一 CLI、项目配置、脚手架、桌面 / Android 构建后端 | create / build / run / clean / test |
 | `Platforms/Android/Contract` | APK 生产者和消费者共用的启动文档 | 工具与运行时使用同一个 Codable 类型 |
 | `EditorCore` | 编辑器项目与应用领域服务 | 编辑器和现有游戏项目加载服务使用 |
 | `EditorUI` | 编辑器窗口、面板和启动编排 | EditorApp 的唯一实现来源 |
@@ -43,7 +44,7 @@ flowchart TD
   AndroidHost[Platforms/Android 原生宿主] --> AndroidUI[GuavaUIAndroid]
   AndroidUI --> Compose
   AndroidHost --> Contract[Android Contract]
-  APK[Android APK 工具] --> Contract
+  CLI[Tools/Guava 统一 CLI] --> Contract
   Examples[Gallery / Counter 示例包] --> UI
   Examples --> Workspace
   EditorUI[EditorUI] --> UI
@@ -52,7 +53,7 @@ flowchart TD
   Root[工作区 / EditorApp 启动文件] --> EditorUI
 ```
 
-Android 的平台基础设施放在 GuavaUI 内会把游戏播放器、APK 工具和 JNI 生命周期错误地归给 UI。实际 UI 会话已放入 GuavaUI 的平台目录；共用宿主与工具保留在统一 `Platforms/Android` 下。普通 UI APK、游戏 APK 与 showcase APK 选择不同的依赖图，普通 UI 构建不依赖 Editor、Gallery 或 Counter。
+Android 的平台基础设施放在 GuavaUI 内会把游戏播放器、APK 工具和 JNI 生命周期错误地归给 UI。实际 UI 会话已放入 GuavaUI 的平台目录；共用宿主在 `Platforms/Android`，创建与构建工具在 `Tools/Guava`。桌面复用 SDL3 / NativeRHI 宿主，没有为每个平台创建空目录。完整 iOS / Web 应用宿主尚未实现。普通 UI APK、游戏 APK 与 showcase APK 选择不同的依赖图，普通 UI 构建不依赖 Editor、Gallery 或 Counter。
 
 ## 单一数据来源
 
@@ -76,7 +77,7 @@ Android 的平台基础设施放在 GuavaUI 内会把游戏播放器、APK 工�
 | GuavaAndroidContent / ApplicationContent.makeRoot | AppContent / makeApplicationContent 普通函数 |
 | App 的 PanelID / PanelDescriptor / PanelRegistry | WorkspacePanelID / WorkspacePanelDescriptor / WorkspacePanelRegistry |
 | PanelWorkspace | WorkspaceView(controller:registry:compact:) |
-| Android/Tools | Platforms/Android/Tools |
+| Android 专用工具入口 | Tools/Guava 的统一 guava CLI |
 | 根目录 swift run EditorApp | swift run GuavaEditor（Editor 包仍提供 EditorApp） |
 | swift run --package-path GuavaUI GuavaUIDemo | swift run --package-path GuavaUI/Examples GuavaUIDemo |
 
@@ -92,6 +93,13 @@ swift test --package-path GuavaUI/Examples
 swift test --package-path GuavaUI/Portable
 swift test --package-path examples/Counter
 swift test --package-path Platforms/Android/Contract
+swift test --package-path Tools/Guava
 ```
 
 边界检查读取实际 SwiftPM manifest，覆盖正式 UI 产品、工作区唯一来源、Android 应用 / 游戏 / showcase 三种图，以及嵌入的应用模板。原生 GPU、桌面窗口、Android 触摸 / IME / 旋转 / 暂停恢复还需要对应集成测试；目录或导入检查不能代替这些验证。
+
+## 应用与工具依赖方向
+
+代码依赖为 `Editor → GuavaUI → Engine`。Engine 提供基础设施，GuavaUI 封装 UI 能力，Editor 是使用它们的桌面应用，不反向进入 UI 的默认依赖。Editor/guava.json 声明其桌面产品；统一 CLI 读取配置后构建，不把 Editor 特判写入命令层。
+
+一个应用由 guava create app 创建；guava build / run 选择目标，test 在主机运行单元测试，clean 只删除项目 .guava/build。application 身份、SDK 位置与目标配置集中在 guava.json，临时设备 / 签名参数不写回配置。桌面 Package.swift 与 CLI 读取同一个 SDK 路径；模板与仓库 Starter 由边界检查保持一致。详细命令、安装及支持边界见 [Guava CLI](../../Tools/Guava/README.md)。

@@ -91,7 +91,7 @@ final class HostedScene {
         #if GUAVA_ANDROID_GAME
         game = try launch.mode == .game ? GameSession(device: device, project: launch.project ?? "GuavaProject") : nil
         #else
-        guard launch.mode != .game else { throw RHIError.unsupportedFeature("build a game with GuavaAndroid export-game") }
+        guard launch.mode != .game else { throw RHIError.unsupportedFeature("build a game with guava export game PROJECT --android") }
         game = nil
         #endif
         #if GUAVA_ANDROID_SHOWCASE
@@ -109,7 +109,7 @@ final class HostedScene {
             #if GUAVA_ANDROID_UI
             root = AnyView(LayerRoot { makeApplicationContent() })
             #else
-            throw RHIError.unsupportedFeature("build this UI application's APK with GuavaAndroid build --app PATH")
+            throw RHIError.unsupportedFeature("build this UI application's APK with guava build PATH --android")
             #endif
         case .game: root = AnyView(EmptyView())
         }

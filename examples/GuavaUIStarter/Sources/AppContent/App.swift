@@ -1,7 +1,6 @@
 import GuavaUI
 
-/// The Android host installs this root once per application session.
-/// Return your existing shared View here to reuse a desktop UI on Android.
+/// Desktop and mobile hosts install this shared root once per application session.
 public func makeApplicationContent() -> some View { RootView() }
 
 private struct RootView: View {

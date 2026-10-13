@@ -2,7 +2,12 @@
 import Foundation
 import PackageDescription
 
-let engineRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ROOT"] ?? "../.."
+// SwiftPM and the Guava CLI read the same SDK location from guava.json.
+let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+let document = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("guava.json"))) as! [String: Any]
+let toolchain = document["toolchain"] as! [String: String]
+let engineRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ROOT"]
+    ?? URL(fileURLWithPath: toolchain["enginePath"]!, relativeTo: directory).standardizedFileURL.path
 
 let package = Package(
     name: "GuavaApplication",
@@ -18,12 +23,9 @@ let package = Package(
         .executableTarget(name: "DesktopApp", dependencies: [
             "AppContent", .product(name: "GuavaUI", package: "GuavaUI"),
         ]),
-        .target(
-            name: "AppContent",
-            dependencies: [
-                .product(name: "GuavaUI", package: "GuavaUI"),
-            ],
-            resources: [.copy("Assets")]
-        ),
+        .target(name: "AppContent", dependencies: [
+            .product(name: "GuavaUI", package: "GuavaUI"),
+        ], resources: [.copy("Assets")]),
+        .testTarget(name: "AppContentTests", dependencies: ["AppContent"]),
     ]
 )

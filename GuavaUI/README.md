@@ -42,15 +42,16 @@ GUAVA_FPS_LOG=1 swift run --package-path GuavaUI/Examples GuavaUIDemo --benchmar
 
 DevTools 通过 `GUAVA_DEVTOOLS=1` 显式开启。Gallery 的 `--performance-hud` 启用宿主通用 HUD；CPU 帧分解可用 `GUAVA_FPS_LOG=1`，其中呈现时间包含 acquire / submit / present 等待，不等于 GPU 执行时间。
 
-Android 应用可以从脚手架开始：
+跨平台应用从统一 CLI 开始（仓库中使用 `./guava`；安装后使用 `guava`）：
 
 ```sh
-swift run --package-path Platforms/Android/Tools GuavaAndroid create \
-  --directory /absolute/path/to/MyApp --application-id com.example.myapp --name 'My App'
-swift /absolute/path/to/MyApp/android.swift --install --serial DEVICE_SERIAL
+./guava create app /absolute/path/to/MyApp --id com.example.myapp --name 'My App'
+./guava run /absolute/path/to/MyApp --mac
+./guava run /absolute/path/to/MyApp --android --device DEVICE_SERIAL
+./guava test /absolute/path/to/MyApp
 ```
 
-业务模块 `AppContent` 导出普通函数 `makeApplicationContent() -> some View`，宿主安装其根视图。生成项目同一份视图也可用 `swift run DesktopApp` 在桌面运行。构建需要 Swift 6.4.1 release 与匹配 Android SDK、NDK r30、JDK 21、CMake 和 Ninja；见 [Android 接入说明](../Platforms/Android/README.md)。
+业务模块 `AppContent` 导出普通函数 `makeApplicationContent() -> some View`，桌面和 Android 安装同一个根视图；应用 ID / 名称 / SDK 路径集中在 `guava.json`。桌面构建在对应主机运行；Android 需要 Swift 6.4.1 release 与匹配 SDK、NDK r30、JDK 21、CMake 和 Ninja。iOS / Web 尚无完整应用宿主。详见 [Guava CLI](../Tools/Guava/README.md)和 [Android 接入说明](../Platforms/Android/README.md)。
 
 应用可以全局或局部设置 `Theme`，普通文字和输入默认继承 body；显式语义角色或任意值优先。`ThemeExtension`、`SemanticFontRef`、`SemanticColorRef`、`SemanticIconSize` 和 `ThemeMetric` 允许定义自己的设计系统，`IconTheme` 支持尺寸槽与资源替换。`ApplicationConfiguration.typography.scaler` 与屏幕 DPI 独立，主窗口和辅助窗口共用宿主偏好。[设计系统契约](../docs/components/design-system.md)说明完整 API、覆盖优先级与系统适配边界。
 

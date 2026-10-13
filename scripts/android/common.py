@@ -49,8 +49,8 @@ def build(product, ndk, configuration='debug'):
     descriptor, result_name = tempfile.mkstemp(prefix='compile-', suffix='.json', dir=OUTPUT)
     os.close(descriptor)
     result = Path(result_name)
-    arguments = [swift, 'run', '--package-path', ROOT / 'Platforms/Android/Tools', 'GuavaAndroid', 'compile',
-                 '--product', product, '--ndk', ndk, '--configuration', configuration, '--result-file', result]
+    arguments = [swift, 'run', '--package-path', ROOT / 'Tools/Guava', 'guava', 'internal', 'android-compile',
+                 '--product', product, '--ndk', ndk, '--' + configuration, '--result-file', result]
     try:
         run(arguments)
         return Path(json.loads(result.read_text())['products'])

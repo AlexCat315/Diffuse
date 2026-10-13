@@ -18,14 +18,14 @@ open examples/CrystalRush/export/CrystalRush.app
 
 当前导出已在 macOS arm64 验证。导出包含编译后的脚本与 Player，运行不需要 Swift 编译器。导出文件、缓存和验证日志不纳入版本控制。
 
-Android ARM64 / Vulkan 真机也已接入。完成 [Android 工具链安装](../../Platforms/Android/README.md)后，在仓库根目录导出并安装：
+Android ARM64 / Vulkan 真机也已接入。完成 [Android 工具链安装](../../Platforms/Android/README.md)后，在仓库根目录导出：
 
 ```bash
-swift run --package-path Platforms/Android/Tools GuavaAndroid export-game \
-  --project examples/CrystalRush \
-  --application-id com.guava.game.crystalrush \
-  --output Engine/build/android-validation/CrystalRush.apk \
-  --install --serial DEVICE_SERIAL
+./guava export game examples/CrystalRush --android \
+  --id com.guava.game.crystalrush \
+  --output Engine/build/android-validation/CrystalRush.apk
+adb -s DEVICE_SERIAL install -r Engine/build/android-validation/CrystalRush.apk
+adb -s DEVICE_SERIAL shell am start -W -n com.guava.game.crystalrush/com.guava.probe.MainActivity
 ```
 
 屏幕底部提供移动、加速、开始和重开按钮。项目脚本与播放器静态链接，场景、资源和中文 GuavaUI HUD 一起打包；暂停与旋转保留当前游戏会话。`scripts/android/verify-game.py` 验收真实场景绘制、触摸输入和生命周期，Release 与生产签名选项见 Android 接入说明。

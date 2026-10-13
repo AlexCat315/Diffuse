@@ -137,3 +137,6 @@ GuavaUI/Browser/.dev-builds/
 
 # Local visual/evidence records — generated per verification run, not versioned
 /docs/guava-ui/
+
+# Guava CLI generated application outputs
+**/.guava/build/
