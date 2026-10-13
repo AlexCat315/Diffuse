@@ -96,6 +96,10 @@ extension TextField {
                 }
             }
             registry.setWheel(node, route: .textInput) { event, _ in
+                if !event.input.isContinuation, let mouseX = event.mouseX, let mouseY = event.mouseY,
+                   !node.absoluteFrame.contains(CGPoint(x: CGFloat(mouseX), y: CGFloat(mouseY))) {
+                    return .ignored
+                }
                 textField.refreshScrollableMetrics(state: state, node: node)
                 let previousOffset = state.scroll.offsetY
                 let previousX = state.scroll.horizontal.offset
@@ -114,8 +118,11 @@ extension TextField {
                     node.firstResource(TextCompletionSession.self)?.dismiss()
                     textField.reportHover(nil)
                 }
-                return ScrollConsumePolicy.whenOffsetChanged
-                    .result(didScroll: nextOffset != previousOffset || state.scroll.horizontal.offset != previousX)
+                let canScroll = (delta.y != 0 && state.scroll.maxY > 0)
+                    || (wheelX != 0 && state.scroll.horizontal.maximum > 0)
+                return ScrollConsumePolicy.whenScrollable
+                    .result(didScroll: nextOffset != previousOffset || state.scroll.horizontal.offset != previousX,
+                            canScroll: canScroll)
             }
         }
     }

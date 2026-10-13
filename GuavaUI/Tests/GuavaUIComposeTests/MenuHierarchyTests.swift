@@ -226,18 +226,55 @@ struct MenuHierarchyTests: GuavaUIComposeSerializedSuite {
         #expect(scroll.contentOffset.y >= 200 && portal.entries.count == 1)
     } }
 
-    @Test("Rows preserve text insets, clip long labels and keep separators thin")
-    func rowGeometry() throws { try scene { graph, _, _, _, _ in
-        let label = String(repeating: "Long command ", count: 30)
+    @Test("Rows wrap long labels within their bounds at 100% and 200% while preserving shortcuts and separators", arguments: [Float(1), Float(2)])
+    func rowGeometry(scale: Float) throws { try scene { graph, _, _, _, _ in
+        let label = "Workspace search results and navigation history"
         graph.install(root: Menu([.item(MenuItem(id: "long", title: label, shortcut: "⌘K") {}),
-                                 .separator("sep"), .item(MenuItem(id: "short", title: "Short") {})], width: 220))
+                                 .separator("sep"), .item(MenuItem(id: "short", title: "Short") {})], width: 220)
+            .theme(.defaultLight).textScaler(.init(scale)))
         settle(graph)
         let target = try row("long", graph: graph)
         let title = try #require(nodes(target).first { $0.accessibility?.label == label && $0.accessibility?.role == .staticText })
-        #expect(title.clipsToBounds)
+        title.draw?(DrawList(), .zero)
+        let measurement = try #require(title.layoutNode?.textMeasure)
+        let shortcut = try #require(nodes(target).first { $0.layoutNode?.textInputs?.text == "⌘K" })
+        #expect(measurement.key.font.size == 14 * scale)
+        #expect(measurement.result.lines.count > 1)
+        #expect(measurement.result.totalHeight <= Float(title.frame.height) + 0.5)
+        #expect(!title.clipsToBounds)
+        #expect(target.absoluteFrame.contains(title.absoluteFrame))
+        let titleShortcutGap = shortcut.absoluteFrame.minX - title.absoluteFrame.maxX
+        // Yoga rounds text width outward to preserve glyphs; the adjoining
+        // origins use pixel-grid rounding, allowing one point of gap variance.
+        #expect(abs(titleShortcutGap - 8) <= 1)
+        #expect(target.absoluteFrame.contains(shortcut.absoluteFrame))
         #expect(title.absoluteFrame.minX - target.absoluteFrame.minX == 16)
+        let short = try row("short", graph: graph)
+        #expect(short.absoluteFrame.minY >= target.absoluteFrame.maxY)
         let lines = nodes(graph.tree.root).filter { $0.backgroundColor == $0.theme.colors.divider && $0.frame.height > 0 }
         #expect(lines.count == 1 && lines[0].frame.height == 1)
+    } }
+
+    @Test("Keyboard navigation reveals scaled multiline menu rows using their full height")
+    func scaledWrappedRowNavigation() throws { try scene { graph, context, _, scheduler, dispatcher in
+        let harness = Harness(entries: (0..<12).map {
+            .item(MenuItem(id: "wrapped-\($0)", title: "Workspace search results \($0)") {})
+        })
+        graph.install(root: harness.theme(.defaultLight).textScaler(.init(2)))
+        settle(graph); harness.$shown.wrappedValue = true; settle(graph)
+        scheduler.tick(deltaTime: 1); settle(graph)
+        let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[MenuScrollMarker.key] as? Bool == true })
+        let last = try row("wrapped-11", graph: graph)
+        let title = try #require(nodes(last).first { $0.layoutNode?.textInputs != nil })
+        #expect((title.layoutNode?.textMeasure?.result.lines.count ?? 0) > 1)
+        #expect(last.frame.height > 52 && last.frame.height < scroll.frame.height)
+        key(Scancode.end, graph: graph, dispatcher: dispatcher)
+        #expect(context.focusChain.focused === last && scroll.contentOffset.y > 0)
+        #expect(last.absoluteFrame.minY >= scroll.absoluteFrame.minY - 1)
+        #expect(last.absoluteFrame.maxY <= scroll.absoluteFrame.maxY + 1)
+        key(Scancode.home, graph: graph, dispatcher: dispatcher)
+        #expect(context.focusChain.focused === (try row("wrapped-0", graph: graph)))
+        #expect(scroll.contentOffset.y == 0)
     } }
 
     @Test("A row highlight is inset the same on both sides of the panel")

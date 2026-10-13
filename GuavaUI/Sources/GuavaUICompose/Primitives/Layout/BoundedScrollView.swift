@@ -13,7 +13,7 @@ public struct BoundedScrollView: View {
                                contentHeight: Float,
                                minHeight: Float,
                                maxHeight: Float,
-                               consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
+                               consumePolicy: ScrollConsumePolicy = .whenScrollable,
                                scrollbarGutter: ScrollView<AnyView>.ScrollbarGutter = .stable,
                                @ViewBuilder content: () -> Content) {
         self.axes = axes

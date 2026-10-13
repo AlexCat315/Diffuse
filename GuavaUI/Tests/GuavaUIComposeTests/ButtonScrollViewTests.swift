@@ -778,8 +778,8 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(scrollView.contentOffset.y == 0)
     } }
 
-    @Test("TextField wheel at boundary passes through to parent ScrollView")
-    func nestedTextFieldBoundaryPassesWheelToParentScrollView() { GlobalTestLock.locked {
+    @Test("TextField wheel at boundary stays inside the overflowing editor")
+    func nestedTextFieldBoundaryContainsWheel() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         let focus = FocusChain()
         InteractionRegistryHolder.current = registry
@@ -808,6 +808,11 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         let fieldState = field.attachments["__textfield_state"] as? TextField.FieldState
         #expect((fieldState?.scroll.maxY ?? 0) > 0)
 
+        focus.focus(field)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 220, height: 260)
+        field.draw?(DrawList(), field.absoluteOrigin)
+
         let dispatcher = EventDispatcher(
             tree: tree,
             interactions: registry,
@@ -828,7 +833,39 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
 
         #expect(field.contentOffset.y == previousFieldOffset)
-        #expect(scrollView.contentOffset.y > 0)
+        #expect(scrollView.contentOffset.y == 0)
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -12,
+            input: .init(unit: .points, device: .continuous, phase: .began))))
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -8,
+            input: .init(unit: .points, device: .continuous, phase: .changed))))
+        #expect(field.contentOffset.y == previousFieldOffset)
+        #expect(scrollView.contentOffset.y == 0)
+    } }
+
+    @Test("A TextField without overflowing input axes lets its parent scroll")
+    func nestedTextFieldWithoutOverflow() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        let store = TextStore()
+        store.value = "short"
+        graph.install(root: ScrollView {
+            Box(direction: .column, alignItems: .stretch) {
+                TextField(text: makeBinding(store)).frame(width: 180)
+                Box {}.frame(height: 600)
+            }.flex(0, shrink: 0)
+        }.frame(width: 220, height: 180))
+        graph.computeLayout(width: 220, height: 180)
+        let scroll = tree.root!.children.first!
+        let field = firstNode(in: tree.root, where: { $0.attachments[TextField.surfaceMarkerKey] != nil })!
+        let dispatcher = EventDispatcher(tree: tree, interactions: registry,
+            capture: PointerCapture(), focusChain: FocusChain())
+        dispatcher.dispatch(.mouseWheel(.init(x: 0, y: -1,
+            mouseX: Float(field.absoluteFrame.midX), mouseY: Float(field.absoluteFrame.midY))))
+        #expect(field.contentOffset == .zero)
+        #expect(scroll.contentOffset.y == 30)
     } }
 
     @Test("Scrollable Menu consumes boundary wheel before parent ScrollView")
@@ -953,8 +990,8 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(activations == 1)
     } }
 
-    @Test("Focused TextField wheel priority outranks hovered parent ScrollView")
-    func focusedTextFieldWheelPriorityBeatsHoveredParent() { GlobalTestLock.locked {
+    @Test("A focused TextField lets a fresh wheel over the parent scroll the parent")
+    func focusedTextFieldWheelUsesPointerRegion() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         let focus = FocusChain()
         InteractionRegistryHolder.current = registry
@@ -1001,9 +1038,9 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
                                                           y: 12,
                                                           deltaX: 0,
                                                           deltaY: 0)))
-        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: 1)))
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
 
-        #expect(field.contentOffset.y < previousFieldOffset)
-        #expect(scrollView.contentOffset.y == 0)
+        #expect(field.contentOffset.y == previousFieldOffset)
+        #expect(scrollView.contentOffset.y > 0)
     } }
 }
