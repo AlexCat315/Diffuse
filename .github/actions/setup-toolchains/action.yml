@@ -15,7 +15,7 @@ runs:
     - uses: SwiftyLab/setup-swift@v1.14.1
       if: runner.os != 'macOS'
       with:
-        swift-version: '6.4.0'
+        swift-version: '6.4.1'
     - uses: actions/setup-python@v7.0.0
       with:
         python-version: '3.14.8'
