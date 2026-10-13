@@ -56,6 +56,23 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    /// A caller constrains `List` with `.frame`, which lands on the keyboard
+    /// host — not on the scroll view inside it.
+    struct SizedListHarness: View {
+        let items: [ListItem]
+
+        @State var selection: Int? = 2
+
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 12) {
+                List(items, id: \.id, selection: $selection) { item, _ in
+                    Text(item.title)
+                }.frame(height: 260)
+                Text("caption").font(.caption).debugName("sized-list-caption")
+            }
+        }
+    }
+
     struct TreeHarness: View {
         let selectionProbe: Probe<String?>
         let expandedProbe: Probe<Set<String>>
@@ -216,15 +233,111 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
 
         AnimatorScheduler.current.tick(deltaTime: 1)
         buttons = orderedPointerNodes(in: tree.root!, registry: registry)
-        // The selection fill now lives on the row style's body (one descendant
-        // below the host pointer node) — walk into the styled subtree to count
-        // selected backgrounds.
+        // The selection fill lives on the row style's body, a few descendants
+        // below the host pointer node — search the whole styled subtree instead
+        // of counting fixed levels.
         let selectedRows = buttons.filter { host in
-            host.children.contains { $0.backgroundColor?.a ?? 0 > 0 }
-                || host.children.flatMap(\.children).contains { $0.backgroundColor?.a ?? 0 > 0 }
+            var found = false
+            func walk(_ node: Node) {
+                if node.backgroundColor?.a ?? 0 > 0 { found = true }
+                for child in node.children { walk(child) }
+            }
+            for child in host.children { walk(child) }
+            return found
         }
         #expect(selectedRows.count == 1)
     } }
+
+    @Test("List fills and clips the height its caller constrains it to")
+    func listRespectsCallerHeight() throws { try GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let items = (1...30).map { ListItem(id: $0, title: "Document \($0)") }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: SizedListHarness(items: items))
+        graph.computeLayout(width: 600, height: 800)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 800)
+
+        let caption = try #require(node(in: tree.root!, debugName: "sized-list-caption"))
+        let viewport = try #require(firstClippingNode(in: tree.root!))
+        let viewportFrame = absoluteFrame(of: viewport)
+
+        // Rows exist past the viewport (overscan), so the contract is that the
+        // scroll view *is* the caller's 260pt frame and clips what it holds.
+        // Before that, it sized to its content and painted over the caption.
+        #expect(viewport.clipsToBounds)
+        #expect(abs(viewportFrame.height - 260) < 0.5)
+        #expect(abs(caption.frame.minY - 272) < 0.5)
+    } }
+
+    @Test("A selected list row stays inside its own slot and uses the shared navigation highlight")
+    func selectedRowFitsItsSlot() { GlobalTestLock.locked {
+        let theme = Theme.defaultDark
+        let appearance = SelectionAppearance.resolve(.navigation, theme: theme)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: SizedListHarness(items: (1...6).map { ListItem(id: $0, title: "Document \($0)") }))
+        graph.computeLayout(width: 600, height: 800)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 800)
+
+        // A badge is taller than the body line. The row box is still 30pt, so
+        // the painted highlight cannot grow past it and shift the row down.
+        var fills: [Node] = []
+        var rowTop: CGFloat?
+
+        func walk(_ node: Node) {
+            if node.backgroundColor?.a ?? 0 > 0.1 { fills.append(node) }
+            if rowTop == nil, node.frame.height == 30, node.frame.width > 500 {
+                rowTop = node.frame.minY
+
+            }
+            node.children.forEach(walk)
+        }
+        walk(tree.root!)
+
+        #expect(fills.count == 1, "exactly the preselected row paints a selection")
+        let fill = fills[0]
+        let expectedHeight = 30 - 2 * CGFloat(appearance.verticalInset)
+        let expectedRadius = appearance.cornerRadius
+        #expect(abs(fill.frame.height - expectedHeight) < 0.5)
+        #expect(abs(fill.cornerRadius - expectedRadius) < 0.01)
+        // The pill is inset from the row edges, the way a sidebar destination is.
+        let viewportWidth = absoluteFrame(of: firstClippingNode(in: tree.root!)!).width
+        let inset = CGFloat(appearance.horizontalInset)
+        #expect(abs(viewportWidth - absoluteFrame(of: fill).width - 2 * inset) < 0.5)
+
+        // The same role drives the sidebar, so the two cannot drift apart.
+        #expect(SelectionAppearance.resolve(.navigation, theme: theme) == appearance)
+        // A data grid keeps its own band — a documented difference, not a
+        // forgotten one.
+        let grid = SelectionAppearance.resolve(.dataRow, theme: theme)
+        #expect(grid.fill == appearance.fill)
+        #expect(grid.cornerRadius == 0)
+    } }
+
+    private func node(in root: Node, debugName: String) -> Node? {
+        if (root.attachments[LayoutDebugAttachmentKey.debugName] as? String) == debugName { return root }
+        for child in root.children {
+            if let found = node(in: child, debugName: debugName) { return found }
+        }
+        return nil
+    }
+
+    /// The list's scroll viewport: the widest node under the keyboard host that
+    /// clips its own bounds.
+    private func firstClippingNode(in node: Node) -> Node? {
+        if node.clipsToBounds, node.frame.width > 200 { return node }
+        for child in node.children {
+            if let found = firstClippingNode(in: child) { return found }
+        }
+        return nil
+    }
 
     @Test("Tree disclosure updates expanded binding and reveals child rows")
     func treeExpansion() { GlobalTestLock.locked {

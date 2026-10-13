@@ -493,10 +493,13 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-trailing"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-bottom"))
         XCTAssertEqual(leadingSlot.minX, 0, accuracy: 0.5)
-        XCTAssertEqual(leadingSlot.maxX, leadingSplit.minX, accuracy: 1.0)
-        XCTAssertEqual(leadingSplit.maxX, centerSlot.minX, accuracy: 1.0)
-        XCTAssertEqual(centerSlot.maxX, trailingSplit.minX, accuracy: 1.0)
-        XCTAssertEqual(trailingSplit.maxX, trailingSlot.minX, accuracy: 1.0)
+        // Two cards sit adjacent across a single hairline; the splitter's grab
+        // area overhangs both of them, so it straddles that seam rather than
+        // sitting between them.
+        XCTAssertEqual(centerSlot.minX - leadingSlot.maxX, 1, accuracy: 0.5)
+        XCTAssertEqual(trailingSlot.minX - centerSlot.maxX, 1, accuracy: 0.5)
+        XCTAssertEqual(leadingSlot.maxX, leadingSplit.midX, accuracy: 1.0)
+        XCTAssertEqual(centerSlot.maxX, trailingSplit.midX, accuracy: 1.0)
         XCTAssertEqual(bottomSlot.minX, centerSlot.minX, accuracy: 1.0)
         XCTAssertEqual(bottomSlot.maxX, centerSlot.maxX, accuracy: 1.0)
         XCTAssertEqual(restoredStatusBar.maxY, 640, accuracy: 0.5)

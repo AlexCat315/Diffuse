@@ -8,6 +8,27 @@ private enum _WorkspaceMetrics {
     static let railThickness: Float = 40
 }
 
+/// Card chrome shared by docked groups and floating windows.
+///
+/// A workspace is a set of cards resting on the window canvas, not a grid of
+/// outlined rectangles: the group carries the design system's panel radius, a
+/// single soft hairline and one shallow shadow, and the gutters between groups
+/// stay narrow enough that the cards dominate. Callers that already own a
+/// stronger elevation (a floating window) can apply their own shadow after this
+/// and win.
+private extension View {
+    func workspaceCardSurface(_ fill: SemanticColorRef) -> some View {
+        ThemeReader { theme in
+            self
+                .background(fill)
+                .cornerRadius(theme.radius.xl)
+                .border(theme.colors.border.multipliedAlpha(0.55), width: 1)
+                .shadow(color: theme.elevation.low.color ?? .clear, offsetY: 2, blur: 8)
+                .clipped()
+        }
+    }
+}
+
 private struct _WorkspaceRailSlot {
     var id: WorkspaceSlotID
     var edge: WorkspaceEdge
@@ -405,9 +426,7 @@ private struct _WorkspaceFloatingWindowView: View {
                                    content: content)
                 .flex()
         }
-        .background(.surface)
-        .border(.border, width: 1)
-        .cornerRadius(6)
+        .workspaceCardSurface(.surfaceFloating)
         .shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x96),
                 offsetY: 12,
                 blur: 32)
@@ -734,11 +753,7 @@ struct _WorkspaceTabGroupView: View {
                     .flex()
             }
         }
-        .background(.surface)
-        .border(.border, width: 1)
-        .surfaceFinish()
-        .cornerRadius(6)
-        .clipped()
+        .workspaceCardSurface(.surfaceRaised)
         .frame(minWidth: 0, minHeight: 0)
         .layoutRole("workspace-tab-group")
         .semanticRole("workspace.group")
@@ -815,7 +830,7 @@ private struct _WorkspaceTabBar: View {
             }
         }
         .padding(horizontal: 4, vertical: 0)
-        .background(.surfaceRaised)
+        .background(.surface)
         .modifier(_WorkspaceTabBarHeight())
         .layoutRole("workspace-tab-bar")
         .accessibility { $0.role = .group; $0.label = "Panel tabs" }
@@ -1451,9 +1466,9 @@ private struct _WorkspaceSplitDividerLine: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let theme = resolveWorkspaceTheme(on: node)
-        // Floating-island chrome: the gutter shows the window canvas; no
-        // painted line. The parent divider node keeps the resize hit area.
-        node.animatableSet(\.backgroundColor, to: nil)
+        // The hairline between two cards. The parent keeps the invisible grab
+        // area around it, so this node contributes only the visible rule.
+        node.animatableSet(\.backgroundColor, to: node.theme.colors.divider)
         let thickness = max(1, theme.splitDividerThickness)
         switch axis {
         case .vertical:

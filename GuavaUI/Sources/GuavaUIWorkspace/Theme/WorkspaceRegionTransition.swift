@@ -24,7 +24,7 @@ enum WorkspaceRegionSizing {
     func extent(in theme: WorkspaceTheme) -> Float {
         switch self {
         case .fraction(let value), .points(let value): max(0, value)
-        case .divider: max(1, theme.splitDividerThickness + theme.splitDividerHitSlop * 2)
+        case .divider: max(1, theme.splitDividerThickness)
         }
     }
 }
@@ -75,6 +75,14 @@ private struct WorkspaceRegionHost: _PrimitiveView {
         return node
     }
 
+    /// A splitter overhangs the cards on both sides, so it must not be clipped
+    /// by its own region — and it has to win hit-testing against the card
+    /// content it covers, or the grab area would belong to the panel instead.
+    private var isSplitter: Bool {
+        if case .divider = sizing { return true }
+        return false
+    }
+
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
         layout.flexDirection = .column
@@ -87,6 +95,8 @@ private struct WorkspaceRegionHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         guard let state = node.firstResource(WorkspaceRegionPresentation.self) else { return }
         let workspaceTheme = resolveWorkspaceTheme(on: node)
+        node.clipsToBounds = !isSplitter
+        node.zIndex = isSplitter ? 1 : 0
         let target = isVisible ? sizing.extent(in: workspaceTheme) : 0
         let animate = workspaceTheme.animatesLayout && state.phase != nil && state.phase != phase
         state.phase = phase
@@ -137,9 +147,27 @@ private struct WorkspaceRegionHost: _PrimitiveView {
         switch sizing {
         case .fraction:
             layout.setFlexBasis(0); layout.flexGrow = value
-        case .points, .divider:
+        case .points:
             layout.flexGrow = 0; layout.flexShrink = 0
             if horizontal { layout.width = value } else { layout.height = value }
+        case .divider:
+            // The hairline is what separates two cards, so the region it lives
+            // in reserves only that hairline. The grab area is added on top as a
+            // negative margin: it overhangs the cards instead of pushing them
+            // apart, which is what a gutter of real margin always ended up
+            // doing.
+            let slop = max(0, resolveWorkspaceTheme(on: node).splitDividerHitSlop)
+            layout.flexGrow = 0; layout.flexShrink = 0
+            let span = value + 2 * slop
+            if horizontal {
+                layout.width = span
+                layout.setMargin(-slop, edge: .left)
+                layout.setMargin(-slop, edge: .right)
+            } else {
+                layout.height = span
+                layout.setMargin(-slop, edge: .top)
+                layout.setMargin(-slop, edge: .bottom)
+            }
         }
         node.opacity = max(0, min(1, state.alpha))
     }
