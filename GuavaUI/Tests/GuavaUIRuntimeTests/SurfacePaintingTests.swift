@@ -59,12 +59,17 @@ struct SurfacePaintingTests {
         #expect(layered.vertices.prefix(ambient.vertices.count).map(\.posX)
                 == ambient.vertices.map(\.posX))
 
-        // Each layer spreads by its own blur: 100 wide plus 2 × blur.
-        #expect(abs(spanX(ambient) - 140) < 2)
-        #expect(abs(spanX(key) - 116) < 2)
-        // And hangs below by its own offset.
-        #expect(abs(top(ambient) - (3 - 20)) < 2)
-        #expect(abs(top(key) - (6 - 8)) < 2)
+        // Only quantized visible steps remain. The ambient layer still reaches
+        // farther, and each stays inside its authored blur's maximum extent.
+        #expect(spanX(ambient) > spanX(key))
+        #expect(spanX(key) > 100 && spanX(key) <= 116 + 1)
+        #expect(spanX(ambient) <= 140 + 1)
+        // Offsets translate the surviving geometry without changing the blur.
+        let unshiftedHalo = node(), unshiftedContact = node()
+        unshiftedHalo.ambientShadow = shadow(1, offsetY: 0, blur: 20)
+        unshiftedContact.shadow = shadow(1, offsetY: 0, blur: 8)
+        #expect(abs(top(ambient) - top(render(unshiftedHalo)) - 3) < 0.01)
+        #expect(abs(top(key) - top(render(unshiftedContact)) - 6) < 0.01)
     }
 
     @Test("The ambient halo is broader and fainter than the key shadow under it")

@@ -628,7 +628,9 @@ public final class SDL3PlatformHost: PlatformHost {
                 }
                 var timeout = hasImmediateWork
                     ? 0.001
-                    : eventWaitTimeout(shell: shell, animationsActive: animationsActive)
+                    : eventWaitTimeout(shell: shell,
+                                       animationTickTime: animationsActive ? frameStart : nil,
+                                       now: now)
                 for session in sessions.values where session.needsDisplay || session.tree.hasRenderUpdates {
                     timeout = min(timeout, max(0.001, session.nextRenderAttemptTime - now))
                 }
@@ -670,17 +672,21 @@ public final class SDL3PlatformHost: PlatformHost {
     }
 
     private func eventWaitTimeout(shell: any Shell,
-                                  animationsActive: Bool) -> Double {
+                                  animationTickTime: Double?,
+                                  now: Double) -> Double {
         var timeout = Self.maxEventWaitInterval
 
-        if animationsActive {
+        if let animationTickTime {
             let refreshRate = Self.sanitizedDisplayRefreshRate(
                 shell.displayRefreshRate(windowID: mainWindowID)
             )
-            timeout = min(timeout, 1.0 / refreshRate)
+            // Rendering (including a drawable's vsync wait) already consumes
+            // part of the animation interval. Wait only until the next tick
+            // deadline, or poll immediately when that deadline has passed.
+            let deadline = animationTickTime + 1.0 / refreshRate
+            timeout = min(timeout, max(0, deadline - now))
         }
 
-        let now = TimingTrace.now()
         for session in sessions.values where focusedTextInputArea(for: session) != nil {
             guard session.lastTextCursorAnimationTick > 0 else {
                 timeout = min(timeout, Self.focusedTextRefreshInterval)
@@ -691,7 +697,7 @@ public final class SDL3PlatformHost: PlatformHost {
             timeout = min(timeout, max(0.001, remaining))
         }
 
-        return max(0.001, timeout)
+        return timeout
     }
 
     private static func sanitizedDisplayRefreshRate(_ framesPerSecond: Double?) -> Double {
@@ -830,7 +836,7 @@ public final class SDL3PlatformHost: PlatformHost {
             return
         }
 
-        let now = TimingTrace.now()
+        let now = frameClock()
         if session.lastTextCursorAnimationTick == 0 {
             session.lastTextCursorAnimationTick = now
             return

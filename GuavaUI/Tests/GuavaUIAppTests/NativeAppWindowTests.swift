@@ -64,15 +64,28 @@ final class NativeAppWindowTests: XCTestCase {
         let second = try context.makeWindow(settings: AppWindowRenderSettings(config: AppConfig(msaaSampleCount: 1)))
         try first.configure(native: .metalLayer(Unmanaged.passUnretained(layerA).toOpaque()), size: SIMD2(64, 64), vsync: false)
         try second.configure(native: .metalLayer(Unmanaged.passUnretained(layerB).toOpaque()), size: SIMD2(48, 48), vsync: true)
+        XCTAssertFalse(layerA.displaySyncEnabled)
+        XCTAssertTrue(layerB.displaySyncEnabled)
         let list = DrawList()
         list.addRect(UIRect(x: 0, y: 0, width: 32, height: 32), color: Color(r: 1, g: 0, b: 0))
         list.addRoundedRect(UIRect(x: 3, y: 3, width: 26, height: 26), radius: 5, color: Color(r: 0, g: 1, b: 0))
         for frame in 0..<24 {
-            if frame == 8 { try first.resize(size: SIMD2(40, 24), vsync: false) }
+            if frame == 8 {
+                try first.resize(size: SIMD2(40, 24), vsync: false)
+                XCTAssertFalse(layerA.displaySyncEnabled)
+                XCTAssertTrue(layerB.displaySyncEnabled)
+            }
             if frame == 12 {
                 try first.resize(size: .zero, vsync: false)
                 XCTAssertFalse(try first.draw(list: list, logical: SIMD2(32, 32)))
                 try first.resize(size: SIMD2(40, 24), vsync: true)
+                XCTAssertTrue(layerA.displaySyncEnabled)
+                XCTAssertTrue(layerB.displaySyncEnabled)
+            }
+            if frame == 16 {
+                try second.resize(size: SIMD2(48, 48), vsync: false)
+                XCTAssertTrue(layerA.displaySyncEnabled)
+                XCTAssertFalse(layerB.displaySyncEnabled)
             }
             XCTAssertTrue(try first.draw(list: list, logical: SIMD2(32, 32)))
             XCTAssertTrue(try second.draw(list: list, logical: SIMD2(32, 32)))

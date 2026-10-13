@@ -309,6 +309,116 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Animation waits include work already spent in the frame", arguments: [0.004, 0.020])
+    func animationWaitUsesRemainingFrameBudget(renderDuration: Double) throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        shell.refreshRate = 60
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        var time = 100.0
+        host.frameClock = { time }
+        shell.onPoll = { time += 0.002 }
+        shell.onWait = { timeout in
+            time += timeout
+            return false
+        }
+
+        let tree = NodeTree()
+        let root = Node()
+        tree.root = root
+        let session = try host.openWindow(title: "Animation", tree: tree)
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        let scheduler = AnimatorScheduler()
+        let controller = IdleAnimationController()
+        controller.onTick = { root.markRenderDirty() }
+        scheduler.register(controller)
+
+        var frameTimes: [Double] = []
+        session.onFrame = { _ in
+            frameTimes.append(time)
+            time += renderDuration
+            return true
+        }
+
+        AnimatorScheduler.$current.withValue(scheduler) { host.run() }
+
+        let workDuration = 0.002 + renderDuration
+        let expectedWait = max(0, 1.0 / 60.0 - workDuration)
+        #expect(frameTimes.count == 3)
+        #expect(shell.waitTimeouts.count == 3)
+        #expect(shell.waitTimeouts.allSatisfy { abs($0 - expectedWait) < 1e-9 })
+        for (previous, current) in zip(frameTimes, frameTimes.dropFirst()) {
+            #expect(abs(current - previous - max(1.0 / 60.0, workDuration)) < 1e-9)
+        }
+    }
+
+    @MainActor
+    @Test("Input wakes an animation wait and redraws before its timeout")
+    func animationWaitRemainsInterruptibleByInput() throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        shell.refreshRate = 60
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        var time = 100.0
+        host.frameClock = { time }
+        var waitCount = 0
+        shell.onWait = { timeout in
+            waitCount += 1
+            time += waitCount == 1 ? 0.003 : timeout
+            return waitCount == 1
+        }
+
+        let tree = NodeTree()
+        tree.root = Node()
+        let session = try host.openWindow(title: "Input", tree: tree)
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        shell.eventBatches[1] = [
+            WindowInputEvent(windowID: session.id,
+                             event: .mouseMotion(MouseMotionEvent(x: 8, y: 8, deltaX: 1, deltaY: 0))),
+        ]
+
+        let scheduler = AnimatorScheduler()
+        scheduler.register(IdleAnimationController())
+        var frameTimes: [Double] = []
+        var deliveredAt: Double?
+        session.onEvent = { _ in deliveredAt = time }
+        session.onFrame = { _ in
+            frameTimes.append(time)
+            return true
+        }
+
+        AnimatorScheduler.$current.withValue(scheduler) { host.run() }
+
+        #expect(frameTimes.count == 2)
+        #expect(abs((frameTimes.last ?? 0) - (frameTimes.first ?? 0) - 0.003) < 1e-9)
+        #expect(deliveredAt == frameTimes.last)
+        #expect((shell.waitTimeouts.first ?? 0) > 0.003)
+    }
+
+    @MainActor
+    @Test("Finished animations return to the idle event wait")
+    func finishedAnimationReturnsToIdleWait() throws {
+        let shell = MockShell(eventBatches: [[], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        var time = 100.0
+        host.frameClock = { time }
+        shell.onWait = { timeout in time += timeout; return false }
+
+        let tree = NodeTree()
+        tree.root = Node()
+        let session = try host.openWindow(title: "Idle", tree: tree)
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        let scheduler = AnimatorScheduler()
+        scheduler.register(TickCountingController())
+        var frameCount = 0
+        session.onFrame = { _ in frameCount += 1; return true }
+
+        AnimatorScheduler.$current.withValue(scheduler) { host.run() }
+
+        #expect(frameCount == 1)
+        #expect(shell.waitTimeouts == [0.25, 0.25])
+    }
+
+    @MainActor
     @Test("Host frame loop ticks task-local animation scheduler")
     func hostTicksTaskLocalScheduler() throws {
         let shell = MockShell(eventBatches: [[], []])
@@ -482,8 +592,9 @@ private let mockSurface = NativeRenderSurface.metalLayer(UnsafeMutableRawPointer
 
 private final class IdleAnimationController: AnyAnimationController {
     var isFinished: Bool = false
+    var onTick: (() -> Void)?
 
-    func tick(deltaTime: Double) {}
+    func tick(deltaTime: Double) { onTick?() }
 
     func finishImmediately() {
         isFinished = true
@@ -544,6 +655,7 @@ private final class MockShell: Shell {
     var refreshRate: Double?
     var pollDelay: TimeInterval = 0
     var onPoll: (() -> Void)?
+    var onWait: ((TimeInterval) -> Bool)?
     var waitTimeouts: [TimeInterval] = []
     var cursorRequests: [CursorRequest] = []
     var textInputAreas: [WindowID: TextInputArea?] = [:]
@@ -608,7 +720,7 @@ private final class MockShell: Shell {
     @discardableResult
     func waitForEvents(timeout: TimeInterval) -> Bool {
         waitTimeouts.append(timeout)
-        return false
+        return onWait?(timeout) ?? false
     }
 
     func setTextInputArea(windowID: WindowID, _ area: TextInputArea?) {

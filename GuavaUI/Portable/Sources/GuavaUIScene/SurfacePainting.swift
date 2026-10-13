@@ -20,7 +20,6 @@ extension DrawList {
     public func addShadow(_ layer: SurfaceShadow, rect: UIRect, cornerRadius: Float,
                           opacity: Float = 1, frostedRect: UIRect? = nil) {
         guard !layer.isEmpty, rect.width > 0, rect.height > 0 else { return }
-        let blur = max(0, layer.blur)
         let hole = frostedRect.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
         paintSteps(layer, rect: rect, cornerRadius: cornerRadius,
                    opacity: opacity, count: Self.stepCount(for: layer), hole: hole)
@@ -70,6 +69,10 @@ extension DrawList {
             let alpha = layer.color!.a * weight / Float(count)
             let stepColor = Color(r: layer.color!.r, g: layer.color!.g, b: layer.color!.b,
                                   a: min(1, alpha) * opacity)
+            // Vertices store 8-bit alpha. Many faint blur steps round to zero;
+            // they cannot affect compositing but still cost a full rounded
+            // mesh, its upload and validation if recorded.
+            guard stepColor.rgba8 >> 24 != 0 else { continue }
             let stepRect = UIRect(x: rect.minX + layer.offsetX + inset,
                                   y: rect.minY + layer.offsetY + inset,
                                   width: rect.width - 2 * inset,

@@ -60,7 +60,7 @@ var demoFrameAttemptCount = 0
 var demoSurfaceWasUnavailable = false
 nonisolated(unsafe) var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
 /// Timestamp of the previous submitted frame, for the cadence diagnostic below.
-nonisolated(unsafe) var lastFrameSubmitTime = ProcessInfo.processInfo.systemUptime
+nonisolated(unsafe) var lastFrameSubmitTime = TimingTrace.now()
 nonisolated(unsafe) var hudTickFrameCount: Int = 0
 nonisolated(unsafe) var hudRenderFrameCount: Int = 0
 nonisolated(unsafe) var hudTickFPS: Int = 0
@@ -72,6 +72,7 @@ func shouldLogMainDemoFrameTiming(frameIndex: Int,
                                   didAtlasUpload: Bool,
                                   didPreviewUpload: Bool) -> Bool {
     frameIndex <= 5 || didAtlasUpload || didPreviewUpload
+        || (DemoFrameModeHolder.current == .benchmark && frameIndex.isMultiple(of: 60))
 }
 
 func makePreviewTexturePixels(scale: Float) -> (pixels: [UInt8], width: UInt32, height: UInt32) {
@@ -367,7 +368,6 @@ host.onInit = { native, w, h in
         }
         surfaceNative = native
         surfaceVSync = isVSyncOn
-        if !isVSyncOn { native.disableDisplaySync() }
         try device.withFrameSession {
             try renderer.configure(format: .bgra8UnormSRGB, sampleCount: Int(demoMSAASampleCount))
         }
@@ -448,7 +448,6 @@ host.onFrame = { native in
                     descriptor: SurfaceFactory.nativeDescriptor(native: native,
                         size: SIMD2(drawableW, drawableH), vsync: DemoVSyncHolder.enabled))
             }
-            if !DemoVSyncHolder.enabled { native.disableDisplaySync() }
             surfaceVSync = DemoVSyncHolder.enabled
             print("[demo] vsync changed: vsync=\(DemoVSyncHolder.enabled)")
         } catch {
@@ -516,25 +515,23 @@ host.onFrame = { native in
         }
     }
 
-    // 3. Submit to the GPU.
+    // 3. Record and submit. These are CPU wall times, including any wait for a
+    // frame slot or drawable; GPU execution proceeds asynchronously.
     var presented = false
     var devToolsPresentEnd = devToolsDrawEnd
     do {
-        presented = try submitDemoFrame()
+        presented = try submitDemoFrame(timing: &timing)
         devToolsPresentEnd = TimingTrace.now()
     } catch {
         print("[demo] frame submit failed: \(error)")
     }
-    timing.mark("gpuSubmit")
-
-    // A frame that misses the display cadence gets a line of its own. The
-    // breakdown is what separates the three candidates: time spent encoding the
-    // list (sceneRender), time spent submitting and waiting (gpuSubmit), or a
-    // gap that neither explains — which points at presentation pacing.
-    let submitNow = ProcessInfo.processInfo.systemUptime
+    // Log slow frame work, rather than interpreting an event-driven window's
+    // idle time between input events as a missed display deadline. The interval
+    // remains useful context, but includes intentional time asleep in SDL.
+    let submitNow = TimingTrace.now()
     let frameInterval = submitNow - lastFrameSubmitTime
     lastFrameSubmitTime = submitNow
-    if frameInterval > 0.025, demoRenderedFrameCount > 5 {
+    if submitNow - devToolsFrameStart > 0.025, demoRenderedFrameCount > 5 {
         print(timing.summary(extra: [
             "interval=\(String(format: "%.1f", frameInterval * 1000))ms",
         ]))
@@ -598,10 +595,16 @@ host.onFrame = { native in
             "layoutUpdated=\(didLayout)",
             "atlasUploaded=\(didAtlasUpload)",
             "previewUploaded=\(didPreviewUpload)",
+            "vertices=\(drawList.vertices.count)",
+            "indices=\(drawList.indices.count)",
+            "batches=\(drawList.batches.count)",
+            "interval=\(String(format: "%.1f", frameInterval * 1000))ms",
         ]))
     }
     demoSurfaceWasUnavailable = false
-    if DemoFrameModeHolder.current == .benchmark || !DemoVSyncHolder.enabled {
+    // Presentation synchronization does not choose whether an idle UI redraws.
+    // Continuous rendering is an explicit benchmark mode.
+    if DemoFrameModeHolder.current == .benchmark {
         host.requestDisplay()
     }
     return true
@@ -619,12 +622,17 @@ host.run(tree: tree)
 /// Renders the recorded draw list into the swapchain. Returns false while the
 /// window has no drawable to present to.
 @MainActor
-func submitDemoFrame() throws -> Bool {
+func submitDemoFrame(timing: inout TimingTrace) throws -> Bool {
     guard let resource = swapchain else { return false }
     return try device.withFrameSession { () throws -> Bool in
         try device.beginFrame()
-        defer { device.endFrame() }
+        timing.mark("frameSlot")
+        defer {
+            device.endFrame()
+            timing.mark("frameEnd")
+        }
         let image = try device.acquireSwapchainImage(resource.swapchain)
+        timing.mark("drawableAcquire")
         let pixels = SIMD2(image.width, image.height)
         if demoMSAASampleCount > 1,
            multisample?.descriptor.width != pixels.x || multisample?.descriptor.height != pixels.y {
@@ -652,16 +660,20 @@ func submitDemoFrame() throws -> Bool {
             loadAction: .clear(SIMD4<Float>(0.05, 0.06, 0.08, 1)))
         target.resolveTexture = multisample == nil ? nil : surface
         let commands = CommandBuffer()
+        timing.mark("renderTargets")
         let frame = try renderer.record(list: drawList, into: commands, target: target,
             viewport: NativeUIViewport(pixels: pixels, logical: SIMD2(Float(logicalW), Float(logicalH))),
             backdropSource: framebuffer?.texture)
         if let source = framebuffer?.texture {
-            var present = RenderColorTarget(texture: image.texture, loadAction: .dontCare, store: true)
+            let present = RenderColorTarget(texture: image.texture, loadAction: .dontCare, store: true)
             try renderer.recordBlit(source: source, into: commands, target: present, size: pixels)
         }
+        timing.mark("commandRecord")
         try device.submit(commands)
+        timing.mark("queueSubmit")
         frame.didSubmit()
         try device.present(image)
+        timing.mark("present")
         return true
     }
 }

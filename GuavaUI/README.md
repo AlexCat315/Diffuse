@@ -13,6 +13,15 @@ swift run --package-path GuavaUI GuavaUIDemo --component dataTable
 
 画廊默认打开由真实组件组成的 Dashboard，提供 72 个 Story、搜索、尺寸切换、100–200% 文字缩放、禁用示例、明暗主题和独立重置。Theme 页可现场修改字体族、body 字号、图标和圆角，并操作局部主题下的输入框与按钮。示例代码在 `Sources/GuavaUIGallery/`，宿主代码在 `Sources/GuavaUIDemo/`。Story 数量不是独立组件数量。
 
+默认按事件和动画重绘，`--no-vsync` 只关闭呈现同步，`--benchmark` 才启用持续重绘。对比同步开关时使用同一种重绘模式：
+
+```sh
+swift run --package-path GuavaUI GuavaUIDemo --benchmark
+swift run --package-path GuavaUI GuavaUIDemo --benchmark --no-vsync
+```
+
+帧日志记录 CPU 墙钟时间：`sceneRender` 是生成 draw list，`frameSlot` 是准备帧槽，`drawableAcquire` 是获取可呈现图像，`renderTargets` 是准备目标纹理，`commandRecord` 是校验几何和录制命令，`queueSubmit` 是编码并提交，`present` 是排队呈现，`frameEnd` 是结束帧。GPU 异步执行，这些数值不是 GPU 执行耗时。普通模式只记录启动、资源更新和超过 25ms 的帧工作；benchmark 另每 60 帧记录一次。`interval` 包含等待输入的空闲时间，不能单独作为掉帧依据。
+
 Android 使用方可通过脚手架创建独立 Swift Package，在 `ApplicationContent.makeRoot() -> some View` 返回自己的根视图；Android 宿主负责 Vulkan、文本、触摸、IME 和生命周期。创建及构建入口：
 
 ```sh

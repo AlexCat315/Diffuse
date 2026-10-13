@@ -170,14 +170,24 @@ struct NativeDrawListLifecycleTests {
         let output = try context.nativeOutput(format: .bgra8Unorm, size: viewport.pixels)
         try context.device.beginFrame(); defer { context.device.endFrame() }
         let valid = DrawList(); valid.addRect(UIRect(x: 0, y: 0, width: 1, height: 1), color: .white)
-        for variant in 0..<5 {
+        for variant in 0..<12 {
             let invalid = DrawList()
             var vertices = valid.vertices, indices = valid.indices, batches = valid.batches
             switch variant {
             case 0: vertices[0].posX = .nan
-            case 1: indices[0] = UInt32(vertices.count)
-            case 2: batches[0].indexOffset = .max
-            case 3: batches[0].indexCount = 4
+            case 1: vertices[vertices.count - 1].posY = .infinity
+            case 2: vertices[0].u = .nan
+            case 3: vertices[vertices.count - 1].v = -.infinity
+            case 4: indices[0] = UInt32(vertices.count)
+            // Unused storage still receives the complete safety validation.
+            case 5: indices.append(UInt32(vertices.count))
+            case 6:
+                var unused = vertices[0]; unused.posX = .nan
+                vertices.append(unused)
+            case 7: batches[0].indexOffset = .max
+            case 8: batches[0].indexCount = .max
+            case 9: batches[0].indexCount = 4
+            case 10: vertices.removeAll()
             default: batches[0].scissor = UIRect(x: .infinity, y: 0, width: 1, height: 1)
             }
             invalid.load(vertices: vertices, indices: indices, batches: batches, resources: valid.resources)

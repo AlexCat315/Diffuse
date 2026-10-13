@@ -1097,18 +1097,15 @@ public final class SDL3Shell: Shell {
             sdlRefreshRate = Double(mode.pointee.refresh_rate)
         }
 
-        let validSDL = Self.validDisplayRefreshRate(sdlRefreshRate)
-        let validNative = Self.validDisplayRefreshRate(nativeRefreshRate)
-        switch (validSDL, validNative) {
-        case let (sdl?, native?):
-            return max(sdl, native)
-        case let (sdl?, nil):
-            return sdl
-        case let (nil, native?):
-            return native
-        case (nil, nil):
-            return nil
-        }
+        return Self.resolvedDisplayRefreshRate(current: sdlRefreshRate, fallback: nativeRefreshRate)
+    }
+
+    static func resolvedDisplayRefreshRate(current: Double?, fallback: Double?) -> Double? {
+        // The native maximum describes the screen's capability, which can be
+        // higher than the user's selected display mode. Pace against the
+        // current mode whenever SDL reports it; use the maximum only when the
+        // current rate is unavailable.
+        validDisplayRefreshRate(current) ?? validDisplayRefreshRate(fallback)
     }
 
     private static func validDisplayRefreshRate(_ refreshRate: Double?) -> Double? {

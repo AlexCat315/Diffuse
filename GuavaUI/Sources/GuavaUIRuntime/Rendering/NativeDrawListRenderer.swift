@@ -63,16 +63,23 @@ extension NativeDrawListRenderer {
     static func reliesOnScissorClip(list: DrawList, batch: DrawBatch) -> Bool {
         guard let rect = batch.scissor else { return false }
         let tolerance: Float = 0.01
-        var minX = Float.greatestFiniteMagnitude, minY = Float.greatestFiniteMagnitude
-        var maxX = -Float.greatestFiniteMagnitude, maxY = -Float.greatestFiniteMagnitude
-        let begin = Int(batch.indexOffset), end = begin + Int(batch.indexCount)
-        for i in begin..<end {
-            let vertex = list.vertices[Int(list.indices[i])]
-            minX = min(minX, vertex.posX); maxX = max(maxX, vertex.posX)
-            minY = min(minY, vertex.posY); maxY = max(maxY, vertex.posY)
+        let minX = rect.minX - tolerance, minY = rect.minY - tolerance
+        let maxX = rect.maxX + tolerance, maxY = rect.maxY + tolerance
+        // Borrow the arrays once. Repeated cross-module getters and generic
+        // collection iteration are costly for every index in debug builds.
+        return list.vertices.withUnsafeBufferPointer { vertices in
+            list.indices.withUnsafeBufferPointer { indices in
+                var index = Int(batch.indexOffset)
+                let end = index + Int(batch.indexCount)
+                while index < end {
+                    let vertex = vertices[Int(indices[index])]
+                    if vertex.posX < minX || vertex.posY < minY
+                        || vertex.posX > maxX || vertex.posY > maxY { return true }
+                    index += 1
+                }
+                return false
+            }
         }
-        return minX < rect.minX - tolerance || minY < rect.minY - tolerance
-            || maxX > rect.maxX + tolerance || maxY > rect.maxY + tolerance
     }
 }
 
@@ -311,11 +318,28 @@ public final class NativeDrawListRenderer {
     }
 
     private func validate(_ list: DrawList) throws {
-        // Read the cross-module array counts once for these bounds checks.
         let vertexCount = list.vertices.count, indexCount = list.indices.count
-        guard list.vertices.allSatisfy({ $0.posX.isFinite && $0.posY.isFinite && $0.u.isFinite && $0.v.isFinite })
-            && list.indices.allSatisfy({ Int($0) < vertexCount }) else {
-            throw RHIError.invalidArgument("invalid UI vertices or indices")
+        // Keep complete validation even for unused geometry, but walk concrete
+        // contiguous storage. Sequence.allSatisfy uses unspecialized iterator
+        // witnesses and per-element allocation in an unoptimized Swift build.
+        try list.vertices.withUnsafeBufferPointer { vertices in
+            var index = 0
+            while index < vertices.count {
+                let vertex = vertices[index]
+                guard vertex.posX.isFinite && vertex.posY.isFinite && vertex.u.isFinite && vertex.v.isFinite else {
+                    throw RHIError.invalidArgument("invalid UI vertices or indices")
+                }
+                index += 1
+            }
+        }
+        try list.indices.withUnsafeBufferPointer { indices in
+            var index = 0
+            while index < indices.count {
+                guard Int(indices[index]) < vertexCount else {
+                    throw RHIError.invalidArgument("invalid UI vertices or indices")
+                }
+                index += 1
+            }
         }
         for batch in list.batches {
             let offset = Int(batch.indexOffset), count = Int(batch.indexCount)
