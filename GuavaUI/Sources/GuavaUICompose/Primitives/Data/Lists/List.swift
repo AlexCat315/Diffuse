@@ -38,6 +38,11 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
                          onActivate: { activate(element) },
                          content: AnyView(rowContent(element, selected)))
         }
+        // The keyboard host is the outermost node, so it is where a caller's
+        // `.frame`/`.flex` lands. The scroll view has to take the height that
+        // is left for it — otherwise it sizes to its own content and paints
+        // rows past the bottom of whatever constrained it.
+        .flex().frame(minWidth: 0, minHeight: 0)
         }
     }
 
@@ -107,6 +112,10 @@ struct _ListRowHost: _PrimitiveView {
         node.accessibilityActions.activate = onActivate
         guard let registry = InteractionRegistryHolder.current else { return }
         node.cursor = .pointer
+        // Hover is painted on the host so entering a row never recomposes it.
+        // The radius comes from the shared selection appearance, so the hover
+        // band is not the one square thing left on the row.
+        node.cornerRadius = SelectionAppearance.resolve(.navigation, theme: node.theme).cornerRadius
         let applyHover: (Bool) -> Void = { hovered in
             node.attachments[Self.hoveredKey] = hovered
             node.backgroundColor = hovered && !isSelected ? node.theme.colors.stateLayerHover : .clear
@@ -151,6 +160,7 @@ struct _ListRowHost: _PrimitiveView {
             isSelected: isSelected,
             isHovered: false,
             isEnabled: true,
+            rowHeight: rowHeight,
             theme: node.theme
         )
         return [style.makeBody(cfg)]

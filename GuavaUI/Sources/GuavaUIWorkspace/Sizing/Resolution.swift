@@ -3,11 +3,13 @@ import GuavaUIRuntime
 
 struct WorkspaceLayoutMetrics {
     var tabHeight: Float = 34
-    var divider: Float = 12
+    /// Canvas two cards share between them: the divider hairline and nothing
+    /// else. The grab area around it overhangs, so it costs no extra space.
+    var divider: Float = 1
 
     init(theme: WorkspaceTheme = .init(), scaler: TextScaler = .identity) {
         tabHeight = max(26, scaler.scale(theme.tabBarHeight))
-        divider = max(1, theme.splitDividerThickness + 2 * theme.splitDividerHitSlop)
+        divider = max(1, theme.splitDividerThickness)
     }
 }
 

@@ -27,7 +27,11 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
     public var body: some View {
         let stride = rowHeight + spacing
         let count = data.count
-        if let target = scrollToIndex, target != previousTarget {
+        // The first layout has no viewport yet. Revealing against a zero-height
+        // viewport scrolls a row too far and the request is then consumed, so a
+        // target that is already visible still starts the stack scrolled past
+        // its own top.
+        if let target = scrollToIndex, target != previousTarget, viewport.size.height > 0 {
             previousTarget = target
             let top = CGFloat(max(0, min(target, count - 1))) * CGFloat(stride)
             let bottom = top + CGFloat(rowHeight)

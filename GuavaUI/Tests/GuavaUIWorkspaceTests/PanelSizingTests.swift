@@ -41,7 +41,13 @@ final class PanelSizingTests: XCTestCase {
                 first: .group("ab"), second: .group("c")))])
         let sizing = WorkspaceSizingResolver(document: document)
         XCTAssertEqual(sizing.group("ab", axis: .horizontal), .init(minimum: 220, maximum: 350))
-        XCTAssertEqual(sizing.slot(.center, axis: .horizontal), .init(minimum: 312, maximum: 562))
+        // Stacked siblings share one hairline between them — the cards sit
+        // adjacent, and the grab area around the hairline overhangs instead of
+        // reserving margin.
+        let gutter = WorkspaceLayoutMetrics().divider
+        XCTAssertEqual(gutter, 1)
+        XCTAssertEqual(sizing.slot(.center, axis: .horizontal),
+                       .init(minimum: 220 + 80 + gutter, maximum: 350 + 200 + gutter))
         XCTAssertEqual(sizing.slot(.center, axis: .vertical).minimum, 34)
         document.groups["c"]?.isCollapsed = true
         XCTAssertEqual(WorkspaceSizingResolver(document: document).slot(.center, axis: .horizontal),
