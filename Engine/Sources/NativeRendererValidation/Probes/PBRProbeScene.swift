@@ -7,11 +7,11 @@ public enum PBRProbeScene {
     /// directional lights. The primary light uses two of the four atlas tiles.
     public static func packet(size: RenderDrawableSize, frame: Int = 0) -> RenderPacket {
         var packet = MeshProbeScene.packet(size: size, frame: frame)
-        packet.renderSettings.enablePBR = true
-        packet.renderSettings.enableDepthPrepass = true
-        packet.renderSettings.debugViewMode = .shaded
-        packet.renderSettings.enableEditorGrid = true
-        packet.renderSettings.shadowSettings = RenderShadowSettings(enabled: true, mapResolution: 256,
+        packet.renderSettings.shading.pbr = true
+        packet.renderSettings.shading.depthPrepass = true
+        packet.renderSettings.shading.debugViewMode = .shaded
+        packet.renderSettings.viewport.gridEnabled = true
+        packet.renderSettings.shadows = RenderShadowSettings(enabled: true, mapResolution: 256,
             depthBias: 0.004, strength: 0.85, maxShadowedDirectionalLights: 2, directionalCascadeCount: 2)
         packet.scene.environment = RenderEnvironment(ambientColor: SIMD3(0.8,0.9,1), ambientIntensity: 0.2, exposure: 1.2)
         packet.scene.lights = [

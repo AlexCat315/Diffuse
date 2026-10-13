@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Recent projects")
 struct RecentProjectsStoreTests {

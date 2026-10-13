@@ -114,11 +114,7 @@ struct DeformableMeshUploadTests {
                 deformableMeshes: [mesh]
             ),
             sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: UInt64(frame)),
-            renderSettings: RenderSettings(
-                enablePBR: false,
-                enableDepthPrepass: true,
-                enableOffscreenViewport: true
-            ),
+            renderSettings: RenderSettings { $0.shading.pbr = false; $0.shading.depthPrepass = true; $0.viewport.offscreen = true },
             simulationTimeSeconds: Double(frame) / 60.0
         )
     }

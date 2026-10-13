@@ -1,7 +1,7 @@
-@testable import EditorApp
+@testable import EditorUI
 import EditorCore
 import Foundation
-import GuavaUIApp
+import GuavaUI
 import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
@@ -23,10 +23,10 @@ struct WorkspacePresetRegressionTests {
         #expect(L(EditorLayoutPreset.animationSequencer.title) == "动画属性")
     } }
 
-    private func registry() -> PanelRegistry {
-        let ids: [PanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console",
+    private func registry() -> WorkspacePanelRegistry {
+        let ids: [WorkspacePanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console",
                               "animation", "render-pipeline", "developer-tools", "intent-input", "confirmation-host"]
-        return PanelRegistry(ids.map { id in
+        return WorkspacePanelRegistry(ids.map { id in
             let slot: WorkspaceSlotID
             switch id.rawValue {
             case "viewport", "scripts": slot = .center
@@ -34,7 +34,7 @@ struct WorkspacePresetRegressionTests {
             case "inspector", "intent-input": slot = .trailing
             default: slot = .bottom
             }
-            return PanelDescriptor(id: id, title: id.rawValue, preferredSlot: slot) {
+            return WorkspacePanelDescriptor(id: id, title: id.rawValue, defaultSlot: slot, configure: { $0.isCollapsible = slot != .center }) {
                 Text(id.rawValue).flex().debugName("preset-" + id.rawValue)
             }
         })

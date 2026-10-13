@@ -55,6 +55,10 @@ public struct WorkspaceView: View {
         self.content = content
     }
 
+    public init(controller: WorkspaceController, registry: WorkspacePanelRegistry, compact: Bool = false) {
+        self.init(controller: controller, compact: compact, content: { registry.make($0) })
+    }
+
     public var body: some View {
         let _ = version
         let document = controller.document

@@ -1,4 +1,4 @@
-@testable import EditorApp
+@testable import EditorUI
 import CinematicRenderer
 import SceneRuntime
 import SIMDCompat

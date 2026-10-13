@@ -1,7 +1,7 @@
 import Foundation
 import GuavaUICompose
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Incremental Swift syntax trees")
 struct TreeSitterHighlighterTests {

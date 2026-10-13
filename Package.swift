@@ -1,77 +1,18 @@
 // swift-tools-version: 6.1
 import PackageDescription
 
+// Workspace convenience launcher. Editor/Package.swift owns the editor graph.
 let package = Package(
     name: "GuavaEngineWorkspace",
-    defaultLocalization: "en",
     platforms: [.macOS(.v13)],
-    products: [
-        .executable(name: "EditorApp", targets: ["EditorApp"]),
-    ],
-    dependencies: [
-        .package(path: "Engine"),
-        .package(path: "GuavaUI"),
-    ],
+    products: [.executable(name: "GuavaEditor", targets: ["WorkspaceLauncher"])],
+    dependencies: [.package(path: "Editor")],
     targets: [
-        .target(
-            name: "EditorCore",
-            dependencies: [
-                .product(name: "SIMDCompat", package: "Engine"),
-                .product(name: "AIRuntime", package: "Engine"),
-                .product(name: "AssetPipeline", package: "Engine"),
-                .product(name: "AudioRuntime", package: "Engine"),
-                .product(name: "CapabilityRuntime", package: "Engine"),
-                .product(name: "ContextMemory", package: "Engine"),
-                .product(name: "EngineCore", package: "Engine"),
-                .product(name: "EngineKernel", package: "Engine"),
-                .product(name: "EngineMath", package: "Engine"),
-                .product(name: "IntentRuntime", package: "Engine"),
-                .product(name: "ObservationBus", package: "Engine"),
-                .product(name: "PerceptionRuntime", package: "Engine"),
-                .product(name: "PluginRuntime", package: "Engine"),
-                .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "NativeRHI", package: "Engine"),
-                .product(name: "SceneRuntime", package: "Engine"),
-                .product(name: "ScriptRuntime", package: "Engine"),
-                .product(name: "SemanticPipeline", package: "Engine"),
-                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
-                .product(name: "GuavaUICompose", package: "GuavaUI"),
-            ],
-            path: "Editor/Sources/EditorCore",
-            resources: [
-                .process("Resources"),
-            ]
-        ),
-        .executableTarget(
-            name: "EditorApp",
-            dependencies: [
-                "EditorCore",
-                .product(name: "SIMDCompat", package: "Engine"),
-                .product(name: "GuavaUIApp", package: "GuavaUI"),
-                .product(name: "GuavaUICompose", package: "GuavaUI"),
-                .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
-                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
-                .product(name: "AssetPipeline", package: "Engine"),
-                .product(name: "EngineKernel", package: "Engine"),
-                .product(name: "IntentRuntime", package: "Engine"),
-                .product(name: "PlatformShell", package: "Engine"),
-                .product(name: "NativeRHI", package: "Engine"),
-                .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "SceneRuntime", package: "Engine"),
-                .product(name: "CardBattleRuntime", package: "Engine"),
-                .product(name: "CinematicRenderer", package: "Engine"),
-                .product(name: "ColorPipeline", package: "Engine"),
-                .product(name: "EXRIO", package: "Engine"),
-            ],
-            path: "Editor/Sources/EditorApp",
-            resources: [
-                .process("Resources"),
-            ],
-            linkerSettings: [
-                .unsafeFlags(["-Xlinker", "-export_dynamic"], .when(platforms: [.macOS])),
-                .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
-            ]
-        ),
-    ],
-    cxxLanguageStandard: .cxx17
+        .executableTarget(name: "WorkspaceLauncher", dependencies: [
+            .product(name: "EditorUI", package: "Editor"),
+        ], path: "Editor/Sources/EditorApp", linkerSettings: [
+            .unsafeFlags(["-Xlinker", "-export_dynamic"], .when(platforms: [.macOS])),
+            .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
+        ]),
+    ]
 )

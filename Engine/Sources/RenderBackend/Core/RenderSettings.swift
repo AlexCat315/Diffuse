@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SIMDCompat
 
 public struct StylizedCharacterStyle: Sendable, Equatable {
@@ -88,70 +88,55 @@ public struct RenderSettings: Sendable, Equatable {
         case metallic = 5
     }
 
-    public var enablePBR: Bool
-    public var enableDepthPrepass: Bool
-    public var debugViewMode: DebugViewMode
-    public var enableFXAA: Bool
-    public var enableSSAO: Bool
-    public var enableSSR: Bool
-    public var enableTAA: Bool
-    public var enableBloom: Bool
-    public var enableFrustumCulling: Bool
-    public var enableMeshInstancing: Bool
-    public var enableDistanceLOD: Bool
-    public var enableGroupedDrawByMesh: Bool
-    public var shadowSettings: RenderShadowSettings
-    public var enableShadows: Bool {
-        get { shadowSettings.enabled }
-        set { shadowSettings.enabled = newValue }
+    public struct Shading: Sendable, Equatable {
+        public var pbr = true
+        public var depthPrepass = true
+        public var debugViewMode = DebugViewMode.shaded
+        public init() {}
     }
-    public var enableOffscreenViewport: Bool
-    /// Editor reference grid, facing orthographic views or on XZ in perspective.
-    /// Runtime rendering leaves it off.
-    public var enableEditorGrid: Bool
-    public var editorGridSpacing: Float
-    public var enableStylizedCharacterShading: Bool
-    public var stylizedCharacterStyle: StylizedCharacterStyle
 
-    public init(
-        enablePBR: Bool = true,
-        enableDepthPrepass: Bool = true,
-        debugViewMode: DebugViewMode = .shaded,
-        enableFXAA: Bool = false,
-        enableSSAO: Bool = false,
-        enableSSR: Bool = false,
-        enableTAA: Bool = false,
-        enableBloom: Bool = false,
-        enableFrustumCulling: Bool = true,
-        enableMeshInstancing: Bool = true,
-        enableDistanceLOD: Bool = true,
-        enableGroupedDrawByMesh: Bool = false,
-        enableShadows: Bool = false,
-        shadowSettings: RenderShadowSettings? = nil,
-        enableOffscreenViewport: Bool = false,
-        enableEditorGrid: Bool = false,
-        editorGridSpacing: Float = 1,
-        enableStylizedCharacterShading: Bool = false,
-        stylizedCharacterStyle: StylizedCharacterStyle = .colorfulInkCard
-    ) {
-        self.enablePBR = enablePBR
-        self.enableDepthPrepass = enableDepthPrepass
-        self.debugViewMode = debugViewMode
-        self.enableFXAA = enableFXAA
-        self.enableSSAO = enableSSAO
-        self.enableSSR = enableSSR
-        self.enableTAA = enableTAA
-        self.enableBloom = enableBloom
-        self.enableFrustumCulling = enableFrustumCulling
-        self.enableMeshInstancing = enableMeshInstancing
-        self.enableDistanceLOD = enableDistanceLOD
-        self.enableGroupedDrawByMesh = enableGroupedDrawByMesh
-        self.shadowSettings = shadowSettings ?? RenderShadowSettings(enabled: enableShadows)
-        self.enableOffscreenViewport = enableOffscreenViewport
-        self.enableEditorGrid = enableEditorGrid
-        self.editorGridSpacing = editorGridSpacing.isFinite && editorGridSpacing > 0
-            ? editorGridSpacing : 1
-        self.enableStylizedCharacterShading = enableStylizedCharacterShading
-        self.stylizedCharacterStyle = stylizedCharacterStyle
+    public struct PostProcessing: Sendable, Equatable {
+        public var fxaa = false
+        public var ssao = false
+        public var ssr = false
+        public var taa = false
+        public var bloom = false
+        public init() {}
+    }
+
+    public struct Visibility: Sendable, Equatable {
+        public var frustumCulling = true
+        public var meshInstancing = true
+        public var distanceLOD = true
+        public var groupedDrawByMesh = false
+        public init() {}
+    }
+
+    public struct Viewport: Sendable, Equatable {
+        public var offscreen = false
+        public var gridEnabled = false
+        public var gridSpacing: Float = 1
+        public init() {}
+        mutating func normalize() {
+            if !gridSpacing.isFinite || gridSpacing <= 0 { gridSpacing = 1 }
+        }
+    }
+
+    public struct Stylization: Sendable, Equatable {
+        public var enabled = false
+        public var style = StylizedCharacterStyle.colorfulInkCard
+        public init() {}
+    }
+
+    public var shading = Shading()
+    public var postProcessing = PostProcessing()
+    public var visibility = Visibility()
+    public var viewport = Viewport()
+    public var shadows = RenderShadowSettings()
+    public var stylization = Stylization()
+
+    public init(configure: (inout Self) -> Void = { _ in }) {
+        configure(&self)
+        viewport.normalize()
     }
 }

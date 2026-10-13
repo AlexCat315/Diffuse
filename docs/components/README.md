@@ -2,7 +2,7 @@
 
 本目录收录组件设计契约。索引标记仅代表文档存在，不表示组件已达到完整或生产成熟状态。
 
-实现质量、缺失组件与本次重构范围见 [GPUI Kit 对照审计](../guava-ui/gpui-kit-audit.md)，实际示例见 `GuavaUI/Sources/GuavaUIGallery/`。每篇覆盖：
+实现质量、缺失组件与本次重构范围见 [GPUI Kit 对照审计](../guava-ui/gpui-kit-audit.md)，实际示例见 `GuavaUI/Examples/Sources/GalleryContent/`。每篇覆盖：
 
 1. **Anatomy** —— ASCII 框图 + 槽位命名
 2. **Sizing** —— 高度 / padding / 最小命中区

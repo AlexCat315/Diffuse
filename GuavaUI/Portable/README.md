@@ -9,7 +9,6 @@ GPU drivers or native font libraries. Scene and Compose targets use Yoga C++.
 - `GuavaUIScene`: Node/RenderTree, Yoga layout, recomposition, animation,
   hit testing, focus, pointer capture and input dispatch.
 - `GuavaUIComposeCore`: View/ViewBuilder, ViewGraph, CompositionLocal and boxes/stacks.
-- `GuavaUISharedDemo`: one Compose counter and text-input source for both hosts.
 - `GuavaUIDevToolsScene`: actual SceneInspector, stable identifiers, visual picking,
   layout/style snapshots and bounded undoable temporary styles.
 - `GuavaUIDevToolsProtocol`: wire types, session validation/subscriptions,
@@ -17,6 +16,8 @@ GPU drivers or native font libraries. Scene and Compose targets use Yoga C++.
 - `GuavaUIDevToolsServer`: shared requests and injectable transport. The default
   SwiftNIO WebSocket transport supports macOS, Linux and Windows.
 - `GuavaUIDevToolsProbe`: headless real Node/Yoga scene and state provider for server checks.
+
+The shared counter is example content in [`examples/Counter`](../../examples/Counter), with its own tests and no dependency from the production packages.
 
 Pure platform input types live in `Engine/PlatformCore`. Desktop EngineKernel,
 PlatformShell, Runtime, Compose and DevTools re-export their shared implementations.
@@ -30,7 +31,7 @@ swift run --package-path GuavaUI/Portable GuavaUIDevToolsProbe
 Open `GuavaUI/DevTools/index.html`, connect to `ws://127.0.0.1:9229/`.
 Pass a port to the probe to override it. Port zero binds an available port;
 `DevServer.boundPort` reports it. The actual shared counter desktop host is
-`GUAVA_DEVTOOLS=1 swift run --package-path GuavaUI GuavaUIDemo --shared-counter`.
+`GUAVA_DEVTOOLS=1 swift run --package-path GuavaUI/Examples GuavaUIDemo --shared-counter`.
 
 WebSocket messages are bounded to 1 MiB. Fragmented text, ping/pong and writer
 backpressure are supported. Streams remain opt-in per connection. Disconnecting

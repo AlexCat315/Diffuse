@@ -13,7 +13,7 @@ final class PanelSizingTests: XCTestCase {
         XCTAssertEqual(decoded.width, .init(minimum: 180, preferred: 320, maximum: 320))
         XCTAssertEqual(decoded.height, .init())
         let panel = WorkspacePanel(id: "inspector", title: "Inspector", sizing: decoded)
-        let descriptor = WorkspacePanelDescriptor(id: "inspector", title: "Inspector", sizing: decoded) { EmptyView() }
+        let descriptor = WorkspacePanelDescriptor(id: "inspector", title: "Inspector", configure: { $0.sizing = decoded }) { EmptyView() }
         XCTAssertEqual(descriptor.panel, panel)
         let document = WorkspaceDocument(panels: [panel.id: panel],
             groups: ["inspector": .init(id: "inspector", panels: [panel.id])],

@@ -90,7 +90,7 @@ public final class FrameTap {
     }
 
     /// Render the same draw list through the selected capture source and
-    /// emit a `mirror.frame` to clients. Called by `AppRuntime.handleFrame`
+    /// emit a `mirror.frame` to clients. Called by `Application.handleFrame`
     /// after the primary surface present.
     ///
     /// - Parameters:

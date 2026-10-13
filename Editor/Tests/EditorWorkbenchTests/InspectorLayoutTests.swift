@@ -5,7 +5,7 @@ import GuavaUICompose
 import GuavaUIRuntime
 import SceneRuntime
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Inspector compact authoring", .serialized)
 struct InspectorLayoutTests {

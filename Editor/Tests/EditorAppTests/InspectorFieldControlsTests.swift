@@ -2,7 +2,7 @@ import EditorCore
 import GuavaUICompose
 import SceneRuntime
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Inspector field control registry")
 struct InspectorFieldControlTests {

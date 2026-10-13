@@ -64,7 +64,7 @@ final class NativeMeshPass {
                  matrices: RenderCameraMatrices, depthPrepass: Bool, hdr: Bool, lighting: NativeLightingBindings, skin: NativeSkinBindings,
                  deformables: [EntityID: NativeMeshGeometry]) throws -> (draws: [NativePreparedMeshDraw], visibility: MeshVisibilityPlan) {
         let prepared = try NativeMeshBatchPlanner.prepare(packet: packet, store: store, viewProjection: matrices.viewProjection, deformables: deformables)
-        let style = try ringBlock(NativeUniformUpload.binding(StylizedCharacterUniforms(style: packet.renderSettings.stylizedCharacterStyle), device: device))
+        let style = try ringBlock(NativeUniformUpload.binding(StylizedCharacterUniforms(style: packet.renderSettings.stylization.style), device: device))
         let lights = try ringBlock(lighting.lights)
         let shadows = try ringBlock(lighting.shadows)
         var draws: [NativePreparedMeshDraw] = []
@@ -93,7 +93,7 @@ final class NativeMeshPass {
                 instanceOffset, instanceOffset,
                 lights.offset, shadows.offset, style.offset
             ]
-            let stylized = packet.renderSettings.enableStylizedCharacterShading
+            let stylized = packet.renderSettings.stylization.enabled
             let base = try pipeline(key: key,kind: .color,hdr: hdr,stylized: stylized)
             let depth = depthPrepass && key.mode != .blend ? try pipeline(key: key,kind: .depth,hdr: hdr,stylized: false) : nil
             let outline = stylized && key.mode != .blend && MeshOutlinePolicy.includes(bounds: batch.mesh.geometry.bounds)

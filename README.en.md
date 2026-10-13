@@ -131,8 +131,10 @@ npm run dev
 
 ```bash
 swift build --package-path Engine   # engine + renderers
-swift build --package-path GuavaUI  # UI framework (demo: swift run GuavaUIDemo)
-swift build --package-path Editor   # editor (run: swift run GuavaEditor)
+swift build --package-path GuavaUI  # UI framework
+swift run --package-path examples/HelloUI HelloUI
+swift run --package-path GuavaUI/Examples GuavaUIDemo
+swift build --package-path Editor   # editor (run: swift run --package-path Editor EditorApp)
 swift build --package-path guava-mcp # MCP server (run: swift run GuavaMCP)
 ```
 
@@ -186,15 +188,22 @@ Guava-Engine/
 │   ├── SemanticPipeline/     (structure extraction, fingerprinting, analysis, memory)
 │   ├── SequenceRuntime/      (SequenceDocument, ShotEvaluator, ClipScheduler)
 │   └── SIMDCompat/           (cross-platform SIMD helpers)
-├── GuavaUI/Sources/
-│   ├── Bridge/CYoga/         (C bindings for Yoga)
-│   ├── Font/                 (bundled fonts, FontAtlas, TextShaper)
-│   ├── GuavaUIApp/           (AppConfig, window host, NativeRHI surface assembly)
-│   ├── GuavaUIDemo/          (runnable demo entry point)
-│   └── GuavaUIRuntime/       (Node, NodeTree, Layout, Color, State, Theme, DrawList NativeRHI renderer)
+├── GuavaUI/
+│   ├── Sources/GuavaUI/       (application API and native window host)
+│   ├── Sources/GuavaUICompose/ (native components and themes)
+│   ├── Sources/GuavaUIRuntime/ (native text, images, rendering and SDL host)
+│   ├── Sources/GuavaUIWorkspace/ (optional workspace model and views)
+│   ├── Portable/              (portable scene, composition and DevTools contracts)
+│   ├── Text/                  (FreeType/HarfBuzz text service)
+│   ├── Platforms/Android/     (Compose/input session for Android)
+│   └── Examples/              (GalleryContent, GuavaUIDemo, PetDemo)
+├── Platforms/Android/         (JNI/Java surface host, APK tools, launch contract)
 ├── Editor/Sources/
-│   ├── EditorApp/            (main.swift, MainWindow, panels)
-│   └── EditorCore/           (editor state, project manager, AI/EditLog, GizmoSystem, etc.)
+│   ├── EditorApp/             (thin executable launcher)
+│   ├── EditorUI/              (editor windows and panels)
+│   ├── EditorCore/            (editor project/application domain)
+│   └── GameRuntime/           (project simulation and player services)
+├── examples/                  (HelloUI, GuavaUIStarter, portable Counter, CrystalRush)
 ├── guava-mcp/Sources/GuavaMCP/  (MCP server exposing Guava capabilities)
 ├── website/                 (Vue 3 website, docs, and community portal)
 ├── docs/                     (architecture, roadmap, component & blueprint docs)

@@ -4,7 +4,7 @@ import Foundation
 let project = URL(fileURLWithPath: #filePath).standardizedFileURL.deletingLastPathComponent()
 let engine = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ROOT"].map { URL(fileURLWithPath: $0) }
     ?? project.appendingPathComponent("../..").standardizedFileURL
-let tools = engine.appendingPathComponent("Android/Tools")
+let tools = engine.appendingPathComponent("Platforms/Android/Tools")
 guard FileManager.default.fileExists(atPath: tools.appendingPathComponent("Package.swift").path) else {
     fatalError("Set GUAVA_ENGINE_ROOT to the absolute path of your Guava-Engine checkout")
 }

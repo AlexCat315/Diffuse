@@ -56,15 +56,15 @@ final class NativePostTests: XCTestCase {
         let device = try makeDevice(api), renderer = try NativeRenderer(device: device)
         let reference = try SceneCapture(validation: true, api: api)
         var packet = PostProbeScene.packet(size: .init(width: 256,height: 192))
-        clearEffects(&packet); packet.renderSettings.enableEditorGrid = false
+        clearEffects(&packet); packet.renderSettings.viewport.gridEnabled = false
         let baseline = try compare(packet,renderer: renderer,reference: reference,label: "baseline")
         for (index,kind) in [RenderPassKind.ssao,.ssr,.bloom,.fxaa].enumerated() {
             clearEffects(&packet); packet.frameIndex = index*2+1
             switch kind {
-            case .ssao: packet.renderSettings.enableSSAO = true
-            case .ssr: packet.renderSettings.enableSSR = true
-            case .bloom: packet.renderSettings.enableBloom = true
-            case .fxaa: packet.renderSettings.enableFXAA = true
+            case .ssao: packet.renderSettings.postProcessing.ssao = true
+            case .ssr: packet.renderSettings.postProcessing.ssr = true
+            case .bloom: packet.renderSettings.postProcessing.bloom = true
+            case .fxaa: packet.renderSettings.postProcessing.fxaa = true
             default: break
             }
             _ = try compare(packet,renderer: renderer,reference: reference,label: "\(kind)-moving")
@@ -82,15 +82,15 @@ final class NativePostTests: XCTestCase {
         for frame in 0..<24 {
             packet.frameIndex = frame
             switch frame {
-            case 1: packet.renderSettings.enableSSAO = true
-            case 3: packet.renderSettings.enableSSR = true
-            case 5: packet.renderSettings.enableTAA = true
-            case 6: packet.renderSettings.enableBloom = true; packet.renderSettings.enableFXAA = true; packet.scene.camera.eye.x += 0.2
-            case 8: packet.renderSettings.enableEditorGrid = false
+            case 1: packet.renderSettings.postProcessing.ssao = true
+            case 3: packet.renderSettings.postProcessing.ssr = true
+            case 5: packet.renderSettings.postProcessing.taa = true
+            case 6: packet.renderSettings.postProcessing.bloom = true; packet.renderSettings.postProcessing.fxaa = true; packet.scene.camera.eye.x += 0.2
+            case 8: packet.renderSettings.viewport.gridEnabled = false
             case 9: packet.drawableSize = .init(width: 192,height: 128)
             case 10: packet.drawableSize = .init(width: 320,height: 200)
-            case 11: packet.renderSettings.enableTAA = false
-            case 12: packet.renderSettings.enableTAA = true
+            case 11: packet.renderSettings.postProcessing.taa = false
+            case 12: packet.renderSettings.postProcessing.taa = true
             case 20: packet.scene.instances[packet.scene.instances.count-1].material.baseColorFactor = SIMD4(0.75,0.25,0.15,0.35)
             case 21:
                 var invalid = packet; invalid.drawableSize = .init(width: 640,height: 384)
@@ -100,9 +100,9 @@ final class NativePostTests: XCTestCase {
                 reference = try SceneCapture(validation: true, api: api)
             case 22: clearEffects(&packet)
             case 23:
-                packet.renderSettings.enableTAA = true
-                packet.renderSettings.enableSSAO = true; packet.renderSettings.enableSSR = true
-                packet.renderSettings.enableBloom = true; packet.renderSettings.enableFXAA = true
+                packet.renderSettings.postProcessing.taa = true
+                packet.renderSettings.postProcessing.ssao = true; packet.renderSettings.postProcessing.ssr = true
+                packet.renderSettings.postProcessing.bloom = true; packet.renderSettings.postProcessing.fxaa = true
                 packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 14
             default: break
             }
@@ -117,8 +117,8 @@ final class NativePostTests: XCTestCase {
         }
     }
     private func clearEffects(_ packet: inout RenderPacket) {
-        packet.renderSettings.enableSSAO = false; packet.renderSettings.enableSSR = false
-        packet.renderSettings.enableTAA = false; packet.renderSettings.enableBloom = false; packet.renderSettings.enableFXAA = false
+        packet.renderSettings.postProcessing.ssao = false; packet.renderSettings.postProcessing.ssr = false
+        packet.renderSettings.postProcessing.taa = false; packet.renderSettings.postProcessing.bloom = false; packet.renderSettings.postProcessing.fxaa = false
     }
     private func makeDevice(_ api: GraphicsAPI) throws -> Device {
         try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))

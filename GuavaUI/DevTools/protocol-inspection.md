@@ -81,5 +81,5 @@ connection's scene. Browser `bye`, reconnect and page rebuilds also clear overri
 
 Custom hosts wire `SceneInspector.editor.handle`, `.reset`, `.intercept` and
 `.drawOverlay`, request redisplay on `.onChange`, compute layout before painting,
-and publish a settled snapshot. `DevTools` plus AppRuntime/GuavaUIDemo install
+and publish a settled snapshot. `DevTools` plus Application/GuavaUIDemo install
 these hooks; `PlatformWindowSession.inputInterceptor` runs before `inputObserver`.

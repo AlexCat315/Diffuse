@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Asset import file replacement")
 struct AssetImportFileCopierTests {

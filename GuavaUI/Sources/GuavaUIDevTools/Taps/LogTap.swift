@@ -117,8 +117,8 @@ public final class LogTapInstaller: @unchecked Sendable {
 
     private init() {}
 
-    /// Stable process-wide sink used by AppRuntime. Reusing it allows a
-    /// second AppRuntime session to attach to the already-bootstrapped
+    /// Stable process-wide sink used by Application. Reusing it allows a
+    /// second Application session to attach to the already-bootstrapped
     /// swift-log factory after the first session shuts down.
     public static var processSink: LogTap.Sink { shared.sink }
 

@@ -193,7 +193,7 @@ struct VariableVirtualStackTests: GuavaUIComposeSerializedSuite {
             })
             #expect(target.absoluteFrame.minY >= 0)
             #expect(target.absoluteFrame.maxY <= 201)
-            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments["__scrollview_axes"] != nil })
+            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
             let anchored = try #require(mounted().first { $0.absoluteFrame.maxY > 0 })
             let anchorName = anchored.attachments[LayoutDebugAttachmentKey.debugName] as? String
             let anchorY = anchored.absoluteFrame.minY

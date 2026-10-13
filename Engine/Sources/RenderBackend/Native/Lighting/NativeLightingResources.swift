@@ -45,7 +45,7 @@ final class NativeLightingResources {
     }
     func prepare(packet: RenderPacket, plan: ShadowAtlasPlan, atlas: Texture?, fallback: Texture) throws -> NativeLightingBindings {
         var lights = SceneLightUniforms(scene: packet.scene, shadowBindingsByLightIndex: plan.shadowBindingsByLightIndex)
-        lights.exposureAndLightCount.z = Float(packet.renderSettings.debugViewMode.rawValue)
+        lights.exposureAndLightCount.z = Float(packet.renderSettings.shading.debugViewMode.rawValue)
         return try NativeLightingBindings(lights: NativeUniformUpload.binding(lights, device: device),
             shadows: NativeUniformUpload.binding(plan.uniforms, device: device), sampler: shadowSampler,
             atlas: atlas ?? fallback, environment: environment ?? fallback)

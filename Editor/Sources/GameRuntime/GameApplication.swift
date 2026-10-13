@@ -17,7 +17,7 @@ import ScriptRuntime
 /// ```swift
 /// let app = try GameApplication(projectDirectory: "/path/to/project")
 /// app.bootstrap()
-/// try AppRuntime.run(..., onTick: { dt in app.tick(deltaTime: dt) }) {
+/// try Application.run(..., onTick: { dt in app.tick(deltaTime: dt) }) {
 ///     GamePlayerRootView(app: app)
 /// }
 /// app.shutdown()
@@ -118,11 +118,7 @@ public final class GameApplication: @unchecked Sendable {
 
     public func bootstrap() {
         engine.start(renderSurface: nil, enableViewportSurface: true)
-        engine.queueRenderSettings(RenderSettings(
-            enableFXAA: true,
-            enableShadows: true,
-            enableOffscreenViewport: true
-        ))
+        engine.queueRenderSettings(RenderSettings { $0.postProcessing.fxaa = true; $0.shadows.enabled = true; $0.viewport.offscreen = true })
     }
 
     public func tick(deltaTime: Double) {

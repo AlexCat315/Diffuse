@@ -5,7 +5,7 @@ public enum StylizedProbeScene {
     /// paper. Continuous camera motion exercises every opaque stylized frame.
     public static func packet(size: RenderDrawableSize, frame: Int = 0) -> RenderPacket {
         var packet = PostProbeScene.packet(size: size,frame: frame)
-        packet.renderSettings.enableStylizedCharacterShading = true
+        packet.renderSettings.stylization.enabled = true
         packet.scene.camera.eye.x += Float(frame % 11)*0.002
         return packet
     }

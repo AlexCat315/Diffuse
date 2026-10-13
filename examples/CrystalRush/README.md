@@ -18,10 +18,10 @@ open examples/CrystalRush/export/CrystalRush.app
 
 当前导出已在 macOS arm64 验证。导出包含编译后的脚本与 Player，运行不需要 Swift 编译器。导出文件、缓存和验证日志不纳入版本控制。
 
-Android ARM64 / Vulkan 真机也已接入。完成 [Android 工具链安装](../../Android/README.md)后，在仓库根目录导出并安装：
+Android ARM64 / Vulkan 真机也已接入。完成 [Android 工具链安装](../../Platforms/Android/README.md)后，在仓库根目录导出并安装：
 
 ```bash
-swift run --package-path Android/Tools GuavaAndroid export-game \
+swift run --package-path Platforms/Android/Tools GuavaAndroid export-game \
   --project examples/CrystalRush \
   --application-id com.guava.game.crystalrush \
   --output Engine/build/android-validation/CrystalRush.apk \

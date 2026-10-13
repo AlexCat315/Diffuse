@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'GuavaUI/**'
+      - 'examples/Counter/**'
+      - 'Platforms/Android/**'
+      - 'scripts/check-module-boundaries.py'
       - 'Engine/**'
       - '.github/workflows/ci-guavaui.yml'
       - '.github/actions/setup-toolchains/**'
@@ -13,6 +16,9 @@ on:
   pull_request:
     paths:
       - 'GuavaUI/**'
+      - 'examples/Counter/**'
+      - 'Platforms/Android/**'
+      - 'scripts/check-module-boundaries.py'
       - 'Engine/**'
 
 jobs:
@@ -52,14 +58,17 @@ jobs:
           swift build --target GuavaUICompose
           swift build --target GuavaUIWorkspace
           swift build --target GuavaUIDevTools
-          swift build --target GuavaUIApp
-          swift build --product GuavaUIDemo
+          swift build --target GuavaUI
+          swift build --package-path Examples --product GuavaUIDemo
 
       - name: Run tests
         working-directory: GuavaUI
-        # Run every test target, including GuavaUIAppTests, and automatically
+        # Run every test target, including GuavaUITests, and automatically
         # cover future targets without requiring workflow edits.
-        run: swift test
+        run: |
+          swift test
+          swift test --package-path Examples
+          python3 ../scripts/check-module-boundaries.py
 
   portable:
     name: Portable DevTools (${{ matrix.os }})
@@ -73,7 +82,10 @@ jobs:
         with:
           swift-version: '6.4.0'
       - name: Test shared Compose scene and WebSocket service
-        run: swift test --package-path GuavaUI/Portable
+        run: |
+          swift test --package-path GuavaUI/Portable
+          swift test --package-path examples/Counter
+          swift test --package-path Platforms/Android/Contract
 
   browser:
     name: Wasm browser prototype

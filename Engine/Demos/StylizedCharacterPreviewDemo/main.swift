@@ -103,12 +103,7 @@ let device = try Device.make(DeviceConfig(enableValidation: false))
 let renderer = try NativeRenderer(device: device)
 renderer.initialize()
 
-let settings = RenderSettings(
-    enableBloom: false,
-    enableOffscreenViewport: true,
-    enableStylizedCharacterShading: true,
-    stylizedCharacterStyle: .colorfulInkCard
-)
+let settings = RenderSettings { $0.postProcessing.bloom = false; $0.viewport.offscreen = true; $0.stylization.enabled = true; $0.stylization.style = .colorfulInkCard }
 
 var frameIndex = 0
 for state in CharacterPreviewState.allCases {

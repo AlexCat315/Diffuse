@@ -141,7 +141,7 @@ final class NativeParticleInstanceTests: XCTestCase {
         let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
         let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         var packet = MeshProbeScene.packet(size: .init(width: 256,height: 192))
-        packet.renderSettings.enableEditorGrid = false; packet.renderSettings.debugViewMode = .unlit
+        packet.renderSettings.viewport.gridEnabled = false; packet.renderSettings.shading.debugViewMode = .unlit
         packet.scene.camera = RenderCamera(eye: SIMD3(0,1,5),target: SIMD3(0,0.4,0),near: 0.1,far: 100)
         packet.scene.particles = [RenderParticle(position: SIMD3(0.6,0.4,0.5),size: 0.3,color: SIMD4(0.4,0.8,1,0.6),blendMode: .additive)]
         let atlasURL = FileManager.default.temporaryDirectory.appendingPathComponent("guava-particle-atlas-\(UUID().uuidString).bmp")
@@ -160,8 +160,8 @@ final class NativeParticleInstanceTests: XCTestCase {
             if frame == 10 { packet.drawableSize = .init(width: 320,height: 200) }
             if frame == 12 { packet.drawableSize = .init(width: 192,height: 128) }
             if frame >= 14 {
-                packet.renderSettings.enablePBR = true; packet.renderSettings.debugViewMode = .shaded
-                packet.renderSettings.enableBloom = true; packet.renderSettings.enableTAA = true; packet.renderSettings.enableFXAA = true
+                packet.renderSettings.shading.pbr = true; packet.renderSettings.shading.debugViewMode = .shaded
+                packet.renderSettings.postProcessing.bloom = true; packet.renderSettings.postProcessing.taa = true; packet.renderSettings.postProcessing.fxaa = true
             }
             try renderer.renderChecked(packet: packet); let expectedStats = try reference.render(packet: packet)
             let actual = try GridImage.readback(device: device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)

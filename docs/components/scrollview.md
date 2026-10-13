@@ -59,4 +59,4 @@ TextField 与 CodeEditor 的内部视口采用同样的有溢出边界隔离；�
 - [运动控制](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/ScrollAnimator.swift)、[逐轴交接](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/AxisMotion.swift)、[弹簧](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/ScrollSpring.swift)
 - [可配置物理组](../../GuavaUI/Portable/Sources/GuavaUIScene/Scrolling/ScrollPhysics.swift)
 
-Demo 默认使用与 AppRuntime 相同的 LayerAwareNodeRenderer；`GUAVAUI_LEGACY_RENDERER=1` 可用于原始全树绘制对照。保留路径的缓存继承屏幕 pixelScale，密度改变重新记录；第一次记录的离屏叶子也不会被追加进祖先缓存。原生测量发现并修正了 Demo 曾绕过此路径的问题，测量范围详见审计证据。
+Demo 默认使用与 Application 相同的 LayerAwareNodeRenderer；`GUAVAUI_LEGACY_RENDERER=1` 可用于原始全树绘制对照。保留路径的缓存继承屏幕 pixelScale，密度改变重新记录；第一次记录的离屏叶子也不会被追加进祖先缓存。原生测量发现并修正了 Demo 曾绕过此路径的问题，测量范围详见审计证据。

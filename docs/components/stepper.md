@@ -21,6 +21,6 @@ Stepper([
 
 键盘 Tab 只停靠一个可用步骤。横向使用 Left/Right，纵向使用 Up/Down；Home/End 定位边缘，默认到达边界后停止。锁定步骤不接受选择。空集合没有操作和焦点停靠；无效或缺失选择使用首个可用步骤作为 Tab 入口，不擅自修改调用方绑定。
 
-真实示例：`swift run --package-path GuavaUI GuavaUIDemo --component stepper`。示例可启动、失败、完成、解锁 Review，并切换横/纵向、密度、主题和禁用状态。
+真实示例：`swift run --package-path GuavaUI/Examples GuavaUIDemo --component stepper`。示例可启动、失败、完成、解锁 Review，并切换横/纵向、密度、主题和禁用状态。
 
 目前未提供 RTL、自动换行或适合极窄视口的替代布局；这些仍属于后续工作。行为与验证边界详见 [GPUI Kit 对照审计](../guava-ui/gpui-kit-audit.md)。

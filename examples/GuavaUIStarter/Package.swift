@@ -5,19 +5,23 @@ import PackageDescription
 let engineRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ROOT"] ?? "../.."
 
 let package = Package(
-    name: "GuavaAndroidContent",
-    products: [.library(name: "GuavaAndroidContent", targets: ["GuavaAndroidContent"])],
+    name: "GuavaApplication",
+    platforms: [.macOS(.v13)],
+    products: [
+        .library(name: "AppContent", targets: ["AppContent"]),
+        .executable(name: "DesktopApp", targets: ["DesktopApp"]),
+    ],
     dependencies: [
         .package(path: "\(engineRoot)/GuavaUI"),
-        .package(path: "\(engineRoot)/Engine"),
     ],
     targets: [
+        .executableTarget(name: "DesktopApp", dependencies: [
+            "AppContent", .product(name: "GuavaUI", package: "GuavaUI"),
+        ]),
         .target(
-            name: "GuavaAndroidContent",
+            name: "AppContent",
             dependencies: [
-                .product(name: "GuavaUICompose", package: "GuavaUI"),
-                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
-                .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "GuavaUI", package: "GuavaUI"),
             ],
             resources: [.copy("Assets")]
         ),

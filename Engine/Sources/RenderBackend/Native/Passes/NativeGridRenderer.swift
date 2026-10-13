@@ -39,7 +39,7 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
     private func renderFrame(packet: RenderPacket) throws {
         let start = DispatchTime.now().uptimeNanoseconds
         guard packet.drawableSize.width > 0, packet.drawableSize.height > 0,
-              !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else {
+              !packet.renderSettings.viewport.gridEnabled || packet.renderSettings.viewport.gridSpacing.isFinite else {
             throw RHIError.invalidArgument("native grid viewport must be nonempty")
         }
         try ensureTargets(size: packet.drawableSize)
@@ -52,7 +52,7 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         let commands = CommandBuffer()
         let colorTarget = RenderColorTarget(texture: color, loadAction: .clear(SIMD4(0.08, 0.10, 0.14, 1)))
         let depthTarget = RenderDepthTarget(texture: targets.depth.texture, loadAction: .clear(1))
-        if packet.renderSettings.enableEditorGrid {
+        if packet.renderSettings.viewport.gridEnabled {
             try grid.encode(packet: packet, color: colorTarget, depth: depthTarget, into: commands)
         } else {
             commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [colorTarget], depthTarget: depthTarget)) { _ in }
@@ -67,8 +67,8 @@ public final class NativeGridRenderer: RenderPacketConsumer, @unchecked Sendable
         let submitted = DispatchTime.now().uptimeNanoseconds
         var stats = RenderFrameStats()
         stats.frameIndex = packet.frameIndex; stats.passCount = 1
-        stats.drawCallCount = packet.renderSettings.enableEditorGrid ? 1 : 0
-        stats.activePasses = packet.renderSettings.enableEditorGrid ? [.editorGrid] : []
+        stats.drawCallCount = packet.renderSettings.viewport.gridEnabled ? 1 : 0
+        stats.activePasses = packet.renderSettings.viewport.gridEnabled ? [.editorGrid] : []
         stats.passDrawCallCounts = [.editorGrid: stats.drawCallCount]
         stats.cpuPrepareNS = prepared - start; stats.cpuEncodeNS = encoded - prepared
         stats.cpuSubmitNS = submitted - encoded; stats.cpuFrameTotalNS = submitted - start

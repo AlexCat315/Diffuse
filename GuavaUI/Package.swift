@@ -6,14 +6,12 @@ let package = Package(
     name: "GuavaUI",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
-        .executable(name: "PetDemo", targets: ["PetDemo"]),
+        .library(name: "GuavaUIAndroid", targets: ["GuavaUIAndroid"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
         .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
-        .library(name: "GuavaUIApp", targets: ["GuavaUIApp"]),
+        .library(name: "GuavaUI", targets: ["GuavaUI"]),
         .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
-        .library(name: "GuavaUIGallery", targets: ["GuavaUIGallery"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -22,6 +20,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     ],
     targets: [
+        .target(name: "GuavaUIAndroid", dependencies: ["GuavaUICompose", "GuavaUIRuntime"], path: "Platforms/Android"),
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。
         // 依赖 Engine 的渲染抽象（NativeRHI、PlatformShell、EngineKernel）。
@@ -34,7 +33,6 @@ let package = Package(
                 .product(name: "GuavaUIText", package: "Text"),
                 .product(name: "CFreeType", package: "Text"),
                 .product(name: "CHarfBuzz", package: "Text"),
-                "GuavaUIBundledFonts",
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
@@ -80,26 +78,16 @@ let package = Package(
             ]
         ),
 
-        // MARK: - Bundled fonts
-        // Font shim target. No font is bundled — each platform uses its system
-        // default UI font (see SystemFontDefaults / FontProvider).
-        .target(
-            name: "GuavaUIBundledFonts",
-            path: "Sources/Font"
-        ),
-
         // MARK: - App
         // 高层应用宿主：把 Runtime（窗口、NativeRHI、文本）和 Compose 装配在一起，
-        // 对调用方暴露 `AppRuntime.run(...)` 一行启动入口。Editor / 第三方 App
+        // 对调用方暴露 `Application.run(...)` 一行启动入口。Editor / 第三方 App
         // 应优先依赖这一层，而不是直接拼装 SDL3PlatformHost + Device。
         .target(
-            name: "GuavaUIApp",
+            name: "GuavaUI",
             dependencies: [
                 "GuavaUIRuntime",
                 "GuavaUICompose",
-                "GuavaUIWorkspace",
                 "GuavaUIDevTools",
-                "GuavaUIBundledFonts",
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
@@ -128,46 +116,13 @@ let package = Package(
             ]
         ),
 
-        // MARK: - Demo
-        .target(
-            name: "GuavaUIGallery",
-            dependencies: ["GuavaUICompose", "GuavaUIWorkspace"],
-            resources: [.process("Resources")]
-        ),
-        .executableTarget(
-            name: "GuavaUIDemo",
-            dependencies: [
-                .product(name: "GuavaUISharedDemo", package: "Portable"),
-                .product(name: "NativeRHI", package: "Engine"),
-                "GuavaUIRuntime",
-                "GuavaUICompose",
-                "GuavaUIWorkspace",
-                "GuavaUIDevTools",
-                "GuavaUIGallery",
-            ]
-        ),
-
-        // PetDemo — the software pet showcase (stands/sits on components,
-        // jumps between buttons). Uses the high-level AppRuntime host.
-        .executableTarget(
-            name: "PetDemo",
-            dependencies: [
-                "GuavaUIApp",
-                "GuavaUICompose",
-            ],
-            resources: [
-                .process("Resources"),
-            ]
-        ),
-
         // MARK: - Tests
-        .testTarget(name: "GuavaUIGalleryTests", dependencies: ["GuavaUIGallery", "GuavaUICompose"]),
+        .testTarget(name: "GuavaUIAndroidTests", dependencies: ["GuavaUIAndroid", "GuavaUICompose", "GuavaUIRuntime"]),
         .testTarget(
             name: "GuavaUIRuntimeTests",
             dependencies: [
                 .product(name: "GuavaUIScene", package: "Portable"),
                 "GuavaUIRuntime",
-                "GuavaUIBundledFonts",
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
             ]
@@ -178,15 +133,14 @@ let package = Package(
                 .product(name: "GuavaUIComposeCore", package: "Portable"),
                 "GuavaUICompose",
                 "GuavaUIRuntime",
-                "GuavaUIBundledFonts",
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
             ]
         ),
         .testTarget(
-            name: "GuavaUIAppTests",
+            name: "GuavaUITests",
             dependencies: [
-                "GuavaUIApp",
+                "GuavaUI",
                 "GuavaUIDevTools",
                 "GuavaUICompose",
                 "GuavaUIWorkspace",

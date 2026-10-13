@@ -22,7 +22,7 @@ def main():
     args = parser.parse_args()
     adb = list(map(str, adb_device(sdk_root(args.android_sdk), args.serial)))
     directory = Path(tempfile.mkdtemp(prefix='gallery-run-', dir=OUTPUT))
-    catalog = re.findall(r'\.init\(\.(\w+),', (ROOT / 'GuavaUI/Sources/GuavaUIGallery/GalleryCatalog.swift').read_text())
+    catalog = re.findall(r'\.init\(\.(\w+),', (ROOT / 'GuavaUI/Examples/Sources/GalleryContent/GalleryCatalog.swift').read_text())
     if args.pages and (unknown := set(args.pages) - set(catalog)):
         parser.error('Unknown Gallery pages: ' + ', '.join(sorted(unknown)))
     pages = [] if args.interactions_only else args.pages or catalog

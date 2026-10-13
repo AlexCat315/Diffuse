@@ -20,10 +20,10 @@ struct RenderTemporalState {
 
     mutating func prepare(packet: RenderPacket, resources: RenderFrameResourceVersion, hdr: Bool) {
         if settings != packet.renderSettings {
-            if settings?.enableEditorGrid != packet.renderSettings.enableEditorGrid { historyValid = false }
+            if settings?.viewport.gridEnabled != packet.renderSettings.viewport.gridEnabled { historyValid = false }
             settings = packet.renderSettings; settingsGeneration &+= 1
         }
-        if !packet.renderSettings.enableTAA { historyValid = false }
+        if !packet.renderSettings.postProcessing.taa { historyValid = false }
         let resourceChange = self.resources != resources
         if resourceChange { historyValid = false }
         let next = OpaqueSceneFingerprint.make(packet: packet,settingsGeneration: settingsGeneration)
@@ -34,6 +34,6 @@ struct RenderTemporalState {
         fingerprint = next; self.resources = resources
     }
     func canCapture(settings: RenderSettings) -> Bool {
-        stableFrames >= (settings.enableTAA ? Self.taaWarmupFrames : 0) && (!settings.enableSSR || !moving)
+        stableFrames >= (settings.postProcessing.taa ? Self.taaWarmupFrames : 0) && (!settings.postProcessing.ssr || !moving)
     }
 }

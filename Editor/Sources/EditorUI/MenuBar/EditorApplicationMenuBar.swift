@@ -1,0 +1,137 @@
+import EditorCore
+import GuavaUI
+import GuavaUIRuntime
+
+struct EditorApplicationMenuBar: View {
+    let workspaceMode: EditorWorkspaceMode
+    let activeLayoutPreset: EditorLayoutPreset
+    let interactionMode: EditorInteractionMode
+    let playbackState: PlaybackState
+    let canUndo: Bool
+    let canRedo: Bool
+    let hasSelection: Bool
+    let onCommand: (EditorMenuCommand) -> Void
+    @State private var openMenuIndex: Int? = nil
+
+    init(workspaceMode: EditorWorkspaceMode,
+         activeLayoutPreset: EditorLayoutPreset,
+         playbackState: PlaybackState,
+         interactionMode: EditorInteractionMode = .manual,
+         canUndo: Bool,
+         canRedo: Bool,
+         hasSelection: Bool,
+         onCommand: @escaping (EditorMenuCommand) -> Void) {
+        self.workspaceMode = workspaceMode
+        self.activeLayoutPreset = activeLayoutPreset
+        self.playbackState = playbackState
+        self.interactionMode = interactionMode
+        self.canUndo = canUndo
+        self.canRedo = canRedo
+        self.hasSelection = hasSelection
+        self.onCommand = onCommand
+        _openMenuIndex = State(wrappedValue: nil)
+    }
+
+    var body: some View {
+        Row(alignment: .center, spacing: 2) {
+            for (index, menu) in Array(menus.enumerated()) {
+                menuButton(menu, index: index)
+            }
+        }
+        .frame(height: 28, minWidth: menuBarMinimumWidth)
+        .flex(0, shrink: 0)
+        .zIndex(20_000)
+        .layoutRole("editor-application-menu-bar")
+        .debugName("editor-application-menu-bar")
+    }
+
+    private func menuButton(_ menu: EditorApplicationMenu, index: Int) -> AnyView {
+        let isPresented = Binding<Bool>(
+            get: { openMenuIndex == index },
+            set: { presented in
+                if presented {
+                    openMenuIndex = index
+                } else if openMenuIndex == index {
+                    openMenuIndex = nil
+                }
+            }
+        )
+
+        return AnyView(Popover(isPresented: isPresented,
+                               width: 240) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Text(menu.title)
+                    .font(.body)
+                    .foregroundColor(openMenuIndex == index ? .onSurface : .onSurfaceVariant)
+            }
+                .padding(horizontal: 10, vertical: 0)
+                .frame(height: 28)
+                .background(openMenuIndex == index ? .surfaceVariant : .surface)
+                .cornerRadius(4)
+        } content: {
+            Menu(entries(for: menu),
+                 width: 240,
+                 maxVisibleRows: 16,
+                 onItemActivated: {
+                openMenuIndex = nil
+            })
+        })
+    }
+
+    private var menuBarMinimumWidth: Float {
+        menus.reduce(Float(0)) { width, menu in
+            width + max(44, Float(menu.title.count * 9 + 24))
+        } + Float(max(0, menus.count - 1) * 2)
+    }
+
+    private func entries(for menu: EditorApplicationMenu) -> [MenuEntry] {
+        menu.items.enumerated().map { index, item in
+            switch item {
+            case .separator:
+                return .separator("separator-\(index)")
+            case .action(let action):
+                return .item(MenuItem(
+                    id: "action-\(index)",
+                    title: action.title,
+                    shortcut: shortcutLabel(key: action.keyEquivalent,
+                                            modifiers: action.keyModifiers),
+                    isEnabled: EditorCommandDispatcher.isEnabled(action.command,
+                                                                  sceneCommandEnabled: action.isEnabled),
+                    isSelected: action.isSelected,
+                    action: {
+                        onCommand(action.command)
+                    }
+                ))
+            }
+        }
+    }
+
+    private func shortcutLabel(key: String, modifiers: EditorMenuKeyModifiers) -> String? {
+        guard !key.isEmpty else { return nil }
+        var parts: [String] = []
+        if modifiers.contains(.control) { parts.append("Ctrl") }
+        if modifiers.contains(.shift) { parts.append("Shift") }
+        if modifiers.contains(.option) { parts.append("Alt") }
+        if modifiers.contains(.command) { parts.append(commandModifierLabel) }
+        parts.append(key == "\u{8}" || key == "\u{7F}" ? L("Delete") : key.uppercased())
+        return parts.joined(separator: "+")
+    }
+
+    private var commandModifierLabel: String {
+        #if os(macOS)
+        "Cmd"
+        #else
+        "Meta"
+        #endif
+    }
+
+    private var menus: [EditorApplicationMenu] {
+        EditorMenuModel.make(workspaceMode: workspaceMode,
+                             activeLayoutPreset: activeLayoutPreset,
+                             playbackState: playbackState,
+                             interactionMode: interactionMode,
+                             canUndo: canUndo,
+                             canRedo: canRedo,
+                             hasSelection: hasSelection).menus
+    }
+}

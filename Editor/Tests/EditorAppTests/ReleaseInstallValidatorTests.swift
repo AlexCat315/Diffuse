@@ -1,13 +1,13 @@
-@testable import EditorApp
+@testable import EditorUI
 import Foundation
 import XCTest
 
 final class ReleaseInstallValidatorTests: XCTestCase {
     private let bundleBases = [
-        "GuavaEditor_EditorApp",
+        "GuavaEditor_EditorUI",
         "GuavaEditor_EditorCore",
         "GuavaEngine_RenderBackend",
-        "GuavaUI_GuavaUIApp",
+        "GuavaUI_GuavaUI",
         "GuavaUI_GuavaUICompose",
         "GuavaUI_GuavaUIWorkspace",
     ]

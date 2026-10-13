@@ -41,9 +41,9 @@ final class NativeAnimatedMeshTests: XCTestCase {
         for frame in 0..<7 {
             packet.frameIndex = frame
             if frame == 1 { packet.scene.instances.reverse() }
-            if frame == 2 { packet.renderSettings.enablePBR = true; packet.renderSettings.enableDepthPrepass = true }
+            if frame == 2 { packet.renderSettings.shading.pbr = true; packet.renderSettings.shading.depthPrepass = true }
             if frame == 3 {
-                packet.renderSettings.enableEditorGrid = true
+                packet.renderSettings.viewport.gridEnabled = true
                 packet.scene.instances[0].transform.columns.0.x *= -1
             }
             if frame == 4 {
@@ -71,8 +71,8 @@ final class NativeAnimatedMeshTests: XCTestCase {
         let device = try Self.device(api), renderer = try NativeRenderer(device: device)
         let reference = try SceneCapture(validation: true, api: api)
         let a = EntityID(rawValue: 41), b = EntityID(rawValue: 42)
-        var packet = Self.packet(); packet.renderSettings.enablePBR = true; packet.renderSettings.enableDepthPrepass = true
-        packet.renderSettings.debugViewMode = .shaded
+        var packet = Self.packet(); packet.renderSettings.shading.pbr = true; packet.renderSettings.shading.depthPrepass = true
+        packet.renderSettings.shading.debugViewMode = .shaded
         packet.scene.instances = [Self.pane(z: 0,color: SIMD4(0.7,0.3,0.1,1),entity: a,scale: 1),
             Self.pane(z: 0,color: SIMD4(0.2,0.6,0.8,1),entity: b,scale: 1),
             Self.pane(z: -1,color: SIMD4(0.45,0.45,0.45,1),scale: 4)]
@@ -95,19 +95,19 @@ final class NativeAnimatedMeshTests: XCTestCase {
             case 6:
                 packet.scene.instances[0].transform.columns.3.x = 20
                 packet.jointPaletteMap.palettes[a] = JointPalette(matrices: [Self.translation(-20,0,0),Self.translation(-20,0,0)])
-                packet.renderSettings.enableFrustumCulling = true
-                packet.renderSettings.enableDistanceLOD = true
+                packet.renderSettings.visibility.frustumCulling = true
+                packet.renderSettings.visibility.distanceLOD = true
             case 7:
                 packet.scene.instances[0].material.alphaMode = .blend
                 packet.scene.instances[0].material.baseColorFactor.w = 0.5
-            case 8: packet.renderSettings.debugViewMode = .worldNormal
+            case 8: packet.renderSettings.shading.debugViewMode = .worldNormal
             case 9:
-                packet.renderSettings.debugViewMode = .shaded
+                packet.renderSettings.shading.debugViewMode = .shaded
                 packet.scene.instances[0].transform.columns.3.x = 0
                 packet.scene.instances[0].material.alphaMode = .opaque
                 packet.scene.instances[0].material.baseColorFactor.w = 1
                 packet.jointPaletteMap.palettes[a] = JointPalette(matrices: [matrix_identity_float4x4,Self.translation(-1.4,0,0)])
-            case 10: packet.renderSettings.enableShadows = false
+            case 10: packet.renderSettings.shadows.enabled = false
             default: break
             }
             snapshots.append(try compare(packet,renderer: renderer,reference: reference,label: "skin-\(frame)"))
@@ -151,7 +151,7 @@ final class NativeAnimatedMeshTests: XCTestCase {
                 packet.scene.instances.append(RenderInstance(meshIndex: 999,transform: matrix_identity_float4x4))
                 XCTAssertThrowsError(try renderer.renderChecked(packet: packet))
                 packet.scene.instances.removeLast()
-            case 7: packet.renderSettings.enablePBR = true; packet.renderSettings.enableDepthPrepass = true
+            case 7: packet.renderSettings.shading.pbr = true; packet.renderSettings.shading.depthPrepass = true
             default: break
             }
             packet.scene.deformableMeshes = frame == 6 ? [] : [mesh]
@@ -188,7 +188,7 @@ final class NativeAnimatedMeshTests: XCTestCase {
         var packet = MeshProbeScene.packet(size: .init(width: 192,height: 192))
         packet.scene.camera = RenderCamera(eye: SIMD3(0,0,8),target: .zero,near: 0.1,far: 100)
         packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 8
-        packet.renderSettings.shadowSettings = RenderShadowSettings(enabled: true,mapResolution: 128)
+        packet.renderSettings.shadows = RenderShadowSettings(enabled: true,mapResolution: 128)
         packet.scene.lights = [RenderLight(type: .directional,direction: SIMD3(-0.4,-0.6,-1),intensity: 3,castShadows: true)]
         packet.scene.environment.ambientIntensity = 0.2
         return packet

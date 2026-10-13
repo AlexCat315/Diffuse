@@ -80,7 +80,7 @@ final class NativeEditorGridTests: XCTestCase {
         for frame in 0..<36 {
             packet.frameIndex = frame
             if frame >= 17 { packet.drawableSize = RenderDrawableSize(width: 96, height: 160) }
-            packet.renderSettings.editorGridSpacing = frame.isMultiple(of: 2) ? 0.25 : 0.75
+            packet.renderSettings.viewport.gridSpacing = frame.isMultiple(of: 2) ? 0.25 : 0.75
             try renderer.renderChecked(packet: packet)
         }
         let texture = try XCTUnwrap(renderer.colorTexture)
@@ -112,7 +112,7 @@ final class NativeEditorGridTests: XCTestCase {
             let texture = try XCTUnwrap(renderer.colorTexture)
             let native = try GridImage.readback(device: device, texture: texture, size: size)
             XCTAssertEqual(native.count, Int(size.width * size.height * 4))
-            packet.renderSettings.enableEditorGrid = false
+            packet.renderSettings.viewport.gridEnabled = false
             try renderer.renderChecked(packet: packet)
             let clear = try GridImage.readback(device: device, texture: texture, size: size)
             if index < 4 {

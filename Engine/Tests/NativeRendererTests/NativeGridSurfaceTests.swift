@@ -29,15 +29,15 @@ final class NativeGridSurfaceTests: XCTestCase {
                 : post ? PostProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
                 : hdr ? PBRProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
                 : MeshProbeScene.packet(size: RenderDrawableSize(width: size,height: size),frame: frame)
-            packet.renderSettings.enableStylizedCharacterShading = stylized
+            packet.renderSettings.stylization.enabled = stylized
             if frame == 1 {
-                packet.renderSettings.enableEditorGrid = true
-                packet.renderSettings.editorGridSpacing = .nan
+                packet.renderSettings.viewport.gridEnabled = true
+                packet.renderSettings.viewport.gridSpacing = .nan
                 for _ in 0..<4 { XCTAssertThrowsError(try renderer.renderChecked(packet: packet)) }
-                packet.renderSettings.editorGridSpacing = 0.5
-                packet.renderSettings.enableEditorGrid = false
+                packet.renderSettings.viewport.gridSpacing = 0.5
+                packet.renderSettings.viewport.gridEnabled = false
             }
-            if hdr && frame == 4 { packet.renderSettings.shadowSettings.mapResolution = 128 }
+            if hdr && frame == 4 { packet.renderSettings.shadows.mapResolution = 128 }
             try renderer.renderChecked(packet: packet)
             XCTAssertFalse(renderer.currentViewportSurfaceState().isValid, "swapchain images are not persistent viewport textures")
             if hdr { XCTAssertEqual(renderer.lastFrameStats.passDrawCallCounts[.tonemap],1) }

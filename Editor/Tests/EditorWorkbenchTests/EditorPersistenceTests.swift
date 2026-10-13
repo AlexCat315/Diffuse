@@ -1,17 +1,17 @@
 import Foundation
-import GuavaUIApp
+import GuavaUI
 import GuavaUICompose
 import GuavaUIWorkspace
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Editor persistence")
 struct EditorPersistenceTests {
     @Test("the active legacy profiler migrates to Developer Tools without duplicate docking")
     func profilerMigration() {
-        let registry = PanelRegistry([
-            PanelDescriptor(id: "developer-tools", title: "Developer Tools", preferredSlot: .bottom) { EmptyView() },
-            PanelDescriptor(id: "console", title: "Console", preferredSlot: .bottom) { EmptyView() },
+        let registry = WorkspacePanelRegistry([
+            WorkspacePanelDescriptor(id: "developer-tools", title: "Developer Tools", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) { EmptyView() },
+            WorkspacePanelDescriptor(id: "console", title: "Console", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) { EmptyView() },
         ])
         let document = WorkspaceDocument(
             panels: ["profiler": WorkspacePanel(id: "profiler", title: "Profiler"),
@@ -71,11 +71,11 @@ struct EditorPersistenceTests {
 
     @Test("Workspace reconciliation preserves closed panels while adding new descriptors")
     func workspaceReconciliationPreservesClosedPanels() {
-        let registry = PanelRegistry([
-            PanelDescriptor(id: "assets", title: "Assets", preferredSlot: .bottom) {
+        let registry = WorkspacePanelRegistry([
+            WorkspacePanelDescriptor(id: "assets", title: "Assets", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) {
                 EmptyView()
             },
-            PanelDescriptor(id: "new-tool", title: "New Tool", preferredSlot: .bottom) {
+            WorkspacePanelDescriptor(id: "new-tool", title: "New Tool", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) {
                 EmptyView()
             },
         ])
@@ -103,14 +103,14 @@ struct EditorPersistenceTests {
 
     @Test("workspace reconciliation preserves the user's Scripts docking position")
     func scriptsPanelPlacementIsPreserved() {
-        let registry = PanelRegistry([
-            PanelDescriptor(id: "viewport", title: "Viewport", preferredSlot: .center) {
+        let registry = WorkspacePanelRegistry([
+            WorkspacePanelDescriptor(id: "viewport", title: "Viewport", defaultSlot: .center, configure: { $0.isCollapsible = false }) {
                 EmptyView()
             },
-            PanelDescriptor(id: "scripts", title: "Scripts", preferredSlot: .center) {
+            WorkspacePanelDescriptor(id: "scripts", title: "Scripts", defaultSlot: .center, configure: { $0.isCollapsible = false }) {
                 EmptyView()
             },
-            PanelDescriptor(id: "assets", title: "Assets", preferredSlot: .bottom) {
+            WorkspacePanelDescriptor(id: "assets", title: "Assets", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) {
                 EmptyView()
             },
         ])
@@ -138,12 +138,12 @@ struct EditorPersistenceTests {
 
     @Test("the workbench's side-by-side scene and script survive save/reload reconciliation")
     func workbenchSplitSurvivesReload() throws {
-        let registry = PanelRegistry([
-            PanelDescriptor(id: "viewport", title: "Viewport", preferredSlot: .center) { EmptyView() },
-            PanelDescriptor(id: "scripts", title: "Scripts", preferredSlot: .center) { EmptyView() },
-            PanelDescriptor(id: "hierarchy", title: "Hierarchy", preferredSlot: .leading) { EmptyView() },
-            PanelDescriptor(id: "inspector", title: "Inspector", preferredSlot: .trailing) { EmptyView() },
-            PanelDescriptor(id: "profiler", title: "Profiler", preferredSlot: .bottom) { EmptyView() },
+        let registry = WorkspacePanelRegistry([
+            WorkspacePanelDescriptor(id: "viewport", title: "Viewport", defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() },
+            WorkspacePanelDescriptor(id: "scripts", title: "Scripts", defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() },
+            WorkspacePanelDescriptor(id: "hierarchy", title: "Hierarchy", defaultSlot: .leading, configure: { $0.isCollapsible = true }) { EmptyView() },
+            WorkspacePanelDescriptor(id: "inspector", title: "Inspector", defaultSlot: .trailing, configure: { $0.isCollapsible = true }) { EmptyView() },
+            WorkspacePanelDescriptor(id: "profiler", title: "Profiler", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) { EmptyView() },
         ])
         let document = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelWorkbench,
                                                             registry: registry)

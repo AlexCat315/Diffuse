@@ -32,7 +32,7 @@ struct PortalLayoutTests: GuavaUIComposeSerializedSuite {
                 }
             )
 
-            // AppRuntime scopes the ambient per window. Recomposition can be
+            // Application scopes the ambient per window. Recomposition can be
             // requested after that scope unwinds, so the host must not resolve
             // its entries from whichever store happens to be ambient later.
             PortalStoreHolder.current = unrelatedStore

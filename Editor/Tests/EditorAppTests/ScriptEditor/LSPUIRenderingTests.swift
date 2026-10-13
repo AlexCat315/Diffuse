@@ -3,7 +3,7 @@ import Testing
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Editor code UI integration", .serialized)
 struct LSPUIRenderingTests {

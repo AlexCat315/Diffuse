@@ -71,7 +71,7 @@ struct MeshSurfaceAndVisibilityTests {
         #expect(plan.visibleIndices == [0, 3, 4])
         #expect(plan.culledCount == 2)
         let unculled = MeshVisibilityPlan.make(scene: scene, viewProjection: vp,
-            settings: RenderSettings(enableFrustumCulling: false), skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in true })
+            settings: RenderSettings { $0.visibility.frustumCulling = false }, skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in true })
         #expect(unculled.visibleIndices.count == 5)
     }
 
@@ -90,7 +90,7 @@ struct MeshSurfaceAndVisibilityTests {
             skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in false })
         #expect(missing.meshIndices[0] == 100)
         let disabled = MeshVisibilityPlan.make(scene: scene, viewProjection: vp,
-            settings: RenderSettings(enableDistanceLOD: false), skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in true })
+            settings: RenderSettings { $0.visibility.distanceLOD = false }, skinnedEntities: [], meshBounds: { MeshBoundsRegistry.shared.bounds(for: $0) }, meshExists: { _ in true })
         #expect(disabled.meshIndices[0] == 100)
     }
 }

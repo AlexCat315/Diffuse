@@ -1,6 +1,6 @@
 import Foundation
 import GuavaUIComposeCore
-import GuavaUISharedDemo
+import CounterExample
 import GuavaUIDevToolsScene
 import GuavaUICore
 import GuavaUIDevToolsProtocol
@@ -67,7 +67,7 @@ private final class ExportBuffer {
 }
 
 private final class BrowserPrototype {
-    let counter = SharedCounterView()
+    let counter = CounterView()
     var count: Int { counter.count }
     var dark: Bool { counter.dark }
     let tree = NodeTree()
@@ -122,7 +122,7 @@ private final class BrowserPrototype {
             let drawTrace = tree.timeline.begin()
             drawList.reset()
             func walk(_ node: Node) {
-                if let text = node.attachments[SharedDemoText.attachment] as? DemoText {
+                if let text = node.attachments[CounterText.attachment] as? CounterTextRun {
                     let f = node.absoluteFrame
                     let c = node.inheritedForegroundColor ?? text.color
                     let preedit = node.attachments["preedit"] as? String ?? ""

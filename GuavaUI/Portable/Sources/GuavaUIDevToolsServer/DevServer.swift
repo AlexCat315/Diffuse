@@ -63,7 +63,7 @@ public typealias SceneSnapshotProvider = @MainActor () -> TreeSnapshotPayload
 public typealias NodeSelectionHandler = @MainActor (_ id: String) -> Void
 public typealias NodeSelectionClearHandler = @MainActor () -> Void
 
-/// Schedules DevTools callbacks onto the host's UI thread. AppRuntime uses its
+/// Schedules DevTools callbacks onto the host's UI thread. Application uses its
 /// own main-thread inbox because its SDL loop is synchronous and may not yield
 /// to Swift Concurrency `MainActor` tasks while running.
 public typealias HostMainExecutor = (@escaping @MainActor () -> Void) -> Void
@@ -71,8 +71,8 @@ public typealias HostMainExecutor = (@escaping @MainActor () -> Void) -> Void
 /// WebSocket server with platform-independent protocol dispatch.
 /// The transport owns sockets; the host owns UI-thread scheduling.
 ///
-/// The server is opt-in. AppRuntime constructs and starts it when an
-/// AppConfig carries a non-nil DevToolsConfig.
+/// The server is opt-in. Application constructs and starts it when an
+/// ApplicationConfiguration carries a non-nil DevToolsConfig.
 public final class DevServer: @unchecked Sendable {
 
     private typealias Subscription = DevToolsSubscription
@@ -112,7 +112,7 @@ public final class DevServer: @unchecked Sendable {
     /// start so clients do not expose controls with no host-side provider.
     public var advertisedCapabilities: [String] = ["tree", "select", "log", "timing"]
 
-    /// Provided by AppRuntime; called on the main actor to build a
+    /// Provided by Application; called on the main actor to build a
     /// snapshot when a tree request arrives.
     public var stateRestoreResultHandler: (@MainActor ([String: String]) -> Bool)?
     public var recordingStartHandler: (@MainActor () -> Bool)?
@@ -123,7 +123,7 @@ public final class DevServer: @unchecked Sendable {
     public var timelineProvider: (@MainActor (UInt64) -> TimelineSnapshotPayload)?
     public var timelineCaptureHandler: (@MainActor (Bool) -> Void)?
 
-    /// Provided by AppRuntime; called on the main actor when the client
+    /// Provided by Application; called on the main actor when the client
     /// asks to highlight a node.
     public var selectionHandler: NodeSelectionHandler?
     public var selectionClearHandler: NodeSelectionClearHandler?

@@ -5,8 +5,8 @@ import SceneRuntime
 public enum GridProbeScene {
     public static func packet(size: RenderDrawableSize, frame: Int = 0,
                               camera: RenderCamera? = nil) -> RenderPacket {
-        var settings = RenderSettings(enablePBR: false, enableDepthPrepass: false)
-        settings.enableEditorGrid = true; settings.editorGridSpacing = 0.5
+        var settings = RenderSettings { $0.shading.pbr = false; $0.shading.depthPrepass = false }
+        settings.viewport.gridEnabled = true; settings.viewport.gridSpacing = 0.5
         return RenderPacket(frameIndex: frame, deltaTime: 1.0 / 60, drawableSize: size,
             scene: RenderScene(camera: camera ?? RenderCamera(eye: SIMD3(7, 6, 9), target: .zero,
                 near: 0.1, far: 100), instances: []),

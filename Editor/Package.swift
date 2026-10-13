@@ -42,6 +42,7 @@ let package = Package(
     products: [
         .executable(name: "EditorApp", targets: ["EditorApp"]),
         .library(name: "EditorCore", targets: ["EditorCore"]),
+        .library(name: "EditorUI", targets: ["EditorUI"]),
         .library(name: "GameRuntime", targets: ["GameRuntime"]),
         .executable(name: "GuavaProjectExport", targets: ["GuavaProjectExport"]),
         .executable(name: "GuavaPlayer", targets: ["GuavaPlayer"]),
@@ -53,7 +54,7 @@ let package = Package(
     targets: [
         // MARK: - Editor Domain
         // 编辑器状态、Store、引擎宿主。UI 通过 GuavaUICompose 构建，
-        // 窗口/NativeRHI 装配交给 EditorApp 那一层依赖的 GuavaUIApp。
+        // 窗口/NativeRHI 装配交给 EditorApp 那一层依赖的 GuavaUI。
         .target(
             name: "EditorCore",
             dependencies: [
@@ -87,13 +88,13 @@ let package = Package(
         ),
 
         // MARK: - Editor Entry Point
-        .executableTarget(
-            name: "EditorApp",
+        .target(
+            name: "EditorUI",
             dependencies: [
                 "EditorCore",
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
-                .product(name: "GuavaUIApp", package: "GuavaUI"),
+                .product(name: "GuavaUI", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
@@ -108,9 +109,9 @@ let package = Package(
             ],
             resources: [
                 .process("Resources")
-            ],
-            linkerSettings: guavaScriptExportLinkerSettings
+            ]
         ),
+        .executableTarget(name: "EditorApp", dependencies: ["EditorUI"], linkerSettings: guavaScriptExportLinkerSettings),
         // MARK: - Game Runtime (simulation host, no Editor UI)
         // 独立游戏播放器的引擎宿主层。依赖 EditorCore（场景加载）和
         // EngineCore（引擎宿主），但不依赖任何编辑器 UI 模块。
@@ -133,7 +134,7 @@ let package = Package(
             name: "GuavaPlayer",
             dependencies: [
                 "GameRuntime",
-                .product(name: "GuavaUIApp", package: "GuavaUI"),
+                .product(name: "GuavaUI", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "EngineKernel", package: "Engine"),
@@ -166,7 +167,7 @@ let package = Package(
         .testTarget(
             name: "EditorAppTests",
             dependencies: [
-                "EditorApp",
+                "EditorUI",
                 "EditorCore",
             ]
         ),
@@ -174,11 +175,11 @@ let package = Package(
         .testTarget(
             name: "EditorWorkbenchTests",
             dependencies: [
-                "EditorApp",
+                "EditorUI",
                 "EditorCore",
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
-                .product(name: "GuavaUIApp", package: "GuavaUI"),
+                .product(name: "GuavaUI", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),

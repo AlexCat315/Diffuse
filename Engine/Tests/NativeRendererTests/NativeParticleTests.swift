@@ -77,7 +77,7 @@ final class NativeParticleTests: XCTestCase {
         try textureFixture().write(to: textureURL)
         defer { try? FileManager.default.removeItem(at: textureURL); try? FileManager.default.removeItem(at: retryURL) }
         var packet = MeshProbeScene.packet(size: .init(width: 256,height: 192))
-        packet.renderSettings.enableEditorGrid = false; packet.renderSettings.debugViewMode = .unlit
+        packet.renderSettings.viewport.gridEnabled = false; packet.renderSettings.shading.debugViewMode = .unlit
         packet.scene.camera = RenderCamera(eye: SIMD3(0,0,7),target: .zero,near: 0.1,far: 100)
         packet.scene.instances = [RenderInstance(meshIndex: 0,transform: matrix_identity_float4x4)]
         packet.scene.particles = [
@@ -113,8 +113,8 @@ final class NativeParticleTests: XCTestCase {
             case 10: packet.drawableSize = .init(width: 320,height: 200)
             case 11: packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 6
             case 12:
-                packet.renderSettings.enablePBR = true
-                packet.renderSettings.enableBloom = true; packet.renderSettings.enableTAA = true; packet.renderSettings.enableFXAA = true
+                packet.renderSettings.shading.pbr = true
+                packet.renderSettings.postProcessing.bloom = true; packet.renderSettings.postProcessing.taa = true; packet.renderSettings.postProcessing.fxaa = true
             case 21: packet.scene.particles[0].position.x += 0.5
             case 22: packet.scene.particles = []
             case 23: packet.scene.particles = originals
@@ -122,7 +122,7 @@ final class NativeParticleTests: XCTestCase {
                 var invalid = packet; invalid.scene.particles[0].endColor.z = .infinity
                 XCTAssertThrowsError(try renderer.renderChecked(packet: invalid))
                 try textureFixture().write(to: retryURL)
-            case 25: packet.renderSettings.enablePBR = false; packet.renderSettings.enableBloom = false; packet.renderSettings.enableTAA = false; packet.renderSettings.enableFXAA = false
+            case 25: packet.renderSettings.shading.pbr = false; packet.renderSettings.postProcessing.bloom = false; packet.renderSettings.postProcessing.taa = false; packet.renderSettings.postProcessing.fxaa = false
             default: break
             }
             try renderer.renderChecked(packet: packet); _ = try reference.render(packet: packet)

@@ -1,11 +1,11 @@
 # GuavaUI 浏览器 Wasm 原型
 
-浏览器和桌面现在运行同一份 `SharedCounterView` Compose 源码，以及真实的
+浏览器和桌面现在运行同一份 `CounterView` Compose 源码，以及真实的
 ViewGraph、节点树、Yoga 布局、输入分发、State/Binding 和 DrawList。
 FreeType/HarfBuzz 字体管线也已共用，浏览器文字绘制为真实的图集字形四边形。
 Inspector 读取真实节点和失效记录，支持状态检查点、状态差异、输入录制和回放。
 同一组件也已接入 Android NativeRHI Vulkan 宿主，完成字体、触摸、IME 回调与
-窗口重建的真机验证，见 [Android SharedCounter](../../Android/README.md)。
+窗口重建的真机验证，见 [Android SharedCounter](../../Platforms/Android/README.md)。
 
 ## 构建与运行
 
@@ -44,12 +44,12 @@ WebGPU 需要安全上下文，本地 localhost HTTP 可用。设备不可用或
 从已完成原生依赖构建的仓库根目录运行：
 
 ```bash
-GUAVA_DEVTOOLS=1 swift run --package-path GuavaUI GuavaUIDemo --shared-counter
+GUAVA_DEVTOOLS=1 swift run --package-path GuavaUI/Examples GuavaUIDemo --shared-counter
 ```
 
-桌面入口为 `GuavaUI/Sources/GuavaUIDemo/main.swift`，浏览器入口为
+桌面入口为 `GuavaUI/Examples/Sources/GuavaUIDemo/main.swift`，浏览器入口为
 `Sources/GuavaUIBrowserPrototype/main.swift`。两者都安装
-`../Portable/Sources/GuavaUISharedDemo/SharedCounterView.swift`。
+`../../examples/Counter/Sources/CounterExample/CounterView.swift`。
 宿主只负责窗口、绘制后端、文字绘制和输入适配。
 
 ## 共享模块

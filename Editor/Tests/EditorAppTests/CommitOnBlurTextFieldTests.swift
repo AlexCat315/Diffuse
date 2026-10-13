@@ -1,4 +1,4 @@
-@testable import EditorApp
+@testable import EditorUI
 import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime

@@ -18,6 +18,7 @@ extension VulkanBackend {
         for id in Array(registries.textures.keys) { destroyTexture(Texture(id: id)) }
         for id in Array(registries.buffers.keys) { destroyBuffer(Buffer(id: id)) }
         for frame in frames {
+            if let queries = frame.queryPool { context.resources.queries.destroyQueryPool(context.device, queries, nil) }
             for pool in frame.commandPools.values { context.auxiliary.destroyCommandPool(context.device, pool.handle, nil) }
         }
         for semaphore in timelineSemaphores.values { sync.destroySemaphore(context.device, semaphore, nil) }

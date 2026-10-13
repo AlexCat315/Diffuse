@@ -34,7 +34,7 @@ public final class SceneInspector: @unchecked Sendable {
     }
 
     /// Capture a snapshot of the current scene. Must run on the same actor
-    /// that mutates the tree (i.e. the main actor in AppRuntime).
+    /// that mutates the tree (i.e. the main actor in Application).
     public func snapshot() -> TreeSnapshotPayload {
         let inspection = editor.state
         let invalidations = invalidationLog?.snapshot(limit: 64).map(Self.encode(reason:))

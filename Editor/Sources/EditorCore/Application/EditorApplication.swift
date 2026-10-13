@@ -20,12 +20,12 @@ import SIMDCompat
 
 /// 编辑器应用域：把 `EngineHost`、`EditorStore` 与 `InputState` 汇总成一个对象。
 ///
-/// 与 GuavaUIApp 配合使用：
+/// 与 GuavaUI 配合使用：
 ///   1. 启动时由调用方实例化 `EditorApplication`；
-///   2. 在 `AppRuntime.run` 的 `onTick` 回调里调用 `tick(deltaTime:)` 推进引擎；
+///   2. 在 `Application.run` 的 `onTick` 回调里调用 `tick(deltaTime:)` 推进引擎；
 ///   3. 退出主循环后调用 `shutdown()` 清理引擎资源。
 ///
-/// 自身不持有窗口 / native surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
+/// 自身不持有窗口 / native surface — UI 渲染由 GuavaUI 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication: @unchecked Sendable {
     public let engine: EngineHost
@@ -324,7 +324,7 @@ public final class EditorApplication: @unchecked Sendable {
             ),
             forceContinuous: wantsContinuousFrames,
             hasViewportInput: !inputEvents.isEmpty,
-            temporalEffectsActive: lastQueuedRenderSettings.enableTAA,
+            temporalEffectsActive: lastQueuedRenderSettings.postProcessing.taa,
             now: monotonicNow()
         )
         let shouldSubmitEngineTick = shouldAdvanceSceneSimulation || renderViewport

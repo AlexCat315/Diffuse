@@ -1,8 +1,8 @@
-@testable import EditorApp
+@testable import EditorUI
 import EditorCore
 import EngineKernel
 import Foundation
-import GuavaUIApp
+import GuavaUI
 import GuavaUICompose
 import GuavaUIWorkspace
 import RenderBackend
@@ -49,8 +49,8 @@ struct EditorProductivityWorkflowTests {
 
     @Test("script and film workspaces have distinct defaults")
     func workspaceDefaults() {
-        let ids: [PanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console", "render-pipeline", "animation", "developer-tools", "intent-input", "confirmation-host"]
-        let registry = PanelRegistry(ids.map { id in PanelDescriptor(id: id, title: id.rawValue) { EmptyView() } })
+        let ids: [WorkspacePanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console", "render-pipeline", "animation", "developer-tools", "intent-input", "confirmation-host"]
+        let registry = WorkspacePanelRegistry(ids.map { id in WorkspacePanelDescriptor(id: id, title: id.rawValue, defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() } })
         let level = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelDefault, registry: registry)
         let script = EditorWorkspaceDefaults.makeDocument(mode: .scripting, preset: .scriptingDefault, registry: registry)
         let film = EditorWorkspaceDefaults.makeDocument(mode: .animation, preset: .animationDefault, registry: registry)
@@ -107,7 +107,7 @@ struct EditorProductivityWorkflowTests {
         layout.groups["trailing"] = WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector", isCollapsed: true)
         layout.slots[.trailing]?.layout = .group("trailing")
         let controller = WorkspaceController(document: layout)
-        let registry = PanelRegistry([])
+        let registry = WorkspacePanelRegistry([])
         _ = controller.dispatch(.toggleMaximize("viewport"))
         EditorCommandDispatcher.handle(.showSceneSettings, app: app, controller: controller,
                                        registry: registry, fromCommandPalette: true)

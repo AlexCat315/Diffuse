@@ -1,6 +1,6 @@
-@testable import EditorApp
+@testable import EditorUI
 import EditorCore
-import GuavaUIApp
+import GuavaUI
 import GuavaUIRuntime
 import Testing
 

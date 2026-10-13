@@ -6,7 +6,7 @@ import GuavaUIRuntime
 import SceneRuntime
 import ScriptRuntime
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Script behavior inspector", .serialized)
 struct ScriptBehaviorInspectorTests {

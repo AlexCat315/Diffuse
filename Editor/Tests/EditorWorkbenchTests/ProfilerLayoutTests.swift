@@ -3,7 +3,7 @@ import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Profiler dock layout", .serialized)
 struct ProfilerLayoutTests {

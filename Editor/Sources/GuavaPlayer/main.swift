@@ -1,7 +1,7 @@
 import Foundation
 import GameRuntime
 import EngineCore
-import GuavaUIApp
+import GuavaUI
 import GuavaUICompose
 import GuavaUIRuntime
 import EngineKernel
@@ -107,13 +107,12 @@ private func runPlayer() throws {
     let inGameUIHost = try InGameUIHost(device: renderDevice)
     InGameUIRegistry.shared.provider = inGameUIHost
 
-    try AppRuntime.run(
-        config: AppConfig(
-            title: "Guava Player",
-            clearColor: SIMD4(0, 0, 0, 1),
-            titleBarStyle: .standard,
-            targetFrameRate: 60
-        ),
+    try Application.run(
+        config: ApplicationConfiguration(title: "Guava Player") {
+            $0.rendering.clearColor = SIMD4(0, 0, 0, 1)
+            $0.frames.policy = .continuous
+            $0.frames.targetRate = 60
+        },
         backend: renderDevice,
         onTick: { dt in
             app.tick(deltaTime: dt)

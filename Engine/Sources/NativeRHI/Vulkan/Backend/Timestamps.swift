@@ -55,7 +55,7 @@ extension VulkanBackend: GPUTimestampRecording {
             return nil
         }
         profile.note("recording \(queryCount) queries over \(markerCount) passes")
-        draw.cmdResetQueryPool(cmd, pool, 0, UInt32(queryCount))
+        context.resources.queries.cmdResetQueryPool(cmd, pool, 0, UInt32(queryCount))
         return VulkanTimestampRecording(pool: pool, queryCount: UInt32(queryCount), labels: labels,
                                         profile: profile, period: period)
     }
@@ -74,7 +74,7 @@ extension VulkanBackend: GPUTimestampRecording {
         // the same eight bytes and lose the handle.
         var storage: VkQueryPool?
         let result = withUnsafeMutablePointer(to: &storage) { pointer in
-            context.resources.createQueryPool(context.device, &info, nil, pointer)
+            context.resources.queries.createQueryPool(context.device, &info, nil, pointer)
         }
         frame.queryPoolFailure = result
         frame.queryPoolHandleWasNil = storage == nil
@@ -88,7 +88,7 @@ extension VulkanBackend: GPUTimestampRecording {
     /// host so the write is ordered and readable, without gating device memory.
     private func writeTimestamp(cmd: VkCommandBuffer, recording: VulkanTimestampRecording,
                                 stage: VkPipelineStageFlagBits, query: UInt32) {
-        draw.cmdWriteTimestamp(cmd, stage, recording.pool, query)
+        context.resources.queries.cmdWriteTimestamp(cmd, stage, recording.pool, query)
         var barrier = VkMemoryBarrier()
         barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER
         barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT.rawValue
@@ -118,7 +118,7 @@ extension VulkanBackend: GPUTimestampRecording {
         let byteStride = MemoryLayout<UInt64>.stride
         var raw = [UInt64](repeating: 0, count: count)
         let status = raw.withUnsafeMutableBytes { bytes in
-            context.resources.getQueryPoolResults(
+            context.resources.queries.getQueryPoolResults(
                 context.device, recording.pool, 0, recording.queryCount,
                 byteStride * count, bytes.baseAddress, VkDeviceSize(byteStride),
                 VkQueryResultFlags(VK_QUERY_RESULT_64_BIT.rawValue | VK_QUERY_RESULT_WAIT_BIT.rawValue))

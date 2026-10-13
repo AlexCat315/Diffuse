@@ -2,7 +2,7 @@ import Foundation
 import GuavaUIRuntime
 
 public struct PortalHost: View {
-    /// The root view can be constructed before AppRuntime enters its per-window
+    /// The root view can be constructed before Application enters its per-window
     /// `withCurrent` scope. Resolve the owning store from the primitive node's
     /// first update, then retain that identity across later recompositions.
     /// The shared fallback is deliberately not retained; only a real window
@@ -57,7 +57,7 @@ private struct _PortalHostPrimitive: _PrimitiveView {
         // eventually paint this window's overlays into another window.
         let ambientStore = PortalStoreHolder.current
         let treeStore = node.compositionValue(of: PortalStoreEnvironment.key)
-        // AppRuntime may install the root once before the per-window ambient
+        // Application may install the root once before the per-window ambient
         // is active. The process-shared fallback is not ownership evidence;
         // wait until a real window store is observed. Tests and simple hosts
         // that intentionally use the shared store continue to observe it, but

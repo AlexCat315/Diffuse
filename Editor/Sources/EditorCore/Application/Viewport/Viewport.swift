@@ -171,8 +171,8 @@ extension EditorApplication {
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
         var settings = settings
-        settings.enableEditorGrid = store.state.viewport.gridEnabled
-        settings.editorGridSpacing = viewportGridSpacing
+        settings.viewport.gridEnabled = store.state.viewport.gridEnabled
+        settings.viewport.gridSpacing = viewportGridSpacing
         queueTrackedRenderSettings(settings)
     }
 
@@ -198,7 +198,7 @@ extension EditorApplication {
         guard store.state.viewport.gridEnabled != enabled else { return }
         store.dispatch(.setViewportGridEnabled(enabled))
         var settings = lastQueuedRenderSettings
-        settings.enableEditorGrid = enabled
+        settings.viewport.gridEnabled = enabled
         queueTrackedRenderSettings(settings)
         requestDisplayRefresh()
     }
@@ -226,7 +226,7 @@ extension EditorApplication {
                                 detail: error.localizedDescription)
             }
             var settings = self.lastQueuedRenderSettings
-            settings.editorGridSpacing = self.viewportGridSpacing
+            settings.viewport.gridSpacing = self.viewportGridSpacing
             if settings != self.lastQueuedRenderSettings {
                 self.queueTrackedRenderSettings(settings)
             }
@@ -249,13 +249,7 @@ extension EditorApplication {
         shadowsEnabled: Bool,
         shadingMode: EditorViewportShadingMode
     ) -> RenderSettings {
-        RenderSettings(
-            debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
-            shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
-            enableOffscreenViewport: true,
-            enableEditorGrid: store.state.viewport.gridEnabled && store.state.viewport.mode == .scene,
-            editorGridSpacing: viewportGridSpacing
-        )
+        RenderSettings { $0.shading.debugViewMode = RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded; $0.shadows = RenderShadowSettings(enabled: shadowsEnabled); $0.viewport.offscreen = true; $0.viewport.gridEnabled = store.state.viewport.gridEnabled && store.state.viewport.mode == .scene; $0.viewport.gridSpacing = viewportGridSpacing }
     }
 
     public func currentSelectedEntityTranslation() -> SIMD3<Float>? {

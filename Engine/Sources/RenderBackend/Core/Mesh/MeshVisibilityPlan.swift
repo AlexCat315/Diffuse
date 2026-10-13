@@ -41,11 +41,11 @@ struct MeshVisibilityPlan {
                 }
                 if known { bounds = combined }
             }
-            if settings.enableFrustumCulling, let bounds, !frustum.intersects(bounds) {
+            if settings.visibility.frustumCulling, let bounds, !frustum.intersects(bounds) {
                 result.culledCount += 1; continue
             }
             var meshIndex = instance.meshIndex
-            if settings.enableDistanceLOD, dynamic == nil, !skinned {
+            if settings.visibility.distanceLOD, dynamic == nil, !skinned {
                 let t = instance.transform.columns.3
                 let distance = simd_distance(scene.camera.eye, SIMD3<Float>(t.x, t.y, t.z))
                 for lod in instance.mesh.levelsOfDetail.sorted(by: { $0.minimumDistance < $1.minimumDistance })

@@ -522,65 +522,20 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
     }
 }
 
+/// Authored panel metadata has one representation; the factory is transient.
 public struct WorkspacePanelDescriptor {
-    public var id: WorkspacePanelID
-    public var title: String
+    public var panel: WorkspacePanel
     public var defaultSlot: WorkspaceSlotID
-    public var isClosable: Bool
-    public var isDraggable: Bool
-    public var isCollapsible: Bool
-    public var iconAssetKey: String?
-    public var sizing = WorkspacePanelSizing()
     public let factory: () -> AnyView
 
-    public init(id: WorkspacePanelID,
-                title: String,
-                defaultSlot: WorkspaceSlotID = .center,
-                isClosable: Bool = true,
-                isDraggable: Bool = true,
-                isCollapsible: Bool = true,
-                iconAssetKey: String? = nil,
-                sizing: WorkspacePanelSizing = .init(),
-                factory: @escaping () -> AnyView) {
-        self.id = id
-        self.title = title
-        self.defaultSlot = defaultSlot
-        self.isClosable = isClosable
-        self.isDraggable = isDraggable
-        self.isCollapsible = isCollapsible
-        self.iconAssetKey = iconAssetKey
-        self.sizing = sizing
-        self.factory = factory
-    }
-
-    public init<Content: View>(id: WorkspacePanelID,
-                               title: String,
+    public init<Content: View>(id: WorkspacePanelID, title: String,
                                defaultSlot: WorkspaceSlotID = .center,
-                               isClosable: Bool = true,
-                               isDraggable: Bool = true,
-                               isCollapsible: Bool = true,
-                               iconAssetKey: String? = nil,
-                               sizing: WorkspacePanelSizing = .init(),
+                               configure: (inout WorkspacePanel) -> Void = { _ in },
                                @ViewBuilder content: @escaping () -> Content) {
-        self.init(id: id,
-                  title: title,
-                  defaultSlot: defaultSlot,
-                  isClosable: isClosable,
-                  isDraggable: isDraggable,
-                  isCollapsible: isCollapsible,
-                  iconAssetKey: iconAssetKey,
-                  sizing: sizing,
-                  factory: { AnyView(content()) })
-    }
-
-    public var panel: WorkspacePanel {
-        WorkspacePanel(id: id,
-                       title: title,
-                       isClosable: isClosable,
-                       isDraggable: isDraggable,
-                       isCollapsible: isCollapsible,
-                       iconAssetKey: iconAssetKey,
-                       sizing: sizing)
+        panel = WorkspacePanel(id: id, title: title)
+        configure(&panel)
+        self.defaultSlot = defaultSlot
+        factory = { AnyView(content()) }
     }
 }
 
@@ -597,16 +552,17 @@ public final class WorkspacePanelRegistry {
     }
 
     public func register(_ descriptor: WorkspacePanelDescriptor) {
-        if byID[descriptor.id] == nil {
-            order.append(descriptor.id)
+        if byID[descriptor.panel.id] == nil {
+            order.append(descriptor.panel.id)
         }
-        byID[descriptor.id] = descriptor
+        byID[descriptor.panel.id] = descriptor
     }
 
     public func updateDescriptor(id: WorkspacePanelID,
                                  _ update: (inout WorkspacePanelDescriptor) -> Void) {
         guard var descriptor = byID[id] else { return }
         update(&descriptor)
+        precondition(descriptor.panel.id == id, "Updating a descriptor cannot change its panel identity")
         byID[id] = descriptor
     }
 
@@ -618,6 +574,13 @@ public final class WorkspacePanelRegistry {
         byID[id]?.factory() ?? AnyView(EmptyView())
     }
 
+    public func unregister(id: WorkspacePanelID) {
+        byID.removeValue(forKey: id)
+        order.removeAll { $0 == id }
+    }
+
+    public var count: Int { byID.count }
+    public var isEmpty: Bool { byID.isEmpty }
     public var ids: [WorkspacePanelID] { order }
     public var descriptors: [WorkspacePanelDescriptor] { order.compactMap { byID[$0] } }
 }

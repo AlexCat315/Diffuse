@@ -8,7 +8,7 @@ import EngineKernel
 
 /// One-stop entry for hosts that want to enable DevTools. Wires the
 /// SceneInspector into a DevServer and exposes a single `start` /
-/// `stop` pair plus a `notifyTreeChanged()` hook for AppRuntime.
+/// `stop` pair plus a `notifyTreeChanged()` hook for Application.
 @MainActor
 public final class DevTools {
 
@@ -49,7 +49,7 @@ public final class DevTools {
     public var stateRestoreResultHandler: (([String: String]) -> Bool)?
     public var stateRestoreHandler: (([String: String]) -> Void)?
 
-    /// `true` between `mirror.start` and `mirror.stop`. AppRuntime can poll
+    /// `true` between `mirror.start` and `mirror.stop`. Application can poll
     /// this to keep requesting redisplay so the mirror stays live even when
     /// the host UI itself isn't dirty.
     public var mirrorIsActive: Bool { frameTap?.isActive ?? false }

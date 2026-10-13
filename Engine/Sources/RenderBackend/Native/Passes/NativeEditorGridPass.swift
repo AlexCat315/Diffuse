@@ -39,12 +39,12 @@ public final class NativeEditorGridPass {
     public func encode(packet: RenderPacket, color: RenderColorTarget, depth: RenderDepthTarget,
                        into commands: CommandBuffer) throws {
         let size = packet.drawableSize
-        guard size.width > 0, size.height > 0, packet.renderSettings.editorGridSpacing.isFinite else {
+        guard size.width > 0, size.height > 0, packet.renderSettings.viewport.gridSpacing.isFinite else {
             throw RHIError.invalidArgument("grid requires a nonempty viewport and finite spacing")
         }
         let uniforms = EditorGridUniforms.make(camera: packet.scene.camera,
             matrices: RenderCameraMatrices.make(scene: packet.scene, drawableSize: size),
-            size: size, spacing: packet.renderSettings.editorGridSpacing)
+            size: size, spacing: packet.renderSettings.viewport.gridSpacing)
         let data = withUnsafeBytes(of: uniforms) { Data($0) }
         let upload = try device.uploadTransient(data)
         let bindings = try device.makeBindingSet(layout: bindingLayout, descriptor: BindingSetDescriptor(entries: [

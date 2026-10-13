@@ -42,43 +42,43 @@ enum RenderFramePlanner {
     static func makePlan(settings: RenderSettings) -> RenderFramePlan {
         var passes: [RenderPassKind] = []
 
-        if settings.enableDepthPrepass {
+        if settings.shading.depthPrepass {
             passes.append(.depthPrepass)
         }
-        if settings.shadowSettings.enabled && settings.shadowSettings.maxShadowedDirectionalLights > 0 {
+        if settings.shadows.enabled && settings.shadows.maxShadowedDirectionalLights > 0 {
             passes.append(.shadowPass)
         }
-        if settings.enablePBR {
+        if settings.shading.pbr {
             passes.append(.skybox)
         }
         passes.append(.basePass)
         appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
-        if settings.enableSSAO {
+        if settings.postProcessing.ssao {
             passes.append(.ssao)
         }
-        if settings.enableSSR {
+        if settings.postProcessing.ssr {
             passes.append(.ssr)
         }
-        if settings.enableTAA {
+        if settings.postProcessing.taa {
             passes.append(.taa)
         }
-        if settings.enableBloom {
+        if settings.postProcessing.bloom {
             passes.append(.bloom)
         }
-        if settings.enablePBR {
+        if settings.shading.pbr {
             passes.append(.tonemap)
         }
-        if settings.enableFXAA {
+        if settings.postProcessing.fxaa {
             passes.append(.fxaa)
         }
-        if settings.enableOffscreenViewport {
+        if settings.viewport.offscreen {
             passes.append(.viewportResolve)
         }
 
         // Reference lines use scene depth, without contributing to depth or
         // screen-space lighting. Draw before TAA so its history and current
         // image both contain the grid, then include it in the opaque snapshot.
-        if settings.enableEditorGrid,
+        if settings.viewport.gridEnabled,
            let lastOpaque = passes.lastIndex(where: { RenderPassKind.opaquePasses.contains($0) }) {
             passes.insert(.editorGrid, at: passes.firstIndex(of: .taa) ?? passes.index(after: lastOpaque))
         }
@@ -107,7 +107,7 @@ enum RenderFramePlanner {
 
     private static func appendStylizedPassesIfNeeded(settings: RenderSettings,
                                                      passes: inout [RenderPassKind]) {
-        if settings.enableStylizedCharacterShading {
+        if settings.stylization.enabled {
             passes.append(.outline)
             passes.append(.inkPaperPost)
         }

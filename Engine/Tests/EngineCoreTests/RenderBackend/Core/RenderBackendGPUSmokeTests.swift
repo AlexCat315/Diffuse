@@ -70,7 +70,7 @@ struct RenderBackendGPUSmokeTests {
             var packet = GridProbeScene.packet(size: size)
             try renderer.renderChecked(packet: packet)
             let pixels = try GridImage.readback(device: device, texture: #require(renderer.colorTexture), size: size)
-            packet.renderSettings.enableEditorGrid = false
+            packet.renderSettings.viewport.gridEnabled = false
             try renderer.renderChecked(packet: packet)
             let clear = try GridImage.readback(device: device, texture: #require(renderer.colorTexture), size: size)
             #expect(try GridImage.difference(pixels, clear).pixelsOverThree > 300)

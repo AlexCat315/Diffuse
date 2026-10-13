@@ -6,12 +6,10 @@ import NativeRHI
 struct ShaderCatalogTests {
     @Test("editor grid follows screen-space lighting and precedes particles")
     func editorGridPassOrdering() throws {
-        #expect(!RenderSettings().enableEditorGrid)
-        var settings = RenderSettings(enableSSAO: true,
-                                      enableSSR: true, enableTAA: true,
-                                      enableOffscreenViewport: true)
+        #expect(!RenderSettings().viewport.gridEnabled)
+        var settings = RenderSettings { $0.postProcessing.ssao = true; $0.postProcessing.ssr = true; $0.postProcessing.taa = true; $0.viewport.offscreen = true }
         #expect(!RenderFramePlanner.makePlan(settings: settings).passes.contains(.editorGrid))
-        settings.enableEditorGrid = true
+        settings.viewport.gridEnabled = true
         let passes = RenderFramePlanner.makePlan(settings: settings).passes
         let gridIndex = try #require(passes.firstIndex(of: .editorGrid))
         let particleIndex = try #require(passes.firstIndex(of: .particles))
@@ -50,20 +48,10 @@ struct ShaderCatalogTests {
     @Test("capability switches assemble the HDR frame graph in the correct order")
     func plannerOrdersHDRPasses() {
         let shadowed = RenderFramePlanner.makePlan(
-            settings: RenderSettings(
-                enableShadows: true,
-                enableOffscreenViewport: true
-            )
+            settings: RenderSettings { $0.shadows.enabled = true; $0.viewport.offscreen = true }
         )
         let withPost = RenderFramePlanner.makePlan(
-            settings: RenderSettings(
-                enableFXAA: true,
-                enableSSAO: true,
-                enableSSR: true,
-                enableTAA: true,
-                enableBloom: true,
-                enableOffscreenViewport: true
-            )
+            settings: RenderSettings { $0.postProcessing.fxaa = true; $0.postProcessing.ssao = true; $0.postProcessing.ssr = true; $0.postProcessing.taa = true; $0.postProcessing.bloom = true; $0.viewport.offscreen = true }
         )
 
         let expectedShadowed: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .transparentMeshes, .particles, .tonemap, .viewportResolve]
@@ -109,22 +97,17 @@ struct ShaderCatalogTests {
         #expect(settings.directionalCascadeCount == 4)
         #expect(settings.directionalCascadeSplitLambda == 0)
 
-        var renderSettings = RenderSettings(
-            shadowSettings: .directionalPreview
-        )
-        #expect(renderSettings.enableShadows)
-        renderSettings.enableShadows = false
-        #expect(!renderSettings.shadowSettings.enabled)
+        var renderSettings = RenderSettings { $0.shadows = .directionalPreview }
+        #expect(renderSettings.shadows.enabled)
+        renderSettings.shadows.enabled = false
+        #expect(!renderSettings.shadows.enabled)
         #expect(RenderFramePlanner.makePlan(settings: renderSettings).passes == [.depthPrepass, .skybox, .basePass, .transparentMeshes, .particles, .tonemap])
     }
 
     @Test("stylized character shading schedules outline after base pass")
     func plannerSchedulesStylizedOutline() {
         let plan = RenderFramePlanner.makePlan(
-            settings: RenderSettings(
-                enableBloom: true,
-                enableStylizedCharacterShading: true
-            )
+            settings: RenderSettings { $0.postProcessing.bloom = true; $0.stylization.enabled = true }
         )
 
         #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .inkPaperPost, .transparentMeshes, .particles, .bloom, .tonemap])
@@ -141,13 +124,10 @@ struct ShaderCatalogTests {
             materialBiasStrength: 0.09,
             outlineWidth: 0.02
         )
-        let settings = RenderSettings(
-            enableStylizedCharacterShading: true,
-            stylizedCharacterStyle: style
-        )
+        let settings = RenderSettings { $0.stylization.enabled = true; $0.stylization.style = style }
 
-        #expect(settings.enableStylizedCharacterShading)
-        #expect(settings.stylizedCharacterStyle == style)
-        #expect(RenderSettings().stylizedCharacterStyle == .colorfulInkCard)
+        #expect(settings.stylization.enabled)
+        #expect(settings.stylization.style == style)
+        #expect(RenderSettings().stylization.style == .colorfulInkCard)
     }
 }

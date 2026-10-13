@@ -1,39 +1,58 @@
 # GuavaUI
 
-GuavaUI 是 Guava Engine 的 Swift 声明式界面库。组件、平台运行时和可序列化工作区分别位于 Compose、Runtime 和 Workspace 模块。
+应用代码默认只依赖 `GuavaUI` 产品，并使用一个导入：
 
-运行组件画廊：
+```swift
+import GuavaUI
 
-```sh
-swift run --package-path GuavaUI GuavaUIDemo
-swift run --package-path GuavaUI GuavaUIDemo --component textField
-swift run --package-path GuavaUI GuavaUIDemo --component workspace
-swift run --package-path GuavaUI GuavaUIDemo --component dataTable
+try Application.run { Text("Hello, GuavaUI!").padding(24) }
 ```
 
-画廊默认打开由真实组件组成的 Dashboard，提供 72 个 Story、搜索、尺寸切换、100–200% 文字缩放、禁用示例、明暗主题和独立重置。Theme 页可现场修改字体族、body 字号、图标和圆角，并操作局部主题下的输入框与按钮。示例代码在 `Sources/GuavaUIGallery/`，宿主代码在 `Sources/GuavaUIDemo/`。Story 数量不是独立组件数量。
-
-默认按事件和动画重绘，`--no-vsync` 只关闭呈现同步，`--benchmark` 才启用持续重绘。对比同步开关时使用同一种重绘模式：
+窗口、设备、文字、输入、布局、图像上传与帧提交由宿主负责。可运行的最小应用在 [`examples/HelloUI`](../examples/HelloUI)，共享桌面 / Android 根视图的项目在 [`examples/GuavaUIStarter`](../examples/GuavaUIStarter)。从仓库根目录运行：
 
 ```sh
-swift run --package-path GuavaUI GuavaUIDemo --benchmark
-swift run --package-path GuavaUI GuavaUIDemo --benchmark --no-vsync
+swift run --package-path examples/HelloUI HelloUI
+swift run --package-path GuavaUI/Examples GuavaUIDemo
+swift run --package-path GuavaUI/Examples GuavaUIDemo --component textField
+swift run --package-path GuavaUI/Examples PetDemo
 ```
 
-桌面宿主的 `.displayRefresh` 和事件模式中的动画使用每个窗口的原生刷新信号：macOS 14 及以上使用 `NSWindow.displayLink`，随窗口所在屏幕和可变刷新率调整；macOS 13 使用 `CVDisplayLink`，窗口换屏时重新绑定。隐藏或最小化窗口暂停刷新，积压信号合并为最新一帧。输入、刷新信号和跨线程工作通过同一个 SDL 事件等待唤醒；呈现后没有额外的一周期 sleep 或忙等。暂未提供原生刷新源的平台会明确输出警告，并回退到按绝对 deadline 推进的固定频率；`.fixed(...)` 始终使用这一软件 deadline 模式。
+框架内部仍按 Compose、Runtime、Text、Portable 划分职责；工作台、DevTools 和原生渲染集成使用显式模块。示例在 `Examples/` 独立包内，正式框架不依赖 Gallery 或 Counter。Counter 的纯 Compose 示例与测试位于 `examples/Counter`，可供浏览器和原生宿主共享。详见[模块边界与迁移](../docs/architecture/module-boundaries.md)。
 
-帧日志记录 CPU 墙钟时间：`sceneRender` 是生成 draw list，`frameSlot` 是准备帧槽，`drawableAcquire` 是获取可呈现图像，`renderTargets` 是准备目标纹理，`commandRecord` 是校验几何和录制命令，`queueSubmit` 是编码并提交，`present` 是排队呈现，`frameEnd` 是结束帧。GPU 异步执行，这些数值不是 GPU 执行耗时。普通模式只记录启动、资源更新和超过 25ms 的帧工作；benchmark 另每 60 帧记录一次。`interval` 包含等待输入的空闲时间，不能单独作为掉帧依据。
+需要调整默认行为时，配置对应的职责组：
 
-Android 使用方可通过脚手架创建独立 Swift Package，在 `ApplicationContent.makeRoot() -> some View` 返回自己的根视图；Android 宿主负责 Vulkan、文本、触摸、IME 和生命周期。创建及构建入口：
+```swift
+let configuration = ApplicationConfiguration(title: "My App") {
+    $0.typography.fontSize = 18
+    $0.rendering.sampleCount = 4
+    $0.frames.policy = .eventDriven
+}
+try Application.run(config: configuration) { MyRootView() }
+```
+
+默认按输入、状态和动画重绘，空闲窗口不持续提交帧。`--no-vsync` 请求关闭呈现同步；后端会报告实际模式，MAILBOX / FIFO 回退仍可能同步。`--benchmark` 显式启用持续重绘：
 
 ```sh
-swift run --package-path Android/Tools GuavaAndroid create --directory /absolute/path/to/MyApp --application-id com.example.myapp --name 'My App'
+swift run --package-path GuavaUI/Examples GuavaUIDemo --benchmark
+swift run --package-path GuavaUI/Examples GuavaUIDemo --benchmark --no-vsync
+GUAVA_FPS_LOG=1 swift run --package-path GuavaUI/Examples GuavaUIDemo --benchmark
+```
+
+桌面宿主在 macOS 14 及以上使用 `NSWindow.displayLink`，macOS 13 使用随窗口换屏重新绑定的 `CVDisplayLink`。隐藏或最小化窗口暂停刷新，积压信号合并为最新一帧；呈现后没有额外的一周期 sleep 或忙等。尚未接入原生刷新源的平台会输出警告，并按绝对 deadline 回退；`.fixed(...)` 始终使用软件 deadline。
+
+DevTools 通过 `GUAVA_DEVTOOLS=1` 显式开启。Gallery 的 `--performance-hud` 启用宿主通用 HUD；CPU 帧分解可用 `GUAVA_FPS_LOG=1`，其中呈现时间包含 acquire / submit / present 等待，不等于 GPU 执行时间。
+
+Android 应用可以从脚手架开始：
+
+```sh
+swift run --package-path Platforms/Android/Tools GuavaAndroid create \
+  --directory /absolute/path/to/MyApp --application-id com.example.myapp --name 'My App'
 swift /absolute/path/to/MyApp/android.swift --install --serial DEVICE_SERIAL
 ```
 
-创建、构建与安装均由 Swift 工具完成，无需 Python。运行前需要 Swift 6.4.0 release 及匹配的 Android SDK / NDK、JDK、CMake 和 Ninja，详见 [Android 接入说明](../Android/README.md#使用自己的-guavaui-根视图)。[GuavaUIStarter](../examples/GuavaUIStarter/README.md) 提供同一模板的可编辑项目。新的 Swift 工具和使用方入口本轮尚未编译 / 真机验收。
+业务模块 `AppContent` 导出普通函数 `makeApplicationContent() -> some View`，宿主安装其根视图。生成项目同一份视图也可用 `swift run DesktopApp` 在桌面运行。构建需要 Swift 6.4.1 release 与匹配 Android SDK、NDK r30、JDK 21、CMake 和 Ninja；见 [Android 接入说明](../Platforms/Android/README.md)。
 
-应用可以全局或局部设置 `Theme`，普通文字和输入默认继承 body；显式语义角色或任意值优先。`ThemeExtension`、`SemanticFontRef`、`SemanticColorRef`、`SemanticIconSize` 和 `ThemeMetric` 允许定义自己的设计系统，`IconTheme` 支持尺寸槽与资源替换。`AppConfig.textScaler` 与屏幕 DPI 独立，主窗口和辅助窗口共用宿主偏好。[设计系统契约](../docs/components/design-system.md)说明完整 API、覆盖优先级与系统适配边界。
+应用可以全局或局部设置 `Theme`，普通文字和输入默认继承 body；显式语义角色或任意值优先。`ThemeExtension`、`SemanticFontRef`、`SemanticColorRef`、`SemanticIconSize` 和 `ThemeMetric` 允许定义自己的设计系统，`IconTheme` 支持尺寸槽与资源替换。`ApplicationConfiguration.typography.scaler` 与屏幕 DPI 独立，主窗口和辅助窗口共用宿主偏好。[设计系统契约](../docs/components/design-system.md)说明完整 API、覆盖优先级与系统适配边界。
 
 运行接入真实 SourceKit-LSP 的代码编辑器：
 

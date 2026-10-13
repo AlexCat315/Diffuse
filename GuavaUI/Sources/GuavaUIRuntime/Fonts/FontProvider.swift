@@ -1,7 +1,6 @@
 import Foundation
 import CFreeType
 import CHarfBuzz
-import GuavaUIBundledFonts
 #if canImport(CoreText)
 import CoreText
 #endif

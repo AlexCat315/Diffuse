@@ -7,10 +7,10 @@ def analysis_checks(page, inspector):
     frame = page.locator("#inspector").element_handle().content_frame()
     assert frame.evaluate("compactTag('GuavaUI.Row<GuavaUI._SourceLocatedView<Demo.Button>>')") == "Row"
     inspector.locator("#tree button").filter(has_text="counter.value").first.click()
-    inspector.locator("#sourceLocation").filter(has_text="SharedCounterView.swift:").wait_for()
+    inspector.locator("#sourceLocation").filter(has_text="CounterView.swift:").wait_for()
     source = frame.evaluate("findNode(state.tree, state.selectedId).source")
     assert source["line"] > 0 and source["column"] > 0
-    lines = (Path(__file__).resolve().parent.parent / "Portable/Sources/GuavaUISharedDemo/SharedCounterView.swift").read_text().splitlines()
+    lines = (Path(__file__).resolve().parent.parent / "../examples/Counter/Sources/CounterExample/CounterView.swift").read_text().splitlines()
     assert 'debugName("counter.value")' in lines[source["line"] - 1], source
     expected = frame.evaluate("editorSourceURL(findNode(state.tree, state.selectedId).source, 'vscode')")
     assert inspector.locator("#openSource").get_attribute("href") == expected
@@ -22,7 +22,7 @@ def analysis_checks(page, inspector):
     inspector.locator("#sourceEditor").select_option("cursor")
     assert inspector.locator("#openSource").get_attribute("href").startswith("cursor://file/")
     frame.locator("details").filter(has=frame.locator("#sourceBuildRoot")).evaluate("e => e.open = true")
-    build_root = source["filePath"].split("/GuavaUI/")[0]
+    build_root = source["filePath"].split("/examples/Counter/")[0]
     inspector.locator("#sourceBuildRoot").fill(build_root)
     inspector.locator("#sourceLocalRoot").fill("C:\\我的项目\\Guava UI")
     uri = inspector.locator("#openSource").get_attribute("href")

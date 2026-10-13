@@ -10,10 +10,10 @@ import XCTest
 final class NativeStylizedTests: XCTestCase {
     func testNonfiniteStyleRejectsBeforeFramePreparation() throws {
         var packet = PBRProbeScene.packet(size: .init(width: 64,height: 64))
-        packet.renderSettings.enableStylizedCharacterShading = true
-        packet.renderSettings.stylizedCharacterStyle.toonLevels.z = .nan
+        packet.renderSettings.stylization.enabled = true
+        packet.renderSettings.stylization.style.toonLevels.z = .nan
         XCTAssertThrowsError(try NativePacketValidation.validate(packet))
-        packet.renderSettings.stylizedCharacterStyle = .colorfulInkCard
+        packet.renderSettings.stylization.style = .colorfulInkCard
         _ = try NativePacketValidation.validate(packet)
         XCTAssertFalse(MeshOutlinePolicy.includes(bounds: (.zero,SIMD3(1,0,1))))
         XCTAssertTrue(MeshOutlinePolicy.includes(bounds: (.zero,SIMD3(1,1,1))))
@@ -32,9 +32,9 @@ final class NativeStylizedTests: XCTestCase {
         let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
         let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         var packet = PBRProbeScene.packet(size: .init(width: 320,height: 192))
-        packet.renderSettings.enableStylizedCharacterShading = true
+        packet.renderSettings.stylization.enabled = true
         _ = try compare(packet,renderer: renderer,reference: reference,label: "default")
-        packet.frameIndex = 1; packet.renderSettings.stylizedCharacterStyle.paperGrainStrength = 0
+        packet.frameIndex = 1; packet.renderSettings.stylization.style.paperGrainStrength = 0
         _ = try compare(packet,renderer: renderer,reference: reference,label: "no-grain")
     }
     private func backfaces(_ api: GraphicsAPI) throws {
@@ -49,7 +49,7 @@ final class NativeStylizedTests: XCTestCase {
         let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false))
         let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         var packet = MeshProbeScene.packet(size: .init(width: 128,height: 96))
-        packet.renderSettings.enableStylizedCharacterShading = true
+        packet.renderSettings.stylization.enabled = true
         packet.scene.camera = RenderCamera(eye: SIMD3(0,-3,4),target: .zero,near: 0.1,far: 100)
         packet.scene.instances = []
         let background = try compare(packet,renderer: renderer,reference: reference,label: "thin-background")
@@ -79,7 +79,7 @@ final class NativeStylizedTests: XCTestCase {
         let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
         let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
         var packet = PBRProbeScene.packet(size: .init(width: 256,height: 192))
-        packet.renderSettings.enableEditorGrid = false
+        packet.renderSettings.viewport.gridEnabled = false
         let actor = EntityID(rawValue: 300), deformable = EntityID(rawValue: 301)
         for (index,mesh) in [2,3,4,5].enumerated() {
             var model = matrix_identity_float4x4; model.columns.3 = SIMD4(Float(index)*1.8-2.7,1.5,4,1)
@@ -98,15 +98,15 @@ final class NativeStylizedTests: XCTestCase {
         for frame in 0..<30 {
             packet.frameIndex = frame
             switch frame {
-            case 1: packet.renderSettings.enableStylizedCharacterShading = true
-            case 2: packet.renderSettings.stylizedCharacterStyle.materialBiasStrength = 0
-            case 3: packet.renderSettings.stylizedCharacterStyle.materialBiasStrength = 1
-            case 4: packet.renderSettings.stylizedCharacterStyle.outlineWidth = 0
-            case 5: packet.renderSettings.stylizedCharacterStyle.outlineWidth = 0.12
-            case 6: packet.renderSettings.stylizedCharacterStyle.paperGrainStrength = 0.15
+            case 1: packet.renderSettings.stylization.enabled = true
+            case 2: packet.renderSettings.stylization.style.materialBiasStrength = 0
+            case 3: packet.renderSettings.stylization.style.materialBiasStrength = 1
+            case 4: packet.renderSettings.stylization.style.outlineWidth = 0
+            case 5: packet.renderSettings.stylization.style.outlineWidth = 0.12
+            case 6: packet.renderSettings.stylization.style.paperGrainStrength = 0.15
             case 7:
-                packet.renderSettings.stylizedCharacterStyle.toonLevels = SIMD4(0.12,0.3,0.8,0)
-                packet.renderSettings.stylizedCharacterStyle.inkWashColor = SIMD4(0.7,0.85,1,1)
+                packet.renderSettings.stylization.style.toonLevels = SIMD4(0.12,0.3,0.8,0)
+                packet.renderSettings.stylization.style.inkWashColor = SIMD4(0.7,0.85,1,1)
             case 8:
                 packet.scene.lights = [RenderLight(type: .spot,position: SIMD3(3,4,5),direction: SIMD3(-1,-1,-1),
                     color: SIMD3(repeating: 1),intensity: 2,range: 12,spotInnerAngleRadians: 0.3,spotOuterAngleRadians: 0.9)]
@@ -121,17 +121,17 @@ final class NativeStylizedTests: XCTestCase {
             case 14: packet.scene.camera.projection = .orthographic; packet.scene.camera.orthographicHeight = 14
             case 15: packet.drawableSize = .init(width: 192,height: 128)
             case 16: packet.drawableSize = .init(width: 320,height: 200)
-            case 17: packet.renderSettings.enablePBR = false
-            case 18: packet.renderSettings.enablePBR = true
+            case 17: packet.renderSettings.shading.pbr = false
+            case 18: packet.renderSettings.shading.pbr = true
             case 19:
-                packet.renderSettings.enablePBR = true
-                packet.renderSettings.enableSSAO = true; packet.renderSettings.enableSSR = true; packet.renderSettings.enableTAA = true
-                packet.renderSettings.enableBloom = true; packet.renderSettings.enableFXAA = true
+                packet.renderSettings.shading.pbr = true
+                packet.renderSettings.postProcessing.ssao = true; packet.renderSettings.postProcessing.ssr = true; packet.renderSettings.postProcessing.taa = true
+                packet.renderSettings.postProcessing.bloom = true; packet.renderSettings.postProcessing.fxaa = true
             case 20: packet.scene.camera.eye.x += 0.2
             case 28:
-                var invalid = packet; invalid.renderSettings.stylizedCharacterStyle.paperGrainStrength = .infinity
+                var invalid = packet; invalid.renderSettings.stylization.style.paperGrainStrength = .infinity
                 XCTAssertThrowsError(try renderer.renderChecked(packet: invalid))
-            case 29: packet.renderSettings.enableStylizedCharacterShading = false
+            case 29: packet.renderSettings.stylization.enabled = false
             default: break
             }
             snapshots.append(try compare(packet,renderer: renderer,reference: reference,label: "frame-\(frame)"))

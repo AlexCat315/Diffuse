@@ -58,7 +58,7 @@ func summary(_ key: String) -> [String: Any] {
 }
 let presented = frames.filter { $0["presented"] as? Bool == true }.count
 let report: [String: Any] = ["hello": hello, "warmup": warmup, "sampleCount": count,
-    "source": "AppRuntime real-window layout, draw-list construction, submission and present calls; mirror disabled",
+    "source": "Application real-window layout, draw-list construction, submission and present calls; mirror disabled",
     "includesGPUCompletionTimestamp": false, "includesCompositorTimestamp": false,
     "streamElapsedSeconds": elapsed, "streamFramesPerSecond": Double(count - 1) / elapsed,
     "presentedFrames": presented, "unpresentedFrames": count - presented,

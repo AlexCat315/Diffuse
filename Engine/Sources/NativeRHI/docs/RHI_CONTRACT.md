@@ -4,7 +4,7 @@
 
 这一轮参考了本地 NRI、NVRHI 和 slang-rhi 源码中的布局、原生管线和资源生命周期组织，保持自有接口与实现，不引入这些项目的运行时依赖。Slang 只承担离线编译；RHI 接收目标产物，其他编译器也可以生成相同的 `ShaderArtifact`。
 
-NativeRHI 是唯一的图形后端。EngineHost、编辑器、播放器、GuavaUI 主/辅助窗口和 HUD 共享 NativeRHI Device；无设备的 EngineHost 用于无 GPU 仿真。macOS 默认使用 Metal，Windows 优先使用 DX12、设备创建失败时尝试 Vulkan，Linux / Android 默认使用原生 Vulkan。Android 的原生窗口与 GuavaUI 绘制验证见 [Android 入口](../../../../Android/README.md)。DX12 打包 shader 仍待 Windows 工具链生成。旧后端已移除；下列迁移报告及 benchmarks 保留当时的历史测量，不能作为当前可运行的对照命令。当前迁移结果见 [独立运行验证](validation/Standalone.md)。
+NativeRHI 是唯一的图形后端。EngineHost、编辑器、播放器、GuavaUI 主/辅助窗口和 HUD 共享 NativeRHI Device；无设备的 EngineHost 用于无 GPU 仿真。macOS 默认使用 Metal，Windows 优先使用 DX12、设备创建失败时尝试 Vulkan，Linux / Android 默认使用原生 Vulkan。Android 的原生窗口与 GuavaUI 绘制验证见 [Android 入口](../../../../Platforms/Android/README.md)。DX12 打包 shader 仍待 Windows 工具链生成。旧后端已移除；下列迁移报告及 benchmarks 保留当时的历史测量，不能作为当前可运行的对照命令。当前迁移结果见 [独立运行验证](validation/Standalone.md)。
 
 Clip space 使用 +Y 向上、深度 0…1；framebuffer / viewport 使用左上原点、+Y 向下。Vulkan backend 通过负高度 viewport 统一这一约定，shader 不再自行翻转 Y。
 
@@ -111,7 +111,7 @@ python3 scripts/check-swift-maintainability.py
 
 macOS 只使用 Metal，不链接 Vulkan loader，不加载 Vulkan ICD，也不执行 Vulkan GPU 测试。Slang 是离线工具，产物无需运行时编译器。
 
-Android 使用 Swift 6.4.0 Android SDK、NDK r30 与系统 libvulkan，默认 RGBA8 surface；工具链和真机复现见 `Android/README.md`。
+Android 使用 Swift 6.4.0 Android SDK、NDK r30 与系统 libvulkan，默认 RGBA8 surface；工具链和真机复现见 `Platforms/Android/README.md`。
 
 Windows / Linux 使用安装的 Vulkan SDK，非系统位置设置 `VULKAN_SDK`。可在对应宿主上运行 `scripts/bootstrap-rhi-vulkan.py`，校验固定 Vulkan-Headers / Loader **1.4.328** 的 SHA-256 并安装到忽略的 `Engine/vendor/vulkan-sdk`；脚本在 macOS 明确拒绝运行。Windows 还需 Windows SDK 的 D3D12 / DXGI；DXIL shader 编译需 DXC。
 

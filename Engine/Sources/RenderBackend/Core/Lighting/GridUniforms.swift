@@ -14,7 +14,7 @@ public struct EditorGridUniforms {
     public static func make(packet: RenderPacket) -> EditorGridUniforms {
         make(camera: packet.scene.camera,
              matrices: RenderCameraMatrices.make(scene: packet.scene, drawableSize: packet.drawableSize),
-             size: packet.drawableSize, spacing: packet.renderSettings.editorGridSpacing)
+             size: packet.drawableSize, spacing: packet.renderSettings.viewport.gridSpacing)
     }
 
     static func make(camera: RenderCamera, matrices: RenderCameraMatrices,

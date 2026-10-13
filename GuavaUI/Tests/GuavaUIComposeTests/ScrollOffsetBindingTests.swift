@@ -36,7 +36,7 @@ struct ScrollOffsetBindingTests: GuavaUIComposeSerializedSuite {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: harness)
             settle(graph)
-            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments["__scrollview_axes"] != nil })
+            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
             harness.$offset.wrappedValue = CGPoint(x: 0, y: 250)
             settle(graph)
             #expect(scroll.contentOffset.y == 250)

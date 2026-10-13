@@ -23,7 +23,7 @@ struct RenderThreadTests {
         thread.start(); defer { thread.shutdown() }
         var packet = Self.makePacket(frameIndex: 17)
         packet.drawableSize = RenderDrawableSize(width: 128, height: 96)
-        packet.scene.instances = []; packet.renderSettings.enableEditorGrid = true
+        packet.scene.instances = []; packet.renderSettings.viewport.gridEnabled = true
         buffer.publish(packet); thread.requestRender()
         #expect(rendered.wait(timeout: .now() + 5) == .success)
         thread.shutdown(); try device.waitUntilIdle()
@@ -52,9 +52,9 @@ struct RenderThreadTests {
         thread.start(); defer { thread.shutdown() }
         var packet = Self.makePacket(frameIndex: 21)
         packet.drawableSize = RenderDrawableSize(width: 128, height: 96)
-        packet.renderSettings.enablePBR = false; packet.renderSettings.enableDepthPrepass = true
-        packet.renderSettings.debugViewMode = .unlit
-        packet.renderSettings.enableEditorGrid = true
+        packet.renderSettings.shading.pbr = false; packet.renderSettings.shading.depthPrepass = true
+        packet.renderSettings.shading.debugViewMode = .unlit
+        packet.renderSettings.viewport.gridEnabled = true
         buffer.publish(packet); thread.requestRender()
         #expect(rendered.wait(timeout: .now() + 5) == .success)
         thread.shutdown(); try device.waitUntilIdle()

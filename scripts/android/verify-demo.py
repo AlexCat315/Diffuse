@@ -98,7 +98,7 @@ def main():
     # Verify that the real IME is bound to our view, then inject physical keys.
     # Some IMEs keep the word in their candidate window until Space selects it.
     ime = subprocess.check_output(list(map(str, adb + ['shell', 'dumpsys', 'input_method'])), text=True)
-    assert 'connection=com.guava.probe.DemoInputConnection' in ime and 'mInputShown=true' in ime
+    assert 'connection=com.guava.probe.TextInputConnection' in ime and 'mInputShown=true' in ime
     shell('input', 'text', 'Vulkan')
     deadline = time.monotonic() + 2
     while not read()['state']['note'] and time.monotonic() < deadline: time.sleep(0.2)

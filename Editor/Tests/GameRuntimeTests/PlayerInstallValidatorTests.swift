@@ -6,7 +6,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
     private let resourceBundleBases = [
         "GuavaEditor_EditorCore",
         "GuavaEngine_RenderBackend",
-        "GuavaUI_GuavaUIApp",
+        "GuavaUI_GuavaUI",
         "GuavaUI_GuavaUICompose",
         "GuavaUI_GuavaUIWorkspace",
     ]
@@ -37,7 +37,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
             at: root.appendingPathComponent("GuavaEngine_RenderBackend.bundle")
         )
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("GuavaUI_GuavaUIApp.bundle")
+            at: root.appendingPathComponent("GuavaUI_GuavaUI.bundle")
         )
 
         XCTAssertThrowsError(try PlayerInstallValidator.validateLayout(
@@ -48,7 +48,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
             }
             XCTAssertEqual(missing, [
                 "GuavaEngine_RenderBackend.{bundle,resources}",
-                "GuavaUI_GuavaUIApp.{bundle,resources}",
+                "GuavaUI_GuavaUI.{bundle,resources}",
             ])
         }
     }

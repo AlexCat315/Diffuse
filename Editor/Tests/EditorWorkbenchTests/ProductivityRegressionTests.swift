@@ -1,4 +1,4 @@
-@testable import EditorApp
+@testable import EditorUI
 @testable import EditorCore
 import EngineKernel
 import Foundation

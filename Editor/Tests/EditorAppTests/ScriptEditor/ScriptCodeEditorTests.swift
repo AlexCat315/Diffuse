@@ -1,6 +1,6 @@
 import Testing
 import GuavaUICompose
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Swift script syntax highlighting")
 struct ScriptCodeEditorTests {

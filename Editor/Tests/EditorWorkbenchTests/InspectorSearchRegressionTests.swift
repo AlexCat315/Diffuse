@@ -3,7 +3,7 @@ import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Inspector search regressions", .serialized)
 struct InspectorSearchRegressionTests {

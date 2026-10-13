@@ -1,4 +1,4 @@
-@testable import EditorApp
+@testable import EditorUI
 import EditorCore
 import SceneRuntime
 import ScriptRuntime

@@ -34,9 +34,9 @@ final class NativeFXAACompositionTests: XCTestCase {
         func packet(fxaa: Bool, frame: Int) -> RenderPacket {
             var packet = MeshProbeScene.packet(
                 size: RenderDrawableSize(width: 256, height: 192), frame: frame)
-            packet.renderSettings.enablePBR = false
-            packet.renderSettings.enableDepthPrepass = false
-            packet.renderSettings.enableFXAA = fxaa
+            packet.renderSettings.shading.pbr = false
+            packet.renderSettings.shading.depthPrepass = false
+            packet.renderSettings.postProcessing.fxaa = fxaa
             packet.scene.instances = [
                 RenderInstance(meshIndex: 88, transform: matrix_identity_float4x4)
             ]

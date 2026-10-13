@@ -5,7 +5,7 @@ import GuavaUIRuntime
 import NativeRHI
 import EngineKernel
 import Testing
-@testable import EditorApp
+@testable import EditorUI
 
 @Suite("Welcome project workflow", .serialized)
 @MainActor

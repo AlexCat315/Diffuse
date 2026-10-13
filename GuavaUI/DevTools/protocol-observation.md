@@ -30,7 +30,7 @@ tools.stateRegistry = graph.stateRegistry // before tools.start()
 if let token { graph.stateRegistry.unregister(token) }
 ```
 
-AppRuntime and GuavaUIDemo attach their graph registry automatically. Other
+Application and GuavaUIDemo attach their graph registry automatically. Other
 hosts call `server.broadcastObservations()` on the scene thread after a state
 change or frame; `DevTools.notifyTreeChanged()` / `notifyFrameFinished()` do this.
 

@@ -8,12 +8,12 @@ enum NativePacketValidation {
         guard packet.drawableSize.width > 0, packet.drawableSize.height > 0,
               packet.drawableSize.width <= ViewportTargetAllocation.maxDimension,
               packet.drawableSize.height <= ViewportTargetAllocation.maxDimension,
-              !packet.renderSettings.enableEditorGrid || packet.renderSettings.editorGridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
+              !packet.renderSettings.viewport.gridEnabled || packet.renderSettings.viewport.gridSpacing.isFinite else { throw RHIError.invalidArgument("native viewport must be nonempty") }
         try validateSimulation(packet)
         try validateCapabilityDependencies(packet.renderSettings)
         let settings = packet.renderSettings
-        let style = settings.stylizedCharacterStyle
-        if settings.enableStylizedCharacterShading {
+        let style = settings.stylization.style
+        if settings.stylization.enabled {
             let values = [style.toonThresholds,style.toonLevels,style.inkWashColor,
                 SIMD4(style.paperGrainStrength,style.rimStrength,style.materialBiasStrength,style.outlineWidth)]
             guard values.allSatisfy({ vector in (0..<4).allSatisfy { vector[$0].isFinite } }) else {
@@ -30,9 +30,9 @@ enum NativePacketValidation {
               scene.lights.allSatisfy({ finite($0.position) && finite($0.direction) && finite($0.color)
                 && $0.intensity.isFinite && $0.intensity >= 0 && $0.range.isFinite && $0.range >= 0
                 && $0.spotInnerAngleRadians.isFinite && $0.spotOuterAngleRadians.isFinite }),
-              packet.renderSettings.shadowSettings.depthBias.isFinite,
-              packet.renderSettings.shadowSettings.strength.isFinite,
-              packet.renderSettings.shadowSettings.directionalCascadeSplitLambda.isFinite else {
+              packet.renderSettings.shadows.depthBias.isFinite,
+              packet.renderSettings.shadows.strength.isFinite,
+              packet.renderSettings.shadows.directionalCascadeSplitLambda.isFinite else {
             throw RHIError.invalidArgument("non-finite or negative native lighting input")
         }
         let matrices = RenderCameraMatrices.make(scene: packet.scene, drawableSize: packet.drawableSize)
@@ -97,12 +97,12 @@ enum NativePacketValidation {
     /// mid-frame. Screen-space and temporal effects operate in the linear HDR
     /// colour space, which the PBR path provides.
     private static func validateCapabilityDependencies(_ settings: RenderSettings) throws {
-        guard !settings.enablePBR else { return }
+        guard !settings.shading.pbr else { return }
         let hdrEffects: [(String, Bool)] = [
-            ("SSAO", settings.enableSSAO),
-            ("SSR", settings.enableSSR),
-            ("TAA", settings.enableTAA),
-            ("Bloom", settings.enableBloom)
+            ("SSAO", settings.postProcessing.ssao),
+            ("SSR", settings.postProcessing.ssr),
+            ("TAA", settings.postProcessing.taa),
+            ("Bloom", settings.postProcessing.bloom)
         ]
         if let effect = hdrEffects.first(where: { $0.1 }) {
             throw RHIError.unsupportedFeature(

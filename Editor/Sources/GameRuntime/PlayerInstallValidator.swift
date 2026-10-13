@@ -21,7 +21,7 @@ public enum PlayerInstallValidator {
     private static let resourceBundleBases = [
         "GuavaEditor_EditorCore",
         "GuavaEngine_RenderBackend",
-        "GuavaUI_GuavaUIApp",
+        "GuavaUI_GuavaUI",
         "GuavaUI_GuavaUICompose",
         "GuavaUI_GuavaUIWorkspace",
     ]

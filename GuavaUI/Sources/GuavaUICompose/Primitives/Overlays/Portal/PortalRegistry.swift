@@ -198,7 +198,7 @@ public enum PortalStoreHolder {
     nonisolated(unsafe) public static var current: PortalStore = shared
 }
 
-/// Tree-scoped portal ownership. AppRuntime provides one store at each window
+/// Tree-scoped portal ownership. Application provides one store at each window
 /// root, allowing portal presenters and the matching host to resolve the same
 /// store from their node ancestry without depending on global ambient timing.
 public enum PortalStoreEnvironment {

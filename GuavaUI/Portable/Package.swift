@@ -7,7 +7,6 @@ let package = Package(
     name: "GuavaUIPortable",
     platforms: [.macOS(.v13)],
     products: [
-        .library(name: "GuavaUISharedDemo", targets: ["GuavaUISharedDemo"]),
         .library(name: "GuavaUIScene", targets: ["GuavaUIScene"]),
         .library(name: "GuavaUIComposeCore", targets: ["GuavaUIComposeCore"]),
         .library(name: "CYoga", targets: ["CYoga"]),
@@ -26,11 +25,10 @@ let package = Package(
     targets: [
         .target(name: "CYoga", dependencies: [.product(name: "yoga", package: "yoga")], publicHeadersPath: "include"),
         .target(name: "GuavaUIScene", dependencies: ["GuavaUICore", "CYoga", .product(name: "GuavaPlatformCore", package: "PlatformCore")]),
-        .target(name: "GuavaUISharedDemo", dependencies: ["GuavaUIComposeCore"]),
         .target(name: "GuavaUIComposeCore", dependencies: ["GuavaUIScene"]),
         .target(name: "GuavaUIDevToolsScene", dependencies: ["GuavaUIScene", "GuavaUIDevToolsProtocol"]),
         .target(name: "GuavaUICore"),
-        .testTarget(name: "GuavaUISceneTests", dependencies: ["GuavaUISharedDemo", "GuavaUIDevToolsScene", "GuavaUIDevToolsProtocol"]),
+        .testTarget(name: "GuavaUISceneTests", dependencies: ["GuavaUIComposeCore", "GuavaUIDevToolsScene", "GuavaUIDevToolsProtocol"]),
         .testTarget(name: "GuavaUICoreTests", dependencies: ["GuavaUICore"]),
         .target(name: "GuavaUIDevToolsProtocol", dependencies: [.product(name: "GuavaPlatformCore", package: "PlatformCore")]),
         .target(name: "GuavaUIDevToolsServer", dependencies: [

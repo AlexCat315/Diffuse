@@ -48,7 +48,7 @@ enum NativeMeshBatchPlanner {
                 let material = ResolvedMeshMaterial(imported: imported, runtime: instance.material)
                 if shadow && material.alphaMode == .blend { continue }
                 let posed = instance.entity.flatMap { packet.jointPaletteMap.palette(for: $0) } != nil
-                let isolated = !packet.renderSettings.enableMeshInstancing || material.alphaMode == .blend || posed || dynamic != nil
+                let isolated = !packet.renderSettings.visibility.meshInstancing || material.alphaMode == .blend || posed || dynamic != nil
                 let key = NativeMeshBatchKey(mesh: meshIndex, firstIndex: Int(part.indexStart), indexCount: Int(part.indexCount),
                     mode: material.alphaMode, cutoff: material.cutoff, doubleSided: material.doubleSided,
                     mirrored: simd_determinant(instance.transform) < 0, materialIndex: part.materialIndex,
@@ -58,7 +58,7 @@ enum NativeMeshBatchPlanner {
                 members[key, default: []].append(index)
             }
         }
-        if packet.renderSettings.enableGroupedDrawByMesh { order.sort { $0.mesh < $1.mesh } }
+        if packet.renderSettings.visibility.groupedDrawByMesh { order.sort { $0.mesh < $1.mesh } }
         var batches: [NativeMeshBatch] = []
         let forward = simd_normalize(packet.scene.camera.target - packet.scene.camera.eye)
         for key in order {
@@ -84,7 +84,7 @@ enum NativeMeshBatchPlanner {
         return (batches,visibility)
     }
     private static func shadowSettings(_ settings: RenderSettings) -> RenderSettings {
-        var result = settings; result.enableFrustumCulling = false; result.enableDistanceLOD = false
+        var result = settings; result.visibility.frustumCulling = false; result.visibility.distanceLOD = false
         return result
     }
 }

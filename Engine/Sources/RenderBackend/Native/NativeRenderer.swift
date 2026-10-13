@@ -71,17 +71,17 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             throw RHIError.unsupportedFeature("script HUD requires an installed in-game UI provider")
         }
         try meshes.synchronize()
-        let hdr = packet.renderSettings.enablePBR
-        if hdr || packet.renderSettings.debugViewMode == .shaded { try lighting.ensureEnvironment() }
+        let hdr = packet.renderSettings.shading.pbr
+        if hdr || packet.renderSettings.shading.debugViewMode == .shaded { try lighting.ensureEnvironment() }
         let shadowPlan = ShadowAtlasPlanner.makeShadowAtlasPlan(scene: packet.scene, drawableSize: packet.drawableSize,
-            enabled: hdr, settings: packet.renderSettings.shadowSettings, palettes: packet.jointPaletteMap, meshBounds: { meshes[$0]?.geometry.bounds })
+            enabled: hdr, settings: packet.renderSettings.shadows, palettes: packet.jointPaletteMap, meshBounds: { meshes[$0]?.geometry.bounds })
         try shadows.ensureTargets(plan: shadowPlan)
         try ensureTargets(size: packet.drawableSize, hdr: hdr)
         guard let targets else { throw RHIError.outOfMemory }
         // Post targets back the HDR ping-pong chain and, for an LDR scene, the
         // FXAA input. They are allocated whenever the assembled pipeline needs
         // them, independent of whether PBR is enabled.
-        if hdr || packet.renderSettings.enableFXAA {
+        if hdr || packet.renderSettings.postProcessing.fxaa {
             try post.ensureTargets(size: targets.size, requirements: .make(packet.renderSettings))
         }
         var nextFrame = frameState
@@ -89,7 +89,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             usedSize: packet.drawableSize),hdr: hdr)
         try device.beginFrame()
         defer { device.endFrame() }
-        let hasDepth = packet.renderSettings.enableDepthPrepass
+        let hasDepth = packet.renderSettings.shading.depthPrepass
         let commands = CommandBuffer()
         let simulationStart = DispatchTime.now().uptimeNanoseconds
         let simulation = try particleSimulation.prepare(scene: packet.scene,deltaTime: Float(packet.deltaTime),
@@ -116,7 +116,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         // it and write the final color (a pass cannot read and write the same
         // texture). Otherwise the scene renders straight into the color target.
         var current = targets.hdr?.texture
-            ?? (packet.renderSettings.enableFXAA ? post.targets?.ldr : nil) ?? color
+            ?? (packet.renderSettings.postProcessing.fxaa ? post.targets?.ldr : nil) ?? color
         var bloom: Texture?
         let planned = RenderFramePlanner.makePlan(settings: packet.renderSettings).passes
         let passes = RenderFramePlanner.motionRefinedPasses(planned,opaqueMoving: nextFrame.moving)
@@ -188,7 +188,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                     uniforms: PostEffectUniforms.bloom(size: resources.size),size: packet.drawableSize,into: commands)
                 bloom = output
             case .tonemap:
-                let output = packet.renderSettings.enableFXAA ? post.targets?.ldr ?? color : color
+                let output = packet.renderSettings.postProcessing.fxaa ? post.targets?.ldr ?? color : color
                 try hdrPasses.encodeTonemap(size: packet.drawableSize,capacity: targets.size,hdr: current,output: output,bloom: bloom,into: commands)
             case .fxaa:
                 guard let input = post.targets?.ldr else { throw RHIError.outOfMemory }
@@ -208,7 +208,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                 guard hdr, let resources = post.targets else { continue }
                 let output = resources.next(after: current)
                 try post.encode(kind: kind,input: current,secondary: current,output: output,
-                    uniforms: StylizedCharacterUniforms(style: packet.renderSettings.stylizedCharacterStyle),size: packet.drawableSize,into: commands)
+                    uniforms: StylizedCharacterUniforms(style: packet.renderSettings.stylization.style),size: packet.drawableSize,into: commands)
                 current = output
             }
             passTimes[kind] = DispatchTime.now().uptimeNanoseconds - before

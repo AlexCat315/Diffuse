@@ -11,15 +11,15 @@ struct NativePostRequirements: Equatable {
     var needsLDR: Bool
 
     static func make(_ settings: RenderSettings) -> NativePostRequirements {
-        let pingPong = (settings.enableStylizedCharacterShading ? 1 : 0)
-            + (settings.enableSSAO ? 1 : 0)
-            + (settings.enableSSR ? 1 : 0)
-            + (settings.enableTAA ? 1 : 0)
-            + (settings.enableBloom ? 1 : 0)
+        let pingPong = (settings.stylization.enabled ? 1 : 0)
+            + (settings.postProcessing.ssao ? 1 : 0)
+            + (settings.postProcessing.ssr ? 1 : 0)
+            + (settings.postProcessing.taa ? 1 : 0)
+            + (settings.postProcessing.bloom ? 1 : 0)
         return NativePostRequirements(
             pingPongEffects: pingPong,
-            needsHistory: settings.enableTAA,
-            needsLDR: settings.enableFXAA)
+            needsHistory: settings.postProcessing.taa,
+            needsLDR: settings.postProcessing.fxaa)
     }
 }
 

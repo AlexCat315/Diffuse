@@ -6,7 +6,7 @@ GuavaUI 的默认外观是一套可替换的预设。应用决定字号、字体
 
 ```swift
 var theme = Theme.defaultLight
-theme.typography.family = "Helvetica Neue" // nil 使用 AppConfig.primaryFontName
+theme.typography.family = "Helvetica Neue" // nil 使用 ApplicationConfiguration.typography.primaryFontName
 theme.typography.body = TextStyleToken(font: .system(size: 16), lineHeight: 24)
 theme.typography.caption = TextStyleToken(font: .system(size: 12), lineHeight: 18)
 theme.icons.medium = 20
@@ -46,7 +46,7 @@ Icon(MyIcons.avatar, size: avatarIcon)
 ## 字体缩放与 DPI
 
 ```swift
-var config = AppConfig(title: "Studio")
+var config = ApplicationConfiguration(title: "Studio")
 config.textScaler = TextScaler(1.5) // 主窗口和辅助窗口共用宿主偏好
 
 // 独立使用 Compose 或覆盖单个子树：

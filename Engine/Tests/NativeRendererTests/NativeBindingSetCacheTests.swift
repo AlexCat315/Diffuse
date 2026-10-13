@@ -40,11 +40,11 @@ final class NativeBindingSetCacheTests: XCTestCase {
         func render(count: Int, frame: Int) throws {
             var packet = MeshProbeScene.packet(
                 size: RenderDrawableSize(width: 96, height: 96), frame: frame)
-            packet.renderSettings.enablePBR = false
-            packet.renderSettings.enableDepthPrepass = false
+            packet.renderSettings.shading.pbr = false
+            packet.renderSettings.shading.depthPrepass = false
             // Isolate every instance so the number of draws moves 1:1 with the
             // visible instance count, exercising the worst-case churn path.
-            packet.renderSettings.enableMeshInstancing = false
+            packet.renderSettings.visibility.meshInstancing = false
             packet.scene.camera = RenderCamera(
                 eye: SIMD3(0, 0, 40), target: .zero, near: 0.1, far: 100)
             packet.scene.instances = (0..<count).map { i in
