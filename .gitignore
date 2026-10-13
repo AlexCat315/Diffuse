@@ -134,7 +134,6 @@ examples/*/Scripts/.guava/
 
 # Versioned local Wasm development builds
 GuavaUI/Browser/.dev-builds/
-GuavaUI/Sources/PetDemo/Resources/*.png
 
 # Local visual/evidence records — generated per verification run, not versioned
 /docs/guava-ui/
