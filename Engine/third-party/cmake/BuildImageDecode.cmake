@@ -69,8 +69,10 @@ else()
     set(SHARPYUV_LIB_FILENAME "libsharpyuv.a")
 endif()
 
+# cmake --install installs every archive of these dependencies, so the staging
+# target must build all of them and not only the ones copied into the bundle.
 add_custom_target(stage_image_decode
-    DEPENDS lunasvg webp sharpyuv
+    DEPENDS lunasvg plutovg webp webpdecoder webpdemux sharpyuv cpufeatures-webp
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${LUNASVG_VARIANT} ${PLUTOVG_VARIANT} ${WEBP_VARIANT} ${SHARPYUV_VARIANT}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${LUNASVG_VARIANT}/lib ${LUNASVG_VARIANT}/include
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PLUTOVG_VARIANT}/lib ${PLUTOVG_VARIANT}/include
