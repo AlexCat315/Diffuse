@@ -16,7 +16,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 
 | Layer | Technology |
 |-------|-----------|
-| Primary language | Swift 6.4.0 |
+| Primary language | Swift 6.4.1 |
 | Render backend | NativeRHI (Metal / Vulkan / DX12) |
 | UI layout | Yoga (Meta) |
 | Text shaping / rendering | HarfBuzz + FreeType |
@@ -84,7 +84,7 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
 
 ### Prerequisites
 
-- Swift 6.4.0 (official Swift toolchain)
+- Swift 6.4.1 (official Swift toolchain)
 - CMake 4.4.4
 - A C/C++ toolchain:
   - **macOS**: Xcode Command Line Tools
