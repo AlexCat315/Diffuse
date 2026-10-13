@@ -123,7 +123,7 @@ struct WorkspaceStory: View {
             }
             WorkspaceView(controller: controller) { id in
                 AnyView(Text(id == "files" ? "Sources\nResources\nTests" : id == "editor" ? "Editable document workspace" : id == "search" ? "Search panel" : id == "history" ? "Version history" : "Preview panel").padding(18))
-            }.frame(height: 360).border(.border, width: 1)
+            }.frame(height: 360)
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }

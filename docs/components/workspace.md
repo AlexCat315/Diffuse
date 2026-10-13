@@ -27,6 +27,10 @@ controller.replace(try JSONDecoder().decode(WorkspaceDocument.self, from: saved)
 
 标签点击、关闭、同组重排、跨组移动、边缘拆分、拖拽 ghost/落点预览；区域折叠/恢复与可选动画；聚焦/最大化/恢复；关闭其他/右侧、重开关闭面板、pin 的模型操作；浮动组的位置、层级与重新停靠；紧凑视图中的面板切换。
 
+面板是卡片，不是描边矩形。停靠分组和浮动窗口共用一份 `workspaceCardSurface`：`surfaceRaised` 面板体、`theme.radius.xl` 圆角、一道弱化的 1px 描边和一层浅阴影。分组间隙由 `WorkspaceTheme.splitDividerThickness + 2 × splitDividerHitSlop` 决定，默认 6 点——两卡片之间露出的画布细缝，不是每个面板四周的 margin。标签条用 `surface` 作为表头，与白色面板体形成一档明度差；圆角由卡片裁切，不需要单独处理。
+
+两块卡片之间没有间隔区域，只有一根 1px 分隔线：`WorkspaceTheme.splitDividerThickness` 是这条线本身的宽度，`WorkspaceLayoutMetrics.divider` 等于它。分隔线的可拖拽区域用负 margin 悬在两侧卡片之上（`splitDividerHitSlop`），因此不占布局宽度——分隔区域节点 `clipsToBounds = false` 且 `zIndex` 高于卡片，否则这段悬空区域会被裁掉，或被面板内容抢走指针。区域边界因此落在分隔节点的**中点**上，而不是它的任一边缘。标签条里的活动标签走 `SelectionAppearance` 的 `.navigation` role，与 List 行、Sidebar 目的地共用同一套填充、圆角和内缩。
+
 面板用 `WorkspacePanelSizing(width:height:)` 声明逻辑内容尺寸，每个轴拥有 `minimum / preferred / maximum`，直接随面板 Codable 持久化。约束跟随面板移动，分组综合所有标签的约束，避免换标签时跳动；同轴拆分累加最小/最大值和 divider，交叉轴取共同边界。标题栏高度额外计入垂直约束，200% 字体时同步扩高。初始化和解码会归一化非有限值、负值以及 min/max 冲突，缺失尺寸组使用独立默认值。
 
 ```swift

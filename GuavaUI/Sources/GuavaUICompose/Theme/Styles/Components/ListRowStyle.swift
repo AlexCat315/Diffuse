@@ -6,6 +6,10 @@ public struct ListRowStyleConfiguration {
     public let isSelected: Bool
     public let isHovered: Bool
     public let isEnabled: Bool
+    /// The row box is fixed at this height, so a style lays its content out
+    /// *inside* it instead of letting a taller child (a badge, a two-line
+    /// cell) push the painted row past its own slot.
+    public let rowHeight: Float
     public let theme: Theme
 }
 
