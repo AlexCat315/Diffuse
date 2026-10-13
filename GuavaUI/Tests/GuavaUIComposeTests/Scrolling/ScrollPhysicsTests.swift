@@ -412,8 +412,8 @@ struct ScrollPhysicsTests {
         }
     } }
 
-    @Test("Nested edge hands outward input to the outer scroll surface")
-    func nestedBoundaryHandoff() { GlobalTestLock.locked {
+    @Test("Nested edge consumes outward input while its axis has overflow")
+    func nestedBoundaryContainsInput() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
         let tree = NodeTree()
@@ -427,7 +427,7 @@ struct ScrollPhysicsTests {
         graph.computeLayout(width: 200, height: 300)
         let inner = firstNode(in: tree.root, where: { ($0.attachments[LayoutDebugAttachmentKey.debugName] as? String) == "inner-scroll" })!
         let result = registry.handlers(for: inner).wheel!(MouseWheelEvent(x: 0, y: 1), .target)
-        #expect(result == .ignored)
+        #expect(result == .handled)
         #expect(inner.contentOffset == .zero)
         #expect(registry.handlers(for: inner).wheel!(MouseWheelEvent(x: 0, y: -1), .target) == .handled)
         #expect(inner.contentOffset.y > 0)

@@ -25,7 +25,6 @@ private enum _ScrollViewAttachmentKeys {
     static let contentSize = "__scrollview_content_size"
     static let motion = "__scrollview_motion"
     static let report = "__scrollview_report"
-    static let axes = "__scrollview_axes"
     static let pendingOffset = "__scrollview_pending_offset"
 
     static func motionAnimator(for node: Node,
@@ -107,7 +106,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     static var scrollbarGutterWidth: Float { 12 }
 
     public init(_ axes: ScrollAxis = .vertical,
-                consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
+                consumePolicy: ScrollConsumePolicy = .whenScrollable,
                 scrollbarGutter: ScrollbarGutter = .overlay,
                 scrollOffset: Binding<CGPoint>? = nil,
                 onViewportChange: ((ScrollViewport) -> Void)? = nil,
@@ -140,7 +139,6 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                             contentSize: Self.cachedScrollableContentSize(for: node)))
         }
         node.attachments[_ScrollViewAttachmentKeys.report] = report
-        node.attachments[_ScrollViewAttachmentKeys.axes] = axes
         if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset {
             // The child tree still has its previous layout at this point. A
             // new binding offset may target newly grown content, so adopting
@@ -224,34 +222,34 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
                 // Nothing measured yet — keep letting the event bubble.
                 guard Self.publishScrollRange(to: motion, on: node) else {
-                    return consumePolicy.result(didScroll: false)
+                    return consumePolicy.result(didScroll: false, canScroll: false)
                 }
+                let horizontalOverflow = axes != .vertical && motion.maximumOffset.x > 0
+                let verticalOverflow = axes != .horizontal && motion.maximumOffset.y > 0
                 if dx == 0 && dy == 0 {
                     if event.input.phase != .none || event.input.momentumPhase != .none {
                         motion.scrollDirectly(by: .zero)
                     }
-                    return consumePolicy.result(didScroll: false)
+                    // Zero-delta lifecycle packets cannot identify an axis.
+                    // An existing phased stream already retains its owner.
+                    return consumePolicy.result(didScroll: false, canScroll: false)
                 }
 
-                // A surface with no overflow cannot consume a wheel or invent
-                // elastic space. At a nested edge, hand outward input to the
-                // nearest scroll ancestor instead of trapping it in a bounce.
-                if motion.maximumOffset.x <= 0 { dx = 0 }
-                if motion.maximumOffset.y <= 0 { dy = 0 }
-                if consumePolicy == .whenOffsetChanged {
-                    if Self.hasScrollAncestor(node, horizontal: true),
-                       Self.pointsOutward(dx, at: previousOffset.x, maximum: motion.maximumOffset.x) { dx = 0 }
-                    if Self.hasScrollAncestor(node, horizontal: false),
-                       Self.pointsOutward(dy, at: previousOffset.y, maximum: motion.maximumOffset.y) { dy = 0 }
+                // Overflow owns the input at either bound. An empty axis still
+                // passes through, so a horizontal child does not trap a vertical
+                // parent's input. Explicit .whenOffsetChanged enables chaining.
+                if !horizontalOverflow { dx = 0 }
+                if !verticalOverflow { dy = 0 }
+                guard dx != 0 || dy != 0 else {
+                    return consumePolicy.result(didScroll: false, canScroll: false)
                 }
-                guard dx != 0 || dy != 0 else { return consumePolicy.result(didScroll: false) }
 
                 // Precise input already contains the OS's acceleration and
                 // momentum. Line wheels are discrete placements. Neither may
                 // infer another fling or start a spring between input packets.
                 motion.adopt(previousOffset)
                 let nextOffset = motion.scrollDirectly(by: CGPoint(x: CGFloat(dx), y: CGFloat(dy)))
-                return consumePolicy.result(didScroll: nextOffset != previousOffset)
+                return consumePolicy.result(didScroll: nextOffset != previousOffset, canScroll: true)
             }
             registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
                 switch pointerPhase {
@@ -466,20 +464,6 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             physics.rubberBand.isEnabled = false
         }
         return physics
-    }
-
-    private static func pointsOutward(_ delta: Float, at offset: CGFloat, maximum: CGFloat) -> Bool {
-        (delta < 0 && offset <= 0) || (delta > 0 && offset >= maximum)
-    }
-
-    private static func hasScrollAncestor(_ node: Node, horizontal: Bool) -> Bool {
-        var parent = node.parent
-        while let ancestor = parent {
-            if let axes = ancestor.attachments[_ScrollViewAttachmentKeys.axes] as? ScrollAxis,
-               horizontal ? axes != .vertical : axes != .horizontal { return true }
-            parent = ancestor.parent
-        }
-        return false
     }
 
     private static func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {

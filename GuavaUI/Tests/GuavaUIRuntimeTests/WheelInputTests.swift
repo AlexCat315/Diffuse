@@ -56,6 +56,20 @@ struct WheelInputTests {
         #expect(left == 2 && right == 1)
     }
 
+    @Test("Focused fallback is retained without a pointer and a fresh known pointer selects its own viewport")
+    func focusedFallbackFollowsPointer() {
+        let f = Fixture(); var left = 0; var right = 0
+        f.left.isFocusable = true
+        f.left.attachments[WheelRoutingAttachmentKey.priority] = WheelRoutingPriority.preferFocused
+        f.focus.focus(f.left)
+        f.registry.setWheel(f.left, route: .textInput) { _, _ in left += 1; return .handled }
+        f.registry.setWheel(f.right, route: .scroll) { _, _ in right += 1; return .handled }
+        f.dispatcher.dispatch(.mouseWheel(.init(x: 0, y: -1)))
+        #expect(left == 1 && right == 0)
+        f.wheel(250)
+        #expect(left == 1 && right == 1)
+    }
+
     @Test("A global scroll fallback latches its consumer when an overlay intercepted hit testing")
     func globalFallbackLatchesConsumer() {
         let f = Fixture(); var left = 0; var right = 0
