@@ -95,7 +95,7 @@ Tree(nodes, children: \.children, configure: { options in
 
 macOS 彩色 emoji 接入共享文字排版和独立 RGBA 图集，支持普通文字、输入框、头像与游戏内 HUD。画廊的 `Theme / Typography` 与 `TextField` 有混排/透明度和 Unicode 编辑示例；其他平台彩色字形仍待接入。[文字渲染契约](../docs/components/typography.md)记录密度、缓存、传输与原生验证边界。
 
-[与 GPUI Kit 的逐项审计及缺失清单](../docs/guava-ui/gpui-kit-audit.md)明确区分已有能力、基础实现与缺失组件。
+[组件覆盖与缺失清单](../docs/components/gaps.md)明确区分已有能力、基础实现与缺失组件，并给出缺失组件的验收规范。
 
 验证：
 

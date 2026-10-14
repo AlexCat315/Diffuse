@@ -40,7 +40,7 @@
 ## Behavior
 
 - **指针**：down 把 thumb 锁定到光标 X 位置；motion 时持续更新 binding；up 释放并触发 `onEditingChanged?(false)`。
-- **键盘**：未实现（待 Phase 9 键盘焦点链）。
+- **键盘**：← / ↓ 减小、→ / ↑ 增大，Home / End 到范围两端（Page 键未实现）。
 - **step**：非 nil 时把值四舍五入到最近的 step 倍数。
 
 ## Authoring rules
@@ -56,7 +56,7 @@
 
 ## Known issues / TODO
 
-- 没有 keyboard support（方向键、Page）
+- Page 键未实现（方向键 / Home / End 已实现）
 - 没有 tick mark / discrete step 视觉提示
 - 没有 vertical 方向
 

@@ -57,7 +57,7 @@ Tree(roots, children: \.children, id: \.id, // 默认 \.id
 - **disclosure**：点击 chevron 区域翻转 expanded；点击其他区域选中本行
 - **指针**：单击行 → `selection.wrappedValue = id`
 - **滚动**：外层 `ScrollView(.vertical)`
-- **键盘**：未实现
+- **键盘**：↑ / ↓ 导航，← 折叠或选父，→ 展开或进子层，Return / Space 选择
 
 ## Known issues
 

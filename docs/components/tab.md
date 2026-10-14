@@ -49,7 +49,7 @@ TabView(selection: $page, tabs: [
 ## Behavior
 
 - **指针**：单击某 tab → `selection.wrappedValue = tab.id`
-- **键盘**：未实现（待 Phase 9 焦点链）
+- **键盘**：单一 Tab 停靠 + ← / → / Home / End 在标签间移动，禁用标签跳过
 - **content 切换**：只渲染 active tab 的 content；其他 tab 的 content 闭包不参与 recompose
 - **selection miss**：若 `selection.wrappedValue` 不命中任何 tab → bar 仍显示，content 区为空
 
@@ -67,9 +67,9 @@ TabView(selection: $page, tabs: [
 ## Known limitations / TODO
 
 - 没有 `TabStyle` 协议，视觉硬编码（chrome / indicator 颜色 / padding）
-- 没有键盘导航（← / → / Home / End）
+- 没有折叠菜单（溢出滚动、键盘导航与 compact 底部栏已实现）
 - 没有 close button / dirty marker（VS Code 风格 EditorTabs）
-- TabBar 当前总是水平、单行；没有溢出滚动 / 折叠菜单
+- TabBar 单行；溢出可滚动；没有折叠菜单
 
 ## References
 

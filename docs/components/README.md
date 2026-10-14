@@ -2,7 +2,7 @@
 
 本目录收录组件设计契约。索引标记仅代表文档存在，不表示组件已达到完整或生产成熟状态。
 
-跨设备抽象与组件交付要求见 [组件标准](standard.md)，空间不足阶梯、手机/平板重排、触摸/键盘/辅助功能与动效验收见[跨平台控件规范](adaptive-spec.md)，实际示例见 `GuavaUI/Examples/Sources/GalleryContent/`。每篇覆盖：
+跨设备抽象与组件交付要求见 [组件标准](standard.md)，空间不足阶梯、手机/平板重排、触摸/键盘/辅助功能与动效验收见[跨平台控件规范](adaptive-spec.md)，缺失组件与既有组件功能缺口见[组件覆盖与缺失清单](gaps.md)，实际示例见 `GuavaUI/Examples/Sources/GalleryContent/`。每篇覆盖：
 
 1. **Anatomy** —— ASCII 框图 + 槽位命名
 2. **Sizing** —— 高度 / padding / 最小命中区
@@ -18,7 +18,8 @@
 
 | 组件 | 状态 | 文件 |
 | ---- | ---- | ---- |
-| 跨平台控件规范（手机 / 平板 / 桌面） | 空间阶梯、重排与验收 | [adaptive-spec.md](adaptive-spec.md) |
+| 跨平台控件规范（手机 / 平板 / 桌面） | 空间阶梯、重排、动效与验收 | [adaptive-spec.md](adaptive-spec.md) |
+| 组件覆盖与缺失清单 | 缺失组件规范、功能缺口、优先级 | [gaps.md](gaps.md) |
 | Button | 文档已写 | [button.md](button.md) |
 | IconButton | 文档已写 | [iconbutton.md](iconbutton.md) |
 | Toggle | 文档已写 | [toggle.md](toggle.md) |

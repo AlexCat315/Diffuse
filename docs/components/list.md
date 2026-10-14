@@ -52,7 +52,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 ## Behavior
 
 - **指针**：down + up 在同一行内 → 写 `selection.wrappedValue = id`
-- **键盘**：未实现
+- **键盘**：↑ / ↓ 移动选择，Home / End 到首尾，Return / keypad Enter 选择当前行
 - **滚动**：外层 `ScrollView(.vertical)`，wheel 自动支持；只挂载视口附近的行，用占位高度保留完整滚动范围。
 - **虚拟化**：`List` 内部使用 `VirtualStack`；`VirtualStack(data, id: \.id, rowHeight: 30, scrollToIndex: target)` 和 `VirtualList(data, id: \.id, rowHeight: 30)` 可单独使用，默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。
 - **调用方的尺寸约束生效**：`List` 最外层是键盘 host，所以 `.frame`/`.flex` 落在它上面，内部滚动容器取剩余高度并裁切。缺少这条时滚动容器会按自身内容撑高，行会画到容器外面去。

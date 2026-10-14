@@ -26,12 +26,16 @@ NumberField(value: $mass, isEnabled: false)
 | ---- | ---- | ---- |
 | `value` | 必填 | `Binding<Float>` |
 | `decimals` | `2` | 格式化时保留的小数位上限，自动去掉尾随 `0` |
-| `size` | `.regular` | 直接复用 `TextField.Size` |
+| `size` | `.automatic` | 直接复用 `TextField.Size` |
 | `isEnabled` | `true` | `false` 时禁用输入 |
+| `minValue` / `maxValue` | `nil` | 提交与步进时夹紧；到达边界时步进按钮禁用 |
+| `step` | `nil` | 步进与输入归一化的步长 |
+| `showsStepper` | `false` | 显示紧凑上下箭头列；方向键步进不依赖它 |
 
 ## Behavior
 
 - **提交时机**：`Return` 或失焦时提交
+- **键盘步进**：↑ / ↓ 调整值，Shift ×10、Alt ×0.1；达到 min / max 边界停止
 - **解析策略**：用 `Float(...)` 解析；失败则恢复到当前已提交值
 - **编辑体验**：聚焦后显示 draft，避免把 `1.`、`-` 这类中间态立刻回写成格式化结果
 - **格式化**：输出会去掉尾随 `0` 和孤立的小数点，例如 `1.50 -> 1.5`，`2.00 -> 2`
@@ -44,13 +48,12 @@ NumberField(value: $mass, isEnabled: false)
 - 用 `.small` 放进 24-26pt 高的紧凑行
 
 ❌ 不应：
-- 把 `NumberField` 当 stepper；它没有增减按钮，也没有滚轮步进
+- 把 `NumberField` 当流程导航（那是 `Stepper`）；数值增减用 `showsStepper` 或方向键
 - 指望它做 locale-aware 小数分隔符；当前只接受 `.`
 
 ## Known issues / TODO
 
-- 还没有 stepper arrows / drag scrub
-- 还没有最小值、最大值、step 约束
+- 还没有拖拽 scrub
 - 还没有 locale decimal separator 支持
 
 ## References
