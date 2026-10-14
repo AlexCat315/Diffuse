@@ -11,7 +11,7 @@ const { t } = useLocale()
     <div class="concept-window">
       <div class="concept-topbar">
         <div class="traffic"><i></i><i></i><i></i></div>
-        <b>Guava Editor</b>
+        <b>GuavaStudio</b>
         <div class="concept-tools"><MousePointer2 :size="13" /><Rotate3D :size="13" /><button><Play :size="11" /> Run</button></div>
       </div>
       <div class="concept-body">

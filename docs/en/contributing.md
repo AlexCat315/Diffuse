@@ -11,7 +11,7 @@ kind: doc
 
 # Contributing
 
-Guava Engine is licensed under Apache-2.0. Keep changes focused and add proportionate verification for behavior changes.
+GuavaStudio is licensed under Apache-2.0. Keep changes focused and add proportionate verification for behavior changes.
 
 ## Suggested workflow
 

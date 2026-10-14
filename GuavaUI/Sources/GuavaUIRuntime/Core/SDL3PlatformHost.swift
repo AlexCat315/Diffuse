@@ -213,7 +213,7 @@ public final class SDL3PlatformHost: PlatformHost {
     public var onTeardown: (@MainActor () -> Void)?
     public var externalDisplayRequestDrain: (() -> Bool)?
 
-    private var frameRateMode: PlatformFrameRateMode = .eventDriven
+    private let frameDrive = HostFrameDrive()
     private var frameTimingLogCounter = 0
     // Tests can advance frame time independently of OS scheduling latency.
     var frameClock: () -> Double = TimingTrace.now
@@ -396,19 +396,24 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public func setTargetFrameRate(_ framesPerSecond: Double?) {
         guard let framesPerSecond, framesPerSecond.isFinite, framesPerSecond > 0 else {
-            frameRateMode = .eventDriven
+            frameDrive.mode = .eventDriven
             return
         }
-        frameRateMode = .fixed(Self.sanitizedFrameRate(framesPerSecond))
+        frameDrive.mode = .fixed(Self.sanitizedFrameRate(framesPerSecond))
     }
 
     public func setFrameRateMode(_ mode: PlatformFrameRateMode) {
         switch mode {
         case .eventDriven, .displayRefresh:
-            frameRateMode = mode
+            frameDrive.mode = mode
         case let .fixed(framesPerSecond):
-            frameRateMode = .fixed(Self.sanitizedFrameRate(framesPerSecond))
+            frameDrive.mode = .fixed(Self.sanitizedFrameRate(framesPerSecond))
         }
+    }
+
+    public var safeArea: WindowSafeArea {
+        guard let id = mainWindowID else { return WindowSafeArea() }
+        return shell?.window(for: id)?.safeArea ?? WindowSafeArea()
     }
 
     public func currentDisplayRefreshRate(windowID: WindowID? = nil) -> Double? {
@@ -429,265 +434,285 @@ public final class SDL3PlatformHost: PlatformHost {
 
         _isRunning = true
         Logger.runtime.info("running — \(title)")
-        var lastLoopTime = frameClock()
-        var lastFramePreparationTime: Double?
-        var lastAnimationTickTime = lastLoopTime
-        var animationsPreviouslyActive = false
-        var fallbackDeadline = FrameDeadline()
-        var reportedFallback = false
+        frameDrive.clock = HostFrameClock(now: frameClock())
+        #if os(iOS)
+        let driver = IOSFrameDriver { [weak self] in
+            guard let self else { return false }
+            guard self._isRunning, shell.isRunning, !self.sessions.isEmpty else {
+                self.finishRunLoop()
+                return false
+            }
+            self.runFrame(wait: false)
+            return true
+        }
+        frameDrive.driver = driver
+        driver.start()
+        #else
+        while _isRunning && shell.isRunning && !sessions.isEmpty { runFrame(wait: true) }
+        finishRunLoop()
+        #endif
+    }
 
-        while _isRunning && shell.isRunning && !sessions.isEmpty {
-            let frameStart = frameClock()
-            let loopDeltaTime = frameStart - lastLoopTime
-            lastLoopTime = frameStart
-            var framePreparationDelta = loopDeltaTime
-            var timing = TimingTrace(label: "[timing] host.frame")
+    private func runFrame(wait: Bool) {
+        guard let shell else { return }
+        let state = frameDrive.clock
+        let frameStart = frameClock()
+        let loopDeltaTime = frameStart - state.lastLoopTime
+        state.lastLoopTime = frameStart
+        var framePreparationDelta = loopDeltaTime
+        var timing = TimingTrace(label: "[timing] host.frame")
 
-            for routed in shell.pollWindowEvents() {
-                guard let session = sessions[routed.windowID] else { continue }
-                session.withCurrent {
-                    if session.dispatcher.dispatch(routed.event) {
-                        session.onEvent?(routed.event)
-                        if routed.windowID == mainWindowID { onEvent?(routed.event) }
-                    }
+        for routed in shell.pollWindowEvents() {
+            guard let session = sessions[routed.windowID] else { continue }
+            session.withCurrent {
+                if session.dispatcher.dispatch(routed.event) {
+                    session.onEvent?(routed.event)
+                    if routed.windowID == mainWindowID { onEvent?(routed.event) }
                 }
-                // Focus, caret position, and IME anchor geometry are updated
-                // during draw, so input delivery must always request a frame.
+            }
+            // Focus, caret position, and IME anchor geometry are updated
+            // during draw, so input delivery must always request a frame.
+            session.needsDisplay = true
+        }
+        let externalDisplayRequested = externalDisplayRequestDrain?() == true
+        if externalDisplayRequested {
+            for session in sessions.values {
                 session.needsDisplay = true
-            }
-            let externalDisplayRequested = externalDisplayRequestDrain?() == true
-            if externalDisplayRequested {
-                for session in sessions.values {
-                    session.needsDisplay = true
-                }
-            }
-
-            // Run work handed back from native callbacks (e.g. file dialogs) on
-            // the main thread, then force a frame so any resulting UI change
-            // (such as a freshly loaded project) is shown promptly.
-            let pendingMainThreadWork = mainThreadInbox.drain()
-            if !pendingMainThreadWork.isEmpty {
-                for work in pendingMainThreadWork { work() }
-                for session in sessions.values {
-                    session.needsDisplay = true
-                }
-            }
-            timing.mark("events")
-
-            let hasDisplayWork = sessions.values.contains { session in
-                session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
-            }
-            let animationsWereActive = AnimatorScheduler.current.hasActiveAnimations
-            if !animationsPreviouslyActive || !animationsWereActive {
-                lastAnimationTickTime = frameStart
-            }
-            let wantsNativeRefresh = frameRateMode == .displayRefresh
-                || (frameRateMode == .eventDriven && animationsWereActive)
-            var nativeWindows = Set<WindowID>()
-            var refreshTicks: [WindowID: DisplayRefreshTick] = [:]
-            for id in sessionOrder {
-                if shell.setDisplayRefreshEnabled(wantsNativeRefresh, windowID: id), wantsNativeRefresh {
-                    nativeWindows.insert(id)
-                    if let tick = shell.takeDisplayRefresh(windowID: id) { refreshTicks[id] = tick }
-                }
-            }
-            let needsRefreshFallback = wantsNativeRefresh && nativeWindows.count < sessions.count
-            if needsRefreshFallback, !reportedFallback {
-                Logger.runtime.warning("native display refresh unavailable; using fixed-rate deadline fallback")
-                reportedFallback = true
-            }
-            let fallbackInterval: Double? = {
-                if case let .fixed(fps) = frameRateMode { return 1.0 / fps }
-                guard needsRefreshFallback else { return nil }
-                return 1.0 / Self.sanitizedDisplayRefreshRate(shell.displayRefreshRate(windowID: mainWindowID))
-            }()
-            fallbackDeadline.update(interval: fallbackInterval, now: frameStart)
-            let fallbackDue = fallbackDeadline.consumeIfDue(now: frameStart)
-            let hasRefreshTick = !refreshTicks.isEmpty
-            // Animate the frame for its predicted display time. CADisplayLink's
-            // timestamp describes the previous display, while targetTimestamp
-            // tracks the upcoming interval, including variable refresh rates.
-            let animationTickTime = refreshTicks.values.map(\.targetTimestamp).max() ?? frameStart
-            let isCadenceDriven = frameRateMode != .eventDriven
-            let frameDue = hasRefreshTick || fallbackDue
-            let shouldRunFramePreparation = frameDue || (!isCadenceDriven && hasDisplayWork)
-            if isCadenceDriven {
-                for id in sessionOrder where refreshTicks[id] != nil || (!nativeWindows.contains(id) && fallbackDue) {
-                    sessions[id]?.needsDisplay = true
-                }
-            }
-            if shouldRunFramePreparation {
-                let preparationTime = isCadenceDriven ? animationTickTime : frameStart
-                if !isCadenceDriven {
-                    framePreparationDelta = loopDeltaTime
-                } else if let lastFramePreparationTime {
-                    framePreparationDelta = max(0, preparationTime - lastFramePreparationTime)
-                } else {
-                    framePreparationDelta = fallbackInterval
-                        ?? refreshTicks.values.first.map { max(0, $0.targetTimestamp - $0.timestamp) }
-                        ?? 0
-                }
-                // Different displays can predict targets in a different order
-                // from callback delivery. Keep the shared update clock monotonic.
-                lastFramePreparationTime = max(lastFramePreparationTime ?? preparationTime, preparationTime)
-                onBeforeCommit?(framePreparationDelta)
-            }
-            timing.mark("prepare")
-
-            for id in sessionOrder where shouldRunFramePreparation {
-                guard let session = sessions[id] else { continue }
-                let didCommit = session.withCurrent {
-                    session.recomposer.commitAll()
-                }
-                if didCommit {
-                    session.needsDisplay = true
-                }
-            }
-            timing.mark("commit")
-
-            // Input can wake SDL and redraw immediately, without advancing the
-            // animation between native refresh callbacks. Missed callbacks are
-            // coalesced, so a blocked present never causes catch-up frames.
-            if frameDue || (shouldRunFramePreparation && !animationsWereActive) {
-                AnimatorScheduler.current.tick(deltaTime: max(0, animationTickTime - lastAnimationTickTime))
-                lastAnimationTickTime = max(lastAnimationTickTime, animationTickTime)
-            }
-            let animationsActive = AnimatorScheduler.current.hasActiveAnimations
-            animationsPreviouslyActive = animationsActive
-            timing.mark("animations")
-
-            var renderedAnyFrame = false
-            var renderSummaries: [String] = []
-
-            for id in sessionOrder {
-                guard let session = sessions[id],
-                      let handle = shell.window(for: id)
-                else { continue }
-
-                if session.updateMetrics(from: handle) {
-                    session.needsDisplay = true
-                    session.nextRenderAttemptTime = 0
-                    session.onResize?(session.drawableSize.width, session.drawableSize.height)
-                    if id == mainWindowID {
-                        drawableSize = session.drawableSize
-                        logicalSize = session.logicalSize
-                        onResize?(session.drawableSize.width, session.drawableSize.height)
-                    }
-                }
-
-                if !session.didCallOnInit, let surface = handle.renderSurface {
-                    session.didCallOnInit = true
-                    session.needsDisplay = true
-                    session.onInit?(surface, session.drawableSize.width, session.drawableSize.height)
-                    if id == mainWindowID {
-                        onInit?(surface, session.drawableSize.width, session.drawableSize.height)
-                    }
-                }
-
-                let hasRenderInvalidation = session.tree.hasRenderUpdates
-                if nativeWindows.contains(id), refreshTicks[id] != nil {
-                    session.nextRenderAttemptTime = 0
-                }
-                let shouldRender = (session.needsDisplay || hasRenderInvalidation)
-                    && frameStart >= session.nextRenderAttemptTime
-                    && (!isCadenceDriven || refreshTicks[id] != nil || (!nativeWindows.contains(id) && fallbackDue))
-                    && (isCadenceDriven || !nativeWindows.contains(id) || refreshTicks[id] != nil || session.needsDisplay)
-
-                if shouldRender, let surface = handle.renderSurface {
-                    var reasons: [String] = []
-                    if session.needsDisplay { reasons.append("needsDisplay") }
-                    if hasRenderInvalidation { reasons.append("renderDirty") }
-
-                    session.needsDisplay = false
-                    let renderStart = TimingTrace.now()
-                    let hasFrameHandler = session.onFrame != nil
-                        || (id == mainWindowID && onFrame != nil)
-                    var didRender = !hasFrameHandler
-                    if let callback = session.onFrame {
-                        didRender = callback(surface) || didRender
-                    }
-                    if id == mainWindowID, let callback = onFrame {
-                        didRender = callback(surface) || didRender
-                    }
-                    if didRender {
-                        session.nextRenderAttemptTime = 0
-                        session.withCurrent {
-                            session.tree.flush()
-                        }
-                    } else {
-                        session.needsDisplay = true
-                        // An occluded/unavailable swapchain must remain pending,
-                        // without redrawing the entire scene every 1 ms. Retry at
-                        // display cadence; native events can still wake SDL.
-                        if nativeWindows.contains(id) {
-                            // The next native callback is itself the retry
-                            // deadline; do not add another software period.
-                            session.nextRenderAttemptTime = .infinity
-                        } else {
-                            session.nextRenderAttemptTime = frameClock() + 1.0 / Self.sanitizedDisplayRefreshRate(
-                                shell.displayRefreshRate(windowID: id)
-                            )
-                        }
-                    }
-                    let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
-                    if didRender {
-                        let reasonText = reasons.isEmpty ? "unknown" : reasons.joined(separator: "+")
-                        let renderText = String(format: "%.2fms", renderMilliseconds)
-                        renderSummaries.append(
-                            "window=\(id) reason=\(reasonText) render=\(renderText)"
-                        )
-                        renderedAnyFrame = true
-                    }
-                }
-
-                syncTextInputArea(for: session, shell: shell)
-                scheduleFocusedTextRefresh(for: session)
-            }
-            timing.mark("windows")
-
-            if renderedAnyFrame {
-                let deltaText = String(format: "%.2fms", framePreparationDelta * 1000)
-                let extra = [
-                    "delta=\(deltaText)",
-                    "animationsActive=\(animationsActive)",
-                ] + renderSummaries
-                frameTimingLogCounter &+= 1
-                if Self.frameTimingLogStride > 0,
-                   frameTimingLogCounter % Self.frameTimingLogStride == 0 {
-                    Logger.runtime.debug("\(timing.summary(extra: extra))")
-                }
-            }
-
-            pruneClosedSessions(using: shell)
-
-            if _isRunning {
-                if frameRateMode == .eventDriven && !animationsActive {
-                    fallbackDeadline.update(interval: nil, now: frameStart)
-                    for id in nativeWindows { shell.setDisplayRefreshEnabled(false, windowID: id) }
-                }
-                let now = frameClock()
-                let hasImmediateWork = sessions.values.contains { session in
-                    !isCadenceDriven && (session.recomposer.hasPending ||
-                        ((session.needsDisplay || (session.tree.hasRenderUpdates && !nativeWindows.contains(session.id)))
-                            && now >= session.nextRenderAttemptTime)
-                    )
-                }
-                var timeout = hasImmediateWork
-                    ? 0
-                    : eventWaitTimeout(now: now)
-                if let remaining = fallbackDeadline.remaining(now: now) { timeout = min(timeout, remaining) }
-                for session in sessions.values where !isCadenceDriven && !nativeWindows.contains(session.id)
-                    && (session.needsDisplay || session.tree.hasRenderUpdates) {
-                    timeout = min(timeout, max(0.001, session.nextRenderAttemptTime - now))
-                }
-                // Display callbacks, input and cross-thread work all wake the
-                // same native wait. No sleep/spin follows a vsync-blocked frame:
-                // a queued callback wakes immediately, and fallback waits only
-                // for the remainder of its absolute deadline.
-                _ = shell.waitForEvents(timeout: timeout)
             }
         }
 
+        // Run work handed back from native callbacks (e.g. file dialogs) on
+        // the main thread, then force a frame so any resulting UI change
+        // (such as a freshly loaded project) is shown promptly.
+        let pendingMainThreadWork = mainThreadInbox.drain()
+        if !pendingMainThreadWork.isEmpty {
+            for work in pendingMainThreadWork { work() }
+            for session in sessions.values {
+                session.needsDisplay = true
+            }
+        }
+        timing.mark("events")
+
+        let hasDisplayWork = sessions.values.contains { session in
+            session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
+        }
+        let animationsWereActive = AnimatorScheduler.current.hasActiveAnimations
+        if !state.animationsPreviouslyActive || !animationsWereActive {
+            state.lastAnimationTickTime = frameStart
+        }
+        let wantsNativeRefresh = frameDrive.mode == .displayRefresh
+            || (frameDrive.mode == .eventDriven && animationsWereActive)
+        var nativeWindows = Set<WindowID>()
+        var refreshTicks: [WindowID: DisplayRefreshTick] = [:]
+        for id in sessionOrder {
+            if shell.setDisplayRefreshEnabled(wantsNativeRefresh, windowID: id), wantsNativeRefresh {
+                nativeWindows.insert(id)
+                if let tick = shell.takeDisplayRefresh(windowID: id) { refreshTicks[id] = tick }
+            }
+        }
+        let needsRefreshFallback = wantsNativeRefresh && nativeWindows.count < sessions.count
+        if needsRefreshFallback, !state.reportedFallback {
+            Logger.runtime.warning("native display refresh unavailable; using fixed-rate deadline fallback")
+            state.reportedFallback = true
+        }
+        let fallbackInterval: Double? = {
+            if case let .fixed(fps) = frameDrive.mode { return 1.0 / fps }
+            guard needsRefreshFallback else { return nil }
+            return 1.0 / Self.sanitizedDisplayRefreshRate(shell.displayRefreshRate(windowID: mainWindowID))
+        }()
+        state.fallbackDeadline.update(interval: fallbackInterval, now: frameStart)
+        let fallbackDue = state.fallbackDeadline.consumeIfDue(now: frameStart)
+        let hasRefreshTick = !refreshTicks.isEmpty
+        // Animate the frame for its predicted display time. CADisplayLink's
+        // timestamp describes the previous display, while targetTimestamp
+        // tracks the upcoming interval, including variable refresh rates.
+        let animationTickTime = refreshTicks.values.map(\.targetTimestamp).max() ?? frameStart
+        let isCadenceDriven = frameDrive.mode != .eventDriven
+        let frameDue = hasRefreshTick || fallbackDue
+        let shouldRunFramePreparation = frameDue || (!isCadenceDriven && hasDisplayWork)
+        if isCadenceDriven {
+            for id in sessionOrder where refreshTicks[id] != nil || (!nativeWindows.contains(id) && fallbackDue) {
+                sessions[id]?.needsDisplay = true
+            }
+        }
+        if shouldRunFramePreparation {
+            let preparationTime = isCadenceDriven ? animationTickTime : frameStart
+            if !isCadenceDriven {
+                framePreparationDelta = loopDeltaTime
+            } else if let previousPreparation = state.lastFramePreparationTime {
+                framePreparationDelta = max(0, preparationTime - previousPreparation)
+            } else {
+                framePreparationDelta = fallbackInterval
+                    ?? refreshTicks.values.first.map { max(0, $0.targetTimestamp - $0.timestamp) }
+                    ?? 0
+            }
+            // Different displays can predict targets in a different order
+            // from callback delivery. Keep the shared update clock monotonic.
+            state.lastFramePreparationTime = max(state.lastFramePreparationTime ?? preparationTime, preparationTime)
+            onBeforeCommit?(framePreparationDelta)
+        }
+        timing.mark("prepare")
+
+        for id in sessionOrder where shouldRunFramePreparation {
+            guard let session = sessions[id] else { continue }
+            let didCommit = session.withCurrent {
+                session.recomposer.commitAll()
+            }
+            if didCommit {
+                session.needsDisplay = true
+            }
+        }
+        timing.mark("commit")
+
+        // Input can wake SDL and redraw immediately, without advancing the
+        // animation between native refresh callbacks. Missed callbacks are
+        // coalesced, so a blocked present never causes catch-up frames.
+        if frameDue || (shouldRunFramePreparation && !animationsWereActive) {
+            AnimatorScheduler.current.tick(deltaTime: max(0, animationTickTime - state.lastAnimationTickTime))
+            state.lastAnimationTickTime = max(state.lastAnimationTickTime, animationTickTime)
+        }
+        let animationsActive = AnimatorScheduler.current.hasActiveAnimations
+        state.animationsPreviouslyActive = animationsActive
+        timing.mark("animations")
+
+        var renderedAnyFrame = false
+        var renderSummaries: [String] = []
+
+        for id in sessionOrder {
+            guard let session = sessions[id],
+                  let handle = shell.window(for: id)
+            else { continue }
+
+            if session.updateMetrics(from: handle) {
+                session.needsDisplay = true
+                session.nextRenderAttemptTime = 0
+                session.onResize?(session.drawableSize.width, session.drawableSize.height)
+                if id == mainWindowID {
+                    drawableSize = session.drawableSize
+                    logicalSize = session.logicalSize
+                    onResize?(session.drawableSize.width, session.drawableSize.height)
+                }
+            }
+
+            if !session.didCallOnInit, let surface = handle.renderSurface {
+                session.didCallOnInit = true
+                session.needsDisplay = true
+                session.onInit?(surface, session.drawableSize.width, session.drawableSize.height)
+                if id == mainWindowID {
+                    onInit?(surface, session.drawableSize.width, session.drawableSize.height)
+                }
+            }
+
+            let hasRenderInvalidation = session.tree.hasRenderUpdates
+            if nativeWindows.contains(id), refreshTicks[id] != nil {
+                session.nextRenderAttemptTime = 0
+            }
+            let shouldRender = (session.needsDisplay || hasRenderInvalidation)
+                && frameStart >= session.nextRenderAttemptTime
+                && (!isCadenceDriven || refreshTicks[id] != nil || (!nativeWindows.contains(id) && fallbackDue))
+                && (isCadenceDriven || !nativeWindows.contains(id) || refreshTicks[id] != nil || session.needsDisplay)
+
+            if shouldRender, let surface = handle.renderSurface {
+                var reasons: [String] = []
+                if session.needsDisplay { reasons.append("needsDisplay") }
+                if hasRenderInvalidation { reasons.append("renderDirty") }
+
+                session.needsDisplay = false
+                let renderStart = TimingTrace.now()
+                let hasFrameHandler = session.onFrame != nil
+                    || (id == mainWindowID && onFrame != nil)
+                var didRender = !hasFrameHandler
+                if let callback = session.onFrame {
+                    didRender = callback(surface) || didRender
+                }
+                if id == mainWindowID, let callback = onFrame {
+                    didRender = callback(surface) || didRender
+                }
+                if didRender {
+                    session.nextRenderAttemptTime = 0
+                    session.withCurrent {
+                        session.tree.flush()
+                    }
+                } else {
+                    session.needsDisplay = true
+                    // An occluded/unavailable swapchain must remain pending,
+                    // without redrawing the entire scene every 1 ms. Retry at
+                    // display cadence; native events can still wake SDL.
+                    if nativeWindows.contains(id) {
+                        // The next native callback is itself the retry
+                        // deadline; do not add another software period.
+                        session.nextRenderAttemptTime = .infinity
+                    } else {
+                        session.nextRenderAttemptTime = frameClock() + 1.0 / Self.sanitizedDisplayRefreshRate(
+                            shell.displayRefreshRate(windowID: id)
+                        )
+                    }
+                }
+                let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
+                if didRender {
+                    let reasonText = reasons.isEmpty ? "unknown" : reasons.joined(separator: "+")
+                    let renderText = String(format: "%.2fms", renderMilliseconds)
+                    renderSummaries.append(
+                        "window=\(id) reason=\(reasonText) render=\(renderText)"
+                    )
+                    renderedAnyFrame = true
+                }
+            }
+
+            syncTextInputArea(for: session, shell: shell)
+            scheduleFocusedTextRefresh(for: session)
+        }
+        timing.mark("windows")
+
+        if renderedAnyFrame {
+            let deltaText = String(format: "%.2fms", framePreparationDelta * 1000)
+            let extra = [
+                "delta=\(deltaText)",
+                "animationsActive=\(animationsActive)",
+            ] + renderSummaries
+            frameTimingLogCounter &+= 1
+            if Self.frameTimingLogStride > 0,
+               frameTimingLogCounter % Self.frameTimingLogStride == 0 {
+                Logger.runtime.debug("\(timing.summary(extra: extra))")
+            }
+        }
+
+        pruneClosedSessions(using: shell)
+
+        if wait && _isRunning {
+            if frameDrive.mode == .eventDriven && !animationsActive {
+                state.fallbackDeadline.update(interval: nil, now: frameStart)
+                for id in nativeWindows { shell.setDisplayRefreshEnabled(false, windowID: id) }
+            }
+            let now = frameClock()
+            let hasImmediateWork = sessions.values.contains { session in
+                !isCadenceDriven && (session.recomposer.hasPending ||
+                    ((session.needsDisplay || (session.tree.hasRenderUpdates && !nativeWindows.contains(session.id)))
+                        && now >= session.nextRenderAttemptTime)
+                )
+            }
+            var timeout = hasImmediateWork
+                ? 0
+                : eventWaitTimeout(now: now)
+            if let remaining = state.fallbackDeadline.remaining(now: now) { timeout = min(timeout, remaining) }
+            for session in sessions.values where !isCadenceDriven && !nativeWindows.contains(session.id)
+                && (session.needsDisplay || session.tree.hasRenderUpdates) {
+                timeout = min(timeout, max(0.001, session.nextRenderAttemptTime - now))
+            }
+            // Display callbacks, input and cross-thread work all wake the
+            // same native wait. No sleep/spin follows a vsync-blocked frame:
+            // a queued callback wakes immediately, and fallback waits only
+            // for the remainder of its absolute deadline.
+            _ = shell.waitForEvents(timeout: timeout)
+        }
+    }
+
+    private func finishRunLoop() {
+        guard let shell else { return }
+        #if os(iOS)
+        frameDrive.driver?.stop()
+        frameDrive.driver = nil
+        #endif
         _isRunning = false
         // Release consumer GPU surfaces (which hold Wayland display/surface
         // references) before the shell destroys windows and quits SDL — otherwise

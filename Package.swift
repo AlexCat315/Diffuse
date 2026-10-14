@@ -3,9 +3,9 @@ import PackageDescription
 
 // Workspace convenience launcher. Editor/Package.swift owns the editor graph.
 let package = Package(
-    name: "GuavaEngineWorkspace",
+    name: "GuavaStudioWorkspace",
     platforms: [.macOS(.v13)],
-    products: [.executable(name: "GuavaEditor", targets: ["WorkspaceLauncher"])],
+    products: [.executable(name: "GuavaStudio", targets: ["WorkspaceLauncher"])],
     dependencies: [.package(path: "Editor")],
     targets: [
         .executableTarget(name: "WorkspaceLauncher", dependencies: [

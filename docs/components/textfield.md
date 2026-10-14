@@ -66,7 +66,7 @@ TextField(text: $source) { input in
 
 20 万行的未换行代码编辑器按可见窗口测量，修改一行保留其他行缓存，undo 直接恢复旧根。软换行采用持久化视觉行索引；未访问行的高度暂按一行估计，测量后校正。特别长的单一逻辑行仍会完整测量该行，尚未实现水平字形分段布局。
 
-横向内容宽度来自已测量窗口和光标，不为寻找全篇最宽行而扫描文档；滚动条范围会随访问其他行调整。原生 200K 行连续输入 30 秒已验证，详细口径与采样见[验证记录](../guava-ui/code-editor-validation.md)。
+横向内容宽度来自已测量窗口和光标，不为寻找全篇最宽行而扫描文档；滚动条范围会随访问其他行调整。原生 200K 行连续输入 30 秒已验证，详细口径与采样见[验证记录](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/CodeEditingUITests.swift)。
 
 Tree-sitter 首次解析需要遍历文档，某些编辑也会使语法上下文扩大；后台 worker 保证这些工作不阻塞 UI。当前 completion 使用普通插入文本，未向服务器声明 snippet tab-stop 导航支持。
 

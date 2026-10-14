@@ -4,7 +4,7 @@ import IntentRuntime
 /// Owns the editor workspace state and its persistence defaults.
 public struct EditorWorkspaceState: Codable, Sendable, Equatable {
     public var mode: EditorWorkspaceMode = .level
-    public var interactionMode: EditorInteractionMode = .manual
+    public var interactionMode: EditorInteractionMode = .agent
     public var layoutPreset: EditorLayoutPreset = .levelDefault
 
     public init(_ configure: (inout Self) -> Void = { _ in }) {

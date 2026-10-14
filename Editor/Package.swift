@@ -1,5 +1,5 @@
 // swift-tools-version: 6.1
-// GuavaEditor 0.0.9
+// GuavaStudioEditor 0.0.9
 import PackageDescription
 
 // MARK: - C ABI exports for dynamically loaded Swift scripts
@@ -36,7 +36,7 @@ let guavaScriptExportLinkerSettings: [LinkerSetting] = [
 ]
 
 let package = Package(
-    name: "GuavaEditor",
+    name: "GuavaStudioEditor",
     defaultLocalization: "en",
     platforms: [.macOS(.v13)],
     products: [
@@ -50,6 +50,8 @@ let package = Package(
     dependencies: [
         .package(path: "../Engine/Logging"),
         .package(path: "../Engine"),
+        .package(path: "../Engine/Media"),
+        .package(path: "Documents"),
         .package(path: "../GuavaUI"),
     ],
     targets: [
@@ -64,6 +66,8 @@ let package = Package(
                 .product(name: "ContextMemory", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "AudioRuntime", package: "Engine"),
+                .product(name: "StudioDocuments", package: "Documents"),
+                .product(name: "MediaRuntime", package: "Media"),
                 .product(name: "CapabilityRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
@@ -93,6 +97,9 @@ let package = Package(
             name: "EditorUI",
             dependencies: [.product(name: "GuavaLogging", package: "Logging"),
                 "EditorCore",
+                .product(name: "AudioRuntime", package: "Engine"),
+                .product(name: "StudioDocuments", package: "Documents"),
+                .product(name: "MediaRuntime", package: "Media"),
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "GuavaUI", package: "GuavaUI"),

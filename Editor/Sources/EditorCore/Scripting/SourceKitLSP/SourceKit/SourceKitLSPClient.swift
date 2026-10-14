@@ -157,7 +157,7 @@ public actor SourceKitLSPClient {
         let rootURI = workspaceURL.standardizedFileURL.absoluteString
         return [
             "processId": ProcessInfo.processInfo.processIdentifier,
-            "clientInfo": ["name": "GuavaEditor", "version": "0.0.9"],
+            "clientInfo": ["name": "GuavaStudioEditor", "version": "0.0.9"],
             "rootUri": rootURI,
             "workspaceFolders": [["uri": rootURI, "name": workspaceURL.lastPathComponent]],
             "capabilities": Self.clientCapabilities,
@@ -273,7 +273,7 @@ public actor SourceKitLSPClient {
             let response: [String: Any] = [
                 "jsonrpc": "2.0",
                 "id": id,
-                "error": ["code": -32601, "message": "Method not supported by GuavaEditor"],
+                "error": ["code": -32601, "message": "Method not supported by GuavaStudioEditor"],
             ]
             try write(try LSPJSON.data(response))
             return

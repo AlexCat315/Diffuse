@@ -11,7 +11,8 @@
       "mac",
       "win",
       "linux",
-      "android"
+      "android",
+      "ios"
     ]
   },
   "version": {

@@ -5,7 +5,7 @@
 // that uses them (the slot is only reset after its GPU work completes), so
 // there is no per-upload staging alloc + commit + wait on the hot path.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 
 /// A chunk of GPU-visible upload storage: a shared-storage `MTLBuffer` plus

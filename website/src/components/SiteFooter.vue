@@ -12,7 +12,7 @@ const { locale, t } = useLocale()
     <div class="footer-shell">
       <div class="footer-brand">
         <img :src="logoUrl" alt="" />
-        <div><strong>Guava Engine</strong><p>{{ t.footer.tagline }}</p></div>
+        <div><strong>GuavaStudio</strong><p>{{ t.footer.tagline }}</p></div>
       </div>
       <div class="footer-links">
         <RouterLink :to="`/${locale}/docs`">{{ t.nav.docs }}</RouterLink>
@@ -21,6 +21,6 @@ const { locale, t } = useLocale()
         <a :href="repositoryUrl" target="_blank" rel="noreferrer"><Github :size="16" /> GitHub</a>
       </div>
     </div>
-    <div class="footer-bottom"><span>© {{ new Date().getFullYear() }} Guava Engine</span><span>{{ t.footer.license }}</span></div>
+    <div class="footer-bottom"><span>© {{ new Date().getFullYear() }} GuavaStudio</span><span>{{ t.footer.license }}</span></div>
   </footer>
 </template>

@@ -6,7 +6,7 @@
 // (upload-ring chunks, swapchain drawable textures) use a high-offset ID space
 // so they can never collide with frontend handles.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 
 /// Native resources are resolved and range-checked at set registration.

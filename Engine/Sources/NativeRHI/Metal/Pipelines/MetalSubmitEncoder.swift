@@ -5,14 +5,19 @@
 // frontend completion callback fires from `addCompletedHandler`. There is no
 // `waitUntilCompleted` and no per-submit idle.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
+import Foundation
+import GuavaLogging
 
 extension MetalDevice {
     public func submit(_ submit: PlannedSubmit, cpuProfile: SubmissionCPUProfile? = nil, completion: @escaping () -> Void) throws {
+        try submissionStatus.check()
         let encodingStart = cpuProfile?.begin()
         let queue: MTLCommandQueue = submit.queue == .compute ? computeQueue : graphicsQueue
-        guard let commandBuffer = queue.makeCommandBuffer() else {
+        let descriptor = MTLCommandBufferDescriptor()
+        if config.enableValidation { descriptor.errorOptions = .encoderExecutionStatus }
+        guard let commandBuffer = queue.makeCommandBuffer(descriptor: descriptor) else {
             throw RHIError.submitFailed("cannot create command buffer")
         }
 
@@ -24,7 +29,7 @@ extension MetalDevice {
             commandBuffer.encodeWaitForEvent(event, value: semaphore.value)
         }
 
-        var encoder = MetalPassEncoder(device: device, registries: registries,
+        var encoder = MetalPassEncoder(device: device, registries: registries, disabledDepthState: disabledDepthState,
                                        commandBuffer: commandBuffer, cpuProfile: cpuProfile)
         defer { encoder.endActiveEncoders() }
         for command in submit.commands {
@@ -43,7 +48,10 @@ extension MetalDevice {
         let status = submissionStatus
         let callback = MetalCompletionCallback(completion)
         commandBuffer.addCompletedHandler { buffer in
-            if let error = buffer.error { status.record(error.localizedDescription) }
+            if let error = buffer.error {
+                status.record(error.localizedDescription)
+                LogSystem.logger("com.guava.engine.rhi").error("Metal submission failed", metadata: ["detail": "\(error)"])
+            }
             callback.call()
         }
         cpuProfile?.end(.encoding, since: encodingStart)
@@ -73,6 +81,7 @@ final class MetalCompletionCallback: @unchecked Sendable {
 /// pipeline, index buffer, primitive type).
 private struct MetalPassEncoder {
     let device: MTLDevice
+    let disabledDepthState: MTLDepthStencilState
     let registries: MetalRegistries
     let commandBuffer: MTLCommandBuffer
     let cpuProfile: SubmissionCPUProfile?
@@ -88,10 +97,11 @@ private struct MetalPassEncoder {
     private var currentIndexOffset: Int = 0
     private var currentIndexType: MTLIndexType = .uint32
 
-    init(device: MTLDevice, registries: MetalRegistries, commandBuffer: MTLCommandBuffer,
+    init(device: MTLDevice, registries: MetalRegistries, disabledDepthState: MTLDepthStencilState, commandBuffer: MTLCommandBuffer,
          cpuProfile: SubmissionCPUProfile?) {
         self.device = device
         self.registries = registries
+        self.disabledDepthState = disabledDepthState
         self.commandBuffer = commandBuffer
         self.cpuProfile = cpuProfile
     }
@@ -145,7 +155,7 @@ private struct MetalPassEncoder {
             guard let texture = registries.textures[handle.id] else {
                 throw RHIError.invalidArgument("unknown render attachment")
             }
-            let depth = [.depth32Float, .depth24Unorm_stencil8, .depth32Float_stencil8].contains(texture.pixelFormat)
+            let depth = [MTLPixelFormat.depth32Float, .depth32Float_stencil8].contains(texture.pixelFormat)
             let usage: TextureUsage = texture.usage.contains(.renderTarget)
                 ? (depth ? .depthStencilTarget : .colorTarget) : []
             var info = RenderTextureInfo(extent: SIMD2(texture.width, texture.height), sampleCount: texture.sampleCount,
@@ -235,7 +245,7 @@ private struct MetalPassEncoder {
             }
             currentMeshPipeline = mesh
             encoder.setRenderPipelineState(mesh.state)
-            encoder.setDepthStencilState(nil)
+            encoder.setDepthStencilState(disabledDepthState)
             encoder.setCullMode(mtlCullMode(mesh.rasterization.cullMode))
             encoder.setFrontFacing(mtlWinding(mesh.rasterization.frontWinding))
             encoder.setTriangleFillMode(mtlTriangleFillMode(mesh.rasterization.fillMode))
@@ -256,7 +266,7 @@ private struct MetalPassEncoder {
             }
             encoder.setRenderPipelineState(state.state)
             currentPrimitive = registries.pipelinePrimitives[pipeline.id] ?? .triangle
-            encoder.setDepthStencilState(registries.depthStates[pipeline.id])
+            encoder.setDepthStencilState(registries.depthStates[pipeline.id] ?? disabledDepthState)
             if let raster = registries.pipelineRasterStates[pipeline.id] {
                 encoder.setCullMode(mtlCullMode(raster.cullMode))
                 encoder.setFrontFacing(mtlWinding(raster.frontWinding))

@@ -1,3 +1,14 @@
+---
+path: /zh/docs/getting-started
+title: '创建第一个 GuavaUI 应用'
+description: '创建第一个 GuavaUI 应用 — GuavaStudio documentation'
+locale: zh
+translationKey: getting-started
+category: guides
+order: 100
+kind: doc
+---
+
 # 创建第一个 GuavaUI 应用
 
 Guava CLI 管理应用创建、构建、运行、测试、缓存和调试会话；Guava SDK 提供 Engine、GuavaUI、平台宿主和模板。应用开发者使用 `import GuavaUI`，业务代码放在 `Sources/AppContent`。
@@ -21,7 +32,7 @@ Windows 需要 Swift 官方页面列出的 Visual Studio C++ 工具和 Windows S
 ## 2. 安装 CLI 与源码 SDK
 
 ```sh
-git clone --recurse-submodules https://github.com/AlexCat315/Guava-Engine.git "$HOME/.guava/source"
+git clone --recurse-submodules https://github.com/AlexCat315/GuavaStudio.git "$HOME/.guava/source"
 cd "$HOME/.guava/source"
 # 可先 git checkout 某个已发布版本；此时还需更新其 submodules。
 Tools/Guava/install.sh
@@ -35,10 +46,10 @@ Windows 对应入口是 `Tools/Guava/install.ps1`，默认安装到 `%LOCALAPPDA
 已经安装 CLI 后，可以安装另一个固定版本的源码 SDK：
 
 ```sh
-guava sdk install https://github.com/AlexCat315/Guava-Engine.git --revision COMMIT_OR_TAG
+guava sdk install https://github.com/AlexCat315/GuavaStudio.git --revision COMMIT_OR_TAG
 guava setup --mac
 # 或使用已有 checkout：
-guava sdk use /path/to/Guava-Engine
+guava sdk use /path/to/GuavaStudio
 guava sdk list
 ```
 
@@ -61,7 +72,7 @@ guava build --mac --release
 guava clean
 ```
 
-Windows / Linux 创建时选择 `win` / `linux`，在对应主机运行。省略 `--platforms` 会生成当前已实现的四种原生平台配置，但只需要安装实际开发目标的工具。iOS / Web 应用目标尚未实现，CLI 会明确拒绝。
+Windows / Linux 创建时选择 `win` / `linux`，在对应主机运行。省略 `--platforms` 会生成桌面、Android 和 iOS 的五种原生平台配置，但只需要安装实际开发目标的工具。iOS/iPadOS 通过 `guava run MyApp --ios --simulator UDID` 构建运行，真机提供 `--device ID --team TEAM_ID`；完整 Web 应用宿主仍在开发。
 
 默认模板没有桌面可执行目标；CLI 将启动包生成到 `.guava/build/desktop/launcher`。`Sources/AppContent/App.swift` 提供共享根视图，`Assets` 是共享资源。只有自定义桌面宿主才需要在 `targets.desktopExecutable` 指定自己的可执行产品，例如 Editor。
 

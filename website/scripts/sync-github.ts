@@ -1,8 +1,8 @@
 import { writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-const api = 'https://api.github.com/repos/AlexCat315/Guava-Engine'
-const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'guava-engine-website' }
+const api = 'https://api.github.com/repos/AlexCat315/GuavaStudio'
+const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'guava-studio-website' }
 
 interface RepositoryPayload { stargazers_count: number; forks_count: number; open_issues_count: number; updated_at: string; html_url: string }
 interface AssetPayload { id: number; name: string; size: number; download_count: number; browser_download_url: string }

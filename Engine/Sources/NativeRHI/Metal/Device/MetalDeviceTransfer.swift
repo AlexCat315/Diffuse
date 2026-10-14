@@ -1,7 +1,7 @@
 // NativeRHI Metal backend — binding sets, immediate data transfer, swapchain,
 // the per-frame uploader, and idle synchronization.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 import QuartzCore
 

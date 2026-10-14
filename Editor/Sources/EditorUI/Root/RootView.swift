@@ -58,7 +58,7 @@ struct EditorRootView: View {
                                 .debugName("editor-workspace")
                         }
 
-                        EditorStatusBar(store: store, scriptWorkspace: app.scriptWorkspace,
+                        EditorStatusBar(store: store, scriptWorkspace: app.workstation.scripts,
                                         showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed },
                                         onShowProblems: {
                                             store.dispatch(.setOutputTab(.problems))

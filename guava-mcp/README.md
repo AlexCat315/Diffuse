@@ -1,6 +1,6 @@
 # Guava MCP
 
-本地 stdio MCP 服务，连接正在运行的 Guava Editor。项目脚本工具与内置 AI 助手共用实现，详见 [工具文档](../docs/api/ai-tools.md)。
+本地 stdio MCP 服务，连接正在运行的 GuavaStudio。项目脚本工具与内置 AI 助手共用实现，详见 [工具文档](../docs/api/ai-tools.md)。
 
 先构建并启动编辑器，再将 MCP 可执行文件配置到支持 stdio 的客户端：
 

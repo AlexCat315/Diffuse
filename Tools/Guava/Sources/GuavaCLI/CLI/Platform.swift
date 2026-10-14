@@ -16,7 +16,9 @@ enum AppPlatform: String, Codable, CaseIterable, Sendable {
     func requireAvailable() throws {
         switch self {
         case .ios:
-            throw ToolError.invalid("iOS application builds are not implemented yet; the native application host, signing and device deployment are missing.")
+#if !os(macOS)
+            throw ToolError.invalid("iOS builds require macOS with Xcode")
+#endif
         case .web:
             throw ToolError.invalid("Web currently has a portable rendering prototype, not the complete GuavaUI application host. See GuavaUI/Browser.")
         case .mac, .win, .linux:

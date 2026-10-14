@@ -7,6 +7,8 @@ import EngineKernel
 import Testing
 @testable import EditorUI
 
+private final class WelcomeTestBundle: NSObject {}
+
 @Suite("Welcome project workflow", .serialized)
 @MainActor
 struct WelcomeWorkflowTests {
@@ -59,7 +61,7 @@ struct WelcomeWorkflowTests {
         try context.createProject(name: "Empty", parent: parent, template: .blank)
         let app = try #require(context.bundle?.app)
         #expect(app.scene.entityCount == 0)
-        #expect(app.scriptWorkspace.snapshot.documents.isEmpty)
+        #expect(app.workstation.scripts.snapshot.documents.isEmpty)
         context.closeProject()
         #expect(!context.isProjectLoaded)
         try context.loadProject(directory: parent.appendingPathComponent("Empty").path)
@@ -76,9 +78,8 @@ struct WelcomeWorkflowTests {
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let candidates = [repo.appendingPathComponent("Editor/.build/out/Products/Debug/EditorApp"),
-                          repo.appendingPathComponent("Editor/.build/debug/EditorApp")]
-        let host = try #require(candidates.first { FileManager.default.fileExists(atPath: $0.path) })
+        let host = Bundle(for: WelcomeTestBundle.self).bundleURL.deletingLastPathComponent().appendingPathComponent("EditorApp")
+        #expect(FileManager.default.isExecutableFile(atPath: host.path))
         let sdk = ProjectScriptBuildConfiguration.discover(for: host.resolvingSymlinksInPath(), environment: [:])
         #expect(!sdk.engineModulePaths.isEmpty)
         let overrides = ["GUAVA_ENGINE_MODULE_PATHS": sdk.engineModulePaths.joined(separator: ","),
@@ -108,11 +109,11 @@ struct WelcomeWorkflowTests {
         try context.createProject(name: "Crystal Sample", parent: parent, template: .crystalRush)
         let app = try #require(context.bundle?.app)
         for _ in 0..<400 {
-            if app.scriptWorkspace.snapshot.selectedDocument?.loadedRevision != nil
-                || app.scriptWorkspace.snapshot.selectedDocument?.buildState.isFailed == true { break }
+            if app.workstation.scripts.snapshot.selectedDocument?.loadedRevision != nil
+                || app.workstation.scripts.snapshot.selectedDocument?.buildState.isFailed == true { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        let doc = try #require(app.scriptWorkspace.snapshot.selectedDocument)
+        let doc = try #require(app.workstation.scripts.snapshot.selectedDocument)
         #expect(doc.loadedRevision != nil, "\(doc.output)")
         guard doc.loadedRevision != nil else { return }
         #expect(!doc.buildState.isFailed)
@@ -123,7 +124,7 @@ struct WelcomeWorkflowTests {
         app.applyPlaybackState(.stopped)
         #expect(app.scene.entityCount == 1)
         app.store.dispatch(.setThemeMode(.light))
-        app.scriptWorkspace.setProjectTrusted(false)
+        app.workstation.scripts.setProjectTrusted(false)
         context.closeProject()
         #expect(!context.isProjectLoaded)
         #expect(backend.backendAPI == .metal)
@@ -131,12 +132,12 @@ struct WelcomeWorkflowTests {
         let empty = try #require(context.bundle?.app)
         #expect(empty.store.state.themeMode == .light)
         #expect(empty.scene.entityCount == 0)
-        #expect(empty.scriptWorkspace.snapshot.documents.isEmpty)
+        #expect(empty.workstation.scripts.snapshot.documents.isEmpty)
         context.closeProject()
         #expect(!context.isProjectLoaded)
         try context.loadProject(directory: parent.appendingPathComponent("Crystal Sample").path)
         #expect(context.bundle?.app.scene.entityCount == 1)
-        #expect(context.bundle?.app.scriptWorkspace.snapshot.documents.count == 1)
+        #expect(context.bundle?.app.workstation.scripts.snapshot.documents.count == 1)
     }
     #endif
 

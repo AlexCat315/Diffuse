@@ -5,7 +5,7 @@
 // `MTLCommandBuffer`s; submission is asynchronous (completion fires from
 // `addCompletedHandler`), and timeline semaphores map to `MTLSharedEvent`s.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 import QuartzCore
 
@@ -30,6 +30,7 @@ public final class MetalDevice: RHIBackend {
     let device: MTLDevice
     let graphicsQueue: MTLCommandQueue
     let computeQueue: MTLCommandQueue
+    let disabledDepthState: MTLDepthStencilState
     let config: DeviceConfig
     let registries: MetalRegistries
     let libraryCache: MetalLibraryCache
@@ -46,12 +47,14 @@ public final class MetalDevice: RHIBackend {
         device: MTLDevice,
         graphicsQueue: MTLCommandQueue,
         computeQueue: MTLCommandQueue,
+        disabledDepthState: MTLDepthStencilState,
         config: DeviceConfig,
         capabilities: Capabilities
     ) {
         self.device = device
         self.graphicsQueue = graphicsQueue
         self.computeQueue = computeQueue
+        self.disabledDepthState = disabledDepthState
         self.config = config
         self.capabilities = capabilities
         self.registries = MetalRegistries()
@@ -68,12 +71,19 @@ public final class MetalDevice: RHIBackend {
             throw RHIError.outOfMemory
         }
         let computeQueue = device.makeCommandQueue() ?? graphicsQueue
+        let depth = MTLDepthStencilDescriptor()
+        depth.depthCompareFunction = .always
+        depth.isDepthWriteEnabled = false
+        guard let disabledDepthState = device.makeDepthStencilState(descriptor: depth) else {
+            throw RHIError.outOfMemory
+        }
 
         let capabilities = MetalDevice.queryCapabilities(device: device)
         return MetalDevice(
             device: device,
             graphicsQueue: graphicsQueue,
             computeQueue: computeQueue,
+            disabledDepthState: disabledDepthState,
             config: config,
             capabilities: capabilities
         )
@@ -104,6 +114,9 @@ public final class MetalDevice: RHIBackend {
     }
 
     private static func probeIndirectCommandBuffer(device: MTLDevice) -> Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
         let descriptor = MTLIndirectCommandBufferDescriptor()
         descriptor.commandTypes = [.draw]
         descriptor.inheritBuffers = false
@@ -113,6 +126,7 @@ public final class MetalDevice: RHIBackend {
             descriptor: descriptor, maxCommandCount: 1, options: []
         )
         return icb != nil
+        #endif
     }
 
     private static func probeTexture3D(device: MTLDevice) -> Bool {
@@ -166,13 +180,20 @@ public final class MetalDevice: RHIBackend {
         layer.pixelFormat = mtlPixelFormat(descriptor.colorFormat)
         layer.framebufferOnly = true
         layer.drawableSize = CGSize(width: descriptor.width, height: descriptor.height)
+        #if os(macOS)
         layer.displaySyncEnabled = descriptor.vsyncEnabled
+        #endif
         swapchains[handle.id] = MetalWindowSwapchain(layer: layer, generation: generation)
     }
 
     public func presentationMode(for handle: Swapchain) throws -> PresentationMode {
         guard let window = swapchains[handle.id] else { throw RHIError.invalidArgument("query a live swapchain") }
+        #if os(macOS)
         return window.layer.displaySyncEnabled ? .fifo : .immediate
+        #else
+        _ = window
+        return .fifo
+        #endif
     }
 
     public func destroySwapchain(_ handle: Swapchain) {

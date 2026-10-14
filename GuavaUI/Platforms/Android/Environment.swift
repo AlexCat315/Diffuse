@@ -5,6 +5,7 @@ import GuavaUIRuntime
 /// Per-scene font/image services and a queue drained only on Android's UI thread.
 final class SceneEnvironment {
     let images = ImageAssetRegistry()
+    let surface = State<UIEnvironment>(wrappedValue: UIEnvironment())
     private(set) var text: TextEnvironment?
     private let lock = NSLock()
     private var work: [() -> Void] = []

@@ -125,7 +125,7 @@
 "About Guava" = "About Guava";
 "Version" = "Version";
 "Development Build" = "Development Build";
-"A native scene editor powered by Guava Engine." = "A native scene editor powered by Guava Engine.";
+"An AI Agent driven workstation for code, games, animation and video." = "An AI Agent driven workstation for code, games, animation and video.";
 "Workspace: Level" = "Workspace: Level";
 "Workspace: Modeling" = "Workspace: Modeling";
 "Workspace: Animation" = "Workspace: Animation";
@@ -382,7 +382,7 @@
 "Front to Back" = "Front to Back";
 "GPU Preferred" = "GPU Preferred";
 "GPU Required" = "GPU Required";
-"GuavaNext Editor" = "GuavaNext Editor";
+"GuavaStudio" = "GuavaStudio";
 "Half Extents" = "Half Extents";
 "Half Height" = "Half Height";
 "Height Field" = "Height Field";

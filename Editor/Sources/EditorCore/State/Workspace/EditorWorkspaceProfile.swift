@@ -3,10 +3,14 @@ import CapabilityRuntime
 import Foundation
 
 public enum EditorAuthoringDomain: String, Codable, Sendable {
+    case documents
+    case media
     case game
     case creation
 
-    public var title: String { self == .game ? "Game Development" : "3D Creation" }
+    public var title: String {
+        switch self { case .documents: "Text and Code"; case .media: "Video Editing"; case .game: "Game Development"; case .creation: "3D Creation" }
+    }
 }
 
 /// How the user works, independent of the production domain and dock layout.
@@ -18,7 +22,7 @@ public enum EditorInteractionMode: String, Codable, Sendable, CaseIterable {
 }
 
 public enum EditorWorkflowFeature: String, Sendable, Hashable {
-    case scene, rendering, animation, simulation, gameplay, scripting, gameBuild
+    case documents, media, scene, rendering, animation, simulation, gameplay, scripting, gameBuild
 }
 
 /// Functional definition shared by the shell, inspector and assistant. A
@@ -30,13 +34,17 @@ public struct EditorWorkspaceProfile: Sendable {
 
     public static let builtInPanelIDs: Set<String> = [
         "viewport", "hierarchy", "inspector", "assets", "console", "intent-input",
-        "confirmation-host", "scripts", "developer-tools", "animation", "render-pipeline",
+        "confirmation-host", "documents", "media", "scripts", "developer-tools", "animation", "render-pipeline",
     ]
 
     public static func profile(for mode: EditorWorkspaceMode) -> Self {
         let shared: Set<String> = ["viewport", "hierarchy", "inspector", "assets", "console",
                                    "intent-input", "confirmation-host", "render-pipeline"]
         switch mode {
+        case .documents:
+            return Self(domain: .documents, features: [.documents], panelIDs: ["documents", "console", "intent-input", "confirmation-host"])
+        case .video:
+            return Self(domain: .media, features: [.media, .documents], panelIDs: ["media", "documents", "console", "intent-input", "confirmation-host"])
         case .level, .scripting:
             return Self(domain: .game,
                         features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],
@@ -55,6 +63,7 @@ public struct EditorWorkspaceProfile: Sendable {
     }
 
     public var capabilityIDs: Set<String> {
+        guard features.contains(.scene) else { return [] }
         var ids: Set<String> = [
             "scene.get_entities", "scene.get_selection", "scene.find_entities", "scene.describe_components", "scene.spawn_entity",
             "scene.delete_entity", "scene.duplicate_entity", "scene.reparent_entity", "scene.set_name",
@@ -78,6 +87,9 @@ public struct EditorWorkspaceProfile: Sendable {
 
     public var projectToolNames: Set<String> {
         var names: Set<String> = ["respond", "get_project_info", "save_scene", "get_console_messages"]
+        if features.contains(.documents) { names.formUnion(["list_files", "read_file", "write_file"]) }
+        if features.contains(.media) { names.formUnion(["get_media_timeline", "add_media_clip", "trim_media_clip", "remove_media_clip", "save_media_timeline", "export_media"]) }
+        if !features.contains(.scene) { names.remove("save_scene") }
         if features.contains(.scripting) {
             names.formUnion(["get_scripting_api", "list_scripts", "read_script", "write_script", "compile_scripts"])
         }

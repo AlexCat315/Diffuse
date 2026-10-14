@@ -36,6 +36,11 @@ enum ToolchainRequirements {
             checks.append(.executable("glslc", remedy: "Install the Vulkan SDK from https://vulkan.lunarg.com/ and a Vulkan-capable GPU driver; export VULKAN_SDK."))
         }
         #endif
+        if arguments.platform == .ios {
+            for name in ["xcodebuild", "xcrun", "cargo", "rustup"] {
+                checks.append(.executable(name, remedy: "Install full Xcode and Rust; rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios"))
+            }
+        }
         if arguments.platform == .android { checks += AndroidRequirements.inspect(arguments, root: root, version: version) }
         return checks
     }

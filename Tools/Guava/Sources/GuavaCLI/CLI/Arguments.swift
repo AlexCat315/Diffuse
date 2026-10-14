@@ -5,6 +5,7 @@ enum Operation: Equatable {
 }
 
 enum Option: String, CaseIterable {
+    case simulator, team
     case revision
     case engineRoot = "engine-root", id, name, output, device, filter, platforms, session
     case androidSDK = "android-sdk", ndk, keystore, keyAlias = "key-alias"
@@ -94,13 +95,25 @@ struct Arguments {
         if configuration != nil, ![.build, .run, .test, .showcase, .exportGame, .androidCompile, .androidPrepare].contains(operation) {
             throw ToolError.invalid("\(verb) does not take a build configuration")
         }
-        let selectedPlatform = platform ?? ([.androidCompile, .androidPrepare, .exportGame, .devices, .showcase].contains(operation) ? .android : .host)
-        if [.androidCompile, .androidPrepare, .exportGame, .showcase, .devices].contains(operation), selectedPlatform != .android {
+        let selectedPlatform = platform ?? ([.androidCompile, .androidPrepare, .exportGame, .showcase].contains(operation) ? .android : .host)
+        if [.androidCompile, .androidPrepare, .exportGame, .showcase].contains(operation), selectedPlatform != .android {
             throw ToolError.invalid("This operation currently requires --android")
         }
-        let androidOnly: Set<Option> = [.androidSDK, .ndk, .device, .keystore, .keyAlias, .storePassword, .keyPassword, .component]
+        let androidOnly: Set<Option> = [.androidSDK, .ndk, .keystore, .keyAlias, .storePassword, .keyPassword, .component]
         if selectedPlatform != .android, !Set(values.keys).isDisjoint(with: androidOnly) {
             throw ToolError.invalid("Android options require --android")
+        }
+        if operation == .build && selectedPlatform == .android && values[.device] != nil {
+            throw ToolError.invalid("Android --device is a run option")
+        }
+        if values[.device] != nil && ![AppPlatform.android, .ios].contains(selectedPlatform) {
+            throw ToolError.invalid("--device requires --android or --ios")
+        }
+        if (values[.simulator] != nil || values[.team] != nil) && selectedPlatform != .ios {
+            throw ToolError.invalid("--simulator and --team require --ios")
+        }
+        if values[.simulator] != nil && values[.device] != nil {
+            throw ToolError.invalid("Select either --simulator or --device")
         }
         if configuration == .release, flags.contains(.devtools) {
             throw ToolError.invalid("DevTools requires --debug or --profile")
@@ -130,8 +143,8 @@ struct Arguments {
         let android: Set<Option> = [.androidSDK, .ndk, .keystore, .keyAlias, .storePassword, .keyPassword]
         switch operation {
         case .create: return common.union([.id, .name, .platforms])
-        case .build: return common.union(android).union([.output])
-        case .run: return common.union(android).union([.output, .device])
+        case .build: return common.union(android).union([.output, .device, .simulator, .team])
+        case .run: return common.union(android).union([.output, .device, .simulator, .team])
         case .test: return common.union([.filter])
         case .clean: return []
         case .sdkInstall: return [.revision]

@@ -6,6 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #include <wasm.h>
 #include <wasmtime.h>
 #include <wasmtime/component.h>
@@ -14,6 +18,7 @@
 
 struct guava_wasmtime_runtime {
   wasm_engine_t *engine;
+  bool interpreter;
 };
 
 typedef struct guava_host_binding {
@@ -113,7 +118,8 @@ void guava_wasmtime_buffer_delete(guava_wasmtime_buffer_t *buffer) {
 const char *guava_wasmtime_runtime_version(void) { return WASMTIME_VERSION; }
 
 guava_wasmtime_runtime_t *
-guava_wasmtime_runtime_new(guava_wasmtime_buffer_t *error) {
+guava_wasmtime_runtime_new(guava_wasmtime_execution_t execution,
+                          guava_wasmtime_buffer_t *error) {
   if (error != NULL) {
     error->data = NULL;
     error->size = 0;
@@ -123,6 +129,20 @@ guava_wasmtime_runtime_new(guava_wasmtime_buffer_t *error) {
     (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
                     "could not allocate Wasmtime configuration");
     return NULL;
+  }
+  bool interpreter = execution == GUAVA_WASMTIME_INTERPRETER;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  // iOS, including Simulator, never requests executable pages for guest code.
+  interpreter = true;
+#endif
+  if (interpreter) {
+    wasmtime_error_t *target_error = wasmtime_config_target_set(
+        config, sizeof(void *) == 8 ? "pulley64" : "pulley32");
+    if (target_error != NULL) {
+      (void)take_wasmtime_error(target_error, GUAVA_WASMTIME_COMPILE_ERROR, error);
+      wasm_config_delete(config);
+      return NULL;
+    }
   }
   wasmtime_config_consume_fuel_set(config, true);
   wasmtime_config_epoch_interruption_set(config, true);
@@ -142,7 +162,12 @@ guava_wasmtime_runtime_new(guava_wasmtime_buffer_t *error) {
     return NULL;
   }
   runtime->engine = engine;
+  runtime->interpreter = interpreter;
   return runtime;
+}
+
+int32_t guava_wasmtime_runtime_is_interpreter(guava_wasmtime_runtime_t *runtime) {
+  return runtime != NULL && runtime->interpreter;
 }
 
 void guava_wasmtime_runtime_delete(guava_wasmtime_runtime_t *runtime) {

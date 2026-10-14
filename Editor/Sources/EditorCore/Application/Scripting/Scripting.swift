@@ -63,7 +63,7 @@ extension EditorApplication {
             }
             scene.setDynamicScriptOptions(options, aliases: aliases)
             store.dispatch(.forceUIRefresh)
-            scriptWorkspace.markAllBuildsStarted()
+            workstation.scripts.markAllBuildsStarted()
 
             // Swift scripts are native code in the editor process. Project
             // discovery and language analysis remain available while
@@ -73,7 +73,7 @@ extension EditorApplication {
             try dynamicScriptManager.compileAllScripts(
                 onScriptCompletion: { [weak self] file, status in
                     guard let self else { return }
-                    self.scriptWorkspace.recordBuildResult(scriptID: file.identifier,
+                    self.workstation.scripts.recordBuildResult(scriptID: file.identifier,
                                                            status: status)
                     if case let .failed(message) = status {
                         self.logConsole("Failed to compile dynamic script",

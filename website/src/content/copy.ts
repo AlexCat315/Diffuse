@@ -1,6 +1,6 @@
 import type { Locale } from '@/types/content'
 
-export const repositoryUrl = 'https://github.com/AlexCat315/Guava-Engine'
+export const repositoryUrl = 'https://github.com/AlexCat315/GuavaStudio'
 
 export const copy = {
   zh: {
@@ -10,9 +10,9 @@ export const copy = {
     home: {
       eyebrow: 'AI-NATIVE · SWIFT · WEBGPU',
       title: '让创作意图，直接成为可运行的世界。',
-      description: 'Guava Engine 是面向独立游戏创作者的开源 3D 游戏与影视引擎。统一场景、运行时与 AI 语义，让人和 Agent 使用同一套世界编辑能力。',
+      description: 'GuavaStudio 是以 AI Agent 驱动的开源创作工作站，整合文本与代码编辑、游戏开发、动画制作和视频剪辑。人与 Agent 共用文件、场景和媒体操作。',
       conceptLabel: '概念界面 · 非实际产品截图',
-      capabilitiesTitle: '一套引擎，贯穿创作全流程',
+      capabilitiesTitle: '一套工作站，连接代码与创作',
       capabilitiesIntro: '从场景搭建到运行时，从声明式 UI 到 AI 协作，核心能力都围绕同一个可理解、可编辑的世界。',
       workflowTitle: '从想法到可玩世界，只需三步',
       releaseTitle: '构建已经在路上',
@@ -21,21 +21,21 @@ export const copy = {
       communityTitle: '和创作者一起构建',
     },
     features: {
-      eyebrow: 'ENGINE CAPABILITIES',
+      eyebrow: 'WORKSTATION CAPABILITIES',
       title: '为创作者设计，而不是为管线妥协。',
-      description: 'Guava 把渲染、场景、UI、物理、影视与 AI 能力组织成可组合的 Swift 模块。',
+      description: 'GuavaStudio 把文档、媒体、渲染、场景、UI、物理与 AI 能力组织成可组合的 Swift 模块。',
     },
     download: {
       eyebrow: 'LATEST BUILDS',
       title: '选择你的平台，开始创造。',
-      description: 'Release 构建直接来自 Guava Engine 的公开 GitHub 发布页。项目仍处于早期阶段，建议保留源码构建能力。',
+      description: 'Release 构建直接来自 GuavaStudio 的公开 GitHub 发布页。项目仍处于早期阶段，建议保留源码构建能力。',
       sourceTitle: '从源码构建',
       sourceDescription: '需要 Swift 6.1+、CMake 3.20+、C/C++ 工具链和 Git。首次构建会编译原生依赖。',
     },
-    blog: { eyebrow: 'PROJECT LOG', title: '构建日志', description: '记录 Guava Engine 的版本、设计决策与创作工作流。' },
+    blog: { eyebrow: 'PROJECT LOG', title: '构建日志', description: '记录 GuavaStudio 的版本、设计决策与创作工作流。' },
     community: {
       eyebrow: 'OPEN SOURCE COMMUNITY',
-      title: '引擎属于每一位建设者。',
+      title: '工作站属于每一位建设者。',
       description: '阅读代码、提出问题、贡献实现，或者把你的第一个 Guava 项目分享给社区。',
       contribute: '参与贡献',
       issue: '报告问题',
@@ -43,7 +43,7 @@ export const copy = {
     },
     search: { label: '搜索', placeholder: '搜索文档与动态…', empty: '没有找到相关内容', hint: '按 Esc 关闭' },
     github: { stale: '当前显示缓存数据，GitHub 实时数据暂时不可用。', latest: '最新版本', stars: 'Stars', forks: 'Forks' },
-    footer: { tagline: '面向创作者与 Agent 的 AI-Native 3D 引擎。', license: 'Apache-2.0 开源许可' },
+    footer: { tagline: '连接代码、游戏、动画与视频的 AI Agent 工作站。', license: 'Apache-2.0 开源许可' },
   },
   en: {
     languageName: 'English',
@@ -52,9 +52,9 @@ export const copy = {
     home: {
       eyebrow: 'AI-NATIVE · SWIFT · WEBGPU',
       title: 'Turn creative intent into a world that runs.',
-      description: 'Guava Engine is an open-source 3D game and film engine for independent creators. Scene, runtime, and AI semantics share one world model, so people and agents use the same editing primitives.',
+      description: 'GuavaStudio is an open-source workstation driven by AI agents, bringing text and code editing, game development, animation, and video editing into one workspace. People and agents share file, scene, and media operations.',
       conceptLabel: 'Concept UI · not a product screenshot',
-      capabilitiesTitle: 'One engine across the creative loop',
+      capabilitiesTitle: 'One workstation for code and creation',
       capabilitiesIntro: 'Scene authoring, runtime, declarative UI, and AI collaboration all operate on the same understandable and editable world.',
       workflowTitle: 'From an idea to a playable world in three steps',
       releaseTitle: 'Working builds, available today',
@@ -63,18 +63,18 @@ export const copy = {
       communityTitle: 'Built together with creators',
     },
     features: {
-      eyebrow: 'ENGINE CAPABILITIES',
+      eyebrow: 'WORKSTATION CAPABILITIES',
       title: 'Designed for creators, not pipeline compromises.',
       description: 'Guava organizes rendering, scene, UI, physics, film, and AI capabilities as composable Swift modules.',
     },
     download: {
       eyebrow: 'LATEST BUILDS',
       title: 'Choose a platform and start creating.',
-      description: 'Release builds come directly from the public Guava Engine GitHub releases. The project is early-stage, so keeping a source build available is recommended.',
+      description: 'Release builds come directly from the public GuavaStudio GitHub releases. The project is early-stage, so keeping a source build available is recommended.',
       sourceTitle: 'Build from source',
       sourceDescription: 'Requires Swift 6.1+, CMake 3.20+, a C/C++ toolchain, and Git. The first build compiles native dependencies.',
     },
-    blog: { eyebrow: 'PROJECT LOG', title: 'Build log', description: 'Releases, design decisions, and creative workflows from Guava Engine.' },
+    blog: { eyebrow: 'PROJECT LOG', title: 'Build log', description: 'Releases, design decisions, and creative workflows from GuavaStudio.' },
     community: {
       eyebrow: 'OPEN SOURCE COMMUNITY',
       title: 'The engine belongs to its builders.',

@@ -6,7 +6,7 @@ struct ProjectConfiguration: Codable, Equatable {
     }
 
     struct Targets: Codable, Equatable {
-        var platforms: [AppPlatform] = [.mac, .win, .linux, .android]
+        var platforms: [AppPlatform] = [.mac, .win, .linux, .android, .ios]
         var desktopExecutable: String? = nil
 
         enum CodingKeys: CodingKey { case platforms, desktopExecutable }

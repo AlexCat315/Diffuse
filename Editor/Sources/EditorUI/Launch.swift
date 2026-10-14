@@ -50,7 +50,7 @@ private func runEditor() throws {
         let app = try EditorApplication(projectDirectory: directory)
         _ = app.openSceneManifest()
         if CommandLine.arguments.contains("--trust-project-scripts") {
-            app.scriptWorkspace.setProjectTrusted(true)
+            app.workstation.scripts.setProjectTrusted(true)
         }
         // Explicit local automation accepts reversible previews only.
         let driver = HeadlessEditorDriver(app: app)
@@ -152,7 +152,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     }
 
     try Application.run(
-        config: ApplicationConfiguration(title: "GuavaNext Editor") {
+        config: ApplicationConfiguration(title: "GuavaStudio") {
             $0.rendering.clearColor = SIMD4(0x1E / 255, 0x1F / 255, 0x22 / 255, 1)
             $0.window.titleBarStyle = .hiddenInset
         },
@@ -175,7 +175,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
             }
         },
         onDisplayReady: { display in
-            display.installNativeMenuBar(NativeMenuBar(appName: "GuavaNext Editor", menus: []))
+            display.installNativeMenuBar(NativeMenuBar(appName: "GuavaStudio", menus: []))
             context.wireDisplay(display)
         }
     ) {

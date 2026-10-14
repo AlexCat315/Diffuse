@@ -31,7 +31,7 @@ public final class AndroidContentSession {
         self.scale = scale.isFinite ? min(4, max(1, scale)) : 1
         self.rendering = rendering
         environment.configure(scale: self.scale)
-        withCurrent { graph.install(root: content()) }
+        withCurrent { graph.install(root: AndroidAdaptiveContent(content: content(), environment: environment.surface)) }
     }
 
     public func configureDiagnostics(_ config: DevToolsConfig, schedule: @escaping @Sendable () -> Void) throws {
@@ -64,6 +64,10 @@ public final class AndroidContentSession {
     public func prepare(pixels: SIMD2<Int>, scale: Float, deltaTime: Double) -> DrawList {
         self.scale = scale.isFinite ? min(4, max(1, scale)) : 1
         logicalSize = SIMD2(Float(pixels.x), Float(pixels.y)) / self.scale
+        var surface = UIEnvironment()
+        surface.input = [.touch, .keyboard]
+        surface.viewport.width = logicalSize.x; surface.viewport.height = logicalSize.y; surface.viewport.scale = self.scale
+        if surface != environment.surface.wrappedValue { environment.surface.wrappedValue = surface }
         withCurrent {
             diagnostics?.drain()
             diagnostics?.beginFrame()
@@ -151,4 +155,11 @@ public final class AndroidContentSession {
         }
         needsUpdate = true
     }
+}
+
+private struct AndroidAdaptiveContent<Root: View>: View {
+    let content: Root
+    @State var environment: UIEnvironment
+    init(content: Root, environment: State<UIEnvironment>) { self.content = content; self._environment = environment }
+    var body: some View { content.surfaceEnvironment(environment) }
 }

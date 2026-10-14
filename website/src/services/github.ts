@@ -1,7 +1,7 @@
 import fallbackSnapshot from '@/data/github-fallback.json'
 import type { GitHubSnapshot } from '@/types/github'
 
-const api = 'https://api.github.com/repos/AlexCat315/Guava-Engine'
+const api = 'https://api.github.com/repos/AlexCat315/GuavaStudio'
 const cacheKey = 'guava-github-snapshot-v1'
 const ttl = 30 * 60 * 1000
 

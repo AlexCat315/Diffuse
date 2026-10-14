@@ -6,6 +6,8 @@ import SIMDCompat
 import Testing
 @testable import EditorCore
 
+private final class PlayerScriptTestBundle: NSObject {}
+
 @Suite("Exported Swift gameplay", .serialized)
 struct GameProjectScriptLoaderTests {
     private func temporaryProject() throws -> URL {
@@ -74,10 +76,8 @@ struct GameProjectScriptLoaderTests {
         let editorRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let override = ProcessInfo.processInfo.environment["GUAVA_TEST_PLAYER_EXECUTABLE"].map { URL(fileURLWithPath: $0) }
-        let candidates = [override,
-                          editorRoot.appendingPathComponent(".build/out/Products/Debug/GuavaPlayer"),
-                          editorRoot.appendingPathComponent(".build/debug/GuavaPlayer")].compactMap { $0 }
-        let player = try #require(candidates.first { fileManager.isExecutableFile(atPath: $0.path) })
+        let player = override ?? Bundle(for: PlayerScriptTestBundle.self).bundleURL.deletingLastPathComponent().appendingPathComponent("GuavaPlayer")
+        #expect(fileManager.isExecutableFile(atPath: player.path))
         let configuration = ProjectScriptBuildConfiguration.discover(for: player)
         #expect(!configuration.engineModulePaths.isEmpty)
         let project = try temporaryProject()

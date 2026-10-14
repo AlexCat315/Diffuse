@@ -69,12 +69,26 @@ if sys.platform == "win32" and "VCToolsInstallDir" not in env:
     else:
         print("warning: Visual Studio C++ tools not found — cmake may fail to link.", file=sys.stderr)
 
+# Media is an independent dependency graph. Incremental desktop builds should
+# not rebuild all graphics libraries when only FFmpeg is missing.
+media_stage = root / "Engine/Media/Native/stage.py"
+media_ready = subprocess.run([sys.executable, str(media_stage), "--check"], env=env,
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+if force or not media_ready:
+    subprocess.run([sys.executable, str(media_stage)], env=env, check=True)
+
 # ── Sentinels ─────────────────────────────────────────────────────────────────
 
 engine_done   = root / "Engine"  / "vendor" / "SDL3.artifactbundle"
 guava_ui_done = root / "GuavaUI" / "vendor" / "CFreeType.artifactbundle"
-wasmtime_done = root / "Engine" / "vendor" / "Wasmtime.xcframework"
-wasmtime_ready = sys.platform != "darwin" or wasmtime_done.exists()
+wasmtime_ready = subprocess.run(
+    [sys.executable, str(root / "Engine/third-party/wasmtime/stage.py"), "--check"],
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+).returncode == 0
+
+if not wasmtime_ready:
+    subprocess.run([sys.executable, str(root / "Engine/third-party/wasmtime/stage.py")], env=env, check=True)
+    wasmtime_ready = True
 
 if not force and engine_done.exists() and guava_ui_done.exists() and wasmtime_ready:
     print("Native deps already built. Run `python bootstrap.py --force` to rebuild.")

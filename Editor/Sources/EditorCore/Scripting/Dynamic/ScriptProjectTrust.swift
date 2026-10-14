@@ -81,7 +81,7 @@ final class ScriptProjectTrustStore: @unchecked Sendable {
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".guava", isDirectory: true)
         return base
-            .appendingPathComponent("GuavaEditor", isDirectory: true)
+            .appendingPathComponent("GuavaStudioEditor", isDirectory: true)
             .appendingPathComponent("script-workspace-trust.json")
     }
 }

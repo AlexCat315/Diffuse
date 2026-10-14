@@ -267,6 +267,15 @@ struct ButtonHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        let surface = node.compositionValue(of: SurfaceEnvironment.key)
+        if surface.input.contains(.touch) {
+            node.layoutNode?.minHeight = surface.minimumControlExtent
+            node.layoutNode?.minWidth = surface.minimumControlExtent
+            node.attachments["__touchControlExtent"] = true
+        } else if node.attachments.removeValue(forKey: "__touchControlExtent") != nil {
+            node.layoutNode?.minHeight = nil
+            node.layoutNode?.minWidth = nil
+        }
         node.isFocusable = isEnabled
         node.accessibility = AccessibilitySemantics(node.compositionValue(of: ActionControlAccessibility.role)) {
             $0.state.isEnabled = isEnabled; $0.state.isSelected = isSelected

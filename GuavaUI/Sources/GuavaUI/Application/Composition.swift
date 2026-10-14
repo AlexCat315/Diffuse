@@ -5,6 +5,7 @@ import GuavaUIRuntime
 @MainActor
 final class MainComposition {
     let tree = NodeTree()
+    let environment = State<UIEnvironment>(wrappedValue: UIEnvironment())
     let portalStore: PortalStore
     let graph: ViewGraph
     let imageAssets = ImageAssetRegistry()

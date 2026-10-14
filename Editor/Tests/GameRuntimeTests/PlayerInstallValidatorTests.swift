@@ -4,8 +4,8 @@ import XCTest
 
 final class PlayerInstallValidatorTests: XCTestCase {
     private let resourceBundleBases = [
-        "GuavaEditor_EditorCore",
-        "GuavaEngine_RenderBackend",
+        "GuavaStudioEditor_EditorCore",
+        "GuavaStudioRuntime_RenderBackend",
         "GuavaUI_GuavaUI",
         "GuavaUI_GuavaUICompose",
         "GuavaUI_GuavaUIWorkspace",
@@ -34,7 +34,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
         let root = try makePortableLayout()
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("GuavaEngine_RenderBackend.bundle")
+            at: root.appendingPathComponent("GuavaStudioRuntime_RenderBackend.bundle")
         )
         try FileManager.default.removeItem(
             at: root.appendingPathComponent("GuavaUI_GuavaUI.bundle")
@@ -47,7 +47,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
                 return XCTFail("unexpected error: \(error)")
             }
             XCTAssertEqual(missing, [
-                "GuavaEngine_RenderBackend.{bundle,resources}",
+                "GuavaStudioRuntime_RenderBackend.{bundle,resources}",
                 "GuavaUI_GuavaUI.{bundle,resources}",
             ])
         }

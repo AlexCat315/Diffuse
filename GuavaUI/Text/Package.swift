@@ -6,7 +6,7 @@ import Foundation
 let artifacts = ProcessInfo.processInfo.environment["GUAVA_TEXT_ARTIFACT_ROOT"] ?? "../vendor"
 let package = Package(
     name: "GuavaUIText",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v13), .iOS(.v16)],
     products: [
         .library(name: "GuavaUIText", targets: ["GuavaUIText"]),
         .library(name: "CFreeType", targets: ["CFreeType"]),

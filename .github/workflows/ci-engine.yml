@@ -1,10 +1,11 @@
-name: GuavaEngine CI
+name: GuavaStudioRuntime CI
 
 on:
   push:
     branches: [main]
     paths:
       - 'Engine/**'
+      - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
       - 'bootstrap.py'
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - 'Engine/**'
+      - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
       - 'bootstrap.py'
@@ -76,6 +78,10 @@ jobs:
         working-directory: Engine
         run: swift package resolve
 
+      - name: Build pinned FFmpeg
+        shell: bash
+        run: python Engine/Media/Native/stage.py
+
       - name: Build pure-Swift targets
         shell: bash
         working-directory: Engine
@@ -88,11 +94,13 @@ jobs:
           swift build --target SequenceRuntime
           swift build --target CardBattleRuntime
           swift build --target AIRuntime
+          swift build --product GuavaPluginHost
+          swift build --target PluginWasmtimeRuntime
           swift build --target PluginRuntime
           swift build --target IntentRuntime
           swift build --target ScriptRuntime
           # AudioRuntime pulls CSDL3; on Linux/Windows this compiles the SDL3
-          # audio backend, on macOS the AVFoundation one.
+          # audio backend and FFmpeg decoder on every platform.
           swift build --target AudioRuntime
 
       - name: Run tests
@@ -104,6 +112,24 @@ jobs:
         # skipped on ordinary CI runners. Dedicated Metal regressions run in
         # ci-gpu.yml once GUAVA_GPU_CI_ENABLED and its runner are configured.
         run: swift test
+
+      - name: Verify browser plugin execution
+        if: runner.os == 'macOS'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '26.10.0'
+      - name: Run Web Component Worker gates
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          npm ci --prefix Platforms/Web/Plugins --ignore-scripts
+          npm test --prefix Platforms/Web/Plugins
+          cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
+          cmake --build Engine/build/plugin-probe --parallel 4
+          python -m pip install -r GuavaUI/Browser/requirements-dev.txt
+          python -m playwright install chromium
+          host_bin=$(swift build --package-path Engine --show-bin-path)
+          python Platforms/Web/Plugins/tests/browser.py --host "$host_bin/GuavaPluginHost" --probe Engine/build/plugin-probe/GuavaPluginProbe
 
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'

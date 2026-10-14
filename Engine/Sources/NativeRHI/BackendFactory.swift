@@ -8,7 +8,7 @@ enum BackendFactory {
     static func makeBackend(_ api: GraphicsAPI, config: DeviceConfig) throws -> RHIBackend {
         switch api {
         case .metal:
-            #if os(macOS)
+            #if canImport(Metal)
             return try MetalBackend.make(config: config)
             #else
             throw RHIError.unsupportedBackend("Metal is only available on Apple platforms")

@@ -13,7 +13,7 @@ public enum NativeRHI {
     /// Backend preference order for the current platform. The first backend
     /// that constructs successfully wins; later entries are fallbacks.
     public static var platformDefaultBackends: [GraphicsAPI] {
-        #if os(macOS)
+        #if canImport(Metal)
         return [.metal]
         #elseif os(Windows)
         return [.dx12, .vulkan]
@@ -39,7 +39,7 @@ public enum NativeRHI {
     public static func isCompiledIn(_ api: GraphicsAPI) -> Bool {
         switch api {
         case .metal:
-            #if os(macOS)
+            #if canImport(Metal)
             return true
             #else
             return false

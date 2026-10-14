@@ -10,7 +10,7 @@ struct EditorOutputPanel: View {
 
     init(app: EditorApplication) {
         self.app = app
-        workspace = Observed(\.snapshot, on: app.scriptWorkspace)
+        workspace = Observed(\.snapshot, on: app.workstation.scripts)
     }
 
     var body: some View {
@@ -81,7 +81,7 @@ struct EditorOutputPanel: View {
                 Spacer(minLength: 0)
                 Button(L("Copy"), isEnabled: !output.isEmpty) { ClipboardHolder.write?(output) }
                     .buttonStyle(.ghost).controlSize(.small)
-                Button(L("Clear"), isEnabled: !output.isEmpty, action: app.scriptWorkspace.clearSelectedOutput)
+                Button(L("Clear"), isEnabled: !output.isEmpty, action: app.workstation.scripts.clearSelectedOutput)
                     .buttonStyle(.ghost).controlSize(.small)
             }
             if output.isEmpty {

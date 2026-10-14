@@ -9,12 +9,18 @@ struct NativeDependencies {
         let fonts = toolchain.cache.appendingPathComponent("fonts-cmake")
         try configure(source: toolchain.root.appendingPathComponent("Engine/third-party"), directory: engine,
                       options: ["-DGUAVA_BUILD_OPENEXR=OFF"])
-        try Shell.run(["cmake", "--build", engine.path, "--target", "stage_sdl3", "stage_jolt", "stage_image_decode",
+        try Shell.run(["cmake", "--build", engine.path, "--target", "stage_sdl3", "stage_jolt", "stage_image_decode", "stage_wasmtime",
                        "--parallel", parallelism])
         try Shell.run(["cmake", "--install", engine.path])
         try configure(source: toolchain.root.appendingPathComponent("GuavaUI/third-party"), directory: fonts, options: [])
         try Shell.run(["cmake", "--build", fonts.path, "--target", "stage_freetype", "stage_harfbuzz", "--parallel", parallelism])
         try Shell.run(["cmake", "--install", fonts.path])
+        var mediaEnvironment = ProcessInfo.processInfo.environment
+        mediaEnvironment["ANDROID_NDK_HOME"] = toolchain.ndk.path
+        let mediaScript = toolchain.root.appendingPathComponent("Engine/Media/Native/stage.py").path
+        if (try? Shell.run(["python3", mediaScript, "--platform", "android-arm64", "--check"], environment: mediaEnvironment, quiet: true)) == nil {
+            try Shell.run(["python3", mediaScript, "--platform", "android-arm64"], environment: mediaEnvironment)
+        }
         return Artifacts(engine: engine.appendingPathComponent("vendor"), text: fonts.appendingPathComponent("vendor"))
     }
 

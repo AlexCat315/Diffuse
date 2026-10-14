@@ -1,4 +1,4 @@
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 
 /// State belongs to one render encoder. Metal keeps independent buffer,

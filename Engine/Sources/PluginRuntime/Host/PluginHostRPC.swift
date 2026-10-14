@@ -194,7 +194,7 @@ public enum PluginHostFrameCodec {
     }
 }
 
-/// Adapter seam for the pinned Wasmtime v45 Component runtime. Implementations
+/// Adapter seam for the pinned Wasmtime Component runtime. Implementations
 /// must configure fuel, memory limits, epoch interruption, and no ambient WASI.
 public protocol WASIComponentRuntime: Sendable {
     var runtimeVersion: String { get }
@@ -206,27 +206,4 @@ public protocol WASIComponentRuntime: Sendable {
                  querySnapshot: PluginQuerySnapshot?,
                  limits: PluginResourceLimits) throws -> Data
     func interrupt(pluginID: String)
-}
-
-public enum PluginRuntimeUnavailableError: Error, CustomStringConvertible {
-    case unavailable
-
-    public var description: String {
-        "Wasmtime 49.0.2 Component runtime is not linked; plugin execution is fail-closed"
-    }
-}
-
-/// Used on builds that do not carry the pinned Wasmtime artifact. Package
-/// validation remains available, but component code can never execute.
-public struct FailClosedWASIComponentRuntime: WASIComponentRuntime {
-    public let runtimeVersion = "unavailable"
-    public init() {}
-    public func validateComponent(_ package: ValidatedPluginPackage,
-                                  limits: PluginResourceLimits) throws { throw PluginRuntimeUnavailableError.unavailable }
-    public func prepare(_ package: ValidatedPluginPackage,
-                        capabilityID: String,
-                        input: Data,
-                        querySnapshot: PluginQuerySnapshot?,
-                        limits: PluginResourceLimits) throws -> Data { throw PluginRuntimeUnavailableError.unavailable }
-    public func interrupt(pluginID: String) {}
 }

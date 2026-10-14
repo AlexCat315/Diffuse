@@ -1,3 +1,4 @@
+#if os(macOS) || os(Linux) || os(Windows)
 import Foundation
 import GuavaLogging
 #if canImport(Darwin)
@@ -392,4 +393,6 @@ private func guavaSystemWrite(_ fileDescriptor: Int32,
     Android.write(fileDescriptor, buffer, count)
 #endif
 }
+#endif
+
 #endif

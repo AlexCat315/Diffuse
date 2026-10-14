@@ -5,6 +5,8 @@ import SIMDCompat
 import Testing
 @testable import ScriptRuntime
 
+private final class CompilerTestBundle: NSObject {}
+
 @Suite("Swift script compiler")
 struct SwiftScriptCompilerTests {
     @Test("discovers Linux C intermediates once and excludes other configurations")
@@ -21,9 +23,9 @@ struct SwiftScriptCompilerTests {
             return file.path
         }
         _ = try write("GeneratedModuleMaps/CJoltBridge.modulemap", "module CJoltBridge { export * }")
-        _ = try write("GuavaEngine.build/Debug-linux-x86_64/CJoltBridge.build/module.modulemap", "module CJoltBridge { export * }")
-        _ = try write("GuavaEngine.build/Debug-linux-x86_64/CNativeBridge.build/module.modulemap", "module CNativeBridge { export * }")
-        _ = try write("GuavaEngine.build/Release-linux-x86_64/CReleaseBridge.build/module.modulemap", "module CReleaseBridge { export * }")
+        _ = try write("GuavaStudioRuntime.build/Debug-linux-x86_64/CJoltBridge.build/module.modulemap", "module CJoltBridge { export * }")
+        _ = try write("GuavaStudioRuntime.build/Debug-linux-x86_64/CNativeBridge.build/module.modulemap", "module CNativeBridge { export * }")
+        _ = try write("GuavaStudioRuntime.build/Release-linux-x86_64/CReleaseBridge.build/module.modulemap", "module CReleaseBridge { export * }")
         _ = try write("GeneratedModuleMaps/ContextMemory.modulemap", "module ContextMemory { header \"ContextMemory-Swift.h\" }")
         let alias = root.appendingPathComponent(".build/debug")
         try FileManager.default.createDirectory(at: alias.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -107,13 +109,16 @@ struct SwiftScriptCompilerTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let productCandidates = [
+        var runningDirectory = Bundle(for: CompilerTestBundle.self).bundleURL
+        var runningCandidates: [URL] = []
+        for _ in 0..<8 { runningCandidates.append(runningDirectory); runningDirectory.deleteLastPathComponent() }
+        let productCandidates = runningCandidates + [
             engineRoot.appendingPathComponent(".build/out/Products/Debug", isDirectory: true),
             engineRoot.appendingPathComponent(".build/arm64-apple-macosx/debug", isDirectory: true),
             engineRoot.appendingPathComponent(".build/debug", isDirectory: true),
         ]
         let productsDirectory = productCandidates.first {
-            fileManager.fileExists(atPath: $0.appendingPathComponent("SceneRuntime.swiftmodule").path)
+            fileManager.fileExists(atPath: $0.appendingPathComponent("Modules/SceneRuntime.swiftmodule").path) || fileManager.fileExists(atPath: $0.appendingPathComponent("SceneRuntime.swiftmodule").path)
         } ?? productCandidates[0]
 
         var moduleMapPaths = SwiftScriptCompiler.discoverClangModuleMapPaths(in: productsDirectory)
@@ -155,7 +160,7 @@ struct SwiftScriptCompilerTests {
         """.write(to: sourceURL, atomically: true, encoding: .utf8)
 
         let compiler = SwiftScriptCompiler(
-            includePaths: [productsDirectory.path],
+            includePaths: [productsDirectory.path, productsDirectory.appendingPathComponent("Modules").path],
             clangModuleMapPaths: moduleMapPaths,
             clangIncludePaths: Array(clangIncludePaths),
             outputDirectory: testDirectory.appendingPathComponent(".build", isDirectory: true)

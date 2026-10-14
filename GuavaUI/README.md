@@ -8,7 +8,7 @@ import GuavaUI
 try Application.run { Text("Hello, GuavaUI!").padding(24) }
 ```
 
-窗口、设备、文字、输入、布局、图像上传与帧提交由宿主负责。可运行的最小应用在 [`examples/HelloUI`](../examples/HelloUI)，共享桌面 / Android 根视图的项目在 [`examples/GuavaUIStarter`](../examples/GuavaUIStarter)。从仓库根目录运行：
+窗口、设备、文字、输入、布局、图像上传与帧提交由宿主负责。可运行的最小应用在 [`examples/HelloUI`](../examples/HelloUI)，共享桌面 / Android / iOS 根视图的项目在 [`examples/GuavaUIStarter`](../examples/GuavaUIStarter)。从仓库根目录运行：
 
 ```sh
 swift run --package-path examples/HelloUI HelloUI
@@ -104,3 +104,5 @@ swift test --package-path Editor
 ```
 
 [Portable 核心](Portable/README.md)与[浏览器原型](Browser/README.md)可独立使用。浏览器原型尚未提供全部原生组件画廊。
+
+跨设备布局和组件要求见 [组件标准](../docs/components/standard.md)。`SurfaceReader` 读取空间与输入能力；应用内容不需要直接识别 UIKit、SDL 或 Android 生命周期。

@@ -82,7 +82,7 @@ struct EditorAgentTaskTests {
         #expect(restored.workspace.mode == .animation)
         #expect(restored.assistant.agentTasks.isEmpty)
         #expect(restored.document.identity != state.document.identity)
-        #expect(try JSONDecoder().decode(EditorWorkspaceState.self, from: Data("{}".utf8)).interactionMode == .manual)
+        #expect(try JSONDecoder().decode(EditorWorkspaceState.self, from: Data("{}".utf8)).interactionMode == .agent)
     }
 
     @Test("Task cancellation and terminal results release the active slot")

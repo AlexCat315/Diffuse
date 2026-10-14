@@ -1,6 +1,6 @@
 // NativeRHI Metal backend — resource & pipeline creation, and destruction.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 
 extension MetalDevice {

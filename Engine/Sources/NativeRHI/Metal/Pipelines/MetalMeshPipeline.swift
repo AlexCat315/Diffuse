@@ -1,4 +1,4 @@
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 
 struct MetalMeshPipeline {

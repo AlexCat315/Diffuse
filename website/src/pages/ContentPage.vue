@@ -18,7 +18,7 @@ const previous = computed(() => position.value > 0 ? siblings.value[position.val
 const next = computed(() => position.value < siblings.value.length - 1 ? siblings.value[position.value + 1] : undefined)
 const docs = computed(() => contentEntries.filter((entry) => entry.locale === props.entry.locale && entry.kind === 'doc').sort((a, b) => a.order - b.order))
 const categories = computed(() => [...new Set(docs.value.map((entry) => entry.category))])
-const editUrl = computed(() => `https://github.com/AlexCat315/Guava-Engine/edit/next/${props.entry.editPath}`)
+const editUrl = computed(() => `https://github.com/AlexCat315/GuavaStudio/edit/next/${props.entry.editPath}`)
 </script>
 
 <template>

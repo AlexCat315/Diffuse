@@ -29,7 +29,7 @@ struct EditorProjectLifecycleTests {
         #expect(app.scene.entityCount == 0)
         #expect(app.scene.defaultSelectionID == nil)
         #expect(app.restoreProjectSceneAtLaunch()?.entityCount == 0)
-        #expect(app.scriptWorkspace.snapshot.documents.isEmpty)
+        #expect(app.workstation.scripts.snapshot.documents.isEmpty)
         #expect(!app.hasUnsavedSceneChanges)
         let cube = try #require(app.scene.spawnEntity(template: .cube))
         app.store.dispatch(.setSelectedEntity(cube))
@@ -96,7 +96,7 @@ struct EditorProjectLifecycleTests {
         let app = try EditorApplication(projectDirectory: first.directory.path)
         defer { app.shutdown() }
         #expect(app.restoreProjectSceneAtLaunch()?.entityCount == 1)
-        let document = try #require(app.scriptWorkspace.snapshot.documents.first)
+        let document = try #require(app.workstation.scripts.snapshot.documents.first)
         let sceneBindings = scene.roots.first.flatMap { sceneDocumentScripts(in: $0.components) }
         #expect(document.file.identifier == sceneBindings?.first?.identifier)
         #expect(!app.dynamicScriptManager.projectTrustState.allowsExecution)
@@ -132,12 +132,12 @@ struct EditorProjectLifecycleTests {
         defer { app.shutdown() }
         var closed = false
         app.setCloseProjectHandler { closed = true }
-        #expect(app.scriptWorkspace.createScript(name: "One", source: "one"))
-        app.scriptWorkspace.updateSelectedSource("unsaved")
+        #expect(app.workstation.scripts.createScript(name: "One", source: "one"))
+        app.workstation.scripts.updateSelectedSource("unsaved")
         app.requestCloseProject()
         #expect(!closed)
         #expect(app.store.state.document.pendingCloseRequest?.action == .closeProject)
-        #expect(app.scriptWorkspace.persistAll())
+        #expect(app.workstation.scripts.persistAll())
         #expect(try String(contentsOf: project.directory.appendingPathComponent("Scripts/One.swift"), encoding: .utf8) == "unsaved")
         app.store.dispatch(.dismissCloseRequest)
         app.requestCloseProject()

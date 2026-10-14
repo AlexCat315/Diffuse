@@ -130,8 +130,8 @@ jobs:
         shell: bash
         run: |
           swift test --package-path Engine
-          swift test --package-path GuavaUI
-          swift test --package-path Editor
+          swift test --package-path GuavaUI --no-parallel
+          swift test --package-path Editor --no-parallel
 
       - name: Package
         id: package
@@ -146,8 +146,8 @@ jobs:
           mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
 
           dist_root="$PWD/dist"
-          package_dir="$dist_root/GuavaEditor-macos-$arch"
-          app_dir="$package_dir/GuavaEditor.app"
+          package_dir="$dist_root/GuavaStudio-macos-$arch"
+          app_dir="$package_dir/GuavaStudio.app"
           rm -rf "$dist_root"
           mkdir -p "$app_dir/Contents/MacOS" \
             "$app_dir/Contents/Helpers" \
@@ -157,7 +157,12 @@ jobs:
           cp "$player_bin/GuavaPlayer" "$app_dir/Contents/MacOS/"
           cp "$plugin_host_bin/GuavaPluginHost" "$app_dir/Contents/Helpers/"
           cp "$mcp_bin/GuavaMCP" "$app_dir/Contents/Helpers/"
-          cp "$plugin_host_bin/libwasmtime.dylib" "$app_dir/Contents/Helpers/"
+          cp "Engine/Media/vendor/FFmpeg.artifactbundle/macos-$arch/bin/ffmpeg" "$app_dir/Contents/Helpers/"
+          cp "Engine/Media/vendor/FFmpeg.artifactbundle/macos-$arch/bin/ffprobe" "$app_dir/Contents/Helpers/"
+          mkdir -p "$app_dir/Contents/Resources/FFmpeg"
+          cp Engine/Media/vendor/FFmpeg.artifactbundle/COPYING.* "$app_dir/Contents/Resources/FFmpeg/"
+          cp Engine/Media/vendor/FFmpeg.artifactbundle/LICENSE.md Engine/Media/README.md "$app_dir/Contents/Resources/FFmpeg/"
+          cp "Engine/Media/vendor/FFmpeg.artifactbundle/macos-$arch/provenance.json" "$app_dir/Contents/Resources/FFmpeg/"
 
           find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
             -exec cp -R {} "$app_dir/Contents/Resources/" \;
@@ -167,11 +172,11 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>CFBundleDisplayName</key><string>Guava Editor</string>
+            <key>CFBundleDisplayName</key><string>GuavaStudio</string>
             <key>CFBundleExecutable</key><string>EditorApp</string>
-            <key>CFBundleIdentifier</key><string>com.guava.editor</string>
+            <key>CFBundleIdentifier</key><string>com.guava.studio</string>
             <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-            <key>CFBundleName</key><string>Guava Editor</string>
+            <key>CFBundleName</key><string>GuavaStudio</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleShortVersionString</key><string>0.0.1</string>
             <key>CFBundleVersion</key><string>1</string>
@@ -200,7 +205,7 @@ jobs:
           codesign --force --deep --sign - --timestamp=none "$app_dir"
           codesign --verify --deep --strict "$app_dir"
 
-          zip_path="$dist_root/guava-editor-macos-$arch.zip"
+          zip_path="$dist_root/guava-studio-macos-$arch.zip"
           ditto -c -k --sequesterRsrc --keepParent "$package_dir" "$zip_path"
           echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
 
@@ -248,8 +253,8 @@ jobs:
           $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $true
           swift test --package-path Engine
-          swift test --package-path GuavaUI
-          swift test --package-path Editor
+          swift test --package-path GuavaUI --no-parallel
+          swift test --package-path Editor --no-parallel
 
       - name: Package
         id: package
@@ -264,7 +269,7 @@ jobs:
           $mcpBin = (swift build -c release --package-path guava-mcp --show-bin-path).Trim()
 
           $distRoot = Join-Path $PWD "dist"
-          $packageDir = Join-Path $distRoot "GuavaEditor-windows-x86_64"
+          $packageDir = Join-Path $distRoot "GuavaStudio-windows-x86_64"
           if (Test-Path $distRoot) {
             Remove-Item $distRoot -Recurse -Force
           }
@@ -274,6 +279,11 @@ jobs:
           Copy-Item (Join-Path $playerBin "GuavaPlayer.exe") $packageDir
           Copy-Item (Join-Path $pluginHostBin "GuavaPluginHost.exe") (Join-Path $packageDir "Tools")
           Copy-Item (Join-Path $mcpBin "GuavaMCP.exe") (Join-Path $packageDir "Tools")
+          Copy-Item "Engine/Media/vendor/FFmpeg.artifactbundle/windows-x86_64/bin/*.exe" (Join-Path $packageDir "Tools")
+          $mediaLicenses = Join-Path $packageDir "Licenses/FFmpeg"
+          New-Item -ItemType Directory -Path $mediaLicenses -Force | Out-Null
+          Copy-Item "Engine/Media/vendor/FFmpeg.artifactbundle/COPYING.*" $mediaLicenses
+          Copy-Item "Engine/Media/vendor/FFmpeg.artifactbundle/LICENSE.md", "Engine/Media/README.md", "Engine/Media/vendor/FFmpeg.artifactbundle/windows-x86_64/provenance.json" $mediaLicenses
 
           Get-ChildItem $editorBin -Directory |
             Where-Object { $_.Name -like "*.bundle" -or $_.Name -like "*.resources" } |
@@ -327,7 +337,7 @@ jobs:
             Remove-Item $emptyInput -Force
           }
 
-          $zipPath = Join-Path $distRoot "guava-editor-windows-x86_64.zip"
+          $zipPath = Join-Path $distRoot "guava-studio-windows-x86_64.zip"
           Compress-Archive -Path $packageDir -DestinationPath $zipPath -Force
           "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
 
@@ -406,8 +416,8 @@ jobs:
         shell: bash
         run: |
           swift test --package-path Engine
-          swift test --package-path GuavaUI
-          swift test --package-path Editor
+          swift test --package-path GuavaUI --no-parallel
+          swift test --package-path Editor --no-parallel
 
       - name: Package
         id: package
@@ -421,7 +431,7 @@ jobs:
           mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
 
           dist_root="$PWD/dist"
-          package_dir="$dist_root/GuavaEditor-linux-x86_64"
+          package_dir="$dist_root/GuavaStudio-linux-x86_64"
           rm -rf "$dist_root"
           mkdir -p "$package_dir/Tools" "$package_dir/Lib"
 
@@ -429,6 +439,12 @@ jobs:
           cp "$player_bin/GuavaPlayer" "$package_dir/"
           cp "$plugin_host_bin/GuavaPluginHost" "$package_dir/Tools/"
           cp "$mcp_bin/GuavaMCP" "$package_dir/Tools/"
+          cp Engine/Media/vendor/FFmpeg.artifactbundle/linux-x86_64/bin/ffmpeg "$package_dir/Tools/"
+          cp Engine/Media/vendor/FFmpeg.artifactbundle/linux-x86_64/bin/ffprobe "$package_dir/Tools/"
+          mkdir -p "$package_dir/Licenses/FFmpeg"
+          cp Engine/Media/vendor/FFmpeg.artifactbundle/COPYING.* "$package_dir/Licenses/FFmpeg/"
+          cp Engine/Media/vendor/FFmpeg.artifactbundle/LICENSE.md Engine/Media/README.md "$package_dir/Licenses/FFmpeg/"
+          cp Engine/Media/vendor/FFmpeg.artifactbundle/linux-x86_64/provenance.json "$package_dir/Licenses/FFmpeg/"
 
           find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
             -exec cp -R {} "$package_dir/" \;
@@ -478,7 +494,7 @@ jobs:
           "$package_dir/Tools/GuavaPluginHost" </dev/null
           "$package_dir/Tools/GuavaMCP" </dev/null
 
-          tar_path="$dist_root/guava-editor-linux-x86_64.tar.gz"
+          tar_path="$dist_root/guava-studio-linux-x86_64.tar.gz"
           tar -C "$dist_root" -czf "$tar_path" "$(basename "$package_dir")"
           echo "tar_path=$tar_path" >> "$GITHUB_OUTPUT"
 

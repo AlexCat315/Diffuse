@@ -73,6 +73,9 @@ extension EditorApplication {
             }
         }
 
+        if let result = try await executeWorkstationTool(name, arguments: args) {
+            return try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+        }
         var result: [String: Any] = ["ok": true]
         switch name {
         case "get_project_info":
@@ -109,7 +112,7 @@ extension EditorApplication {
             try validateProjectScriptsDirectory()
             result["scripts"] = try dynamicScriptManager.scanScriptFiles().map { file -> [String: Any] in
                 let url = try projectScriptURL(filename: file.url.lastPathComponent)
-                let document = scriptWorkspace.snapshot.documents.first { $0.file.identifier == file.identifier }
+                let document = workstation.scripts.snapshot.documents.first { $0.file.identifier == file.identifier }
                 return ["filename": url.lastPathComponent, "identifier": file.identifier,
                         "sha256": CapabilityDigest.sha256(try boundedScriptData(at: url)),
                         "unsaved_changes": document?.isDirty ?? false,
@@ -129,7 +132,7 @@ extension EditorApplication {
             let source = args["source"] as? String ?? ""
             guard source.utf8.count <= 262_144 else { throw EditorProjectToolError("Source exceeds 256 KiB.") }
             if FileManager.default.fileExists(atPath: url.path) {
-                guard scriptWorkspace.snapshot.documents.first(where: { ProjectFilePath.sameLocation($0.file.url, url) })?.isDirty != true else {
+                guard workstation.scripts.snapshot.documents.first(where: { ProjectFilePath.sameLocation($0.file.url, url) })?.isDirty != true else {
                     throw EditorProjectToolError("The editor has unsaved changes for \(url.lastPathComponent). Save or resolve them first.")
                 }
                 let current = CapabilityDigest.sha256(try boundedScriptData(at: url))
@@ -137,10 +140,10 @@ extension EditorApplication {
                     throw EditorProjectToolError("Source changed or expected_sha256 is missing. Read the script again before replacing it.")
                 }
                 try dynamicScriptManager.writeSource(source, at: url)
-                scriptWorkspace.refreshFromDisk()
+                workstation.scripts.refreshFromDisk()
             } else {
                 guard args["expected_sha256"] == nil else { throw EditorProjectToolError("The expected source no longer exists.") }
-                guard scriptWorkspace.createScript(name: url.deletingPathExtension().lastPathComponent, source: source) else {
+                guard workstation.scripts.createScript(name: url.deletingPathExtension().lastPathComponent, source: source) else {
                     throw EditorProjectToolError("Could not create script. Check editor diagnostics.")
                 }
             }
@@ -156,18 +159,18 @@ extension EditorApplication {
             guard dynamicScriptManager.projectTrustState.allowsExecution else {
                 throw EditorProjectToolError(ScriptProjectTrustError.executionBlocked.localizedDescription)
             }
-            guard !scriptWorkspace.snapshot.documents.contains(where: \.isDirty) else {
+            guard !workstation.scripts.snapshot.documents.contains(where: \.isDirty) else {
                 throw EditorProjectToolError("Save unsaved script documents before compiling project files.")
             }
             projectToolBuildInProgress = true
             defer { projectToolBuildInProgress = false }
             let report = ProjectCompileReport()
-            scriptWorkspace.markAllBuildsStarted()
+            workstation.scripts.markAllBuildsStarted()
             return try await withCheckedThrowingContinuation { continuation in
                 do {
                     try dynamicScriptManager.compileAllScripts(onScriptCompletion: { [weak self] file, status in
                         report.append(file, status)
-                        self?.scriptWorkspace.recordBuildResult(scriptID: file.identifier, status: status)
+                        self?.workstation.scripts.recordBuildResult(scriptID: file.identifier, status: status)
                         if case .succeeded = status {
                             self?.scene.registerDynamicScriptOption(identifier: file.identifier, displayName: file.displayName)
                         }

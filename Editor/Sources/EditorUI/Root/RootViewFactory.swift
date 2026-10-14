@@ -149,8 +149,8 @@ enum EditorRootViewFactory {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
             WorkspacePanelDescriptor(id: "inspector", title: localizedPanelTitle(for: "inspector"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.inspector" }) {
-                InspectorPanel(store: app.store, scene: app.scene, scriptWorkspace: app.scriptWorkspace) { identifier in
-                    guard let file = app.scriptWorkspace.snapshot.documents.first(where: {
+                InspectorPanel(store: app.store, scene: app.scene, scriptWorkspace: app.workstation.scripts) { identifier in
+                    guard let file = app.workstation.scripts.snapshot.documents.first(where: {
                         $0.file.identifier == identifier || $0.file.legacyIdentifiers.contains(identifier)
                     })?.file else { return }
                     app.navigateToIssue(.script(id: file.identifier, line: 1, column: 1))
@@ -180,6 +180,12 @@ enum EditorRootViewFactory {
             },
             WorkspacePanelDescriptor(id: "developer-tools", title: localizedPanelTitle(for: "developer-tools"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.developer-tools" }) {
                 DeveloperToolsPanel(app: app)
+            },
+            WorkspacePanelDescriptor(id: "documents", title: L("Text and Code"), defaultSlot: .center) {
+                DocumentsPanel(model: app.workstation.documents)
+            },
+            WorkspacePanelDescriptor(id: "media", title: L("Video Editing"), defaultSlot: .center) {
+                MediaTimelinePanel(model: app.workstation.media, projectRoot: URL(fileURLWithPath: app.projectDirectory))
             },
             WorkspacePanelDescriptor(id: "scripts", title: localizedPanelTitle(for: "scripts"), defaultSlot: .center, configure: { $0.isCollapsible = false; $0.iconAssetKey = "panel.scripts" }) {
                 ScriptPanel(app: app)

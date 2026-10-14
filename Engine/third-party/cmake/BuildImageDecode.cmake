@@ -71,8 +71,12 @@ endif()
 
 # cmake --install installs every archive of these dependencies, so the staging
 # target must build all of them and not only the ones copied into the bundle.
+set(GUAVA_WEBP_STAGE_TARGETS lunasvg plutovg webp webpdecoder webpdemux sharpyuv)
+if(TARGET cpufeatures-webp)
+    list(APPEND GUAVA_WEBP_STAGE_TARGETS cpufeatures-webp)
+endif()
 add_custom_target(stage_image_decode
-    DEPENDS lunasvg plutovg webp webpdecoder webpdemux sharpyuv cpufeatures-webp
+    DEPENDS ${GUAVA_WEBP_STAGE_TARGETS}
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${LUNASVG_VARIANT} ${PLUTOVG_VARIANT} ${WEBP_VARIANT} ${SHARPYUV_VARIANT}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${LUNASVG_VARIANT}/lib ${LUNASVG_VARIANT}/include
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PLUTOVG_VARIANT}/lib ${PLUTOVG_VARIANT}/include

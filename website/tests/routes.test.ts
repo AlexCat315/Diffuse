@@ -17,7 +17,7 @@ describe('routes', () => {
   })
 
   it('encodes non-ASCII table-of-contents anchors to match rendered heading ids', () => {
-    const architecture = contentEntries.find((entry) => entry.path === '/zh/docs/architecture')
+    const architecture = contentEntries.find((entry) => entry.path === '/zh/docs/architecture/workstation')
     expect(architecture?.headings[0]?.slug).toMatch(/^%E/)
   })
 

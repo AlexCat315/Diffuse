@@ -4,9 +4,9 @@ import XCTest
 
 final class ReleaseInstallValidatorTests: XCTestCase {
     private let bundleBases = [
-        "GuavaEditor_EditorUI",
-        "GuavaEditor_EditorCore",
-        "GuavaEngine_RenderBackend",
+        "GuavaStudioEditor_EditorUI",
+        "GuavaStudioEditor_EditorCore",
+        "GuavaStudioRuntime_RenderBackend",
         "GuavaUI_GuavaUI",
         "GuavaUI_GuavaUICompose",
         "GuavaUI_GuavaUIWorkspace",
@@ -67,7 +67,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("guava-app-install-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let app = root.appendingPathComponent("GuavaEditor.app", isDirectory: true)
+        let app = root.appendingPathComponent("GuavaStudioEditor.app", isDirectory: true)
         let macOS = app.appendingPathComponent("Contents/MacOS", isDirectory: true)
         let helpers = app.appendingPathComponent("Contents/Helpers", isDirectory: true)
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
@@ -78,7 +78,6 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             macOS.appendingPathComponent("GuavaPlayer"),
             helpers.appendingPathComponent("GuavaPluginHost"),
             helpers.appendingPathComponent("GuavaMCP"),
-            helpers.appendingPathComponent("libwasmtime.dylib"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -103,7 +102,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("guava-app-install-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let app = root.appendingPathComponent("GuavaEditor.app", isDirectory: true)
+        let app = root.appendingPathComponent("GuavaStudioEditor.app", isDirectory: true)
         let macOS = app.appendingPathComponent("Contents/MacOS", isDirectory: true)
         let helpers = app.appendingPathComponent("Contents/Helpers", isDirectory: true)
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
@@ -112,7 +111,6 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         for url in [
             macOS.appendingPathComponent("EditorApp"),
             macOS.appendingPathComponent("GuavaPlayer"),
-            helpers.appendingPathComponent("GuavaPluginHost"),
             helpers.appendingPathComponent("GuavaMCP"),
         ] {
             try Data().write(to: url)
@@ -133,7 +131,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             guard case let EditorInstallValidationError.missingComponents(missing) = error else {
                 return XCTFail("unexpected error: \(error)")
             }
-            XCTAssertTrue(missing.contains("Contents/Helpers/libwasmtime.dylib"))
+            XCTAssertTrue(missing.contains("Contents/Helpers/GuavaPluginHost"))
         }
         #endif
     }
@@ -155,7 +153,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("guava-app-install-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let app = root.appendingPathComponent("GuavaEditor.app", isDirectory: true)
+        let app = root.appendingPathComponent("GuavaStudioEditor.app", isDirectory: true)
         let macOS = app.appendingPathComponent("Contents/MacOS", isDirectory: true)
         let helpers = app.appendingPathComponent("Contents/Helpers", isDirectory: true)
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
@@ -165,7 +163,6 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             macOS.appendingPathComponent("GuavaPlayer"),
             helpers.appendingPathComponent("GuavaPluginHost"),
             helpers.appendingPathComponent("GuavaMCP"),
-            helpers.appendingPathComponent("libwasmtime.dylib"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],

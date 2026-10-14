@@ -27,7 +27,7 @@ guava test
 guava clean
 ```
 
-也可以从其他目录执行 `guava run /path/to/MyApp --mac --devtools`。平台选项互斥，默认当前主机；Debug / Profile / Release 互斥，默认 Debug。桌面需要对应主机，Android 交叉构建支持 macOS / Linux。iOS / Web 完整应用宿主尚未接入，CLI 会明确报错。
+也可以从其他目录执行 `guava run /path/to/MyApp --mac --devtools`。平台选项互斥，默认当前主机；Debug / Profile / Release 互斥，默认 Debug。桌面需要对应主机，Android 交叉构建支持 macOS / Linux。Web 完整应用宿主尚未接入，CLI 会明确报错。
 
 ## 应用所有权
 
@@ -37,7 +37,7 @@ guava clean
 {
   "application": { "id": "com.example.myapp", "name": "My App" },
   "version": { "name": "0.1.0", "build": 1 },
-  "toolchain": { "enginePath": "../Guava-Engine" },
+  "toolchain": { "enginePath": "../GuavaStudio" },
   "targets": {
     "platforms": ["mac", "win", "linux", "android"]
   }
@@ -102,3 +102,6 @@ node scripts/verify-development-session.mjs /path/to/MyApp android
 ```
 
 Editor 也使用 guava.json 和应用自己的平台目录：`./guava run Editor --devtools`。SDK 当前来自源码 checkout，原生依赖初始化仍由 bootstrap.py 负责；预编译 SDK 下载、公证和商店发布不在本轮工具中。
+
+
+默认项目包含 `Platforms/iOS/Application.xcodeproj`，与桌面和 Android 共用 AppContent。`guava devices --ios` 列出目标，`guava run MyApp --ios --simulator UDID` 使用模拟器，真机使用 `--device ID --team TEAM_ID`。Xcode 工程通过 CLI 自动设置共享包和原生库路径；依赖构建输出位于 SDK 的 `Engine/build/ios-*/` 与 `GuavaUI/build/ios-*/`，不会替换桌面库。构建需要完整 Xcode、Ninja、CMake、Python 和已安装相应 iOS target 的 Rust。

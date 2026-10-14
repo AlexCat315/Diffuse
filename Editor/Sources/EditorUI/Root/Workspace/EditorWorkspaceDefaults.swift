@@ -19,6 +19,8 @@ enum EditorWorkspaceDefaults {
         if mode == .scripting || mode == .modeling {
             move("assets", to: "leading", groups: &groups, panels: panels)
         }
+        if mode == .documents { move("documents", to: "center", groups: &groups, panels: panels) }
+        if mode == .video { move("media", to: "center", groups: &groups, panels: panels) }
         if mode == .scripting { move("scripts", to: "center", groups: &groups, panels: panels) }
 
         switch preset {
@@ -106,6 +108,7 @@ enum EditorWorkspaceDefaults {
 
     private static func defaultFractions(for preset: EditorLayoutPreset) -> WorkspaceSplitFractions {
         switch preset {
+        case .documentsDefault, .videoDefault: return .init(leading: 0.20, centerTrailing: 0.78, topBottom: 0.78)
         case .scriptingDefault: return .init(leading: 0.22, centerTrailing: 0.74, topBottom: 0.72)
         case .levelWorkbench: return .init(leading: 0.16, centerTrailing: 0.75, topBottom: 0.68)
         case .levelDefault: return .init(leading: 0.17, centerTrailing: 0.75, topBottom: 0.66)
@@ -119,6 +122,7 @@ enum EditorWorkspaceDefaults {
 
     private static func defaultBottomPanelID(for preset: EditorLayoutPreset) -> WorkspacePanelID {
         switch preset {
+        case .documentsDefault, .videoDefault: return "intent-input"
         case .scriptingDefault: return "console"
         case .levelWorkbench: return "developer-tools"
         case .levelDefault: return "assets"

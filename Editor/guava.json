@@ -1,7 +1,7 @@
 {
   "application": {
-    "id": "com.guava.editor",
-    "name": "Guava Editor"
+    "id": "com.guava.studio",
+    "name": "GuavaStudio"
   },
   "toolchain": {
     "enginePath": ".."

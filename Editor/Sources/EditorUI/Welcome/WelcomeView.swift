@@ -23,12 +23,12 @@ struct WelcomeView: View {
         LayerRoot {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 ImmersiveWindowTitleBar {
-                    Text("GuavaNext Editor").font(.label).foregroundColor(.onSurfaceMuted)
+                    Text("GuavaStudio").font(.label).foregroundColor(.onSurfaceMuted)
                 }
                 ScrollView(.vertical, scrollbarGutter: .stable) {
                     Box(direction: .column, alignItems: .center, spacing: 24) {
                         Column(alignment: .leading, spacing: 8) {
-                            Text("GuavaNext Editor").font(.title).foregroundColor(.onSurface)
+                            Text("GuavaStudio").font(.title).foregroundColor(.onSurface)
                             Text(L("Create a blank project, open your work, or try a playable example."))
                                 .font(.body).foregroundColor(.onSurfaceMuted)
                         }.frame(width: 900)

@@ -140,3 +140,6 @@ GuavaUI/Browser/.dev-builds/
 
 # Guava CLI generated application outputs
 **/.guava/build/
+
+# Independent media dependency artifacts
+Engine/Media/vendor/

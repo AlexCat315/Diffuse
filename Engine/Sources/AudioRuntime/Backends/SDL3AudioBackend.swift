@@ -1,175 +1,135 @@
-// SDL3 audio sink — the single cross-platform audio backend, used on every
-// platform (SDL3 is already a core dependency for windowing/input, so there is
-// no reason to keep an Apple-only AVFoundation path).
-//
-// WAV playback via `SDL_LoadWAV`. Each voice is its own `SDL_AudioStream` bound
-// to the default playback device; SDL mixes the bound streams. Looping is driven
-// from `pump()`. mp3/ogg decoding is a follow-up (needs a decoder bridge);
-// unsupported files simply fail to load.
 #if canImport(CSDL3)
 import Foundation
 import CSDL3
+import MediaRuntime
+import GuavaLogging
 
+/// FFmpeg supplies resident stereo PCM; SDL owns output devices and resampling.
+/// A short queue permits moving-source pan changes without reloading clips.
 public final class SDL3AudioBackend: AudioBackend, @unchecked Sendable {
-
-    /// A decoded WAV resident in memory. The buffer is SDL-allocated and lives
-    /// for the backend's lifetime so looping voices can re-feed it cheaply.
-    private struct Clip {
-        var spec: SDL_AudioSpec
-        var buffer: UnsafeMutablePointer<UInt8>
-        var length: UInt32
-    }
-
     private struct Voice {
-        var stream: OpaquePointer
-        var clip: String
-        var loop: Bool
+        let stream: OpaquePointer
+        let clip: String
+        let loop: Bool
+        var offset = 0
         var pan: Float = 0
+        var ended = false
     }
-
-    private var clips: [String: Clip] = [:]
+    private var clips: [String: PCMBuffer] = [:]
     private var voices: [UInt64: Voice] = [:]
     private var nextID: UInt64 = 1
     private var bgm: Voice?
+    private let chunkFrames = 2048
 
     public init?() {
         guard SDL_InitSubSystem(GUAVA_SDL_INIT_AUDIO) else { return nil }
     }
-
     deinit {
-        for (_, v) in voices { SDL_DestroyAudioStream(v.stream) }
-        if let bgm { SDL_DestroyAudioStream(bgm.stream) }
-        for (_, c) in clips { SDL_free(c.buffer) }
+        stopAll()
         SDL_QuitSubSystem(GUAVA_SDL_INIT_AUDIO)
     }
 
-    // MARK: - Clips
-
     public func loadClip(name: String, url: URL) -> Bool {
         if clips[name] != nil { return true }
-        var spec = SDL_AudioSpec()
-        var buffer: UnsafeMutablePointer<UInt8>? = nil
-        var length: UInt32 = 0
-        guard SDL_LoadWAV(url.path, &spec, &buffer, &length), let buffer else { return false }
-        clips[name] = Clip(spec: spec, buffer: buffer, length: length)
-        return true
-    }
-
-    public func isClipLoaded(_ name: String) -> Bool { clips[name] != nil }
-
-    public func unloadAllClips() {
-        // Voices and BGM streams may still hold pointers into a clip buffer.
-        // Tear them down before releasing the decoded storage.
-        stopAll()
-        for clip in clips.values {
-            SDL_free(clip.buffer)
+        do { clips[name] = try AudioFile.decode(url); return true }
+        catch {
+            LogSystem.logger("com.guava.audio").error("Audio decoding failed", metadata: ["file": "\(url.lastPathComponent)", "error": "\(error)"])
+            return false
         }
-        clips.removeAll(keepingCapacity: true)
     }
-
-    // MARK: - Voices
+    public func isClipLoaded(_ name: String) -> Bool { clips[name] != nil }
+    public func unloadAllClips() { stopAll(); clips.removeAll(keepingCapacity: true) }
 
     public func play(clip: String, volume: Float, pitch: Float, loop: Bool) -> AudioVoiceID? {
-        guard var clipData = clips[clip],
-              let stream = openStream(spec: &clipData.spec, gain: volume, pitch: pitch) else { return nil }
-        guard feed(stream, clip: clipData) else {
-            SDL_DestroyAudioStream(stream)
-            return nil
-        }
-        _ = SDL_ResumeAudioStreamDevice(stream)
-
+        guard let voice = makeVoice(clip: clip, volume: volume, pitch: pitch, loop: loop) else { return nil }
         let id = nextID
         nextID &+= 1
-        voices[id] = Voice(stream: stream, clip: clip, loop: loop)
+        voices[id] = voice
         return AudioVoiceID(raw: id)
     }
-
     public func stop(_ voice: AudioVoiceID) {
-        guard let v = voices.removeValue(forKey: voice.raw) else { return }
-        SDL_DestroyAudioStream(v.stream)
+        if let value = voices.removeValue(forKey: voice.raw) { SDL_DestroyAudioStream(value.stream) }
     }
-
     public func isActive(_ voice: AudioVoiceID) -> Bool {
-        guard let v = voices[voice.raw] else { return false }
-        return v.loop || SDL_GetAudioStreamQueued(v.stream) > 0
+        guard let value = voices[voice.raw] else { return false }
+        return !value.ended || queued(value.stream) > 0
     }
-
     public func setVolume(_ voice: AudioVoiceID, volume: Float) {
-        guard let v = voices[voice.raw] else { return }
-        _ = SDL_SetAudioStreamGain(v.stream, volume)
+        if let value = voices[voice.raw] { _ = SDL_SetAudioStreamGain(value.stream, volume.isFinite ? max(0, volume) : 0) }
     }
-
-    public func setPan(_ voice: AudioVoiceID, pan: Float) {
-        guard var v = voices[voice.raw] else { return }
-        // SDL's stream gain is scalar. Keep the voice state wired so the engine
-        // API and tests can evolve independently of the eventual mixer matrix.
-        v.pan = min(1, max(-1, pan))
-        voices[voice.raw] = v
-    }
-
     public func setPitch(_ voice: AudioVoiceID, pitch: Float) {
-        guard let v = voices[voice.raw] else { return }
-        _ = SDL_SetAudioStreamFrequencyRatio(v.stream, max(0.01, pitch))
+        if let value = voices[voice.raw] { _ = SDL_SetAudioStreamFrequencyRatio(value.stream, pitch.isFinite ? min(100, max(0.01, pitch)) : 1) }
     }
-
+    public func setPan(_ voice: AudioVoiceID, pan: Float) {
+        guard var value = voices[voice.raw] else { return }
+        value.pan = pan.isFinite ? min(1, max(-1, pan)) : 0
+        voices[voice.raw] = value
+    }
     public func pump() {
-        var finished: [UInt64] = []
-        for (id, v) in voices where SDL_GetAudioStreamQueued(v.stream) <= 0 {
-            if v.loop, let clipData = clips[v.clip] {
-                _ = feed(v.stream, clip: clipData)
-            } else {
-                finished.append(id)
-            }
+        for id in Array(voices.keys) {
+            guard var voice = voices[id] else { continue }
+            if !feed(&voice) || (voice.ended && queued(voice.stream) <= 0) {
+                SDL_DestroyAudioStream(voice.stream)
+                voices.removeValue(forKey: id)
+            } else { voices[id] = voice }
         }
-        for id in finished {
-            if let v = voices.removeValue(forKey: id) { SDL_DestroyAudioStream(v.stream) }
+        if var music = bgm {
+            if !feed(&music) || (music.ended && queued(music.stream) <= 0) { stopBGM() }
+            else { bgm = music }
         }
-        refeedBGMIfNeeded()
     }
-
-    // MARK: - Background music
-
     public func playBGM(clip: String, volume: Float, loop: Bool) {
         stopBGM()
-        guard var clipData = clips[clip],
-              let stream = openStream(spec: &clipData.spec, gain: volume, pitch: 1),
-              feed(stream, clip: clipData) else { return }
-        _ = SDL_ResumeAudioStreamDevice(stream)
-        bgm = Voice(stream: stream, clip: clip, loop: loop)
+        bgm = makeVoice(clip: clip, volume: volume, pitch: 1, loop: loop)
     }
-
     public func stopBGM() {
         if let bgm { SDL_DestroyAudioStream(bgm.stream) }
         bgm = nil
     }
-
     public func stopAll() {
-        for (_, v) in voices { SDL_DestroyAudioStream(v.stream) }
+        for voice in voices.values { SDL_DestroyAudioStream(voice.stream) }
         voices.removeAll()
         stopBGM()
     }
 
-    // The BGM channel loops itself; the simulation tick calls `pump()` which only
-    // walks `voices`, so re-feed the music here too if it has drained.
-    private func refeedBGMIfNeeded() {
-        guard let music = bgm, music.loop,
-              SDL_GetAudioStreamQueued(music.stream) <= 0,
-              let clipData = clips[music.clip] else { return }
-        _ = feed(music.stream, clip: clipData)
+    private func makeVoice(clip: String, volume: Float, pitch: Float, loop: Bool) -> Voice? {
+        guard clips[clip] != nil else { return nil }
+        var spec = SDL_AudioSpec()
+        spec.freq = 48000; spec.channels = 2; spec.format = SDL_AUDIO_F32
+        guard let stream = SDL_OpenAudioDeviceStream(GUAVA_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nil, nil) else { return nil }
+        _ = SDL_SetAudioStreamGain(stream, volume.isFinite ? max(0, volume) : 0)
+        _ = SDL_SetAudioStreamFrequencyRatio(stream, pitch.isFinite ? min(100, max(0.01, pitch)) : 1)
+        var voice = Voice(stream: stream, clip: clip, loop: loop)
+        guard feed(&voice), SDL_ResumeAudioStreamDevice(stream) else { SDL_DestroyAudioStream(stream); return nil }
+        return voice
     }
-
-    // MARK: - Helpers
-
-    private func openStream(spec: inout SDL_AudioSpec, gain: Float, pitch: Float) -> OpaquePointer? {
-        guard let stream = SDL_OpenAudioDeviceStream(
-            GUAVA_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nil, nil) else { return nil }
-        _ = SDL_SetAudioStreamGain(stream, gain)
-        if pitch != 1 { _ = SDL_SetAudioStreamFrequencyRatio(stream, pitch) }
-        return stream
+    private func queued(_ stream: OpaquePointer) -> Int32 {
+        max(0, SDL_GetAudioStreamQueued(stream)) + max(0, SDL_GetAudioStreamAvailable(stream))
     }
-
-    private func feed(_ stream: OpaquePointer, clip: Clip) -> Bool {
-        SDL_PutAudioStreamData(stream, clip.buffer, Int32(clip.length))
+    private func feed(_ voice: inout Voice) -> Bool {
+        guard let clip = clips[voice.clip] else { return false }
+        while !voice.ended && queued(voice.stream) < Int32(chunkFrames * 2 * MemoryLayout<Float>.size) {
+            let count = min(chunkFrames, clip.frameCount - voice.offset)
+            var samples = [Float](repeating: 0, count: count * 2)
+            clip.samples.withUnsafeBytes { bytes in
+                // Data's base address need not be Float-aligned.
+                let start = voice.offset * 2 * MemoryLayout<Float>.size
+                samples.withUnsafeMutableBytes { destination in
+                    destination.copyBytes(from: bytes[start..<(start + destination.count)])
+                }
+            }
+            let left: Float = voice.pan > 0 ? 1 - voice.pan : 1
+            let right: Float = voice.pan < 0 ? 1 + voice.pan : 1
+            for frame in 0..<count { samples[frame * 2] *= left; samples[frame * 2 + 1] *= right }
+            let accepted = samples.withUnsafeBytes { SDL_PutAudioStreamData(voice.stream, $0.baseAddress, Int32($0.count)) }
+            guard accepted else { return false }
+            voice.offset += count
+            if voice.offset == clip.frameCount {
+                if voice.loop { voice.offset = 0 }
+                else { voice.ended = true; _ = SDL_FlushAudioStream(voice.stream) }
+            }
+        }
+        return true
     }
 }
 #endif

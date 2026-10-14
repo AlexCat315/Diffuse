@@ -22,6 +22,8 @@ public enum PlaybackState: String, Codable, Sendable, Hashable {
 }
 
 public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
+    case documents
+    case video
     case level
     case scripting
     case modeling
@@ -30,6 +32,8 @@ public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
     public var isGameWorkspace: Bool { self == .level || self == .scripting }
     public var title: String {
         switch self {
+        case .documents: "Text and Code"
+        case .video: "Video Editing"
         case .level: "Level Editing"
         case .scripting: "Script Development"
         case .modeling: "Models and Rendering"
@@ -39,6 +43,8 @@ public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
 }
 
 public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
+    case documentsDefault
+    case videoDefault
     case scriptingDefault
     case levelWorkbench
     case levelDefault
@@ -50,6 +56,8 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public var mode: EditorWorkspaceMode {
         switch self {
+        case .documentsDefault: return .documents
+        case .videoDefault: return .video
         case .scriptingDefault: return .scripting
         case .levelWorkbench, .levelDefault, .levelCinematics:
             return .level
@@ -62,6 +70,8 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public var title: String {
         switch self {
+        case .documentsDefault: return "Documents and Agent"
+        case .videoDefault: return "Video Timeline"
         case .scriptingDefault: return "Code and Console"
         case .levelWorkbench:
             return "Scene and Scripts"
@@ -82,6 +92,8 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public static func `default`(for mode: EditorWorkspaceMode) -> EditorLayoutPreset {
         switch mode {
+        case .documents: return .documentsDefault
+        case .video: return .videoDefault
         case .level:
             return .levelDefault
         case .scripting:
@@ -95,6 +107,8 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public static func presets(for mode: EditorWorkspaceMode) -> [EditorLayoutPreset] {
         switch mode {
+        case .documents: return [.documentsDefault]
+        case .video: return [.videoDefault]
         case .scripting: return [.scriptingDefault]
         case .level:
             return [.levelDefault, .levelWorkbench, .levelCinematics]

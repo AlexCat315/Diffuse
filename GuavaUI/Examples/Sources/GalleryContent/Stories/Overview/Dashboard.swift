@@ -23,7 +23,7 @@ struct IntroductionStory: View {
                     .debugName("dashboard-period")
             }
             Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 16) {
-                MetricCard(title: "Engine", value: isPaused ? "Paused" : "Ready", unit: "", detail: "Guava Engine · native renderer", history: [], tone: .success)
+                MetricCard(title: "Engine", value: isPaused ? "Paused" : "Ready", unit: "", detail: "GuavaStudio · native renderer", history: [], tone: .success)
                 MetricCard(title: "Frame time", value: "8.4", unit: "ms", detail: "Sample trace · 119 frames / second", history: [22, 18, 26, 20, 25, 16, 21, 15, 24, 18, 21, 19], tone: .accentSecondary)
                 MetricCard(title: "Assets", value: period == "week" ? "1,284" : "248", unit: "", detail: period == "week" ? "Imported this week" : "Imported today", history: [9, 12, 18, 12, 26, 22, 32, 38, 34, 52, 58, 64], tone: .info)
                 MetricCard(title: "Completed", value: "\(completed)", unit: "tasks", detail: "All changes saved locally", history: [], tone: .success)

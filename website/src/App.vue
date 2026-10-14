@@ -19,10 +19,10 @@ function translatedPath(locale: 'zh' | 'en') {
 }
 useHead(() => ({
   htmlAttrs: { lang: route.meta.locale === 'en' ? 'en' : 'zh-CN' },
-  title: route.meta.title ? `${route.meta.title} · Guava Engine` : 'Guava Engine',
+  title: route.meta.title ? `${route.meta.title} · GuavaStudio` : 'GuavaStudio',
   meta: [
-    { name: 'description', content: String(route.meta.description || 'Guava Engine — AI-Native 3D game and film engine.') },
-    { property: 'og:title', content: route.meta.title ? `${route.meta.title} · Guava Engine` : 'Guava Engine' },
+    { name: 'description', content: String(route.meta.description || 'GuavaStudio — AI agent workstation for code, games, animation and video.') },
+    { property: 'og:title', content: route.meta.title ? `${route.meta.title} · GuavaStudio` : 'GuavaStudio' },
     { property: 'og:description', content: String(route.meta.description || 'An AI-native 3D engine for creators and agents.') },
     { property: 'og:image', content: `${siteUrl}/og.png` },
     { property: 'og:type', content: 'website' },

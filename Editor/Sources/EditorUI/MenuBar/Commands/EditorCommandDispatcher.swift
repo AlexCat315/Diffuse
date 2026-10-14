@@ -189,7 +189,7 @@ enum EditorCommandDispatcher {
     }
 
     private static func openDocumentation(app: EditorApplication) {
-        guard let url = URL(string: "https://github.com/AlexCat315/Guava-Engine/tree/main/docs") else {
+        guard let url = URL(string: "https://github.com/AlexCat315/GuavaStudio/tree/main/docs") else {
             app.logConsole("Unable to open documentation", severity: .error)
             return
         }

@@ -47,10 +47,18 @@ typedef int32_t (*guava_wasmtime_query_callback_t)(
     size_t interface_name_size, const uint8_t *request, size_t request_size,
     guava_wasmtime_buffer_t *response, guava_wasmtime_buffer_t *error);
 
+typedef enum guava_wasmtime_execution {
+  GUAVA_WASMTIME_AUTOMATIC = 0,
+  GUAVA_WASMTIME_INTERPRETER = 1,
+} guava_wasmtime_execution_t;
+
 const char *guava_wasmtime_runtime_version(void);
 
 guava_wasmtime_runtime_t *
-guava_wasmtime_runtime_new(guava_wasmtime_buffer_t *error);
+guava_wasmtime_runtime_new(guava_wasmtime_execution_t execution,
+                          guava_wasmtime_buffer_t *error);
+
+int32_t guava_wasmtime_runtime_is_interpreter(guava_wasmtime_runtime_t *runtime);
 
 void guava_wasmtime_runtime_delete(guava_wasmtime_runtime_t *runtime);
 

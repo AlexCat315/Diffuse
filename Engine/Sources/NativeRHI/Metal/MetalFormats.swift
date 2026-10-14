@@ -4,7 +4,7 @@
 // the corresponding Metal enum here. Keeping the mappings out of the device
 // type keeps the device small and makes the translation trivially testable.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 
 // MARK: Pixel formats

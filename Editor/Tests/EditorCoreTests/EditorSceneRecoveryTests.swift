@@ -9,7 +9,7 @@ struct EditorSceneRecoveryTests {
     @Test("an explicitly selected scene file loads and survives the unsaved prompt")
     func opensExplicitSceneFile() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-open-scene-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-open-scene-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -36,7 +36,7 @@ struct EditorSceneRecoveryTests {
     @Test("corrupt scene recovery is quarantined with a diagnostic")
     func corruptSceneRecoveryIsQuarantined() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-corrupt-recovery-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-corrupt-recovery-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let recoveryURL = GameSaveDocument.url(slot: GameSaveDocument.autoSaveSlot,
@@ -69,7 +69,7 @@ struct EditorSceneRecoveryTests {
     @Test("corrupt AI context memory is quarantined instead of silently disabling memory")
     func corruptContextMemoryIsQuarantined() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-context-memory-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-context-memory-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let guavaDirectory = project.appendingPathComponent(".guava", isDirectory: true)
@@ -101,7 +101,7 @@ struct EditorSceneRecoveryTests {
     @Test("core playback state machine rejects stopping-to-paused and no-op transitions")
     func corePlaybackStateMachineRejectsInvalidTransitions() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-playback-policy-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-playback-policy-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -117,7 +117,7 @@ struct EditorSceneRecoveryTests {
     @Test("an interrupted Play snapshot is recovered on the next launch")
     func interruptedPlaySnapshotRecovery() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-interrupted-play-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-interrupted-play-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let guavaDirectory = project.appendingPathComponent(".guava", isDirectory: true)
@@ -151,7 +151,7 @@ struct EditorSceneRecoveryTests {
     @Test("clean shutdown removes the Play crash marker")
     func cleanShutdownRemovesPlaySnapshot() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-clean-play-exit-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-clean-play-exit-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -170,7 +170,7 @@ struct EditorSceneRecoveryTests {
     @Test("dirty scene is autosaved on shutdown, restored, and cleared by an explicit save")
     func shutdownRecoveryRoundTrip() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-recovery-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-recovery-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -206,7 +206,7 @@ struct EditorSceneRecoveryTests {
     @Test("saving during playback persists the authored scene, not runtime mutations")
     func saveDuringPlaybackUsesPrePlaySnapshot() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-play-save-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-play-save-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -244,7 +244,7 @@ struct EditorSceneRecoveryTests {
     @Test("exporting during playback packages the authored scene, not runtime mutations")
     func exportDuringPlaybackUsesPrePlaySnapshot() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-editor-play-export-\(UUID().uuidString)",
+            .appendingPathComponent("guava-studio-play-export-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

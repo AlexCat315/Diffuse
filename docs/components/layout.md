@@ -122,7 +122,7 @@ SafeArea(.horizontal) { content }
 
 SafeArea 的 insets 由宿主提供，桌面默认零；它不推断操作系统刘海、软键盘或窗口 chrome。嵌套容器只消费尚未使用的边。显式 left/right 定位保持物理方向；leading/trailing padding 使用 Yoga start/end。方向一致不等于所有控件的图标、键盘和 bidi 文本已经验收。
 
-大集合详见 [可变行高窗口化](../guava-ui/variable-virtual-layout.md)，候选算法详见 [响应式布局](../guava-ui/responsive-layout.md)。画廊 `--component layout` 展示测量 Grid、自适应列、候选切换、RTL/insets、100K LazyGrid 和 100K 可变行高列表。普通 ScrollView 不因此自动窗口化。
+大集合详见 [可变行高窗口化](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VariableVirtualStackTests.swift)，候选算法详见 [响应式布局](standard.md)。画廊 `--component layout` 展示测量 Grid、自适应列、候选切换、RTL/insets、100K LazyGrid 和 100K 可变行高列表。普通 ScrollView 不因此自动窗口化。
 
 ## 尺寸修饰器与局部重组
 

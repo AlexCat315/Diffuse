@@ -179,7 +179,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         shutdown()
         display?.restoreWindow()
         display?.setWindowCloseInterceptor { _ in true }
-        display?.installNativeMenuBar(NativeMenuBar(appName: "GuavaNext Editor", menus: []))
+        display?.installNativeMenuBar(NativeMenuBar(appName: "GuavaStudio", menus: []))
         publisher.send()
         display?.requestDisplay()
     }
@@ -189,8 +189,8 @@ final class EditorLaunchContext: @unchecked Sendable {
         let location = try EditorProjectLifecycle.create(name: name, parent: parent, template: template)
         try loadProject(directory: location.directory.path)
         if template == .crystalRush, let app = bundle?.app {
-            app.scriptWorkspace.setProjectTrusted(true)
-            app.scriptWorkspace.compileSelected()
+            app.workstation.scripts.setProjectTrusted(true)
+            app.workstation.scripts.compileSelected()
             app.logConsole("Preparing Crystal Rush", detail: "When compilation finishes, press Play, then Space to start. WASD moves, Shift sprints, R restarts.")
         }
     }
@@ -214,7 +214,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             // Auxiliary windows (settings) close freely; only the main window
             // and whole-app quit guard the scene.
             if let windowID, windowID != display?.mainWindowID { return true }
-            guard app.hasUnsavedSceneChanges || app.scriptWorkspace.snapshot.documents.contains(where: \.isDirty) else {
+            guard app.hasUnsavedSceneChanges || app.workstation.hasUnsavedChanges else {
                 return true
             }
             app.store.dispatch(.requestClose(EditorPendingCloseRequest(windowID: windowID)))

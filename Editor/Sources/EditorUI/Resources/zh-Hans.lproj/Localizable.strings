@@ -125,7 +125,7 @@
 "About Guava" = "关于 Guava";
 "Version" = "版本";
 "Development Build" = "开发版本";
-"A native scene editor powered by Guava Engine." = "由 Guava Engine 驱动的原生场景编辑器。";
+"An AI Agent driven workstation for code, games, animation and video." = "以 AI Agent 驱动的代码、游戏、动画与视频工作站。";
 "Workspace: Level" = "工作区：关卡";
 "Workspace: Modeling" = "工作区：建模";
 "Workspace: Animation" = "工作区：动画";
@@ -382,7 +382,7 @@
 "Front to Back" = "从前到后";
 "GPU Preferred" = "优先使用 GPU";
 "GPU Required" = "必须使用 GPU";
-"GuavaNext Editor" = "GuavaNext 编辑器";
+"GuavaStudio" = "GuavaStudio";
 "Half Extents" = "半尺寸";
 "Half Height" = "半高度";
 "Height Field" = "高度场";

@@ -205,90 +205,6 @@ struct PluginRuntimeTests {
         }
     }
 
-    @Test("Wasmtime invocation disables the ambient WASI linker surface")
-    func wasmtimeArgumentsDisableAmbientWASI() {
-        let arguments = WasmtimeCLIComponentRuntime.invocationArguments(
-            componentPath: "/plugin/component.wasm",
-            expression: "discover()",
-            timeoutMilliseconds: 2_000,
-            limits: .secureDefault
-        )
-        let wasiOptions = arguments.dropFirst()
-            .first { $0.contains("common=n") }
-        #expect(wasiOptions?.contains("cli=n") == true)
-        #expect(wasiOptions?.contains("http=n") == true)
-        #expect(wasiOptions?.contains("inherit-env=n") == true)
-        #expect(wasiOptions?.contains("inherit-network=n") == true)
-        #expect(arguments.contains("fuel=20000000"))
-        #expect(arguments.contains("max-memory-size=67108864"))
-        #expect(arguments.contains("timeout=2000ms"))
-        #expect(arguments.contains {
-            $0.contains("max-instances=64") && $0.contains("max-memories=16")
-        })
-        #expect(arguments.last == "/plugin/component.wasm")
-    }
-
-    @Test("Wasmtime CLI accepts only the exact pinned release")
-    func wasmtimeVersionMatchIsExact() {
-        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 49.0.2\n"))
-        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 49.0.2 build-hash"))
-        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 149.0.2"))
-        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 49.0.2-rc.1"))
-    }
-
-    @Test("CLI runtime rejects custom host imports until an embedded linker is available")
-    func cliRuntimeRejectsUnlinkedGuavaImports() throws {
-        try WasmtimeCLIComponentRuntime.validateSupportedImports([])
-        #expect(throws: WasmtimeCLIError.unsupportedHostImports(["guava:scene/query"])) {
-            try WasmtimeCLIComponentRuntime.validateSupportedImports(["guava:scene/query"])
-        }
-    }
-
-    @Test("legacy CLI runtime fails closed for the typed Component ABI")
-    func cliRuntimeCannotBypassTypedABI() throws {
-        #if !os(Windows)
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let executable = root.appendingPathComponent("fake-wasmtime")
-        let script = """
-        #!/bin/sh
-        if [ "$1" = "--version" ]; then
-          printf 'wasmtime 49.0.2\\n'
-          exit 0
-        fi
-        exit 99
-        """
-        try Data(script.utf8).write(to: executable)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700],
-                                              ofItemAtPath: executable.path)
-        let runtime = try WasmtimeCLIComponentRuntime(executableURL: executable)
-        let package = ValidatedPluginPackage(
-            rootURL: root,
-            manifest: GuavaPluginManifest(
-                id: "safe.reader",
-                version: 1,
-                name: "Reader",
-                description: "Test reader",
-                access: .read
-            ),
-            componentURL: root.appendingPathComponent("component.wasm"),
-            witURL: root.appendingPathComponent("capabilities.wit"),
-            witContract: WITContract(
-                worldName: "plugin",
-                imports: [],
-                exports: [WITFunctionExport(name: "capabilities", signature: "interface")]
-            ),
-            componentHash: "test",
-            witHash: "test"
-        )
-        #expect(throws: WasmtimeCLIError.typedComponentABIRequiresEmbeddedRuntime) {
-            try runtime.validateComponent(package, limits: .secureDefault)
-        }
-        #endif
-    }
-
     @Test("plugin composition cannot call an ungranted primitive")
     func compositionRequiresExactGrant() throws {
         let contract = try #require(CapabilityRegistry.default.descriptor(for: "scene.set_transform")?.contract)
@@ -401,14 +317,14 @@ struct PluginRuntimeTests {
     }
 
 #if canImport(PluginWasmtimeRuntime)
-    @Test("embedded Wasmtime validates and invokes the exact plugin ABI")
-    func embeddedRuntimeInvokesRealComponent() throws {
+    @Test("embedded Wasmtime validates and invokes the exact plugin ABI", arguments: [false, true])
+    func embeddedRuntimeInvokesRealComponent(interpreter: Bool) throws {
         let package = try makePluginPackage(
-            componentWAT: Self.constantResultComponentWAT,
+            componentWAT: try Self.constantResultComponentWAT,
             imports: []
         )
         defer { try? FileManager.default.removeItem(at: package.rootURL) }
-        let runtime = try EmbeddedWasmtimeComponentRuntime()
+        let runtime = try EmbeddedWasmtimeComponentRuntime(useInterpreter: interpreter)
 
         try runtime.validateComponent(package, limits: .secureDefault)
         let prepared = try runtime.prepare(
@@ -419,6 +335,7 @@ struct PluginRuntimeTests {
             limits: .secureDefault
         )
 
+        #expect(runtime.usesInterpreter == interpreter)
         #expect(runtime.runtimeVersion == "49.0.2")
         #expect(String(decoding: prepared, as: UTF8.self) == "true")
         let disabled = try runtime.prepare(
@@ -431,10 +348,27 @@ struct PluginRuntimeTests {
         #expect(String(decoding: disabled, as: UTF8.self) == "false")
     }
 
+    @Test("mobile session binds approval and executes an immutable package copy")
+    func embeddedSessionOwnsApprovedCode() async throws {
+        let package = try makePluginPackage(componentWAT: try Self.constantResultComponentWAT, imports: [])
+        defer { try? FileManager.default.removeItem(at: package.rootURL) }
+        let inspection = try await EmbeddedPluginSession.inspect(at: package.rootURL)
+        let authorization = try PluginAuthorizationRecord(inspection: inspection)
+        let session = try await EmbeddedPluginSession.open(at: package.rootURL, authorization: authorization)
+        // Mutating the source cannot change an already opened session.
+        try Data([0]).write(to: package.componentURL)
+        let result = try await session.prepare(capabilityID: "safe.reader.inspect",
+                                               input: Data(#"{"enabled":true}"#.utf8))
+        #expect(result == .read(Data("true".utf8)))
+        await #expect(throws: (any Error).self) {
+            try await EmbeddedPluginSession.open(at: package.rootURL, authorization: authorization)
+        }
+    }
+
     @Test("isolated GuavaPluginHost loads and invokes a real Component over RPC")
     func pluginHostEndToEnd() throws {
         let package = try makePluginPackage(
-            componentWAT: Self.constantResultComponentWAT,
+            componentWAT: try Self.constantResultComponentWAT,
             imports: []
         )
         defer { try? FileManager.default.removeItem(at: package.rootURL) }
@@ -619,14 +553,14 @@ struct PluginRuntimeTests {
     }
 
 #if canImport(PluginWasmtimeRuntime)
-    @Test("embedded Component can query only its granted revision-bound snapshot")
-    func embeddedRuntimeDispatchesGrantedQueryImport() throws {
+    @Test("embedded Component can query only its granted revision-bound snapshot", arguments: [false, true])
+    func embeddedRuntimeDispatchesGrantedQueryImport(interpreter: Bool) throws {
         let package = try makePluginPackage(
-            componentWAT: Self.sceneQueryComponentWAT,
+            componentWAT: try Self.sceneQueryComponentWAT,
             imports: [.sceneQuery]
         )
         defer { try? FileManager.default.removeItem(at: package.rootURL) }
-        let runtime = try EmbeddedWasmtimeComponentRuntime()
+        let runtime = try EmbeddedWasmtimeComponentRuntime(useInterpreter: interpreter)
         let scene = Data(#"{"entities":[{"id":"scene:1"}]}"#.utf8)
         let snapshot = PluginQuerySnapshot(sceneRevision: 17, scene: scene)
 
@@ -656,7 +590,7 @@ struct PluginRuntimeTests {
     @Test("Component imports must exactly match capabilities.wit")
     func embeddedRuntimeRejectsComponentWITMismatch() throws {
         let package = try makePluginPackage(
-            componentWAT: Self.constantResultComponentWAT,
+            componentWAT: try Self.constantResultComponentWAT,
             imports: [.sceneQuery]
         )
         defer { try? FileManager.default.removeItem(at: package.rootURL) }
@@ -670,7 +604,7 @@ struct PluginRuntimeTests {
     @Test("Component typed inputs must exactly match capabilities.wit")
     func embeddedRuntimeRejectsTypedInputDrift() throws {
         let package = try makePluginPackage(
-            componentWAT: Self.constantResultComponentWAT,
+            componentWAT: try Self.constantResultComponentWAT,
             imports: [],
             inputFields: "enabled: u32,"
         )
@@ -687,7 +621,7 @@ struct PluginRuntimeTests {
     @Test("fuel and epoch interruption bound a non-terminating Component")
     func embeddedRuntimeInterruptsInfiniteLoop() throws {
         let package = try makePluginPackage(
-            componentWAT: Self.infinitePrepareComponentWAT,
+            componentWAT: try Self.infinitePrepareComponentWAT,
             imports: [],
             capabilityName: "loop"
         )
@@ -753,7 +687,12 @@ struct PluginRuntimeTests {
     }
 
 #if canImport(PluginWasmtimeRuntime)
-    private func builtExecutable(named name: String) -> URL? {
+    private func builtExecutable(named requestedName: String) -> URL? {
+        #if os(Windows)
+        let name = requestedName + ".exe"
+        #else
+        let name = requestedName
+        #endif
         let launchLocations = [
             URL(fileURLWithPath: CommandLine.arguments[0]),
             Bundle.main.executableURL,
@@ -833,203 +772,16 @@ struct PluginRuntimeTests {
         }
     }
 
-    private static let constantResultComponentWAT = #"""
-    (component
-      (core module $guest
-        (memory (export "memory") 1)
-        (global $next (mut i32) (i32.const 4096))
-        (data (i32.const 128) "true")
-        (data (i32.const 144) "false")
-        (func $realloc (export "realloc")
-          (param $old i32) (param $old-size i32)
-          (param $align i32) (param $new-size i32) (result i32)
-          (local $result i32)
-          local.get $new-size
-          i32.eqz
-          if (result i32)
-            i32.const 0
-          else
-            global.get $next
-            local.set $result
-            global.get $next
-            local.get $new-size
-            i32.add
-            global.set $next
-            local.get $result
-          end)
-        (func (export "inspect") (param $enabled i32) (result i32)
-          i32.const 0
-          local.get $enabled
-          if (result i32)
-            i32.const 128
-          else
-            i32.const 144
-          end
-          i32.store
-          i32.const 4
-          local.get $enabled
-          if (result i32)
-            i32.const 4
-          else
-            i32.const 5
-          end
-          i32.store
-          i32.const 0))
-      (core instance $guest (instantiate $guest))
-      (type $inspect-input (record (field "enabled" bool)))
-      (type $inspect-func (func
-        (param "input" $inspect-input) (result string)))
-      (func $inspect (type $inspect-func)
-        (canon lift (core func $guest "inspect")
-          (memory $guest "memory")
-          (realloc (func $guest "realloc"))))
-      (component $capabilities-component
-        (type $local-input (record (field "enabled" bool)))
-        (import "import-type-inspect-input"
-          (type $import-input (eq $local-input)))
-        (type $import-func (func
-          (param "input" $import-input) (result string)))
-        (import "import-func-inspect" (func $implementation
-          (type $import-func)))
-        (type $export-input (record (field "enabled" bool)))
-        (export $public-input "inspect-input" (type $export-input))
-        (type $export-func (func
-          (param "input" $public-input) (result string)))
-        (export "inspect" (func $implementation)
-          (func (type $export-func))))
-      (instance $capabilities
-        (instantiate $capabilities-component
-          (with "import-func-inspect" (func $inspect))
-          (with "import-type-inspect-input" (type $inspect-input))))
-      (export (interface "safe:reader/capabilities")
-        (instance $capabilities))
-    )
-    """#
+    private static var constantResultComponentWAT: String {
+        get throws { try String(contentsOf: Bundle.module.url(forResource: "reader", withExtension: "wat", subdirectory: "Fixtures")!, encoding: .utf8) }
+    }
 
-    private static let sceneQueryComponentWAT = #"""
-    (component
-      (type $inspect-input (record (field "enabled" bool)))
-      (type $query-interface (instance
-        (export "query" (func (param "request" string) (result string)))
-      ))
-      (import (interface "guava:scene/query")
-        (instance $scene-query (type $query-interface)))
-      (alias export $scene-query "query" (func $query))
+    private static var sceneQueryComponentWAT: String {
+        get throws { try String(contentsOf: Bundle.module.url(forResource: "scene-query", withExtension: "wat", subdirectory: "Fixtures")!, encoding: .utf8) }
+    }
 
-      (core module $libc
-        (memory (export "memory") 1)
-        (global $next (mut i32) (i32.const 4096))
-        (func (export "realloc")
-          (param $old i32) (param $old-size i32)
-          (param $align i32) (param $new-size i32) (result i32)
-          (local $result i32)
-          local.get $new-size
-          i32.eqz
-          if (result i32)
-            i32.const 0
-          else
-            global.get $next
-            local.set $result
-            global.get $next
-            local.get $new-size
-            i32.add
-            global.set $next
-            local.get $result
-          end)
-      )
-      (core instance $libc (instantiate $libc))
-      (core func $query-lower
-        (canon lower (func $query)
-          (memory $libc "memory")
-          (realloc (func $libc "realloc"))))
-
-      (core module $guest
-        (import "libc" "memory" (memory 1))
-        (import "host" "query" (func $query (param i32 i32 i32)))
-        (data (i32.const 128) "{\22operation\22:\22snapshot\22}")
-
-        (func (export "inspect") (param i32) (result i32)
-          i32.const 128
-          i32.const 24
-          i32.const 0
-          call $query
-          i32.const 0)
-      )
-      (core instance $guest (instantiate $guest
-        (with "libc" (instance $libc))
-        (with "host" (instance (export "query" (func $query-lower))))
-      ))
-      (type $inspect-func (func
-        (param "input" $inspect-input) (result string)))
-      (func $inspect (type $inspect-func)
-        (canon lift (core func $guest "inspect")
-          (memory $libc "memory")
-          (realloc (func $libc "realloc"))))
-      (component $capabilities-component
-        (type $local-input (record (field "enabled" bool)))
-        (import "import-type-inspect-input"
-          (type $import-input (eq $local-input)))
-        (type $import-func (func
-          (param "input" $import-input) (result string)))
-        (import "import-func-inspect" (func $implementation
-          (type $import-func)))
-        (type $export-input (record (field "enabled" bool)))
-        (export $public-input "inspect-input" (type $export-input))
-        (type $export-func (func
-          (param "input" $public-input) (result string)))
-        (export "inspect" (func $implementation)
-          (func (type $export-func))))
-      (instance $capabilities
-        (instantiate $capabilities-component
-          (with "import-func-inspect" (func $inspect))
-          (with "import-type-inspect-input" (type $inspect-input))))
-      (export (interface "safe:reader/capabilities")
-        (instance $capabilities))
-    )
-    """#
-
-    private static let infinitePrepareComponentWAT = #"""
-    (component
-      (type $loop-input (record (field "enabled" bool)))
-      (core module $guest
-        (memory (export "memory") 1)
-        (global $next (mut i32) (i32.const 4096))
-        (func (export "realloc")
-          (param i32 i32 i32 i32) (result i32)
-          global.get $next)
-        (func (export "loop") (param i32) (result i32)
-          (loop $forever
-            br $forever)
-          unreachable)
-      )
-      (core instance $guest (instantiate $guest))
-      (type $loop-func (func
-        (param "input" $loop-input) (result string)))
-      (func $loop (type $loop-func)
-        (canon lift (core func $guest "loop")
-          (memory $guest "memory")
-          (realloc (func $guest "realloc"))))
-      (component $capabilities-component
-        (type $local-input (record (field "enabled" bool)))
-        (import "import-type-loop-input"
-          (type $import-input (eq $local-input)))
-        (type $import-func (func
-          (param "input" $import-input) (result string)))
-        (import "import-func-loop" (func $implementation
-          (type $import-func)))
-        (type $export-input (record (field "enabled" bool)))
-        (export $public-input "loop-input" (type $export-input))
-        (type $export-func (func
-          (param "input" $public-input) (result string)))
-        (export "loop" (func $implementation)
-          (func (type $export-func))))
-      (instance $capabilities
-        (instantiate $capabilities-component
-          (with "import-func-loop" (func $loop))
-          (with "import-type-loop-input" (type $loop-input))))
-      (export (interface "safe:reader/capabilities")
-        (instance $capabilities))
-    )
-    """#
+    private static var infinitePrepareComponentWAT: String {
+        get throws { try String(contentsOf: Bundle.module.url(forResource: "infinite", withExtension: "wat", subdirectory: "Fixtures")!, encoding: .utf8) }
+    }
 #endif
 }

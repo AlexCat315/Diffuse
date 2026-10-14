@@ -73,7 +73,9 @@ public struct WorkspaceView: View {
                     Button("Restore") { _ = controller.dispatch(.restoreMaximized) }.buttonStyle(.ghost)
                 }.padding(6)
                 content(panelID).flex().frame(minWidth: 0, minHeight: 0)
-            } else if compact {
+            } else {
+            SurfaceReader { surface in
+            if compact || surface.viewport.widthClass != .expanded {
                 _WorkspaceCompactView(document: document, controller: controller, content: content).flex()
             } else {
             WorkspaceMetricsReader { metrics in
@@ -84,6 +86,8 @@ public struct WorkspaceView: View {
             _WorkspaceFloatingLayer(document: document,
                                     controller: controller,
                                     content: content)
+            }
+            }
             }
         }
             .flex()

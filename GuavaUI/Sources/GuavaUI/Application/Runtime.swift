@@ -33,7 +33,17 @@ public final class Application {
                                        checkpoint: ApplicationCheckpoint? = nil,
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
                                        onDisplayReady: ((AppDisplayHandle) -> Void)? = nil,
-                                       @ViewBuilder rootView: () -> Root) throws {
+                                       @ViewBuilder rootView: @escaping () -> Root) throws {
+        try PlatformApplication.run {
+            try runHosted(config: config, backend: backend, events: events, checkpoint: checkpoint,
+                          onTick: onTick, onDisplayReady: onDisplayReady, rootView: rootView)
+        }
+    }
+
+    private static func runHosted<Root: View>(config: ApplicationConfiguration, backend: Device?,
+        events: PlatformEventBridge, checkpoint: ApplicationCheckpoint?,
+        onTick: ((Double) -> Void)?, onDisplayReady: ((AppDisplayHandle) -> Void)?,
+        rootView: () -> Root) throws -> Application {
         var logging = config.logging
         try logging.applyEnvironment()
         try LogSystem.bootstrap(application: Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName, configuration: logging)
@@ -46,6 +56,7 @@ public final class Application {
                                  onTick: onTick,
                                  onDisplayReady: onDisplayReady)
         try runtime.start(rootView: rootView())
+        return runtime
     }
 
     private let config: ApplicationConfiguration
@@ -107,23 +118,12 @@ public final class Application {
     }
 
     private func start<Root: View>(rootView: Root) throws {
-        let previousText = TextEnvironmentHolder.current
-        let previousScale = ContentScaleHolder.current
-        let previousInteractions = InteractionRegistryHolder.current
-        let previousFocus = FocusChainHolder.current
-        let previousCapture = PointerCaptureHolder.current
-        let previousClipboardRead = ClipboardHolder.read
-        let previousClipboardWrite = ClipboardHolder.write
+        let services = ApplicationServices()
         defer {
-            TextEnvironmentHolder.current = previousText
-            ContentScaleHolder.current = previousScale
-            InteractionRegistryHolder.current = previousInteractions
-            FocusChainHolder.current = previousFocus
-            PointerCaptureHolder.current = previousCapture
-            ClipboardHolder.read = previousClipboardRead
-            ClipboardHolder.write = previousClipboardWrite
+            #if !os(iOS)
+            services.restore()
+            #endif
         }
-
 
         if let devConfig = config.diagnostics.devTools {
             let dev = DevTools(config: devConfig,
@@ -157,21 +157,11 @@ public final class Application {
             }
         }
 
-        let previousViewportBridge = ViewportTextureBridgeHolder.current
-        let previousImageAssets = ImageAssetRegistryHolder.current
-        let previousAssetDropRegistry = AssetDropRegistryHolder.current
-        let previousUIWorkScheduler = UIWorkSchedulerHolder.enqueue
         ViewportTextureBridgeHolder.current = rendering.viewportTextures
         ImageAssetRegistryHolder.current = composition.imageAssets
         AssetDropRegistryHolder.current = composition.assetDropRegistry
         UIWorkSchedulerHolder.enqueue = { [weak host] work in
             host?.enqueueMainThreadWork(work)
-        }
-        defer {
-            ViewportTextureBridgeHolder.current = previousViewportBridge
-            ImageAssetRegistryHolder.current = previousImageAssets
-            AssetDropRegistryHolder.current = previousAssetDropRegistry
-            UIWorkSchedulerHolder.enqueue = previousUIWorkScheduler
         }
 
         // 把进程级 holder 接到主窗口的 input context 上，使 Compose / Workspace
@@ -223,16 +213,15 @@ public final class Application {
             self?.devTools?.stop()
             self?.devTools = nil
             self?.releaseGPUSurfaces()
+            #if os(iOS)
+            services.restore()
+            #endif
         }
 
         let displayHandle = AppDisplayHandle { [weak host] in
             host?.wakeEventLoop()
         }
-        let previousDisplayHandle = AppDisplayHandleHolder.current
         AppDisplayHandleHolder.current = displayHandle
-        defer {
-            AppDisplayHandleHolder.current = previousDisplayHandle
-        }
         host.externalDisplayRequestDrain = {
             displayHandle.drainDisplayRequest()
         }
@@ -393,11 +382,12 @@ public final class Application {
         try renderer.configure(native: native, size: SIMD2(widthPx, heightPx), vsync: mainWindow.isVSyncEnabled)
         windowRenderer = renderer
 
+        updateSurfaceEnvironment()
         configureTextEnvironment(scale: host.contentScaleFactor)
 
         if !mainWindow.didInstallRoot {
             withWindowChromeContext(host.mainSession?.id) {
-                composition.graph.install(root: rootView.textScaler(config.typography.scaler).compositionLocal(
+                composition.graph.install(root: AdaptiveApplicationContent(content: rootView, environment: composition.environment).textScaler(config.typography.scaler).compositionLocal(
                     PortalStoreEnvironment.key,
                     composition.portalStore
                 ))
@@ -421,6 +411,7 @@ public final class Application {
         mainWindow.logicalW = host.logicalSize.width
         mainWindow.logicalH = host.logicalSize.height
         try windowRenderer?.resize(size: SIMD2(widthPx, heightPx), vsync: mainWindow.isVSyncEnabled)
+        updateSurfaceEnvironment()
         configureTextEnvironment(scale: host.contentScaleFactor)
         try uploadAtlasIfNeeded()
     }
@@ -469,6 +460,7 @@ public final class Application {
 
         let frameStart = TimingTrace.now()
 
+        updateSurfaceEnvironment()
         configureTextEnvironment(scale: host.contentScaleFactor)
         let layoutStart = TimingTrace.now()
         _ = composition.graph.computeLayoutIfNeeded(width: Float(mainWindow.logicalW), height: Float(mainWindow.logicalH))
@@ -497,6 +489,7 @@ public final class Application {
                 try uploadAtlasIfNeeded(force: true)
             }
         } catch {
+            failRunLoop(error, context: "Font atlas upload")
             return false
         }
 
@@ -564,6 +557,7 @@ public final class Application {
             }
             return true
         } catch {
+            failRunLoop(error, context: "Frame rendering")
             return false
         }
     }
@@ -585,6 +579,22 @@ public final class Application {
     }
 
     // MARK: - Text environment
+    private func updateSurfaceEnvironment() {
+        var environment = UIEnvironment()
+        environment.viewport.width = Float(host.logicalSize.width)
+        environment.viewport.height = Float(host.logicalSize.height)
+        environment.viewport.scale = host.contentScaleFactor
+        let insets = host.safeArea
+        environment.safeArea.top = insets.top
+        environment.safeArea.bottom = insets.bottom
+        environment.safeArea.leading = insets.leading
+        environment.safeArea.trailing = insets.trailing
+        #if os(iOS) || os(Android)
+        environment.input = [.touch, .keyboard]
+        #endif
+        if environment != composition.environment.wrappedValue { composition.environment.wrappedValue = environment }
+    }
+
     private func configureTextEnvironment(scale requestedScale: Float) {
         let scale = max(1, requestedScale)
         guard typography.atlas == nil || abs(scale - typography.scale) >= 0.01 else { return }

@@ -1,4 +1,4 @@
-#if os(macOS)
+#if canImport(Metal)
 import Foundation
 
 /// GPU errors are recorded on completion threads and surfaced on the API

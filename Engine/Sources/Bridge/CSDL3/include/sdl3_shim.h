@@ -106,4 +106,8 @@ enum {
 	GUAVA_SDL_SYSTEM_CURSOR_POINTER      = SDL_SYSTEM_CURSOR_POINTER,
 };
 
+// The platform shell owns SDL main integration; callers only supply application content.
+typedef int (*GuavaSDLAppMain)(void *);
+int guava_sdl_run_app(GuavaSDLAppMain entry, void *context);
+
 #endif  // GUAVA_NEXT_SDL3_SHIM_H

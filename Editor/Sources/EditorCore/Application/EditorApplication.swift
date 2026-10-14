@@ -39,7 +39,7 @@ public final class EditorApplication: @unchecked Sendable {
     /// Manages dynamically compiled Swift scripts in the project.
     public let dynamicScriptManager: DynamicScriptManager
     /// Canonical editor-facing state for script documents, diagnostics, and builds.
-    public let scriptWorkspace: ScriptWorkspaceModel
+    public let workstation: EditorWorkstation
 
     let observationBus: ObservationBus
     let intentCoordinator: IntentRuntimeCoordinator
@@ -161,7 +161,7 @@ public final class EditorApplication: @unchecked Sendable {
             clangIncludePaths: Self.resolveEngineClangIncludePaths()
         )
         self.dynamicScriptManager = dynamicScriptManager
-        self.scriptWorkspace = try ScriptWorkspaceModel(
+        let scripts = try ScriptWorkspaceModel(
             manager: dynamicScriptManager,
             onScriptLoaded: { file in
                 scene.registerDynamicScriptOption(identifier: file.identifier,
@@ -178,6 +178,7 @@ public final class EditorApplication: @unchecked Sendable {
                     nextStep: "Open the script, fix the reported errors, then Save and Compile."))
             }
         )
+        self.workstation = try EditorWorkstation(root: URL(fileURLWithPath: projectDirectory), scripts: scripts)
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
         self.aiWorldContext = AIWorldContext(worldView: initialWorldView)
@@ -230,7 +231,7 @@ public final class EditorApplication: @unchecked Sendable {
         }
         reloadProjectScripts(force: true, reportUnresolvedBindings: false)
         reloadDynamicScripts()
-        scriptWorkspace.startLanguageService()
+        workstation.scripts.startLanguageService()
 
         startMCPBridge()
 
@@ -370,7 +371,7 @@ public final class EditorApplication: @unchecked Sendable {
         isShuttingDown = true
         scene.scriptRuntime.isGameplayExecutionEnabled = false
         scene.scriptRuntime.stop(in: &scene.scene)
-        scriptWorkspace.shutdown()
+        workstation.scripts.shutdown()
         scene.endInteractiveEditHistoryGroup()
         let activeSession = session
         cancelActiveAIRequest()

@@ -20,7 +20,7 @@ struct EditorAboutView: View {
             alignItems: .center,
             justifyContent: .center,
             spacing: 12) {
-            Text("GuavaNext Editor")
+            Text("GuavaStudio")
                 .font(.title)
                 .foregroundColor(.onSurface)
 
@@ -28,11 +28,11 @@ struct EditorAboutView: View {
                 .font(.body)
                 .foregroundColor(.onSurfaceVariant)
 
-            Text(L("A native scene editor powered by Guava Engine."))
+            Text(L("An AI Agent driven workstation for code, games, animation and video."))
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
-            Text("© 2026 Guava Engine")
+            Text("© 2026 GuavaStudio")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
         }

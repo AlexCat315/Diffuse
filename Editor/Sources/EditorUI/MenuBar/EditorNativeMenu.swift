@@ -3,7 +3,7 @@ import GuavaUI
 import GuavaUIRuntime
 
 enum EditorNativeMenuBuilder {
-    static func make(appName: String = "GuavaNext Editor",
+    static func make(appName: String = "GuavaStudio",
                      workspaceMode: EditorWorkspaceMode,
                      activeLayoutPreset: EditorLayoutPreset,
                      playbackState: PlaybackState,

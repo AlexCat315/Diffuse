@@ -5,6 +5,8 @@ import GuavaLogging
 
 #if os(macOS)
 import AppKit
+#endif
+#if canImport(QuartzCore)
 import QuartzCore
 #endif
 
@@ -22,7 +24,7 @@ public final class SDL3Shell: Shell {
         let window: OpaquePointer
         let metalView: UnsafeMutableRawPointer?
 
-#if os(macOS)
+#if canImport(Metal)
         private var metalLayer: CAMetalLayer?
 #endif
 
@@ -42,7 +44,7 @@ public final class SDL3Shell: Shell {
             self.window = window
             self.metalView = metalView
 
-#if os(macOS)
+#if canImport(Metal)
             if let metalView {
                 guard let layerPointer = SDL_Metal_GetLayer(metalView) else {
                     throw ShellError.initializationFailed("SDL_Metal_GetLayer returned null")
@@ -67,7 +69,7 @@ public final class SDL3Shell: Shell {
         }
 
         var renderSurface: NativeRenderSurface? {
-#if os(macOS)
+#if canImport(Metal)
             guard let metalLayer else { return nil }
             return .metalLayer(Unmanaged.passUnretained(metalLayer).toOpaque())
 #elseif os(Windows)
@@ -100,6 +102,19 @@ public final class SDL3Shell: Shell {
                 return (UInt32(max(1, width)), UInt32(max(1, height)))
             }
             return (1, 1)
+        }
+
+        var safeArea: WindowSafeArea {
+            var rect = SDL_Rect()
+            var insets = WindowSafeArea()
+            guard SDL_GetWindowSafeArea(window, &rect) else { return insets }
+            var width: Int32 = 0, height: Int32 = 0
+            _ = SDL_GetWindowSize(window, &width, &height)
+            insets.top = Float(max(0, rect.y))
+            insets.leading = Float(max(0, rect.x))
+            insets.bottom = Float(max(0, height - rect.y - rect.h))
+            insets.trailing = Float(max(0, width - rect.x - rect.w))
+            return insets
         }
 
         var logicalSize: (width: UInt32, height: UInt32) {
@@ -199,7 +214,7 @@ public final class SDL3Shell: Shell {
         func shutdown() {
             setChromeHitTest(nil)
 
-#if os(macOS)
+#if canImport(Metal)
             metalLayer = nil
             if let metalView {
                 SDL_Metal_DestroyView(metalView)
@@ -374,7 +389,7 @@ public final class SDL3Shell: Shell {
         }
 
         private func syncDrawableSize() {
-#if os(macOS)
+#if canImport(Metal)
             guard let metalLayer else { return }
 
             var logicalWidth: Int32 = 1
@@ -394,13 +409,16 @@ public final class SDL3Shell: Shell {
 #endif
         }
 
-#if os(macOS)
+#if canImport(Metal)
         private func configureMetalLayer(_ layer: CAMetalLayer) {
             layer.pixelFormat = .bgra8Unorm
             layer.framebufferOnly = true
             syncDrawableSize()
         }
 
+        #endif
+
+#if os(macOS)
         func nativeDisplayRefreshRate() -> Double? {
             let screen = cocoaWindow?.screen ?? NSScreen.main
             guard let screen else { return nil }
@@ -484,7 +502,7 @@ public final class SDL3Shell: Shell {
         NSApplication.shared.setActivationPolicy(options.showsDockIcon ? .regular : .accessory)
 #endif
 
-#if os(macOS)
+#if canImport(Metal)
         let windowFlags = SDL_WindowFlags(
             GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY | GUAVA_SDL_WINDOW_METAL)
 #else
@@ -530,7 +548,7 @@ public final class SDL3Shell: Shell {
             throw ShellError.initializationFailed("SDL_GetWindowID returned 0")
         }
 
-#if os(macOS)
+#if canImport(Metal)
         let createdMetalView = SDL_Metal_CreateView(createdWindow)
         guard let createdMetalView else {
             SDL_DestroyWindow(createdWindow)
@@ -565,7 +583,7 @@ public final class SDL3Shell: Shell {
             Logger.platform.info("SDL3 window ready, id=\(handle.id), drawable=\(sz), logical=\(lz), contentScaleFactor=\(csf), displayRefreshRate=\(hz)")
             return handle
         } catch {
-#if os(macOS)
+#if canImport(Metal)
             SDL_Metal_DestroyView(createdMetalView)
 #endif
             SDL_DestroyWindow(createdWindow)

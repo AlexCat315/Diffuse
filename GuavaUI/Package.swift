@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "GuavaUI",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v13), .iOS(.v16)],
     products: [
         .library(name: "GuavaUIAndroid", targets: ["GuavaUIAndroid"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
@@ -92,7 +92,6 @@ let package = Package(
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
-                .product(name: "EngineCore", package: "Engine"),
                 .product(name: "GuavaLogging", package: "Logging"),
             ],
             resources: [

@@ -1,3 +1,4 @@
+#if os(macOS) || os(Linux) || os(Windows)
 import Foundation
 import GuavaLogging
 
@@ -35,3 +36,5 @@ final class PluginHostDiagnostics: @unchecked Sendable {
         }
     }
 }
+
+#endif

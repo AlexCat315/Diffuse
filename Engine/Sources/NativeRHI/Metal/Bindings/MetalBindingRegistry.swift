@@ -1,4 +1,4 @@
-#if os(macOS)
+#if canImport(Metal)
 /// Owns immutable native bindings and invalidates only sets that reference a
 /// retired resource. Called under the frontend's device/frame synchronization.
 final class MetalBindingRegistry {

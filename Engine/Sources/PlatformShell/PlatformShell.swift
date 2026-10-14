@@ -120,11 +120,20 @@ public enum NativeWindowReference: @unchecked Sendable {
     case win32(UnsafeMutableRawPointer)
 }
 
+public struct WindowSafeArea: Sendable, Equatable {
+    public var top: Float = 0
+    public var bottom: Float = 0
+    public var leading: Float = 0
+    public var trailing: Float = 0
+    public init() {}
+}
+
 @MainActor
 public protocol WindowHandle: AnyObject {
     var id: WindowID { get }
     var nativeWindowReference: NativeWindowReference? { get }
     var renderSurface: NativeRenderSurface? { get }
+    var safeArea: WindowSafeArea { get }
     var drawableSize: (width: UInt32, height: UInt32) { get }
     var logicalSize: (width: UInt32, height: UInt32) { get }
     var contentScaleFactor: Float { get }
@@ -134,6 +143,7 @@ public protocol WindowHandle: AnyObject {
 }
 
 public extension WindowHandle {
+    var safeArea: WindowSafeArea { WindowSafeArea() }
     var nativeWindowReference: NativeWindowReference? { nil }
     var contentScaleFactor: Float {
         let logicalWidth = max(logicalSize.width, 1)
@@ -338,7 +348,7 @@ public extension Shell {
 
 @MainActor
 public func makeDefaultShell() throws -> any Shell {
-#if os(macOS) || os(Windows) || os(Linux)
+#if os(macOS) || os(iOS) || os(Windows) || os(Linux)
     try SDL3Shell()
 #else
     throw ShellError.unsupportedPlatform("no default shell is implemented for this platform yet")

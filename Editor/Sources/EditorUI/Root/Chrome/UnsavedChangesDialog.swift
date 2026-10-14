@@ -92,7 +92,7 @@ struct UnsavedChangesDialog: View {
     private var message: String {
         switch request.action {
         case .close, .closeProject:
-            return L("The project has unsaved scene or script changes. Save before closing?")
+            return L("The project has unsaved scene, document or media changes. Save before closing?")
         case .newScene:
             return L("The scene has unsaved changes. Save before creating a new scene?")
         case .openScene:
@@ -118,7 +118,7 @@ struct UnsavedChangesDialog: View {
 
     private func saveAndProceed() {
         if request.action == .close || request.action == .closeProject {
-            guard app.scriptWorkspace.persistAll() else { return }
+            guard app.workstation.saveAll() else { return }
         }
         guard app.saveSceneManifest() != nil else { return }
         proceed()

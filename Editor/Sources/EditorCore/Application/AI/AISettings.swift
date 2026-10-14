@@ -145,6 +145,8 @@ extension EditorApplication {
             scriptSchemas: scriptEntries.map(scriptSchema)
         )
         switch mode {
+        case .documents: return .workstation(WorkstationContext(domain: .documents))
+        case .video: return .workstation(WorkstationContext(domain: .media))
         case .level, .scripting:
             return .game(GameWorkflowContext(levelPhase: .blockout,
                                             gameplayIntent: intent,

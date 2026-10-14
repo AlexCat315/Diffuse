@@ -23,7 +23,7 @@ let platformTargets: [Target] = hasNativeSources ? [
 
 let package = Package(
     name: "GuavaApplication",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v13), .iOS(.v16)],
     products: [
         .library(name: "AppContent", targets: ["AppContent"]),
     ],

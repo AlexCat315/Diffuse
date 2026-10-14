@@ -174,6 +174,7 @@ public actor Session {
 
     private static func workflowPayload(from ctx: WorkflowContext) -> [String: String] {
         switch ctx {
+        case let .workstation(context): return ["kind": context.domain.rawValue]
         case let .asset(a):
             return ["kind": "asset", "intent": a.intent]
         case let .game(g):

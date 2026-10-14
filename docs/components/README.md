@@ -2,7 +2,7 @@
 
 本目录收录组件设计契约。索引标记仅代表文档存在，不表示组件已达到完整或生产成熟状态。
 
-实现质量、缺失组件与本次重构范围见 [GPUI Kit 对照审计](../guava-ui/gpui-kit-audit.md)，实际示例见 `GuavaUI/Examples/Sources/GalleryContent/`。每篇覆盖：
+跨设备抽象与组件交付要求见 [组件标准](standard.md)，实际示例见 `GuavaUI/Examples/Sources/GalleryContent/`。每篇覆盖：
 
 1. **Anatomy** —— ASCII 框图 + 槽位命名
 2. **Sizing** —— 高度 / padding / 最小命中区
@@ -12,7 +12,7 @@
 6. **Authoring rules** —— 调用方应做 / 不应做的事
 7. **References** —— Material 3 / Fluent / Radix / Flutter Material / SwiftUI 对应组件
 
-底层 token 体系见 [../guava-ui-design-system.md](../guava-ui-design-system.md)。
+底层 token 体系见 [standard.md](standard.md)。
 
 ## 索引
 
@@ -49,7 +49,7 @@
 
 ## 通用约定
 
-- **所有可点击组件**的命中区最小高度 32pt，键盘焦点用 2px focusRing。
+- **所有可点击组件**在触摸输入下的命中区至少 44pt；桌面可使用显式工具栏密度，键盘焦点用 2px focusRing。
 - **所有文本输入**默认垂直居中、左侧 inset = `theme.spacing.sm`、`clipsToBounds = true`。
 - **状态层** (hover/press/selected/focused) 走 `Color.composited(over:)`，不要用 `.lighter()` / `.darker()`。
 - **chrome 颜色** 通过 `node.theme.colors.*` 在 `_updateNode` 内每次重算，不要缓存到 attachments。

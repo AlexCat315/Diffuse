@@ -1,3 +1,14 @@
+---
+path: /zh/docs/architecture/module-boundaries
+title: '模块、入口与平台边界'
+description: '模块、入口与平台边界 — GuavaStudio documentation'
+locale: zh
+translationKey: architecture/module-boundaries
+category: architecture
+order: 100
+kind: doc
+---
+
 # 模块、入口与平台边界
 
 默认应用入口属于 `GuavaUI`，内部模块服务于可移植性、宿主和集成边界。SwiftPM target 数量不是应用必须学习的 API 数量。普通应用只声明 `GuavaUI` 产品并 `import GuavaUI`；自定义渲染器、嵌入引擎、工作台和诊断工具才显式依赖相应集成模块。
@@ -62,7 +73,7 @@ Android 的平台基础设施放在 GuavaUI 内会把游戏播放器、APK 工�
 - `RenderSettings` 分成 shading、postProcessing、visibility、viewport、shadows、stylization。阴影只由 shadows.enabled 控制，没有并行开关和兼容别名。
 - `WorkspacePanelDescriptor` 持有规范的 WorkspacePanel 值以及临时视图工厂。注册表只有 WorkspacePanelRegistry 一份，不再在 App 层复制面板元数据与注册表。
 - Android 构建工具与宿主共用 SceneLaunch。benchmark / timings / vsync、IME 预编辑、Surface 状态和输入捕获属于运行时，不进入 launch.json。
-- 根工作区的 GuavaEditor 与 Editor 的 EditorApp 使用同一个启动文件，Editor 的 target 定义只在 Editor/Package.swift 维护。
+- 根工作区的 GuavaStudio 与 Editor 的 EditorApp 使用同一个启动文件，Editor 的 target 定义只在 Editor/Package.swift 维护。
 - 脚手架资源与示例 AppContent 使用相同入口。创建器从嵌入模板产生应用；检查脚本验证模板和示例使用的产品、导入与入口一致。
 - 删除了无资源、无行为的 GuavaUIBundledFonts 兼容 target。系统字体由现有 FontProvider / SystemFontDefaults 负责。
 
@@ -79,7 +90,7 @@ Android 的平台基础设施放在 GuavaUI 内会把游戏播放器、APK 工�
 | App 的 PanelID / PanelDescriptor / PanelRegistry | WorkspacePanelID / WorkspacePanelDescriptor / WorkspacePanelRegistry |
 | PanelWorkspace | WorkspaceView(controller:registry:compact:) |
 | Android 专用工具入口 | Tools/Guava 的统一 guava CLI |
-| 根目录 swift run EditorApp | swift run GuavaEditor（Editor 包仍提供 EditorApp） |
+| 根目录 swift run EditorApp | swift run GuavaStudio（Editor 包仍提供 EditorApp） |
 | swift run --package-path GuavaUI GuavaUIDemo | swift run --package-path GuavaUI/Examples GuavaUIDemo |
 
 最小应用在 examples/HelloUI。跨桌面 / Android 项目在 examples/GuavaUIStarter：CLI 生成的桌面入口调用 Application.run，Android 宿主安装同一个 AppContent 根视图。
@@ -112,4 +123,4 @@ Application projects own their native `Platforms` directories: Android Gradle/Ma
 
 The installed SDK selection is user state; each application's toolchain.enginePath remains authored configuration. Version metadata is owned once by guava.json and applied during native packaging. CLI build caches and authenticated DevTools session descriptors stay under .guava/build.
 
-DevTools has one Client tree consumed by native WebSocket hosts and the browser MessageChannel host. Protocol models, transport, session lifecycle and request domains have separate owners. Browser is a Swift/Wasm host prototype, not an implemented Web application target. Engine's Wasmtime plugin runtime currently ships only an Apple XCFramework; Portable UI/Wasm support does not imply cross-platform Wasmtime delivery.
+DevTools has one Client tree consumed by native WebSocket hosts and the browser MessageChannel host. Protocol models, transport, session lifecycle and request domains have separate owners. Browser is a Swift/Wasm host prototype, not an implemented Web application target. Engine's plugin runtime uses pinned static Wasmtime artifacts on macOS, Windows, Linux and Android, with Pulley on iOS. `Platforms/Web/Plugins` owns the build-time Component conversion and browser Worker runtime. These plugin targets are independent of the portable UI host; see [plugin execution](plugin-execution.md) for isolation and delivery boundaries.

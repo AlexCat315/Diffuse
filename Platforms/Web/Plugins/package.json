@@ -1,0 +1,19 @@
+{
+  "name": "@guava/plugin-runtime",
+  "version": "0.0.9",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "types": "./src/runtime/session.d.ts",
+    "default": "./src/runtime/session.js"
+  },
+  "bin": {
+    "guava-plugin-web": "./src/packaging/entry.js"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "@bytecodealliance/jco": "1.37.0"
+  }
+}

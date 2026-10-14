@@ -33,9 +33,14 @@ private struct EditorAuthoringSelector: View {
     let mode: EditorWorkspaceMode
     let onCommand: (EditorMenuCommand) -> Void
 
+    private var workflows: [EditorWorkspaceMode] {
+        switch mode.profile.domain { case .game: [.level, .scripting]; case .creation: [.modeling, .animation]; case .documents, .media: [] }
+    }
     var body: some View {
         let domain = mode.profile.domain
         Row(alignment: .center, spacing: 3) {
+            Button(L("Text and Code"), isSelected: domain == .documents) { onCommand(.setWorkspaceMode(.documents)) }.buttonStyle(.toolToggle)
+            Button(L("Video Editing"), isSelected: domain == .media) { onCommand(.setWorkspaceMode(.video)) }.buttonStyle(.toolToggle)
             Button(L("Game Development"), isSelected: domain == .game) {
                 if domain != .game { onCommand(.setWorkspaceMode(.level)) }
             }.buttonStyle(.toolToggle)
@@ -45,7 +50,7 @@ private struct EditorAuthoringSelector: View {
             Box(direction: .row, alignItems: .center) {
                 Box { EmptyView() }.frame(width: 1, height: 16).background(.divider)
             }.padding(horizontal: 8)
-            for workflow in domain == .game ? [EditorWorkspaceMode.level, .scripting] : [.modeling, .animation] {
+            for workflow in workflows {
                 AnyView(Button(L(workflow.title), isSelected: mode == workflow) {
                     onCommand(.setWorkspaceMode(workflow))
                 }.buttonStyle(.tab))

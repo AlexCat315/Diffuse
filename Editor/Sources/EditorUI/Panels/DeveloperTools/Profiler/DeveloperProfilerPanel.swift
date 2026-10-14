@@ -419,7 +419,7 @@ struct DeveloperProfilerOverview: View {
             .flex(1, shrink: 1, basis: 0)
             .frame(minWidth: 0)
 
-            Box(direction: .column, alignItems: .stretch, spacing: 5) {
+            Box(direction: .column, alignItems: .stretch, spacing: 3) {
                 Row(alignment: .center, spacing: 8) {
                     Text(L("Frame Health")).font(.label)
                     Spacer(minLength: 0)

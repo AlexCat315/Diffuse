@@ -8,7 +8,7 @@ extension EditorApplication {
     public func navigateToIssue(_ target: EditorIssueTarget) {
         switch target {
         case let .script(id, line, column):
-            guard scriptWorkspace.select(scriptID: id) else {
+            guard workstation.scripts.select(scriptID: id) else {
                 logConsole("Script is missing", severity: .warning, detail: id,
                            nextStep: "Restore the script file, then refresh the script catalog.")
                 return
@@ -24,7 +24,7 @@ extension EditorApplication {
             store.dispatch(.navigateToAsset(id))
             activatePanelHandler?("assets")
         case let .file(path):
-            if let document = scriptWorkspace.snapshot.documents.first(where: {
+            if let document = workstation.scripts.snapshot.documents.first(where: {
                 $0.file.url.path == path || $0.file.url.lastPathComponent == path
             }) {
                 navigateToIssue(.script(id: document.file.identifier, line: 0, column: 0))

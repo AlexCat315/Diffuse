@@ -39,6 +39,7 @@ enum GuavaCLI {
             if arguments.operation == .test { try SwiftPackage.test(project: project, root: root, arguments: arguments); return }
             try project.require(arguments.platform)
             if arguments.platform == .android { try BuildAndroidApplication.run(arguments, root: root, project: project) }
+            else if arguments.platform == .ios { try IOSBuild(project: project, root: root, arguments: arguments).run() }
             else { try DesktopBuild(project: project, root: root, arguments: arguments).run() }
         case .devtools:
             let project = try AppProject(at: arguments.directory)
@@ -82,20 +83,21 @@ enum GuavaCLI {
           guava clean [directory]
           guava sdk install <repository> --revision COMMIT_OR_TAG
           guava sdk use <checkout> | guava sdk list
-          guava setup [--mac|--win|--linux|--android]
-          guava doctor [--mac|--win|--linux|--android]
-          guava devices [--android]
+          guava setup [--mac|--win|--linux|--android|--ios]
+          guava doctor [--mac|--win|--linux|--android|--ios]
+          guava devices [--android|--ios]
           guava devtools [directory] [--session ID] [--no-open]
 
         Directory defaults to the current project; platform defaults to the host; configuration defaults to debug.
         One guava.json owns application identity, SDK location and targets; UI lives in Sources/AppContent.
         Desktop builds run on their matching host. Android uses Swift 6.4.1 + Android SDK, NDK r30 and JDK 21.
-        iOS and Web application hosts are not yet implemented; selecting them reports an explicit error.
+        iOS uses Xcode, SDL/UIKit and Metal; Web has a portable rendering prototype.
 
         SDK selection: --engine-root PATH, GUAVA_ENGINE_ROOT, guava.json's toolchain.enginePath, or the installed SDK selection.
         Run: --devtools [--no-open] opens the Inspector; --profile enables optimized diagnostics.
-        Create: --platforms mac,android selects native project templates.
+        Create: --platforms mac,android,ios selects native project templates.
         Build/run: --output PATH; Android: --android-sdk PATH --ndk PATH --device SERIAL
+        iOS: --simulator UDID (default: booted); physical device: --device ID --team TEAM_ID
         Android signing: --keystore FILE --key-alias ALIAS --store-password-env NAME --key-password-env NAME
         Release APKs use a development key unless custom signing is provided.
 

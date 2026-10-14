@@ -1,0 +1,17 @@
+{
+  "version": "49.0.2",
+  "source_sha256": "8dbfaa56c576471e954e96e24e57acaab2457f68a194a97386ecc2c56f1faba2",
+  "platforms": {
+    "macos-arm64": {"release": "aarch64-macos", "triple": "arm64-apple-macosx", "sha256": "f7000ab1661495d09b9dc87a11b356941b4e6097f295434bcb30a8cf1393b0d5"},
+    "macos-x86_64": {"release": "x86_64-macos", "triple": "x86_64-apple-macosx", "sha256": "1a1fd4bcec77d65bab1bdd4c38e4168825b7679c2f105bf573c4ef1cf5e779b1"},
+    "linux-aarch64": {"release": "aarch64-linux", "triple": "aarch64-unknown-linux-gnu", "sha256": "a97a874152b5fb49c4720b39b96a71d00ba61eab5ad59976163b7ddd1a3b14c0"},
+    "linux-x86_64": {"release": "x86_64-linux", "triple": "x86_64-unknown-linux-gnu", "sha256": "4818e139aeb83b7adbaaf41b267bf18992c18463ae26d1a9acdcfc63ea9eb316"},
+    "windows-arm64": {"release": "aarch64-windows", "triple": "aarch64-unknown-windows-msvc", "sha256": "224fc6db1a214fec8626786b6f5362c47f832490775f9e79e8e9cd0299b48a95"},
+    "windows-x86_64": {"release": "x86_64-windows", "triple": "x86_64-unknown-windows-msvc", "sha256": "928dad67acbf4a4f97be8d528b271ac72f8e329da21e327b0724d3af86fe3f44"},
+    "android-arm64": {"release": "aarch64-android", "triple": "aarch64-unknown-linux-android", "sha256": "7d0fcac9a3533df910edfd0651990ba17161827485120d026f25859cf77df045"},
+    "android-x86_64": {"release": "x86_64-android", "triple": "x86_64-unknown-linux-android", "sha256": "4d226b59e31c6a7e3ab3df52972df971c754462e5a16f515d47dfdf180c00ccb"},
+    "ios-arm64": {"rust_target": "aarch64-apple-ios", "triple": "arm64-apple-ios"},
+    "ios-arm64-simulator": {"rust_target": "aarch64-apple-ios-sim", "triple": "arm64-apple-ios-simulator"},
+    "ios-x86_64-simulator": {"rust_target": "x86_64-apple-ios", "triple": "x86_64-apple-ios-simulator"}
+  }
+}

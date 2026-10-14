@@ -1,4 +1,4 @@
-name: GuavaEditor CI
+name: GuavaStudioEditor CI
 
 on:
   push:
@@ -84,4 +84,4 @@ jobs:
         working-directory: Editor
         # Run the package as a whole so GameRuntimeTests and any future test
         # targets cannot be added without being exercised by CI.
-        run: swift test
+        run: swift test --no-parallel

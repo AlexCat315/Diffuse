@@ -20,7 +20,7 @@ struct ScriptPanel: View {
 
     init(app: EditorApplication) {
         self.app = app
-        self._workspace = Observed(\.snapshot, on: app.scriptWorkspace)
+        self._workspace = Observed(\.snapshot, on: app.workstation.scripts)
     }
 
     var body: some View {
@@ -232,7 +232,7 @@ struct ScriptPanel: View {
                                                      set: { app.store.setScriptCaretLabel($0, for: selectedScript.identifier) }),
                                  onChange: { text in
                                      cancelHover()
-                                     app.scriptWorkspace.updateSelectedSource(text)
+                                     app.workstation.scripts.updateSelectedSource(text)
                                  },
                                  diagnostics: workspace.selectedDocument?.diagnostics ?? [],
                                  completionProvider: completionProvider(for: selectedScript.identifier),
@@ -251,10 +251,10 @@ struct ScriptPanel: View {
                             .foregroundColor(.warning)
                         Spacer(minLength: 0)
                         if case .unavailable = workspace.languageServiceState {
-                            Button(L("Retry"), action: app.scriptWorkspace.retryLanguageService)
+                            Button(L("Retry"), action: app.workstation.scripts.retryLanguageService)
                                 .buttonStyle(.secondary)
                         }
-                        Button(action: app.scriptWorkspace.dismissLanguageServiceMessage) {
+                        Button(action: app.workstation.scripts.dismissLanguageServiceMessage) {
                             Text(L("Dismiss"))
                         }
                             .buttonStyle(GhostButtonStyle())
@@ -335,11 +335,11 @@ struct ScriptPanel: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
                 .flex(1, shrink: 1)
-            Button(action: { app.scriptWorkspace.resolveSelectedExternalChange(useDiskVersion: true) }) {
+            Button(action: { app.workstation.scripts.resolveSelectedExternalChange(useDiskVersion: true) }) {
                 Text(diskAction)
             }
             .buttonStyle(.secondary)
-            Button(action: { app.scriptWorkspace.resolveSelectedExternalChange(useDiskVersion: false) }) {
+            Button(action: { app.workstation.scripts.resolveSelectedExternalChange(useDiskVersion: false) }) {
                 Text(editorAction)
             }
             .buttonStyle(.primary)
@@ -372,8 +372,8 @@ struct ScriptPanel: View {
 
     private var sourceText: Binding<TextBuffer> {
         Binding(
-            get: { app.scriptWorkspace.snapshot.selectedDocument?.source ?? "" },
-            set: app.scriptWorkspace.updateSelectedSource
+            get: { app.workstation.scripts.snapshot.selectedDocument?.source ?? "" },
+            set: app.workstation.scripts.updateSelectedSource
         )
     }
 
@@ -393,7 +393,7 @@ struct ScriptPanel: View {
 
     private func select(_ file: DynamicScriptManager.ScriptFile) {
         guard file.identifier != workspace.selectedScriptID else { return }
-        if app.scriptWorkspace.select(scriptID: file.identifier) {
+        if app.workstation.scripts.select(scriptID: file.identifier) {
             cancelHover()
         }
     }
@@ -406,13 +406,13 @@ struct ScriptPanel: View {
             name = "NewScript\(suffix)"
             suffix += 1
         }
-        _ = app.scriptWorkspace.createScript(name: name, source: ScriptTemplate.default)
+        _ = app.workstation.scripts.createScript(name: name, source: ScriptTemplate.default)
     }
 
-    private func saveSource() { _ = app.scriptWorkspace.persistSelected(reportSuccess: true) }
+    private func saveSource() { _ = app.workstation.scripts.persistSelected(reportSuccess: true) }
 
     private func editInExternalEditor() {
-        guard let file = selectedScript, app.scriptWorkspace.persistSelected() else { return }
+        guard let file = selectedScript, app.workstation.scripts.persistSelected() else { return }
         openInExternalEditor(url: file.url)
     }
 
@@ -420,7 +420,7 @@ struct ScriptPanel: View {
         #if canImport(AppKit)
         NSWorkspace.shared.open(url)
         #else
-        app.scriptWorkspace.setSelectedOutput(L("Open this file in your editor: \(url.path)"))
+        app.workstation.scripts.setSelectedOutput(L("Open this file in your editor: \(url.path)"))
         #endif
     }
 
@@ -429,7 +429,7 @@ struct ScriptPanel: View {
         #if canImport(AppKit)
         NSWorkspace.shared.activateFileViewerSelecting([file.url])
         #else
-        app.scriptWorkspace.setSelectedOutput(L("Script path: \(file.url.path)"))
+        app.workstation.scripts.setSelectedOutput(L("Script path: \(file.url.path)"))
         #endif
     }
 
@@ -437,21 +437,21 @@ struct ScriptPanel: View {
         #if canImport(AppKit)
         NSWorkspace.shared.open(app.dynamicScriptManager.scriptsDirectoryURL)
         #else
-        app.scriptWorkspace.setSelectedOutput(app.dynamicScriptManager.scriptsDirectoryURL.path)
+        app.workstation.scripts.setSelectedOutput(app.dynamicScriptManager.scriptsDirectoryURL.path)
         #endif
     }
 
     private func trustProject() {
-        app.scriptWorkspace.setProjectTrusted(true)
+        app.workstation.scripts.setProjectTrusted(true)
     }
 
     private func revokeProjectTrust() {
-        app.scriptWorkspace.setProjectTrusted(false)
+        app.workstation.scripts.setProjectTrusted(false)
     }
 
     private func deleteSelectedScript() {
         guard let file = selectedScript else { return }
-        let workspaceModel = app.scriptWorkspace
+        let workspaceModel = app.workstation.scripts
         Task { @MainActor in
             #if canImport(AppKit)
             let alert = NSAlert()
@@ -467,7 +467,7 @@ struct ScriptPanel: View {
     }
 
     private func completionProvider(for scriptID: String) -> TextCompletionProvider {
-        let manager = app.dynamicScriptManager, model = app.scriptWorkspace
+        let manager = app.dynamicScriptManager, model = app.workstation.scripts
         return { request, reply in
             Task { @MainActor in
                 let position = ScriptSourceCoordinates.position(in: request.buffer, atCharacterIndex: request.caretIndex)
@@ -482,7 +482,7 @@ struct ScriptPanel: View {
 
     /// Pointer settled on something that may have documentation.
     private func requestHover(_ anchor: TextFieldHoverAnchor) {
-        guard app.scriptWorkspace.snapshot.languageServiceState == .ready,
+        guard app.workstation.scripts.snapshot.languageServiceState == .ready,
               let scriptID = workspace.selectedScriptID else {
             cancelHover()
             return
@@ -506,7 +506,7 @@ struct ScriptPanel: View {
         let sequence = hoverSequence
         let manager = app.dynamicScriptManager
         let presentationBinding = $hoverPresentation
-        let model = app.scriptWorkspace
+        let model = app.workstation.scripts
         Task { @MainActor in
             guard let presentation = await ScriptEditorHoverResolver.resolve(
                 scriptID: scriptID,
@@ -533,11 +533,11 @@ struct ScriptPanel: View {
     }
 
     private func compile() {
-        app.scriptWorkspace.compileSelected()
+        app.workstation.scripts.compileSelected()
     }
 
     private func cancelBuild() {
-        app.scriptWorkspace.cancelSelectedBuild()
+        app.workstation.scripts.cancelSelectedBuild()
     }
 }
 

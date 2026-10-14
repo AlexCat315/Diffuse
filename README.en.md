@@ -1,8 +1,8 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# Guava Engine
+# GuavaStudio
 
-An **AI-Native 3D game & film engine** written in Swift, built around a unified semantic world rather than a traditional translation-layer API.
+An **AI agent driven workstation** written in Swift, bringing text/code editing, game development, animation and video editing into a shared workspace.
 
 Guava's core thesis: **creative intent, world state, runtime execution, and AI understanding are not four layers — they are four views of the same thing.** Humans and AI authors share the exact same world-mutation primitives; every interaction is a training signal by default; and the world is a continuously maintained semantic graph, not a serialized snapshot.
 
@@ -98,8 +98,8 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
 ### First build
 
 ```bash
-git clone https://github.com/AlexCat315/Guava-Engine.git
-cd Guava-Engine
+git clone https://github.com/AlexCat315/GuavaStudio.git
+cd GuavaStudio
 git submodule update --init --recursive
 python bootstrap.py
 swift build --package-path Editor
@@ -164,7 +164,7 @@ The pattern is uniform: each SPM package owns its native deps under `<package>/t
 ## Project Structure
 
 ```
-Guava-Engine/
+GuavaStudio/
 ├── Engine/Sources/
 │   ├── AIRuntime/            (Session, WorldView, Signal, Proposal, RetryPolicy)
 │   ├── AssetPipeline/        (asset import, registry, loader)
@@ -236,4 +236,9 @@ GitHub Actions workflows live under `.github/workflows/`:
 
 ## License
 
-Guava Engine is open source under the [Apache License 2.0](LICENSE). Third-party dependencies retain their upstream licenses; see [NOTICE](NOTICE) for attribution.
+GuavaStudio is open source under the [Apache License 2.0](LICENSE). Third-party dependencies retain their upstream licenses; see [NOTICE](NOTICE) for attribution.
+
+
+The product is GuavaStudio. Runtime modules under `Engine/` remain reusable building blocks. The Editor adds independent text/code documents and a video timeline with cuts, ordering, frame preview, playback, and MP4 export. See [workstation boundaries](docs/architecture/workstation.md), [media](Engine/Media/README.md), and [component standards](docs/components/standard.md).
+
+New CLI applications include an iOS/iPadOS Xcode host alongside desktop and Android. `guava build MyApp --ios` builds for Simulator; `guava run MyApp --ios --simulator UDID` installs and launches. Devices require `--device ID --team TEAM_ID`. Native Metal/SDL and Wasmtime/Pulley artifacts are staged separately from desktop dependencies.

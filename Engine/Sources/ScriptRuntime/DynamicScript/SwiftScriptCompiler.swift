@@ -175,7 +175,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         clangIncludePaths: [String] = [],
         libraryPaths: [String] = [],
         outputDirectory: URL,
-        hostModuleName: String = "GuavaEditor",
+        hostModuleName: String = "GuavaStudioEditor",
         exportedSymbols: [String] = []
     ) {
         self.swiftcPath = swiftcPath
@@ -482,7 +482,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     /// Builds the contents of the `.def` file.
     ///
     /// ```
-    /// LIBRARY GuavaEditor
+    /// LIBRARY GuavaStudioEditor
     /// EXPORTS
     ///     guava_input_axis
     ///     guava_input_held

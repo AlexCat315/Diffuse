@@ -13,7 +13,9 @@ enum ToolchainSetup {
 
     static func run(_ arguments: Arguments, root: URL) throws {
         try report(arguments, root: root)
-        if arguments.platform != .android {
+        if arguments.platform == .ios {
+            try Shell.run(["python3", root.appendingPathComponent("scripts/bootstrap-ios.py").path], at: root)
+        } else if arguments.platform != .android {
             // SDK native archives are built once, shared by all application projects.
             #if os(Windows)
             let python = "python"

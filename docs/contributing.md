@@ -1,7 +1,7 @@
 ---
 path: /zh/docs/contributing
 title: 参与贡献
-description: 为 Guava Engine 提交文档、测试和代码变更的建议流程。
+description: 为 GuavaStudio 提交文档、测试和代码变更的建议流程。
 locale: zh
 translationKey: docs.contributing
 category: 社区
@@ -11,7 +11,7 @@ kind: doc
 
 # 参与贡献
 
-Guava Engine 采用 Apache-2.0 许可证。贡献前请确保变更边界清晰，并为行为变化提供对应验证。
+GuavaStudio 采用 Apache-2.0 许可证。贡献前请确保变更边界清晰，并为行为变化提供对应验证。
 
 ## 推荐流程
 

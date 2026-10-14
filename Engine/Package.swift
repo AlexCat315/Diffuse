@@ -1,38 +1,41 @@
 // swift-tools-version: 6.1
-// GuavaEngine 0.0.9
+// GuavaStudioRuntime 0.0.9
 import PackageDescription
 import Foundation
 
 // Cross builds stage target archives separately from the host's vendor directory.
 let nativeArtifactRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ARTIFACT_ROOT"] ?? "vendor"
 
-#if os(macOS)
 let wasmtimeProducts: [Product] = [
     .library(name: "PluginWasmtimeRuntime", targets: ["PluginWasmtimeRuntime"]),
+    .executable(name: "PluginRuntimeProbe", targets: ["PluginRuntimeProbe"]),
 ]
 let wasmtimeTargets: [Target] = [
-    .binaryTarget(
-        name: "Wasmtime",
-        path: "vendor/Wasmtime.xcframework"
-    ),
+    .binaryTarget(name: "Wasmtime", path: "\(nativeArtifactRoot)/Wasmtime.artifactbundle"),
     .target(
         name: "CWasmtimeBridge",
         dependencies: ["Wasmtime"],
         path: "Sources/Bridge/CWasmtimeBridge",
-        publicHeadersPath: "include"
+        publicHeadersPath: "include",
+        cSettings: [.define("WASM_API_EXTERN", to: ""), .define("WASI_API_EXTERN", to: "")],
+        linkerSettings: [
+            .linkedFramework("CoreFoundation", .when(platforms: [.macOS, .iOS])),
+            .linkedLibrary("pthread", .when(platforms: [.linux])),
+            .linkedLibrary("dl", .when(platforms: [.linux, .android])),
+            .linkedLibrary("m", .when(platforms: [.linux, .android])),
+            .linkedLibrary("ws2_32", .when(platforms: [.windows])),
+            .linkedLibrary("advapi32", .when(platforms: [.windows])),
+            .linkedLibrary("userenv", .when(platforms: [.windows])),
+            .linkedLibrary("ntdll", .when(platforms: [.windows])),
+            .linkedLibrary("shell32", .when(platforms: [.windows])),
+            .linkedLibrary("ole32", .when(platforms: [.windows])),
+            .linkedLibrary("bcrypt", .when(platforms: [.windows])),
+        ]
     ),
-    .target(
-        name: "PluginWasmtimeRuntime",
-        dependencies: ["CWasmtimeBridge", "PluginRuntime"]
-    ),
+    .target(name: "PluginWasmtimeRuntime", dependencies: ["CWasmtimeBridge", "PluginRuntime"]),
+    .executableTarget(name: "PluginRuntimeProbe", dependencies: ["PluginWasmtimeRuntime", "PluginRuntime"],
+                      path: "Validation/Plugins/Swift"),
 ]
-#else
-// The official C API dynamic artifact is currently packaged as an Apple
-// XCFramework. Other hosts retain package validation and fail closed instead
-// of falling back to an ambient Wasmtime installation.
-let wasmtimeProducts: [Product] = []
-let wasmtimeTargets: [Target] = []
-#endif
 
 // Vulkan targets native Windows/Linux/Android drivers. macOS uses Metal and has no
 // Vulkan loader, headers, portability surface, or driver dependency.
@@ -59,8 +62,8 @@ let nativeRHIInteropTargets: [Target] = [
 ]
 
 let package = Package(
-    name: "GuavaEngine",
-    platforms: [.macOS(.v13)],
+    name: "GuavaStudioRuntime",
+    platforms: [.macOS(.v13), .iOS(.v16)],
     products: [
         .library(name: "SIMDCompat", targets: ["SIMDCompat"]),
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
@@ -99,6 +102,7 @@ let package = Package(
     dependencies: [
         .package(path: "PlatformCore"),
         .package(path: "Logging"),
+        .package(path: "Media"),
     ],
     targets: [
         // MARK: - C Bridges
@@ -139,6 +143,22 @@ let package = Package(
                 .linkedFramework("Metal", .when(platforms: [.macOS])),
                 .linkedFramework("QuartzCore", .when(platforms: [.macOS])),
                 .linkedFramework("UniformTypeIdentifiers", .when(platforms: [.macOS])),
+                .linkedFramework("UIKit", .when(platforms: [.iOS])),
+                .linkedFramework("CoreBluetooth", .when(platforms: [.iOS])),
+                .linkedFramework("Foundation", .when(platforms: [.iOS])),
+                .linkedFramework("AVFoundation", .when(platforms: [.iOS])),
+                .linkedFramework("AudioToolbox", .when(platforms: [.iOS])),
+                .linkedFramework("CoreAudio", .when(platforms: [.iOS])),
+                .linkedFramework("CoreFoundation", .when(platforms: [.iOS])),
+                .linkedFramework("CoreGraphics", .when(platforms: [.iOS])),
+                .linkedFramework("CoreHaptics", .when(platforms: [.iOS])),
+                .linkedFramework("CoreMedia", .when(platforms: [.iOS])),
+                .linkedFramework("CoreMotion", .when(platforms: [.iOS])),
+                .linkedFramework("CoreVideo", .when(platforms: [.iOS])),
+                .linkedFramework("GameController", .when(platforms: [.iOS])),
+                .linkedFramework("Metal", .when(platforms: [.iOS])),
+                .linkedFramework("QuartzCore", .when(platforms: [.iOS])),
+                .linkedFramework("OpenGLES", .when(platforms: [.iOS])),
                 // SDL3 static needs these Win32 system libraries at link time.
                 .linkedLibrary("winmm", .when(platforms: [.windows])),
                 .linkedLibrary("setupapi", .when(platforms: [.windows])),
@@ -298,9 +318,11 @@ let package = Package(
         .target(
             name: "AudioRuntime",
             dependencies: [
+                .product(name: "GuavaLogging", package: "Logging"),
                 "SIMDCompat",
                 "SceneRuntime",
-                // SDL3 is the single audio backend on every platform.
+                // FFmpeg decodes media; SDL3 owns device output.
+                .product(name: "MediaRuntime", package: "Media"),
                 "CSDL3",
             ]
         ),
@@ -539,7 +561,8 @@ let package = Package(
                 .product(name: "GuavaLogging", package: "Logging"),
                 "CapabilityRuntime",
                 "PluginRuntime",
-            ]
+            ],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "IntentRuntimeTests",
@@ -634,15 +657,13 @@ let package = Package(
 package.products.append(contentsOf: wasmtimeProducts)
 package.targets.append(contentsOf: wasmtimeTargets)
 package.targets.append(contentsOf: nativeRHIInteropTargets)
-#if os(macOS)
 for targetName in ["GuavaPluginHost", "PluginRuntimeTests"] {
     package.targets.first(where: { $0.name == targetName })?
         .dependencies.append("PluginWasmtimeRuntime")
 }
-#endif
 
 // macOS builds the package's tests as one bundle: SwiftPM's synthesized
-// `GuavaEnginePackageTests` runner links every test target and transitively
+// `GuavaStudioRuntimePackageTests` runner links every test target and transitively
 // loads AssetPipeline, which imports the CImageDecodeBridge Clang module. The
 // macOS explicit-module build then requires that module's modulemap in scope
 // for the whole bundle — not just the test targets that import AssetPipeline

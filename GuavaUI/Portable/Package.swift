@@ -5,7 +5,7 @@ import PackageDescription
 // Browser targets depend only on the protocol, never on the socket transport.
 let package = Package(
     name: "GuavaUIPortable",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v13), .iOS(.v16)],
     products: [
         .library(name: "GuavaUIScene", targets: ["GuavaUIScene"]),
         .library(name: "GuavaUIComposeCore", targets: ["GuavaUIComposeCore"]),

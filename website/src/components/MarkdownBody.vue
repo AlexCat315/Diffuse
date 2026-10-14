@@ -3,6 +3,7 @@ import { inject, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { contentEntries } from 'virtual:guava-content'
 import type { ContentEntry } from '@/types/content'
+import { repositoryUrl } from '@/content/copy'
 
 const root = ref<HTMLElement>()
 const router = useRouter()
@@ -20,7 +21,7 @@ function normalize(path: string) {
 function onClick(event: MouseEvent) {
   const anchor = (event.target as HTMLElement).closest('a')
   if (!anchor || !entry) return
-  const href = anchor.getAttribute('href') || ''
+  const href = anchor.dataset.sourceHref || anchor.getAttribute('href') || ''
   if (href.startsWith('#') || href.startsWith('http') || !href.includes('.md')) return
   const sourceDirectory = entry.editPath.split('/').slice(0, -1).join('/')
   const [file, hash] = href.split('#')
@@ -50,6 +51,18 @@ async function copyText(value: string) {
 onMounted(() => {
   if (!root.value) return
   root.value.addEventListener('click', onClick)
+  if (entry) {
+    const sourceDirectory = entry.editPath.split('/').slice(0, -1).join('/')
+    for (const anchor of root.value.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+      const href = anchor.getAttribute('href') || ''
+      if (!href.includes('.md') || href.startsWith('http') || href.startsWith('#')) continue
+      const [file, hash] = href.split('#')
+      const source = normalize(`${sourceDirectory}/${file}`)
+      const target = contentEntries.find((candidate) => candidate.editPath === source)
+      anchor.dataset.sourceHref = href
+      anchor.href = `${target?.path || `${repositoryUrl}/blob/main/${source}`}${hash ? `#${hash}` : ''}`
+    }
+  }
   for (const anchor of root.value.querySelectorAll<HTMLAnchorElement>('a[href^="http"]')) {
     anchor.target = '_blank'
     anchor.rel = 'noreferrer'

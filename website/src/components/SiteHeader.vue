@@ -40,7 +40,7 @@ function switchLocale() {
 <template>
   <header class="site-header">
     <div class="header-shell">
-      <RouterLink :to="`/${locale}`" class="brand" aria-label="Guava Engine home">
+      <RouterLink :to="`/${locale}`" class="brand" aria-label="GuavaStudio home">
         <img :src="logoUrl" alt="" class="brand-mark" />
         <span>GUAVA <b>ENGINE</b></span>
       </RouterLink>

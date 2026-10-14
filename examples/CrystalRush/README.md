@@ -1,6 +1,6 @@
 # Crystal Rush / 晶体冲刺
 
-用 Guava Engine 的真实 Swift 脚本、输入、实体、灯光和 HUD 实现的小型游戏。源码写入、脚本编译、场景草稿、脚本绑定、场景保存、播放查询和独立导出均已通过真实 `GuavaMCP` stdio 服务执行。
+用 GuavaStudio 的真实 Swift 脚本、输入、实体、灯光和 HUD 实现的小型游戏。源码写入、脚本编译、场景草稿、脚本绑定、场景保存、播放查询和独立导出均已通过真实 `GuavaMCP` stdio 服务执行。
 
 ## 试玩
 

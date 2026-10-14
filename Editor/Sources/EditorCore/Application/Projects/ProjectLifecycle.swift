@@ -49,7 +49,7 @@ extension EditorApplication {
 
     public func requestCloseProject() {
         if store.state.timing.playbackState != .stopped { applyPlaybackState(.stopped) }
-        guard !hasUnsavedSceneChanges && !scriptWorkspace.snapshot.documents.contains(where: \.isDirty) else {
+        guard !hasUnsavedSceneChanges && !workstation.hasUnsavedChanges else {
             store.dispatch(.requestClose(EditorPendingCloseRequest(action: .closeProject)))
             return
         }

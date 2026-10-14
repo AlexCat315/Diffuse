@@ -4,12 +4,10 @@ private var loggingConfiguration = LoggingConfiguration()
 try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
 try LogSystem.bootstrap(configuration: loggingConfiguration)
 defer { LogSystem.flush() }
-import CapabilityRuntime
 import IntentRuntime
+import CapabilityRuntime
 import PluginRuntime
-#if canImport(PluginWasmtimeRuntime)
 import PluginWasmtimeRuntime
-#endif
 
 private func createSecureDirectory(at url: URL,
                                    withIntermediateDirectories: Bool) throws {
@@ -27,17 +25,25 @@ private func createSecureDirectory(at url: URL,
     #endif
 }
 
-#if canImport(PluginWasmtimeRuntime)
-let runtime: any WASIComponentRuntime = (try? EmbeddedWasmtimeComponentRuntime())
-    ?? FailClosedWASIComponentRuntime()
-let runtimeMode = runtime is EmbeddedWasmtimeComponentRuntime ? "embedded" : "unavailable"
-#else
-let runtime: any WASIComponentRuntime = FailClosedWASIComponentRuntime()
-let runtimeMode = "unavailable"
-#endif
+let runtime = try EmbeddedWasmtimeComponentRuntime()
+let runtimeMode = runtime.usesInterpreter ? "embedded-pulley" : "embedded"
 let capabilityRegistry = CapabilityRegistry.aiDefault
 let loader = PluginPackageLoader(registry: capabilityRegistry)
 let limits = PluginResourceLimits.secureDefault
+if CommandLine.arguments.count > 1 {
+    guard CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-web" else {
+        throw WebPackageExportError.usage
+    }
+    do {
+        try exportWebPackage(at: URL(fileURLWithPath: CommandLine.arguments[2]),
+                             loader: loader, runtime: runtime, limits: limits, registry: capabilityRegistry)
+        exit(0)
+    } catch {
+        LogSystem.logger("com.guava.engine.plugin").error("Web package validation failed: \(error)")
+        LogSystem.flush()
+        exit(1)
+    }
+}
 let stagingRoot = FileManager.default.temporaryDirectory
     .appendingPathComponent("GuavaPluginHost-\(UUID().uuidString)", isDirectory: true)
 try? createSecureDirectory(at: stagingRoot, withIntermediateDirectories: true)

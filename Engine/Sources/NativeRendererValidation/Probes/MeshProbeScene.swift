@@ -7,7 +7,7 @@ import SIMDCompat
 
 public enum MeshProbeScene {
     public static func importedFixture() throws -> MeshAsset {
-        let bundle = PackageResourceBundle.required(named: "GuavaEngine_RenderBackend")
+        let bundle = PackageResourceBundle.required(named: "GuavaStudioRuntime_RenderBackend")
         guard let url = bundle.url(forResource: "NativeSceneFixture", withExtension: "gltf") else {
             throw CocoaError(.fileNoSuchFile)
         }

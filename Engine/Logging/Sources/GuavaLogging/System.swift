@@ -44,6 +44,9 @@ public enum LogSystem {
         return URL(fileURLWithPath: env["LOCALAPPDATA"] ?? FileManager.default.homeDirectoryForCurrentUser.path).appendingPathComponent("Guava/Logs")
         #elseif os(macOS)
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Guava")
+        #elseif os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        return (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory).appendingPathComponent("Guava/Logs")
         #else
         return (env["XDG_STATE_HOME"].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/state")).appendingPathComponent("guava/logs")

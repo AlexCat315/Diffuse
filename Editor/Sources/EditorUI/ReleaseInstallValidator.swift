@@ -17,9 +17,9 @@ enum EditorInstallValidationError: Error, Equatable, CustomStringConvertible {
 
 enum EditorInstallValidator {
     private static let resourceBundleBases = [
-        "GuavaEditor_EditorUI",
-        "GuavaEditor_EditorCore",
-        "GuavaEngine_RenderBackend",
+        "GuavaStudioEditor_EditorUI",
+        "GuavaStudioEditor_EditorCore",
+        "GuavaStudioRuntime_RenderBackend",
         "GuavaUI_GuavaUI",
         "GuavaUI_GuavaUICompose",
         "GuavaUI_GuavaUIWorkspace",
@@ -62,8 +62,6 @@ enum EditorInstallValidator {
                  contentsDirectory.appendingPathComponent("Helpers/GuavaPluginHost"), true),
                 ("Contents/Helpers/GuavaMCP",
                  contentsDirectory.appendingPathComponent("Helpers/GuavaMCP"), true),
-                ("Contents/Helpers/libwasmtime.dylib",
-                 contentsDirectory.appendingPathComponent("Helpers/libwasmtime.dylib"), false),
             ]
             : [
                 ("EditorApp\(suffix)",

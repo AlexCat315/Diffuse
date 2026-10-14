@@ -137,7 +137,7 @@ struct CommandPaletteOverlay: View {
             }
         }
         if !commandsOnly {
-            entries += app.scriptWorkspace.snapshot.documents.map { document in
+            entries += app.workstation.scripts.snapshot.documents.map { document in
                 ResultItem(id: "script/" + document.file.identifier, title: document.file.displayName + ".swift",
                     detail: "Scripts/", shortcut: "", enabled: true,
                     searchText: document.file.displayName + " " + document.file.identifier,

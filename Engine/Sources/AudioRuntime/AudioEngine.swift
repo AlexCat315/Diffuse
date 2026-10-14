@@ -6,7 +6,7 @@ import SceneRuntime
 /// components into playback requests and drives spatial attenuation.
 ///
 /// All of this logic is platform-neutral. The actual sound output is delegated
-/// to an injected `AudioBackend` (`AVFoundation` on Apple, `SDL3` elsewhere, or
+/// to an injected `AudioBackend` (`SDL3` with FFmpeg decoding, or
 /// a silent stub), so the same gameplay behaviour runs on every platform and can
 /// be unit-tested with a mock backend.
 public final class AudioEngine: @unchecked Sendable {
@@ -20,7 +20,7 @@ public final class AudioEngine: @unchecked Sendable {
     /// lock permits public convenience methods to call `preload` / reset helpers
     /// while keeping project reloads and simulation ticks mutually exclusive.
     private let lock = NSRecursiveLock()
-    private let searchExtensions = ["wav", "mp3", "m4a", "aiff", "aif", "caf", "ogg"]
+    private let searchExtensions = ["wav", "mp3", "m4a", "aiff", "aif", "caf", "ogg", "flac", "opus", "aac", "mp4", "webm"]
 
     private var searchURLs: [URL] = []
     private var indexedClipURLs: [String: URL] = [:]

@@ -1,6 +1,6 @@
-# Guava Engine Website
+# GuavaStudio Website
 
-Vue 3 + TypeScript website, documentation, release download, and community portal for Guava Engine.
+Vue 3 + TypeScript website, documentation, release download, and community portal for GuavaStudio.
 
 ```bash
 npm install

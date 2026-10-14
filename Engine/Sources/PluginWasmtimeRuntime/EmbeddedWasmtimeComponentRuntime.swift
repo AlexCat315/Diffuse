@@ -20,22 +20,24 @@ public enum EmbeddedWasmtimeError: Error, Sendable, Equatable, CustomStringConve
     }
 }
 
-/// Wasmtime v45 Component Model embedding used exclusively inside the
-/// GuavaPluginHost process. The bridge creates a fresh Store per call, links
+/// Component Model embedding for native hosts and iOS (Pulley).
+/// Desktop applications use this inside the isolated GuavaPluginHost process. The bridge creates a fresh Store per call, links
 /// no WASI interfaces, and exposes only manifest-granted Guava query imports.
 public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unchecked Sendable {
     public let runtimeVersion: String
+    public let usesInterpreter: Bool
 
     private let runtime: OpaquePointer
     private let invocationLock = NSLock()
 
-    public init() throws {
+    public init(useInterpreter: Bool = false) throws {
         var error = guava_wasmtime_buffer_t(data: nil, size: 0)
-        guard let runtime = guava_wasmtime_runtime_new(&error) else {
+        guard let runtime = guava_wasmtime_runtime_new(useInterpreter ? GUAVA_WASMTIME_INTERPRETER : GUAVA_WASMTIME_AUTOMATIC, &error) else {
             let message = Self.consume(&error)
             throw EmbeddedWasmtimeError.initialisationFailed(message)
         }
         self.runtime = runtime
+        usesInterpreter = guava_wasmtime_runtime_is_interpreter(runtime) != 0
         runtimeVersion = String(cString: guava_wasmtime_runtime_version())
     }
 

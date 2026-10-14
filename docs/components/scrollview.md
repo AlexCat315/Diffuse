@@ -27,7 +27,7 @@ ScrollView(.vertical, scrollbarGutter: .stable,
 - 软件写入滚动绑定仍是立即定位并中断框架运动；节点卸载取消其运动控制器。
 - `.reducedMotion()` 禁用框架添加的运动；OS 已提供的滚动流仍直接跟随。
 
-`ScrollAnimator.scroll(by:) / move(to:) / settle()` 的可配置惯性与解析弹簧仍供软件显式管理自定义手势使用；它们不再是原生 wheel 的自动路径。不要将系统 momentum 包送入推算释放的自定义手势接口。详见 [本轮输入验证](../guava-ui/evidence/scroll-input/README.md)。
+`ScrollAnimator.scroll(by:) / move(to:) / settle()` 的可配置惯性与解析弹簧仍供软件显式管理自定义手势使用；它们不再是原生 wheel 的自动路径。不要将系统 momentum 包送入推算释放的自定义手势接口。详见 [本轮输入验证](https://github.com/AlexCat315/GuavaStudio/tree/main/GuavaUI/Portable/Tests/GuavaUISceneTests/Scrolling)。
 
 DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMode` 传 points/lines/pages，并统一方向，只对 point 输入做画面到逻辑坐标的比例换算。InputRecording 格式升级为 version 2，直接保存完整事件，未增加旧格式解码层。
 
@@ -43,7 +43,7 @@ TextField 与 CodeEditor 的内部视口采用同样的有溢出边界隔离；�
 
 内容偏移改变绘制/命中几何，稳定内容不需要每帧重跑 Yoga。保留渲染器可复用文字等叶子的绘制缓存；本轮新增实际缓存顶点边界与视口/裁剪相交判断，不再把完全不可见的缓存叶子反复追加到帧列表。自定义 painter 超出 Node.frame 的实际绘制仍被保留；有明确裁剪边界的离屏子树可整体跳过。
 
-这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；已知可变行高可使用 [VariableVirtualStack](../guava-ui/variable-virtual-layout.md)，未知高度的自动测量仍缺失。此前版本的原生绘制计时方法和数值见 [滚动与布局历史验证记录](../guava-ui/evidence/scroll-layout/README.md)。
+这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；已知可变行高可使用 [VariableVirtualStack](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VariableVirtualStackTests.swift)，未知高度的自动测量仍缺失。此前版本的原生绘制计时方法和数值见 [滚动与布局历史验证记录](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/ButtonScrollViewTests.swift)。
 
 ## 尚未完成
 

@@ -12,7 +12,7 @@ enum CreateApplication {
         if let platforms = arguments.value(.platforms) {
             configuration.targets.platforms = try platforms.split(separator: ",").map {
                 guard let platform = AppPlatform(rawValue: String($0)) else { throw ToolError.invalid("Unknown platform: \($0)") }
-                guard [.mac, .win, .linux, .android].contains(platform) else { throw ToolError.invalid("Platform template not implemented: \($0)") }
+                guard [.mac, .win, .linux, .android, .ios].contains(platform) else { throw ToolError.invalid("Platform template not implemented: \($0)") }
                 return platform
             }
         }

@@ -7,6 +7,8 @@ const staticPages = [
   ['/download', () => import('@/pages/DownloadPage.vue'), 'download'],
   ['/blog', () => import('@/pages/BlogIndexPage.vue'), 'blog'],
   ['/community', () => import('@/pages/CommunityPage.vue'), 'community'],
+  ['/docs', () => import('@/pages/DocsIndexPage.vue'), 'docs'],
+  ['/roadmap', () => import('@/pages/RoadmapPage.vue'), 'roadmap'],
 ] as const
 
 const ContentPage = () => import('@/pages/ContentPage.vue')

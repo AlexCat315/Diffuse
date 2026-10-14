@@ -23,4 +23,4 @@ Stepper([
 
 真实示例：`swift run --package-path GuavaUI/Examples GuavaUIDemo --component stepper`。示例可启动、失败、完成、解锁 Review，并切换横/纵向、密度、主题和禁用状态。
 
-目前未提供 RTL、自动换行或适合极窄视口的替代布局；这些仍属于后续工作。行为与验证边界详见 [GPUI Kit 对照审计](../guava-ui/gpui-kit-audit.md)。
+目前未提供 RTL、自动换行或适合极窄视口的替代布局；这些仍属于后续工作。行为与验证边界详见 [GPUI Kit 对照审计](standard.md)。

@@ -5,7 +5,7 @@
 // their `MTLFunction` from the cached library, so the hot path never calls
 // `newLibraryWithSource`.
 
-#if os(macOS)
+#if canImport(Metal)
 import Metal
 
 final class MetalLibraryCache {

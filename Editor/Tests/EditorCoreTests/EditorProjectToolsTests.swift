@@ -33,11 +33,11 @@ struct EditorProjectToolsTests {
             _ = try await call(app, "write_script", ["filename": "Game.swift", "source": "stale", "expected_sha256": hash])
         }
         let current = try await call(app, "read_script", ["filename": "Game.swift"])
-        app.scriptWorkspace.updateSelectedSource("unsaved user draft")
+        app.workstation.scripts.updateSelectedSource("unsaved user draft")
         await #expect(throws: EditorProjectToolError.self) {
             _ = try await call(app, "write_script", ["filename": "Game.swift", "source": "overwrite", "expected_sha256": current["sha256"] as? String ?? ""])
         }
-        #expect(app.scriptWorkspace.snapshot.selectedDocument?.source.stringValue == "unsaved user draft")
+        #expect(app.workstation.scripts.snapshot.selectedDocument?.source.stringValue == "unsaved user draft")
         #expect(try String(contentsOf: root.appendingPathComponent("Scripts/Game.swift"), encoding: .utf8) == "second source")
     }
 

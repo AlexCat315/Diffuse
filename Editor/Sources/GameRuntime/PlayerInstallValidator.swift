@@ -19,8 +19,8 @@ public enum PlayerInstallValidationError: Error, Equatable, CustomStringConverti
 /// Validates the resource layout used by both release archives and exported games.
 public enum PlayerInstallValidator {
     private static let resourceBundleBases = [
-        "GuavaEditor_EditorCore",
-        "GuavaEngine_RenderBackend",
+        "GuavaStudioEditor_EditorCore",
+        "GuavaStudioRuntime_RenderBackend",
         "GuavaUI_GuavaUI",
         "GuavaUI_GuavaUICompose",
         "GuavaUI_GuavaUIWorkspace",

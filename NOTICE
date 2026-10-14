@@ -1,5 +1,5 @@
-Guava Engine
-Copyright 2026 Guava Engine authors
+GuavaStudio
+Copyright 2026 GuavaStudio authors
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
@@ -7,4 +7,4 @@ This product bundles or builds against third-party software, each under its own
 license (see README.md for the dependency list and their upstream sources):
 
   - Yoga, FreeType, HarfBuzz, SDL3, Imath, OpenEXR, OpenColorIO, JoltPhysics,
-    Wasmtime, lunasvg, plutovg, libwebp, sharpyuv.
+    Wasmtime, FFmpeg (LGPL configuration; see Engine/Media/README.md), lunasvg, plutovg, libwebp, sharpyuv.

@@ -36,7 +36,7 @@ extension EditorApplication {
         let source = URL(fileURLWithPath: asset.absolutePath)
         let destination = root.appendingPathComponent(relativePath)
         guard !relativePath.isEmpty, !relativePath.hasPrefix("/"),
-              !scriptWorkspace.snapshot.documents.contains(where: { $0.isDirty && $0.source.stringValue.contains(asset.relativePath) }) else {
+              !workstation.scripts.snapshot.documents.contains(where: { $0.isDirty && $0.source.stringValue.contains(asset.relativePath) }) else {
             logConsole("Asset relocation blocked", severity: .warning, target: .asset(id: asset.id),
                        nextStep: "Enter a project-relative path and save scripts referencing this asset before moving it.")
             return false
@@ -60,7 +60,7 @@ extension EditorApplication {
                 throw error
             }
             scene.relocateAssetReferences(from: asset.id, to: moved)
-            scriptWorkspace.refreshFromDisk()
+            workstation.scripts.refreshFromDisk()
             store.dispatch(.navigateToAsset(moved.id))
             store.dispatch(.forceUIRefresh)
             logConsole("Asset relocated", detail: "\(asset.relativePath) → \(moved.relativePath)", target: .asset(id: moved.id))

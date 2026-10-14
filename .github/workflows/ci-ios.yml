@@ -1,0 +1,29 @@
+name: iOS application host
+on:
+  push:
+    branches: [main]
+    paths: ['GuavaUI/**', 'Engine/**', 'cmake/**', 'scripts/bootstrap-ios.py', 'Tools/Guava/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+  pull_request:
+    paths: ['GuavaUI/**', 'Engine/**', 'cmake/**', 'scripts/bootstrap-ios.py', 'Tools/Guava/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+  workflow_dispatch:
+jobs:
+  simulator:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with: {submodules: recursive}
+      - uses: ./.github/actions/setup-toolchains
+      - name: Install Rust targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - name: Stage iOS dependencies and build the shared application
+        shell: bash
+        run: |
+          python scripts/bootstrap-ios.py
+          GUAVA_ENGINE_ROOT="$PWD" GUAVA_ENGINE_ARTIFACT_ROOT=build/ios-arm64-simulator/vendor \
+            GUAVA_TEXT_ARTIFACT_ROOT=../build/ios-arm64-simulator/vendor \
+            xcodebuild -quiet -jobs 4 -project examples/GuavaUIStarter/Platforms/iOS/Application.xcodeproj \
+            -scheme Application -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/guava-ios" \
+            CODE_SIGNING_ALLOWED=NO ARCHS=arm64 build
+      - name: Verify the generated iOS CLI project
+        run: swift test --package-path Tools/Guava

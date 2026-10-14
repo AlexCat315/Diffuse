@@ -7,6 +7,8 @@ import SIMDCompat
 import Testing
 @testable import EditorCore
 
+private final class CrystalRushTestBundle: NSObject {}
+
 @Suite("Crystal Rush actual gameplay", .serialized)
 struct CrystalRushGameplayTests {
     #if os(macOS) || os(Linux)
@@ -14,10 +16,8 @@ struct CrystalRushGameplayTests {
     func playableLoop() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let candidates = ["Editor/.build/out/Products/Debug/GuavaPlayer", "Editor/.build/debug/GuavaPlayer"]
-        let playerBinary = try #require(candidates.map { root.appendingPathComponent($0) }.first {
-            FileManager.default.isExecutableFile(atPath: $0.path)
-        })
+        let playerBinary = Bundle(for: CrystalRushTestBundle.self).bundleURL.deletingLastPathComponent().appendingPathComponent("GuavaPlayer")
+        #expect(FileManager.default.isExecutableFile(atPath: playerBinary.path))
         let project = FileManager.default.temporaryDirectory.appendingPathComponent("guava-crystal-rules-\(UUID())")
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

@@ -24,6 +24,22 @@ struct ButtonIconTests: GuavaUIComposeSerializedSuite {
         return nil
     }
 
+    @Test("Touch controls reach 44 points and restore desktop density")
+    func adaptiveTouchTarget() throws { try GlobalTestLock.locked {
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        var surface = UIEnvironment()
+        surface.input = [.touch]
+        graph.install(root: Button(icon: .texture(7), size: 16) {}.surfaceEnvironment(surface))
+        graph.computeLayout(width: 200, height: 200)
+        let touch = try #require(findButtonHost(graph.tree.root!))
+        #expect(touch.frame.width >= 44 && touch.frame.height >= 44)
+        surface.input = [.pointer, .keyboard]
+        graph.install(root: Button(icon: .texture(7), size: 16) {}.surfaceEnvironment(surface))
+        graph.computeLayout(width: 200, height: 200)
+        let desktop = try #require(findButtonHost(graph.tree.root!))
+        #expect(desktop.frame.height < 44)
+    } }
+
     @Test("Button(icon: .texture) renders a button shell whose label is an Image")
     func texturePathBuildsButton() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

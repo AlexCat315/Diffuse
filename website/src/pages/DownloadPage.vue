@@ -26,8 +26,8 @@ const platforms = computed(() => [
       </article>
     </section>
     <p v-if="snapshot?.stale" class="stale-note section-shell">{{ t.github.stale }}</p>
-    <section class="section-shell source-build section-space"><div><Terminal :size="29" /><h2>{{ t.download.sourceTitle }}</h2><p>{{ t.download.sourceDescription }}</p></div><pre><code>git clone https://github.com/AlexCat315/Guava-Engine.git
-cd Guava-Engine
+    <section class="section-shell source-build section-space"><div><Terminal :size="29" /><h2>{{ t.download.sourceTitle }}</h2><p>{{ t.download.sourceDescription }}</p></div><pre><code>git clone https://github.com/AlexCat315/GuavaStudio.git
+cd GuavaStudio
 git submodule update --init --recursive
 python bootstrap.py
 swift build --package-path Editor</code></pre><div><RouterLink :to="`/${locale}/docs/getting-started`" class="text-link">{{ t.actions.getStarted }} <ArrowUpRight :size="15" /></RouterLink><a :href="repositoryUrl" class="text-link" target="_blank" rel="noreferrer"><Github :size="15" /> GitHub</a></div></section>
