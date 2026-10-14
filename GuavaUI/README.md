@@ -107,4 +107,4 @@ swift test --package-path Editor
 
 [Portable 核心](Portable/README.md)与[浏览器原型](Browser/README.md)可独立使用。浏览器原型尚未提供全部原生组件画廊。
 
-跨设备布局和组件要求见 [组件标准](../docs/components/standard.md)。`SurfaceReader` 读取空间与输入能力；应用内容不需要直接识别 UIKit、SDL 或 Android 生命周期。
+跨设备布局和组件要求见 [组件标准](../docs/components/standard.md)，空间不足阶梯、手机/平板重排、触摸/键盘/辅助功能与动效实现见[跨平台控件规范](../docs/components/adaptive-spec.md)。`SurfaceReader` 读取空间与输入能力；应用内容不需要直接识别 UIKit、SDL 或 Android 生命周期。
