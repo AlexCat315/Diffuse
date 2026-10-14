@@ -1,4 +1,4 @@
-import CSDL3
+private import CSDL3
 import GuavaLogging
 
 func installSDLLogging() {

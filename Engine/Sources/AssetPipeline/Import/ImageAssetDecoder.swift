@@ -1,5 +1,5 @@
 import Foundation
-import CImageDecodeBridge
+private import CImageDecodeBridge
 
 public struct DecodedTextureAsset: Sendable, Equatable {
     public var pixels: [UInt8]

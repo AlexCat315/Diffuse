@@ -1,4 +1,4 @@
-import CSDL3
+private import CSDL3
 import Foundation
 
 /// Thin Swift wrapper around SDL3 clipboard text APIs.

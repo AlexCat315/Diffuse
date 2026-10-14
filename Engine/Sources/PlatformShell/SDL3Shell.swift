@@ -1,4 +1,4 @@
-import CSDL3
+private import CSDL3
 import EngineKernel
 import Foundation
 import GuavaLogging

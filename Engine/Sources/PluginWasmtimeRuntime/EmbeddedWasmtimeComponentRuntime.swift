@@ -1,4 +1,4 @@
-import CWasmtimeBridge
+private import CWasmtimeBridge
 import CapabilityRuntime
 import Foundation
 import PluginRuntime

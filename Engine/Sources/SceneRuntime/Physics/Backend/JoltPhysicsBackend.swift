@@ -1,4 +1,4 @@
-import CJoltBridge
+private import CJoltBridge
 import SIMDCompat
 
 public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {

@@ -1,6 +1,6 @@
 import Foundation
-import CTreeSitter
-import CTreeSitterSwift
+private import CTreeSitter
+private import CTreeSitterSwift
 
 public struct SyntaxPoint: Equatable {
     public let row: Int

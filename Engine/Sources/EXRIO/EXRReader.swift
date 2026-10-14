@@ -1,4 +1,4 @@
-import COpenEXRBridge
+private import COpenEXRBridge
 import Foundation
 
 public final class EXRReader: @unchecked Sendable {

@@ -1,6 +1,6 @@
 #if os(macOS)
 import AppKit
-import CSDL3
+private import CSDL3
 import EngineKernel
 
 /// SDL discards precise units, phase-only packets and momentum phase. Observe
