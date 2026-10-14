@@ -1,4 +1,3 @@
-import CSDL3
 import Foundation
 import MediaRuntime
 
@@ -54,6 +53,11 @@ public actor MediaPlayer {
         }
     }
 }
+
+// Device access is the one SDL-specific part of playback, so the import stays
+// private and matches the access level SDL3AudioBackend.swift uses. Any future
+// SDL usage elsewhere in AudioRuntime must also be private, or the build fails.
+private import CSDL3
 
 private final class PlaybackAudioSink {
     private let stream: OpaquePointer

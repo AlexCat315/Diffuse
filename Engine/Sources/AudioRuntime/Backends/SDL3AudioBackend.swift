@@ -1,8 +1,13 @@
 #if canImport(CSDL3)
 import Foundation
-import CSDL3
 import MediaRuntime
 import GuavaLogging
+
+// SDL3 is an implementation detail of this backend. The access level is load
+// bearing: it confines SDL declarations to this file, so any other file in
+// AudioRuntime that writes `import CSDL3` — or uses an SDL symbol without
+// importing — fails to compile.
+private import CSDL3
 
 /// FFmpeg supplies resident stereo PCM; SDL owns output devices and resampling.
 /// A short queue permits moving-source pan changes without reloading clips.
