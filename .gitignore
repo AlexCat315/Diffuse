@@ -143,3 +143,4 @@ GuavaUI/Browser/.dev-builds/
 
 # Independent media dependency artifacts
 Engine/Media/vendor/
+GuavaUI/Examples/.guava/validation/

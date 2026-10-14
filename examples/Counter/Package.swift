@@ -4,7 +4,7 @@ import PackageDescription
 // Portable example content, deliberately outside the production UI package.
 let package = Package(
     name: "CounterExample",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v13), .iOS(.v16)],
     products: [.library(name: "CounterExample", targets: ["CounterExample"])],
     dependencies: [.package(path: "../../GuavaUI/Portable")],
     targets: [

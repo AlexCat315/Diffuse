@@ -14,7 +14,8 @@
     "platforms": [
       "mac",
       "win",
-      "linux"
+      "linux",
+      "ios"
     ],
     "desktopExecutable": "GuavaUIDemo"
   }
