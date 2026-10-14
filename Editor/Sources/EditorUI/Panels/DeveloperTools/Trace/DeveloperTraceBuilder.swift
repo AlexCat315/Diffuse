@@ -132,7 +132,7 @@ private func developerFrameTraceEvents(samples: [DeveloperTraceSample]) -> [Deve
                 "Pacing Gap \(formatMs(stats.pacingGapMs))",
             ],
             recommendation: recommendation,
-            target: DeveloperDiagnosticTarget(tab: .frame,
+            target: DeveloperDiagnosticTarget(area: .frame,
                                               frameSampleIndex: sample.sampleIndex,
                                               label: "Open Frame")
         )
@@ -177,7 +177,7 @@ private func developerParticleTraceEvents(particleHistory: [EditorParticleDiagno
                 "CPU/GPU render \(sample.cpuRenderInstanceCount)/\(sample.gpuRenderInstanceCount)",
             ],
             recommendation: "Open Particles to inspect emitter hotspots, budget drops, GPU fallback, and render skips.",
-            target: DeveloperDiagnosticTarget(tab: .particles,
+            target: DeveloperDiagnosticTarget(area: .particles,
                                               frameSampleIndex: sample.sampleIndex,
                                               label: "Open Particles")
         )
@@ -206,7 +206,7 @@ private func developerConsoleTraceEvents(consoleEntries: [EditorConsoleEntry],
             primarySignal: "\(count) \(severity == .critical ? "error" : "warning")\(count == 1 ? "" : "s")",
             evidence: filtered.prefix(3).map(\.message),
             recommendation: "Open Console and resolve the newest messages before interpreting downstream symptoms.",
-            target: DeveloperDiagnosticTarget(tab: .console,
+            target: DeveloperDiagnosticTarget(area: .console,
                                               frameSampleIndex: nil,
                                               label: "Open Console")
         ),
@@ -230,7 +230,7 @@ private func developerRenderPassTraceEvents(renderPasses: [DeveloperRenderPassIn
                 "Draw calls \(pass.drawCallCount)",
             ],
             recommendation: pass.recommendation,
-            target: DeveloperDiagnosticTarget(tab: .render,
+            target: DeveloperDiagnosticTarget(area: .render,
                                               frameSampleIndex: nil,
                                               label: "Open Render")
         )

@@ -268,7 +268,7 @@ struct EditorProfilerPanel: View {
                 frameStats: stats, frameHistory: history, renderStats: renderStats,
                 particleSummary: nil, particleAuthoringSummary: nil,
                 particleHotspots: [], selectedEntityID: nil, consoleEntries: []
-            ).filter { $0.target.tab == .frame }
+            ).filter { $0.target.area == .frame }
             DeveloperProfilerWorkbenchView(frameStats: stats,
                                            history: history,
                                            renderStats: renderStats,

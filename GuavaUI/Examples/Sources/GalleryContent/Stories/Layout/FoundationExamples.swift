@@ -30,6 +30,25 @@ struct LayoutFoundationExamples: View {
                     Button("Settings") {}.buttonStyle(.secondary)
                 }.frame(width: narrow ? 180 : 620).debugName("layout-candidates")
             }
+            StorySection("Container queries", "Content follows the width actually available to it, not the window. The switch above resizes this container; each branch owns its own subtree.") {
+                ViewThatFits(threshold: 500) {
+                    Row(spacing: 8) {
+                        chip("Files")
+                        chip("Preview")
+                        chip("Settings")
+                    }
+                } narrow: {
+                    Column(spacing: 8) {
+                        chip("Files")
+                        chip("Preview")
+                        chip("Settings")
+                    }
+                }.frame(width: narrow ? 300 : 620).debugName("layout-view-that-fits")
+                ContainerSizeReader { size in
+                    Text("Container measures \(Int(size.width)) × \(Int(size.height)) points")
+                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                }.frame(width: narrow ? 300 : 620).debugName("layout-container-reader")
+            }
             StorySection("Logical edges and safe area", "Leading/trailing padding mirrors with direction. Nested SafeArea containers consume each supplied host inset once.") {
                 Button(rtl ? "Switch to LTR" : "Switch to RTL") { rtl.toggle() }.buttonStyle(.secondary)
                 SafeArea(.horizontal) {
@@ -71,5 +90,10 @@ struct LayoutFoundationExamples: View {
             Text(title).font(.bodyStrong)
             Text(detail).font(.caption).foregroundColor(.onSurfaceMuted)
         }.padding(12).frame(width: .percent(100)).background(.surfaceVariant).cornerRadius(6)
+    }
+
+    private func chip(_ title: String) -> some View {
+        Text(title).font(.label).padding(horizontal: 12, vertical: 6)
+            .background(.surfaceVariant).cornerRadius(6)
     }
 }

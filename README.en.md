@@ -29,7 +29,7 @@ The repository ships three top-level SwiftPM packages plus an MCP server:
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
 - **`GuavaUI/`** — a declarative, SwiftUI-style UI framework with a NativeRHI renderer. Also the foundation of the in-game UI, injected into the engine via a protocol (no circular dependency).
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
-- **`guava-mcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
+- **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
 
 ---
 
@@ -135,7 +135,7 @@ swift build --package-path GuavaUI  # UI framework
 swift run --package-path examples/HelloUI HelloUI
 swift run --package-path GuavaUI/Examples GuavaUIDemo
 swift build --package-path Editor   # editor (run: swift run --package-path Editor EditorApp)
-swift build --package-path guava-mcp # MCP server (run: swift run GuavaMCP)
+swift build --package-path GuavaMcp # MCP server (run: swift run GuavaMCP)
 ```
 
 GuavaUI's [portable core and DevTools server](GuavaUI/Portable/README.md) build and
@@ -204,7 +204,7 @@ GuavaStudio/
 │   ├── EditorCore/            (editor project/application domain)
 │   └── GameRuntime/           (project simulation and player services)
 ├── examples/                  (HelloUI, GuavaUIStarter, portable Counter, CrystalRush)
-├── guava-mcp/Sources/GuavaMCP/  (MCP server exposing Guava capabilities)
+├── GuavaMcp/Sources/GuavaMCP/  (MCP server exposing Guava capabilities)
 ├── website/                 (Vue 3 website, docs, and community portal)
 ├── docs/                     (architecture, roadmap, component & blueprint docs)
 └── .github/workflows/        (CI matrices for engine / editor / UI / MCP + release)

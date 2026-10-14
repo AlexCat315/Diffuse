@@ -4,11 +4,17 @@ import Foundation
 /// so a tablet with a keyboard can use the same controls as a desktop window.
 public struct UIEnvironment: Sendable, Hashable {
     public struct Viewport: Sendable, Hashable {
+        public static let compactMaximumWidth: Float = 600
+        public static let expandedMinimumWidth: Float = 1000
         public var width: Float = 1280
         public var height: Float = 720
         public var scale: Float = 1
         public init() {}
-        public var widthClass: WidthClass { width < 600 ? .compact : width < 1000 ? .medium : .expanded }
+        public var widthClass: WidthClass {
+            width < Self.compactMaximumWidth ? .compact
+                : width < Self.expandedMinimumWidth ? .medium
+                : .expanded
+        }
     }
     public struct Insets: Sendable, Hashable {
         public var top: Float = 0

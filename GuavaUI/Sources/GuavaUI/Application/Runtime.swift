@@ -33,16 +33,18 @@ public final class Application {
                                        checkpoint: ApplicationCheckpoint? = nil,
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
                                        onDisplayReady: ((AppDisplayHandle) -> Void)? = nil,
+                                       onDiagnosticsReady: ((UIDiagnostics?) -> Void)? = nil,
                                        @ViewBuilder rootView: @escaping () -> Root) throws {
         try PlatformApplication.run {
             try runHosted(config: config, backend: backend, events: events, checkpoint: checkpoint,
-                          onTick: onTick, onDisplayReady: onDisplayReady, rootView: rootView)
+                          onTick: onTick, onDisplayReady: onDisplayReady, onDiagnosticsReady: onDiagnosticsReady, rootView: rootView)
         }
     }
 
     private static func runHosted<Root: View>(config: ApplicationConfiguration, backend: Device?,
         events: PlatformEventBridge, checkpoint: ApplicationCheckpoint?,
         onTick: ((Double) -> Void)?, onDisplayReady: ((AppDisplayHandle) -> Void)?,
+        onDiagnosticsReady: ((UIDiagnostics?) -> Void)?,
         rootView: () -> Root) throws -> Application {
         var logging = config.logging
         try logging.applyEnvironment()
@@ -54,7 +56,8 @@ public final class Application {
                                  events: events,
                                  checkpoint: checkpoint,
                                  onTick: onTick,
-                                 onDisplayReady: onDisplayReady)
+                                 onDisplayReady: onDisplayReady,
+                                 onDiagnosticsReady: onDiagnosticsReady)
         try runtime.start(rootView: rootView())
         return runtime
     }
@@ -73,7 +76,7 @@ public final class Application {
     private let metrics = FrameMetrics()
     private let performanceHUD = PerformanceHUD()
     private var runLoopError: Error?
-    private var devTools: DevTools?
+    private let diagnostics = ApplicationDiagnostics()
 
     private static let forceVSyncOff = ["off", "0", "false", "no"].contains(
         ProcessInfo.processInfo.environment["GUAVA_VSYNC"]?.lowercased() ?? "")
@@ -82,9 +85,10 @@ public final class Application {
 
     private init(config: ApplicationConfiguration, backend: Device?,
                  events: PlatformEventBridge, checkpoint: ApplicationCheckpoint?,
-                 onTick: ((Double) -> Void)?, onDisplayReady: ((AppDisplayHandle) -> Void)?) throws {
+                 onTick: ((Double) -> Void)?, onDisplayReady: ((AppDisplayHandle) -> Void)?,
+                 onDiagnosticsReady: ((UIDiagnostics?) -> Void)?) throws {
         self.config = config
-        self.callbacks = ApplicationCallbacks(events: events, tick: onTick, ready: onDisplayReady)
+        self.callbacks = ApplicationCallbacks(events: events, tick: onTick, ready: onDisplayReady, diagnosticsReady: onDiagnosticsReady)
         self.checkpoint = checkpoint
         mainWindow.isVSyncEnabled = config.rendering.vsync && !Self.forceVSyncOff
         rendering = try AppRenderingContext(device: backend, config: config)
@@ -151,10 +155,15 @@ public final class Application {
             }
             do {
                 try dev.start()
-                self.devTools = dev
+                self.diagnostics.devTools = dev
             } catch {
                 LogSystem.logger("com.guava.ui.app").warning("DevTools server failed to start: \(error)")
             }
+        }
+
+        if callbacks.diagnosticsReady != nil {
+            diagnostics.queries = UIDiagnostics(tree: composition.tree, state: composition.graph.stateRegistry)
+            callbacks.diagnosticsReady?(diagnostics.queries)
         }
 
         ViewportTextureBridgeHolder.current = rendering.viewportTextures
@@ -176,7 +185,7 @@ public final class Application {
         host.onInit = { [weak self] native, w, h in
             guard let self else { return }
             self.host.mainSession?.inputInterceptor = { [weak self] event in
-                MainActor.assumeIsolated { self?.devTools?.interceptInput(event) ?? false }
+                MainActor.assumeIsolated { self?.diagnostics.devTools?.interceptInput(event) ?? false }
             }
             if self.checkpoint != nil {
                 self.host.mainSession?.inputObserver = { [weak self] event in
@@ -210,8 +219,11 @@ public final class Application {
             self?.releaseGPUSurface(for: windowID)
         }
         host.onTeardown = { [weak self] in
-            self?.devTools?.stop()
-            self?.devTools = nil
+            self?.callbacks.diagnosticsReady?(nil)
+            self?.diagnostics.queries?.resetCaptures()
+            self?.diagnostics.queries = nil
+            self?.diagnostics.devTools?.stop()
+            self?.diagnostics.devTools = nil
             self?.releaseGPUSurfaces()
             #if os(iOS)
             services.restore()
@@ -493,7 +505,7 @@ public final class Application {
             return false
         }
 
-        if let dev = devTools {
+        if let dev = diagnostics.devTools {
             if root.isDirty || root.renderDirty {
                 dev.notifyTreeChanged()
             }
@@ -501,18 +513,18 @@ public final class Application {
 
         do {
             guard try windowRenderer.draw(list: composition.drawList, logical: SIMD2(Float(mainWindow.logicalW), Float(mainWindow.logicalH))) else {
-                devTools?.mirrorCapture(drawList: composition.drawList, widthPx: mainWindow.drawableW, heightPx: mainWindow.drawableH,
+                diagnostics.devTools?.mirrorCapture(drawList: composition.drawList, widthPx: mainWindow.drawableW, heightPx: mainWindow.drawableH,
                     logical: (Float(mainWindow.logicalW), Float(mainWindow.logicalH)))
                 let frameEnd = TimingTrace.now()
-                devTools?.timing.record(layoutMs: (layoutEnd - layoutStart) * 1000,
+                diagnostics.devTools?.timing.record(layoutMs: (layoutEnd - layoutStart) * 1000,
                     drawMs: (drawEnd - layoutEnd) * 1000, presentMs: 0,
                     totalMs: (frameEnd - frameStart) * 1000, nodeCount: composition.tree.nodeCount,
                     batchCount: composition.drawList.batches.count, presented: false)
-                devTools?.notifyFrameFinished()
+                diagnostics.devTools?.notifyFrameFinished()
                 host.requestDisplay()
                 return false
             }
-            if let dev = devTools {
+            if let dev = diagnostics.devTools {
                 // Keep synchronous mirror readback behind the primary
                 // swapchain submission. Doing it before acquisition can make
                 // the native surface unavailable on subsequent frames.
@@ -539,7 +551,7 @@ public final class Application {
                                 presentMs: (presentEnd - drawEnd) * 1000)
             }
 
-            if let dev = devTools {
+            if let dev = diagnostics.devTools {
                 dev.timing.record(
                     layoutMs: (layoutEnd - layoutStart) * 1000,
                     drawMs: (drawEnd - layoutEnd) * 1000,
@@ -575,7 +587,7 @@ public final class Application {
     }
 
     private func drawDevToolsOverlay(into list: DrawList) {
-        devTools?.drawInspectionOverlay(into: list)
+        diagnostics.devTools?.drawInspectionOverlay(into: list)
     }
 
     // MARK: - Text environment

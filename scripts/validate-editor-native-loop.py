@@ -80,7 +80,7 @@ def validate(directory, continuous, renderer, configuration="debug", timing_fram
     directory.mkdir()
     editor = executable("Editor", "EditorApp", configuration)
     player = executable("Editor", "GuavaPlayer", configuration)
-    server = executable("guava-mcp", "GuavaMCP")
+    server = executable("GuavaMcp", "GuavaMCP")
     project = directory / "Crystal Rush"
     scripts = project / "Scripts"
     metadata = project / ".guava"

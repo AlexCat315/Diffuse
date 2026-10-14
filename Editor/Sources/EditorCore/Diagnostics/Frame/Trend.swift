@@ -1,29 +1,26 @@
-import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
 import RenderBackend
 import SceneRuntime
 
-struct DeveloperFrameTrendSummary: Equatable {
-    var sampleCount: Int
-    var firstSampleIndex: UInt64
-    var lastSampleIndex: UInt64
-    var averageObservedFPS: Double
-    var averageWorkFPS: Double
-    var averageWorkMs: Double
-    var p95WorkMs: Double
-    var maxWorkMs: Double
-    var averagePacingGapMs: Double
-    var maxPacingGapMs: Double
-    var pacingDominatedSamples: Int
-    var peakWorkSampleIndex: UInt64
-    var maxDrawCallCount: Int
-    var maxPassCount: Int
-    var maxMeshBatchCount: Int
+public struct DeveloperFrameTrendSummary: Codable, Sendable, Equatable {
+    public let sampleCount: Int
+    public let firstSampleIndex: UInt64
+    public let lastSampleIndex: UInt64
+    public let averageObservedFPS: Double
+    public let averageWorkFPS: Double
+    public let averageWorkMs: Double
+    public let p95WorkMs: Double
+    public let maxWorkMs: Double
+    public let averagePacingGapMs: Double
+    public let maxPacingGapMs: Double
+    public let pacingDominatedSamples: Int
+    public let peakWorkSampleIndex: UInt64
+    public let maxDrawCallCount: Int
+    public let maxPassCount: Int
+    public let maxMeshBatchCount: Int
 }
 
-func makeDeveloperFrameTrendSummary(
+public func makeDeveloperFrameTrendSummary(
     history: [EditorFrameStatsHistorySample]
 ) -> DeveloperFrameTrendSummary? {
     guard !history.isEmpty else { return nil }

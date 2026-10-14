@@ -1,5 +1,6 @@
 import GuavaUIWorkspace
 import CapabilityRuntime
+import GuavaUIAgent
 import Foundation
 
 public enum EditorAuthoringDomain: String, Codable, Sendable {
@@ -87,6 +88,7 @@ public struct EditorWorkspaceProfile: Sendable {
 
     public var projectToolNames: Set<String> {
         var names: Set<String> = ["respond", "get_project_info", "save_scene", "get_console_messages"]
+        names.formUnion(UIDiagnosticTools.tools.map(\.name))
         if features.contains(.documents) { names.formUnion(["list_files", "read_file", "write_file"]) }
         if features.contains(.media) { names.formUnion(["get_media_timeline", "add_media_clip", "trim_media_clip", "remove_media_clip", "save_media_timeline", "export_media"]) }
         if !features.contains(.scene) { names.remove("save_scene") }

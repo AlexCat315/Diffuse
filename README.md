@@ -61,7 +61,7 @@ swift build --package-path GuavaUI   # UI 框架
 swift run --package-path examples/HelloUI HelloUI
 swift run --package-path GuavaUI/Examples GuavaUIDemo
 swift build --package-path Editor    # 编辑器（运行: swift run --package-path Editor EditorApp）
-swift build --package-path guava-mcp # MCP 服务（运行: swift run GuavaMCP）
+swift build --package-path GuavaMcp # MCP 服务（运行: swift run GuavaMCP）
 ```
 
 GuavaUI 的[跨平台调试服务与共享核心](GuavaUI/Portable/README.md)可独立构建和测试，
@@ -97,7 +97,7 @@ GuavaStudio/
 ├── Engine/Sources/       渲染 / 场景 / 物理 / 资产 / AI 运行时 / 观察总线 / 影视管线
 ├── GuavaUI/Sources/      声明式 UI 框架（Compose API + NativeRHI 渲染器）
 ├── Editor/Sources/       创作工作站（文档、媒体时间线、场景、Agent）
-├── guava-mcp/Sources/    MCP 服务器（暴露 Guava 能力给 LLM agent）
+├── GuavaMcp/Sources/    MCP 服务器（暴露 Guava 能力给 LLM agent）
 ├── website/              Vue 3 官方网站、文档与社区门户
 ├── docs/                 架构、路线图、组件与蓝图文档
 └── .github/workflows/    CI 矩阵与 release

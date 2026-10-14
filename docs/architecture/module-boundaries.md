@@ -33,6 +33,7 @@ SwiftUI 也把默认使用入口收敛到 `import SwiftUI`、App / Scene / View�
 | `GuavaUICompose` | 原生组件、主题与引擎视口适配 | 通过 `GuavaUI` 获得普通组件 |
 | `GuavaUI` | Application、窗口生命周期、应用资源、诊断接线 | 默认入口 |
 | `GuavaUIWorkspace` | 工作台模型、面板元数据、注册表、停靠交互 | 工具应用显式导入 |
+| `GuavaUIAgent` | 通用工具契约、模型工具循环、MCP、skills 与 UI 诊断查询 | AI 集成显式导入；纯核心在 Portable，无 Editor / GPU 依赖 |
 | `GuavaUIAndroid` | 与 Surface 生命周期独立的 Compose / 输入会话 | JNI Surface 宿主使用 |
 | `GuavaUI/Examples` | GalleryContent、Gallery / Pet 可执行程序 | 示例包，生产框架不依赖它 |
 | `examples/Counter` | 浏览器与原生共用的 Counter 示例及其验收 | 示例包，Portable 不依赖它 |

@@ -88,9 +88,9 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | 双面板与 IDE 工作区 | SplitView 与 Workspace；详见各自的约束与缺口 |
 | 层叠内容 | absolutePosition / zIndex 与 Portal 支持绘制层级；缺独立公共 ZStack/Overlay 布局容器 |
 | 大集合 | VariableVirtualStack 提供已知可变行高、稳定 ID 锚点及窗口化；仍缺未知高度估测和统一加载协议 |
-| 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；仍缺容器查询和多套内容的 ViewThatFits |
+| 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；ContainerSizeReader 发布自身内容盒实测尺寸（容器查询，0.5pt 抗抖动阈值）；ViewThatFits 在容器宽度阈值两侧切换两套内容树，默认阈值与 `UIEnvironment.Viewport.compactMaximumWidth` 一致 |
 | Grid | Grid/GridLayout 有 fixed/flexible/adaptive 列、测量行高及 RTL 对齐；LazyGrid 有等宽列与已知固定/可变行高窗口化；仍缺 span、显式 intrinsic 轨道和二维窗口化 |
-| 应用自定义布局 | 公开 Layout / ProposedViewSize / LayoutSubview / LayoutContainer；仍缺 GeometryReader、baseline/alignment guide API |
+| 应用自定义布局 | 公开 Layout / ProposedViewSize / LayoutSubview / LayoutContainer；容器尺寸查询由 ContainerSizeReader 覆盖；仍缺 baseline/alignment guide API 与 safeAreaInsets/frame-in-container 全量 proxy |
 | 表单/属性布局 | Form / PropertyGrid 已有专门用途；不能代替通用约束或网格系统 |
 | 特殊布局 | layoutDirection 贯通 Flex、自定义布局和逻辑 padding；SafeArea 嵌套消费宿主提供的逻辑 insets；平台自动 insets、完整组件 RTL/双向文字、Anchor/约束布局和 Masonry 仍缺 |
 
@@ -114,6 +114,19 @@ LayoutThatFits([StackLayout(.horizontal, spacing: 12), StackLayout(.vertical, sp
     Button("Save") {}
     Button("Restore") {}
 }
+
+ViewThatFits(threshold: 500) {
+    Row(spacing: 8) { Button("Save") {}; Button("Restore") {} }
+} narrow: {
+    Column(spacing: 8) { Button("Save") {}; Button("Restore") {} }
+}
+
+ContainerSizeReader { size in
+    Text("\(Int(size.width)) × \(Int(size.height)) points available")
+}
+```
+
+`ContainerSizeReader` 在每次布局后发布自身内容盒的实测尺寸（挂在 `layoutDidUpdate`，一次性安装并链接既有回调），内容按可用空间而非窗口重组——网格单元格里的卡片与工具栏按所在容器收窄，不依赖窗口宽度。0.5pt 以内的抖动不发布，循环布局/重发不会互相触发；未测量的首次构建收到 `.zero` 并选取窄分支，下一帧发布实测值后重建。`ViewThatFits` 是它的阈值封装：两个分支各自持有子树，被选中的分支在持续选中期间保持节点身份；阈值默认取 `UIEnvironment.Viewport.compactMaximumWidth`，与窗口级 widthClass 同一断点。threshold 变化时父级重组经 body 视图急切传播（ViewGraph 对用户视图 `replaceView` + `recompose`），不必等待尺寸重发。画廊 `--component layout` 有可交互示例。
 
 SafeArea(.horizontal) { content }
     .safeAreaInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 12))

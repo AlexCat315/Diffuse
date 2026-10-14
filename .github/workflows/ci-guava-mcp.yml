@@ -4,16 +4,18 @@ on:
   push:
     branches: [main]
     paths:
-      - 'guava-mcp/**'
+      - 'GuavaMcp/**'
       - 'Engine/**'
+      - 'GuavaUI/Portable/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - 'bootstrap.py'
       - 'cmake/**'
   pull_request:
     paths:
-      - 'guava-mcp/**'
+      - 'GuavaMcp/**'
       - 'Engine/**'
+      - 'GuavaUI/Portable/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - 'bootstrap.py'
@@ -65,5 +67,5 @@ jobs:
         run: swift --version
 
       - name: Build (release)
-        working-directory: guava-mcp
+        working-directory: GuavaMcp
         run: swift build -c release

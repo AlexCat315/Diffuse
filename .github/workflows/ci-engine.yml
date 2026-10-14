@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'Engine/**'
+      - 'GuavaUI/Portable/**'
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - 'Engine/**'
+      - 'GuavaUI/Portable/**'
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'

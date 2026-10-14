@@ -123,9 +123,9 @@ def main():
     environment = dict(os.environ, GUAVA_MCP_PORT=str(port))
     editor = ROOT / "Editor/.build/out/Products/Debug/EditorApp"
     player = ROOT / "Editor/.build/out/Products/Debug/GuavaPlayer"
-    server = ROOT / "guava-mcp/.build/out/Products/Debug/GuavaMCP"
+    server = ROOT / "GuavaMcp/.build/out/Products/Debug/GuavaMCP"
     # Native SwiftPM uses .build/debug instead of Xcode's Products directory.
-    for name, package in (("editor", "Editor"), ("player", "Editor"), ("server", "guava-mcp")):
+    for name, package in (("editor", "Editor"), ("player", "Editor"), ("server", "GuavaMcp")):
         path = locals()[name]
         if not path.exists():
             replacement = ROOT / package / ".build/debug" / path.name

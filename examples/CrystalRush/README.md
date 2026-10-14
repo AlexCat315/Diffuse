@@ -44,7 +44,7 @@ swift run --package-path Editor EditorApp --project-dir "$PWD/examples/CrystalRu
 
 ```bash
 swift build --package-path Editor
-swift build --package-path guava-mcp
+swift build --package-path GuavaMcp
 python3 scripts/check-guava-mcp-protocol.py
 python3 scripts/validate-crystal-rush-mcp.py
 ```

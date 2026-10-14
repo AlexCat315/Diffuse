@@ -19,6 +19,8 @@ swift run --package-path GuavaUI/Examples PetDemo
 
 框架内部仍按 Compose、Runtime、Text、Portable 划分职责；工作台、DevTools 和原生渲染集成使用显式模块。示例在 `Examples/` 独立包内，正式框架不依赖 Gallery 或 Counter。Counter 的纯 Compose 示例与测试位于 `examples/Counter`，可供浏览器和原生宿主共享。详见[模块边界与迁移](../docs/architecture/module-boundaries.md)。
 
+可选的 `GuavaUIAgent` 产品提供通用工具契约、模型工具调用循环、MCP 端点、skills 和 DevTools 诊断查询。纯模型与协议应用可直接使用 Portable 的 `GuavaUIAgentCore`，无需 Editor 或 GPU。详见[通用 AI 底层与应用适配](../docs/architecture/agent-framework.md)。
+
 需要调整默认行为时，配置对应的职责组：
 
 ```swift

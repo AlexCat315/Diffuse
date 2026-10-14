@@ -124,7 +124,7 @@ jobs:
           swift build -c release --package-path Editor --product EditorApp
           swift build -c release --package-path Editor --product GuavaPlayer
           swift build -c release --package-path Engine --product GuavaPluginHost
-          swift build -c release --package-path guava-mcp
+          swift build -c release --package-path GuavaMcp
 
       - name: Test packages before release
         shell: bash
@@ -143,7 +143,7 @@ jobs:
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
           player_bin="$(swift build -c release --package-path Editor --product GuavaPlayer --show-bin-path)"
           plugin_host_bin="$(swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path GuavaMcp --show-bin-path)"
 
           dist_root="$PWD/dist"
           package_dir="$dist_root/GuavaStudio-macos-$arch"
@@ -245,7 +245,7 @@ jobs:
           swift build -c release --package-path Editor --product EditorApp
           swift build -c release --package-path Editor --product GuavaPlayer
           swift build -c release --package-path Engine --product GuavaPluginHost
-          swift build -c release --package-path guava-mcp
+          swift build -c release --package-path GuavaMcp
 
       - name: Test packages before release
         shell: pwsh
@@ -266,7 +266,7 @@ jobs:
           $editorBin = (swift build -c release --package-path Editor --product EditorApp --show-bin-path).Trim()
           $playerBin = (swift build -c release --package-path Editor --product GuavaPlayer --show-bin-path).Trim()
           $pluginHostBin = (swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path).Trim()
-          $mcpBin = (swift build -c release --package-path guava-mcp --show-bin-path).Trim()
+          $mcpBin = (swift build -c release --package-path GuavaMcp --show-bin-path).Trim()
 
           $distRoot = Join-Path $PWD "dist"
           $packageDir = Join-Path $distRoot "GuavaStudio-windows-x86_64"
@@ -410,7 +410,7 @@ jobs:
           swift build -c release --package-path Editor --product EditorApp
           swift build -c release --package-path Editor --product GuavaPlayer
           swift build -c release --package-path Engine --product GuavaPluginHost
-          swift build -c release --package-path guava-mcp
+          swift build -c release --package-path GuavaMcp
 
       - name: Test packages before release
         shell: bash
@@ -428,7 +428,7 @@ jobs:
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
           player_bin="$(swift build -c release --package-path Editor --product GuavaPlayer --show-bin-path)"
           plugin_host_bin="$(swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path GuavaMcp --show-bin-path)"
 
           dist_root="$PWD/dist"
           package_dir="$dist_root/GuavaStudio-linux-x86_64"

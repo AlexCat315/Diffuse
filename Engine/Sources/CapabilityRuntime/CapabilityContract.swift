@@ -113,43 +113,25 @@ public struct CapabilityContract: Codable, Sendable, Equatable {
         return "cap_\(prefix)_v\(version)_\(schemaHash.prefix(8))"
     }
 
+    private func toolDescriptor(name: String? = nil) -> AgentTool {
+        AgentTool(name: name ?? toolName, description: description, schema: inputSchema,
+                  readOnly: access == .read)
+    }
+
     public func anthropicToolDefinition() -> [String: Any] {
-        [
-            "name": toolName,
-            "description": description,
-            "input_schema": inputSchema.jsonObject(),
-        ]
+        toolDescriptor().providerDefinition(format: .anthropic)
     }
 
     public func openAIToolDefinition() -> [String: Any] {
-        [
-            "type": "function",
-            "function": [
-                "name": toolName,
-                "description": description,
-                "parameters": inputSchema.jsonObject(),
-            ] as [String: Any],
-        ]
+        toolDescriptor().providerDefinition(format: .openAICompatible)
     }
 
     public func openAIResponsesToolDefinition(name: String? = nil) -> [String: Any] {
-        [
-            "type": "function",
-            "name": name ?? toolName,
-            // Guava validates its canonical schemas locally; optional properties
-            // must stay optional on the Responses wire format.
-            "strict": false,
-            "description": description,
-            "parameters": inputSchema.jsonObject(),
-        ]
+        toolDescriptor(name: name).providerDefinition(format: .openAIResponses)
     }
 
     public func mcpToolDefinition() -> [String: Any] {
-        [
-            "name": toolName,
-            "description": description,
-            "inputSchema": inputSchema.jsonObject(),
-        ]
+        toolDescriptor().mcpDefinition
     }
 
     /// Digest of the already validated canonical capability input. This is an

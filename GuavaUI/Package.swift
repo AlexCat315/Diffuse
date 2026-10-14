@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
         .library(name: "GuavaUI", targets: ["GuavaUI"]),
         .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
+        .library(name: "GuavaUIAgent", targets: ["GuavaUIAgent"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -20,6 +21,11 @@ let package = Package(
         .package(path: "../Engine/Logging"),
     ],
     targets: [
+        .target(name: "GuavaUIAgent", dependencies: [
+            .product(name: "GuavaUIAgentCore", package: "Portable"),
+            .product(name: "GuavaUIAgentTransport", package: "Portable"),
+            .product(name: "GuavaUIDevToolsScene", package: "Portable"),
+        ]),
         .target(name: "GuavaUIAndroid", dependencies: ["GuavaUICompose", "GuavaUIRuntime", "GuavaUIDevTools"], path: "Platforms/Android"),
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。

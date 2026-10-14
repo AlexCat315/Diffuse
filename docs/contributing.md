@@ -27,7 +27,7 @@ GuavaStudio 采用 Apache-2.0 许可证。贡献前请确保变更边界清晰�
 swift test --package-path Engine
 swift test --package-path GuavaUI
 swift test --package-path Editor
-swift build --package-path guava-mcp
+swift build --package-path GuavaMcp
 ```
 
 涉及 C/C++ 桥接或第三方版本时，至少在受影响平台重新运行 `python bootstrap.py --force`。文档贡献应保持中英文核心页面的 `translationKey` 对齐。

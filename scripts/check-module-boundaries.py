@@ -33,6 +33,14 @@ def check():
     assert "GuavaUIWorkspace" not in dependencies
     for package in (ui, manifest("GuavaUI/Portable")):
         assert not any("examples" in str(path).lower() for path in local_dependencies(package))
+    portable = manifest("GuavaUI/Portable")
+    core = next(target for target in portable["targets"] if target["name"] == "GuavaUIAgentCore")
+    assert core["dependencies"] == [], "Generic agent contracts, MCP and skills must not depend on UI or Engine domains"
+    assert ROOT / "Engine" not in local_dependencies(portable)
+    assert ROOT / "Editor" not in local_dependencies(ui)
+    assert "GuavaUIAgent" in products
+    capability = next(target for target in manifest("Engine")["targets"] if target["name"] == "CapabilityRuntime")
+    assert {item["product"][0] for item in capability["dependencies"] if "product" in item} == {"GuavaUIAgentCore"}
     workspace = manifest(".")
     assert local_dependencies(workspace) == {ROOT / "Editor"}
     assert len(workspace["targets"]) == 1, "The workspace must not duplicate Editor's target graph"
@@ -66,7 +74,7 @@ def check():
     assert not (example / "android.swift").exists()
     assert not (example / "guava-android.json").exists()
     configuration = json.loads((example / "guava.json").read_text())
-    assert set(configuration["targets"]["platforms"]) == {"mac", "win", "linux", "android"}
+    assert set(configuration["targets"]["platforms"]) == {"mac", "win", "linux", "android", "ios"}
     assert (example / configuration["toolchain"]["enginePath"]).resolve() == ROOT
     assert not (example / "Sources/DesktopApp").exists()
     starter = manifest("examples/GuavaUIStarter")

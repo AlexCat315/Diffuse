@@ -17,7 +17,7 @@ public struct AccessibilityState: Sendable, Equatable, Codable {
     public init() {}
 }
 
-public struct AccessibilitySemantics: Sendable, Equatable {
+public struct AccessibilitySemantics: Sendable, Equatable, Codable {
     public var role: AccessibilityRole
     public var label = ""
     public var value = ""

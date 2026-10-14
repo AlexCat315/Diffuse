@@ -1,11 +1,8 @@
-import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
 import RenderBackend
 import SceneRuntime
 
-func makeDeveloperWorkbenchIssues(
+public func makeDeveloperWorkbenchIssues(
     frameStats: EditorFrameStats,
     frameHistory: [EditorFrameStatsHistorySample],
     renderStats: RenderFrameStats,
@@ -31,7 +28,7 @@ func makeDeveloperWorkbenchIssues(
                 "Work \(formatMs(frameStats.workMs))",
             ],
             recommendation: "Treat this as event-loop or viewport pacing first; rendering work is not the primary explanation until work time rises.",
-            target: DeveloperDiagnosticTarget(tab: .frame,
+            target: DeveloperDiagnosticTarget(area: .frame,
                                               frameSampleIndex: latestSampleIndex,
                                               label: "Open Frame")
         ))
@@ -48,7 +45,7 @@ func makeDeveloperWorkbenchIssues(
                 "Likely \(bottleneck(frameStats))",
             ],
             recommendation: "Inspect the selected frame breakdown before changing quality settings; the bottleneck label only points to the first layer.",
-            target: DeveloperDiagnosticTarget(tab: .frame,
+            target: DeveloperDiagnosticTarget(area: .frame,
                                               frameSampleIndex: latestSampleIndex,
                                               label: "Open Frame")
         ))
@@ -64,7 +61,7 @@ func makeDeveloperWorkbenchIssues(
                 "Likely \(bottleneck(frameStats))",
             ],
             recommendation: "Use the frame timeline to find whether this is a one-frame spike or sustained frame pressure.",
-            target: DeveloperDiagnosticTarget(tab: .frame,
+            target: DeveloperDiagnosticTarget(area: .frame,
                                               frameSampleIndex: latestSampleIndex,
                                               label: "Open Frame")
         ))
@@ -85,7 +82,7 @@ func makeDeveloperWorkbenchIssues(
                 "Pacing-dominated \(trend.pacingDominatedSamples)/\(trend.sampleCount)",
             ],
             recommendation: "Open the peak sample and compare it with the latest frame before tuning render or simulation settings.",
-            target: DeveloperDiagnosticTarget(tab: .frame,
+            target: DeveloperDiagnosticTarget(area: .frame,
                                               frameSampleIndex: trend.peakWorkSampleIndex,
                                               label: "Open Peak Frame")
         ))
@@ -104,7 +101,7 @@ func makeDeveloperWorkbenchIssues(
                 "Mesh batches \(renderStats.meshBatchCount)",
             ],
             recommendation: "Open the render debugger and inspect pass encode time before reducing scene content broadly.",
-            target: DeveloperDiagnosticTarget(tab: .render,
+            target: DeveloperDiagnosticTarget(area: .render,
                                               frameSampleIndex: nil,
                                               label: "Open Render")
         ))
@@ -123,7 +120,7 @@ func makeDeveloperWorkbenchIssues(
                 slowPass.signal,
             ],
             recommendation: slowPass.recommendation,
-            target: DeveloperDiagnosticTarget(tab: .render,
+            target: DeveloperDiagnosticTarget(area: .render,
                                               frameSampleIndex: nil,
                                               label: "Open Render")
         ))
@@ -140,7 +137,7 @@ func makeDeveloperWorkbenchIssues(
             primarySignal: particleSummary.primarySignal,
             evidence: particleSummary.details,
             recommendation: particleSummary.recommendation,
-            target: DeveloperDiagnosticTarget(tab: .particles,
+            target: DeveloperDiagnosticTarget(area: .particles,
                                               frameSampleIndex: nil,
                                               label: "Open Particles")
         ))
@@ -158,7 +155,7 @@ func makeDeveloperWorkbenchIssues(
             primarySignal: particleAuthoringSummary.primarySignal,
             evidence: particleAuthoringSummary.details,
             recommendation: particleAuthoringSummary.recommendation,
-            target: DeveloperDiagnosticTarget(tab: .particles,
+            target: DeveloperDiagnosticTarget(area: .particles,
                                               frameSampleIndex: nil,
                                               label: "Open Particles")
         ))
@@ -174,7 +171,7 @@ func makeDeveloperWorkbenchIssues(
             primarySignal: hotspot.primarySignal,
             evidence: hotspot.details,
             recommendation: hotspot.recommendation,
-            target: DeveloperDiagnosticTarget(tab: .particles,
+            target: DeveloperDiagnosticTarget(area: .particles,
                                               frameSampleIndex: nil,
                                               label: "Open Particles")
         ))
@@ -191,7 +188,7 @@ func makeDeveloperWorkbenchIssues(
             primarySignal: "\(errorCount) error\(errorCount == 1 ? "" : "s") recorded",
             evidence: consoleEntries.reversed().filter { $0.severity == .error }.prefix(3).map(\.message),
             recommendation: "Open the console and resolve the newest errors before interpreting downstream runtime symptoms.",
-            target: DeveloperDiagnosticTarget(tab: .console,
+            target: DeveloperDiagnosticTarget(area: .console,
                                               frameSampleIndex: nil,
                                               label: "Open Console")
         ))
@@ -204,7 +201,7 @@ func makeDeveloperWorkbenchIssues(
             primarySignal: "\(warningCount) warning\(warningCount == 1 ? "" : "s") recorded",
             evidence: consoleEntries.reversed().filter { $0.severity == .warning }.prefix(3).map(\.message),
             recommendation: "Review the newest warnings and correlate them with the active scene or selected entity.",
-            target: DeveloperDiagnosticTarget(tab: .console,
+            target: DeveloperDiagnosticTarget(area: .console,
                                               frameSampleIndex: nil,
                                               label: "Open Console")
         ))
@@ -223,7 +220,7 @@ func makeDeveloperWorkbenchIssues(
                 "Console entries \(consoleEntries.count)",
             ],
             recommendation: "Use Profiler and Monitors as the entry points, then drill into Render or Particles for subsystem-specific evidence.",
-            target: DeveloperDiagnosticTarget(tab: .frame,
+            target: DeveloperDiagnosticTarget(area: .frame,
                                               frameSampleIndex: latestSampleIndex,
                                               label: "Open Frame")
         ))
@@ -254,7 +251,7 @@ private func developerDiagnosticIssuePrecedes(_ lhs: DeveloperDiagnosticIssue,
     return lhs.id < rhs.id
 }
 
-func developerDiagnosticSeverityRank(_ severity: DeveloperDiagnosticSeverity) -> Int {
+public func developerDiagnosticSeverityRank(_ severity: DeveloperDiagnosticSeverity) -> Int {
     switch severity {
     case .critical: 4
     case .warning: 3

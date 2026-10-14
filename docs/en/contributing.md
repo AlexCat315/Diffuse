@@ -25,7 +25,7 @@ GuavaStudio is licensed under Apache-2.0. Keep changes focused and add proportio
 swift test --package-path Engine
 swift test --package-path GuavaUI
 swift test --package-path Editor
-swift build --package-path guava-mcp
+swift build --package-path GuavaMcp
 ```
 
 Changes to C/C++ bridges or third-party versions should include a forced native rebuild on affected platforms. Core website documents keep matching `translationKey` values across Chinese and English.

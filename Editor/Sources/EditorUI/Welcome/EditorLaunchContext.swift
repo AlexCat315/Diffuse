@@ -5,6 +5,7 @@ import Foundation
 import GuavaUI
 import GuavaUIRuntime
 import GuavaUIWorkspace
+import GuavaUIAgent
 import PlatformShell
 import NativeRHI
 
@@ -15,6 +16,7 @@ final class EditorLaunchContext: @unchecked Sendable {
     private var workspaceSubscriptionToken: WorkspaceController.SubscriptionToken?
     private var workspacePersistenceTask: Task<Void, Never>?
     private(set) var display: AppDisplayHandle?
+    private var diagnostics: UIDiagnostics?
     private var shouldExpandEditorWindow = false
     private var settingsWindowID: WindowID?
     private var nativeMenuState: NativeMenuState?
@@ -52,6 +54,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             MainActor.assumeIsolated { self?.closeProject() }
         }
         app.bootstrap()
+        app.setUIDiagnostics(diagnostics)
 
         if let s = shellState {
             app.store.dispatch(.setInteractionMode(s.workspace.interactionMode))
@@ -109,6 +112,11 @@ final class EditorLaunchContext: @unchecked Sendable {
                                 registry: bundle.registry,
                                 display: display)
         }
+    }
+
+    @MainActor func wireDiagnostics(_ diagnostics: UIDiagnostics?) {
+        self.diagnostics = diagnostics
+        bundle?.app.setUIDiagnostics(diagnostics)
     }
 
     @MainActor func tick(deltaTime: Double) {

@@ -1,19 +1,16 @@
-import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
 import RenderBackend
 import SceneRuntime
 
-struct DeveloperRenderPassInspection: Equatable {
-    var name: String
-    var drawCallCount: Int
-    var encodeNS: UInt64
-    var signal: String
-    var recommendation: String
+public struct DeveloperRenderPassInspection: Codable, Sendable, Equatable {
+    public let name: String
+    public let drawCallCount: Int
+    public let encodeNS: UInt64
+    public let signal: String
+    public let recommendation: String
 }
 
-func makeDeveloperRenderPassBreakdown(renderStats: RenderFrameStats) -> [DeveloperRenderPassInspection] {
+public func makeDeveloperRenderPassBreakdown(renderStats: RenderFrameStats) -> [DeveloperRenderPassInspection] {
     var passNames: [RenderPassKind] = []
     for pass in renderStats.activePasses {
         if !passNames.contains(pass) {

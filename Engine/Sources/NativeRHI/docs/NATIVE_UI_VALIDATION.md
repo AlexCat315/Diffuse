@@ -246,7 +246,7 @@ GuavaUI 全包回归通过，随后修改的数组计数读取经 Release 的 11
 
 ```sh
 swift build --package-path Editor --jobs 4
-swift build --package-path guava-mcp --product GuavaMCP
+swift build --package-path GuavaMcp --product GuavaMCP
 python3 scripts/validate-editor-native-loop.py --renderer both
 # 默认检查两种循环；--mode event-driven / continuous 可单独检查。
 # 临时目录保留每条路径的启动／暂停 JPEG、渲染状态、比较报告和日志。

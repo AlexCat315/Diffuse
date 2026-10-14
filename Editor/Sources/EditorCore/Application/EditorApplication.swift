@@ -15,6 +15,7 @@ import RenderBackend
 import NativeRHI
 import SceneRuntime
 import GuavaUICompose
+import GuavaUIAgent
 import GuavaUIRuntime
 import Foundation
 import SIMDCompat
@@ -48,6 +49,7 @@ public final class EditorApplication: @unchecked Sendable {
     let perceptionService: PerceptionService
     let events: PlatformEventBridge
     let subscriptions = EditorSubscriptions()
+    let diagnosticSession = EditorDiagnosticSession()
     var pendingViewportEvents: [InputEvent] = []
     var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
@@ -67,7 +69,7 @@ public final class EditorApplication: @unchecked Sendable {
     var projectToolBuildInProgress = false
     var isShuttingDown = false
     public var isActive: Bool { !isShuttingDown }
-    let mcpBridge = MCPBridge()
+    var mcpBridge: AgentLocalServer?
     let mcpCapabilitySessions = CapabilityExposureSessionStore()
     var pluginCapabilityExecutor: PluginCapabilityExecutor?
     let trustedPluginHostExecutableURL: URL?
@@ -369,6 +371,7 @@ public final class EditorApplication: @unchecked Sendable {
         subscriptions.console.stop()
         guard !isShuttingDown else { return }
         isShuttingDown = true
+        diagnosticSession.close()
         scene.scriptRuntime.isGameplayExecutionEnabled = false
         scene.scriptRuntime.stop(in: &scene.scene)
         workstation.scripts.shutdown()
@@ -394,7 +397,8 @@ public final class EditorApplication: @unchecked Sendable {
         }
         flushContextMemoryBeforeShutdown()
         logConsole("Editor runtime shutdown")
-        mcpBridge.stop()
+        mcpBridge?.stop()
+        mcpBridge = nil
         pluginSession.stop()
         pluginCapabilityExecutor = nil
         if let token = subscriptions.events {

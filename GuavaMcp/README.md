@@ -6,9 +6,9 @@
 
 ```bash
 swift build --package-path Editor
-swift build --package-path guava-mcp
+swift build --package-path GuavaMcp
 swift run --package-path Editor EditorApp --project-dir "$PWD/examples/CrystalRush"
-swift build --package-path guava-mcp --show-bin-path
+swift build --package-path GuavaMcp --show-bin-path
 ```
 
 最后一个命令返回目录；使用其中的 `GuavaMCP` 作为下面 `command` 的绝对路径：
@@ -24,7 +24,9 @@ swift build --package-path guava-mcp --show-bin-path
 }
 ```
 
-Editor 默认监听 `127.0.0.1:9898`，支持多个连接和异步脚本编译。需要更换端口时，为 Editor 和 MCP 同时设置 `GUAVA_MCP_PORT`。当前 TCP 桥接使用 Apple Network.framework；本次连通与游戏验证平台是 macOS，Windows/Linux 的桥接尚未实现。
+Editor 默认监听 `127.0.0.1:9898`，支持多个连接和异步脚本编译。需要更换端口时，为 Editor 和 MCP 同时设置 `GUAVA_MCP_PORT`。TCP 桥接已迁到 GuavaUI 的 `AgentLocalServer`，使用 SwiftNIO；MCP 协议分发复用 `MCPServer`。实现支持 macOS/Linux/Windows，本次构建与连通验证平台是 macOS。
+
+AI 与 MCP 共用诊断工具：`get_diagnostics`、`query_ui_nodes`、`query_ui_recomposition`、`query_ui_state`、`capture_ui_trace`、`get_ui_trace`、`compare_ui_traces`。`list_skills` / `read_skill` 提供任务指引，MCP 也通过 `prompts/list` / `prompts/get` 暴露同一份 skill。图形 Editor 自动接入 UI 查询；headless Editor 可读领域诊断和 skills，UI 查询明确返回 unavailable。详见 [通用 AI 底层](../docs/architecture/agent-framework.md)。
 
 协议协商支持 `2024-11-05`、`2025-03-26`、`2025-06-18`、`2025-11-25`；不是对后续 MCP 版本全部特性的声明。能力搜索后会更新工具列表，客户端应处理 `notifications/tools/list_changed`。
 

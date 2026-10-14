@@ -7,6 +7,8 @@ let package = Package(
     name: "GuavaUIPortable",
     platforms: [.macOS(.v13), .iOS(.v16)],
     products: [
+        .library(name: "GuavaUIAgentCore", targets: ["GuavaUIAgentCore"]),
+        .library(name: "GuavaUIAgentTransport", targets: ["GuavaUIAgentTransport"]),
         .library(name: "GuavaUIScene", targets: ["GuavaUIScene"]),
         .library(name: "GuavaUIComposeCore", targets: ["GuavaUIComposeCore"]),
         .library(name: "CYoga", targets: ["CYoga"]),
@@ -23,10 +25,19 @@ let package = Package(
         .package(path: "../../Engine/Logging"),
     ],
     targets: [
+        .target(name: "GuavaUIAgentCore"),
+        .target(name: "GuavaUIAgentTransport", dependencies: [
+            "GuavaUIAgentCore", .product(name: "NIOCore", package: "swift-nio"),
+            .product(name: "NIOPosix", package: "swift-nio"),
+        ]),
+        .testTarget(name: "GuavaUIAgentTransportTests", dependencies: [
+            "GuavaUIAgentTransport", .product(name: "NIOEmbedded", package: "swift-nio"),
+        ]),
+        .testTarget(name: "GuavaUIAgentCoreTests", dependencies: ["GuavaUIAgentCore"]),
         .target(name: "CYoga", dependencies: [.product(name: "yoga", package: "yoga")], publicHeadersPath: "include"),
         .target(name: "GuavaUIScene", dependencies: ["GuavaUICore", "CYoga", .product(name: "GuavaPlatformCore", package: "PlatformCore")]),
         .target(name: "GuavaUIComposeCore", dependencies: ["GuavaUIScene"]),
-        .target(name: "GuavaUIDevToolsScene", dependencies: ["GuavaUIScene", "GuavaUIDevToolsProtocol"]),
+        .target(name: "GuavaUIDevToolsScene", dependencies: ["GuavaUIScene", "GuavaUIDevToolsProtocol", "GuavaUIAgentCore"]),
         .target(name: "GuavaUICore"),
         .testTarget(name: "GuavaUISceneTests", dependencies: ["GuavaUIComposeCore", "GuavaUIDevToolsScene", "GuavaUIDevToolsProtocol"]),
         .testTarget(name: "GuavaUICoreTests", dependencies: ["GuavaUICore"]),

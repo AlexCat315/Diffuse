@@ -1,5 +1,5 @@
+@testable import EditorCore
 @testable import EditorUI
-import EditorCore
 import RenderBackend
 import SceneRuntime
 import Testing
@@ -557,7 +557,7 @@ struct DeveloperParticleDiagnosticsTests {
         let issue = issues.first { $0.scope == .particles }
         #expect(issue?.severity == .warning)
         #expect(issue?.title == "Spawn budget throttling")
-        #expect(issue?.target.tab == .particles)
+        #expect(issue?.target.area == .particles)
         #expect(issue?.recommendation.contains("Max Spawn / Frame") == true)
     }
 
@@ -608,7 +608,7 @@ struct DeveloperParticleDiagnosticsTests {
         let spike = trace.events.first { $0.id == "frame.2" }
         #expect(spike?.track == .frame)
         #expect(spike?.severity == .warning)
-        #expect(spike?.target.tab == .frame)
+        #expect(spike?.target.area == .frame)
         #expect(trace.samples.last?.issueIDs.contains("frame.2") == true)
     }
 
@@ -667,7 +667,7 @@ struct DeveloperParticleDiagnosticsTests {
         let console = trace.events.first { $0.track == .console }
         #expect(console?.severity == .critical)
         #expect(console?.primarySignal == "1 error")
-        #expect(console?.target.tab == .console)
+        #expect(console?.target.area == .console)
         #expect(trace.samples.last?.consoleSeverity == .critical)
     }
 
@@ -703,7 +703,7 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(event?.severity == .warning)
         #expect(event?.title == "Particle spawn drops")
         #expect(event?.primarySignal == "40 dropped spawns")
-        #expect(event?.target.tab == .particles)
+        #expect(event?.target.area == .particles)
         #expect(trace.samples.first?.particleDroppedCount == 40)
     }
 
@@ -733,7 +733,7 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(trace.renderPasses.first?.name == RenderPassKind.particles.rawValue)
         let event = trace.events.first { $0.track == .renderPass }
         #expect(event?.severity == .critical)
-        #expect(event?.target.tab == .render)
+        #expect(event?.target.area == .render)
         #expect(event?.sampleIndex == 9)
     }
 
@@ -749,7 +749,7 @@ struct DeveloperParticleDiagnosticsTests {
             primarySignal: "10 dropped spawns",
             evidence: ["Requested 20, spawned 10"],
             recommendation: "Open particle diagnostics.",
-            target: DeveloperDiagnosticTarget(tab: .particles,
+            target: DeveloperDiagnosticTarget(area: .particles,
                                               frameSampleIndex: 13,
                                               label: "Open Particles")
         )
@@ -769,7 +769,7 @@ struct DeveloperParticleDiagnosticsTests {
 
         let event = trace.events.first { $0.id == "issue.particles.test" }
         #expect(event?.track == .particles)
-        #expect(event?.target.tab == .particles)
+        #expect(event?.target.area == .particles)
         #expect(event?.target.frameSampleIndex == 13)
         #expect(event?.target.label == "Open Particles")
     }
@@ -993,7 +993,7 @@ struct DeveloperParticleDiagnosticsTests {
             primarySignal: "1 warning recorded",
             evidence: ["Shader variant missing"],
             recommendation: "Open console.",
-            target: DeveloperDiagnosticTarget(tab: .console,
+            target: DeveloperDiagnosticTarget(area: .console,
                                               frameSampleIndex: nil,
                                               label: "Open Console")
         )
@@ -1065,7 +1065,7 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("trace event sort modes order rows predictably")
     func traceEventSortModesOrderRowsPredictably() {
-        let target = DeveloperDiagnosticTarget(tab: .frame,
+        let target = DeveloperDiagnosticTarget(area: .frame,
                                                frameSampleIndex: nil,
                                                label: "Open")
         let trace = DeveloperTraceSnapshot(
@@ -1139,7 +1139,7 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("trace adjacent event navigation clamps to visible rows")
     func traceAdjacentEventNavigationClampsToVisibleRows() {
-        let target = DeveloperDiagnosticTarget(tab: .frame,
+        let target = DeveloperDiagnosticTarget(area: .frame,
                                                frameSampleIndex: nil,
                                                label: "Open")
         let events = [
@@ -1197,7 +1197,7 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("trace investigation summary identifies hot sample and focus event")
     func traceInvestigationSummaryIdentifiesHotSampleAndFocusEvent() {
-        let target = DeveloperDiagnosticTarget(tab: .frame,
+        let target = DeveloperDiagnosticTarget(area: .frame,
                                                frameSampleIndex: nil,
                                                label: "Open")
         let events = [
@@ -1267,10 +1267,10 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("trace sample investigation ranks lead marker and deduplicates jump targets")
     func traceSampleInvestigationRanksLeadMarkerAndDeduplicatesJumpTargets() {
-        let frameTarget = DeveloperDiagnosticTarget(tab: .frame,
+        let frameTarget = DeveloperDiagnosticTarget(area: .frame,
                                                     frameSampleIndex: 20,
                                                     label: "Open Frame")
-        let renderTarget = DeveloperDiagnosticTarget(tab: .render,
+        let renderTarget = DeveloperDiagnosticTarget(area: .render,
                                                      frameSampleIndex: nil,
                                                      label: "Open Render")
         let trace = DeveloperTraceSnapshot(
@@ -1316,7 +1316,7 @@ struct DeveloperParticleDiagnosticsTests {
                                     primarySignal: "Console",
                                     evidence: [],
                                     recommendation: "Open console",
-                                    target: DeveloperDiagnosticTarget(tab: .console,
+                                    target: DeveloperDiagnosticTarget(area: .console,
                                                                       frameSampleIndex: nil,
                                                                       label: "Open Console")),
             ],
@@ -1338,7 +1338,7 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("trace sample context compares neighboring samples")
     func traceSampleContextComparesNeighboringSamples() {
-        let target = DeveloperDiagnosticTarget(tab: .frame,
+        let target = DeveloperDiagnosticTarget(area: .frame,
                                                frameSampleIndex: nil,
                                                label: "Open")
         let trace = DeveloperTraceSnapshot(

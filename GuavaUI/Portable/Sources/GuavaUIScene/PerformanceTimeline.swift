@@ -13,6 +13,8 @@ public final class PerformanceTimeline {
         public var reasons: [RecompositionReason]
     }
     public private(set) var enabled = false
+    private var externallyEnabled = false
+    private var activeRecordings = 0
     private var buffer: [Event] = []
     private var nextIndex = 0
     public var events: [Event] {
@@ -30,10 +32,25 @@ public final class PerformanceTimeline {
     }
     public private(set) var dropped = 0
     private var sequence: UInt64 = 0
+    public var latestSequence: UInt64 { sequence }
     private var origin = ContinuousClock.now
     private let capacity: Int
     public init(capacity: Int = 2048) { self.capacity = max(1, min(8192, capacity)) }
     public func setEnabled(_ value: Bool) {
+        externallyEnabled = value
+        synchronizeRecording()
+    }
+    /// Runs a bounded capture without stopping another consumer's recording.
+    /// All access, including the operation, remains on the owning scene actor.
+    @MainActor
+    public func record<T>(_ operation: @MainActor () async throws -> T) async rethrows -> T {
+        activeRecordings += 1
+        synchronizeRecording()
+        defer { activeRecordings -= 1; synchronizeRecording() }
+        return try await operation()
+    }
+    private func synchronizeRecording() {
+        let value = externallyEnabled || activeRecordings > 0
         if value && !enabled { buffer.removeAll(keepingCapacity: true); nextIndex = 0; dropped = 0; origin = .now }
         enabled = value
     }

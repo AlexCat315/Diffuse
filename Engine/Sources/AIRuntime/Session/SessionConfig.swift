@@ -1,11 +1,6 @@
 import Foundation
 
-/// Which wire format the inference endpoint speaks.
-public enum SessionAPIFormat: Sendable {
-    case anthropic
-    case openAIResponses
-    case openAICompatible
-}
+@_exported import GuavaUIAgentCore
 
 /// Named assets available in the project, surfaced in the system prompt so Claude
 /// can use correct clip/mesh names rather than guessing.

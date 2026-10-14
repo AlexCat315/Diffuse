@@ -100,6 +100,7 @@ let package = Package(
         .executable(name: "GuavaPluginHost", targets: ["GuavaPluginHost"]),
     ],
     dependencies: [
+        .package(path: "../GuavaUI/Portable"),
         .package(path: "PlatformCore"),
         .package(path: "Logging"),
         .package(path: "Media"),
@@ -329,6 +330,7 @@ let package = Package(
         .target(
             name: "AIRuntime",
             dependencies: [
+                .product(name: "GuavaUIAgentCore", package: "Portable"),
                 "SIMDCompat",
                 "SceneRuntime",
                 "ScriptRuntime",
@@ -340,7 +342,8 @@ let package = Package(
             ]
         ),
         .target(
-            name: "CapabilityRuntime"
+            name: "CapabilityRuntime",
+            dependencies: [.product(name: "GuavaUIAgentCore", package: "Portable")]
         ),
         .target(
             name: "PluginRuntime",

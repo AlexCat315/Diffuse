@@ -214,136 +214,61 @@ func capabilitySearchText(_ response: [String: Any]) -> String {
     return jsonText(publicResponse)
 }
 
-func toolResult(id: Any, text: String, isError: Bool = false) {
-    writeResponse([
-        "jsonrpc": "2.0",
-        "id": id,
-        "result": [
-            "content": [["type": "text", "text": text]],
-            "isError": isError,
-        ] as [String: Any],
-    ])
-}
-
-func errorResponse(id: Any, code: Int = -32603, message: String) {
-    writeResponse([
-        "jsonrpc": "2.0",
-        "id": id,
-        "error": ["code": code, "message": message] as [String: Any],
-    ])
-}
-
-func handle(_ msg: [String: Any]) {
-    let method = msg["method"] as? String ?? ""
-    let id = msg["id"]
-    let params = msg["params"] as? [String: Any] ?? [:]
-
-    // Notifications — no response
-    if msg["id"] == nil {
-        return
+func toolDescriptors() throws -> [AgentTool] {
+    _ = openCapabilitySessionIfNeeded()
+    let definitions = [toolSearchCapabilities, toolSubmitPlan]
+        + activeCapabilityTools.keys.sorted().compactMap { activeCapabilityTools[$0] }
+    let capabilities = try definitions.map { definition -> AgentTool in
+        let schema = try JSONDecoder().decode(JSONSchema.self,
+            from: JSONSerialization.data(withJSONObject: definition["inputSchema"] ?? [:]))
+        return AgentTool(name: definition["name"] as? String ?? "",
+            description: definition["description"] as? String ?? "", schema: schema,
+            readOnly: (definition["annotations"] as? [String: Any])?["readOnlyHint"] as? Bool ?? false)
     }
+    return ProjectToolset.tools + capabilities
+}
 
-    switch method {
-    case "initialize":
-        let supportedVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
-        let requestedVersion = params["protocolVersion"] as? String ?? ""
-        writeResponse([
-            "jsonrpc": "2.0",
-            "id": id as Any,
-            "result": [
-                "protocolVersion": supportedVersions.contains(requestedVersion) ? requestedVersion : supportedVersions[0],
-                "capabilities": ["tools": ["listChanged": true] as [String: Any]] as [String: Any],
-                "serverInfo": ["name": "guava", "version": "0.0.9"] as [String: Any],
-            ] as [String: Any],
-        ])
-
-    case "ping":
-        writeResponse(["jsonrpc": "2.0", "id": id as Any, "result": [:] as [String: Any]])
-
-    case "tools/list":
-        _ = openCapabilitySessionIfNeeded()
-        let generatedTools = activeCapabilityTools.keys.sorted().compactMap { activeCapabilityTools[$0] }
-        writeResponse([
-            "jsonrpc": "2.0",
-            "id": id as Any,
-            "result": ["tools": [toolSearchCapabilities, toolSubmitPlan] + ProjectToolset.tools.map(\.mcpDefinition) + generatedTools] as [String: Any],
-        ])
-
-    case "tools/call":
-        guard let name = params["name"] as? String,
-              params["arguments"] == nil || params["arguments"] is [String: Any] else {
-            errorResponse(id: id as Any, code: -32602, message: "tools/call requires a tool name and object arguments")
-            return
-        }
-        let args = params["arguments"] as? [String: Any] ?? [:]
-        switch name {
-        case let projectTool where ProjectToolset.tools.contains(where: { $0.name == projectTool }):
-            let response = editorCall(["action": "project_tool", "tool_name": projectTool, "arguments": args])
-            toolResult(id: id as Any, text: jsonText(response), isError: response["ok"] as? Bool != true)
-
-        case CapabilityToolset.searchToolName:
-            var request = args
-            request["action"] = "search_capabilities"
-            request["session_id"] = capabilitySessionID
-            let response = editorCall(request)
-            installCapabilityTools(from: response)
-            let failed = response["ok"] as? Bool != true
-            toolResult(id: id as Any,
-                       text: failed ? (response["error"] as? String ?? "capability search failed")
-                                    : capabilitySearchText(response),
-                       isError: failed)
-            if !failed { writeNotification(method: "notifications/tools/list_changed") }
-
-        case CapabilityToolset.submitToolName:
-            var request = args
-            request["action"] = "submit_capability_plan"
-            request["session_id"] = capabilitySessionID
-            let response = editorCall(request)
-            let failed = response["ok"] as? Bool != true
-            toolResult(id: id as Any,
-                       text: failed ? (response["error"] as? String ?? "plan submission failed")
-                                    : jsonText(response),
-                       isError: failed)
-
-        default:
-            guard activeCapabilityTools[name] != nil else {
-                errorResponse(id: id as Any, code: -32601, message: "unknown tool '\(name)'")
-                break
-            }
-            let response = editorCall([
-                "action": "invoke_capability",
-                "session_id": capabilitySessionID,
-                "tool_name": name,
-                "arguments": args,
-            ])
-            let failed = response["ok"] as? Bool != true
-            toolResult(id: id as Any,
-                       text: failed ? (response["error"] as? String ?? "capability invocation failed")
-                                    : jsonText(response),
-                       isError: failed)
-        }
-
+func invokeTool(_ name: String, input: Data) throws -> AgentToolResult {
+    let args = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
+    let response: [String: Any]
+    switch name {
+    case let projectTool where ProjectToolset.tools.contains(where: { $0.name == projectTool }):
+        response = editorCall(["action": "project_tool", "tool_name": projectTool, "arguments": args])
+    case CapabilityToolset.searchToolName:
+        var request = args
+        request["action"] = "search_capabilities"
+        request["session_id"] = capabilitySessionID
+        let found = editorCall(request)
+        installCapabilityTools(from: found)
+        if found["ok"] as? Bool == true { writeNotification(method: "notifications/tools/list_changed") }
+        // Discovery metadata is bounded by the host; generated tool schemas are
+        // returned through tools/list rather than repeated in this result.
+        response = (try? JSONSerialization.jsonObject(with: Data(capabilitySearchText(found).utf8)) as? [String: Any]) ?? found
+    case CapabilityToolset.submitToolName:
+        var request = args
+        request["action"] = "submit_capability_plan"
+        request["session_id"] = capabilitySessionID
+        response = editorCall(request)
     default:
-        errorResponse(id: id as Any, code: -32601, message: "method not found: \(method)")
+        guard activeCapabilityTools[name] != nil else { throw AgentError.unknownTool(name) }
+        response = editorCall(["action": "invoke_capability", "session_id": capabilitySessionID,
+                               "tool_name": name, "arguments": args])
     }
+    return AgentToolResult(json: try JSONSerialization.data(withJSONObject: response, options: [.sortedKeys]),
+                           isError: response["ok"] as? Bool != true)
 }
+
+let mcp = MCPServer(name: "guava", version: "0.0.9", skills: try UIDiagnosticTools.skills(),
+    tools: { try toolDescriptors() }, execute: { try invokeTool($0, input: $1) })
 
 // MARK: - Main loop
 
 while let line = readLine(strippingNewline: true) {
     if line.isEmpty { continue }
-    guard line.utf8.count <= 1_048_576 else {
-        errorResponse(id: NSNull(), code: -32600, message: "request exceeds 1 MiB")
-        continue
+    if let response = await mcp.respond(to: Data(line.utf8)) {
+        FileHandle.standardOutput.write(response)
+        FileHandle.standardOutput.write(Data([10]))
     }
-    guard let data = line.data(using: .utf8),
-          let msg = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else { errorResponse(id: NSNull(), code: -32700, message: "invalid JSON"); continue }
-    guard msg["jsonrpc"] as? String == "2.0", msg["method"] is String else {
-        errorResponse(id: msg["id"] ?? NSNull(), code: -32600, message: "invalid JSON-RPC request")
-        continue
-    }
-    handle(msg)
 }
 
 if currentCapabilitySnapshotID != nil { _ = editorCall([

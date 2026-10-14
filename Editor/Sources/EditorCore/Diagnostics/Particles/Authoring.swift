@@ -1,11 +1,8 @@
-import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
 import RenderBackend
 import SceneRuntime
 
-func makeDeveloperParticleEmitterLabels(roots: [EditorSceneNode]) -> [UInt64: DeveloperParticleEmitterLabel] {
+public func makeDeveloperParticleEmitterLabels(roots: [EditorSceneNode]) -> [UInt64: DeveloperParticleEmitterLabel] {
     var labels: [UInt64: DeveloperParticleEmitterLabel] = [:]
 
     func visit(_ node: EditorSceneNode, parentPath: String?) {
@@ -27,7 +24,7 @@ func makeDeveloperParticleEmitterLabels(roots: [EditorSceneNode]) -> [UInt64: De
     return labels
 }
 
-func makeDeveloperParticleAuthoringDiagnosticSummary(
+public func makeDeveloperParticleAuthoringDiagnosticSummary(
     gpuPlan: ParticleGPUSimulationPlan?,
     moduleIssues: [ParticleModuleIssue]
 ) -> DeveloperParticleDiagnosticSummary {
@@ -124,12 +121,12 @@ func makeDeveloperParticleAuthoringDiagnosticSummary(
     )
 }
 
-func developerParticleGPUUnsupportedReasonList(_ reasons: [ParticleGPUSimulationUnsupportedReason]) -> String {
+public func developerParticleGPUUnsupportedReasonList(_ reasons: [ParticleGPUSimulationUnsupportedReason]) -> String {
     guard !reasons.isEmpty else { return "none" }
     return reasons.map(developerParticleGPUUnsupportedReasonLabel).joined(separator: ", ")
 }
 
-func developerParticleGPUUnsupportedReasonLabel(_ reason: ParticleGPUSimulationUnsupportedReason) -> String {
+public func developerParticleGPUUnsupportedReasonLabel(_ reason: ParticleGPUSimulationUnsupportedReason) -> String {
     switch reason {
     case .backendCPU:
         return "CPU backend"

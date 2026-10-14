@@ -107,7 +107,7 @@ struct DeveloperToolsPanel: View {
                         history: frameStatsHistory,
                         renderStats: renderStats,
                         particleHistory: store.particleDiagnosticsHistory,
-                        issues: diagnostics.filter { $0.target.tab == .frame || $0.target.tab == .render },
+                        issues: diagnostics.filter { $0.target.area == .frame || $0.target.area == .render },
                         selectedSampleIndex: $selectedFrameSampleIndex,
                         onOpenTarget: openDiagnosticTarget
                     )
@@ -120,7 +120,7 @@ struct DeveloperToolsPanel: View {
                 TabItem("Render", id: DeveloperToolTab.render) {
                     RenderFrameDebuggerView(frameStats: frameStats,
                                             renderStats: renderStats,
-                                            issues: diagnostics.filter { $0.target.tab == .render },
+                                            issues: diagnostics.filter { $0.target.area == .render },
                                             onOpenTarget: openDiagnosticTarget)
                 },
                 TabItem("Particles", id: DeveloperToolTab.particles) {
@@ -143,7 +143,7 @@ struct DeveloperToolsPanel: View {
     }
 
     private func openDiagnosticTarget(_ target: DeveloperDiagnosticTarget) {
-        selectedTab = developerToolTabDestination(for: target.tab)
+        selectedTab = developerToolTabDestination(for: DeveloperToolTab(target.area))
         if let frameSampleIndex = target.frameSampleIndex {
             selectedFrameSampleIndex = frameSampleIndex
         }
@@ -170,5 +170,17 @@ func developerToolTabDestination(for target: DeveloperToolTab) -> DeveloperToolT
         return .debugger
     default:
         return target
+    }
+}
+
+private extension DeveloperToolTab {
+    init(_ area: DeveloperDiagnosticArea) {
+        switch area {
+        case .frame: self = .frame
+        case .render: self = .render
+        case .particles: self = .particles
+        case .console: self = .console
+        case .state: self = .state
+        }
     }
 }

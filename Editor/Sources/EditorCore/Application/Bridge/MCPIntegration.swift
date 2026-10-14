@@ -14,6 +14,7 @@ import RenderBackend
 import NativeRHI
 import SceneRuntime
 import GuavaUICompose
+import GuavaUIAgent
 import GuavaUIRuntime
 import Foundation
 import SIMDCompat
@@ -22,24 +23,32 @@ extension EditorApplication {
     // MARK: - MCP Bridge
 
     func startMCPBridge() {
-        mcpBridge.onCommand = { [weak self] action, params in
-            guard let self else { return ["ok": false, "error": "editor unavailable"] }
+        let port = ProcessInfo.processInfo.environment["GUAVA_MCP_PORT"].flatMap(UInt16.init) ?? 9898
+        let bridge = AgentLocalServer(port: port) { [weak self] data in
+            guard let self else { return Data(#"{"ok":false,"error":"editor unavailable"}"#.utf8) }
+            return await self.handleMCPMessage(data)
+        }
+        do { try bridge.start(); mcpBridge = bridge }
+        catch { logConsole("MCP bridge failed to start", severity: .warning, detail: error.localizedDescription) }
+    }
+
+    @MainActor
+    private func handleMCPMessage(_ data: Data) async -> Data {
+        let result: [String: Any]
+        if let params = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let action = params["action"] as? String {
             if action == "project_tool" {
                 do {
                     guard let name = params["tool_name"] as? String,
                           let arguments = params["arguments"] as? [String: Any] else {
-                        return ["ok": false, "error": "missing project tool name or arguments"]
+                        throw EditorProjectToolError("Missing project tool name or arguments.")
                     }
-                    let output = try await self.executeProjectTool(
-                        name: name, input: JSONSerialization.data(withJSONObject: arguments)
-                    )
-                    return try JSONSerialization.jsonObject(with: output) as? [String: Any]
-                        ?? ["ok": false, "error": "invalid project tool response"]
-                } catch { return ["ok": false, "error": error.localizedDescription] }
-            }
-            return self.handleMCPAction(action, params: params)
-        }
-        mcpBridge.start()
+                    return try await executeProjectTool(name: name, input: JSONSerialization.data(withJSONObject: arguments))
+                } catch { result = ["ok": false, "error": error.localizedDescription] }
+            } else { result = handleMCPAction(action, params: params) }
+        } else { result = ["ok": false, "error": "invalid JSON command"] }
+        return (try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]))
+            ?? Data(#"{"ok":false,"error":"invalid host response"}"#.utf8)
     }
 
     private func handleMCPAction(_ action: String, params: [String: Any]) -> [String: Any] {

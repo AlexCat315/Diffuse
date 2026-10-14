@@ -83,6 +83,7 @@ let package = Package(
                 .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
+                .product(name: "GuavaUIAgent", package: "GuavaUI"),
             ],
             resources: [
                 .process("Resources")

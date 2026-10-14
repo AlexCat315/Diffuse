@@ -1,11 +1,8 @@
-import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
 import RenderBackend
 import SceneRuntime
 
-func makeDeveloperParticleEmitterHotspots(stats: ParticleFrameStatsResource,
+public func makeDeveloperParticleEmitterHotspots(stats: ParticleFrameStatsResource,
                                           eventReport: ParticleSimulationEventApplyReport,
                                           limit: Int = 8) -> [DeveloperParticleEmitterHotspot] {
     let entityIDs = Set(stats.emitterStatsByEntity.keys)
@@ -37,7 +34,7 @@ private func particleDiagnosticSeverityRank(_ severity: DeveloperParticleDiagnos
     }
 }
 
-func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
+public func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
                                          frameStats: ParticleEmitterFrameStats?,
                                          eventStats: ParticleEmitterFrameStats? = nil) -> DeveloperParticleEmitterHotspot {
     guard let baseStats = frameStats ?? eventStats else {
@@ -161,7 +158,7 @@ func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
     )
 }
 
-func makeDeveloperParticleDiagnosticSummary(stats: ParticleFrameStatsResource,
+public func makeDeveloperParticleDiagnosticSummary(stats: ParticleFrameStatsResource,
                                             eventReport: ParticleSimulationEventApplyReport,
                                             scalability: ParticleScalabilityStateResource,
                                             renderSummary: ParticleRenderSummary,
