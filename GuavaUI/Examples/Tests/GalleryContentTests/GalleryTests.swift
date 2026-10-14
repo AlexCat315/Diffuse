@@ -3,6 +3,7 @@ import Testing
 import GuavaUIRuntime
 import GuavaUICompose
 @testable import GalleryContent
+@testable import GuavaUI
 
 @Suite("Component gallery", .serialized)
 @MainActor
@@ -41,9 +42,12 @@ struct GalleryTests {
                     PointerCaptureHolder.current = PointerCapture()
                     let tree = NodeTree()
                     let graph = ViewGraph(tree: tree, recomposer: Recomposer())
-                    graph.install(root: GalleryView(initialPage: page, appearance: appearance))
+                    graph.install(root: AdaptiveApplicationContent(content: GalleryView(initialPage: page, appearance: appearance),
+                        environment: State(wrappedValue: UIEnvironment())))
                     for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 1280, height: 820) }
                     #expect(tree.root != nil, "Missing root for \(page)")
+                    #expect(graph.layoutSnapshot().first { $0.debugName == "gallery-shell" }?.frame.height == 820,
+                            "Application root collapsed for \(page)")
                     func validate(_ node: Node) {
                         #expect(node.frame.width.isFinite && node.frame.height.isFinite, "Invalid layout for \(page)")
                         #expect(node.frame.width >= 0 && node.frame.height >= 0, "Negative size for \(page)")
@@ -72,7 +76,8 @@ struct GalleryTests {
         defer { TextEnvironmentHolder.current = oldText }
         AnimatorScheduler.$current.withValue(AnimatorScheduler()) {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-            graph.install(root: GalleryView(initialPage: .button))
+            graph.install(root: AdaptiveApplicationContent(content: GalleryView(initialPage: .button),
+                environment: State(wrappedValue: UIEnvironment())))
             graph.computeLayout(width: 1280, height: 820)
             #expect(graph.tree.root != nil)
             let layout = graph.layoutSnapshot()
@@ -145,7 +150,8 @@ struct GalleryTests {
         PointerCaptureHolder.current = capture
         AnimatorScheduler.$current.withValue(AnimatorScheduler()) {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-            graph.install(root: GalleryView(initialPage: .button))
+            graph.install(root: AdaptiveApplicationContent(content: GalleryView(initialPage: .button),
+                environment: State(wrappedValue: UIEnvironment())))
             let dispatcher = EventDispatcher(tree: graph.tree, interactions: interactions, capture: capture, focusChain: focus)
             func settle() { graph.recomposer.commitAll(); graph.computeLayout(width: 1280, height: 820) }
             func click(_ name: String) {

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import GuavaUIRuntime
 @testable import GuavaUI
@@ -55,4 +56,32 @@ private struct ConsumerView: View {
     let content = try #require(graph.tree.root.flatMap(marker))
     #expect(content.absoluteFrame.minX == 36)
     #expect(content.absoluteFrame.minY == 84)
+}
+
+
+@Test @MainActor func applicationRootAllocatesViewportToFlexibleContent() throws {
+    var surface = UIEnvironment()
+    surface.safeArea.top = 20; surface.safeArea.leading = 12
+    let environment = State(wrappedValue: surface)
+    let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+    graph.install(root: AdaptiveApplicationContent(content:
+        Box(direction: .column, alignItems: .stretch) {
+            Box {}.frame(height: 40).flex(0, shrink: 0).debugName("root-header")
+            Box {}.flex(1, shrink: 1, basis: 0).debugName("root-content")
+        }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0).debugName("root-shell"),
+        environment: environment))
+    func frame(_ name: String) throws -> CGRect {
+        try #require(graph.layoutSnapshot().first { $0.debugName == name }?.absoluteFrame)
+    }
+    graph.computeLayoutIfNeeded(width: 400, height: 800)
+    let firstShell = try frame("root-shell"), firstContent = try frame("root-content")
+    #expect(firstShell == CGRect(x: 12, y: 20, width: 388, height: 780))
+    #expect(firstContent == CGRect(x: 12, y: 60, width: 388, height: 740))
+    surface.safeArea.top = 30; surface.safeArea.leading = 24
+    environment.wrappedValue = surface; graph.recomposer.commitAll()
+    graph.computeLayoutIfNeeded(width: 300, height: 600)
+    let resizedShell = try frame("root-shell"), resizedContent = try frame("root-content")
+    #expect(resizedShell == CGRect(x: 24, y: 30, width: 276, height: 570))
+    #expect(resizedContent == CGRect(x: 24, y: 70, width: 276, height: 530))
+    #expect(!graph.layoutNeedsUpdate(width: 300, height: 600))
 }
