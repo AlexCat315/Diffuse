@@ -74,12 +74,12 @@ public struct RuntimeWorldSchedule {
     var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     var jobSystem = JobSystem.shared
     let joltPhysicsBackend: JoltPhysicsBackend
-    let physicsQueryScene: JoltPhysicsQueryScene
+    let physicsQueryScene: PhysicsQueryScene
 
     public init() {
         let joltPhysicsBackend = JoltPhysicsBackend()
         self.joltPhysicsBackend = joltPhysicsBackend
-        physicsQueryScene = JoltPhysicsQueryScene(backend: joltPhysicsBackend)
+        physicsQueryScene = PhysicsQueryScene(backend: joltPhysicsBackend)
     }
 
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {
@@ -139,11 +139,11 @@ public struct RuntimeWorldSchedule {
         physicsQueryScene.stats
     }
 
-    func physicsQueryBackend(in world: RuntimeWorld) -> JoltPhysicsBackend {
+    func physicsQueryBackend(in world: RuntimeWorld) -> any PhysicsBackend {
         physicsQueryScene.backend(in: world)
     }
 
-    var physicsQuerySceneHandle: JoltPhysicsQueryScene {
+    var physicsQuerySceneHandle: PhysicsQueryScene {
         physicsQueryScene
     }
 

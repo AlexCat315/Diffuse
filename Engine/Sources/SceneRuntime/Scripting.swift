@@ -20,13 +20,13 @@ public struct RuntimeScriptPhaseContext {
     private let worldPointer: UnsafeMutablePointer<RuntimeWorld>
     private let commandBufferPointer: UnsafeMutablePointer<RuntimeCommandBuffer>
     private let deltaTimeSecondsValue: Double
-    private let physicsQueryScene: JoltPhysicsQueryScene
+    private let physicsQueryScene: PhysicsQueryScene
 
     init(
         world: UnsafeMutablePointer<RuntimeWorld>,
         commands: UnsafeMutablePointer<RuntimeCommandBuffer>,
         deltaTimeSeconds: Double,
-        physicsQueryScene: JoltPhysicsQueryScene
+        physicsQueryScene: PhysicsQueryScene
     ) {
         self.worldPointer = world
         self.commandBufferPointer = commands

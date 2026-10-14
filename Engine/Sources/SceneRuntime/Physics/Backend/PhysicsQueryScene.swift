@@ -25,8 +25,11 @@ public struct PhysicsQueryCacheStats: Sendable, Equatable {
     }
 }
 
-final class JoltPhysicsQueryScene: @unchecked Sendable {
-    private let backend: JoltPhysicsBackend
+/// Mirrors the world's physics state into a backend so spatial queries can run
+/// outside the simulation phase. Holds the protocol rather than a concrete engine
+/// so any `PhysicsBackend` implementation can be queried this way.
+final class PhysicsQueryScene: @unchecked Sendable {
+    private let backend: any PhysicsBackend
     private var sourceRevision: UInt64?
     private var bodyCount = 0
     private var constraintCount = 0
@@ -34,11 +37,11 @@ final class JoltPhysicsQueryScene: @unchecked Sendable {
     private var rebuildCount = 0
     private var cacheHitCount = 0
 
-    init(backend: JoltPhysicsBackend) {
+    init(backend: any PhysicsBackend) {
         self.backend = backend
     }
 
-    func backend(in world: RuntimeWorld) -> JoltPhysicsBackend {
+    func backend(in world: RuntimeWorld) -> any PhysicsBackend {
         queryCount += 1
         if sourceRevision == world.physicsRevision {
             cacheHitCount += 1
@@ -46,7 +49,7 @@ final class JoltPhysicsQueryScene: @unchecked Sendable {
         return synchronize(in: world)
     }
 
-    func synchronize(in world: RuntimeWorld) -> JoltPhysicsBackend {
+    func synchronize(in world: RuntimeWorld) -> any PhysicsBackend {
         guard sourceRevision != world.physicsRevision else {
             return backend
         }
@@ -107,8 +110,9 @@ func buildPhysicsSceneSnapshot(
     constraints: [PhysicsConstraintDescriptor],
     characters: [PhysicsCharacterDescriptor]
 ) {
-    var settings = overrideSettings ?? world.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
-    settings.backendKind = .jolt
+    // The backend selection lives in the settings the caller already carries; this
+    // snapshot must not claim an engine of its own.
+    let settings = overrideSettings ?? world.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
 
     let entities = world.entities()
     let localTransforms = world.localTransformSnapshot(matching: entities)
