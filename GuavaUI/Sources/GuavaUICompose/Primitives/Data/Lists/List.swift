@@ -7,7 +7,9 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
     public let data: Data
     public let id: KeyPath<Data.Element, ID>
     public let selection: Binding<ID?>
+    /// Authored logical height, before text scaling and the touch density floor.
     public let rowHeight: Float
+    /// Authored logical spacing, before text scaling.
     public let rowSpacing: Float
     public let onActivate: ((Data.Element) -> Void)?
     public let rowContent: (Data.Element, Bool) -> RowContent
@@ -30,21 +32,23 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
 
     public var body: some View {
         SurfaceReader { surface in
-            let effectiveHeight = max(rowHeight, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
-            SelectionKeyHost(onKey: handleKey) {
-                VirtualStack(data, id: id, rowHeight: effectiveHeight, spacing: rowSpacing,
-                             scrollToIndex: data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
-                                .map { data.distance(from: data.startIndex, to: $0) }) { element in
-                    let selected = isSelected(element)
-                    _ListRowHost(isSelected: selected, rowHeight: effectiveHeight,
-                                 onActivate: { activate(element) },
-                                 content: AnyView(rowContent(element, selected)))
+            TextScalerReader { scaler in
+                let effectiveHeight = max(scaler.scale(rowHeight), surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
+                SelectionKeyHost(onKey: handleKey) {
+                    VirtualStack(data, id: id, rowHeight: effectiveHeight, spacing: scaler.scale(rowSpacing),
+                                 scrollToIndex: data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
+                                    .map { data.distance(from: data.startIndex, to: $0) }) { element in
+                        let selected = isSelected(element)
+                        _ListRowHost(isSelected: selected, rowHeight: effectiveHeight,
+                                     onActivate: { activate(element) },
+                                     content: AnyView(rowContent(element, selected)))
+                    }
+                    // The keyboard host is the outermost node, so it is where a caller's
+                    // `.frame`/`.flex` lands. The scroll view has to take the height that
+                    // is left for it — otherwise it sizes to its own content and paints
+                    // rows past the bottom of whatever constrained it.
+                    .flex().frame(minWidth: 0, minHeight: 0)
                 }
-                // The keyboard host is the outermost node, so it is where a caller's
-                // `.frame`/`.flex` lands. The scroll view has to take the height that
-                // is left for it — otherwise it sizes to its own content and paints
-                // rows past the bottom of whatever constrained it.
-                .flex().frame(minWidth: 0, minHeight: 0)
             }
         }
     }

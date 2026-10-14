@@ -63,9 +63,11 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
     }
     public var body: some View {
         SurfaceReader { surface in
-            var table = self
-            table.options.layout = options.layout.resolved(in: surface)
-            return table.content
+            TextScalerReader { scaler in
+                var table = self
+                table.options.layout = options.layout.resolved(in: surface, textScaler: scaler)
+                return table.content
+            }
         }
     }
     private var content: some View {

@@ -47,16 +47,20 @@ public struct TableTextEditing<Record> {
 }
 
 public struct TableLayout {
+    /// Authored logical height, before text scaling and the touch density floor.
     public var rowHeight: Float = 36
+    /// Authored logical height, before text scaling and the touch density floor.
     public var headerHeight: Float = 38
     public var isStriped = true
     public var emptyTitle = "No records"
     public init() {}
-    func resolved(in surface: UIEnvironment) -> Self {
+    func resolved(in surface: UIEnvironment, textScaler: TextScaler) -> Self {
         var result = self
+        result.rowHeight = textScaler.scale(rowHeight)
+        result.headerHeight = textScaler.scale(headerHeight)
         if surface.input.contains(.touch) {
-            result.rowHeight = max(rowHeight, surface.minimumControlExtent)
-            result.headerHeight = max(headerHeight, surface.minimumControlExtent)
+            result.rowHeight = max(result.rowHeight, surface.minimumControlExtent)
+            result.headerHeight = max(result.headerHeight, surface.minimumControlExtent)
         }
         return result
     }
@@ -98,12 +102,15 @@ public struct Table<Record, ID: Hashable>: View {
     }
     public var body: some View {
         SurfaceReader { surface in
-            var table = self
-            table.options.layout = options.layout.resolved(in: surface)
-            return table.content(cellVerticalPadding: surface.input.contains(.touch) ? 0 : 4)
+            TextScalerReader { scaler in
+                var table = self
+                table.options.layout = options.layout.resolved(in: surface, textScaler: scaler)
+                return table.content(authoredRowHeight: options.layout.rowHeight,
+                    cellVerticalPadding: surface.input.contains(.touch) ? 0 : 4)
+            }
         }
     }
-    private func content(cellVerticalPadding: Float) -> some View {
+    private func content(authoredRowHeight: Float, cellVerticalPadding: Float) -> some View {
         let rows = Self.sorted(records, columns: columns, sort: sortBinding.wrappedValue)
         let positions = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($0.element[keyPath: id], $0.offset) })
         let width = columns.reduce(Float(0)) { $0 + columnWidth($1) }
@@ -116,7 +123,8 @@ public struct Table<Record, ID: Hashable>: View {
                 Divider()
                 if rows.isEmpty { EmptyState(options.layout.emptyTitle, message: "Change your filters or add a record.", action: { EmptyView() }).flex(1) }
                 else {
-                    List(rows, id: id, selection: selectionBinding, rowHeight: options.layout.rowHeight,
+                    // List resolves its own density; cells use the table's resolved geometry.
+                    List(rows, id: id, selection: selectionBinding, rowHeight: authoredRowHeight,
                          onActivate: onActivate) { record, selected in
                         Row(alignment: .center, spacing: 0) {
                             for column in columns {

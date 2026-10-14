@@ -3,12 +3,14 @@ import Foundation
 /// Authored row heights for `LazyGrid`. Construct variable heights when the
 /// data changes and reuse the value while scrolling; prefix sums are built
 /// once, and viewport lookup is logarithmic in the number of rows.
+/// Supply unscaled logical heights; LazyGrid applies the active TextScaler.
 public struct GridRowHeights: Sendable {
     private enum Storage: Sendable {
         case fixed(CGFloat)
         case variable([CGFloat])
     }
     private let storage: Storage
+    private var scale: CGFloat = 1
 
     /// Every row has this height. Fixed rows need no per-row allocation.
     public static func fixed(_ height: CGFloat) -> GridRowHeights {
@@ -32,18 +34,25 @@ public struct GridRowHeights: Sendable {
         }
     }
 
+    /// Reuse authored prefix sums when the text scale changes or rows scroll.
+    func scaled(by factor: CGFloat) -> Self {
+        var result = self
+        result.scale *= factor
+        return result
+    }
+
     func height(at row: Int) -> CGFloat {
         switch storage {
-        case let .fixed(height): return height
-        case let .variable(offsets): return offsets[row + 1] - offsets[row]
+        case let .fixed(height): return height * scale
+        case let .variable(offsets): return (offsets[row + 1] - offsets[row]) * scale
         }
     }
 
     func offset(of row: Int, spacing: CGFloat) -> CGFloat {
         let gap = GridTrackResolver.finiteNonnegative(spacing)
         switch storage {
-        case let .fixed(height): return CGFloat(row) * (height + gap)
-        case let .variable(offsets): return offsets[row] + CGFloat(row) * gap
+        case let .fixed(height): return CGFloat(row) * (height * scale + gap)
+        case let .variable(offsets): return offsets[row] * scale + CGFloat(row) * gap
         }
     }
 
@@ -64,7 +73,7 @@ public struct GridRowHeights: Sendable {
         let upper: Int
         switch storage {
         case let .fixed(height):
-            let stride = height + gap
+            let stride = height * scale + gap
             lower = boundedIndex(floor((start + gap) / stride), count: count)
             upper = boundedIndex(ceil(end / stride), count: count)
         case .variable:

@@ -3,14 +3,15 @@ import Foundation
 /// A vertically scrolling, equal-column grid that constructs only visible
 /// rows plus overscan. Row heights are explicit so scrolling never measures
 /// the full collection. Stable item identities preserve overlapping cells.
+/// Row heights and row spacing are authored logical values and follow TextScaler once.
 /// Row state that must survive leaving the viewport belongs in the model.
 public struct LazyGrid<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     private let data: Data
     private let id: KeyPath<Data.Element, ID>
     private let tracks: [GridColumn]
-    private let rowHeights: GridRowHeights
+    private var rowHeights: GridRowHeights
     private let columnSpacing: CGFloat
-    private let rowSpacing: CGFloat
+    private var rowSpacing: CGFloat
     private let overscan: Int
     private let scrollOffset: Binding<CGPoint>?
     private let content: (Data.Element) -> Content
@@ -36,6 +37,15 @@ public struct LazyGrid<Data: RandomAccessCollection, ID: Hashable, Content: View
     }
 
     public var body: some View {
+        TextScalerReader { scaler in
+            var grid = self
+            grid.rowHeights = rowHeights.scaled(by: CGFloat(scaler.factor))
+            grid.rowSpacing = rowSpacing * CGFloat(scaler.factor)
+            return grid.contentView
+        }
+    }
+
+    private var contentView: some View {
         let rowCount = Self.rowCount(itemCount: data.count, columns: columns)
         let lower = min(rowCount, visibleRows.lowerBound)
         let upper = max(lower, min(rowCount, visibleRows.upperBound))

@@ -29,8 +29,8 @@ List(items, id: \.id, selection: $selectedID, rowHeight: 30, rowSpacing: 0) { it
 | 参数 | 默认 | 说明 |
 | ---- | ---- | ---- |
 | `selection` | `.constant(nil)` | 单选 binding，nil 表示未选 |
-| `rowHeight` | 30 | Material list item 一致 |
-| `rowSpacing` | 0 | 行间隙 |
+| `rowHeight` | 30 | 未缩放逻辑行高，组件自动应用 `TextScaler` 与触摸下限 |
+| `rowSpacing` | 0 | 未缩放行间隙，组件自动应用 `TextScaler` |
 
 ## Tokens (DefaultListRowStyle)
 
@@ -87,4 +87,6 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 
 ## 响应式与输入密度
 
-List 在 touch surface 上使用 max(rowHeight, 44) 作为真实行高，行 host、VirtualStack 的窗口化与滚动 extent 使用同一高度。返回 pointer 后恢复 authored rowHeight。通用 VirtualList/VirtualStack 不假定每行可交互，仍使用调用方高度。touch-only surface 不展示行 hover。
+List 先用 `TextScaler` 缩放 authored `rowHeight` 与 `rowSpacing`，再在 touch surface 上把行高提升至至少 44pt。行 host、VirtualStack 的窗口化与滚动 extent 使用同一高度；返回 pointer 后仅移除触摸下限，字号缩放仍生效。不要在调用方预先缩放这两个参数。通用 VirtualList/VirtualStack 不假定每行可交互，仍使用调用方的实际高度。touch-only surface 不展示行 hover。
+
+`TextScaleRowTests.collectionGeometry` 覆盖 390/720/1280pt、light/dark、100%/125%/200% 字号与输入切换，验证缩放一次、行间距、窗口化及状态保留。

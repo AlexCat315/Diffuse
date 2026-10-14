@@ -67,14 +67,12 @@ struct LayoutFoundationExamples: View {
                     .layoutDirection(rtl ? .rtl : .ltr).background(.surfaceSunken)
                     .debugName("layout-safe-area")
             }
-            StorySection("Lazy grid · 100,000 cells", "Only viewport rows plus overscan are constructed. This example supplies a row height that follows the text scale.") {
-                TextScalerReader { scaler in
-                    LazyGrid(0..<100_000, id: \.self, columns: 4,
-                             rowHeights: .fixed(CGFloat(scaler.scale(48))), columnSpacing: 8, rowSpacing: 8) { index in
-                        Text("Cell \(index + 1)").font(.caption)
-                            .padding(8).frame(width: .percent(100)).background(.surfaceVariant).cornerRadius(6)
-                    }.frame(height: 240).debugName("layout-lazy-grid")
-                }
+            StorySection("Lazy grid · 100,000 cells", "Only viewport rows plus overscan are constructed. Authored row heights automatically follow the text scale.") {
+                LazyGrid(0..<100_000, id: \.self, columns: 4,
+                         rowHeights: .fixed(48), columnSpacing: 8, rowSpacing: 8) { index in
+                    Text("Cell \(index + 1)").font(.caption)
+                        .padding(8).frame(width: .percent(100)).background(.surfaceVariant).cornerRadius(6)
+                }.frame(height: 240).debugName("layout-lazy-grid")
             }
             StorySection("Variable rows · 100,000 items", "Known row heights alternate between one and three lines. A cached cumulative index locates the viewport without scanning all rows during scrolling.") {
                 Button("Reveal item 50,001") { target = target == nil ? 50_000 : nil }.buttonStyle(.secondary)

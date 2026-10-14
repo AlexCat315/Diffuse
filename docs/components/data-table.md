@@ -49,6 +49,6 @@ DataTable(model, columns: [name]) { table in
 
 ## 响应式与输入密度
 
-Table 与 DataTable 共用行高解析：touch（包含混合输入）使用 `max(rowHeight, 44)` 与 `max(headerHeight, 44)`，pointer 恢复 authored 高度。DataTable 的冻结列、可见窗口、占位、滚动范围、目标显露和 PageUp/Down 使用同一行高；Table 的 List 行与单元格同高。触摸单元格移除纵向内容 inset，使内嵌按钮与编辑器的 44pt 命中不被裁剪。解析只作用于当前视图值，不写回配置或数据模型。
+Table 与 DataTable 共用行高解析：先按 `TextScaler` 缩放 authored `rowHeight` 与 `headerHeight`，touch（包含混合输入）再应用 44pt 下限；pointer 仅移除触摸下限。不要在调用方预先缩放高度。DataTable 的冻结列、可见窗口、占位、滚动范围、目标显露和 PageUp/Down 使用同一行高；Table 将 authored 行高交给内部 List，单元格使用解析后的高度，避免二次缩放。触摸单元格移除纵向内容 inset，使内嵌按钮与编辑器的 44pt 命中不被裁剪。解析只作用于当前视图值，不写回配置或数据模型。
 
-`RowDensityTests.collectionRows` 在 390/720/1280pt 验证 touch-only、混合输入、pointer 恢复、较大 authored 行高和节点/选择保留；`dataTableNavigation` 验证触摸翻页、最后一行、冻结列对齐与编辑取消后的焦点恢复。窄宽列优先级与文本缩放行高仍属于待实现项。
+`RowDensityTests.collectionRows` 在 390/720/1280pt 验证 touch-only、混合输入、pointer 恢复、较大 authored 行高和节点/选择保留；`dataTableNavigation` 验证触摸翻页、最后一行、冻结列对齐与编辑取消后的焦点恢复。`TextScaleRowTests.collectionGeometry` / `dataTableNavigation` 验证 100%/125%/200% 字号、表头高度、选择/焦点保留及翻页与滚动 extent。窄宽列优先级仍属于待实现项。

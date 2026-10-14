@@ -88,7 +88,7 @@
 
 ### 1.2 虚拟化与大数据
 
-- 大集合（List/Tree/DataTable/VirtualStack）必须使用窗口化协议，空间不足不改变虚拟化契约：行高在触摸面替换为 `max(authored, 44)`，窗口化 extent 与滚动范围使用同一高度；切回指针恢复 authored 高度。
+- 大集合（List/Tree/Table/DataTable/VirtualStack）必须使用窗口化协议，空间不足不改变虚拟化契约：List/Tree/Table/DataTable 先按 `TextScaler` 缩放 authored 行高，触摸面再应用 44pt 下限；窗口化 extent 与滚动范围使用同一高度，切回指针保留字号缩放并移除触摸下限。通用 VirtualStack 使用调用方传入的实际高度。
 - 已知可变行高用 `VariableVirtualStack`；未知高度测量 `[未实现]`。普通 `ScrollView` 不自动窗口化，长列表必须显式选择容器。
 - 数据表列在窄宽下：调用方声明列优先级，容器按优先级隐藏低优先列并提供横向滚动与"列可见性"入口；`frozenColumnCount` 冻结列不参与隐藏 `[未实现]`。
 
@@ -235,16 +235,21 @@
 **List / Tree**
 
 - 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；Tree 每级缩进 16、箭头列 18。`[已实现]`
-- 手机：行高 `max(rowHeight, 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高已实现；截断与文本缩放未实现）
-- 平板 / 桌面：恢复 authored 行高；hover 行高亮；Tree 跟随 `TextScaler`。`[已实现]`
-- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。Tree 行高与展开按钮命中在触摸面均 ≥ 44pt，切回指针恢复 authored 尺寸；List 的文本缩放仍待补齐。验收：`TouchDensityTests` list、`RowDensityTests.collectionRows`、`NavigationStateTests` tree 200%。
+- 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
+- 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
+- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。Tree 行高与展开按钮命中在触摸面均 ≥ 44pt。验收：`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
 
 **Table / DataTable**
 
-- 外观：固定行高（Table 36 / DataTable 36）、表头固定、冻结列、单元格单行裁剪。`[已实现]`
+- 外观：authored 行高（Table 36 / DataTable 36）与表头高度均随 `TextScaler` 缩放一次；表头固定、冻结列、单元格单行裁剪。`[已实现]`
 - 手机：行、单元格与表头高度 ≥ 44pt，窗口化、冻结列、滚动范围和键盘翻页共用真实行高，内嵌按钮与编辑器保留完整命中。`[已实现]`；列按优先级隐藏低优先列并提供横向滚动与"列可见性"入口，冻结列不参与隐藏。`[未实现]`
 - 平板 / 桌面：两轴窗口化、列宽拖拽、键盘单元格导航。`[已实现]`
-- 交互与验收：键盘导航（箭头/Home/End/PageUp/PageDown/F2/Escape/Cmd+A）、编辑提交/取消、辅助功能 row/cell/slider（列宽）。验收：`DataTableInteractionTests`、`RowDensityTests.collectionRows` / `dataTableNavigation`、`--component table|dataTable`。
+- 交互与验收：键盘导航（箭头/Home/End/PageUp/PageDown/F2/Escape/Cmd+A）、编辑提交/取消、辅助功能 row/cell/slider（列宽）。验收：`DataTableInteractionTests`、`RowDensityTests`、`TextScaleRowTests.collectionGeometry` / `dataTableNavigation`、`--component table|dataTable`。
+
+**LazyGrid**
+
+- 固定与已知可变行高均接收未缩放逻辑高度，行高和行间距自动跟随 `TextScaler`；列宽与列间距不参与字号缩放。变量模式复用 authored 前缀索引，不因字号变化或滚动遍历全部数据。`[已实现]`
+- 窗口化、占位、单元格高度与滚动 extent 使用同一份缩放几何；字号恢复后夹紧超出范围的滚动位置，保留重叠可见单元格身份。验收：`TextScaleRowTests.collectionGeometry` / `variableGrid`、`LazyGridTests`。
 
 **Chart / Timeline**
 
@@ -398,6 +403,7 @@ guava showcase gallery --android --component NAME
 | 全部页面在 light/dark、1280×820 物化且无重叠 | `swift test --package-path GuavaUI/Examples`（`GalleryTests`） |
 | 触摸 44pt 族、密度恢复、hover gating | `GuavaUI/Tests/GuavaUIComposeTests/TouchDensityTests.swift` |
 | Tree / Table / DataTable / Menu 行高、节点与选择保留、翻页/编辑、子浮层环境 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/RowDensityTests.swift` |
+| List / Table / DataTable / LazyGrid 字号缩放一次、行间距、前缀索引与滚动边界 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TextScaleRows.swift` |
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
@@ -430,7 +436,6 @@ guava showcase gallery --android --component NAME
 | 4 | DataTable / Table / Grid 列优先级、隐藏与"列可见性"入口 | `Data/DataTable/*`、`Data/Lists/Table.swift`、`Layout/Grid/*` | 新列策略 API 测试 + `dataTable` 页窄宽验收 |
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
 | 6 | Button / Select / DatePicker 等单行标题截断 + 完整 tooltip（当前只换行或裁剪） | `Text/Text.swift`（`lineLimit(1)` 仅禁换行）、各控件 | `Text` 截断测试 + 对应页面 |
-| 7 | 列表族文本缩放：List / Table / DataTable / LazyGrid 行高不跟随 `TextScaler` | `Data/Lists/*`、`Layout/Grid/LazyGrid.swift` | 200% 行高测试（现有 Tree 为对照实现） |
 | 9 | ScrollView 触摸拖动/惯性、键盘滚动（箭头/Page/Home/End）、横向滚动条 gutter | `Layout/ScrollView.swift` | 触摸滚动测试 + `scrollview` 页；键盘测试 |
 | 10 | 浮层自适应：底部抽屉 Sheet、Select/CommandPalette 弹层宽度与行高、菜单触摸展开子菜单 | `Overlays/*`、`Fields/Select.swift` | 对应浮层测试 + 390pt 取样 |
 | 11 | Stepper / ButtonGroup 窄宽替代布局（纵向或滚动） | `Navigation/Stepper/*`、`Layout/NavigationComponents.swift` | 390pt 取样 + 布局测试 |
@@ -446,6 +451,8 @@ guava showcase gallery --android --component NAME
 | 21 | `withAnimation` 完成回调（SwiftUI 的 completionCriteria + completion） | `Animation/WithAnimation.swift` | 完成回调测试 |
 
 建议顺序：先做 1–4（壳层与数据密度，直接影响手机/平板可用性），再做 5–8（截断与行密度），然后 9–16（输入与语义补齐）；动画相关 17–21 随第 6 节的实现与验收排期。每项实现时同步更新组件文档的"响应式与输入密度"小节与本节状态。
+
+第 7 项列表族文本缩放已完成：List、Table、DataTable、LazyGrid 自动解析字号后的行高，表格表头与 List/LazyGrid 行间距同步缩放；Table 把 authored 高度交给内部 List，避免二次缩放。LazyGrid 的可变行高复用前缀索引，Gallery 100K 示例已移除手动缩放。`TextScaleRowTests` 在 macOS 宿主上覆盖 390/720/1280pt、light/dark、100%/125%/200%、触摸/混合/指针输入、选择与焦点保留、部分末行、缩放恢复的滚动夹紧以及 DataTable 翻页/末行/冻结列对齐；`NavigationStateTests.lazyGridTextScale` 验证 Gallery 100K 示例在 200% 下实际行高为 96pt、视口仍为 240pt。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过。原生设备视觉仍按第 4 节矩阵验收。
 
 第 8 项触摸行高已完成：`RowDensityTests.collectionRows` 在 macOS 宿主上覆盖 390/720/1280pt、touch-only、touch + pointer + keyboard、pointer + keyboard，验证 36/56pt authored 行高、44pt 下限、节点与选择保留、单元格/展开按钮命中及密度恢复；`dataTableNavigation` 验证触摸翻页、末行显露、冻结列对齐与 44pt 编辑器；`scaledRows` 覆盖 Tree/Menu 的 100%/200% 文本缩放与 light/dark；`menuRows` 验证嵌入表面的菜单及子浮层继承输入环境、行底部点击展开与键盘关闭。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过。设备视觉与系统触摸派发仍按第 4 节真机矩阵验收。
 
