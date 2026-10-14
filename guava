@@ -1,4 +1,8 @@
 #!/bin/sh
 set -eu
 GUAVA_CHECKOUT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec "${GUAVA_SWIFT_EXECUTABLE:-swift}" run --package-path "$GUAVA_CHECKOUT/Tools/Guava" guava "$@"
+GUAVA_SOURCE_SWIFT=${GUAVA_SWIFT_EXECUTABLE:-swift}
+"$GUAVA_SOURCE_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Guava" --product guava --jobs 4
+GUAVA_SOURCE_PRODUCTS=$("$GUAVA_SOURCE_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Guava" --show-bin-path)
+# Keep the caller's environment when the CLI launches the compiler itself.
+exec "$GUAVA_SOURCE_PRODUCTS/guava" "$@"

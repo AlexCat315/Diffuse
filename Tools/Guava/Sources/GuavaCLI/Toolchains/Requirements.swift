@@ -20,8 +20,11 @@ enum ToolchainRequirements {
         #else
         let python = "python3"
         #endif
-        let commands = ["git", "cmake", "ninja"] + (arguments.platform == .android ? [] : [python])
+        let commands = ["git", "cmake", "ninja", python]
         var checks = commands.map { ToolchainCheck.executable($0, remedy: common) }
+        for name in ["sh", "make"] {
+            checks.append(.executable(name, remedy: "FFmpeg source builds require a POSIX shell and GNU make. macOS: install Xcode tools; Linux: install make; Windows: install MSYS2 make and add its usr/bin to PATH."))
+        }
         let version = (try? Shell.run([GuavaSDK.swift, "--version"], capture: true, quiet: true)) ?? ""
         checks.append(.init(name: "Swift 6.4.1", ready: version.contains("swift-6.4.1-RELEASE"),
             remedy: "Install Swift 6.4.1 from https://www.swift.org/install/. With Swiftly: swiftly install 6.4.1; swiftly use 6.4.1. GUAVA_SWIFT_EXECUTABLE can select an existing compiler."))

@@ -31,6 +31,18 @@ Windows 需要 Swift 官方页面列出的 Visual Studio C++ 工具和 Windows S
 
 ## 2. 安装 CLI 与源码 SDK
 
+如果已经有这个仓库，直接从仓库根使用 `./guava` 即可，无需下载或发布 SDK：
+
+```sh
+./guava setup --mac
+./guava run GuavaUI/Examples --mac
+./guava run Editor --mac
+```
+
+在 `GuavaUI` 目录对应命令是 `../guava run Examples --mac`。`zsh: command not found: guava` 表示独立命令尚未安装或不在 PATH；源码入口与下面的用户目录安装流程都可以使用。
+
+使用 Swiftly 时，如果 `swift --version` 仍显示系统编译器，可设置 `export GUAVA_SWIFT_EXECUTABLE="$HOME/.swiftly/bin/swift"` 后再执行上述命令。
+
 ```sh
 git clone --recurse-submodules https://github.com/AlexCat315/GuavaStudio.git "$HOME/.guava/source"
 cd "$HOME/.guava/source"
@@ -104,7 +116,8 @@ guava run --android --device SERIAL --devtools
 | macOS | Swift 6.4.1、Apple SDK、Git、CMake、Ninja、Python 3 |
 | Windows | Swift 6.4.1、Visual Studio C++ / Windows SDK、Git、CMake、Ninja、Python 3、Vulkan SDK / 驱动 |
 | Linux | Swift 6.4.1、C/C++、Git、CMake、Ninja、Python 3、窗口系统开发包、Vulkan SDK / 驱动 |
-| Android | Swift / Git / CMake / Ninja + JDK 21、Android SDK / NDK r30、匹配的 Swift Android SDK；不要求 Python / Node |
+| Android | Swift / Git / CMake / Ninja / Python 3 / make + JDK 21、Android SDK / NDK r30、匹配的 Swift Android SDK；不要求 Node |
+| iOS / iPadOS | macOS、完整 Xcode、Swift、Python 3、make、CMake、Ninja、Rust 与对应 iOS target |
 | 浏览器原型 | 单独的 Swift / Wasm SDK 配对、Node、CMake、Ninja、Python；并非普通桌面 / Android 应用的前置条件 |
 
 源码 SDK 会带来原生编译工具的安装负担。未来发布预编译 SDK 时，应把原生依赖随各主机/目标架构打包；Swift 编译器和目标平台 SDK 仍是编译用户代码的工具，不能被 CLI 的安装名义隐藏。

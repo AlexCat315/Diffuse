@@ -6,7 +6,22 @@
 
 ## 安装与使用
 
-仓库内可直接运行 `./guava`，Windows 使用 `guava.cmd`。安装独立命令：
+已有源码 checkout 时无需下载 SDK，也无需先安装全局命令。从仓库根运行：
+
+```sh
+./guava doctor --mac
+./guava setup --mac
+./guava run GuavaUI/Examples --mac   # 组件 Gallery
+./guava run Editor --mac             # GuavaStudio 工作站
+./guava create app /path/to/MyApp
+./guava run /path/to/MyApp --mac
+```
+
+在 `GuavaUI` 目录使用 `../guava run Examples --mac`。`GuavaUI` 本身是框架包，`run` 的目录必须包含应用的 `guava.json`。入口脚本用 Swift 构建并运行同一 checkout 的 CLI；需要 Swift 6.4.1。仓库移动或改名后若旧预编译缓存报路径不匹配，可从仓库根执行 `swift package --package-path Tools/Guava clean`。
+
+若使用 Swiftly，但当前 shell 优先找到系统 Swift，可设置 `export GUAVA_SWIFT_EXECUTABLE="$HOME/.swiftly/bin/swift"`，再运行 `./guava doctor --mac`。也可以将它设置为已安装的 Swift 6.4.1 编译器绝对路径；源码入口和 CLI 的后续构建都会使用这个选择。
+
+Windows 使用 `guava.cmd`。希望在任意目录输入 `guava` 时，安装独立命令：
 
 ```sh
 Tools/Guava/install.sh                 # ~/.local/bin
@@ -39,7 +54,7 @@ guava clean
   "version": { "name": "0.1.0", "build": 1 },
   "toolchain": { "enginePath": "../GuavaStudio" },
   "targets": {
-    "platforms": ["mac", "win", "linux", "android"]
+    "platforms": ["mac", "win", "linux", "android", "ios"]
   }
 }
 ```
@@ -47,6 +62,7 @@ guava clean
 - `Sources/AppContent`：共享业务视图与资源。
 - 桌面启动包由 CLI 生成在 `.guava/build/desktop/launcher`；模板无需单独的可执行目标。
 - `Platforms/Android`：应用自己的 Gradle 工程、Manifest、图标、Java/Kotlin 扩展和原生依赖。
+- `Platforms/iOS`：应用自己的 Xcode 工程，使用同一 AppContent 和 SDL/UIKit 宿主。
 - `Platforms/macOS`：Info.plist、Entitlements.plist、原生资源；可添加 Sources。
 - `Platforms/Windows`：应用 manifest、原生资源；可添加 Sources。
 - `Platforms/Linux`：desktop 集成配置、原生资源；可添加 Sources。
