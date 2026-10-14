@@ -90,3 +90,7 @@ State 切换走语义动效 `.animation(.semantic(.fast, in: theme), value: conf
 - 协议 + Configuration: [GuavaUICompose/Theme/ButtonStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ButtonStyle.swift)
 - 主体: [GuavaUICompose/Primitives/Button.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Button.swift)
 - 变体: [PrimaryButtonStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/PrimaryButtonStyle.swift) · [SecondaryButtonStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/SecondaryButtonStyle.swift) · [GhostButtonStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/GhostButtonStyle.swift) · [DestructiveButtonStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DestructiveButtonStyle.swift) · [PlainButtonStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/PlainButtonStyle.swift)
+
+## 响应式与输入密度
+
+Button 与基于 Button 的 Stepper、ButtonGroup、Tab 在 surface 输入包含 touch 时，命中布局宽高至少 44pt。共享布局 floor 与调用方 minWidth/minHeight 独立，切回 pointer 后恢复当前 authored minima。hover 仅在支持 pointer 的 surface 生效；touch + pointer 同时保留 44pt 密度和 hover。

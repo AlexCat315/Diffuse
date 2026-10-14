@@ -10,8 +10,9 @@ import CoreGraphics
 ///
 /// Measurement runs after the composition that built this view, so the first
 /// build receives `.zero` and the next frame publishes the measured size.
-/// A frame is published only when it moves beyond a small tolerance, so
-/// layout rounding jitter cannot drive an endless recompose–relayout loop.
+/// A size is published only when it changes by at least 0.5 points.
+/// The reader fills its parent's available width, so changing content does
+/// not determine the width used to select that content.
 ///
 /// ```swift
 /// ContainerSizeReader { size in
@@ -21,10 +22,9 @@ import CoreGraphics
 /// }
 /// ```
 ///
-/// The node is a pass-through: children keep ordinary layout semantics and
-/// the reader stretches them on the cross axis like a column `Box`. Callers
-/// that need the container to fill an offered width can add
-/// `.flex(1, shrink: 1)` or wrap it in a sized frame.
+/// Children keep ordinary layout semantics. Height remains content driven;
+/// use a frame or flex allocation to query a constrained height. An intrinsic
+/// parent must itself have a bounded width for width-based queries to settle.
 public struct ContainerSizeReader<Content: View>: View {
     @State private var size: CGSize = .zero
     private let content: (CGSize) -> Content
@@ -52,10 +52,13 @@ private final class ContainerSizeMeasurement {
     }
 
     func update(_ node: Node) {
-        let measured = node.frame.size
+        let padding = node.layoutNode?.resolvedPadding ?? LayoutInsets(top: 0, right: 0, bottom: 0, left: 0)
+        let border = node.layoutNode?.resolvedBorder ?? LayoutInsets(top: 0, right: 0, bottom: 0, left: 0)
+        let measured = CGSize(width: max(0, node.frame.width - CGFloat(padding.left + padding.right + border.left + border.right)),
+                              height: max(0, node.frame.height - CGFloat(padding.top + padding.bottom + border.top + border.bottom)))
         guard measured.width.isFinite, measured.height.isFinite else { return }
-        guard abs(measured.width - lastReported.width) > Self.tolerance
-                || abs(measured.height - lastReported.height) > Self.tolerance else { return }
+        guard abs(measured.width - lastReported.width) >= Self.tolerance
+                || abs(measured.height - lastReported.height) >= Self.tolerance else { return }
         lastReported = measured
         reported.wrappedValue = measured
     }
@@ -95,7 +98,12 @@ private struct _ContainerSizeProbe<Content: View>: _PrimitiveView {
         }
     }
 
-    func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.setWidthPercent(100)
+        layout.alignItems = .stretch
+        return layout
+    }
     func _updateLayout(_ layout: LayoutNode) {}
 
     var _children: [any View] { [content] }

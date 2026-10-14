@@ -16,6 +16,7 @@ extension Rating {
         session.binding = value
         let configuration = RatingSession.Configuration(value: selection.clamped(value.wrappedValue), selection: selection, geometry: geometry)
         if session.configuration != configuration { session.cancel(node: node); session.configuration = configuration }
+        node.applyTouchControlExtent(enabled: selection.isInteractive)
         node.isFocusable = selection.isInteractive; node.isHitTestable = selection.isInteractive
         if !selection.isInteractive, FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
         node.cursor = selection.isInteractive ? .pointer : .arrow
@@ -57,6 +58,7 @@ extension Rating {
         registry.setMotion(node) { [weak node] event, phase in
             guard let node else { return .ignored }
             guard phase == .target else { return .ignored }
+            guard node.supportsControlHover || session.pressedCandidate != nil else { return .ignored }
             session.hover(geometry.contains(event.x, event.y, node: node) ? geometry.candidate(at: event.x, node: node, precision: selection.precision) : nil, node: node)
             return session.pressedCandidate == nil ? .ignored : .handled
         }

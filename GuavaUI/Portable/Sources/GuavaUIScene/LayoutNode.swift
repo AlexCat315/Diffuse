@@ -294,9 +294,7 @@ public final class LayoutNode: @unchecked Sendable {
     public var minWidth: Float? {
         didSet {
             guard oldValue != minWidth else { return }
-            if let w = minWidth { YGNodeStyleSetMinWidth(ygNode, w) }
-            else { YGNodeStyleSetMinWidth(ygNode, .nan) }
-            markLayoutDirtyHint()
+            applyMinimumSize()
         }
     }
 
@@ -322,10 +320,30 @@ public final class LayoutNode: @unchecked Sendable {
     public var minHeight: Float? {
         didSet {
             guard oldValue != minHeight else { return }
-            if let h = minHeight { YGNodeStyleSetMinHeight(ygNode, h) }
-            else { YGNodeStyleSetMinHeight(ygNode, .nan) }
-            markLayoutDirtyHint()
+            applyMinimumSize()
         }
+    }
+
+    /// A transient layout floor, independent of authored minimum constraints.
+    /// Removing it restores the current authored values, including changes made
+    /// while the floor was active. Native control adapters use it for hit sizes.
+    public func setMinimumSizeFloor(_ size: CGSize?) {
+        let normalized = size.flatMap { value -> CGSize? in
+            guard value.width.isFinite, value.height.isFinite else { return nil }
+            return CGSize(width: max(0, value.width), height: max(0, value.height))
+        }
+        guard (attachments["__minimumSizeFloor"] as? CGSize) != normalized else { return }
+        attachments["__minimumSizeFloor"] = normalized
+        applyMinimumSize()
+    }
+
+    private func applyMinimumSize() {
+        let floor = attachments["__minimumSizeFloor"] as? CGSize
+        let width = floor.map { max(minWidth ?? 0, Float($0.width)) } ?? minWidth ?? .nan
+        let height = floor.map { max(minHeight ?? 0, Float($0.height)) } ?? minHeight ?? .nan
+        YGNodeStyleSetMinWidth(ygNode, width)
+        YGNodeStyleSetMinHeight(ygNode, height)
+        markLayoutDirtyHint()
     }
 
     public var maxHeight: Float? {

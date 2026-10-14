@@ -31,11 +31,12 @@ public struct UIEnvironment: Sendable, Hashable {
         public static let keyboard = Input(rawValue: 4)
         public static let pen = Input(rawValue: 8)
     }
-    public enum WidthClass: Sendable { case compact, medium, expanded }
+    public enum WidthClass: Sendable, Hashable { case compact, medium, expanded }
     public var viewport = Viewport()
     public var safeArea = Insets()
     public var input: Input = [.pointer, .keyboard]
     public var reducesMotion = false
     public init() {}
     public var minimumControlExtent: Float { input.contains(.touch) ? 44 : 28 }
+    public var supportsHover: Bool { input.contains(.pointer) }
 }

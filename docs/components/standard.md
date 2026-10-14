@@ -30,7 +30,7 @@ Application 在初始化/缩放/调整尺寸时提供环境，AndroidContentSess
 ## 所有组件的交付要求
 
 - 用语义动作表达 activate、select、edit、dismiss；不让业务代码识别鼠标按钮或 SDL 常量。
-- hover 是可选反馈；触摸设备必须能直接完成动作。默认触摸操作区至少 44 logical points，普通指针操作区为 28，桌面工具栏可显式使用 mini 密度。ButtonHost 从 SurfaceEnvironment 获取尺寸。
+- hover 是可选反馈；触摸设备必须能直接完成动作。默认触摸操作区至少 44 logical points，按钮普通指针密度从 28 起，其他控件保留各自 authored 尺寸；桌面工具栏可显式使用 mini 密度。Button、TextField、Slider、Toggle/Checkbox、Rating、List row、Calendar 与基于 Button 的 Stepper/Segment/Tab 共用输入密度契约；切回 pointer 恢复 authored minima。touch-only 禁止 hover，touch + pointer 保留 hover。
 - 同一动作提供键盘、指针、触摸和辅助功能入口；焦点环区分键盘焦点与点击焦点；disabled/loading 不能误触发动作。
 - 文本输入交给宿主的 IME/剪贴板和已有 TextInputClient，使用 Unicode、逻辑 start/end 和文本缩放。
 - 布局使用可用空间；安全区由宿主根应用一次，独立嵌入表面自行提供环境。工具栏和导航在 compact 模式收敛，不缩小触摸目标。
@@ -38,4 +38,4 @@ Application 在初始化/缩放/调整尺寸时提供环境，AndroidContentSess
 - 媒体组件接收 owned bitmap、视频帧或纹理值；解码、设备、播放时钟和导出任务留在媒体服务。
 - 数据模型只保存 authored 内容；焦点、hover、IME preedit、播放进度、纹理和拖动过程属于 session。
 
-新组件应加入相应责任目录，以真实的交互或状态测试证明其契约。当前 Button、SurfaceReader、WorkspaceView 已接入；其他已有控件的触摸密度、弹出层和宿主辅助功能能力仍需逐项迁移，不能把有一个移动 target 等同于全部控件已适配。
+新组件应加入相应责任目录，以真实的交互或状态测试证明其契约。当前 ContainerSizeReader、ViewThatFits、WidthClassReader 已提供容器与窗口两级查询，常用交互控件已接入 44pt 触摸密度，TabView 默认在 compact 下移到底部。Sidebar 抽屉、SplitView 单栏、Form/PropertyGrid 的 compact label 与 DataTable 列优先级尚未完成；弹出层和各平台触摸/IME/辅助功能仍需真机验收。Theme 状态层、spring 与响应式 Typography 的统一是下一阶段。

@@ -84,3 +84,7 @@ TabView(selection: $page, tabs: [
 
 - 主体: [GuavaUICompose/Primitives/TabView.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/TabView.swift)
 - 测试: [Tests/GuavaUIComposeTests/TabViewTests.swift](../../GuavaUI/Tests/GuavaUIComposeTests/TabViewTests.swift)
+
+## 响应式与输入密度
+
+TabStripPlacement 默认 .adaptive：surface width class 为 compact 时底部栏，其余顶部栏。显式 .top/.bottom 可覆盖。移动栏位只反转排列方向，保留当前页面的节点和局部状态。touch 下 tab 和关闭按钮至少 44pt；横向滚动 strip 同步扩展高度，segmented 额外包含 6pt padding。

@@ -45,3 +45,7 @@ Rating("Customer score", value: $score) {
 原生 Retina 窗口已确认明暗主题、12/16/20/28/36pt SVG、半星和 4.25 填充、禁用颜色、键盘步长、Home/End、清空策略、焦点环、辅助功能写入和独立重置。鼠标整星/半星命中、预览不提交、重复清零、内部拖动提交、外部释放取消及只读/禁用忽略输入也已完成原生验收。[Rating 验证](../guava-ui/evidence/rating-native.json)记录口径和限制。原生点击验收使用的 CUA 坐标仍待后续在输入驱动层稳定复现与修复。
 
 当前边界：水平 LTR 星形布局；未提供 RTL、其他评分图形、触摸专属手势和表单校验集成。
+
+## 响应式与输入密度
+
+可交互 Rating 在 touch surface 上为每颗星保留至少 44pt 的命中 lane，组件高度至少 44pt；星形仍使用 authored starSize 并在 lane 中居中。半星按 lane 的左右半区选择。touch-only surface 不产生被动 hover preview，但按下后的拖动仍可预览；只读评分保留紧凑展示尺寸。

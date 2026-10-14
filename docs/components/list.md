@@ -84,3 +84,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 
 - 主体: [GuavaUICompose/Primitives/List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/List.swift)
 - Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DefaultListRowStyle.swift)
+
+## 响应式与输入密度
+
+List 在 touch surface 上使用 max(rowHeight, 44) 作为真实行高，行 host、VirtualStack 的窗口化与滚动 extent 使用同一高度。返回 pointer 后恢复 authored rowHeight。通用 VirtualList/VirtualStack 不假定每行可交互，仍使用调用方高度。touch-only surface 不展示行 hover。

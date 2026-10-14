@@ -79,3 +79,7 @@ Tree-sitter 首次解析需要遍历文档，某些编辑也会使语法上下�
 - 主题样式：`DefaultTextFieldStyle.swift`、`TextFieldOptions.swift`
 
 `TextBuffer` 的 `==` 比较修订根身份；`hasSameContents(as:)` 比较精确 UTF-8 内容并跳过共享子树。独立加载的相同文本可能需要 O(n)，因此在编辑/保存边界计算并缓存结果，不在每帧调用。Script 工作区缓存 dirty 标志，输入后删除回原文也会恢复 clean，不依赖根身份恰好相同。
+
+## 响应式与输入密度
+
+TextField 的 style host 和实际输入 surface 在 touch 下共同保留至少 44pt 命中宽高；controlSize 的视觉与 authored minima 保留，切回 pointer 恢复对应密度。touch-only surface 不触发指针 hover 查询或 hover scrollbar chrome；键盘 F1 查询仍可用。

@@ -96,6 +96,52 @@ struct ContainerQueryTests: GuavaUIComposeSerializedSuite {
         #expect(recorder.builds == builds)
     } }
 
+    @Test("queries the parent allocation rather than branch intrinsic width, and excludes insets")
+    func allocationAndInsets() throws { try GlobalTestLock.locked {
+        let recorder = Recorder()
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: Box(direction: .column, alignItems: .stretch) {
+            ContainerSizeReader { recorder.content(for: $0) }
+                .padding(horizontal: 12, vertical: 8).border(.white, width: 2)
+                .frame(height: 100).debugName("inset-reader")
+        }.frame(width: 400))
+        let probe = try #require(named("inset-reader", in: graph))
+        probe.layoutNode?.setBorder(2)
+        settle(graph, graph.recomposer, width: 900, height: 300)
+        #expect(recorder.sizes.last == CGSize(width: 372, height: 80))
+        #expect(!graph.recomposer.hasPending)
+    } }
+
+    @Test("row queries use the flex allocation even when content has a larger intrinsic width")
+    func rowAllocation() throws { try GlobalTestLock.locked {
+        let recorder = Recorder(), graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: Row {
+            Box {}.frame(width: 100, height: 40).flex(0, shrink: 0)
+            ContainerSizeReader { size in recorder.content(for: size).frame(width: 950, height: 40) }
+                .flex(1, shrink: 1, basis: 0)
+        }.frame(width: 400))
+        settle(graph, graph.recomposer, width: 900, height: 300)
+        #expect(recorder.sizes.last?.width == 300)
+        #expect(!graph.recomposer.hasPending)
+    } }
+
+    @Test("exactly half a point is published")
+    func toleranceBoundary() throws { try GlobalTestLock.locked {
+        let recorder = Recorder()
+        let measured = Harness(recorder: recorder)
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: measured)
+        settle(graph, graph.recomposer, width: 300, height: 100)
+        // Yoga rounds at the default pixel scale; exercise a subpixel host frame
+        // directly to verify the publication threshold before pixel snapping.
+        let probe = try #require(nodes(graph.tree.root).first { $0.layoutDidUpdate != nil })
+        probe.frame.size.width = 300.5
+        probe.layoutDidUpdate?(probe)
+        graph.recomposer.commitAll()
+        #expect(recorder.sizes.last?.width == 300.5)
+        #expect(!graph.recomposer.hasPending)
+    } }
+
     @Test("sub-tolerance frame jitter does not republish")
     func ignoresJitter() throws { try GlobalTestLock.locked {
         let recorder = Recorder()

@@ -29,20 +29,23 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
     }
 
     public var body: some View {
-        SelectionKeyHost(onKey: handleKey) {
-        VirtualStack(data, id: id, rowHeight: rowHeight, spacing: rowSpacing,
-                     scrollToIndex: data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
-                        .map { data.distance(from: data.startIndex, to: $0) }) { element in
-            let selected = isSelected(element)
-            _ListRowHost(isSelected: selected, rowHeight: rowHeight,
-                         onActivate: { activate(element) },
-                         content: AnyView(rowContent(element, selected)))
-        }
-        // The keyboard host is the outermost node, so it is where a caller's
-        // `.frame`/`.flex` lands. The scroll view has to take the height that
-        // is left for it — otherwise it sizes to its own content and paints
-        // rows past the bottom of whatever constrained it.
-        .flex().frame(minWidth: 0, minHeight: 0)
+        SurfaceReader { surface in
+            let effectiveHeight = max(rowHeight, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
+            SelectionKeyHost(onKey: handleKey) {
+                VirtualStack(data, id: id, rowHeight: effectiveHeight, spacing: rowSpacing,
+                             scrollToIndex: data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
+                                .map { data.distance(from: data.startIndex, to: $0) }) { element in
+                    let selected = isSelected(element)
+                    _ListRowHost(isSelected: selected, rowHeight: effectiveHeight,
+                                 onActivate: { activate(element) },
+                                 content: AnyView(rowContent(element, selected)))
+                }
+                // The keyboard host is the outermost node, so it is where a caller's
+                // `.frame`/`.flex` lands. The scroll view has to take the height that
+                // is left for it — otherwise it sizes to its own content and paints
+                // rows past the bottom of whatever constrained it.
+                .flex().frame(minWidth: 0, minHeight: 0)
+            }
         }
     }
 
@@ -108,6 +111,7 @@ struct _ListRowHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.applyTouchControlExtent()
         node.accessibility = AccessibilitySemantics(.listItem) { $0.state.isSelected = isSelected; $0.combinesChildren = true }
         node.accessibilityActions.activate = onActivate
         guard let registry = InteractionRegistryHolder.current else { return }
@@ -117,6 +121,7 @@ struct _ListRowHost: _PrimitiveView {
         // band is not the one square thing left on the row.
         node.cornerRadius = SelectionAppearance.resolve(.navigation, theme: node.theme).cornerRadius
         let applyHover: (Bool) -> Void = { hovered in
+            let hovered = hovered && node.supportsControlHover
             node.attachments[Self.hoveredKey] = hovered
             node.backgroundColor = hovered && !isSelected ? node.theme.colors.stateLayerHover : .clear
         }
@@ -152,6 +157,8 @@ struct _ListRowHost: _PrimitiveView {
         l.height = rowHeight
         return l
     }
+
+    func _updateLayout(_ layout: LayoutNode) { layout.height = rowHeight }
 
     func _children(for node: Node) -> [any View] {
         let style = node.compositionValue(of: ListRowStyleEnvironment.key)

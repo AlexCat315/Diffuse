@@ -73,3 +73,7 @@
 
 - 主体: [GuavaUICompose/Primitives/Slider.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Slider.swift)
 - Style 协议 + 默认: [GuavaUICompose/Theme/SliderStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/SliderStyle.swift)
+
+## 响应式与输入密度
+
+touch surface 上 Slider 的命中区域宽高至少 44pt，轨道和 thumb 仍居中绘制。touch-only surface 忽略 hover；切回 pointer 恢复 authored minima 与原生 24pt 高度。

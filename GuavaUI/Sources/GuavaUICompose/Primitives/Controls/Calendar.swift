@@ -35,16 +35,19 @@ public struct CalendarView: View {
         _session = State(wrappedValue: CalendarSession(month: CalendarGrid.monthStart(initial, calendar: options.calendar), focusedDay: options.calendar.startOfDay(for: initial)))
     }
     public var body: some View {
-        CalendarKeyHost(onNavigate: navigate) {
-            Row(alignment: .top, spacing: 16) {
-                for index in 0..<options.presentation.numberOfMonths {
-                    AnyView(monthView(options.calendar.date(byAdding: .month, value: index, to: month) ?? month, index: index))
+        SurfaceReader { surface in
+            let cellSize = max(options.presentation.cellSize, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
+            CalendarKeyHost(onNavigate: navigate) {
+                Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 16) {
+                    for index in 0..<options.presentation.numberOfMonths {
+                        AnyView(monthView(options.calendar.date(byAdding: .month, value: index, to: month) ?? month, index: index, cellSize: cellSize))
+                    }
                 }
-            }
-        }.accessibility { $0.role = .group; $0.label = "Calendar" }
+            }.accessibility { $0.role = .group; $0.label = "Calendar" }
+        }
     }
     private var month: Date { options.visibleMonth?.wrappedValue ?? session.month }
-    private func monthView(_ date: Date, index: Int) -> some View {
+    private func monthView(_ date: Date, index: Int, cellSize: Float) -> some View {
         let days = CalendarGrid.days(in: date, calendar: options.calendar)
         let formatter = DateFormatter(); formatter.calendar = options.calendar; formatter.timeZone = options.calendar.timeZone
         formatter.locale = options.locale; formatter.setLocalizedDateFormatFromTemplate("MMMM yyyy")
@@ -60,27 +63,27 @@ public struct CalendarView: View {
             Row(alignment: .center, spacing: 2) {
                 for weekday in 0..<7 {
                     AnyView(Text(symbols[(weekday + options.calendar.firstWeekday - 1) % 7]).font(.caption).foregroundColor(.onSurfaceMuted)
-                        .frame(width: options.presentation.cellSize, height: 24).accessibilityHidden())
+                        .frame(width: cellSize, height: 24).accessibilityHidden())
                 }
             }
             for week in 0..<6 {
                 AnyView(Row(alignment: .center, spacing: 2) {
                     for day in days.dropFirst(week * 7).prefix(7) {
-                        AnyView(dayView(day, currentMonth: date, tabDay: tabDay))
+                        AnyView(dayView(day, currentMonth: date, tabDay: tabDay, cellSize: cellSize))
                     }
                 })
             }
         }.padding(10).background(.surface).cornerRadius(8).border(.border, width: 1)
     }
-    private func dayView(_ day: Date, currentMonth: Date, tabDay: Date?) -> some View {
+    private func dayView(_ day: Date, currentMonth: Date, tabDay: Date?, cellSize: Float) -> some View {
         let inMonth = options.calendar.isDate(day, equalTo: currentMonth, toGranularity: .month)
         let selected = selection.wrappedValue.map { options.calendar.isDate(day, inSameDayAs: $0) } ?? false
         let formatter = DateFormatter(); formatter.dateStyle = .full; formatter.calendar = options.calendar
         formatter.timeZone = options.calendar.timeZone; formatter.locale = options.locale
         return Button(String(options.calendar.component(.day, from: day)), isEnabled: inMonth && isEnabled(day), isSelected: selected) {
             selection.wrappedValue = options.calendar.startOfDay(for: day); session.focusedDay = day
-        }.buttonStyle(CalendarDayStyle(cellSize: options.presentation.cellSize, isCurrentMonth: inMonth, isToday: options.calendar.isDate(day, inSameDayAs: options.today)))
-            .frame(width: options.presentation.cellSize, height: options.presentation.cellSize).flex(0, shrink: 0)
+        }.buttonStyle(CalendarDayStyle(cellSize: cellSize, isCurrentMonth: inMonth, isToday: options.calendar.isDate(day, inSameDayAs: options.today)))
+            .frame(width: cellSize, height: cellSize).flex(0, shrink: 0)
             .modifier(CalendarDayModifier(day: day, isTabStop: tabDay == day))
             .accessibility { $0.role = .button; $0.label = formatter.string(from: day); $0.state.isSelected = selected }
             .focusRequest(session.focusRequest > 0 && session.focusedDay == day && inMonth ? AnyHashable(session.focusRequest) : nil)

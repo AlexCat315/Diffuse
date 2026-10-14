@@ -81,7 +81,10 @@ struct GalleryTests {
             #expect(shell?.absoluteFrame.height == 820)
             #expect((content?.frame.height ?? 0) > 500)
             let sections = layout.filter { $0.debugName?.hasPrefix("story-section-") == true }
-            #expect(sections.count == 4)
+            #expect(sections.count == 7)
+            for preview in ["narrow", "wide", "touch"] {
+                #expect(layout.contains { $0.debugName == "adaptive-button-\(preview)" })
+            }
             let primary = layout.first { $0.debugName == "gallery-primary-button" }
             #expect((primary?.frame.width ?? 0) > 40)
             #expect((primary?.frame.width ?? 1000) < 200)

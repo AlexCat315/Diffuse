@@ -1,49 +1,62 @@
 import Foundation
-import GuavaUIScene
+import GuavaUIRuntime
 
-/// Switches between two content trees by the width actually available to
-/// this container. Unlike `LayoutThatFits`, which rearranges one set of
-/// children, each branch owns its own subtree; identity, focus and local
-/// state stay separate per branch and survive while that branch is selected.
-///
-/// The default threshold is the compact width class boundary shared with
-/// `UIEnvironment.Viewport.widthClass`, so a component-level switch and the
-/// window-level size class agree on what "narrow" means.
-///
-/// ```swift
-/// ViewThatFits {
-///     WideToolbar()      // container width ≥ threshold
-/// } narrow: {
-///     CompactToolbar()   // otherwise
-/// }
-/// ```
-///
-/// The first build sees an unmeasured container and selects the narrow
-/// branch; the following frame publishes the measured size and rebuilds when
-/// the branch changes. Local state is separate per branch: it survives
-/// recomposition while that branch stays selected, and resets when the other
-/// branch is selected. Compose more than two shapes with
-/// `ContainerSizeReader` directly.
-public struct ViewThatFits<Wide: View, Narrow: View>: View {
+/// Selects wide or compact content using the allocated container width.
+/// Each branch is created on first selection and retains its own identity and
+/// local state until this container is removed. Inactive branches remain mounted
+/// but take no layout space, paint no pixels and receive no input or accessibility.
+/// App-owned drafts can still use shared bindings across the two presentations.
+/// This is a width-threshold selector; it does not measure intrinsic content fit.
+public struct ViewThatFits<Wide: View, Compact: View>: View {
     private let threshold: CGFloat
     private let wide: () -> Wide
-    private let narrow: () -> Narrow
+    private let compact: () -> Compact
 
     public init(threshold: CGFloat = CGFloat(UIEnvironment.Viewport.compactMaximumWidth),
                 @ViewBuilder wide: @escaping () -> Wide,
-                @ViewBuilder narrow: @escaping () -> Narrow) {
+                @ViewBuilder compact: @escaping () -> Compact) {
         self.threshold = threshold.isFinite ? max(0, threshold) : 0
-        self.wide = wide
-        self.narrow = narrow
+        self.wide = wide; self.compact = compact
     }
 
     public var body: some View {
         ContainerSizeReader { size in
-            if size.width >= threshold {
-                wide()
-            } else {
-                narrow()
+            Box(direction: .column, alignItems: .stretch) {
+                RetainedResponsiveBranch(isActive: size.width >= threshold, content: wide).id("wide")
+                RetainedResponsiveBranch(isActive: size.width < threshold, content: compact).id("compact")
             }
         }
+    }
+}
+
+private struct RetainedResponsiveBranch<Content: View>: _PrimitiveView {
+    let isActive: Bool
+    let content: () -> Content
+    private static var activatedKey: String { "__responsiveBranchActivated" }
+    func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode(); layout.alignItems = .stretch
+        return layout
+    }
+    func _updateNode(_ node: Node) {
+        if isActive { node.attachments[Self.activatedKey] = true }
+        node.isInteractionEnabled = isActive
+        node.opacity = isActive ? 1 : 0
+        node.layoutNode?.display = isActive ? .flex : .none
+        if !isActive {
+            if let focused = FocusChainHolder.current?.focused, contains(focused, in: node) { FocusChainHolder.current?.clear() }
+            if let captured = PointerCaptureHolder.current?.target, contains(captured, in: node) { PointerCaptureHolder.current?.release() }
+        }
+    }
+    func _children(for node: Node) -> [any View] {
+        node.attachments[Self.activatedKey] as? Bool == true ? [content()] : []
+    }
+    private func contains(_ candidate: Node, in ancestor: Node) -> Bool {
+        var current: Node? = candidate
+        while let node = current {
+            if node === ancestor { return true }
+            current = node.parent
+        }
+        return false
     }
 }

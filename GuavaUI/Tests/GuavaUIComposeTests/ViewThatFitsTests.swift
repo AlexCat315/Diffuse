@@ -5,121 +5,96 @@ import GuavaUIRuntime
 
 @Suite("ViewThatFits content trees", .serialized)
 struct ViewThatFitsTests: GuavaUIComposeSerializedSuite {
+    private struct Counter: View {
+        let name: String
+        @State private var count = 0
+        var body: some View {
+            Button(action: { count += 1 }) { Box {}.frame(width: 20, height: 20) }
+                .debugName(name).modifier(Value(value: count)).accessibilityLabel(name)
+        }
+    }
+    private struct Value: ViewModifier {
+        let value: Int
+        func apply(node: Node) { node.attachments["test.counter"] = value }
+    }
     private struct Harness: View {
         @State var width: Float = 700
-
-        var body: some View {
-            ViewThatFits {
-                Row {}.frame(width: 120, height: 40).debugName("branch-wide")
-            } narrow: {
-                Column {}.frame(width: 60, height: 40).debugName("branch-narrow")
-            }.frame(width: width, height: 100)
-        }
-    }
-
-    private struct ThresholdHarness: View {
         @State var threshold: Float = 600
-        @State var width: Float = 450
-
         var body: some View {
             ViewThatFits(threshold: CGFloat(threshold)) {
-                Row {}.debugName("threshold-wide")
-            } narrow: {
-                Column {}.debugName("threshold-narrow")
+                Counter(name: "wide")
+            } compact: {
+                Counter(name: "compact")
             }.frame(width: width, height: 100)
         }
     }
-
-    private func nodes(_ node: Node?) -> [Node] {
-        guard let node else { return [] }
-        return [node] + node.children.flatMap { nodes($0) }
-    }
-
+    private func nodes(_ root: Node) -> [Node] { [root] + root.children.flatMap(nodes) }
     private func named(_ name: String, in graph: ViewGraph) -> Node? {
-        nodes(graph.tree.root).first {
-            $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == name
-        }
+        nodes(graph.tree.root!).first { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == name }
     }
-
-    private func settle(_ graph: ViewGraph, _ recomposer: Recomposer, width: Float, height: Float) {
-        recomposer.commitAll()
-        graph.computeLayout(width: width, height: height)
-        recomposer.commitAll()
-        graph.computeLayout(width: width, height: height)
-    }
-
-    @Test("the wide branch is selected once the container is measured; the unmeasured build is narrow")
-    func selectsByMeasuredWidth() throws { try GlobalTestLock.locked {
-        var harness = Harness()
-        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: harness)
-        let recomposer = graph.recomposer
-
-        // Before any layout the container size is unknown: the narrow branch
-        // is the documented first build.
-        graph.computeLayout(width: 700, height: 100)
-        #expect(named("branch-narrow", in: graph) != nil)
-        #expect(named("branch-wide", in: graph) == nil)
-
-        settle(graph, recomposer, width: 700, height: 100)
-        #expect(named("branch-wide", in: graph) != nil)
-        #expect(named("branch-narrow", in: graph) == nil)
-        #expect(!recomposer.hasPending)
-
-        // A narrower container switches the branch and settles without
-        // further pending work.
-        harness.$width.wrappedValue = 300
-        settle(graph, recomposer, width: 300, height: 100)
-        #expect(named("branch-wide", in: graph) == nil)
-        #expect(named("branch-narrow", in: graph) != nil)
-        #expect(!recomposer.hasPending)
-    } }
-
-    @Test("a selected branch keeps its node identity while it stays selected")
-    func branchIdentitySurvivesRecomposition() throws { try GlobalTestLock.locked {
-        var harness = Harness()
-        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: harness)
-        let recomposer = graph.recomposer
-        settle(graph, recomposer, width: 700, height: 100)
-        let wide = named("branch-wide", in: graph)
-
-        // Idle frames must not rebuild the selected branch.
+    private func settle(_ graph: ViewGraph, width: Float) {
         for _ in 0..<3 {
-            recomposer.commitAll()
-            graph.computeLayout(width: 700, height: 100)
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: width, height: 100)
         }
-        #expect(named("branch-wide", in: graph) === wide)
+        #expect(!graph.recomposer.hasPending)
+    }
 
-        // Dropping below the threshold rebuilds the narrow branch; the wide
-        // node is gone and a fresh one appears when it is selected again.
-        harness.$width.wrappedValue = 300
-        settle(graph, recomposer, width: 300, height: 100)
-        #expect(named("branch-wide", in: graph) == nil)
-        harness.$width.wrappedValue = 800
-        settle(graph, recomposer, width: 800, height: 100)
-        let reselected = named("branch-wide", in: graph)
-        #expect(reselected != nil)
-        #expect(reselected !== wide)
+    @Test("only the measured branch lays out and is exposed to input and accessibility")
+    func selectionAndVisibility() throws { try GlobalTestLock.locked {
+        let harness = Harness(), graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: harness)
+        #expect(named("compact", in: graph) != nil && named("wide", in: graph) == nil)
+        settle(graph, width: 700)
+        let wide = try #require(named("wide", in: graph)), compact = try #require(named("compact", in: graph))
+        #expect(wide.acceptsSubtreeInput && !compact.acceptsSubtreeInput)
+        #expect(wide.frame.width > 0 && compact.frame.size == .zero)
+        #expect(AccessibilityTree.snapshot(root: graph.tree.root!).map(\.semantics.label) == ["wide"])
+        harness.width = 300
+        settle(graph, width: 300)
+        #expect(!wide.acceptsSubtreeInput && compact.acceptsSubtreeInput)
+        #expect(wide.frame.size == .zero && compact.frame.width > 0)
+        #expect(AccessibilityTree.snapshot(root: graph.tree.root!).map(\.semantics.label) == ["compact"])
     } }
 
-    @Test("an explicit threshold switches at the boundary, wide inclusive")
-    func explicitThresholdBoundary() throws { try GlobalTestLock.locked {
-        var harness = ThresholdHarness()
-        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: harness)
-        let recomposer = graph.recomposer
+    @Test("round trips preserve independent local state and node identity, while releasing hidden focus and capture")
+    func retainedState() throws { try GlobalTestLock.locked {
+        let oldRegistry = InteractionRegistryHolder.current, oldFocus = FocusChainHolder.current
+        let oldCapture = PointerCaptureHolder.current
+        let registry = InteractionRegistry(), focus = FocusChain(), capture = PointerCapture()
+        InteractionRegistryHolder.current = registry; FocusChainHolder.current = focus; PointerCaptureHolder.current = capture
+        defer { InteractionRegistryHolder.current = oldRegistry; FocusChainHolder.current = oldFocus; PointerCaptureHolder.current = oldCapture }
+        let harness = Harness(), graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: harness); settle(graph, width: 700)
+        let wide = try #require(named("wide", in: graph))
+        wide.accessibilityActions.activate?(); settle(graph, width: 700)
+        #expect(wide.attachments["test.counter"] as? Int == 1)
+        focus.focus(wide); capture.acquire(wide)
+        harness.width = 300; settle(graph, width: 300)
+        #expect(focus.focused == nil && capture.target == nil)
+        let compact = try #require(named("compact", in: graph))
+        #expect(compact.attachments["test.counter"] as? Int == 0)
+        compact.accessibilityActions.activate?(); compact.accessibilityActions.activate?()
+        settle(graph, width: 300)
+        harness.width = 800; settle(graph, width: 800)
+        #expect(named("wide", in: graph) === wide && wide.attachments["test.counter"] as? Int == 1)
+        harness.width = 320; settle(graph, width: 320)
+        #expect(named("compact", in: graph) === compact && compact.attachments["test.counter"] as? Int == 2)
+        let id = compact.id
+        graph.install(root: EmptyView())
+        #expect(nodes(graph.tree.root!).allSatisfy { $0.id != id })
+    } }
 
-        settle(graph, recomposer, width: 450, height: 100)
-        #expect(named("threshold-narrow", in: graph) != nil)
-
-        harness.$width.wrappedValue = 600
-        settle(graph, recomposer, width: 600, height: 100)
-        #expect(named("threshold-wide", in: graph) != nil)
-
-        harness.$threshold.wrappedValue = 700
-        settle(graph, recomposer, width: 600, height: 100)
-        #expect(named("threshold-wide", in: graph) == nil)
-        #expect(named("threshold-narrow", in: graph) != nil)
+    @Test("the wide threshold is inclusive and changing it does not require a new measurement")
+    func thresholdBoundary() throws { try GlobalTestLock.locked {
+        let harness = Harness(), graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: harness); settle(graph, width: 700)
+        harness.width = 600; settle(graph, width: 600)
+        let wide = try #require(named("wide", in: graph))
+        #expect(wide.acceptsSubtreeInput)
+        harness.threshold = 700; settle(graph, width: 600)
+        let compact = try #require(named("compact", in: graph))
+        #expect(compact.acceptsSubtreeInput)
+        #expect(!wide.acceptsSubtreeInput)
     } }
 }

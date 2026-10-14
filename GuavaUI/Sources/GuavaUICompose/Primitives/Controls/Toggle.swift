@@ -102,6 +102,8 @@ struct BoolControlHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.applyTouchControlExtent()
+        if !node.supportsControlHover { node.attachments[Self.hoveredKey] = false }
         node.isFocusable = isEnabled
         node.accessibility = AccessibilitySemantics(variant == .toggle ? .toggle : .checkbox) {
             $0.state.isEnabled = isEnabled; $0.state.isSelected = isOn.wrappedValue
@@ -142,7 +144,7 @@ struct BoolControlHost: _PrimitiveView {
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
-                setBoolControlInteraction(node, key: Self.hoveredKey, value: true)
+                setBoolControlInteraction(node, key: Self.hoveredKey, value: node.supportsControlHover)
             case .leave:
                 setBoolControlInteraction(node, key: Self.hoveredKey, value: false)
             }
@@ -217,9 +219,10 @@ struct BoolControlHost: _PrimitiveView {
         let trackHeight: Float = 20
         let thumbDiameter: Float = 16
         let thumbInset: Float = 2
-        let trackRect = UIRect(x: originX,
+        let trackWidth = node.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch) ? min(width, 38) : width
+        let trackRect = UIRect(x: originX + (width - trackWidth) * 0.5,
                                y: originY + (height - trackHeight) * 0.5,
-                               width: width,
+                               width: trackWidth,
                                height: trackHeight)
         list.addRoundedRect(trackRect,
                             radius: trackHeight * 0.5,
@@ -275,8 +278,8 @@ struct BoolControlHost: _PrimitiveView {
         let colors = node.theme.colors
         let originX = Float(origin.x)
         let originY = Float(origin.y)
-        let edge = min(width, height)
-        let boxRect = UIRect(x: originX,
+        let edge = node.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch) ? min(width, height, variant.layoutSize.width) : min(width, height)
+        let boxRect = UIRect(x: originX + (width - edge) * 0.5,
                              y: originY + (height - edge) * 0.5,
                              width: edge,
                              height: edge)

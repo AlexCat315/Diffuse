@@ -9,7 +9,9 @@ import GuavaUICore
     environment.viewport.width = 768
     environment.input = [.touch, .keyboard]
     #expect(environment.viewport.widthClass == .medium)
-    #expect(environment.minimumControlExtent == 44)
+    #expect(environment.minimumControlExtent == 44 && !environment.supportsHover)
     environment.input = [.pointer, .keyboard]
-    #expect(environment.minimumControlExtent == 28)
+    #expect(environment.minimumControlExtent == 28 && environment.supportsHover)
+    environment.input = [.touch, .pointer]
+    #expect(environment.minimumControlExtent == 44 && environment.supportsHover)
 }

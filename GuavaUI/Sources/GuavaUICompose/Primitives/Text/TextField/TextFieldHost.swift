@@ -54,6 +54,8 @@ struct _TextFieldStyleHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         node.isHitTestable = false
         node.isFocusable = false
+        node.applyTouchControlExtent()
+        if !node.supportsControlHover { onHoverChange(false) }
     }
 
     func _makeLayoutNode() -> LayoutNode? {
@@ -81,7 +83,7 @@ struct _TextFieldStyleHost: _PrimitiveView {
             isError: false,
             isEnabled: !textField.behavior.disabled,
             theme: node.theme,
-            isHovered: interactionState.isHovered && !textField.behavior.disabled
+            isHovered: interactionState.isHovered && node.supportsControlHover && !textField.behavior.disabled
         )
         return [style.makeBody(configuration)]
     }
@@ -100,6 +102,16 @@ struct _TextFieldSurface: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.attachments["__textfield_chrome_hover"] = onHoverChange
+        node.applyTouchControlExtent()
+        let supportsHover = node.supportsControlHover
+        if !supportsHover {
+            node.attachments[TextField.scrollbarHoveredKey] = false
+            if node.attachments["__textfield_pointer_hover_supported"] as? Bool == true {
+                textField.setScrollbarChromeVisible(false, on: node)
+                textField.reportHover(nil)
+            }
+        }
+        node.attachments["__textfield_pointer_hover_supported"] = supportsHover
         textField.updateSurfaceNode(node,
                                     interactionState: interactionState,
                                     onFocusChange: onFocusChange,

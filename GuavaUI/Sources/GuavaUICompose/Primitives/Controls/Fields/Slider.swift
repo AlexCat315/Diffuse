@@ -92,6 +92,8 @@ struct SliderHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.applyTouchControlExtent()
+        if !node.supportsControlHover { node.attachments[Self.hoveredKey] = false }
         node.isFocusable = isEnabled
         node.accessibility = AccessibilitySemantics(.slider) {
             $0.state.isEnabled = isEnabled; $0.value = String(clampedValue(value.wrappedValue))
@@ -144,7 +146,7 @@ struct SliderHost: _PrimitiveView {
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
-                setSliderInteraction(node, key: SliderHost.hoveredKey, value: true)
+                setSliderInteraction(node, key: SliderHost.hoveredKey, value: node.supportsControlHover)
             case .leave:
                 setSliderInteraction(node, key: SliderHost.hoveredKey, value: false)
             }

@@ -88,7 +88,7 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | 双面板与 IDE 工作区 | SplitView 与 Workspace；详见各自的约束与缺口 |
 | 层叠内容 | absolutePosition / zIndex 与 Portal 支持绘制层级；缺独立公共 ZStack/Overlay 布局容器 |
 | 大集合 | VariableVirtualStack 提供已知可变行高、稳定 ID 锚点及窗口化；仍缺未知高度估测和统一加载协议 |
-| 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；ContainerSizeReader 发布自身内容盒实测尺寸（容器查询，0.5pt 抗抖动阈值）；ViewThatFits 在容器宽度阈值两侧切换两套内容树，默认阈值与 `UIEnvironment.Viewport.compactMaximumWidth` 一致 |
+| 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；ContainerSizeReader 发布自身内容盒实测尺寸（容器查询，0.5pt 抗抖动阈值）；ViewThatFits 的 `wide:` / `compact:` 两套内容往返切换保留各自状态与节点；WidthClassReader 读取窗口级 compact/medium/expanded；默认容器阈值与 `UIEnvironment.Viewport.compactMaximumWidth` 一致 |
 | Grid | Grid/GridLayout 有 fixed/flexible/adaptive 列、测量行高及 RTL 对齐；LazyGrid 有等宽列与已知固定/可变行高窗口化；仍缺 span、显式 intrinsic 轨道和二维窗口化 |
 | 应用自定义布局 | 公开 Layout / ProposedViewSize / LayoutSubview / LayoutContainer；容器尺寸查询由 ContainerSizeReader 覆盖；仍缺 baseline/alignment guide API 与 safeAreaInsets/frame-in-container 全量 proxy |
 | 表单/属性布局 | Form / PropertyGrid 已有专门用途；不能代替通用约束或网格系统 |
@@ -117,7 +117,7 @@ LayoutThatFits([StackLayout(.horizontal, spacing: 12), StackLayout(.vertical, sp
 
 ViewThatFits(threshold: 500) {
     Row(spacing: 8) { Button("Save") {}; Button("Restore") {} }
-} narrow: {
+} compact: {
     Column(spacing: 8) { Button("Save") {}; Button("Restore") {} }
 }
 
@@ -126,8 +126,13 @@ ContainerSizeReader { size in
 }
 ```
 
-`ContainerSizeReader` 在每次布局后发布自身内容盒的实测尺寸（挂在 `layoutDidUpdate`，一次性安装并链接既有回调），内容按可用空间而非窗口重组——网格单元格里的卡片与工具栏按所在容器收窄，不依赖窗口宽度。0.5pt 以内的抖动不发布，循环布局/重发不会互相触发；未测量的首次构建收到 `.zero` 并选取窄分支，下一帧发布实测值后重建。`ViewThatFits` 是它的阈值封装：两个分支各自持有子树，被选中的分支在持续选中期间保持节点身份；阈值默认取 `UIEnvironment.Viewport.compactMaximumWidth`，与窗口级 widthClass 同一断点。threshold 变化时父级重组经 body 视图急切传播（ViewGraph 对用户视图 `replaceView` + `recompose`），不必等待尺寸重发。画廊 `--component layout` 有可交互示例。
+`ContainerSizeReader` 在布局后发布自身内容盒的实测尺寸，扣除 layout padding 和 border。它默认填充父级可用宽度，高度随内容；行内分配空间时用 `.flex(1, shrink: 1, basis: 0)`。父级必须提供有界宽度，避免内容自身决定用来选择内容的宽度。首次构建收到 `.zero`；下一次重组得到测量值。小于 0.5pt 的变化不发布，恰好 0.5pt 会发布。该阈值抑制尺寸噪声，不能替任意自定义尺寸反馈算法保证收敛。
 
+`ViewThatFits` 按实测容器宽度阈值选择两套内容，阈值为 wide 分支的包含边界。分支首次被选择时创建；已创建的分支在来回切换时保留自己的 `@State` 和节点身份，直到整个容器卸载。隐藏分支不参与布局、绘制、输入和可访问性，隐藏时释放其焦点与指针捕获；它仍挂载，因此订阅和资源仍存活，重任务应由应用按当前形态控制。跨形态共享的草稿使用应用持有的 Binding。此 API 是宽度阈值选择器，不测量内容是否 intrinsic fit；同一组子视图的实际候选测量仍使用 LayoutThatFits。
+
+`WidthClassReader { widthClass in … }` 读取 surface 级 width class；容器里嵌入的卡片应使用 ContainerSizeReader 或 ViewThatFits。默认断点为 compact < 600，medium < 1000，其余 expanded。画廊 `--component layout` 演示二者区别，控件 stories 各有窄窗、宽窗和触摸预览。
+
+```swift
 SafeArea(.horizontal) { content }
     .safeAreaInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 12))
     .layoutDirection(.rtl)

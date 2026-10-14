@@ -267,14 +267,11 @@ struct ButtonHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        let surface = node.compositionValue(of: SurfaceEnvironment.key)
-        if surface.input.contains(.touch) {
-            node.layoutNode?.minHeight = surface.minimumControlExtent
-            node.layoutNode?.minWidth = surface.minimumControlExtent
-            node.attachments["__touchControlExtent"] = true
-        } else if node.attachments.removeValue(forKey: "__touchControlExtent") != nil {
-            node.layoutNode?.minHeight = nil
-            node.layoutNode?.minWidth = nil
+        node.applyTouchControlExtent()
+        if !node.supportsControlHover {
+            node.attachments[ButtonHost.hoveredKey] = false
+            onHoverChange(false)
+            node.firstResource(TooltipSession.self)?.dismiss()
         }
         node.isFocusable = isEnabled
         node.accessibility = AccessibilitySemantics(node.compositionValue(of: ActionControlAccessibility.role)) {
@@ -305,7 +302,7 @@ struct ButtonHost: _PrimitiveView {
         }
         if requiresInteractionRecompose {
             node.attachments[ButtonHost.pressedKey] = isEnabled ? isPressed : false
-            node.attachments[ButtonHost.hoveredKey] = isEnabled ? isHovered : false
+            node.attachments[ButtonHost.hoveredKey] = isEnabled && node.supportsControlHover ? isHovered : false
         } else if isEnabled {
             if node.attachments[ButtonHost.pressedKey] == nil {
                 node.attachments[ButtonHost.pressedKey] = false
@@ -357,12 +354,12 @@ struct ButtonHost: _PrimitiveView {
                                  requiresRecompose: requiresInteractionRecompose, onChange: pressChange)
         } as () -> Void
         registry.setHover(node) { phase in
-            node.firstResource(TooltipSession.self)?.setHovered(phase == .enter)
+            node.firstResource(TooltipSession.self)?.setHovered(phase == .enter && node.supportsControlHover)
             switch phase {
             case .enter:
                 setButtonInteraction(node,
                                      key: ButtonHost.hoveredKey,
-                                     value: true,
+                                     value: node.supportsControlHover,
                                      requiresRecompose: requiresInteractionRecompose,
                                      onChange: hoverChange)
             case .leave:
@@ -423,7 +420,7 @@ struct ButtonHost: _PrimitiveView {
             let isInside = isPointInsideButton(event.x, event.y, node: node)
             setButtonInteraction(node,
                                  key: ButtonHost.hoveredKey,
-                                 value: isInside,
+                                 value: isInside && node.supportsControlHover,
                                  requiresRecompose: requiresInteractionRecompose,
                                  onChange: hoverChange)
             if isInside {
@@ -486,7 +483,7 @@ struct ButtonHost: _PrimitiveView {
             label:      label,
             role:       role,
             isPressed:  isEnabled ? configPressed : false,
-            isHovered:  isEnabled ? configHovered : false,
+            isHovered:  isEnabled && node.supportsControlHover ? configHovered : false,
             isFocused:  isFocused,
             isEnabled:  isEnabled,
             isSelected: isSelected,

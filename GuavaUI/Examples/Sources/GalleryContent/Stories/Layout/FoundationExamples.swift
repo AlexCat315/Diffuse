@@ -30,20 +30,24 @@ struct LayoutFoundationExamples: View {
                     Button("Settings") {}.buttonStyle(.secondary)
                 }.frame(width: narrow ? 180 : 620).debugName("layout-candidates")
             }
-            StorySection("Container queries", "Content follows the width actually available to it, not the window. The switch above resizes this container; each branch owns its own subtree.") {
+            StorySection("Container queries", "Content follows the width actually available to it, not the window. The switch above resizes this container; each branch keeps its own subtree and local state when selected again.") {
                 ViewThatFits(threshold: 500) {
                     Row(spacing: 8) {
                         chip("Files")
                         chip("Preview")
                         chip("Settings")
                     }
-                } narrow: {
+                } compact: {
                     Column(spacing: 8) {
                         chip("Files")
                         chip("Preview")
                         chip("Settings")
                     }
                 }.frame(width: narrow ? 300 : 620).debugName("layout-view-that-fits")
+                WidthClassReader { widthClass in
+                    Text("Surface width class: \(String(describing: widthClass))")
+                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                }
                 ContainerSizeReader { size in
                     Text("Container measures \(Int(size.width)) × \(Int(size.height)) points")
                         .font(.caption).foregroundColor(.onSurfaceMuted)

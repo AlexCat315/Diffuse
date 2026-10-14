@@ -4,7 +4,7 @@ import GuavaUIRuntime
 @testable import GuavaUICompose
 
 @Suite("Control density", .serialized)
-struct ControlDensityTests {
+struct ControlDensityTests: GuavaUIComposeSerializedSuite {
     @Test("compact color fields retain the hex value without duplicate channel text")
     func compactColorField() throws { try GlobalTestLock.locked {
         let previous = TextEnvironmentHolder.current

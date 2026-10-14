@@ -53,6 +53,6 @@ private struct ConsumerView: View {
         return node.children.lazy.compactMap(marker).first
     }
     let content = try #require(graph.tree.root.flatMap(marker))
-    #expect(content.frame.minX == 36)
-    #expect(content.frame.minY == 84)
+    #expect(content.absoluteFrame.minX == 36)
+    #expect(content.absoluteFrame.minY == 84)
 }

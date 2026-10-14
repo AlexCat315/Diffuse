@@ -100,6 +100,14 @@ struct SliderStory: View {
 
 public extension GalleryPage {
     func makeStory(options: GalleryOptions = GalleryOptions()) -> AnyView {
+        guard AdaptiveControlExamples.supports(self) else { return baseStory(options: options) }
+        return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            baseStory(options: options)
+            AdaptiveControlExamples(page: self, options: options)
+        })
+    }
+
+    private func baseStory(options: GalleryOptions) -> AnyView {
         switch self {
         case .introduction: AnyView(IntroductionStory(options: options))
         case .button: AnyView(ButtonStory(options: options))

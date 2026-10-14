@@ -5,24 +5,26 @@ struct RatingGeometry: Equatable {
     let starSize: Float
     let spacing: Float
     let maximum: Int
-    var cellWidth: Float { starSize + 8 }
+    let cellWidth: Float
     var stride: Float { cellWidth + spacing }
     var width: Float { 8 + Float(maximum) * cellWidth + Float(maximum - 1) * spacing }
-    var height: Float { max(32, starSize + 8) }
+    var height: Float { max(32, cellWidth) }
     init(appearance: RatingAppearance, selection: RatingSelection, node: Node) {
         let density = appearance.size ?? node.compositionValue(of: ControlSizeEnvironment.key)
         starSize = appearance.starSize ?? (density == .mini ? 12 : density == .small ? 16 : density == .large ? 28 : 20)
+        let surface = node.compositionValue(of: SurfaceEnvironment.key)
+        cellWidth = max(starSize + 8, selection.isInteractive && surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         spacing = appearance.spacing; maximum = selection.maximum
     }
     func starRect(_ index: Int, origin: CGPoint, height: Float) -> UIRect {
-        UIRect(x: Float(origin.x) + 8 + Float(index) * stride,
+        UIRect(x: Float(origin.x) + 4 + (cellWidth - starSize) / 2 + Float(index) * stride,
             y: Float(origin.y) + (height - starSize) / 2, width: starSize, height: starSize)
     }
     func candidate(at eventX: Float, node: Node, precision: RatingPrecision) -> Double {
         guard eventX.isFinite else { return 0 }
         let x = max(0, min(width, eventX - Float(node.absoluteOrigin.x) - 4))
         let index = min(maximum - 1, Int(x / stride))
-        let fraction = (x - Float(index) * stride - 4) / starSize
+        let fraction = (x - Float(index) * stride) / cellWidth
         let part = precision == .half && fraction <= 0.5 ? 0.5 : 1.0
         return Double(index) + part
     }

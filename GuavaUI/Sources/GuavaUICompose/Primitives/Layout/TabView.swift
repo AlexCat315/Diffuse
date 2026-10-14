@@ -37,6 +37,8 @@ public enum TabVariant: Sendable, Hashable {
 
 /// Which edge of a `TabView` holds the strip.
 public enum TabStripPlacement: Sendable, Hashable {
+    /// Bottom on compact surfaces; top on medium and expanded surfaces.
+    case adaptive
     case top
     case bottom
 }
@@ -83,7 +85,7 @@ public struct TabView<ID: Hashable>: View {
         self.selection = selection
         self.tabs = tabs
         self.variant = .bar
-        self.placement = .top
+        self.placement = .adaptive
         self.overflow = .wrap
         self.isEnabled = true
         configure(&self)
@@ -94,18 +96,20 @@ public struct TabView<ID: Hashable>: View {
         let enabled = tabs.filter { isEnabled && $0.isEnabled }.map(\.id)
         let active = enabled.contains(selection.wrappedValue) ? selection.wrappedValue : enabled.first
         let tabStop = active ?? enabled.first
-        return RovingFocusHost(
-            enabledItems: enabled.map { AnyHashable($0) },
-            // Read the binding at call time, not the `active` snapshot: two key
-            // events can arrive inside one render pass, and a captured value
-            // would send the second arrow from the previous selection.
-            selection: { AnyHashable(selection.wrappedValue) },
-            onSelect: { if let id = $0.base as? ID { selection.wrappedValue = id } }
-        ) {
-            Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                if placement == .top { strip(tabStop: tabStop) }
-                contentArea
-                if placement == .bottom { strip(tabStop: tabStop) }
+        return SurfaceReader { surface in
+            let placement = self.placement == .adaptive ? (surface.viewport.widthClass == .compact ? TabStripPlacement.bottom : .top) : self.placement
+            RovingFocusHost(
+                enabledItems: enabled.map { AnyHashable($0) },
+                // Read the binding at call time, not the `active` snapshot: two key
+                // events can arrive inside one render pass, and a captured value
+                // would send the second arrow from the previous selection.
+                selection: { AnyHashable(selection.wrappedValue) },
+                onSelect: { if let id = $0.base as? ID { selection.wrappedValue = id } }
+            ) {
+                Box(direction: placement == .top ? .column : .columnReverse, alignItems: .stretch, spacing: 0) {
+                    strip(tabStop: tabStop, placement: placement, surface: surface)
+                    contentArea
+                }
             }
         }
     }
@@ -116,7 +120,7 @@ public struct TabView<ID: Hashable>: View {
         }
     }
 
-    private func strip(tabStop: ID?) -> some View {
+    private func strip(tabStop: ID?, placement: TabStripPlacement, surface: UIEnvironment) -> some View {
         let items = Box(direction: .row,
                         alignItems: .center,
                         justifyContent: .flexStart,
@@ -129,7 +133,7 @@ public struct TabView<ID: Hashable>: View {
                                     isSelected: tab.id == selection.wrappedValue,
                                     isEnabled: isEnabled && tab.isEnabled,
                                     variant: variant,
-                                    indicator: indicatorPlacement,
+                                    indicator: variant == .bar ? (placement == .top ? .bottom : .top) : .none,
                                     onSelect: { selection.wrappedValue = tab.id },
                                     onClose: tab.onClose)
                     .modifier(RovingItemModifier(id: AnyHashable(tab.id), isTabStop: tab.id == tabStop)))
@@ -140,12 +144,8 @@ public struct TabView<ID: Hashable>: View {
             ? AnyView(items.padding(3).background(SemanticColorRef.surfaceVariant).cornerRadius(8))
             : AnyView(items.background(SemanticColorRef.surface))
         guard overflow == .scroll else { return styled }
-        return AnyView(ScrollView(.horizontal) { styled }.frame(height: 40))
-    }
-
-    private var indicatorPlacement: IndicatorPlacement {
-        guard variant == .bar else { return .none }
-        return placement == .top ? .bottom : .top
+        let height = max(Float(40), surface.input.contains(.touch) ? surface.minimumControlExtent + (variant == .segmented ? 6 : 0) : 0)
+        return AnyView(ScrollView(.horizontal) { styled }.frame(minHeight: height).flex(0, shrink: 0))
     }
 }
 

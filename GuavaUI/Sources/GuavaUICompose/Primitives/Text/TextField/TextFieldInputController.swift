@@ -72,7 +72,7 @@ extension TextField {
                 // Without a subscriber this stays free — resolving the pointer
                 // to a character index costs a layout pass, which pointer motion
                 // would otherwise charge to every frame.
-                guard textField.events.onHoverChange != nil,
+                guard node.supportsControlHover, textField.events.onHoverChange != nil,
                       TextEnvironmentHolder.current != nil else { return .ignored }
                 let target = textField.characterIndex(atWindowPoint: point,
                                                      state: state,
@@ -84,11 +84,11 @@ extension TextField {
             }
             registry.setHover(node) { phase in
                 let onHover = node.attachments["__textfield_chrome_hover"] as? (Bool) -> Void
-                onHover?(phase == .enter)
+                onHover?(phase == .enter && node.supportsControlHover)
                 switch phase {
                 case .enter:
-                    node.attachments[TextField.scrollbarHoveredKey] = true
-                    textField.setScrollbarChromeVisible(true, on: node)
+                    node.attachments[TextField.scrollbarHoveredKey] = node.supportsControlHover
+                    textField.setScrollbarChromeVisible(node.supportsControlHover, on: node)
                 case .leave:
                     node.attachments[TextField.scrollbarHoveredKey] = false
                     textField.setScrollbarChromeVisible(false, on: node)
