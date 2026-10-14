@@ -184,7 +184,7 @@
 - 外观：月视图、日期格由 `controlSize` 决定；前后月箭头为独立按钮。`[已实现]`
 - 手机：日期格 ≥ 44pt，单月一屏；放不下时整板横向滚动，不缩格。`[部分]`（触摸格下限已实现；整板滚动与窄宽取样待验收）
 - 平板 / 桌面：可多月份并排（`numberOfMonths`）；hover 日期反馈。`[已实现]`
-- 交互与验收：方向键移动（±1/±7）、辅助功能每格 role=button + 选中态、月份箭头有名称；Home/End/PageUp/PageDown `[未实现]`。验收：`TouchDensityTests` calendar、`--component calendar` 的三预览。
+- 交互与验收：方向键移动（±1/±7）；Home/End 定位焦点所属月份的首个/最后一个可用日期，PageUp/PageDown 按日号翻月并夹到月末。不可用目标在目标月内查找，空月不改变焦点；导航不提交选择，Return/Space 才激活。多月份窗口仅在目标超出已显示范围时移动；禁用日期释放焦点。辅助功能每格 role=button + 完整日期/选中态，月份箭头有名称。`[已实现]`。验收：`CalendarKeyboardNavigationTests`、`TouchDensityTests` calendar、`NavigationStateTests.calendarKeyboard`、`--component calendar` 三预览；完整契约见 [Calendar / DatePicker](calendar.md)。
 
 ### 3.3 文本与数值输入
 
@@ -404,6 +404,7 @@ guava showcase gallery --android --component NAME
 | 触摸 44pt 族、密度恢复、hover gating | `GuavaUI/Tests/GuavaUIComposeTests/TouchDensityTests.swift` |
 | Tree / Table / DataTable / Menu 行高、节点与选择保留、翻页/编辑、子浮层环境 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/RowDensityTests.swift` |
 | List / Table / DataTable / LazyGrid 字号缩放一次、行间距、前缀索引与滚动边界 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TextScaleRows.swift` |
+| Calendar 月内首尾/翻月、日期限制、实际焦点、禁用与 DatePicker 提交 | `GuavaUI/Tests/GuavaUIComposeTests/Calendar/KeyboardNavigationTests.swift` |
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
@@ -423,6 +424,8 @@ guava showcase gallery --android --component NAME
 - 每条要求记录：测试名 + 覆盖行为 + 平台（宿主 + 输入形态 + 宽度）。
 - 原生视觉验收记录截图组合：light/dark × 390/720/1280，加 200% 文本缩放与触摸形态各一组。
 - 已知无法在本轮验收的条目必须写入第 5 节，不允许以"设计如此"绕过。
+
+Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主上覆盖 390pt 触摸 + 键盘、720pt 混合输入、1280pt 指针 + 键盘，验证 Home/End、PageUp/PageDown、日期限制与空月、闰年/月底/跨年/DST、受控多月份窗口、禁用释放焦点，以及 DatePicker 导航不提交、Enter 提交后关闭并恢复触发器焦点。`NavigationStateTests.calendarKeyboard` 验证 Gallery 周末禁用故事。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过；手机真机视觉仍按上述矩阵验收。
 
 ## 5. 未实现项清单（按本文验收）
 

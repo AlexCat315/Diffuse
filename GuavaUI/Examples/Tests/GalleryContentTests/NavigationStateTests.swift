@@ -7,6 +7,52 @@ import GuavaUICompose
 @Suite("Gallery navigation state", .serialized)
 @MainActor
 struct NavigationStateTests {
+    @Test("Calendar story changes focused months and skips weekends without selecting until Enter")
+    func calendarKeyboard() throws {
+        let previous = TextEnvironmentHolder.current
+        TextEnvironmentHolder.current = .bootstrapped(atlasTextureID: 1, primaryFontName: SystemFontDefaults.primaryFontName)
+        defer { TextEnvironmentHolder.current = previous }
+        let context = PlatformInputContext()
+        try context.withCurrent { try AnimatorScheduler.$current.withValue(AnimatorScheduler()) {
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            defer { graph.install(root: EmptyView()) }
+            graph.install(root: CalendarStory(options: GalleryOptions()))
+            let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
+                capture: context.pointerCapture, focusChain: context.focusChain)
+            func all(_ node: Node) -> [Node] { [node] + node.children.flatMap(all) }
+            func settle() {
+                for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 720, height: 700) }
+            }
+            func key(_ code: UInt32) {
+                dispatcher.dispatch(.keyDown(KeyEvent(scancode: code, keycode: 0, modifiers: [], isRepeat: false)))
+                settle()
+            }
+            settle()
+            var first: Node?
+            for node in all(graph.tree.root!) {
+                if node.attachments["calendar.day"] != nil, node.isFocusable { first = node; break }
+            }
+            let day = try #require(first)
+            let initial = try #require(day.attachments["calendar.day"] as? Date)
+            context.focusChain.focus(day)
+            key(Scancode.pageDown)
+            let calendar = Foundation.Calendar.current
+            let focused = try #require(context.focusChain.focused?.attachments["calendar.day"] as? Date)
+            let nextMonth = try #require(calendar.date(byAdding: .month, value: 1, to: initial))
+            #expect(calendar.isDate(focused, equalTo: nextMonth, toGranularity: .month))
+            #expect(!calendar.isDateInWeekend(focused))
+            #expect(all(graph.tree.root!).contains { $0.layoutNode?.textInputs?.text == "No date selected" })
+            key(Scancode.end)
+            let interval = try #require(calendar.dateInterval(of: .month, for: focused))
+            var last = calendar.date(byAdding: .day, value: -1, to: interval.end)!
+            while calendar.isDateInWeekend(last) { last = calendar.date(byAdding: .day, value: -1, to: last)! }
+            #expect(context.focusChain.focused?.attachments["calendar.day"] as? Date == last)
+            key(Scancode.return)
+            #expect(context.focusChain.focused?.accessibility?.state.isSelected == true)
+            #expect(!all(graph.tree.root!).contains { $0.layoutNode?.textInputs?.text == "No date selected" })
+        } }
+    }
+
     @Test("The 100K LazyGrid story applies text scaling once without expanding the viewport")
     func lazyGridTextScale() throws {
         let previous = TextEnvironmentHolder.current

@@ -39,7 +39,7 @@ struct CalendarStory: View {
     let options: GalleryOptions
     @State private var date: Date?
     var body: some View {
-        StorySection("Choose a day", "Browse months, Tab into the day grid, then move with arrows or Home/End. Return selects the focused day. Weekend dates are unavailable.") {
+        StorySection("Choose a day", "Move with arrows; Home/End focus the first/last available day of the month. PageUp/PageDown change months. Return selects the focused day. Weekend dates are unavailable.") {
             CalendarView(selection: $date) {
                 $0.presentation.isEnabled = options.isEnabled; $0.calendar.firstWeekday = 2
                 let calendar = $0.calendar

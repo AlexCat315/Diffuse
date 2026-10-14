@@ -82,7 +82,7 @@
 - 用途：日期区间（起点/终点）选择。
 - 外观：复用 Calendar 月视图；起点/终点填充、区间段高亮、hover 预览；弹层宽度夹紧窗口。`[未实现]`
 - 手机：单月一屏、日期格 ≥ 44；平板/桌面：可双月并排。`[未实现]`
-- 交互与验收：第一次点击设起点、第二次设终点，Escape 取消草稿，区间非法自动交换并提示；辅助功能读"开始日期/结束日期"；键盘方向键移动、Home/End（月内）与 PageUp/Down（月份）见规范 3.2 Calendar 缺口。参考：Flutter `DateRangePicker`；Material 3 date range picker。
+- 交互与验收：第一次点击设起点、第二次设终点，Escape 取消草稿，区间非法自动交换并提示；辅助功能读"开始日期/结束日期"；键盘方向键移动、Home/End（月内）与 PageUp/Down（月份）复用规范 3.2 已实现的 Calendar 导航契约。参考：Flutter `DateRangePicker`；Material 3 date range picker。
 
 ### 2.9 列表能力包（P1）
 
@@ -132,8 +132,8 @@
 | Rating | RTL、自定义图形/半星以上精度 | P2 |
 | NumberField / Vec3Field | locale 小数分隔、拖拽 scrub、单轴重置与向量复制/粘贴 | P2 |
 | Select / Combobox | 远程/异步结果（按需）、触发器宽度联动 | P2 |
-| DatePicker / TimeField | 12/24 小时与时区、键盘月份跳转、滚轮（见 2.12） | P2 |
-| Calendar | 区间选择（见 2.8）、Home/End/PageUp/Down | P1/P2 |
+| DatePicker / TimeField | 12/24 小时与时区、滚轮（见 2.12）；DatePicker 键盘月份跳转已有 | P2 |
+| Calendar | 区间选择（见 2.8）；Home/End/PageUp/Down 已实现，见 [日历导航](calendar.md) | P1 |
 | List | 多选/区段/重排/swipe/下拉刷新（见 2.9） | P1 |
 | Tree | 懒加载子节点、全部展开/折叠快捷；多选、搜索与触摸行高已有 | P1/P2 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级见规范 5-4，文本缩放行高已有 | P2 |

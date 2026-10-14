@@ -86,7 +86,8 @@ public struct CalendarView: View {
             .frame(width: cellSize, height: cellSize).flex(0, shrink: 0)
             .modifier(CalendarDayModifier(day: day, isTabStop: tabDay == day))
             .accessibility { $0.role = .button; $0.label = formatter.string(from: day); $0.state.isSelected = selected }
-            .focusRequest(session.focusRequest > 0 && session.focusedDay == day && inMonth ? AnyHashable(session.focusRequest) : nil)
+            .focusRequest(session.focusRequest > 0 && session.focusedDay == day && inMonth && isEnabled(day)
+                ? AnyHashable(session.focusRequest) : nil)
             .id(day)
     }
     private func isEnabled(_ day: Date) -> Bool { options.presentation.isEnabled && options.availability.contains(day, calendar: options.calendar) }
@@ -95,29 +96,34 @@ public struct CalendarView: View {
         if let binding = options.visibleMonth { binding.wrappedValue = next } else { session.month = next }
     }
     private func navigate(_ date: Date, _ code: UInt32) -> Bool {
-        let step: Int
-        switch code {
-        case Scancode.arrowLeft: step = -1
-        case Scancode.arrowRight: step = 1
-        case Scancode.arrowUp: step = -7
-        case Scancode.arrowDown: step = 7
-        case Scancode.home: step = -((options.calendar.component(.weekday, from: date) - options.calendar.firstWeekday + 7) % 7)
-        case Scancode.end: step = 6 - ((options.calendar.component(.weekday, from: date) - options.calendar.firstWeekday + 7) % 7)
-        default: return false
-        }
-        guard let next = CalendarGrid.move(date, days: step, calendar: options.calendar, availability: options.availability) else { return true }
+        guard options.presentation.isEnabled, let navigation = CalendarNavigation(scancode: code) else { return false }
+        guard let next = navigation.destination(from: date, calendar: options.calendar,
+                                               availability: options.availability) else { return true }
         session.focusedDay = next; session.focusRequest += 1
-        if !options.calendar.isDate(next, equalTo: month, toGranularity: .month) {
-            if let binding = options.visibleMonth { binding.wrappedValue = CalendarGrid.monthStart(next, calendar: options.calendar) }
-            else { session.month = CalendarGrid.monthStart(next, calendar: options.calendar) }
-        }
+        reveal(next)
         return true
+    }
+
+    private func reveal(_ day: Date) {
+        let calendar = options.calendar
+        let first = CalendarGrid.monthStart(month, calendar: calendar)
+        guard let end = calendar.date(byAdding: .month, value: options.presentation.numberOfMonths, to: first),
+              day < first || day >= end else { return }
+        let targetMonth = CalendarGrid.monthStart(day, calendar: calendar)
+        let next = day < first ? targetMonth
+            : calendar.date(byAdding: .month, value: 1 - options.presentation.numberOfMonths, to: targetMonth) ?? targetMonth
+        if let binding = options.visibleMonth { binding.wrappedValue = next }
+        else { session.month = next }
     }
 }
 private struct CalendarDayModifier: ViewModifier {
     let day: Date
     let isTabStop: Bool
-    func apply(node: Node) { node.attachments["calendar.day"] = day; node.isTabStop = isTabStop }
+    func apply(node: Node) {
+        node.attachments["calendar.day"] = day
+        node.isTabStop = isTabStop && node.isFocusable
+        if !node.isFocusable, FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
+    }
 }
 private struct CalendarKeyHost<Content: View>: _PrimitiveView {
     let onNavigate: (Date, UInt32) -> Bool
@@ -127,7 +133,8 @@ private struct CalendarKeyHost<Content: View>: _PrimitiveView {
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
         InteractionRegistryHolder.current?.setKey(node) { event, phase in
-            guard phase == .bubble, let date = FocusChainHolder.current?.focused?.attachments["calendar.day"] as? Date else { return .ignored }
+            guard phase == .bubble, event.modifiers.isEmpty,
+                  let date = FocusChainHolder.current?.focused?.attachments["calendar.day"] as? Date else { return .ignored }
             return onNavigate(date, event.scancode) ? .handled : .ignored
         }
     }
