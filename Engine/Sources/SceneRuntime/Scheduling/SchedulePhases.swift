@@ -126,7 +126,7 @@ extension RuntimeWorldSchedule {
         } else {
             physicsSyncCache = PhysicsSyncCache()
         }
-        if usesSharedJoltBackend {
+        if usesSharedPhysicsBackend {
             physicsQueryScene.adoptSynchronizedWorld(
                 world,
                 bodyCount: frame.descriptors.bodies.count,
@@ -138,7 +138,7 @@ extension RuntimeWorldSchedule {
     /// Clears every physics-derived resource when simulation is switched off, so the
     /// world keeps reporting empty frames instead of stale simulation results.
     mutating func resetDisabledPhysicsResources(world: inout RuntimeWorld) {
-        if !usesSharedJoltBackend {
+        if !usesSharedPhysicsBackend {
             physicsBackend.reset()
         }
         physicsSyncCache = PhysicsSyncCache()
@@ -342,7 +342,7 @@ extension RuntimeWorldSchedule {
             stateHashFrame: stateHashFrame
         )
         world.setDerivedResource(physicsContactFrame)
-        if usesSharedJoltBackend {
+        if usesSharedPhysicsBackend {
             physicsQueryScene.adoptSynchronizedWorld(
                 world,
                 bodyCount: frame.descriptors.bodies.count,

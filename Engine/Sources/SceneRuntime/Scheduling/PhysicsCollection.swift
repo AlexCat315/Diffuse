@@ -171,7 +171,7 @@ extension RuntimeWorldSchedule {
         guard explicitPhysicsBackend == nil else { return }
         guard resolvedPhysicsBackendKind != kind else { return }
 
-        if usesSharedJoltBackend {
+        if usesSharedPhysicsBackend {
             physicsQueryScene.invalidate()
         }
         physicsBackend.reset()
@@ -185,9 +185,12 @@ extension RuntimeWorldSchedule {
         physicsFrameState.backendIdentifier = physicsBackend.identifier
     }
 
-    var usesSharedJoltBackend: Bool {
-        guard let backend = physicsBackend as? JoltPhysicsBackend else { return false }
-        return backend === joltPhysicsBackend
+    /// Whether `physicsBackend` is still the shared backend instance created with
+    /// this schedule. Physics-derived caches and the query scene are only valid
+    /// while that instance survives, so this is an identity question rather than
+    /// a question about which engine is selected.
+    var usesSharedPhysicsBackend: Bool {
+        physicsBackend === joltPhysicsBackend
     }
 
 
