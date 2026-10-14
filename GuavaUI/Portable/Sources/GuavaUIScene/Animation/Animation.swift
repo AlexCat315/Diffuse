@@ -6,8 +6,8 @@ import Foundation
 
 // MARK: - AnimationCurve
 
-/// Easing curve mapping normalized time `t ∈ [0, 1]` to normalized progress
-/// `p ∈ [0, 1]`. Pure value type with no theme dependency — Phase 7.5's
+/// Easing curve mapping normalized time `t ∈ [0, 1]` to progress. Overshooting
+/// curves can return progress outside `[0, 1]`. Pure value type with no theme dependency — Phase 7.5's
 /// `Easing` struct lives in the Compose layer and feeds into `Animation` via
 /// `.cubicBezier(...)` here when needed.
 public enum AnimationCurve: Sendable, Equatable {
@@ -15,6 +15,15 @@ public enum AnimationCurve: Sendable, Equatable {
     case easeIn
     case easeOut
     case easeInOut
+    /// Equal intervals with a jump at the start or end of each interval.
+    /// Nonpositive counts resolve to one interval.
+    case steps(Int, position: AnimationStepPosition = .end)
+    /// Linear interpolation through authored time/progress points.
+    case piecewiseLinear(LinearTimingCurve)
+    /// Four diminishing parabolic bounces, bounded to `[0, 1]`.
+    case bounceOut
+    /// Decaying oscillation with overshoot and a normalized period of 0.4.
+    case elasticOut
     /// Damped spring curve using a response period and damping fraction.
     ///
     /// `response` is the approximate period in seconds for a single natural
@@ -30,10 +39,10 @@ public enum AnimationCurve: Sendable, Equatable {
     /// Anchors `(0, 0)` and `(1, 1)` are implied.
     case cubicBezier(Float, Float, Float, Float)
 
-    /// Map normalized time to normalized progress. Inputs outside `[0, 1]`
-    /// are clamped before evaluation.
+    /// Map normalized time to progress, preserving overshoot. Inputs outside
+    /// `[0, 1]` are clamped; NaN is treated as zero.
     public func evaluate(_ t: Float) -> Float {
-        let x = max(0, min(1, t))
+        let x = t.isNaN ? 0 : max(0, min(1, t))
         switch self {
         case .linear:
             return x
@@ -52,6 +61,14 @@ public enum AnimationCurve: Sendable, Equatable {
                 let inv = 1 - x
                 return 1 - 2 * inv * inv
             }
+        case let .steps(count, position):
+            return Self.evaluateSteps(x: x, count: count, position: position)
+        case let .piecewiseLinear(curve):
+            return curve.evaluate(x)
+        case .bounceOut:
+            return Self.evaluateBounceOut(x)
+        case .elasticOut:
+            return Self.evaluateElasticOut(x)
         case let .spring(response, dampingFraction):
             return Self.evaluateSpring(
                 x: x,

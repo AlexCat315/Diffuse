@@ -147,13 +147,17 @@ struct LayoutStory: View {
 }
 
 struct AnimationStory: View {
+    let options: GalleryOptions
     @State private var visible = true
     var body: some View {
-        StorySection("Animated visibility", "The component retains the subtree through its exit animation and cleans up after settling.") {
-            Button(visible ? "Hide content" : "Show content") { visible.toggle() }.buttonStyle(.secondary)
-            AnimatedVisibility(isVisible: visible, transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
-                Alert("Animated content", message: "Try toggling repeatedly during the transition.", tone: .success)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Animated visibility", "The component retains the subtree through its exit animation and cleans up after settling.") {
+                Button(visible ? "Hide content" : "Show content", isEnabled: options.isEnabled) { visible.toggle() }.buttonStyle(.secondary)
+                AnimatedVisibility(isVisible: visible, transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
+                    Alert("Animated content", message: "Try toggling repeatedly during the transition.", tone: .success)
+                }
             }
+            AnimationCurveExamples(isEnabled: options.isEnabled)
         }
     }
 }

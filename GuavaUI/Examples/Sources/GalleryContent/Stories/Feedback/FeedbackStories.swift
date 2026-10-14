@@ -145,7 +145,7 @@ public extension GalleryPage {
         case .propertyGrid: AnyView(PropertyGridStory(options: options))
         case .workspace: AnyView(WorkspaceStory())
         case .layout: AnyView(LayoutStory())
-        case .animation: AnyView(AnimationStory())
+        case .animation: AnyView(AnimationStory(options: options))
         case .theme: AnyView(ThemeStory())
         case .badge: AnyView(BadgeStory())
         case .alert: AnyView(AlertStory())

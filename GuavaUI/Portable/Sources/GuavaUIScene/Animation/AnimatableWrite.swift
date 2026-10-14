@@ -17,6 +17,10 @@ import Foundation
 ///    controller writes through; `animatableSet` does not need a second,
 ///    parallel dirty-tracking path.
 ///
+/// A node that prefers reduced motion snaps to `target` and cancels any
+/// in-flight controller for that property, matching `AnimatedVisibility` and
+/// the scroll physics; state feedback still reaches its final value.
+///
 /// Edge cases for `Optional<Value>` (e.g. `Color?`): if either endpoint is
 /// `nil` we cannot meaningfully interpolate, so we fall back to an instant
 /// write and skip the controller. Animating in/out of `nil` is the caller's
@@ -52,7 +56,7 @@ public extension Node {
             apply(target)
             return
         }
-        guard let anim = ActiveAnimationContext.current, current != target else {
+        guard let anim = ActiveAnimationContext.current, !prefersReducedMotion, current != target else {
             replaceAnimationController(for: propertyKey, with: nil)
             apply(target)
             return
@@ -87,6 +91,7 @@ public extension Node {
             return
         }
         guard let anim = ActiveAnimationContext.current,
+              !prefersReducedMotion,
               let from = current,
               let to = target,
               from != to
@@ -120,7 +125,7 @@ public extension Node {
             self[keyPath: keyPath] = target
             return
         }
-        guard let anim = ActiveAnimationContext.current, current != target else {
+        guard let anim = ActiveAnimationContext.current, !prefersReducedMotion, current != target else {
             replaceAnimationController(for: propertyKey, with: nil)
             self[keyPath: keyPath] = target
             return
@@ -151,6 +156,7 @@ public extension Node {
             return
         }
         guard let anim = ActiveAnimationContext.current,
+              !prefersReducedMotion,
               let from = current,
               let to = target,
               from != to

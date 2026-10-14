@@ -4,9 +4,9 @@ import Foundation
 import CoreGraphics
 #endif
 
-/// Linearly-blendable values. `t` is clamped to `[0, 1]` by callers; the
-/// scheduler always passes pre-clamped progress, so implementations may
-/// assume the bound holds.
+/// Linearly-blendable values. Overshooting easing can supply `t` outside
+/// `[0, 1]`; numeric and geometry interpolation preserve that progress.
+/// Callers choose curves appropriate for the animated property's bounds.
 ///
 /// Conformances live next to the type they describe: `Color`, `CGRect`, and
 /// the numeric primitives ship with `GuavaUIRuntime`; Compose-layer types
