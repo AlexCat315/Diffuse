@@ -62,7 +62,8 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         let activeDrag = session.dragState
         return TextScalerReader { scaler in
         IconMetricsReader { icons in
-        let layout = options.layout.resolved(textScaler: scaler, icons: icons)
+        SurfaceReader { surface in
+        let layout = options.layout.resolved(textScaler: scaler, icons: icons, surface: surface)
         _TreeKeyboardHost(onKey: { event in
             session.activeModifiers = event.modifiers
             if options.events.onKeyCommand?(event, treeState.selectedIDs) == true { return true }
@@ -167,8 +168,10 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                         .id(token)
             }
         }
+        .flex(1, shrink: 1).frame(minWidth: 0, minHeight: 0)
         } // _TreeGhostContainer
         } // persistent keyboard target
+        } // input density
         } // icon geometry
         } // text geometry
     }
@@ -1252,6 +1255,10 @@ private struct _TreeRowHost: _PrimitiveView {
         l.alignItems = .stretch
         l.height = geometry.rowHeight
         return l
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.height = geometry.rowHeight
     }
 
     func _children(for node: Node) -> [any View] {

@@ -237,14 +237,14 @@
 - 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；Tree 每级缩进 16、箭头列 18。`[已实现]`
 - 手机：行高 `max(rowHeight, 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高已实现；截断与文本缩放未实现）
 - 平板 / 桌面：恢复 authored 行高；hover 行高亮；Tree 跟随 `TextScaler`。`[已实现]`
-- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。Tree 的触摸行高与 List 的文本缩放需补齐后验收。验收：`TouchDensityTests` list、`NavigationStateTests` tree 200%。
+- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。Tree 行高与展开按钮命中在触摸面均 ≥ 44pt，切回指针恢复 authored 尺寸；List 的文本缩放仍待补齐。验收：`TouchDensityTests` list、`RowDensityTests.collectionRows`、`NavigationStateTests` tree 200%。
 
 **Table / DataTable**
 
 - 外观：固定行高（Table 36 / DataTable 36）、表头固定、冻结列、单元格单行裁剪。`[已实现]`
-- 手机：行高与单元格触摸 ≥ 44pt；列按优先级隐藏低优先列并提供横向滚动与"列可见性"入口；冻结列不参与隐藏。`[未实现]`
+- 手机：行、单元格与表头高度 ≥ 44pt，窗口化、冻结列、滚动范围和键盘翻页共用真实行高，内嵌按钮与编辑器保留完整命中。`[已实现]`；列按优先级隐藏低优先列并提供横向滚动与"列可见性"入口，冻结列不参与隐藏。`[未实现]`
 - 平板 / 桌面：两轴窗口化、列宽拖拽、键盘单元格导航。`[已实现]`
-- 交互与验收：键盘导航（箭头/Home/End/PageUp/PageDown/F2/Escape/Cmd+A）、编辑提交/取消、辅助功能 row/cell/slider（列宽）。验收：`DataTableInteractionTests`、`--component table|dataTable`。
+- 交互与验收：键盘导航（箭头/Home/End/PageUp/PageDown/F2/Escape/Cmd+A）、编辑提交/取消、辅助功能 row/cell/slider（列宽）。验收：`DataTableInteractionTests`、`RowDensityTests.collectionRows` / `dataTableNavigation`、`--component table|dataTable`。
 
 **Chart / Timeline**
 
@@ -309,7 +309,7 @@
 **Menu / ContextMenu**
 
 - 外观：Portal 浮层、独立宽度、行高随文字、子菜单独立 Portal；窗口边界夹紧，下方不足翻上、左右翻转。`[已实现]`
-- 手机：行高 ≥ 44pt、菜单宽 ≤ 窗口 − 24、长标题换行或截断策略一致、触摸不依赖 hover 展开子菜单（点击展开）。`[部分]`（翻转与夹紧已实现；行高与触摸展开需补）
+- 手机：行高 ≥ 44pt，`maxVisibleRows` 预算使用触摸下限，子浮层继承来源 surface 的输入环境。`[已实现]`；菜单宽 ≤ 窗口 − 24、长标题换行或截断策略一致、触摸不依赖 hover 展开子菜单（点击展开）。`[部分]`（翻转与夹紧已实现；触摸展开需补验收）
 - 平板 / 桌面：hover 180ms 展开子菜单、前缀查找、快捷键列。`[已实现]`
 - 交互与验收：Up/Down/Home/End/Right/Left/Escape/Enter/类型查找；辅助功能逐行 role、禁用与选中态。验收：Menu 测试族、`--component menu|contextMenu`。
 
@@ -397,6 +397,7 @@ guava showcase gallery --android --component NAME
 | --- | --- |
 | 全部页面在 light/dark、1280×820 物化且无重叠 | `swift test --package-path GuavaUI/Examples`（`GalleryTests`） |
 | 触摸 44pt 族、密度恢复、hover gating | `GuavaUI/Tests/GuavaUIComposeTests/TouchDensityTests.swift` |
+| Tree / Table / DataTable / Menu 行高、节点与选择保留、翻页/编辑、子浮层环境 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/RowDensityTests.swift` |
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
@@ -430,7 +431,6 @@ guava showcase gallery --android --component NAME
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
 | 6 | Button / Select / DatePicker 等单行标题截断 + 完整 tooltip（当前只换行或裁剪） | `Text/Text.swift`（`lineLimit(1)` 仅禁换行）、各控件 | `Text` 截断测试 + 对应页面 |
 | 7 | 列表族文本缩放：List / Table / DataTable / LazyGrid 行高不跟随 `TextScaler` | `Data/Lists/*`、`Layout/Grid/LazyGrid.swift` | 200% 行高测试（现有 Tree 为对照实现） |
-| 8 | 触摸行高补齐：Tree、Table、DataTable、菜单行（当前菜单行最低 32） | 同上、`Overlays/Menu/*` | `TouchDensityTests` 扩展 |
 | 9 | ScrollView 触摸拖动/惯性、键盘滚动（箭头/Page/Home/End）、横向滚动条 gutter | `Layout/ScrollView.swift` | 触摸滚动测试 + `scrollview` 页；键盘测试 |
 | 10 | 浮层自适应：底部抽屉 Sheet、Select/CommandPalette 弹层宽度与行高、菜单触摸展开子菜单 | `Overlays/*`、`Fields/Select.swift` | 对应浮层测试 + 390pt 取样 |
 | 11 | Stepper / ButtonGroup 窄宽替代布局（纵向或滚动） | `Navigation/Stepper/*`、`Layout/NavigationComponents.swift` | 390pt 取样 + 布局测试 |
@@ -446,6 +446,8 @@ guava showcase gallery --android --component NAME
 | 21 | `withAnimation` 完成回调（SwiftUI 的 completionCriteria + completion） | `Animation/WithAnimation.swift` | 完成回调测试 |
 
 建议顺序：先做 1–4（壳层与数据密度，直接影响手机/平板可用性），再做 5–8（截断与行密度），然后 9–16（输入与语义补齐）；动画相关 17–21 随第 6 节的实现与验收排期。每项实现时同步更新组件文档的"响应式与输入密度"小节与本节状态。
+
+第 8 项触摸行高已完成：`RowDensityTests.collectionRows` 在 macOS 宿主上覆盖 390/720/1280pt、touch-only、touch + pointer + keyboard、pointer + keyboard，验证 36/56pt authored 行高、44pt 下限、节点与选择保留、单元格/展开按钮命中及密度恢复；`dataTableNavigation` 验证触摸翻页、末行显露、冻结列对齐与 44pt 编辑器；`scaledRows` 覆盖 Tree/Menu 的 100%/200% 文本缩放与 light/dark；`menuRows` 验证嵌入表面的菜单及子浮层继承输入环境、行底部点击展开与键盘关闭。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过。设备视觉与系统触摸派发仍按第 4 节真机矩阵验收。
 
 ## 6. 动效与动画（动画效果实现）
 

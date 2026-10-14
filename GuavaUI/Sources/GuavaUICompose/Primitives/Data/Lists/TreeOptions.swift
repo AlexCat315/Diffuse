@@ -21,13 +21,19 @@ public struct TreeLayout: Equatable {
     public init() {}
     /// Virtualization, hit testing, indentation guides and disclosure slots
     /// consume one resolved geometry, so scaling cannot drift between them.
-    func resolved(textScaler: TextScaler, icons: IconMetrics) -> Self {
+    func resolved(textScaler: TextScaler, icons: IconMetrics, surface: UIEnvironment) -> Self {
         var result = self
         result.rowHeight = max(textScaler.scale(rowHeight), icons.size(.small) + 4)
         result.rowSpacing = textScaler.scale(rowSpacing)
         result.indentation = indentation * max(textScaler.factor, icons.factor)
         result.disclosureWidth = disclosureWidth > 0 ? max(icons.size(disclosureWidth), icons.size(.small)) : 0
         result.trailingSlotWidth = textScaler.scale(trailingSlotWidth)
+        if surface.input.contains(.touch) {
+            result.rowHeight = max(result.rowHeight, surface.minimumControlExtent)
+            if result.disclosureWidth > 0 {
+                result.disclosureWidth = max(result.disclosureWidth, surface.minimumControlExtent)
+            }
+        }
         return result
     }
     mutating func validate() {

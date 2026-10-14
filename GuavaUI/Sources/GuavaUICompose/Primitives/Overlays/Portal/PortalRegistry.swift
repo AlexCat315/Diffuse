@@ -282,6 +282,7 @@ final class PortalResource: NodeResource {
         }
         store = current
         let content = AnyView(content.theme(owner?.theme ?? .defaultDark).textScaler(owner?.textScaler ?? .identity)
+            .surfaceEnvironment(owner?.compositionValue(of: SurfaceEnvironment.key) ?? UIEnvironment())
             .iconScaling(owner?.iconScalingOverride ?? owner?.theme.icons.scaling ?? .text)
             .reducedMotion(owner?.prefersReducedMotion ?? false))
         self.content = content

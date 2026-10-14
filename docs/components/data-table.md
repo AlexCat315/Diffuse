@@ -46,3 +46,9 @@ DataTable(model, columns: [name]) { table in
 `DataTableModelTests` 验证 200K 行后台排序、稳定相等顺序、两方向缓存、最新数据/回复、范围多选和 500 列窗口查找。`DataTableInteractionTests` 验证 200K × 100 不创建全部单元格、空闲布局不重建行、末行/水平导航、冻结列对齐、实际点击修饰键、编辑验证/取消/焦点。
 
 原生画廊已加载 200K × 33，跳到第 100,001 行，编辑 Asset 单元格，并验证后台排序完成及横向键盘导航时冻结列保持原位。没有 FPS/Instruments 的定量证据。当前不包含列拖拽重排、分组表头、分页/远端加载、列/矩形单元格选择、可变行高、CSV 导出协议或内置表格级撤销。
+
+## 响应式与输入密度
+
+Table 与 DataTable 共用行高解析：touch（包含混合输入）使用 `max(rowHeight, 44)` 与 `max(headerHeight, 44)`，pointer 恢复 authored 高度。DataTable 的冻结列、可见窗口、占位、滚动范围、目标显露和 PageUp/Down 使用同一行高；Table 的 List 行与单元格同高。触摸单元格移除纵向内容 inset，使内嵌按钮与编辑器的 44pt 命中不被裁剪。解析只作用于当前视图值，不写回配置或数据模型。
+
+`RowDensityTests.collectionRows` 在 390/720/1280pt 验证 touch-only、混合输入、pointer 恢复、较大 authored 行高和节点/选择保留；`dataTableNavigation` 验证触摸翻页、最后一行、冻结列对齐与编辑取消后的焦点恢复。窄宽列优先级与文本缩放行高仍属于待实现项。

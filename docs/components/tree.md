@@ -88,3 +88,7 @@ Tree(roots, children: \.children, id: \.id, // 默认 \.id
 
 - 主体 + `_TreeRowComposite`: [GuavaUICompose/Primitives/Tree.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Tree.swift)
 - Style 协议 + 默认: [GuavaUICompose/Theme/TreeRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/TreeRowStyle.swift) · [DefaultTreeRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DefaultTreeRowStyle.swift)
+
+## 响应式与输入密度
+
+Tree 先解析文本与图标缩放，再在 touch surface 上把行高与非零展开槽宽度提升到至少 44pt。行绘制、命中、缩进线、拖拽反馈与 VirtualStack 的窗口化使用同一份几何；滚动容器占满受约束高度，避免按全部内容高度创建行。切回 pointer 后恢复 authored 尺寸并保留节点、选择与展开状态。`RowDensityTests.collectionRows` 覆盖 390/720/1280pt 与输入切换，`scaledRows` 覆盖 100%/200% 文本缩放与 light/dark。

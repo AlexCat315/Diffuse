@@ -2,6 +2,11 @@ import GuavaUIRuntime
 
 extension DataTable {
     func cell(record: Record, rowID: ID, column: TableColumn<Record>) -> AnyView {
+        AnyView(SurfaceReader { surface in
+            cellContent(record: record, rowID: rowID, column: column, isTouch: surface.input.contains(.touch))
+        })
+    }
+    private func cellContent(record: Record, rowID: ID, column: TableColumn<Record>, isTouch: Bool) -> AnyView {
         if let draft = session.editing, draft.rowID == rowID, draft.columnID == column.id {
             return AnyView(TextField(text: Binding(get: { session.editing?.buffer ?? .empty }, set: { session.editing?.buffer = $0 })) { input in
                 input.behavior.disabled = !options.isEnabled
@@ -17,13 +22,13 @@ extension DataTable {
                     let direction = event.modifiers.contains(.shift) ? -1 : 1
                     moveEditor(from: draft, direction: direction); return true
                 }
-            }.font(.label).padding(horizontal: 4, vertical: 2)
+            }.font(.label).padding(horizontal: 4, vertical: isTouch ? 0 : 2)
                 .accessibility { $0.label = "Edit \(column.title)"; $0.state.isInvalid = draft.error != nil; $0.help = draft.error ?? "Return commits, Escape cancels" })
         }
         return AnyView(Box(direction: .row, alignItems: .center,
             justifyContent: column.layout.alignment == .leading ? .flexStart : column.layout.alignment == .trailing ? .flexEnd : .center) {
                 column.content(record)
-            }.padding(horizontal: 10, vertical: 4))
+            }.padding(horizontal: 10, vertical: isTouch ? 0 : 4))
     }
     func beginEditing(row: Int, column: Int) {
         guard options.isEnabled, columns.indices.contains(column), row >= 0, row < model.count,

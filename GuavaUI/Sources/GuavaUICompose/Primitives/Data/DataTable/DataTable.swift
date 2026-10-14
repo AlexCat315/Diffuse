@@ -62,6 +62,13 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
         options.selection ?? Binding(get: { session.selection }, set: { session.selection = $0 })
     }
     public var body: some View {
+        SurfaceReader { surface in
+            var table = self
+            table.options.layout = options.layout.resolved(in: surface)
+            return table.content
+        }
+    }
+    private var content: some View {
         let _ = observedRevision.wrappedValue
         if options.navigation.requestID != nil, options.navigation.requestID != session.lastNavigation,
            let id = options.navigation.rowID, let row = model.index(for: id) {

@@ -26,6 +26,7 @@ struct MenuItemRowHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.applyTouchControlExtent()
         node.isFocusable = item.isEnabled
         node.isTabStop = item.isEnabled && isHighlighted
         node.attachments[TextInputAttachmentKey.focusChangeHandler] = { focused in
@@ -154,6 +155,8 @@ struct MenuItemRowHost: _PrimitiveView {
 
     func _children(for node: Node) -> [any View] {
         let theme = node.theme
+        let surface = node.compositionValue(of: SurfaceEnvironment.key)
+        let minimumHeight = max(32, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         let titleColor: Color = !item.isEnabled
             ? (theme.textEmphasis.disabled ?? theme.colors.onSurfaceMuted)
             : item.role == .destructive ? theme.colors.error : theme.colors.onSurface
@@ -189,7 +192,7 @@ struct MenuItemRowHost: _PrimitiveView {
             }
         }
         .padding(horizontal: 16, vertical: 6)
-        .frame(minHeight: 32)
+        .frame(minHeight: minimumHeight)
 
         return [row]
     }

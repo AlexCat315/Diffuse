@@ -85,7 +85,10 @@ struct MenuLevelHost<Content: View>: _PrimitiveView {
 
 func menuRow(_ id: AnyHashable, in node: Node) -> Node? {
     if node.attachments["__menu_item_id"] as? AnyHashable == id { return node }
-    return node.children.lazy.compactMap { menuRow(id, in: $0) }.first
+    for child in node.children {
+        if let row = menuRow(id, in: child) { return row }
+    }
+    return nil
 }
 
 /// A short intent delay lets a pointer cross sibling rows while travelling
@@ -143,7 +146,9 @@ struct MenuScrollMarker: ViewModifier {
 struct MenuWindowBounds: ViewModifier {
     let maxVisibleRows: Int
     func apply(node: Node) {
-        let rowHeight = max(32, node.textScaler.scale(node.theme.typography.body.lineHeight) + 12)
+        let surface = node.compositionValue(of: SurfaceEnvironment.key)
+        let rowHeight = max(32, node.textScaler.scale(node.theme.typography.body.lineHeight) + 12,
+            surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         let preferredHeight = Float(maxVisibleRows) * rowHeight
         func constrain(_ node: Node) {
             let height = min(preferredHeight, max(0, Float(portalWindowBounds(node).height) - 12))

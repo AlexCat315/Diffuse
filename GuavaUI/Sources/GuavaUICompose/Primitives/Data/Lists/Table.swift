@@ -52,6 +52,14 @@ public struct TableLayout {
     public var isStriped = true
     public var emptyTitle = "No records"
     public init() {}
+    func resolved(in surface: UIEnvironment) -> Self {
+        var result = self
+        if surface.input.contains(.touch) {
+            result.rowHeight = max(rowHeight, surface.minimumControlExtent)
+            result.headerHeight = max(headerHeight, surface.minimumControlExtent)
+        }
+        return result
+    }
     mutating func validate() {
         rowHeight = rowHeight.isFinite ? max(24, rowHeight) : 36
         headerHeight = headerHeight.isFinite ? max(24, headerHeight) : 38
@@ -89,6 +97,13 @@ public struct Table<Record, ID: Hashable>: View {
         precondition(Set(records.map { $0[keyPath: id] }).count == records.count, "Table row IDs must be unique")
     }
     public var body: some View {
+        SurfaceReader { surface in
+            var table = self
+            table.options.layout = options.layout.resolved(in: surface)
+            return table.content(cellVerticalPadding: surface.input.contains(.touch) ? 0 : 4)
+        }
+    }
+    private func content(cellVerticalPadding: Float) -> some View {
         let rows = Self.sorted(records, columns: columns, sort: sortBinding.wrappedValue)
         let positions = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($0.element[keyPath: id], $0.offset) })
         let width = columns.reduce(Float(0)) { $0 + columnWidth($1) }
@@ -105,7 +120,7 @@ public struct Table<Record, ID: Hashable>: View {
                          onActivate: onActivate) { record, selected in
                         Row(alignment: .center, spacing: 0) {
                             for column in columns {
-                                AnyView(Box(direction: .row, alignItems: .center, justifyContent: column.layout.alignment == .leading ? .flexStart : column.layout.alignment == .trailing ? .flexEnd : .center) { column.content(record) }.padding(horizontal: 10, vertical: 4)
+                                AnyView(Box(direction: .row, alignItems: .center, justifyContent: column.layout.alignment == .leading ? .flexStart : column.layout.alignment == .trailing ? .flexEnd : .center) { column.content(record) }.padding(horizontal: 10, vertical: cellVerticalPadding)
                                     .frame(width: columnWidth(column), height: options.layout.rowHeight)
                                     .flex(0, shrink: 0).clipped().accessibility { $0.role = .cell; $0.label = column.title })
                             }

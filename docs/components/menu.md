@@ -32,3 +32,9 @@ Up/Down 循环跳过禁用和非命令条目，Home/End 选择边界，键盘导
 仍缺自定义富内容行、命令图标槽、链接语义，以及基于指针运动三角区域的更精细 submenu intent。当前短延迟是稳定切换基础，不声称与 GPUI 所有行为等价。
 
 原生画廊已验证四层 Workspace → Settings → Appearance → Accent color 菜单，文字、选择列、快捷键、分隔线和箭头对齐；选择 Green 后所有浮层关闭且示例反馈更新。标题采用换行布局；尚未提供省略号或根据全部标题自动选择菜单宽度。
+
+## 响应式与输入密度
+
+命令与子菜单行在 touch surface 上至少 44pt，pointer 保留 32pt 下限；长标题与文本缩放仍可使行自然增长。`maxVisibleRows` 的高度预算同样使用触摸下限，避免增大行高后仍按桌面密度裁剪菜单。Portal 继承触发节点的 surface 环境，嵌入表面与子浮层也能保持同一输入密度；输入切换保留已打开分支与行节点。
+
+`RowDensityTests.menuRows` 验证来源表面与 PortalHost 环境不同的场景、禁用行、子菜单、视口高度、行底部点击展开、键盘关闭和 pointer 密度恢复；`scaledRows` 覆盖 100%/200% 文本缩放与 light/dark。手机系统触摸派发与窄宽视觉取样仍需真机验收。
