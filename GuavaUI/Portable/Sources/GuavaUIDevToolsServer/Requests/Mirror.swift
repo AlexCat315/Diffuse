@@ -18,7 +18,7 @@ extension DevServer {
                 payload = MirrorStartPayload(fps: nil, quality: nil)
             }
             setSubscription(.mirror, enabled: true, for: conn)
-            log.info("recv mirror.start fps=\(payload.fps ?? -1) quality=\(payload.quality ?? -1)")
+            logger.debug("recv mirror.start fps=\(payload.fps ?? -1) quality=\(payload.quality ?? -1)")
             runOnHostMain { [weak self] in
                 self?.host.mirror.start?(payload)
             }
@@ -27,7 +27,7 @@ extension DevServer {
         case "mirror.stop":
             let shouldStopCapture = setSubscription(.mirror, enabled: false, for: conn)
                 && !hasSubscribers(for: .mirror)
-            log.info("recv mirror.stop handlerWired=\(host.mirror.stop != nil) stopCapture=\(shouldStopCapture)")
+            logger.debug("recv mirror.stop handlerWired=\(host.mirror.stop != nil) stopCapture=\(shouldStopCapture)")
             if shouldStopCapture {
                 runOnHostMain { [weak self] in
                     self?.host.mirror.stop?()

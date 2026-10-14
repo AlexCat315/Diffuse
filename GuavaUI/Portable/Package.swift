@@ -20,7 +20,7 @@ let package = Package(
         .package(path: "../../Engine/PlatformCore"),
         .package(url: "https://github.com/facebook/yoga.git", from: "3.2.1"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.103.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
+        .package(path: "../../Engine/Logging"),
     ],
     targets: [
         .target(name: "CYoga", dependencies: [.product(name: "yoga", package: "yoga")], publicHeadersPath: "include"),
@@ -30,20 +30,20 @@ let package = Package(
         .target(name: "GuavaUICore"),
         .testTarget(name: "GuavaUISceneTests", dependencies: ["GuavaUIComposeCore", "GuavaUIDevToolsScene", "GuavaUIDevToolsProtocol"]),
         .testTarget(name: "GuavaUICoreTests", dependencies: ["GuavaUICore"]),
-        .target(name: "GuavaUIDevToolsProtocol", dependencies: [.product(name: "GuavaPlatformCore", package: "PlatformCore")]),
+        .target(name: "GuavaUIDevToolsProtocol", dependencies: [.product(name: "GuavaLogCore", package: "Logging"), .product(name: "GuavaPlatformCore", package: "PlatformCore")]),
         .target(name: "GuavaUIDevToolsServer", dependencies: [
             "GuavaUIDevToolsProtocol",
             .product(name: "NIOCore", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
             .product(name: "NIOHTTP1", package: "swift-nio"),
             .product(name: "NIOWebSocket", package: "swift-nio"),
-            .product(name: "Logging", package: "swift-log"),
+            .product(name: "GuavaLogging", package: "Logging"),
         ]),
         .executableTarget(name: "GuavaUIDevToolsProbe", dependencies: [
-            "GuavaUIDevToolsServer", "GuavaUIDevToolsScene", "GuavaUIComposeCore",
+            "GuavaUIDevToolsServer", "GuavaUIDevToolsScene", "GuavaUIComposeCore", .product(name: "GuavaLogging", package: "Logging"),
         ]),
         .testTarget(name: "GuavaUIDevToolsServerTests", dependencies: [
-            "GuavaUIDevToolsServer", "GuavaUIDevToolsProtocol",
+            "GuavaUIDevToolsServer", "GuavaUIDevToolsProtocol", .product(name: "GuavaLogging", package: "Logging"),
             .product(name: "NIOEmbedded", package: "swift-nio"),
         ]),
     ]

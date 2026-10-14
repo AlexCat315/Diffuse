@@ -442,36 +442,3 @@ public extension DevToolsProtocol {
         case trace, debug, info, notice, warning, error, critical
     }
 }
-
-public struct LogEntryPayload: Codable, Sendable {
-    public var level: String
-    public var label: String
-    public var message: String
-    public var metadata: [String: String]?
-    public var source: String
-    public var file: String
-    public var function: String
-    public var line: UInt
-    /// Seconds since 1970, with millisecond precision.
-    public var timestamp: Double
-
-    public init(level: String,
-                label: String,
-                message: String,
-                metadata: [String: String]? = nil,
-                source: String,
-                file: String,
-                function: String,
-                line: UInt,
-                timestamp: Double) {
-        self.level = level
-        self.label = label
-        self.message = message
-        self.metadata = metadata
-        self.source = source
-        self.file = file
-        self.function = function
-        self.line = line
-        self.timestamp = timestamp
-    }
-}

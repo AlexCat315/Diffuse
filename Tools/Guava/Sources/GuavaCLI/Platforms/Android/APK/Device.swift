@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import GuavaUIDevToolsProtocol
 
@@ -19,8 +20,12 @@ enum AndroidDevice {
             "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", identity.id], capture: true, quiet: true)
         let activity = try launcher(resolved, applicationID: identity.id)
         var start = command + ["shell", "am", "start", "-W", "-n", activity]
+        var logging = LogSystem.launch
+        logging.application = identity.id
+        logging.configuration.storage.directory = nil
+        start += ["--es", "guava_logging", try JSONEncoder().encode(logging).base64EncodedString()]
         if let launch { start += ["--es", "guava_devtools", try JSONEncoder().encode(launch).base64EncodedString()] }
-        try Shell.run(start, quiet: launch != nil)
+        try Shell.run(start, quiet: true)
         return device
     }
     static func launcher(_ listing: String, applicationID: String) throws -> String {

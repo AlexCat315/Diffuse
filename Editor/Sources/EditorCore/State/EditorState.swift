@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import IntentRuntime
 
@@ -217,18 +218,20 @@ public struct EditorConsoleEntry: Identifiable, Codable, Sendable, Equatable, Ha
     public var detail: String?
     public var target: EditorIssueTarget?
     public var nextStep: String?
+    public var record: LogRecord?
 
     public init(id: UInt64,
                 severity: EditorConsoleSeverity = .info,
                 message: String,
                 detail: String? = nil, target: EditorIssueTarget? = nil,
-                nextStep: String? = nil) {
+                nextStep: String? = nil, record: LogRecord? = nil) {
         self.id = id
         self.severity = severity
         self.message = message
         self.detail = detail
         self.target = target
         self.nextStep = nextStep
+        self.record = record
     }
 }
 

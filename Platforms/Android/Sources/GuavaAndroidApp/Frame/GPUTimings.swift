@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import NativeRHI
 import CAndroidHost
@@ -56,7 +57,7 @@ struct GPUTimingReporter {
         let windowMilliseconds = Double(timestamp - windowStart) / 1_000_000
         windowStart = timestamp
         guard !window.isEmpty else {
-            guava_android_log("[timing] android.gpu window=\(Self.text(windowMilliseconds))ms passes=0 status=\(profile.status)")
+            LogSystem.logger("com.guava.android.timing").info("[timing] android.gpu window=\(Self.text(windowMilliseconds))ms passes=0 status=\(profile.status)")
             return
         }
         let summary = window.keys.sorted().compactMap { label -> String? in
@@ -68,7 +69,7 @@ struct GPUTimingReporter {
             let key = Self.parseable(label)
             return "\(key)_avg=\(Self.text(average))ms \(key)_max=\(Self.text(worst))ms"
         }.joined(separator: " ")
-        guava_android_log("[timing] android.gpu window=\(Self.text(windowMilliseconds))ms passes=\(window.count) \(summary)")
+        LogSystem.logger("com.guava.android.timing").info("[timing] android.gpu window=\(Self.text(windowMilliseconds))ms passes=\(window.count) \(summary)")
         window.removeAll(keepingCapacity: true)
     }
 

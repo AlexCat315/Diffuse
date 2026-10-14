@@ -31,10 +31,10 @@ context.elements.checkpoint.stopRecording.addEventListener("click", () => contex
 context.elements.checkpoint.replayInput.addEventListener("click", () => context.checkpoint.sendJSON("input.replay", context.elements.checkpoint.inputRecording.value));
 context.elements.logs.logLevel.addEventListener("change", context.logs.renderLog);
 context.elements.logs.logSearch.addEventListener("input", context.logs.renderLog);
-context.elements.logs.clearLog.addEventListener("click", () => {
-  context.session.logs.logEntries = [];
-  context.logs.renderLog();
-});
+context.elements.logs.logModule.addEventListener("input", context.logs.renderLog);
+context.elements.logs.clearLog.addEventListener("click", context.logs.clear);
+context.elements.logs.pauseLog.addEventListener("click", context.logs.pause);
+context.elements.logs.exportLog.addEventListener("click", context.logs.exportJSONL);
 context.input.installMirrorInput();
 
 // The browser host announces readiness after its Wasm reactor is initialized.

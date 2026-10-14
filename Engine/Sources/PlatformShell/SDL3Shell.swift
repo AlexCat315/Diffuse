@@ -1,7 +1,7 @@
 import CSDL3
 import EngineKernel
 import Foundation
-import Logging
+import GuavaLogging
 
 #if os(macOS)
 import AppKit
@@ -457,6 +457,7 @@ public final class SDL3Shell: Shell {
 #endif
 
     public init(width: Int32 = 1280, height: Int32 = 720) throws {
+        installSDLLogging()
         self.defaultWindowOptions = WindowOptions(width: width, height: height)
     }
 

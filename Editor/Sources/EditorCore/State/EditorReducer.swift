@@ -1,3 +1,4 @@
+import GuavaLogging
 import GuavaUICompose
 import Foundation
 import IntentRuntime
@@ -71,6 +72,7 @@ public enum EditorAction: Sendable {
     case setGamePreviewResolution(EditorGamePreviewResolution)
     case setGamePreviewHUDEnabled(Bool)
     case setGamePreviewFocused(Bool)
+    case appendLogRecord(LogRecord)
     case clearConsole
     case setCommandPaletteVisible(Bool)
     case frameTimingUpdated
@@ -289,6 +291,12 @@ public enum EditorReducer {
             if state.output.consoleEntries.count > 200 {
                 state.output.consoleEntries.removeFirst(state.output.consoleEntries.count - 200)
             }
+        case .appendLogRecord(let record):
+            let severity: EditorConsoleSeverity = record.level >= .error ? .error : record.level >= .warning ? .warning : .info
+            let detail = "[\(record.label)] \(record.location.file):\(record.location.line)\n\(record.metadata)"
+            state.output.consoleEntries.append(.init(id: state.output.nextConsoleEntryID, severity: severity, message: record.message, detail: detail, record: record))
+            state.output.nextConsoleEntryID &+= 1
+            if state.output.consoleEntries.count > 200 { state.output.consoleEntries.removeFirst(state.output.consoleEntries.count - 200) }
         case .clearConsole:
             state.output.consoleEntries.removeAll(keepingCapacity: false)
         case let .setCommandPaletteVisible(visible):

@@ -3,7 +3,7 @@ import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIDevTools
-import Logging
+import GuavaLogging
 import NativeRHI
 import PlatformShell
 
@@ -34,21 +34,17 @@ public final class Application {
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
                                        onDisplayReady: ((AppDisplayHandle) -> Void)? = nil,
                                        @ViewBuilder rootView: () -> Root) throws {
-        let devToolsLogSink: LogTap.Sink?
-        if let devConfig = config.diagnostics.devTools, devConfig.autoInstallLogTap {
-            let sink = LogTapInstaller.processSink
-            LogTapInstaller.bootstrapIfNeeded(sink: sink)
-            devToolsLogSink = sink
-        } else {
-            devToolsLogSink = nil
-        }
+        var logging = config.logging
+        try logging.applyEnvironment()
+        try LogSystem.bootstrap(application: Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName, configuration: logging)
+        defer { LogSystem.flush() }
+        LogSystem.logger("com.guava.ui.application").info("Application starting", metadata: ["title": "\(config.window.title)"])
         let runtime = try Application(config: config,
                                  backend: backend,
                                  events: events,
                                  checkpoint: checkpoint,
                                  onTick: onTick,
-                                 onDisplayReady: onDisplayReady,
-                                 devToolsLogSink: devToolsLogSink)
+                                 onDisplayReady: onDisplayReady)
         try runtime.start(rootView: rootView())
     }
 
@@ -75,10 +71,9 @@ public final class Application {
 
     private init(config: ApplicationConfiguration, backend: Device?,
                  events: PlatformEventBridge, checkpoint: ApplicationCheckpoint?,
-                 onTick: ((Double) -> Void)?, onDisplayReady: ((AppDisplayHandle) -> Void)?,
-                 devToolsLogSink: LogTap.Sink?) throws {
+                 onTick: ((Double) -> Void)?, onDisplayReady: ((AppDisplayHandle) -> Void)?) throws {
         self.config = config
-        self.callbacks = ApplicationCallbacks(events: events, tick: onTick, ready: onDisplayReady, logSink: devToolsLogSink)
+        self.callbacks = ApplicationCallbacks(events: events, tick: onTick, ready: onDisplayReady)
         self.checkpoint = checkpoint
         mainWindow.isVSyncEnabled = config.rendering.vsync && !Self.forceVSyncOff
         rendering = try AppRenderingContext(device: backend, config: config)
@@ -134,8 +129,7 @@ public final class Application {
             let dev = DevTools(config: devConfig,
                                tree: composition.tree,
                                invalidationLog: host.invalidationLog,
-                               renderTree: composition.graph.renderTree,
-                               logSink: callbacks.logSink ?? LogTap.Sink())
+                               renderTree: composition.graph.renderTree)
             try rendering.attachFrameTap(to: dev)
             dev.stateRegistry = composition.graph.stateRegistry
             configureCheckpoint(dev)
@@ -159,7 +153,7 @@ public final class Application {
                 try dev.start()
                 self.devTools = dev
             } catch {
-                Logger(label: "com.guava.ui.app").warning("DevTools server failed to start: \(error)")
+                LogSystem.logger("com.guava.ui.app").warning("DevTools server failed to start: \(error)")
             }
         }
 
@@ -357,7 +351,7 @@ public final class Application {
     private func failRunLoop(_ error: Error, context: String) {
         guard runLoopError == nil else { return }
         runLoopError = error
-        Logger(label: "com.guava.ui.app").error("\(context) failed: \(error)")
+        LogSystem.logger("com.guava.ui.app").error("\(context) failed: \(error)")
         host.stop()
     }
 
@@ -376,7 +370,7 @@ public final class Application {
         do { try windowRenderer?.close() }
         catch {
             runLoopError = runLoopError ?? error
-            Logger(label: "com.guava.ui.app").error("Main window GPU cleanup failed: \(error)")
+            LogSystem.logger("com.guava.ui.app").error("Main window GPU cleanup failed: \(error)")
         }
         windowRenderer = nil
     }
@@ -450,7 +444,7 @@ public final class Application {
 
     private func reconfigureMainSurfaceForCurrentPresentMode() {
         do { try windowRenderer?.resize(size: SIMD2(mainWindow.drawableW, mainWindow.drawableH), vsync: mainWindow.isVSyncEnabled) }
-        catch { Logger(label: "com.guava.ui.app").warning("Main window present mode update failed: \(error)") }
+        catch { LogSystem.logger("com.guava.ui.app").warning("Main window present mode update failed: \(error)") }
     }
 
     private func syncMainWindowChromeHitTest() {
@@ -697,7 +691,7 @@ public final class Application {
             session.requestDisplay()
             return session.id
         } catch {
-            Logger(label: "com.guava.ui.app").warning("Auxiliary window open failed: \(error)")
+            LogSystem.logger("com.guava.ui.app").warning("Auxiliary window open failed: \(error)")
             return nil
         }
     }
@@ -710,7 +704,7 @@ public final class Application {
     private func failAuxiliaryWindow(_ windowID: WindowID,
                                      error: Error,
                                      context: String) {
-        Logger(label: "com.guava.ui.app")
+        LogSystem.logger("com.guava.ui.app")
             .error("auxiliary window \(context) failed: \(error)")
         host.enqueueMainThreadWork { [weak self] in
             self?.closeAuxiliaryWindow(windowID)

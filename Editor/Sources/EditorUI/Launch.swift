@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import EngineCore
 import EngineKernel
@@ -70,7 +71,7 @@ private func runEditor() throws {
         RunLoop.main.add(simulationTimer, forMode: .default)
         defer { simulationTimer.invalidate() }
         defer { app.shutdown() }
-        FileHandle.standardError.write(Data("Guava headless editor ready: \(directory)\n".utf8))
+        LogSystem.logger("com.guava.editor").info("Headless editor ready", metadata: ["project": "\(directory)"])
         RunLoop.main.run()
         return
     }
@@ -186,9 +187,15 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
 @MainActor
 public enum EditorLauncher {
     public static func run() {
-        do { try runEditor() }
+        do {
+            var logging = LoggingConfiguration(); try logging.applyEnvironment()
+            try LogSystem.bootstrap(application: Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName, configuration: logging)
+            defer { LogSystem.flush() }
+            try runEditor()
+        }
         catch {
-            FileHandle.standardError.write(Data("[EditorApp] startup failed: \(error)\n".utf8))
+            LogSystem.logger("com.guava.editor").error("Editor startup failed", metadata: ["error": "\(error)"])
+            LogSystem.flush()
             exit(1)
         }
     }

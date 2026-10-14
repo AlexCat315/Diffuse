@@ -1,6 +1,6 @@
 import AssetPipeline
 import Foundation
-import Logging
+import GuavaLogging
 import NativeRHI
 
 /// GPU residency is renderer-owned. Catalog revisions replace resources as a

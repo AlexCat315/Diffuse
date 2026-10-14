@@ -1,4 +1,5 @@
 import Foundation
+import GuavaLogging
 
 /// Owns one `sourcekit-lsp` child process and speaks JSON-RPC over its pipes.
 ///
@@ -65,6 +66,7 @@ public actor SourceKitLSPClient {
                                                              capabilities: capabilities)
         process.currentDirectoryURL = workspaceURL
         process.environment = ProcessInfo.processInfo.environment.merging(environmentOverrides) { _, new in new }
+        process.environment?["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
         connection.installPipes()
         do { try process.run() } catch {
             connection.close()
@@ -311,6 +313,7 @@ public actor SourceKitLSPClient {
     }
 
     private func consumeStderr(_ data: Data) {
+        LogSystem.logger("com.guava.editor.lsp").debug("\(String(decoding: data, as: UTF8.self))", source: "sourcekit.stderr")
         stderrTail.append(data)
         if stderrTail.count > Self.stderrTailCapacity {
             stderrTail.removeSubrange(..<(stderrTail.count - Self.stderrTailCapacity))

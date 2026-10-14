@@ -4,7 +4,7 @@ import Foundation
 import CoreGraphics
 #endif
 #if canImport(Logging)
-import Logging
+import GuavaLogging
 #endif
 #if canImport(UniformTypeIdentifiers)
 import UniformTypeIdentifiers
@@ -53,7 +53,7 @@ public final class FrameTap {
 
     private var seq: UInt64 = 0
     #if canImport(Logging)
-    private let log = Logger(label: "guava.devtools.frameTap")
+    private let log = LogSystem.logger("guava.devtools.frameTap")
     #endif
     /// Counts consecutive capture failures to throttle warning spam.
     private var consecutiveErrors: Int = 0

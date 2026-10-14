@@ -119,7 +119,7 @@ def main():
         checks.append({'check': 'finger scrolling reveals clipped fields', 'snapshot': scrolled})
 
     pid = shell('pidof', 'com.guava.probe').strip()
-    log = subprocess.check_output(adb + ['logcat', '-d', '--pid=' + pid, '-s', 'GuavaAndroid:I', 'AndroidRuntime:E', '*:S'], text=True)
+    log = subprocess.check_output(adb + ['logcat', '-d', '--pid=' + pid, '-s', 'Guava:I', 'AndroidRuntime:E', '*:S'], text=True)
     (directory / 'app.log').write_text(log)
     assert 'FAIL' not in log and 'FATAL' not in log, log[-4000:]
     (directory / 'report.json').write_text(json.dumps({'passed': True, 'pages': len(pages), 'checks': checks}, ensure_ascii=False, indent=2)+'\n')

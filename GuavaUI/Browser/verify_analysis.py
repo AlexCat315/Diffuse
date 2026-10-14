@@ -26,7 +26,7 @@ def analysis_checks(page, inspector):
     inspector.locator("#sourceBuildRoot").fill(build_root)
     inspector.locator("#sourceLocalRoot").fill("C:\\我的项目\\Guava UI")
     uri = inspector.locator("#openSource").get_attribute("href")
-    assert uri.startswith("cursor://file/C:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/Guava%20UI/GuavaUI/"), uri
+    assert uri.startswith("cursor://file/C:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/Guava%20UI/examples/Counter/"), uri
     assert frame.evaluate("inspector.analysis.editorSourceURL({filePath:'/build/name #.swift',line:2,column:3},'vscode','/build','/Users/me')") == "vscode://file/Users/me/name%20%23.swift:2:3"
     assert frame.evaluate("inspector.analysis.editorSourceURL({filePath:'/build/name.swift',line:2,column:3},'vscode','/','C:/')") == "vscode://file/C:/build/name.swift:2:3"
     assert frame.evaluate("inspector.analysis.editorSourceURL({filePath:'C:/build/name.swift',line:2,column:3},'vscode','C:/','/local')") == "vscode://file/local/build/name.swift:2:3"

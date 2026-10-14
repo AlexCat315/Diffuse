@@ -7,6 +7,7 @@
 #if (os(Windows) || os(Linux) || os(Android)) && canImport(CVulkanHeaders)
 import CVulkanHeaders
 import Foundation
+import GuavaLogging
 
 final class VulkanSwapchain {
     private let context: VulkanContext
@@ -55,6 +56,9 @@ final class VulkanSwapchain {
                                   vsync: surface.vsync,
                                   oldSwapchain: vkNull(),
                                   registries: registries)
+        LogSystem.logger("com.guava.engine.rhi.vulkan").info("Swapchain created", metadata: [
+            "present_mode": "\(swapchain.presentationMode)", "vsync_requested": "\(surface.vsync)",
+            "width": "\(swapchain.extent.width)", "height": "\(swapchain.extent.height)", "images": "\(swapchain.images.count)"])
         return swapchain
     }
 

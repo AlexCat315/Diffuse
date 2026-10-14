@@ -17,7 +17,7 @@ let package = Package(
         .package(path: "../Engine"),
         .package(path: "Portable"),
         .package(path: "Text"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
+        .package(path: "../Engine/Logging"),
     ],
     targets: [
         .target(name: "GuavaUIAndroid", dependencies: ["GuavaUICompose", "GuavaUIRuntime", "GuavaUIDevTools"], path: "Platforms/Android"),
@@ -38,7 +38,7 @@ let package = Package(
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "ImageDecodeBridge", package: "Engine"),
-                .product(name: "Logging", package: "swift-log"),
+                .product(name: "GuavaLogging", package: "Logging"),
             ],
             resources: [.copy("Resources/Shaders")],
             linkerSettings: [
@@ -54,7 +54,7 @@ let package = Package(
         // viewport 桥使用 Engine 的 RenderBackend；纯 UI API 位于 Portable。
         .target(
             name: "GuavaUICompose",
-            dependencies: ["GuavaUIRuntime",
+            dependencies: ["GuavaUIRuntime", .product(name: "GuavaLogging", package: "Logging"),
                            .product(name: "GuavaUIComposeCore", package: "Portable"),
                            .product(name: "EngineKernel", package: "Engine"),
                            .product(name: "RenderBackend", package: "Engine")],
@@ -93,7 +93,7 @@ let package = Package(
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
-                .product(name: "Logging", package: "swift-log"),
+                .product(name: "GuavaLogging", package: "Logging"),
             ],
             resources: [
                 .process("Resources"),
@@ -112,7 +112,7 @@ let package = Package(
                 "GuavaUIRuntime",
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),
-                .product(name: "Logging", package: "swift-log"),
+                .product(name: "GuavaLogging", package: "Logging"),
             ]
         ),
 

@@ -81,7 +81,7 @@ def main():
     restarted = wait(lambda s: s['game']['player'] == [0, .6, 0] and any('50 秒' in t for t in s['game']['hud']), 'restart restores the round deterministically')
     screenshot('restarted')
     pid = shell('pidof', args.package).strip()
-    log = subprocess.check_output(adb + ['logcat', '-d', '--pid=' + pid, '-s', 'GuavaAndroid:I', 'AndroidRuntime:E', '*:S'], text=True)
+    log = subprocess.check_output(adb + ['logcat', '-d', '--pid=' + pid, '-s', 'Guava:I', 'AndroidRuntime:E', '*:S'], text=True)
     (directory / 'app.log').write_text(log)
     assert 'FAIL' not in log and 'FATAL' not in log, log[-4000:]
     (directory / 'report.json').write_text(json.dumps({'passed': True, 'checks': checks}, ensure_ascii=False, indent=2)+'\n')

@@ -6,9 +6,10 @@ let package = Package(
     name: "GuavaTools",
     platforms: [.macOS(.v13)],
     products: [.executable(name: "guava", targets: ["GuavaCLI"])],
-    dependencies: [.package(path: "../../Platforms/Android/Contract"), .package(path: "../../GuavaUI/Portable")],
+    dependencies: [
+        .package(path: "../../Engine/Logging"),.package(path: "../../Platforms/Android/Contract"), .package(path: "../../GuavaUI/Portable")],
     targets: [
-        .executableTarget(name: "GuavaCLI", dependencies: [
+        .executableTarget(name: "GuavaCLI", dependencies: [.product(name: "GuavaLogging", package: "Logging"),
             .product(name: "GuavaAndroidContract", package: "Contract"),
             .product(name: "GuavaUIDevToolsProtocol", package: "Portable"),
         ], resources: [.copy("Templates")]),

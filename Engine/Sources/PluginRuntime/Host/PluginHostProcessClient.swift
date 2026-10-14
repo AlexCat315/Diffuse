@@ -1,4 +1,5 @@
 import Foundation
+import GuavaLogging
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -40,6 +41,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
     private var process: Process?
     private var input: FileHandle?
     private var output: FileHandle?
+    private var diagnostics: PluginHostDiagnostics?
     private var didRestart = false
     private var _generation: UInt64 = 0
 
@@ -113,15 +115,21 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         let process = Process()
         let stdin = Pipe()
         let stdout = Pipe()
+        let diagnostics = PluginHostDiagnostics()
         process.executableURL = executableURL
         process.arguments = launchArguments
         process.standardInput = stdin
         process.standardOutput = stdout
-        process.standardError = Pipe()
+        process.standardError = diagnostics.pipe
+        var environment = ProcessInfo.processInfo.environment
+        environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
+        process.environment = environment
         do { try process.run() } catch {
             throw PluginHostClientError.launchFailed(String(describing: error))
         }
         self.process = process
+        self.diagnostics = diagnostics
+        diagnostics.start(pid: process.processIdentifier)
         input = stdin.fileHandleForWriting
         output = stdout.fileHandleForReading
 #if canImport(Darwin)
@@ -135,6 +143,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         // A synchronous Windows pipe read can keep CloseHandle waiting until
         // the peer exits. Terminate the host before closing its pipe handles.
         if process?.isRunning == true { process?.terminate() }
+        diagnostics?.stop(); diagnostics = nil
         try? input?.close()
         try? output?.close()
         process = nil

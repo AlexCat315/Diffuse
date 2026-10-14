@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 
 enum ToolError: Error, LocalizedError {
@@ -41,7 +42,9 @@ enum Shell {
         let process = Process()
         process.executableURL = try executable(command, environment: environment)
         process.arguments = Array(arguments.dropFirst()); process.currentDirectoryURL = directory
-        process.environment = environment
+        var childEnvironment = environment
+        childEnvironment["GUAVA_LOG_RUN_ID"] = childEnvironment["GUAVA_LOG_RUN_ID"] ?? LogSystem.launch.runID
+        process.environment = childEnvironment
         try process.run()
         return process
     }
@@ -52,19 +55,24 @@ enum Shell {
                     environment: [String: String] = ProcessInfo.processInfo.environment,
                     capture: Bool = false, quiet: Bool = false) throws -> String {
         guard let command = arguments.first else { throw ToolError.invalid("Empty command") }
-        let display = arguments.count > 16
-            ? Array(arguments.prefix(10)) + ["… (\(arguments.count - 10) more arguments)"] : arguments
-        if !quiet { print("+ " + display.joined(separator: " ")) }
+        let logger = LogSystem.logger("com.guava.cli.process")
+        if !quiet { logger.debug("Starting command", metadata: ["command": "\(URL(fileURLWithPath: command).lastPathComponent)", "arguments": "\(arguments.count - 1)"]) }
         let process = Process()
         process.executableURL = try executable(command, environment: environment)
         process.arguments = Array(arguments.dropFirst())
         process.currentDirectoryURL = directory
-        process.environment = environment
-        let output = Pipe()
-        if capture { process.standardOutput = output }
+        var childEnvironment = environment
+        childEnvironment["GUAVA_LOG_RUN_ID"] = childEnvironment["GUAVA_LOG_RUN_ID"] ?? LogSystem.launch.runID
+        process.environment = childEnvironment
+        let output = ProcessStream(command: command, stream: "stdout", destination: capture ? nil : .standardOutput, collect: capture)
+        let errors = ProcessStream(command: command, stream: "stderr", destination: .standardError)
+        process.standardOutput = output.pipe; process.standardError = errors.pipe
+        let started = ContinuousClock.now
         try process.run()
-        let data = capture ? output.fileHandleForReading.readDataToEndOfFile() : Data()
+        output.start(pid: process.processIdentifier); errors.start(pid: process.processIdentifier)
         process.waitUntilExit()
+        let data = output.finish(); _ = errors.finish()
+        if !quiet { logger.debug("Command finished", metadata: ["command": "\(command)", "status": "\(process.terminationStatus)", "duration": "\(started.duration(to: .now))"]) }
         guard process.terminationStatus == 0 else { throw ToolError.failed(command, process.terminationStatus) }
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -98,7 +98,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "PlatformCore"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
+        .package(path: "Logging"),
     ],
     targets: [
         // MARK: - C Bridges
@@ -164,6 +164,7 @@ let package = Package(
         ),
         .target(
             name: "CEngineBridge",
+            dependencies: [.product(name: "CGuavaLog", package: "Logging")],
             path: "Sources/Bridge/CEngineBridge",
             publicHeadersPath: "include"
         ),
@@ -240,7 +241,7 @@ let package = Package(
         // MARK: - Rendering
         .target(
             name: "NativeRHI",
-            dependencies: nativeRHIInteropDependencies,
+            dependencies: nativeRHIInteropDependencies + [.product(name: "GuavaLogging", package: "Logging")],
             path: "Sources/NativeRHI",
             exclude: ["docs"]
         ),
@@ -252,7 +253,7 @@ let package = Package(
                 .product(name: "GuavaPlatformCore", package: "PlatformCore"),
                 "CSDL3",
                 "EngineKernel",
-                .product(name: "Logging", package: "swift-log"),
+                .product(name: "GuavaLogging", package: "Logging"),
             ]
         ),
 
@@ -272,7 +273,7 @@ let package = Package(
                 "SIMDCompat",
                 "SceneRuntime",
                 "CImageDecodeBridge",
-                .product(name: "Logging", package: "swift-log"),
+                .product(name: "GuavaLogging", package: "Logging"),
             ]
         ),
         .target(name: "SequenceRuntime"),
@@ -321,7 +322,7 @@ let package = Package(
         ),
         .target(
             name: "PluginRuntime",
-            dependencies: ["CapabilityRuntime"]
+            dependencies: ["CapabilityRuntime", .product(name: "GuavaLogging", package: "Logging")]
         ),
         .target(
             name: "IntentRuntime",
@@ -372,7 +373,7 @@ let package = Package(
                 "NativeRHI",
                 "AssetPipeline",
                 "SceneRuntime",
-                .product(name: "Logging", package: "swift-log"),
+                .product(name: "GuavaLogging", package: "Logging"),
             ],
             resources: [
                 .copy("Resources/FinalBaseMesh.obj"),
@@ -393,7 +394,7 @@ let package = Package(
         // MARK: - Engine Host (orchestrates all services)
         .target(
             name: "EngineCore",
-            dependencies: [
+            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
                 "CTreeSitter",
                 "CTreeSitterSwift",
                 "CEngineBridge",
@@ -408,7 +409,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "SceneRuntimeBenchmarks",
-            dependencies: [
+            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
                 "SIMDCompat",
                 "SceneRuntime",
             ],
@@ -416,7 +417,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "PhysicsRuntimeBenchmarks",
-            dependencies: [
+            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
                 "SIMDCompat",
                 "SceneRuntime",
             ],
@@ -427,12 +428,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "RenderBackendBenchmarks",
-            dependencies: ["NativeRendererValidation"],
+            dependencies: [.product(name: "GuavaLogging", package: "Logging"), "NativeRendererValidation"],
             path: "Benchmarks/RenderBackendBenchmarks"
         ),
         .executableTarget(
             name: "StylizedCharacterPreviewDemo",
-            dependencies: [
+            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
                 "SIMDCompat",
                 "RenderBackend",
                 "SceneRuntime",
@@ -441,7 +442,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "GuavaPluginHost",
-            dependencies: [
+            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
                 "CapabilityRuntime",
                 "IntentRuntime",
                 "PluginRuntime",
@@ -535,6 +536,7 @@ let package = Package(
         .testTarget(
             name: "PluginRuntimeTests",
             dependencies: [
+                .product(name: "GuavaLogging", package: "Logging"),
                 "CapabilityRuntime",
                 "PluginRuntime",
             ]
@@ -613,7 +615,7 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "NativeRHIPassProbe",
-            dependencies: ["NativeRendererValidation"]),
+            dependencies: [.product(name: "GuavaLogging", package: "Logging"), "NativeRendererValidation"]),
         .target(name: "NativeRendererValidation",
             dependencies: ["RenderBackend", "NativeRHI", "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
         .testTarget(name: "NativeRendererTests",

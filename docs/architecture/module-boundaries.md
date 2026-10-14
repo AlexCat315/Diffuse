@@ -15,6 +15,7 @@ SwiftUI 也把默认使用入口收敛到 `import SwiftUI`、App / Scene / View�
 | 边界 | 所有权 | 应用侧用法 |
 | --- | --- | --- |
 | `Engine` | NativeRHI、场景、资源、脚本、音频、引擎调度 | 按引擎集成需要显式依赖领域产品 |
+| `Engine/Logging` | swift-log 后端、结构化记录、上下文、输出和有界订阅 | 普通应用由 GuavaUI 导出并初始化；协议只依赖 GuavaLogCore |
 | `GuavaUI/Portable` | 可移植值、Compose 核心、场景 / 输入、DevTools 契约 | 浏览器或新平台宿主使用底层产品 |
 | `GuavaUI/Text` | FreeType / HarfBuzz、字体图集与排版 | 文字后端集成使用 |
 | `GuavaUIRuntime` | 原生字体 / 图像服务、SDL 宿主、NativeRHI UI renderer | 原生宿主、renderer 集成使用 |

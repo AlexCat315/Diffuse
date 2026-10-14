@@ -4,9 +4,10 @@ import PackageDescription
 let package = Package(
     name: "GuavaUIBrowser",
     platforms: [.macOS(.v13)],
-    dependencies: [.package(path: "../Portable"), .package(path: "../../examples/Counter"), .package(path: "../Text")],
+    dependencies: [.package(path: "../Portable"), .package(path: "../../examples/Counter"), .package(path: "../Text"), .package(path: "../../Engine/Logging")],
     targets: [
         .executableTarget(name: "GuavaUIBrowserPrototype", dependencies: [
+            .product(name: "GuavaLogging", package: "Logging"),
             .product(name: "GuavaUIText", package: "Text"),
             .product(name: "CounterExample", package: "Counter"),
             .product(name: "GuavaUICore", package: "Portable"),

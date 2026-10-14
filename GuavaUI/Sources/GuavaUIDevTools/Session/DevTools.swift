@@ -1,7 +1,7 @@
 import GuavaUIDevToolsProtocol
 import GuavaUIDevToolsScene
 import Foundation
-import Logging
+import GuavaLogging
 import NativeRHI
 import GuavaUIRuntime
 import EngineKernel
@@ -15,11 +15,6 @@ public final class DevTools {
     public let config: DevToolsConfig
     public let server: DevServer
     public let scene: SceneInspector
-
-    /// Sink for log records. Install with
-    /// `LoggingSystem.bootstrap { LogTap(label: $0, sink: tools.logSink) }`
-    /// from the host before any `Logger` is constructed.
-    public let logSink: LogTap.Sink
 
     /// Frame timing publisher; the host calls `record(...)` once per frame.
     public let timing = TimingPublisher()
@@ -57,12 +52,10 @@ public final class DevTools {
     public init(config: DevToolsConfig,
                 tree: NodeTree,
                 invalidationLog: InvalidationLog? = nil,
-                renderTree: RenderTree? = nil,
-                logSink: LogTap.Sink = LogTap.Sink()) {
+                renderTree: RenderTree? = nil) {
         self.config = config
         self.timeline = tree.timeline
         self.server = DevServer(config: config)
-        self.logSink = logSink
         self.scene = SceneInspector(tree: tree,
                                     invalidationLog: invalidationLog,
                                     renderTree: renderTree)
@@ -124,7 +117,6 @@ public final class DevTools {
     }
 
     private func unwireSinks() {
-        logSink.deliver = nil
         timing.deliver = nil
         frameTapSink.deliver = nil
     }
@@ -178,12 +170,7 @@ public final class DevTools {
     public func drawInspectionOverlay(into list: DrawList) { scene.editor.drawOverlay(into: list) }
 
     private func wireSinks() {
-        // Capture the server reference rather than self. `stop()` clears all
-        // callbacks so a process-wide LogTap does not retain a stopped server.
         let server = self.server
-        logSink.deliver = { entry in
-            server.broadcastLog(entry)
-        }
         timing.deliver = { frame in
             server.broadcastTiming(frame)
         }

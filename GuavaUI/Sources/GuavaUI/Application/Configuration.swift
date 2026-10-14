@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
@@ -62,6 +63,7 @@ public struct ApplicationConfiguration: Sendable {
         public init() {}
     }
 
+    public var logging = LoggingConfiguration()
     public var window = Window()
     public var typography = Typography()
     public var rendering = Rendering()

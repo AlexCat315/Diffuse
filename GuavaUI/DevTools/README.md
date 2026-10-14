@@ -122,9 +122,7 @@ The [Wasm prototype](../Browser/README.md) embeds the same client and uses
 `browser://guava` over a same-origin MessageChannel. This transport requires the
 Inspector to be embedded in its browser host.
 
-By default DevTools installs the process-wide swift-log tap. If the host already
-calls `LoggingSystem.bootstrap`, configure DevTools with
-`autoInstallLogTap: false` and add `LogTap` to the host's multiplex handler.
+Application startup installs [GuavaLogging](../../Engine/Logging/README.md), independently of DevTools. The Inspector subscribes to bounded startup history and live records; it does not install or replace swift-log. The Logs panel supports level/module/text filters, structured metadata and source details, pause display, loss counts and JSONL export. See [log protocol](Protocol/Logs.md). Hosts with an existing swift-log backend select local installation in the application's logging configuration.
 
 The default endpoint is loopback-only. Binding to `0.0.0.0` or `::` exposes
 remote input and state restore to the local network; only do this on a trusted

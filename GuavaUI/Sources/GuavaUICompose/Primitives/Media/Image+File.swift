@@ -1,6 +1,6 @@
 import Foundation
 import GuavaUIRuntime
-import Logging
+import GuavaLogging
 
 public enum ImageLoadFailureReason: Sendable {
     case decodeFailed
@@ -24,7 +24,7 @@ public enum ImageLoadDiagnostics {
 
     static func emit(path: String, reason: ImageLoadFailureReason, details: String) {
         let event = ImageLoadDiagnostic(path: path, reason: reason, details: details)
-        Logger(label: "com.guava.ui.compose").warning("image load fallback [\(reason)]: \(path) — \(details)")
+        LogSystem.logger("com.guava.ui.compose").warning("image load fallback [\(reason)]: \(path) — \(details)")
         onEvent?(event)
     }
 }

@@ -184,15 +184,16 @@ struct EditorViewportNavigationTests {
             return try JSONSerialization.data(withJSONObject: content, options: [.sortedKeys])
         }
         let scene = try sceneContent()
-        var displayRequests = 0
-        app.setDisplayInvalidationHandler { displayRequests += 1 }
+        let displayRequests = DisplayRequestCounter()
+        app.setDisplayInvalidationHandler { displayRequests.increment() }
+        let initialRequests = displayRequests.value
         app.store.dispatch(.setTranslateSnapEnabled(true))
         app.store.dispatch(.setRotateSnapEnabled(true))
         app.store.dispatch(.setScaleSnapEnabled(true))
         app.store.dispatch(.setTranslateSnapStep(0.25))
         app.store.dispatch(.setRotateSnapStepDegrees(15))
         app.store.dispatch(.setScaleSnapStep(0.1))
-        #expect(displayRequests == 6)
+        #expect(displayRequests.value == initialRequests + 6)
         #expect(try sceneContent() == scene)
         #expect(!app.hasUnsavedSceneChanges)
         let settings = EditorViewportSnapSettings(state: app.store.state)
@@ -220,4 +221,11 @@ struct EditorViewportNavigationTests {
             #expect(abs(projected.x - 530) < 0.001 && abs(projected.y - 240) < 0.001)
         }
     }
+}
+
+private final class DisplayRequestCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var value: Int { lock.withLock { count } }
+    func increment() { lock.withLock { count += 1 } }
 }

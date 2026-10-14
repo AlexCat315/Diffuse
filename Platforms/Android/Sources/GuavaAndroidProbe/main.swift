@@ -1,3 +1,6 @@
+import GuavaLogging
+try LogSystem.bootstrap(application: "com.guava.android.probe", configuration: .init { $0.storage.enabled = false })
+defer { LogSystem.flush() }
 import Foundation
 import NativeRHI
 
@@ -28,6 +31,7 @@ do {
         } catch {
             results.append(ProbeResult(name: name, passed: false, detail: String(describing: error)))
             print("FAIL \(name): \(error)")
+            LogSystem.logger("com.guava.android.probe").error("\(name)", metadata: ["error": "\(error)"])
         }
     }
     let report = ProbeReport(device: device.deviceName, backend: String(describing: device.backendAPI), results: results)
@@ -36,5 +40,6 @@ do {
     if results.contains(where: { !$0.passed }) { exit(1) }
 } catch {
     print("FAIL initialization: \(error)")
+    LogSystem.logger("com.guava.android.probe").error("Initialization failed", metadata: ["error": "\(error)"])
     exit(1)
 }

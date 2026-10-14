@@ -87,6 +87,7 @@ private final class NIODevToolsConnection: DevToolsConnection, @unchecked Sendab
     let channel: Channel
     init(channel: Channel) { self.channel = channel }
 
+    var isWritable: Bool { channel.isWritable }
     func send(text: Data) {
         channel.eventLoop.execute { [channel] in
             guard channel.isActive else { return }

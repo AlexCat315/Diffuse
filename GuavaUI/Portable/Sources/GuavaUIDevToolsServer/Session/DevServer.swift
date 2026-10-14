@@ -1,9 +1,7 @@
 import Foundation
 import Dispatch
 import GuavaUIDevToolsProtocol
-#if canImport(Logging)
-import Logging
-#endif
+import GuavaLogging
 
 /// WebSocket server with platform-independent protocol dispatch.
 /// The transport owns sockets; the host owns UI-thread scheduling.
@@ -49,9 +47,8 @@ public final class DevServer: @unchecked Sendable {
 
     public var advertisedCapabilities: [String] = ["tree", "select", "log", "timing"]
 
-    #if canImport(Logging)
-    let log = Logger(label: "guava.devtools")
-    #endif
+    let logs = DevToolsLogFeed()
+    var logger: Logger { LogSystem.logger("com.guava.devtools") }
 
     public init(config: DevToolsConfig, transport: (any DevToolsTransport)? = nil) {
         self.config = config
@@ -60,6 +57,8 @@ public final class DevServer: @unchecked Sendable {
     }
 
     public func start() throws {
+        logs.start(self)
+        do {
         try onQueueSync {
             guard !isStarted else { return }
             let epoch = generation
@@ -81,10 +80,12 @@ public final class DevServer: @unchecked Sendable {
             }
             isStarted = true
         }
+        } catch { logs.stop(); throw error }
         log("DevServer listening on ws://\(config.host):\(boundPort ?? config.port)")
     }
 
     public func stop() {
+        logs.stop()
         let cleanup = onQueueSync { () -> (Bool, Bool, Bool, UUID?) in
             generation &+= 1
             isStarted = false
@@ -153,11 +154,7 @@ public final class DevServer: @unchecked Sendable {
         }
     }
 
-    public func broadcastLog(_ entry: LogEntryPayload) {
-        guard hasSubscribers(for: .log) else { return }
-        let env = DevToolsEnvelope(type: "log.entry", payload: encodeJSON(entry))
-        send(env, toSubscribersOf: .log)
-    }
+    public func broadcastLog(_ entry: LogRecord) { logs.enqueue(entry, server: self) }
 
     public func broadcastTiming(_ frame: TimingFramePayload) {
         guard hasSubscribers(for: .timing) else { return }
@@ -315,7 +312,7 @@ public final class DevServer: @unchecked Sendable {
     }
 
     /// Queueing broadcasts instead of synchronously re-entering `queue` is
-    /// essential: DevServer's own Logger can be routed through LogTap while
+    /// essential: DevServer's own Logger can be routed through the central pipeline while
     /// already executing on this queue.
     func send(_ env: DevToolsEnvelope, toSubscribersOf subscription: Subscription) {
         queue.async { [weak self] in
@@ -412,11 +409,7 @@ public final class DevServer: @unchecked Sendable {
     }
 
     func log(_ message: String) {
-        #if canImport(Logging)
-        log.info("\(message)")
-        #else
-        print("[guava.devtools] \(message)")
-        #endif
+        logger.debug("\(message)")
     }
 
     func currentPlatformName() -> String {

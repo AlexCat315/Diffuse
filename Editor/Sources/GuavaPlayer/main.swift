@@ -1,4 +1,9 @@
 import Foundation
+import GuavaLogging
+private var loggingConfiguration = LoggingConfiguration()
+try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
+try LogSystem.bootstrap(application: Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName, configuration: loggingConfiguration)
+defer { LogSystem.flush() }
 import GameRuntime
 import EngineCore
 import GuavaUI
@@ -147,7 +152,8 @@ if CommandLine.arguments.contains("--validate-project") {
         let report = "GuavaPlayer project validation passed (\(app.compiledScriptCount) compiled scripts, \(app.scene.manifest().entityCount) entities, \(frames) simulation frames)\n"
         FileHandle.standardOutput.write(Data(report.utf8))
     } catch {
-        FileHandle.standardError.write(Data("[GuavaPlayer] project validation failed: \(error)\n".utf8))
+        LogSystem.logger("com.guava.player").error("[GuavaPlayer] project validation failed: \(error)")
+        LogSystem.flush()
         exit(1)
     }
 } else if CommandLine.arguments.contains("--validate-install") {
@@ -155,14 +161,16 @@ if CommandLine.arguments.contains("--validate-project") {
         let report = try PlayerInstallValidator.validateLayout()
         FileHandle.standardOutput.write(Data("\(report)\n".utf8))
     } catch {
-        FileHandle.standardError.write(Data("\(error)\n".utf8))
+        LogSystem.logger("com.guava.player").error("\(error)")
+        LogSystem.flush()
         exit(1)
     }
 } else {
     do {
         try runPlayer()
     } catch {
-        FileHandle.standardError.write(Data("[GuavaPlayer] startup failed: \(error)\n".utf8))
+        LogSystem.logger("com.guava.player").error("[GuavaPlayer] startup failed: \(error)")
+        LogSystem.flush()
         exit(1)
     }
 }

@@ -1,3 +1,4 @@
+import GuavaLogCore
 import Foundation
 
 public enum DevToolsSubscription: String, Hashable, Sendable {
@@ -9,13 +10,16 @@ public enum DevToolsSubscription: String, Hashable, Sendable {
 public final class DevToolsSession {
     public private(set) var subscriptions: Set<DevToolsSubscription> = []
     public var watchedStateIDs: [String] = []
+    public var logQuery = LogQuery()
+    public var logSequence: UInt64 = 0
+    public var logDropped: UInt64 = 0
     public var timelineSequence: UInt64 = 0
     public init() {}
     @discardableResult public func set(_ stream: DevToolsSubscription, enabled: Bool) -> Bool {
         if enabled { return subscriptions.insert(stream).inserted }
         return subscriptions.remove(stream) != nil
     }
-    public func reset() { subscriptions.removeAll(); watchedStateIDs = []; timelineSequence = 0 }
+    public func reset() { subscriptions.removeAll(); watchedStateIDs = []; timelineSequence = 0; logQuery = .init(); logSequence = 0; logDropped = 0 }
 
     /// Shared validation before either host applies a command to its scene.
     public func validate(_ request: DevToolsEnvelope) -> DevToolsEnvelope? {
@@ -24,6 +28,11 @@ public final class DevToolsSession {
         }
         let message: String?
         switch request.type {
+        case "log.subscribe":
+            if request.payload == nil { message = nil }
+            else if let query = DevToolsCodec.decode(LogQuery.self, request.payload), query.labels.count <= 64,
+                    query.labels.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 }), query.text.utf8.count <= 4096 { message = nil }
+            else { message = "log.subscribe requires a bounded log query" }
         case "state.subscribe":
             message = DevToolsCodec.decode(StateWatchPayload.self, request.payload)?.isValid == true ? nil : "state.subscribe requires up to 128 unique bounded IDs"
         case "state.list", "state.unsubscribe", "timeline.subscribe", "timeline.unsubscribe":

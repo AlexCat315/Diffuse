@@ -22,7 +22,7 @@ final class AndroidApplication {
         try renderer.configure(format: .rgba8Unorm)
         scene = try HostedScene(checkpoint: checkpoint, launch: launch, scale: self.scale, device: device)
         if let launch = runtime.devtools {
-            var configuration = DevToolsConfig(port: 0, appTitle: launch.appTitle, autoInstallLogTap: false)
+            var configuration = DevToolsConfig(port: 0, appTitle: launch.appTitle)
             configuration.launch = launch
             try scene.content.configureDiagnostics(configuration) { [weak self] in
                 if let self { guava_android_schedule_diagnostics(Unmanaged.passUnretained(self).toOpaque()) }

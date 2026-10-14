@@ -149,7 +149,7 @@ def main():
     shell('am', 'start', '-W', '-n', 'com.guava.probe/.MainActivity', '--ei', 'orientation', -1, '--ez', 'snapshots', 'true')
     wait(lambda s: s['state']['count'] == '0' and s['state']['note'] == expected['note'], 'sensor orientation restored')
     pid = subprocess.check_output(list(map(str, adb + ['shell', 'pidof', 'com.guava.probe'])), text=True).strip()
-    log = subprocess.check_output(list(map(str, adb + ['logcat', '-d', '--pid=' + pid, '-s', 'GuavaAndroid:I', '*:S'])), text=True)
+    log = subprocess.check_output(list(map(str, adb + ['logcat', '-d', '--pid=' + pid, '-s', 'Guava:I', '*:S'])), text=True)
     (directory / 'app.log').write_text(log)
     assert 'FAIL' not in log, log
     (directory / 'report.json').write_text(json.dumps({'passed': True, 'checks': checkpoints}, ensure_ascii=False, indent=2) + '\n')

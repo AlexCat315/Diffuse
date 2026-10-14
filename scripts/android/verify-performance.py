@@ -110,13 +110,13 @@ def main():
     trace_started = False
     with log_path.open('wb') as output:
         startup = subprocess.check_output(device.adb + ['logcat', '-d', '-v', 'threadtime', '--pid=' + pid,
-                                                       'GuavaAndroid:I', 'AndroidRuntime:E', '*:S'])
+                                                       'Guava:I', 'AndroidRuntime:E', '*:S'])
         output.write(startup)
         output.flush()
         # Measurement markers come from adb's shell process, not the app PID.
         # Keep both tags here and filter app records after isolating the window.
         logger = subprocess.Popen(device.adb + ['logcat', '-v', 'threadtime', '-T', '1',
-                                              'GuavaAndroid:I', 'GuavaPerf:I', 'AndroidRuntime:E', '*:S'], stdout=output)
+                                              'Guava:I', 'GuavaPerf:I', 'AndroidRuntime:E', '*:S'], stdout=output)
         try:
             time.sleep(args.warmup)
             width, height = device.screenshot(directory / 'screen.png')

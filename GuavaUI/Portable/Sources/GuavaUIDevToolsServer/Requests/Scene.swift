@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import GuavaUIDevToolsProtocol
 
@@ -65,8 +66,11 @@ extension DevServer {
             conn.close()
 
         case "log.subscribe":
+            client.session.logQuery = DevToolsCodec.decode(LogQuery.self, env.payload) ?? .init()
+            let snapshot = DevToolsLogFeed.snapshot(client.session.logQuery)
+            client.session.logSequence = snapshot.records.last?.sequence ?? client.session.logQuery.afterSequence ?? 0
             setSubscription(.log, enabled: true, for: conn)
-            sendOK(for: env, on: conn)
+            send(.init(type: "log.snapshot", id: env.id, payload: DevToolsCodec.json(snapshot)), on: conn)
 
         case "log.unsubscribe":
             setSubscription(.log, enabled: false, for: conn)

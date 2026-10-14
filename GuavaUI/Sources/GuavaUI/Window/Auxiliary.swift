@@ -3,7 +3,7 @@ import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIDevTools
-import Logging
+import GuavaLogging
 import NativeRHI
 import PlatformShell
 
@@ -106,7 +106,7 @@ final class AuxiliaryAppWindow {
     /// destroys its SDL/Wayland window. See `Application.releaseGPUSurfaces()`.
     func releaseGPUSurface() {
         do { try windowRenderer?.close() }
-        catch { Logger(label: "com.guava.ui.app").error("Auxiliary window GPU cleanup failed: \(error)") }
+        catch { LogSystem.logger("com.guava.ui.app").error("Auxiliary window GPU cleanup failed: \(error)") }
         windowRenderer = nil
     }
 
@@ -128,7 +128,7 @@ final class AuxiliaryAppWindow {
         do {
             try windowRenderer?.resize(size: SIMD2(session.drawableSize.width, session.drawableSize.height), vsync: enabled)
             session.requestDisplay()
-        } catch { Logger(label: "com.guava.ui.app").warning("Auxiliary present mode update failed: \(error)") }
+        } catch { LogSystem.logger("com.guava.ui.app").warning("Auxiliary present mode update failed: \(error)") }
     }
 
     private func syncWindowChromeHitTest() {

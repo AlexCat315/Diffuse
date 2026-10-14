@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import NativeRHI
 import GuavaUICore
@@ -30,7 +31,7 @@ final class SurfaceSession {
         }
         scene.invalidate()
         let presentation = try? application.device.presentationMode(for: swapchain)
-        guava_android_log("OPEN \(device.deviceName) \(width)x\(height) vsyncRequested=\(application.runtime.vsync) presentMode=\(presentation?.rawValue ?? "unavailable") displaySynchronized=\(presentation.map { String($0.synchronizesToDisplay) } ?? "unavailable") benchmark=\(application.runtime.benchmark) gpuTimings=\(gpuTimings.isRecording)")
+        LogSystem.logger("com.guava.android.surface").info("OPEN \(device.deviceName) \(width)x\(height) vsyncRequested=\(application.runtime.vsync) presentMode=\(presentation?.rawValue ?? "unavailable") displaySynchronized=\(presentation.map { String($0.synchronizesToDisplay) } ?? "unavailable") benchmark=\(application.runtime.benchmark) gpuTimings=\(gpuTimings.isRecording)")
     }
 
     func frame(timestamp: UInt64) throws -> Bool {
@@ -86,6 +87,6 @@ final class SurfaceSession {
             try? device.waitUntilIdle()
             device.destroy(swapchain)
         }
-        guava_android_log("CLOSE")
+        LogSystem.logger("com.guava.android.surface").info("CLOSE")
     }
 }

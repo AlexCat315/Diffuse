@@ -215,7 +215,7 @@ extension EditorApplication {
             saved.restore(in: store)
         }
         var previous = EditorViewportSnapSettings(state: store.state)
-        snapSettingsToken = store.subscribe { [weak self] store in
+        subscriptions.settings = store.subscribe { [weak self] store in
             let next = EditorViewportSnapSettings(state: store.state)
             guard let self, next != previous else { return }
             previous = next

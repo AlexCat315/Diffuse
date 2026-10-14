@@ -61,7 +61,7 @@ def check():
         assert destination.read_bytes() == expected, f"Starter drifted from its template: {relative}"
     tools = manifest("Tools/Guava")
     assert {item["name"] for item in tools["products"]} == {"guava"}
-    assert local_dependencies(tools) == {ROOT / "Platforms/Android/Contract", ROOT / "GuavaUI/Portable"}
+    assert local_dependencies(tools) == {ROOT / "Platforms/Android/Contract", ROOT / "GuavaUI/Portable", ROOT / "Engine/Logging"}
     assert not (ROOT / "Platforms/Android/Tools").exists(), "Android must not own a separate developer CLI"
     assert not (example / "android.swift").exists()
     assert not (example / "guava-android.json").exists()

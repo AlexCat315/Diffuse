@@ -1,5 +1,11 @@
 import Foundation
+import GuavaLogging
+private var loggingConfiguration = LoggingConfiguration()
+try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
+try LogSystem.bootstrap(configuration: loggingConfiguration)
+defer { LogSystem.flush() }
 import NativeRendererValidation
 
 do { try NativePassBenchmark.run(arguments: Array(CommandLine.arguments.dropFirst())) }
-catch { FileHandle.standardError.write(Data("NativeRHIPassProbe: \(error)\n".utf8)); exit(1) }
+catch { LogSystem.logger("com.guava.tools").error("NativeRHIPassProbe: \(error)")
+        LogSystem.flush(); exit(1) }

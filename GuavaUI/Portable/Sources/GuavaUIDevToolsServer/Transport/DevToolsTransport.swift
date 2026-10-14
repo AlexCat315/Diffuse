@@ -2,6 +2,7 @@ import Foundation
 
 /// Connection identity stays stable until the transport reports disconnection.
 public protocol DevToolsConnection: AnyObject, Sendable {
+    var isWritable: Bool { get }
     func send(text: Data)
     func close()
 }

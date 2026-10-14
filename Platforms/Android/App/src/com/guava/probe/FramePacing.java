@@ -1,6 +1,5 @@
 package com.guava.probe;
 
-import android.util.Log;
 import java.util.Locale;
 
 /** CPU callback statistics, not a measurement of GPU completion or presentation. */
@@ -35,7 +34,7 @@ final class FramePacing {
         lag.add(Math.max(0, started - timestamp));
         if (duration > period) overBudget++;
         if (timestamp - windowStart < 1000000000L) return;
-        Log.i("GuavaAndroid", String.format(Locale.ROOT,
+        RuntimeLog.info("com.guava.android.pacing", String.format(Locale.ROOT,
                 "[timing] android.pacing refreshHz=%.3f window=%.3fms callbacks=%d rendered=%d idle=%d missedRefresh=%d overBudget=%d callbackWorkAvg=%.3fms callbackWorkMax=%.3fms callbackLagAvg=%.3fms callbackLagMax=%.3fms",
                 refreshRate, (double)(timestamp - windowStart) / 1000000, callbacks, rendered, callbacks - rendered,
                 missedRefresh, overBudget, work.average(callbacks), work.maximumMillis(), lag.average(callbacks), lag.maximumMillis()));

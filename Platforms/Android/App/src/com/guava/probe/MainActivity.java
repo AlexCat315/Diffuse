@@ -88,8 +88,17 @@ public final class MainActivity extends Activity {
         }
     }
 
-    @Override protected void onResume() { super.onResume(); surface.startFrames(); }
-    @Override protected void onPause() { surface.stopFrames(); super.onPause(); }
+    @Override protected void onResume() {
+        super.onResume();
+        RuntimeLog.info("com.guava.android.lifecycle", "Activity resumed");
+        surface.startFrames();
+    }
+    @Override protected void onPause() {
+        surface.stopFrames();
+        RuntimeLog.info("com.guava.android.lifecycle", "Activity paused");
+        RuntimeLog.flush();
+        super.onPause();
+    }
     @Override protected void onDestroy() { if (commandsRegistered) unregisterReceiver(commands); surface.releaseSurface(); if (!isChangingConfigurations()) surface.closeApplication(); super.onDestroy(); }
     @Override public Object onRetainNonConfigurationInstance() { return surface.detachApplication(); }
     @Override protected void onSaveInstanceState(Bundle state) {

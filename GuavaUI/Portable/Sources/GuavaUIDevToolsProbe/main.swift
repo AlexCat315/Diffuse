@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import GuavaUIDevToolsProtocol
 import GuavaUIDevToolsServer
@@ -16,6 +17,10 @@ private struct ProbeComponent: View {
 struct DevToolsProbe {
     @MainActor
     static func main() async throws {
+        try LogSystem.bootstrap(application: "com.guava.devtools.probe", configuration: .init { $0.storage.enabled = false })
+        defer { LogSystem.flush() }
+        LogSystem.logger("com.guava.probe").info("Probe starting", metadata: ["startup": "before inspector connects"])
+
         let port = CommandLine.arguments.dropFirst().first.flatMap(UInt16.init) ?? 9229
         let server = DevServer(config: DevToolsConfig(port: port, appTitle: "GuavaUI transport probe"))
         var state = ["count": "0"]

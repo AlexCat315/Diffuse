@@ -95,19 +95,17 @@ adb shell am force-stop com.guava.probe
 adb shell am start -W -n com.guava.probe/com.guava.probe.MainActivity \
   --es mode gallery --es component introduction \
   --ez benchmark true --ez timings true --ez vsync true
-adb logcat -s GuavaAndroid:I
+adb logcat -s Guava:I
 ```
 
 `benchmark=true` 在每次显示回调绘制；关闭 benchmark 后保留按需绘制。Debug 默认也不生成语义快照或逐帧写盘；自动化脚本需要启动时显式传入 `--ez snapshots true` 才会在绘制后发布 `files/demo-state.json`。benchmark 始终关闭自动快照，即使 snapshots 为 true。此 Java 诊断选项在 Activity Intent 中跨前后台和配置变更保留，不进入 Swift 场景配置。`vsync=false` 请求后端关闭同步，启动日志报告实际 `presentMode` 和 `displaySynchronized`，回退到 MAILBOX / FIFO 时不能解释为真正关闭同步。Release APK 的页面来自构建配置，运行时 `mode` / `component` 和调试广播仅在 Debug 生效。
 
 `timings=true` 最多记录 6000 条 `android.frame`，包含 Compose / layout / 绘制列表准备、帧槽等待、drawable 获取、atlas 上传、命令录制、队列提交、呈现的 CPU 墙钟耗时，以及几何量。`android.pacing` 每秒报告显示回调、提交帧、空闲回调、按当前刷新率估算的遗漏刷新周期、回调耗时与投递延迟，最多 120 条。它们不代表 GPU 执行耗时或实际屏幕呈现帧率；显式启用后的 Debug 快照开销只计入 callbackWork。Debug 广播可设置运行参数重建场景并开始新的测量；仅切换 snapshots 不重建场景。仓库输入自动化已显式开启自动快照。需要检查状态时，也可发送 `--es demoAction snapshot` 的 `com.guava.probe.DEMO_INPUT` 广播写出一次快照，这不要求 snapshots=true，并可用于 benchmark。
 
-显示时钟与运行时选项的独立主机测试可运行：
+显示时钟的独立主机测试可运行：
 
 ```sh
-swiftc GuavaUI/Portable/Sources/GuavaUIDevToolsProtocol/Discovery.swift \
-  Platforms/Android/Sources/GuavaAndroidApp/Frame/Clock.swift \
-  Platforms/Android/Sources/GuavaAndroidApp/Frame/RuntimeOptions.swift scripts/android/frame-clock-tests.swift \
+swiftc Platforms/Android/Sources/GuavaAndroidApp/Frame/Clock.swift scripts/android/frame-clock-tests.swift \
   -o /tmp/guava-android-frame-clock-tests
 /tmp/guava-android-frame-clock-tests
 ```

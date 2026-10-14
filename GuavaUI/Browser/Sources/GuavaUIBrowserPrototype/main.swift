@@ -1,4 +1,5 @@
 import Foundation
+import GuavaLogging
 import GuavaUIComposeCore
 import CounterExample
 import GuavaUIDevToolsScene
@@ -96,6 +97,10 @@ private final class BrowserPrototype {
     var lastObservation: StateObservationPayload?
 
     init() {
+        do {
+            try LogSystem.bootstrap(application: "com.guava.browser", configuration: .init { $0.storage.enabled = false })
+            LogSystem.logger("com.guava.browser").info("Browser application starting")
+        } catch { preconditionFailure("Invalid logging defaults: \(error)") }
         dispatcher.eventSink = { [weak self] event in self?.recorder.record(event) }
         dispatcher.eventInterceptor = { [weak self] event in self?.inspector.editor.intercept(event) ?? false }
         context.withCurrent { graph.install(root: counter) }
@@ -224,7 +229,7 @@ private final class BrowserPrototype {
     func hello() {
         responseBuffer.encode(DevToolsEnvelope(type: "hello", payload: json(HelloPayload(
             host: HelloHostInfo(pid: 0, appTitle: "GuavaUI Wasm prototype", platform: "WebAssembly"),
-            capabilities: ["tree", "select", "timing", "state", "recording", "inspect", "style", "source", "recomposition", "state.observe", "timeline"]))))
+            capabilities: ["log", "tree", "select", "timing", "state", "recording", "inspect", "style", "source", "recomposition", "state.observe", "timeline"]))))
     }
 
     func dispatch(_ bytes: UnsafeRawBufferPointer) {
@@ -238,6 +243,14 @@ private final class BrowserPrototype {
         func fail(_ message: String) { response.type = request.type + ".err"; response.payload = json(ErrorPayload(code: "bad_request", message: message)) }
         switch request.type {
         case "hello.ack": break
+        case "log.subscribe":
+            session.logQuery = DevToolsCodec.decode(LogQuery.self, request.payload) ?? .init()
+            let snapshot = LogSystem.snapshot(session.logQuery)
+            session.logSequence = snapshot.records.last?.sequence ?? session.logQuery.afterSequence ?? 0
+            session.logDropped = snapshot.dropped
+            session.set(.log, enabled: true)
+            response.type = "log.snapshot"; response.payload = json(snapshot)
+        case "log.unsubscribe": session.set(.log, enabled: false)
         case "state.list": response.payload = json(graph.stateRegistry.observation(ids: []))
         case "state.subscribe":
             session.watchedStateIDs = DevToolsCodec.decode(StateWatchPayload.self, request.payload)!.ids
@@ -302,6 +315,16 @@ private final class BrowserPrototype {
 
     func events() {
         var messages = [DevToolsEnvelope]()
+        if session.subscriptions.contains(.log) {
+            var query = session.logQuery; query.afterSequence = session.logSequence
+            let snapshot = LogSystem.snapshot(query)
+            for record in snapshot.records { messages.append(DevToolsEnvelope(type: "log.entry", payload: json(record))) }
+            if let last = snapshot.records.last { session.logSequence = last.sequence }
+            if snapshot.dropped > session.logDropped {
+                messages.append(DevToolsEnvelope(type: "log.gap", payload: .object(["dropped": .number(Double(snapshot.dropped - session.logDropped))])))
+                session.logDropped = snapshot.dropped
+            }
+        }
         if session.subscriptions.contains(.state) {
             let observed = graph.stateRegistry.observation(ids: session.watchedStateIDs)
             if observed != lastObservation {

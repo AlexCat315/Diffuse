@@ -1,4 +1,5 @@
 import Foundation
+import GuavaLogging
 import GuavaUIRuntime
 
 final class FrameMetrics {
@@ -23,8 +24,7 @@ final class FrameMetrics {
         let elapsed = now - fpsWindowStart
         guard elapsed >= 1.0 else { return }
         let n = Double(fpsFrames)
-        // Write to stderr: when stdout is redirected to a file it is block
-        // buffered, so a force-killed GUI run would lose buffered samples.
+        // Journal the summary once per second; individual frames remain in timing streams.
         let line = String(format: "[guava.fps] %.1f fps | sim/tick=%.2fms | cpu: layout=%.2fms draw=%.2fms | gpu/present=%.2fms (n=%d)\n",
                           n / elapsed,
                           fpsTickAccum / n,
@@ -32,7 +32,7 @@ final class FrameMetrics {
                           fpsDrawAccum / n,
                           fpsPresentAccum / n,
                           fpsFrames)
-        FileHandle.standardError.write(Data(line.utf8))
+        LogSystem.logger("com.guava.ui.timing").info("\(line.trimmingCharacters(in: .newlines))")
         fpsFrames = 0
         fpsWindowStart = now
         fpsLayoutAccum = 0

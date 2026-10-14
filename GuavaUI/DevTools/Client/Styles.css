@@ -421,3 +421,10 @@ textarea {
 .timelineTrack { display: block; height: 5px; background: #1e293b; overflow: hidden; margin-top: 3px; }
 .timelineBar { display: block; height: 5px; background: #a78bfa; }
 .timelineBar.layout { background: #38bdf8; } .timelineBar.draw { background: #34d399; }
+
+.logRecord { padding: 4px 8px; border-bottom: 1px solid var(--border, #343840); font: 12px/1.5 monospace; }
+.logRecord summary { white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer; }
+.logRecord pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #aab3c2; }
+.logRecord.error, .logRecord.critical { color: #ff8b8b; }
+.logRecord.warning { color: #edcd7d; }
+.logControls { flex-wrap: wrap; }

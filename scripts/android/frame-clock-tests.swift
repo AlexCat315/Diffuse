@@ -20,12 +20,7 @@ enum FrameClockTests {
         clock = DisplayFrameClock()
         expect(clock.advance(to: 10_000_000_000), 1.0 / 60)
 
-        let defaults = try JSONDecoder().decode(RuntimeOptions.self, from: Data("{}".utf8))
-        precondition(!defaults.benchmark && !defaults.timings && defaults.vsync)
-        let benchmark = try JSONDecoder().decode(RuntimeOptions.self,
-            from: Data(#"{"benchmark":true,"timings":true,"vsync":false}"#.utf8))
-        precondition(benchmark.benchmark && benchmark.timings && !benchmark.vsync)
-        print("PASS: display timestamps, idle clock, dropped frames, surface reset, runtime defaults")
+        print("PASS: display timestamps, idle clock, dropped frames, surface reset")
     }
 
     private static func expect(_ actual: Double, _ expected: Double) {

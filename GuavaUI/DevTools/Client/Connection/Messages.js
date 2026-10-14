@@ -27,6 +27,12 @@ function handleEnvelope(env) {
         context.analysis.renderRecompositionTable(); context.observation.renderStateRegistry();
       });
       break;
+    case "log.snapshot":
+      context.logs.acceptSnapshot(env.payload);
+      break;
+    case "log.gap":
+      context.logs.deliveryGap(env.payload);
+      break;
     case "log.entry":
       context.logs.appendLog(env.payload);
       break;

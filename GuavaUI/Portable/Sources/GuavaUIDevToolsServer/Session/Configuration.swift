@@ -7,21 +7,16 @@ public struct DevToolsConfig: Sendable {
     public var port: UInt16
     public var appTitle: String
     public var enabled: Bool
-    /// Automatically bootstraps swift-log with LogTap. Disable this when the
-    /// host already bootstraps LoggingSystem and multiplex LogTap manually.
-    public var autoInstallLogTap: Bool
     public var launch: DevToolsLaunch? = nil
 
     public init(host: String = "127.0.0.1",
                 port: UInt16 = 9229,
                 appTitle: String = "GuavaUI",
-                enabled: Bool = true,
-                autoInstallLogTap: Bool = true) {
+                enabled: Bool = true) {
         self.host = host
         self.port = port
         self.appTitle = appTitle
         self.enabled = enabled
-        self.autoInstallLogTap = autoInstallLogTap
     }
 
     /// Convenience: enables the server when the `GUAVA_DEVTOOLS=1` env var is set.
@@ -33,12 +28,10 @@ public struct DevToolsConfig: Sendable {
         guard env["GUAVA_DEVTOOLS"] == "1" else { return nil }
         let host = env["GUAVA_DEVTOOLS_HOST"] ?? "127.0.0.1"
         let port = env["GUAVA_DEVTOOLS_PORT"].flatMap(UInt16.init) ?? 9229
-        let autoInstallLogTap = env["GUAVA_DEVTOOLS_AUTO_LOG_TAP"] != "0"
         var config = DevToolsConfig(host: host,
                               port: port,
                               appTitle: appTitle,
-                              enabled: true,
-                              autoInstallLogTap: autoInstallLogTap)
+                              enabled: true)
         if let id = env["GUAVA_DEVTOOLS_SESSION_ID"], let token = env["GUAVA_DEVTOOLS_TOKEN"],
            let path = env["GUAVA_DEVTOOLS_SESSION_FILE"] {
             config.launch = DevToolsLaunch(id: id, token: token, descriptorPath: path, appTitle: appTitle)

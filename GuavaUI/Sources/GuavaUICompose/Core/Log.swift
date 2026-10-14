@@ -1,5 +1,5 @@
-import Logging
+import GuavaLogging
 
 extension Logger {
-    static let compose = Logger(label: "com.guava.ui.compose")
+    static let compose = LogSystem.logger("com.guava.ui.compose")
 }

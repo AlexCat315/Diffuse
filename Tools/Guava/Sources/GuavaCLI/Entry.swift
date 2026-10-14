@@ -1,16 +1,29 @@
+import GuavaLogging
 import Foundation
 
 @main
 enum GuavaCLI {
     static func main() {
         do {
+            var logging = LoggingConfiguration()
+            try logging.applyEnvironment()
+            try LogSystem.bootstrap(application: "com.guava.cli", configuration: logging)
+            defer { LogSystem.flush() }
             let raw = Array(CommandLine.arguments.dropFirst())
             if raw.isEmpty || raw.contains("--help") { print(usage); return }
-            try execute(Arguments(raw))
+            let arguments = try Arguments(raw)
+            LogContext.withValues(["operation": "\(arguments.operation)", "platform": "\(arguments.platform.rawValue)", "configuration": "\(arguments.configuration.rawValue)"]) {
+                do { try execute(arguments) } catch { fail(error) }
+            }
         } catch {
-            FileHandle.standardError.write(Data("guava: \(error.localizedDescription)\n".utf8))
-            exit(1)
+            fail(error)
         }
+    }
+
+    private static func fail(_ error: any Error) -> Never {
+        LogSystem.logger("com.guava.cli").error("\(error.localizedDescription)")
+        LogSystem.flush()
+        exit(1)
     }
 
     static func execute(_ arguments: Arguments) throws {

@@ -11,14 +11,14 @@ Inspector 读取真实节点和失效记录，支持状态检查点、状态差�
 
 ## 构建与运行
 
-使用 Swift 6.4.0，以及**版本完全匹配**的官方 Wasm SDK：
+使用 Swift 6.4.1，以及**版本完全匹配**的官方 Wasm SDK：
 
 macOS 的 Xcode Swift 编译器即使也标记为 6.4，仍可能与官方 SDK 的预编译模块
 不兼容。此时应使用同版本的 swift.org 发布工具链，并把它的 `usr/bin` 放在
 当前构建命令的 `PATH` 最前；无需更改系统默认工具链。
 
 ```bash
-swift sdk install https://download.swift.org/swift-6.4.0-release/wasm-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_wasm.artifactbundle.tar.gz --checksum f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d
+swift sdk install https://download.swift.org/swift-6.4.1-release/wasm-sdk/swift-6.4.1-RELEASE/swift-6.4.1-RELEASE_wasm.artifactbundle.tar.gz --checksum 783e6128d174d9f975b4eda68be02a5960681b723ef372e6876a7c2543a365d8
 git submodule update --init GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
 
 cd GuavaUI/Browser
@@ -177,7 +177,7 @@ CI 覆盖共享字体、Linux/Windows Portable 和浏览器流程，并上传构
 CMake/Ninja/Python/Node 的 runner 后，从 Actions 手动运行，它会严格检查适配器和
 文字/几何像素，保存日志与 WebGPU 截图。
 
-此前 Linux/Swift 6.4.0 的完整桌面测试集、7 项字体集成测试、Portable、1×/2× 图集像素
+此前 Linux/Swift 6.4.1 的完整桌面测试集、7 项字体集成测试、Portable、1×/2× 图集像素
 和真实 WebSocket 检查通过。该云容器没有 `/dev/dri`，物理 GPU 预检得到 `vendor=google`、
 `architecture=swiftshader`、`isFallbackAdapter=true`、`lost=true`，严格硬件验收按预期拒绝
 该环境。macOS 上已通过 Canvas2D 1× 与 WebGPU/SwiftShader 2× 的实际呈现像素和

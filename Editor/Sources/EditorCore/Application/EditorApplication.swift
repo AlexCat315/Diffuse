@@ -1,3 +1,4 @@
+import GuavaLogging
 import AIRuntime
 import ContextMemory
 import AssetPipeline
@@ -46,8 +47,7 @@ public final class EditorApplication: @unchecked Sendable {
     let aiWorldContext: AIWorldContext
     let perceptionService: PerceptionService
     let events: PlatformEventBridge
-    private var eventToken: PlatformEventBridge.SubscriptionToken?
-    var snapSettingsToken: EditorStore.SubscriptionToken?
+    let subscriptions = EditorSubscriptions()
     var pendingViewportEvents: [InputEvent] = []
     var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
@@ -263,7 +263,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func bootstrap() {
-        eventToken = events.subscribe { [weak self] event in
+        subscriptions.events = events.subscribe { [weak self] event in
             self?.handlePlatformEvent(event)
         }
         engine.start(renderSurface: nil, enableViewportSurface: true)
@@ -277,6 +277,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func tick(deltaTime: Double) {
+        for record in subscriptions.console.take() { store.dispatch(.appendLogRecord(record)) }
         // Under the event-driven frame policy the loop can sleep for seconds;
         // the wake-up tick must not step simulation/animation by the whole gap.
         let simulationDelta = min(max(deltaTime, 0), 0.25)
@@ -364,6 +365,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func shutdown() {
+        subscriptions.console.stop()
         guard !isShuttingDown else { return }
         isShuttingDown = true
         scene.scriptRuntime.isGameplayExecutionEnabled = false
@@ -394,13 +396,13 @@ public final class EditorApplication: @unchecked Sendable {
         mcpBridge.stop()
         pluginSession.stop()
         pluginCapabilityExecutor = nil
-        if let eventToken {
-            events.unsubscribe(eventToken)
-            self.eventToken = nil
+        if let token = subscriptions.events {
+            events.unsubscribe(token)
+            subscriptions.events = nil
         }
-        if let snapSettingsToken {
-            store.unsubscribe(snapSettingsToken)
-            self.snapSettingsToken = nil
+        if let token = subscriptions.settings {
+            store.unsubscribe(token)
+            subscriptions.settings = nil
         }
         engine.shutdown()
     }
@@ -425,7 +427,8 @@ public final class EditorApplication: @unchecked Sendable {
         store.state.timing.playbackState == .stopped && scene.isAuthoringEnabled
     }
 
-    public func setDisplayInvalidationHandler(_ handler: (() -> Void)?) {
+    public func setDisplayInvalidationHandler(_ handler: (@Sendable () -> Void)?) {
+        subscriptions.console.setWake(handler)
         displayInvalidationHandler = handler
     }
 
@@ -437,8 +440,9 @@ public final class EditorApplication: @unchecked Sendable {
                            severity: EditorConsoleSeverity = .info,
                            detail: String? = nil, target: EditorIssueTarget? = nil,
                            nextStep: String? = nil) {
-        store.dispatch(.appendConsoleMessage(message, severity: severity, detail: detail,
-                                             target: target, nextStep: nextStep))
+        LogContext.withValues(["project": "\(projectDirectory)"]) {
+            store.dispatch(.appendConsoleMessage(message, severity: severity, detail: detail, target: target, nextStep: nextStep))
+        }
     }
 
     public func setVSyncModeHandler(_ handler: ((EditorVSyncMode) -> Void)?) {

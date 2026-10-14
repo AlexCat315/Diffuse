@@ -1,6 +1,6 @@
 import AssetPipeline
 import Foundation
-import Logging
+import GuavaLogging
 import NativeRHI
 import SIMDCompat
 

@@ -70,6 +70,7 @@ jobs:
         # Run every test target, including GuavaUITests, and automatically
         # cover future targets without requiring workflow edits.
         run: |
+          swift test --package-path ../Engine/Logging
           swift test
           swift test --package-path Examples
           swift test --package-path ../Tools/Guava
@@ -91,6 +92,7 @@ jobs:
           swift test --package-path GuavaUI/Portable
           swift test --package-path examples/Counter
           swift test --package-path Platforms/Android/Contract
+          swift test --package-path Engine/Logging
           swift test --package-path Tools/Guava
 
   browser:
@@ -102,12 +104,12 @@ jobs:
           submodules: recursive
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
-          swift-version: '6.4.0'
+          swift-version: '6.4.1'
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
       - name: Install matching Wasm SDK
-        run: swift sdk install https://download.swift.org/swift-6.4.0-release/wasm-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_wasm.artifactbundle.tar.gz --checksum f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d
+        run: swift sdk install https://download.swift.org/swift-6.4.1-release/wasm-sdk/swift-6.4.1-RELEASE/swift-6.4.1-RELEASE_wasm.artifactbundle.tar.gz --checksum 783e6128d174d9f975b4eda68be02a5960681b723ef372e6876a7c2543a365d8
       - name: Build native diagnostic host
         run: swift build --package-path GuavaUI/Portable
       - name: Build Wasm and run browser checks
@@ -137,7 +139,7 @@ jobs:
           submodules: recursive
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
-          swift-version: '6.4.0'
+          swift-version: '6.4.1'
       - name: Build native font dependencies
         run: |
           cmake -S GuavaUI/third-party -B GuavaUI/build/native -G Ninja -DCMAKE_BUILD_TYPE=Release

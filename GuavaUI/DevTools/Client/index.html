@@ -151,11 +151,16 @@
             <option value="notice">Notice+</option>
             <option value="warning">Warning+</option>
             <option value="error">Error+</option>
+            <option value="critical">Critical</option>
           </select>
+          <input id="logModule" placeholder="Module prefix…" aria-label="Log module prefix">
           <input id="logSearch" type="search" placeholder="Filter logs…" autocomplete="off">
+          <button id="pauseLog">Pause display</button>
+          <button id="exportLog">Export JSONL</button>
           <button id="clearLog">Clear</button>
         </div>
       </div>
+      <div id="logStatus" class="panelStatus"></div>
       <div id="log" class="log empty">No log entries.</div>
     </section>
   </main>

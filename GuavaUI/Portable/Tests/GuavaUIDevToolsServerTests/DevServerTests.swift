@@ -1,4 +1,5 @@
 import Foundation
+import GuavaLogging
 import Testing
 import NIOCore
 import NIOEmbedded
@@ -9,6 +10,9 @@ import GuavaUIDevToolsProtocol
 private final class TestConnection: DevToolsConnection, @unchecked Sendable {
     private let lock = NSLock()
     private var messages: [Data] = []
+    private var writable = true
+    var isWritable: Bool { lock.withLock { writable } }
+    func setWritable(_ value: Bool) { lock.withLock { writable = value } }
     func send(text: Data) { lock.withLock { messages.append(text) } }
     func close() {}
     func takeNextData() -> Data? {
@@ -390,4 +394,42 @@ func observationStreamsAreIndependentAndTimelineStopsAfterLastDisconnect() async
     let deadline = ContinuousClock.now + .seconds(3)
     while capture && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
     #expect(!capture)
+}
+
+
+@Test @MainActor
+func logsReplayBeforeConnectionFilterAndReportSlowConsumerLoss() async throws {
+    let label = "test.server." + UUID().uuidString
+    let logger = LogSystem.logger(label)
+    logger.info("below threshold")
+    logger.warning("before connection", metadata: ["structured": ["nested": "value"]])
+    LogSystem.flush()
+    let transport = TestTransport(), connection = TestConnection()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    try server.start(); defer { server.stop() }
+    transport.onEvent?(.connected(connection)); _ = try await receive("hello", from: connection)
+    var query = LogQuery(); query.labels = [label]; query.minimum = .warning
+    try transport.request("log.subscribe", payload: DevToolsCodec.json(query), connection: connection)
+    let response = try await receive("log.snapshot", from: connection)
+    let snapshot = try #require(DevToolsCodec.decode(LogSnapshot.self, response.payload))
+    #expect(snapshot.records.map(\.message) == ["before connection"])
+    #expect(snapshot.records.first?.metadata["structured"] == .object(["nested": .string("value")]))
+    logger.warning("live")
+    LogSystem.flush()
+    let live = try await receive("log.entry", from: connection)
+    let record = try #require(DevToolsCodec.decode(LogRecord.self, live.payload))
+    #expect(record.message == "live" && record.sequence > snapshot.records.last!.sequence)
+    connection.setWritable(false)
+    logger.warning("slow consumer")
+    LogSystem.flush(); server.onQueueSync {}
+    #expect(connection.take().isEmpty)
+    connection.setWritable(true)
+    logger.warning("recovered")
+    LogSystem.flush()
+    let gap = try await receive("log.gap", from: connection)
+    #expect(DevToolsCodec.decode([String: Double].self, gap.payload)?["dropped"] == 1)
+    try transport.request("log.unsubscribe", connection: connection)
+    _ = try await receive("log.unsubscribe.ok", from: connection)
+    logger.warning("after unsubscribe"); LogSystem.flush(); server.onQueueSync {}
+    #expect(connection.take().isEmpty)
 }

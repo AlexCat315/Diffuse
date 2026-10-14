@@ -1,3 +1,4 @@
+import GuavaLogging
 import EngineKernel
 import Foundation
 import NativeRHI
@@ -146,7 +147,7 @@ public final class EngineHost: @unchecked Sendable {
             do {
                 consumer = try NativeRenderer(device: device, surface: renderSurface)
             } catch {
-                FileHandle.standardError.write(Data("[EngineHost] NativeRHI renderer initialization failed: \(error)\n".utf8))
+                LogSystem.logger("com.guava.engine.host").error("Renderer initialization failed", metadata: ["error": "\(error)"])
                 consumer = nil
             }
         } else {

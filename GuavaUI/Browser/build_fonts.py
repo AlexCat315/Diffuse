@@ -23,7 +23,7 @@ def main():
         data = (fonts / item["file"]).read_bytes()
         if len(data) != item["bytes"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
             raise SystemExit(f"Font checksum mismatch: {item['file']}")
-    sdk = os.environ.get("GUAVA_WASM_SDK", "swift-6.4.0-RELEASE_wasm")
+    sdk = os.environ.get("GUAVA_WASM_SDK", "swift-6.4.1-RELEASE_wasm")
     config = subprocess.check_output(["swift", "sdk", "configure", sdk, "--show-configuration"], text=True)
     sysroot = next(Path(line.split(": ", 1)[1]) for line in config.splitlines() if line.startswith("sdkRootPath: "))
     # On macOS /usr/bin/swift is an xcrun shim, not the actual toolchain.

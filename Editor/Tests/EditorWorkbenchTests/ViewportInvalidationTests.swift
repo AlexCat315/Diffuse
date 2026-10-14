@@ -12,17 +12,18 @@ struct ViewportInvalidationTests {
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path)
         defer { app.shutdown() }
-        var displayRequests = 0
-        app.setDisplayInvalidationHandler { displayRequests += 1 }
+        let displayRequests = DisplayRequestCounter()
+        app.setDisplayInvalidationHandler { displayRequests.increment() }
+        let initialRequests = displayRequests.value
         let sceneRevision = app.scene.revision
         app.setViewportGridEnabled(false)
         #expect(!app.store.state.viewport.gridEnabled)
-        #expect(displayRequests == 1)
+        #expect(displayRequests.value == initialRequests + 1)
         app.setViewportGridEnabled(false)
-        #expect(displayRequests == 1)
+        #expect(displayRequests.value == initialRequests + 1)
         app.setViewportGridEnabled(true)
         #expect(app.store.state.viewport.gridEnabled)
-        #expect(displayRequests == 2)
+        #expect(displayRequests.value == initialRequests + 2)
         #expect(app.scene.revision == sceneRevision)
     }
 
@@ -34,13 +35,21 @@ struct ViewportInvalidationTests {
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
-        var displayRequests = 0
-        app.setDisplayInvalidationHandler { displayRequests += 1 }
+        let displayRequests = DisplayRequestCounter()
+        app.setDisplayInvalidationHandler { displayRequests.increment() }
+        let initialRequests = displayRequests.value
         app.setViewportDrawableSize(.init(width: 640, height: 360))
-        #expect(displayRequests == 1)
+        #expect(displayRequests.value == initialRequests + 1)
         app.setViewportDrawableSize(.init(width: 640, height: 360))
-        #expect(displayRequests == 1)
+        #expect(displayRequests.value == initialRequests + 1)
         app.setViewportDrawableSize(.init(width: 800, height: 450))
-        #expect(displayRequests == 2)
+        #expect(displayRequests.value == initialRequests + 2)
     }
+}
+
+private final class DisplayRequestCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var value: Int { lock.withLock { count } }
+    func increment() { lock.withLock { count += 1 } }
 }

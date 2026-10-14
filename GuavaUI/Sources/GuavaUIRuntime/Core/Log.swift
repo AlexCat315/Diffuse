@@ -1,5 +1,5 @@
-import Logging
+import GuavaLogging
 
 extension Logger {
-    static let runtime = Logger(label: "com.guava.ui.runtime")
+    static let runtime = LogSystem.logger("com.guava.ui.runtime")
 }

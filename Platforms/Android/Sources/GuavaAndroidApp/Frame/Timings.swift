@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import CAndroidHost
 
@@ -36,7 +37,7 @@ final class FrameTimings {
         let total = DispatchTime.now().uptimeNanoseconds - start
         samples += 1
         let values = Phase.allCases.map { "\($0.rawValue)=\(milliseconds(phases[$0, default: 0]))ms" }.joined(separator: " ")
-        guava_android_log("[timing] android.frame sample=\(samples) displayTime=\(timestamp) \(values) total=\(milliseconds(total))ms vertices=\(vertices) indices=\(indices)")
+        LogSystem.logger("com.guava.android.timing").info("[timing] android.frame sample=\(samples) displayTime=\(timestamp) \(values) total=\(milliseconds(total))ms vertices=\(vertices) indices=\(indices)")
     }
 
     private func milliseconds(_ duration: UInt64) -> String {

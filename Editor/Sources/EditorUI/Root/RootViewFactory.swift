@@ -1,3 +1,4 @@
+import GuavaLogging
 import EditorCore
 import GuavaUI
 import GuavaUIRuntime
@@ -240,7 +241,7 @@ enum EditorRootViewFactory {
             let path = layoutDir.appendingPathComponent(shellStatePersistenceKey + ".json")
             try data.write(to: path, options: .atomic)
         } catch {
-            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to save shell state: \(error)\n".utf8))
+            LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] failed to save shell state: \(error)")
         }
     }
 
@@ -257,7 +258,7 @@ enum EditorRootViewFactory {
             quarantinePersistenceFile(at: path,
                                       label: "shell state",
                                       reason: String(describing: error))
-            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to load shell state: \(error)\n".utf8))
+            LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] failed to load shell state: \(error)")
             return nil
         }
     }
@@ -445,7 +446,7 @@ enum EditorRootViewFactory {
             )
             try data.write(to: path, options: .atomic)
         } catch {
-            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to save workspace layout: \(error)\n".utf8))
+            LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] failed to save workspace layout: \(error)")
         }
     }
 
@@ -484,7 +485,7 @@ enum EditorRootViewFactory {
             try FileManager.default.createDirectory(at: guavaDir, withIntermediateDirectories: true)
             return guavaDir
         } catch {
-            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to create persistence directory: \(error)\n".utf8))
+            LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] failed to create persistence directory: \(error)")
             return nil
         }
     }
@@ -503,10 +504,10 @@ enum EditorRootViewFactory {
             .appendingPathComponent("\(stem).corrupt-\(UUID().uuidString)\(suffix)")
         do {
             try FileManager.default.moveItem(at: url, to: quarantineURL)
-            FileHandle.standardError.write(Data("[EditorRootViewFactory] moved invalid \(label) to \(quarantineURL.lastPathComponent): \(reason)\n".utf8))
+            LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] moved invalid \(label) to \(quarantineURL.lastPathComponent): \(reason)")
             return quarantineURL
         } catch {
-            FileHandle.standardError.write(Data("[EditorRootViewFactory] invalid \(label) could not be quarantined and was preserved at \(url.path): \(error); original error: \(reason)\n".utf8))
+            LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] invalid \(label) could not be quarantined and was preserved at \(url.path): \(error); original error: \(reason)")
             return nil
         }
     }

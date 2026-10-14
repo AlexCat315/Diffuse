@@ -1,3 +1,4 @@
+#include "GuavaLog.h"
 #include "CAndroidHost.h"
 #include "Session.h"
 #include <android/log.h>
@@ -22,7 +23,6 @@ extern void* guava_android_open(void* application, void* window, int width, int 
 extern int guava_android_frame(void* session, uint64_t timestamp);
 extern void guava_android_close(void* session);
 
-void guava_android_log(const char* message) { __android_log_write(ANDROID_LOG_INFO, "GuavaAndroid", message); }
 
 JNIEXPORT jlong JNICALL Java_com_guava_probe_MainActivity_createApplication(JNIEnv* env, jclass type,
         jfloat scale, jstring resources, jstring checkpoint, jstring configuration, jstring options) {
@@ -99,6 +99,21 @@ void guava_android_schedule_diagnostics(void* application) {
     int attached = (*guava_vm)->GetEnv(guava_vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK;
     if (attached && (*guava_vm)->AttachCurrentThread(guava_vm, &env, NULL) != JNI_OK) return;
     (*env)->CallStaticVoidMethod(env, main_activity, schedule_diagnostics, (jlong)(uintptr_t)application);
-    if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); guava_android_log("FAIL diagnostics scheduling"); }
+    if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); GUAVA_LOG(GUAVA_LOG_ERROR, "com.guava.android.jni", "Diagnostics scheduling failed"); }
     if (attached) (*guava_vm)->DetachCurrentThread(guava_vm);
 }
+
+extern void guava_android_log_java(int level, const uint16_t* label, int label_count, const uint16_t* message, int message_count);
+JNIEXPORT void JNICALL Java_com_guava_probe_RuntimeLog_write(JNIEnv* env, jclass cls, jint level, jstring label, jstring message) {
+    (void)cls;
+    if (!label || !message) return;
+    // JNI modified UTF-8 encodes surrogate pairs differently; preserve Java's UTF-16 instead.
+    const jchar* category = (*env)->GetStringChars(env, label, NULL);
+    if (!category) return;
+    const jchar* text = (*env)->GetStringChars(env, message, NULL);
+    if (text) guava_android_log_java(level, category, (*env)->GetStringLength(env, label), text, (*env)->GetStringLength(env, message));
+    (*env)->ReleaseStringChars(env, label, category);
+    if (text) (*env)->ReleaseStringChars(env, message, text);
+}
+
+JNIEXPORT void JNICALL Java_com_guava_probe_RuntimeLog_flush(JNIEnv* env, jclass cls) { (void)env; (void)cls; guava_log_flush(); }

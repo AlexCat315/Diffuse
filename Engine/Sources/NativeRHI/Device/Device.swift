@@ -11,6 +11,7 @@
 // deferred to the frame's GPU completion instead of freeing live objects.
 
 import Foundation
+import GuavaLogging
 
 /// Monotonic handle allocator. A single counter across all resource kinds
 /// guarantees no two live handles share an ID (ID 0 is reserved/invalid).
@@ -78,8 +79,12 @@ public final class Device {
             }
             do {
                 let backend = try BackendFactory.makeBackend(api, config: config)
-                return try Device(backend: backend, config: config)
+                let device = try Device(backend: backend, config: config)
+                LogSystem.logger("com.guava.engine.rhi").info("Graphics device created", metadata: [
+                    "backend": "\(api.displayName)", "adapter": "\(device.deviceName)", "frames_in_flight": "\(config.framesInFlight)"])
+                return device
             } catch {
+                LogSystem.logger("com.guava.engine.rhi").warning("Graphics backend initialization failed", metadata: ["backend": "\(api.displayName)", "error": "\(error)"])
                 lastError = error
             }
         }

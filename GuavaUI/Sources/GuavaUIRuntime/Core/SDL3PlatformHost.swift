@@ -1,6 +1,6 @@
 import EngineKernel
 import Foundation
-import Logging
+import GuavaLogging
 import PlatformShell
 #if canImport(WinSDK)
 import WinSDK

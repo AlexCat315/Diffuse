@@ -1,3 +1,4 @@
+import GuavaLogging
 import EditorCore
 import EngineCore
 import EngineKernel
@@ -71,7 +72,7 @@ public final class GameApplication: @unchecked Sendable {
                 }
             } catch {
                 _ = scene.applyProjectScriptCatalog(.builtIn)
-                Self.writeStandardError("script catalog failed to load: \(error)")
+                Self.reportDiagnostic("script catalog failed to load: \(error)")
             }
         } else {
             _ = scene.applyProjectScriptCatalog(.builtIn)
@@ -89,7 +90,7 @@ public final class GameApplication: @unchecked Sendable {
                !unresolvedBindings.isEmpty {
                 throw GameProjectScriptLoadError.missingBindings(unresolvedBindings)
             }
-            for binding in unresolvedBindings { Self.writeStandardError("unresolved script binding: \(binding)") }
+            for binding in unresolvedBindings { Self.reportDiagnostic("unresolved script binding: \(binding)") }
         }
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: resolvedRenderDevice)
@@ -174,7 +175,7 @@ public final class GameApplication: @unchecked Sendable {
             let report = scene.applyProjectScriptCatalog(catalog)
             Self.writeScriptCatalogReport(report, diagnostics: catalog.diagnostics)
         } catch {
-            Self.writeStandardError("script catalog reload failed: \(error)")
+            Self.reportDiagnostic("script catalog reload failed: \(error)")
         }
     }
 
@@ -184,14 +185,14 @@ public final class GameApplication: @unchecked Sendable {
         reportUnresolvedBindings: Bool = true
     ) {
         for diagnostic in diagnostics {
-            writeStandardError("script catalog \(diagnostic.severity.rawValue): \(diagnostic.message)")
+            reportDiagnostic("script catalog \(diagnostic.severity.rawValue): \(diagnostic.message)")
         }
         if reportUnresolvedBindings {
-            for binding in report.unresolvedBindings { writeStandardError("unresolved script binding: \(binding)") }
+            for binding in report.unresolvedBindings { reportDiagnostic("unresolved script binding: \(binding)") }
         }
     }
 
-    private static func writeStandardError(_ message: String) {
-        FileHandle.standardError.write(Data("[GuavaPlayer] \(message)\n".utf8))
+    private static func reportDiagnostic(_ message: String) {
+        LogSystem.logger("com.guava.player.scripting").warning("\(message)")
     }
 }

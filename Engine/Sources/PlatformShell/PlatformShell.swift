@@ -1,5 +1,5 @@
 import Foundation
-import Logging
+import GuavaLogging
 import EngineKernel
 
 #if os(macOS)

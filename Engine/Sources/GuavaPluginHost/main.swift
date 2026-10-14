@@ -1,4 +1,9 @@
 import Foundation
+import GuavaLogging
+private var loggingConfiguration = LoggingConfiguration()
+try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
+try LogSystem.bootstrap(configuration: loggingConfiguration)
+defer { LogSystem.flush() }
 import CapabilityRuntime
 import IntentRuntime
 import PluginRuntime
@@ -261,6 +266,7 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
             return PluginHostResponse(id: request.id, ok: true)
         }
     } catch {
+        LogSystem.logger("com.guava.engine.plugin").warning("Plugin request rejected", metadata: ["method": "\(request.method)", "error": "\(error)"])
         return PluginHostResponse(id: request.id, ok: false, error: String(describing: error))
     }
 }
@@ -271,7 +277,8 @@ while true {
         let frame = try PluginHostFrameCodec.encode(response(for: request))
         FileHandle.standardOutput.write(frame)
     } catch {
-        FileHandle.standardError.write(Data("GuavaPluginHost: \(error)\n".utf8))
+        LogSystem.logger("com.guava.engine.plugin").error("Plugin host protocol failed", metadata: ["error": "\(error)"])
+        LogSystem.flush()
         break
     }
 }

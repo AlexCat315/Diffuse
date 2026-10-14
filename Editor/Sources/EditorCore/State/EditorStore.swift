@@ -1,3 +1,4 @@
+import GuavaLogging
 import GuavaUICompose
 import Foundation
 import GuavaUIRuntime
@@ -106,6 +107,15 @@ public final class EditorStore: @unchecked Sendable {
     }
 
     public func dispatch(_ action: EditorAction) {
+        if case let .appendConsoleMessage(message, severity, detail, target, nextStep) = action {
+            var metadata: Logger.Metadata = ["editor_console": "direct"]
+            if let detail { metadata["detail"] = "\(detail)" }
+            if let target { metadata["target"] = "\(target)" }
+            if let nextStep { metadata["next_step"] = "\(nextStep)" }
+            let level: Logger.Level = severity == .error ? .error : severity == .warning ? .warning : .info
+            LogSystem.logger("com.guava.editor").log(level: level, "\(message)", metadata: metadata)
+        }
+
         let previous = storage
         EditorReducer.reduce(state: &storage, action: action)
         guard action.notifiesSubscribers else { return }
@@ -271,7 +281,7 @@ public final class EditorStore: @unchecked Sendable {
             mark(.aiWarnings, old.assistant.aiWarnings, new.assistant.aiWarnings)
         case .appendChatMessage, .updateChatMessage, .clearChatHistory:
             mark(.chatMessages, old.assistant.chatMessages, new.assistant.chatMessages)
-        case .appendConsoleMessage, .clearConsole:
+        case .appendConsoleMessage, .appendLogRecord, .clearConsole:
             mark(.consoleEntries, old.output.consoleEntries, new.output.consoleEntries)
         case .setCommandPaletteVisible:
             mark(.commandPaletteVisible, old.navigation.commandPaletteVisible, new.navigation.commandPaletteVisible)

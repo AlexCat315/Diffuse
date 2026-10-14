@@ -42,7 +42,7 @@ const hello = new Promise((resolve, reject) => {
 });
 const host = await hello;
 assert.equal(host.host.pid, session.runtime.pid);
-for (const capability of ['tree', 'select', 'inspect', 'style', 'source', 'recomposition', 'timeline', 'state.observe']) {
+for (const capability of ['log', 'tree', 'select', 'inspect', 'style', 'source', 'recomposition', 'timeline', 'state.observe']) {
   assert(host.capabilities.includes(capability), `Missing capability ${capability}`);
 }
 function request(type, payload) {
@@ -53,6 +53,14 @@ function request(type, payload) {
     socket.send(JSON.stringify({ type, id, payload }));
   });
 }
+const logs = await request('log.subscribe');
+assert.equal(logs.type, 'log.snapshot');
+assert(logs.payload.records.length > 0, 'Startup logs were not replayed');
+for (const record of logs.payload.records) {
+  assert(record.sequence > 0 && record.process.runID && record.location.file, 'Incomplete log record');
+}
+assert(logs.payload.records.some(record => record.label === 'com.guava.engine.rhi'), 'Engine logs did not join the application journal');
+assert.equal((await request('log.unsubscribe')).type, 'log.unsubscribe.ok');
 const tree = await request('tree.subscribe');
 assert.equal(tree.type, 'tree.snapshot');
 assert(tree.payload.root, 'Empty scene tree');
@@ -75,4 +83,4 @@ assert.equal((await request('inspect.style.clearAll')).type, 'inspect.style.clea
 assert.equal((await request('timeline.unsubscribe')).type, 'timeline.unsubscribe.ok');
 assert.equal((await request('tree.unsubscribe')).type, 'tree.unsubscribe.ok');
 socket.close();
-console.log(JSON.stringify({ platform, session: session.runtime.id, nodes: ids.length, authenticated: true, capabilities: host.capabilities }, null, 2));
+console.log(JSON.stringify({ platform, session: session.runtime.id, nodes: ids.length, replayedLogs: logs.payload.records.length, runID: logs.payload.records[0].process.runID, authenticated: true, capabilities: host.capabilities }, null, 2));

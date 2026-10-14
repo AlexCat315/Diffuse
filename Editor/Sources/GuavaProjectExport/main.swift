@@ -1,4 +1,9 @@
 import Foundation
+import GuavaLogging
+private var loggingConfiguration = LoggingConfiguration()
+try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
+try LogSystem.bootstrap(configuration: loggingConfiguration)
+defer { LogSystem.flush() }
 import EditorCore
 
 func argument(_ name: String) -> String? {
@@ -27,6 +32,7 @@ do {
         to: URL(fileURLWithPath: output, isDirectory: true))
     print("Exported \(descriptor.appName): \(descriptor.entityCount) entities, \(descriptor.assetCount) assets")
 } catch {
-    FileHandle.standardError.write(Data("Project export failed: \(error)\n".utf8))
+    LogSystem.logger("com.guava.tools").error("Project export failed: \(error)")
+        LogSystem.flush()
     exit(1)
 }

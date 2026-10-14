@@ -1,3 +1,4 @@
+import GuavaLogging
 import Foundation
 import GuavaUIRuntime
 
@@ -89,7 +90,7 @@ public final class FileAppStorageStore: AppStorageStore {
                 loadWarning = "Unreadable app storage could not be quarantined; disk writes are disabled to preserve it: \(error); original error: \(originalError)"
             }
             if let loadWarning {
-                FileHandle.standardError.write(Data("[FileAppStorageStore] \(loadWarning)\n".utf8))
+                LogSystem.logger("com.guava.ui.storage").warning("\(loadWarning)")
             }
         }
     }
@@ -117,7 +118,7 @@ public final class FileAppStorageStore: AppStorageStore {
             lastSaveError = nil
         } catch {
             lastSaveError = String(describing: error)
-            FileHandle.standardError.write(Data("[FileAppStorageStore] failed to persist \(url.path): \(error)\n".utf8))
+            LogSystem.logger("com.guava.ui.storage").error("Failed to persist application storage", metadata: ["path": "\(url.path)", "error": "\(error)"])
         }
     }
 

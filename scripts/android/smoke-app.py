@@ -34,7 +34,7 @@ def main():
                    '--ei', 'orientation', str(orientation), '--ez', 'snapshots', 'true'])
         pid = subprocess.check_output(list(map(str, adb + ['shell', 'pidof', 'com.guava.probe'])), text=True).strip()
         def logs():
-            return subprocess.check_output(list(map(str, adb + ['logcat', '-d', '--pid=' + pid, '-s', 'GuavaAndroid:I', '*:S'])), text=True)
+            return subprocess.check_output(list(map(str, adb + ['logcat', '-d', '--pid=' + pid, '-s', 'Guava:I', '*:S'])), text=True)
         # Published snapshots count actual successful submissions without adding
         # unconditional per-frame logging to the normal application.
         before = wait(lambda s: s.get('session') != old and s.get('frames', 0) > 0, 10)

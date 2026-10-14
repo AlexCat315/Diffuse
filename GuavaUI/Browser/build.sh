@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # The compiler and SDK versions must match. Override for another installed pair.
-sdk="${GUAVA_WASM_SDK:-swift-6.4.0-RELEASE_wasm}"
+sdk="${GUAVA_WASM_SDK:-swift-6.4.1-RELEASE_wasm}"
 configuration="${GUAVA_WASM_CONFIGURATION:-debug}"
 python3 build_fonts.py
 export GUAVA_TEXT_ARTIFACT_ROOT="../Browser/.build/font-vendor"

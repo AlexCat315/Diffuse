@@ -109,3 +109,5 @@ Guava-Engine/
 Guava Engine 以 [Apache License 2.0](LICENSE) 开源。第三方依赖各自遵循其上游许可证，归属信息见 [NOTICE](NOTICE)。
 
 应用开发从 [GuavaUI 安装与第一个应用](docs/getting-started.md) 开始；统一 CLI 提供 SDK 选择、工具链检查、应用创建和开发会话。
+
+日志统一使用 swift-log；配置、文件轮转、Android logcat、Inspector 回放与 API 使用见 [日志系统](Engine/Logging/README.md)。

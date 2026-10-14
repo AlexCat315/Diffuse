@@ -4,6 +4,7 @@ import functools
 import http.server
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import subprocess
@@ -16,11 +17,18 @@ from verify_inspection import inspection_checks, native_inspection_checks
 from verify_analysis import analysis_checks, native_analysis_checks
 from verify_observation import native_observation_checks, wasm_observation_checks
 from verify_pixels import wait_pixels
+from verify_logs import log_panel_checks
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *_):
         pass
+
+
+class VerificationServer(http.server.ThreadingHTTPServer):
+    # Concurrent iframe scripts can exceed the stdlib's small listen backlog
+    # while a second cold browser context is loading the Wasm/fonts.
+    request_queue_size = 128
 
 
 def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
@@ -67,8 +75,9 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
     page.locator("#theme").click()
     page.wait_for_function("guavaDebug.snapshot.dark === true")
     inspector = page.frame_locator("#inspector")
-    inspector.locator("#status").filter(has_text="Connected").wait_for()
+    inspector.locator("#status").filter(has_text=re.compile("^Connected$")).wait_for()
     inspector.locator("#tree").filter(has_text="counter.root").wait_for()
+    log_panel_checks(page, page.locator("#inspector").element_handle().content_frame())
     inspector.locator("#captureState").click()
     page.wait_for_function("document.querySelector('#inspector').contentDocument.querySelector('#stateSnapshot').value.includes('true')")
     captured = json.loads(inspector.locator("#stateSnapshot").input_value())
@@ -161,6 +170,7 @@ def native_checks(browser, base_url, native_port, client_path="devtools/index.ht
     page.locator("#endpoint").fill(f"ws://127.0.0.1:{native_port}/")
     page.locator("#connect").click()
     page.locator("#tree").filter(has_text="headless.root").wait_for()
+    log_panel_checks(page, page)
     page.locator("#captureState").click()
     page.wait_for_function("document.querySelector('#stateSnapshot').value.includes('count')")
     page.locator("#stateSnapshot").fill('{"count":"12"}')
@@ -195,7 +205,7 @@ def main():
     dist = (root / options.dist).resolve()
     if not options.native_only and not (dist / "guava.wasm").is_file():
         raise SystemExit("Run npm ci and npm run build first")
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(root.parent if options.native_only else dist)))
+    server = VerificationServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(root.parent if options.native_only else dist)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     native = None
     with tempfile.TemporaryFile(mode="w+") as log:
