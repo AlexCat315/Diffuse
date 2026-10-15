@@ -95,8 +95,7 @@ public enum AccessibilityTree {
         let frame = bounds.intersection(clip)
         guard !frame.isNull, frame.width > 0, frame.height > 0 else { return children }
         if semantic.label.isEmpty && semantic.combinesChildren {
-            semantic.label = labelText(in: node).joined(separator: " ")
-            if semantic.label.isEmpty { semantic.label = semantic.help }
+            semantic.label = resolvedLabel(for: node)
         }
         if semantic.role == .cell && semantic.value.isEmpty { semantic.value = labelText(in: node).joined(separator: " ") }
         if semantic.role == .listItem && semantic.label.isEmpty {
@@ -106,8 +105,18 @@ public enum AccessibilityTree {
         else if semantic.state.isSecure { semantic.value = String(repeating: "•", count: semantic.value.count) }
         return [AccessibilityElement(node: node, semantics: semantic, frame: frame, children: children)]
     }
+    /// Shared by native accessibility and agent diagnostics; never evaluates a
+    /// lazy value provider or treats an editable field value as its label.
+    package static func resolvedLabel(for node: Node) -> String {
+        guard let semantic = node.accessibility else { return "" }
+        guard semantic.label.isEmpty && semantic.combinesChildren else { return semantic.label }
+        let text = labelText(in: node).joined(separator: " ")
+        return text.isEmpty ? semantic.help : text
+    }
+
     private static func labelText(in node: Node) -> [String] {
         node.children.flatMap { child -> [String] in
+            guard child.isInteractionEnabled, child.opacity > 0, child.subtreeOpacity > 0 else { return [] }
             if let semantics = child.accessibility {
                 if semantics.isHidden { return [] }
                 if semantics.role == .staticText { return [semantics.label] }

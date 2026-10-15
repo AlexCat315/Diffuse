@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import GuavaUIScene
 import GuavaUIDevToolsProtocol
 import GuavaUIAgentCore
@@ -7,6 +7,7 @@ public struct UIDiagnosticNode: Codable, Sendable {
     public var node: NodeSummary
     public let parentID: String?
     public let semantics: AccessibilitySemantics?
+    public let presentation: UIDiagnosticPresentation
 }
 
 public struct UIDiagnosticPage<Item: Codable & Sendable>: Codable, Sendable {
@@ -38,20 +39,26 @@ public final class UIDiagnostics {
     private func nodes() -> [UIDiagnosticNode] {
         var result: [UIDiagnosticNode] = []
         var meanings: [String: AccessibilitySemantics] = [:]
+        guard let root = tree.root else { return [] }
+        let presentation = UIDiagnosticPresentation.capture(root: root)
         func collectMeanings(_ node: Node) {
             if var semantics = node.accessibility, !semantics.isHidden {
+                semantics.label = AccessibilityTree.resolvedLabel(for: node)
                 if semantics.state.isSecure { semantics.value = "<redacted>" }
                 meanings[String(node.id.rawValue)] = semantics
             }
             node.children.forEach(collectMeanings)
         }
-        if let root = tree.root { collectMeanings(root) }
+        collectMeanings(root)
         func collect(_ node: NodeSummary, parent: String?) {
             var value = node
             value.children = []
             // Expose one canonical live identity to query clients.
             value.id = node.elementID ?? node.id
-            result.append(UIDiagnosticNode(node: value, parentID: parent, semantics: meanings[value.id]))
+            if let presentation = presentation[value.id] {
+                result.append(UIDiagnosticNode(node: value, parentID: parent, semantics: meanings[value.id],
+                    presentation: presentation))
+            }
             for child in node.children { collect(child, parent: value.id) }
         }
         if let root = inspector.snapshot().root { collect(root, parent: nil) }
@@ -59,12 +66,14 @@ public final class UIDiagnostics {
     }
 
     public func queryNodes(id: String? = nil, text: String? = nil, role: String? = nil,
-                           source: String? = nil, offset: Int = 0, limit: Int = 50) throws -> UIDiagnosticPage<UIDiagnosticNode> {
+                           source: String? = nil, visibleOnly: Bool = false,
+                           offset: Int = 0, limit: Int = 50) throws -> UIDiagnosticPage<UIDiagnosticNode> {
         let all = nodes()
         if let id, !all.contains(where: { $0.node.id == id }) { throw AgentError.invalidConfiguration("Node is missing or unmounted: \(id)") }
         let matches = all.filter { item in
             let node = item.node
             return (id == nil || node.id == id)
+                && (!visibleOnly || item.presentation.isVisible)
                 && (text == nil || [node.debugName, node.viewTag, item.semantics?.label].compactMap { $0 }.contains { $0.localizedCaseInsensitiveContains(text!) })
                 && (role == nil || node.semanticRole == role || node.layoutRole == role || item.semantics?.role.rawValue == role)
                 && (source == nil || node.source?.filePath.localizedCaseInsensitiveContains(source!) == true)

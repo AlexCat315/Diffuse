@@ -1,5 +1,5 @@
 import GuavaUIDevToolsProtocol
-import Foundation
+public import Foundation
 import GuavaUIScene
 
 /// Builds NodeSummary snapshots from a NodeTree.

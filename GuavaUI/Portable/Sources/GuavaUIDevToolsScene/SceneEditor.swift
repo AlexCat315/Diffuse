@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import GuavaUIScene
 import GuavaUIDevToolsProtocol
 import GuavaPlatformCore
