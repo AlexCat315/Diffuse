@@ -28,7 +28,7 @@ struct FormStory: View {
          FormRule("email", label: "Email") { email.stringValue.contains("@") && email.stringValue.contains(".") ? nil : "Enter a valid email address." }]
     }
     var body: some View {
-        StorySection("Create an account", "Submit an empty form to see field errors and the summary. Values stay intact when validation resets.") {
+        StorySection("Create an account", "Labels move above their inputs when space is limited. Resize or change text scale while editing; drafts and focus stay intact. Submit to see field errors.") {
             Form([
                 FormField("name", "Name", configure: { $0.isRequired = true; $0.help = "Your visible display name" }) {
                     TextField("Your name", text: $name) { $0.behavior.disabled = !options.isEnabled }
@@ -42,7 +42,7 @@ struct FormStory: View {
                     if controller.beginSubmit(rules) { controller.finishSubmit(); status = "Saved account for \(name.stringValue)" }
                     else { status = "Check the highlighted fields" }
                 }.debugName("gallery-form-submit")
-            }.frame(width: 520)
+            }.frame(maxWidth: 720)
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }

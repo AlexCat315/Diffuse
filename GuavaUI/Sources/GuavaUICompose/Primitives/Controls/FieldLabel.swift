@@ -3,7 +3,7 @@ import GuavaUIRuntime
 public struct FieldLabelOptions {
     public var isRequired = false
     public var help = ""
-    /// Matches an input's accessibility identifier within this scene, never another window.
+    /// Matches within the nearest Form, or within this scene for standalone labels.
     public var targetID: String?
     public init() {}
 }
@@ -24,7 +24,8 @@ private struct FieldLabelHost: _PrimitiveView {
         guard let targetID = options.targetID else { return [AnyView(text)] }
         return [AnyView(Button(action: { [weak node] in
             guard let node else { return }
-            var root = node; while let parent = root.parent { root = parent }
+            var root = node
+            while root.attachments[FormLabelScopeMarker.key] as? Bool != true, let parent = root.parent { root = parent }
             func find(_ candidate: Node) -> Node? {
                 if candidate.isFocusable && candidate.accessibility?.identifier == targetID { return candidate }
                 return candidate.children.lazy.compactMap(find).first

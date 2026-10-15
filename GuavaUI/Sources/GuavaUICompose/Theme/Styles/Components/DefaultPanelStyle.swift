@@ -13,7 +13,9 @@ public struct DefaultPanelStyle: PanelStyle {
         let t = configuration.theme
         let titleColor: SemanticColorRef = configuration.isActive ? .onSurface : .onSurfaceMuted
 
-        return Column(alignment: .leading, spacing: 0) {
+        // Header and content consume the allocated panel width. Intrinsic
+        // leading alignment would strand container-query content at zero width.
+        return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: t.spacing.sm) {
                 Text(configuration.title)
                     .font(SemanticFontRef.label)

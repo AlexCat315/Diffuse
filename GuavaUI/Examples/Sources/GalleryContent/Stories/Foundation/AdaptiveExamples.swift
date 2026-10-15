@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar: true
+        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .tabs ? 160 : page == .list ? 144 : 104
+        let height: Float = page == .calendar ? 440 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -70,6 +70,14 @@ private struct AdaptiveControlSample: View {
             ToolbarItem(MenuItem(id: "share", title: "Share project") { text = "Shared" }),
             ToolbarItem(MenuItem(id: "settings", title: "Project settings") { text = "Settings" })
         ], configure: { $0.isEnabled = options.isEnabled }).frame(width: .percent(100)))
+        case .form: AnyView(Form([
+            FormField("adaptive-name", "Display name") { TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled } }
+        ]).frame(width: .percent(100)))
+        case .propertyGrid: AnyView(PropertyGrid([
+            PropertyGridSection(id: "preview", title: "Properties", rows: [
+                PropertyGridRow(id: "name", label: "Display name") { TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled } }
+            ])
+        ]).frame(width: .percent(100), height: .points(180)))
         default: AnyView(EmptyView())
         }
     }

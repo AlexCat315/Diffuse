@@ -14,6 +14,7 @@ import GuavaUIRuntime
 /// unscrolled position. Button's release-inside check then cancels every
 /// click, and the popover overlay registers at the wrong screen position.
 @Suite("Scrolled control clicks", .serialized)
+@MainActor
 struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
 
     private final class Counter {
@@ -26,7 +27,7 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
 
     // MARK: - Helpers
 
-    private func firstNode(in root: Node?, where predicate: (Node) -> Bool) -> Node? {
+    nonisolated private func firstNode(in root: Node?, where predicate: (Node) -> Bool) -> Node? {
         guard let root else { return nil }
         if predicate(root) { return root }
         for child in root.children {
@@ -40,7 +41,7 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
     /// Window-space origin: parent-local frames composed down the chain with
     /// every ancestor's scroll offset applied (children render translated by
     /// `-contentOffset`).
-    private func visualOrigin(of node: Node) -> CGPoint {
+    nonisolated private func visualOrigin(of node: Node) -> CGPoint {
         var origin = node.frame.origin
         var current = node.parent
         while let parent = current {
@@ -51,7 +52,7 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         return origin
     }
 
-    private func click(_ dispatcher: EventDispatcher, x: CGFloat, y: CGFloat) {
+    nonisolated private func click(_ dispatcher: EventDispatcher, x: CGFloat, y: CGFloat) {
         let event = MouseButtonEvent(button: .left, x: Float(x), y: Float(y), clicks: 1)
         dispatcher.dispatch(.mouseButtonDown(event))
         dispatcher.dispatch(.mouseButtonUp(event))
@@ -439,15 +440,14 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         graph.install(root: InspectorHarness(model: model))
 
         func settle() {
-            var passes = 0
-            while recomposer.commitAll() {
-                passes += 1
-                if passes > 100 {
-                    Issue.record("recomposer did not settle — runaway invalidation loop")
-                    return
-                }
+            // Container queries publish after layout, so settling must cover
+            // commit/layout pairs before dispatching a click at their geometry.
+            for _ in 0..<100 {
+                recomposer.commitAll()
+                graph.computeLayout(width: 320, height: 280)
+                if !recomposer.hasPending { return }
             }
-            graph.computeLayout(width: 320, height: 280)
+            Issue.record("recomposer did not settle — runaway invalidation loop")
         }
         settle()
 
@@ -486,6 +486,11 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         guard triggers.count == 2 else { return }
 
         // 1. Open the first dropdown.
+        let initialTrigger = triggers[0]
+        let initialPoint = CGPoint(x: initialTrigger.absoluteFrame.midX, y: initialTrigger.absoluteFrame.midY)
+        let initialHit = HitTester.hitTest(rootNode: tree.root!, point: initialPoint)?.node
+        #expect(initialTrigger.frame.width > 0 && initialTrigger.frame.height < 100)
+        #expect(initialHit?.id == initialTrigger.id)
         clickCenter(triggers[0])
         #expect(PortalStoreHolder.current.entries.count == 1)
 

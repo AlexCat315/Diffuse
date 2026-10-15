@@ -79,7 +79,7 @@
 | `ContainerSizeReader` | 发布自身内容盒（扣 padding/border）实测尺寸；首次收到 `.zero`，变化 < 0.5pt 不发布；父级必须有界宽。卡片内部自适应用它，不用窗口宽度 | `[已实现]` |
 | `WidthClassReader` | 读取 surface 级 width class（窗口级），用于壳层：导航收敛、栏位切换；不用于卡片内部 | `[已实现]` |
 | `SafeArea` | 只应用宿主提供的 logical insets，嵌套时只消费未使用边；桌面默认零；不推断刘海/软键盘/窗口 chrome。宿主要求：手机竖屏底部 inset 含 home indicator，横屏含侧边；IME 出现由宿主处理，组件不用占位 | `[已实现]`；IME 联动 `[部分]` |
-| `Form` / `PropertyGrid` | 宽布局用 leading label + 右侧 value 槽；`minValueWidth` 保证输入可测。窄布局 label 折到 value 上方（stacked），label 单行截断且完整值可达 | `[未实现]`（见第 5 节） |
+| `Form` / `PropertyGrid` | 按字段实测宽度在 leading ↔ stacked 间切换；共享 `labelPlacement` 和 `minValueWidth` 语义。Form 最大列数随宽度减少，值槽保留节点与编辑状态；完整标签进 tooltip 与语义 | 重排 `[已实现]`；通用省略号见第 5-6 项，API 见 [Form](form.md) |
 | `TabView` 标签条 | 单行不换行；超出时按 `overflow` 横向滚动或折叠菜单；compact 时按 `TabStripPlacement.adaptive` 移到内容下方，节点与状态保留 | 换边/滚动 `[已实现]`；折叠菜单 `[未实现]` |
 | `Toolbar` | `items:` 按命令自然宽度与优先级收进 overflow 菜单，`.always` 保留主操作；提供图标时使用图标与完整名称。触摸命中 ≥ 44pt，主命令自身超宽时保留尺寸并横向滚动；自定义内容闭包由应用安排重排 | 命令溢出 `[已实现]`，见 [Toolbar](toolbar.md) |
 | `Sidebar` | expanded 常驻；compact/medium 按壳层选择折叠为抽屉/覆盖层或 rail；抽屉打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt（触摸） | 常驻列表 `[已实现]`；抽屉/rail `[未实现]` |
@@ -229,6 +229,13 @@
 - 手机：drop 目标在触摸面保留清空与选择入口（拖放不是唯一路径）；JsonField 展开模式占满窗口并 ≥ 44pt 操作按钮。`[部分]`（清空已有；展开按钮触摸尺寸需验收）
 - 平板 / 桌面：拖放与展开均可；hover 提示。`[已实现]`
 - 交互与验收：Cmd+Return 提交、Escape 取消、校验失败保留草稿；验收：`--component assetRef|jsonField`。
+
+**Form / PropertyGrid**
+
+- 外观：前导标签与值槽，窄宽自动堆叠。Form 提供帮助、错误摘要和可换行提交区；PropertyGrid 提供区段、折叠、嵌套和滚动。`[已实现]`
+- 手机：读取字段实际内容盒宽度，标签不足时移到值上方；Form 减少列数。`minValueWidth` 为共享的首选值槽阈值，极窄时单列填满可用宽度，不强撑窗口。输入和属性区段标题命中 ≥ 44pt。`[已实现]`
+- 平板 / 桌面：宽度足够时恢复前导标签；labelWidth 随 TextScaler 缩放一次，字号变化重新决定是否并排。节点、草稿、光标与焦点不因重排重建。`[已实现]`
+- 交互与验收：标签关联限于所属 Form，属性值继承行名称，支持 AI 诊断按标签定位。`FieldLayoutTests` 覆盖 390/720/1280pt、100%/200%、三种输入集合、真实编辑、列数切换和诊断位置；Gallery `--component form|propertyGrid` 提供三预览。固定布局配置与边界见 [Form / PropertyGrid](form.md)。
 
 ### 3.4 数据集合
 
@@ -405,6 +412,8 @@ guava showcase gallery --android --component NAME
 | 触摸 44pt 族、密度恢复、hover gating | `GuavaUI/Tests/GuavaUIComposeTests/TouchDensityTests.swift` |
 | Tree / Table / DataTable / Menu 行高、节点与选择保留、翻页/编辑、子浮层环境 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/RowDensityTests.swift` |
 | List / Table / DataTable / LazyGrid 字号缩放一次、行间距、前缀索引与滚动边界 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TextScaleRows.swift` |
+| Form / PropertyGrid 标签、列数、编辑状态与 AI 诊断定位 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/FieldLayoutTests.swift` |
+| Toolbar 优先级、菜单、密度与焦点交接 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/ToolbarOverflowTests.swift` |
 | Calendar 月内首尾/翻月、日期限制、实际焦点、禁用与 DatePicker 提交 | `GuavaUI/Tests/GuavaUIComposeTests/Calendar/KeyboardNavigationTests.swift` |
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
@@ -435,7 +444,6 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
 | 2 | Sidebar 抽屉/rail 紧凑呈现；SplitView 单栏模式 | `Layout/Sidebar/Sidebar.swift`、`Layout/SplitView.swift` | `AdaptiveNavigationTests` 或新套件 + `sidebar` 页窄预览 |
-| 3 | Form / PropertyGrid 宽度触发的 stacked ↔ leading label 切换；统一 `minValueWidth` 语义 | `Controls/Form.swift`、`Data/PropertyGrid.swift` | `--component form|propertyGrid` 390/720 取样 + 单元测试 |
 | 4 | DataTable / Table / Grid 列优先级、隐藏与"列可见性"入口 | `Data/DataTable/*`、`Data/Lists/Table.swift`、`Layout/Grid/*` | 新列策略 API 测试 + `dataTable` 页窄宽验收 |
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
 | 6 | Button / Select / DatePicker 等单行标题截断 + 完整 tooltip（当前只换行或裁剪） | `Text/Text.swift`（`lineLimit(1)` 仅禁换行）、各控件 | `Text` 截断测试 + 对应页面 |
@@ -448,9 +456,11 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 自身自适应：壳层固定 240pt 侧栏，手机宽度仍渲染桌面骨架；预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面 | `Examples/Sources/GalleryContent/GalleryView.swift`、`Stories/Foundation/AdaptiveExamples.swift` | Gallery 壳层窄宽验收 + 扩充 `supports` 列表 |
 
-编号稳定保留已完成项的空位。建议顺序：先做 2–4（壳层与数据密度，直接影响手机/平板可用性），再做 5–6（截断），然后 9–16（输入与语义补齐）。1、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+编号稳定保留已完成项的空位。建议顺序：先做 2、4（壳层与数据密度，直接影响手机/平板可用性），再做 5–6（截断），然后 9–16（输入与语义补齐）。1、3、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
 第 1 项命令工具栏溢出已实现：`Toolbar(items:)` 以实测按钮树分配自然宽度，支持优先级、始终保留、始终溢出及图标命令；隐藏 inline 节点仍挂载但不绘制、不接输入、不暴露语义。`ToolbarOverflowTests` 覆盖三档宽度、100%/200% 字号、三种输入集合、菜单操作、节点保留和焦点交接；Gallery Toolbar 已接入自动预览。自定义任意内容仍由应用显式重排，真机触摸和读屏继续按第 4 节取样。
+
+第 3 项表单标签重排已实现：Form / PropertyGrid 共享 `FieldLabelPlacement` 与首选值槽宽度，按容器而非窗口决定标签位置，Form 列数变化只重新放置原字段；属性网格默认使用内在行高，标题与输入遵守缩放和触摸下限。条件/数组经普通 modifier 修饰后不再于首次更新重建用户组件；`StructuralModifierTests` 验证状态保留及卸载默认值。`FieldLayoutTests` 同时通过 AI 诊断 facade 查询可读字段名称与实际几何，防止只修视觉而遗漏语义。设备输入取样仍按第 4 节验收。
 
 第 7 项列表族文本缩放已完成：List、Table、DataTable、LazyGrid 自动解析字号后的行高，表格表头与 List/LazyGrid 行间距同步缩放；Table 把 authored 高度交给内部 List，避免二次缩放。LazyGrid 的可变行高复用前缀索引，Gallery 100K 示例已移除手动缩放。`TextScaleRowTests` 在 macOS 宿主上覆盖 390/720/1280pt、light/dark、100%/125%/200%、触摸/混合/指针输入、选择与焦点保留、部分末行、缩放恢复的滚动夹紧以及 DataTable 翻页/末行/冻结列对齐；`NavigationStateTests.lazyGridTextScale` 验证 Gallery 100K 示例在 200% 下实际行高为 96pt、视口仍为 240pt。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过。原生设备视觉仍按第 4 节矩阵验收。
 

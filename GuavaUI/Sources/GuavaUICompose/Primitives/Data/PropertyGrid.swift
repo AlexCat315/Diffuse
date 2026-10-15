@@ -16,7 +16,8 @@ public enum PropertyGridRowLayout: Sendable {
 }
 
 public enum PropertyGridRowSizing: Sendable {
-    /// Keep the row at `rowHeight` (or the grid's default row height).
+    /// Fix the value slot to the scaled row height and platform control minimum.
+    /// An adaptive stacked label adds its own height above that slot.
     case fixed
     /// Measure the value's content. `rowHeight` becomes a minimum, allowing
     /// disclosure editors to grow/shrink without an external height formula.
@@ -35,7 +36,7 @@ public struct PropertyGridRow: Identifiable {
                                     label: String,
                                     rowHeight: Float? = nil,
                                     layout: PropertyGridRowLayout = .twoColumn,
-                                    sizing: PropertyGridRowSizing = .fixed,
+                                    sizing: PropertyGridRowSizing = .intrinsic,
                                     @ViewBuilder value: () -> ValueContent) {
         self.id = id
         self.label = label
@@ -99,6 +100,7 @@ public struct PropertyGrid: View {
     public let sections: [PropertyGridSection]
     public let labelWidth: Float
     public let minValueWidth: Float
+    public let labelPlacement: FieldLabelPlacement
     public let rowHeight: Float
     public let rowSpacing: Float
     public let sectionSpacing: Float
@@ -113,6 +115,7 @@ public struct PropertyGrid: View {
     public init(_ sections: [PropertyGridSection],
                 labelWidth: Float = 96,
                 minValueWidth: Float = 220,
+                labelPlacement: FieldLabelPlacement = .adaptive,
                 rowHeight: Float = 24,
                 rowSpacing: Float = 1,
                 sectionSpacing: Float = 10,
@@ -122,8 +125,9 @@ public struct PropertyGrid: View {
                 collapsedSectionIDs: Set<String>? = nil,
                 onSectionCollapseChanged: ((String, Bool) -> Void)? = nil) {
         self.sections = sections
-        self.labelWidth = labelWidth
-        self.minValueWidth = minValueWidth
+        self.labelWidth = labelWidth.isFinite ? max(0, labelWidth) : 96
+        self.minValueWidth = minValueWidth.isFinite ? max(1, minValueWidth) : 220
+        self.labelPlacement = labelPlacement
         self.rowHeight = rowHeight
         self.rowSpacing = rowSpacing
         self.sectionSpacing = sectionSpacing
@@ -148,10 +152,12 @@ private struct _StatefulPropertyGrid: View {
     @State var collapsed: [String: Bool] = [:]
 
     var body: some View {
-        scrollContainer {
-            gridContent()
-        }
+        ContainerSizeReader { size in
+            scrollContainer {
+                gridContent(width: max(0, Float(size.width) - (grid.scrollAxes == .horizontal ? 0 : 12)))
+            }
             .flex()
+        }.flex()
     }
 
     private func scrollContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -167,7 +173,7 @@ private struct _StatefulPropertyGrid: View {
         }
     }
 
-    private func gridContent() -> some View {
+    private func gridContent(width: Float) -> some View {
         Box(direction: .column, alignItems: .stretch, spacing: grid.sectionSpacing) {
             if grid.sections.isEmpty {
                 emptyState()
@@ -175,7 +181,7 @@ private struct _StatefulPropertyGrid: View {
                 sectionViews()
             }
         }
-        .frame(minWidth: grid.scrollAxes == .vertical ? 0 : grid.labelWidth + grid.minValueWidth)
+        .frame(width: width, minWidth: 0)
         .padding(grid.contentPadding)
     }
 
@@ -234,13 +240,13 @@ private struct _StatefulPropertyGrid: View {
                     .flex(1, shrink: 1, basis: 0)
                 }
                 .buttonStyle(.plain)
-                .frame(height: 26, minWidth: 0)
+                .frame(minWidth: 0, minHeight: 26)
                 .flex(1, shrink: 1, basis: 0)
                 .debugName("property-section-header-\(section.id)")
                 if let trailing = section.headerTrailing { trailing }
             }
             .padding(horizontal: 8, vertical: 3)
-            .frame(height: section.headerLeading == nil && section.headerTrailing == nil ? 26 : 32, minWidth: 0)
+            .frame(minWidth: 0, minHeight: section.headerLeading == nil && section.headerTrailing == nil ? 26 : 32)
             .background(.surfaceRaised)
 
             AnimatedVisibility(isVisible: !isCollapsed) {
@@ -278,61 +284,83 @@ private struct _StatefulPropertyGrid: View {
     }
 
     private func rowView(_ row: PropertyGridRow, sectionID: String, index: Int) -> some View {
-        let rowHeight = row.rowHeight ?? grid.rowHeight
         let rowKey = "\(sectionID)/\(row.id)"
-        switch row.layout {
-        case .twoColumn:
-            return AnyView(decoratedRow(rowKey, index: index) {
-                twoColumnRowView(row, rowHeight: rowHeight)
-            })
-        case .fullWidth:
-            return AnyView(decoratedRow(rowKey, index: index) {
-                fullWidthRowView(row, rowHeight: rowHeight)
-            })
+        return TextScalerReader { scaler in
+            SurfaceReader { surface in
+                let rowHeight = max(scaler.scale(row.rowHeight ?? grid.rowHeight), surface.minimumControlExtent)
+                switch row.layout {
+                case .twoColumn:
+                    AnyView(
+                        decoratedRow(rowKey, index: index) {
+                            twoColumnRowView(row, rowHeight: rowHeight, labelWidth: scaler.scale(grid.labelWidth))
+                        })
+                case .fullWidth:
+                    AnyView(
+                        decoratedRow(rowKey, index: index) {
+                            fullWidthRowView(
+                                row, rowHeight: rowHeight, labelHeight: scaler.scale(18),
+                                minimumValueHeight: max(scaler.scale(grid.rowHeight), surface.minimumControlExtent))
+                        })
+                }
+            }
         }
     }
 
-    private func decoratedRow<Content: View>(_ id: String,
-                                             index: Int,
-                                             @ViewBuilder content: () -> Content) -> some View {
-        _PropertyGridRowHost(baseBackground: .surfaceSunken,
-                             hoverBackground: .stateLayerHover,
-                             cornerRadius: 4,
-                             content: AnyView(content()))
+    private func decoratedRow<Content: View>(
+        _ id: String,
+        index: Int,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        _PropertyGridRowHost(
+            baseBackground: .surfaceSunken,
+            hoverBackground: .stateLayerHover,
+            cornerRadius: 4,
+            content: AnyView(content()))
     }
 
-    private func twoColumnRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
-        let alignment: VerticalAlignment = rowHeight > grid.rowHeight ? .top : .center
+    private func twoColumnRowView(_ row: PropertyGridRow, rowHeight: Float, labelWidth: Float) -> some View {
         let fixedHeight = row.sizing == .fixed ? rowHeight : nil
-        let minimumHeight = row.sizing == .intrinsic ? rowHeight : nil
-        return Row(alignment: alignment, spacing: 4) {
-            Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
-                Text(row.label)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceVariant)
-            }
-            .padding(horizontal: 7)
-            .frame(width: grid.labelWidth, height: fixedHeight, minHeight: minimumHeight)
-            .clipped()
+        return ContainerSizeReader { size in
+            let leading = grid.labelPlacement.isLeading(
+                width: Float(size.width), labelWidth: labelWidth,
+                minValueWidth: grid.minValueWidth, spacing: 4)
+            Box(direction: leading ? .row : .column, alignItems: leading ? .center : .stretch, spacing: leading ? 4 : 6)
+            {
+                Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
+                    Text(row.label)
+                        .lineLimit(leading ? 1 : nil)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceVariant)
+                }
+                .padding(horizontal: 7)
+                .frame(width: leading ? .points(labelWidth) : .auto, minHeight: leading ? rowHeight : 0)
+                .clipped()
+                .tooltip(row.label)
+                .flex(0, shrink: 0)
 
-            Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
-                sizedValue(for: row, height: fixedHeight)
-                    .flex(1, shrink: 1, basis: 0)
+                Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
+                    sizedValue(for: row, height: fixedHeight)
+                        .flex(1, shrink: 1, basis: 0)
+                }
+                .frame(height: fixedHeight, minHeight: rowHeight)
+                .padding(horizontal: leading ? 0 : 7, vertical: 2)
+                .flex(leading ? 1 : 0, shrink: 1, basis: leading ? 0 : nil)
             }
-            .frame(height: fixedHeight, minHeight: minimumHeight)
-            .padding(horizontal: 0, vertical: 2)
-            .flex(1, shrink: 1, basis: 0)
+            .frame(minWidth: 0)
         }
-        .frame(height: fixedHeight, minWidth: 0, minHeight: minimumHeight)
     }
 
-    private func fullWidthRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
-        let labelHeight: Float = row.label.isEmpty ? 0 : 18
+    private func fullWidthRowView(
+        _ row: PropertyGridRow, rowHeight: Float, labelHeight: Float,
+        minimumValueHeight: Float
+    ) -> some View {
+        let labelHeight: Float = row.label.isEmpty ? 0 : labelHeight
         let verticalPadding: Float = 6
         let labelValueSpacing: Float = row.label.isEmpty ? 0 : 6
-        let valueHeight: Float? = row.sizing == .fixed
-            ? max(grid.rowHeight, rowHeight - labelHeight - labelValueSpacing - verticalPadding * 2)
+        let rowHeight = max(rowHeight, labelHeight + labelValueSpacing + verticalPadding * 2 + minimumValueHeight)
+        let valueHeight: Float? =
+            row.sizing == .fixed
+            ? rowHeight - labelHeight - labelValueSpacing - verticalPadding * 2
             : nil
         return Box(direction: .column, alignItems: .stretch, spacing: labelValueSpacing) {
             if !row.label.isEmpty {
@@ -351,14 +379,18 @@ private struct _StatefulPropertyGrid: View {
             .padding(horizontal: 7, vertical: 0)
         }
         .padding(vertical: verticalPadding)
-        .frame(height: row.sizing == .fixed ? .points(rowHeight) : .auto,
-               minHeight: row.sizing == .intrinsic ? rowHeight : 0)
+        .frame(
+            height: row.sizing == .fixed ? .points(rowHeight) : .auto,
+            minHeight: row.sizing == .intrinsic ? rowHeight : 0)
     }
 
     private func sizedValue(for row: PropertyGridRow, height: Float?) -> AnyView {
+        let value = row.value.accessibility {
+            $0.label = row.label; $0.identifier = row.id
+        }
         // Intrinsic rows leave their value's own sizing untouched.
-        if let height { return AnyView(row.value.frame(height: height)) }
-        return row.value
+        if let height { return AnyView(value.frame(height: height)) }
+        return AnyView(value)
     }
 }
 
@@ -376,14 +408,15 @@ private struct _PropertyGridRowHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.cornerRadius = cornerRadius
+        if !node.supportsControlHover { node.attachments[Self.hoveredKey] = false }
         applyBackground(to: node, isHovered: node.attachments[Self.hoveredKey] as? Bool ?? false)
 
         guard let registry = InteractionRegistryHolder.current else { return }
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
-                node.attachments[Self.hoveredKey] = true
-                applyBackground(to: node, isHovered: true)
+                node.attachments[Self.hoveredKey] = node.supportsControlHover
+                applyBackground(to: node, isHovered: node.supportsControlHover)
             case .leave:
                 node.attachments[Self.hoveredKey] = false
                 applyBackground(to: node, isHovered: false)

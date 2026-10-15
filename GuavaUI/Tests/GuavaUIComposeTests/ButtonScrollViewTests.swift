@@ -656,7 +656,8 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
                          rowHeight: 24)
                 .frame(width: 260, height: 120)
         )
-        graph.computeLayout(width: 260, height: 120)
+        // Finish the initial container queries before measuring hover work.
+        for _ in 0..<6 { graph.recomposer.commitAll(); graph.computeLayout(width: 260, height: 120) }
 
         let row = firstNode(in: tree.root, where: { node in
             registry.handlers(for: node).hover != nil

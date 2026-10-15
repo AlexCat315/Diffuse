@@ -66,6 +66,19 @@ extension ModifiedContent: _AnyModifiedContent {
             return [anchor]
         }
 
+        if Self.hasStructuralContent(content) {
+            // A conditional/tuple/array can produce several roots. It needs
+            // its own slot: overwriting a child's viewTag would replace that
+            // child's user scope with the structural value on the next update.
+            let anchor = Node()
+            anchor.isHitTestable = false
+            anchor.viewTag = ViewGraph.slotTag(self)
+            parent.addChild(anchor)
+            _ = graph.materialise(content, into: anchor, layoutParent: layoutParent)
+            applyModifier(to: anchor, graph: graph)
+            return [anchor]
+        }
+
         let nodes = graph.materialise(content, into: parent, layoutParent: layoutParent)
         for n in nodes {
             // Override the inner content's tag with the wrapper's tag so the
@@ -118,6 +131,14 @@ extension ModifiedContent: _AnyModifiedContent {
             return
         }
 
+        if Self.hasStructuralContent(content) {
+            ModifierReplay.reset(on: node)
+            graph.reconcileChildren(parent: node, layoutParent: layoutParent, newViews: [content])
+            node.viewTag = ViewGraph.slotTag(self)
+            applyModifier(to: node, graph: graph)
+            return
+        }
+
         // Recurse into the wrapped content first so its primitive's
         // `_updateNode` runs and any deeper reconciliation happens.
         graph.updateInPlace(node: node, view: content, layoutParent: layoutParent)
@@ -131,6 +152,24 @@ extension ModifiedContent: _AnyModifiedContent {
             if let ln = graph.layoutNode(for: target) {
                 modifier.apply(layout: ln)
             }
+        }
+    }
+
+    private static func hasStructuralContent(_ view: any View) -> Bool {
+        // Check Optional's own conformance before casts that can implicitly
+        // unwrap its non-nil, source-located payload.
+        if view is any _StructuralView { return true }
+        if let source = view as? _AnySourceLocatedView { return hasStructuralContent(source._sourceContent) }
+        if let identified = view as? _AnyIdentifiedView { return hasStructuralContent(identified._content) }
+        if let erased = view as? AnyView { return hasStructuralContent(erased.storage) }
+        return false
+    }
+
+    private func applyModifier(to node: Node, graph: ViewGraph) {
+        retainModifier(on: node, graph: graph)
+        for target in Self.modifierTargets(for: node, graph: graph) {
+            modifier.apply(node: target)
+            if let layout = graph.layoutNode(for: target) { modifier.apply(layout: layout) }
         }
     }
 

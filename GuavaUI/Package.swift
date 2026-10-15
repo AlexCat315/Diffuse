@@ -135,6 +135,7 @@ let package = Package(
         .testTarget(
             name: "GuavaUIComposeTests",
             dependencies: [
+                "GuavaUIAgent",
                 .product(name: "GuavaUIComposeCore", package: "Portable"),
                 "GuavaUICompose",
                 "GuavaUIRuntime",

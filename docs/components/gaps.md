@@ -5,7 +5,7 @@
 - 数据来源：`GuavaUI/Sources/GuavaUICompose/Primitives`、Gallery 72 页（`GalleryCatalog.swift`）、各组件文档与逐项代码复核。
 - 范围：脱离 Guava 编辑器语境仍成立的通用 UI 能力。场景层级、Inspector 字段面板、Material Graph、媒体时间线等领域组件留在应用层，不进本清单。
 - 状态：`[未实现]` 完全缺失；`[部分]` 已有基础实现或可用组合替代；`[已实现]` 仅作对照。优先级 P0（手机/平板可用性阻塞）> P1（常用能力）> P2（长尾/体验）> P3（按需）。
-- 已列入规范第 5 节的缺口（Toolbar 溢出、Sidebar 收敛、Form 标签、DataTable 列优先级、TabView 溢出菜单、截断、文本缩放、触摸行高、ScrollView 输入、浮层自适应、Stepper/ButtonGroup 重排、Vec3Field 重排、焦点环、辅助功能、高度类、Gallery 自适应）**不在此重复**，避免双份维护。
+- 自适应工作统一由规范第 5 节跟踪待办和完成记录（Toolbar、Sidebar、Form、数据列、Tab、截断、缩放、触摸行高、滚动、浮层、焦点与 Gallery 等）；本文仅保留交叉引用，避免双份维护。
 
 ## 1. 覆盖总览
 
@@ -146,7 +146,7 @@
 | Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
 | Workspace | N 面板联动、折叠阈值/吸附、pin 专属视觉、浮动为应用内层、文档解码校验与可版本化格式、a11y/RTL、chrome 硬编码清理（见 [workspace.md](workspace.md)） | P2 |
 | ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、锚定滚动、带时长程序滚动、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | P1 |
-| Form / PropertyGrid | 宽度标签切换（规范 5-3）、`minValueWidth` 语义统一、标签换行、校验摘要（按需） | P1/P2 |
+| Form / PropertyGrid | 自适应标签、共享值槽阈值、列数重排、标签关联与 Form 校验摘要已实现，见 [form.md](form.md)；PropertyGrid 跨字段业务校验由应用管理 | 已实现 |
 | Carousel | 自动轮播、复杂指示器（按需）；滑动/键盘已有 | P2 |
 | StatusBar / Panel | 状态格与标题截断策略（规范 1.1 已标部分） | P2 |
 | CodeEditor / TextField | snippet tab-stop、超长单行分段布局（[textfield.md](textfield.md) 边界） | P2 |
@@ -159,7 +159,7 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、NavigationDrawer（Sidebar 收敛）、BottomSheet 拖拽与自适应；再加规范第 5 节的 Form 标签、DataTable 列优先级、SplitView 单栏。Toolbar 命令溢出已实现，验收与边界见 [toolbar.md](toolbar.md)。
+**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、NavigationDrawer（Sidebar 收敛）、BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级、SplitView 单栏。Toolbar 命令溢出和 Form 标签重排已实现，验收与边界见 [toolbar.md](toolbar.md)、[form.md](form.md)。
 
 **P1（常用能力）**：NavigationRail、NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。
 
