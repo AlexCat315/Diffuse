@@ -9,7 +9,7 @@ struct ImageStory: View {
     static var resource: BundleImageResource { .svg(named: "gallery-landscape", in: .module) }
     private var url: URL? {
         switch source {
-        case "remote": URL(string: "https://avatars.githubusercontent.com/u/5518?v=4")
+        case "remote": URL(string: "https://avatars.githubusercontent.com/u/99124972?v=4")
         case "missing": URL(fileURLWithPath: "/guava-gallery-missing.png")
         case "empty": nil
         default: Self.resource.url
