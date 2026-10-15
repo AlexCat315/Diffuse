@@ -8,15 +8,14 @@ private struct _TreeRowVisualKey: Equatable, Sendable {
 /// Tree row default: same density and hierarchy cues as the list style, with
 /// enough selection contrast to read as an outline tree in an editor shell.
 ///
-/// The highlight is the shared `SelectionAppearance` data-row role — an
-/// edge-to-edge band, because a tree's rows share horizontal rules with their
-/// indent guides and a pill would break the column they line up in.
+/// The navigation highlight leaves the hierarchy gutter clear. Subtle vertical
+/// guides carry depth without connecting horizontal strokes to the row chrome.
 public struct DefaultTreeRowStyle: TreeRowStyle {
     public init() {}
 
     public func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
         let t = configuration.theme
-        let selection = SelectionAppearance.resolve(.dataRow, theme: t)
+        let selection = SelectionAppearance.resolve(.navigation, theme: t)
         let bg: Color = configuration.isSearchHit && !configuration.isSelected
             ? t.colors.stateLayerSelected
             : selection.fill(isSelected: configuration.isSelected,
@@ -34,7 +33,7 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
             .padding(horizontal: t.spacing.sm + 1, vertical: t.spacing.xs + 1)
         }
         .background(bg)
-        .cornerRadius(t.radius.sm)
+        .cornerRadius(selection.cornerRadius)
         .opacity(alpha)
         .animation(.semantic(.fast, in: t), value: visualKey)
     }

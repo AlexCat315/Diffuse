@@ -115,7 +115,7 @@ struct DisclosureContainerTests: GuavaUIComposeSerializedSuite {
             let rootText = try #require(graph.layoutSnapshot().first { $0.debugName == "tree-text-0" }?.absoluteFrame)
             let childText = try #require(graph.layoutSnapshot().first { $0.debugName == "tree-text-1" }?.absoluteFrame)
             #expect(rootText.height == 40 && childText.minY - rootText.minY == 60)
-            #expect(childText.minX - rootText.minX == 28)
+            #expect(childText.minX - rootText.minX == 32)
             #expect(all(graph.tree.root!).contains { $0.viewTag?.contains("Image") == true && $0.frame.width == 24 })
             let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
                 capture: context.pointerCapture, focusChain: context.focusChain)

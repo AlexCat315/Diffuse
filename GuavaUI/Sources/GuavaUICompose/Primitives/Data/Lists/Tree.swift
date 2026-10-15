@@ -1,4 +1,4 @@
-﻿import EngineKernel
+import EngineKernel
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
@@ -38,6 +38,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     public let roots: [Element]
     public let id: KeyPath<Element, ID>
     public let children: (Element) -> [Element]
+    private let childPresence: ((Element) -> Bool)?
     public var options = TreeOptions<Element, ID>()
     public let rowContent: (Element, Bool, Bool, Int) -> RowContent
     @State private var session = TreeSession<ID>()
@@ -45,17 +46,20 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     public init(_ roots: Roots,
                 id: KeyPath<Element, ID>,
                 children: @escaping (Element) -> [Element],
+                hasChildren: ((Element) -> Bool)? = nil,
                 configure: (inout TreeOptions<Element, ID>) -> Void = { _ in },
                 @ViewBuilder rowContent: @escaping (Element, Bool, Bool, Int) -> RowContent) {
         self.roots = Array(roots)
         self.id = id
         self.children = children
+        self.childPresence = hasChildren
         self.rowContent = rowContent
         configure(&options)
         options.layout.validate()
     }
 
     public var body: some View {
+        if !options.isEnabled, session.dragState != nil { cancelDrag() }
         let treeState = derivedState()
         let entries = visibleEntries(using: treeState)
         let entriesByToken = Dictionary(uniqueKeysWithValues: entries.map { ($0.nodeKey, $0) })
@@ -64,9 +68,17 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         IconMetricsReader { icons in
         SurfaceReader { surface in
         let layout = options.layout.resolved(textScaler: scaler, icons: icons, surface: surface)
-        _TreeKeyboardHost(onKey: { event in
+        _TreeKeyboardHost(isEnabled: options.isEnabled, onKey: { event in
+            guard options.isEnabled else { return false }
             session.activeModifiers = event.modifiers
             if options.events.onKeyCommand?(event, treeState.selectedIDs) == true { return true }
+            if event.scancode == Scancode.escape, session.dragState != nil {
+                cancelDrag(); PointerCaptureHolder.current?.release(); return true
+            }
+            if event.modifiers.hasAlt {
+                if event.scancode == Scancode.arrowRight { expandAll(); return true }
+                if event.scancode == Scancode.arrowLeft { collapseAll(); return true }
+            }
             let current = entries.first { $0.nodeKey == options.selection.primaryKey.wrappedValue }
                 ?? entries.first { $0.id == options.selection.primary.wrappedValue }
                 ?? entries.first { treeState.selectedIDs.contains($0.id) }
@@ -77,6 +89,10 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             case Scancode.arrowUp: moveSelection(from: current.nodeKey, delta: -1, entries: entries)
             case Scancode.arrowLeft: collapseOrSelectParent(current, entries: entries)
             case Scancode.arrowRight: expandOrSelectFirstChild(current, entries: entries)
+            case Scancode.home: if let first = entries.first { select(first, modifiers: event.modifiers, entries: entries) }
+            case Scancode.end: if let last = entries.last { select(last, modifiers: event.modifiers, entries: entries) }
+            case Scancode.return, Scancode.keypadEnter, Scancode.space:
+                select(current, modifiers: event.modifiers, entries: entries)
             default: return false
             }
             return true
@@ -85,18 +101,17 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             rowHeight: layout.rowHeight) {
         VirtualStack(entries, id: \.nodeKey, rowHeight: layout.rowHeight, spacing: layout.rowSpacing,
                      scrollToIndex: entries.firstIndex { $0.nodeKey == options.selection.primaryKey.wrappedValue || $0.id == options.selection.primary.wrappedValue }) { entry in
-            _TreeGuideOverlayHost(rows: [_TreeGuideRowSnapshot(depth: entry.depth,
+            TreeGuideOverlayHost(rows: [TreeGuideRowSnapshot(depth: entry.depth,
                                   ancestorHasNextSiblings: entry.ancestorHasNextSiblings,
-                                  hasNextSibling: entry.hasNextSibling, hasChildren: entry.hasChildren,
-                                  isExpanded: entry.isExpanded)],
-                                  rowHeight: layout.rowHeight, rowSpacing: 0, indentation: layout.indentation,
+                                  hasNextSibling: entry.hasNextSibling)],
+                                  rowHeight: layout.rowHeight, rowSpacing: layout.rowSpacing, indentation: layout.indentation,
                                   showsIndentGuides: layout.showsIndentGuides) {
                         let token = entry.nodeKey
                         let isSel = treeState.usesNodeKeySelection
                             ? treeState.selectedNodeKeys.contains(token)
                             : treeState.selectedIDs.contains(entry.id)
                         _TreeRowComposite(
-                            appearance: TreeRowAppearance(hasChildren: entry.hasChildren,
+                            appearance: TreeRowAppearance(isEnabled: options.isEnabled, hasChildren: entry.hasChildren,
                                 isExpanded: entry.isExpanded,
                                 isSearchHit: entry.isSearchHit,
                                 isSelected: isSel,
@@ -297,7 +312,12 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             // search merely hides non-matching siblings.
             let path = pathPrefix + [indexedNode.originalIndex]
             let nodeKey = TreeNodeKey(id: nodeID, path: path)
-            let childNodes = children(node)
+            let explicitlyExpanded = state.expandedIDs.contains(nodeID) || state.expandedNodeKeys.contains(nodeKey)
+            let branch = childPresence?(node)
+            // A cheap branch predicate lets a synchronous provider defer child
+            // construction until expansion. Search intentionally traverses the
+            // available hierarchy to retain matching ancestors.
+            let childNodes = branch != false && (branch == nil || explicitlyExpanded || state.autoExpand) ? children(node) : []
 
             let selfMatches = state.searchMetadata?.selfMatches[nodeID] ?? false
             let childSubtreeMatches: Bool
@@ -322,7 +342,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                                     ancestorHasNextSiblings: ancestorHasNextSiblings,
                                     hasNextSibling: hasNextSibling,
                                     isSearchHit: selfMatches,
-                                    hasChildren: !childNodes.isEmpty,
+                                    hasChildren: branch ?? !childNodes.isEmpty,
                                     isExpanded: isExpanded))
             if isExpanded && !childNodes.isEmpty {
                 var childGuide = ancestorHasNextSiblings
@@ -504,6 +524,31 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         if let expanded = options.selection.expanded { expanded.wrappedValue = next } else { session.localExpanded = next }
     }
 
+    private func expandAll() {
+        var keys: Set<TreeNodeKey<ID>> = []
+        func visit(_ elements: [Element], path: [Int]) {
+            for (index, element) in elements.enumerated() {
+                let nextPath = path + [index]
+                if childPresence?(element) == false { continue }
+                let childNodes = children(element)
+                guard !childNodes.isEmpty else { continue }
+                keys.insert(TreeNodeKey(id: element[keyPath: id], path: nextPath))
+                visit(childNodes, path: nextPath)
+            }
+        }
+        visit(roots, path: [])
+        setExpanded(keys)
+    }
+
+    private func collapseAll() { setExpanded([]) }
+
+    private func setExpanded(_ keys: Set<TreeNodeKey<ID>>) {
+        if let expandedKeys = options.selection.expandedKeys { expandedKeys.wrappedValue = keys }
+        let ids = Set(keys.map(\.id))
+        if let expanded = options.selection.expanded { expanded.wrappedValue = ids }
+        else if options.selection.expandedKeys == nil { session.localExpanded = ids }
+    }
+
     private func toggle(_ nodeKey: TreeNodeKey<ID>, legacyID: ID) {
         if let expandedKeys = options.selection.expandedKeys {
             var next = expandedKeys.wrappedValue
@@ -579,7 +624,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             let own = searchText(node).lowercased().contains(query)
             selfMatches[nodeID] = own
             var any = own
-            for child in children(node) {
+            for child in childPresence?(node) == false ? [] : children(node) {
                 if walk(child) {
                     any = true
                 }
@@ -808,6 +853,7 @@ private final class _TreeRowDragRegistry<ID: Hashable>: @unchecked Sendable {
 /// body itself is hosted by `_TreeRowHost` which delegates to the active
 /// `TreeRowStyle`.
 private struct TreeRowAppearance {
+    let isEnabled: Bool
     let hasChildren: Bool
     let isExpanded: Bool
     let isSearchHit: Bool
@@ -868,7 +914,7 @@ private struct _TreeRowComposite: View {
             Box { EmptyView() }
                 .frame(width: indentWidth, height: geometry.rowHeight)
 
-            _TreeDisclosureSlotHost(hasChildren: appearance.hasChildren,
+            _TreeDisclosureSlotHost(isEnabled: appearance.isEnabled, hasChildren: appearance.hasChildren,
                                     isExpanded: appearance.isExpanded,
                                     width: geometry.disclosureWidth,
                                     rowHeight: geometry.rowHeight,
@@ -888,6 +934,7 @@ private struct _TreeRowComposite: View {
 }
 
 private struct _TreeDisclosureSlotHost: View {
+    let isEnabled: Bool
     let hasChildren: Bool
     let isExpanded: Bool
     let width: Float
@@ -898,7 +945,7 @@ private struct _TreeDisclosureSlotHost: View {
     var body: some View {
         Box(direction: .row, alignItems: .center, justifyContent: .center) {
             if hasChildren {
-                Button(action: onToggle) {
+                Button(isEnabled: isEnabled, action: onToggle) {
                     if let disclosureContent {
                         disclosureContent(isExpanded)
                             .frame(width: width, height: rowHeight)
@@ -908,154 +955,11 @@ private struct _TreeDisclosureSlotHost: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "Collapse" : "Expand")
                 .frame(width: width, height: rowHeight)
             }
         }
         .frame(width: width, height: rowHeight)
-    }
-}
-
-private struct _TreeGuideRowSnapshot: Equatable {
-    let depth: Int
-    let ancestorHasNextSiblings: [Bool]
-    let hasNextSibling: Bool
-    let hasChildren: Bool
-    let isExpanded: Bool
-}
-
-private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
-    let rows: [_TreeGuideRowSnapshot]
-    let rowHeight: Float
-    let rowSpacing: Float
-    let indentation: Float
-    let showsIndentGuides: Bool
-    let content: Content
-
-    private struct PaintIdentity: Equatable {
-        let rows: [_TreeGuideRowSnapshot]
-        let rowHeight: Float
-        let rowSpacing: Float
-        let indentation: Float
-        let showsIndentGuides: Bool
-    }
-
-    init(rows: [_TreeGuideRowSnapshot],
-         rowHeight: Float,
-         rowSpacing: Float,
-         indentation: Float,
-         showsIndentGuides: Bool,
-         @ViewBuilder content: () -> Content) {
-        self.rows = rows
-        self.rowHeight = rowHeight
-        self.rowSpacing = rowSpacing
-        self.indentation = indentation
-        self.showsIndentGuides = showsIndentGuides
-        self.content = content()
-    }
-
-    func _makeNode() -> Node {
-        let node = Node()
-        node.isHitTestable = false
-        return node
-    }
-
-    func _updateNode(_ node: Node) {
-        node.attachments["__tree_guide"] = true
-        let rows = rows
-        let rowHeight = rowHeight
-        let rowSpacing = rowSpacing
-        let indentation = indentation
-        let showsIndentGuides = showsIndentGuides
-
-        node.updateDraw(identity: PaintIdentity(rows: rows,
-                                                rowHeight: rowHeight,
-                                                rowSpacing: rowSpacing,
-                                                indentation: indentation,
-                                                showsIndentGuides: showsIndentGuides)) { [weak node] list, origin in
-            guard let node,
-                  showsIndentGuides,
-                  rowHeight > 0,
-                  indentation > 0,
-                  !rows.isEmpty else {
-                return
-            }
-
-            let baseX = Float(origin.x)
-            let baseY = Float(origin.y)
-            let rowStride = rowHeight + rowSpacing
-            let centerLead: Float = {
-                let whole = max(2, indentation.rounded(.down))
-                return ((whole - 1) * 0.5).rounded(.down)
-            }()
-            let centerYLead: Float = {
-                let whole = max(2, rowHeight.rounded(.down))
-                return max(0, ((whole - 1) * 0.5).rounded(.down))
-            }()
-            let continuationExtension = max(0, rowSpacing.rounded(.up))
-            let guideInk = (node.foregroundColor ?? node.theme.colors.onSurfaceVariant)
-                .multipliedAlpha(node.opacity)
-            let branchColor = guideInk.multipliedAlpha(0.82)
-            let ancestorColor = guideInk.multipliedAlpha(0.7)
-
-            for (index, row) in rows.enumerated() {
-                guard row.depth > 0 else { continue }
-
-                let rowOriginY = baseY + Float(index) * rowStride
-                let rowTop = rowOriginY.rounded(.down)
-                let rowBottom = max(rowTop + 1, (rowOriginY + rowHeight).rounded(.up))
-                let strokeY = (rowOriginY + centerYLead).rounded(.down)
-
-                for level in 0..<row.depth {
-                    let cellX = baseX + Float(level) * indentation
-                    let strokeX = (cellX + centerLead).rounded(.down)
-                    // Draw horizontal branches to the next guide-column center
-                    // so joins remain continuous under rounding.
-                    let nextColumnStrokeX = (cellX + indentation + centerLead).rounded(.down)
-
-                    if level == row.depth - 1 {
-                        let continuesDownward = row.hasNextSibling || (row.hasChildren && row.isExpanded)
-                        let verticalBottom = continuesDownward
-                            ? rowBottom + continuationExtension
-                            : strokeY + 1
-                        list.addRect(UIRect(x: strokeX,
-                                            y: rowTop,
-                                            width: 1,
-                                            height: max(1, verticalBottom - rowTop)),
-                                  color: branchColor)
-                        // Add one pixel of overlap so horizontal/vertical joins
-                        // stay visually continuous after integer rounding.
-                        list.addRect(UIRect(x: strokeX,
-                                            y: strokeY,
-                                            width: max(1, nextColumnStrokeX - strokeX + 1),
-                                            height: 1),
-                                     color: branchColor)
-                        continue
-                    }
-
-                    let shouldDrawVertical = level < row.ancestorHasNextSiblings.count
-                        && row.ancestorHasNextSiblings[level]
-                    if shouldDrawVertical {
-                        let verticalBottom = rowBottom + continuationExtension
-                        list.addRect(UIRect(x: strokeX,
-                                            y: rowTop,
-                                            width: 1,
-                                            height: max(1, verticalBottom - rowTop)),
-                                     color: ancestorColor)
-                    }
-                }
-            }
-        }
-    }
-
-    func _makeLayoutNode() -> LayoutNode? {
-        let layout = LayoutNode()
-        layout.flexDirection = .column
-        layout.alignItems = .stretch
-        return layout
-    }
-
-    var _children: [any View] {
-        [content]
     }
 }
 
@@ -1092,10 +996,13 @@ private struct _TreeRowHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.accessibility = AccessibilitySemantics(.treeItem) {
+            $0.state.isEnabled = appearance.isEnabled
             $0.state.isSelected = appearance.isSelected; $0.state.isExpanded = appearance.hasChildren ? appearance.isExpanded : nil
             $0.combinesChildren = true
         }
-        node.accessibilityActions.activate = { actions.onSelect([]) }
+        node.accessibilityActions.activate = appearance.isEnabled ? { actions.onSelect([]) } : nil
+        node.allowsHitTesting = appearance.isEnabled
+        node.isInteractionEnabled = appearance.isEnabled
 
         guard let registry = InteractionRegistryHolder.current else { return }
         let captured = actions.onSelect
@@ -1277,7 +1184,7 @@ private struct _TreeRowHost: _PrimitiveView {
             isSearchHit: appearance.isSearchHit,
             isSelected: appearance.isSelected,
             isHovered: appearance.isHovered,
-            isEnabled: true,
+            isEnabled: appearance.isEnabled,
             theme: node.theme
         )
         return [style.makeBody(cfg)]
@@ -1434,13 +1341,28 @@ private extension UIRect {
 }
 
 private struct _TreeKeyboardHost<Content: View>: _PrimitiveView {
+    let isEnabled: Bool
     let onKey: (KeyEvent) -> Bool; let content: Content
-    init(onKey: @escaping (KeyEvent) -> Bool, @ViewBuilder content: () -> Content) { self.onKey = onKey; self.content = content() }
+    init(isEnabled: Bool, onKey: @escaping (KeyEvent) -> Bool, @ViewBuilder content: () -> Content) {
+        self.isEnabled = isEnabled; self.onKey = onKey; self.content = content()
+    }
     func _makeNode() -> Node {
         let node = Node(); node.isHitTestable = false; node.isFocusable = true
         node.attachments["tree-keyboard-root"] = true; return node
     }
     func _makeLayoutNode() -> LayoutNode? { nil }
-    func _updateNode(_ node: Node) { InteractionRegistryHolder.current?.setKey(node) { event, _ in onKey(event) ? .handled : .ignored } }
+    func _updateNode(_ node: Node) {
+        node.isFocusable = isEnabled
+        node.allowsHitTesting = isEnabled
+        node.isInteractionEnabled = isEnabled
+        node.accessibility = AccessibilitySemantics(.tree) { $0.state.isEnabled = isEnabled }
+        if !isEnabled {
+            if let focused = FocusChainHolder.current?.focused, !focused.acceptsSubtreeInput { FocusChainHolder.current?.clear() }
+            if let captured = PointerCaptureHolder.current?.target, !captured.acceptsSubtreeInput { PointerCaptureHolder.current?.release() }
+        }
+        InteractionRegistryHolder.current?.setKey(node) { event, _ in
+            isEnabled && onKey(event) ? .handled : .ignored
+        }
+    }
     var _children: [any View] { [content] }
 }

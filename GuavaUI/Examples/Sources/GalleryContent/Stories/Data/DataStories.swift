@@ -32,15 +32,25 @@ struct ListStory: View {
 }
 
 struct TreeStory: View {
+    var options = GalleryOptions()
     @State private var selection: String? = "camera"
     @State private var expanded: Set<String> = ["scene", "lights"]
     @State private var selectedIDs: Set<String> = ["camera"]
     @State private var search: TextBuffer = ""
     var body: some View {
-        StorySection("Scene hierarchy", "Search keeps matching ancestors. Use arrows to expand and navigate; Command-click selects multiple nodes.") {
-            TextField("Search nodes…", text: $search) { $0.behavior.clearable = true }.frame(width: 300)
-            ScrollView(.vertical, scrollbarGutter: .stable) {
-                Tree(galleryTree, id: \.id, children: { $0.children }, configure: { tree in
+        StorySection("Scene hierarchy", "Search retains matching ancestors. Use arrows, Home and End; Option/Alt + Right expands all and Option/Alt + Left collapses all. Command/Control-click selects multiple nodes.") {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
+                TextField("Search nodes…", text: $search) {
+                    $0.behavior.clearable = true
+                    $0.behavior.disabled = !options.isEnabled
+                }.frame(maxWidth: 300).flex(1, shrink: 1, basis: 240)
+                Button("Expand all", isEnabled: options.isEnabled) { expanded = ["scene", "lights", "objects"] }
+                    .buttonStyle(.secondary).debugName("tree-expand-all")
+                Button("Collapse all", isEnabled: options.isEnabled) { expanded = [] }
+                    .buttonStyle(.secondary).debugName("tree-collapse-all")
+            }
+            Tree(galleryTree, id: \.id, children: { $0.children }, hasChildren: { !$0.children.isEmpty }, configure: { tree in
+                    tree.isEnabled = options.isEnabled
                     tree.selection.primary = $selection
                     tree.selection.multiple = $selectedIDs
                     tree.selection.expanded = $expanded
@@ -48,8 +58,7 @@ struct TreeStory: View {
                     tree.search.text = { $0.title }
                 }) { node, _, _, _ in
                     Text(node.title).font(.body)
-                }.flex(0, shrink: 0)
-            }.frame(height: 250).flex(0, shrink: 0).debugName("gallery-tree")
+                }.frame(height: 250).flex(0, shrink: 0).clipped().debugName("gallery-tree")
             Text("Selected: \(selectedIDs.sorted().joined(separator: ", "))").font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }

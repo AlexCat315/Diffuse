@@ -398,6 +398,18 @@ public final class Node: @unchecked Sendable {
     public func setCompositionValue<Value>(_ local: CompositionLocal<Value>,
                                            _ value: Value) {
         compositionValues[local.key] = value
+        // A painter can resolve an environment value at draw time without
+        // changing its authored content identity (for example Text's default
+        // foreground when a theme changes). Those retained layers must repaint.
+        markRenderDirty(reason: .styleSet(field: "compositionValue"))
+        invalidateCompositionPaint(for: local.key)
+    }
+
+    private func invalidateCompositionPaint(for key: ObjectIdentifier) {
+        renderObject?.cacheInvalid = true
+        for child in children where child.compositionValues[key] == nil {
+            child.invalidateCompositionPaint(for: key)
+        }
     }
 
     /// Resolve `local` by walking up the parent chain. Returns the nearest

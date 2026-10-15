@@ -686,7 +686,7 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(multiSelectionKeyProbe.value == [expected])
     } }
 
-    @Test("Tree guide lines use pixel-aligned 1pt strokes")
+    @Test("Tree guides use subtle vertical 1pt strokes without horizontal branches")
     func treeGuideLinesArePixelAligned() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
@@ -729,8 +729,13 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         let strokeRects = guideNodes.flatMap(renderedGuideStrokeRects)
         #expect(!strokeRects.isEmpty)
         #expect(strokeRects.allSatisfy { rect in
-            (rect.width == 1 && rect.height >= 1) || (rect.height == 1 && rect.width >= 1)
+            rect.width == 1 && rect.height > 1
         })
+        for node in guideNodes {
+            let list = DrawList()
+            node.draw?(list, node.absoluteOrigin)
+            #expect(list.vertices.allSatisfy { Float($0.color >> 24) / 255 <= 0.25 })
+        }
     } }
 
     @Test("Tree guide lines keep ancestor continuation stems")
@@ -742,7 +747,8 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
             TreeItem(id: "scene", title: "Scene", children: [
                 TreeItem(id: "group", title: "Group", children: [
                     TreeItem(id: "leaf", title: "Leaf", children: [])
-                ])
+                ]),
+                TreeItem(id: "sibling", title: "Sibling", children: [])
             ]),
             TreeItem(id: "console", title: "Console", children: [])
         ]

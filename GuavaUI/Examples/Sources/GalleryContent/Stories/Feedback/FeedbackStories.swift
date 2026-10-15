@@ -126,7 +126,7 @@ public extension GalleryPage {
         case .jsonField: AnyView(JsonStory(options: options))
         case .assetRef: AnyView(AssetStory(options: options))
         case .list: AnyView(ListStory())
-        case .tree: AnyView(TreeStory())
+        case .tree: AnyView(TreeStory(options: options))
         case .virtualList: AnyView(VirtualListStory())
         case .virtualStack: AnyView(VirtualStackStory())
         case .chart: AnyView(ChartStory())

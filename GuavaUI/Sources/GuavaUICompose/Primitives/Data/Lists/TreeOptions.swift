@@ -14,7 +14,7 @@ public struct TreeSelection<ID: Hashable> {
 public struct TreeLayout: Equatable {
     public var rowHeight: Float = 30
     public var rowSpacing: Float = 0
-    public var indentation: Float = 14
+    public var indentation: Float = 16
     public var disclosureWidth: Float = 18
     public var showsIndentGuides = true
     public var trailingSlotWidth: Float = 64
@@ -73,6 +73,7 @@ public struct TreeDragOperations<Element> {
 /// Configuration consists of independently reusable groups. The row renderer's generic
 /// type is deliberately absent, so Swift can infer trailing row-content closures.
 public struct TreeOptions<Element, ID: Hashable> {
+    public var isEnabled = true
     public var selection = TreeSelection<ID>()
     public var layout = TreeLayout()
     public var slots = TreeSlots<Element>()
