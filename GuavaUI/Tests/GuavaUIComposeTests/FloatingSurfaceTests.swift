@@ -8,21 +8,10 @@ import EngineKernel
 import GuavaUIRuntime
 @testable import GuavaUICompose
 
-/// Floating panels have to *look* lifted: a two-layer shadow. These tests pin
-/// the token, the modifier that reads it, and one real menu.
-@Suite("Floating surfaces", .serialized)
+/// Floating panels have to *look* lifted and read as glass. These tests pin
+/// the token, the one modifier that assembles the material, and a real menu.
+@Suite("Glass surfaces", .serialized)
 struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
-
-    @Test("floatingSurface() lifts the node with the theme's two layers")
-    @MainActor func modifierWiring() {
-        let node = Node()
-        node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
-        FloatingSurfaceModifier().apply(node: node)
-
-        let theme = node.theme
-        #expect(node.ambientShadow == theme.elevation.floating.ambient)
-        #expect(node.shadow == theme.elevation.floating.key)
-    }
 
     @Test("The floating token is two different layers, not one twice")
     @MainActor func tokenIsLayered() {
@@ -41,7 +30,7 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
         node.cornerRadius = 6
         node.backgroundColor = Node().theme.colors.surfaceFloating
-        FloatingSurfaceModifier().apply(node: node)
+        GlassSurfaceModifier(cornerRadius: 6).apply(node: node)
 
         let list = DrawList()
         NodeRenderer().render(root: node, into: list)
@@ -95,8 +84,8 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         #expect(clamped.backdropBlur == 0)
     }
 
-    @Test("A menu panel is a card, not a floating surface")
-    @MainActor func menuPanelStaysFlat() throws {
+    @Test("A menu panel is glass, like every other floating panel")
+    @MainActor func menuPanelFrosts() throws {
         try GlobalTestLock.locked {
             PortalStoreHolder.current.clear()
             defer { PortalStoreHolder.current.clear() }
@@ -123,12 +112,16 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
                 let panel = try #require(flatten(tree.root).first {
                     $0.backgroundColor != nil && $0.frame.width > 100
                 })
-                // Same as any card: no lift, no rim, no frost. A menu that
-                // carried the floating treatment was the one panel in the UI
-                // that did not match the cards around it.
-                #expect(panel.ambientShadow.isEmpty)
-                #expect(panel.shadow.isEmpty)
-                #expect(panel.backdropBlur == 0)
+                // Every floating panel is the same material. A menu that quietly skipped the
+                // frost used to render as a plain card among glass ones, which
+                // is the one outcome this modifier exists to prevent.
+                let theme = panel.theme
+                #expect(panel.backdropBlur > 0)
+                #expect(panel.backgroundColor == theme.colors.surfaceMaterial)
+                #expect(panel.cornerRadius == theme.radius.md)
+                #expect(panel.borderColor == theme.colors.border)
+                #expect(panel.ambientShadow == theme.elevation.floating.ambient)
+                #expect(panel.shadow == theme.elevation.floating.key)
             }
         }
     }

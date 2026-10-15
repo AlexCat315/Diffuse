@@ -117,12 +117,11 @@ struct MenuLevel: View {
                 .modifier(MenuWindowBounds(maxVisibleRows: configuration.maxVisibleRows))
                 .modifier(MenuScrollMarker())
             }
-            // A card, like every other panel in the UI: a fill, a radius and a
-            // border. No shadow, no rim light, no frost — a menu is not a
-            // floating surface, and the floating treatment made it the one
-            // panel in the UI that did not match the cards around it.
-            .background(.surfaceFloating).cornerRadius(.controlRadius)
-            .border(.border, width: 1)
+            // Every panel that floats over content gets the same material: a frosted,
+            // translucent body with the chrome's shadow under it. The menu is
+            // no longer the odd one out, and `glassSurface` is the only way to
+            // say so — the parts have to agree and none of them implies the rest.
+.glassSurface(.controlRadius)
             .frame(width: configuration.width)
         }
     }

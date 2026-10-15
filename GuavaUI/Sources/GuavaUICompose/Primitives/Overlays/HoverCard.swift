@@ -114,8 +114,7 @@ final class HoverCardSession: NodeResource, AnyAnimationController {
                 })
                 content
             }
-                .padding(theme.spacing.md).background(.surfaceFloating).cornerRadius(theme.radius.md)
-                .border(SemanticColorRef.border, width: 1).floatingSurface()
+                .padding(theme.spacing.md).glassSurface(theme.radius.md)
                 .onHover { [weak self] in self?.setCardHovered($0) }))
         }
         let portal = node.firstResource(PortalResource.self)!

@@ -293,7 +293,7 @@ struct DesignSystemTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    @Test("Menu defaults stay opaque and their visible-row budget follows body typography and scale")
+    @Test("Menu takes the shared glass material, and its visible-row budget follows body typography and scale")
     func readableMenus() throws {
         try fixture { graph in
             graph.install(root: Menu([
@@ -305,8 +305,12 @@ struct DesignSystemTests: GuavaUIComposeSerializedSuite {
             #expect(first.layoutNode?.textMeasure?.key.font.size == 28)
             func all(_ node: Node) -> [Node] { [node] + node.children.flatMap(all) }
             let nodes = all(graph.tree.root!)
-            let panel = try #require(nodes.first { $0.backgroundColor == Theme.defaultLight.colors.surfaceFloating && $0.cornerRadius > 0 })
-            #expect(panel.backgroundColor?.a == 1)
+            // Glass, like every other floating panel — and translucent, which is
+            // what lets the frost behind it show through at all.
+            let panel = try #require(nodes.first {
+                $0.backgroundColor == Theme.defaultLight.colors.surfaceMaterial && $0.cornerRadius > 0
+            })
+            #expect(panel.backdropBlur > 0)
             #expect(panel.frame.height >= 104)
             #expect(nodes.filter { $0.attachments["__menu_item_id"] != nil }.allSatisfy { $0.frame.height >= 52 })
         }

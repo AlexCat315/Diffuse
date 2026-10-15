@@ -3,7 +3,7 @@ import GuavaUIRuntime
 /// A faint upper edge and a shallow shadow: material without glass or gradients.
 ///
 /// For surfaces that sit *in* the chrome — a panel edge, a sidebar. Surfaces
-/// that float above it want `floatingSurface()` instead.
+/// that float above it want `glassSurface()` instead.
 public struct SurfaceFinishModifier: ViewModifier {
     public init() {}
 
@@ -17,26 +17,6 @@ public struct SurfaceFinishModifier: ViewModifier {
                                 width: max(0, Float(node.frame.width) - inset * 2), height: 1),
                          color: node.theme.colors.border.multipliedAlpha(0.4 * node.opacity))
         }
-    }
-}
-
-/// A floating surface: layered shadow plus a rim light along the top edge.
-///
-/// The shadow is what a menu cannot do without — one layer can only be broad
-/// or tight, and a floating panel needs a halo *and* a contact shadow. The rim
-/// light is what keeps it from reading as a sticker: it says the light is above
-/// the UI, so the edge facing up catches it.
-///
-/// Pair with `.backdropBlur` and a translucent fill; this modifier does not
-/// frost, and the fill does not lift. `glassSurface()` is the whole thing in
-/// one call when the surface should frost too.
-public struct FloatingSurfaceModifier: ViewModifier {
-    public init() {}
-
-    public func apply(node: Node) {
-        let floating = node.theme.elevation.floating
-        node.ambientShadow = floating.ambient
-        node.shadow = floating.key
     }
 }
 
@@ -83,11 +63,15 @@ public struct GlassSurfaceModifier: ViewModifier {
 public extension View {
     func surfaceFinish() -> some View { modifier(SurfaceFinishModifier()) }
 
-    /// Raise this surface above the chrome: layered shadow and a light top edge.
-    func floatingSurface() -> some View { modifier(FloatingSurfaceModifier()) }
-
     /// Frost this surface and raise it above the chrome.
     func glassSurface(_ cornerRadius: Float, blur: Float = 12) -> some View {
         modifier(GlassSurfaceModifier(cornerRadius: cornerRadius, blurRadius: blur))
+    }
+
+    /// The theme-driven radius, the same way `.cornerRadius(_ token:)` takes
+    /// one. A surface that used `.controlRadius` before it became glass should
+    /// not have to hard-code the number to keep the same shape.
+    func glassSurface(_ cornerRadius: ThemeMetric, blur: Float = 12) -> some View {
+        ThemeReader { theme in self.glassSurface(cornerRadius.resolve(theme), blur: blur) }
     }
 }
