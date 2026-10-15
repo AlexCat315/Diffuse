@@ -381,15 +381,24 @@ private func updateBoolControlAppearance(_ node: Node, isOn: Bool, isEnabled: Bo
     let fill = !isEnabled ? base : pressed ? (isOn ? colors.accentPressed : base.composited(over: colors.stateLayerPressed))
         : hovered ? (isOn ? colors.accentHover : base.composited(over: colors.stateLayerHover)) : base
     let previous = node.attachments["__bool_visual_progress"] as? Float
-    let apply = { [node] in
+    let applyProgress = { [node] in
         node.animatableSet(propertyKey: "bool.progress", current: previous ?? (isOn ? 1 : 0), to: Float(isOn ? 1 : 0)) { [weak node] value in
             node?.attachments["__bool_visual_progress"] = value
             node?.markRenderDirty(reason: .styleSet(field: "bool.progress"))
         }
+    }
+    let applyFill = { [node] in
         node.animatableSet(propertyKey: "bool.fill", current: node.attachments["__bool_visual_fill"] as? Color ?? fill, to: fill) { [weak node] value in
             node?.attachments["__bool_visual_fill"] = value
             node?.markRenderDirty(reason: .styleSet(field: "bool.fill"))
         }
     }
-    if previous != nil { withAnimation(.semantic(.fast, in: node.theme), apply) } else { apply() }
+    if previous != nil {
+        let isSwitch = node.attachments[BoolControlHost.variantKey] as? _BoolControlVariant == .toggle
+        let motion: Animation = isSwitch
+            ? .spring(response: node.theme.motion.fast.seconds, dampingFraction: 0.9, allowsOvershoot: true)
+            : .semantic(.fast, in: node.theme)
+        withAnimation(motion, applyProgress)
+        withAnimation(.semantic(.fast, in: node.theme), applyFill)
+    } else { applyProgress(); applyFill() }
 }

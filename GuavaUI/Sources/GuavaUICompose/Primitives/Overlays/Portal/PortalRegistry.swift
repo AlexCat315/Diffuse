@@ -291,7 +291,7 @@ final class PortalResource: NodeResource {
         generation &+= 1
         let presented = transition.map { effect in
             AnyView(AnimatedVisibility(isVisible: true, transition: effect,
-                animation: Self.appearAnimation, animateOnMount: true) { content }
+                animation: .semantic(.entering, in: owner?.theme ?? .defaultDark), animateOnMount: true) { content }
                 .reducedMotion(owner?.prefersReducedMotion ?? false))
         } ?? content
         if let id = entryID, current.contains(id) {
@@ -312,13 +312,12 @@ final class PortalResource: NodeResource {
     /// steps — text, then frost, then nothing — instead of one movement. So the
     /// entrance is leisurely and the exit is quick, and both are shorter than
     /// the default the overlays used to share.
-    private static let appearAnimation = Animation(duration: 0.16, curve: .easeOut)
-    private static let exitAnimation = Animation(duration: 0.09, curve: .easeIn)
 
     /// Shared reveal size for menus and popovers. The caller supplies the
     /// trigger corner; transition scale leaves elevation lengths unchanged.
-    static func surfaceReveal(anchor: CGPoint) -> Transition {
-        .scale(from: 0.96, anchor: anchor)
+    static func surfaceReveal(anchor: CGPoint, theme: Theme) -> Transition {
+        let scale = theme.motion.surface.revealScale
+        return .scale(from: CGFloat(scale.isFinite ? min(1, max(0, scale)) : 0.96), anchor: anchor)
     }
 
     /// Logical dismissal is immediate. Only noninteractive paint survives the
@@ -331,7 +330,7 @@ final class PortalResource: NodeResource {
         let expected = generation
         store.beginDismissal(id, content: AnyView(
             AnimatedVisibility(isVisible: false, transition: transition,
-                animation: Self.exitAnimation, animateOnMount: true,
+                animation: .semantic(.exiting, in: node.theme), animateOnMount: true,
                 onVisibilitySettled: { [weak self, weak node] visible in
                     guard !visible, let self, let node, self.generation == expected else { return }
                     self.unmount(node: node)

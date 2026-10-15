@@ -731,6 +731,7 @@ final class ViewScope {
                     scopeID: scopeID,
                     animation: capturedAnim,
                     completion: ActiveAnimationContext.currentCompletion,
+                    disablesAnimations: ActiveAnimationContext.disablesAnimations,
                     reason: .init(kind: kind, detail: field)
                 ) { [weak self] reasons in
                     self?.recompose(reasons: reasons)
@@ -862,6 +863,7 @@ final class ViewScope {
             scopeID: ObjectIdentifier(anchor),
             animation: capturedAnim,
             completion: ActiveAnimationContext.currentCompletion,
+            disablesAnimations: ActiveAnimationContext.disablesAnimations,
             reason: reason
         ) { [weak self] reasons in
             self?.recompose(reasons: reasons)

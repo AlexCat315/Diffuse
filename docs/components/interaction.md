@@ -2,7 +2,7 @@
 
 ## 组合过渡
 
-`AnimatedVisibility` 使用同一动画进度组合透明度、位移和折叠尺寸，也支持不同的入场和退出过渡。退出完成后再卸载内容；退出中的内容不接收输入。快速切换会取消旧动画。`TransitionView` 保留兼容入口，动画时长从当前主题的 motion token 读取。
+`AnimatedVisibility` 使用同一动画进度组合透明度、位移和折叠尺寸，也支持不同的入场和退出过渡。退出完成后再卸载内容；退出中的内容不接收输入。快速切换会取消旧动画。动画时长从当前主题的 motion token 读取；属性、物理释放、轨道、完成判定和共享几何见 [动画系统](animation.md)。
 
 ```swift
 TransitionView(isVisible: expanded,

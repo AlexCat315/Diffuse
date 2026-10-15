@@ -447,18 +447,16 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | 14 | 辅助功能补齐：滚动条/滚动位置语义、Select/Combobox 专用角色、hint/described-by | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 自身自适应：壳层固定 240pt 侧栏，手机宽度仍渲染桌面骨架；12 页以外无可交互自适应预览 | `Examples/Sources/GalleryContent/GalleryView.swift`、`AdaptiveExamples.swift` | Gallery 壳层窄宽验收 + 扩充 `supports` 列表 |
-| 18 | 弹簧过冲：欠阻尼求值当前夹到 [0,1]；在位移/缩放等安全属性上放开 | 同上 | Spring 求值测试 + 视觉验收 |
-| 19 | 可中断物理：中断从当前值继续但不继承速度；一般组件拖拽释放的带速度弹簧 | `AnimationController.swift`、拖拽组件 | `AnimationControllerTests` 扩展 |
-| 20 | Keyframe / Phase 动画与跨节点位置尺寸 morph（matched geometry） | 未实现 | 新 API 测试 |
-| 21 | `withAnimation` 完成回调（SwiftUI 的 completionCriteria + completion） | `Animation/WithAnimation.swift` | 完成回调测试 |
 
-建议顺序：先做 1–4（壳层与数据密度，直接影响手机/平板可用性），再做 5–8（截断与行密度），然后 9–16（输入与语义补齐）；动画相关 18–21 随第 6 节的实现与验收排期。每项实现时同步更新组件文档的"响应式与输入密度"小节与本节状态。
+建议顺序：先做 1–4（壳层与数据密度，直接影响手机/平板可用性），再做 5–8（截断与行密度），然后 9–16（输入与语义补齐）。动画相关 17–21 已完成，能力与边界见第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的"响应式与输入密度"小节与本节状态。
 
 第 7 项列表族文本缩放已完成：List、Table、DataTable、LazyGrid 自动解析字号后的行高，表格表头与 List/LazyGrid 行间距同步缩放；Table 把 authored 高度交给内部 List，避免二次缩放。LazyGrid 的可变行高复用前缀索引，Gallery 100K 示例已移除手动缩放。`TextScaleRowTests` 在 macOS 宿主上覆盖 390/720/1280pt、light/dark、100%/125%/200%、触摸/混合/指针输入、选择与焦点保留、部分末行、缩放恢复的滚动夹紧以及 DataTable 翻页/末行/冻结列对齐；`NavigationStateTests.lazyGridTextScale` 验证 Gallery 100K 示例在 200% 下实际行高为 96pt、视口仍为 240pt。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过。原生设备视觉仍按第 4 节矩阵验收。
 
 第 8 项触摸行高已完成：`RowDensityTests.collectionRows` 在 macOS 宿主上覆盖 390/720/1280pt、touch-only、touch + pointer + keyboard、pointer + keyboard，验证 36/56pt authored 行高、44pt 下限、节点与选择保留、单元格/展开按钮命中及密度恢复；`dataTableNavigation` 验证触摸翻页、末行显露、冻结列对齐与 44pt 编辑器；`scaledRows` 覆盖 Tree/Menu 的 100%/200% 文本缩放与 light/dark；`menuRows` 验证嵌入表面的菜单及子浮层继承输入环境、行底部点击展开与键盘关闭。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过。设备视觉与系统触摸派发仍按第 4 节真机矩阵验收。
 
-第 17 项动画曲线扩展已完成：`AnimationCurve` 新增 `steps(count:position:)`、`piecewiseLinear(LinearTimingCurve)`、`bounceOut` 与 `elasticOut`；`CurveTests` 在 macOS 宿主上覆盖端点与非法时间、阶梯边界跳变与单调性、折线平台/反向/过冲与极端 progress、弹跳撞击连续性与递衰、弹性过冲与衰减、延迟/精确终值/调度清理。Gallery `--component animation` 新增可交互 `AnimationCurveExamples` 双向尺寸动画（`animation-curve-choice-*`、`animation-curve-play`、`animation-curve-bar`），`AnimationTests` 覆盖 390/720/1280pt、light/dark、双向播放、减少动画立即吸附与禁用状态；同时补齐通用 `animatableSet` 在减少动画下吸附终值并取消在飞控制器（`ReducedMotionEnvironment` 键下沉到 `GuavaUIScene`，Compose 侧只保留 `.reducedMotion()` 修饰器）。`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable` 与 `swift test --package-path GuavaUI/Examples` 均通过。真机视觉仍按第 4 节矩阵验收。
+第 17 项动画曲线扩展已完成：`AnimationCurve` 新增 `steps(_:position:)`、`piecewiseLinear(LinearTimingCurve)`、`bounceOut` 与 `elasticOut`；`CurveTests` 在 macOS 宿主上覆盖端点与非法时间、阶梯边界跳变与单调性、折线平台/反向/过冲与极端 progress、弹跳撞击连续性与递衰、弹性过冲与衰减、延迟/精确终值/调度清理。Gallery `--component animation` 新增可交互 `AnimationCurveExamples` 双向尺寸动画（`animation-curve-choice-*`、`animation-curve-play`、`animation-curve-bar`），`AnimationTests` 覆盖 390/720/1280pt、light/dark、双向播放、减少动画立即吸附与禁用状态；同时补齐通用 `animatableSet` 在减少动画下吸附终值并取消在飞控制器（`ReducedMotionEnvironment` 键下沉到 `GuavaUIScene`，Compose 侧只保留 `.reducedMotion()` 修饰器）。`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable` 与 `swift test --package-path GuavaUI/Examples` 均通过。真机视觉仍按第 4 节矩阵验收。
+
+第 18–21 项动画能力已完成：几何弹簧可显式过冲并继承实际值速度，通用 `springDrag` 提供带速度释放；新增关键帧、普通域相位、有限 / 无限循环、共享位置尺寸和数值过渡；完成组区分名义期限与物理尾部，并处理取消、卸载、减少动画和布局后登记。Button、Toggle、菜单、加载指示与 Gallery 已应用。API、适用边界和测试入口统一记录在 [动画系统](animation.md)。
 
 ## 6. 动效与动画（动画效果实现）
 
@@ -467,8 +465,8 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 ### 6.1 两类动画与"拟合"边界
 
 - **时间曲线**：总时长内进度 = `f(t)`，可预算、可导出（CSS / SwiftUI / Flutter 通用）。GuavaUI 对应 `Animation(duration:curve:delay:)`。`[已实现]`
-- **物理动画**：无固定时长，可中断、可继承速度。GuavaUI 对应 spring 曲线与 `ScrollPhysics`（rubber band、系统 momentum、settle spring）。`[已实现]`
-- **拟合不是物理**：把弹簧导出成 Bezier 或 CSS `linear()` 多点曲线只是看起来接近，不能实时响应中断、继承速度。拖拽释放、连续反馈用物理路径，不要用拟合曲线代替。`[部分]`（滚动已是物理；一般组件拖拽释放仍缺）
+- **物理动画**：无固定时长，可中断、可继承速度。GuavaUI 对应 物理 spring controller、`springDrag` 与 `ScrollPhysics`（rubber band、系统 momentum、settle spring）。`[已实现]`
+- **拟合不是物理**：把弹簧导出成 Bezier 或 CSS `linear()` 多点曲线只是看起来接近，不能实时响应中断、继承速度。拖拽释放、连续反馈用物理路径，不要用拟合曲线代替。`[已实现]`（`springDrag(offset:restingAt:spring:)` 负责实际释放速度与重新抓取）
 
 ### 6.2 缓动曲线：效果与实现
 
@@ -478,12 +476,12 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | ease | (.25,.1,.25,1) | 轻微慢起慢收（CSS 默认） | 通用 | 无同名预设，写 `cubicBezier(0.25,0.1,0.25,1)` | `.easeInOut`、`Curves.ease` |
 | ease-in | (.42,0,1,1) | 慢起、越来越快 | 退出、消失 | `Animation.easeIn`（二次近似） | `.easeIn` / `Curves.easeIn` |
 | ease-out | (0,0,.58,1) | 快起、慢慢停 | 进入、出现 | `Animation.easeOut`（二次近似） | `.easeOut` / `Curves.easeOut` |
-| ease-in-out | (.42,0,.58,1) | 慢—快—慢 | 位移、尺寸、状态切换 | `Animation.easeInOut`（smoothstep 近似）/ 语义 `.medium` | `.easeInOut` / `Curves.easeInOut` |
+| ease-in-out | (.42,0,.58,1) | 慢—快—慢 | 位移、尺寸、状态切换 | `Animation.easeInOut`（分段二次近似）/ 语义 `.medium` | `.easeInOut` / `Curves.easeInOut` |
 | cubic-bezier | 自定义 | 精确速度 | 设计系统、品牌动效 | `AnimationCurve.cubicBezier(x1,y1,x2,y2)`、`Easing` token | `Animation.timingCurve` / `Cubic` |
-| steps | steps(5, end) | 一格一格跳 | 帧动画、数字变化 | `AnimationCurve.steps(count, position:)` | SwiftUI/Flutter 无同名预设，需离散量化 |
+| steps | steps(5, end) | 一格一格跳 | 帧动画、数字变化 | `AnimationCurve.steps(5, position: .end)` | SwiftUI/Flutter 无同名预设，需离散量化 |
 | linear() | 多段折线 | 近似弹跳 | 新 API 的多点曲线 | `AnimationCurve.piecewiseLinear(LinearTimingCurve)`（可平台、反向、过冲） | CSS `linear()`；Flutter 自定义 `Curve` |
 
-注意：GuavaUI 的 `easeIn/easeOut/easeInOut` 是二次/smoothstep 近似，不比 CSS 的贝塞尔端点值；需要精确曲线时显式写 `cubicBezier(...)`。
+注意：GuavaUI 的 `easeIn/easeOut/easeInOut` 是二次近似，不比 CSS 的贝塞尔端点值；需要精确曲线时显式写 `cubicBezier(...)`。
 
 ### 6.3 曲线语义与过冲预设
 
@@ -506,8 +504,8 @@ Flutter 的 `easeOutBack` 属于这一类；`elasticOut` / `bounceOut` 是多段
 | --- | --- | --- |
 | Material standard / Android FastOutSlowIn | (.4,0,.2,1) | `Easing.standard` = `theme.motion.standardEasing` `[已实现]` |
 | Material emphasized | (.2,0,0,1) | `Easing.emphasized` = `theme.motion.emphasized` `[已实现]` |
-| Material decelerate（进入） | (0,0,.2,1) | 无命名 token，写 `cubicBezier(0,0,.2,1)` `[部分]` |
-| Material accelerate（退出） | (.4,0,1,1) | 无命名 token，写 `cubicBezier(0.4,0,1,1)` `[部分]` |
+| Material decelerate（进入） | (0,0,.2,1) | `Easing.decelerate`、`.semantic(.entering)` `[已实现]` |
+| Material accelerate（退出） | (.4,0,1,1) | `Easing.accelerate`、`.semantic(.exiting)` `[已实现]` |
 | iOS spring | `response` + `dampingFraction` | `Animation.spring(response:dampingFraction:)` `[已实现]` |
 
 语义动效引用（应用与组件默认使用）：
@@ -530,8 +528,8 @@ Flutter 的 `easeOutBack` 属于这一类；`elasticOut` / `bounceOut` 是多段
   - `= 1` 临界阻尼，不回弹；
   - `< 1` 欠阻尼，会回弹（数值越低越弹）；
   - `> 1` 过阻尼，慢而粘。
-- 预设：`.snappy`（0.30 / 0.90，控件交互）、`.bouncy`（0.45 / 0.65，活泼动效）、无参 `.spring()`（0.40 / 0.82）。
-- 现状：解析解归一化后**夹到 [0,1]**，欠阻尼在视觉上不过冲；与 SwiftUI 的弹簧体感存在差异 `[部分]`。
+- 预设：`.snappy`（0.30 / 0.90）、`.bouncy`（0.45 / 0.65）、`.smooth`（0.40 / 1）、无参 `.spring()`（0.40 / 0.82）。
+- 物理 controller 按真实秒数求解析解，在收敛上界吸附精确终值；几何动画通过 `allowsOvershoot: true` 放开过冲，颜色 / 透明度默认限制进度。`AnimationCurve.spring` 是有明确端点的归一化时间曲线，与物理求值分开。`[已实现]`
 
 **其他物理/特殊效果**
 
@@ -541,9 +539,9 @@ Flutter 的 `easeOutBack` 属于这一类；`elasticOut` / `bounceOut` 是多段
 | Elastic 弹性 | 多次振荡 | `AnimationCurve.elasticOut`（周期 0.4 的衰减振荡）`[已实现]` |
 | Back / Overshoot | 冲过目标再回来 | `cubicBezier` y>1（6.3 预设） `[已实现]` |
 | Anticipate 预期 | 先反向蓄力再走 | `cubicBezier` y<0（6.3 预设） `[已实现]` |
-| Decay / Inertia 惯性 | 滚动、拖拽甩出 | 滚动已有系统 momentum/回弹/收敛，`reducesMotion` 下禁用 `[已实现]`；一般组件拖拽释放 `[未实现]` |
+| Decay / Inertia 惯性 | 滚动、拖拽甩出 | 滚动已有系统 momentum/回弹/收敛，`reducesMotion` 下禁用 `[已实现]`；`springDrag` 提供一般组件带速度释放 `[已实现]` |
 
-**可中断性**：新目标替换旧 controller 时从当前显示值继续（Toggle 快速反转已有测试），但**不继承速度**；真物理的"可打断、继承速度"仍缺 `[部分]`。
+**可中断性**：几何弹簧替换旧 controller 时保留当前值与各分量的实际速度，改变目标距离或方向时也保持连续；受边界约束的动画从当前值静止启动。`springDrag` 以窗口内的实际指针样本估算释放速度，重新抓取取消旧尾部。`[已实现]`
 
 ### 6.6 选型与时长
 
@@ -572,7 +570,7 @@ withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { flag.toggle() }
 
 // GuavaUI
 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { flag.toggle() }
-withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
+withAnimation(Animation(duration: 0.2, curve: .easeOut)) { expanded.toggle() }
 ```
 
 隐式动画（值变化时触发；首帧吸附，之后才动画）：
@@ -603,7 +601,7 @@ AnimatedVisibility(isVisible: visible,
 }
 ```
 
-过渡原语：`.opacity`、`.offset(x:y:)`、`.move(edge:distance:)`、`.scale(from:anchor:)`、`.collapse`（高度折叠）、`.combined(with:)`、`.asymmetric(insertion:removal:)`。默认动画为 `.semantic(.medium)`；`onVisibilitySettled` 提供退出完成回调。生命周期缩放保留阴影偏移/模糊尺寸，普通节点缩放同步缩放两层阴影；嵌套与缓存遵循相同规则，见 [生命周期缩放与阴影](animation.md)。
+过渡原语：`.opacity`、`.offset(x:y:)`、`.move(edge:distance:)`、`.scale(from:anchor:)`、`.collapse`（高度折叠）、`.combined(with:)`、`.asymmetric(insertion:removal:)`。默认动画为 `.semantic(.medium)`；`onVisibilitySettled` 提供退出完成回调。生命周期缩放保留阴影偏移/模糊尺寸，普通节点缩放同步缩放两层阴影；嵌套与缓存遵循相同规则，见 [动画系统](animation.md)。
 
 可动画的属性（`withAnimation` / `.animation(_:value:)` 生效范围）：样式类（background/foreground/opacity/cornerRadius/border/shadow）、布局类（frame 宽高与 min/max、padding、flex grow）、过渡用的 `contentOffset`。`[已实现]`
 
@@ -618,7 +616,7 @@ theme.motion.standardEasing = .cubicBezier(0.4, 0, 0.2, 1)
 theme.motion.emphasized = .cubicBezier(0.2, 0, 0, 1)
 
 // 品牌大转场：过冲只用于位移/缩放
-withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1))) {
+withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1), allowsOvershoot: true)) {
     showBadge = true
 }
 ```
@@ -639,30 +637,30 @@ withAnimation(.easeIn(duration: 0.15)) { shown = false }         // 退出：加
 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { dragPos = .zero }   // 拖拽释放
 withAnimation(.timingCurve(0.34, 1.56, 0.64, 1, duration: 0.3)) { badgeIn = true } // 过冲
 
-// GuavaUI：一一对应
-withAnimation(.easeOut(duration: 0.2)) { shown = true }
-withAnimation(.easeIn(duration: 0.15)) { shown = false }
-withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { dragPos = .zero }
-withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1))) { badgeIn = true }
+// GuavaUI：对应能力
+withAnimation(Animation(duration: 0.2, curve: .easeOut)) { shown = true }
+withAnimation(Animation(duration: 0.15, curve: .easeIn)) { shown = false }
+card.springDrag(offset: $dragPos, restingAt: .zero)
+withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1), allowsOvershoot: true)) { badgeIn = true }
 ```
 
 | 效果 | SwiftUI | GuavaUI |
 | --- | --- | --- |
 | 固定时长缓动 | `.animation(.easeOut(duration: 0.2), value:)` | 同形；组件内 `.semantic(.fast/.medium/.slow)` 走主题 `[已实现]` |
 | 自定义曲线 | `.timingCurve(0.4, 0, 0.2, 1, duration: 0.25)` | `Animation(duration:curve: .cubicBezier(0.4,0,0.2,1))` `[已实现]` |
-| 弹簧（参数） | `.spring(response:dampingFraction:)` | 同名 API；解析解，欠阻尼当前不过冲 `[部分]` |
-| 弹簧（系统预设） | `.snappy` / `.bouncy` / `.smooth`、`Spring(duration:bounce:)` | `.snappy` / `.bouncy` 与语义引用；`.smooth` 无 `[部分]` |
+| 弹簧（参数） | `.spring(response:dampingFraction:)` | 解析解、释放与继承速度，几何过冲显式启用 `[已实现]` |
+| 弹簧（系统预设） | `.snappy` / `.bouncy` / `.smooth`、`Spring(duration:bounce:)` | `.snappy` / `.bouncy` / `.smooth` 与主题语义引用 `[已实现]` |
 | Back 过冲 | `.timingCurve(0.34, 1.56, 0.64, 1, duration:)` | `cubicBezier(0.34,1.56,0.64,1)` `[已实现]` |
 | Bounce / Elastic | `.spring(duration:bounce:)`、iOS 17 `UnitCurve` / `CustomAnimation` | `.bounceOut` / `.elasticOut` `[已实现]` |
-| 阶梯 steps | 手动量化 / `TimelineView` | `AnimationCurve.steps(count:position:)` `[已实现]` |
+| 阶梯 steps | 手动量化 / `TimelineView` | `AnimationCurve.steps(_:position:)` `[已实现]` |
 | 多点折线（linear()） | CSS `linear()`、自定义 `UnitCurve` / `CustomAnimation` | `AnimationCurve.piecewiseLinear(LinearTimingCurve)` `[已实现]` |
 | 隐式动画 | `.animation(_:value:)` | 同名 `[已实现]` |
-| 显式动画与完成回调 | `withAnimation`、`withAnimation(_:completionCriteria:_:completion:)` | `withAnimation` 同名；无 completion `[部分]`（第 5 节 21） |
+| 显式动画与完成回调 | `withAnimation`、`withAnimation(_:completionCriteria:_:completion:)` | `withAnimation(...completionCriteria:...completion:)`，支持逻辑期限与物理停止判定 `[已实现]` |
 | 进入 / 退出 | `.transition(.opacity.combined(with: .move(edge: .top)))` | `AnimatedVisibility` + `Transition`（同原语集）`[已实现]` |
-| 数值 / 文本过渡 | `.contentTransition(.numericText())` | `[未实现]` |
-| 关键帧 / 相位 | `KeyframeAnimator` / `PhaseAnimator` | `[未实现]`（第 5 节 20） |
-| 跨节点几何 morph | `matchedGeometryEffect` | `[未实现]`（第 5 节 20） |
-| 循环动画 | `.repeatForever(...)` | 组件内 Clock 驱动（Spinner / Progress / Skeleton）`[部分]` |
+| 数值 / 文本过渡 | `.contentTransition(.numericText())` | `NumericText` 数值插值与自定义格式，非任意字符滚轮 `[已实现]` |
+| 关键帧 / 相位 | `KeyframeAnimator` / `PhaseAnimator` | `KeyframeTimeline`、`KeyframeAnimator`、普通域值 `PhaseAnimator` `[已实现]` |
+| 跨节点几何 morph | `matchedGeometryEffect` | `.matchedGeometry(id)` 共享表面位置 / 宽高，ID 在场景内唯一 `[已实现]` |
+| 循环动画 | `.repeatForever(...)` | `.repeatCount` / `.repeatForever`；加载组件复用通用控制器 `[已实现]` |
 | 减少动画 | `@Environment(\.accessibilityReduceMotion)` | `.reducedMotion()` + `node.prefersReducedMotion` `[已实现]` |
 | 惯性 / 甩出 | 系统滚动物理、`.scrollTargetBehavior` | `ScrollPhysics` 系统 momentum + 回弹 `[已实现]` |
 
@@ -674,6 +672,9 @@ withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1))
 | controller tick / 替换 / finish / cancel / 调度 | `Tests/GuavaUIRuntimeTests/AnimationControllerTests.swift` |
 | 新曲线求值（端点 / 阶梯边界 / 弹跳连续性 / 过冲 / 非有限时间） | `Portable/Tests/GuavaUISceneTests/Animation/CurveTests.swift` |
 | 动画页双向尺寸动画（390/720/1280 × light/dark × 减少动画 × 禁用） | `Examples/Tests/GalleryContentTests/AnimationTests.swift` |
+| 关键帧 / 循环 / 速度 / 完成判定 | Portable `Animation/PlaybackTests.swift` |
+| 相位 / 几何 / 数字 / 帧顺序 | Gallery `AnimationSystemTests.swift` |
+| 拖拽释放 / 按压缩放 | Compose `Animation/InteractionTests.swift` |
 | `.animation(_:value:)`：首帧吸附、值变化触发、nil 关闭 | `AnimationValueModifierTests.swift` |
 | 属性动画（opacity / bg / fg / cornerRadius） | `WithAnimationOpacityTests.swift`、`WithAnimationPropertiesTests.swift`、`AnimationIntegrationTests.swift` |
 | 控件动效（field hover、toggle 反转从当前进度继续） | `ControlMotionTests.swift` |

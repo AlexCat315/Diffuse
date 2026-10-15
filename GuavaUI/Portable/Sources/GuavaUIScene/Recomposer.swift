@@ -28,6 +28,7 @@ public final class Recomposer: @unchecked Sendable {
         /// the same way so every controller this scope registers is accounted
         /// for by the same callback.
         let completion: AnimationCompletionGroup?
+        let disablesAnimations: Bool
     }
 
     private var pendingOrder: [ObjectIdentifier] = []
@@ -61,6 +62,7 @@ public final class Recomposer: @unchecked Sendable {
     public func invalidateTracked(scopeID: ObjectIdentifier,
                                   animation: Animation? = nil,
                                   completion: AnimationCompletionGroup? = nil,
+                                  disablesAnimations: Bool = false,
                                   reason: RecompositionReason,
                                   body: @escaping ([RecompositionReason]) -> Void) {
         lock.withLock {
@@ -74,7 +76,8 @@ public final class Recomposer: @unchecked Sendable {
                                                 body: body,
                                                 reasons: [reason],
                                                 animation: animation,
-                                                completion: completion)
+                                                completion: completion,
+                                                disablesAnimations: disablesAnimations)
             pendingOrder.append(scopeID)
         }
     }
@@ -109,7 +112,8 @@ public final class Recomposer: @unchecked Sendable {
             guard let scope else { break }
             didCommit = true
             committedIDs.insert(scope.id)
-            ActiveAnimationContext.with(scope.animation, completion: scope.completion) {
+            ActiveAnimationContext.with(scope.animation, completion: scope.completion,
+                                        disablesAnimations: scope.disablesAnimations) {
                 scope.body(scope.reasons)
             }
         }

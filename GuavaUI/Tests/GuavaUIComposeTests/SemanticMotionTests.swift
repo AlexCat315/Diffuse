@@ -69,4 +69,17 @@ struct SemanticMotionTests {
             Issue.record("expected cubicBezier")
         }
     }
+
+    @Test("Surface and smooth motion resolve the active theme's authored groups")
+    func surfaceMotion() {
+        var theme = Theme.defaultLight
+        theme.motion.surface.entrance = .milliseconds(450)
+        theme.motion.surface.exit = .milliseconds(120)
+        theme.motion.standard = .milliseconds(300)
+        let entering = Animation.semantic(.entering, in: theme)
+        let exiting = Animation.semantic(.exiting, in: theme)
+        #expect(entering.duration == 0.45 && entering.curve == Easing.decelerate.asAnimationCurve)
+        #expect(exiting.duration == 0.12 && exiting.curve == Easing.accelerate.asAnimationCurve)
+        #expect(Animation.semantic(.smooth, in: theme).curve == .spring(response: 0.3, dampingFraction: 1))
+    }
 }

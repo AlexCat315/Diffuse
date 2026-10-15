@@ -42,10 +42,11 @@ struct SpringInterruptionTests: GuavaUIComposeSerializedSuite {
     /// what `AnimationCurve.spring` samples. A spring that inherits velocity is
     /// already travelling, and pinning it to the same arrival instant would
     /// distort the motion it was handed; it approaches the target instead.
-    @Test("Only a spring released from rest is pinned to its endpoint")
+    @Test("A physical spring converges without changing its equilibrium to pin an endpoint")
     func normalizationAppliesToRestOnly() {
         let solution = SpringSolution(response: response, dampingFraction: 0.55)
-        #expect(abs(solution.position(at: response, from: 0, velocity: 0) - 1) < 1e-4)
+        #expect(abs(solution.position(at: response, from: 0, velocity: 0) - 1) > 1e-4)
+        #expect(abs(solution.position(at: response * 5, from: 0, velocity: 0) - 1) < 1e-4)
 
         // Released with a shove it is somewhere else on its way, and must not
         // be yanked onto the same schedule.
@@ -97,15 +98,17 @@ struct SpringInterruptionTests: GuavaUIComposeSerializedSuite {
                 #expect(rising > 0)
 
                 withAnimation(bouncy(true)) { fixture.harness.$radius.wrappedValue = 0 }
-                fixture.frame(0.04)
+                fixture.frame(0.0001)
 
                 let afterReverse = fixture.node?.cornerRadius ?? -1
                 // Still under the peak — it turned around rather than jumping.
-                #expect(afterReverse < rising)
+                #expect(afterReverse > rising)
                 // And still above zero: a release from rest at this instant
                 // would also be above zero, so the distinguishing measurement
                 // is the *rate* below, not the value.
                 #expect(afterReverse > 0)
+                fixture.frame(0.2)
+                #expect((fixture.node?.cornerRadius ?? 0) < rising)
             }
         }
     }

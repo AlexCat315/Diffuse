@@ -42,6 +42,32 @@ struct WithAnimationCompletionTests: GuavaUIComposeSerializedSuite {
 
     private let oneSecond = Animation(duration: 1.0, curve: .linear)
 
+    private final class ReducedHarness: View {
+        @State var alpha: Float = 0
+        @State var reduced = false
+        var body: some View { _DebugNode(label: "reduced").opacity(alpha).reducedMotion(reduced) }
+    }
+    @Test("Enabling reduced motion finishes the current target and its completion")
+    func reducedMotionCompletes() {
+        GlobalTestLock.locked {
+            let scheduler = AnimatorScheduler()
+            AnimatorScheduler.$current.withValue(scheduler) {
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer()), harness = ReducedHarness()
+                defer { graph.install(root: EmptyView()) }
+                graph.install(root: harness)
+                var completions = 0
+                withAnimation(oneSecond, completionCriteria: .removed) {
+                    harness.$alpha.wrappedValue = 1
+                } completion: { completions += 1 }
+                graph.recomposer.commitAll(); scheduler.tick(deltaTime: 0.1)
+                #expect(completions == 0 && scheduler.activeCount == 1)
+                harness.$reduced.wrappedValue = true
+                graph.recomposer.commitAll(); scheduler.tick(deltaTime: 0)
+                #expect(completions == 1 && scheduler.activeCount == 0)
+            }
+        }
+    }
+
     @Test("The callback fires on the frame the animation lands")
     func firesWhenTheLastControllerFinishes() {
         GlobalTestLock.locked {

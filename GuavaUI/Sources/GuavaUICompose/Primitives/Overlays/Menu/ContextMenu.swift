@@ -56,7 +56,7 @@ private struct _ContextMenuHost<Content: View>: _PrimitiveView {
                           // the top-left corner is the one nearest the trigger.
                           transition: .opacity
                               .combined(with: .move(edge: .top, distance: 4))
-                              .combined(with: PortalResource.surfaceReveal(anchor: .zero)))
+                              .combined(with: PortalResource.surfaceReveal(anchor: .zero, theme: node.theme)))
         resource?.setDismissal(anchor: { .zero }, dismiss: onDismiss)
     }
     var _children: [any View] { [content] }

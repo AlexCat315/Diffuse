@@ -25,27 +25,15 @@ public struct SpringSolution: Sendable, Equatable {
     private let omegaD: Float
     private let lambda1: Float
     private let lambda2: Float
-    /// Scales position *and* velocity so a spring released from rest lands
-    /// exactly on its target at `t == response`. Without it the closed form
-    /// arrives close to, but not exactly at, the target, and the final frame
-    /// would show the difference.
-    private let normalization: Float
-
-    private init(omega0: Float, zeta: Float, omegaD: Float,
-                 lambda1: Float, lambda2: Float, normalization: Float) {
-        self.omega0 = omega0
-        self.zeta = zeta
-        self.omegaD = omegaD
-        self.lambda1 = lambda1
-        self.lambda2 = lambda2
-        self.normalization = normalization
-        self.response = 2 * Float.pi / omega0
-        self.dampingFraction = zeta
+    static func normalizedResponse(_ value: Double) -> Double {
+        value.isFinite ? min(30, max(0.001, value)) : 0.4
     }
-
+    static func normalizedDamping(_ value: Double) -> Double {
+        value.isFinite ? min(20, max(0.01, value)) : 1
+    }
     public init(response: Float, dampingFraction: Float) {
-        let r = max(0.0001, response)
-        let z = max(0.0001, dampingFraction)
+        let r = Float(Self.normalizedResponse(Double(response)))
+        let z = Float(Self.normalizedDamping(Double(dampingFraction)))
         let w0 = (2 * Float.pi) / r
 
         var omegaD: Float = 0
@@ -63,17 +51,9 @@ public struct SpringSolution: Sendable, Equatable {
             lambda2 = -w0 * (z + root)
         }
 
-        // Probe unnormalized to find where a spring released from rest lands after
-        // one response period, then scale by the reciprocal so it lands exactly
-        // on the target. Position and velocity share the scale, so the rate
-        // handed to a successor stays consistent with the path that produced
-        // it.
-        let probe = SpringSolution(omega0: w0, zeta: z, omegaD: omegaD,
-                                   lambda1: lambda1, lambda2: lambda2, normalization: 1)
-        let atOne = 1 + probe.rawPosition(t: r, start: 0, velocity: 0, target: 1)
-        let scale = abs(atOne) > 1e-5 ? 1 / atOne : 1
-        self.init(omega0: w0, zeta: z, omegaD: omegaD,
-                  lambda1: lambda1, lambda2: lambda2, normalization: scale)
+        self.response = r; self.dampingFraction = z
+        self.omega0 = w0; self.zeta = z; self.omegaD = omegaD
+        self.lambda1 = lambda1; self.lambda2 = lambda2
     }
 
     /// Normalized progress in `[0, 1]` mapped to the seconds the physics runs
@@ -84,35 +64,37 @@ public struct SpringSolution: Sendable, Equatable {
         t * response
     }
 
+    /// Conservative settling bound in seconds, capped for nearly undamped input.
+    public var settlingDuration: Double {
+        let slowRate = zeta <= 1 ? zeta * omega0
+            : omega0 / (zeta + sqrt(zeta * zeta - 1))
+        return min(30, Double(12 / max(0.0001, slowRate)))
+    }
+
     /// Progress at `t` seconds after release.
     ///
     /// May leave `[0, 1]`: an underdamped spring passing its target is the
     /// point, not a bug. Whether that is allowed to reach the animated value
     /// is the caller's decision — see `Animation.allowsOvershoot`.
     ///
-    /// The normalization that anchors a released-from-rest spring to its target
-    /// at `t == response` applies *only* to that case. A spring that inherits
-    /// velocity is already in motion, and forcing it to land exactly at the
-    /// same instant would distort the very motion it was handed.
+    /// No endpoint normalization is applied: the equilibrium remains `target`
+    /// for every initial velocity and every elapsed time.
     public func position(at t: Float, from start: Float, velocity startVelocity: Float,
                          to target: Float = 1) -> Float {
-        // The target sits *inside* the normalization: the scale is the
-        // reciprocal of where an unnormalized spring lands after one response
-        // period, and folding the target in afterwards would leave position(0)
-        // off by whatever the scale is.
-        let raw = target + rawPosition(t: t, start: start, velocity: startVelocity, target: target)
-        return startVelocity == 0 ? raw * normalization : raw
+        if t <= 0 || t.isNaN { return start }
+        if t == .infinity { return target }
+        return target + rawPosition(t: t, start: start, velocity: startVelocity, target: target)
     }
 
     /// Rate of change of `position(at:)` with respect to time.
     ///
-    /// Carried so an animation that supersedes this one can hand its motion
-    /// over instead of dropping it. Uses the same normalization as
-    /// `position(at:)`, so the rate matches the path that produced it.
+    /// This is the analytic derivative of position, measured in value units
+    /// per real second.
     public func velocity(at t: Float, from start: Float, velocity startVelocity: Float,
                          to target: Float = 1) -> Float {
-        let rate = rawVelocity(t: t, start: start, velocity: startVelocity, target: target)
-        return rate * (startVelocity == 0 ? normalization : 1)
+        if t <= 0 || t.isNaN { return startVelocity }
+        if t == .infinity { return 0 }
+        return rawVelocity(t: t, start: start, velocity: startVelocity, target: target)
     }
 
     // MARK: - Closed form

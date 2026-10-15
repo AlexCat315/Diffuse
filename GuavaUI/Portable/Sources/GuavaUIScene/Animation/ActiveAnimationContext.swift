@@ -10,14 +10,7 @@ import Foundation
 public enum AnimationCompletionCriteria: Sendable, Equatable {
     /// The animation reached the value it was animating toward.
     case logicallyComplete
-    /// The animated view left the hierarchy.
-    ///
-    /// The two only differ for a spring, which is logically done the moment it
-    /// first passes its target but keeps settling. Springs are currently
-    /// evaluated as a clamped curve that ends with the animation, so this
-    /// resolves at the same point as `.logicallyComplete` until the spring
-    /// integrator lands; it exists so the API shape is right before the
-    /// behaviour diverges, not to be selected for an effect today.
+    /// Every controller has stopped, including a spring's settling tail.
     case removed
 }
 
@@ -38,6 +31,8 @@ public final class AnimationCompletionGroup {
     private let handler: () -> Void
     private var outstanding = 0
     private var settled = false
+    private var cancelled = false
+    var onSettlement: (() -> Void)?
 
     public var hasSettled: Bool { settled }
 
@@ -57,13 +52,21 @@ public final class AnimationCompletionGroup {
         // A zero-duration controller is already finished by the time it can be
         // attached. Wiring `onFinish` would wait for a tick that will never
         // report it, so settle the count now instead.
-        if controller.isFinished {
+        if controller.isFinished || (criteria == .logicallyComplete && controller.isLogicallyFinished) {
             outstanding -= 1
             return
         }
-        controller.onFinish = { [weak self] in
+        let completed = { [weak self] in
             guard let self, self.outstanding > 0 else { return }
             self.outstanding -= 1
+        }
+        if criteria == .logicallyComplete { controller.onLogicalFinish = completed }
+        else {
+            let previous = controller.onFinish
+            controller.onFinish = { previous?(); completed() }
+        }
+        controller.onCancel = { [weak self] in
+            self?.cancelled = true; self?.settled = true; self?.onSettlement?()
         }
     }
 
@@ -71,7 +74,8 @@ public final class AnimationCompletionGroup {
     public func settleIfIdle() {
         guard !settled, outstanding == 0 else { return }
         settled = true
-        handler()
+        onSettlement?()
+        if !cancelled { handler() }
     }
 }
 
@@ -102,6 +106,7 @@ public enum ActiveAnimationContext {
     private final class Box {
         var value: Animation?
         var completion: AnimationCompletionGroup?
+        var disablesAnimations = false
         init(_ v: Animation?) { value = v }
     }
 
@@ -126,6 +131,7 @@ public enum ActiveAnimationContext {
     public static var currentCompletion: AnimationCompletionGroup? {
         box.completion
     }
+    public static var disablesAnimations: Bool { box.disablesAnimations }
 
     /// Push `animation` as the active context for the duration of `body`,
     /// then restore the previous value. Nested calls stack; the innermost
@@ -141,15 +147,19 @@ public enum ActiveAnimationContext {
     @discardableResult
     public static func with<R>(_ animation: Animation?,
                                completion: AnimationCompletionGroup?,
+                               disablesAnimations: Bool? = nil,
                                _ body: () throws -> R) rethrows -> R {
         let storage = box
         let savedAnimation = storage.value
         let savedCompletion = storage.completion
+        let savedDisabled = storage.disablesAnimations
         storage.value = animation
         storage.completion = completion
+        storage.disablesAnimations = disablesAnimations ?? (animation == nil)
         defer {
             storage.value = savedAnimation
             storage.completion = savedCompletion
+            storage.disablesAnimations = savedDisabled
         }
         return try body()
     }

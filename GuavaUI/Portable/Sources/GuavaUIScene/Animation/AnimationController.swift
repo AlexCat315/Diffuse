@@ -13,8 +13,8 @@ import Foundation
 /// to hop onto the main actor even in tests that operate purely on
 /// synchronous state.
 public protocol AnyAnimationController: AnyObject {
-    /// `true` once the animation has reached `delay + duration`. Finished
-    /// controllers are removed from the scheduler on the next sweep.
+    /// `true` after timed playback or the physical settling tail has ended.
+    /// Forever playback stays active until cancelled or explicitly finished.
     var isFinished: Bool { get }
 
     /// Advance the animation by `deltaTime` seconds and apply the resulting
@@ -34,224 +34,114 @@ public protocol AnyAnimationController: AnyObject {
     func cancel()
 }
 
-/// A controller that drives an interpolated value from a start to a target.
-///
-/// Separate from `AnyAnimationController` because the protocol is also
-/// implemented by clocks and timers that keep the scheduler producing frames
-/// without interpolating anything. Those have no progress and so cannot hand
-/// motion to whatever supersedes them.
-public protocol ProgressReporting: AnyAnimationController {
-    /// Rate of change of progress per second as of the last tick.
-    var progressVelocity: Float { get }
-}
-
 // MARK: - Concrete controller
 
 /// Drives one `Interpolatable` value from `from` to `to` over the lifetime
 /// of an `Animation`. The controller is value-agnostic — it does not know
 /// which property it writes; the caller's `apply` closure handles that
 /// (typically `{ value in node.backgroundColor = value }`).
-public final class AnimationController<Value: Interpolatable>: ProgressReporting {
-
+public final class AnimationController<Value: Interpolatable>: AnyAnimationController {
     public let from: Value
     public let to: Value
     public let animation: Animation
     public let apply: (Value) -> Void
-
     public private(set) var elapsed: Double = 0
-    public private(set) var isFinished: Bool = false
-
-    /// Invoked once when the animation reaches its target on its own — from
-    /// `tick` running out of time, or from `finishImmediately`. Deliberately
-    /// *not* invoked by `cancel`: a superseded animation was abandoned, not
-    /// completed, and a `withAnimation` completion must not fire for one.
-    ///
-    /// Only this class carries it. The protocol is also implemented by clocks
-    /// and timers that drive the scheduler without interpolating a value, and
-    /// none of those can complete an animated scope.
-    public var onFinish: (() -> Void)?
-
-    /// `nil` for every curve except a spring. A spring is evaluated from the
-    /// value it inherits rather than sampled from elapsed time, which is what
-    /// lets an interrupted animation keep its velocity.
-    private var spring: SpringSolution?
-    private var initialVelocity: Float = 0
-    private var lastProgress: Float = 0
-
-    /// Rate of change of progress per second as of the last tick.
-    ///
-    /// Hand to the animation that supersedes this one so it continues the
-    /// motion rather than restarting it. Zero until the first tick, and zero
-    /// for anything that is not a spring.
+    public private(set) var isFinished = false
     public private(set) var progressVelocity: Float = 0
+    public var onFinish: (() -> Void)?
+    var onLogicalFinish: (() -> Void)?
+    var onCancel: (() -> Void)?
+    private var logicalFinished = false
+    private var motion: MotionVector<Value>?
+    private let spring: SpringSolution?
+    private let releaseVelocity: Float
 
-    /// Fire once, and only for a real completion. `cancel` deliberately does
-    /// not come through here.
-    private func finish() {
-        guard !isFinished else { return }
-        isFinished = true
-        onFinish?()
-    }
-
-    /// Progress at `active` seconds after the animation started, clamped to
-    /// `[0, 1]` unless the animation opted into overshoot.
-    ///
-    /// A spring's time is already in seconds — its `response` *is* its clock —
-    /// so it is solved at `active` directly. Every other curve maps
-    /// normalized `[0, 1]` time, so it sees `active / duration`.
-    private func progress(at active: Double) -> Float {
-        let raw: Float
-        if let spring {
-            // Normalized elapsed time, converted to the seconds the spring's
-            // physics runs on — the same conversion `AnimationCurve.spring`
-            // makes, so the two paths agree at every instant.
-            let t = spring.seconds(forNormalized: Float(active / animation.duration))
-            raw = spring.position(at: t, from: 0, velocity: initialVelocity)
-        } else {
-            raw = animation.curve.evaluate(Float(active / animation.duration))
-        }
-        return animation.allowsOvershoot ? raw : max(0, min(1, raw))
-    }
-
-    public init(from: Value,
-                to: Value,
-                animation: Animation,
-                initialVelocity: Float = 0,
-                apply: @escaping (Value) -> Void) {
-        self.from = from
-        self.to = to
-        self.animation = animation
-        self.apply = apply
+    public init(from: Value, to: Value, animation: Animation,
+                initialVelocity: Float = 0, apply: @escaping (Value) -> Void) {
+        self.from = from; self.to = to; self.animation = animation; self.apply = apply
+        let velocity = initialVelocity == 0 ? animation.initialVelocity : initialVelocity
+        releaseVelocity = velocity.isFinite ? velocity : 0
         if case let .spring(response, damping) = animation.curve {
             spring = SpringSolution(response: response, dampingFraction: damping)
-            self.initialVelocity = initialVelocity
+        } else { spring = nil }
+        if animation.duration == 0, animation.delay == 0 {
+            apply(to); isFinished = true; logicalFinished = true
         }
+    }
 
-        // Zero or negative duration ⇒ snap immediately. Still apply once so
-        // the target value is visible on this frame. `onFinish` is not called
-        // from here: a caller that attaches after construction sees
-        // `isFinished` and settles the group itself.
-        if animation.duration <= 0 && animation.delay <= 0 {
-            apply(to)
-            isFinished = true
+    var isLogicallyFinished: Bool { logicalFinished }
+
+    /// Capture the outgoing value velocity, including prior interruptions. A
+    /// bounded animation starts from rest so its value stays inside its bounds.
+    func inheritMotion(from previous: AnimationController<Value>) {
+        guard spring != nil, animation.allowsOvershoot, releaseVelocity == 0, !previous.isFinished else { return }
+        let active = max(0, previous.elapsed - previous.animation.delay)
+        let lower = max(0, active - 0.0001), upper = active + 0.0001
+        motion = MotionVector(from: previous.value(at: lower), to: previous.value(at: upper),
+                              rate: Float(1 / (upper - lower)))
+    }
+
+    private func springProgress(at active: Double) -> Float {
+        guard let spring else { return 0 }
+        return spring.position(at: Float(active), from: 0, velocity: releaseVelocity)
+    }
+
+    private func value(at active: Double) -> Value {
+        if let spring, animation.repetition == .once {
+            let progress = springProgress(at: active)
+            let bounded = animation.allowsOvershoot ? progress : max(0, min(1, progress))
+            let base = Value.interpolate(from, to, t: bounded)
+            if let motion, animation.allowsOvershoot {
+                let impulse = spring.position(at: Float(active), from: 0, velocity: 1, to: 0)
+                return motion.adding(to: base, seconds: impulse)
+            }
+            return base
         }
+        let time = animation.playback(at: active + animation.delay).time
+        let progress = animation.curve.evaluate(time)
+        return Value.interpolate(from, to, t: animation.allowsOvershoot ? progress : max(0, min(1, progress)))
     }
 
     public func tick(deltaTime: Double) {
-        guard !isFinished else { return }
-
-        elapsed += deltaTime
+        guard !isFinished, deltaTime.isFinite, deltaTime >= 0 else { return }
+        elapsed = min(Double.greatestFiniteMagnitude, elapsed + deltaTime)
         let active = elapsed - animation.delay
-
-        if active <= 0 {
-            // Still in the delay window — keep the from value pinned.
-            apply(from)
-            return
+        guard active > 0 else { apply(from); return }
+        if let spring, animation.repetition == .once, animation.duration > 0 {
+            let t = Float(active)
+            let progress = springProgress(at: active)
+            progressVelocity = spring.velocity(at: t, from: 0, velocity: releaseVelocity)
+            if active >= animation.duration { finishLogical() }
+            // An envelope bound prevents a zero crossing from falsely looking
+            // settled. The cap also bounds pathological near-zero damping.
+            let restTime = max(animation.duration, spring.settlingDuration)
+            if active >= restTime {
+                apply(to); finish(); return
+            }
+            if !progress.isFinite { apply(to); finish(); return }
+            apply(value(at: active))
+        } else {
+            let sample = animation.playback(at: elapsed)
+            if sample.finished {
+                apply(sample.time == 0 ? from : to); finish(); return
+            }
+            apply(value(at: active))
         }
-
-        let previous = lastProgress
-        lastProgress = progress(at: active)
-        if deltaTime > 0 {
-            progressVelocity = (lastProgress - previous) / Float(deltaTime)
-        }
-
-        if active >= animation.duration {
-            apply(to)
-            finish()
-            return
-        }
-
-        apply(Value.interpolate(from, to, t: lastProgress))
     }
 
+    private func finishLogical() {
+        guard !logicalFinished else { return }
+        logicalFinished = true; onLogicalFinish?()
+    }
+    private func finish() {
+        finishLogical(); isFinished = true; progressVelocity = 0; onFinish?()
+    }
     public func finishImmediately() {
         guard !isFinished else { return }
-        apply(to)
-        finish()
+        apply(to); finish()
     }
-
     public func cancel() {
-        isFinished = true
-    }
-}
-
-// MARK: - Scheduler
-
-/// Per-thread registry of in-flight animation controllers. The platform
-/// shell calls `tick(deltaTime:)` once per frame on the UI thread. Finished
-/// controllers drop out automatically on the next tick.
-///
-/// Like the controllers themselves, the scheduler is non-isolated because
-/// the UI runtime is single-threaded by construction. Concurrent access
-/// from multiple threads is not supported.
-///
-/// **Test isolation**: The scheduler used by `Node.animatableSet` is
-/// resolved through the `current` task-local. Tests can install a fresh
-/// scheduler for the scope of a closure with
-/// `AnimatorScheduler.$current.withValue(AnimatorScheduler()) { ... }`,
-/// avoiding cross-test interference on the shared global.
-public final class AnimatorScheduler: @unchecked Sendable {
-
-    /// Default scheduler used by the Compose layer. Tests may instantiate a
-    /// fresh `AnimatorScheduler()` and drive it manually.
-    public static let shared = AnimatorScheduler()
-
-    /// The scheduler that `Node.animatableSet` (and friends) registers
-    /// controllers with. Defaults to `.shared`. Override via
-    /// `$current.withValue(_:)` to scope a different scheduler to a task.
-    @TaskLocal public static var current: AnimatorScheduler = AnimatorScheduler.shared
-
-    private var active: [AnyAnimationController] = []
-    private var completions: [AnimationCompletionGroup] = []
-
-    public init() {}
-
-    /// Number of controllers currently being driven. Useful for tests that
-    /// want to assert lifecycle (registration, eviction).
-    public var activeCount: Int { active.count }
-
-    public var hasActiveAnimations: Bool { !active.isEmpty }
-
-    /// Register a controller for per-frame ticking. The scheduler retains a
-    /// strong reference until the controller becomes finished, after which
-    /// it is dropped on the next `tick`.
-    public func register(_ controller: AnyAnimationController) {
-        active.removeAll { $0.isFinished || $0 === controller }
-        active.append(controller)
-    }
-
-    /// Release a repeating controller immediately when its view is paused or
-    /// removed. Registering it again later resumes with one scheduler entry.
-    public func unregister(_ controller: AnyAnimationController) {
-        active.removeAll { $0 === controller }
-    }
-
-    /// Watch a `withAnimation` completion group. The group is asked to settle at
-    /// the end of every sweep, which is what lets a callback fire on the frame
-    /// its last controller finishes — and also fire (correctly) on the first
-    /// sweep when the mutation turned out to animate nothing.
-    public func track(_ group: AnimationCompletionGroup) {
-        completions.append(group)
-    }
-
-    /// Advance every registered controller by `deltaTime` seconds, then
-    /// remove any that finished during the sweep.
-    public func tick(deltaTime: Double) {
-        for c in active { c.tick(deltaTime: deltaTime) }
-        if active.contains(where: \.isFinished) {
-            active.removeAll(where: \.isFinished)
-        }
-        if !completions.isEmpty {
-            for group in completions { group.settleIfIdle() }
-            completions.removeAll(where: \.hasSettled)
-        }
-    }
-
-    /// Drop every active controller without applying any final value.
-    /// Intended for test isolation; production code should let controllers
-    /// run to completion or replace them via `finishImmediately()`.
-    public func reset() {
-        active.removeAll()
-        completions.removeAll()
+        guard !isFinished else { return }
+        isFinished = true; progressVelocity = 0; onCancel?()
     }
 }

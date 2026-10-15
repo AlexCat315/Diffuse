@@ -49,6 +49,8 @@ public extension Node {
         apply: @escaping (Value) -> Void
     ) {
         let propertyKey = AnyHashable(propertyKey)
+        if finishesReducedAnimation(for: propertyKey, to: target) { return }
+        if continuesAnimation(for: propertyKey, to: target) { return }
         if current == target, ActiveAnimationContext.current == nil {
             if hasAnimationController(for: propertyKey) {
                 replaceAnimationController(for: propertyKey, with: nil)
@@ -61,14 +63,13 @@ public extension Node {
             apply(target)
             return
         }
-        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: current,
             to: target,
             animation: anim,
-            initialVelocity: inherited,
             apply: apply
         )
+        inheritMotion(for: propertyKey, into: controller)
         replaceAnimationController(for: propertyKey, with: controller)
         ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)
@@ -86,6 +87,8 @@ public extension Node {
         apply: @escaping (Value?) -> Void
     ) {
         let propertyKey = AnyHashable(propertyKey)
+        if let target, finishesReducedAnimation(for: propertyKey, to: target) { return }
+        if let target, continuesAnimation(for: propertyKey, to: target) { return }
         if current == target, ActiveAnimationContext.current == nil {
             if hasAnimationController(for: propertyKey) {
                 replaceAnimationController(for: propertyKey, with: nil)
@@ -103,14 +106,13 @@ public extension Node {
             apply(target)
             return
         }
-        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: from,
             to: to,
             animation: anim,
-            initialVelocity: inherited,
             apply: { apply($0) }
         )
+        inheritMotion(for: propertyKey, into: controller)
         replaceAnimationController(for: propertyKey, with: controller)
         ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)
@@ -125,6 +127,8 @@ public extension Node {
     ) {
         let propertyKey = AnyHashable(keyPath)
         let current = self[keyPath: keyPath]
+        if finishesReducedAnimation(for: propertyKey, to: target) { return }
+        if continuesAnimation(for: propertyKey, to: target) { return }
         if current == target, ActiveAnimationContext.current == nil {
             guard hasAnimationController(for: propertyKey) else { return }
             replaceAnimationController(for: propertyKey, with: nil)
@@ -136,14 +140,13 @@ public extension Node {
             self[keyPath: keyPath] = target
             return
         }
-        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: current,
             to: target,
             animation: anim,
-            initialVelocity: inherited,
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
+        inheritMotion(for: propertyKey, into: controller)
         replaceAnimationController(for: propertyKey, with: controller)
         ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)
@@ -158,6 +161,8 @@ public extension Node {
     ) {
         let propertyKey = AnyHashable(keyPath)
         let current = self[keyPath: keyPath]
+        if let target, finishesReducedAnimation(for: propertyKey, to: target) { return }
+        if let target, continuesAnimation(for: propertyKey, to: target) { return }
         if current == target, ActiveAnimationContext.current == nil {
             guard hasAnimationController(for: propertyKey) else { return }
             replaceAnimationController(for: propertyKey, with: nil)
@@ -174,14 +179,13 @@ public extension Node {
             self[keyPath: keyPath] = target
             return
         }
-        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: from,
             to: to,
             animation: anim,
-            initialVelocity: inherited,
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
+        inheritMotion(for: propertyKey, into: controller)
         replaceAnimationController(for: propertyKey, with: controller)
         ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)

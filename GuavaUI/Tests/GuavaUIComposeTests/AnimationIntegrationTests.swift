@@ -667,8 +667,8 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             graph.computeLayout(width: 300, height: 160)
 
             // points -> percent is a mode switch: layout snaps immediately.
-            // The canceled controller is swept from the scheduler on next tick.
-            #expect(scheduler.activeCount == 1)
+            // The canceled controller is released immediately by its owner.
+            #expect(scheduler.activeCount == 0)
             #expect(leaf?.frame.width == 60)
 
             scheduler.tick(deltaTime: 0)
@@ -708,7 +708,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             graph.computeLayout(width: 300, height: 160)
 
             #expect(leaf?.frame.width == 80)
-            #expect(scheduler.activeCount == 1)
+            #expect(scheduler.activeCount == 0)
 
             scheduler.tick(deltaTime: 0)
             #expect(scheduler.activeCount == 0)

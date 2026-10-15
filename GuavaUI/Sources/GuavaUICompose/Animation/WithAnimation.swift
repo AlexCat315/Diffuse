@@ -7,9 +7,9 @@ import GuavaUIRuntime
 /// node properties register an `AnimationController` instead of writing the
 /// new value instantly.
 ///
-/// `completion` runs once every controller that mutation created has reached
-/// its target — or on the first frame after the commit if the mutation turned
-/// out to animate nothing. It does **not** run when a later animation
+/// `completion` runs at the nominal deadline with `.logicallyComplete`, or
+/// after the physical spring tail with `.removed`. A mutation that animates
+/// nothing completes on the next scheduler sweep. It does not run when a later animation
 /// supersedes these controllers: an abandoned animation was interrupted, not
 /// completed.
 ///

@@ -158,6 +158,7 @@ struct AnimationStory: View {
                 }
             }
             AnimationCurveExamples(isEnabled: options.isEnabled)
+            AnimationSystemExamples(isEnabled: options.isEnabled)
         }
     }
 }

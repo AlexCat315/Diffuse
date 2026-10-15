@@ -7,9 +7,11 @@ private enum _AnimatablePropertyAttachmentKey {
 
 private final class _WeakAnimationControllerBox {
     weak var controller: (any AnyAnimationController)?
+    weak var scheduler: AnimatorScheduler?
 
     init(_ controller: (any AnyAnimationController)?) {
         self.controller = controller
+        scheduler = AnimatorScheduler.current
     }
 }
 
@@ -19,13 +21,21 @@ private final class _WeakAnimationControllerBox {
 /// same property is retargeted before completion, matching the Phase 8 rule
 /// that new animations start from the current instantaneous value and older
 /// ones are discarded.
-final class AnimatablePropertyRegistry {
+final class AnimatablePropertyRegistry: NodeResource {
     private var controllers: [AnyHashable: _WeakAnimationControllerBox] = [:]
+    func mount(node: Node) {}
+    func unmount(node: Node) {
+        for box in controllers.values {
+            if let controller = box.controller { controller.cancel(); box.scheduler?.unregister(controller) }
+        }
+        controllers.removeAll()
+    }
 
     func replaceController(for propertyKey: AnyHashable,
                            with controller: (any AnyAnimationController)?) {
         if let existing = controllers[propertyKey]?.controller {
             existing.cancel()
+            controllers[propertyKey]?.scheduler?.unregister(existing)
         }
 
         if let controller {
@@ -69,6 +79,7 @@ extension Node {
         }
         let created = AnimatablePropertyRegistry()
         attachments[_AnimatablePropertyAttachmentKey.registry] = created
+        addResource(created)
         return created
     }
 
@@ -84,17 +95,24 @@ extension Node {
         existingAnimatablePropertyRegistry?.hasActiveController(for: propertyKey) ?? false
     }
 
-    /// Progress rate, in units per second, of the animation currently driving
-    /// `propertyKey` — zero when nothing is running.
-    ///
-    /// Read by `animatableSet` before it replaces the controller, so a new
-    /// spring can be released from the motion already on screen instead of
-    /// from rest. A curve has no such thing, so a non-spring successor simply
-    /// ignores what it gets.
-    @inline(__always)
-    func animatableVelocity<Key: Hashable>(for propertyKey: Key) -> Float {
-        guard let live = existingAnimatablePropertyRegistry?
-            .liveController(for: AnyHashable(propertyKey)) as? ProgressReporting else { return 0 }
-        return live.progressVelocity
+    func inheritMotion<Value>(for propertyKey: AnyHashable, into controller: AnimationController<Value>) {
+        if let previous = existingAnimatablePropertyRegistry?.liveController(for: propertyKey) as? AnimationController<Value> {
+            controller.inheritMotion(from: previous)
+        }
     }
+    func continuesAnimation<Value: Interpolatable & Equatable>(for propertyKey: AnyHashable, to target: Value) -> Bool {
+        guard !prefersReducedMotion, !ActiveAnimationContext.disablesAnimations,
+              let controller = existingAnimatablePropertyRegistry?.liveController(for: propertyKey) as? AnimationController<Value>
+        else { return false }
+        return controller.to == target
+    }
+    func finishesReducedAnimation<Value: Interpolatable & Equatable>(for propertyKey: AnyHashable, to target: Value) -> Bool {
+        guard prefersReducedMotion,
+              let controller = existingAnimatablePropertyRegistry?.liveController(for: propertyKey) as? AnimationController<Value>,
+              controller.to == target else { return false }
+        controller.finishImmediately()
+        replaceAnimationController(for: propertyKey, with: nil)
+        return true
+    }
+
 }

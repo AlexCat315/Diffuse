@@ -32,8 +32,8 @@ public struct _AnimationValueModifier<Value: Equatable>: ViewModifier, _AroundAp
         let changed = previous != nil && previous != value
         node.attachments[key] = value
 
-        if changed, let anim = animation {
-            ActiveAnimationContext.with(anim, perform)
+        if changed {
+            ActiveAnimationContext.with(animation, perform)
         } else {
             perform()
         }

@@ -32,8 +32,8 @@ public enum AnimationCurve: Sendable, Equatable {
     /// - `< 1`  => underdamped (can overshoot)
     /// - `> 1`  => overdamped (slower settle)
     ///
-    /// The runtime clamps the evaluated progress into `[0, 1]` to keep
-    /// interpolation stable across all value types.
+    /// This normalized timing curve is distinct from the controller's physical
+    /// spring, which runs until displacement and velocity have settled.
     case spring(response: Float, dampingFraction: Float)
     /// Cubic Bezier with control points `(c1x, c1y)` and `(c2x, c2y)`.
     /// Anchors `(0, 0)` and `(1, 1)` are implied.
@@ -90,7 +90,10 @@ public enum AnimationCurve: Sendable, Equatable {
                                        response: Float,
                                        dampingFraction: Float) -> Float {
         let spring = SpringSolution(response: response, dampingFraction: dampingFraction)
-        return spring.position(at: spring.seconds(forNormalized: x), from: 0, velocity: 0)
+        if x == 0 || x == 1 { return x }
+        let end = spring.position(at: spring.response, from: 0, velocity: 0)
+        let value = spring.position(at: spring.seconds(forNormalized: x), from: 0, velocity: 0)
+        return abs(end) > 0.00001 ? value / end : value
     }
 
     /// Solve the cubic Bezier `y(x)` defined by the four control points
@@ -149,9 +152,8 @@ public enum AnimationCurve: Sendable, Equatable {
 /// type; the runtime scheduler consumes this when building per-property
 /// `AnimationController` instances.
 public struct Animation: Sendable, Equatable {
-    /// Total time, in seconds, for the value to travel from `from` to `to`.
-    /// Must be > 0 to take effect; non-positive durations behave as if no
-    /// animation was requested.
+    /// Nominal duration in seconds. Timed curves finish here; a physical spring
+    /// may retain a settling tail. Nonpositive/nonfinite durations snap.
     public let duration: Double
 
     /// Easing curve applied to normalized elapsed time.
@@ -175,18 +177,30 @@ public struct Animation: Sendable, Equatable {
     /// animation, on properties known to tolerate it.
     public let allowsOvershoot: Bool
 
+    /// Initial progress velocity per real second, used by spring releases.
+    let initialVelocity: Float
+    private(set) var repetition: AnimationRepetition = .once
+
     public init(duration: Double,
                 curve: AnimationCurve = .easeInOut,
                 delay: Double = 0,
-                allowsOvershoot: Bool = false) {
-        self.duration = duration
+                allowsOvershoot: Bool = false,
+                initialVelocity: Float = 0) {
+        self.duration = duration.isFinite ? max(0, duration) : 0
         self.curve = curve
-        self.delay = delay
+        self.delay = delay.isFinite ? max(0, delay) : 0
         self.allowsOvershoot = allowsOvershoot
+        self.initialVelocity = initialVelocity.isFinite ? initialVelocity : 0
     }
 }
 
 public extension Animation {
+    func repeatCount(_ count: Int, autoreverses: Bool = true) -> Animation {
+        var result = self; result.repetition = .count(max(1, count), autoreverses: autoreverses); return result
+    }
+    func repeatForever(autoreverses: Bool = true) -> Animation {
+        var result = self; result.repetition = .forever(autoreverses: autoreverses); return result
+    }
     /// `easeInOut` over 0.25 s.
     static let `default` = Animation(duration: 0.25, curve: .easeInOut)
 
@@ -207,6 +221,7 @@ public extension Animation {
 
     /// Spring tuned for bouncy decorative motion.
     static let bouncy = Animation.spring(response: 0.45, dampingFraction: 0.65)
+    static let smooth = Animation.spring(response: 0.40, dampingFraction: 1)
 
     /// Convenience for setting a custom duration while keeping `easeInOut`.
     static func easeInOut(duration: Double) -> Animation {
@@ -217,13 +232,16 @@ public extension Animation {
     /// curve while setting animation duration to `response`.
     static func spring(response: Double = 0.40,
                        dampingFraction: Double = 0.82,
-                       delay: Double = 0) -> Animation {
-        let r = max(0.0001, response)
-        let d = max(0.0001, dampingFraction)
+                       delay: Double = 0,
+                       initialVelocity: Float = 0,
+                       allowsOvershoot: Bool = false) -> Animation {
+        let duration = SpringSolution.normalizedResponse(response)
+        let parameters = SpringSolution(response: Float(duration),
+                                        dampingFraction: Float(SpringSolution.normalizedDamping(dampingFraction)))
         return Animation(
-            duration: r,
-            curve: .spring(response: Float(r), dampingFraction: Float(d)),
-            delay: delay
+            duration: duration,
+            curve: .spring(response: parameters.response, dampingFraction: parameters.dampingFraction),
+            delay: delay, allowsOvershoot: allowsOvershoot, initialVelocity: initialVelocity
         )
     }
 }

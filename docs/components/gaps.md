@@ -5,7 +5,7 @@
 - 数据来源：`GuavaUI/Sources/GuavaUICompose/Primitives`、Gallery 72 页（`GalleryCatalog.swift`）、各组件文档与逐项代码复核。
 - 范围：脱离 Guava 编辑器语境仍成立的通用 UI 能力。场景层级、Inspector 字段面板、Material Graph、媒体时间线等领域组件留在应用层，不进本清单。
 - 状态：`[未实现]` 完全缺失；`[部分]` 已有基础实现或可用组合替代；`[已实现]` 仅作对照。优先级 P0（手机/平板可用性阻塞）> P1（常用能力）> P2（长尾/体验）> P3（按需）。
-- 已列入规范第 5 节的缺口（Toolbar 溢出、Sidebar 收敛、Form 标签、DataTable 列优先级、TabView 溢出菜单、截断、文本缩放、触摸行高、ScrollView 输入、浮层自适应、Stepper/ButtonGroup 重排、Vec3Field 重排、焦点环、辅助功能、高度类、Gallery 自适应、动画 18–21）**不在此重复**，避免双份维护。
+- 已列入规范第 5 节的缺口（Toolbar 溢出、Sidebar 收敛、Form 标签、DataTable 列优先级、TabView 溢出菜单、截断、文本缩放、触摸行高、ScrollView 输入、浮层自适应、Stepper/ButtonGroup 重排、Vec3Field 重排、焦点环、辅助功能、高度类、Gallery 自适应）**不在此重复**，避免双份维护。
 
 ## 1. 覆盖总览
 

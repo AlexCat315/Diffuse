@@ -618,6 +618,7 @@ private struct BuiltinButtonChromeValues {
     let borderWidth: Float
     let radius: Float
     let opacity: Float
+    let scale: Float
 }
 
 private extension BuiltinButtonChromeKind {
@@ -674,6 +675,15 @@ private func applyBuiltinButtonChrome(to chromeNode: Node, animated: Bool) {
     } else {
         apply()
     }
+    chromeNode.transform.anchor = CGPoint(x: 0.5, y: 0.5)
+    let transform = {
+        chromeNode.animatableSet(propertyKey: "button.pressScale", current: chromeNode.transform.scale,
+                                to: values.scale) { [weak chromeNode] in chromeNode?.transform.scale = max(0, $0) }
+    }
+    if animated {
+        withAnimation(.spring(response: chromeNode.theme.motion.fast.seconds, dampingFraction: 0.9,
+                              allowsOvershoot: true), transform)
+    } else { transform() }
 }
 
 private func builtinButtonChromeValues(state: BuiltinButtonChromeState,
@@ -768,7 +778,8 @@ private func builtinButtonChromeValues(state: BuiltinButtonChromeState,
                                      border: border,
                                      borderWidth: borderWidth,
                                      radius: metrics.radius,
-                                     opacity: state.isEnabled || theme.textEmphasis.disabled != nil ? 1 : (state.isSelected ? 0.75 : 0.55))
+                                     opacity: state.isEnabled || theme.textEmphasis.disabled != nil ? 1 : (state.isSelected ? 0.75 : 0.55),
+                                     scale: pressed ? (theme.motion.pressScale.isFinite ? min(1, max(0.8, theme.motion.pressScale)) : 0.97) : 1)
 }
 
 private func nearestButtonHostAncestor(of node: Node) -> Node? {

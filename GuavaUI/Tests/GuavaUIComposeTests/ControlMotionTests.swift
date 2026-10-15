@@ -62,6 +62,8 @@ struct ControlMotionTests: GuavaUIComposeSerializedSuite {
             #expect(midpoint > 0 && midpoint < 1)
             harness.$enabled.wrappedValue = false; graph.recomposer.commitAll()
             #expect(toggle.attachments["__bool_visual_progress"] as? Float == midpoint)
+            scheduler.tick(deltaTime: 0.0001)
+            #expect((toggle.attachments["__bool_visual_progress"] as? Float ?? 0) > midpoint)
             scheduler.tick(deltaTime: 1)
             #expect(toggle.attachments["__bool_visual_progress"] as? Float == 0)
             #expect(scheduler.activeCount == 0)

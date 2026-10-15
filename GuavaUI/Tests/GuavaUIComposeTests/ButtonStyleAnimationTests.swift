@@ -69,6 +69,9 @@ struct ButtonStyleAnimationTests: GuavaUIComposeSerializedSuite {
 
             scheduler.tick(deltaTime: 0.03)
             #expect(findFilled(tree.root!)?.backgroundColor == pressed)
+            // Bounded paint has reached its endpoint; physical scale and
+            // spring controllers retain their settling tail.
+            scheduler.tick(deltaTime: 0.5)
             #expect(scheduler.activeCount == 0)
         }
     } }

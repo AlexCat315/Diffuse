@@ -65,7 +65,7 @@ public enum GalleryCatalog {
         .init(.propertyGrid, "PropertyGrid", "Layout", "Inspector rows, sections, custom sizing and empty state."),
         .init(.workspace, "Workspace / Dock", "Layout", "Draggable tabs, split layouts and document serialization."),
         .init(.layout, "Box / Row / Column", "Layout", "Alignment, spacing, flex sizing, spacers and dividers."),
-        .init(.animation, "Animation", "Foundation", "Animated visibility, steps, linear points, bounce and elastic timing curves."),
+        .init(.animation, "Animation", "Foundation", "Visibility, curves, springs, keyframes, phases, loops, shared geometry, numeric transitions and completion."),
         .init(.theme, "Theme / Typography", "Foundation", "Light and dark semantic surfaces, text and status colors."),
         .init(.badge, "Badge", "Feedback", "Compact labels using semantic status tones."),
         .init(.alert, "Alert", "Feedback", "Inline feedback with a title, detail and status tone."),

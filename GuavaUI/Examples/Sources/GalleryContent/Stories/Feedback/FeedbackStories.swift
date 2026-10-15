@@ -51,7 +51,8 @@ struct ProgressStory: View {
                 ProgressView(value: progress)
                 ProgressView(value: progress) { $0.tone = .success; $0.height = 8 }
                 Slider(value: $progress, isEnabled: options.isEnabled)
-                Text("\(Int(progress * 100))% complete").font(.caption).foregroundColor(.onSurfaceMuted)
+                NumericText(progress * 100) { String(format: "%.0f%% complete", $0) }
+                    .font(.caption).foregroundColor(.onSurfaceMuted)
                 Row(alignment: .center, spacing: 12) { Spinner(); Text("Working…").font(.body); Button("Uploading…", isLoading: true) {} }
             }
             StorySection("Indeterminate", "Used when the total work is unknown — a fabricated percentage that never advances is worse than admitting the wait.") {

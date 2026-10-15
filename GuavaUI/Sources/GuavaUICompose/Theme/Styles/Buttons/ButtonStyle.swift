@@ -84,14 +84,6 @@ public extension ButtonStyleConfiguration {
     }
 }
 
-/// Default transition for built-in `ButtonStyle` interaction changes.
-/// Kept as a compatibility helper for call sites that still reference
-/// `.buttonInteraction` directly. New built-in styles resolve motion from
-/// `theme.motion.fast` through `Animation.semantic(.snappy, in:)`.
-public extension Animation {
-    static let buttonInteraction = Animation.semantic(.snappy, in: .defaultDark)
-}
-
 /// SwiftUI-shaped style protocol. Implementors describe a button's complete
 /// visual tree given its configuration; the `Button` primitive itself only
 /// owns hit-testing and state.

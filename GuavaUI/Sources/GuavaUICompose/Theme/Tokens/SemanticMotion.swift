@@ -15,13 +15,19 @@ public struct SemanticMotionRef: Sendable {
 }
 
 public extension SemanticMotionRef {
-    /// 100 ms in the default themes — micro-interactions, hover/press.
+    static let entering = SemanticMotionRef { theme in
+        Animation(duration: theme.motion.surface.entrance.seconds, curve: Easing.decelerate.asAnimationCurve)
+    }
+    static let exiting = SemanticMotionRef { theme in
+        Animation(duration: theme.motion.surface.exit.seconds, curve: Easing.accelerate.asAnimationCurve)
+    }
+    /// 80 ms in the default themes — micro-interactions, hover/press.
     static let fast = SemanticMotionRef { theme in
         Animation(duration: theme.motion.fast.seconds,
                   curve: theme.motion.standardEasing.asAnimationCurve)
     }
 
-    /// 200 ms in the default themes — surface state changes, default choice.
+    /// 180 ms in the default themes — surface state changes, default choice.
     static let medium = SemanticMotionRef { theme in
         Animation(duration: theme.motion.standard.seconds,
                   curve: theme.motion.standardEasing.asAnimationCurve)
@@ -46,6 +52,9 @@ public extension SemanticMotionRef {
     static let bouncy = SemanticMotionRef { theme in
         Animation.spring(response: theme.motion.standard.seconds,
                          dampingFraction: 0.68)
+    }
+    static let smooth = SemanticMotionRef { theme in
+        Animation.spring(response: theme.motion.standard.seconds, dampingFraction: 1)
     }
 }
 
