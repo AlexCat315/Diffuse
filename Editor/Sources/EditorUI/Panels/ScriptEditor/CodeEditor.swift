@@ -76,7 +76,7 @@ struct ScriptCodeEditor: View {
                 if let diagnosticHover, diagnosticHover.buffer == text {
                     Tooltip(anchor: diagnosticHover.anchor, configure: { $0.maxWidth = 380 }) {
                         Text(diagnosticHover.message).font(.caption).foregroundColor(.onSurface)
-                            .padding(10).background(.surfaceFloating).cornerRadius(6).border(.border, width: 1)
+                            .padding(10).glassSurface(6)
                     }
                 }
                 ScriptHoverOverlay(presentation: hover.wrappedValue)

@@ -62,6 +62,47 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         #expect(haloList.vertices.count < shadowVertices)
     }
 
+    /// Glass is five properties that only work together, and the order is not
+    /// obvious from any one of them: the fill buries the frost unless it is
+    /// translucent, and without `backdropBlur` there is no frost to bury. A
+    /// menu once assembled the chain by hand and missed the blur, rendering as
+    /// a plain card that looked finished in review. The modifier exists so that
+    /// cannot be done by accident, and this pins every part of it.
+    @Test("glassSurface() asks for the whole material, not part of it")
+    @MainActor func glassSurfaceWiring() {
+        let node = Node()
+        node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
+        GlassSurfaceModifier(cornerRadius: 7).apply(node: node)
+
+        let theme = node.theme
+        #expect(node.backdropBlur == 12)
+        #expect(node.backgroundColor == theme.colors.surfaceMaterial)
+        #expect(node.cornerRadius == 7)
+        #expect(node.borderColor == theme.colors.border)
+        #expect(node.borderWidth == 1)
+        #expect(node.ambientShadow == theme.elevation.floating.ambient)
+        #expect(node.shadow == theme.elevation.floating.key)
+        #expect(node.highlight.color == theme.colors.edgeHighlight)
+        // The fill has to let the backdrop through, or the frost the pass just
+        // drew underneath it is simply covered.
+        #expect(node.backgroundColor?.a ?? 1 < 1)
+    }
+
+    @Test("The frost strength is the caller's, and zero is honoured")
+    @MainActor func glassBlurIsConfigurable() {
+        let node = Node()
+        node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
+        GlassSurfaceModifier(cornerRadius: 6, blurRadius: 24).apply(node: node)
+        #expect(node.backdropBlur == 24)
+
+        // A negative radius has to clamp rather than reach the pass as one:
+        // it would size the capture backwards.
+        let clamped = Node()
+        clamped.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
+        GlassSurfaceModifier(cornerRadius: 6, blurRadius: -5).apply(node: clamped)
+        #expect(clamped.backdropBlur == 0)
+    }
+
     @Test("A menu panel is a card, not a floating surface")
     @MainActor func menuPanelStaysFlat() throws {
         try GlobalTestLock.locked {

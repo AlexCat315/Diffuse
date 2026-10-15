@@ -55,11 +55,7 @@ public struct CompletionPopover: View {
                 Text("\(selectedIndex + 1) / \(items.count)").font(.caption).foregroundColor(.onSurfaceMuted)
                     .padding(horizontal: 10, vertical: 4)
             }
-        // Heavy frost for the same reason as the colour picker: small type over an
-        // editor, and diffusion is what keeps the text off whatever the user
-        // happens to be editing.
-        }.padding(3).background(.materialFloating).cornerRadius(6).backdropBlur(12)
-        .border(.border, width: 1).floatingSurface()
+        }.padding(3).glassSurface(6)
             .accessibility { $0.role = .list; $0.label = "Completions" }
     }
 }

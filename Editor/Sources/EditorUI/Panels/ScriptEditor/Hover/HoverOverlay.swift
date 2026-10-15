@@ -14,7 +14,7 @@ struct ScriptHoverOverlay: View {
                 Column(alignment: .leading, spacing: 6) {
                     for block in presentation.textBlocks { textBlock(block) }
                 }.padding(horizontal: 10, vertical: 8)
-                    .background(.surfaceFloating).border(.border, width: 1).cornerRadius(6)
+                    .glassSurface(6)
             }
         }
     }

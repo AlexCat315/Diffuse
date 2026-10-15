@@ -85,10 +85,10 @@ public extension View {
 
 func tooltipDescription(_ description: String) -> AnyView {
     AnyView(Text(description).font(.caption).foregroundColor(.onSurface)
-        // Opaque on purpose: a tooltip explains a control that is behind it, so a
-        // hint of that control showing through would be read as noise. Menus and
-        // popovers float over content that is not the subject; see materialFloating.
-        .padding(9).background(.surfaceFloating).cornerRadius(6).border(.border, width: 1))
+        // Frosted, not opaque: a tooltip sits over whatever the pointer is
+        // near, and the blur is what keeps a busy backdrop from reading as
+        // noise behind the text. Menus and popovers float the same way.
+        .padding(9).glassSurface(6))
 }
 
 private struct TooltipHost<Target: View>: _PrimitiveView {

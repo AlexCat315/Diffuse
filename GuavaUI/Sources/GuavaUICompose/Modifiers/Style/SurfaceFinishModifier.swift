@@ -28,7 +28,8 @@ public struct SurfaceFinishModifier: ViewModifier {
 /// the UI, so the edge facing up catches it.
 ///
 /// Pair with `.backdropBlur` and a translucent fill; this modifier does not
-/// frost, and the fill does not lift.
+/// frost, and the fill does not lift. `glassSurface()` is the whole thing in
+/// one call when the surface should frost too.
 public struct FloatingSurfaceModifier: ViewModifier {
     public init() {}
 
@@ -45,9 +46,55 @@ public struct FloatingSurfaceModifier: ViewModifier {
     }
 }
 
+/// A frosted surface floating over content: translucent fill, backdrop frost,
+/// hairline border, and the lift that says it is above the chrome.
+///
+/// One modifier because the parts only work together, and the ordering is not
+/// obvious from any single piece:
+///
+/// - the fill has to be translucent, or it buries the frost the backdrop pass
+///   just drew underneath it;
+/// - `backdropBlur` is what *starts* that pass — without it there is no frost
+///   at all, however translucent the fill;
+/// - the border sits outside the backdrop so the rim stays crisp on top of it;
+/// - the rim is painted last, over both.
+///
+/// Handing callers those five pieces separately is how a menu ends up looking
+/// like every other card while claiming to be glass.
+///
+/// `blurRadius` is in points and scales with the panel, so the same value
+/// frosts the same amount on any display.
+public struct GlassSurfaceModifier: ViewModifier {
+    public let cornerRadius: Float
+    public let blurRadius: Float
+
+    public init(cornerRadius: Float, blurRadius: Float = 12) {
+        self.cornerRadius = max(0, cornerRadius)
+        self.blurRadius = max(0, blurRadius)
+    }
+
+    public func apply(node: Node) {
+        let colors = node.theme.colors
+        node.animatableSet(\.backgroundColor, to: colors.surfaceMaterial)
+        node.animatableSet(\.cornerRadius, to: cornerRadius)
+        node.animatableSet(\.backdropBlur, to: blurRadius)
+        node.animatableSet(\.borderColor, to: colors.border)
+        node.animatableSet(\.borderWidth, to: 1)
+        let floating = node.theme.elevation.floating
+        node.ambientShadow = floating.ambient
+        node.shadow = floating.key
+        node.highlight = SurfaceHighlight(color: colors.edgeHighlight)
+    }
+}
+
 public extension View {
     func surfaceFinish() -> some View { modifier(SurfaceFinishModifier()) }
 
     /// Raise this surface above the chrome: layered shadow and a light top edge.
     func floatingSurface() -> some View { modifier(FloatingSurfaceModifier()) }
+
+    /// Frost this surface and raise it above the chrome.
+    func glassSurface(_ cornerRadius: Float, blur: Float = 12) -> some View {
+        modifier(GlassSurfaceModifier(cornerRadius: cornerRadius, blurRadius: blur))
+    }
 }

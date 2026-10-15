@@ -34,21 +34,9 @@ public extension SemanticColorRef {
     static let surfaceOverlay   = SemanticColorRef { $0.colors.surfaceOverlay }
 
     /// Fill for panels that float over content: menus, popovers, popup editors.
-    ///
-    /// A *material*, not a solid: it is meant to sit over a blurred backdrop
-    /// (`View.backdropBlur`). What reads as frost is the panel answering to
-    /// whatever is behind it, and the backdrop only reaches the screen by
-    /// `(1 - alpha)` of it — so a high alpha leaves the backdrop pass running
-    /// at a few percent, which looks like a painted panel that happened to be
-    /// translucent, not like glass.
-    ///
-    /// The cost of a low alpha is legibility, and only where the backdrop is
-    /// bright. Over the canvas these panels actually sit on, the dark theme
-    /// lands at 11.6:1 against label text and the light theme at 13.4:1 —
-    /// both *better* than a higher alpha would give. Over pure white the dark
-    /// panel drops to 2.3:1, so a material over bright content needs a
-    /// backing of its own rather than leaning on this fill.
-    static let materialFloating = SemanticColorRef { $0.colors.surfaceFloating.multipliedAlpha(0.5) }
+    /// Resolved from `ColorScheme.surfaceMaterial`, which owns the alpha and
+    /// the reasoning behind it.
+    static let materialFloating = SemanticColorRef { $0.colors.surfaceMaterial }
 
     static let onBackground     = SemanticColorRef { $0.colors.onBackground }
     static let onSurface        = SemanticColorRef { $0.colors.onSurface }

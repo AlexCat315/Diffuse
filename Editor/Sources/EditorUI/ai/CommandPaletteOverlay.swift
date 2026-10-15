@@ -115,7 +115,7 @@ struct CommandPaletteOverlay: View {
                     .font(.caption).foregroundColor(.onSurfaceMuted).padding(10)
             }
             .frame(width: .percent(92), maxWidth: 580)
-            .background(.surfaceFloating).cornerRadius(10).border(.border, width: 1)
+            .glassSurface(10)
             .debugName("command-palette-card")
         }
     }
