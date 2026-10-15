@@ -15,7 +15,7 @@ struct AnimationCurveExamples: View {
                 }
             }
             Button("Play motion", isEnabled: isEnabled) {
-                withAnimation(Animation(duration: 1, curve: choice.curve)) { expanded.toggle() }
+                withAnimation(Animation(duration: 1, curve: choice.curve, allowsOvershoot: true)) { expanded.toggle() }
             }.buttonStyle(.secondary).debugName("animation-curve-play")
             Box(direction: .row, alignItems: .center) {
                 Box {}.frame(width: expanded ? 200 : 80, height: 28)

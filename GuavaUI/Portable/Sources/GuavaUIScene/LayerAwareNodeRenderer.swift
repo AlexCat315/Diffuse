@@ -11,7 +11,7 @@ import Foundation
 /// Cache invariants per layer-root `RenderObject`:
 /// - `cacheInvalid == false` AND
 /// - the layer's placement at composite time matches the one captured when the
-///   cache was recorded (`lastPlacement`: position *and* scale) AND
+///   cache was recorded (`lastPlacement`: position, paint and shadow scales) AND
 /// - the layer's parent clip stack at composite time matches the one captured
 ///   when the cache was recorded (tracked by `lastClipStack`).
 ///
@@ -52,7 +52,7 @@ public final class LayerAwareNodeRenderer {
                          parentClipStack: [UIRect]) {
         guard let node = obj.node else { return }
         let f = node.frame
-        let own = placed.followed(by: node.placementStep(scrolling: .zero))
+        let own = node.placementStep(scrolling: .zero).followed(by: placed)
         let origin = own.origin
         let absX = origin.x
         let absY = origin.y
@@ -74,7 +74,8 @@ public final class LayerAwareNodeRenderer {
                let cached = obj.cachedLayerList,
                cached.pixelScale == frame.pixelScale {
                 if obj.children.isEmpty, let bounds = obj.cachedPaintBounds,
-                   let cachedPlacement = obj.lastPlacement {
+                   let cachedPlacement = obj.lastPlacement,
+                   own.a == cachedPlacement.a, own.shadowScale == cachedPlacement.shadowScale {
                     let translated = UIRect(x: bounds.x + absX - cachedPlacement.e,
                                             y: bounds.y + absY - cachedPlacement.f,
                                             width: bounds.width, height: bounds.height)
@@ -90,6 +91,7 @@ public final class LayerAwareNodeRenderer {
                 if obj.children.isEmpty,
                    !node.clipsToBounds,
                    own.a == obj.lastPlacement?.a,
+                   own.shadowScale == obj.lastPlacement?.shadowScale,
                    let cachedPlacement = obj.lastPlacement {
                     frame.append(
                         cached,
@@ -171,7 +173,7 @@ public final class LayerAwareNodeRenderer {
                                           placed: Affine2D,
                                           clipStack: [UIRect]) {
         let firstVertex = list.vertices.count
-        let own = placed.followed(by: node.placementStep(scrolling: .zero))
+        let own = node.placementStep(scrolling: .zero).followed(by: placed)
         let origin = own.origin
         let originX = origin.x
         let originY = origin.y
@@ -195,21 +197,19 @@ public final class LayerAwareNodeRenderer {
 
         // Painters (mirror NodeRenderer order):
         emitShadow(node, into: list, x: originX, y: originY, w: width, h: height,
-                   radius: radius)
+                   radius: radius, scale: own.shadowScale)
         emitBorder(node, into: list, x: originX, y: originY, w: width, h: height,
                    radius: radius, borderWidth: borderWidth)
         emitBackground(node, into: list, x: originX, y: originY, w: width, h: height,
                        radius: radius, borderWidth: borderWidth)
         if let draw = node.draw {
-            draw(list, CGPoint(x: Double(originX), y: Double(originY)))
+            paintScaled(draw, into: list, origin: CGPoint(x: Double(originX), y: Double(originY)), scale: scale)
         }
 
         // Children, placed where this node's *content* sits: its own frame slid
         // by -contentOffset and then scaled. The offset stays fractional
         // throughout motion and at rest.
-        let content = placed.followed(by: node.placementStep(scrolling: node.contentOffset))
-        let childX = content.e
-        let childY = content.f
+        let content = node.placementStep(scrolling: node.contentOffset).followed(by: placed)
         let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack
         let children = node.childrenMayNeedZSort ? renderOrderedChildren(of: obj) : obj.children
         let descendantStart = list.vertices.count
@@ -235,7 +235,7 @@ public final class LayerAwareNodeRenderer {
 
         list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)
         if let overlay = node.overlayDraw {
-            overlay(list, CGPoint(x: Double(originX), y: Double(originY)))
+            paintScaled(overlay, into: list, origin: CGPoint(x: Double(originX), y: Double(originY)), scale: scale)
         }
 
         list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)
@@ -248,13 +248,14 @@ public final class LayerAwareNodeRenderer {
 
     private func emitShadow(_ node: Node, into list: DrawList,
                             x: Float, y: Float, w: Float, h: Float,
-                            radius: Float) {
+                            radius: Float, scale: Float) {
         let rect = UIRect(x: x, y: y, width: w, height: h)
         // An opaque background is painted over this node immediately after, so
         // the shadow's interior is never visible. Clipping to it keeps the
         // fringe and drops the wasted fills.
         let occluded = node.backgroundColor != nil ? rect : nil
-        list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
+        list.addShadow(LayeredShadow(ambient: node.ambientShadow.scaled(by: scale),
+                                    key: node.shadow.scaled(by: scale)),
                        rect: rect, cornerRadius: radius, opacity: node.opacity,
                        frostedRect: node.backdropBlur > 0 ? rect : nil,
                        occludedRect: occluded)

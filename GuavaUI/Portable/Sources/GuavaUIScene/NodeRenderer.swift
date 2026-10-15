@@ -32,7 +32,7 @@ public struct NodeRenderer {
     private func renderNode(_ node: Node, list: DrawList, placed: Affine2D) {
         let firstVertex = list.vertices.count
         let f = node.frame
-        let own = placed.followed(by: node.placementStep(scrolling: .zero))
+        let own = node.placementStep(scrolling: .zero).followed(by: placed)
         let origin = own.origin
         let absX = origin.x
         let absY = origin.y
@@ -60,7 +60,8 @@ public struct NodeRenderer {
         // An opaque background covers the shadow's interior the moment it is
         // painted, so clip to that too and keep only the visible fringe.
         let occluded: UIRect? = node.backgroundColor != nil ? rect : nil
-        list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
+        list.addShadow(LayeredShadow(ambient: node.ambientShadow.scaled(by: own.shadowScale),
+                                    key: node.shadow.scaled(by: own.shadowScale)),
                        rect: rect, cornerRadius: radius, opacity: node.opacity,
                        frostedRect: node.backdropBlur > 0 ? rect : nil,
                        occludedRect: occluded)
@@ -102,16 +103,13 @@ public struct NodeRenderer {
 
         // 5. Custom content (Text/Image/etc).
         if let draw = node.draw {
-            draw(list, CGPoint(x: Double(absX), y: Double(absY)))
+            paintScaled(draw, into: list, origin: CGPoint(x: Double(absX), y: Double(absY)), scale: scale)
         }
 
         // 6. Children — placed where this node's *content* sits, which is its
         //    own frame slid by -contentOffset and then scaled. The offset stays
         //    fractional throughout motion and at rest.
-        let content = placed.followed(by: node.placementStep(scrolling: node.contentOffset))
-        let childOrigin = content.origin
-        let childOriginX = childOrigin.x
-        let childOriginY = childOrigin.y
+        let content = node.placementStep(scrolling: node.contentOffset).followed(by: placed)
         let descendantStart = list.vertices.count
         if node.childrenMayNeedZSort {
             for child in renderOrderedChildren(of: node) {
@@ -126,7 +124,7 @@ public struct NodeRenderer {
         // 7. Overlay (scrollbars, focus rings drawn above content).
         list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)
         if let overlay = node.overlayDraw {
-            overlay(list, CGPoint(x: Double(absX), y: Double(absY)))
+            paintScaled(overlay, into: list, origin: CGPoint(x: Double(absX), y: Double(absY)), scale: scale)
         }
 
         list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)

@@ -124,7 +124,7 @@ struct AnimationCurveTests {
     func controllers(curve: AnimationCurve) {
         var value: Float = 80, writes = 0
         let controller = AnimationController(from: Float(80), to: Float(200),
-            animation: Animation(duration: 1, curve: curve, delay: 0.1)) { value = $0; writes += 1 }
+            animation: Animation(duration: 1, curve: curve, delay: 0.1, allowsOvershoot: true)) { value = $0; writes += 1 }
         let scheduler = AnimatorScheduler()
         scheduler.register(controller)
         scheduler.tick(deltaTime: 0.1)

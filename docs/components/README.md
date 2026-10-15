@@ -30,6 +30,7 @@
 | Vec3Field | 文档已写 | [vec3field.md](vec3field.md) |
 | AssetRefField / AssetDropTarget | 文档已写 | [assetref.md](assetref.md) |
 | Modal / ContextMenu / TransitionView | 文档已写 | [interaction.md](interaction.md) |
+| AnimatedVisibility / Transition | 生命周期缩放、阴影与命中 | [animation.md](animation.md) |
 | Sheet | 实现与验证边界 | [sheet.md](sheet.md) |
 | Tooltip | 实现与验证边界 | [tooltip.md](tooltip.md) |
 | Menu / ContextMenu / Select | 实现与验证边界 | [menu.md](menu.md) |

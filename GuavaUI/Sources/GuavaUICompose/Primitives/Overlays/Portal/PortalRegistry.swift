@@ -315,6 +315,12 @@ final class PortalResource: NodeResource {
     private static let appearAnimation = Animation(duration: 0.16, curve: .easeOut)
     private static let exitAnimation = Animation(duration: 0.09, curve: .easeIn)
 
+    /// Shared reveal size for menus and popovers. The caller supplies the
+    /// trigger corner; transition scale leaves elevation lengths unchanged.
+    static func surfaceReveal(anchor: CGPoint) -> Transition {
+        .scale(from: 0.96, anchor: anchor)
+    }
+
     /// Logical dismissal is immediate. Only noninteractive paint survives the
     /// short exit; node teardown still unregisters synchronously.
     func dismiss(node: Node) {

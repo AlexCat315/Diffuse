@@ -52,7 +52,11 @@ private struct _ContextMenuHost<Content: View>: _PrimitiveView {
         guard let point else { resource?.dismiss(node: node); return }
         resource?.present(in: node.compositionValue(of: PortalStoreEnvironment.key), position: point, width: width,
                           content: AnyView(_PopupMenu(entries: entries, width: width, onDismiss: onDismiss)),
-                          transition: .opacity.combined(with: .move(edge: .top, distance: 4)))
+                          // Opens at the pointer and extends right and down, so
+                          // the top-left corner is the one nearest the trigger.
+                          transition: .opacity
+                              .combined(with: .move(edge: .top, distance: 4))
+                              .combined(with: PortalResource.surfaceReveal(anchor: .zero)))
         resource?.setDismissal(anchor: { .zero }, dismiss: onDismiss)
     }
     var _children: [any View] { [content] }

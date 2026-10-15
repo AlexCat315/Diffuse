@@ -133,9 +133,7 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
             [weak state, weak node] amount in
             guard let state, let node else { return }
             state.progress = fromProgress + (target - fromProgress) * amount
-            state.visual.opacity = from.opacity + (goal.opacity - from.opacity) * amount
-            state.visual.x = from.x + (goal.x - from.x) * amount
-            state.visual.y = from.y + (goal.y - from.y) * amount
+            state.visual = from.interpolating(to: goal, amount)
             Self.apply(state, to: node, collapses: collapses)
             if amount == 1 { state.onFinished() }
         }
@@ -148,6 +146,11 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
         // contentOffset participates in both rendering and hit testing, keeping
         // pointer coordinates aligned throughout a moving transition.
         node.contentOffset = CGPoint(x: CGFloat(-state.visual.x), y: CGFloat(-state.visual.y))
+        // Likewise for scale: the node, the geometry it reports and the
+        // rectangle the pointer lands in all move together, so a panel that is
+        // still growing is clickable exactly where it is drawn. Settling at
+        // `Effect()` hands back `identity`, so this resets itself.
+        node.transform = state.visual.scale
         if collapses {
             node.layoutNode?.maxHeight = state.progress >= 1 ? nil
                 : (state.expandedHeight > 0 ? state.expandedHeight * max(0, state.progress) : nil)

@@ -603,7 +603,7 @@ AnimatedVisibility(isVisible: visible,
 }
 ```
 
-过渡原语：`.opacity`、`.offset(x:y:)`、`.move(edge:distance:)`、`.collapse`（高度折叠）、`.combined(with:)`、`.asymmetric(insertion:removal:)`。默认动画为 `.semantic(.medium)`；`onVisibilitySettled` 提供退出完成回调。
+过渡原语：`.opacity`、`.offset(x:y:)`、`.move(edge:distance:)`、`.scale(from:anchor:)`、`.collapse`（高度折叠）、`.combined(with:)`、`.asymmetric(insertion:removal:)`。默认动画为 `.semantic(.medium)`；`onVisibilitySettled` 提供退出完成回调。生命周期缩放保留阴影偏移/模糊尺寸，普通节点缩放同步缩放两层阴影；嵌套与缓存遵循相同规则，见 [生命周期缩放与阴影](animation.md)。
 
 可动画的属性（`withAnimation` / `.animation(_:value:)` 生效范围）：样式类（background/foreground/opacity/cornerRadius/border/shadow）、布局类（frame 宽高与 min/max、padding、flex grow）、过渡用的 `contentOffset`。`[已实现]`
 

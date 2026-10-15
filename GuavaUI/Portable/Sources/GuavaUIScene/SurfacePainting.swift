@@ -4,6 +4,17 @@ import Android
 import Foundation
 import GuavaUICore
 
+extension SurfaceShadow {
+    /// Resolve authored lengths at paint time without changing the node's style.
+    func scaled(by factor: Float) -> SurfaceShadow {
+        var result = self
+        result.offsetX *= factor
+        result.offsetY *= factor
+        result.blur *= abs(factor)
+        return result
+    }
+}
+
 /// How a `SurfaceShadow` becomes geometry.
 ///
 /// Both node painters share this so the cheap-blur approximation and the rim

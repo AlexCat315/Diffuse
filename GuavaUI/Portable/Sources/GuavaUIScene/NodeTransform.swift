@@ -23,11 +23,16 @@ public struct NodeTransform: Equatable, Sendable {
     /// Point the scale is taken about, normalized within the node's frame.
     public var anchor: CGPoint
 
+    /// Scale shadow offsets and blur with the subtree. Lifecycle transitions
+    /// disable this to retain elevation while the surface grows into place.
+    public var scalesShadow: Bool
+
     public static let identity = NodeTransform()
 
-    public init(scale: Float = 1, anchor: CGPoint = .zero) {
+    public init(scale: Float = 1, anchor: CGPoint = .zero, scalesShadow: Bool = true) {
         self.scale = scale
         self.anchor = anchor
+        self.scalesShadow = scalesShadow
     }
 
     /// Whether this transform leaves the subtree exactly where it already is.
@@ -63,15 +68,18 @@ struct Affine2D: Equatable, Sendable {
     var d: Float
     var e: Float
     var f: Float
+    /// Accumulates only transforms that scale elevation, independently of paint.
+    var shadowScale: Float = 1
 
     init(a: Float = 1, b: Float = 0, c: Float = 0,
-         d: Float = 1, e: Float = 0, f: Float = 0) {
+         d: Float = 1, e: Float = 0, f: Float = 0, shadowScale: Float = 1) {
         self.a = a
         self.b = b
         self.c = c
         self.d = d
         self.e = e
         self.f = f
+        self.shadowScale = shadowScale
     }
 
     static let identity = Affine2D()
@@ -83,11 +91,24 @@ struct Affine2D: Equatable, Sendable {
                  c: next.a * c + next.c * d,
                  d: next.b * c + next.d * d,
                  e: next.a * e + next.c * f + next.e,
-                 f: next.b * e + next.d * f + next.f)
+                 f: next.b * e + next.d * f + next.f,
+                 shadowScale: shadowScale * next.shadowScale)
     }
 
     func applied(to x: Float, _ y: Float) -> (x: Float, y: Float) {
         (a * x + c * y + e, b * x + d * y + f)
+    }
+
+    /// The point in this transform's source space that maps to `point`.
+    func source(of point: (x: Float, y: Float)) -> (x: Float, y: Float) {
+        // A scale plus a translation inverts to a divide and a subtract, and
+        // this runs per node on every pointer event — where almost nothing
+        // carries a transform. The full inverse is the general path below.
+        if b == 0 && c == 0 {
+            guard abs(a) > 1e-9 else { return (x: 0, y: 0) }
+            return ((point.x - e) / a, (point.y - f) / a)
+        }
+        return inverted.applied(to: point.x, point.y)
     }
 
     /// Where this transform puts the local origin — the only point the renderers
@@ -142,6 +163,7 @@ extension Node {
         result.b = 0
         result.c = 0
         result.d = scale
+        result.shadowScale = transform.scalesShadow ? scale : 1
         result.e = Float(frame.origin.x) - Float(scrolling.x) * scale
             + Float(transform.anchor.x * frame.width) * (1 - scale)
         result.f = Float(frame.origin.y) - Float(scrolling.y) * scale

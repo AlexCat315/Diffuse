@@ -142,7 +142,16 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
                             if event.scancode == Scancode.escape { onDismiss(); return true }
                             return keyHandler?(event, .target) == .handled
                         }) { content }
-                     }), transition: .opacity.combined(with: .move(edge: .top, distance: 4)))
+                     }),
+                     // `popoverPosition` puts the panel directly below the
+                     // trigger, aligned to its leading or trailing edge, so the
+                     // pinned corner is the matching top one. A fixed anchor
+                     // would make a trailing popover grow away from the thing
+                     // that opened it.
+                     transition: .opacity
+                         .combined(with: .move(edge: .top, distance: 4))
+                         .combined(with: PortalResource.surfaceReveal(
+                            anchor: placement == .end ? CGPoint(x: 1, y: 0) : .zero)))
         node.firstResource(PortalResource.self)?.setDismissal(
             anchor: { [weak node] in node.map { Self.anchorFrame(for: $0) ?? .zero } ?? .zero },
             dismiss: onDismiss
