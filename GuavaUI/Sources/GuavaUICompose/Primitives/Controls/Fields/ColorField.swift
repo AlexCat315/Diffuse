@@ -60,7 +60,10 @@ private struct _StatefulColorField: View {
                 .frame(width: 220)
                 .background(.materialFloating)
                 .cornerRadius(8)
-                .backdropBlur(14)
+                // Heavy frost, not a clear pane. What reads as glass here is
+                // the diffusion plus the rim: the panel is legible because the
+                // backdrop is gone, not because it was never there.
+                .backdropBlur(12)
                 .border(.border, width: 1).floatingSurface()
         })
     }

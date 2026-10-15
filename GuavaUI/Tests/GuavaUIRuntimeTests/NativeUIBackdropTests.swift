@@ -49,8 +49,7 @@ struct NativeUIBackdropTests {
         let (pixels, _) = try context.nativeImage(list: stripedList(frosted: true),
             format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
         let outside = try contrast(pixels, row: 8, from: 0, to: 64)
-        // The 10px lens band at each edge refracts sharply on purpose (liquid
-        // glass), so the frost is measured in the body between the bands.
+        // Measured in the middle of the panel, clear of the rounded corners.
         let inside = try contrast(pixels, row: 32, from: 27, to: 37)
         #expect(outside > 0.8)
         #expect(inside < outside * 0.5)
@@ -65,7 +64,7 @@ struct NativeUIBackdropTests {
         func measure(frosted: Bool, fill: Color) throws -> Float {
             let (pixels, _) = try context.nativeImage(list: stripedList(frosted: frosted, fill: fill),
                 format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
-            // Body between the lens bands, same as the plain-frost test.
+            // The panel's middle, same as the plain-frost test.
             return try contrast(pixels, row: 32, from: 27, to: 37)
         }
         let frosted = try measure(frosted: true, fill: material)
@@ -228,7 +227,7 @@ struct NativeUIBackdropTests {
         #expect(onWhite - onBlack > 0.15)
     }
 
-    // MARK: - The lens: an edge that refracts and catches the light
+    // MARK: - The edge: the rim the CPU paints over the frost
 
     @Test("the rim light reads through the panel's fill")
     func rimShowsThroughTheFill() throws {
@@ -256,16 +255,17 @@ struct NativeUIBackdropTests {
         #expect(edge - body > 0.04)
     }
 
-    /// A dark field with one bright bar just outside the panel's left edge.
-    /// The lens samples past the edge, so the bar is pulled inward — sharper
-    /// and further than the gaussian alone could carry it.
-    private func refractedList() -> DrawList {
+    /// A dark field with one bright bar ending right at the panel's left edge.
+    /// How far that bar reaches into the panel is the capture margin's doing:
+    /// the blur has to carry it across the boundary, and stop carrying it
+    /// before it crosses the whole panel.
+    private func edgeContentList(blurRadius: Float = 4) -> DrawList {
         let list = DrawList()
         list.addRect(UIRect(x: 0, y: 0, width: 64, height: 64),
                      color: Color(r: 0.1, g: 0.1, b: 0.1, a: 1))
         list.addRect(UIRect(x: 10, y: 0, width: 6, height: 64),
                      color: Color(r: 1, g: 1, b: 1, a: 1))
-        list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 4))
+        list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: blurRadius))
         list.addRoundedRect(panel, radius: 4, color: Color(r: 1, g: 1, b: 1, a: 0.02))
         return list
     }
@@ -278,19 +278,42 @@ struct NativeUIBackdropTests {
         return total / Float(count)
     }
 
-    @Test("the edge band pulls what sits beyond the panel inward")
-    func edgeBandRefracts() throws {
+    /// The capture has to reach past the panel on every axis by the blur's own
+    /// two-sigma spread, or the taps clamp on the panel's own edge pixels and
+    /// drag them inward — a bright halo along the rim.
+    @Test("the capture margin is the blur's own reach, scaled per axis")
+    func captureMarginCoversTheBlur() {
+        #expect(NativeUIBackdropPass.captureMargin(blurRadius: 14, scale: 1) == 28)
+        #expect(NativeUIBackdropPass.captureMargin(blurRadius: 14, scale: 2) == 56)
+        // Physical pixels per logical point, so a radius in points scales the
+        // margin the same way it scales the sigma.
+        #expect(NativeUIBackdropPass.captureMargin(blurRadius: 4, scale: 1.5) == 12)
+        // Nothing to reach for, and still never negative — a negative radius
+        // would march the capture inwards over the panel itself.
+        #expect(NativeUIBackdropPass.captureMargin(blurRadius: 0, scale: 2) == 0)
+        #expect(NativeUIBackdropPass.captureMargin(blurRadius: -3, scale: 2) == 0)
+    }
+
+    /// The capture margin's whole job: content sitting just *outside* the panel
+    /// has to reach into it. Without the margin the taps clamp on the panel's
+    /// own edge pixels and drag them inward instead, which reads as a halo
+    /// hugging the rim rather than the backdrop diffusing through it.
+    @Test("content just outside the panel still diffuses into it")
+    func marginLetsTheBackdropReachIn() throws {
         let context = try NativeUIDrawTestContext()
-        let (pixels, _) = try context.nativeImage(list: refractedList(),
+        let (pixels, _) = try context.nativeImage(list: edgeContentList(blurRadius: 12),
             format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
-        let leftEdge = try bandLuma(pixels, from: 17, to: 24)
+        let near = try bandLuma(pixels, from: 18, to: 24)
         let body = try bandLuma(pixels, from: 27, to: 37)
-        let rightEdge = try bandLuma(pixels, from: 40, to: 46)
-        print("glass-lens left=\(leftEdge) body=\(body) right=\(rightEdge)")
-        // The bar ends at the panel's left edge; only the lens can make the
-        // band just inside brighter than the body — and it is one-sided.
-        #expect(leftEdge - body > 0.1)
-        #expect(leftEdge > rightEdge + 0.1)
+        let far = try bandLuma(pixels, from: 40, to: 46)
+        print("frost-reach near=\(near) body=\(body) far=\(far)")
+        // The bright bar ends at the panel's left edge, so the near band can
+        // only be brighter if the capture carried it across the boundary.
+        #expect(near > body + 0.02)
+        // And it stays a diffusion: the bar must fade out well before the far
+        // side, or the capture reached further than a gaussian of this radius
+        // can carry and something is sampling the sharp frame.
+        #expect(body > far + 0.02)
     }
 }
 #endif

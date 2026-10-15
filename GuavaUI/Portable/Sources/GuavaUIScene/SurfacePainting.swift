@@ -217,11 +217,16 @@ extension DrawList {
     }
 
     /// Paint the rim light: the edge of the glass catching the light above the
-    /// UI. Two layers — a faint ring that follows the rounded corners all the
-    /// way round, and a bright bar along the top edge between the corner arcs.
-    /// The ring keeps the corners from going dead; the bar is what says which
-    /// way is up. The bar rides on the ring where they overlap, so the top edge
+    /// UI. Two layers — a ring that follows the rounded corners all the way
+    /// round, and a bright bar along the top edge between the corner arcs. The
+    /// ring keeps the corners from going dead; the bar is what says which way
+    /// is up. The bar rides on the ring where they overlap, so the top edge
     /// ends brightest and the bottom stays near-off.
+    ///
+    /// The ring is not a whisper. A frosted panel is lightened from underneath
+    /// by the backdrop pass, and on the dark theme that lift eats a faint rim
+    /// whole — the edge has to be strong enough to survive being drawn over
+    /// something brighter than the colour it was derived from.
     public func addHighlight(_ highlight: SurfaceHighlight, rect: UIRect, cornerRadius: Float,
                              borderWidth: Float = 0, opacity: Float = 1) {
         guard !highlight.isEmpty, rect.width > 0, rect.height > 0 else { return }
@@ -234,7 +239,7 @@ extension DrawList {
         guard ring.width > 0, ring.height > 0 else { return }
         let width = min(highlight.width, ring.height)
         let radius = min(cornerRadius, min(ring.width, ring.height) * 0.5)
-        let ringColor = Color(r: color.r, g: color.g, b: color.b, a: color.a * 0.2 * opacity)
+        let ringColor = Color(r: color.r, g: color.g, b: color.b, a: color.a * 0.45 * opacity)
         if radius > 0 {
             addRoundedRectStroke(ring, radius: radius, width: width, color: ringColor)
         } else {
