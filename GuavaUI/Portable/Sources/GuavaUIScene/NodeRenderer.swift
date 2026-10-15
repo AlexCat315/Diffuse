@@ -7,7 +7,8 @@ import Foundation
 /// Walks a `Node` tree post-layout and emits draw commands into a `DrawList`.
 ///
 /// Convention: `Node.frame` is interpreted as parent-local; the renderer
-/// accumulates an absolute origin while descending. Background fills and the
+/// carries a placement down the tree rather than a bare origin, so a node's
+/// `transform` reaches the subtree it scales. Background fills and the
 /// `Node.draw` hook (used by Text/Image) are emitted in that order so custom
 /// content paints over its own background. `clipsToBounds` pushes a scissor
 /// for the duration of the subtree.
@@ -21,17 +22,29 @@ public struct NodeRenderer {
                                       y: Float(root.frame.origin.y),
                                       width: Float(root.frame.width),
                                       height: Float(root.frame.height)))
-        renderNode(root, list: list, originX: 0, originY: 0)
+        renderNode(root, list: list, placed: .identity)
     }
 
-    private func renderNode(_ node: Node, list: DrawList,
-                            originX: Float, originY: Float) {
+    /// `placed` is where the parent's content sits; the node composes its own
+    /// placement onto it. Carrying the whole transform rather than a resolved
+    /// origin is what lets a scale reach this node's children — an origin alone
+    /// has nowhere to record how much bigger or smaller they should be drawn.
+    private func renderNode(_ node: Node, list: DrawList, placed: Affine2D) {
         let firstVertex = list.vertices.count
         let f = node.frame
-        let absX = originX + Float(f.origin.x)
-        let absY = originY + Float(f.origin.y)
-        let width  = Float(f.size.width)
-        let height = Float(f.size.height)
+        let own = placed.followed(by: node.placementStep(scrolling: .zero))
+        let origin = own.origin
+        let absX = origin.x
+        let absY = origin.y
+        let scale = own.a
+        let width  = Float(f.size.width) * scale
+        let height = Float(f.size.height) * scale
+
+        // Every length on the node's own box is measured in the node's units, so
+        // it scales with the box. A 10pt corner drawn at 0.96 is a 9.6pt corner
+        // — leaving it at 10 would make the panel visibly rounder as it grew.
+        let radius = node.cornerRadius * scale
+        let borderWidth = node.borderWidth * scale
 
         // 1. Clip stack push (covers background, content, and children).
         let clipped = node.clipsToBounds && width > 0 && height > 0
@@ -48,35 +61,35 @@ public struct NodeRenderer {
         // painted, so clip to that too and keep only the visible fringe.
         let occluded: UIRect? = node.backgroundColor != nil ? rect : nil
         list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
-                       rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity,
+                       rect: rect, cornerRadius: radius, opacity: node.opacity,
                        frostedRect: node.backdropBlur > 0 ? rect : nil,
                        occludedRect: occluded)
 
         // 3. Border ring, including when the background is transparent.
-        if let bc = node.borderColor, node.borderWidth > 0,
+        if let bc = node.borderColor, borderWidth > 0,
            width > 0, height > 0 {
             let color = applyOpacity(bc, node.opacity)
-            list.addRoundedRectStroke(rect, radius: node.cornerRadius,
-                                      width: node.borderWidth, color: color)
+            list.addRoundedRectStroke(rect, radius: radius,
+                                      width: borderWidth, color: color)
         }
 
         // 4. Background fill (inset by border width so it does not overdraw
         //    the border ring).
         if let bg = node.backgroundColor, width > 0, height > 0 {
-            let inset = (node.borderColor != nil && node.borderWidth > 0) ? node.borderWidth : 0
+            let inset = (node.borderColor != nil && node.borderWidth > 0) ? borderWidth : 0
             let bgWidth  = max(0, width  - 2 * inset)
             let bgHeight = max(0, height - 2 * inset)
             if bgWidth > 0 && bgHeight > 0 {
                 let rect = UIRect(x: absX + inset, y: absY + inset,
                                   width: bgWidth, height: bgHeight)
                 let color = applyOpacity(bg, node.opacity)
-                let bgRadius = max(0, node.cornerRadius - inset)
+                let bgRadius = max(0, radius - inset)
                 // The backdrop covers the whole node, not just the fill: the
                 // border ring is drawn on top of it and must stay crisp.
                 if node.backdropBlur > 0 {
                     list.beginBackdrop(UIBackdrop(
                         rect: UIRect(x: absX, y: absY, width: width, height: height),
-                        cornerRadius: node.cornerRadius,
+                        cornerRadius: radius,
                         blurRadius: node.backdropBlur))
                 }
                 if bgRadius > 0 {
@@ -92,18 +105,21 @@ public struct NodeRenderer {
             draw(list, CGPoint(x: Double(absX), y: Double(absY)))
         }
 
-        // 6. Children — translated by -contentOffset for scrollable containers.
-        // The offset stays fractional throughout motion and at rest.
-        let childOriginX = absX - Float(node.contentOffset.x)
-        let childOriginY = absY - Float(node.contentOffset.y)
+        // 6. Children — placed where this node's *content* sits, which is its
+        //    own frame slid by -contentOffset and then scaled. The offset stays
+        //    fractional throughout motion and at rest.
+        let content = placed.followed(by: node.placementStep(scrolling: node.contentOffset))
+        let childOrigin = content.origin
+        let childOriginX = childOrigin.x
+        let childOriginY = childOrigin.y
         let descendantStart = list.vertices.count
         if node.childrenMayNeedZSort {
             for child in renderOrderedChildren(of: node) {
-                renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
+                renderNode(child, list: list, placed: content)
             }
         } else {
             for child in node.children {
-                renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
+                renderNode(child, list: list, placed: content)
             }
         }
 

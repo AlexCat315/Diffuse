@@ -15,9 +15,6 @@ import CoreGraphics
 /// Scale is uniform. A per-axis scale would fit the same shape here, but no
 /// caller needs it yet, and one number is what an animation can hand straight
 /// to a spring without inventing a second thing to interpolate.
-///
-/// The scale is a `Float` because that is what an animated value is on this
-/// path; it becomes `CGFloat` at the geometry boundary in `NodeGeometry`.
 public struct NodeTransform: Equatable, Sendable {
     /// Multiplier applied to both axes about the anchor. `1` leaves the subtree
     /// where layout put it; `0` collapses it onto the anchor point.
@@ -55,19 +52,20 @@ public struct NodeTransform: Equatable, Sendable {
 /// | b  d  f |
 /// ```
 ///
-/// `CGFloat` throughout: everything it maps is a `CGPoint` or `CGRect`, and
-/// Swift has no implicit numeric conversion, so any other choice would mean
-/// converting at every boundary instead of at the one place a transform enters.
+/// `Float`, not `CGFloat`, because the renderers thread this down the tree once
+/// per node per frame and `DrawList` is already `Float` throughout. The
+/// `CGPoint`/`CGRect` boundary converts in `NodeGeometry`, on a cold path,
+/// rather than at every node.
 struct Affine2D: Equatable, Sendable {
-    var a: CGFloat
-    var b: CGFloat
-    var c: CGFloat
-    var d: CGFloat
-    var e: CGFloat
-    var f: CGFloat
+    var a: Float
+    var b: Float
+    var c: Float
+    var d: Float
+    var e: Float
+    var f: Float
 
-    init(a: CGFloat = 1, b: CGFloat = 0, c: CGFloat = 0,
-         d: CGFloat = 1, e: CGFloat = 0, f: CGFloat = 0) {
+    init(a: Float = 1, b: Float = 0, c: Float = 0,
+         d: Float = 1, e: Float = 0, f: Float = 0) {
         self.a = a
         self.b = b
         self.c = c
@@ -77,18 +75,6 @@ struct Affine2D: Equatable, Sendable {
     }
 
     static let identity = Affine2D()
-
-    /// Scale about `anchor`, given in the same space as the points being
-    /// mapped. The anchor is the one point left untouched, so the offset it
-    /// needs is `anchor * (1 - scale)` — and zero when the scale is one.
-    init(scale: CGFloat, anchor: CGPoint) {
-        a = scale
-        b = 0
-        c = 0
-        d = scale
-        e = anchor.x * (1 - scale)
-        f = anchor.y * (1 - scale)
-    }
 
     /// This transform applied to a point first, `next` second.
     func followed(by next: Affine2D) -> Affine2D {
@@ -100,10 +86,13 @@ struct Affine2D: Equatable, Sendable {
                  f: next.b * e + next.d * f + next.f)
     }
 
-    func applied(to point: CGPoint) -> CGPoint {
-        CGPoint(x: a * point.x + c * point.y + e,
-                y: b * point.x + d * point.y + f)
+    func applied(to x: Float, _ y: Float) -> (x: Float, y: Float) {
+        (a * x + c * y + e, b * x + d * y + f)
     }
+
+    /// Where this transform puts the local origin — the only point the renderers
+    /// need while descending, and cheaper than a full point mapping.
+    var origin: (x: Float, y: Float) { (e, f) }
 
     /// The inverse, or the identity when the transform collapses a dimension.
     ///
@@ -120,5 +109,43 @@ struct Affine2D: Equatable, Sendable {
                         d:  a * inverse,
                         e: (c * f - d * e) * inverse,
                         f: (b * e - a * f) * inverse)
+    }
+}
+
+extension Node {
+    /// Maps a point in this node's local coordinates into its parent's, with
+    /// `scrolling` applied to everything *inside* the node first.
+    ///
+    /// Pass `.zero` for where the node's own frame lands, and this node's
+    /// `contentOffset` for where its content lands. That split is the whole
+    /// subtlety: `contentOffset` slides a node's children and leaves the node
+    /// where it is, so a node reporting its own origin scrolled would put
+    /// reveal-into-view, hit testing and the platform drag regions off by
+    /// exactly the scroll offset.
+    ///
+    /// The order is
+    /// `frame.origin + (point - scrolling) * scale + anchor * size * (1 - scale)`,
+    /// and the order is the point. Scroll is measured in the content's own
+    /// units, so it comes out *before* the scale: scrolling 120pt inside a
+    /// container drawn at 2× moves content 240pt across the screen, which is
+    /// what a scroll view growing under your finger has to do. Scaling first
+    /// would move it 120pt and read as the list sliding at half speed.
+    ///
+    /// The `anchor * size * (1 - scale)` term is what pins the anchor: the
+    /// rectangle shrinks toward it, so shifting back by what came off each side
+    /// leaves the anchor exactly where it was. At `scale == 1` both extra terms
+    /// vanish and this is the bare translation it was before transforms existed.
+    func placementStep(scrolling: CGPoint) -> Affine2D {
+        let scale = transform.scale
+        var result = Affine2D()
+        result.a = scale
+        result.b = 0
+        result.c = 0
+        result.d = scale
+        result.e = Float(frame.origin.x) - Float(scrolling.x) * scale
+            + Float(transform.anchor.x * frame.width) * (1 - scale)
+        result.f = Float(frame.origin.y) - Float(scrolling.y) * scale
+            + Float(transform.anchor.y * frame.height) * (1 - scale)
+        return result
     }
 }

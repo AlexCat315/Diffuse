@@ -28,10 +28,18 @@ public final class RenderObject {
     /// blend / shadow over.
     public internal(set) var isLayerRoot: Bool = true
 
-    /// Snapshot of the absolute origin of this object the last time the
-    /// renderer recorded into it. Phase 4b uses this to detect "the layer
-    /// only moved" vs "the layer's contents changed".
-    public var lastAbsoluteOrigin: CGPoint?
+    /// Snapshot of this object's placement the last time the renderer recorded
+    /// into it. Phase 4b uses this to detect "the layer only moved" vs "the
+    /// layer's contents changed".
+    ///
+    /// The whole transform rather than just an origin, because a node can keep
+    /// its origin and still need re-recording: a scale that changed leaves the
+    /// recorded vertices the wrong size, and reusing them draws a stale image
+    /// without reporting anything.
+    ///
+    /// Internal like the cache it guards: only `LayerAwareNodeRenderer` decides
+    /// whether a recorded layer is still good.
+    internal var lastPlacement: Affine2D?
 
     /// Set by Phase 4b's renderer when the cached DrawList for this layer
     /// is no longer trustworthy and must be re-recorded.
@@ -39,8 +47,8 @@ public final class RenderObject {
 
     /// Phase 4b: cached DrawList recorded the last time this layer was
     /// composited. Holds vertices in absolute coordinates valid only for the
-    /// `lastAbsoluteOrigin` snapshot. `LayerAwareNodeRenderer` reuses this
-    /// list when `cacheInvalid == false` and the origin hasn't moved.
+    /// `lastPlacement` snapshot. `LayerAwareNodeRenderer` reuses this
+    /// list when `cacheInvalid == false` and the placement hasn't moved.
     /// Non-layer RenderObjects don't cache (this stays nil).
     public var cachedLayerList: DrawList?
 

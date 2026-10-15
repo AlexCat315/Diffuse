@@ -10,12 +10,16 @@ import Foundation
 ///
 /// Cache invariants per layer-root `RenderObject`:
 /// - `cacheInvalid == false` AND
+/// - the layer's placement at composite time matches the one captured when the
+///   cache was recorded (`lastPlacement`: position *and* scale) AND
 /// - the layer's parent clip stack at composite time matches the one captured
 ///   when the cache was recorded (tracked by `lastClipStack`).
 ///
 /// Stable unclipped leaf layers may move under the same parent clip without
 /// re-recording. Their cached vertices are translated while being appended;
-/// this is the common path for text and controls moving during scrolling.
+/// this is the common path for text and controls moving during scrolling. That
+/// shortcut needs the scale to be unchanged as well — translating vertices
+/// cannot resize them, so a scaling layer has to re-record.
 ///
 /// Visible geometry matches `NodeRenderer` for the same tree. Completely
 /// clipped subtrees and cached offscreen leaves can be omitted. Cached layers
@@ -34,53 +38,63 @@ public final class LayerAwareNodeRenderer {
                                            width: Float(node.frame.width),
                                            height: Float(node.frame.height)))
         }
-        compose(root, into: frame, parentOriginX: 0, parentOriginY: 0,
-                parentClipStack: [])
+        compose(root, into: frame, placed: .identity,
+               parentClipStack: [])
     }
 
+    /// `placed` is where the parent's content sits; the node composes its own
+    /// placement onto it. Carrying the transform rather than a resolved origin
+    /// is what lets a scale reach the subtree and, through `lastPlacement`, what
+    /// makes the cache notice when it changes.
     private func compose(_ obj: RenderObject,
                          into frame: DrawList,
-                         parentOriginX: Float,
-                         parentOriginY: Float,
+                         placed: Affine2D,
                          parentClipStack: [UIRect]) {
         guard let node = obj.node else { return }
         let f = node.frame
-        let absX = parentOriginX + Float(f.origin.x)
-        let absY = parentOriginY + Float(f.origin.y)
-        let origin = CGPoint(x: CGFloat(absX), y: CGFloat(absY))
+        let own = placed.followed(by: node.placementStep(scrolling: .zero))
+        let origin = own.origin
+        let absX = origin.x
+        let absY = origin.y
+        let scale = own.a
+        let width = Float(f.width) * scale
+        let height = Float(f.height) * scale
 
-        if node.clipsToBounds, f.width > 0, f.height > 0,
-           RenderCulling.isOutside(UIRect(x: absX, y: absY, width: Float(f.width), height: Float(f.height)), list: frame) {
+        if node.clipsToBounds, width > 0, height > 0,
+           RenderCulling.isOutside(UIRect(x: absX, y: absY, width: width, height: height), list: frame) {
             return
         }
 
         if obj.isLayerRoot {
             // Try to reuse a cached layer DrawList.
-            let originUnchanged = obj.lastAbsoluteOrigin.map {
-                $0 == origin
-            } ?? false
+            let placementUnchanged = obj.lastPlacement == own
             let clipUnchanged = obj.lastClipStack == parentClipStack
             if !obj.cacheInvalid,
                clipUnchanged,
                let cached = obj.cachedLayerList,
                cached.pixelScale == frame.pixelScale {
-                if obj.children.isEmpty, let bounds = obj.cachedPaintBounds {
-                    let translated = UIRect(x: bounds.x + Float(origin.x - (obj.lastAbsoluteOrigin?.x ?? origin.x)),
-                                            y: bounds.y + Float(origin.y - (obj.lastAbsoluteOrigin?.y ?? origin.y)),
+                if obj.children.isEmpty, let bounds = obj.cachedPaintBounds,
+                   let cachedPlacement = obj.lastPlacement {
+                    let translated = UIRect(x: bounds.x + absX - cachedPlacement.e,
+                                            y: bounds.y + absY - cachedPlacement.f,
                                             width: bounds.width, height: bounds.height)
                     if RenderCulling.isOutside(translated, list: frame) { return }
                 }
-                if originUnchanged {
+                if placementUnchanged {
                     frame.append(cached)
                     return
                 }
+                // Translation-only reuse. Only valid at an unchanged scale: the
+                // cached vertices were baked at the old size and moving them
+                // cannot resize them.
                 if obj.children.isEmpty,
                    !node.clipsToBounds,
-                   let cachedOrigin = obj.lastAbsoluteOrigin {
+                   own.a == obj.lastPlacement?.a,
+                   let cachedPlacement = obj.lastPlacement {
                     frame.append(
                         cached,
-                        vertexTranslationX: Float(origin.x - cachedOrigin.x),
-                        vertexTranslationY: Float(origin.y - cachedOrigin.y)
+                        vertexTranslationX: own.e - cachedPlacement.e,
+                        vertexTranslationY: own.f - cachedPlacement.f
                     )
                     return
                 }
@@ -92,17 +106,16 @@ public final class LayerAwareNodeRenderer {
                 // caches during scrolling or live chart updates. If another
                 // frame arrives without invalidation, cache it then; stable
                 // continuous frames subsequently become one bulk append.
-                if obj.cacheInvalid || !originUnchanged || !clipUnchanged {
+                if obj.cacheInvalid || !placementUnchanged || !clipUnchanged {
                     recordSelfAndDescendants(
                         obj,
                         node: node,
                         into: frame,
-                        originX: absX,
-                        originY: absY,
+                        placed: placed,
                         clipStack: parentClipStack
                     )
                     obj.cachedLayerList = nil
-                    obj.lastAbsoluteOrigin = origin
+                    obj.lastPlacement = own
                     obj.lastClipStack = parentClipStack
                     obj.cacheInvalid = false
                     return
@@ -120,14 +133,13 @@ public final class LayerAwareNodeRenderer {
                 obj,
                 node: node,
                 into: layerList,
-                originX: absX,
-                originY: absY,
+                placed: placed,
                 clipStack: parentClipStack
             )
             for _ in parentClipStack { layerList.popClip() }
             obj.cachedLayerList = layerList
             obj.cachedPaintBounds = obj.children.isEmpty ? RenderCulling.bounds(of: layerList) : nil
-            obj.lastAbsoluteOrigin = origin
+            obj.lastPlacement = own
             obj.lastClipStack = parentClipStack
             obj.cacheInvalid = false
             // Do not bake an offscreen leaf into its ancestor's first cache.
@@ -145,8 +157,7 @@ public final class LayerAwareNodeRenderer {
             obj,
             node: node,
             into: frame,
-            originX: absX,
-            originY: absY,
+            placed: placed,
             clipStack: parentClipStack
         )
     }
@@ -157,12 +168,21 @@ public final class LayerAwareNodeRenderer {
     private func recordSelfAndDescendants(_ obj: RenderObject,
                                           node: Node,
                                           into list: DrawList,
-                                          originX: Float,
-                                          originY: Float,
+                                          placed: Affine2D,
                                           clipStack: [UIRect]) {
         let firstVertex = list.vertices.count
-        let width = Float(node.frame.size.width)
-        let height = Float(node.frame.size.height)
+        let own = placed.followed(by: node.placementStep(scrolling: .zero))
+        let origin = own.origin
+        let originX = origin.x
+        let originY = origin.y
+        let scale = own.a
+        let width = Float(node.frame.size.width) * scale
+        let height = Float(node.frame.size.height) * scale
+
+        // Lengths on the node's own box are measured in the node's units, so
+        // they scale with it — see `NodeRenderer` for the same reasoning.
+        let radius = node.cornerRadius * scale
+        let borderWidth = node.borderWidth * scale
 
         // Clip push if applicable. clipsToBounds always implies layer root,
         // so only the root-of-this-layer node can push a new clip rect.
@@ -174,17 +194,22 @@ public final class LayerAwareNodeRenderer {
         }
 
         // Painters (mirror NodeRenderer order):
-        emitShadow(node, into: list, x: originX, y: originY, w: width, h: height)
-        emitBorder(node, into: list, x: originX, y: originY, w: width, h: height)
-        emitBackground(node, into: list, x: originX, y: originY, w: width, h: height)
+        emitShadow(node, into: list, x: originX, y: originY, w: width, h: height,
+                   radius: radius)
+        emitBorder(node, into: list, x: originX, y: originY, w: width, h: height,
+                   radius: radius, borderWidth: borderWidth)
+        emitBackground(node, into: list, x: originX, y: originY, w: width, h: height,
+                       radius: radius, borderWidth: borderWidth)
         if let draw = node.draw {
             draw(list, CGPoint(x: Double(originX), y: Double(originY)))
         }
 
-        // Children. Translate by -contentOffset for scrollable containers. The
-        // offset stays fractional throughout motion and at rest.
-        let childX = originX - Float(node.contentOffset.x)
-        let childY = originY - Float(node.contentOffset.y)
+        // Children, placed where this node's *content* sits: its own frame slid
+        // by -contentOffset and then scaled. The offset stays fractional
+        // throughout motion and at rest.
+        let content = placed.followed(by: node.placementStep(scrolling: node.contentOffset))
+        let childX = content.e
+        let childY = content.f
         let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack
         let children = node.childrenMayNeedZSort ? renderOrderedChildren(of: obj) : obj.children
         let descendantStart = list.vertices.count
@@ -194,18 +219,15 @@ public final class LayerAwareNodeRenderer {
             if child.isLayerRoot {
                 compose(child,
                         into: list,
-                        parentOriginX: childX,
-                        parentOriginY: childY,
+                        placed: content,
                         parentClipStack: childClipStack)
             } else {
                 guard let childNode = child.node else { continue }
-                let cf = childNode.frame
                 recordSelfAndDescendants(
                     child,
                     node: childNode,
                     into: list,
-                    originX: childX + Float(cf.origin.x),
-                    originY: childY + Float(cf.origin.y),
+                    placed: content,
                     clipStack: childClipStack
                 )
             }
@@ -225,45 +247,47 @@ public final class LayerAwareNodeRenderer {
     // MARK: - Painter helpers (mirror NodeRenderer.swift)
 
     private func emitShadow(_ node: Node, into list: DrawList,
-                            x: Float, y: Float, w: Float, h: Float) {
+                            x: Float, y: Float, w: Float, h: Float,
+                            radius: Float) {
         let rect = UIRect(x: x, y: y, width: w, height: h)
         // An opaque background is painted over this node immediately after, so
         // the shadow's interior is never visible. Clipping to it keeps the
         // fringe and drops the wasted fills.
         let occluded = node.backgroundColor != nil ? rect : nil
         list.addShadow(LayeredShadow(ambient: node.ambientShadow, key: node.shadow),
-                       rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity,
+                       rect: rect, cornerRadius: radius, opacity: node.opacity,
                        frostedRect: node.backdropBlur > 0 ? rect : nil,
                        occludedRect: occluded)
     }
 
     private func emitBorder(_ node: Node, into list: DrawList,
-                            x: Float, y: Float, w: Float, h: Float) {
-        guard let bc = node.borderColor, node.borderWidth > 0,
+                            x: Float, y: Float, w: Float, h: Float,
+                            radius: Float, borderWidth: Float) {
+        guard let bc = node.borderColor, borderWidth > 0,
               w > 0, h > 0 else { return }
         let rect = UIRect(x: x, y: y, width: w, height: h)
         let color = applyOpacity(bc, node.opacity)
-        list.addRoundedRectStroke(rect, radius: node.cornerRadius,
-                                  width: node.borderWidth, color: color)
+        list.addRoundedRectStroke(rect, radius: radius,
+                                  width: borderWidth, color: color)
     }
 
     private func emitBackground(_ node: Node, into list: DrawList,
-                                x: Float, y: Float, w: Float, h: Float) {
+                                x: Float, y: Float, w: Float, h: Float,
+                                radius: Float, borderWidth: Float) {
         guard let bg = node.backgroundColor, w > 0, h > 0 else { return }
-        let inset: Float = (node.borderColor != nil && node.borderWidth > 0)
-            ? node.borderWidth : 0
+        let inset: Float = (node.borderColor != nil && node.borderWidth > 0) ? borderWidth : 0
         let bgWidth = max(0, w - 2 * inset)
         let bgHeight = max(0, h - 2 * inset)
         guard bgWidth > 0 && bgHeight > 0 else { return }
         let rect = UIRect(x: x + inset, y: y + inset,
                           width: bgWidth, height: bgHeight)
         let color = applyOpacity(bg, node.opacity)
-        let bgRadius = max(0, node.cornerRadius - inset)
+        let bgRadius = max(0, radius - inset)
         // The backdrop covers the whole node, not just the fill: the border
         // ring is drawn on top of it and must stay crisp.
         if node.backdropBlur > 0 {
             list.beginBackdrop(UIBackdrop(rect: UIRect(x: x, y: y, width: w, height: h),
-                                          cornerRadius: node.cornerRadius,
+                                          cornerRadius: radius,
                                           blurRadius: node.backdropBlur))
         }
         if bgRadius > 0 {
