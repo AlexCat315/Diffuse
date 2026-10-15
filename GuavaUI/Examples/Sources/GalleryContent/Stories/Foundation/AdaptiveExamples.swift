@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid: true
+        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid, .splitView: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : 104
+        let height: Float = page == .calendar ? 440 : page == .splitView ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -42,6 +42,7 @@ private struct AdaptiveControlSample: View {
     @State private var selected: Int? = 0
     @State private var tab = 0
     @State private var date: Date? = nil
+    @State private var fraction: Float = 0.35
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
             sample
@@ -78,6 +79,13 @@ private struct AdaptiveControlSample: View {
                 PropertyGridRow(id: "name", label: "Display name") { TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled } }
             ])
         ]).frame(width: .percent(100), height: .points(180)))
+        case .splitView: AnyView(SplitView(.horizontal, fraction: $fraction,
+            constraints: .init(minimumFirst: 150, minimumSecond: 220),
+            compact: .init(firstTitle: "Navigation", secondTitle: "Details")) {
+                Text("Navigation pane").padding(12).background(.surfaceVariant)
+            } second: {
+                TextField("Retained draft", text: $text) { $0.behavior.disabled = !options.isEnabled }.padding(12)
+            }.frame(width: .percent(100), height: .points(210)))
         default: AnyView(EmptyView())
         }
     }

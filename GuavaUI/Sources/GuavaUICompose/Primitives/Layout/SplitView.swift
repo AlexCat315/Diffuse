@@ -12,8 +12,9 @@ public enum SplitAxis: Sendable, Hashable {
 ///
 /// Pass a `Float` for a layout the application owns, or a `Binding<Float>` for
 /// one the user owns — the binding form renders a draggable divider that writes
-/// clamped fractions back through it, so the layout can be persisted without
-/// the component owning any state.
+/// clamped fractions back through it, so the application can persist the user's
+/// requested proportion. Supply `compact` to switch to retained single panes
+/// when the container is smaller than its threshold.
 ///
 /// ```swift
 /// SplitView(.horizontal, fraction: 0.35) { sidebar } second: { content }
@@ -29,7 +30,10 @@ public struct SplitView<First: View, Second: View>: View {
     public let dividerThickness: Float
     public let dividerColor: Color?
     public let constraints: SplitConstraints
+    public let compact: SplitCompactPresentation?
     @State private var measuredExtent: Float = 0
+    @State private var selectedPane: SplitPane = .first
+    @State private var focusTransfer = SplitFocusTransfer()
     public let first: First
     public let second: Second
 
@@ -44,6 +48,7 @@ public struct SplitView<First: View, Second: View>: View {
                 dividerThickness: Float = 1,
                 dividerColor: Color? = nil,
                 constraints: SplitConstraints = .init(fraction: 0.05...0.95),
+                compact: SplitCompactPresentation? = nil,
                 @ViewBuilder first: () -> First,
                 @ViewBuilder second: () -> Second) {
         self.axis = axis
@@ -53,6 +58,7 @@ public struct SplitView<First: View, Second: View>: View {
         self.dividerThickness = dividerThickness
         self.dividerColor = dividerColor
         self.constraints = constraints
+        self.compact = compact
         self.first = first()
         self.second = second()
     }
@@ -65,6 +71,7 @@ public struct SplitView<First: View, Second: View>: View {
                 dividerThickness: Float = 1,
                 dividerColor: Color? = nil,
                 constraints: SplitConstraints = .init(),
+                compact: SplitCompactPresentation? = nil,
                 @ViewBuilder first: () -> First,
                 @ViewBuilder second: () -> Second) {
         self.axis = axis
@@ -74,6 +81,7 @@ public struct SplitView<First: View, Second: View>: View {
         self.dividerThickness = dividerThickness
         self.dividerColor = dividerColor
         self.constraints = constraints
+        self.compact = compact
         self.first = first()
         self.second = second()
     }
@@ -83,31 +91,52 @@ public struct SplitView<First: View, Second: View>: View {
         return max(0, min(1, value))
     }
 
-    private var clampedFraction: Float {
+    private func clampedFraction(handleThickness: Float) -> Float {
         let proposed = fractionBinding?.wrappedValue ?? staticFraction
         let value = proposed.isFinite ? proposed : 0.5
-        return max(resolvedRange.lowerBound, min(resolvedRange.upperBound, value))
-    }
-
-    private var handleThickness: Float { fractionBinding == nil ? dividerThickness : max(dividerThickness, 7) }
-    private var resolvedRange: ClosedRange<Float> {
-        constraints.range(available: measuredExtent - handleThickness - 2 * spacing)
+        let range = constraints.range(available: measuredExtent - handleThickness - 2 * spacing)
+        return max(range.lowerBound, min(range.upperBound, value))
     }
 
     public var body: some View {
-        Box(direction: axis.flexDirection, alignItems: .stretch, spacing: spacing) {
-            first.flex(clampedFraction, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
-            AnyView(divider)
-            second.flex(1 - clampedFraction, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+        SurfaceReader { surface in
+            let thickness = fractionBinding == nil ? dividerThickness
+                : max(dividerThickness, surface.input.contains(.touch) ? surface.minimumControlExtent : 7)
+            let fraction = clampedFraction(handleThickness: thickness)
+            let isCompact = compact.map { measuredExtent < $0.resolvedThreshold } ?? false
+            let selection = compact?.selection ?? $selectedPane
+            Box(direction: .column, alignItems: .stretch) {
+                if let compact {
+                    SplitRetainedRegion(isVisible: isCompact, focus: focusTransfer) {
+                        SplitPaneSelector(presentation: compact, selection: selection)
+                    }.flex(0, shrink: 0)
+                }
+                Box(direction: axis.flexDirection, alignItems: .stretch, spacing: spacing) {
+                    SplitRetainedRegion(isVisible: !isCompact || selection.wrappedValue == .first,
+                                        focus: focusTransfer, pane: .first, direction: axis.flexDirection) {
+                        first.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+                    }.flex(isCompact ? 1 : fraction, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+                    SplitRetainedRegion(isVisible: !isCompact, focus: focusTransfer, direction: axis.flexDirection) {
+                        AnyView(divider(thickness: thickness))
+                    }.flex(0, shrink: 0)
+                    SplitRetainedRegion(isVisible: !isCompact || selection.wrappedValue == .second,
+                                        focus: focusTransfer, pane: .second, direction: axis.flexDirection) {
+                        second.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+                    }.flex(isCompact ? 1 : 1 - fraction, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+                }
+                .modifier(SplitContainerMarker())
+                .flex(1, shrink: 1).frame(minWidth: 0, minHeight: 0)
+            }
+            .clipped()
+            .modifier(_SplitExtentObserver(axis: axis, extent: $measuredExtent))
+            .modifier(SplitFocusHandoff(focus: focusTransfer, isCompact: isCompact, selection: selection.wrappedValue))
         }
-        .clipped()
-        .modifier(_SplitExtentObserver(axis: axis, extent: $measuredExtent))
     }
 
-    @ViewBuilder private var divider: some View {
+    @ViewBuilder private func divider(thickness: Float) -> some View {
         if let fractionBinding {
             _SplitHandle(axis: axis,
-                         thickness: max(dividerThickness, 7),
+                         thickness: thickness,
                          color: dividerColor,
                          fraction: fractionBinding,
                          constraints: constraints,
@@ -160,14 +189,16 @@ private struct _SplitHandle: _PrimitiveView {
     func _makeNode() -> Node { Node() }
 
     func _makeLayoutNode() -> LayoutNode? {
-        let layout = LayoutNode()
+        LayoutNode()
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
         layout.flexShrink = 0
         layout.alignSelf = .stretch
         switch axis {
-        case .horizontal: layout.width = thickness
-        case .vertical: layout.height = thickness
+        case .horizontal: layout.width = thickness; layout.height = nil
+        case .vertical: layout.height = thickness; layout.width = nil
         }
-        return layout
     }
 
     func _updateNode(_ node: Node) {
@@ -183,6 +214,9 @@ private struct _SplitHandle: _PrimitiveView {
         }
         node.accessibilityActions.increment = { adjust(node: node, by: 0.02) }
         node.accessibilityActions.decrement = { adjust(node: node, by: -0.02) }
+        node.attachments[PointerCaptureAttachmentKey.didLoseCapture] = { [weak node] in
+            node?.attachments.removeValue(forKey: Keys.start)
+        }
         // Grab area painted inset from the divider line, so the visual weight
         // stays a hairline while the hit target stays usable.
         node.updateDraw(identity: DrawIdentity(color: color?.rgba8, thickness: thickness)) { [weak node] list, origin in
@@ -267,13 +301,17 @@ private struct _SplitHandle: _PrimitiveView {
     }
 
     private func containerExtent(_ node: Node) -> Float {
-        let container = node.parent?.frame ?? node.frame
+        var owner = node.parent
+        while let candidate = owner, candidate.attachments[SplitContainerMarker.key] == nil {
+            owner = candidate.parent
+        }
+        let container = owner?.frame ?? node.frame
         let extent = axis == .horizontal ? Float(container.width) : Float(container.height)
         return max(0, extent - thickness - 2 * spacing)
     }
 
     private func write(_ value: Float, node: Node) {
-        guard value.isFinite else { return }
+        guard value.isFinite, node.acceptsSubtreeInput else { return }
         let range = constraints.range(available: containerExtent(node))
         let clamped = max(range.lowerBound, min(range.upperBound, value))
         if fraction.wrappedValue != clamped { fraction.wrappedValue = clamped }

@@ -185,6 +185,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             node.attachments[_ScrollViewAttachmentKeys.isHovered] = false
         }
         node.layoutDidUpdate = { node in
+            // Retained responsive panes suppress Yoga layout for the whole
+            // subtree. Zero frames are not new scroll geometry: publishing
+            // them would clamp the user's saved offset to zero while hidden.
+            guard !Self.isLayoutSuppressed(node) else { return }
             Self.refreshScrollableContentSize(on: node)
             Self.publishScrollRange(to: motion, on: node)
             if let desired = node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.pendingOffset) as? CGPoint {
@@ -448,6 +452,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     @discardableResult
     private static func publishScrollRange(to animator: ScrollAnimator,
                                            on node: Node) -> Bool {
+        guard !isLayoutSuppressed(node), node.frame.width > 0, node.frame.height > 0 else { return false }
         let viewport = visibleViewportRect(for: node).size
         let content = cachedScrollableContentSize(for: node)
         guard content.width > 0 || content.height > 0 else { return false }
@@ -455,6 +460,15 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                y: max(0, content.height - viewport.height)),
                         viewportSize: viewport)
         return true
+    }
+
+    private static func isLayoutSuppressed(_ node: Node) -> Bool {
+        var ancestor: Node? = node
+        while let candidate = ancestor {
+            if candidate.layoutNode?.display == Display.none { return true }
+            ancestor = candidate.parent
+        }
+        return false
     }
 
     private static func resolvedPhysics(on node: Node) -> ScrollPhysics {

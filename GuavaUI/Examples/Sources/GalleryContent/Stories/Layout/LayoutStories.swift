@@ -19,6 +19,7 @@ struct PanelStory: View {
 struct SplitStory: View {
     @State private var fraction = 0.4
     @State private var resizable: Float = 0.35
+    @State private var draft: TextBuffer = "This draft survives pane switches"
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Proportional split", "The slider updates the fraction; the divider is a plain separator because the application owns the layout.") {
@@ -29,12 +30,21 @@ struct SplitStory: View {
                     SplitView(.vertical, first: { Text("Top").padding(20) }, second: { Text("Bottom").padding(20).background(.surfaceVariant) })
                 }).frame(height: 210)
             }
-            StorySection("Resizable split", "Drag the divider, or focus it and use the arrow keys. The fraction is clamped and written back through the binding, so it can be persisted.") {
-                SplitView(.horizontal, fraction: $resizable, constraints: .init(fraction: 0.2...0.75, minimumFirst: 150, minimumSecond: 220), first: {
+            StorySection("Resizable and compact split", "Below 600 points of container width, choose one pane with the tabs. Widen to restore both panes and the requested fraction. Drafts and scroll positions survive the switch; use arrows, Home and End on the tabs.") {
+                SplitView(.horizontal, fraction: $resizable,
+                    constraints: .init(fraction: 0.2...0.75, minimumFirst: 150, minimumSecond: 220),
+                    compact: .init(firstTitle: "Sidebar", secondTitle: "Content"), first: {
                     Text("Sidebar").padding(24).background(.surfaceVariant)
                 }, second: {
-                    Text("Content").padding(24).background(.surface)
-                }).frame(height: 210)
+                    Box(direction: .column, alignItems: .stretch, spacing: 12) {
+                        TextField("Document title", text: $draft)
+                        ScrollView(.vertical) {
+                            Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                                for index in 1...20 { AnyView(Text("Content line \(index)").padding(8)) }
+                            }.flex(0, shrink: 0)
+                        }.flex(1, shrink: 1, basis: 0)
+                    }.padding(12).background(.surface)
+                }).frame(height: 270).debugName("gallery-adaptive-split")
                 Text("Fraction: \(Int(resizable * 100))% · 20–75% · pane minimums 150 / 220pt").font(.caption).foregroundColor(.onSurfaceMuted)
             }
         }

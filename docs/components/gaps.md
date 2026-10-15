@@ -11,7 +11,7 @@
 
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
-| 布局与容器 | Box/Row/Column/Spacer/Divider、ScrollView/BoundedScrollView、Panel、SplitView、Grid/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | ZStack/Overlay 公共层叠容器 P1、Masonry P2、LazyGrid span P2、SplitView 单栏（规范 5-2）、程序滚动无时长动画（scrollview.md） |
+| 布局与容器 | Box/Row/Column/Spacer/Divider、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | ZStack/Overlay 公共层叠容器 P1、Masonry P2、LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
 | 命令与选择 | Button/IconButton、ButtonGroup、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton/MenuButton P1、RangeSlider P1、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | SearchField P1、OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
@@ -159,7 +159,7 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、NavigationDrawer（Sidebar 收敛）、BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级、SplitView 单栏。Toolbar 命令溢出和 Form 标签重排已实现，验收与边界见 [toolbar.md](toolbar.md)、[form.md](form.md)。
+**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、NavigationDrawer（Sidebar 收敛）、BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级。Toolbar 命令溢出、Form 标签重排和 SplitView 单面板已实现，验收与边界见 [toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)。
 
 **P1（常用能力）**：NavigationRail、NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。
 

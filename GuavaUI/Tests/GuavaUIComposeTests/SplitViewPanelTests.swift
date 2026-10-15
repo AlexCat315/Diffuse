@@ -23,18 +23,14 @@ struct SplitViewPanelTests {
             .frame(width: 400, height: 120)
         )
 
-        graph.computeLayout(width: 400, height: 120)
-
-        let split = materialisedRoot(in: tree)
-        #expect(split.children.count == 3)
-
-        let first = split.children[0]
-        let divider = split.children[1]
-        let second = split.children[2]
+        for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 400, height: 120) }
+        func nodes(_ node: Node) -> [Node] { [node] + node.children.flatMap(nodes) }
+        let first = nodes(tree.root!).first { $0.backgroundColor == firstColor }!
+        let second = nodes(tree.root!).first { $0.backgroundColor == secondColor }!
 
         #expect(first.backgroundColor == firstColor)
         #expect(second.backgroundColor == secondColor)
-        #expect(divider.frame.width == 1)
+        #expect(second.absoluteFrame.minX - first.absoluteFrame.maxX == 1)
         #expect(abs(first.frame.width - 100) <= 1)
         #expect(abs(second.frame.width - 299) <= 1)
         #expect(first.frame.height == 120)
@@ -72,6 +68,25 @@ struct SplitViewPanelTests {
 
         #expect(header.frame.height == 34)
         #expect(content.frame.origin.y == 34)
+    } }
+
+    @Test("An intrinsic horizontal split keeps authored cross-axis sizes")
+    func intrinsicSplitHeight() { GlobalTestLock.locked {
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: Box(direction: .column, alignItems: .stretch) {
+            SplitView {
+                Box {}.frame(height: 40).debugName("intrinsic-first")
+            } second: {
+                Box {}.frame(height: 80).debugName("intrinsic-second")
+            }
+            Box {}.frame(height: 10).debugName("after-split")
+        }.frame(width: 400, height: 300))
+        defer { graph.install(root: EmptyView()) }
+        for _ in 0..<6 { graph.recomposer.commitAll(); graph.computeLayout(width: 400, height: 300) }
+        let snapshot = graph.layoutSnapshot()
+        #expect(snapshot.first { $0.debugName == "intrinsic-first" }?.frame.height == 40)
+        #expect(snapshot.first { $0.debugName == "intrinsic-second" }?.frame.height == 80)
+        #expect(snapshot.first { $0.debugName == "after-split" }?.absoluteFrame.minY == 80)
     } }
 
 

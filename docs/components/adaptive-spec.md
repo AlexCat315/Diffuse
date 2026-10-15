@@ -73,7 +73,7 @@
 | --- | --- | --- |
 | `Box` / `Row` / `Column` / `Spacer` | 默认只收缩 `flex(shrink: >0)` 的子项；`Row` 不自动换行，需要换行的工具栏/标签排显式用 `Box(wrap: .wrap)` 或 `ViewThatFits`。`Column` 不拉伸子节点到父宽。`Spacer` 与 `.flex()` 兄弟争抢剩余空间，固定间距不要用 `Spacer` 冒充 | `[已实现]` |
 | `ScrollView` / `BoundedScrollView` | 先按内容测量；`BoundedScrollView` 在 min/max 高度内先长大再滚动。溢出轴在边界处按 `.whenScrollable` 停留（顶部/底部继续吃滚动，不带动父级），非溢出轴允许事件透传；滚动条用 `.stable` gutter 预留 12pt 不压尾部控件 | `[已实现]`；键盘 Page/Home/End 与滚动条辅助功能 `[未实现]` |
-| `SplitView` | 空间足够时优先满足两侧 minimum；比例范围与像素最小冲突时像素最小优先。空间不足 minFirst + minSecond 时按两个最小尺寸的比例共享空间并继续裁剪，不让面板撑破窗口；比例作为"请求值"保留，窗口恢复后还原分配。拖拽/键盘/辅助功能写回约束后的 binding | `[已实现]`；compact 单栏/折叠阈值 `[未实现]` |
+| `SplitView` | 空间足够时优先满足两侧 minimum；比例范围与像素最小冲突时像素最小优先。未启用 compact 时，空间不足按两个最小尺寸的比例共享并裁剪。`compact` 按容器轴向长度（默认阈值 600pt）切换为单面板 + 页签，保留两个面板的节点、草稿、滚动与请求比例；恢复双栏时重新应用约束。拖拽/键盘/辅助功能才写回比例 binding；触摸分隔柄 ≥ 44pt | `[已实现]`；API 与边界见 [SplitView](splitview.md) |
 | `Grid` / `LazyGrid` | `fixed` 列保持像素宽并在不足时滚动或收缩；`flexible(minimum:)` 不跌破 minimum；`adaptive(minimum:)` 按可用宽度减少列数直至最小列数。窄于单列 minimum 时退化为单列并允许横向滚动或自身滚动 | 列策略 `[已实现]`；单列退化后的滚动兜底、span/二维窗口化 `[未实现]` |
 | `ViewThatFits` / `LayoutThatFits` | 按容器实测宽（默认阈值 600）或候选测量选择布局；两分支各自保留节点与 `@State`，隐藏分支不参与布局/绘制/输入/辅助功能并释放焦点与指针捕获；重任务由应用按当前形态控制 | `[已实现]` |
 | `ContainerSizeReader` | 发布自身内容盒（扣 padding/border）实测尺寸；首次收到 `.zero`，变化 < 0.5pt 不发布；父级必须有界宽。卡片内部自适应用它，不用窗口宽度 | `[已实现]` |
@@ -443,7 +443,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 2 | Sidebar 抽屉/rail 紧凑呈现；SplitView 单栏模式 | `Layout/Sidebar/Sidebar.swift`、`Layout/SplitView.swift` | `AdaptiveNavigationTests` 或新套件 + `sidebar` 页窄预览 |
+| 2 | Sidebar 抽屉/rail 紧凑呈现 | `Layout/Sidebar/Sidebar.swift` | `AdaptiveNavigationTests` 或新套件 + `sidebar` 页窄预览；SplitView 部分已完成，见下方记录 |
 | 4 | DataTable / Table / Grid 列优先级、隐藏与"列可见性"入口 | `Data/DataTable/*`、`Data/Lists/Table.swift`、`Layout/Grid/*` | 新列策略 API 测试 + `dataTable` 页窄宽验收 |
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
 | 6 | Button / Select / DatePicker 等单行标题截断 + 完整 tooltip（当前只换行或裁剪） | `Text/Text.swift`（`lineLimit(1)` 仅禁换行）、各控件 | `Text` 截断测试 + 对应页面 |
@@ -459,6 +459,8 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 编号稳定保留已完成项的空位。建议顺序：先做 2、4（壳层与数据密度，直接影响手机/平板可用性），再做 5–6（截断），然后 9–16（输入与语义补齐）。1、3、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
 第 1 项命令工具栏溢出已实现：`Toolbar(items:)` 以实测按钮树分配自然宽度，支持优先级、始终保留、始终溢出及图标命令；隐藏 inline 节点仍挂载但不绘制、不接输入、不暴露语义。`ToolbarOverflowTests` 覆盖三档宽度、100%/200% 字号、三种输入集合、菜单操作、节点保留和焦点交接；Gallery Toolbar 已接入自动预览。自定义任意内容仍由应用显式重排，真机触摸和读屏继续按第 4 节取样。
+
+第 2 项中的 SplitView 单面板部分已实现：`SplitCompactPresentation` 按容器自身轴向长度切换，页签支持完整名称、换行、键盘与触摸；双侧保留节点、本地状态和滚动，折叠不覆盖请求比例，隐藏时交接焦点并取消捕获。分隔柄随输入集合在 7pt / 44pt 命中区间切换。`SplitPresentationTests` 覆盖横纵阈值、三档宽度、100%/200% 文字、明暗主题、三类输入、草稿和滚动保留及卸载重置，并通过 DevTools AI `query_ui_nodes` 验证可见性和输入状态；Gallery 已增加三种预览及 `SplitTests`。Sidebar 抽屉/rail 仍保留在待办中，设备触摸/读屏仍按第 4 节取样。
 
 第 3 项表单标签重排已实现：Form / PropertyGrid 共享 `FieldLabelPlacement` 与首选值槽宽度，按容器而非窗口决定标签位置，Form 列数变化只重新放置原字段；属性网格默认使用内在行高，标题与输入遵守缩放和触摸下限。条件/数组经普通 modifier 修饰后不再于首次更新重建用户组件；`StructuralModifierTests` 验证状态保留及卸载默认值。`FieldLayoutTests` 同时通过 AI 诊断 facade 查询可读字段名称与实际几何，防止只修视觉而遗漏语义。设备输入取样仍按第 4 节验收。
 
