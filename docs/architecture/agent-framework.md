@@ -53,7 +53,7 @@ let result = try await agent.run(messages: [AgentMessage(role: .user, text: "当
 | 工具 | 数据与边界 |
 | --- | --- |
 | get_diagnostics | Editor 的问题、证据、建议、帧趋势、渲染 Pass 和数据可用性；普通 GuavaUI toolbox 返回 UI 概览 |
-| query_ui_nodes | 扁平分页节点、parent ID、几何、源码、组件归属、已声明的无障碍语义；支持 ID/text/role/source 筛选 |
+| query_ui_nodes | 扁平分页节点、parent ID、裁剪后可见几何、源码、组件归属、已声明的无障碍语义与实际输入权限；支持 ID/text/role/source、visible_only、input_enabled_only 筛选 |
 | query_ui_recomposition | owning component 的重组次数、inclusive CPU 时间与触发原因，按 totalMs 排序 |
 | query_ui_state | 默认只读注册元数据；仅显式 ids 求值，支持 scope 筛选，报告 missing IDs |
 | capture_ui_trace | 50–5000 ms，默认 500 ms；记录真实 CPU spans，不强制刷新或输入 |
@@ -62,6 +62,10 @@ let result = try await agent.run(messages: [AgentMessage(role: .user, text: "当
 | list_skills / read_skill | 指引元数据与正文 |
 
 每页最多 100 项。Node 与 scope IDs 属于节点存活期，卸载后失效；单节点查询对过期 ID 报错。State 默认私有，只有显式注册的摘要可读。secure 控件的 value 被替换为 redacted；节点查询不求值 lazy accessibility providers。
+
+`presentation.inputEnabled` 包含祖先状态、可见几何和所属场景的模态输入许可。打开 dialog 后，仍绘制的背景可保持 `isVisible = true`，但 `inputEnabled = false`；使用 `input_enabled_only: true` 排除它们。模态权限从本场景已绑定的焦点资源读取，不依赖查询发生时的全局 current window，支持嵌套模态及附属浮层。作用域发现采用一次线性扫描，深层组合节点不会反复扫描子树。
+
+原生 Inspector 的 `NodeSummary.semanticRole` 优先保留显式诊断角色，否则取节点的辅助功能角色；普通按钮、输入框和 dialog 不必额外写 debug metadata 才能按角色发现。
 
 时间线为有界环形缓冲，每个 facade 最多保留八份采集。采集只统计自身窗口内遗漏的 spans，报告 dropped。与 Inspector 同时采集时共同使用 recorder，任何一方结束不会停止另一方。取消或 session reset 不发布未完成采集。空闲采集可为零事件。父子 CPU spans 重叠，不可求和当作帧耗时；CPU draw/present 指标不代表 GPU 执行时间。编译时源码位置需要重建才能跟随源码移动。
 

@@ -83,7 +83,62 @@ struct DiagnosticPresentationTests {
         #expect(visible.total == 1 && visible.items.count == 1 && visible.nextOffset == nil)
     }
 
+    @Test("Native Inspector snapshots expose accessibility roles while preserving an explicit diagnostic role")
+    func inspectorRoles() {
+        let root = button("Open", frame: CGRect(x: 0, y: 0, width: 100, height: 44)), tree = NodeTree()
+        tree.root = root
+        let inspector = SceneInspector(tree: tree)
+        #expect(inspector.snapshot().root?.semanticRole == "button")
+        root.attachments["GuavaUI.semantic.role"] = "navigationItem"
+        #expect(inspector.snapshot().root?.semanticRole == "navigationItem")
+    }
+
     private func flatten(_ element: AccessibilityElement) -> [AccessibilityElement] {
         [element] + element.children.flatMap(flatten)
+    }
+
+    @Test("AI input filtering follows nested modal scopes and accessory ownership without blocking another scene")
+    func modalInputFiltering() async throws {
+        let root = Node(), tree = NodeTree(), chain = FocusChain()
+        root.frame = CGRect(x: 0, y: 0, width: 390, height: 640); tree.root = root
+        let background = button("Background", frame: CGRect(x: 0, y: 0, width: 100, height: 44))
+        let modal = Node(), resource = ModalFocusResource()
+        modal.frame = root.frame
+        modal.addResource(resource)
+        let inside = button("Choose", frame: CGRect(x: 20, y: 100, width: 100, height: 44))
+        modal.addChild(inside); root.addChild(background)
+        var container = root
+        for _ in 0..<64 {
+            let anchor = Node(); container.addChild(anchor); container = anchor
+        }
+        container.addChild(modal)
+        resource.bind(modal, chain: chain)
+        defer { resource.unmount(node: modal) }
+        let accessory = button("Submenu", frame: CGRect(x: 200, y: 100, width: 100, height: 44))
+        root.addChild(accessory); chain.attachAccessory(accessory, owner: inside)
+        defer { chain.detachAccessory(accessory) }
+        let diagnostics = UIDiagnostics(tree: tree), toolbox = try diagnostics.toolbox()
+        let blocked = try #require(diagnostics.queryNodes(text: "Background", role: "button").items.first)
+        #expect(blocked.presentation.isVisible && !blocked.presentation.inputEnabled)
+        #expect(try diagnostics.queryNodes(text: "Choose", role: "button", inputEnabledOnly: true).total == 1)
+        #expect(try diagnostics.queryNodes(text: "Submenu", role: "button", inputEnabledOnly: true).total == 1)
+        let result = try await toolbox.execute(name: "query_ui_nodes",
+            input: Data(#"{"role":"button","input_enabled_only":true}"#.utf8))
+        let response = try #require(JSONSerialization.jsonObject(with: result.json) as? [String: Any])
+        let data = try #require(response["data"] as? [String: Any])
+        #expect(data["total"] as? Int == 2)
+        let otherTree = NodeTree(), otherRoot = Node()
+        otherRoot.frame = root.frame; otherTree.root = otherRoot
+        otherRoot.addChild(button("Other window", frame: CGRect(x: 0, y: 0, width: 100, height: 44)))
+        #expect(try UIDiagnostics(tree: otherTree).queryNodes(role: "button", inputEnabledOnly: true).total == 1)
+        let nested = Node(), nestedResource = ModalFocusResource()
+        nested.frame = root.frame; nested.addResource(nestedResource)
+        nested.addChild(button("Nested", frame: CGRect(x: 20, y: 200, width: 100, height: 44)))
+        root.addChild(nested); nestedResource.bind(nested, chain: chain)
+        #expect(try diagnostics.queryNodes(role: "button", inputEnabledOnly: true).total == 1)
+        nestedResource.unmount(node: nested); root.removeChild(nested)
+        #expect(try diagnostics.queryNodes(role: "button", inputEnabledOnly: true).total == 2)
+        resource.unmount(node: modal)
+        #expect(try diagnostics.queryNodes(role: "button", inputEnabledOnly: true).total == 3)
     }
 }

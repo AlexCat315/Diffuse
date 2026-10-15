@@ -66,7 +66,7 @@ public final class UIDiagnostics {
     }
 
     public func queryNodes(id: String? = nil, text: String? = nil, role: String? = nil,
-                           source: String? = nil, visibleOnly: Bool = false,
+                           source: String? = nil, visibleOnly: Bool = false, inputEnabledOnly: Bool = false,
                            offset: Int = 0, limit: Int = 50) throws -> UIDiagnosticPage<UIDiagnosticNode> {
         let all = nodes()
         if let id, !all.contains(where: { $0.node.id == id }) { throw AgentError.invalidConfiguration("Node is missing or unmounted: \(id)") }
@@ -74,6 +74,7 @@ public final class UIDiagnostics {
             let node = item.node
             return (id == nil || node.id == id)
                 && (!visibleOnly || item.presentation.isVisible)
+                && (!inputEnabledOnly || item.presentation.inputEnabled)
                 && (text == nil || [node.debugName, node.viewTag, item.semantics?.label].compactMap { $0 }.contains { $0.localizedCaseInsensitiveContains(text!) })
                 && (role == nil || node.semanticRole == role || node.layoutRole == role || item.semantics?.role.rawValue == role)
                 && (source == nil || node.source?.filePath.localizedCaseInsensitiveContains(source!) == true)

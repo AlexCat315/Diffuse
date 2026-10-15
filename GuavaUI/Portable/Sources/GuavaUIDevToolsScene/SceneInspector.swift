@@ -105,7 +105,7 @@ public final class SceneInspector: @unchecked Sendable {
             zIndex: Double(node.zIndex),
             opacity: Double(node.opacity),
             layoutRole: node.attachments[DebugAttachmentKey.layoutRole] as? String,
-            semanticRole: node.attachments[DebugAttachmentKey.semanticRole] as? String,
+            semanticRole: node.attachments[DebugAttachmentKey.semanticRole] as? String ?? node.accessibility?.role.rawValue,
             flags: NodeFlags(
                 hitTestable: node.isHitTestable,
                 focusable: node.isFocusable,

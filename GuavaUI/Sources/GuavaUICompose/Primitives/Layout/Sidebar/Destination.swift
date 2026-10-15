@@ -5,9 +5,11 @@ struct SidebarDestination<ID: Hashable>: View {
     let selection: Binding<ID?>
     let isTabStop: Bool
     let iconWidth: Float?
+    let minimumRowHeight: Float
+    let onActivate: (ID) -> Void
     var body: some View {
         Button(isEnabled: item.isEnabled, isSelected: selection.wrappedValue == item.id,
-               action: { selection.wrappedValue = item.id }) {
+               action: { selection.wrappedValue = item.id; onActivate(item.id) }) {
             Row(alignment: .center, spacing: 10) {
                 if let iconWidth {
                     Box(direction: .row, alignItems: .center, justifyContent: .center) {
@@ -24,7 +26,7 @@ struct SidebarDestination<ID: Hashable>: View {
                         .debugName("sidebar-badge-\(item.id)")
                 }
             }
-        }.buttonStyle(SidebarItemStyle())
+        }.buttonStyle(SidebarItemStyle(minimumHeight: minimumRowHeight))
             .compositionLocal(ActionControlAccessibility.label, item.title)
             .compositionLocal(ActionControlAccessibility.value, item.badge ?? "")
             .modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: isTabStop))
@@ -50,9 +52,10 @@ private struct SidebarSelectionReveal: ViewModifier {
 }
 
 struct SidebarItemStyle: ButtonStyle {
+    var minimumHeight: Float = 38
     func makeBody(configuration c: ButtonStyleConfiguration) -> some View {
         Box(direction: .row, alignItems: .center) { AnyView(c.label).flex(1, shrink: 1).frame(minWidth: 0) }
-            .flex(1, shrink: 1).frame(minWidth: 0, minHeight: 38)
+            .flex(1, shrink: 1).frame(minWidth: 0, minHeight: minimumHeight)
             .foregroundColor(c.isEnabled ? c.isSelected ? .onSurface : .onSurfaceVariant : .onSurfaceDisabled)
             .padding(horizontal: 10, vertical: 7)
             .selectionHighlight(.navigation,

@@ -38,6 +38,6 @@ Application 在初始化/缩放/调整尺寸时提供环境，AndroidContentSess
 - 媒体组件接收 owned bitmap、视频帧或纹理值；解码、设备、播放时钟和导出任务留在媒体服务。
 - 数据模型只保存 authored 内容；焦点、hover、IME preedit、播放进度、纹理和拖动过程属于 session。
 
-新组件应加入相应责任目录，以真实的交互或状态测试证明其契约。当前 ContainerSizeReader、ViewThatFits、WidthClassReader 已提供容器与窗口两级查询，常用交互控件已接入 44pt 触摸密度，TabView 默认在 compact 下移到底部。Sidebar 抽屉、SplitView 单栏、Form/PropertyGrid 的 compact label 与 DataTable 列优先级尚未完成；弹出层和各平台触摸/IME/辅助功能仍需真机验收。Theme 状态层、spring 与响应式 Typography 的统一是下一阶段。
+新组件应加入相应责任目录，以真实的交互或状态测试证明其契约。当前 ContainerSizeReader、ViewThatFits、WidthClassReader 已提供容器与窗口两级查询，常用交互控件已接入 44pt 触摸密度，TabView 默认在 compact 下移到底部。功能完成状态统一由[跨平台规范第 5 节](adaptive-spec.md)与[组件缺失清单](gaps.md)跟踪；各平台触摸、IME 与辅助功能仍需设备验收。
 
 上述要求逐项展开后的空间不足阶梯、手机/平板重排方式、触摸/键盘/辅助功能契约与验收方法见 [跨平台控件规范](adaptive-spec.md)。

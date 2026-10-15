@@ -82,7 +82,7 @@ public struct Carousel<ID: Hashable>: View {
     @ViewBuilder private func viewport(in theme: Theme) -> some View {
         let row = Box(direction: .row, alignItems: .stretch, spacing: theme.spacing.sm) {
             if showsArrows, pages.count > 1 { AnyView(stepButton(-1)) }
-            AnyView(CarouselSwipeHost(onSwipe: { move($0) },
+            AnyView(HorizontalSwipeHost(onSwipe: { move($0 == .left ? 1 : -1) },
                                        isEnabled: isEnabled && pages.count > 1) {
                 AnyView(currentPage?.content ?? AnyView(EmptyView())).id(currentPage?.id)
             }

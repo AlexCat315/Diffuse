@@ -40,6 +40,7 @@ public extension UIDiagnostics {
             return try AgentToolResult.encode(QueryResponse(data: queryNodes(id: args["node_id"] as? String,
                 text: args["text"] as? String, role: args["role"] as? String, source: args["source"] as? String,
                 visibleOnly: args["visible_only"] as? Bool ?? false,
+                inputEnabledOnly: args["input_enabled_only"] as? Bool ?? false,
                 offset: offset, limit: limit)))
         case "query_ui_recomposition":
             return try AgentToolResult.encode(QueryResponse(data: queryRecomposition(text: args["text"] as? String,

@@ -3,7 +3,8 @@ import GuavaUIScene
 import GuavaUIDevToolsProtocol
 
 /// Current presentation, separate from authored node flags. Visible bounds
-/// include ancestor clipping and scroll offsets; input also includes ancestors.
+/// include ancestor clipping and scroll offsets; input includes ancestors and
+/// the owning scene's active modal scope, including its accessory portals.
 public struct UIDiagnosticPresentation: Codable, Sendable {
     public let isVisible: Bool
     public let inputEnabled: Bool
@@ -11,6 +12,19 @@ public struct UIDiagnosticPresentation: Codable, Sendable {
 
     static func capture(root: Node) -> [String: Self] {
         var result: [String: Self] = [:]
+        func modalInput(in node: Node) -> FocusChain? {
+            // A linear walk avoids lazy recursive compactMap/first repeatedly
+            // evaluating the same deep composition subtrees.
+            var pending = [node]
+            while let candidate = pending.popLast() {
+                if let chain = candidate.firstResource(ModalFocusResource.self)?.boundFocusChain, chain.hasModalScope {
+                    return chain
+                }
+                pending.append(contentsOf: candidate.children.reversed())
+            }
+            return nil
+        }
+        let inputScope = modalInput(in: root)
         func visit(_ node: Node, clip: CGRect?, draws: Bool, input: Bool) -> CGRect? {
             let draws = draws && node.opacity > 0 && node.subtreeOpacity > 0
             let input = input && node.allowsHitTesting && node.isInteractionEnabled
@@ -32,7 +46,7 @@ public struct UIDiagnosticPresentation: Codable, Sendable {
             // descendants without fabricating an independent hit-test box.
             let visible = node.layoutNode == nil && bounds.isEmpty ? descendants : own
             result[String(node.id.rawValue)] = Self(isVisible: visible != nil,
-                inputEnabled: input && visible != nil,
+                inputEnabled: input && visible != nil && (inputScope?.permitsInput(node) ?? true),
                 visibleFrame: visible.map { NodeFrame(x: Double($0.minX), y: Double($0.minY),
                     w: Double($0.width), h: Double($0.height)) })
             if let own { return descendants.map { own.union($0) } ?? own }

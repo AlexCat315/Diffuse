@@ -2,6 +2,9 @@ import GuavaUICore
 /// Restores the previous focus when a modal subtree leaves the window.
 public final class ModalFocusResource: NodeResource {
     private weak var chain: FocusChain?
+    /// Inspection must use the scope's owning window rather than ambient input
+    /// from a different window when an agent query arrives between frames.
+    package var boundFocusChain: FocusChain? { chain }
     public init() {}
     public func mount(node: Node) {}
     public func bind(_ node: Node, chain next: FocusChain?, restoresCommands: Bool = false) {

@@ -37,7 +37,7 @@ struct CarouselTests: GuavaUIComposeSerializedSuite {
     }
 
     private func swipeNode(in graph: ViewGraph, _ registry: InteractionRegistry) -> Node? {
-        nodes(graph.tree.root!).first { $0.attachments["carousel-swipe-host"] != nil }
+        nodes(graph.tree.root!).first { $0.attachments["horizontal-swipe-host"] != nil }
     }
 
     @Test("Arrow keys page, wrap and jump to the ends")

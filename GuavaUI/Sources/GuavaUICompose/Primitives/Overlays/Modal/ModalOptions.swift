@@ -30,5 +30,8 @@ public struct ModalDismissal {
 public struct ModalOptions {
     public var geometry = ModalGeometry()
     public var dismissal = ModalDismissal()
+    var backdrop: ModalBackdrop = .standard
     public init() {}
 }
+
+enum ModalBackdrop { case standard, selection }

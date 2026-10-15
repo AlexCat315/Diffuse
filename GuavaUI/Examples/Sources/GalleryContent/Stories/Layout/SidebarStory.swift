@@ -6,6 +6,7 @@ struct SidebarStory: View {
     @State private var selection: String? = "downloads"
     @State private var showsIcons = true
     @State private var showsBadges = true
+    @State private var drawerOpen = false
 
     private func item(_ id: String, _ title: String, icon: BundleImageResource?, badge: String? = nil, enabled: Bool = true) -> SidebarItem<String> {
         SidebarItem(id, title) {
@@ -18,6 +19,8 @@ struct SidebarStory: View {
     var body: some View {
         StorySection("Workspace navigation", "Native SidebarItem icons follow IconTheme and Scale. Up / Down and Home / End select enabled destinations and reveal them inside the scrolling pane.") {
             Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 16) {
+                Button("Open as drawer", isEnabled: options.isEnabled) { drawerOpen = true }
+                    .debugName("sidebar-open-drawer")
                 Row(alignment: .center, spacing: 8) {
                     Checkbox(isOn: $showsIcons).debugName("sidebar-show-icons")
                     Text("Show icons").font(.caption)
@@ -28,19 +31,7 @@ struct SidebarStory: View {
                 }
             }
             Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 20) {
-                Sidebar(selection: $selection, sections: [
-                    SidebarSection("workspace", title: "Workspace", items: [
-                        item("overview", "Overview", icon: UIIcons.Layout.dashboard),
-                        item("downloads", "Downloads", icon: UIIcons.Action.download, badge: "8"),
-                        item("projects", "Projects", icon: UIIcons.File.folder),
-                        item("recent", "Recent activity", icon: nil)
-                    ]),
-                    SidebarSection("preferences", title: "Preferences", items: [
-                        item("notifications", "Notifications", icon: UIIcons.Status.bell, badge: "3"),
-                        item("settings", "Settings", icon: UIIcons.Action.settings),
-                        item("permissions", "Team permissions unavailable", icon: UIIcons.Status.lock, enabled: false)
-                    ])
-                ], header: {
+                Sidebar(selection: $selection, sections: sections, header: {
                     Row(alignment: .center, spacing: 10) {
                         Icon(UIIcons.File.package, size: .large, color: .accent).flex(0, shrink: 0)
                         Text("Guava workspace").font(.bodyStrong).flex(1, shrink: 1).frame(minWidth: 0)
@@ -65,7 +56,24 @@ struct SidebarStory: View {
                 }.padding(20).flex(1, shrink: 1, basis: 0).frame(minWidth: 260)
                     .background(.surface).cornerRadius(.panelRadius).border(.border, width: 1)
             }
+            NavigationDrawer("Guava workspace", isPresented: $drawerOpen, selection: $selection, sections: sections)
         }
+    }
+
+    private var sections: [SidebarSection<String>] {
+        [
+            SidebarSection("workspace", title: "Workspace", items: [
+                item("overview", "Overview", icon: UIIcons.Layout.dashboard),
+                item("downloads", "Downloads", icon: UIIcons.Action.download, badge: "8"),
+                item("projects", "Projects", icon: UIIcons.File.folder),
+                item("recent", "Recent activity", icon: nil)
+            ]),
+            SidebarSection("preferences", title: "Preferences", items: [
+                item("notifications", "Notifications", icon: UIIcons.Status.bell, badge: "3"),
+                item("settings", "Settings", icon: UIIcons.Action.settings),
+                item("permissions", "Team permissions unavailable", icon: UIIcons.Status.lock, enabled: false)
+            ])
+        ]
     }
 
     private var destinationTitle: String {

@@ -8,7 +8,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case menu, contextMenu, popover, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, animation, theme, badge, alert, progress, empty
-    case radio, form, combobox, notification, tooltip, sidebar
+    case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer
     case table, dataTable, calendar, datePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet
     case commandPalette, hoverCard, timeline, toolbar
@@ -77,6 +77,7 @@ public enum GalleryCatalog {
         .init(.notification, "Notification", "Feedback", "Stable-ID replacement, queued toasts, expiry, hover pause and dismissal."),
         .init(.tooltip, "Tooltip", "Overlays", "Delayed pointer and keyboard-focus descriptions outside clipping."),
         .init(.sidebar, "Sidebar", "Navigation", "Themed icons, aligned destinations, badges, keyboard scrolling and header/footer slots."),
+        .init(.navigationDrawer, "NavigationDrawer", "Navigation", "Modal destinations, fitted width, focus restoration, swipe dismissal and shared selection."),
         .init(.table, "Table", "Data", "Virtualized rows, stable sorting, selection, fixed headers and resizable columns."),
         .init(.dataTable, "DataTable", "Data", "Persistent large-data model, background sorting, frozen columns, multi-selection and cell editing."),
         .init(.calendar, "Calendar", "Inputs", "Calendar-aware month grids, disabled dates and keyboard day navigation."),

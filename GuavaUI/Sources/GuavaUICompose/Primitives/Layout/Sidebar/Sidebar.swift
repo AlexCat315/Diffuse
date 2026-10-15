@@ -4,11 +4,16 @@ import GuavaUIRuntime
 public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
     public let selection: Binding<ID?>
     public let sections: [SidebarSection<ID>]
+    public let minimumRowHeight: Float
+    private let onActivate: (ID) -> Void
     private let header: Header
     private let footer: Footer
-    public init(selection: Binding<ID?>, sections: [SidebarSection<ID>],
+    public init(selection: Binding<ID?>, sections: [SidebarSection<ID>], minimumRowHeight: Float = 38,
+                onActivate: @escaping (ID) -> Void = { _ in },
                 @ViewBuilder header: () -> Header, @ViewBuilder footer: () -> Footer) {
         self.selection = selection; self.sections = sections; self.header = header(); self.footer = footer()
+        self.minimumRowHeight = minimumRowHeight.isFinite ? max(0, minimumRowHeight) : 38
+        self.onActivate = onActivate
         let ids = sections.flatMap(\.items).map(\.id)
         precondition(Set(ids).count == ids.count, "Sidebar item IDs must be unique")
         precondition(Set(sections.map(\.id)).count == sections.count, "Sidebar section IDs must be unique")
@@ -48,7 +53,8 @@ public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
                                     }
                                     for item in section.items {
                                         SidebarDestination(item: item, selection: selection,
-                                                           isTabStop: item.id == tabStop, iconWidth: iconWidth)
+                                                           isTabStop: item.id == tabStop, iconWidth: iconWidth,
+                                                           minimumRowHeight: minimumRowHeight, onActivate: onActivate)
                                     }
                                 }
                             }.id(section.id))
@@ -62,7 +68,9 @@ public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
 }
 
 public extension Sidebar where Header == EmptyView, Footer == EmptyView {
-    init(selection: Binding<ID?>, sections: [SidebarSection<ID>]) {
-        self.init(selection: selection, sections: sections, header: { EmptyView() }, footer: { EmptyView() })
+    init(selection: Binding<ID?>, sections: [SidebarSection<ID>], minimumRowHeight: Float = 38,
+         onActivate: @escaping (ID) -> Void = { _ in }) {
+        self.init(selection: selection, sections: sections, minimumRowHeight: minimumRowHeight,
+                  onActivate: onActivate, header: { EmptyView() }, footer: { EmptyView() })
     }
 }

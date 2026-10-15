@@ -52,6 +52,8 @@ content width/height, flex direction/alignment/justification/grow/shrink, and
 optional `style` with effective background/inherited foreground hex colors and
 the names of overridden properties. Missing colors mean transparent or inherited
 defaults; custom painters may choose additional colors independently.
+`semanticRole` preserves an explicit diagnostic role when present, otherwise
+it uses the node's accessibility role, including ordinary buttons and dialogs.
 
 Visual picking follows sibling z-order and tree paint order, absolute frames,
 scroll offsets and ancestor clipping. It includes text, containers and disabled

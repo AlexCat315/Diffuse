@@ -50,4 +50,6 @@ Tab 进入目的地分组一次。上/下键选择并聚焦上一项/下一项�
 
 辅助功能中每项保留完整标题、选中状态、启用状态，徽标作为 value 暴露；装饰图标与徽标不重复朗读。语义通过 provider 保留，悬停或焦点引起的子树重组不会丢失名称。项目 ID 在整个侧边栏内唯一，分组 ID 也必须唯一。
 
+`minimumRowHeight` 默认 38pt，可按呈现形态提高下限；触摸仍至少 44pt。`onActivate` 仅在点击或 Enter/Space 激活目的地后调用，方向键浏览只更新 selection，不触发该回调。[NavigationDrawer](navigation-drawer.md) 复用同一 Sidebar 数据、至少 44pt 行高和共享选择，并用激活回调关闭覆盖层。Gallery Sidebar 页提供 “Open as drawer” 入口。
+
 当前接口是分组目的地导航。折叠到纯图标、嵌套子菜单、项级操作/上下文菜单及可自定义的前后任意 View 插槽仍未实现，不能将当前 Sidebar 视为与 GPUI Kit Sidebar 完全等价。

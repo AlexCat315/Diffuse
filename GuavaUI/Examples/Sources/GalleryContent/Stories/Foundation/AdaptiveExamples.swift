@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid, .splitView: true
+        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid, .splitView, .navigationDrawer: true
         default: false
         }
     }
@@ -43,6 +43,7 @@ private struct AdaptiveControlSample: View {
     @State private var tab = 0
     @State private var date: Date? = nil
     @State private var fraction: Float = 0.35
+    @State private var navigationOpen = false
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
             sample
@@ -86,6 +87,11 @@ private struct AdaptiveControlSample: View {
             } second: {
                 TextField("Retained draft", text: $text) { $0.behavior.disabled = !options.isEnabled }.padding(12)
             }.frame(width: .percent(100), height: .points(210)))
+        case .navigationDrawer: AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+            Button("Open navigation", isEnabled: options.isEnabled) { navigationOpen = true }
+            NavigationDrawer("Preview workspace", isPresented: $navigationOpen, selection: $selected,
+                sections: [SidebarSection("preview", items: [SidebarItem(0, "Overview"), SidebarItem(1, "Documents")])])
+        })
         default: AnyView(EmptyView())
         }
     }

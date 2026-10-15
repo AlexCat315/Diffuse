@@ -1,24 +1,26 @@
 import Foundation
 import GuavaUIRuntime
 
+enum HorizontalSwipeDirection { case left, right }
+
 /// Observes the capture phase so a nested button can still receive a tap.
 /// Horizontal intent may cancel a button press; sliders and text selections
 /// retain their capture and are never taken over by paging.
-struct CarouselSwipeHost<Content: View>: _PrimitiveView {
-    let onSwipe: (Int) -> Void
+struct HorizontalSwipeHost<Content: View>: _PrimitiveView {
+    let onSwipe: (HorizontalSwipeDirection) -> Void
     let isEnabled: Bool
     let content: Content
-    init(onSwipe: @escaping (Int) -> Void, isEnabled: Bool, @ViewBuilder content: () -> Content) {
+    init(onSwipe: @escaping (HorizontalSwipeDirection) -> Void, isEnabled: Bool, @ViewBuilder content: () -> Content) {
         self.onSwipe = onSwipe; self.isEnabled = isEnabled; self.content = content()
     }
     func _makeNode() -> Node {
         let node = Node(); node.clipsToBounds = true
-        node.attachments["carousel-swipe-host"] = true
-        node.addResource(CarouselSwipeSession()); return node
+        node.attachments["horizontal-swipe-host"] = true
+        node.addResource(HorizontalSwipeSession()); return node
     }
     func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
     func _updateNode(_ node: Node) {
-        let session = node.firstResource(CarouselSwipeSession.self)!
+        let session = node.firstResource(HorizontalSwipeSession.self)!
         session.configure(isEnabled: isEnabled, onSwipe: onSwipe)
         let registry = InteractionRegistryHolder.current
         registry?.setPointer(node) { event, phase, eventPhase in
@@ -40,7 +42,7 @@ struct CarouselSwipeHost<Content: View>: _PrimitiveView {
     var _children: [any View] { [content] }
 }
 
-final class CarouselSwipeSession: NodeResource {
+final class HorizontalSwipeSession: NodeResource {
     private enum Gesture {
         case idle, observing(CGPoint), horizontal(CGPoint), rejected
     }
@@ -48,10 +50,10 @@ final class CarouselSwipeSession: NodeResource {
     private weak var capture: PointerCapture?
     private var gesture = Gesture.idle
     private var isEnabled = true
-    private var onSwipe: ((Int) -> Void)?
+    private var onSwipe: ((HorizontalSwipeDirection) -> Void)?
     func mount(node: Node) { self.node = node; capture = PointerCaptureHolder.current }
     func unmount(node: Node) { cancelGesture(); self.node = nil; onSwipe = nil; capture = nil }
-    func configure(isEnabled: Bool, onSwipe: @escaping (Int) -> Void) {
+    func configure(isEnabled: Bool, onSwipe: @escaping (HorizontalSwipeDirection) -> Void) {
         self.isEnabled = isEnabled; self.onSwipe = onSwipe
         if !isEnabled { cancelGesture() }
     }
@@ -67,7 +69,7 @@ final class CarouselSwipeSession: NodeResource {
             cancelGesture()
             guard case .horizontal(let start) = previous, ownedCapture else { return .ignored }
             let distance = point.x - start.x
-            if abs(distance) >= max(32, node.frame.width * 0.15) { onSwipe?(distance < 0 ? 1 : -1) }
+            if abs(distance) >= max(32, node.frame.width * 0.15) { onSwipe?(distance < 0 ? .left : .right) }
             return .handled
         }
     }

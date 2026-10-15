@@ -13,8 +13,8 @@ public enum UIDiagnosticTools {
     public static let tools: [AgentTool] = [
         AgentTool(name: "get_diagnostics", description: "Read bounded diagnostic issues with evidence and data availability. Recommendations are hypotheses to verify.",
             schema: object(["limit": .integer(minimum: 1, maximum: 100)])),
-        AgentTool(name: "query_ui_nodes", description: "Query live UI nodes by accessible label, role or source. Returns flat paged results, clipped visible bounds and inherited input availability. Use visible_only to exclude hidden/offscreen nodes. IDs expire on unmount.",
-            schema: object(paging.merging(["node_id": text, "text": text, "role": text, "source": text, "visible_only": .boolean()]) { _, new in new })),
+        AgentTool(name: "query_ui_nodes", description: "Query live UI nodes by accessible label, role or source. Returns flat paged results, clipped visible bounds and effective input availability, including modal scopes. Use visible_only to exclude hidden/offscreen nodes; input_enabled_only also excludes disabled or modal-blocked controls. IDs expire on unmount.",
+            schema: object(paging.merging(["node_id": text, "text": text, "role": text, "source": text, "visible_only": .boolean(), "input_enabled_only": .boolean()]) { _, new in new })),
         AgentTool(name: "query_ui_recomposition", description: "Query owning components sorted by total inclusive CPU time, including counts and invalidation causes. Child durations overlap; do not sum them as frame time.",
             schema: object(paging.merging(["text": text, "minimum_count": .integer(minimum: 0, maximum: 1_000_000)]) { _, new in new })),
         AgentTool(name: "query_ui_state", description: "List opted-in state metadata. Read summaries only for explicit ids; private state is never exposed. Unmounted ids are reported as missing.",

@@ -4,14 +4,21 @@ import GuavaUIRuntime
 public struct Modal<Content: View>: View {
     private let isPresented: Binding<Bool>
     public var options = ModalOptions()
+    private var fittingGeometry: ((inout ModalGeometry, CGSize) -> Void)?
     private let content: Content
     public init(isPresented: Binding<Bool>, configure: (inout ModalOptions) -> Void = { _ in },
                 @ViewBuilder content: () -> Content) {
         self.isPresented = isPresented; self.content = content(); configure(&options); options.geometry.validate()
     }
+    init(isPresented: Binding<Bool>, configure: (inout ModalOptions) -> Void,
+         fittingGeometry: @escaping (inout ModalGeometry, CGSize) -> Void,
+         @ViewBuilder content: () -> Content) {
+        self.init(isPresented: isPresented, configure: configure, content: content)
+        self.fittingGeometry = fittingGeometry
+    }
     @State private var retained = false
     public var body: some View {
-        _ModalPresenter(isPresented: isPresented, retained: retained, options: options,
+        _ModalPresenter(isPresented: isPresented, retained: retained, options: options, fittingGeometry: fittingGeometry,
                         content: content, onPresented: { if !retained { retained = true } },
                         onExited: { if retained { retained = false } })
     }
@@ -19,7 +26,9 @@ public struct Modal<Content: View>: View {
 
 private struct _ModalPresenter<Content: View>: _PrimitiveView {
     let isPresented: Binding<Bool>; let retained: Bool
-    let options: ModalOptions; let content: Content
+    let options: ModalOptions
+    let fittingGeometry: ((inout ModalGeometry, CGSize) -> Void)?
+    let content: Content
     let onPresented: () -> Void; let onExited: () -> Void
     func _makeNode() -> Node {
         let node = Node(); node.isHitTestable = false; node.addResource(PortalResource()); return node
@@ -37,12 +46,14 @@ private struct _ModalPresenter<Content: View>: _PrimitiveView {
         guard isPresented.wrappedValue || retained else { resource?.unmount(node: node); return }
         if isPresented.wrappedValue { onPresented() }
         let store = node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
+        var fitted = options
+        fittingGeometry?(&fitted.geometry, portalWindowBounds(node).size)
         resource?.present(in: store, position: .zero, width: nil,
                           content: AnyView(AnimatedVisibility(isVisible: isPresented.wrappedValue,
                             transition: .opacity, animateOnMount: true,
                             onVisibilitySettled: { visible in if !visible { onExited() } }) {
                               FocusScope {
-                                _ModalBackdrop(isVisible: isPresented.wrappedValue, options: options, onDismiss: { isPresented.wrappedValue = false }, content: content)
+                                _ModalBackdrop(isVisible: isPresented.wrappedValue, options: fitted, onDismiss: { isPresented.wrappedValue = false }, content: content)
                               }
                           }.frame(width: .percent(100), height: .percent(100))), fillsWindow: true)
     }
@@ -54,7 +65,10 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
     let options: ModalOptions; let onDismiss: () -> Void; let content: Content
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = true; node.clipsToBounds = true; return node }
     func _updateNode(_ node: Node) {
-        node.backgroundColor = node.theme.colors.background.multipliedAlpha(0.6)
+        switch options.backdrop {
+        case .standard: node.backgroundColor = node.theme.colors.background.multipliedAlpha(0.6)
+        case .selection: node.backgroundColor = node.theme.colors.stateLayerSelected
+        }
         InteractionRegistryHolder.current?.setPointer(node, route: InputHandlerRoute(role: .control, priority: .modal, debugName: "modal.backdrop")) { event, phase, eventPhase in
             guard eventPhase == .target else { return .ignored }
             guard event.button == .left else { return .handled }
