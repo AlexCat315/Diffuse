@@ -49,7 +49,9 @@ struct NativeUIBackdropTests {
         let (pixels, _) = try context.nativeImage(list: stripedList(frosted: true),
             format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
         let outside = try contrast(pixels, row: 8, from: 0, to: 64)
-        let inside = try contrast(pixels, row: 32, from: 20, to: 44)
+        // The 10px lens band at each edge refracts sharply on purpose (liquid
+        // glass), so the frost is measured in the body between the bands.
+        let inside = try contrast(pixels, row: 32, from: 27, to: 37)
         #expect(outside > 0.8)
         #expect(inside < outside * 0.5)
     }
@@ -59,11 +61,12 @@ struct NativeUIBackdropTests {
         let context = try NativeUIDrawTestContext()
         // The material's own colour, so the stripes behind it are not lifted by
         // a white tint on the way through.
-        let material = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.76)
+        let material = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.5)
         func measure(frosted: Bool, fill: Color) throws -> Float {
             let (pixels, _) = try context.nativeImage(list: stripedList(frosted: frosted, fill: fill),
                 format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
-            return try contrast(pixels, row: 32, from: 20, to: 44)
+            // Body between the lens bands, same as the plain-frost test.
+            return try contrast(pixels, row: 32, from: 27, to: 37)
         }
         let frosted = try measure(frosted: true, fill: material)
         let plain = try measure(frosted: false, fill: material)
@@ -79,7 +82,7 @@ struct NativeUIBackdropTests {
     @Test("frost is visible over a flat backdrop too")
     func frostShowsOverAFlatBackdrop() throws {
         let context = try NativeUIDrawTestContext()
-        let material = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.76)
+        let material = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.5)
         /// A plain window at `level`: nothing to blur into anything else.
         func delta(over level: Float) throws -> Float {
             func centre(frosted: Bool) throws -> (Float, Float, Float) {
@@ -134,7 +137,7 @@ struct NativeUIBackdropTests {
         let (pixels, _) = try context.nativeImage(list: stripedList(frosted: true),
             format: NativeUITestFormat.cases[0], samples: 4, viewport: viewport, backdropSource: true)
         let outside = try contrast(pixels, row: 8, from: 0, to: 64)
-        let inside = try contrast(pixels, row: 32, from: 20, to: 44)
+        let inside = try contrast(pixels, row: 32, from: 27, to: 37)
         #expect(outside > 0.8)
         #expect(inside < outside * 0.5)
     }
@@ -153,7 +156,7 @@ struct NativeUIBackdropTests {
         panel.frame = CGRect(x: 48, y: 40, width: 32, height: 32)
         panel.cornerRadius = 6
         panel.backdropBlur = 8
-        panel.backgroundColor = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.76)
+        panel.backgroundColor = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.5)
         if shadow {
             panel.ambientShadow = SurfaceShadow(color: Color(r: 0, g: 0, b: 0, a: 0.3), offsetY: 3, blur: 16)
             panel.shadow = SurfaceShadow(color: Color(r: 0, g: 0, b: 0, a: 0.6), offsetY: 6, blur: 6)
@@ -167,8 +170,8 @@ struct NativeUIBackdropTests {
         return pixels
     }
 
-    private func luma(_ pixels: Data, x: Int, y: Int) -> Float {
-        let offset = (y * 128 + x) * 4
+    private func luma(_ pixels: Data, x: Int, y: Int, width: Int = 128) -> Float {
+        let offset = (y * width + x) * 4
         guard offset + 2 < pixels.count else { return 0 }
         return Float(pixels[offset]) / 255
     }
@@ -185,7 +188,15 @@ struct NativeUIBackdropTests {
         let shadowed = try panelLuma(floatingPanel(shadow: true, backdrop: Color(r: 1, g: 1, b: 1, a: 1)))
         // The shadow falls behind the panel, so the frost must not eat it:
         // sampling it greys the panel by 17%, which reads as dirt.
-        #expect(clean - shadowed < 0.02)
+        //
+        // What is measured is not the leak itself but the leak scaled by how
+        // much of the frost the fill lets through, so the bound moves with the
+        // fill's alpha. Clipping keeps the shadow off the panel rect, but the
+        // capture reaches a margin beyond it and the blur pulls the clipped
+        // ring back inward — inherent, and a few percent of luma. 0.04 at
+        // alpha 0.5 is 0.013 at the old 0.76; the 17% this test was written
+        // against would read 0.085.
+        #expect(clean - shadowed < 0.04)
     }
 
     @Test("the shadow falloff has no ridges")
@@ -215,6 +226,71 @@ struct NativeUIBackdropTests {
         // An 0.84 fill leaves only 0.12 of it, which looked like a solid that
         // happened to be translucent.
         #expect(onWhite - onBlack > 0.15)
+    }
+
+    // MARK: - The lens: an edge that refracts and catches the light
+
+    @Test("the rim light reads through the panel's fill")
+    func rimShowsThroughTheFill() throws {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 128, height: 128)
+        root.backgroundColor = Color(r: 0.5, g: 0.5, b: 0.5, a: 1)
+        let panel = Node()
+        panel.frame = CGRect(x: 48, y: 40, width: 32, height: 32)
+        panel.cornerRadius = 6
+        panel.backdropBlur = 8
+        panel.backgroundColor = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.5)
+        panel.highlight = SurfaceHighlight(color: Color(r: 1, g: 1, b: 1, a: 0.5))
+        root.addChild(panel)
+        let list = DrawList()
+        NodeRenderer().render(root: root, into: list)
+        let context = try NativeUIDrawTestContext()
+        let (pixels, _) = try context.nativeImage(list: list, format: NativeUITestFormat.cases[0],
+                                                  samples: 1, viewport: panelViewport, backdropSource: true)
+        // The top bar sits between the corner arcs: down the middle of the
+        // panel's top edge it must come through the half-alpha fill visibly
+        // brighter than the body just below it.
+        let edge = luma(pixels, x: 64, y: 40)
+        let body = luma(pixels, x: 64, y: 56)
+        print("glass-rim edge=\(edge) body=\(body)")
+        #expect(edge - body > 0.04)
+    }
+
+    /// A dark field with one bright bar just outside the panel's left edge.
+    /// The lens samples past the edge, so the bar is pulled inward — sharper
+    /// and further than the gaussian alone could carry it.
+    private func refractedList() -> DrawList {
+        let list = DrawList()
+        list.addRect(UIRect(x: 0, y: 0, width: 64, height: 64),
+                     color: Color(r: 0.1, g: 0.1, b: 0.1, a: 1))
+        list.addRect(UIRect(x: 10, y: 0, width: 6, height: 64),
+                     color: Color(r: 1, g: 1, b: 1, a: 1))
+        list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 4))
+        list.addRoundedRect(panel, radius: 4, color: Color(r: 1, g: 1, b: 1, a: 0.02))
+        return list
+    }
+
+    private func bandLuma(_ pixels: Data, from: Int, to: Int) throws -> Float {
+        var total: Float = 0, count = 0
+        for x in from..<to {
+            total += luma(pixels, x: x, y: 32, width: 64); count += 1
+        }
+        return total / Float(count)
+    }
+
+    @Test("the edge band pulls what sits beyond the panel inward")
+    func edgeBandRefracts() throws {
+        let context = try NativeUIDrawTestContext()
+        let (pixels, _) = try context.nativeImage(list: refractedList(),
+            format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
+        let leftEdge = try bandLuma(pixels, from: 17, to: 24)
+        let body = try bandLuma(pixels, from: 27, to: 37)
+        let rightEdge = try bandLuma(pixels, from: 40, to: 46)
+        print("glass-lens left=\(leftEdge) body=\(body) right=\(rightEdge)")
+        // The bar ends at the panel's left edge; only the lens can make the
+        // band just inside brighter than the body — and it is one-sided.
+        #expect(leftEdge - body > 0.1)
+        #expect(leftEdge > rightEdge + 0.1)
     }
 }
 #endif

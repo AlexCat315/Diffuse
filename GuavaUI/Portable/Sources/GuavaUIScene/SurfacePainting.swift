@@ -216,23 +216,38 @@ extension DrawList {
         return bands.filter { $0.width > 0 && $0.height > 0 }
     }
 
-    /// Paint the top-edge rim light, inset past the border ring so the two do
-    /// not fight over the same pixel row.
-    ///
-    /// It spans only between the corner arcs — a full-width line would square
-    /// off the rounded corners it sits between.
+    /// Paint the rim light: the edge of the glass catching the light above the
+    /// UI. Two layers — a faint ring that follows the rounded corners all the
+    /// way round, and a bright bar along the top edge between the corner arcs.
+    /// The ring keeps the corners from going dead; the bar is what says which
+    /// way is up. The bar rides on the ring where they overlap, so the top edge
+    /// ends brightest and the bottom stays near-off.
     public func addHighlight(_ highlight: SurfaceHighlight, rect: UIRect, cornerRadius: Float,
                              borderWidth: Float = 0, opacity: Float = 1) {
         guard !highlight.isEmpty, rect.width > 0, rect.height > 0 else { return }
-        let inset = max(0, borderWidth) + max(0, cornerRadius)
-        let width = rect.width - 2 * inset
-        guard width > 0 else { return }
-        let color = Color(r: highlight.color!.r, g: highlight.color!.g, b: highlight.color!.b,
-                          a: highlight.color!.a * opacity)
-        addRect(UIRect(x: rect.minX + inset,
-                       y: rect.minY + max(0, borderWidth),
-                       width: width,
-                       height: min(highlight.width, rect.height)),
-                color: color)
+        let color = highlight.color!
+        let inset = max(0, borderWidth)
+        // The ring is inset by the border only: it runs along the rounded
+        // corners, so unlike the old flat bar it needs no extra corner inset.
+        let ring = UIRect(x: rect.minX + inset, y: rect.minY + inset,
+                          width: rect.width - inset * 2, height: rect.height - inset * 2)
+        guard ring.width > 0, ring.height > 0 else { return }
+        let width = min(highlight.width, ring.height)
+        let radius = min(cornerRadius, min(ring.width, ring.height) * 0.5)
+        let ringColor = Color(r: color.r, g: color.g, b: color.b, a: color.a * 0.2 * opacity)
+        if radius > 0 {
+            addRoundedRectStroke(ring, radius: radius, width: width, color: ringColor)
+        } else {
+            addRect(ring, color: ringColor)
+        }
+        // The top bar spans only between the corner arcs — a full-width line
+        // would square off the rounded corners it sits between.
+        let barInset = inset + radius
+        guard barInset * 2 < rect.width else { return }
+        addRect(UIRect(x: rect.minX + barInset,
+                       y: rect.minY + inset,
+                       width: rect.width - barInset * 2,
+                       height: min(width, rect.height)),
+                color: Color(r: color.r, g: color.g, b: color.b, a: color.a * opacity))
     }
 }

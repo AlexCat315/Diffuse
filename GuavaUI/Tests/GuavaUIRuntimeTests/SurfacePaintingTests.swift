@@ -106,18 +106,25 @@ struct SurfacePaintingTests {
         #expect(spanX(list) < spanX(halo))
     }
 
-    @Test("The rim light is a thin line at the top, inside the corner radius")
+    @Test("The rim light is a ring along the corners plus a bright bar on top")
     func highlightGeometry() {
         let node = node()
         node.cornerRadius = 6
         node.highlight = SurfaceHighlight(color: Color(r: 1, g: 1, b: 1, a: 0.5))
 
         let list = render(node)
-        #expect(list.vertices.count == 4)
-        #expect(list.vertices[0].posX == 6)
-        #expect(list.vertices[0].posY == 0)
-        #expect(list.vertices[2].posX == 94)
-        #expect(list.vertices[2].posY == 1)
+        // The bar: a thin line between the corner arcs, on the top pixel row.
+        // The ring paints first, so the bar is the last quad emitted.
+        let bar = list.vertices.suffix(4)
+        #expect(bar.map(\.posY) == [0, 0, 1, 1])
+        #expect(bar.map(\.posX).min() == 6)
+        #expect(bar.map(\.posX).max() == 94)
+        // The ring: its arc vertices reach the corners the bar has to skip,
+        // and it runs all the way round.
+        #expect(list.vertices.count > 4)
+        #expect(list.vertices.map(\.posX).min() == 0)
+        #expect(list.vertices.map(\.posX).max() == 100)
+        #expect(list.vertices.map(\.posY).max() == 40)
     }
 
     @Test("Without a rim light nothing is painted")
@@ -139,10 +146,18 @@ struct SurfacePaintingTests {
         child.backgroundColor = Color(r: 1, g: 0, b: 0, a: 1)
         node.addChild(child)
 
+        let rimOnly = Node()
+        rimOnly.frame = CGRect(x: 0, y: 0, width: 100, height: 40)
+        rimOnly.cornerRadius = 6
+        rimOnly.highlight = SurfaceHighlight(color: Color(r: 1, g: 1, b: 1, a: 0.5))
+        let rim = render(rimOnly)
+
         let list = render(node)
-        #expect(list.vertices.count == 8)
-        #expect(list.vertices[4].posX == 6)
-        #expect(list.vertices[6].posY == 1)
+        #expect(list.vertices.count == 4 + rim.vertices.count)
+        // The child paints first, then the rim: the suffix is exactly the rim
+        // the node paints on its own, so the child cannot cover the edge.
+        #expect(Array(list.vertices.prefix(4).map(\.posX)) == [10, 30, 30, 10])
+        #expect(Array(list.vertices.suffix(rim.vertices.count).map(\.posX)) == rim.vertices.map(\.posX))
     }
 
     @Test("Opacity dims the rim light with the surface")

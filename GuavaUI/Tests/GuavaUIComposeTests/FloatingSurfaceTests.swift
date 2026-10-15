@@ -62,8 +62,8 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         #expect(haloList.vertices.count < shadowVertices)
     }
 
-    @Test("A menu panel floats")
-    @MainActor func menuPanelFloats() throws {
+    @Test("A menu panel is a card, not a floating surface")
+    @MainActor func menuPanelStaysFlat() throws {
         try GlobalTestLock.locked {
             PortalStoreHolder.current.clear()
             defer { PortalStoreHolder.current.clear() }
@@ -86,11 +86,17 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
                 scheduler.tick(deltaTime: 1)
                 settle()
 
-                let panel = try #require(flatten(tree.root).first { !$0.ambientShadow.isEmpty })
-                #expect(panel.shadow == panel.theme.elevation.floating.key)
-                #expect(!panel.highlight.isEmpty)
-                // The menu, not some inner row: it is the wide one.
-                #expect(panel.frame.width > 100)
+                // The menu panel, not some inner row: it is the wide one.
+                let panel = try #require(flatten(tree.root).first {
+                    $0.backgroundColor != nil && $0.frame.width > 100
+                })
+                // Same as any card: no lift, no rim, no frost. A menu that
+                // carried the floating treatment was the one panel in the UI
+                // that did not match the cards around it.
+                #expect(panel.ambientShadow.isEmpty)
+                #expect(panel.shadow.isEmpty)
+                #expect(panel.highlight.isEmpty)
+                #expect(panel.backdropBlur == 0)
             }
         }
     }

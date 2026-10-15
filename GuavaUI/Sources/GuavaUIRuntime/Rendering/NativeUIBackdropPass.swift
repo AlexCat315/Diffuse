@@ -26,9 +26,9 @@ final class NativeUIBackdropShaders {
         let fragmentArtifact = try Self.artifact(api: device.backendAPI, stage: .fragment)
         guard fragmentArtifact.interface.pushConstants.count == 1,
               let range = fragmentArtifact.interface.pushConstants.first,
-              range.stage == .fragment, range.byteCount == 48,
+              range.stage == .fragment, range.byteCount == 64,
               vertexArtifact.interface.pushConstants.isEmpty else {
-            throw RHIError.layoutMismatch("backdrop shaders require one 48-byte fragment constant block")
+            throw RHIError.layoutMismatch("backdrop shaders require one 64-byte fragment constant block")
         }
         constants = range
         vertex = try device.makeShaderModule(vertexArtifact.moduleDescriptor())
@@ -84,23 +84,31 @@ final class NativeUIBackdropShaders {
 
 /// Everything the composite needs once its offscreen passes are recorded.
 struct NativeUIBackdropComposite {
+    /// The blurred capture: what the panel's body frosts over.
     let texture: Texture
+    /// The capture at full resolution: what the edge band refracts.
+    let sharpTexture: Texture
     /// Panel rect inside the captured region, as source uv scale and offset.
     let uvTransform: SIMD4<Float>
     let blur: SIMD4<Float>
     let shape: SIMD4<Float>
+    let glass: SIMD4<Float>
+    /// Both capture textures bound for the composite draw.
+    let binding: BindingSet
     /// Clip-space rect of the panel, matching the fill that draws over it.
     let x0: Float, y0: Float, x1: Float, y1: Float
 }
 
-/// Frosted-glass backdrops for floating panels.
+/// Liquid-glass backdrops for floating panels.
 ///
 /// A backdrop is captured where the panel's fill is about to be drawn: the
-/// already-rendered frame behind the panel is downsampled into a quarter-size
-/// scratch target, blurred horizontally and vertically, then composited back
-/// under the fill masked to its rounded rect. Everything is sized to the panel,
-/// so a menu costs three small passes instead of a full-frame copy, and nested
-/// panels compose for free — a submenu blurs the parent's frost.
+/// already-rendered frame behind the panel is copied once at full resolution
+/// for the edges, downsampled into a quarter-size scratch target and blurred
+/// horizontally and vertically for the body, then composited back under the
+/// fill masked to its rounded rect — sharp and refracted in an edge band,
+/// frosted inside it. Everything is sized to the panel, so a menu costs a
+/// handful of small passes instead of a full-frame copy, and nested panels
+/// compose for free — a submenu refracts the parent's glass.
 ///
 /// The frame must live in a texture the pass may *sample*. Swapchain images are
 /// render targets only, so the window keeps its frame in an owned texture and
@@ -111,6 +119,7 @@ final class NativeUIBackdropPass {
         case blur = 1
         case composite = 2
         case blit = 3
+        case copy = 4
     }
 
     /// Frost is more than a blur. Over a plain backdrop a blurred frame is the
@@ -122,10 +131,19 @@ final class NativeUIBackdropPass {
     private static let saturation: Float = 1.8
     private static let lift: Float = 0.08
 
+    /// The lens. `edgeWidth` is how far inward the band reaches, `refraction`
+    /// how far it samples beyond the panel's edge, `aberration` the fraction
+    /// red swings further than blue. Band and pull are logical points — the
+    /// capture works in physical pixels, so both get scaled per panel.
+    private static let edgeWidth: Float = 10
+    private static let refraction: Float = 6
+    private static let aberration: Float = 0.35
+
     private struct Params {
         var uvTransform: SIMD4<Float>  // xy = scale, zw = offset
         var blur: SIMD4<Float>         // x = mode, yz = uv step, w = sigma
         var shape: SIMD4<Float>        // xy = half size in px, z = corner radius
+        var glass: SIMD4<Float>        // x = band width px, y = pull px, z = aberration
     }
 
     private struct Scratch {
@@ -143,7 +161,10 @@ final class NativeUIBackdropPass {
     private let blit: GraphicsPipeline        // frame -> swapchain: no blending
     private var scratchA: Scratch?
     private var scratchB: Scratch?
+    private var scratchC: Scratch?
     private var frameBinding: BindingSet?
+    private var compositeBinding: BindingSet?
+    private var compositeBindingTextures: (blurred: Texture, sharp: Texture)?
 
     init(device: Device, shaders: NativeUIBackdropShaders, format: TextureFormat, samples: Int) throws {
         self.device = device
@@ -202,21 +223,43 @@ final class NativeUIBackdropPass {
         let height = max(1, Int(ceil(Float(capture.height) / Float(factor))))
         let a = try scratch(&scratchA, width: width, height: height)
         let b = try scratch(&scratchB, width: width, height: height)
+        // The lens wants a sharp source: the blur chain's quarter-size targets
+        // would soften the bend into invisibility, so the capture is copied
+        // once at full resolution for the edge band.
+        let c = try scratch(&scratchC, width: capture.width, height: capture.height)
         // `blurRadius` is a CSS-style gaussian radius: one standard deviation
         // in points, so a tap has to reach about two of them.
         let sigma = max(backdrop.blurRadius * min(scaleX, scaleY) / Float(factor), 0.5)
         // Spaced taps ride on bilinear filtering: 13 samples covering two sigma
         // instead of one sample per pixel inside it.
         let tapStep = max(1, sigma / 3)
+        let captureUV = SIMD4(Float(capture.width) / Float(frame.x),
+                              Float(capture.height) / Float(frame.y),
+                              Float(capture.x) / Float(frame.x),
+                              Float(capture.y) / Float(frame.y))
 
+        // The pull reaches past the panel's edge, so it can only ever be as
+        // wide as the capture margin actually is — a panel against the window
+        // edge has its capture clamped, and unclamped the lens would smear
+        // whatever scratch border it hit.
+        let scale = min(scaleX, scaleY)
+        let slack = min(panel.x - capture.x, capture.x + capture.width - panel.x - panel.width,
+                        panel.y - capture.y, capture.y + capture.height - panel.y - panel.height)
+        let pull = min(Self.refraction * scale, Float(slack))
+        let glass = SIMD4(Self.edgeWidth * scale, pull, Self.aberration, 0)
+
+        try draw(target: c, pipeline: offscreen, binding: try bindingSet(for: source),
+                 quad: try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1),
+                 params: Params(uvTransform: captureUV,
+                                blur: SIMD4(Mode.copy.rawValue, 0, 0, 0),
+                                shape: .zero, glass: .zero),
+                 label: "backdrop-copy",
+                 into: commands)
         try draw(target: a, pipeline: offscreen, binding: try bindingSet(for: source),
                  quad: try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1),
-                 params: Params(uvTransform: SIMD4(Float(capture.width) / Float(frame.x),
-                                                  Float(capture.height) / Float(frame.y),
-                                                  Float(capture.x) / Float(frame.x),
-                                                  Float(capture.y) / Float(frame.y)),
+                 params: Params(uvTransform: captureUV,
                                 blur: SIMD4(Mode.downsample.rawValue, 1 / Float(frame.x), 1 / Float(frame.y), 0),
-                                shape: .zero),
+                                shape: .zero, glass: .zero),
                  label: "backdrop-downsample",
                  into: commands)
         // Horizontal, then vertical: two 13-tap passes instead of one 169-tap
@@ -225,26 +268,31 @@ final class NativeUIBackdropPass {
                  quad: try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1),
                  params: Params(uvTransform: SIMD4(1, 1, 0, 0),
                                 blur: SIMD4(Mode.blur.rawValue, tapStep / Float(width), 0, sigma),
-                                shape: .zero),
+                                shape: .zero, glass: .zero),
                  label: "backdrop-blur-h",
                  into: commands)
         try draw(target: a, pipeline: offscreen, binding: try bindingSet(for: b.resource.texture),
                  quad: try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1),
                  params: Params(uvTransform: SIMD4(1, 1, 0, 0),
                                 blur: SIMD4(Mode.blur.rawValue, 0, tapStep / Float(height), sigma),
-                                shape: .zero),
+                                shape: .zero, glass: .zero),
                  label: "backdrop-blur-v",
                  into: commands)
 
         let radius = backdrop.cornerRadius * min(scaleX, scaleY)
+        let blurred = a.resource.texture
+        let binding = try compositeBindingSet(blurred: blurred, sharp: c.resource.texture)
         return NativeUIBackdropComposite(
-            texture: a.resource.texture,
+            texture: blurred,
+            sharpTexture: c.resource.texture,
             uvTransform: SIMD4(Float(panel.width) / Float(capture.width),
                                Float(panel.height) / Float(capture.height),
                                Float(panel.x - capture.x) / Float(capture.width),
                                Float(panel.y - capture.y) / Float(capture.height)),
             blur: SIMD4(Mode.composite.rawValue, Self.saturation, 0, Self.lift),
             shape: SIMD4(Float(panel.width) / 2, Float(panel.height) / 2, radius, 0),
+            glass: glass,
+            binding: binding,
             x0: clipX(panel.x, frame: frame.x), y0: clipY(panel.y, frame: frame.y),
             x1: clipX(panel.x + panel.width, frame: frame.x), y1: clipY(panel.y + panel.height, frame: frame.y))
     }
@@ -254,11 +302,12 @@ final class NativeUIBackdropPass {
         let quad = try uploadQuad(x0: composite.x0, y0: composite.y0, x1: composite.x1, y1: composite.y1)
         pass.setPipeline(self.composite)
         pass.setVertexBuffer(quad.buffer, offset: quad.offset)
-        pass.setBindingSet(try bindingSet(for: composite.texture))
+        pass.setBindingSet(composite.binding)
         pass.pushConstant(stage: .fragment, slot: shaders.constants.slot,
                           value: Params(uvTransform: composite.uvTransform,
                                         blur: composite.blur,
-                                        shape: composite.shape))
+                                        shape: composite.shape,
+                                        glass: composite.glass))
         pass.draw(vertexCount: 6)
     }
 
@@ -275,7 +324,7 @@ final class NativeUIBackdropPass {
             pass.pushConstant(stage: .fragment, slot: shaders.constants.slot,
                               value: Params(uvTransform: SIMD4(1, 1, 0, 0),
                                             blur: SIMD4(Mode.blit.rawValue, 0, 0, 0),
-                                            shape: .zero))
+                                            shape: .zero, glass: .zero))
             pass.draw(vertexCount: 6)
         }
     }
@@ -360,6 +409,10 @@ final class NativeUIBackdropPass {
             if let set = scratchB?.bindingSet { return set }
             let set = try makeBindingSet(texture: texture); scratchB?.bindingSet = set; return set
         }
+        if scratchC?.resource.texture == texture {
+            if let set = scratchC?.bindingSet { return set }
+            let set = try makeBindingSet(texture: texture); scratchC?.bindingSet = set; return set
+        }
         if frameTexture == texture, let frameBinding { return frameBinding }
         let set = try makeBindingSet(texture: texture)
         frameTexture = texture
@@ -367,12 +420,32 @@ final class NativeUIBackdropPass {
         return set
     }
 
+    /// The composite reads two textures at once — the blurred body and the
+    /// sharp capture — so its set is keyed on the pair. Both scratches are
+    /// grow-only, so the pair is stable across frames and the set is built once.
+    private func compositeBindingSet(blurred: Texture, sharp: Texture) throws -> BindingSet {
+        if let set = compositeBinding,
+           compositeBindingTextures?.blurred == blurred,
+           compositeBindingTextures?.sharp == sharp { return set }
+        let set = try device.makeBindingSet(layout: shaders.bindings, descriptor: BindingSetDescriptor(entries: [
+            BindingSetEntry(slot: 1, resource: .texture(blurred)),
+            BindingSetEntry(slot: 2, resource: .sampler(shaders.sampler)),
+            BindingSetEntry(slot: 3, resource: .texture(sharp))
+        ]))
+        compositeBinding = set
+        compositeBindingTextures = (blurred, sharp)
+        return set
+    }
+
     private var frameTexture: Texture?
 
+    /// Single-texture passes still have to satisfy the two-texture layout, so
+    /// the unused sharp slot rides along with the same texture.
     private func makeBindingSet(texture: Texture) throws -> BindingSet {
         try device.makeBindingSet(layout: shaders.bindings, descriptor: BindingSetDescriptor(entries: [
             BindingSetEntry(slot: 1, resource: .texture(texture)),
-            BindingSetEntry(slot: 2, resource: .sampler(shaders.sampler))
+            BindingSetEntry(slot: 2, resource: .sampler(shaders.sampler)),
+            BindingSetEntry(slot: 3, resource: .texture(texture))
         ]))
     }
 }

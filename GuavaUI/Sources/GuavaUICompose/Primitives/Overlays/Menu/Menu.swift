@@ -117,8 +117,12 @@ struct MenuLevel: View {
                 .modifier(MenuWindowBounds(maxVisibleRows: configuration.maxVisibleRows))
                 .modifier(MenuScrollMarker())
             }
+            // A card, like every other panel in the UI: a fill, a radius and a
+            // border. No shadow, no rim light, no frost — a menu is not a
+            // floating surface, and the floating treatment made it the one
+            // panel in the UI that did not match the cards around it.
             .background(.surfaceFloating).cornerRadius(.controlRadius)
-            .border(.border, width: 1).floatingSurface()
+            .border(.border, width: 1)
             .frame(width: configuration.width)
         }
     }

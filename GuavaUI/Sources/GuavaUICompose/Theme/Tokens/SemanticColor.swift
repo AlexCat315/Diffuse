@@ -37,14 +37,18 @@ public extension SemanticColorRef {
     ///
     /// A *material*, not a solid: it is meant to sit over a blurred backdrop
     /// (`View.backdropBlur`). What reads as frost is the panel answering to
-    /// whatever is behind it — measured as the luma swing between a black and a
-    /// white backdrop, which is 0.18 at this alpha and only 0.12 at 0.84. That
-    /// higher alpha looked like a painted panel that happened to be
+    /// whatever is behind it, and the backdrop only reaches the screen by
+    /// `(1 - alpha)` of it — so a high alpha leaves the backdrop pass running
+    /// at a few percent, which looks like a painted panel that happened to be
     /// translucent, not like glass.
     ///
-    /// The floor is legibility where the backdrop program is unavailable: over pure white the panel still lands near 5.9:1 against label
-    /// text, so the material can carry its own labels either way.
-    static let materialFloating = SemanticColorRef { $0.colors.surfaceFloating.multipliedAlpha(0.76) }
+    /// The cost of a low alpha is legibility, and only where the backdrop is
+    /// bright. Over the canvas these panels actually sit on, the dark theme
+    /// lands at 11.6:1 against label text and the light theme at 13.4:1 —
+    /// both *better* than a higher alpha would give. Over pure white the dark
+    /// panel drops to 2.3:1, so a material over bright content needs a
+    /// backing of its own rather than leaning on this fill.
+    static let materialFloating = SemanticColorRef { $0.colors.surfaceFloating.multipliedAlpha(0.5) }
 
     static let onBackground     = SemanticColorRef { $0.colors.onBackground }
     static let onSurface        = SemanticColorRef { $0.colors.onSurface }

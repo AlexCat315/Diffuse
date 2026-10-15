@@ -90,12 +90,36 @@
                 "size": 16,
                 "elementStride": 4
               }
+            },
+            {
+              "name": "glass",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 48,
+                "size": 16,
+                "elementStride": 4
+              }
             }
           ],
           "sizes": [
             {
               "kind": "uniform",
-              "value": 48,
+              "value": 64,
               "alignment": 16
             }
           ]
@@ -182,12 +206,36 @@
                   "size": 16,
                   "elementStride": 4
                 }
+              },
+              {
+                "name": "glass",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 48,
+                  "size": 16,
+                  "elementStride": 4
+                }
               }
             ],
             "sizes": [
               {
                 "kind": "uniform",
-                "value": 48,
+                "value": 64,
                 "alignment": 16
               }
             ]
@@ -195,7 +243,7 @@
           "binding": {
             "kind": "uniform",
             "offset": 0,
-            "size": 48,
+            "size": 64,
             "elementStride": 0
           }
         },
@@ -247,6 +295,31 @@
         "sizes": [
           {
             "kind": "samplerState",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "sharp",
+      "binding": {
+        "kind": "shaderResource",
+        "index": 3
+      },
+      "type": {
+        "kind": "resource",
+        "baseShape": "texture2D",
+        "resultType": {
+          "kind": "vector",
+          "elementCount": 4,
+          "elementType": {
+            "kind": "scalar",
+            "scalarType": "float32"
+          }
+        },
+        "sizes": [
+          {
+            "kind": "shaderResource",
             "value": 1
           }
         ]
@@ -345,12 +418,36 @@
                   "size": 16,
                   "elementStride": 4
                 }
+              },
+              {
+                "name": "glass",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 48,
+                  "size": 16,
+                  "elementStride": 4
+                }
               }
             ],
             "sizes": [
               {
                 "kind": "uniform",
-                "value": 48,
+                "value": 64,
                 "alignment": 16
               }
             ]
@@ -437,12 +534,36 @@
                     "size": 16,
                     "elementStride": 4
                   }
+                },
+                {
+                  "name": "glass",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 48,
+                    "size": 16,
+                    "elementStride": 4
+                  }
                 }
               ],
               "sizes": [
                 {
                   "kind": "uniform",
-                  "value": 48,
+                  "value": 64,
                   "alignment": 16
                 }
               ]
@@ -450,7 +571,7 @@
             "binding": {
               "kind": "uniform",
               "offset": 0,
-              "size": 48,
+              "size": 64,
               "elementStride": 0
             }
           },
@@ -502,6 +623,31 @@
           "sizes": [
             {
               "kind": "samplerState",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "sharp",
+        "binding": {
+          "kind": "shaderResource",
+          "index": 3
+        },
+        "type": {
+          "kind": "resource",
+          "baseShape": "texture2D",
+          "resultType": {
+            "kind": "vector",
+            "elementCount": 4,
+            "elementType": {
+              "kind": "scalar",
+              "scalarType": "float32"
+            }
+          },
+          "sizes": [
+            {
+              "kind": "shaderResource",
               "value": 1
             }
           ]
@@ -683,6 +829,14 @@
           "binding": {
             "kind": "samplerState",
             "index": 2,
+            "used": 1
+          }
+        },
+        {
+          "name": "sharp",
+          "binding": {
+            "kind": "shaderResource",
+            "index": 3,
             "used": 1
           }
         }
