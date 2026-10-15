@@ -50,6 +50,24 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
     public private(set) var elapsed: Double = 0
     public private(set) var isFinished: Bool = false
 
+    /// Invoked once when the animation reaches its target on its own — from
+    /// `tick` running out of time, or from `finishImmediately`. Deliberately
+    /// *not* invoked by `cancel`: a superseded animation was abandoned, not
+    /// completed, and a `withAnimation` completion must not fire for one.
+    ///
+    /// Only this class carries it. The protocol is also implemented by clocks
+    /// and timers that drive the scheduler without interpolating a value, and
+    /// none of those can complete an animated scope.
+    public var onFinish: (() -> Void)?
+
+    /// Fire once, and only for a real completion. `cancel` deliberately does
+    /// not come through here.
+    private func finish() {
+        guard !isFinished else { return }
+        isFinished = true
+        onFinish?()
+    }
+
     public init(from: Value,
                 to: Value,
                 animation: Animation,
@@ -60,7 +78,9 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
         self.apply = apply
 
         // Zero or negative duration ⇒ snap immediately. Still apply once so
-        // the target value is visible on this frame.
+        // the target value is visible on this frame. `onFinish` is not called
+        // from here: a caller that attaches after construction sees
+        // `isFinished` and settles the group itself.
         if animation.duration <= 0 && animation.delay <= 0 {
             apply(to)
             isFinished = true
@@ -81,7 +101,7 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
 
         if active >= animation.duration {
             apply(to)
-            isFinished = true
+            finish()
             return
         }
 
@@ -93,7 +113,7 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
     public func finishImmediately() {
         guard !isFinished else { return }
         apply(to)
-        isFinished = true
+        finish()
     }
 
     public func cancel() {
@@ -128,6 +148,7 @@ public final class AnimatorScheduler: @unchecked Sendable {
     @TaskLocal public static var current: AnimatorScheduler = AnimatorScheduler.shared
 
     private var active: [AnyAnimationController] = []
+    private var completions: [AnimationCompletionGroup] = []
 
     public init() {}
 
@@ -151,12 +172,24 @@ public final class AnimatorScheduler: @unchecked Sendable {
         active.removeAll { $0 === controller }
     }
 
+    /// Watch a `withAnimation` completion group. The group is asked to settle at
+    /// the end of every sweep, which is what lets a callback fire on the frame
+    /// its last controller finishes — and also fire (correctly) on the first
+    /// sweep when the mutation turned out to animate nothing.
+    public func track(_ group: AnimationCompletionGroup) {
+        completions.append(group)
+    }
+
     /// Advance every registered controller by `deltaTime` seconds, then
     /// remove any that finished during the sweep.
     public func tick(deltaTime: Double) {
         for c in active { c.tick(deltaTime: deltaTime) }
         if active.contains(where: \.isFinished) {
             active.removeAll(where: \.isFinished)
+        }
+        if !completions.isEmpty {
+            for group in completions { group.settleIfIdle() }
+            completions.removeAll(where: \.hasSettled)
         }
     }
 
@@ -165,5 +198,6 @@ public final class AnimatorScheduler: @unchecked Sendable {
     /// run to completion or replace them via `finishImmediately()`.
     public func reset() {
         active.removeAll()
+        completions.removeAll()
     }
 }

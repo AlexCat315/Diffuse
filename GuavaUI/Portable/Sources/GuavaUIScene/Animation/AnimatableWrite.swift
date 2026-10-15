@@ -68,6 +68,7 @@ public extension Node {
             apply: apply
         )
         replaceAnimationController(for: propertyKey, with: controller)
+        ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)
     }
 
@@ -107,6 +108,7 @@ public extension Node {
             apply: { apply($0) }
         )
         replaceAnimationController(for: propertyKey, with: controller)
+        ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)
     }
 
@@ -137,6 +139,7 @@ public extension Node {
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
         replaceAnimationController(for: propertyKey, with: controller)
+        ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)
     }
 
@@ -172,6 +175,7 @@ public extension Node {
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
         replaceAnimationController(for: propertyKey, with: controller)
+        ActiveAnimationContext.currentCompletion?.attach(controller)
         AnimatorScheduler.current.register(controller)
     }
 }

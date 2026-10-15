@@ -730,6 +730,7 @@ final class ViewScope {
                 graph.recomposer.invalidateTracked(
                     scopeID: scopeID,
                     animation: capturedAnim,
+                    completion: ActiveAnimationContext.currentCompletion,
                     reason: .init(kind: kind, detail: field)
                 ) { [weak self] reasons in
                     self?.recompose(reasons: reasons)
@@ -860,6 +861,7 @@ final class ViewScope {
         graph.recomposer.invalidateTracked(
             scopeID: ObjectIdentifier(anchor),
             animation: capturedAnim,
+            completion: ActiveAnimationContext.currentCompletion,
             reason: reason
         ) { [weak self] reasons in
             self?.recompose(reasons: reasons)

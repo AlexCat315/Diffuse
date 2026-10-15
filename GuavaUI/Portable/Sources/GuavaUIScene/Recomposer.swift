@@ -24,6 +24,10 @@ public final class Recomposer: @unchecked Sendable {
         /// before invoking `body` so modifier `apply` paths observe the same
         /// animation that the user authored at the call site.
         let animation: Animation?
+        /// The `withAnimation` completion waiting on that animation, carried
+        /// the same way so every controller this scope registers is accounted
+        /// for by the same callback.
+        let completion: AnimationCompletionGroup?
     }
 
     private var pendingOrder: [ObjectIdentifier] = []
@@ -46,14 +50,17 @@ public final class Recomposer: @unchecked Sendable {
     /// duration of `body`.
     public func invalidate(scopeID: ObjectIdentifier,
                            animation: Animation? = nil,
+                           completion: AnimationCompletionGroup? = nil,
                            body: @escaping () -> Void) {
-        invalidateTracked(scopeID: scopeID, animation: animation, reason: .init(kind: "manual")) { _ in body() }
+        invalidateTracked(scopeID: scopeID, animation: animation, completion: completion,
+                          reason: .init(kind: "manual")) { _ in body() }
     }
 
     /// Preserve up to 16 distinct causes while keeping existing scheduling and
     /// first-animation semantics. Self-invalidations retain next-frame causes.
     public func invalidateTracked(scopeID: ObjectIdentifier,
                                   animation: Animation? = nil,
+                                  completion: AnimationCompletionGroup? = nil,
                                   reason: RecompositionReason,
                                   body: @escaping ([RecompositionReason]) -> Void) {
         lock.withLock {
@@ -66,7 +73,8 @@ public final class Recomposer: @unchecked Sendable {
             pendingByID[scopeID] = PendingScope(id: scopeID,
                                                 body: body,
                                                 reasons: [reason],
-                                                animation: animation)
+                                                animation: animation,
+                                                completion: completion)
             pendingOrder.append(scopeID)
         }
     }
@@ -101,7 +109,7 @@ public final class Recomposer: @unchecked Sendable {
             guard let scope else { break }
             didCommit = true
             committedIDs.insert(scope.id)
-            ActiveAnimationContext.with(scope.animation) {
+            ActiveAnimationContext.with(scope.animation, completion: scope.completion) {
                 scope.body(scope.reasons)
             }
         }
