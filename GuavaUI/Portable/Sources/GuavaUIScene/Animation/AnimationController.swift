@@ -34,13 +34,24 @@ public protocol AnyAnimationController: AnyObject {
     func cancel()
 }
 
+/// A controller that drives an interpolated value from a start to a target.
+///
+/// Separate from `AnyAnimationController` because the protocol is also
+/// implemented by clocks and timers that keep the scheduler producing frames
+/// without interpolating anything. Those have no progress and so cannot hand
+/// motion to whatever supersedes them.
+public protocol ProgressReporting: AnyAnimationController {
+    /// Rate of change of progress per second as of the last tick.
+    var progressVelocity: Float { get }
+}
+
 // MARK: - Concrete controller
 
 /// Drives one `Interpolatable` value from `from` to `to` over the lifetime
 /// of an `Animation`. The controller is value-agnostic — it does not know
 /// which property it writes; the caller's `apply` closure handles that
 /// (typically `{ value in node.backgroundColor = value }`).
-public final class AnimationController<Value: Interpolatable>: AnyAnimationController {
+public final class AnimationController<Value: Interpolatable>: ProgressReporting {
 
     public let from: Value
     public let to: Value
@@ -60,6 +71,20 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
     /// none of those can complete an animated scope.
     public var onFinish: (() -> Void)?
 
+    /// `nil` for every curve except a spring. A spring is evaluated from the
+    /// value it inherits rather than sampled from elapsed time, which is what
+    /// lets an interrupted animation keep its velocity.
+    private var spring: SpringSolution?
+    private var initialVelocity: Float = 0
+    private var lastProgress: Float = 0
+
+    /// Rate of change of progress per second as of the last tick.
+    ///
+    /// Hand to the animation that supersedes this one so it continues the
+    /// motion rather than restarting it. Zero until the first tick, and zero
+    /// for anything that is not a spring.
+    public private(set) var progressVelocity: Float = 0
+
     /// Fire once, and only for a real completion. `cancel` deliberately does
     /// not come through here.
     private func finish() {
@@ -68,14 +93,39 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
         onFinish?()
     }
 
+    /// Progress at `active` seconds after the animation started, clamped to
+    /// `[0, 1]` unless the animation opted into overshoot.
+    ///
+    /// A spring's time is already in seconds — its `response` *is* its clock —
+    /// so it is solved at `active` directly. Every other curve maps
+    /// normalized `[0, 1]` time, so it sees `active / duration`.
+    private func progress(at active: Double) -> Float {
+        let raw: Float
+        if let spring {
+            // Normalized elapsed time, converted to the seconds the spring's
+            // physics runs on — the same conversion `AnimationCurve.spring`
+            // makes, so the two paths agree at every instant.
+            let t = spring.seconds(forNormalized: Float(active / animation.duration))
+            raw = spring.position(at: t, from: 0, velocity: initialVelocity)
+        } else {
+            raw = animation.curve.evaluate(Float(active / animation.duration))
+        }
+        return animation.allowsOvershoot ? raw : max(0, min(1, raw))
+    }
+
     public init(from: Value,
                 to: Value,
                 animation: Animation,
+                initialVelocity: Float = 0,
                 apply: @escaping (Value) -> Void) {
         self.from = from
         self.to = to
         self.animation = animation
         self.apply = apply
+        if case let .spring(response, damping) = animation.curve {
+            spring = SpringSolution(response: response, dampingFraction: damping)
+            self.initialVelocity = initialVelocity
+        }
 
         // Zero or negative duration ⇒ snap immediately. Still apply once so
         // the target value is visible on this frame. `onFinish` is not called
@@ -99,15 +149,19 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
             return
         }
 
+        let previous = lastProgress
+        lastProgress = progress(at: active)
+        if deltaTime > 0 {
+            progressVelocity = (lastProgress - previous) / Float(deltaTime)
+        }
+
         if active >= animation.duration {
             apply(to)
             finish()
             return
         }
 
-        let t = Float(active / animation.duration)
-        let p = animation.curve.evaluate(t)
-        apply(Value.interpolate(from, to, t: p))
+        apply(Value.interpolate(from, to, t: lastProgress))
     }
 
     public func finishImmediately() {

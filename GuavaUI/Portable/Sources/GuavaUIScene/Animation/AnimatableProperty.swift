@@ -35,6 +35,19 @@ final class AnimatablePropertyRegistry {
         }
     }
 
+    /// The controller currently driving `propertyKey`, if it is still alive
+    /// and unfinished. Peeked rather than taken: the successor reads the
+    /// outgoing controller's motion *before* replacing it, so the rate is
+    /// still there.
+    func liveController(for propertyKey: AnyHashable) -> (any AnyAnimationController)? {
+        guard let box = controllers[propertyKey], let controller = box.controller,
+              !controller.isFinished else {
+            controllers.removeValue(forKey: propertyKey)
+            return nil
+        }
+        return controller
+    }
+
     func hasActiveController(for propertyKey: AnyHashable) -> Bool {
         guard let box = controllers[propertyKey] else { return false }
         guard let controller = box.controller, !controller.isFinished else {
@@ -69,5 +82,19 @@ extension Node {
 
     func hasAnimationController(for propertyKey: AnyHashable) -> Bool {
         existingAnimatablePropertyRegistry?.hasActiveController(for: propertyKey) ?? false
+    }
+
+    /// Progress rate, in units per second, of the animation currently driving
+    /// `propertyKey` — zero when nothing is running.
+    ///
+    /// Read by `animatableSet` before it replaces the controller, so a new
+    /// spring can be released from the motion already on screen instead of
+    /// from rest. A curve has no such thing, so a non-spring successor simply
+    /// ignores what it gets.
+    @inline(__always)
+    func animatableVelocity<Key: Hashable>(for propertyKey: Key) -> Float {
+        guard let live = existingAnimatablePropertyRegistry?
+            .liveController(for: AnyHashable(propertyKey)) as? ProgressReporting else { return 0 }
+        return live.progressVelocity
     }
 }

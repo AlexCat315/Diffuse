@@ -61,10 +61,12 @@ public extension Node {
             apply(target)
             return
         }
+        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: current,
             to: target,
             animation: anim,
+            initialVelocity: inherited,
             apply: apply
         )
         replaceAnimationController(for: propertyKey, with: controller)
@@ -101,10 +103,12 @@ public extension Node {
             apply(target)
             return
         }
+        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: from,
             to: to,
             animation: anim,
+            initialVelocity: inherited,
             apply: { apply($0) }
         )
         replaceAnimationController(for: propertyKey, with: controller)
@@ -132,10 +136,12 @@ public extension Node {
             self[keyPath: keyPath] = target
             return
         }
+        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: current,
             to: target,
             animation: anim,
+            initialVelocity: inherited,
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
         replaceAnimationController(for: propertyKey, with: controller)
@@ -168,10 +174,12 @@ public extension Node {
             self[keyPath: keyPath] = target
             return
         }
+        let inherited = animatableVelocity(for: propertyKey)
         let controller = AnimationController(
             from: from,
             to: to,
             animation: anim,
+            initialVelocity: inherited,
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
         replaceAnimationController(for: propertyKey, with: controller)

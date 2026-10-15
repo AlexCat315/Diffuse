@@ -80,44 +80,17 @@ public enum AnimationCurve: Sendable, Equatable {
         }
     }
 
-    /// Evaluate a damped spring and normalize it so `f(0)=0` and `f(1)=1`.
-    /// The returned value is clamped into `[0, 1]`.
+    /// A damped spring released from rest, normalized so `f(0)=0` and `f(1)=1`.
+    ///
+    /// Not clamped: an underdamped spring passing its target is the point, and
+    /// `SpringSolution` carries the initial velocity that a curve cannot
+    /// express. Whether progress may leave `[0, 1]` on the way to an animated
+    /// value is `Animation.allowsOvershoot`'s decision, not the curve's.
     private static func evaluateSpring(x: Float,
                                        response: Float,
                                        dampingFraction: Float) -> Float {
-        let r = max(0.0001, response)
-        let zeta = max(0.0001, dampingFraction)
-        let omega0 = (2 * Float.pi) / r
-
-        @inline(__always)
-        func rawProgress(_ t: Float) -> Float {
-            if zeta < 1 {
-                let sqrtTerm = sqrt(max(0, 1 - zeta * zeta))
-                let omegaD = omega0 * sqrtTerm
-                let envelope = exp(-zeta * omega0 * t)
-                let value = 1 - envelope * (
-                    cos(omegaD * t) + (zeta / sqrtTerm) * sin(omegaD * t)
-                )
-                return value
-            } else if abs(zeta - 1) < 1e-4 {
-                let envelope = exp(-omega0 * t)
-                return 1 - envelope * (1 + omega0 * t)
-            } else {
-                let root = sqrt(max(0, zeta * zeta - 1))
-                let lambda1 = -omega0 * (zeta - root)
-                let lambda2 = -omega0 * (zeta + root)
-                let c1 = lambda2 / (lambda2 - lambda1)
-                let c2 = 1 - c1
-                return 1 - c1 * exp(lambda1 * t) - c2 * exp(lambda2 * t)
-            }
-        }
-
-        let y = rawProgress(x)
-        let y1 = rawProgress(1)
-        guard abs(y1) > 1e-5 else {
-            return max(0, min(1, y))
-        }
-        return max(0, min(1, y / y1))
+        let spring = SpringSolution(response: response, dampingFraction: dampingFraction)
+        return spring.position(at: spring.seconds(forNormalized: x), from: 0, velocity: 0)
     }
 
     /// Solve the cubic Bezier `y(x)` defined by the four control points
@@ -188,12 +161,28 @@ public struct Animation: Sendable, Equatable {
     /// holds the `from` value during this window.
     public let delay: Double
 
+    /// Whether progress is allowed to leave `[0, 1]` on its way to the target.
+    ///
+    /// A spring under 1.0 damping passes its target before it settles, and
+    /// that overshoot is most of what makes it feel physical. It is also only
+    /// valid for values that can express it: an offset or a scale can sit past
+    /// where it is going, but an alpha, a colour channel or a corner radius
+    /// cannot, and letting one go out of range is a visual bug rather than an
+    /// effect.
+    ///
+    /// Default `false`, so existing animations — including every semantic
+    /// motion token, several of which use springs — are unaffected. Opt in per
+    /// animation, on properties known to tolerate it.
+    public let allowsOvershoot: Bool
+
     public init(duration: Double,
                 curve: AnimationCurve = .easeInOut,
-                delay: Double = 0) {
+                delay: Double = 0,
+                allowsOvershoot: Bool = false) {
         self.duration = duration
         self.curve = curve
         self.delay = delay
+        self.allowsOvershoot = allowsOvershoot
     }
 }
 

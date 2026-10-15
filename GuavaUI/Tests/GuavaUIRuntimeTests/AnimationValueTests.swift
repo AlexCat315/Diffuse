@@ -75,17 +75,42 @@ struct AnimationValueTests {
         }
     }
 
-    @Test("spring curve anchors endpoints and stays bounded")
-    func springAnchorsAndBounds() {
+    @Test("spring curve anchors its endpoints and passes its target when underdamped")
+    func springAnchorsAndOvershoots() {
         let c = AnimationCurve.spring(response: 0.40, dampingFraction: 0.82)
         #expect(abs(c.evaluate(0) - 0) < 1e-4)
         #expect(abs(c.evaluate(1) - 1) < 1e-4)
 
-        for raw in stride(from: Float(0.0), through: Float(1.0), by: 0.05) {
-            let p = c.evaluate(raw)
-            #expect(p >= 0)
-            #expect(p <= 1)
+        // Damping below 1 means the spring is still travelling when it first
+        // reaches the target, so it must go past it. This used to be clamped
+        // away, which is what made every spring in the UI a plain ease.
+        var peak: Float = 0
+        for raw in stride(from: Float(0.0), through: Float(1.0), by: 0.01) {
+            peak = max(peak, c.evaluate(raw))
         }
+        #expect(peak > 1)
+        #expect(c.evaluate(0.25) >= 0)
+    }
+
+    /// Whether that overshoot reaches an animated value is the animation's
+    /// call, not the curve's: an alpha or a corner radius cannot express it.
+    @Test("Overshoot reaches the value only when the animation opts in")
+    func overshootIsOptIn() {
+        let spring = Animation.spring(response: 0.4, dampingFraction: 0.6)
+        #expect(spring.allowsOvershoot == false)
+
+        func peak(_ animation: Animation) -> Float {
+            var highest: Float = 0
+            let controller = AnimationController(from: Float(0), to: Float(1), animation: animation) {
+                highest = max(highest, $0)
+            }
+            for step in 1...20 { controller.tick(deltaTime: Double(step) * 0.01) }
+            return highest
+        }
+        let permissive = Animation(duration: spring.duration, curve: spring.curve,
+                                   delay: spring.delay, allowsOvershoot: true)
+        #expect(peak(spring) <= 1)
+        #expect(peak(permissive) > 1)
     }
 
     @Test("critical spring is monotone")
