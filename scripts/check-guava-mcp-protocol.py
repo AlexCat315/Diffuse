@@ -38,7 +38,7 @@ assert by_id[8]['error']['code'] == -32602
 assert by_id[2]['result']['protocolVersion'] == '2025-03-26'
 assert by_id[3]['result'] == {}
 tools = by_id[4]['result']['tools']
-assert {'write_script', 'compile_scripts', 'get_runtime_state', 'export_project', 'search_capabilities', 'submit_plan'} <= {tool['name'] for tool in tools}
+assert {'write_script', 'compile_scripts', 'get_runtime_state', 'export_project', 'search_capabilities', 'submit_plan', 'reload_plugin'} <= {tool['name'] for tool in tools}
 assert 'respond' not in {tool['name'] for tool in tools}
 assert {'get_diagnostics', 'query_ui_nodes', 'query_ui_recomposition', 'query_ui_state',
         'capture_ui_trace', 'get_ui_trace', 'compare_ui_traces', 'list_skills', 'read_skill'} <= {tool['name'] for tool in tools}

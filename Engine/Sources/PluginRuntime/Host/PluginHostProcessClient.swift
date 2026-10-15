@@ -62,7 +62,10 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         do {
             return try lock.withLock {
                 do {
-                    if process?.isRunning != true { try launch() }
+                    if let process, !process.isRunning {
+                        throw PluginHostClientError.communicationFailed
+                    }
+                    if process == nil { try launch() }
                     guard let input, let output else { throw PluginHostClientError.communicationFailed }
                     let deadline = makeDeadline(timeoutMilliseconds: timeoutMilliseconds)
                     #if os(Windows)
@@ -89,11 +92,12 @@ public final class PluginHostProcessClient: @unchecked Sendable {
                     guard response.id == request.id else { throw PluginHostClientError.mismatchedResponse }
                     return response
                 } catch {
-                    guard !didRestart else { throw error }
                     stopLocked()
-                    didRestart = true
                     _generation &+= 1
-                    try? launch()
+                    if !didRestart {
+                        didRestart = true
+                        try? launch()
+                    }
                     if let onInvalidation {
                         invalidation = (onInvalidation, _generation)
                     }
@@ -109,7 +113,10 @@ public final class PluginHostProcessClient: @unchecked Sendable {
     }
 
     public func stop() {
-        lock.withLock { stopLocked() }
+        lock.withLock {
+            if process != nil { _generation &+= 1 }
+            stopLocked()
+        }
     }
 
     private func launch() throws {
@@ -319,7 +326,10 @@ extension PluginHostProcessClient: PluginCapabilityInvoking {
     public func unloadPlugin(at pluginURL: URL) throws {
         let response = try call(PluginHostRequest(method: .unload,
                                                   pluginPath: pluginURL.path))
-        _ = try acceptedPayload(response)
+        // The host answers a successful unload with an empty ok response.
+        guard response.ok else {
+            throw PluginHostClientError.requestRejected(response.error ?? "unknown error")
+        }
     }
 
     public func prepareCapability(

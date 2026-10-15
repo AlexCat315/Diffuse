@@ -24,12 +24,12 @@ import Testing
     let app = try EditorApplication(projectDirectory: root.path)
     defer { app.shutdown() }
     app.store.dispatch(.setWorkspaceMode(.documents))
-    _ = try await app.executeProjectTool(name: "write_file", input: Data(#"{"path":"Notes.md","text":"First"}"#.utf8))
+    _ = try await app.executeProjectTool(name: "write_file", input: Data(#"{"path":"Notes.md","text":"First"}"#.utf8), origin: .mcp)
     app.workstation.documents.open("Notes.md")
     app.workstation.documents.edit("Notes.md", text: "Unsaved")
     #expect(app.workstation.hasUnsavedChanges)
     await #expect(throws: (any Error).self) {
-        try await app.executeProjectTool(name: "write_file", input: Data(#"{"path":"Notes.md","text":"Replacement","expected_text":"First"}"#.utf8))
+        try await app.executeProjectTool(name: "write_file", input: Data(#"{"path":"Notes.md","text":"Replacement","expected_text":"First"}"#.utf8), origin: .mcp)
     }
     #expect(try String(contentsOf: root.appendingPathComponent("Notes.md"), encoding: .utf8) == "First")
     #expect(app.workstation.saveAll())

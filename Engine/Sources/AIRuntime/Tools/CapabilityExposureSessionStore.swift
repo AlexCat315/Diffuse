@@ -48,12 +48,19 @@ public actor CapabilityExposureSessionStore {
         var snapshot: CapabilityExposureSnapshot
         var drafts: CapabilityDraftStore
         var lastAccessedAt: Date
+        /// Owns the teardown registered for this entry. Disposing it releases
+        /// the Draft store; every path that drops an entry disposes its scope
+        /// instead of hand-running `drafts.removeAll()`.
+        let scope: DisposalScope
     }
 
     private var registry: CapabilityRegistry
     private let ttl: TimeInterval
     private var exposurePolicy: CapabilityExposurePolicy
     private var pluginAuthorities: [String: PluginCapabilityAuthority]
+    /// Host tool policy evaluated before a draft is created; `nil` is a
+    /// pass-through.
+    private let toolPolicy: ToolPolicy?
     private var workflowDocumentID: UUID?
     private var generation: UInt64 = 0
     private var sessions: [UUID: Entry] = [:]
@@ -63,29 +70,36 @@ public actor CapabilityExposureSessionStore {
                 exposurePolicy: CapabilityExposurePolicy = CapabilityExposurePolicy(
                     allowedDomains: ["scene"]
                 ),
-                pluginAuthorities: [String: PluginCapabilityAuthority] = [:]) {
+                pluginAuthorities: [String: PluginCapabilityAuthority] = [:],
+                toolPolicy: ToolPolicy? = nil) {
         self.registry = registry
         self.ttl = max(1, ttl)
         self.exposurePolicy = exposurePolicy
         self.pluginAuthorities = pluginAuthorities
+        self.toolPolicy = toolPolicy
     }
 
     /// Atomically replaces the Registry and its matching exposure authority.
-    /// All existing sessions and Drafts are destroyed first, so tools from a
-    /// disabled or upgraded plugin cannot survive a dynamic catalog change.
+    /// Invalidation is scoped: sessions whose snapshots reference only
+    /// unchanged, still-enabled plugins survive; a policy change outside
+    /// plugin scoping, or a changed/removed plugin authority, drops the
+    /// affected sessions and their Drafts first, so tools from a disabled or
+    /// upgraded plugin cannot survive a dynamic catalog change.
     public func replaceRegistry(
         _ registry: CapabilityRegistry,
         exposurePolicy: CapabilityExposurePolicy,
         pluginAuthorities: [String: PluginCapabilityAuthority]
     ) async {
-        for entry in sessions.values {
-            await entry.drafts.removeAll()
-        }
-        sessions.removeAll()
+        // Switch authority first, then unwind the invalidated generation. An
+        // interleaved caller during the unwind mints under the new Registry.
+        let previousAuthorities = self.pluginAuthorities
+        let previousPolicy = self.exposurePolicy
         self.registry = registry
         self.exposurePolicy = exposurePolicy
         self.pluginAuthorities = pluginAuthorities
         generation &+= 1
+        await discardInvalidatedSessions(previousAuthorities: previousAuthorities,
+                                         previousPolicy: previousPolicy)
     }
 
     /// A workflow or document change invalidates tools and drafts minted under
@@ -97,35 +111,39 @@ public actor CapabilityExposureSessionStore {
         exposurePolicy = policy
         workflowDocumentID = documentID
         generation &+= 1
-        for entry in previous.values { await entry.drafts.removeAll() }
+        for entry in previous.values {
+            await entry.scope.disposeAll()
+        }
     }
 
     /// Plugin enablement, authorisation, upgrades, and PluginHost restarts all
-    /// replace the authority set. Existing tool names and Drafts are discarded
-    /// because they were minted under a different executable boundary.
+    /// replace the authority set. Sessions that reference a changed, newly
+    /// disabled, or removed plugin are discarded because their tool names and
+    /// Drafts were minted under a different executable boundary; sessions that
+    /// reference only unchanged plugins survive.
     public func replacePluginAuthorities(
         _ authorities: [String: PluginCapabilityAuthority],
         enabledPluginIDs: Set<String>
     ) async {
-        for entry in sessions.values {
-            await entry.drafts.removeAll()
-        }
-        sessions.removeAll()
+        let previousAuthorities = pluginAuthorities
+        let previousPolicy = exposurePolicy
         pluginAuthorities = authorities
         exposurePolicy.enabledPluginIDs = enabledPluginIDs
         generation &+= 1
+        await discardInvalidatedSessions(previousAuthorities: previousAuthorities,
+                                         previousPolicy: previousPolicy)
     }
 
     /// Opens (or resumes) a session with only the small host-approved read set.
     /// This is used before a model has searched for any write capability.
     public func bootstrap(sessionID rawSessionID: String,
                           sceneRevision: UInt64,
-                          now: Date = Date()) throws -> CapabilitySearchActivation {
+                          now: Date = Date()) async throws -> CapabilitySearchActivation {
         let sessionID = try validatedSessionID(rawSessionID)
-        purgeExpired(now: now)
-        var entry = sessionEntry(id: sessionID,
-                                 sceneRevision: sceneRevision,
-                                 now: now)
+        await purgeExpired(now: now)
+        var entry = try await sessionEntry(id: sessionID,
+                                       sceneRevision: sceneRevision,
+                                       now: now)
         entry.lastAccessedAt = now
         sessions[sessionID] = entry
         return CapabilitySearchActivation(snapshotID: entry.snapshot.id,
@@ -139,12 +157,12 @@ public actor CapabilityExposureSessionStore {
                        domain: String? = nil,
                        access: CapabilityAccess? = nil,
                        sceneRevision: UInt64,
-                       now: Date = Date()) throws -> CapabilitySearchActivation {
+                       now: Date = Date()) async throws -> CapabilitySearchActivation {
         let sessionID = try validatedSessionID(rawSessionID)
-        purgeExpired(now: now)
-        var entry = sessionEntry(id: sessionID,
-                                 sceneRevision: sceneRevision,
-                                 now: now)
+        await purgeExpired(now: now)
+        var entry = try await sessionEntry(id: sessionID,
+                                       sceneRevision: sceneRevision,
+                                       now: now)
 
         var searchPolicy = exposurePolicy
         searchPolicy.activeReleasePhase = .stable
@@ -197,10 +215,10 @@ public actor CapabilityExposureSessionStore {
     public func contract(sessionID rawSessionID: String,
                          toolName: String,
                          sceneRevision: UInt64,
-                         now: Date = Date()) throws -> CapabilityContract {
-        let entry = try activeEntry(sessionID: rawSessionID,
-                                    sceneRevision: sceneRevision,
-                                    now: now)
+                         now: Date = Date()) async throws -> CapabilityContract {
+        let entry = try await activeEntry(sessionID: rawSessionID,
+                                          sceneRevision: sceneRevision,
+                                          now: now)
         guard let contract = entry.snapshot.contract(forToolName: toolName) else {
             throw CapabilityDraftError.unknownTool(toolName)
         }
@@ -209,10 +227,10 @@ public actor CapabilityExposureSessionStore {
 
     public func snapshot(sessionID rawSessionID: String,
                          sceneRevision: UInt64,
-                         now: Date = Date()) throws -> CapabilityExposureSnapshot {
-        try activeEntry(sessionID: rawSessionID,
-                        sceneRevision: sceneRevision,
-                        now: now).snapshot
+                         now: Date = Date()) async throws -> CapabilityExposureSnapshot {
+        try await activeEntry(sessionID: rawSessionID,
+                              sceneRevision: sceneRevision,
+                              now: now).snapshot
     }
 
     public func createDraft(sessionID rawSessionID: String,
@@ -221,20 +239,30 @@ public actor CapabilityExposureSessionStore {
                             sceneRevision: UInt64,
                             now: Date = Date()) async throws -> CapabilityInvocationDraft {
         let sessionID = try validatedSessionID(rawSessionID)
-        let entry = try activeEntry(sessionID: rawSessionID,
-                                    sceneRevision: sceneRevision,
-                                    now: now)
+        let entry = try await activeEntry(sessionID: rawSessionID,
+                                          sceneRevision: sceneRevision,
+                                          now: now)
         guard let contract = entry.snapshot.contract(forToolName: toolName) else {
             throw CapabilityDraftError.unknownTool(toolName)
         }
         guard contract.access.isWrite else {
             throw CapabilityExposureSessionError.readCapabilityRequiresHostAdapter(contract.id)
         }
+        let validatedInput: Data
+        if let toolPolicy {
+            validatedInput = try toolPolicy.evaluate(
+                ToolCall(name: toolName, arguments: input, origin: .mcp)
+            ).arguments
+        } else {
+            validatedInput = input
+        }
         let draft = try await entry.drafts.createDraft(toolName: toolName,
-                                                       input: input,
+                                                       input: validatedInput,
                                                        snapshot: entry.snapshot,
                                                        currentSceneRevision: sceneRevision,
-                                                       now: now)
+                                                       now: now,
+                                                       registry: registry)
+        try requireCurrentEntry(entry, id: sessionID)
         if var current = sessions[sessionID] {
             current.lastAccessedAt = now
             sessions[sessionID] = current
@@ -248,13 +276,15 @@ public actor CapabilityExposureSessionStore {
                                 now: Date = Date()) async throws
         -> (drafts: [CapabilityInvocationDraft], snapshot: CapabilityExposureSnapshot) {
         let sessionID = try validatedSessionID(rawSessionID)
-        let entry = try activeEntry(sessionID: rawSessionID,
-                                    sceneRevision: sceneRevision,
-                                    now: now)
+        let entry = try await activeEntry(sessionID: rawSessionID,
+                                          sceneRevision: sceneRevision,
+                                          now: now)
         let drafts = try await entry.drafts.validatedDrafts(ids: ids,
                                                             snapshot: entry.snapshot,
                                                             currentSceneRevision: sceneRevision,
-                                                            now: now)
+                                                            now: now,
+                                                            registry: registry)
+        try requireCurrentEntry(entry, id: sessionID)
         if var current = sessions[sessionID] {
             current.lastAccessedAt = now
             sessions[sessionID] = current
@@ -274,21 +304,23 @@ public actor CapabilityExposureSessionStore {
     public func removeSession(_ rawSessionID: String) async throws {
         let sessionID = try validatedSessionID(rawSessionID)
         if let entry = sessions.removeValue(forKey: sessionID) {
-            await entry.drafts.removeAll()
+            await entry.scope.disposeAll()
         }
     }
 
     private func activeEntry(sessionID rawSessionID: String,
                              sceneRevision: UInt64,
-                             now: Date) throws -> Entry {
+                             now: Date) async throws -> Entry {
         let sessionID = try validatedSessionID(rawSessionID)
-        purgeExpired(now: now)
+        await purgeExpired(now: now)
         guard let entry = sessions[sessionID],
               entry.snapshot.sceneRevision == sceneRevision,
               snapshotAuthoritiesAreCurrent(entry.snapshot),
               now.timeIntervalSince(entry.snapshot.createdAt) >= 0,
               now.timeIntervalSince(entry.snapshot.createdAt) <= ttl else {
-            sessions.removeValue(forKey: sessionID)
+            if let discarded = sessions.removeValue(forKey: sessionID) {
+                await discarded.scope.disposeAll()
+            }
             throw CapabilityExposureSessionError.sessionNotFound
         }
         return entry
@@ -296,17 +328,21 @@ public actor CapabilityExposureSessionStore {
 
     private func sessionEntry(id: UUID,
                               sceneRevision: UInt64,
-                              now: Date) -> Entry {
+                              now: Date) async throws -> Entry {
         if let existing = sessions[id],
            existing.snapshot.sceneRevision == sceneRevision,
            now.timeIntervalSince(existing.snapshot.createdAt) >= 0,
            now.timeIntervalSince(existing.snapshot.createdAt) <= ttl {
             return existing
         }
-        sessions.removeValue(forKey: id)
+        // Everything up to the install is synchronous, so a concurrent create
+        // either sees the previous entry or the fresh one — never a half state.
+        // The previous generation unwinds after the new entry is visible.
+        let replaced = sessions.removeValue(forKey: id)
+        var evicted: Entry?
         if sessions.count >= Self.maximumSessions,
            let oldest = sessions.min(by: { $0.value.lastAccessedAt < $1.value.lastAccessedAt })?.key {
-            sessions.removeValue(forKey: oldest)
+            evicted = sessions.removeValue(forKey: oldest)
         }
         generation &+= 1
         let coreReadIDs: Set<String> = [
@@ -322,15 +358,74 @@ public actor CapabilityExposureSessionStore {
             includedCapabilityIDs: coreReadIDs,
             pluginAuthorities: pluginAuthorities
         )
-        return Entry(snapshot: snapshot,
-                     drafts: CapabilityDraftStore(registry: registry, ttl: ttl),
-                     lastAccessedAt: now)
+        let drafts = CapabilityDraftStore(registry: registry, ttl: ttl)
+        let scope = DisposalScope()
+        scope.track { await drafts.removeAll() }
+        let entry = Entry(snapshot: snapshot,
+                          drafts: drafts,
+                          lastAccessedAt: now,
+                          scope: scope)
+        sessions[id] = entry
+        if let replaced {
+            await replaced.scope.disposeAll()
+        }
+        if let evicted {
+            await evicted.scope.disposeAll()
+        }
+        try requireCurrentEntry(entry, id: id)
+        return entry
     }
 
-    private func purgeExpired(now: Date) {
+    /// An actor hop for draft creation or teardown can invalidate/replace the
+    /// entry. Never return authority or reinstall state from that old lifetime.
+    private func requireCurrentEntry(_ entry: Entry, id: UUID) throws {
+        guard sessions[id]?.snapshot.id == entry.snapshot.id,
+              snapshotAuthoritiesAreCurrent(entry.snapshot) else {
+            throw CapabilityExposureSessionError.sessionNotFound
+        }
+    }
+
+    private func purgeExpired(now: Date) async {
+        var expired: [DisposalScope] = []
         sessions = sessions.filter {
             let age = now.timeIntervalSince($0.value.snapshot.createdAt)
-            return age >= 0 && age <= ttl
+            let keep = age >= 0 && age <= ttl
+            if !keep { expired.append($0.value.scope) }
+            return keep
+        }
+        for scope in expired {
+            await scope.disposeAll()
+        }
+    }
+
+    /// Drops sessions whose referenced plugins changed authority, were
+    /// disabled, or whose exposure policy changed outside plugin scoping.
+    /// Built-in-only sessions survive a plugin catalog change, and a session
+    /// referencing a plugin whose authority is byte-identical survives a
+    /// reload of that plugin.
+    private func discardInvalidatedSessions(
+        previousAuthorities: [String: PluginCapabilityAuthority],
+        previousPolicy: CapabilityExposurePolicy
+    ) async {
+        let policyChanged = exposurePolicy.scopedIdentity
+            != previousPolicy.scopedIdentity
+        var discarded: [DisposalScope] = []
+        sessions = sessions.filter { _, entry in
+            let referencedPluginIDs = Set(entry.snapshot.contracts.compactMap(\.source.pluginID))
+            let keep: Bool
+            if policyChanged {
+                keep = false
+            } else {
+                keep = referencedPluginIDs.allSatisfy { pluginID in
+                    exposurePolicy.enabledPluginIDs.contains(pluginID)
+                        && pluginAuthorities[pluginID] == previousAuthorities[pluginID]
+                } && snapshotContractsAreCurrent(entry.snapshot)
+            }
+            if !keep { discarded.append(entry.scope) }
+            return keep
+        }
+        for scope in discarded {
+            await scope.disposeAll()
         }
     }
 
@@ -344,6 +439,7 @@ public actor CapabilityExposureSessionStore {
     private func snapshotAuthoritiesAreCurrent(
         _ snapshot: CapabilityExposureSnapshot
     ) -> Bool {
+        guard snapshotContractsAreCurrent(snapshot) else { return false }
         let pluginIDs = Set(snapshot.contracts.compactMap(\.source.pluginID))
         for pluginID in pluginIDs {
             guard snapshot.authority(forPluginID: pluginID) == pluginAuthorities[pluginID],
@@ -352,5 +448,21 @@ public actor CapabilityExposureSessionStore {
             }
         }
         return true
+    }
+
+    private func snapshotContractsAreCurrent(_ snapshot: CapabilityExposureSnapshot) -> Bool {
+        snapshot.contracts.allSatisfy { contract in
+            registry.descriptor(for: contract.id)?.contract == contract
+        }
+    }
+}
+
+private extension CapabilityExposurePolicy {
+    /// Policy identity excluding the enabled plugin set, which is compared per
+    /// referenced plugin through the plugin authority records instead.
+    var scopedIdentity: CapabilityExposurePolicy {
+        var copy = self
+        copy.enabledPluginIDs = []
+        return copy
     }
 }

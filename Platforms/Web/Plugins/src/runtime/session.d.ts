@@ -9,6 +9,7 @@ export interface Inspection {
     access: Access;
     imports: QueryPermission[];
     composable_host_capabilities: string[];
+    requires: Array<{ kind: 'plugin' | 'capability'; id: string; minimum_version?: number }>;
   };
   componentHash: string;
   witHash: string;

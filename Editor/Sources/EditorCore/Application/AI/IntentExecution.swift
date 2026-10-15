@@ -118,7 +118,8 @@ extension EditorApplication {
                     defaultSource: intent.source,
                     defaultConfidence: intent.confidence,
                     defaultEvidence: intent.evidence
-                )
+                ),
+                entry: .human
             )
         } catch EditorPlanSubmissionError.pendingConfirmation {
             store.dispatch(.setAIStatusMessage(

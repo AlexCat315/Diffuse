@@ -47,15 +47,31 @@ extension EditorApplication {
     }
 
     /// Loads an already-authorized package into the isolated host, rebuilds the
-    /// one Registry used by Editor AI and MCP, and invalidates every old Draft.
+    /// one Registry used by Editor AI and MCP, invalidating affected Drafts.
     @MainActor
     @discardableResult
     public func enablePlugin(
         at pluginURL: URL,
         authorization: PluginAuthorizationRecord
     ) async throws -> PluginInspection {
+        guard !pluginSession.isUpdating else {
+            throw EditorPluginCapabilityError.pluginUpdateInProgress
+        }
+        pluginSession.isUpdating = true
+        defer { pluginSession.isUpdating = false }
         guard pluginSession.bindings[authorization.pluginID] == nil else {
             throw EditorPluginCapabilityError.pluginAlreadyEnabled(authorization.pluginID)
+        }
+        // Requirements resolve before the package reaches the host: enabling
+        // is incremental, so every dependency must already be mounted.
+        let unmet = PluginRequirementResolver.unmet(
+            authorization.requires,
+            requiredBy: authorization.pluginID,
+            enabledPlugins: pluginSession.bindings.mapValues { $0.inspection.manifest.version },
+            providedCapabilities: availableCapabilityVersions()
+        )
+        guard unmet.isEmpty else {
+            throw UnmetPluginRequirements(pluginID: authorization.pluginID, violations: unmet)
         }
         let client = try resolvedPluginHostClient()
         let binding = try await Task.detached(priority: .userInitiated) {
@@ -64,6 +80,9 @@ extension EditorApplication {
         // Component declarations are data-only. A plugin that declares them badly
         // keeps its AI capabilities but contributes no components.
         let declarations = try? await Self.componentDeclarations(for: binding, client: client)
+        guard !isShuttingDown, binding.hostGeneration == client.generation else {
+            throw PluginAuthorizationError.noLongerValid
+        }
         var nextBindings = pluginSession.bindings
         nextBindings[binding.pluginID] = binding
         let executor: PluginCapabilityExecutor
@@ -89,7 +108,7 @@ extension EditorApplication {
     }
 
     /// Calls the reserved `components` capability, if the plugin declares it.
-    private static func componentDeclarations(
+    static func componentDeclarations(
         for binding: PluginExecutionBinding,
         client: PluginHostProcessClient
     ) async throws -> [ComponentDescription] {
@@ -112,8 +131,23 @@ extension EditorApplication {
 
     @MainActor
     public func disablePlugin(id pluginID: String) async throws {
+        guard !pluginSession.isUpdating else {
+            throw EditorPluginCapabilityError.pluginUpdateInProgress
+        }
+        pluginSession.isUpdating = true
+        defer { pluginSession.isUpdating = false }
         guard let binding = pluginSession.bindings[pluginID] else {
             throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
+        }
+        // Dependents are refused rather than cascaded: the caller decides the
+        // order and every unload stays an explicit, reversible action.
+        let dependents = PluginRequirementResolver.dependents(
+            of: pluginID,
+            providing: Set(binding.inspection.contracts.map(\.id)),
+            among: pluginSession.bindings.mapValues { $0.inspection.manifest }
+        )
+        guard dependents.isEmpty else {
+            throw RequiredPluginStillNeeded(pluginID: pluginID, dependents: dependents)
         }
         var unloadError: Error?
         do {
@@ -129,27 +163,30 @@ extension EditorApplication {
         pluginSession.bindings.removeValue(forKey: pluginID)
         pluginSession.components.remove(pluginID: pluginID)
         pluginSession.components.apply(to: &scene.scene)
-        let executor: PluginCapabilityExecutor?
         do {
-            if pluginSession.bindings.isEmpty {
-                executor = nil
-            } else if let client = pluginSession.hostClient {
-                executor = try PluginCapabilityExecutor(
-                    bindings: pluginSession.bindings.values.sorted { $0.pluginID < $1.pluginID },
-                    invoker: client
-                )
-            } else {
-                executor = nil
-            }
+            let executor = try rebuildPluginExecutor()
+            await activatePluginExecutor(executor)
         } catch {
             // Rebuilding the remaining registry is part of the trust boundary. If it
             // cannot be proven consistent, discard every in-memory plugin binding.
             pluginSession.bindings.removeAll()
+            clearPluginComponents()
             await activatePluginExecutor(nil)
             throw error
         }
-        await activatePluginExecutor(executor)
         if let unloadError { throw unloadError }
+    }
+
+    /// Builds the executor for the current bindings. Pure with respect to
+    /// session state so callers choose their own rollback on failure.
+    @MainActor
+    func rebuildPluginExecutor() throws -> PluginCapabilityExecutor? {
+        guard !pluginSession.bindings.isEmpty else { return nil }
+        guard let client = pluginSession.hostClient else { return nil }
+        return try PluginCapabilityExecutor(
+            bindings: pluginSession.bindings.values.sorted { $0.pluginID < $1.pluginID },
+            invoker: client
+        )
     }
 
     @MainActor
@@ -159,6 +196,9 @@ extension EditorApplication {
             do {
                 try await disablePlugin(id: pluginID)
             } catch {
+                // Dependency/busy rejection leaves the mount live. Its stored
+                // authority must remain paired with that binding as well.
+                if pluginSession.bindings[pluginID] != nil { throw error }
                 disableError = error
             }
         }
@@ -235,6 +275,11 @@ extension EditorApplication {
         do {
             let authorization = try storedPluginAuthorization(for: pending.inspection)
                 ?? makePluginAuthorization(afterUserApprovalOf: pending.inspection)
+            // An approved update replaces the enabled build. Disable performs
+            // the dependency check before withdrawing the old mount.
+            if pluginSession.bindings[authorization.pluginID] != nil {
+                try await disablePlugin(id: authorization.pluginID)
+            }
             let enabledInspection = try await enablePlugin(
                 at: pending.packageURL,
                 authorization: authorization
@@ -292,7 +337,7 @@ extension EditorApplication {
     }
 
     @MainActor
-    private func publishPluginManagement(
+    func publishPluginManagement(
         phase: EditorPluginManagementPhase,
         candidate: EditorPluginInspectionSummary?,
         message: String?
@@ -310,7 +355,7 @@ extension EditorApplication {
         displayInvalidationHandler?()
     }
 
-    private static func pluginManagementErrorMessage(_ error: Error) -> String {
+    static func pluginManagementErrorMessage(_ error: Error) -> String {
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription {
             return description
@@ -319,7 +364,7 @@ extension EditorApplication {
     }
 
     @MainActor
-    private func resolvedPluginHostClient() throws -> PluginHostProcessClient {
+    func resolvedPluginHostClient() throws -> PluginHostProcessClient {
         if let existing = pluginSession.hostClient { return existing }
         guard let resolvedURL = trustedPluginHostExecutableURL else {
             throw EditorPluginCapabilityError.pluginHostUnavailable
@@ -340,6 +385,7 @@ extension EditorApplication {
     @MainActor
     private func invalidatePluginsAfterHostRestart() async {
         pluginSession.bindings.removeAll()
+        clearPluginComponents()
         pluginSession.pendingApproval = nil
         await activatePluginExecutor(nil)
         store.dispatch(.setPluginManagementState(
@@ -353,8 +399,26 @@ extension EditorApplication {
         ))
     }
 
+    func clearPluginComponents() {
+        pluginSession.components.removeAll()
+        pluginSession.components.apply(to: &scene.scene)
+    }
+
+    /// Capability versions currently available to a newly enabled plugin:
+    /// built-ins plus every enabled plugin's contracts.
+    func availableCapabilityVersions() -> [String: Int] {
+        let registry = pluginCapabilityExecutor?.registry ?? .aiDefault
+        var versions: [String: Int] = [:]
+        for verb in registry.allVerbs() {
+            if let descriptor = registry.descriptor(for: verb) {
+                versions[verb] = descriptor.version
+            }
+        }
+        return versions
+    }
+
     @MainActor
-    private func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
+    func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
         await pendingAISetupTask?.value
         pendingAISetupTask = nil
         pluginCapabilityExecutor = executor
@@ -363,7 +427,7 @@ extension EditorApplication {
             Self.makeCapabilityInvocationPlanner(for: settings,
                                                  pluginCapabilityExecutor: executor)
         )
-        await mcpCapabilitySessions.replaceRegistry(
+        await toolAccess.capabilitySessions.replaceRegistry(
             executor?.registry ?? .aiDefault,
             exposurePolicy: executor?.exposurePolicy
                 ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
@@ -380,7 +444,8 @@ extension EditorApplication {
             for: store.state.assistant.aiSettings,
             initialWorldView: world,
             pluginCapabilityExecutor: executor,
-            pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider()
+            pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider(),
+            toolPolicy: toolAccess.policy
         )
         session = nextSession
         if let nextSession {
@@ -396,6 +461,7 @@ extension EditorApplication {
         agentExecution.proposal = nil
         agentExecution.assistantMessageID = nil
         store.dispatch(.clearChatHistory)
+        pluginSession.packageMonitor?.setPackages(pluginPackageURLs())
     }
 
     func makePluginQuerySnapshotProvider() -> PluginQuerySnapshotProvider? {

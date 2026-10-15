@@ -16,12 +16,16 @@ final class PluginSession: @unchecked Sendable {
     let authorizationStore: EditorPluginAuthorizationStore
     var pendingApproval: PendingPluginApproval?
     let components = PluginComponentStore()
+    var isUpdating = false
+    var packageMonitor: PluginPackageMonitor?
 
     init(projectDirectory: String) {
         authorizationStore = EditorPluginAuthorizationStore(projectDirectory: projectDirectory)
     }
 
     func stop() {
+        packageMonitor?.stop()
+        packageMonitor = nil
         hostClient?.stop()
         hostClient = nil
         bindings.removeAll()

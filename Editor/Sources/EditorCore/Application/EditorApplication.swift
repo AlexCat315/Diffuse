@@ -44,6 +44,9 @@ public final class EditorApplication: @unchecked Sendable {
 
     let observationBus: ObservationBus
     let intentCoordinator: IntentRuntimeCoordinator
+    /// Host tool policy enforced for the assistant session, the MCP bridge,
+    /// and project-tool execution.
+    let toolAccess: EditorToolAccess
     let intentTransactionBuilder = IntentTransactionBuilder()
     let aiWorldContext: AIWorldContext
     let perceptionService: PerceptionService
@@ -70,7 +73,6 @@ public final class EditorApplication: @unchecked Sendable {
     var isShuttingDown = false
     public var isActive: Bool { !isShuttingDown }
     var mcpBridge: AgentLocalServer?
-    let mcpCapabilitySessions = CapabilityExposureSessionStore()
     var pluginCapabilityExecutor: PluginCapabilityExecutor?
     let trustedPluginHostExecutableURL: URL?
     let editLog: EditLog
@@ -104,7 +106,9 @@ public final class EditorApplication: @unchecked Sendable {
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default,
                 initialCapabilitySettings: EditorCapabilitySettings = .default,
-                trustedPluginHostExecutableURL: URL? = nil) throws {
+                trustedPluginHostExecutableURL: URL? = nil,
+                toolPolicy: ToolPolicy? = nil) throws {
+        let toolAccess = EditorToolAccess(policy: toolPolicy ?? EditorToolAudit.policy)
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
@@ -136,7 +140,8 @@ public final class EditorApplication: @unchecked Sendable {
         var initialWorldView = WorldView()
         initialWorldView.apply(snapshot: initialSnapshot)
         let initialSession = EditorApplication.makeSession(for: initialAISettings,
-                                                           initialWorldView: initialWorldView)
+                                                           initialWorldView: initialWorldView,
+                                                           toolPolicy: toolAccess.policy)
 
         let ps = PerceptionService()
         let contextMemoryURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
@@ -183,6 +188,7 @@ public final class EditorApplication: @unchecked Sendable {
         self.workstation = try EditorWorkstation(root: URL(fileURLWithPath: projectDirectory), scripts: scripts)
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
+        self.toolAccess = toolAccess
         self.aiWorldContext = AIWorldContext(worldView: initialWorldView)
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
@@ -235,6 +241,7 @@ public final class EditorApplication: @unchecked Sendable {
         reloadDynamicScripts()
         workstation.scripts.startLanguageService()
 
+        installCommitPolicies()
         startMCPBridge()
 
         // Register AIWorldContext as the snapshot provider for the "scene" scope so

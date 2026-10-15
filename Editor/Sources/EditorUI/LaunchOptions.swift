@@ -100,6 +100,17 @@ struct EditorAppLaunchOptions {
     }
 }
 
+extension EditorAppLaunchOptions {
+    /// Opt-in developer watch for enabled plugin packages (`--watch-plugins`,
+    /// `GUAVA_WATCH_PLUGINS=1`). Watching never authorizes changed packages:
+    /// byte-identical builds are remounted, and anything else is surfaced for
+    /// review in the plugin management flow.
+    static var watchPluginPackagesRequested: Bool {
+        CommandLine.arguments.contains("--watch-plugins")
+            || ProcessInfo.processInfo.environment["GUAVA_WATCH_PLUGINS"] == "1"
+    }
+}
+
 private struct ParsedCommandLine {
     let backendList: String?
     let configPath: String?

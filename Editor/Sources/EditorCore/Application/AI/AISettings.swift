@@ -49,7 +49,8 @@ extension EditorApplication {
         let newSession = Self.makeSession(
             for: settings,
             pluginCapabilityExecutor: pluginCapabilityExecutor,
-            pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider()
+            pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider(),
+            toolPolicy: toolAccess.policy
         )
         if oldSession != nil || newSession != nil {
             let worldContext = self.aiWorldContext
@@ -186,7 +187,8 @@ extension EditorApplication {
     static func makeSession(for settings: EditorAISettings,
                             initialWorldView: WorldView = WorldView(),
                             pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
-                            pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil) -> Session? {
+                            pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil,
+                            toolPolicy: ToolPolicy? = nil) -> Session? {
         switch settings.provider {
         case .none:
             return nil
@@ -196,21 +198,24 @@ extension EditorApplication {
                                               autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
-                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
+                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
+                           toolPolicy: toolPolicy)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
             return Session(config: .openAIResponses(apiKey: key, model: settings.model, maxTokens: 8192,
                                                     autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
-                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
+                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
+                           toolPolicy: toolPolicy)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
             return Session(config: .deepSeek(apiKey: key, model: settings.model, maxTokens: 8192,
                                              autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
-                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
+                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
+                           toolPolicy: toolPolicy)
         }
     }
 }

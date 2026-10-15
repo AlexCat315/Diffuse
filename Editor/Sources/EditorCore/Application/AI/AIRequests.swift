@@ -167,7 +167,8 @@ extension EditorApplication {
                     capabilityContext: self.makeCapabilityInvocationContext(
                         defaultSource: .ai,
                         defaultConfidence: proposal.confidence
-                    )
+                    ),
+                    entry: .ui
                 )
             } catch {
                 guard !self.isShuttingDown,
@@ -187,27 +188,49 @@ extension EditorApplication {
         }
     }
 
+    /// Entry policies for every plan submission (UI, MCP, headless). Called
+    /// once at construction; the pipeline runs them before the standard
+    /// capability gates so denial precedence matches the previous pre-flight
+    /// checks, and the gates still always run.
+    func installCommitPolicies() {
+        _ = intentCoordinator.registerCommitPolicy { [weak self] request in
+            guard let self else { return .proceed(request) }
+            guard self.store.state.assistant.pendingConfirmationRequest == nil else {
+                throw EditorPlanSubmissionError.pendingConfirmation
+            }
+            return .proceed(request)
+        }
+        _ = intentCoordinator.registerCommitPolicy { [weak self] request in
+            guard let self else { return .proceed(request) }
+            let lockedEntityIDs = self.referencedExistingEntityIDs(in: request.transaction)
+                .filter(self.scene.isEntityLocked)
+                .sorted()
+            guard lockedEntityIDs.isEmpty else {
+                throw EditorPlanSubmissionError.lockedEntities(lockedEntityIDs)
+            }
+            return .proceed(request)
+        }
+    }
+
     func submitPlanTransaction(_ transaction: TransactionIR,
-                                       capabilityContext: CapabilityInvocationContext? = nil) throws {
-        _ = try runPlanTransaction(transaction, capabilityContext: capabilityContext)
+                               capabilityContext: CapabilityInvocationContext? = nil,
+                               entry: CommitEntry = .ui) throws {
+        _ = try runPlanTransaction(transaction, capabilityContext: capabilityContext, entry: entry)
     }
 
     @discardableResult
     func runPlanTransaction(_ transaction: TransactionIR,
-                                    capabilityContext: CapabilityInvocationContext? = nil) throws -> CapabilityInvocationResult {
-        guard store.state.assistant.pendingConfirmationRequest == nil else {
-            throw EditorPlanSubmissionError.pendingConfirmation
-        }
+                            capabilityContext: CapabilityInvocationContext? = nil,
+                            entry: CommitEntry = .ui) throws -> CapabilityInvocationResult {
+        // Pending-confirmation and entity-lock checks live in the registered
+        // commit policies (`installCommitPolicies`); the target set is still
+        // computed here for confirmation bookkeeping.
         let targetEntityIDs = referencedExistingEntityIDs(in: transaction)
-        let lockedEntityIDs = targetEntityIDs.filter(scene.isEntityLocked).sorted()
-        guard lockedEntityIDs.isEmpty else {
-            throw EditorPlanSubmissionError.lockedEntities(lockedEntityIDs)
-        }
-
         var context = makeExecutionContext()
         let result = try intentCoordinator.submitPlan(transaction,
                                                       executionContext: &context,
-                                                      capabilityContext: capabilityContext)
+                                                      capabilityContext: capabilityContext,
+                                                      entry: entry)
         if result.disposition == .confirmationRequested {
             agentExecution.confirmationTargetEntityIDs = targetEntityIDs
         }

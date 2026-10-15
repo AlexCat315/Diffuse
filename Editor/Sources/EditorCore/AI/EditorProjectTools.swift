@@ -41,14 +41,21 @@ extension EditorApplication {
     func makeProjectToolExecutor() -> ProjectToolset.Executor {
         { [weak self] name, input in
             guard let self else { throw EditorProjectToolError("Editor is unavailable.") }
-            return try await self.executeProjectTool(name: name, input: input)
+            return try await self.executeProjectTool(name: name, input: input, origin: .agentSession)
         }
     }
 
     /// Shared implementation for the built-in assistant and the stdio MCP server.
     /// It exposes no shell, credentials, project trust override or arbitrary path.
     @MainActor
-    public func executeProjectTool(name: String, input: Data) async throws -> Data {
+    public func executeProjectTool(name: String,
+                                   input: Data,
+                                   origin: ToolCallOrigin) async throws -> Data {
+        // Host tool policy runs before any workspace effect: a denial throws
+        // `ToolPolicyError`, and a rewrite replaces the arguments.
+        let evaluatedInput = try toolAccess.policy.evaluate(
+            ToolCall(name: name, arguments: input, origin: origin)
+        ).arguments
         guard let definition = ProjectToolset.tools.first(where: { $0.name == name }) else {
             throw EditorProjectToolError("Unknown project tool: \(name)")
         }
@@ -58,8 +65,8 @@ extension EditorApplication {
             throw EditorProjectToolError("This tool is unavailable in the active authoring workflow.")
         }
         if !definition.readOnly, let target = task?.target { try validateAgentTaskTarget(target) }
-        try JSONSchemaValidator.validate(data: input, against: definition.schema)
-        let args = (try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:])
+        try JSONSchemaValidator.validate(data: evaluatedInput, against: definition.schema)
+        let args = (try JSONSerialization.jsonObject(with: evaluatedInput) as? [String: Any] ?? [:])
             .filter { !($0.value is NSNull) }
         if !definition.readOnly {
             guard store.state.assistant.pendingConfirmationRequest == nil else {
@@ -76,7 +83,7 @@ extension EditorApplication {
         if let result = try await executeWorkstationTool(name, arguments: args) {
             return try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
         }
-        if let result = try await executeDiagnosticTool(name: name, input: input) { return result }
+        if let result = try await executeDiagnosticTool(name: name, input: evaluatedInput) { return result }
         var result: [String: Any] = ["ok": true]
         switch name {
         case "get_project_info":

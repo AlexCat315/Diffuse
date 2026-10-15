@@ -352,6 +352,11 @@ struct SettingsPanel: View {
                     EnabledPluginRow(
                         plugin: plugin,
                         isBusy: management.phase == .enabling,
+                        onReload: {
+                            Task { @MainActor in
+                                await app.reloadPluginFromManagement(id: plugin.id)
+                            }
+                        },
                         onDisable: {
                             Task { @MainActor in
                                 await app.disablePluginFromManagement(id: plugin.id)
@@ -523,6 +528,7 @@ private struct PluginInspectionField: View {
 private struct EnabledPluginRow: View {
     let plugin: EditorPluginInspectionSummary
     let isBusy: Bool
+    let onReload: () -> Void
     let onDisable: () -> Void
     let onRevoke: () -> Void
 
@@ -534,6 +540,8 @@ private struct EnabledPluginRow: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
             Row(alignment: .center, spacing: 8) {
+                Button(L("Reload"), isEnabled: !isBusy, action: onReload)
+                    .buttonStyle(.secondary)
                 Button(L("Disable"), isEnabled: !isBusy, action: onDisable)
                     .buttonStyle(.secondary)
                 Button(L("Revoke Authorization"),

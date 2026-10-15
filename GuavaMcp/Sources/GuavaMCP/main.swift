@@ -149,6 +149,18 @@ let toolSearchCapabilities = frameworkTool(capabilityID: "system.search_capabili
                                            name: CapabilityToolset.searchToolName)
 let toolSubmitPlan = frameworkTool(capabilityID: "system.submit_plan",
                                    name: CapabilityToolset.submitToolName)
+let toolReloadPlugin: [String: Any] = [
+    "name": "reload_plugin",
+    "description": "Re-mount an enabled plugin whose package (code, WIT, permissions, schemas, requirements) still matches its stored authorization. Changed packages are rejected until the user re-authorizes them in the Editor; this never authorizes on its own.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [
+            "plugin_id": ["type": "string", "minLength": 1],
+        ],
+        "required": ["plugin_id"],
+        "additionalProperties": false,
+    ],
+]
 
 func installCapabilityTools(from response: [String: Any]) {
     guard response["ok"] as? Bool == true else { return }
@@ -216,7 +228,7 @@ func capabilitySearchText(_ response: [String: Any]) -> String {
 
 func toolDescriptors() throws -> [AgentTool] {
     _ = openCapabilitySessionIfNeeded()
-    let definitions = [toolSearchCapabilities, toolSubmitPlan]
+    let definitions = [toolSearchCapabilities, toolSubmitPlan, toolReloadPlugin]
         + activeCapabilityTools.keys.sorted().compactMap { activeCapabilityTools[$0] }
     let capabilities = try definitions.map { definition -> AgentTool in
         let schema = try JSONDecoder().decode(JSONSchema.self,
@@ -248,6 +260,10 @@ func invokeTool(_ name: String, input: Data) throws -> AgentToolResult {
         var request = args
         request["action"] = "submit_capability_plan"
         request["session_id"] = capabilitySessionID
+        response = editorCall(request)
+    case "reload_plugin":
+        var request = args
+        request["action"] = "reload_plugin"
         response = editorCall(request)
     default:
         guard activeCapabilityTools[name] != nil else { throw AgentError.unknownTool(name) }

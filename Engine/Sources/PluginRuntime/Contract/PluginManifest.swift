@@ -49,6 +49,9 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
     public var access: CapabilityAccess
     public var imports: [PluginImportPermission]
     public var composableHostCapabilities: [String]
+    /// Declared dependencies, `[]` when the manifest omits them. Sorted by
+    /// kind then id so the value is deterministic for digests and comparisons.
+    public var requires: [PluginRequirement]
 
     public init(id: String,
                 version: Int,
@@ -56,7 +59,8 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
                 description: String,
                 access: CapabilityAccess,
                 imports: [PluginImportPermission] = [],
-                composableHostCapabilities: [String] = []) {
+                composableHostCapabilities: [String] = [],
+                requires: [PluginRequirement] = []) {
         self.id = id
         self.version = version
         self.name = CapabilityContract.sanitiseMetadata(name, maximumLength: 80)
@@ -66,11 +70,29 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
             $0.rawValue < $1.rawValue
         }
         self.composableHostCapabilities = Array(Set(composableHostCapabilities)).sorted()
+        self.requires = requires.sorted {
+            ($0.kind.rawValue, $0.id) < ($1.kind.rawValue, $1.id)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try container.decode(String.self, forKey: .id),
+                  version: try container.decode(Int.self, forKey: .version),
+                  name: try container.decode(String.self, forKey: .name),
+                  description: try container.decode(String.self, forKey: .description),
+                  access: try container.decode(CapabilityAccess.self, forKey: .access),
+                  imports: try container.decode([PluginImportPermission].self, forKey: .imports),
+                  composableHostCapabilities: try container.decode([String].self,
+                                                                    forKey: .composableHostCapabilities),
+                  requires: try container.decodeIfPresent([PluginRequirement].self,
+                                                          forKey: .requires) ?? [])
     }
 
     enum CodingKeys: String, CodingKey {
         case id, version, name, description, access, imports
         case composableHostCapabilities = "composable_host_capabilities"
+        case requires
     }
 }
 
@@ -84,6 +106,9 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
     case pluginCapabilityCannotBeComposed(String)
     case accessUnderstatement(capabilityID: String)
     case unsafeHostPrimitive(String)
+    case invalidRequirement(String)
+    case duplicateRequirement(String)
+    case requirementOnSelf(String)
 
     public var description: String {
         switch self {
@@ -97,6 +122,12 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
         case let .accessUnderstatement(id): return "plugin access understates composed capability '\(id)'"
         case let .unsafeHostPrimitive(id):
             return "host capability '\(id)' is not an AI-exposed strict write primitive"
+        case let .invalidRequirement(id):
+            return "plugin requirement '\(id)' is invalid"
+        case let .duplicateRequirement(id):
+            return "plugin requirement '\(id)' is declared more than once"
+        case let .requirementOnSelf(id):
+            return "plugin requirement '\(id)' points at the plugin itself"
         }
     }
 }
@@ -108,7 +139,7 @@ public enum PluginManifestValidator {
     ]
     private static let allowedFields: Set<String> = [
         "id", "version", "name", "description", "access", "imports",
-        "composable_host_capabilities",
+        "composable_host_capabilities", "requires",
     ]
 
     public static func decodeAndValidate(_ data: Data,
@@ -130,7 +161,8 @@ public enum PluginManifestValidator {
                                            description: decoded.description,
                                            access: decoded.access,
                                            imports: decoded.imports,
-                                           composableHostCapabilities: decoded.composableHostCapabilities)
+                                           composableHostCapabilities: decoded.composableHostCapabilities,
+                                           requires: decoded.requires)
         try validate(manifest, registry: registry)
         return manifest
     }
@@ -162,6 +194,48 @@ public enum PluginManifestValidator {
                   descriptor.access.isWrite,
                   descriptor.inputSchema.isStrictCapabilityInput else {
                 throw PluginManifestValidationError.unsafeHostPrimitive(capabilityID)
+            }
+        }
+        var seenRequirements: Set<String> = []
+        for requirement in manifest.requires {
+            try validateRequirement(requirement, manifestID: manifest.id)
+            let key = "\(requirement.kind.rawValue):\(requirement.id)"
+            guard seenRequirements.insert(key).inserted else {
+                throw PluginManifestValidationError.duplicateRequirement(requirement.id)
+            }
+        }
+    }
+
+    private static func validateRequirement(_ requirement: PluginRequirement,
+                                            manifestID: String) throws {
+        guard !requirement.id.isEmpty,
+              requirement.id.count <= 128,
+              requirement.id.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
+              requirement.minimumVersion.map({ $0 > 0 }) ?? true else {
+            throw PluginManifestValidationError.invalidRequirement(requirement.id)
+        }
+        switch requirement.kind {
+        case .plugin:
+            guard requirement.id.range(of: "^[a-z][a-z0-9.-]{2,63}$",
+                                       options: .regularExpression) != nil else {
+                throw PluginManifestValidationError.invalidRequirement(requirement.id)
+            }
+            guard requirement.id != manifestID else {
+                throw PluginManifestValidationError.requirementOnSelf(requirement.id)
+            }
+        case .capability:
+            guard requirement.id.range(of: "^[a-z][a-z0-9._-]{0,127}$",
+                                       options: .regularExpression) != nil else {
+                throw PluginManifestValidationError.invalidRequirement(requirement.id)
+            }
+            // A package's own capabilities are `pluginID.capabilityName`; they
+            // only exist once this package is mounted, so a self-requirement
+            // could never be satisfied and is a manifest bug.
+            let prefix = manifestID + "."
+            let isOwnCapability = requirement.id.hasPrefix(prefix)
+                && !requirement.id.dropFirst(prefix.count).contains(".")
+            guard !isOwnCapability else {
+                throw PluginManifestValidationError.requirementOnSelf(requirement.id)
             }
         }
     }

@@ -95,6 +95,9 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
     public var imports: [PluginImportPermission]
     public var access: CapabilityAccess
     public var composableHostCapabilities: [String]
+    /// Declared dependencies, bound into the authorization like every other
+    /// authority field: changing `requires` invalidates the stored record.
+    public var requires: [PluginRequirement]
     public var capabilitySchemaHashes: [String: String]
     public var authorisedAt: Date
 
@@ -108,6 +111,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         imports = inspection.manifest.imports
         access = inspection.manifest.access
         composableHostCapabilities = inspection.manifest.composableHostCapabilities
+        requires = inspection.manifest.requires
         capabilitySchemaHashes = hashes
         self.authorisedAt = authorisedAt
     }
@@ -129,6 +133,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
             && imports == inspection.manifest.imports
             && access == inspection.manifest.access
             && composableHostCapabilities == inspection.manifest.composableHostCapabilities
+            && requires == inspection.manifest.requires
             && capabilitySchemaHashes == hashes
     }
 
@@ -149,6 +154,16 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
             "imports": imports.map(\.rawValue).sorted(),
             "access": access.rawValue,
             "composable_host_capabilities": composableHostCapabilities.sorted(),
+            "requires": requires.map { requirement -> [String: Any] in
+                var entry: [String: Any] = [
+                    "kind": requirement.kind.rawValue,
+                    "id": requirement.id,
+                ]
+                if let minimum = requirement.minimumVersion {
+                    entry["minimum_version"] = minimum
+                }
+                return entry
+            },
             "capability_schema_hashes": capabilitySchemaHashes,
         ]
         let data = (try? JSONSerialization.data(withJSONObject: object,
@@ -264,6 +279,40 @@ public enum PluginCapabilityRegistryBuilder {
         }
         let result = base.appending(descriptors)
         try result.validateIntegrity()
+        try validateRequirements(bindings, base: base)
         return result
+    }
+
+    /// Resolve in dependency order even when bindings arrive in another order.
+    /// No progress means a missing/versioned dependency or a cycle: either way
+    /// the entire registry is rejected before any executor is published.
+    private static func validateRequirements(_ bindings: [PluginExecutionBinding],
+                                             base: CapabilityRegistry) throws {
+        var remaining = bindings.sorted { $0.pluginID < $1.pluginID }
+        var plugins: [String: Int] = [:]
+        var capabilities = Dictionary(uniqueKeysWithValues: base.allVerbs().compactMap { id in
+            base.descriptor(for: id).map { (id, $0.version) }
+        })
+        while !remaining.isEmpty {
+            let index = remaining.firstIndex { binding in
+                PluginRequirementResolver.unmet(
+                    binding.inspection.manifest.requires, requiredBy: binding.pluginID,
+                    enabledPlugins: plugins, providedCapabilities: capabilities
+                ).isEmpty
+            }
+            guard let index else {
+                let binding = remaining[0]
+                throw UnmetPluginRequirements(pluginID: binding.pluginID, violations:
+                    PluginRequirementResolver.unmet(
+                        binding.inspection.manifest.requires, requiredBy: binding.pluginID,
+                        enabledPlugins: plugins, providedCapabilities: capabilities
+                    ))
+            }
+            let binding = remaining.remove(at: index)
+            plugins[binding.pluginID] = binding.inspection.manifest.version
+            for contract in binding.inspection.contracts {
+                capabilities[contract.id] = contract.version
+            }
+        }
     }
 }

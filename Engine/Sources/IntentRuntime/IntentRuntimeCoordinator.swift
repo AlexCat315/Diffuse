@@ -1,3 +1,4 @@
+import CapabilityRuntime
 import Foundation
 import ObservationBus
 
@@ -75,6 +76,10 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private var capabilityPlanner: CapabilityInvocationPlanner
     private let lock = NSLock()
     private var pending: PendingInvocation?
+    /// Entry policies registered by the embedding application. They run before
+    /// the standard capability gates so their veto order matches the previous
+    /// pre-flight checks; the standard gates always still run.
+    private var commitPolicies: [(id: UUID, handler: CommitPipeline.Handler)] = []
 
     public let undoStack: UndoStack
 
@@ -95,35 +100,54 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         lock.withLock { capabilityPlanner = planner }
     }
 
+    /// Registers an entry policy for every subsequent submission. Policies run
+    /// in registration order, then the standard gates. Disposing the returned
+    /// registration removes the policy; the registration is single-shot.
+    public func registerCommitPolicy(_ handler: @escaping CommitPipeline.Handler) -> Registration {
+        let id = UUID()
+        lock.withLock { commitPolicies.append((id, handler)) }
+        return Registration { [weak self] in
+            guard let self else { return }
+            self.lock.withLock {
+                self.commitPolicies.removeAll { $0.id == id }
+            }
+        }
+    }
+
+    /// Registered entry policies followed by the standard capability gates.
+    private func currentPipeline() -> CommitPipeline {
+        let (planner, policies) = lock.withLock {
+            (capabilityPlanner, commitPolicies.map(\.handler))
+        }
+        let standard = CommitPipeline.standard(planner: planner)
+        return CommitPipeline(handlers: policies + standard.handlers)
+    }
+
     // MARK: - Plan submission
 
     /// Submits a `TransactionIR`. Confirmation is gated by `transaction.approvalPolicy`:
     /// - `.automatic` → applies immediately
     /// - `.requiresApproval` → stages and returns `.confirmationRequested`
     /// - `.forbidden` → throws
+    ///
+    /// All policy checks run through the commit pipeline before apply or
+    /// staging: entry policies registered with `registerCommitPolicy(_:)`,
+    /// then the standard gates (capability context requirement, capability
+    /// planning including the release gate, preconditions, plugin authority
+    /// and approval escalation, and the forbidden-policy rejection).
     public func submitPlan(_ transaction: TransactionIR,
                            executionContext: inout TransactionExecutionContext,
-                           capabilityContext: CapabilityInvocationContext? = nil) throws -> CapabilityInvocationResult {
-        if !transaction.capabilityInvocations.isEmpty, capabilityContext == nil {
-            throw IntentRuntimeCoordinatorError.missingCapabilityContext
-        }
-        var plannedTransaction = transaction
-        var plannedQuestions: [ConfirmationQuestion] = []
-        var warnings: [String] = []
-
-        if let capabilityContext {
-            let planner = lock.withLock { capabilityPlanner }
-            let plan = try planner.plan(transaction: plannedTransaction,
-                                        context: capabilityContext)
-            plannedTransaction.approvalPolicy = plan.approvalPolicy
-            plannedQuestions = plan.questions
-            warnings = plan.warnings
-        }
-
-        return try submitPlannedTransaction(plannedTransaction,
-                                            plannedQuestions: plannedQuestions,
-                                            warnings: warnings,
-                                            capabilityContext: capabilityContext,
+                           capabilityContext: CapabilityInvocationContext? = nil,
+                           entry: CommitEntry = .ui) throws -> CapabilityInvocationResult {
+        let planned = try currentPipeline().run(
+            CommitRequest(transaction: transaction,
+                          capabilityContext: capabilityContext,
+                          entry: entry)
+        )
+        return try submitPlannedTransaction(planned.transaction,
+                                            plannedQuestions: planned.questions,
+                                            warnings: planned.warnings,
+                                            capabilityContext: planned.capabilityContext,
                                             executionContext: &executionContext)
     }
 
@@ -132,10 +156,6 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
                                           warnings: [String],
                                           capabilityContext: CapabilityInvocationContext?,
                                            executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
-        guard transaction.approvalPolicy != .forbidden else {
-            throw CapabilityInvocationPlannerError.approvalForbidden(transaction.id)
-        }
-
         if transaction.approvalPolicy == .automatic {
             let undoSnapshot = executionContext.sceneRuntime
             let applyResult = try executor.apply(transaction, to: &executionContext)
@@ -153,7 +173,9 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         let destructiveQuestions = transaction.capabilityInvocations.isEmpty
             ? []
             : plannedQuestions.filter { $0.kind == .approveDestructive }
-        let initialQuestions = destructiveQuestions.isEmpty ? plannedQuestions : []
+        let initialQuestions = destructiveQuestions.isEmpty
+            ? plannedQuestions
+            : plannedQuestions.filter { $0.kind != .approveDestructive }
         let request = makeConfirmationRequest(for: transaction,
                                               plannedQuestions: initialQuestions)
         do {
@@ -271,8 +293,14 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
                     )
                 }
                 do {
+                    // Re-run the same policy pipeline against the latest scene:
+                    // confirmation may span entity, release-gate, plugin
+                    // authorisation, or registry changes.
                     let planner = lock.withLock { capabilityPlanner }
-                    _ = try planner.plan(transaction: p.transaction, context: currentContext)
+                    _ = try CommitPipeline.standard(planner: planner).run(
+                        CommitRequest(transaction: p.transaction,
+                                      capabilityContext: currentContext)
+                    )
                 } catch {
                     _ = try? stagedStore.discardStagedTransaction(using: executionContext)
                     lock.withLock { pending = nil }

@@ -458,6 +458,15 @@ struct PluginRuntimeTests {
         let unloaded = try client.call(PluginHostRequest(method: .unload,
                                                          pluginPath: path))
         #expect(unloaded.ok)
+        // Typed helper: a successful unload answers with an empty ok response
+        // and must not throw for the missing payload.
+        try client.unloadPlugin(at: package.rootURL)
+        let loadedGeneration = client.generation
+        client.stop()
+        #expect(client.generation == loadedGeneration + 1)
+        #expect(throws: PluginAuthorizationError.noLongerValid) {
+            try typedBinding.validate(hostGeneration: client.generation)
+        }
     }
 #endif
 
@@ -684,15 +693,25 @@ struct PluginRuntimeTests {
         }
         #expect(client.generation == 1)
         #expect(start.duration(to: clock.now) < .seconds(1))
+        // Exhausting the one immediate restart must not stop invalidation.
+        #expect(throws: PluginHostClientError.hostRestarted(generation: 2)) {
+            try client.call(PluginHostRequest(method: .handshake),
+                            timeoutMilliseconds: 50)
+        }
+        #expect(client.generation == 2)
     }
 
 #if canImport(PluginWasmtimeRuntime)
+    /// Most recently built copy of the named executable. Multiple scratch
+    /// directories can hold copies of the same product; a stale one must not
+    /// win over the binary this test run just built.
     private func builtExecutable(named requestedName: String) -> URL? {
         #if os(Windows)
         let name = requestedName + ".exe"
         #else
         let name = requestedName
         #endif
+        var candidates: Set<URL> = []
         let launchLocations = [
             URL(fileURLWithPath: CommandLine.arguments[0]),
             Bundle.main.executableURL,
@@ -702,7 +721,7 @@ struct PluginRuntimeTests {
             for _ in 0..<8 {
                 let candidate = directory.appendingPathComponent(name)
                 if FileManager.default.isExecutableFile(atPath: candidate.path) {
-                    return candidate
+                    candidates.insert(candidate.resolvingSymlinksInPath())
                 }
                 directory.deleteLastPathComponent()
             }
@@ -723,10 +742,16 @@ struct PluginRuntimeTests {
                 directory.appendingPathComponent(name),
                 directory.appendingPathComponent("debug").appendingPathComponent(name),
             ] where FileManager.default.isExecutableFile(atPath: candidate.path) {
-                return candidate
+                candidates.insert(candidate.resolvingSymlinksInPath())
             }
         }
-        return nil
+        return candidates.max { lhs, rhs in
+            let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            return lhsDate < rhsDate
+        }
     }
 
     private func makePluginPackage(componentWAT: String,

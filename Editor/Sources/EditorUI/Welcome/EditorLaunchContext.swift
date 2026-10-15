@@ -55,6 +55,9 @@ final class EditorLaunchContext: @unchecked Sendable {
         }
         app.bootstrap()
         app.setUIDiagnostics(diagnostics)
+        if EditorAppLaunchOptions.watchPluginPackagesRequested {
+            app.startWatchingPluginPackages()
+        }
 
         if let s = shellState {
             app.store.dispatch(.setInteractionMode(s.workspace.interactionMode))

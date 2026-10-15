@@ -33,7 +33,7 @@ extension EditorApplication {
     }
 
     @MainActor
-    private func handleMCPMessage(_ data: Data) async -> Data {
+    func handleMCPMessage(_ data: Data) async -> Data {
         let result: [String: Any]
         if let params = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let action = params["action"] as? String {
@@ -43,22 +43,25 @@ extension EditorApplication {
                           let arguments = params["arguments"] as? [String: Any] else {
                         throw EditorProjectToolError("Missing project tool name or arguments.")
                     }
-                    return try await executeProjectTool(name: name, input: JSONSerialization.data(withJSONObject: arguments))
+                    return try await executeProjectTool(name: name,
+                                                        input: JSONSerialization.data(withJSONObject: arguments),
+                                                        origin: .mcp)
                 } catch { result = ["ok": false, "error": error.localizedDescription] }
-            } else { result = handleMCPAction(action, params: params) }
+            } else { result = await handleMCPAction(action, params: params) }
         } else { result = ["ok": false, "error": "invalid JSON command"] }
         return (try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]))
             ?? Data(#"{"ok":false,"error":"invalid host response"}"#.utf8)
     }
 
-    private func handleMCPAction(_ action: String, params: [String: Any]) -> [String: Any] {
+    @MainActor
+    private func handleMCPAction(_ action: String, params: [String: Any]) async -> [String: Any] {
         var policy = pluginCapabilityExecutor?.exposurePolicy ?? CapabilityExposurePolicy(allowedDomains: ["scene"])
         let target = EditorAgentTaskTarget(documentID: store.state.document.identity, sceneRevision: store.sceneRevision,
             workspace: store.workspaceMode, selectedEntityIDs: store.selectedEntityIDs, primaryEntityID: store.selectedEntityID)
         policy.allowedCapabilityIDs = makeAgentWorkflowScope(target: target).allowedCapabilityIDs
         let capturedPolicy = policy
         do {
-            try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 await mcpCapabilitySessions.setWorkflowScope(policy: capturedPolicy, documentID: target.documentID)
             }
         } catch { return ["ok": false, "error": String(describing: error)] }
@@ -84,8 +87,28 @@ extension EditorApplication {
             return mcpSubmitCapabilityPlan(params: params)
         case "close_capability_session":
             return mcpCloseCapabilitySession(params: params)
+        case "reload_plugin":
+            return await mcpReloadPlugin(params: params)
         default:
             return ["ok": false, "error": "unknown action '\(action)'"]
+        }
+    }
+
+    /// Scripted reload for headless automation: same gates as the management
+    /// button — the package must still match its stored authorization.
+    @MainActor
+    private func mcpReloadPlugin(params: [String: Any]) async -> [String: Any] {
+        guard let pluginID = params["plugin_id"] as? String,
+              !pluginID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ["ok": false, "error": "missing plugin_id"]
+        }
+        do {
+            try await reloadPlugin(id: pluginID)
+            return ["ok": true, "plugin_id": pluginID, "reloaded": true]
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription
+                ?? String(describing: error)
+            return ["ok": false, "plugin_id": pluginID, "error": message]
         }
     }
 
@@ -95,7 +118,7 @@ extension EditorApplication {
         }
         let revision = scene.revision
         do {
-            let activation = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            let activation = try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 try await mcpCapabilitySessions.bootstrap(sessionID: sessionID,
                                                           sceneRevision: revision)
             }
@@ -118,7 +141,7 @@ extension EditorApplication {
             let domain = input["domain"] as? String
             let access = (input["access"] as? String).flatMap(CapabilityAccess.init(rawValue:))
             let revision = scene.revision
-            let activation = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            let activation = try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 try await mcpCapabilitySessions.search(sessionID: sessionID,
                                                        query: query,
                                                        domain: domain,
@@ -167,18 +190,22 @@ extension EditorApplication {
         }
         let arguments = params["arguments"] as? [String: Any] ?? [:]
         guard JSONSerialization.isValidJSONObject(arguments),
-              let input = try? JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys]) else {
+              let rawInput = try? JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys]) else {
             return ["ok": false, "error": "arguments must be a JSON object"]
         }
         let revision = scene.revision
         do {
-            let contract = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            let contract = try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 try await mcpCapabilitySessions.contract(sessionID: sessionID,
                                                          toolName: toolName,
                                                          sceneRevision: revision)
             }
             if contract.access == .read {
+                let input = try toolAccess.policy.evaluate(
+                    ToolCall(name: toolName, arguments: rawInput, origin: .mcp)
+                ).arguments
                 try JSONSchemaValidator.validate(data: input, against: contract.inputSchema)
+                let arguments = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
                 if let pluginID = contract.source.pluginID {
                     guard let executor = pluginCapabilityExecutor else {
                         throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
@@ -190,7 +217,7 @@ extension EditorApplication {
                     let payload = try executor.executeRead(
                         toolName: toolName,
                         input: input,
-                        snapshot: try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                        snapshot: try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                             try await mcpCapabilitySessions.snapshot(
                                 sessionID: sessionID,
                                 sceneRevision: revision
@@ -224,10 +251,10 @@ extension EditorApplication {
                 }
             }
 
-            let draft = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            let draft = try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 try await mcpCapabilitySessions.createDraft(sessionID: sessionID,
                                                             toolName: toolName,
-                                                            input: input,
+                                                            input: rawInput,
                                                             sceneRevision: revision)
             }
             return [
@@ -265,7 +292,7 @@ extension EditorApplication {
                 return ["ok": false, "error": "draft_ids contains an invalid or duplicate id"]
             }
             let revision = scene.revision
-            let validated = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            let validated = try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 try await mcpCapabilitySessions.validatedDrafts(sessionID: sessionID,
                                                                 ids: draftIDs,
                                                                 sceneRevision: revision)
@@ -316,9 +343,10 @@ extension EditorApplication {
             }
             let result = try runPlanTransaction(
                 transaction,
-                capabilityContext: makeCapabilityInvocationContext(defaultSource: .system)
+                capabilityContext: makeCapabilityInvocationContext(defaultSource: .system),
+                entry: .mcp(sessionID: sessionID)
             )
-            try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 try await mcpCapabilitySessions.consume(sessionID: sessionID, ids: draftIDs)
             }
             return [
@@ -356,7 +384,7 @@ extension EditorApplication {
             return ["ok": false, "error": "missing session_id"]
         }
         do {
-            try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+            try waitForMCPCapabilityResult { [mcpCapabilitySessions = toolAccess.capabilitySessions] in
                 try await mcpCapabilitySessions.removeSession(sessionID)
             }
             return ["ok": true]

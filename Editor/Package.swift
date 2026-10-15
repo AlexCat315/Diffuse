@@ -157,9 +157,11 @@ let package = Package(
             name: "EditorCoreTests",
             dependencies: [.product(name: "GuavaLogging", package: "Logging"),
                 "EditorCore",
+                .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "CapabilityRuntime", package: "Engine"),
                 .product(name: "PluginRuntime", package: "Engine"),
+                .product(name: "PluginWasmtimeRuntime", package: "Engine"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
             ]

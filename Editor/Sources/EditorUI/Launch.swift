@@ -52,6 +52,9 @@ private func runEditor() throws {
         if CommandLine.arguments.contains("--trust-project-scripts") {
             app.workstation.scripts.setProjectTrusted(true)
         }
+        if EditorAppLaunchOptions.watchPluginPackagesRequested {
+            app.startWatchingPluginPackages()
+        }
         // Explicit local automation accepts reversible previews only.
         let driver = HeadlessEditorDriver(app: app)
         let approvalTimer: Timer?

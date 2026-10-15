@@ -41,6 +41,33 @@ let result = try await plugin.prepare(
 
 `open` 创建宿主私有执行副本并重新核对 code/WIT/manifest/契约；用户修改来源目录不会改变已经打开的会话。会话使用 actor 串行执行，昂贵工作不要求调用方安排主线程以外的线程。每次调用重新创建 Store，应用不需要传递 Wasmtime 内部上下文或句柄。自定义宿主写入能力的应用可传入自己的 `CapabilityRegistry`，返回的 host calls 必须由该应用现有的授权执行入口提交。
 
+## 依赖声明（`requires`）
+
+`plugin.json` 可以用结构化条目声明依赖，缺省为空：
+
+```json
+"requires": [
+  { "kind": "plugin", "id": "studio.core", "minimum_version": 2 },
+  { "kind": "capability", "id": "studio.core.draw" }
+]
+```
+
+- **校验**：`PluginManifestValidator` 拒绝格式错误、重复（同 kind+id）和自引用（plugin 自指、capability 指向自身单个 WIT 导出；不同嵌套插件 ID 允许引用）。
+- **解析与顺序**：启用是增量的——新插件的每条依赖都必须指向已启用插件或已注册能力（内置或先前插件的契约）。启用顺序是拓扑序；组合注册表还会对整个绑定集独立检查缺失、最低版本与依赖环，不能仅依赖 UI 的启用顺序。
+- **权限**：`requires` 不授予任何权限：不改变 `access` / `imports`，不自动启用或自动授权依赖方；被依赖插件仍需自己的授权记录。依赖列表绑定进 `PluginAuthorizationRecord`（参与 `isStillValid` 与 `authorityDigest`），改动依赖必须重新授权；授权记录缺少该字段时直接拒绝解码，要求重新授权；不维护旧记录解码层。
+- **停用**：存在 plugin 依赖或指向该插件实际契约的 capability 依赖时，`disablePlugin` 拒绝并列出依赖方；正常停用不级联卸载。重载在卸载后失败时，为保持依赖不变量，会撤下目标及递归依赖方。
+- **解析器**：`PluginRequirementResolver.unmet(_:requiredBy:enabledPlugins:providedCapabilities:)` 与 `dependents(of:providing:among:)` 是纯函数，Editor 用已挂载版本表调用解析器。嵌入式与 Web 的单包 Session 不管理插件集合，宿主应用须在 open 前解析依赖，并在停用时维护依赖；仅传入 CapabilityRegistry 不代表依赖已挂载。
+
+## 重挂载与失效范围
+
+已启用的插件可以经 `EditorApplication.reloadPlugin(id:)` 在同一宿主代际内 `unload + load` 重挂载。package 必须仍满足其存储授权（`PluginAuthorizationRecord.isStillValid`）；不满足时以 `pluginAuthorizationStale` 拒绝且**在卸载之前**抛出，旧绑定保留（源包变化后的 prepare 仍被宿主拒绝）。卸载开始后失败撤下目标及依赖方，返回显式错误；启用、停用、重载互斥执行，防止跨 await 覆盖绑定。管理面板重新授权后可替换已启用版本；仍被其他插件依赖时须先停用依赖方。
+
+暴露会话的失效按插件的 authority 收窄：snapshot 引用了 authority 变化 / 被停用 / 被移除的插件的会话被丢弃；authority、契约和非插件策略身份均未变化的会话保留；保留的草案使用本次注册表验证，且每次跨 actor 操作后重查会话是否仍有效。非插件策略身份变化（域名、发布阶段、能力上限）仍整体失效。
+
+重挂载有三个入口：管理面板的 "Reload" 按钮、dev 目录监视（`--watch-plugins` / `GUAVA_WATCH_PLUGINS=1`，默认关闭；同 authority 自动重挂载，变化则提示重新授权）、MCP 工具 `reload_plugin`。
+
+宿主每次故障都推进 `hostGeneration` 并通知失效，包括用尽首次立即重启机会后的故障；显式停止也推进代际。Editor 清除旧绑定与组件声明，待确认计划在使用点重查 authority。
+
 原生保留 fuel、Store memory/table/instance 限制、epoch interruption 和 wall-clock deadline。iOS 使用的 Pulley 保留这些 API，但执行性能不能按原生机器码估算。移动进程内隔离无法提供桌面独立进程对运行库崩溃的隔离；组件编译也不具备可抢占的 epoch 中断。
 
 Web 构建阶段复用 Swift 宿主的真实 Component 类型检查和权限校验，运行时消费其导出的 WIT 类型、inspection 和 host contracts。应用可信目录固定转换产物的哈希；用户授权再绑定精确版本。Worker 只链接获准的三个 Guava 查询接口，使用本次 revision-bound JSON 快照。浏览器无法提供 Wasmtime fuel/epoch，采用 Worker wall-clock deadline 并在 core Wasm 中编码 memory/table 上限。完整步骤、API 和边界见 [Web 插件目标](../../Platforms/Web/Plugins/README.md)。

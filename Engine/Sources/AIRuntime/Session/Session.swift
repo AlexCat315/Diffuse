@@ -99,6 +99,10 @@ public actor Session {
     private var lastSubmittedCapabilityDrafts: [CapabilityInvocationDraft] = []
     private var activeInferenceID: UUID?
     private var projectToolExecutor: ProjectToolset.Executor?
+    /// Host policy evaluated before a capability or project tool call executes.
+    /// `nil` (the default) is a pass-through.
+    private let toolPolicy: ToolPolicy?
+
     public typealias ComponentDescriptionProvider = @Sendable (String?) async -> [ComponentDescription]
     private var componentDescriptionProvider: ComponentDescriptionProvider?
 
@@ -124,7 +128,8 @@ public actor Session {
                 initialWorldView: WorldView = WorldView(),
                 capabilityRegistry: CapabilityRegistry = .aiDefault,
                 pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
-                pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil) {
+                pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil,
+                toolPolicy: ToolPolicy? = nil) {
         let resolvedRegistry = pluginCapabilityExecutor?.registry ?? capabilityRegistry
         self.id = id
         self.config = config
@@ -137,6 +142,7 @@ public actor Session {
         self.capabilityDraftStore = CapabilityDraftStore(registry: resolvedRegistry)
         self.pluginCapabilityExecutor = pluginCapabilityExecutor
         self.pluginQuerySnapshotProvider = pluginQuerySnapshotProvider
+        self.toolPolicy = toolPolicy
     }
 
     public func setWorkflowContext(_ context: WorkflowContext?) async {
@@ -607,7 +613,14 @@ public actor Session {
             let body = requestBody(extraMessages: extraMessages, capabilitySnapshot: snapshot)
             let data = try await post(body)
             try ensureActive(runID)
-            let call = try parseRawToolCall(from: data)
+            var call = try parseRawToolCall(from: data)
+            if call.name == "execute_edit_plan" || call.name == "find_entities" {
+                do { call = try applyingToolPolicy(to: call) }
+                catch {
+                    extraMessages += toolCallExchangeMessages(call: call, resultJSON: toolCallDeniedResultJSON(error))
+                    continue
+                }
+            }
             if call.name == "execute_edit_plan" {
                 return try decodePlan(from: call)
             } else if call.name == "find_entities" {
@@ -647,10 +660,17 @@ public actor Session {
             try ensureActive(runID)
             guard toolCallsRemaining > 0 else { throw SessionError.noPlanInResponse }
             toolCallsRemaining -= 1
-            let call = try await streamOneTurn(extraMessages: extraMessages,
+            var call = try await streamOneTurn(extraMessages: extraMessages,
                                                capabilitySnapshot: snapshot,
                                                onProgress: onProgress)
             try ensureActive(runID)
+            if call.name == "execute_edit_plan" || call.name == "find_entities" {
+                do { call = try applyingToolPolicy(to: call) }
+                catch {
+                    extraMessages += toolCallExchangeMessages(call: call, resultJSON: toolCallDeniedResultJSON(error))
+                    continue
+                }
+            }
             if call.name == "execute_edit_plan" {
                 return try decodePlan(from: call)
             } else if call.name == "find_entities" {
@@ -1369,6 +1389,7 @@ public actor Session {
     private func handleCapabilityToolCall(_ call: RawToolCall,
                                           snapshot: CapabilityExposureSnapshot) async throws
         -> CapabilityToolHandling {
+        var call = call
         let revision = worldView.sceneRevision ?? 0
 
         if let executor = projectToolExecutor, let tool = ProjectToolset.definition(named: call.name) {
@@ -1409,6 +1430,11 @@ public actor Session {
                 throw SessionError.malformedResponse(detail: "project tool returned an invalid or oversized result")
             }
             return .exchange(resultJSON: String(decoding: output, as: UTF8.self), snapshot: snapshot)
+        }
+
+        do { call = try applyingToolPolicy(to: call) }
+        catch {
+            return .exchange(resultJSON: toolCallDeniedResultJSON(error), snapshot: snapshot)
         }
 
         let contract: CapabilityContract
@@ -1598,6 +1624,36 @@ public actor Session {
         var id: String
         var inputJSON: String
         var input: [String: Any]
+    }
+
+    /// Applies a policy rewrite to the call's argument payload.
+    private func applyingToolPolicy(to call: RawToolCall) throws -> RawToolCall {
+        guard let toolPolicy else { return call }
+        let evaluated = try toolPolicy.evaluate(
+            ToolCall(name: call.name, arguments: Data(call.inputJSON.utf8), origin: .agentSession)
+        )
+        return try rebuildingToolCall(call, arguments: evaluated.arguments)
+    }
+
+    private func rebuildingToolCall(_ call: RawToolCall, arguments: Data) throws -> RawToolCall {
+        guard let object = try? JSONSerialization.jsonObject(with: arguments) as? [String: Any] else {
+            throw CapabilityDraftError.invalidInput("tool policy arguments must be a JSON object")
+        }
+        var next = call
+        next.inputJSON = String(decoding: arguments, as: UTF8.self)
+        next.input = object
+        return next
+    }
+
+    /// A denied tool call is an observation, not a session failure: the model
+    /// receives it like any other tool result and can choose another action.
+    private func toolCallDeniedResultJSON(_ error: Error) -> String {
+        let message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        let object: [String: Any] = ["ok": false, "error": "Tool call denied: \(message)"]
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else {
+            return #"{"ok":false,"error":"tool call denied"}"#
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// Parses a raw tool call from a non-streaming API response (either format).

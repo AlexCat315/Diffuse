@@ -26,6 +26,10 @@ public final class PluginComponentStore: @unchecked Sendable {
         lock.withLock { _ = declarations.removeValue(forKey: pluginID) }
     }
 
+    func removeAll() {
+        lock.withLock { declarations.removeAll() }
+    }
+
     /// A fresh registry carrying built-ins plus every declaration. Callers own the
     /// copy: registering later declarations does not mutate scenes built earlier.
     public func registry() -> ComponentRegistry {

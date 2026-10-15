@@ -10,7 +10,7 @@ import GuavaUIAgent
 struct EditorDiagnosticsTests {
     private func call(_ app: EditorApplication, _ name: String, _ args: [String: Any] = [:]) async throws -> [String: Any] {
         let input = try JSONSerialization.data(withJSONObject: args)
-        return try JSONSerialization.jsonObject(with: await app.executeProjectTool(name: name, input: input)) as? [String: Any] ?? [:]
+        return try JSONSerialization.jsonObject(with: await app.executeProjectTool(name: name, input: input, origin: .mcp)) as? [String: Any] ?? [:]
     }
 
     @Test func headlessReportsAvailabilityAndSkillsWithoutInventingUIData() async throws {

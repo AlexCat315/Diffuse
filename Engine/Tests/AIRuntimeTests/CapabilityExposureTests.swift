@@ -1043,9 +1043,14 @@ struct CapabilityExposureTests {
         }
     }
 
-    @Test("dynamic Registry replacement destroys old sessions before exposing plugins")
-    func dynamicRegistryReplacementInvalidatesDrafts() async throws {
-        let sessions = CapabilityExposureSessionStore()
+    @Test("dynamic Registry replacement scopes invalidation to changed plugin authorities")
+    func dynamicRegistryReplacementScopesInvalidation() async throws {
+        // The Editor runs its transport store with the plugin-bearing policy;
+        // the test keeps that identity stable so only authority scoping is
+        // under test.
+        let pluginPolicy = CapabilityExposurePolicy(allowedDomains: ["scene", "plugin"],
+                                                    enabledPluginIDs: ["safe.dynamic"])
+        let sessions = CapabilityExposureSessionStore(exposurePolicy: pluginPolicy)
         let sessionID = UUID().uuidString
         let activation = try await sessions.search(sessionID: sessionID,
                                                    query: "rename",
@@ -1074,22 +1079,69 @@ struct CapabilityExposureTests {
         let executor = try PluginCapabilityExecutor(bindings: [setup.binding],
                                                     invoker: invoker)
         await sessions.replaceRegistry(executor.registry,
-                                       exposurePolicy: executor.exposurePolicy,
+                                       exposurePolicy: pluginPolicy,
                                        pluginAuthorities: executor.pluginAuthorities)
-        await #expect(throws: CapabilityExposureSessionError.sessionNotFound) {
-            try await sessions.validatedDrafts(sessionID: sessionID,
-                                               ids: [oldDraft.id],
-                                               sceneRevision: 12)
-        }
 
+        // Adding a plugin does not invalidate a built-in-only session: its
+        // snapshots reference no executable boundary that changed.
+        let survivors = try await sessions.validatedDrafts(sessionID: sessionID,
+                                                           ids: [oldDraft.id],
+                                                           sceneRevision: 12)
+        #expect(survivors.drafts == [oldDraft])
         let pluginActivation = try await sessions.search(sessionID: sessionID,
                                                          query: "arrange",
                                                          domain: "plugin",
                                                          sceneRevision: 12)
         #expect(pluginActivation.contracts.map(\.id) == [setup.contract.id])
+        let pluginDraft = try await sessions.createDraft(
+            sessionID: sessionID, toolName: setup.contract.toolName,
+            input: Data(#"{"entity_id":"scene:1"}"#.utf8), sceneRevision: 12
+        )
+        let combined = try await sessions.validatedDrafts(
+            sessionID: sessionID, ids: [oldDraft.id, pluginDraft.id], sceneRevision: 12
+        )
+        #expect(combined.drafts == [oldDraft, pluginDraft])
         let snapshot = try await sessions.snapshot(sessionID: sessionID,
                                                    sceneRevision: 12)
         #expect(snapshot.authority(forPluginID: "safe.dynamic") == setup.binding.authority)
+
+        // A byte-identical authority replacement (reload of the same build)
+        // keeps the plugin session alive.
+        await sessions.replacePluginAuthorities(
+            [setup.binding.pluginID: setup.binding.authority],
+            enabledPluginIDs: [setup.binding.pluginID]
+        )
+        _ = try await sessions.snapshot(sessionID: sessionID, sceneRevision: 12)
+
+        // A separate built-in-only session, created before the authority drop.
+        let builtInOnlySessionID = UUID().uuidString
+        _ = try await sessions.bootstrap(sessionID: builtInOnlySessionID, sceneRevision: 12)
+
+        await sessions.replaceRegistry(
+            .aiDefault,
+            exposurePolicy: {
+                var revoked = pluginPolicy
+                revoked.enabledPluginIDs = []
+                return revoked
+            }(),
+            pluginAuthorities: [:]
+        )
+        await #expect(throws: CapabilityExposureSessionError.sessionNotFound) {
+            try await sessions.snapshot(sessionID: sessionID, sceneRevision: 12)
+        }
+        _ = try await sessions.snapshot(sessionID: builtInOnlySessionID, sceneRevision: 12)
+    }
+
+    @Test("registry replacement invalidates sessions whose built-in contracts disappear")
+    func changedBuiltInContractInvalidatesSession() async throws {
+        let sessions = CapabilityExposureSessionStore()
+        let id = UUID().uuidString
+        _ = try await sessions.bootstrap(sessionID: id, sceneRevision: 1)
+        await sessions.replaceRegistry(CapabilityRegistry(),
+            exposurePolicy: CapabilityExposurePolicy(allowedDomains: ["scene"]), pluginAuthorities: [:])
+        await #expect(throws: CapabilityExposureSessionError.sessionNotFound) {
+            try await sessions.snapshot(sessionID: id, sceneRevision: 1)
+        }
     }
 
     @Test("Session keeps plugin writes as authority-bound Drafts for Editor transaction preparation")

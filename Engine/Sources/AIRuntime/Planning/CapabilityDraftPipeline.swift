@@ -96,6 +96,19 @@ public actor CapabilityDraftStore {
                             snapshot: CapabilityExposureSnapshot,
                             currentSceneRevision: UInt64,
                             now: Date = Date()) throws -> CapabilityInvocationDraft {
+        try createDraft(toolName: toolName, input: input, snapshot: snapshot,
+                        currentSceneRevision: currentSceneRevision, now: now, registry: registry)
+    }
+
+    // A retained exposure session may expand against a newer registry while
+    // keeping its existing drafts. Validate against the caller's atomic catalog
+    // snapshot without mutating this actor's registry across suspension points.
+    func createDraft(toolName: String,
+                     input: Data,
+                     snapshot: CapabilityExposureSnapshot,
+                     currentSceneRevision: UInt64,
+                     now: Date,
+                     registry: CapabilityRegistry) throws -> CapabilityInvocationDraft {
         guard input.count <= Self.maximumInputBytes else { throw CapabilityDraftError.inputTooLarge }
         let snapshotAge = now.timeIntervalSince(snapshot.createdAt)
         guard snapshotAge >= 0, snapshotAge <= ttl else { throw CapabilityDraftError.staleSnapshot }
@@ -148,6 +161,15 @@ public actor CapabilityDraftStore {
                                 snapshot: CapabilityExposureSnapshot,
                                 currentSceneRevision: UInt64,
                                 now: Date = Date()) throws -> [CapabilityInvocationDraft] {
+        try validatedDrafts(ids: ids, snapshot: snapshot,
+                            currentSceneRevision: currentSceneRevision, now: now, registry: registry)
+    }
+
+    func validatedDrafts(ids: [UUID],
+                         snapshot: CapabilityExposureSnapshot,
+                         currentSceneRevision: UInt64,
+                         now: Date,
+                         registry: CapabilityRegistry) throws -> [CapabilityInvocationDraft] {
         guard ids.count <= Self.maximumDraftsPerPlan else { throw CapabilityDraftError.tooManyDrafts }
         if let duplicate = Dictionary(grouping: ids, by: { $0 })
             .first(where: { $0.value.count > 1 })?.key {
