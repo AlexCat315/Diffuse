@@ -40,7 +40,7 @@ Panel("Console", isActive: true) {
 | 槽位 | 默认 | Token |
 | ---- | ---- | ----- |
 | 外层 background | `theme.colors.surface` | theme |
-| 外层 cornerRadius | `theme.radius.lg` | theme |
+| 外层 cornerRadius | `theme.radius.xl` | theme |
 | 外层 border | 1px `borderSubtle`，active 时换 `borderStrong` | theme |
 | header background | `theme.colors.surfaceVariant` | theme |
 | header height | 内置（约 36） | — |

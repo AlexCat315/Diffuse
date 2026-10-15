@@ -141,7 +141,7 @@ public struct TabView<ID: Hashable>: View {
             Spacer()
         }
         let styled = variant == .segmented
-            ? AnyView(items.padding(3).background(SemanticColorRef.surfaceVariant).cornerRadius(8))
+            ? AnyView(items.padding(3).background(SemanticColorRef.surfaceVariant).cornerRadius(.controlRadius))
             : AnyView(items.background(SemanticColorRef.surface))
         guard overflow == .scroll else { return styled }
         let height = max(Float(40), surface.input.contains(.touch) ? surface.minimumControlExtent + (variant == .segmented ? 6 : 0) : 0)

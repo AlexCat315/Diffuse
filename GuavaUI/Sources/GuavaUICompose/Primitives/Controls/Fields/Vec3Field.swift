@@ -120,7 +120,7 @@ private struct Vec3AxisField: View {
         }
         .frame(height: fieldHeight)
         .background(.surfaceSunken)
-        .cornerRadius(3)
+        .cornerRadius(.inputRadius)
         .clipped()
     }
 

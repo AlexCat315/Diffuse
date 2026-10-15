@@ -101,7 +101,7 @@ private struct _ToolStripButtonStyle: ButtonStyle {
             AnyView(configuration.label)
         }
         .background(bg)
-        .cornerRadius(6)
+        .cornerRadius(t.radius.sm)
     }
 }
 
@@ -173,7 +173,7 @@ private struct _OutputTabStyle: ButtonStyle {
             AnyView(configuration.label)
         }
         .background(bg)
-        .cornerRadius(5)
+        .cornerRadius(t.radius.sm)
         .border(stroke, width: 1)
         .opacity(configuration.isHovered && !isActive ? 0.85 : 1)
     }
@@ -204,7 +204,7 @@ public struct StatusFooter: View {
     }
 }
 
-/// Toolbar pill: 28px rounded-7 chip; active = accent tint + accent text.
+/// Toolbar pill: 28px rounded chip; active = accent tint + accent text.
 public struct ToolbarPill: View {
     let title: String
     let isActive: Bool
@@ -230,7 +230,7 @@ private struct _ToolbarPillBody: View {
             .padding(horizontal: 10, vertical: 0)
             .frame(height: 28)
             .background(isActive ? SemanticColorRef.accentMuted : SemanticColorRef.background)
-            .cornerRadius(7)
+            .cornerRadius(.rowRadius)
             .border(.border, width: 1)
     }
 }

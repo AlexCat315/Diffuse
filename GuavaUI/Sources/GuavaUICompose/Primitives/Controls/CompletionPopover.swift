@@ -55,7 +55,7 @@ public struct CompletionPopover: View {
                 Text("\(selectedIndex + 1) / \(items.count)").font(.caption).foregroundColor(.onSurfaceMuted)
                     .padding(horizontal: 10, vertical: 4)
             }
-        }.padding(3).glassSurface(6)
+        }.padding(3).glassSurface(.controlRadius)
             .accessibility { $0.role = .list; $0.label = "Completions" }
     }
 }
@@ -83,7 +83,7 @@ private struct CompletionRow: _PrimitiveView {
         [Row(alignment: .center, spacing: 10) {
             Text(item.label, lineLimit: 1).font(.body).foregroundColor(.onSurface).flex(1, shrink: 1)
             if let detail = item.detail { Text(detail, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted) }
-        }.padding(horizontal: 9, vertical: 5).background(isSelected ? SemanticColorRef.selection : .clear).cornerRadius(3)]
+        }.padding(horizontal: 9, vertical: 5).background(isSelected ? SemanticColorRef.selection : .clear).cornerRadius(.rowRadius)]
     }
 }
 

@@ -56,7 +56,7 @@ private struct ToastCard: View {
                     .buttonStyle(.ghost).controlSize(.small)
             }
         // Opaque on purpose: a toast must stay readable over whatever it covers.
-        }.padding(14).background(.surfaceFloating).cornerRadius(8).border(.border, width: 1)
+        }.padding(14).background(.surfaceFloating).cornerRadius(.controlRadius).border(.border, width: 1)
             .onHover { controller.setPaused($0, id: notification.id) }
     }
 }

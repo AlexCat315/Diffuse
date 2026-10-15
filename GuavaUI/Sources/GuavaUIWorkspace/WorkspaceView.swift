@@ -1639,7 +1639,7 @@ private struct _WorkspaceRailRestoreStyle: ButtonStyle {
         }
         .padding(horizontal: 4, vertical: 4)
         .background(bg)
-        .cornerRadius(6)
+        .cornerRadius(theme.radius.sm)
         .border(configuration.isFocused ? theme.colors.focusRing : clear,
                 width: configuration.isFocused ? 2 : 0)
         .opacity(configuration.isEnabled ? 1 : 0.55)

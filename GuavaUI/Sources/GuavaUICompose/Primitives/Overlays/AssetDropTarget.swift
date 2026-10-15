@@ -191,7 +191,7 @@ private func drawDropChrome<Content: View>(for target: AssetDropTarget<Content>,
     let fill = accepts ? colors.accent.multipliedAlpha(0.10) : colors.error.multipliedAlpha(0.08)
     let stroke = accepts ? colors.accent.multipliedAlpha(0.85) : colors.error.multipliedAlpha(0.70)
 
-    list.addRoundedRect(rect, radius: 4, color: fill)
+    list.addRoundedRect(rect, radius: node.theme.inputs.radius, color: fill)
     addBorder(rect: rect, color: stroke, list: list)
 }
 

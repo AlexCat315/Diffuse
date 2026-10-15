@@ -637,7 +637,7 @@ private extension BuiltinButtonChromeKind {
             return BuiltinButtonChromeMetrics(height: height,
                                               minWidth: minWidth,
                                               horizontalPadding: 7,
-                                              radius: 6,
+                                              radius: theme.radius.sm,
                                               verticalPadding: max(2, (height - theme.typography.label.lineHeight) / 2))
         }
     }

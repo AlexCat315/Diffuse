@@ -1054,6 +1054,7 @@ private struct _TreeRowHost: _PrimitiveView {
                 drawTreeDropIndicator(position: dropPosition,
                                       frame: frame,
                                       accent: node.theme.colors.accent,
+                                      radius: node.theme.radius.sm,
                                       list: list)
             }
         }
@@ -1263,7 +1264,7 @@ private struct _TreeGhostContainer<Content: View>: _PrimitiveView {
             let y = cy + 2
             let bg = node.theme.colors.surfaceFloating.multipliedAlpha(0.94)
             let border = node.theme.colors.accent.multipliedAlpha(0.45)
-            list.addRoundedRect(UIRect(x: x, y: y, width: w, height: h), radius: 4, color: bg)
+            list.addRoundedRect(UIRect(x: x, y: y, width: w, height: h), radius: node.theme.radius.sm, color: bg)
             addTreeDropBorder(rect: UIRect(x: x, y: y, width: w, height: h),
                               color: border, list: list)
         }
@@ -1284,6 +1285,7 @@ private struct _TreeGhostContainer<Content: View>: _PrimitiveView {
 private func drawTreeDropIndicator(position: TreeDropPosition,
                                    frame: UIRect,
                                    accent: Color,
+                                   radius: Float,
                                    list: DrawList) {
     switch position {
     case .inside:
@@ -1291,7 +1293,7 @@ private func drawTreeDropIndicator(position: TreeDropPosition,
                                    y: frame.y + 1,
                                    width: max(2, frame.width - 2),
                                    height: max(2, frame.height - 2)),
-                            radius: 4,
+                            radius: radius,
                             color: accent.multipliedAlpha(0.12))
         addTreeDropBorder(rect: frame.insetBy(dx: 1, dy: 1),
                           color: accent.multipliedAlpha(0.9),

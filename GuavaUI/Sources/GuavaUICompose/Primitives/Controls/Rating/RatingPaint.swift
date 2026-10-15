@@ -45,7 +45,7 @@ final class RatingPaint {
             }
         }
         if FocusChainHolder.current?.focused === node, FocusChainHolder.current?.isFocusVisible == true {
-            list.addRoundedRectStroke(bounds, radius: 5, width: 2, color: palette.focus.multipliedAlpha(alpha))
+            list.addRoundedRectStroke(bounds, radius: node.theme.radius.sm, width: 2, color: palette.focus.multipliedAlpha(alpha))
         }
     }
 }

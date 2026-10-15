@@ -199,7 +199,7 @@ public struct KeyCap: View {
             .foregroundColor(isEnabled ? SemanticColorRef.onSurfaceVariant : .onSurfaceDisabled)
             .padding(horizontal: 6, vertical: 2)
             .background(SemanticColorRef.surfaceVariant)
-            .cornerRadius(4)
+            .cornerRadius(.rowRadius)
             .border(SemanticColorRef.border, width: 1)
             .opacity(isEnabled ? 1 : 0.55)
     }

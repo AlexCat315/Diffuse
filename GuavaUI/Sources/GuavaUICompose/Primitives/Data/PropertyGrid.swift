@@ -193,7 +193,7 @@ private struct _StatefulPropertyGrid: View {
         }
         .padding(horizontal: 10, vertical: 12)
         .background(.surface)
-        .cornerRadius(4)
+        .cornerRadius(.controlRadius)
     }
 
     private func sectionViews() -> [AnyView] {
@@ -267,7 +267,7 @@ private struct _StatefulPropertyGrid: View {
             }
         }
         .background(.surface)
-        .cornerRadius(4))
+        .cornerRadius(.controlRadius))
     }
 
     private func childViews(_ sections: [PropertyGridSection]) -> [AnyView] {
@@ -314,7 +314,6 @@ private struct _StatefulPropertyGrid: View {
         _PropertyGridRowHost(
             baseBackground: .surfaceSunken,
             hoverBackground: .stateLayerHover,
-            cornerRadius: 4,
             content: AnyView(content()))
     }
 
@@ -397,7 +396,6 @@ private struct _StatefulPropertyGrid: View {
 private struct _PropertyGridRowHost: _PrimitiveView {
     let baseBackground: SemanticColorRef
     let hoverBackground: SemanticColorRef
-    let cornerRadius: Float
     let content: AnyView
 
     func _makeNode() -> Node {
@@ -407,7 +405,7 @@ private struct _PropertyGridRowHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        node.cornerRadius = cornerRadius
+        node.cornerRadius = node.theme.radius.sm
         if !node.supportsControlHover { node.attachments[Self.hoveredKey] = false }
         applyBackground(to: node, isHovered: node.attachments[Self.hoveredKey] as? Bool ?? false)
 

@@ -2,12 +2,13 @@ import Foundation
 import GuavaUIRuntime
 
 public enum SkeletonShape: Sendable, Equatable {
-    case rectangle(cornerRadius: Float)
+    /// `nil` resolves the theme's row radius so skeletons follow the app scale.
+    case rectangle(cornerRadius: Float? = nil)
     case circle
 }
 
 public struct SkeletonAppearance {
-    public var shape: SkeletonShape = .rectangle(cornerRadius: 4)
+    public var shape: SkeletonShape = .rectangle()
     public var height: Float = 16
     public var color: SemanticColorRef = .onSurfaceMuted.opacity(0.24)
     public var isSecondary = false
@@ -15,7 +16,7 @@ public struct SkeletonAppearance {
     mutating func validate() {
         height = height.isFinite ? max(1, min(1024, height)) : 16
         if case .rectangle(let radius) = shape {
-            shape = .rectangle(cornerRadius: radius.isFinite ? max(0, min(512, radius)) : 4)
+            shape = .rectangle(cornerRadius: radius.flatMap { $0.isFinite ? max(0, min(512, $0)) : nil })
         }
     }
 }
@@ -77,7 +78,7 @@ public struct Skeleton: _PrimitiveView {
                 let diameter = min(rect.width, rect.height)
                 rect.x += (rect.width - diameter) / 2; rect.y += (rect.height - diameter) / 2
                 rect.width = diameter; rect.height = diameter; radius = diameter / 2
-            case .rectangle(let cornerRadius): radius = min(cornerRadius, min(rect.width, rect.height) / 2)
+            case .rectangle(let cornerRadius): radius = min(cornerRadius ?? node.theme.radius.sm, min(rect.width, rect.height) / 2)
             }
             list.addRoundedRect(rect, radius: radius, color: color)
         }

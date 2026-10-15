@@ -19,7 +19,7 @@
 | 槽位 | 默认值 | Token |
 | ---- | ------ | ----- |
 | chrome.height | 32 | 硬编码（Material compact size） |
-| chrome.cornerRadius | `theme.radius.md` | 6 (dark) / 6 (light) |
+| chrome.cornerRadius | `theme.radius.md` | 10 (dark) / 10 (light) |
 | chrome.padding (h) | `theme.spacing.md` | 12 |
 | chrome.padding (v) | 0（高度由 frame 控制） | — |
 | label.font | `bodyStrong` | 14pt 600 |

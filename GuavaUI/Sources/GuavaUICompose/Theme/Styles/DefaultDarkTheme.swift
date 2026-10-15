@@ -59,8 +59,10 @@ public enum DefaultDarkTheme {
             mono:       TextStyleToken(font: .monospaced(size: 13), lineHeight: 20)
         ),
         spacing:   SpacingScale(xs: 4, sm: 6, md: 8, lg: 12, xl: 16, xxl: 24),
-        // Radii: rows 5, controls 7, grouped chrome 10, panels 12.
-        radius:    RadiusScale(none: 0, sm: 5, md: 8, lg: 12, xl: 16, pill: 9999),
+        // Radii: chips / rows 6, controls 10, grouped chrome 14, panels 18.
+        // Apple-leaning continuous-corner feel: each step runs slightly rounder
+        // than the previous scale without turning small controls into pills.
+        radius:    RadiusScale(none: 0, sm: 6, md: 10, lg: 14, xl: 18, pill: 9999),
         elevation: ElevationScale(
             none:   .none,
             low:    SurfaceShadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x50), offsetX: 0, offsetY: 1, blur: 2),

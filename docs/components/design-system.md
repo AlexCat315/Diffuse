@@ -22,6 +22,21 @@ AppRoot().theme(theme)
 
 任意值仍可直接使用：`.font(.named("Menlo", size: 17))`、`.textStyle(TextStyleToken(...))`、`Icon(resource, size: 31)`（缩放前逻辑点）、`.padding(19)`、`.cornerRadius(13)`。显式字体族优先于主题字体族；仅指定 `.font(.system(size: 17))` 时仍继承主题的普通字体族，等宽槽位不受普通字体族覆盖。系统 fallback 继续处理主字体缺少的 grapheme。
 
+### 圆角层级
+
+组件不写圆角字面量；按角色读取 `theme.radius` 或对应的 `ThemeMetric`，应用换主题时整站同步：
+
+| 角色 | token | 默认（逻辑点） |
+| ---- | ----- | -------------- |
+| 行 / chip / 小色块 / 高亮 | `theme.radius.sm`（`.rowRadius`） | 6 |
+| 控件 / 面板内卡片 | `theme.radius.md`（`.controlRadius`） | 10 |
+| 输入框外壳 | `theme.inputs.radius`（`.inputRadius`） | 10 |
+| 分组容器 / 表格卡片 | `theme.radius.lg`（`.groupRadius`） | 14 |
+| Panel / 工作区卡片 | `theme.radius.xl`（`.panelRadius`） | 18 |
+| 胶囊 / Pill | `theme.radius.pill` | 9999（夹到半高） |
+
+行、控件与容器的字面量（例如 4/6/8）只是历史遗留，迁移时映射到最接近的语义档位；自定义外观走 `ThemeMetric`，不要在组件里复制圆角数值。
+
 只有字号覆盖而没有显式行高时，主题默认 body 行高按字号比例计算，避免大字号被固定的默认行高压住。显式 `.lineHeight(...)` 和语义 TextStyleToken 携带的行高保持其优先级；需要完全指定排版时直接传 `.textStyle(...)`。
 
 ## 应用自定义 token

@@ -115,7 +115,7 @@ public struct AssetRefField: View {
             .padding(horizontal: 6, vertical: 4)
             .frame(height: 32)
             .background(.surfaceSunken)
-            .cornerRadius(4)
+            .cornerRadius(.inputRadius)
             .clipped()
         }
     }
@@ -152,7 +152,7 @@ private struct AssetKindBadge: View {
             .foregroundColor(isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
             .frame(width: 34, height: 20)
             .background(.surfaceOverlay)
-            .cornerRadius(3)
+            .cornerRadius(.rowRadius)
     }
 }
 
@@ -169,7 +169,7 @@ private struct AssetRefPreview: View {
                 AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
             }
             .background(.surfaceOverlay)
-            .cornerRadius(3)
+            .cornerRadius(.rowRadius)
         } else {
             AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
         }

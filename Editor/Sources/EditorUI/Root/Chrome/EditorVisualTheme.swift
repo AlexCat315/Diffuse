@@ -58,7 +58,6 @@ enum EditorVisualTheme {
         theme.motion.standard = .milliseconds(220)
         theme.motion.slow = .milliseconds(280)
         theme.motion.standardEasing = .emphasized
-        theme.radius = RadiusScale(none: 0, sm: 4, md: 4, lg: 6, xl: 6, pill: 9999)
         theme.inputs.background = theme.colors.surfaceSunken
         theme.inputs.backgroundDisabled = theme.colors.surface
         theme.inputs.borderColor = theme.colors.border
@@ -67,7 +66,6 @@ enum EditorVisualTheme {
         theme.inputs.borderDisabled = theme.colors.divider
         theme.inputs.dividerColor = theme.colors.divider
         theme.inputs.addonBackground = theme.colors.surface
-        theme.inputs.radius = 4
         theme.inputs.focusRingWidth = 1.5
         return theme
     }

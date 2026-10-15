@@ -95,7 +95,7 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
                         .accessibility { $0.role = .status }
                 }
             }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0))
-            .border(.border, width: 1).cornerRadius(6).opacity(options.isEnabled ? 1 : 0.55)
+            .border(.border, width: 1).cornerRadius(.groupRadius).opacity(options.isEnabled ? 1 : 0.55)
             .accessibility { $0.role = .table; $0.label = "Data table"; $0.value = "\(model.count) rows, \(columns.count) columns"; $0.state.isEnabled = options.isEnabled }
     }
     private func header(geometry: DataTableColumnGeometry, moving: Range<Int>) -> AnyView {

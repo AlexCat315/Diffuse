@@ -136,7 +136,7 @@ public struct Table<Record, ID: Hashable>: View {
                     }.listRowStyle(TableRowStyle()).flex(1, shrink: 1, basis: 0).frame(minHeight: 0)
                 }
             }.frame(width: max(width + 14, session.viewportWidth), minHeight: 0).flex(1, shrink: 1)
-        }.border(.border, width: 1).cornerRadius(8).allowsHitTesting(options.isEnabled).opacity(options.isEnabled ? 1 : 0.55)
+        }.border(.border, width: 1).cornerRadius(.groupRadius).allowsHitTesting(options.isEnabled).opacity(options.isEnabled ? 1 : 0.55)
             .accessibility { $0.role = .table; $0.state.isEnabled = options.isEnabled }
     }
     private var header: some View {

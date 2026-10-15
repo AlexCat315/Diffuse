@@ -164,7 +164,7 @@ private struct _StatefulJsonField: View {
                               onBlur: { if !isExpanded { _ = commitDraft() } })
                 .font(.mono)
                 .border(validation.isAcceptable ? .border : .error, width: 1)
-                .cornerRadius(4)
+                .cornerRadius(.inputRadius)
                 .clipped()
                 .debugName("json-inline-editor")
             if case let .invalid(message) = validation {
@@ -223,7 +223,7 @@ private struct _StatefulJsonField: View {
             }
             .padding(horizontal: 14, vertical: 10)
         }
-        .background(.surfaceFloating).border(.border, width: 1).cornerRadius(10).clipped()
+        .background(.surfaceFloating).border(.border, width: 1).cornerRadius(.controlRadius).clipped()
         .flex(1, shrink: 1, basis: 0)
         .debugName("json-expanded-editor")
     }

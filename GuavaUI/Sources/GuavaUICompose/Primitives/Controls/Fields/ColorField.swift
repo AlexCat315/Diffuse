@@ -58,7 +58,7 @@ private struct _StatefulColorField: View {
             ColorPickerPanel(color: field.color, showAlpha: field.showAlpha)
                 .padding(10)
                 .frame(width: 220)
-                .glassSurface(8)
+                .glassSurface(.controlRadius)
         })
     }
 }
@@ -77,7 +77,7 @@ private struct ColorSwatch: View {
             Box(direction: .row, alignItems: .center, spacing: 0) {}
                 .frame(width: 52, height: 22)
                 .background(isEnabled ? color : color.multipliedAlpha(0.4))
-                .cornerRadius(3)
+                .cornerRadius(.rowRadius)
                 .border(.border, width: 1)
 
             if showsInlineValues {
@@ -134,7 +134,7 @@ private struct ColorPickerPanel: View {
             Box(direction: .row, alignItems: .center, spacing: 0) {}
                 .frame(height: 28)
                 .background(color.wrappedValue)
-                .cornerRadius(4)
+                .cornerRadius(.rowRadius)
                 .border(Color(red: 58, green: 64, blue: 78), width: 1)
 
             // R / G / B channel rows

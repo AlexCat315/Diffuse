@@ -73,7 +73,7 @@ public struct CalendarView: View {
                     }
                 })
             }
-        }.padding(10).background(.surface).cornerRadius(8).border(.border, width: 1)
+        }.padding(10).background(.surface).cornerRadius(.controlRadius).border(.border, width: 1)
     }
     private func dayView(_ day: Date, currentMonth: Date, tabDay: Date?, cellSize: Float) -> some View {
         let inMonth = options.calendar.isDate(day, equalTo: currentMonth, toGranularity: .month)
@@ -148,7 +148,7 @@ private struct CalendarDayStyle: ButtonStyle {
         Box(direction: .row, alignItems: .center, justifyContent: .center) { AnyView(c.label).font(.label) }
             .frame(width: cellSize, height: cellSize).background(c.isSelected ? c.theme.colors.accent : c.isHovered ? c.theme.colors.stateLayerHover : .clear)
             .foregroundColor(c.isSelected ? c.theme.colors.onAccent : c.isEnabled ? c.theme.colors.onSurface : c.theme.colors.onSurfaceMuted)
-            .opacity(isCurrentMonth ? 1 : 0.35).cornerRadius(6)
+            .opacity(isCurrentMonth ? 1 : 0.35).cornerRadius(c.theme.radius.sm)
             .border(c.isFocused ? c.theme.colors.focusRing : isToday ? c.theme.colors.accent : .clear, width: c.isFocused ? 2 : isToday ? 1 : 0)
     }
 }

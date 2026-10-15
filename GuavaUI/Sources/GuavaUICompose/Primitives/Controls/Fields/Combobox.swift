@@ -74,7 +74,7 @@ public struct Combobox<Value: Hashable>: View {
                         .buttonStyle(.ghost).controlSize(.mini)
                 }
                 Icon(UIIcons.Navigation.chevronDown, size: .small)
-            }.padding(horizontal: 10, vertical: 4).frame(minHeight: rowHeight).background(.surface).cornerRadius(6).border(.border, width: 1)
+            }.padding(horizontal: 10, vertical: 4).frame(minHeight: rowHeight).background(.surface).cornerRadius(.inputRadius).border(.border, width: 1)
         }, content: {
             Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 TextField(presentation.searchPlaceholder, text: Binding(get: { session.query }, set: { query in

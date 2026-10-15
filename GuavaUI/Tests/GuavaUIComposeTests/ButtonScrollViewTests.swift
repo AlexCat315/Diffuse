@@ -661,7 +661,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
 
         let row = firstNode(in: tree.root, where: { node in
             registry.handlers(for: node).hover != nil
-                && node.cornerRadius == 4
+                && node.cornerRadius == Theme.defaultDark.radius.sm
                 && node.backgroundColor != nil
         })
         #expect(row != nil)

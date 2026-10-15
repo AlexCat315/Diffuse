@@ -81,7 +81,7 @@ struct MenuItemRowHost: _PrimitiveView {
                               width: width,
                               height: max(0, Float(node.frame.height) - 4))
             list.addRoundedRect(rect,
-                                radius: 5,
+                                radius: node.theme.radius.sm,
                                 color: background.multipliedAlpha(node.opacity))
         }
 

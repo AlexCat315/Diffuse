@@ -85,19 +85,21 @@ public struct CommandPalette: View {
     }
 
     public var body: some View {
-        Modal(isPresented: isPresented) {
-            $0.geometry.width = 640
-            $0.geometry.height = 440
-            $0.geometry.inset = 72
-            $0.geometry.cornerRadius = 10
-            $0.geometry.placement = .top
-        } content: {
-            Column(alignment: .leading, spacing: 0) {
-                _PresentationWatcher(isPresented: isPresented) { open() }
-                AnyView(searchField)
-                AnyView(Divider())
-                AnyView(results)
-                AnyView(footer)
+        ThemeReader { theme in
+            Modal(isPresented: isPresented) {
+                $0.geometry.width = 640
+                $0.geometry.height = 440
+                $0.geometry.inset = 72
+                $0.geometry.cornerRadius = theme.radius.md
+                $0.geometry.placement = .top
+            } content: {
+                Column(alignment: .leading, spacing: 0) {
+                    _PresentationWatcher(isPresented: isPresented) { open() }
+                    AnyView(searchField)
+                    AnyView(Divider())
+                    AnyView(results)
+                    AnyView(footer)
+                }
             }
         }
     }
