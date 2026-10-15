@@ -7,8 +7,6 @@ An **AI agent driven workstation** written in Swift, bringing text/code editing,
 Guava's core thesis: **creative intent, world state, runtime execution, and AI understanding are not four layers — they are four views of the same thing.** Humans and AI authors share the exact same world-mutation primitives; every interaction is a training signal by default; and the world is a continuously maintained semantic graph, not a serialized snapshot.
 
 - 🇨🇳 **中文版**: [README.zh.md](README.zh.md)
-- 📖 **Architecture design doc** (in Chinese): [`docs/architecture.md`](docs/architecture.md)
-- 🗺 **Roadmap** (in Chinese): [`docs/roadmap.md`](docs/roadmap.md)
 
 ---
 
