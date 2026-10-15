@@ -21,6 +21,12 @@ public extension View {
         compositionLocal(ThemeEnvironment.key, theme)
             .compositionLocal(ThemeEnvironment.bodyStyle, theme.typography.body.resolvingFamily(theme.typography.family))
     }
+
+    /// Animate a custom palette when its ordinary domain value changes. The
+    /// renderer retains the previous frame; layout and input use the new theme.
+    func theme<Value: Equatable>(_ theme: Theme, transition: ThemeTransition, value: Value) -> some View {
+        CircularThemeHost(theme: theme, value: value, transition: transition, content: self)
+    }
 }
 
 public extension Node {

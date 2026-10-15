@@ -85,6 +85,9 @@ public final class DrawList {
     /// Backdrop awaiting the next emitted primitive. Consumed by
     /// `recordIndices`, which also starts a fresh batch for it.
     private var pendingBackdrop: UIBackdrop?
+    /// Compositing request for the whole frame, or nil. Unlike a backdrop this
+    /// is not geometry: it is read once by the renderer before anything is drawn.
+    public private(set) var reveal: UIReveal?
 
     public init() {}
 
@@ -97,6 +100,14 @@ public final class DrawList {
         clipStack.removeAll(keepingCapacity: true)
         pendingBackdrop = nil
         viewportBounds = nil
+        reveal = nil
+    }
+
+    /// Retain the frame already on screen and show this one through a circle.
+    /// The last request of a frame wins; two nodes asking at once would have to
+    /// agree on a centre, which is exactly the case where neither is right.
+    public func beginReveal(_ reveal: UIReveal) {
+        self.reveal = reveal
     }
 
     /// Attach a frosted backdrop to the geometry emitted immediately next.
@@ -172,6 +183,7 @@ public final class DrawList {
         self.resources = resources
         clipStack.removeAll(keepingCapacity: true)
         viewportBounds = nil
+        reveal = nil
     }
 
     // MARK: - Composite (Phase 4b)
@@ -193,6 +205,12 @@ public final class DrawList {
                 vertexTranslationX: Float,
                 vertexTranslationY: Float) {
         resources.append(other.resources)
+        // A reveal describes the whole frame, so it travels with the geometry
+        // into the frame list even when the node that raised it was recorded
+        // into a layer cache. A layer replays its cached request for as long as
+        // it stays clean, which is why the raise site must clear it the moment
+        // the run ends rather than leaving a finished disc behind.
+        if let reveal = other.reveal { self.reveal = reveal }
         if vertices.isEmpty,
            indices.isEmpty,
            batches.isEmpty,

@@ -304,7 +304,7 @@ public struct EditorState: Codable, Sendable {
     public var assistant = EditorAssistantState()
     public var output = EditorOutputState()
     public var navigation = EditorNavigationState()
-    public var presentation = EditorPresentationState(themeMode: .dark, language: .system, revision: 0)
+    public var presentation = EditorPresentationState(themeMode: .dark, language: .system, refreshRevision: 0)
     public var vsyncMode: EditorVSyncMode = .enabled
 
     public init(_ configure: (inout Self) -> Void = { _ in }) {
@@ -324,7 +324,7 @@ public struct EditorState: Codable, Sendable {
     public var sceneDirty: Bool { document.sceneRecoveryPending || document.sceneRevision != document.lastSavedSceneRevision }
     public var themeMode: EditorThemeMode { presentation.themeMode }
     public var language: EditorLanguage { presentation.language }
-    public var uiRefreshRevision: UInt64 { presentation.revision }
+    public var uiRefreshRevision: UInt64 { presentation.refreshRevision }
 
     private enum CodingKeys: String, CodingKey {
         case selection

@@ -110,7 +110,11 @@ struct BoolControlHost: _PrimitiveView {
             $0.value = variant == .mixedCheckbox ? "mixed" : isOn.wrappedValue ? "1" : "0"
         }
         node.accessibilityActions = AccessibilityActions()
-        if isEnabled { node.accessibilityActions.activate = { isOn.wrappedValue.toggle() } }
+        let toggle = { [weak node] in
+            if let node { WindowRevealContext.recordActivation(node) }
+            isOn.wrappedValue.toggle()
+        }
+        if isEnabled { node.accessibilityActions.activate = toggle }
         if !isEnabled {
             node.attachments[Self.pressedKey] = false
             node.attachments[Self.hoveredKey] = false
@@ -162,7 +166,7 @@ struct BoolControlHost: _PrimitiveView {
                 guard wasPressed else { return .ignored }
                 if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
                 guard node.absoluteFrame.contains(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))) else { return .handled }
-                isOn.wrappedValue.toggle()
+                toggle()
                 node.attachments[Self.onKey] = isOn.wrappedValue
                 updateBoolControlAppearance(node, isOn: isOn.wrappedValue, isEnabled: isEnabled)
                 node.markRenderDirty(reason: .styleSet(field: "boolControlValue"))
@@ -173,7 +177,7 @@ struct BoolControlHost: _PrimitiveView {
             guard phase == .target, !event.isRepeat else { return .ignored }
             switch event.scancode {
             case Scancode.return, Scancode.space, Scancode.keypadEnter:
-                isOn.wrappedValue.toggle()
+                toggle()
                 node.attachments[Self.onKey] = isOn.wrappedValue
                 updateBoolControlAppearance(node, isOn: isOn.wrappedValue, isEnabled: isEnabled)
                 node.markRenderDirty(reason: .styleSet(field: "boolControlValue"))

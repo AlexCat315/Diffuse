@@ -401,9 +401,10 @@ extension EditorStore {
     public var scaleSnapStep: Float { read(.scaleSnapStep, storage.snapping.scaleSnapStep) }
     public var primarySelectBehavior: SelectionPrimaryModifierBehavior { read(.primarySelectBehavior, storage.selection.primarySelectBehavior) }
     public var presentation: EditorPresentationState { read(.presentation, storage.presentation) }
-    public var presentationRevision: UInt64 { read(.uiRefreshRevision, storage.presentation.revision) }
     public var themeMode: EditorThemeMode { read(.themeMode, storage.themeMode) }
     public var language: EditorLanguage { read(.language, storage.language) }
+    /// Bumped only by `forceUIRefresh`; the presentation boundary keys its
+    /// view tree on it, so reading it rebuilds everything below the boundary.
     public var uiRefreshRevision: UInt64 { read(.uiRefreshRevision, storage.uiRefreshRevision) }
     public var vsyncMode: EditorVSyncMode { read(.vsyncMode, storage.vsyncMode) }
     public var activeAssetDrag: EditorAssetDragPayload? { read(.activeAssetDrag, storage.navigation.activeAssetDrag) }

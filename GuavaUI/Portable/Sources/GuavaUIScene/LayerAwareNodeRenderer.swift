@@ -186,6 +186,11 @@ public final class LayerAwareNodeRenderer {
         let radius = node.cornerRadius * scale
         let borderWidth = node.borderWidth * scale
 
+        // A reveal describes the frame, not this box, so it rides along with
+        // whatever geometry the node emits. `DrawList.append` carries it into
+        // the frame list when the node is recorded into a layer cache.
+        if let reveal = node.revealRequest { list.beginReveal(reveal) }
+
         // Clip push if applicable. clipsToBounds always implies layer root,
         // so only the root-of-this-layer node can push a new clip rect.
         let clipped = node.clipsToBounds && width > 0 && height > 0

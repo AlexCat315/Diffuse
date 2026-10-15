@@ -69,6 +69,7 @@ public final class InGameViewGraphBridge {
 
         withTextEnvInstalled {
             _ = recomposer.commitAll()
+            WindowRevealContext.clearActivation(in: graph.tree.root)
             _ = graph.computeLayoutIfNeeded(width: Float(width), height: Float(height))
             drawList.reset()
             drawList.pixelScale = Float(contentScale)

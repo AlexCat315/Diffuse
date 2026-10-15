@@ -128,6 +128,29 @@ public final class Node: @unchecked Sendable {
 
     // MARK: - Visual (Phase 6.3)
 
+    /// Frame-level compositing request raised for the current frame, or nil.
+    /// See `UIReveal`.
+    ///
+    /// Declared here rather than drawn from a painter because it describes the
+    /// whole frame, not this node's box: the renderer reads it while recording
+    /// and owns the retained frame it composites. Writing it re-records the
+    /// layers up the chain so a cached slice carries the request forward
+    /// instead of replaying a stale one.
+    public private(set) var revealRequest: UIReveal? {
+        didSet {
+            if oldValue != revealRequest {
+                markRenderDirty(reason: .styleSet(field: "revealRequest"))
+            }
+        }
+    }
+
+    /// Raise or clear this node's frame-level reveal. Clearing it is what ends a
+    /// run: a layer replays whatever it last recorded, so a request left behind
+    /// would keep compositing after the reveal is over.
+    public func requestReveal(_ reveal: UIReveal?) {
+        revealRequest = reveal
+    }
+
     private var authoredBackgroundColor: Color?
     /// Diagnostic override. Clearing it reveals the latest authored style.
     public var debugBackgroundColor: Color? {

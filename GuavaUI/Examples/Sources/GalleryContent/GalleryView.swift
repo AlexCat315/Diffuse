@@ -43,7 +43,7 @@ public struct GalleryView: View {
                 }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
             }.flex(1, shrink: 1, basis: 0).frame(minHeight: 0).background(.background)
                 .debugName("gallery-shell")
-        }.appearance(appearance)
+        }.appearance(appearance, transition: .circular())
     }
 
     private var sidebar: some View {

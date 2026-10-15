@@ -14,9 +14,9 @@ struct EditorAssetReloadTests {
                                                 withIntermediateDirectories: true)
         let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
-        let before = application.store.presentationRevision
+        let before = application.store.uiRefreshRevision
 
         #expect(application.reloadAssets() == 0)
-        #expect(application.store.presentationRevision > before)
+        #expect(application.store.uiRefreshRevision > before)
     }
 }

@@ -126,6 +126,23 @@ AnimatedVisibility(
 
 进入中的内容在当前区域可点击，退出立即禁止输入、保留绘制至完成后移除。零倍率不接受命中。运行中减少动画会完成当前目标、取消尾部并释放调度。
 
+## 圆形主题切换
+
+在窗口根内容上启用；Gallery 的主题按钮已应用：
+
+```swift
+RootView().appearance(appearance, transition: .circular(duration: 1.0))
+
+// 自定义配色用普通领域值标识一次主题变化。
+RootView().theme(palette, transition: .circular(), value: themeMode)
+```
+
+默认 `.instant`。Button、Toggle / Switch 和 Checkbox 的指针、键盘、辅助功能激活均以控件中心为圆心；程序直接改变主题时使用窗口中心。只有传入的 appearance / value 改变才播放，普通重组和首次挂载不播放。每个窗口独立保存来源位置，输入提交后清除。
+
+原生 GPU 渲染器在重绘前保留上一张已呈现画面，用全屏 shader 在圆外覆盖旧画面，在圆内显示新主题；每次播放只保存一次旧画面，每帧更新半径。布局、输入与语义立即使用新主题，文字、阴影和毛玻璃一起揭示。半径为零的首帧完整保留旧画面，避免先闪出新主题；中途反向以当前混合画面为起点。结束、取消或卸载清除请求并释放保留纹理，不把截图或进度写入工程配置。
+
+减少动画、非法或非正时长立即显示新主题。窗口尺寸改变、尚无上一帧、后端没有可采样的上一帧来源时也立即切换；当前 in-game HUD 的快照路径使用此回退。Metal 与 SPIR-V 的离线 shader 已同步，macOS 原生窗口与 1× / 2× GPU 像素回读已验证；其他平台的设备表现仍需取样。
+
 ## 主题与 GuavaUI 应用
 
 | 位置 | 应用 |
@@ -135,6 +152,7 @@ AnimatedVisibility(
 | Popover / ContextMenu | `theme.motion.surface` 的进入 / 退出时长与 revealScale；默认 200ms / 90ms / 0.94，配合 6pt 位移与淡入淡出 |
 | Spinner / Progress / Skeleton / loading Button | 节点拥有的通用 repeat 控制器，停止和卸载立即清理 |
 | Gallery Progress | NumericText 百分比过渡 |
+| Gallery 主题切换 | 从主题按钮中心向外扩散的 GPU 圆形揭示，默认 1s |
 | Gallery Animation | 曲线、双向尺寸、关键帧、普通域相位、循环、共享几何、带速度拖拽和完成回调 |
 
 主题还提供 `.semantic(.fast/.medium/.slow/.snappy/.bouncy/.smooth/.entering/.exiting, in: theme)`。fast / medium / slow 默认 80 / 180 / 320ms，entering 与 exiting 使用 decelerate / accelerate 曲线。Popover 按 leading / trailing 选择左上 / 右上锚点，右键菜单以指针处左上为锚点；靠窗口边缘仍由 Portal 限位，子菜单保持即时展开。
@@ -152,7 +170,8 @@ Animation、时间轴、SpringSolution 与主题 token 是 authored 值；控制
 - `TransitionScaleTests`、`SurfaceRevealTests` 与 Runtime `Transforms`：锚点、反转、阴影、内容 / overlay、命中、缓存与菜单关闭清理。
 - `MultiWindowSmokeTests.newAnimationStartsWithoutIdleWait`：提交准备 / 绘制时创建首个动画，在原生刷新与回退帧率下不进入空闲等待；`BackdropOpacityTests`、`NativeUIBackdropTests.frostCompositeOpacity`：嵌套 / 缓存 / 缩放透明度和 GPU 像素淡入，全透明毛玻璃不改变背景。
 - Gallery `AnimationSystemTests`：390 / 720 / 1280pt × light / dark 的轨道与相位，几何尺寸反转、数值辅助功能、循环销毁、减少动画静止、原生帧顺序的几何完成回调。
+- `AppearanceRevealTests`、`RevealRequestTests`：Button / Switch 圆心、键盘反向切换、程序窗口中心、减少动画、卸载与缓存请求清理；`CircularRevealPixelTests`：1× / 2× GPU 首帧、圆内外像素、混合画面反向、无上一帧回退与完成清理。
 
 上述自动化在 macOS 宿主运行。原生设备视觉与系统触摸派发仍按 [跨平台控件规范](adaptive-spec.md) 的矩阵取样；本轮不把宿主节点 / DrawList 回归视为手机真机截图验收。
 
-本轮全量验证：`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable`、`swift test --package-path GuavaUI/Examples` 均通过；其中 Compose 695 项、Runtime 311 项、Portable 场景 86 项、Gallery 19 项测试通过。macOS Gallery 已实际展开 / 关闭 Dashboard 的 Size 下拉菜单，原生帧日志记录到 200ms 入场中的连续更新；Windows、Android 与 iOS 设备表现仍待取样。
+全量验证入口：`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable`、`swift test --package-path GuavaUI/Examples`。macOS Gallery 已实际展开 / 关闭 Dashboard 的 Size 下拉菜单及切换主题，原生帧日志记录到菜单入场与 1s 圆形揭示中的连续更新；Windows、Android 与 iOS 设备表现仍待取样。

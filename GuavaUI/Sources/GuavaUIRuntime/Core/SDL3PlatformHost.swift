@@ -558,6 +558,7 @@ public final class SDL3PlatformHost: PlatformHost {
             let didCommit = session.withCurrent {
                 session.recomposer.commitAll()
             }
+            WindowRevealContext.clearActivation(in: session.tree.root)
             if didCommit {
                 session.needsDisplay = true
             }

@@ -283,7 +283,11 @@ struct ButtonHost: _PrimitiveView {
             else if isIconOnly { $0.label = tooltip ?? "" }
         }
         node.accessibilityActions = AccessibilityActions()
-        if isEnabled { node.accessibilityActions.activate = action }
+        let activate = { [weak node, action] in
+            if let node { WindowRevealContext.recordActivation(node) }
+            action()
+        }
+        if isEnabled { node.accessibilityActions.activate = activate }
         node.attachments[ButtonHost.markerKey] = true
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
         let requiresInteractionRecompose = style.requiresInteractionRecompose
@@ -346,7 +350,6 @@ struct ButtonHost: _PrimitiveView {
         let hoverChange = onHoverChange
         let down = onDown
         let pressChange = onPressChange
-        let activate = action
         node.attachments[PointerCaptureAttachmentKey.didLoseCapture] = { [weak node] in
             guard let node else { return }
             node.attachments.removeValue(forKey: ButtonHost.activePressKey)

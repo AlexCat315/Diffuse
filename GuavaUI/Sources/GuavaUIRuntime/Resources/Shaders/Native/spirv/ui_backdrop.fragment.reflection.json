@@ -90,12 +90,36 @@
                 "size": 16,
                 "elementStride": 4
               }
+            },
+            {
+              "name": "reveal",
+              "type": {
+                "kind": "vector",
+                "elementCount": 4,
+                "elementType": {
+                  "kind": "scalar",
+                  "scalarType": "float32"
+                },
+                "sizes": [
+                  {
+                    "kind": "uniform",
+                    "value": 16,
+                    "alignment": 16
+                  }
+                ]
+              },
+              "binding": {
+                "kind": "uniform",
+                "offset": 48,
+                "size": 16,
+                "elementStride": 4
+              }
             }
           ],
           "sizes": [
             {
               "kind": "uniform",
-              "value": 48,
+              "value": 64,
               "alignment": 16
             }
           ]
@@ -182,12 +206,36 @@
                   "size": 16,
                   "elementStride": 4
                 }
+              },
+              {
+                "name": "reveal",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 48,
+                  "size": 16,
+                  "elementStride": 4
+                }
               }
             ],
             "sizes": [
               {
                 "kind": "uniform",
-                "value": 48,
+                "value": 64,
                 "alignment": 16
               }
             ]
@@ -195,7 +243,7 @@
           "binding": {
             "kind": "uniform",
             "offset": 0,
-            "size": 48,
+            "size": 64,
             "elementStride": 0
           }
         },
@@ -345,12 +393,36 @@
                   "size": 16,
                   "elementStride": 4
                 }
+              },
+              {
+                "name": "reveal",
+                "type": {
+                  "kind": "vector",
+                  "elementCount": 4,
+                  "elementType": {
+                    "kind": "scalar",
+                    "scalarType": "float32"
+                  },
+                  "sizes": [
+                    {
+                      "kind": "uniform",
+                      "value": 16,
+                      "alignment": 16
+                    }
+                  ]
+                },
+                "binding": {
+                  "kind": "uniform",
+                  "offset": 48,
+                  "size": 16,
+                  "elementStride": 4
+                }
               }
             ],
             "sizes": [
               {
                 "kind": "uniform",
-                "value": 48,
+                "value": 64,
                 "alignment": 16
               }
             ]
@@ -437,12 +509,36 @@
                     "size": 16,
                     "elementStride": 4
                   }
+                },
+                {
+                  "name": "reveal",
+                  "type": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                      "kind": "scalar",
+                      "scalarType": "float32"
+                    },
+                    "sizes": [
+                      {
+                        "kind": "uniform",
+                        "value": 16,
+                        "alignment": 16
+                      }
+                    ]
+                  },
+                  "binding": {
+                    "kind": "uniform",
+                    "offset": 48,
+                    "size": 16,
+                    "elementStride": 4
+                  }
                 }
               ],
               "sizes": [
                 {
                   "kind": "uniform",
-                  "value": 48,
+                  "value": 64,
                   "alignment": 16
                 }
               ]
@@ -450,7 +546,7 @@
             "binding": {
               "kind": "uniform",
               "offset": 0,
-              "size": 48,
+              "size": 64,
               "elementStride": 0
             }
           },

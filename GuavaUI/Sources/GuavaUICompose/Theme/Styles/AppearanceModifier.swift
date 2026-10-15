@@ -17,10 +17,7 @@ public extension View {
     /// `.theme(Theme.defaultLight)` for `.light`, etc. Composes naturally
     /// with `.theme(_:)` — whichever modifier appears last (innermost) wins
     /// for descendants.
-    func appearance(_ appearance: Appearance) -> some View {
-        switch appearance {
-        case .dark:  return AnyView(self.theme(.defaultDark))
-        case .light: return AnyView(self.theme(.defaultLight))
-        }
+    func appearance(_ appearance: Appearance, transition: ThemeTransition = .instant) -> some View {
+        theme(appearance == .dark ? .defaultDark : .defaultLight, transition: transition, value: appearance)
     }
 }

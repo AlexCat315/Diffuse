@@ -235,6 +235,7 @@
 **List / Tree**
 
 - 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；Tree 每级缩进 16、箭头列 18。`[已实现]`
+- Tree 指示线只保留低对比度竖线（1pt、`onSurfaceMuted` 的 24% alpha），移除横向连接；禁用、同步延迟子节点、Home / End 与 Option / Alt + Left / Right 全部折叠 / 展开已完成，具体边界见 [Tree](tree.md)。
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
 - 交互与验收：List 方向键/Home/End/Enter + listItem 语义；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。Tree 行高与展开按钮命中在触摸面均 ≥ 44pt。验收：`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
@@ -602,6 +603,8 @@ AnimatedVisibility(isVisible: visible,
 ```
 
 过渡原语：`.opacity`、`.offset(x:y:)`、`.move(edge:distance:)`、`.scale(from:anchor:)`、`.collapse`（高度折叠）、`.combined(with:)`、`.asymmetric(insertion:removal:)`。默认动画为 `.semantic(.medium)`；`onVisibilitySettled` 提供退出完成回调。生命周期缩放保留阴影偏移/模糊尺寸，普通节点缩放同步缩放两层阴影；嵌套与缓存遵循相同规则，见 [动画系统](animation.md)。
+
+窗口主题切换可用 `.appearance(appearance, transition: .circular())`，自定义主题用 `.theme(palette, transition: .circular(), value: themeMode)`。Button / Switch 自动提供扩散中心，GPU 保留上一帧并以圆形遮罩揭示新主题；减少动画或缺少上一帧来源时立即切换。Gallery 已应用，调用方式、反向切换与后端边界见 [动画系统](animation.md)。
 
 可动画的属性（`withAnimation` / `.animation(_:value:)` 生效范围）：样式类（background/foreground/opacity/cornerRadius/border/shadow）、布局类（frame 宽高与 min/max、padding、flex grow）、过渡用的 `contentOffset`。`[已实现]`
 

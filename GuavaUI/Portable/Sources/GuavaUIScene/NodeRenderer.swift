@@ -46,6 +46,9 @@ public struct NodeRenderer {
         let radius = node.cornerRadius * scale
         let borderWidth = node.borderWidth * scale
 
+        // 0. A reveal describes the frame, not this box. See `UIReveal`.
+        if let reveal = node.revealRequest { list.beginReveal(reveal) }
+
         // 1. Clip stack push (covers background, content, and children).
         let clipped = node.clipsToBounds && width > 0 && height > 0
         if clipped {

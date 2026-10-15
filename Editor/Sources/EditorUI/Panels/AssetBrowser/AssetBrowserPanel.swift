@@ -70,7 +70,7 @@ struct AssetBrowserPanel: View {
 
     var body: some View {
         StoreScope(app.store) { store in
-            let _ = store.presentationRevision
+            let _ = store.uiRefreshRevision
             let allAssets = EditorAssetCatalog.entries()
             let _: Void = applyNavigation(store, assets: allAssets)
             let isSearching = !trimmedQuery.isEmpty

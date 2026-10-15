@@ -15,7 +15,7 @@
 | 命令与选择 | Button/IconButton、ButtonGroup、Toggle/Checkbox/RadioGroup、Slider、Rating、Stepper（流程）、ToolbarToggle | SplitButton/MenuButton P1、RangeSlider P1、FAB P2、Checkbox/Toggle 三态 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | SearchField P1、OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
-| 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、Tree lazy children P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
+| 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
 | 导航与外壳 | TabView（adaptive/closable）、Sidebar、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、StatusBar、Workspace（compact）、Carousel、CommandPalette | AppBar/NavigationBar P0、NavigationDrawer P0（规范 5-2）、NavigationRail P1、NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换） | BottomSheet 拖拽与自适应 P0、Toast 操作按钮与位置 P1、ActionSheet/Popconfirm P2、菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Banner 由 Alert 覆盖 |
@@ -135,7 +135,7 @@
 | DatePicker / TimeField | 12/24 小时与时区、滚轮（见 2.12）；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择（见 2.8）；Home/End/PageUp/Down 已实现，见 [日历导航](calendar.md) | P1 |
 | List | 多选/区段/重排/swipe/下拉刷新（见 2.9） | P1 |
-| Tree | 懒加载子节点、全部展开/折叠快捷；多选、搜索与触摸行高已有 | P1/P2 |
+| Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级见规范 5-4，文本缩放行高已有 | P2 |
 | Chart | pie/area/scatter/stacked、图例交互、数据点选择 | P2 |
 | Timeline | 分组/折叠、缩放 | P2 |
@@ -161,7 +161,7 @@
 
 **P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、NavigationDrawer（Sidebar 收敛）、BottomSheet 拖拽与自适应；再加规范第 5 节的 Toolbar 溢出、Form 标签、DataTable 列优先级、SplitView 单栏。
 
-**P1（常用能力）**：NavigationRail、NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Tree lazy、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。
+**P1（常用能力）**：NavigationRail、NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 

@@ -1,12 +1,14 @@
-// Frosted backdrop for floating UI panels.
+// Offscreen capture and frame compositing for the UI pass.
 //
-// One program, four jobs, chosen by `params.blur.x`:
+// One program, five jobs, chosen by `params.blur.x`:
 //   0 — downsample the frame region behind a panel into a quarter-size target
 //   1 — separable gaussian, the direction coming from `params.blur.yz`
 //   2 — composite: the blurred body, masked to the panel's rounded rect
 //       (`params.blur.yw` carry the saturation and the lift, see `composite`)
 //   3 — straight copy of the frame into the swapchain, which is only ever a
 //       render target and must never be sampled itself
+//   4 — reveal: put the retained frame back over the current one, masked to a
+//       disc, so the new frame shows through a circle growing from a point
 //
 // The renderer ping-pongs two scratch textures for the blur, both sized to the
 // panel, so a frosted menu costs four small passes instead of a full-frame
@@ -37,6 +39,8 @@ struct BackdropParams {
     float4 uvTransform;  // xy = scale, zw = offset
     float4 blur;         // x = mode, yz = uv step per tap, w = sigma in texels
     float4 shape;        // composite: xy = half size in px, z = radius, w = opacity
+                         // reveal:   xy = half frame size in px
+    float4 reveal;       // reveal:   xy = centre in px, z = radius, w = feather
 };
 [[vk::push_constant]] ConstantBuffer<BackdropParams> params : register(b0, space0);
 [[vk::binding(1, 0)]] Texture2D<float4> source : register(t1, space0);
@@ -116,6 +120,23 @@ float4 composite(BackdropVertex input) {
     return float4(backdrop, coverage * params.shape.w);
 }
 
+// Reveal the current frame through the retained one inside a growing disc.
+// Alpha is the coverage, because the pipeline is alpha blended and the current
+// frame is already in the target: outside coverage keeps the retained frame,
+// while zero coverage inside the disc leaves the new frame alone.
+float4 revealComposite(BackdropVertex input) {
+    // uv 0..1 covers the whole frame, and y runs downwards in screen space.
+    float2 pixel = input.uv * 2 * params.shape.xy;
+    float distance = length(pixel - params.reveal.xy);
+    float feather = max(params.reveal.w, 0.0001);
+    // A hard edge crawls as the radius grows; the band keeps the boundary a
+    // clean anti-aliased boundary instead of a staircase of pixels.
+    float coverage = params.reveal.z <= 0 ? 1
+        : smoothstep(params.reveal.z - feather, params.reveal.z + feather, distance);
+    float3 retained = source.SampleLevel(sourceSampler, sourceUV(input), 0).rgb;
+    return float4(retained, coverage);
+}
+
 [shader("fragment")]
 float4 backdropFragment(BackdropVertex input) : SV_Target {
     int mode = int(params.blur.x + 0.5);
@@ -125,6 +146,8 @@ float4 backdropFragment(BackdropVertex input) : SV_Target {
     // panel can sample it; this hands that frame to the swapchain, which is
     // only ever a render target and must never be sampled itself.
     if (mode == 3) return source.SampleLevel(sourceSampler, sourceUV(input), 0);
+
+    if (mode == 4) return revealComposite(input);
     return composite(input);
 }
 #endif

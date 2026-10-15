@@ -25,6 +25,7 @@ public struct NativeUIDrawFrame {
     /// Set when this recording carried atlas uploads; cleared on successful
     /// submission so abandoned recordings keep their pixels queued.
     let atlasCommit: NativeUIAtlasCommit?
+    var presentationCommit: (() -> Void)? = nil
 
     /// Acknowledge this recording only after its commands were submitted.
     /// Ownership and update sequences travel with the token, so the caller
@@ -32,6 +33,7 @@ public struct NativeUIDrawFrame {
     public func didSubmit() {
         commits.forEach { $0.slot.commit(through: $0.sequence) }
         atlasCommit?.commit()
+        presentationCommit?()
     }
 }
 
@@ -69,6 +71,19 @@ public final class NativeDrawListRenderer {
     private var geometry: NativeUIGeometry?
     private var pipeline: NativeUIPipeline?
     private var backdropPass: NativeUIBackdropPass?
+    /// The reveal run whose frame is already retained, so a long reveal
+    /// composites one frame instead of re-retaining a half-revealed one.
+    private struct FrameExtent: Equatable {
+        let pixels: SIMD2<Int>
+        let logical: SIMD2<Float>
+    }
+    private struct RetainedReveal {
+        let sequence: UInt64
+        let texture: Texture?
+        let extent: FrameExtent
+    }
+    private var retainedReveal: RetainedReveal?
+    private var lastFrameExtent: FrameExtent?
 
     public init(device: Device) throws {
         self.device = device
@@ -88,6 +103,8 @@ public final class NativeDrawListRenderer {
         backdropPass = try backdropShaders.map {
             try NativeUIBackdropPass(device: device, shaders: $0, format: format, samples: sampleCount)
         }
+        retainedReveal = nil
+        lastFrameExtent = nil
     }
 
     public func makeSibling(format: TextureFormat, sampleCount: Int = 1) throws -> NativeDrawListRenderer {
@@ -135,6 +152,29 @@ public final class NativeDrawListRenderer {
         try viewport.validate()
         if geometry?.matches(list) != true { geometry = try NativeUIGeometry(validating: list) }
         let clipReliance = geometry!.reliesOnClip
+        // A reveal shows this frame through the previous one, so the previous
+        // frame has to be retained before a single pixel of this one is drawn.
+        // `backdropSource` is nil on a backend without the backdrop program and
+        // on a frame drawn straight into a swapchain image; both cannot sample
+        // what they just drew, so the request is simply dropped.
+        var retained: Texture?
+        var nextReveal: RetainedReveal?
+        let extent = FrameExtent(pixels: viewport.pixels, logical: viewport.logical)
+        if let backdropPass, let backdropSource, let reveal = list.reveal {
+            if retainedReveal?.sequence != reveal.sequence {
+                if lastFrameExtent == extent {
+                    retained = try backdropPass.recordRevealCapture(source: backdropSource,
+                        viewport: viewport, into: commands)
+                }
+            } else if retainedReveal?.extent == extent {
+                retained = retainedReveal?.texture
+            }
+            // A resized target has no previous image of the new extent. Snap
+            // this run rather than sampling an old-sized frame or restarting
+            // halfway through the reveal.
+            nextReveal = RetainedReveal(sequence: reveal.sequence, texture: retained,
+                extent: extent)
+        }
         try textureStore.prepareAssets(list.resources)
         var statistics = NativeUIDrawStatistics()
         statistics.vertices = list.vertices.count; statistics.indices = list.indices.count
@@ -207,10 +247,27 @@ public final class NativeDrawListRenderer {
             loadAction: segmentStart == 0 ? target.loadAction : .load, isFirst: segmentStart == 0,
             into: commands, target: target, viewport: viewport, pipeline: pipeline,
             vertices: vertices, indices: indices, backdropPass: backdropPass)
-        statistics.drawCalls = coalesced.count + frosted
-        return NativeUIDrawFrame(statistics: statistics, pipeline: pipeline, textures: slots, commits: commits,
+        // Last, so the reveal covers everything the new frame drew — including
+        // any frosted panel that opened in the same frame.
+        if let backdropPass, let retained, let reveal = list.reveal {
+            var compositeTarget = target
+            compositeTarget.loadAction = .load
+            compositeTarget.store = true
+            try commands.renderPass(
+                descriptor: RenderPassDescriptor(colorTargets: [compositeTarget], label: "ui-reveal")) { pass in
+                try backdropPass.drawReveal(reveal, source: retained, viewport: viewport, in: &pass)
+            }
+        }
+        statistics.drawCalls = coalesced.count + frosted + (retained == nil ? 0 : 1)
+        var frame = NativeUIDrawFrame(statistics: statistics, pipeline: pipeline, textures: slots, commits: commits,
             atlasCommit: atlasUploads.sequence == 0 ? nil
                 : NativeUIAtlasCommit(store: textureStore, sequence: atlasUploads.sequence))
+        frame.presentationCommit = { [weak self] in
+            self?.retainedReveal = nextReveal
+            self?.lastFrameExtent = extent
+            if nextReveal == nil { self?.backdropPass?.clearRevealCapture() }
+        }
+        return frame
     }
 
     /// One slice of the frame between two backdrop captures.

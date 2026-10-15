@@ -16,6 +16,18 @@ struct NativeUIBackdropParams {
     var uvTransform: SIMD4<Float>  // xy = scale, zw = offset
     var blur: SIMD4<Float>         // x = mode, yz = uv step, w = sigma
     var shape: SIMD4<Float>        // composite: xy = half size in px, z = corner radius
+                                   // reveal:   xy = half frame size in px
+    var reveal: SIMD4<Float>       // reveal: xy = centre in px, z = radius, w = feather
+
+    /// Only the reveal composite reads `reveal`, so every other pass leaves it
+    /// zero and stays silent about a shape it has no use for.
+    init(uvTransform: SIMD4<Float>, blur: SIMD4<Float>,
+         shape: SIMD4<Float> = .zero, reveal: SIMD4<Float> = .zero) {
+        self.uvTransform = uvTransform
+        self.blur = blur
+        self.shape = shape
+        self.reveal = reveal
+    }
 }
 
 /// Shader modules and binding layout for `ui_backdrop.slang`.
@@ -128,6 +140,7 @@ final class NativeUIBackdropPass {
         case blur = 1
         case composite = 2
         case blit = 3
+        case reveal = 4
     }
 
     /// Frost is more than a blur. Over a plain backdrop a blurred frame is the
@@ -162,6 +175,7 @@ final class NativeUIBackdropPass {
     private let blit: GraphicsPipeline        // frame -> swapchain: no blending
     private var scratchA: Scratch?
     private var scratchB: Scratch?
+    private var revealCapture: Scratch?
     private var frameBinding: BindingSet?
 
     init(device: Device, shaders: NativeUIBackdropShaders, format: TextureFormat, samples: Int) throws {
@@ -288,9 +302,83 @@ final class NativeUIBackdropPass {
     /// Hand an owned frame to the swapchain, which is a render target only.
     func recordBlit(source: Texture, into commands: CommandBuffer, target: RenderColorTarget,
                     size: SIMD2<Int>) throws {
+        try recordCopy(source: source, target: target, size: size, label: "backdrop-blit", into: commands)
+    }
+
+    // MARK: - Reveal
+
+    /// Retain the frame that is on screen right now, so `drawReveal` can put it
+    /// back over a later one.
+    ///
+    /// This has to be the first thing recorded in a frame: `source` is the very
+    /// target the UI is about to clear and redraw, so a pass recorded ahead of
+    /// this one would retain the frame being replaced instead of the one to
+    /// keep. Returns the retained texture, or nil when there is nothing to hold.
+    @discardableResult
+    func recordRevealCapture(source: Texture, viewport: NativeUIViewport,
+                             into commands: CommandBuffer) throws -> Texture? {
+        let size = viewport.pixels
+        guard size.x > 0, size.y > 0 else { return nil }
+        // Its own target, not one of the blur scratch pair: the retained frame
+        // has to outlive the capture, and a panel drawn mid-reveal must not be
+        // able to recycle it.
+        if revealCapture?.width != size.x || revealCapture?.height != size.y {
+            var descriptor = TextureDescriptor(width: size.x, height: size.y,
+                                               format: scratchFormat, usage: [.colorTarget, .sampled])
+            descriptor.label = "native-ui-reveal-capture"
+            revealCapture = Scratch(resource: try TextureResource(device: device, descriptor: descriptor),
+                                    bindingSet: nil)
+        }
+        guard let capture = revealCapture else { return nil }
+        let retained = capture.resource.texture
+        try recordCopy(source: source, target: RenderColorTarget(texture: retained, loadAction: .dontCare, store: true),
+                       size: size, label: "ui-reveal-capture", into: commands)
+        return retained
+    }
+
+    /// Composite a retained frame outside the growing disc.
+    /// The current frame is already in the target, so this is one full-screen
+    /// quad and coverage keeps the retained frame outside the growing disc,
+    /// leaving the new frame visible inside it.
+    func drawReveal(_ reveal: UIReveal, source: Texture, viewport: NativeUIViewport,
+                    in pass: inout RenderPassEncoder) throws {
+        let size = viewport.pixels
+        let quad = try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1)
+        // The shader works in physical pixels because that is what `distance`
+        // has to be measured in for the edge to land on a real pixel boundary.
+        // Scale the origin on each axis; the smaller density keeps the reveal
+        // circular when a host reports a non-uniform logical-to-pixel ratio.
+        let scale = SIMD2<Float>(Float(size.x) / max(viewport.logical.x, 0.0001),
+                                 Float(size.y) / max(viewport.logical.y, 0.0001))
+        pass.setPipeline(composite)
+        pass.setViewport(Viewport(width: Double(size.x), height: Double(size.y)))
+        pass.setVertexBuffer(quad.buffer, offset: quad.offset)
+        pass.setBindingSet(try revealBinding(for: source))
+        pass.pushConstant(stage: .fragment, slot: shaders.constants.slot,
+                          value: NativeUIBackdropParams(
+                            uvTransform: SIMD4(1, 1, 0, 0),
+                            blur: SIMD4(Mode.reveal.rawValue, 0, 0, 0),
+                            shape: SIMD4(Float(size.x) / 2, Float(size.y) / 2, 0, 0),
+                            reveal: SIMD4(reveal.centerX * scale.x, reveal.centerY * scale.y,
+                                          reveal.radius * min(scale.x, scale.y),
+                                          max(reveal.feather * min(scale.x, scale.y), 0.5))))
+        pass.draw(vertexCount: 6)
+    }
+
+    private func revealBinding(for texture: Texture) throws -> BindingSet {
+        if let set = revealCapture?.bindingSet, revealCapture?.resource.texture == texture { return set }
+        let set = try makeBindingSet(texture: texture)
+        revealCapture?.bindingSet = set
+        return set
+    }
+
+    func clearRevealCapture() { revealCapture = nil }
+
+    private func recordCopy(source: Texture, target: RenderColorTarget, size: SIMD2<Int>,
+                            label: String, into commands: CommandBuffer) throws {
         let quad = try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1)
         let binding = try bindingSet(for: source)
-        commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [target], label: "backdrop-blit")) { pass in
+        commands.renderPass(descriptor: RenderPassDescriptor(colorTargets: [target], label: label)) { pass in
             pass.setPipeline(blit)
             pass.setViewport(Viewport(width: Double(size.x), height: Double(size.y)))
             pass.setVertexBuffer(quad.buffer, offset: quad.offset)
