@@ -30,28 +30,6 @@ public struct SurfaceShadow: Sendable, Equatable {
     }
 }
 
-/// A light rim along the inside of a surface's top edge.
-///
-/// Physically this is the edge catching the light above the UI, and it is what
-/// stops a floating panel from reading as a flat rectangle: a shadow alone only
-/// says "raised", the highlight says which way is up.
-public struct SurfaceHighlight: Sendable, Equatable {
-    public var color: Color?
-    public var width: Float
-
-    public init(color: Color? = nil, width: Float = 1) {
-        self.color = color
-        self.width = width
-    }
-
-    public static let none = SurfaceHighlight(color: nil, width: 1)
-
-    public var isEmpty: Bool {
-        guard let color else { return true }
-        return color.a <= 0 || width <= 0
-    }
-}
-
 /// A raised surface's shadow: an ambient halo beneath a tighter key shadow.
 ///
 /// The ambient layer is wide and faint — it separates the whole panel from what

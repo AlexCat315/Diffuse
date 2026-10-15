@@ -37,12 +37,6 @@ public struct FloatingSurfaceModifier: ViewModifier {
         let floating = node.theme.elevation.floating
         node.ambientShadow = floating.ambient
         node.shadow = floating.key
-        // A full point, and that is the floor. The rasteriser drops geometry
-        // thinner than a pixel outright — a 0.5pt line lands exactly between
-        // two sample points and disappears — so a narrower rim would not read
-        // as finer, it would read as absent on any non-retina display.
-        // Restraint has to come from the rim's alpha instead.
-        node.highlight = SurfaceHighlight(color: node.theme.colors.edgeHighlight)
     }
 }
 
@@ -83,7 +77,6 @@ public struct GlassSurfaceModifier: ViewModifier {
         let floating = node.theme.elevation.floating
         node.ambientShadow = floating.ambient
         node.shadow = floating.key
-        node.highlight = SurfaceHighlight(color: colors.edgeHighlight)
     }
 }
 

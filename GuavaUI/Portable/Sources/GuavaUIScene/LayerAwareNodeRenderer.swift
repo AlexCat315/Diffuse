@@ -215,7 +215,6 @@ public final class LayerAwareNodeRenderer {
         if let overlay = node.overlayDraw {
             overlay(list, CGPoint(x: Double(originX), y: Double(originY)))
         }
-        emitHighlight(node, into: list, x: originX, y: originY, w: width, h: height)
 
         list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)
         if clipped {
@@ -236,14 +235,6 @@ public final class LayerAwareNodeRenderer {
                        rect: rect, cornerRadius: node.cornerRadius, opacity: node.opacity,
                        frostedRect: node.backdropBlur > 0 ? rect : nil,
                        occludedRect: occluded)
-    }
-
-    private func emitHighlight(_ node: Node, into list: DrawList,
-                               x: Float, y: Float, w: Float, h: Float) {
-        let borderInset = (node.borderColor != nil && node.borderWidth > 0) ? node.borderWidth : 0
-        list.addHighlight(node.highlight, rect: UIRect(x: x, y: y, width: w, height: h),
-                          cornerRadius: node.cornerRadius, borderWidth: borderInset,
-                          opacity: node.opacity)
     }
 
     private func emitBorder(_ node: Node, into list: DrawList,

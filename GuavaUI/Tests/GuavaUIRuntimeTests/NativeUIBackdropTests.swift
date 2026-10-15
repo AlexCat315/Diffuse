@@ -227,34 +227,6 @@ struct NativeUIBackdropTests {
         #expect(onWhite - onBlack > 0.15)
     }
 
-    // MARK: - The edge: the rim the CPU paints over the frost
-
-    @Test("the rim light reads through the panel's fill")
-    func rimShowsThroughTheFill() throws {
-        let root = Node()
-        root.frame = CGRect(x: 0, y: 0, width: 128, height: 128)
-        root.backgroundColor = Color(r: 0.5, g: 0.5, b: 0.5, a: 1)
-        let panel = Node()
-        panel.frame = CGRect(x: 48, y: 40, width: 32, height: 32)
-        panel.cornerRadius = 6
-        panel.backdropBlur = 8
-        panel.backgroundColor = Color(r: 0x2B / 255, g: 0x2D / 255, b: 0x33 / 255, a: 0.5)
-        panel.highlight = SurfaceHighlight(color: Color(r: 1, g: 1, b: 1, a: 0.5))
-        root.addChild(panel)
-        let list = DrawList()
-        NodeRenderer().render(root: root, into: list)
-        let context = try NativeUIDrawTestContext()
-        let (pixels, _) = try context.nativeImage(list: list, format: NativeUITestFormat.cases[0],
-                                                  samples: 1, viewport: panelViewport, backdropSource: true)
-        // The top bar sits between the corner arcs: down the middle of the
-        // panel's top edge it must come through the half-alpha fill visibly
-        // brighter than the body just below it.
-        let edge = luma(pixels, x: 64, y: 40)
-        let body = luma(pixels, x: 64, y: 56)
-        print("glass-rim edge=\(edge) body=\(body)")
-        #expect(edge - body > 0.04)
-    }
-
     /// A dark field with one bright bar ending right at the panel's left edge.
     /// How far that bar reaches into the panel is the capture margin's doing:
     /// the blur has to carry it across the boundary, and stop carrying it

@@ -107,15 +107,11 @@ public struct NodeRenderer {
             }
         }
 
-        // 7. Overlay (scrollbars, focus rings drawn above content), then the
-        //    rim light: the edge belongs to the surface, so it goes on last.
+        // 7. Overlay (scrollbars, focus rings drawn above content).
         list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)
         if let overlay = node.overlayDraw {
             overlay(list, CGPoint(x: Double(absX), y: Double(absY)))
         }
-        let borderInset = (node.borderColor != nil && node.borderWidth > 0) ? node.borderWidth : 0
-        list.addHighlight(node.highlight, rect: rect, cornerRadius: node.cornerRadius,
-                          borderWidth: borderInset, opacity: node.opacity)
 
         list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)
         // 8. Pop clip.

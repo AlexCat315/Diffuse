@@ -8,8 +8,8 @@ import EngineKernel
 import GuavaUIRuntime
 @testable import GuavaUICompose
 
-/// Floating panels have to *look* lifted: a layered shadow plus a rim light.
-/// These tests pin the token, the modifier that reads it, and one real menu.
+/// Floating panels have to *look* lifted: a two-layer shadow. These tests pin
+/// the token, the modifier that reads it, and one real menu.
 @Suite("Floating surfaces", .serialized)
 struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
 
@@ -22,7 +22,6 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         let theme = node.theme
         #expect(node.ambientShadow == theme.elevation.floating.ambient)
         #expect(node.shadow == theme.elevation.floating.key)
-        #expect(node.highlight.color == theme.colors.edgeHighlight)
     }
 
     @Test("The floating token is two different layers, not one twice")
@@ -36,7 +35,7 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         #expect(floating.key.blur > 0)
     }
 
-    @Test("A lifted node renders both layers and then the rim")
+    @Test("A lifted node renders both shadow layers")
     @MainActor func geometryAfterModifier() {
         let node = Node()
         node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
@@ -47,14 +46,8 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         let list = DrawList()
         NodeRenderer().render(root: node, into: list)
 
-        // Shadow layers come first, the rim last — so nothing inside the panel
-        // can paint over the edge.
-        let rim = list.vertices.suffix(4)
-        #expect(rim.first?.posX == 6)
-        #expect(rim.first?.posY == 0)
-        // And the halo really is there: one layer alone would be half the
-        // shadow geometry.
-        let shadowVertices = list.vertices.count - 4
+        // The halo is really there: one layer alone would be half the geometry.
+        let shadowVertices = list.vertices.count
         let haloOnly = node
         haloOnly.shadow = .none
         let haloList = DrawList()
@@ -82,7 +75,6 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         #expect(node.borderWidth == 1)
         #expect(node.ambientShadow == theme.elevation.floating.ambient)
         #expect(node.shadow == theme.elevation.floating.key)
-        #expect(node.highlight.color == theme.colors.edgeHighlight)
         // The fill has to let the backdrop through, or the frost the pass just
         // drew underneath it is simply covered.
         #expect(node.backgroundColor?.a ?? 1 < 1)
@@ -136,7 +128,6 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
                 // that did not match the cards around it.
                 #expect(panel.ambientShadow.isEmpty)
                 #expect(panel.shadow.isEmpty)
-                #expect(panel.highlight.isEmpty)
                 #expect(panel.backdropBlur == 0)
             }
         }

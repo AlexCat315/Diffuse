@@ -213,16 +213,6 @@ public final class Node: @unchecked Sendable {
         }
     }
 
-    /// Light rim along the inside of the top edge. Empty (default) paints
-    /// nothing. Drawn last, over children, so content cannot cover the edge.
-    public var highlight = SurfaceHighlight() {
-        didSet {
-            if oldValue != highlight {
-                markRenderDirty(reason: .styleSet(field: "highlight"))
-            }
-        }
-    }
-
     private var authoredForegroundColor: Color?
     /// Diagnostic tint override, including inherited foreground invalidation.
     public var debugForegroundColor: Color? {
