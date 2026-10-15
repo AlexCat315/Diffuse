@@ -381,24 +381,17 @@ final class WindowChromeHitTestCollector {
         var result: [WindowChromeHitTest.Rect] = []
         result.reserveCapacity(nodes.count)
         for node in nodes where node.attachments[attachmentKey] as? Bool == true {
-            guard node.frame.width > 0, node.frame.height > 0 else { continue }
-            let origin = absoluteOrigin(of: node)
-            result.append(WindowChromeHitTest.Rect(x: Float(origin.x),
-                                                   y: Float(origin.y),
-                                                   width: Float(node.frame.width),
-                                                   height: Float(node.frame.height)))
+            // `absoluteFrame` rather than this function's own walk over
+            // `frame` — these rects are handed to the platform for window
+            // dragging, so a copy that lags one geometry rule behind puts the
+            // draggable area somewhere the title bar is not.
+            let frame = node.absoluteFrame
+            guard frame.width > 0, frame.height > 0 else { continue }
+            result.append(WindowChromeHitTest.Rect(x: Float(frame.origin.x),
+                                                   y: Float(frame.origin.y),
+                                                   width: Float(frame.width),
+                                                   height: Float(frame.height)))
         }
         return result
-    }
-
-    private func absoluteOrigin(of node: Node) -> CGPoint {
-        var origin = node.frame.origin
-        var ancestor = node.parent
-        while let current = ancestor {
-            origin.x += current.frame.origin.x - current.contentOffset.x
-            origin.y += current.frame.origin.y - current.contentOffset.y
-            ancestor = current.parent
-        }
-        return origin
     }
 }

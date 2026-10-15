@@ -344,6 +344,22 @@ public final class Node: @unchecked Sendable {
         }
     }
 
+    /// Scale applied to this node's painted subtree about `transform.anchor`.
+    /// `identity` — the default — leaves everything exactly where layout put
+    /// it, so this costs nothing until something animates it.
+    ///
+    /// Goes through the same funnel as `contentOffset` because it has the same
+    /// failure mode: a render cache keyed on origin and clip alone would keep
+    /// last frame's vertices when only the scale changed, and draw a stale
+    /// image without reporting anything.
+    public var transform: NodeTransform = .identity {
+        didSet {
+            if oldValue != transform {
+                invalidateGeometry(reason: .styleSet(field: "transform"))
+            }
+        }
+    }
+
     /// Desired system cursor when the pointer is hovering this node. Resolved
     /// by `EventDispatcher` walking the hover path leaf → root and using the
     /// deepest non-nil value. `nil` (the default) inherits from ancestors.
