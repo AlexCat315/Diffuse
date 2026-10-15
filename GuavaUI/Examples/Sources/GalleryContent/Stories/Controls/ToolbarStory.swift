@@ -10,6 +10,15 @@ struct ToolbarStory: View {
     @State private var appliedSearch = "None"
     var body: some View {
         StorySection("Toolbar", "Left/Right and Home/End move focus between controls; the search field keeps its caret keys. Disabled blocks the entire bar.") {
+            Toolbar(items: [
+                ToolbarItem(MenuItem(id: "run", title: isPlaying ? "Pause" : "Run") { isPlaying.toggle() }, placement: .always),
+                ToolbarItem(MenuItem(id: "save", title: "Save workspace") { appliedSearch = "Saved" }, placement: .automatic(priority: 10)),
+                ToolbarItem(MenuItem(id: "export", title: "Export selection") { appliedSearch = "Exported" }),
+                ToolbarItem(MenuItem(id: "share", title: "Share project") { appliedSearch = "Shared" }),
+                ToolbarItem(MenuItem(id: "settings", title: "Project settings") { appliedSearch = "Settings" }, placement: .overflow)
+            ], configure: { $0.isEnabled = options.isEnabled; $0.label = "Adaptive project commands" })
+            Text("Resize this bar: Run stays visible; lower priority commands move into More actions.")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
             Toolbar(configure: { $0.isEnabled = options.isEnabled; $0.label = "Playback and formatting" }) {
                 AnyView(playback)
                 ToolbarSeparator()

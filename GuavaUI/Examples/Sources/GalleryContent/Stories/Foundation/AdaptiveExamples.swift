@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper: true
+        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar: true
         default: false
         }
     }
@@ -64,6 +64,12 @@ private struct AdaptiveControlSample: View {
         ]) { $0.overflow = .scroll }.frame(width: .percent(100), height: .points(132)))
         case .buttonGroup: AnyView(ButtonGroup([ButtonGroupItem(0, "Grid"), ButtonGroupItem(1, "List")], selection: $selected, isEnabled: options.isEnabled))
         case .stepper: AnyView(Stepper([StepperItem(0, "Configure"), StepperItem(1, "Review")], selection: $selected) { $0.isEnabled = options.isEnabled }.frame(width: .percent(100)))
+        case .toolbar: AnyView(Toolbar(items: [
+            ToolbarItem(MenuItem(id: "save", title: "Save") { number += 1 }, placement: .always),
+            ToolbarItem(MenuItem(id: "export", title: "Export selection") { text = "Exported" }, placement: .automatic(priority: 10)),
+            ToolbarItem(MenuItem(id: "share", title: "Share project") { text = "Shared" }),
+            ToolbarItem(MenuItem(id: "settings", title: "Project settings") { text = "Settings" })
+        ], configure: { $0.isEnabled = options.isEnabled }).frame(width: .percent(100)))
         default: AnyView(EmptyView())
         }
     }

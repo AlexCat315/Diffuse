@@ -62,6 +62,7 @@ private struct ToolbarHost<Content: View>: _PrimitiveView {
             guard let index = command.destination(in: Array(candidates.indices),
                 from: candidates.firstIndex(where: { $0 === focused })) else { return .ignored }
             FocusChainHolder.current?.focus(candidates[index])
+            ScrollReveal.reveal(candidates[index])
             return .handled
         }
     }

@@ -12,7 +12,7 @@
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
 | 布局与容器 | Box/Row/Column/Spacer/Divider、ScrollView/BoundedScrollView、Panel、SplitView、Grid/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | ZStack/Overlay 公共层叠容器 P1、Masonry P2、LazyGrid span P2、SplitView 单栏（规范 5-2）、程序滚动无时长动画（scrollview.md） |
-| 命令与选择 | Button/IconButton、ButtonGroup、Toggle/Checkbox/RadioGroup、Slider、Rating、Stepper（流程）、ToolbarToggle | SplitButton/MenuButton P1、RangeSlider P1、FAB P2、Checkbox/Toggle 三态 P2 |
+| 命令与选择 | Button/IconButton、ButtonGroup、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton/MenuButton P1、RangeSlider P1、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | SearchField P1、OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
@@ -127,7 +127,7 @@
 
 | 组件 | 缺口 | 优先级 |
 | --- | --- | --- |
-| Toggle / Checkbox | indeterminate 三态、label 槽位 | P2 |
+| Toggle / Checkbox | label 槽位；Checkbox 的 `CheckboxState.off/on/mixed` 已实现，Toggle 仍采用 Bool 开关语义 | P2 |
 | Slider | 垂直方向、刻度标记、Page 键、区间（见 2.6） | P2 |
 | Rating | RTL、自定义图形/半星以上精度 | P2 |
 | NumberField / Vec3Field | locale 小数分隔、拖拽 scrub、单轴重置与向量复制/粘贴 | P2 |
@@ -143,7 +143,7 @@
 | CommandPalette | 几何高固定 440；结果列表全量创建（未虚拟化）；无最近使用记录与自定义页脚；模糊匹配与分组已有 | P1/P2 |
 | Sheet / Modal | 拖拽关闭与自适应（见 2.11）；其余契约完整 | P1 |
 | Sidebar | 抽屉/rail（规范 5-2）、可调整宽度、嵌套子菜单、项级操作/上下文菜单 | P1 |
-| Toolbar | 溢出（规范 5-1 已列）、垂直工具栏 | P1 |
+| Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
 | Workspace | N 面板联动、折叠阈值/吸附、pin 专属视觉、浮动为应用内层、文档解码校验与可版本化格式、a11y/RTL、chrome 硬编码清理（见 [workspace.md](workspace.md)） | P2 |
 | ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、锚定滚动、带时长程序滚动、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | P1 |
 | Form / PropertyGrid | 宽度标签切换（规范 5-3）、`minValueWidth` 语义统一、标签换行、校验摘要（按需） | P1/P2 |
@@ -159,7 +159,7 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、NavigationDrawer（Sidebar 收敛）、BottomSheet 拖拽与自适应；再加规范第 5 节的 Toolbar 溢出、Form 标签、DataTable 列优先级、SplitView 单栏。
+**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、NavigationDrawer（Sidebar 收敛）、BottomSheet 拖拽与自适应；再加规范第 5 节的 Form 标签、DataTable 列优先级、SplitView 单栏。Toolbar 命令溢出已实现，验收与边界见 [toolbar.md](toolbar.md)。
 
 **P1（常用能力）**：NavigationRail、NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。
 
