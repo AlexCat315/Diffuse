@@ -33,11 +33,14 @@ public struct UIBackdrop: Equatable, Sendable {
     public var cornerRadius: Float
     /// Gaussian radius in logical points.
     public var blurRadius: Float
+    /// Composite strength, independent of the material fill's alpha.
+    public var opacity: Float
 
-    public init(rect: UIRect, cornerRadius: Float = 0, blurRadius: Float = 12) {
+    public init(rect: UIRect, cornerRadius: Float = 0, blurRadius: Float = 12, opacity: Float = 1) {
         self.rect = rect
         self.cornerRadius = cornerRadius
         self.blurRadius = blurRadius
+        self.opacity = opacity
     }
 }
 
@@ -113,13 +116,7 @@ public final class DrawList {
     /// Fade a completed subtree. The UI shader consumes straight RGBA tints,
     /// so only alpha changes; RGB must retain its original brightness.
     public func multiplyOpacity(_ opacity: Float, fromVertex start: Int) {
-        let factor = max(0, min(1, opacity))
-        guard factor < 1 else { return }
-        for index in start..<vertices.count {
-            let packed = vertices[index].color
-            let alpha = UInt32((Float(packed >> 24) * factor).rounded())
-            vertices[index].color = (packed & 0x00ff_ffff) | (alpha << 24)
-        }
+        multiplyOpacity(fromVertexIndex: start, by: opacity)
     }
 
     // MARK: - Clipping
@@ -150,6 +147,14 @@ public final class DrawList {
             let packed = vertices[index].color
             let next = UInt32((Float(packed >> 24) * alpha).rounded())
             vertices[index].color = (packed & 0x00FF_FFFF) | (next << 24)
+        }
+        // Frost is a separate composite pass, so fading only the panel's
+        // vertices leaves a fully opaque glass plate behind its content.
+        for index in batches.indices {
+            guard var backdrop = batches[index].backdrop,
+                  Int(indices[Int(batches[index].indexOffset)]) >= start else { continue }
+            backdrop.opacity *= alpha
+            batches[index].backdrop = backdrop
         }
     }
 

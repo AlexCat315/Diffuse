@@ -372,6 +372,48 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Animations created during a frame start before the idle event wait",
+          arguments: [false, true], [false, true])
+    func newAnimationStartsWithoutIdleWait(nativeRefresh: Bool, startsDuringRender: Bool) throws {
+        let shell = MockShell(eventBatches: Array(repeating: [], count: 6))
+        shell.nativeRefresh.supported = nativeRefresh
+        shell.refreshRate = 60
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        host.setFrameRateMode(.eventDriven)
+        var time = 100.0
+        host.frameClock = { time }
+        let tree = NodeTree(), root = Node()
+        tree.root = root
+        let session = try host.openWindow(title: "Menu reveal", tree: tree)
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        shell.onWait = { timeout in
+            let enabled = shell.nativeRefresh.requests[session.id]?.last == true
+            time += nativeRefresh && enabled ? min(timeout, 1.0 / 60) : timeout
+            if nativeRefresh && enabled {
+                shell.nativeRefresh.pending[session.id] = DisplayRefreshTick(
+                    timestamp: time, targetTimestamp: time + 1.0 / 60)
+            }
+            return nativeRefresh && enabled
+        }
+        let scheduler = AnimatorScheduler()
+        var samples: [Float] = []
+        func start() {
+            guard samples.isEmpty, !scheduler.hasActiveAnimations else { return }
+            scheduler.register(AnimationController(from: Float(0), to: Float(1),
+                animation: Animation(duration: 0.16, curve: .linear)) { value in
+                samples.append(value)
+                root.opacity = value
+            })
+        }
+        host.onBeforeCommit = { _ in if !startsDuringRender { start() } }
+        session.onFrame = { _ in if startsDuringRender { start() }; return true }
+        AnimatorScheduler.$current.withValue(scheduler) { host.run() }
+        #expect(shell.waitTimeouts.first == 0)
+        #expect(samples.contains { $0 > 0 && $0 < 0.5 })
+        #expect(scheduler.hasActiveAnimations)
+    }
+
+    @MainActor
     @Test("Event-driven host waits for events when no frame is pending")
     func eventDrivenHostWaitsWhenIdle() throws {
         let shell = MockShell(eventBatches: [[], [], []])

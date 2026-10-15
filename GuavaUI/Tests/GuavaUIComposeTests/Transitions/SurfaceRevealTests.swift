@@ -48,11 +48,11 @@ struct SurfaceRevealTests: GuavaUIComposeSerializedSuite {
                     #expect(reveal == nil && scheduler.activeCount == 0)
                 } else {
                     let host = try #require(reveal)
-                    #expect(abs(host.transform.scale - 0.96) < 0.0001)
+                    #expect(abs(host.transform.scale - 0.94) < 0.0001)
                     #expect(host.transform.anchor == CGPoint(x: trailing ? 1 : 0, y: 0))
                     #expect(!host.transform.scalesShadow)
                     scheduler.tick(deltaTime: 0.08); settle()
-                    #expect(host.transform.scale > 0.96 && host.transform.scale < 1)
+                    #expect(host.transform.scale > 0.94 && host.transform.scale < 1)
                     #expect(host.transform.anchor == CGPoint(x: trailing ? 1 : 0, y: 0))
                 }
                 let command = try #require(row)
@@ -104,7 +104,7 @@ struct SurfaceRevealTests: GuavaUIComposeSerializedSuite {
                     if node.attachments["__menu_item_id"] as? AnyHashable == AnyHashable("command") { row = node }
                 }
                 let host = try #require(reveal), command = try #require(row)
-                #expect(abs(host.transform.scale - 0.96) < 0.0001 && host.transform.anchor == .zero)
+                #expect(abs(host.transform.scale - 0.94) < 0.0001 && host.transform.anchor == .zero)
                 #expect(!host.transform.scalesShadow)
                 scheduler.tick(deltaTime: 0.08); settle()
                 let frame = command.absoluteFrame

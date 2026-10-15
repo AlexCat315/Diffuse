@@ -29,9 +29,9 @@ public struct Easing: Sendable, Equatable {
 
 /// Floating surfaces share entrance, exit and reveal sizing across components.
 public struct SurfaceMotion: Sendable {
-    public var entrance: Duration = .milliseconds(160)
+    public var entrance: Duration = .milliseconds(200)
     public var exit: Duration = .milliseconds(90)
-    public var revealScale: Float = 0.96
+    public var revealScale: Float = 0.94
     public init() {}
 }
 

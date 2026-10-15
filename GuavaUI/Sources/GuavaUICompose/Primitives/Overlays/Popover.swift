@@ -149,7 +149,7 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
                      // would make a trailing popover grow away from the thing
                      // that opened it.
                      transition: .opacity
-                         .combined(with: .move(edge: .top, distance: 4))
+                         .combined(with: .move(edge: .top, distance: 6))
                          .combined(with: PortalResource.surfaceReveal(
                             anchor: placement == .end ? CGPoint(x: 1, y: 0) : .zero, theme: node.theme)))
         node.firstResource(PortalResource.self)?.setDismissal(

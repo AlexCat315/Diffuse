@@ -27,7 +27,7 @@ func paintScaled(_ painter: (DrawList, CGPoint) -> Void, into list: DrawList, or
         result.scissor = batch.scissor.map { resolve($0, factor: scale) }
         result.backdrop = batch.backdrop.map {
             UIBackdrop(rect: resolve($0.rect, factor: scale), cornerRadius: $0.cornerRadius * scale,
-                       blurRadius: $0.blurRadius * scale)
+                       blurRadius: $0.blurRadius * scale, opacity: $0.opacity)
         }
         return result
     }

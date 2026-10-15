@@ -36,7 +36,7 @@ struct BackdropParams {
     // sizes into this so no branch has to know which pass it is.
     float4 uvTransform;  // xy = scale, zw = offset
     float4 blur;         // x = mode, yz = uv step per tap, w = sigma in texels
-    float4 shape;        // composite: xy = half size in px, z = corner radius
+    float4 shape;        // composite: xy = half size in px, z = radius, w = opacity
 };
 [[vk::push_constant]] ConstantBuffer<BackdropParams> params : register(b0, space0);
 [[vk::binding(1, 0)]] Texture2D<float4> source : register(t1, space0);
@@ -113,7 +113,7 @@ float4 composite(BackdropVertex input) {
     direction = sign(direction) * max(abs(direction), 0.4);
     backdrop = saturate(luma + (backdrop - luma) * params.blur.y
                         + params.blur.w * direction);
-    return float4(backdrop, coverage);
+    return float4(backdrop, coverage * params.shape.w);
 }
 
 [shader("fragment")]

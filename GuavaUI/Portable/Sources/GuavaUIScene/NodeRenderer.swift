@@ -91,7 +91,7 @@ public struct NodeRenderer {
                     list.beginBackdrop(UIBackdrop(
                         rect: UIRect(x: absX, y: absY, width: width, height: height),
                         cornerRadius: radius,
-                        blurRadius: node.backdropBlur))
+                        blurRadius: node.backdropBlur, opacity: node.opacity))
                 }
                 if bgRadius > 0 {
                     list.addRoundedRect(rect, radius: bgRadius, color: color)

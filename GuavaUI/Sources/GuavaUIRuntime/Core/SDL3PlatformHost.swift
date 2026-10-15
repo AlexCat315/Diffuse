@@ -685,7 +685,13 @@ public final class SDL3PlatformHost: PlatformHost {
                 for id in nativeWindows { shell.setDisplayRefreshEnabled(false, windowID: id) }
             }
             let now = frameClock()
-            let hasImmediateWork = sessions.values.contains { session in
+            // A commit or layout can create the first animation after this
+            // frame chose its refresh policy. Enter the next iteration now so
+            // it can arm display refresh (or a fallback deadline), rather than
+            // spending the entire entrance in the 250ms idle event wait.
+            let startsAnimation = frameDrive.mode == .eventDriven
+                && !animationsWereActive && AnimatorScheduler.current.hasActiveAnimations
+            let hasImmediateWork = startsAnimation || sessions.values.contains { session in
                 !isCadenceDriven && (session.recomposer.hasPending ||
                     ((session.needsDisplay || (session.tree.hasRenderUpdates && !nativeWindows.contains(session.id)))
                         && now >= session.nextRenderAttemptTime)

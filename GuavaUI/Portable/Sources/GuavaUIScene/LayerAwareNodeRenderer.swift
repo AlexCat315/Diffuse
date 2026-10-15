@@ -289,7 +289,7 @@ public final class LayerAwareNodeRenderer {
         if node.backdropBlur > 0 {
             list.beginBackdrop(UIBackdrop(rect: UIRect(x: x, y: y, width: w, height: h),
                                           cornerRadius: radius,
-                                          blurRadius: node.backdropBlur))
+                                          blurRadius: node.backdropBlur, opacity: node.opacity))
         }
         if bgRadius > 0 {
             list.addRoundedRect(rect, radius: bgRadius, color: color)

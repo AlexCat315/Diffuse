@@ -15,14 +15,14 @@ struct NativeUIBackdropTests {
     /// 8px bars: wide enough that simply reading the frame at a lower
     /// resolution still leaves a ripple, so only a real blur can flatten it.
     private func stripedList(frosted: Bool,
-                             fill: Color = Color(r: 1, g: 1, b: 1, a: 0.02)) -> DrawList {
+                             fill: Color = Color(r: 1, g: 1, b: 1, a: 0.02), opacity: Float = 1) -> DrawList {
         let list = DrawList()
         for x in stride(from: 0, to: 64, by: 16) {
             list.addRect(UIRect(x: Float(x), y: 0, width: 8, height: 64),
                          color: Color(r: 1, g: 1, b: 1, a: 1))
         }
         if frosted {
-            list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 8))
+            list.beginBackdrop(UIBackdrop(rect: panel, cornerRadius: 4, blurRadius: 8, opacity: opacity))
         }
         // Almost no fill by default: those tests measure the backdrop, not the
         // tint. A real panel passes its own material instead.
@@ -53,6 +53,25 @@ struct NativeUIBackdropTests {
         let inside = try contrast(pixels, row: 32, from: 27, to: 37)
         #expect(outside > 0.8)
         #expect(inside < outside * 0.5)
+    }
+
+    @Test("Frost fades with the panel and contributes no pixels at zero opacity")
+    func frostCompositeOpacity() throws {
+        let context = try NativeUIDrawTestContext()
+        var images: [Data] = []
+        for opacity: Float in [0, 0.5, 1] {
+            let (pixels, _) = try context.nativeImage(list: stripedList(frosted: true, fill: .clear, opacity: opacity),
+                format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
+            images.append(pixels)
+        }
+        let (plain, _) = try context.nativeImage(list: stripedList(frosted: false, fill: .clear),
+            format: NativeUITestFormat.cases[0], samples: 1, viewport: viewport, backdropSource: true)
+        #expect(images[0] == plain)
+        let sharp = try contrast(images[0], row: 32, from: 27, to: 37)
+        let half = try contrast(images[1], row: 32, from: 27, to: 37)
+        let frosted = try contrast(images[2], row: 32, from: 27, to: 37)
+        #expect(sharp > half && half > frosted)
+        #expect(abs(half - (sharp + frosted) * 0.5) < 0.03)
     }
 
     @Test("a material panel over content still shows it, softened")

@@ -317,7 +317,7 @@ final class PortalResource: NodeResource {
     /// trigger corner; transition scale leaves elevation lengths unchanged.
     static func surfaceReveal(anchor: CGPoint, theme: Theme) -> Transition {
         let scale = theme.motion.surface.revealScale
-        return .scale(from: CGFloat(scale.isFinite ? min(1, max(0, scale)) : 0.96), anchor: anchor)
+        return .scale(from: CGFloat(scale.isFinite ? min(1, max(0, scale)) : SurfaceMotion().revealScale), anchor: anchor)
     }
 
     /// Logical dismissal is immediate. Only noninteractive paint survives the

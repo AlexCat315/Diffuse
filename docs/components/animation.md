@@ -110,8 +110,8 @@ NumericText(progress * 100) { String(format: "%.0f%% complete", $0) }
 ```swift
 AnimatedVisibility(
     isVisible: shown,
-    transition: .opacity.combined(with: .scale(from: 0.96, anchor: CGPoint(x: 1, y: 0))),
-    animation: Animation(duration: 0.16, curve: .easeOut)
+    transition: .opacity.combined(with: .scale(from: 0.94, anchor: CGPoint(x: 1, y: 0))),
+    animation: Animation(duration: 0.2, curve: .easeOut)
 ) { panel }
 ```
 
@@ -132,12 +132,14 @@ AnimatedVisibility(
 | --- | --- |
 | Button 内置 chrome | `theme.motion.pressScale`（默认 0.97）与几何弹簧；外层激活区域保持稳定 |
 | Toggle | 拇指使用可继承速度的几何弹簧，填色保持有界语义动画；Checkbox 的勾选进度保持有界 |
-| Popover / ContextMenu | `theme.motion.surface` 的进入 / 退出时长与 revealScale；默认 160ms / 90ms / 0.96 |
+| Popover / ContextMenu | `theme.motion.surface` 的进入 / 退出时长与 revealScale；默认 200ms / 90ms / 0.94，配合 6pt 位移与淡入淡出 |
 | Spinner / Progress / Skeleton / loading Button | 节点拥有的通用 repeat 控制器，停止和卸载立即清理 |
 | Gallery Progress | NumericText 百分比过渡 |
 | Gallery Animation | 曲线、双向尺寸、关键帧、普通域相位、循环、共享几何、带速度拖拽和完成回调 |
 
 主题还提供 `.semantic(.fast/.medium/.slow/.snappy/.bouncy/.smooth/.entering/.exiting, in: theme)`。fast / medium / slow 默认 80 / 180 / 320ms，entering 与 exiting 使用 decelerate / accelerate 曲线。Popover 按 leading / trailing 选择左上 / 右上锚点，右键菜单以指针处左上为锚点；靠窗口边缘仍由 Portal 限位，子菜单保持即时展开。
+
+事件驱动宿主在提交或布局创建首个动画后立即进入下一轮，开启原生刷新或帧率回退，不先等待 250ms 空闲超时。毛玻璃合成透明度与表面、父节点和 subtreeOpacity 一起相乘，包含缓存与自定义缩放绘制；全透明时跳过模糊采样，避免“先出现空毛玻璃板，再突然出现文字”的开合表现。
 
 ## 生命周期与验收
 
@@ -148,8 +150,9 @@ Animation、时间轴、SpringSolution 与主题 token 是 authored 值；控制
 - `SequenceLifecycleTests`：未触发初态、减少动画切换、完成后不重播与空闲状态。
 - `WithAnimationCompletionTests`、`AnimationValueModifierTests`、`AnimationIntegrationTests`：完成 / 中断 / 合并、运行中减少动画、显式 nil、属性与布局量。
 - `TransitionScaleTests`、`SurfaceRevealTests` 与 Runtime `Transforms`：锚点、反转、阴影、内容 / overlay、命中、缓存与菜单关闭清理。
+- `MultiWindowSmokeTests.newAnimationStartsWithoutIdleWait`：提交准备 / 绘制时创建首个动画，在原生刷新与回退帧率下不进入空闲等待；`BackdropOpacityTests`、`NativeUIBackdropTests.frostCompositeOpacity`：嵌套 / 缓存 / 缩放透明度和 GPU 像素淡入，全透明毛玻璃不改变背景。
 - Gallery `AnimationSystemTests`：390 / 720 / 1280pt × light / dark 的轨道与相位，几何尺寸反转、数值辅助功能、循环销毁、减少动画静止、原生帧顺序的几何完成回调。
 
 上述自动化在 macOS 宿主运行。原生设备视觉与系统触摸派发仍按 [跨平台控件规范](adaptive-spec.md) 的矩阵取样；本轮不把宿主节点 / DrawList 回归视为手机真机截图验收。
 
-本轮全量验证：`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable`、`swift test --package-path GuavaUI/Examples` 均通过；其中 Compose 695 项、Runtime 307 项、Portable 场景 86 项、Gallery 19 项测试通过。
+本轮全量验证：`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable`、`swift test --package-path GuavaUI/Examples` 均通过；其中 Compose 695 项、Runtime 311 项、Portable 场景 86 项、Gallery 19 项测试通过。macOS Gallery 已实际展开 / 关闭 Dashboard 的 Size 下拉菜单，原生帧日志记录到 200ms 入场中的连续更新；Windows、Android 与 iOS 设备表现仍待取样。

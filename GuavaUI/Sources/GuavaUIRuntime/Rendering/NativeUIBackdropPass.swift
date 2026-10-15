@@ -204,7 +204,7 @@ final class NativeUIBackdropPass {
     /// sample (no source, an empty panel, or a zero-sized frame region).
     func record(_ backdrop: UIBackdrop, source: Texture?, frame: SIMD2<Int>, logical: SIMD2<Float>,
                 into commands: CommandBuffer) throws -> NativeUIBackdropComposite? {
-        guard let source, frame.x > 0, frame.y > 0 else { return nil }
+        guard let source, frame.x > 0, frame.y > 0, backdrop.opacity > 0 else { return nil }
         let scaleX = Float(frame.x) / max(logical.x, 0.0001)
         let scaleY = Float(frame.y) / max(logical.y, 0.0001)
         let panel = pixelRect(backdrop.rect, scaleX: scaleX, scaleY: scaleY, frame: frame)
@@ -266,7 +266,7 @@ final class NativeUIBackdropPass {
                                Float(panel.x - capture.x) / Float(capture.width),
                                Float(panel.y - capture.y) / Float(capture.height)),
             blur: SIMD4(Mode.composite.rawValue, Self.saturation, 0, Self.lift),
-            shape: SIMD4(Float(panel.width) / 2, Float(panel.height) / 2, radius, 0),
+            shape: SIMD4(Float(panel.width) / 2, Float(panel.height) / 2, radius, min(1, backdrop.opacity)),
             binding: binding,
             x0: clipX(panel.x, frame: frame.x), y0: clipY(panel.y, frame: frame.y),
             x1: clipX(panel.x + panel.width, frame: frame.x), y1: clipY(panel.y + panel.height, frame: frame.y))
