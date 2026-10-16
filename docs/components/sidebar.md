@@ -52,4 +52,6 @@ Tab 进入目的地分组一次。上/下键选择并聚焦上一项/下一项�
 
 `minimumRowHeight` 默认 38pt，可按呈现形态提高下限；触摸仍至少 44pt。`onActivate` 仅在点击或 Enter/Space 激活目的地后调用，方向键浏览只更新 selection，不触发该回调。[NavigationDrawer](navigation-drawer.md) 复用同一 Sidebar 数据、至少 44pt 行高和共享选择，并用激活回调关闭覆盖层。Gallery Sidebar 页提供 “Open as drawer” 入口。
 
-当前接口是分组目的地导航。折叠到纯图标、嵌套子菜单、项级操作/上下文菜单及可自定义的前后任意 View 插槽仍未实现，不能将当前 Sidebar 视为与 GPUI Kit Sidebar 完全等价。
+`presentation` 默认 `.expanded`，也可使用 `.rail(showsLabels: true/false)` 收为 72/56pt 导航轨，同一组目的地按钮、选择、焦点及头尾槽位状态保留；标签和徽标在图标模式下保留完整 tooltip 与辅助功能信息。呈现与内容几何变化后会显露选中项，普通滚动不被持续拉回。独立 Rail API 与边界见 [NavigationRail](navigation-rail.md)。
+
+当前接口是分组目的地导航。统一宽度自适应壳层、嵌套子菜单、项级操作/上下文菜单及行内可自定义的前后任意 View 插槽仍未实现，不能将当前 Sidebar 视为与 GPUI Kit Sidebar 完全等价。

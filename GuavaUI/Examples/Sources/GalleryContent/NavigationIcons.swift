@@ -37,7 +37,7 @@ extension GalleryPage {
         case .empty: UIIcons.File.inbox
         case .radio: UIIcons.Shape.circleDot
         case .notification: UIIcons.Status.bell
-        case .sidebar, .navigationDrawer: UIIcons.Layout.sidebar
+        case .sidebar, .navigationDrawer, .navigationRail: UIIcons.Layout.sidebar
         case .table, .dataTable: UIIcons.Layout.table
         case .calendar, .datePicker: UIIcons.Data.calendar
         case .timeField, .timeline: UIIcons.Data.clock

@@ -91,8 +91,12 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
             }
             updateTabStops(node)
             func locate(_ candidate: Node) -> Node? {
-                if candidate.attachments["__roving.item"] as? AnyHashable == target, candidate.isFocusable { return candidate }
-                return candidate.children.lazy.compactMap(locate).first
+                var pending = [candidate]
+                while let item = pending.popLast() {
+                    if item.attachments["__roving.item"] as? AnyHashable == target, item.isFocusable { return item }
+                    pending.append(contentsOf: item.children.reversed())
+                }
+                return nil
             }
             if let targetNode = locate(node) {
                 FocusChainHolder.current?.focus(targetNode)

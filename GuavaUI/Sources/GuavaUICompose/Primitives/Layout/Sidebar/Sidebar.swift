@@ -5,15 +5,18 @@ public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
     public let selection: Binding<ID?>
     public let sections: [SidebarSection<ID>]
     public let minimumRowHeight: Float
+    private let presentation: SidebarPresentation
     private let onActivate: (ID) -> Void
     private let header: Header
     private let footer: Footer
-    public init(selection: Binding<ID?>, sections: [SidebarSection<ID>], minimumRowHeight: Float = 38,
+    public init(selection: Binding<ID?>, sections: [SidebarSection<ID>], presentation: SidebarPresentation = .expanded,
+                minimumRowHeight: Float = 38,
                 onActivate: @escaping (ID) -> Void = { _ in },
                 @ViewBuilder header: () -> Header, @ViewBuilder footer: () -> Footer) {
         self.selection = selection; self.sections = sections; self.header = header(); self.footer = footer()
         self.minimumRowHeight = minimumRowHeight.isFinite ? max(0, minimumRowHeight) : 38
         self.onActivate = onActivate
+        self.presentation = presentation
         let ids = sections.flatMap(\.items).map(\.id)
         precondition(Set(ids).count == ids.count, "Sidebar item IDs must be unique")
         precondition(Set(sections.map(\.id)).count == sections.count, "Sidebar section IDs must be unique")
@@ -47,30 +50,34 @@ public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
                                     item.icon.map { _ in metrics.size(item.iconSize) }
                                 }.max()
                                 Box(direction: .column, alignItems: .stretch, spacing: 3) {
-                                    if !section.title.isEmpty {
+                                    if !section.title.isEmpty && !presentation.isRail {
                                         Text(section.title.uppercased()).font(.caption).foregroundColor(.onSurfaceMuted)
                                             .padding(horizontal: 8, vertical: 8)
                                     }
                                     for item in section.items {
                                         SidebarDestination(item: item, selection: selection,
                                                            isTabStop: item.id == tabStop, iconWidth: iconWidth,
-                                                           minimumRowHeight: minimumRowHeight, onActivate: onActivate)
+                                                           minimumRowHeight: minimumRowHeight, onActivate: onActivate,
+                                                           presentation: presentation,
+                                                           iconExtent: metrics.size(item.icon == nil ? .medium : item.iconSize))
                                     }
                                 }
                             }.id(section.id))
                         }
-                    }.padding(10).flex(0, shrink: 0)
+                    }.padding(presentation.isRail ? 0 : 10).flex(0, shrink: 0)
                 }.flex(1, shrink: 1, basis: 0).frame(minHeight: 0)
             }
             Box(direction: .column, alignItems: .stretch) { footer }.flex(0, shrink: 0)
-        }.background(.surface).frame(minWidth: 0, minHeight: 0)
+        }.background(.surface).frame(width: presentation.railWidth.map(FrameDimension.points) ?? .auto,
+                                    minWidth: 0, minHeight: 0)
     }
 }
 
 public extension Sidebar where Header == EmptyView, Footer == EmptyView {
-    init(selection: Binding<ID?>, sections: [SidebarSection<ID>], minimumRowHeight: Float = 38,
+    init(selection: Binding<ID?>, sections: [SidebarSection<ID>], presentation: SidebarPresentation = .expanded,
+         minimumRowHeight: Float = 38,
          onActivate: @escaping (ID) -> Void = { _ in }) {
-        self.init(selection: selection, sections: sections, minimumRowHeight: minimumRowHeight,
+        self.init(selection: selection, sections: sections, presentation: presentation, minimumRowHeight: minimumRowHeight,
                   onActivate: onActivate, header: { EmptyView() }, footer: { EmptyView() })
     }
 }

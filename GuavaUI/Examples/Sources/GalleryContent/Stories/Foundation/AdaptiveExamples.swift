@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid, .splitView, .navigationDrawer: true
+        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid, .splitView, .navigationDrawer, .navigationRail: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .splitView ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : 104
+        let height: Float = page == .calendar ? 440 : page == .navigationRail || page == .splitView ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -92,6 +92,10 @@ private struct AdaptiveControlSample: View {
             NavigationDrawer("Preview workspace", isPresented: $navigationOpen, selection: $selected,
                 sections: [SidebarSection("preview", items: [SidebarItem(0, "Overview"), SidebarItem(1, "Documents")])])
         })
+        case .navigationRail: AnyView(NavigationRail(selection: $selected, items: [
+            SidebarItem(0, "Overview") { $0.icon = UIIcons.Layout.dashboard; $0.isEnabled = options.isEnabled },
+            SidebarItem(1, "Notifications") { $0.icon = UIIcons.Status.bell; $0.isEnabled = options.isEnabled }
+        ]).frame(height: 210))
         default: AnyView(EmptyView())
         }
     }

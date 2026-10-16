@@ -31,7 +31,7 @@ NavigationDrawer("工作区", isPresented: $navigationOpen,
 
 进入/退出复用 Modal/Sheet 的 medium motion，遮罩淡变、面板按实际宽度移动；关闭立即阻断内容输入，退场完成后卸载，期间再次打开沿原节点反转。减少动画时立即完成。`isPresented` 和选择属于应用会话，不写入文档；旋转不会把它们重置。彻底关闭后，内容局部状态随 Portal 卸载；需要跨关闭保留的草稿由应用通过 binding 持有。
 
-`NavigationDrawer` 提供覆盖层形态；expanded 常驻栏已有 `Sidebar`。根据宽度自动在常驻、drawer、rail 之间切换的统一壳层仍由[规范第 5-2 项](adaptive-spec.md)跟踪，NavigationRail 尚未实现。
+`NavigationDrawer` 提供覆盖层形态；expanded 常驻栏已有 `Sidebar`，紧凑轨道已有 [NavigationRail](navigation-rail.md)。根据宽度自动在常驻、drawer、rail 之间切换的统一壳层仍由[规范第 5-2 项](adaptive-spec.md)跟踪。
 
 `NavigationDrawerTests` 覆盖 280/390/720/1280pt、100%/200% 字号、明暗主题、三类输入、窗口变化时节点/草稿保留、焦点循环与恢复、选择显露、独立关闭策略、手势与按下取消、动画反转和卸载。Gallery 新增 `--component navigationDrawer`、三种输入/宽度预览；Sidebar 页的 “Open as drawer” 与原栏共享选择，`DrawerTests` 通过真实事件分发验证。
 

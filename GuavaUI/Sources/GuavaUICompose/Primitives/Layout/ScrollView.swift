@@ -166,7 +166,16 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
         node.attachments[ScrollReveal.handlerKey] = { [weak node] (target: CGRect) in
             guard let node else { return }
+            let previousOffset = node.contentOffset
+            // A descendant can reveal itself during layout write-back, before
+            // this viewport's hook publishes its new range. The node structure
+            // may be unchanged even though the content has grown or reflowed.
+            Self.refreshScrollableContentSize(on: node)
             Self.publishScrollRange(to: motion, on: node)
+            // Updating a smaller range can clamp the offset. The caller's
+            // window-space rectangle was measured before that clamp.
+            let target = target.offsetBy(dx: previousOffset.x - node.contentOffset.x,
+                                         dy: previousOffset.y - node.contentOffset.y)
             let viewport = Self.visibleViewportRect(for: node).offsetBy(dx: node.absoluteOrigin.x, dy: node.absoluteOrigin.y)
             var offset = node.contentOffset
             if axes != .vertical {

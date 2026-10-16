@@ -14,6 +14,8 @@ ScrollView(.vertical, scrollbarGutter: .stable,
 
 `scrollOffset`、`onViewportChange`、`onGeometryChange` 均可省略。程序写入不同的绑定偏移会中断旧运动并夹到有效范围；这是立即定位，尚无公开的带时长 scrollTo 动画协议。回调可能在布局/绘制时运行，应用应比较快照后才更新状态，避免每帧重组不相关的内容。
 
+Sidebar、Tab 等键盘组显露目标时，ScrollView 先用本轮节点几何刷新滚动范围；若范围更新夹紧了偏移，同步换算目标的窗口坐标后再计算显露距离。这样在内容重排、字号或导航呈现变化时不会按旧偏移二次移动，普通用户滚动仍保持自己的位置。
+
 ## 平台输入与停止
 
 原生 wheel/trackpad 输入直接跟随平台增量，不会再用最后输入后 90ms 的静默推算额外 fling，也不在相邻滚动包之间启动回弹。系统已经提供的加速与减速只能应用一次。

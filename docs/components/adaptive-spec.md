@@ -82,7 +82,7 @@
 | `Form` / `PropertyGrid` | 按字段实测宽度在 leading ↔ stacked 间切换；共享 `labelPlacement` 和 `minValueWidth` 语义。Form 最大列数随宽度减少，值槽保留节点与编辑状态；完整标签进 tooltip 与语义 | 重排 `[已实现]`；通用省略号见第 5-6 项，API 见 [Form](form.md) |
 | `TabView` 标签条 | 单行不换行；超出时按 `overflow` 横向滚动或折叠菜单；compact 时按 `TabStripPlacement.adaptive` 移到内容下方，节点与状态保留 | 换边/滚动 `[已实现]`；折叠菜单 `[未实现]` |
 | `Toolbar` | `items:` 按命令自然宽度与优先级收进 overflow 菜单，`.always` 保留主操作；提供图标时使用图标与完整名称。触摸命中 ≥ 44pt，主命令自身超宽时保留尺寸并横向滚动；自定义内容闭包由应用安排重排 | 命令溢出 `[已实现]`，见 [Toolbar](toolbar.md) |
-| `Sidebar` | expanded 常驻；compact/medium 按壳层选择折叠为抽屉/覆盖层或 rail；抽屉打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt（触摸） | 常驻列表及独立 [NavigationDrawer](navigation-drawer.md) `[已实现]`；统一自适应壳层/rail `[未实现]` |
+| `Sidebar` | expanded 常驻；compact/medium 按壳层选择折叠为抽屉/覆盖层或 rail；抽屉打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt（触摸） | 常驻列表、[NavigationDrawer](navigation-drawer.md)、[NavigationRail](navigation-rail.md) 及保留节点的呈现切换 `[已实现]`；统一自适应壳层 `[未实现]` |
 | `Workspace` | widthClass != expanded 时自动进入紧凑呈现：单面板 + 面板选择器；expanded 恢复停靠树。折叠、比例、活动面板作为会话保留，不写入文档 | 紧凑切换 `[已实现]`；标签条键盘与完整语义 `[部分]` |
 | `Panel` / `StatusBar` / `Carousel` 等边框容器 | 标题/状态格单行截断并保留完整语义；`Carousel` 一页一屏、不因窄而缩小内容，方向键/滑动/Home/End 导航；`StatusBar` 单元格等高等宽策略由调用方声明 | 结构 `[已实现]`；状态格截断策略 `[部分]` |
 
@@ -278,7 +278,7 @@
 **Sidebar**
 
 - 外观：图标槽 + 标题 + 徽标；行高 ≥ 38；header/footer/滚动区各自边界。`[已实现]`
-- 手机 / 紧凑：独立 `NavigationDrawer` 复用 Sidebar 目的地，打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt，支持左滑关闭。统一壳层按宽度自动切换常驻/抽屉/rail 尚未实现。`[部分]`
+- 手机 / 紧凑：独立 `NavigationDrawer` 复用 Sidebar 目的地，打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt，支持左滑关闭。`NavigationRail` 和 `SidebarPresentation.rail` 提供轨道形态并保留按钮/焦点；统一壳层按宽度自动切换常驻/抽屉/rail 尚未实现。`[部分]`
 - 平板 / 桌面：常驻分栏；图标/徽标/文字全部可见，`TextScaler` 200% 可用。`[已实现]`
 - 交互与验收：方向键/Home/End 循环、Enter/Space 选择、选中显露、辅助功能完整标题 + 选中/禁用 + 徽标 value。验收：`--component sidebar`、`NavigationStateTests`；抽屉行为加入 `AdaptiveNavigationTests` 或新套件。
 
@@ -443,7 +443,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 2 | Sidebar 统一自适应壳层与 rail 紧凑呈现 | `Layout/Sidebar/*` | 独立 NavigationDrawer 与 SplitView 已完成；自动切换/rail 仍待新套件与 Gallery 壳层验证 |
+| 2 | Sidebar 统一自适应壳层（常驻/rail/drawer） | `Layout/Sidebar/*` | 独立 Drawer、Rail、呈现切换与 SplitView 已完成；自动壳层切换仍待新套件与 Gallery 壳层验证 |
 | 4 | DataTable / Table / Grid 列优先级、隐藏与"列可见性"入口 | `Data/DataTable/*`、`Data/Lists/Table.swift`、`Layout/Grid/*` | 新列策略 API 测试 + `dataTable` 页窄宽验收 |
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
 | 6 | Button / Select / DatePicker 等单行标题截断 + 完整 tooltip（当前只换行或裁剪） | `Text/Text.swift`（`lineLimit(1)` 仅禁换行）、各控件 | `Text` 截断测试 + 对应页面 |
@@ -460,9 +460,11 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 第 1 项命令工具栏溢出已实现：`Toolbar(items:)` 以实测按钮树分配自然宽度，支持优先级、始终保留、始终溢出及图标命令；隐藏 inline 节点仍挂载但不绘制、不接输入、不暴露语义。`ToolbarOverflowTests` 覆盖三档宽度、100%/200% 字号、三种输入集合、菜单操作、节点保留和焦点交接；Gallery Toolbar 已接入自动预览。自定义任意内容仍由应用显式重排，真机触摸和读屏继续按第 4 节取样。
 
-第 2 项中的 SplitView 单面板部分已实现：`SplitCompactPresentation` 按容器自身轴向长度切换，页签支持完整名称、换行、键盘与触摸；双侧保留节点、本地状态和滚动，折叠不覆盖请求比例，隐藏时交接焦点并取消捕获。分隔柄随输入集合在 7pt / 44pt 命中区间切换。`SplitPresentationTests` 覆盖横纵阈值、三档宽度、100%/200% 文字、明暗主题、三类输入、草稿和滚动保留及卸载重置，并通过 DevTools AI `query_ui_nodes` 验证可见性和输入状态；Gallery 已增加三种预览及 `SplitTests`。Sidebar 统一壳层/rail 仍保留在待办中，设备触摸/读屏仍按第 4 节取样。
+第 2 项中的 SplitView 单面板部分已实现：`SplitCompactPresentation` 按容器自身轴向长度切换，页签支持完整名称、换行、键盘与触摸；双侧保留节点、本地状态和滚动，折叠不覆盖请求比例，隐藏时交接焦点并取消捕获。分隔柄随输入集合在 7pt / 44pt 命中区间切换。`SplitPresentationTests` 覆盖横纵阈值、三档宽度、100%/200% 文字、明暗主题、三类输入、草稿和滚动保留及卸载重置，并通过 DevTools AI `query_ui_nodes` 验证可见性和输入状态；Gallery 已增加三种预览及 `SplitTests`。Sidebar 统一自适应壳层仍保留在待办中，设备触摸/读屏仍按第 4 节取样。
 
-第 2 项中的独立 NavigationDrawer 已实现：按实际窗口保留 56pt 外部空间，复用 Sidebar 的选择/显露与激活，提供标题、关闭、焦点约束/还原、独立关闭策略、左滑关闭和可反转的边缘动画。`NavigationDrawerTests` 覆盖窗口变化时节点与草稿保留、完整输入矩阵及生命周期；Gallery 新增独立页/三种预览，Sidebar 页共享选择。验证中补齐 DevTools AI 的模态输入权限与 `input_enabled_only` 筛选，`DiagnosticPresentationTests` 覆盖深层节点、嵌套模态、附属浮层和窗口隔离。统一壳层/rail 仍在上表待办；可选屏幕边缘唤出及设备输入取样见组件文档。
+第 2 项中的独立 NavigationDrawer 已实现：按实际窗口保留 56pt 外部空间，复用 Sidebar 的选择/显露与激活，提供标题、关闭、焦点约束/还原、独立关闭策略、左滑关闭和可反转的边缘动画。`NavigationDrawerTests` 覆盖窗口变化时节点与草稿保留、完整输入矩阵及生命周期；Gallery 新增独立页/三种预览，Sidebar 页共享选择。验证中补齐 DevTools AI 的模态输入权限与 `input_enabled_only` 筛选，`DiagnosticPresentationTests` 覆盖深层节点、嵌套模态、附属浮层和窗口隔离。统一自适应壳层仍在上表待办；可选屏幕边缘唤出及设备输入取样见组件文档。
+
+第 2 项中的 NavigationRail 已实现：72/56pt 两种形态、2pt 指示条、44pt 行高、受约束的主题图标、完整 tooltip/语义与头尾槽位；`SidebarPresentation` 在同一目的地节点上切换普通栏和 Rail，保留选择、焦点与槽位状态。`NavigationRailTests` 覆盖宽度/字号/输入/主题矩阵、长词换行、模式切换、显露及普通滚动、生命周期与 AI 名称发现；Gallery 新增独立页和三种预览。显露操作补齐重排后的实际滚动范围与目标坐标换算，roving 目标发现使用线性遍历。统一自适应壳层仍保留在待办。
 
 第 3 项表单标签重排已实现：Form / PropertyGrid 共享 `FieldLabelPlacement` 与首选值槽宽度，按容器而非窗口决定标签位置，Form 列数变化只重新放置原字段；属性网格默认使用内在行高，标题与输入遵守缩放和触摸下限。条件/数组经普通 modifier 修饰后不再于首次更新重建用户组件；`StructuralModifierTests` 验证状态保留及卸载默认值。`FieldLayoutTests` 同时通过 AI 诊断 facade 查询可读字段名称与实际几何，防止只修视觉而遗漏语义。设备输入取样仍按第 4 节验收。
 
