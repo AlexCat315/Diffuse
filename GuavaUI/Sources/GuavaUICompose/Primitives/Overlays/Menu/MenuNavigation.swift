@@ -147,7 +147,7 @@ struct MenuWindowBounds: ViewModifier {
     let maxVisibleRows: Int
     func apply(node: Node) {
         let surface = node.compositionValue(of: SurfaceEnvironment.key)
-        let rowHeight = max(32, node.textScaler.scale(node.theme.typography.body.lineHeight) + 12,
+        let rowHeight = max(node.compositionValue(of: MenuRowMetrics.minimumHeight), node.textScaler.scale(node.theme.typography.body.lineHeight) + 12,
             surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         let preferredHeight = Float(maxVisibleRows) * rowHeight
         func constrain(_ node: Node) {

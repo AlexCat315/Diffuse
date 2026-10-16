@@ -156,7 +156,7 @@ struct MenuItemRowHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let theme = node.theme
         let surface = node.compositionValue(of: SurfaceEnvironment.key)
-        let minimumHeight = max(32, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
+        let minimumHeight = max(node.compositionValue(of: MenuRowMetrics.minimumHeight), surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         let titleColor: Color = !item.isEnabled
             ? (theme.textEmphasis.disabled ?? theme.colors.onSurfaceMuted)
             : item.role == .destructive ? theme.colors.error : theme.colors.onSurface

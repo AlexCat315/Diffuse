@@ -209,12 +209,14 @@ public struct Text: _PrimitiveView {
     public let alignment: TextAlignment
     public let color: Color?
     public let lineLimit: Int?
+    private var truncates = false
 
     private struct PaintIdentity: Equatable {
         let string: String
         let alignment: TextAlignment
         let color: Color?
         let lineLimit: Int?
+        let truncates: Bool
     }
 
     public init(_ string: String,
@@ -238,6 +240,13 @@ public struct Text: _PrimitiveView {
         Text(string, alignment: alignment, color: color, lineLimit: limit)
     }
 
+    /// A single line with a trailing ellipsis, a full-text tooltip and the
+    /// original accessible name. Truncation never splits a grapheme cluster.
+    public func truncated() -> some View { truncatingTail().tooltip(string) }
+
+    /// Controls with their own tooltip reuse the same painter without nesting descriptions.
+    func truncatingTail() -> Text { var copy = self; copy.truncates = true; return copy }
+
     public func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = false
@@ -246,13 +255,14 @@ public struct Text: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         node.syncTextStyleEnvironment()
+        node.clipsToBounds = truncates
         node.accessibility = AccessibilitySemantics(.staticText) { $0.label = string }
         // Bind the draw callback. Captures `string` etc by value.
         let snapshot = self
         node.updateDraw(identity: PaintIdentity(string: string,
                                                 alignment: alignment,
                                                 color: color,
-                                                lineLimit: lineLimit)) { list, origin in
+                                                lineLimit: lineLimit, truncates: truncates)) { list, origin in
             guard let env = TextEnvironmentHolder.current else { return }
             let fontOverride = node.textStyleValue(StyleAttachmentKey.font) as Font?
             let lineHeightOverride = node.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
@@ -260,14 +270,12 @@ public struct Text: _PrimitiveView {
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
             let padding = node.layoutNode?.resolvedPadding
-            let result = Text.cachedLayout(
+            let result = snapshot.displayLayout(
                 env: env,
                 layout: node.layoutNode,
-                text: snapshot.string,
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
-                maxWidth: snapshot.resolvedMaxWidth(max(0, Float(node.frame.width) - (padding?.left ?? 0) - (padding?.right ?? 0))),
-                alignment: snapshot.alignment,
+                maxWidth: max(0, Float(node.frame.width) - (padding?.left ?? 0) - (padding?.right ?? 0)),
                 letterSpacing: node.textStyleValue(StyleAttachmentKey.letterSpacing) ?? 0
             )
             // Composite button labels and other containers supply inherited
@@ -288,7 +296,7 @@ public struct Text: _PrimitiveView {
         layout.textInputs = TextMeasureInputs(
             text: string,
             alignment: alignment,
-            lineLimit: lineLimit
+            lineLimit: truncates ? 1 : lineLimit
         )
         return layout
     }
@@ -297,7 +305,7 @@ public struct Text: _PrimitiveView {
         Text.installMeasureFunc(on: layout, snapshot: self)
         let next = TextMeasureInputs(text: string,
                                      alignment: alignment,
-                                     lineLimit: lineLimit)
+                                     lineLimit: truncates ? 1 : lineLimit)
         let previous = layout.textInputs
         layout.textInputs = next
         if previous != nil, previous != next {
@@ -318,14 +326,12 @@ public struct Text: _PrimitiveView {
             let resolvedFont = fontOverride ?? (layout?.textScaler ?? .identity).scale(env.defaultFont)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
-            let result = Text.cachedLayout(
+            let result = snapshot.displayLayout(
                 env: env,
                 layout: layout,
-                text: snapshot.string,
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
-                maxWidth: snapshot.resolvedMaxWidth(constraint),
-                alignment: snapshot.alignment,
+                maxWidth: constraint,
                 letterSpacing: layout?.textStyleValue(StyleAttachmentKey.letterSpacing) ?? 0
             )
             return CGSize(width: CGFloat(result.totalWidth),
@@ -379,6 +385,17 @@ public struct Text: _PrimitiveView {
             return maxWidth
         }
         return .infinity
+    }
+
+    private func displayLayout(env: TextEnvironment, layout: LayoutNode?, font: Font,
+                               lineHeight: Float, maxWidth: Float, letterSpacing: Float) -> TextLayoutResult {
+        let text = truncates ? SingleLineText.fitting(string, width: maxWidth) { candidate in
+            env.cachedLayout(text: candidate, font: font, lineHeight: lineHeight,
+                             letterSpacing: letterSpacing).totalWidth
+        } : string
+        return Self.cachedLayout(env: env, layout: layout, text: text, font: font,
+                                 lineHeight: lineHeight, maxWidth: truncates ? maxWidth : resolvedMaxWidth(maxWidth),
+                                 alignment: alignment, letterSpacing: letterSpacing)
     }
 }
 

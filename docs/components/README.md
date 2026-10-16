@@ -50,6 +50,7 @@
 | Workspace（Docking） | 布局模型/拖拽/内部拆分与缺口 | [workspace.md](workspace.md) |
 | ScrollView | 文档已写 | [scrollview.md](scrollview.md) |
 | Tab | 文档已写 | [tab.md](tab.md) |
+| AppBar / NavigationBar | 自适应标题、返回、主操作与更多菜单 | [appbar.md](appbar.md) |
 | Sidebar / AdaptiveSidebar | 实现与验证边界 | [sidebar.md](sidebar.md) |
 | NavigationDrawer | 模态导航、窗口拟合、关闭策略与手势 | [navigation-drawer.md](navigation-drawer.md) |
 | NavigationRail | 72/56pt 导航轨、完整名称与呈现保留 | [navigation-rail.md](navigation-rail.md) |

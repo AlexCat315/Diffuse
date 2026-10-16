@@ -160,6 +160,7 @@ public extension GalleryPage {
         case .sidebar: AnyView(SidebarStory(options: options))
         case .navigationDrawer: AnyView(NavigationDrawerStory(options: options))
         case .navigationRail: AnyView(NavigationRailStory(options: options))
+        case .appBar: AnyView(AppBarStory(options: options))
         case .table: AnyView(TableStory(options: options))
         case .dataTable: AnyView(DataTableStory(options: options))
         case .calendar: AnyView(CalendarStory(options: options))

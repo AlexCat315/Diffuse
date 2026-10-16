@@ -7,6 +7,8 @@ struct ToolbarOverflowLayout: Layout {
     let placements: [ToolbarItem.Placement]
     let spacing: CGFloat
     let onOverflow: ([Int]) -> Void
+    var onContentWidth: ((CGFloat) -> Void)?
+    var fitsContent = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: [LayoutSubview]) -> CGSize {
         arrangement(subviews).size
@@ -27,6 +29,8 @@ struct ToolbarOverflowLayout: Layout {
             cursor += (rtl ? -1 : 1) * (size.width + spacing)
         }
         onOverflow(plan.hidden)
+        onContentWidth?(plan.visible.sorted().reduce(CGFloat(0)) { $0 + plan.sizes[$1].width }
+                        + spacing * CGFloat(max(0, plan.visible.count - 1)))
     }
 
     private func arrangement(_ subviews: [LayoutSubview]) -> Arrangement {
@@ -53,7 +57,7 @@ struct ToolbarOverflowLayout: Layout {
         }
         let shown = visible()
         return Arrangement(sizes: sizes, visible: Set(shown), hidden: hidden.sorted(),
-            size: CGSize(width: max(availableWidth, width(shown)),
+            size: CGSize(width: fitsContent ? width(shown) : max(availableWidth, width(shown)),
                          height: shown.map { sizes[$0].height }.max() ?? 0))
     }
 

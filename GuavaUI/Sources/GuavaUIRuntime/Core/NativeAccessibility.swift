@@ -169,6 +169,9 @@ private extension AccessibilityRole {
         switch self {
         case .button: return .button
         case .staticText, .status: return .staticText
+        case .heading:
+            if #available(macOS 26.0, *) { return .headingRole }
+            return .staticText
         case .textField: return .textField
         case .checkbox, .toggle: return .checkBox
         case .slider: return .slider

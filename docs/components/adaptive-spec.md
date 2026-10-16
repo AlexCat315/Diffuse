@@ -275,6 +275,11 @@
 - 平板 / 桌面：strip 在顶部；`.wrap` 或 `.scroll` 由调用方选择；roving focus。`[已实现]`
 - 交互与验收：方向键/Home/End 在标签间移动、单选 tab 语义 + isSelected、关闭按钮独立停靠点。验收：`AdaptiveNavigationTests`、`TouchDensityTests` tabs、`--component tabs` 三预览。
 
+**AppBar / NavigationBar**
+
+- 外观：48pt 基线、44pt 命中、bodyStrong 单行省略标题与 ghost 返回；实际容器 <600pt 最多一个操作，其他宽度最多三个，剩余操作复用 Toolbar / Menu；宽模式可见副标题。`[已实现]`
+- 交互与验收：Tab 返回 → 操作 → 更多，菜单键盘与焦点还原、禁用清理、完整 heading / tooltip / 展开态；宿主安全区消费一次。`AppBarTests`、`SingleLineTextTests`、`NativeAccessibilityTests` 与 Gallery `--component appBar` / 三预览覆盖宽度、字号、输入、主题、RTL 与真实 AI 查询。平台原生角色边界见 [AppBar](appbar.md)。
+
 **Sidebar**
 
 - 外观：图标槽 + 标题 + 徽标；行高 ≥ 38；header/footer/滚动区各自边界。`[已实现]`
@@ -439,13 +444,13 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 ## 5. 未实现项清单（按本文验收）
 
-以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核，是本文契约中当前**未实现**的部分。每项按"位置 → 验收归属"列出；实现后从清单移除并在第 3 节改为 `[已实现]`。完整缺失组件（AppBar、RangeSlider、SearchField、列表能力包等）与既有组件的其他功能缺口见[组件覆盖与缺失清单](gaps.md)。
+以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核，是本文契约中当前**未实现**的部分。每项按"位置 → 验收归属"列出；实现后从清单移除并在第 3 节改为 `[已实现]`。完整缺失组件（RangeSlider、SearchField、列表能力包等）与既有组件的其他功能缺口见[组件覆盖与缺失清单](gaps.md)。
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
 | 4 | DataTable / Table / Grid 列优先级、隐藏与"列可见性"入口 | `Data/DataTable/*`、`Data/Lists/Table.swift`、`Layout/Grid/*` | 新列策略 API 测试 + `dataTable` 页窄宽验收 |
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
-| 6 | Button / Select / DatePicker 等单行标题截断 + 完整 tooltip（当前只换行或裁剪） | `Text/Text.swift`（`lineLimit(1)` 仅禁换行）、各控件 | `Text` 截断测试 + 对应页面 |
+| 6 | Button / Select / DatePicker / Tab 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()` 与 AppBar 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
 | 9 | ScrollView 触摸拖动/惯性、键盘滚动（箭头/Page/Home/End）、横向滚动条 gutter | `Layout/ScrollView.swift` | 触摸滚动测试 + `scrollview` 页；键盘测试 |
 | 10 | 浮层自适应：底部抽屉 Sheet、Select/CommandPalette 弹层宽度与行高、菜单触摸展开子菜单 | `Overlays/*`、`Fields/Select.swift` | 对应浮层测试 + 390pt 取样 |
 | 11 | Stepper / ButtonGroup 窄宽替代布局（纵向或滚动） | `Navigation/Stepper/*`、`Layout/NavigationComponents.swift` | 390pt 取样 + 布局测试 |
@@ -455,7 +460,9 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
-编号稳定保留已完成项的空位。建议顺序：先做 2、4（壳层与数据密度，直接影响手机/平板可用性），再做 5–6（截断），然后 9–16（输入与语义补齐）。1、3、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+编号稳定保留已完成项的空位。建议顺序：先做 4（数据密度，直接影响手机/平板可用性），再做 5–6（截断），然后 9–16（输入与语义补齐）。1–3、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+
+AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单，按实际容器在 1 / 3 个平铺操作之间收敛；标题与文字主操作使用统一的单行省略能力，保留全文及 heading 语义，安全区由宿主消费。组件、菜单和原生角色测试及 Gallery 可交互页已经接入；第 6 项仍保留既有控件的逐项采用工作，不能由 AppBar 的完成代替。
 
 第 1 项命令工具栏溢出已实现：`Toolbar(items:)` 以实测按钮树分配自然宽度，支持优先级、始终保留、始终溢出及图标命令；隐藏 inline 节点仍挂载但不绘制、不接输入、不暴露语义。`ToolbarOverflowTests` 覆盖三档宽度、100%/200% 字号、三种输入集合、菜单操作、节点保留和焦点交接；Gallery Toolbar 已接入自动预览。自定义任意内容仍由应用显式重排，真机触摸和读屏继续按第 4 节取样。
 

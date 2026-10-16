@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail: true
+        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail: true
         default: false
         }
     }
@@ -72,6 +72,14 @@ private struct AdaptiveControlSample: View {
             ToolbarItem(MenuItem(id: "share", title: "Share project") { text = "Shared" }),
             ToolbarItem(MenuItem(id: "settings", title: "Project settings") { text = "Settings" })
         ], configure: { $0.isEnabled = options.isEnabled }).frame(width: .percent(100)))
+        case .appBar: AnyView(AppBar("Workspace permissions and project access 👩🏽‍💻", subtitle: "Saved locally",
+            back: MenuItem(id: "back", title: "Back") { text = "Back" },
+            primary: ToolbarItem(MenuItem(id: "save", title: "Save") { number += 1 }, icon: .resource(UIIcons.Action.check)),
+            actions: [
+                ToolbarItem(MenuItem(id: "find", title: "Find") { text = "Find" }, icon: .resource(UIIcons.Action.search)),
+                ToolbarItem(MenuItem(id: "export", title: "Export") { text = "Export" }, icon: .resource(UIIcons.Action.download)),
+                ToolbarItem(MenuItem(id: "share", title: "Share") { text = "Share" }, icon: .resource(UIIcons.Action.share))
+            ], configure: { $0.isEnabled = options.isEnabled }).frame(width: .percent(100)))
         case .form: AnyView(Form([
             FormField("adaptive-name", "Display name") { TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled } }
         ]).frame(width: .percent(100)))

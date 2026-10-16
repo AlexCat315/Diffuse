@@ -11,7 +11,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
     case table, dataTable, calendar, datePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet
-    case commandPalette, hoverCard, timeline, toolbar
+    case commandPalette, hoverCard, timeline, toolbar, appBar
     case link, statusBar, carousel, skeleton, stepper
 
     public var entry: GalleryEntry { GalleryCatalog.entries.first { $0.page == self }! }
@@ -79,6 +79,7 @@ public enum GalleryCatalog {
         .init(.sidebar, "Sidebar", "Navigation", "Retained adaptive sidebar, rail and drawer layouts, icons, badges and keyboard navigation."),
         .init(.navigationDrawer, "NavigationDrawer", "Navigation", "Modal destinations, fitted width, focus restoration, swipe dismissal and shared selection."),
         .init(.navigationRail, "NavigationRail", "Navigation", "Labeled and icon-only destinations, retained presentations, keyboard navigation and full accessible names."),
+        .init(.appBar, "AppBar / NavigationBar", "Navigation", "Adaptive headings, back navigation, primary actions, overflow commands and host-owned safe areas."),
         .init(.table, "Table", "Data", "Virtualized rows, stable sorting, selection, fixed headers and resizable columns."),
         .init(.dataTable, "DataTable", "Data", "Persistent large-data model, background sorting, frozen columns, multi-selection and cell editing."),
         .init(.calendar, "Calendar", "Inputs", "Calendar-aware month grids, disabled dates and keyboard day navigation."),

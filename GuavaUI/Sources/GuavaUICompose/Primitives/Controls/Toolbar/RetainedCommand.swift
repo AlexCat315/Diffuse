@@ -36,9 +36,13 @@ struct ToolbarRetainedCommand<Content: View>: _PrimitiveView {
         node.layoutDidUpdate = { node in
             guard isOverflow, let visible = focus.pendingVisibility else { return }
             func button(in node: Node) -> Node? {
-                guard node.acceptsSubtreeInput else { return nil }
-                if node.isFocusable && node.isTabStop { return node }
-                return node.children.lazy.compactMap { button(in: $0) }.first
+                var pending = [node]
+                while let candidate = pending.popLast() {
+                    guard candidate.acceptsSubtreeInput else { continue }
+                    if candidate.isFocusable && candidate.isTabStop { return candidate }
+                    pending.append(contentsOf: candidate.children.reversed())
+                }
+                return nil
             }
             var owner = node
             if !isVisible {

@@ -2,7 +2,7 @@
 
 本文与[跨平台控件规范](adaptive-spec.md)互补：规范管**已有**容器的空间不足阶梯、控件重排与输入/动效契约；本文管**还缺什么**——完整缺失的组件、既有组件的功能缺口，以及优先级与验收口径。
 
-- 数据来源：`GuavaUI/Sources/GuavaUICompose/Primitives`、Gallery 74 页（`GalleryCatalog.swift`）、各组件文档与逐项代码复核。
+- 数据来源：`GuavaUI/Sources/GuavaUICompose/Primitives`、Gallery 75 页（`GalleryCatalog.swift`）、各组件文档与逐项代码复核。
 - 范围：脱离 Guava 编辑器语境仍成立的通用 UI 能力。场景层级、Inspector 字段面板、Material Graph、媒体时间线等领域组件留在应用层，不进本清单。
 - 状态：`[未实现]` 完全缺失；`[部分]` 已有基础实现或可用组合替代；`[已实现]` 仅作对照。优先级 P0（手机/平板可用性阻塞）> P1（常用能力）> P2（长尾/体验）> P3（按需）。
 - 自适应工作统一由规范第 5 节跟踪待办和完成记录（Toolbar、Sidebar、Form、数据列、Tab、截断、缩放、触摸行高、滚动、浮层、焦点与 Gallery 等）；本文仅保留交叉引用，避免双份维护。
@@ -16,7 +16,7 @@
 | 文本与数值输入 | TextField/TextArea/CodeEditor、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | SearchField P1、OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
-| 导航与外壳 | TabView（adaptive/closable）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、StatusBar、Workspace（compact）、Carousel、CommandPalette | AppBar/NavigationBar P0、NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
+| 导航与外壳 | TabView（adaptive/closable）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换） | BottomSheet 拖拽与自适应 P0、Toast 操作按钮与位置 P1、ActionSheet/Popconfirm P2、菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Banner 由 Alert 覆盖 |
 | 展示与媒体 | Text/Typography、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/Label、ViewportHost、ScriptCanvasView | RichText/Markdown P2、视频播放组件（应用层按需）、GIF/WebP、EXIF/渐进、缓存淘汰 P2 |
@@ -29,10 +29,10 @@
 ### 2.1 AppBar / NavigationBar（P0）
 
 - 用途：手机与平板的顶部应用栏：返回、标题、副标题、主操作、溢出。
-- 外观：触摸高度 ≥ 44，桌面 48；标题 `bodyStrong` 单行截断并保留完整语义；返回为 ghost IconButton；操作最多平铺 3 个，其余进 overflow 菜单。`[未实现]`
-- 手机：返回 + 标题 + 1 个主操作 + overflow；标题过长时截断并提供 tooltip/辅助功能全文；顶部安全区由宿主应用，AppBar 不重复。`[未实现]`
-- 平板/桌面：标题前导 + 操作平铺 + 可选副标题；hover 反馈。`[未实现]`
-- 交互与验收：键盘 Tab 顺序为 返回 → 操作 → overflow；辅助功能暴露标题 heading、返回名称、overflow 展开态；overflow 复用 Menu 契约（≥44 行高）。验收：390/720/1280 三档 + 安全区 + 播放安全区截图；新测试套件。参考：SwiftUI `toolbar`/`NavigationStack` 标题栏；Flutter `AppBar`。
+- 外观：`AppBar` 已实现，48pt 基线随内容增长，触摸目标 ≥44；标题 `bodyStrong` 单行省略并保留全文；ghost 返回；最多平铺 3 个操作，其余复用 Toolbar overflow。`[已实现]`
+- 手机：实际容器 <600pt 时保留返回、标题、最多 1 个主操作和 overflow；标题与文字主操作省略且保留全文 tooltip / 语义；顶部安全区由宿主消费一次。`[已实现]`
+- 平板/桌面：标题前导、可选副标题、按优先级平铺最多 3 个操作；hover / press / 键盘焦点反馈与 Toolbar 一致。`[已实现]`
+- 交互与验收：Tab 返回 → 操作 → overflow；heading / 返回全文名称 / 展开态；菜单行 ≥44，状态和禁用来自同一 MenuItem。`AppBarTests` 覆盖 390/720/1280 × 字号/输入/主题、安全区、RTL、键盘、焦点及真实 AI 查询；Gallery 新增可交互页与三预览。平台 heading 边界和设备取样见 [AppBar](appbar.md)。`[已实现]`
 
 ### 2.2 NavigationDrawer（P0，Sidebar 的抽屉形态）
 
@@ -159,7 +159,7 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级。Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
+**P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级。AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
 **P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail 与 AdaptiveSidebar 统一壳层已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)。
 

@@ -6,6 +6,23 @@ import Testing
 @Suite("Native accessibility", .serialized)
 @MainActor
 struct NativeAccessibilityTests {
+    @Test("Heading semantics preserve the complete title and use the platform heading role when available")
+    func heading() {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 100), styleMask: .titled, backing: .buffered, defer: false)
+        let root = Node(); root.frame = CGRect(x: 0, y: 0, width: 320, height: 100)
+        let heading = Node(); heading.frame = CGRect(x: 0, y: 0, width: 200, height: 40)
+        heading.accessibility = AccessibilitySemantics(.heading) { $0.label = "Full document title 👩🏽‍💻" }
+        root.addChild(heading)
+        let bridge = MacAccessibilityBridge(view: window.contentView!)
+        bridge.update(root: root, focus: FocusChain(), perform: { $0() })
+        let native = window.contentView!.accessibilityChildren()!.first as! NSAccessibilityElement
+        #expect(native.accessibilityLabel() == "Full document title 👩🏽‍💻")
+        if #available(macOS 26.0, *) { #expect(native.accessibilityRole() == .headingRole) }
+        else { #expect(native.accessibilityRole() == .staticText) }
+        bridge.unmount(node: root)
+    }
+
     @Test("Pointer-transparent descriptions remain accessible while interactive actions stay blocked")
     func passiveDescriptions() {
         _ = NSApplication.shared

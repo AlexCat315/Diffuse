@@ -10,6 +10,12 @@
 
 `SystemFontInstanceTests` 检查真实 SF 的字重坐标、实际轮廓覆盖量，以及 1×/2× 的光学坐标和 advance；`FontPipelineTests` 检查首次栅格化前后 metrics 不变。这些证明修复了字体实例与测量路径，没有宣称自定义 FreeType 灰度栅格与系统原生文字的每个像素相同。
 
+## 单行省略号
+
+`Text("完整标题 👩🏽‍💻").truncated().font(.bodyStrong)` 按实际分配绘制单行尾部省略号，同时保留完整 tooltip 与辅助功能名称。它不会切开 emoji ZWJ、组合音标或旗帜；显式换行合并为空格，连省略号都放不下时不绘制残缺字符。测量与绘制复用同一套字体、字距、缩放及缓存；缩窄、放大和实时改字都会重新选择可见文本。`lineLimit(1)` 仍只禁用换行，需要省略号时显式使用 `truncated()`；此 API 不处理多行省略。
+
+AppBar 已应用。其他 Button / Select / DatePicker / Tab / 表格标题的采用仍由自适应规范第 5-6 项跟踪，不能因通用能力存在就认定逐控件截断全部完成。`SingleLineTextTests` 验证 grapheme 边界、零宽度、shaping 和实际绘制，AppBar 通过真实 tooltip 与 heading 验证全文出口。
+
 ## 彩色字体
 
 macOS 上由 `FontProvider` 识别 FreeType color face，交给 `NativeColorGlyphFont` 的 CoreText shaping/metrics/rasterizer。平台 rasterizer 通过 `ColorGlyphSource` 提供逻辑 metrics、line metrics 和 straight-alpha sRGB RGBA bitmap；通用 `FontAtlas` 不依赖 CoreText。

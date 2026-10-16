@@ -64,6 +64,10 @@ public enum MenuEntry {
     }
 }
 
+enum MenuRowMetrics {
+    static let minimumHeight = CompositionLocal<Float>(defaultValue: 32)
+}
+
 public struct Menu: View {
     public let entries: [MenuEntry]
     public let width: Float?

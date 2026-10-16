@@ -29,9 +29,15 @@ public struct Toolbar<Content: View>: View {
     public var body: some View { ToolbarHost(options: options, content: content) }
 }
 
-private struct ToolbarHost<Content: View>: _PrimitiveView {
+struct ToolbarChrome {
+    var minimumHeight: Float?
+    var verticalPadding: Float = 4
+}
+
+struct ToolbarHost<Content: View>: _PrimitiveView {
     let options: ToolbarOptions
     let content: Content
+    var chrome = ToolbarChrome()
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
@@ -72,7 +78,8 @@ private struct ToolbarHost<Content: View>: _PrimitiveView {
         return [Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if options.divider == .top { Divider() }
             Row(alignment: .center, spacing: theme.spacing.xs) { content }
-                .padding(horizontal: theme.spacing.sm, vertical: 4).frame(minHeight: ToolbarMetrics.height(for: size))
+                .padding(horizontal: theme.spacing.sm, vertical: chrome.verticalPadding)
+                .frame(minHeight: chrome.minimumHeight ?? ToolbarMetrics.height(for: size))
             if options.divider == .bottom { Divider() }
         }.buttonStyle(.ghost).background(SemanticColorRef.surface).opacity(options.isEnabled ? 1 : 0.6)]
     }

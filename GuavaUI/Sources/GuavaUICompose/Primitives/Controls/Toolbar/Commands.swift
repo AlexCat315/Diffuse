@@ -36,12 +36,28 @@ public extension Toolbar where Content == AnyView {
     }
 }
 
-private struct ToolbarCommands: View {
+struct ToolbarCommandPresentation {
+    var minimumExtent: Float?
+    var maximumButtonWidth: Float?
+    var usesOverflowIcon = false
+}
+
+struct ToolbarCommands: View {
     let items: [ToolbarItem]
     let isEnabled: Bool
+    var availableWidth: CGFloat?
+    var presentation = ToolbarCommandPresentation()
+    var onContentWidth: ((CGFloat) -> Void)?
     @State private var overflow: Set<AnyHashable> = []
     @State private var isPresented = false
+    @State private var overflowHovered = false
     @State private var focus = ToolbarOverflowFocus()
+
+    init(items: [ToolbarItem], isEnabled: Bool, availableWidth: CGFloat? = nil,
+         presentation: ToolbarCommandPresentation = .init(), onContentWidth: ((CGFloat) -> Void)? = nil) {
+        self.items = items; self.isEnabled = isEnabled; self.availableWidth = availableWidth
+        self.presentation = presentation; self.onContentWidth = onContentWidth
+    }
 
     var body: some View {
         if !isEnabled {
@@ -51,7 +67,7 @@ private struct ToolbarCommands: View {
         return ThemeReader { theme in
             ContainerSizeReader { size in
                 ScrollView(.horizontal, scrollbarGutter: .overlay) {
-                    ToolbarOverflowLayout(availableWidth: size.width,
+                    ToolbarOverflowLayout(availableWidth: availableWidth ?? size.width,
                         placements: items.map(\.placement), spacing: CGFloat(theme.spacing.xs),
                         onOverflow: { indices in
                             let next = Set(indices.map { items[$0].command.id })
@@ -62,19 +78,29 @@ private struct ToolbarCommands: View {
                                 overflow = next
                                 isPresented = false
                             }
-                        }) {
+                        }, onContentWidth: onContentWidth, fitsContent: availableWidth != nil) {
                         items.map { item in
                             ToolbarRetainedCommand(isVisible: !overflow.contains(item.command.id), focus: focus) {
-                                command(item)
+                                command(item).frame(minWidth: presentation.minimumExtent, minHeight: presentation.minimumExtent)
                             }.id(item.command.id)
                         }
                         ToolbarRetainedCommand(isVisible: !overflow.isEmpty, focus: focus, isOverflow: true) {
                             Popover(isPresented: $isPresented, isEnabled: isEnabled, placement: .end) {
-                                Text("…").font(.bodyStrong).padding(horizontal: 10, vertical: 6)
+                                if presentation.usesOverflowIcon {
+                                    Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                                        Icon(UIIcons.Action.moreHorizontal, size: 20).iconScaling(.fixed).flex(0, shrink: 0)
+                                    }.frame(minWidth: presentation.minimumExtent, minHeight: presentation.minimumExtent)
+                                        .background(!isEnabled ? .clear : isPresented ? theme.colors.stateLayerSelected : overflowHovered ? theme.colors.stateLayerHover : .clear)
+                                        .cornerRadius(theme.inputs.radius)
+                                } else {
+                                    Text("…").font(.bodyStrong).padding(horizontal: 10, vertical: 6)
+                                }
                             } content: {
                                 Menu(items.filter { overflow.contains($0.command.id) }.map { .item($0.command) },
                                     onItemActivated: { isPresented = false }, onDismiss: { isPresented = false })
+                                    .compositionLocal(MenuRowMetrics.minimumHeight, presentation.minimumExtent ?? 32)
                             }
+                            .onHover { if presentation.usesOverflowIcon && overflowHovered != $0 { overflowHovered = $0 } }
                             .compositionLocal(ActionControlAccessibility.label, "More actions")
                             .compositionLocal(ActionControlAccessibility.isExpanded, isPresented)
                             .tooltip("More actions")
@@ -92,6 +118,13 @@ private struct ToolbarCommands: View {
                 isEnabled: isEnabled && command.isEnabled, isSelected: command.isSelected,
                 tooltip: command.title, action: command.action)
                 .compositionLocal(ActionControlAccessibility.label, command.title))
+        }
+        if let limit = presentation.maximumButtonWidth {
+            return AnyView(Button(role: command.role == .destructive ? .destructive : .normal,
+                isEnabled: isEnabled && command.isEnabled, isSelected: command.isSelected,
+                tooltip: command.title, action: command.action) {
+                    Text(command.title).truncatingTail().font(.label).flex(1, shrink: 1).frame(minWidth: 0).accessibilityHidden()
+                }.frame(maxWidth: limit).compositionLocal(ActionControlAccessibility.label, command.title))
         }
         return AnyView(Button(command.title, role: command.role == .destructive ? .destructive : .normal,
             isEnabled: isEnabled && command.isEnabled, isSelected: command.isSelected,

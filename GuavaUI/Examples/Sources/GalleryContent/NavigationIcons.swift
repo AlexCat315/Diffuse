@@ -43,7 +43,7 @@ extension GalleryPage {
         case .timeField, .timeline: UIIcons.Data.clock
         case .breadcrumb, .pagination, .stepper: UIIcons.Navigation.arrowRight
         case .keyCap: UIIcons.Shape.key
-        case .toolbar: UIIcons.Layout.panelTop
+        case .toolbar, .appBar: UIIcons.Layout.panelTop
         case .link: UIIcons.Action.link
         case .statusBar: UIIcons.Layout.panelBottom
         }
