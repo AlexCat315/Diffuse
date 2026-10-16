@@ -13,9 +13,14 @@ struct DataTableModelTests {
         $0.value == $1.value ? .orderedSame : $0.value < $1.value ? .orderedAscending : .orderedDescending
     }
     private func finish(_ model: DataTableModel<TableTestRow, Int>) async throws {
-        let deadline = Date.timeIntervalSinceReferenceDate + 10
-        while model.sorting.isPending, Date.timeIntervalSinceReferenceDate < deadline { try await Task.sleep(for: .milliseconds(5)) }
-        #expect(!model.sorting.isPending)
+        // Other suites build UI graphs synchronously on MainActor. Count
+        // polling opportunities rather than wall time spent waiting for that
+        // actor, so its queued sort delivery can run before asserting results.
+        for _ in 0..<2_000 {
+            if !model.sorting.isPending { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(!model.sorting.isPending)
     }
     @Test("200K rows have stable asynchronous projections and constant-time ID lookup")
     func largeProjection() async throws {

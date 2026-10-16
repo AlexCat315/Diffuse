@@ -11,6 +11,7 @@ public struct AnimatedVisibility<Content: View>: View {
     public let animation: Animation?
     private let content: Content
     private let onVisibilitySettled: ((Bool) -> Void)?
+    private var retainsContent = false
     @State private var completionRevision = 0
 
     public init(isVisible: Bool, collapses: Bool = true,
@@ -30,9 +31,15 @@ public struct AnimatedVisibility<Content: View>: View {
         self.onVisibilitySettled = onVisibilitySettled
     }
 
+    /// Navigation changes presentation without changing the identity of its slots.
+    init(isVisible: Bool, transition: Transition, retainsContent: Bool, @ViewBuilder content: () -> Content) {
+        self.init(isVisible: isVisible, transition: transition, content: content)
+        self.retainsContent = retainsContent
+    }
+
     public var body: some View {
         _VisibilityHost(isVisible: isVisible, transition: transition, animateOnMount: animateOnMount,
-                        animation: animation, revision: completionRevision,
+                        animation: animation, revision: completionRevision, retainsContent: retainsContent,
                         content: content, onFinished: { completionRevision &+= 1; onVisibilitySettled?(isVisible) })
     }
 }
@@ -69,6 +76,7 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
     private var collapses: Bool { transition.insertion.collapse || transition.removal.collapse }
     let animation: Animation?
     let revision: Int
+    let retainsContent: Bool
     let content: Content
     let onFinished: () -> Void
 
@@ -100,10 +108,10 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
                 let height = Float(child.frame.height)
                 state.expandedHeight = height
             }
-            Self.apply(state, to: node, collapses: collapses)
+            Self.apply(state, to: node, collapses: collapses, retainsContent: retainsContent)
         }
         if state.target == isVisible {
-            if node.prefersReducedMotion { state.settleImmediately() }
+            if node.prefersReducedMotion || (retainsContent && transition == .identity) { state.settleImmediately() }
             return
         }
         let wasMounted = state.target != nil
@@ -111,9 +119,9 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
         state.cancel()
         let target: Float = isVisible ? 1 : 0
         let goal = isVisible ? Transition.Effect() : transition.removal
-        if node.prefersReducedMotion {
+        if node.prefersReducedMotion || (retainsContent && transition == .identity) {
             state.progress = target; state.visual = goal
-            Self.apply(state, to: node, collapses: collapses)
+            Self.apply(state, to: node, collapses: collapses, retainsContent: retainsContent)
             if wasMounted || (animateOnMount && isVisible) { state.onFinished() }
             return
         }
@@ -121,7 +129,7 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
             state.progress = isVisible && animateOnMount ? 0 : target
             state.visual = isVisible && animateOnMount ? transition.insertion : goal
             if !animateOnMount || !isVisible {
-                Self.apply(state, to: node, collapses: collapses)
+                Self.apply(state, to: node, collapses: collapses, retainsContent: retainsContent)
                 return
             }
         }
@@ -134,15 +142,20 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
             guard let state, let node else { return }
             state.progress = fromProgress + (target - fromProgress) * amount
             state.visual = from.interpolating(to: goal, amount)
-            Self.apply(state, to: node, collapses: collapses)
+            Self.apply(state, to: node, collapses: collapses, retainsContent: retainsContent)
             if amount == 1 { state.onFinished() }
         }
         state.animate(controller)
-        Self.apply(state, to: node, collapses: collapses)
+        Self.apply(state, to: node, collapses: collapses, retainsContent: retainsContent)
     }
 
-    private static func apply(_ state: VisibilityState, to node: Node, collapses: Bool) {
-        node.opacity = max(0, min(1, state.visual.opacity))
+    private static func apply(_ state: VisibilityState, to node: Node, collapses: Bool, retainsContent: Bool) {
+        if retainsContent { node.layoutNode?.display = state.target == false && state.progress == 0 ? .none : .flex }
+        // Move/identity effects keep alpha at one. A retained, fully hidden
+        // subtree still owns its text painters even though Yoga zeroes its
+        // frames, so suppress paint as well as layout after the exit settles.
+        node.opacity = retainsContent && state.target == false && state.progress == 0
+            ? 0 : max(0, min(1, state.visual.opacity))
         // contentOffset participates in both rendering and hit testing, keeping
         // pointer coordinates aligned throughout a moving transition.
         node.contentOffset = CGPoint(x: CGFloat(-state.visual.x), y: CGFloat(-state.visual.y))
@@ -171,7 +184,7 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
         // Measure the full content while the host clips its animated height.
         // Shrinking the child to that height feeds a smaller measurement back
         // into the next animation frame and causes a reveal to stall.
-        guard isVisible || (state?.progress ?? 0) > 0 else { return [] }
+        guard retainsContent || isVisible || (state?.progress ?? 0) > 0 else { return [] }
         if collapses {
             return [Box(direction: .column, alignItems: .stretch) { content }.flex(0, shrink: 0)]
         }

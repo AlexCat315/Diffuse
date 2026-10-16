@@ -16,7 +16,7 @@
 | 文本与数值输入 | TextField/TextArea/CodeEditor、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | SearchField P1、OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
-| 导航与外壳 | TabView（adaptive/closable）、Sidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、StatusBar、Workspace（compact）、Carousel、CommandPalette | AppBar/NavigationBar P0、Sidebar 自适应壳层（规范 5-2）、NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
+| 导航与外壳 | TabView（adaptive/closable）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、StatusBar、Workspace（compact）、Carousel、CommandPalette | AppBar/NavigationBar P0、NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换） | BottomSheet 拖拽与自适应 P0、Toast 操作按钮与位置 P1、ActionSheet/Popconfirm P2、菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Banner 由 Alert 覆盖 |
 | 展示与媒体 | Text/Typography、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/Label、ViewportHost、ScriptCanvasView | RichText/Markdown P2、视频播放组件（应用层按需）、GIF/WebP、EXIF/渐进、缓存淘汰 P2 |
@@ -36,17 +36,17 @@
 
 ### 2.2 NavigationDrawer（P0，Sidebar 的抽屉形态）
 
-- 用途：compact/medium 宽度下 Sidebar 的覆盖层形态；[NavigationDrawer](navigation-drawer.md) 已实现，统一自适应壳层仍见规范 5-2。
+- 用途：compact/medium 宽度下 Sidebar 的覆盖层形态；[NavigationDrawer](navigation-drawer.md) 已实现，[AdaptiveSidebar](sidebar.md#自适应壳层) 已按宽度统一三种形态。
 - 外观：按实际窗口拟合宽度 `min(320, 窗口 − 56)`；遮罩 `stateLayerSelected` 强度；顶部标题与关闭；行高 ≥ 44。`[已实现]`
-- 手机：按钮打开；焦点进入并循环、Escape 关闭、关闭后还原；选中项显露；左滑关闭并取消子按钮按下。可选边缘唤出手势尚未提供。`[已实现]`（按钮路径）
-- 平板/桌面：可显式打开 Drawer，常驻形态使用 Sidebar，轨道使用 NavigationRail；按宽度自动切换的统一壳层仍未实现（规范 5-2）。`[部分]`
+- 手机：按钮打开；焦点进入并循环、Escape 关闭、关闭后还原；选中项显露；左滑关闭并取消子按钮按下。可选边缘唤出由 AdaptiveSidebar 提供（仅紧凑触摸容器前导 24pt 起始的右滑）。`[已实现]`（独立按钮入口与壳层手势入口）
+- 平板/桌面：可显式打开 Drawer，常驻形态使用 Sidebar，轨道使用 NavigationRail；AdaptiveSidebar 按容器宽度自动切换。`[已实现]`
 - 交互与验收：展开与选择由应用 session binding 持有，窗口变化保留；辅助功能为带完整名称的 dialog。`NavigationDrawerTests` 覆盖宽度/字号/主题/输入、展开/关闭/焦点/手势/生命周期和 AI 查询；Gallery `DrawerTests` 覆盖独立页与 Sidebar 共享选择。
 
 ### 2.3 NavigationRail（P1）
 
 - 用途：medium 宽度的图标导航轨（桌面可显式启用）；[NavigationRail](navigation-rail.md) 复用 Sidebar 数据和目的地节点。
 - 外观：宽 72（图标 + 换行标签）或 56（纯图标）；2pt accent 指示条；顶部/底部开放槽。图标受轨道宽度约束，徽标用圆点并保留完整值。`[已实现]`
-- 手机/平板：壳层应在 compact 使用抽屉、medium 使用 rail、expanded 使用 Sidebar；三种组件均可显式组合，统一自动切换壳层仍在规范 5-2 待办。`[部分]`
+- 手机/平板：壳层应在 compact 使用抽屉、medium 使用 rail、expanded 使用 Sidebar；AdaptiveSidebar 已统一自动切换，并保留同一目的地、页面、焦点和会话。`[已实现]`
 - 交互与验收：Up/Down、Home/End 循环并跳过禁用项，单一 Tab 停靠；完整名称/选中态/徽标值、tooltip、目标 ≥44pt；`SidebarPresentation` 切换保留节点/焦点/槽位状态。`NavigationRailTests` 覆盖输入矩阵、模式切换、滚动、AI 发现；Gallery `RailTests` 验证实际示例。参考：Flutter `NavigationRail`；SwiftUI `NavigationSplitView` 折叠态。
 
 ### 2.4 NavigationStack / 路由（P1）
@@ -142,7 +142,7 @@
 | Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义；触摸展开验收见规范 5-10，触摸行高与水平翻转已有 | P2 |
 | CommandPalette | 几何高固定 440；结果列表全量创建（未虚拟化）；无最近使用记录与自定义页脚；模糊匹配与分组已有 | P1/P2 |
 | Sheet / Modal | 拖拽关闭与自适应（见 2.11）；其余契约完整 | P1 |
-| Sidebar | 常驻/drawer/rail 自动切换壳层（规范 5-2）、可调整宽度、嵌套子菜单、项级操作/上下文菜单 | P1 |
+| Sidebar | 可调整宽度、嵌套子菜单、项级操作/上下文菜单 | P1 |
 | Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
 | Workspace | N 面板联动、折叠阈值/吸附、pin 专属视觉、浮动为应用内层、文档解码校验与可版本化格式、a11y/RTL、chrome 硬编码清理（见 [workspace.md](workspace.md)） | P2 |
 | ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、锚定滚动、带时长程序滚动、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | P1 |
@@ -159,9 +159,9 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、Sidebar 自适应壳层、BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级。Toolbar 命令溢出、Form 标签重排、SplitView 单面板与 NavigationDrawer 覆盖层已实现，验收与边界见 [toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
+**P0（手机/平板可用性阻塞）**：AppBar/NavigationBar、BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级。Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail 已补齐独立组件，自动壳层切换仍按 P0 / 规范 5-2 跟踪。
+**P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail 与 AdaptiveSidebar 统一壳层已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 

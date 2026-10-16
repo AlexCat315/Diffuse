@@ -9,9 +9,11 @@ enum HorizontalSwipeDirection { case left, right }
 struct HorizontalSwipeHost<Content: View>: _PrimitiveView {
     let onSwipe: (HorizontalSwipeDirection) -> Void
     let isEnabled: Bool
+    let shouldBegin: (MouseButtonEvent, Node) -> Bool
     let content: Content
-    init(onSwipe: @escaping (HorizontalSwipeDirection) -> Void, isEnabled: Bool, @ViewBuilder content: () -> Content) {
-        self.onSwipe = onSwipe; self.isEnabled = isEnabled; self.content = content()
+    init(onSwipe: @escaping (HorizontalSwipeDirection) -> Void, isEnabled: Bool,
+         shouldBegin: @escaping (MouseButtonEvent, Node) -> Bool = { _, _ in true }, @ViewBuilder content: () -> Content) {
+        self.onSwipe = onSwipe; self.isEnabled = isEnabled; self.shouldBegin = shouldBegin; self.content = content()
     }
     func _makeNode() -> Node {
         let node = Node(); node.clipsToBounds = true
@@ -21,7 +23,7 @@ struct HorizontalSwipeHost<Content: View>: _PrimitiveView {
     func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
     func _updateNode(_ node: Node) {
         let session = node.firstResource(HorizontalSwipeSession.self)!
-        session.configure(isEnabled: isEnabled, onSwipe: onSwipe)
+        session.configure(isEnabled: isEnabled, shouldBegin: shouldBegin, onSwipe: onSwipe)
         let registry = InteractionRegistryHolder.current
         registry?.setPointer(node) { event, phase, eventPhase in
             guard eventPhase != .bubble, event.button == .left else { return .ignored }
@@ -51,10 +53,11 @@ final class HorizontalSwipeSession: NodeResource {
     private var gesture = Gesture.idle
     private var isEnabled = true
     private var onSwipe: ((HorizontalSwipeDirection) -> Void)?
+    private var shouldBegin: ((MouseButtonEvent, Node) -> Bool)?
     func mount(node: Node) { self.node = node; capture = PointerCaptureHolder.current }
-    func unmount(node: Node) { cancelGesture(); self.node = nil; onSwipe = nil; capture = nil }
-    func configure(isEnabled: Bool, onSwipe: @escaping (HorizontalSwipeDirection) -> Void) {
-        self.isEnabled = isEnabled; self.onSwipe = onSwipe
+    func unmount(node: Node) { cancelGesture(); self.node = nil; onSwipe = nil; shouldBegin = nil; capture = nil }
+    func configure(isEnabled: Bool, shouldBegin: @escaping (MouseButtonEvent, Node) -> Bool = { _, _ in true }, onSwipe: @escaping (HorizontalSwipeDirection) -> Void) {
+        self.isEnabled = isEnabled; self.onSwipe = onSwipe; self.shouldBegin = shouldBegin
         if !isEnabled { cancelGesture() }
     }
     func pointer(_ event: MouseButtonEvent, phase: PointerPhase) -> EventResult {
@@ -62,7 +65,9 @@ final class HorizontalSwipeSession: NodeResource {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         switch phase {
         case .down:
-            cancelGesture(); gesture = .observing(point); return .ignored
+            cancelGesture()
+            if shouldBegin?(event, node) != false { gesture = .observing(point) }
+            return .ignored
         case .up:
             let previous = gesture
             let ownedCapture = capture?.target === node

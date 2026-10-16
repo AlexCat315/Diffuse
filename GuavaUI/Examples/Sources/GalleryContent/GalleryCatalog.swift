@@ -76,7 +76,7 @@ public enum GalleryCatalog {
         .init(.combobox, "Combobox", "Inputs", "Searchable typed options, keyboard highlight, empty results and clearing."),
         .init(.notification, "Notification", "Feedback", "Stable-ID replacement, queued toasts, expiry, hover pause and dismissal."),
         .init(.tooltip, "Tooltip", "Overlays", "Delayed pointer and keyboard-focus descriptions outside clipping."),
-        .init(.sidebar, "Sidebar", "Navigation", "Themed icons, aligned destinations, badges, keyboard scrolling and header/footer slots."),
+        .init(.sidebar, "Sidebar", "Navigation", "Retained adaptive sidebar, rail and drawer layouts, icons, badges and keyboard navigation."),
         .init(.navigationDrawer, "NavigationDrawer", "Navigation", "Modal destinations, fitted width, focus restoration, swipe dismissal and shared selection."),
         .init(.navigationRail, "NavigationRail", "Navigation", "Labeled and icon-only destinations, retained presentations, keyboard navigation and full accessible names."),
         .init(.table, "Table", "Data", "Virtualized rows, stable sorting, selection, fixed headers and resizable columns."),

@@ -33,7 +33,7 @@ Sidebar(selection: $destination, sections: sections,
 
 `.expanded` 恢复普通栏；`.rail(showsLabels: true/false)` 使用同一组按钮节点。切换保留选择、焦点和 header/footer 本地状态，分组标题在 Rail 里收起。初始选择、应用改变选择、呈现或内容几何变化后显露选中项；普通用户滚动不会持续被拉回。显露操作先刷新实际内容范围，并在范围夹紧偏移后换算目标坐标，避免重排时二次滚动到错误位置。tooltip 的定位与显露观察互不覆盖。
 
-Rail 不自行选择窗口形态：medium/expanded 可由壳层使用，compact 应使用 [NavigationDrawer](navigation-drawer.md)。统一常驻/rail/drawer 自适应壳层仍由[规范第 5-2 项](adaptive-spec.md)跟踪。
+Rail 不自行选择窗口形态：medium/expanded 可由壳层使用，compact 应使用 [NavigationDrawer](navigation-drawer.md)。自动选择常驻栏、Rail 和抽屉可使用 [AdaptiveSidebar](sidebar.md#自适应壳层)，它保留同一导航和页面节点；Gallery 的中等宽度壳层采用 56pt 图标轨。
 
 ## 验证
 
