@@ -34,7 +34,11 @@ struct DevToolsProbe {
         graph.install(root: component)
         root.addChild(componentTree.root!)
         let inspector = SceneInspector(tree: tree)
-        server.advertisedCapabilities = ["tree", "select", "log", "timing", "state", "inspect", "style", "source", "recomposition", "state.observe", "timeline"]
+        let diagnostics = UIDiagnostics(tree: tree, state: graph.stateRegistry)
+        server.host.scene.diagnostics = { diagnostics.handleReadRequest($0) }
+        server.advertisedCapabilities = ["tree", "select", "log", "timing", "state", "inspect", "style", "source", "recomposition", "state.observe", "timeline", "diagnostics"]
+        layout.calculateLayout(availableWidth: 320, availableHeight: 180); root.frame = layout.frame
+        graph.computeLayout(width: 320, height: 180)
         server.host.scene.snapshot = {
             layout.calculateLayout(availableWidth: 320, availableHeight: 180); root.frame = layout.frame
             return inspector.snapshot()

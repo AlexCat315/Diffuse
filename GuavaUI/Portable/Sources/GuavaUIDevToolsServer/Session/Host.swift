@@ -9,6 +9,7 @@ public struct DevToolsHost {
         public var snapshot: SceneSnapshotProvider? = nil
         public var select: NodeSelectionHandler? = nil
         public var clearSelection: NodeSelectionClearHandler? = nil
+        public var diagnostics: (@MainActor (DevToolsEnvelope) -> DevToolsEnvelope)? = nil
         public init() {}
     }
     public var scene = Scene()

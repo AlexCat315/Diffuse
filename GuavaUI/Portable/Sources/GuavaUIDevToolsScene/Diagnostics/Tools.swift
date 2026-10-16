@@ -1,5 +1,5 @@
 public import Foundation
-import GuavaUIAgentCore
+public import GuavaUIAgentCore
 
 public struct UIDiagnosticOverview: Codable, Sendable {
     public let nodeCount: Int
@@ -24,11 +24,33 @@ public extension UIDiagnostics {
     }
 
     func execute(name: String, input: Data) async throws -> AgentToolResult {
+        if name == "capture_ui_trace" {
+            let args = try validatedArguments(name: name, input: input)
+            return try await AgentToolResult.encode(QueryResponse(data: captureTrace(durationMilliseconds: args["duration_ms"] as? Int ?? 500)))
+        }
+        return try executeRead(name: name, input: input)
+    }
+}
+
+extension UIDiagnostics {
+    /// Immediate reads can run in a native host's synchronous frame inbox.
+    /// The asynchronous toolbox and wire adapter share validation and results.
+    func executeRead(name: String, input: Data) throws -> AgentToolResult {
+        let args = try validatedArguments(name: name, input: input)
+        let result = try readResponse(name: name, args: args)
+        guard result.json.count <= 524_288 else { throw AgentError.invalidResult }
+        return result
+    }
+
+    private func validatedArguments(name: String, input: Data) throws -> [String: Any] {
         guard let tool = UIDiagnosticTools.tools.first(where: { $0.name == name }) else { throw AgentError.unknownTool(name) }
         guard input.count <= 262_144 else { throw AgentError.invalidConfiguration("Query exceeds 256 KiB.") }
         try JSONSchemaValidator.validate(data: input, against: tool.schema)
-        let args = (try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:])
+        return (try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:])
             .filter { !($0.value is NSNull) }
+    }
+
+    private func readResponse(name: String, args: [String: Any]) throws -> AgentToolResult {
         let offset = args["offset"] as? Int ?? 0, limit = args["limit"] as? Int ?? 50
         switch name {
         case "get_diagnostics":
@@ -48,8 +70,6 @@ public extension UIDiagnostics {
         case "query_ui_state":
             return try AgentToolResult.encode(QueryResponse(data: queryState(ids: args["ids"] as? [String] ?? [],
                 scopeID: args["scope_id"] as? String, offset: offset, limit: limit)))
-        case "capture_ui_trace":
-            return try await AgentToolResult.encode(QueryResponse(data: captureTrace(durationMilliseconds: args["duration_ms"] as? Int ?? 500)))
         case "get_ui_trace":
             return try AgentToolResult.encode(QueryResponse(data: queryTrace(id: args["capture_id"] as? String ?? "", offset: offset, limit: limit)))
         case "compare_ui_traces":

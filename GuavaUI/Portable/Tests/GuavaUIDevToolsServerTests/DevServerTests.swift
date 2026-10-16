@@ -67,6 +67,70 @@ private func receive(_ type: String, from connection: TestConnection) async thro
     throw Timeout.waitingForMessage
 }
 
+@Test @MainActor
+func diagnosticReadsUseHostInboxWithoutTakingInspectionLease() async throws {
+    let transport = TestTransport(), inbox = HostInbox(), owner = TestConnection(), reader = TestConnection()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    var calls = 0
+    server.host.execute = { inbox.add($0) }
+    server.host.scene.inspect = { DevToolsEnvelope(type: $0.type + ".ok", id: $0.id) }
+    server.host.scene.diagnostics = {
+        calls += 1
+        return DevToolsEnvelope(type: $0.type + ".ok", id: $0.id, payload: .object(["count": .number(Double(calls))]))
+    }
+    try server.start(); defer { server.stop(); inbox.drain() }
+    transport.onEvent?(.connected(owner)); _ = try await receive("hello", from: owner)
+    transport.onEvent?(.connected(reader)); _ = try await receive("hello", from: reader)
+    try transport.request("inspect.pick.start", connection: owner)
+    try transport.request("diagnostics.call", connection: reader)
+    let deadline = ContinuousClock.now + .seconds(3)
+    while inbox.count < 2, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(calls == 0 && inbox.count == 2)
+    inbox.drain()
+    _ = try await receive("inspect.pick.start.ok", from: owner)
+    let read = try await receive("diagnostics.call.ok", from: reader)
+    #expect(read.payload?.objectValue?["count"] != nil && calls == 1)
+    try transport.request("inspect.pick.start", connection: reader)
+    #expect(try await receive("inspect.pick.start.err", from: reader).payload?.objectValue?["code"]?.stringValue == "busy")
+    try transport.request("diagnostics.tools", connection: reader)
+    let nextDeadline = ContinuousClock.now + .seconds(3)
+    while inbox.count < 1, ContinuousClock.now < nextDeadline { try await Task.sleep(for: .milliseconds(5)) }
+    transport.onEvent?(.disconnected(reader))
+    // The round trip on the other connection orders disconnect before draining.
+    try transport.request("diagnostics.call", connection: owner)
+    let lastDeadline = ContinuousClock.now + .seconds(3)
+    while inbox.count < 2, ContinuousClock.now < lastDeadline { try await Task.sleep(for: .milliseconds(5)) }
+    inbox.drain(); _ = try await receive("diagnostics.call.ok", from: owner)
+    #expect(calls == 2 && reader.take().isEmpty)
+}
+
+@Test @MainActor
+func diagnosticReadsReportUnavailableHostsAndDiscardPreviousServerEpoch() async throws {
+    let transport = TestTransport(), inbox = HostInbox(), connection = TestConnection()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    server.host.execute = { inbox.add($0) }
+    try server.start(); defer { server.stop(); inbox.drain() }
+    transport.onEvent?(.connected(connection)); _ = try await receive("hello", from: connection)
+    try transport.request("diagnostics.tools", connection: connection)
+    let missing = try await receive("diagnostics.tools.err", from: connection)
+    #expect(missing.payload?.objectValue?["code"]?.stringValue == "unsupported")
+    var calls = 0
+    server.host.scene.diagnostics = { calls += 1; return DevToolsEnvelope(type: $0.type + ".ok") }
+    try transport.request("diagnostics.call", connection: connection)
+    let deadline = ContinuousClock.now + .seconds(3)
+    while inbox.count == 0, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(inbox.count == 1)
+    server.stop(); try server.start()
+    transport.onEvent?(.connected(connection)); _ = try await receive("hello", from: connection)
+    inbox.drain()
+    #expect(calls == 0 && connection.take().isEmpty)
+    try transport.request("diagnostics.call", connection: connection)
+    let nextDeadline = ContinuousClock.now + .seconds(3)
+    while inbox.count == 0, ContinuousClock.now < nextDeadline { try await Task.sleep(for: .milliseconds(5)) }
+    inbox.drain(); _ = try await receive("diagnostics.call.ok", from: connection)
+    #expect(calls == 1)
+}
+
 private struct TreeWireMessage: Decodable {
     let type: String
     let id: Int?

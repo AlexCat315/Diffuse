@@ -20,11 +20,14 @@ public final class DevTools {
     public let timing = TimingPublisher()
     public var stateRegistry: StateRegistry? {
         didSet {
+            diagnostics = UIDiagnostics(tree: diagnosticTree, state: stateRegistry)
             server.host.observation.state = stateRegistry.map { registry in { @MainActor ids in registry.observation(ids: ids) } }
         }
     }
 
     private let timeline: PerformanceTimeline
+    private let diagnosticTree: NodeTree
+    private var diagnostics: UIDiagnostics
     private var frameTap: FrameTap?
     private let frameTapSink = FrameTap.Sink()
 
@@ -55,6 +58,8 @@ public final class DevTools {
                 renderTree: RenderTree? = nil) {
         self.config = config
         self.timeline = tree.timeline
+        self.diagnosticTree = tree
+        self.diagnostics = UIDiagnostics(tree: tree)
         self.server = DevServer(config: config)
         self.scene = SceneInspector(tree: tree,
                                     invalidationLog: invalidationLog,
@@ -70,6 +75,10 @@ public final class DevTools {
         }
         server.host.scene.inspect = { @MainActor request in scene.editor.handle(request) }
         server.host.scene.reset = { @MainActor in scene.editor.reset() }
+        server.host.scene.diagnostics = { @MainActor [weak self] request in
+            guard let self else { return DevToolsSession.error(request, code: "unavailable", message: "Diagnostics session ended") }
+            return self.diagnostics.handleReadRequest(request)
+        }
         scene.editor.onChange = { [weak self] in
             MainActor.assumeIsolated {
                 self?.onSelectionChanged?()
@@ -87,6 +96,7 @@ public final class DevTools {
         server.host.checkpoint = checkpoint
         server.host.recording = recording
         var capabilities = ["tree", "select", "log", "timing", "inspect", "style", "source", "recomposition", "timeline"]
+        capabilities.append("diagnostics")
         if stateRegistry != nil { capabilities.append("state.observe") }
         if frameTap != nil { capabilities.append("mirror") }
         if checkpoint.capture != nil, checkpoint.restore != nil {

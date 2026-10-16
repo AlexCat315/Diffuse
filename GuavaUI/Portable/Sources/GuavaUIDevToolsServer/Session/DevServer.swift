@@ -246,6 +246,7 @@ public final class DevServer: @unchecked Sendable {
             return
         }
         switch env.type {
+        case "diagnostics.tools", "diagnostics.call": dispatchDiagnostics(env, on: conn)
         case "state.list", "state.subscribe", "state.unsubscribe", "timeline.subscribe", "timeline.unsubscribe": dispatchObservation(env, on: conn)
         case "hello.ack", "tree.subscribe", "tree.unsubscribe", "select.node", "select.clear", "bye", "log.subscribe", "log.unsubscribe", "timing.subscribe", "timing.unsubscribe": dispatchScene(env, on: conn)
         case "mirror.start", "mirror.stop", "mirror.input": dispatchMirror(env, on: conn)

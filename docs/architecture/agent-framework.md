@@ -67,6 +67,20 @@ let result = try await agent.run(messages: [AgentMessage(role: .user, text: "当
 
 原生 Inspector 的 `NodeSummary.semanticRole` 优先保留显式诊断角色，否则取节点的辅助功能角色；普通按钮、输入框和 dialog 不必额外写 debug metadata 才能按角色发现。
 
+开启原生 DevTools 后，`hello.capabilities` 中的 `diagnostics` 表示支持实际窗口的 AI 查询。`diagnostics.tools` 返回当前可调用的 MCP 工具定义；`diagnostics.call` 接收 `{name, arguments}`，返回同一 toolbox 的 `{ok, data}`。当前即时查询包括 `get_diagnostics`、`query_ui_nodes`、`query_ui_recomposition`、`query_ui_state`、`list_skills`、`read_skill`。参数 Schema、分页、脱敏与 SDK 共用；输入最多 256 KiB，结果最多 512 KiB，错误通过标准 `.err` envelope 返回。这些读取不占用 Inspector 的编辑租约。
+
+原生 SDL 循环通过宿主的帧 inbox 执行这些同步读取，连接断开或服务重启后丢弃旧请求。异步 Trace 采集仍通过进程内 toolbox 或已有 `timeline.*` 流使用，不在即时查询列表中承诺可用。
+
+可以在仓库根目录直接查询已启动的原生窗口：
+
+```sh
+swift scripts/query-ui-devtools.swift 9229 --list
+swift scripts/query-ui-devtools.swift 9229 query_ui_nodes '{"role":"heading","visible_only":true}'
+swift scripts/query-ui-devtools.swift 9229 query_ui_nodes '{"text":"More actions","input_enabled_only":true}'
+```
+
+端口取实际 DevTools 启动输出。脚本也接受 `@参数文件.json`；需要启动令牌时通过 `GUAVA_DEVTOOLS_TOKEN` 环境变量提供，不把令牌放进命令行。脚本仅连接 loopback，10 秒超时；具体能力以 `--list` 返回值为准。
+
 时间线为有界环形缓冲，每个 facade 最多保留八份采集。采集只统计自身窗口内遗漏的 spans，报告 dropped。与 Inspector 同时采集时共同使用 recorder，任何一方结束不会停止另一方。取消或 session reset 不发布未完成采集。空闲采集可为零事件。父子 CPU spans 重叠，不可求和当作帧耗时；CPU draw/present 指标不代表 GPU 执行时间。编译时源码位置需要重建才能跟随源码移动。
 
 ## Skills
