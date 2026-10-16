@@ -90,7 +90,7 @@
 
 - 大集合（List/Tree/Table/DataTable/VirtualStack）必须使用窗口化协议，空间不足不改变虚拟化契约：List/Tree/Table/DataTable 先按 `TextScaler` 缩放 authored 行高，触摸面再应用 44pt 下限；窗口化 extent 与滚动范围使用同一高度，切回指针保留字号缩放并移除触摸下限。通用 VirtualStack 使用调用方传入的实际高度。
 - 已知可变行高用 `VariableVirtualStack`；未知高度测量 `[未实现]`。普通 `ScrollView` 不自动窗口化，长列表必须显式选择容器。
-- 数据表列在窄宽下：调用方声明列优先级，容器按优先级隐藏低优先列并提供横向滚动与"列可见性"入口；`frozenColumnCount` 冻结列不参与隐藏 `[未实现]`。
+- 数据表列在窄宽下：`TableColumn.visibility` 声明必要列或自动列优先级；Table / DataTable 按实际宽度隐藏低优先列，提供横向滚动、显隐菜单及可选用户选择 binding。冻结列和活动编辑不参与隐藏，规则与超宽冻结区兜底见 [数据表](data-table.md#列优先级与可见性)。`[已实现]`
 
 ## 2. 视觉与密度基线
 
@@ -250,7 +250,7 @@
 **Table / DataTable**
 
 - 外观：authored 行高（Table 36 / DataTable 36）与表头高度均随 `TextScaler` 缩放一次；表头固定、冻结列、单元格单行裁剪。`[已实现]`
-- 手机：行、单元格与表头高度 ≥ 44pt，窗口化、冻结列、滚动范围和键盘翻页共用真实行高，内嵌按钮与编辑器保留完整命中。`[已实现]`；列按优先级隐藏低优先列并提供横向滚动与"列可见性"入口，冻结列不参与隐藏。`[未实现]`
+- 手机：行、单元格与表头高度 ≥ 44pt，窗口化、冻结列、滚动范围和键盘翻页共用真实行高，内嵌按钮与编辑器保留完整命中。列按优先级隐藏低优先列，显隐入口及菜单行 ≥44pt；冻结列和活动编辑保留，必要内容超宽时横向滚动。`[已实现]`
 - 平板 / 桌面：两轴窗口化、列宽拖拽、键盘单元格导航。`[已实现]`
 - 交互与验收：键盘导航（箭头/Home/End/PageUp/PageDown/F2/Escape/Cmd+A）、编辑提交/取消、辅助功能 row/cell/slider（列宽）。验收：`DataTableInteractionTests`、`RowDensityTests`、`TextScaleRowTests.collectionGeometry` / `dataTableNavigation`、`--component table|dataTable`。
 
@@ -419,6 +419,7 @@ guava showcase gallery --android --component NAME
 | List / Table / DataTable / LazyGrid 字号缩放一次、行间距、前缀索引与滚动边界 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TextScaleRows.swift` |
 | Form / PropertyGrid 标签、列数、编辑状态与 AI 诊断定位 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/FieldLayoutTests.swift` |
 | Toolbar 优先级、菜单、密度与焦点交接 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/ToolbarOverflowTests.swift` |
+| Table / DataTable 列优先级、显隐、排序、编辑迁移、会话和 AI 查询 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TableColumnsTests.swift` |
 | Calendar 月内首尾/翻月、日期限制、实际焦点、禁用与 DatePicker 提交 | `GuavaUI/Tests/GuavaUIComposeTests/Calendar/KeyboardNavigationTests.swift` |
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
@@ -448,7 +449,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 4 | DataTable / Table / Grid 列优先级、隐藏与"列可见性"入口 | `Data/DataTable/*`、`Data/Lists/Table.swift`、`Layout/Grid/*` | 新列策略 API 测试 + `dataTable` 页窄宽验收 |
+| 4 | Grid 列优先级、隐藏与"列可见性"入口；Table / DataTable 已完成，见下方记录 | `Layout/Grid/*` | Grid 列策略与窄宽验收，单列 minimum 的滚动兜底 |
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
 | 6 | Button / Select / DatePicker / Tab 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()` 与 AppBar 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
 | 9 | ScrollView 触摸拖动/惯性、键盘滚动（箭头/Page/Home/End）、横向滚动条 gutter | `Layout/ScrollView.swift` | 触摸滚动测试 + `scrollview` 页；键盘测试 |
@@ -463,6 +464,8 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 编号稳定保留已完成项的空位。建议顺序：先做 4（数据密度，直接影响手机/平板可用性），再做 5–6（截断），然后 9–16（输入与语义补齐）。1–3、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
 AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单，按实际容器在 1 / 3 个平铺操作之间收敛；标题与文字主操作使用统一的单行省略能力，保留全文及 heading 语义，安全区由宿主消费。组件、菜单和原生角色测试及 Gallery 可交互页已经接入；第 6 项仍保留既有控件的逐项采用工作，不能由 AppBar 的完成代替。
+
+第 4 项的 Table / DataTable 已实现共享列策略：必要列、冻结列和活动草稿优先，按实际分配与当前列宽移除低优先自动列；内置 Columns 菜单、显隐 binding 和恢复自动模式。显隐不改变排序、记录、选择或列宽，隐藏焦点列交接并释放捕获，键盘跳过隐藏列，程序化导航可揭示目标。`TableColumnsTests` 覆盖容器/字号/输入/主题矩阵、菜单、排序、编辑、会话重置和经校验的 AI 查询；Gallery 两页增加优先级和三预览。通用 Grid 的列策略与滚动兜底仍保留在第 4 项。
 
 第 1 项命令工具栏溢出已实现：`Toolbar(items:)` 以实测按钮树分配自然宽度，支持优先级、始终保留、始终溢出及图标命令；隐藏 inline 节点仍挂载但不绘制、不接输入、不暴露语义。`ToolbarOverflowTests` 覆盖三档宽度、100%/200% 字号、三种输入集合、菜单操作、节点保留和焦点交接；Gallery Toolbar 已接入自动预览。自定义任意内容仍由应用显式重排，真机触摸和读屏继续按第 4 节取样。
 

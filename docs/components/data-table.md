@@ -8,7 +8,7 @@
 
 排序命令在串行后台队列建立显示顺序及反向 ID 索引；相同值在升序和降序中都保留源顺序。排序时继续显示旧投影，过期回复按命令代数丢弃。最近两个投影缓存供反复切换；数据改变使缓存失效。排序闭包必须 `@Sendable`，不能捕获 UI 状态。
 
-`DataTableSelection`、列宽、滚动位置与 `TextBuffer` 编辑草稿是会话数据，与 authored rows 分开。可由应用绑定选择和列宽。`replaceRows` 后调用方应清空选择，或显式调用 `retainExisting(in:)`；不在每帧遍历大型选中集合。模型不隐式序列化这些会话值。
+`DataTableSelection`、列宽、列显隐选择、滚动位置与 `TextBuffer` 编辑草稿是会话数据，与 authored rows 分开。可由应用绑定选择、列宽与列显隐。`replaceRows` 后调用方应清空选择，或显式调用 `retainExisting(in:)`；不在每帧遍历大型选中集合。模型不隐式序列化这些会话值。
 
 ```swift
 struct AssetRow: Sendable {
@@ -51,4 +51,27 @@ DataTable(model, columns: [name]) { table in
 
 Table 与 DataTable 共用行高解析：先按 `TextScaler` 缩放 authored `rowHeight` 与 `headerHeight`，touch（包含混合输入）再应用 44pt 下限；pointer 仅移除触摸下限。不要在调用方预先缩放高度。DataTable 的冻结列、可见窗口、占位、滚动范围、目标显露和 PageUp/Down 使用同一行高；Table 将 authored 行高交给内部 List，单元格使用解析后的高度，避免二次缩放。触摸单元格移除纵向内容 inset，使内嵌按钮与编辑器的 44pt 命中不被裁剪。解析只作用于当前视图值，不写回配置或数据模型。
 
-`RowDensityTests.collectionRows` 在 390/720/1280pt 验证 touch-only、混合输入、pointer 恢复、较大 authored 行高和节点/选择保留；`dataTableNavigation` 验证触摸翻页、最后一行、冻结列对齐与编辑取消后的焦点恢复。`TextScaleRowTests.collectionGeometry` / `dataTableNavigation` 验证 100%/125%/200% 字号、表头高度、选择/焦点保留及翻页与滚动 extent。窄宽列优先级仍属于待实现项。
+`RowDensityTests.collectionRows` 在 390/720/1280pt 验证 touch-only、混合输入、pointer 恢复、较大 authored 行高和节点/选择保留；`dataTableNavigation` 验证触摸翻页、最后一行、冻结列对齐与编辑取消后的焦点恢复。`TextScaleRowTests.collectionGeometry` / `dataTableNavigation` 验证 100%/125%/200% 字号、表头高度、选择/焦点保留及翻页与滚动 extent。
+
+### 列优先级与可见性
+
+`Table` 与 `DataTable` 共用 `TableColumn.visibility`。默认 `.required` 保留列；`.automatic(priority:)` 按实际容器宽度移除低优先列，相同优先级先移除靠后的列。列宽使用当前拖拽宽度，不缩小列宽、字号或触摸行高来塞进视口。冻结前缀与正在编辑的列不自动隐藏，至少保留一列。
+
+```swift
+let details = TableColumn<AssetRow>("details", "Details", configure: {
+    $0.layout.width = 110
+    $0.visibility = .automatic(priority: 10)
+}) { Text("ID \($0.id)") }
+
+DataTable(model, columns: [name, details]) {
+    $0.options.columnVisibility = $columnChoices
+}
+```
+
+`columnVisibility` 是可选的 `[String: Bool]` binding：`true` 强制显示，`false` 隐藏，缺省使用自动策略；必要列、冻结列和活动编辑仍优先。无 binding 时选择只属于当前挂载会话，卸载重置。有自动列时，表格自带“Columns”按钮、可见数量和复用 Menu 的勾选入口；“Automatic columns”清除用户选择。触发器及菜单行至少 44pt，必要列的菜单项保持选中并禁用。
+
+用户强制显示超出容器的列时保留横向滚动。冻结区域本身宽于可用区时，当前呈现暂时使用整体横向滚动，保留全部必要列；恢复空间后恢复冻结。显隐不改写模型、排序或列宽。键盘仅导航当前列；隐藏焦点列时交接到可见性入口并释放拖拽捕获。正在编辑的列保留到提交/取消，冻结/滚动区迁移不触发失焦提交；普通点击离开仍验证并提交。程序化导航到隐藏列会将它显式显示并揭示目标。窗口化允许隐藏列卸载，单元格的长期值仍由模型管理。
+
+`TableColumnsTests` 覆盖两类表格的宽度、100%/200% 字号、三种输入和明暗主题，以及显隐、排序、选择、焦点、草稿和会话重置；AI 查询验证隐藏列不暴露可交互单元格，恢复显示后可按列名发现。Gallery `table` / `dataTable` 提供优先级、菜单和三种容器预览。
+
+2026-10-16 macOS 原生 Gallery 加载 200,000×33：1280pt 窗口保留 6 列，390pt 窗口保留 Asset；显式恢复 Quantity 后保留两列与横向滚动。经 [DevTools 即时 AI 工具](../architecture/agent-framework.md#诊断工具) 查询，当前窄屏视口有 7 个 row，隐藏 Quantity 的可见单元格为 0，恢复后为 7。100%/200% 字号的入口命中分别为 79×44 / 125×50pt，200% 菜单行高 52pt，必要列禁用勾选、恢复自动模式均已实际操作。空数据仍保留已分配的表头；仅剩冻结列时不产生重复空行语义。以上不是 GPU 帧时间或物理设备触摸测量。

@@ -8,22 +8,24 @@ extension DataTable {
     }
     private func cellContent(record: Record, rowID: ID, column: TableColumn<Record>, isTouch: Bool) -> AnyView {
         if let draft = session.editing, draft.rowID == rowID, draft.columnID == column.id {
-            return AnyView(TextField(text: Binding(get: { session.editing?.buffer ?? .empty }, set: { session.editing?.buffer = $0 })) { input in
-                input.behavior.disabled = !options.isEnabled
-                input.navigation.focusRequestID = draft.identity
-                input.codeEditing.editHistory = nil
-                input.events.onSubmit = { _ = commitEditing() }
-                input.events.onBlur = { _ = commitEditing(restoresFocus: false) }
-                input.events.onCancel = { session.editing = nil; session.focus.focus() }
-                input.events.onChange = { _ in session.editing?.error = nil }
-                input.events.onKeyDown = { event in
-                    guard event.scancode == Scancode.tab else { return false }
-                    guard commitEditing() else { return true }
-                    let direction = event.modifiers.contains(.shift) ? -1 : 1
-                    moveEditor(from: draft, direction: direction); return true
-                }
-            }.font(.label).padding(horizontal: 4, vertical: isTouch ? 0 : 2)
-                .accessibility { $0.label = "Edit \(column.title)"; $0.state.isInvalid = draft.error != nil; $0.help = draft.error ?? "Return commits, Escape cancels" })
+            return AnyView(DataTableEditorPresence(focus: session.focus) { isPresented in
+                TextField(text: Binding(get: { session.editing?.buffer ?? .empty }, set: { session.editing?.buffer = $0 })) { input in
+                    input.behavior.disabled = !options.isEnabled
+                    input.navigation.focusRequestID = draft.identity
+                    input.codeEditing.editHistory = nil
+                    input.events.onSubmit = { _ = commitEditing() }
+                    input.events.onBlur = { if isPresented() { _ = commitEditing(restoresFocus: false) } }
+                    input.events.onCancel = { session.editing = nil; session.focus.focus() }
+                    input.events.onChange = { _ in session.editing?.error = nil }
+                    input.events.onKeyDown = { event in
+                        guard event.scancode == Scancode.tab else { return false }
+                        guard commitEditing() else { return true }
+                        let direction = event.modifiers.contains(.shift) ? -1 : 1
+                        moveEditor(from: draft, direction: direction); return true
+                    }
+                }.font(.label).padding(horizontal: 4, vertical: isTouch ? 0 : 2)
+                    .accessibility { $0.label = "Edit \(column.title)"; $0.state.isInvalid = draft.error != nil; $0.help = draft.error ?? "Return commits, Escape cancels" }
+            })
         }
         return AnyView(Box(direction: .row, alignItems: .center,
             justifyContent: column.layout.alignment == .leading ? .flexStart : column.layout.alignment == .trailing ? .flexEnd : .center) {

@@ -136,7 +136,7 @@
 | Calendar | 区间选择（见 2.8）；Home/End/PageUp/Down 已实现，见 [日历导航](calendar.md) | P1 |
 | List | 多选/区段/重排/swipe/下拉刷新（见 2.9） | P1 |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
-| Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级见规范 5-4，文本缩放行高已有 | P2 |
+| Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |
 | Chart | pie/area/scatter/stacked、图例交互、数据点选择 | P2 |
 | Timeline | 分组/折叠、缩放 | P2 |
 | Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义；触摸展开验收见规范 5-10，触摸行高与水平翻转已有 | P2 |
@@ -159,7 +159,7 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应；再加规范第 5 节的 DataTable 列优先级。AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
+**P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应。DataTable / Table 列优先级与显隐菜单、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。通用 Grid 的余项继续由规范第 5-4 项跟踪。
 
 **P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail 与 AdaptiveSidebar 统一壳层已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)。
 

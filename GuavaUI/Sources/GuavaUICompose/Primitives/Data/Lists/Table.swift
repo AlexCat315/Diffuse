@@ -26,6 +26,7 @@ public struct TableColumn<Record>: Identifiable {
     public let id: String
     public let title: String
     public var layout = TableColumnLayout()
+    public var visibility: TableColumnVisibility = .required
     /// Equal comparisons retain source order in both sort directions.
     public var compare: (@Sendable (Record, Record) -> ComparisonResult)?
     public var textEditing: TableTextEditing<Record>?
@@ -74,6 +75,8 @@ public struct TableOptions<ID: Hashable> {
     public var sort: Binding<TableSort?>?
     /// When absent, resized widths belong to this mounted table's session.
     public var columnWidths: Binding<[String: Float]>?
+    /// Per-column user choices: true forces shown, false hides; absent is automatic.
+    public var columnVisibility: Binding<[String: Bool]>?
     public var layout = TableLayout()
     public var isEnabled = true
     public init() {}
@@ -82,6 +85,7 @@ private struct TableSession<ID: Hashable> {
     var selection: ID?
     var sort: TableSort?
     var widths: [String: Float] = [:]
+    var visibility: [String: Bool] = [:]
     var viewportWidth: Float = 0
 }
 
@@ -90,7 +94,7 @@ private struct TableSession<ID: Hashable> {
 public struct Table<Record, ID: Hashable>: View {
     public let records: [Record]
     public let id: KeyPath<Record, ID>
-    public let columns: [TableColumn<Record>]
+    public private(set) var columns: [TableColumn<Record>]
     public var options = TableOptions<ID>()
     public var onActivate: ((Record) -> Void)?
     @State private var session = TableSession<ID>()
@@ -105,13 +109,17 @@ public struct Table<Record, ID: Hashable>: View {
             TextScalerReader { scaler in
                 var table = self
                 table.options.layout = options.layout.resolved(in: surface, textScaler: scaler)
-                return table.content(authoredRowHeight: options.layout.rowHeight,
-                    cellVerticalPadding: surface.input.contains(.touch) ? 0 : 4)
+                let rows = Self.sorted(records, columns: columns, sort: sortBinding.wrappedValue)
+                return TableColumns(columns: columns, widths: options.columnWidths?.wrappedValue ?? session.widths,
+                    overrides: visibilityBinding, isEnabled: options.isEnabled) { plan in
+                    var presented = table; presented.columns = plan.indices.map { columns[$0] }
+                    return presented.content(rows: rows, authoredRowHeight: options.layout.rowHeight,
+                        cellVerticalPadding: surface.input.contains(.touch) ? 0 : 4)
+                }
             }
         }
     }
-    private func content(authoredRowHeight: Float, cellVerticalPadding: Float) -> some View {
-        let rows = Self.sorted(records, columns: columns, sort: sortBinding.wrappedValue)
+    private func content(rows: [Record], authoredRowHeight: Float, cellVerticalPadding: Float) -> some View {
         let positions = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($0.element[keyPath: id], $0.offset) })
         let width = columns.reduce(Float(0)) { $0 + columnWidth($1) }
         return ScrollView(.horizontal, scrollbarGutter: .stable, onViewportChange: { viewport in
@@ -130,7 +138,8 @@ public struct Table<Record, ID: Hashable>: View {
                             for column in columns {
                                 AnyView(Box(direction: .row, alignItems: .center, justifyContent: column.layout.alignment == .leading ? .flexStart : column.layout.alignment == .trailing ? .flexEnd : .center) { column.content(record) }.padding(horizontal: 10, vertical: cellVerticalPadding)
                                     .frame(width: columnWidth(column), height: options.layout.rowHeight)
-                                    .flex(0, shrink: 0).clipped().accessibility { $0.role = .cell; $0.label = column.title })
+                                    .flex(0, shrink: 0).clipped().accessibility { $0.role = .cell; $0.label = column.title }
+                                    .modifier(TableColumnIdentity(id: column.id)).id(column.id))
                             }
                         }.modifier(TableStripeModifier(isAlternate: !selected && options.layout.isStriped && positions[record[keyPath: id]].map { $0 % 2 == 1 } == true))
                     }.listRowStyle(TableRowStyle()).flex(1, shrink: 1, basis: 0).frame(minHeight: 0)
@@ -161,12 +170,16 @@ public struct Table<Record, ID: Hashable>: View {
                         TableResizeGrip(width: widthBinding(column), layout: column.layout, isEnabled: options.isEnabled)
                             .accessibilityLabel("Resize \(column.title) column")
                     }
-                }.frame(width: columnWidth(column), height: options.layout.headerHeight).flex(0, shrink: 0))
+                }.frame(width: columnWidth(column), height: options.layout.headerHeight).flex(0, shrink: 0)
+                    .modifier(TableColumnIdentity(id: column.id)).id(column.id))
             }
         }.background(.surfaceVariant)
     }
     private var selectionBinding: Binding<ID?> {
         options.selection ?? Binding(get: { session.selection }, set: { session.selection = $0 })
+    }
+    private var visibilityBinding: Binding<[String: Bool]> {
+        options.columnVisibility ?? Binding(get: { session.visibility }, set: { session.visibility = $0 })
     }
     private var sortBinding: Binding<TableSort?> {
         options.sort ?? Binding(get: { session.sort }, set: { session.sort = $0 })

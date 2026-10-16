@@ -11,6 +11,7 @@ public struct DataTableOptions<ID: Hashable & Sendable> {
     public var selection: Binding<DataTableSelection<ID>>?
     public var selectionMode: DataTableSelectionMode = .multiple
     public var columnWidths: Binding<[String: Float]>?
+    public var columnVisibility: Binding<[String: Bool]>?
     public var layout = TableLayout()
     public var frozenColumnCount = 1
     public var navigation = DataTableNavigation<ID>()
@@ -31,6 +32,7 @@ struct DataTableCellDraft<ID: Hashable & Sendable> {
 struct DataTableSession<ID: Hashable & Sendable> {
     var selection = DataTableSelection<ID>()
     var widths: [String: Float] = [:]
+    var visibility: [String: Bool] = [:]
     var viewport = ScrollViewport(offset: .zero, size: .zero)
     var offset = CGPoint.zero
     var editing: DataTableCellDraft<ID>?
@@ -43,7 +45,7 @@ struct DataTableSession<ID: Hashable & Sendable> {
 /// Row selection and cell edit drafts are transient, independent of the model.
 public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
     public let model: DataTableModel<Record, ID>
-    public let columns: [TableColumn<Record>]
+    public private(set) var columns: [TableColumn<Record>]
     public var options = DataTableOptions<ID>()
     public var onActivate: ((Record) -> Void)?
     private var observedRevision: Observed<DataTableModel<Record, ID>, UInt64>
@@ -61,17 +63,36 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
     var selectionBinding: Binding<DataTableSelection<ID>> {
         options.selection ?? Binding(get: { session.selection }, set: { session.selection = $0 })
     }
+    private var visibilityBinding: Binding<[String: Bool]> {
+        options.columnVisibility ?? Binding(get: { session.visibility }, set: { session.visibility = $0 })
+    }
     public var body: some View {
         SurfaceReader { surface in
             TextScalerReader { scaler in
                 var table = self
                 table.options.layout = options.layout.resolved(in: surface, textScaler: scaler)
-                return table.content
+                if let request = options.navigation.requestID, request != session.lastNavigation,
+                   let rowID = options.navigation.rowID, model.index(for: rowID) != nil,
+                   let id = options.navigation.columnID, let column = columns.first(where: { $0.id == id }),
+                   column.visibility != .required, visibilityBinding.wrappedValue[id] != true {
+                    visibilityBinding.wrappedValue[id] = true
+                }
+                return TableColumns(columns: columns, widths: options.columnWidths?.wrappedValue ?? session.widths,
+                    overrides: visibilityBinding, frozenCount: options.frozenColumnCount,
+                    pinnedIDs: Set(session.editing.map { [$0.columnID] } ?? []), isEnabled: options.isEnabled) { plan in
+                    var presented = table; presented.columns = plan.indices.map { columns[$0] }
+                    presented.options.frozenColumnCount = plan.frozenCount
+                    return presented.content(availableWidth: plan.availableWidth)
+                }
             }
         }
     }
-    private var content: some View {
+    private func content(availableWidth: Float) -> some View {
         let _ = observedRevision.wrappedValue
+        if let focused = selectionBinding.wrappedValue.focusedColumnID, !columns.contains(where: { $0.id == focused }) {
+            var selection = selectionBinding.wrappedValue
+            selection.focusedColumnID = columns.first?.id; selectionBinding.wrappedValue = selection
+        }
         if options.navigation.requestID != nil, options.navigation.requestID != session.lastNavigation,
            let id = options.navigation.rowID, let row = model.index(for: id) {
             session.lastNavigation = options.navigation.requestID
@@ -80,7 +101,10 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
         let geometry = geometry
         let rows = VirtualStack<[Int], Int, EmptyView>.visibleRange(count: model.count, rowStride: options.layout.rowHeight,
             offset: Float(session.offset.y), height: Float(session.viewport.size.height), overscan: 3)
-        let moving = geometry.visibleColumns(offset: Float(session.offset.x), width: Float(session.viewport.size.width))
+        // Empty tables have no row scroller to publish a viewport. Their
+        // headers still use the allocated width rather than an empty window.
+        let movingWidth = model.count == 0 ? availableWidth - geometry.frozenWidth : Float(session.viewport.size.width)
+        let moving = geometry.visibleColumns(offset: Float(session.offset.x), width: movingWidth)
         return DataTableInputHost(focus: session.focus, isEnabled: options.isEnabled, onKey: handleKey,
             content: Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 header(geometry: geometry, moving: moving).flex(0, shrink: 0)
@@ -146,6 +170,7 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
                     .accessibilityLabel("Resize \(column.title) column")
             }
         }.frame(width: width, height: options.layout.headerHeight).flex(0, shrink: 0).clipped()
+            .modifier(TableColumnIdentity(id: column.id))
     }
     private func bodyViewport(rows: Range<Int>, moving: Range<Int>, geometry: DataTableColumnGeometry) -> AnyView {
         let height = Float(model.count) * options.layout.rowHeight
@@ -165,7 +190,8 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
         }.frame(minHeight: 0))
     }
     private func rowWindow(_ rows: Range<Int>, columns range: Range<Int>, geometry: DataTableColumnGeometry) -> AnyView {
-        AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
+        if range.isEmpty { return AnyView(Box {}.frame(height: Float(model.count) * options.layout.rowHeight)) }
+        return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Box {}.frame(height: Float(rows.lowerBound) * options.layout.rowHeight).flex(0, shrink: 0)
             for index in rows {
                 AnyView(row(index, columns: range, geometry: geometry).id(model.rowID(at: index)))
@@ -176,7 +202,8 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
     private func row(_ index: Int, columns range: Range<Int>, geometry: DataTableColumnGeometry) -> some View {
         let id = model.rowID(at: index), record = model.record(at: index), selection = selectionBinding.wrappedValue
         return DataTableRowHost(index: index, isSelected: selection.selectedIDs.contains(id), isStriped: options.layout.isStriped,
-            isEnabled: options.isEnabled, isFrozenLane: range.upperBound <= geometry.frozenCount, content: Row(alignment: .center, spacing: 0) {
+            isEnabled: options.isEnabled, isFrozenLane: range.upperBound <= geometry.frozenCount && geometry.frozenCount < geometry.widths.count,
+            content: Row(alignment: .center, spacing: 0) {
                 if range.lowerBound >= geometry.frozenCount, range.lowerBound < geometry.starts.count {
                     Box {}.frame(width: geometry.starts[range.lowerBound] - geometry.frozenWidth).flex(0, shrink: 0)
                 }
@@ -190,7 +217,8 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
                             else { onActivate?(record) }
                         },
                         content: cell(record: record, rowID: id, column: column))
-                        .frame(width: geometry.widths[columnIndex], height: options.layout.rowHeight).flex(0, shrink: 0).clipped().id(column.id))
+                        .frame(width: geometry.widths[columnIndex], height: options.layout.rowHeight).flex(0, shrink: 0).clipped()
+                        .modifier(TableColumnIdentity(id: column.id)).id(column.id))
                 }
                 Spacer()
             }).frame(height: options.layout.rowHeight).flex(0, shrink: 0)

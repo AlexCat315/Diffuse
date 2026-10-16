@@ -8,12 +8,12 @@ struct DataTableColumnGeometry {
     let frozenCount: Int
     let totalWidth: Float
     init(widths: [Float], frozenCount: Int) {
-        self.widths = widths; self.frozenCount = min(max(0, frozenCount), max(0, widths.count - 1))
+        self.widths = widths; self.frozenCount = min(max(0, frozenCount), widths.count)
         var starts: [Float] = []; var width: Float = 0
         for value in widths { starts.append(width); width += value }
         self.starts = starts; totalWidth = width
     }
-    var frozenWidth: Float { frozenCount < starts.count ? starts[frozenCount] : 0 }
+    var frozenWidth: Float { frozenCount < starts.count ? starts[frozenCount] : totalWidth }
     var movingWidth: Float { totalWidth - frozenWidth }
     func visibleColumns(offset: Float, width: Float) -> Range<Int> {
         guard frozenCount < widths.count else { return frozenCount..<frozenCount }

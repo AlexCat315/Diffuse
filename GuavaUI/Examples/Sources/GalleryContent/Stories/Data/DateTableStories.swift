@@ -13,18 +13,20 @@ struct TableStory: View {
     @State private var selection: Int?
     @State private var sort: TableSort?
     @State private var widths: [String: Float] = [:]
+    @State private var visibility: [String: Bool] = [:]
     @State private var status = "Choose a row or sort a column"
     private let records = (0..<10_000).map { InventoryRecord(id: $0, name: "Asset \($0 + 1)", category: ["Texture", "Material", "Mesh"][$0 % 3], stock: ($0 * 17) % 250) }
     private var columns: [TableColumn<InventoryRecord>] {
         [TableColumn("name", "Name", configure: { $0.layout.width = 220; $0.compare = { $0.name.localizedStandardCompare($1.name) } }) { Text($0.name).font(.label) },
-         TableColumn("category", "Category", configure: { $0.layout.width = 180; $0.compare = { $0.category.compare($1.category) } }) { Badge($0.category) },
-         TableColumn("stock", "Stock", configure: { $0.layout.width = 120; $0.compare = { $0.stock == $1.stock ? .orderedSame : $0.stock < $1.stock ? .orderedAscending : .orderedDescending } }) { Text(String($0.stock)).font(.label) }]
+         TableColumn("category", "Category", configure: { $0.layout.width = 180; $0.visibility = .automatic(); $0.compare = { $0.category.compare($1.category) } }) { Badge($0.category) },
+         TableColumn("stock", "Stock", configure: { $0.layout.width = 120; $0.visibility = .automatic(priority: 10); $0.compare = { $0.stock == $1.stock ? .orderedSame : $0.stock < $1.stock ? .orderedAscending : .orderedDescending } }) { Text(String($0.stock)).font(.label) }]
     }
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Inventory · 10,000 rows", "Sort headers through ascending, descending and source order. Drag column edges or use Left/Right on a focused divider. Rows are virtualized.") {
+            StorySection("Inventory · 10,000 rows", "Narrow tables prioritize Stock over Category. Use Columns for explicit visibility choices. Sort headers through ascending, descending and source order; hidden sort columns retain their ordering. Rows are virtualized.") {
                 Table(records, id: \.id, columns: columns) {
                     $0.options.selection = $selection; $0.options.sort = $sort; $0.options.columnWidths = $widths
+                    $0.options.columnVisibility = $visibility
                     $0.options.isEnabled = options.isEnabled; $0.onActivate = { status = "Opened \($0.name)" }
                 }.frame(height: 320).flex(0, shrink: 0).debugName("gallery-table")
                 Text("\(status) · Selected: \(selection.map(String.init) ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
