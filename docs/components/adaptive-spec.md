@@ -178,16 +178,16 @@
 **Stepper**
 
 - 外观：数字/完成/失败/忙碌图标 + 标题 + 说明；选中是导航、状态是业务值，互不写入。`[已实现]`
-- 手机：窄宽下先换纵向排列，再退化为横向滚动；不得压缩步骤或触摸目标，不得把说明截断到不可读。`[未实现]`（当前无自动换纵向/滚动）
+- 手机：容器宽度不足每个步骤的横向预算（默认每步 148pt + 24pt 连接段）时切换为纵向堆叠，方向键随实际轴；保留宽/窄两套分支，不压缩步骤、触摸目标或说明文本。`[已实现]`，`StepperOptions.minimumHorizontalStepWidth` 可调
 - 平板 / 桌面：横向单行；200% 文本缩放可操作。`[已实现]`
-- 交互与验收：单一 Tab 停靠、方向键（随轴）、Home/End、边界停止、禁用跳过；辅助功能暴露序号与结果。验收：`--component stepper` + `Stepper` 测试。
+- 交互与验收：单一 Tab 停靠、方向键（随实际轴）、Home/End、边界停止、禁用跳过；窄宽堆叠后 Left/Right 不再导航、Up/Down 生效；辅助功能暴露序号与结果。验收：`NarrowReflowTests.stepperReflow`、`ProductInteractionRegressionTests.stepperNavigation`、`--component stepper`。
 
 **ButtonGroup / Segment**
 
 - 外观：分段单选，选中填充 accent；roving focus 单停靠点。`[已实现]`
-- 手机：段数多时不缩文字；超出宽度改为横向滚动或换行成两段。`[未实现]`
+- 手机：段数多时不缩文字；超出宽度时按段换行，段宽与触摸高度保持，roving focus 仍只占一个 Tab 停靠点。`[已实现]`
 - 平板 / 桌面：单行分段；hover 反馈。`[已实现]`
-- 交互与验收：方向键切换、辅助功能 radio/tab 语义；触摸段高 ≥ 44pt。验收：`TouchDensityTests` segment、Gallery `--component buttonGroup`。
+- 交互与验收：方向键切换、辅助功能 radio/tab 语义；触摸段高 ≥ 44pt；换行后所有段仍可达。验收：`NarrowReflowTests.buttonGroupReflow`、`TouchDensityTests` segment、Gallery `--component buttonGroup`。
 
 **Calendar**
 
@@ -215,9 +215,9 @@
 **NumberField / Vec3Field**
 
 - 外观：NumberField 为 TextField + 可选步进列（最小 22pt）；Vec3Field 为三个可收缩轴单元 + 固定轴字母。`[已实现]`
-- 手机：步进按钮触摸 ≥ 44pt；Vec3Field 窄宽下允许两行（X/Y 一行、Z 一行）或横向滚动，不允许把轴单元压到不可编辑。`[未实现]`（当前只有 shrink + clip）
+- 手机：步进按钮触摸 ≥ 44pt；Vec3Field 在宽度不足时按 96pt 基准换行，X/Y 一行、Z 下一行（极窄时逐行），轴单元最小 88pt 保持可编辑，不靠 clip 隐藏输入。`[已实现]`
 - 平板 / 桌面：单行三联编辑；Shift/Alt 步进语义保持。`[已实现]`
-- 交互与验收：提交/失焦解析、非法输入恢复、min/max 夹紧、辅助功能输入值；验收：`--component numberField|vec3Field`。
+- 交互与验收：提交/失焦解析、非法输入恢复、min/max 夹紧、辅助功能输入值；换行前后轴输入身份与草稿保留。验收：`NarrowReflowTests.vec3Reflow`、`--component numberField|vec3Field`。
 
 **ColorField**
 
@@ -502,14 +502,12 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | --- | --- | --- | --- |
 | 6 | Button / Select / DatePicker 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()`、AppBar 与 TabView 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
 | 10 | 浮层自适应：底部抽屉 Sheet、Select/CommandPalette 弹层宽度与行高、菜单触摸展开子菜单 | `Overlays/*`、`Fields/Select.swift` | 对应浮层测试 + 390pt 取样 |
-| 11 | Stepper / ButtonGroup 窄宽替代布局（纵向或滚动） | `Navigation/Stepper/*`、`Layout/NavigationComponents.swift` | 390pt 取样 + 布局测试 |
-| 12 | NumberField / Vec3Field 窄宽重排（两行或滚动） | `Fields/NumberField.swift`、`Fields/Vec3Field.swift` | 390pt 取样 + 布局测试 |
 | 13 | 焦点环模态统一：仅键盘焦点绘制（Toggle/Slider/表格等当前点击也绘制） | 各控件 style | 统一断言助手 + 逐控件测试 |
 | 14 | 辅助功能补齐：滚动条/滚动位置语义、Select/Combobox 专用角色、hint/described-by | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
-编号稳定保留已完成项的空位。建议顺序：先做 6（截断），然后 9–16（输入与语义补齐）。1–5、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+编号稳定保留已完成项的空位。建议顺序：先做 6（截断），然后 10、13–16（浮层、输入与语义补齐）。1–5、7–12 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 
@@ -536,6 +534,8 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 第 17 项动画曲线扩展已完成：`AnimationCurve` 新增 `steps(_:position:)`、`piecewiseLinear(LinearTimingCurve)`、`bounceOut` 与 `elasticOut`；`CurveTests` 在 macOS 宿主上覆盖端点与非法时间、阶梯边界跳变与单调性、折线平台/反向/过冲与极端 progress、弹跳撞击连续性与递衰、弹性过冲与衰减、延迟/精确终值/调度清理。Gallery `--component animation` 新增可交互 `AnimationCurveExamples` 双向尺寸动画（`animation-curve-choice-*`、`animation-curve-play`、`animation-curve-bar`），`AnimationTests` 覆盖 390/720/1280pt、light/dark、双向播放、减少动画立即吸附与禁用状态；同时补齐通用 `animatableSet` 在减少动画下吸附终值并取消在飞控制器（`ReducedMotionEnvironment` 键下沉到 `GuavaUIScene`，Compose 侧只保留 `.reducedMotion()` 修饰器）。`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable` 与 `swift test --package-path GuavaUI/Examples` 均通过。真机视觉仍按第 4 节矩阵验收。
 
 第 18–21 项动画能力已完成：几何弹簧可显式过冲并继承实际值速度，通用 `springDrag` 提供带速度释放；新增关键帧、普通域相位、有限 / 无限循环、共享位置尺寸和数值过渡；完成组区分名义期限与物理尾部，并处理取消、卸载、减少动画和布局后登记。Button、Toggle、菜单、加载指示与 Gallery 已应用。API、适用边界和测试入口统一记录在 [动画系统](animation.md)。
+
+第 11–12 项窄宽重排已完成：`Stepper` 按每步 148pt 加 24pt 连接段的横向预算在宽/窄两套 retained 分支间切换，窄分支纵向堆叠，Left/Right 停止导航、Up/Down 生效；`StepperOptions.minimumHorizontalStepWidth` 供长标题调用方提高预算。开发中的 390pt DevTools 实测发现，原地把同一 `Box` 从 `.row` 改成 `.column` 会让 Yoga 沿用旧行高、把步骤压成 0pt；改为 `ViewThatFits` 的两套稳定布局树后，步骤恢复 56pt 行高。`ButtonGroup` 改用可换行 flex line，段宽与 44pt 触摸高度保持；`Vec3Field` 以 96pt 基准和 88pt 最小轴宽换行，窄宽下 X/Y 一行、Z 下一行。`NarrowReflowTests` 在 390/720pt、触摸输入下验证堆叠/单行几何、换行位置、44pt 段高与轴感知键盘。Gallery `stepper`、`buttonGroup`、`vec3Field` 页与自适应预览已更新；DevTools `query_ui_nodes` 实测 390pt 步骤为 y=446/526/606 × 56pt，720pt 为同一 y=294、x=102/302/502；ButtonGroup 260pt 五段换行；Vec3Field 390pt 的 X/Y 同 y=409、Z y=437，720pt 全宽 X/Y/Z 同 y=277。`capture-ui` 截图确认纵向连接线、分段换行与 Vec3 的 X/Y→Z 排布。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排/swipe/下拉刷新仍按 [缺失清单](gaps.md#29-列表能力包p1) 跟踪。
 

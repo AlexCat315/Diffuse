@@ -15,35 +15,58 @@ public struct Stepper<ID: Hashable>: View {
     private var enabled: [ID] { options.isEnabled ? items.filter(\.isEnabled).map(\.id) : [] }
     private var tabStop: ID? { enabled.first(where: { $0 == selection.wrappedValue }) ?? enabled.first }
     public var body: some View {
+        if options.axis == .vertical {
+            content(vertical: true)
+        } else {
+            // Two retained branches keep each layout tree stable. Mutating one
+            // row's direction in place lets Yoga keep the old row height when
+            // the narrow branch activates, which collapses the step buttons.
+            ViewThatFits(threshold: CGFloat(horizontalBudget),
+                         wide: { content(vertical: false) },
+                         compact: { content(vertical: true) })
+        }
+    }
+
+    private func content(vertical: Bool) -> some View {
         RovingFocusHost(enabledItems: enabled.map { AnyHashable($0) }, selection: { selection.wrappedValue.map { AnyHashable($0) } },
-            onSelect: { if let id = $0.base as? ID { select(id) } }, wraps: options.allowsWrap, command: navigation) {
-            Box(direction: options.axis == .horizontal ? .row : .column,
-                alignItems: .stretch, spacing: options.axis == .horizontal ? 8 : 4) {
+            onSelect: { if let id = $0.base as? ID { select(id) } }, wraps: options.allowsWrap,
+            command: { navigation($0, vertical: vertical) }) {
+            Box(direction: vertical ? .column : .row,
+                alignItems: .stretch, spacing: vertical ? 4 : 8) {
                 for (index, item) in items.enumerated() {
-                    AnyView(step(item, index: index))
-                    if index < items.count - 1 { AnyView(connector(after: item)) }
+                    AnyView(step(item, index: index, vertical: vertical))
+                    if index < items.count - 1 { AnyView(connector(after: item, vertical: vertical)) }
                 }
             }
             .accessibility { $0.role = .list; $0.label = options.label; $0.state.isEnabled = options.isEnabled }
         }
     }
+
+    /// A horizontal stepper only keeps its row while every step has its
+    /// budget. Below that it stacks, so titles, detail text and the 44pt touch
+    /// target stay readable instead of being compressed into unreadable cells.
+    private var horizontalBudget: Float {
+        let budget = max(80, options.minimumHorizontalStepWidth)
+        let connectors = Float(max(0, items.count - 1)) * 32
+        return Float(items.count) * budget + connectors
+    }
     private func select(_ id: ID) {
         guard enabled.contains(id), selection.wrappedValue != id else { return }
         selection.wrappedValue = id
     }
-    private func navigation(_ event: KeyEvent) -> SelectionNavigation? {
+    private func navigation(_ event: KeyEvent, vertical: Bool) -> SelectionNavigation? {
         guard event.modifiers.isEmpty else { return nil }
         switch event.scancode {
         case Scancode.home: return .first
         case Scancode.end: return .last
-        case Scancode.arrowLeft where options.axis == .horizontal: return .previous
-        case Scancode.arrowRight where options.axis == .horizontal: return .next
-        case Scancode.arrowUp where options.axis == .vertical: return .previous
-        case Scancode.arrowDown where options.axis == .vertical: return .next
+        case Scancode.arrowLeft where !vertical: return .previous
+        case Scancode.arrowRight where !vertical: return .next
+        case Scancode.arrowUp where vertical: return .previous
+        case Scancode.arrowDown where vertical: return .next
         default: return nil
         }
     }
-    private func step(_ item: StepperItem<ID>, index: Int) -> some View {
+    private func step(_ item: StepperItem<ID>, index: Int, vertical: Bool) -> some View {
         let selected = selection.wrappedValue == item.id
         return Button(isEnabled: options.isEnabled && item.isEnabled, isSelected: selected,
             tooltip: "Step \(index + 1) of \(items.count) · \(item.status.description)", action: { select(item.id) }) {
@@ -59,13 +82,13 @@ public struct Stepper<ID: Hashable>: View {
         .modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: item.id == tabStop))
         .compositionLocal(ActionControlAccessibility.role, .listItem)
         .compositionLocal(ActionControlAccessibility.value, "Step \(index + 1) of \(items.count) · \(item.status.description)")
-        .flex(options.axis == .horizontal ? 1 : 0, shrink: 1, basis: options.axis == .horizontal ? 0 : nil)
+        .flex(vertical ? 0 : 1, shrink: vertical ? 0 : 1, basis: vertical ? nil : 0)
         .id(item.id)
     }
-    private func connector(after item: StepperItem<ID>) -> some View {
+    private func connector(after item: StepperItem<ID>, vertical: Bool) -> some View {
         ThemeReader { theme in
             let color = item.status == .completed ? theme.colors.success : theme.colors.border
-            if options.axis == .horizontal {
+            if !vertical {
                 Box(direction: .column, justifyContent: .center) {
                     Box {}.frame(width: 24, height: 1).background(color)
                 }.accessibilityHidden()

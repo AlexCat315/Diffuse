@@ -84,10 +84,16 @@ struct PaginationStory: View {
 struct ButtonGroupStory: View {
     let options: GalleryOptions
     @State private var mode: String? = "grid"
+    @State private var category: String? = "grid"
     var body: some View {
-        StorySection("View preference", "The selected segment is caller-owned. The group has one Tab stop; arrows skip the unavailable segment.") {
+        StorySection("View preference", "The selected segment is caller-owned. The group has one Tab stop; arrows skip the unavailable segment. Narrow groups wrap instead of shrinking segment labels.") {
             ButtonGroup([ButtonGroupItem("grid", "Grid"), ButtonGroupItem("list", "List"), ButtonGroupItem("map", "Map", isEnabled: false)], selection: $mode, isEnabled: options.isEnabled)
-            Text("Mode: \(mode ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
+            ButtonGroup([
+                ButtonGroupItem("grid", "Grid view"), ButtonGroupItem("list", "List view"),
+                ButtonGroupItem("timeline", "Timeline"), ButtonGroupItem("inspector", "Inspector"),
+                ButtonGroupItem("materials", "Materials")
+            ], selection: $category, isEnabled: options.isEnabled).frame(width: 260)
+            Text("Mode: \(mode ?? "None")  ·  Category: \(category ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }
 }

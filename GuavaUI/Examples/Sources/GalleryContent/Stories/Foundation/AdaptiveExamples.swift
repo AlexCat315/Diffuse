@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .select, .combobox, .rating, .list, .sectionedList, .calendar, .tabs, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .sectionedList, .calendar, .tabs, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .vec3Field ? 130 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -42,6 +42,9 @@ private struct AdaptiveControlSample: View {
     let options: GalleryOptions
     @State private var text: TextBuffer = "Editable draft"
     @State private var number: Float = 1
+    @State private var vecX: Float = 1.5
+    @State private var vecY: Float = -2
+    @State private var vecZ: Float = 3.25
     @State private var value: Double = 2.5
     @State private var enabled = true
     @State private var selected: Int? = 0
@@ -66,6 +69,11 @@ private struct AdaptiveControlSample: View {
         case .textField: AnyView(TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled }.frame(width: .percent(100)))
         case .searchField: AnyView(SearchField(text: $text, suggestions: ["Camera", "Canvas"], isEnabled: options.isEnabled).frame(width: .percent(100)))
         case .numberField: AnyView(NumberField(value: $number, isEnabled: options.isEnabled, showsStepper: true).frame(width: .percent(100)))
+        case .vec3Field: AnyView(Vec3Field(
+            x: Binding(get: { vecX }, set: { vecX = $0 }),
+            y: Binding(get: { vecY }, set: { vecY = $0 }),
+            z: Binding(get: { vecZ }, set: { vecZ = $0 }),
+            isEnabled: options.isEnabled, step: 0.1).frame(width: .points(220)))
         case .select: AnyView(Select(selection: Binding(get: { selected ?? -1 }, set: { selected = $0 }), options: selectionOptions,
             isEnabled: options.isEnabled).frame(width: .percent(100)))
         case .combobox: AnyView(Combobox(selection: $selected, options: selectionOptions) {
@@ -95,9 +103,17 @@ private struct AdaptiveControlSample: View {
             TabItem("Workspace permissions and collaboration", id: 2, isEnabled: options.isEnabled) { Text("Permissions panel").padding(12) },
             TabItem("Unavailable", id: 3, isEnabled: false) { EmptyView() }
         ]) { $0.overflow = .menu; $0.isEnabled = options.isEnabled }.frame(width: .percent(100), height: .points(132)))
-        case .buttonGroup: AnyView(ButtonGroup([ButtonGroupItem(0, "Grid"), ButtonGroupItem(1, "List")], selection: $selected, isEnabled: options.isEnabled))
+        case .buttonGroup: AnyView(ButtonGroup([
+            ButtonGroupItem(0, "Grid view"), ButtonGroupItem(1, "List view"),
+            ButtonGroupItem(2, "Timeline"), ButtonGroupItem(3, "Inspector"),
+            ButtonGroupItem(4, "Materials")
+        ], selection: $selected, isEnabled: options.isEnabled))
         case .splitButton: AnyView(SplitButton("Run", entries: [.item(MenuItem(id: "export", title: "Export") { text = TextBuffer("Export") })], isEnabled: options.isEnabled) { text = TextBuffer("Run") })
-        case .stepper: AnyView(Stepper([StepperItem(0, "Configure"), StepperItem(1, "Review")], selection: $selected) { $0.isEnabled = options.isEnabled }.frame(width: .percent(100)))
+        case .stepper: AnyView(Stepper([
+            StepperItem(0, "Configure") { $0.detail = "Workspace"; $0.status = .completed },
+            StepperItem(1, "Review") { $0.detail = "Permissions" },
+            StepperItem(2, "Publish") { $0.detail = "Release" }
+        ], selection: $selected) { $0.isEnabled = options.isEnabled }.frame(width: .percent(100)))
         case .toolbar: AnyView(Toolbar(items: [
             ToolbarItem(MenuItem(id: "save", title: "Save") { number += 1 }, placement: .always),
             ToolbarItem(MenuItem(id: "export", title: "Export selection") { text = "Exported" }, placement: .automatic(priority: 10)),

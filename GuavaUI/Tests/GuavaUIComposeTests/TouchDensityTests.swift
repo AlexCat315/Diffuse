@@ -61,7 +61,7 @@ struct TouchDensityTests: GuavaUIComposeSerializedSuite {
         graph.install(root: controls().surfaceEnvironment(environment([.touch])))
         for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 900, height: 2200) }
         let all = nodes(graph.tree.root!)
-        let hosts = all.filter { $0.isHitTestable && ($0.attachments[ButtonHost.markerKey] as? Bool == true
+        let hosts = all.filter { $0.isHitTestable && $0.acceptsSubtreeInput && ($0.attachments[ButtonHost.markerKey] as? Bool == true
             || $0.accessibility?.role == .slider || $0.accessibility?.role == .toggle
             || $0.accessibility?.role == .checkbox || $0.accessibility?.role == .textField
             || $0.accessibility?.role == .listItem) }

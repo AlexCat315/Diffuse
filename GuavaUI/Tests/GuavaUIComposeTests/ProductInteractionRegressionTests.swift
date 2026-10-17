@@ -351,7 +351,7 @@ struct ProductInteractionRegressionTests: GuavaUIComposeSerializedSuite {
                          StepperItem("last", "Details") { $0.status = .failed }]
             graph.install(root: Stepper(steps, selection: Binding(get: { selected }, set: { selected = $0 })))
             settle(graph)
-            let items = buttons(graph)
+            let items = buttons(graph).filter { $0.acceptsSubtreeInput }
             #expect(items.count == 3 && items.filter { $0.isFocusable && $0.isTabStop }.count == 1)
             context.focusChain.focusNext(in: graph.tree.root!)
             settle(graph)
@@ -367,7 +367,7 @@ struct ProductInteractionRegressionTests: GuavaUIComposeSerializedSuite {
             #expect(items[2].accessibility?.role == .listItem && items[2].accessibility?.help.contains("Failed") == true)
             graph.install(root: Stepper(steps, selection: Binding(get: { selected }, set: { selected = $0 })) { $0.axis = .vertical })
             settle(graph)
-            let vertical = buttons(graph)
+            let vertical = buttons(graph).filter { $0.acceptsSubtreeInput }
             context.focusChain.focus(vertical[0])
             dispatcher.dispatch(.keyDown(key(Scancode.arrowRight)))
             #expect(selected == "first")

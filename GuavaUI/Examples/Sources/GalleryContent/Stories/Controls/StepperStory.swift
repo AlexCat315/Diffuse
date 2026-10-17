@@ -13,7 +13,7 @@ struct StepperStory: View {
     }
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("A controlled workflow", "Click a step or use Left/Right and Home/End. Review stays unavailable until details succeed. Going back preserves the saved outcomes.") {
+            StorySection("A controlled workflow", "Click a step or use Left/Right and Home/End. A narrow container stacks the steps and switches to Up/Down. Review stays unavailable until details succeed. Going back preserves the saved outcomes.") {
                 Stepper(steps, selection: $selected) { $0.isEnabled = options.isEnabled }
                 Row(alignment: .center, spacing: 10) {
                     Button("Start", isEnabled: options.isEnabled) { status = .inProgress; unlockReview = false }

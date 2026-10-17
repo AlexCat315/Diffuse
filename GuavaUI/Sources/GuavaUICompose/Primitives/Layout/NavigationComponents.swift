@@ -98,7 +98,10 @@ public struct ButtonGroup<ID: Hashable>: View {
         let tabStop = selection.wrappedValue.flatMap { enabled.contains($0) ? $0 : nil } ?? enabled.first
         return RovingFocusHost(enabledItems: enabled.map { AnyHashable($0) }, selection: { selection.wrappedValue.map { AnyHashable($0) } },
                                onSelect: { selection.wrappedValue = $0.base as? ID }) {
-            Row(alignment: .center, spacing: 2) {
+            // Segments keep their authored width; when the row cannot hold
+            // them, wrap to a second line instead of squeezing labels or
+            // shrinking the touch target.
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 2) {
                 for item in items {
                     AnyView(Button(item.title, isEnabled: isEnabled && item.isEnabled, isSelected: selection.wrappedValue == item.id) { selection.wrappedValue = item.id }
                         .buttonStyle(SegmentButtonStyle()).modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: tabStop == item.id)))

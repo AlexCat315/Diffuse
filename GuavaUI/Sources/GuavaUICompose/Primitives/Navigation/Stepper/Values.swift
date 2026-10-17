@@ -40,5 +40,9 @@ public struct StepperOptions {
     public var isEnabled = true
     public var allowsWrap = false
     public var label = "Steps"
+    /// Width budget one horizontal step needs before the component switches to
+    /// its vertical presentation. Titles longer than the budget should raise
+    /// this instead of letting the step compress.
+    public var minimumHorizontalStepWidth: Float = 148
     public init() {}
 }

@@ -43,7 +43,10 @@ public struct Vec3Field: View {
     }
 
     public var body: some View {
-        Row(alignment: .center, spacing: 4) {
+        // Three editable cells with a real minimum width: when the row cannot
+        // hold all of them, the wrapping flex line puts X/Y on one line and Z
+        // on the next instead of compressing the fields out of editability.
+        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 4) {
             Vec3AxisField(label: "X",
                           color: Color(red: 211, green: 67, blue: 67),
                           value: x,
@@ -54,7 +57,8 @@ public struct Vec3Field: View {
                           maxValue: maxValue,
                           step: step,
                           mixedValueLabel: mixedAxes.contains("x") ? mixedValueLabel : nil)
-                .flex(1, shrink: 1, basis: 0)
+                .flex(1, shrink: 1, basis: Vec3Field.axisBasis)
+                .frame(minWidth: Vec3Field.axisMinimumWidth)
 
             Vec3AxisField(label: "Y",
                           color: Color(red: 95, green: 173, blue: 86),
@@ -66,7 +70,8 @@ public struct Vec3Field: View {
                           maxValue: maxValue,
                           step: step,
                           mixedValueLabel: mixedAxes.contains("y") ? mixedValueLabel : nil)
-                .flex(1, shrink: 1, basis: 0)
+                .flex(1, shrink: 1, basis: Vec3Field.axisBasis)
+                .frame(minWidth: Vec3Field.axisMinimumWidth)
 
             Vec3AxisField(label: "Z",
                           color: Color(red: 78, green: 128, blue: 220),
@@ -78,10 +83,15 @@ public struct Vec3Field: View {
                           maxValue: maxValue,
                           step: step,
                           mixedValueLabel: mixedAxes.contains("z") ? mixedValueLabel : nil)
-                .flex(1, shrink: 1, basis: 0)
+                .flex(1, shrink: 1, basis: Vec3Field.axisBasis)
+                .frame(minWidth: Vec3Field.axisMinimumWidth)
         }
-        .clipped()
     }
+
+    /// Authored width that makes a line break predictable; growth still lets
+    /// the three cells fill a wide property row evenly.
+    static let axisBasis: Float = 96
+    static let axisMinimumWidth: Float = 88
 }
 
 private struct Vec3AxisField: View {

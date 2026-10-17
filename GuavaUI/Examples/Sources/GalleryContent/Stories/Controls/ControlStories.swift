@@ -154,9 +154,9 @@ struct Vec3Story: View {
     @State private var y: Float = 2
     @State private var z: Float = 3
     var body: some View {
-        StorySection("Transform", "Each axis shares numeric validation. Narrow rows remain shrinkable.") {
-            Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, step: 0.1).frame(width: 420)
-            Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, mixedAxes: ["x", "z"]).frame(width: 300)
+        StorySection("Transform", "Each axis shares numeric validation. Wide rows keep X/Y/Z on one line; narrow rows wrap X/Y before Z instead of squeezing the fields.") {
+            Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, step: 0.1).frame(width: .percent(100))
+            Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, mixedAxes: ["x", "z"]).frame(width: 240)
             Text("Position: \(x), \(y), \(z)").font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }

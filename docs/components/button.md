@@ -94,3 +94,5 @@ State 切换走语义动效 `.animation(.semantic(.fast, in: theme), value: conf
 ## 响应式与输入密度
 
 Button 与基于 Button 的 Stepper、ButtonGroup、Tab 在 surface 输入包含 touch 时，命中布局宽高至少 44pt。共享布局 floor 与调用方 minWidth/minHeight 独立，切回 pointer 后恢复当前 authored minima。hover 仅在支持 pointer 的 surface 生效；touch + pointer 同时保留 44pt 密度和 hover。
+
+`ButtonGroup` 的段不再随父宽压缩：宽度不足时按段换行，每段保持 authored 宽度与 ≥44pt 触摸高度；roving focus 仍只有单一 Tab 停靠点，方向键可跨行移动。`NarrowReflowTests.buttonGroupReflow` 在 220pt 验证换行、在 720pt 验证单行；Gallery `--component buttonGroup` 提供 260pt 五段示例。
