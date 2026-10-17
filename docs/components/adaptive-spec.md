@@ -265,7 +265,7 @@
 
 **List / MultiSelectList / SectionedList / Tree**
 
-- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点；Tree 每级缩进 16、箭头列 18。`[已实现]`
+- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点，可选 sticky 标题固定当前区段并由下一标题上推；Tree 每级缩进 16、箭头列 18。`[已实现]`
 - Tree 指示线只保留低对比度竖线（1pt、`onSurfaceMuted` 的 24% alpha），移除横向连接；禁用、同步延迟子节点、Home / End 与 Option / Alt + Left / Right 全部折叠 / 展开已完成，具体边界见 [Tree](tree.md)。
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
@@ -536,6 +536,8 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 第 17 项动画曲线扩展已完成：`AnimationCurve` 新增 `steps(_:position:)`、`piecewiseLinear(LinearTimingCurve)`、`bounceOut` 与 `elasticOut`；`CurveTests` 在 macOS 宿主上覆盖端点与非法时间、阶梯边界跳变与单调性、折线平台/反向/过冲与极端 progress、弹跳撞击连续性与递衰、弹性过冲与衰减、延迟/精确终值/调度清理。Gallery `--component animation` 新增可交互 `AnimationCurveExamples` 双向尺寸动画（`animation-curve-choice-*`、`animation-curve-play`、`animation-curve-bar`），`AnimationTests` 覆盖 390/720/1280pt、light/dark、双向播放、减少动画立即吸附与禁用状态；同时补齐通用 `animatableSet` 在减少动画下吸附终值并取消在飞控制器（`ReducedMotionEnvironment` 键下沉到 `GuavaUIScene`，Compose 侧只保留 `.reducedMotion()` 修饰器）。`swift test --package-path GuavaUI`、`swift test --package-path GuavaUI/Portable` 与 `swift test --package-path GuavaUI/Examples` 均通过。真机视觉仍按第 4 节矩阵验收。
 
 第 18–21 项动画能力已完成：几何弹簧可显式过冲并继承实际值速度，通用 `springDrag` 提供带速度释放；新增关键帧、普通域相位、有限 / 无限循环、共享位置尺寸和数值过渡；完成组区分名义期限与物理尾部，并处理取消、卸载、减少动画和布局后登记。Button、Toggle、菜单、加载指示与 Gallery 已应用。API、适用边界和测试入口统一记录在 [动画系统](animation.md)。
+
+列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排/swipe/下拉刷新仍按 [缺失清单](gaps.md#29-列表能力包p1) 跟踪。
 
 ## 6. 动效与动画（动画效果实现）
 

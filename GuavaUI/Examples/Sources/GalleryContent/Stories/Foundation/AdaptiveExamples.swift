@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .select, .combobox, .rating, .list, .calendar, .tabs, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .select, .combobox, .rating, .list, .sectionedList, .calendar, .tabs, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -30,6 +30,11 @@ struct AdaptiveControlExamples: View {
             }.frame(height: height)
         }
     }
+}
+
+private struct AdaptiveSectionItem: Identifiable {
+    let id: Int
+    var title: String { "Item \(id + 1)" }
 }
 
 private struct AdaptiveControlSample: View {
@@ -68,6 +73,14 @@ private struct AdaptiveControlSample: View {
         }.frame(width: .percent(100)))
         case .rating: AnyView(Rating("Preview score", value: $value) { $0.selection.isEnabled = options.isEnabled; $0.selection.precision = .half })
         case .list: AnyView(List(0..<20, id: \.self, selection: $selected) { index, _ in Text("Item \(index + 1)") }.frame(width: .percent(100), height: .points(132)))
+        case .sectionedList: AnyView(SectionedList([
+            ListSection("preview-favorites", title: "Favorites",
+                        items: Array(0..<4).map(AdaptiveSectionItem.init(id:))),
+            ListSection("preview-scene", title: "Scene",
+                        items: Array(4..<8).map(AdaptiveSectionItem.init(id:)))
+        ], selection: $selected, stickyHeaders: true) { item, _ in
+            Text(item.title)
+        }.frame(width: .percent(100), height: .points(132)))
         case .table, .dataTable: AnyView(AdaptiveTableSample(data: page == .dataTable, options: options).frame(width: .percent(100), height: .percent(100)))
         case .layout: AnyView(GridColumnSample(options: options).frame(width: .percent(100)))
         case .zStack: AnyView(ZStack {

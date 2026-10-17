@@ -10,6 +10,7 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
     private let spacing: Float
     private let overscan: Int
     private let scrollToIndex: Int?
+    private let onScrollOffsetChange: ((CGPoint) -> Void)?
     private let content: (Data.Element) -> Content
     @State private var viewport = ScrollViewport(offset: .zero, size: .zero)
     @State private var offset = CGPoint.zero
@@ -18,9 +19,21 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
     public init(_ data: Data, id: KeyPath<Data.Element, ID>, rowHeight: Float,
                 spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
                 @ViewBuilder content: @escaping (Data.Element) -> Content) {
+        self.init(data, id: id, rowHeight: rowHeight, spacing: spacing, overscan: overscan,
+                  scrollToIndex: scrollToIndex, onScrollOffsetChange: nil, content: content)
+    }
+
+    /// Internal seam for containers that need the live offset to pin content
+    /// (for example `SectionedList`'s sticky header). Not part of the public
+    /// virtualization contract.
+    init(_ data: Data, id: KeyPath<Data.Element, ID>, rowHeight: Float,
+         spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
+         onScrollOffsetChange: ((CGPoint) -> Void)?,
+         @ViewBuilder content: @escaping (Data.Element) -> Content) {
         self.data = data; self.id = id
         self.rowHeight = max(1, rowHeight); self.spacing = max(0, spacing)
         self.overscan = max(0, overscan); self.scrollToIndex = scrollToIndex
+        self.onScrollOffsetChange = onScrollOffsetChange
         self.content = content
     }
 
@@ -46,7 +59,10 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
                                       height: Float(viewport.size.height), overscan: overscan)
         return ScrollView(.vertical, scrollbarGutter: .stable,
                           scrollOffset: Binding(get: { offset }, set: { if offset != $0 { offset = $0 } }),
-                          onViewportChange: { if viewport != $0 { viewport = $0 } }) {
+                          onViewportChange: { if viewport != $0 { viewport = $0 } },
+                          onGeometryChange: { geometry in
+                              onScrollOffsetChange?(geometry.offset)
+                          }) {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Box {}.frame(height: Float(range.lowerBound) * stride)
                 range.map { row(at: $0) }

@@ -48,7 +48,7 @@ public enum GalleryCatalog {
         .init(.assetRef, "AssetRef / DropTarget", "Inputs", "Typed asset references, picker, clear action and accepted kinds."),
         .init(.list, "List", "Data", "Single selection, arrow-key navigation and activation."),
         .init(.multiSelectList, "MultiSelectList", "Data", "Shift range, Cmd/Ctrl toggle, keyboard extension and select-all."),
-        .init(.sectionedList, "SectionedList", "Data", "Flat section headers and footers over the virtualized list contract."),
+        .init(.sectionedList, "SectionedList", "Data", "Sticky section headers and footers over the virtualized list contract."),
         .init(.tree, "Tree", "Data", "Hierarchy, expansion, selection and search with automatic expansion."),
         .init(.virtualList, "VirtualList", "Data", "A fixed-height scroll window over ten thousand rows."),
         .init(.virtualStack, "VirtualStack", "Data", "Viewport-driven materialization and scroll-to-index."),

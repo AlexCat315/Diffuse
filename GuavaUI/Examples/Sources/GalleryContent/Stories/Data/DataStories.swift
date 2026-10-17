@@ -273,20 +273,24 @@ struct SectionedListStory: View {
         let title: String
     }
 
+    private func items(_ titles: [String], from base: Int) -> [Item] {
+        titles.enumerated().map { Item(id: base + $0.offset, title: $0.element) }
+    }
+
     private var sections: [ListSection<String, Item>] {
         [
-            ListSection("favorites", title: "Favorites", items: [
-                Item(id: 1, title: "Main Camera"),
-                Item(id: 2, title: "Key Light"),
-            ]),
-            ListSection("scene", title: "Scene", footer: "3 objects", items: [
-                Item(id: 3, title: "Player"),
-                Item(id: 4, title: "Ground"),
-                Item(id: 5, title: "Trigger"),
-            ]),
-            ListSection("hidden", title: "Hidden", items: [
-                Item(id: 6, title: "Debug Gizmo"),
-            ])
+            ListSection("favorites", title: "Favorites", items: items([
+                "Main Camera", "Key Light", "Fill Light", "Backdrop", "Audio Source"
+            ], from: 1)),
+            ListSection("scene", title: "Scene", footer: "12 objects", items: items([
+                "Player", "Ground", "Trigger", "Door", "Crate", "Lantern",
+                "Bridge", "Water", "Foliage", "Sky", "Music Zone", "Checkpoint"
+            ], from: 100)),
+            ListSection("hidden", title: "Hidden", items: items([
+                "Debug Gizmo", "Nav Mesh", "Light Probe", "Collision Preview",
+                "Occluder", "Reflection Probe", "Decal", "Audio Reverb",
+                "Trigger Volume", "Waypoint", "Fog Volume", "Camera Bookmark"
+            ], from: 200))
         ]
     }
 
@@ -294,8 +298,9 @@ struct SectionedListStory: View {
     @State private var activated = "No activation yet"
 
     var body: some View {
-        StorySection("Sectioned list", "Headers and footers stay outside the focus order; arrows move only through item rows, including across section boundaries.") {
-            SectionedList(sections, selection: $selected, onActivate: { activated = "Activated \($0.title)" }) { item, isSelected in
+        StorySection("Sectioned list", "Scroll the list: the active section header stays pinned and is pushed out by the next one. Headers and footers stay outside the focus order; arrows move only through item rows, including across section boundaries.") {
+            SectionedList(sections, selection: $selected, stickyHeaders: true,
+                          onActivate: { activated = "Activated \($0.title)" }) { item, isSelected in
                 Row(alignment: .center, spacing: 10) {
                     Text(item.title).font(.body)
                     Spacer()

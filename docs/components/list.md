@@ -65,7 +65,8 @@ MultiSelectList(items, id: \.id, selection: $selection,
 SectionedList([
     ListSection("favorites", title: "Favorites", items: favorites),
     ListSection("scene", title: "Scene", footer: "3 objects", items: scene),
-], selection: $selectedID, onActivate: { open($0) }) { item, isSelected in
+], selection: $selectedID, stickyHeaders: true,
+   onActivate: { open($0) }) { item, isSelected in
     Text(item.title)
 }
 ```
@@ -76,15 +77,23 @@ SectionedList([
 | `selection` | `.constant(nil)` | 单选 `Item.ID?` binding |
 | `rowHeight` | 30 | 区段内 item 行高；header/footer 同高 |
 | `rowSpacing` | 0 | 行间距；同时作用于 header/footer |
+| `stickyHeaders` | false | 滚动时固定当前区段标题，由下一标题上推 |
+| `stickyHeaderBackground` | `.surfaceRaised` | 固定标题的不透明底色；列表位于其他表面时传入对应 token |
 | `onActivate` | nil | Return/点击后的激活 |
 
 - 区段按传入顺序平铺；`title`/`footer` 为空时不生成对应行。
 - header/footer role=staticText，不进入焦点顺序、不参与键盘选择。
 - 方向键/Home/End 只在 item 行之间移动，跨区段时跳过 header/footer。
 - 普通点击/Return 复用 `_ListRowHost` 与 `ListRowStyle`；`scrollToIndex` 跟随 cursor。
-- 当前 header 非 sticky；footer 是平面文本，不支持独立交互内容。
+- `stickyHeaders` 打开后，当前区段标题固定在视口顶部；下一区段标题接近时把它向上推出。
+  固定副本只负责绘制，不进入焦点、不接收指针、不重复暴露语义；原 header 行仍是唯一语义来源。
+  列表自身裁剪，推出的标题不会覆盖列表上方的页面内容；固定条覆盖行内容区并保留右侧 12pt 稳定
+  滚动条槽，底部 1pt 分隔线与半露行分开且不改变行高。
+- header 标题单行省略，完整标题保留在辅助功能 label；footer 是平面文本，不支持独立交互内容。
 - 行高统一为 `rowHeight`（触摸 44）；section header 不再单独用 28pt，以保证虚拟化行高一致。
 - 虚拟化使用 `VirtualStack`；`ListSection` 与 item 数据应稳定，避免每次 body 重新构造大量临时值。
+- 固定标题默认按列表常见所在的高一层面板取 `.surfaceRaised`；放在 `surface` 或自定义卡片上时，
+  把 `stickyHeaderBackground` 设为该表面的颜色 token，避免出现色带。
 
 ## Tokens (DefaultListRowStyle)
 
@@ -112,6 +121,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - **调用方的尺寸约束生效**：`List` 最外层是键盘 host，所以 `.frame`/`.flex` 落在它上面，内部滚动容器取剩余高度并裁切。缺少这条时滚动容器会按自身内容撑高，行会画到容器外面去。
 - **`scrollToIndex` 首次布局不生效**：第一帧还没有视口高度，此时做 reveal 会多滚一行并把这次请求消费掉，所以本来可见的目标也会把列表滚过头。`VariableVirtualStack` 用同一条规则。
 - **多选**：使用 `MultiSelectList`；List 保持单选。多选行仍由同一个 `_ListRowHost` 处理点击，modifier 由指针事件传入。
+- **sticky 区段**：`SectionedList(stickyHeaders: true)` 根据真实滚动 offset 计算当前区段；标题只在原行滚出顶部后接替，下一标题进入标题高度范围时上推它。计算复用虚拟化的固定 `rowHeight + rowSpacing`，因此触摸行高、字号缩放和 `scrollToIndex` 显露都得到同一条几何。固定副本不参与命中与语义，滚动仍由同一个 `ScrollView` 接收。
 
 ## Authoring rules
 
@@ -137,9 +147,11 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 ## Verification
 
 - `SectionedListTests`：header/footer 文本、2 个 item 行、点击与键盘选择/激活。
+- `SectionedListTests.stickyHeaders`：通过真实 `ScrollView` offset 验证首区段标题固定、下一标题上推 15pt、标题交接，以及 End 程序化显露后固定标题跟随到末区段；固定副本隐藏语义、关闭命中。
+- `SectionedListTests.stickyHeadersDisabled`：默认关闭时滚动不生成固定标题，普通 header 仍在行内。
 - `MultiSelectListTests.pointerSelection`：点击 20、Shift-click 40、Cmd-click 30 的集合变化。
 - `MultiSelectListTests.keyboardSelection`：Shift+Arrow 扩展、普通 Arrow 收拢、Cmd+A 全选。
-- Gallery `multiSelectList` 页提供 12 行、初始选中与状态文本。
+- Gallery `multiSelectList` 页提供 12 行、初始选中与状态文本；`sectionedList` 页提供可滚动的三段列表并默认开启 sticky。
 
 ## File map
 
@@ -151,3 +163,5 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 List 先用 `TextScaler` 缩放 authored `rowHeight` 与 `rowSpacing`，再在 touch surface 上把行高提升至至少 44pt。行 host、VirtualStack 的窗口化与滚动 extent 使用同一高度；返回 pointer 后仅移除触摸下限，字号缩放仍生效。不要在调用方预先缩放这两个参数。通用 VirtualList/VirtualStack 不假定每行可交互，仍使用调用方的实际高度。touch-only surface 不展示行 hover。
 
 `TextScaleRowTests.collectionGeometry` 覆盖 390/720/1280pt、light/dark、100%/125%/200% 字号与输入切换，验证缩放一次、行间距、窗口化及状态保留。
+
+SectionedList 的 sticky 标题使用与虚拟化相同的已缩放行高与触摸下限：sticky 容器的标题高度取 `effectiveHeight`，下一标题位置取 `entryIndex × (effectiveHeight + scaledSpacing)`。因此字号或输入集合变化后，固定标题与行几何不会错位。
