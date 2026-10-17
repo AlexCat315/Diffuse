@@ -274,7 +274,8 @@ private struct RangeSliderHost: _PrimitiveView {
             range: range,
             isPressed: node.attachments[Self.pressedKey] as? Bool ?? false,
             isHovered: node.attachments[Self.hoveredKey] as? Bool ?? false,
-            isFocused: FocusChainHolder.current?.focused === node,
+            isFocused: FocusChainHolder.current?.focused === node
+                && FocusChainHolder.current?.isFocusVisible == true,
             isEnabled: isEnabled,
             theme: node.theme))
         let frame = node.frame
@@ -302,6 +303,7 @@ private struct RangeSliderHost: _PrimitiveView {
 
         let half = appearance.thumbDiameter * 0.5
         let focus = FocusChainHolder.current?.focused === node
+            && FocusChainHolder.current?.isFocusVisible == true
         for (thumb, centreX) in [(RangeThumb.lower, lowerX), (.upper, upperX)] {
             let clamped = min(max(originX + half, centreX), originX + width - half)
             let rect = UIRect(x: clamped - half,

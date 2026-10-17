@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import EngineKernel
@@ -258,7 +258,7 @@ struct BoolControlHost: _PrimitiveView {
 
         // The ring belongs outside the whole control, drawn as a ring and with a
         // gap: flush against the fill it cannot be told apart from it.
-        if FocusChainHolder.current?.focused === node {
+        if FocusChainHolder.current?.focused === node, FocusChainHolder.current?.isFocusVisible == true {
             let gap: Float = 1
             let ring: Float = 2
             let outset = gap + ring
@@ -287,7 +287,8 @@ struct BoolControlHost: _PrimitiveView {
                              y: originY + (height - edge) * 0.5,
                              width: edge,
                              height: edge)
-        let isFocused = (FocusChainHolder.current?.focused === node)
+        let isFocused = (FocusChainHolder.current?.focused === node
+            && FocusChainHolder.current?.isFocusVisible == true)
         // Static hairline for the box itself; the focus ring is drawn outside
         // it with a gap rather than replacing this rim — see `renderToggle`.
         let boxBorderWidth: Float = 1

@@ -86,4 +86,37 @@ struct FocusRingTests: GuavaUIComposeSerializedSuite {
             #expect(rings(in: graph).isEmpty)
         }
     }
+
+    @Test("Custom-drawn toggle, slider and range slider ring only for keyboard focus")
+    func customDrawnControlsFollowFocusVisibility() {
+        let root = Box(direction: .column, alignItems: .flexStart, spacing: 12) {
+            Toggle(isOn: .constant(false)).debugName("ring-toggle")
+            Slider(value: .constant(0.4)).frame(width: 200).debugName("ring-slider")
+            RangeSlider(values: .constant(20...80), in: 0...100)
+                .frame(width: 200).debugName("ring-range")
+        }.frame(width: 320, height: 260)
+        withScene(root) { graph, chain, _ in
+            let theme = graph.tree.root!.theme
+            func node(_ name: String) -> Node? {
+                nodes(graph.tree.root!).first {
+                    $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == name
+                }
+            }
+            func ringVertices(_ node: Node?) -> Int {
+                guard let node else { return -1 }
+                let list = DrawList()
+                node.draw?(list, node.absoluteOrigin)
+                return list.vertices.filter { $0.color == theme.colors.focusRing.rgba8 }.count
+            }
+            for name in ["ring-toggle", "ring-slider", "ring-range"] {
+                let target = node(name)
+                #expect(target != nil)
+                guard let target else { continue }
+                chain.focus(target, visible: false)
+                #expect(ringVertices(target) == 0, "\(name) drew a pointer focus ring")
+                chain.focus(target, visible: true)
+                #expect(ringVertices(target) > 0, "\(name) did not draw a keyboard focus ring")
+            }
+        }
+    }
 }

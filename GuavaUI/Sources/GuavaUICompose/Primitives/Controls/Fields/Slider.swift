@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import EngineKernel
@@ -253,7 +253,8 @@ struct SliderHost: _PrimitiveView {
             range: range,
             isPressed: node.attachments[SliderHost.pressedKey] as? Bool ?? false,
             isHovered: node.attachments[SliderHost.hoveredKey] as? Bool ?? false,
-            isFocused: FocusChainHolder.current?.focused === node,
+            isFocused: FocusChainHolder.current?.focused === node
+                && FocusChainHolder.current?.isFocusVisible == true,
             isEnabled: isEnabled,
             theme: node.theme
         ))
