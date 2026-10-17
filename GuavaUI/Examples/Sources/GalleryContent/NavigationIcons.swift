@@ -18,6 +18,7 @@ extension GalleryPage {
         case .list, .multiSelectList, .sectionedList, .virtualList, .virtualStack: UIIcons.Text.list
         case .reorderableList: UIIcons.Action.grip
         case .swipeList: UIIcons.Action.moreHorizontal
+        case .refreshableList: UIIcons.Navigation.refresh
         case .tree: UIIcons.Editor.gitBranch
         case .chart: UIIcons.Data.chartLine
         case .icon: UIIcons.Status.sparkles

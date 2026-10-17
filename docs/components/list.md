@@ -180,15 +180,20 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - `MultiSelectListTests.keyboardSelection`：Shift+Arrow 扩展、普通 Arrow 收拢、Cmd+A 全选。
 - `ReorderableListTests`：指针拖动显示放置线并只移动一次、键盘与辅助功能 increment/decrement、Escape 取消且不改顺序、触摸 handle ≥44pt。
 - `SwipeListTests`：触摸左滑与 44pt 操作、Actions 按钮/上下文菜单的非滑动路径、纵向滚动让路、禁用态与指针面不响应滑动。
+- `RefreshTests`：触摸下拉只触发一次且指示器保持到 binding 清除；Cmd+R 触发一次并忽略刷新中的重复按键。
 - Gallery `multiSelectList` 页提供 12 行、初始选中与状态文本；`sectionedList` 页提供可滚动的三段列表并默认开启 sticky；`reorderableList` 页提供 6 行真实拖动与顺序文本。
 
 ## SwipeList
 
 `SwipeList` 在 List 的选择与键盘基础上增加 trailing 滑动操作。仅触摸面响应左滑，最多露出两个 74pt 操作；行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口。完整 API、RTL 与虚拟化边界见 [SwipeList](swipelist.md)。
 
+## Refreshable List
+
+`List`/`VirtualStack` 通过 `RefreshOptions(isRefreshing:threshold:action:)` 接入下拉刷新。触摸下拉越过阈值只触发一次，指示器在 binding 清除前保持并预留 36pt inset；Cmd+R/Ctrl+R 为键盘入口。完整 API 与边界见 [RefreshableList](refresh.md)。
+
 ## File map
 
-- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [ReorderableList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/ReorderableList.swift) · [SwipeList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SwipeList.swift)
+- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [ReorderableList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/ReorderableList.swift) · [SwipeList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SwipeList.swift) · [Refresh.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Refresh.swift)
 - Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DefaultListRowStyle.swift)
 
 ## 响应式与输入密度

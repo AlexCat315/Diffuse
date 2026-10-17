@@ -132,6 +132,7 @@ public extension GalleryPage {
         case .sectionedList: AnyView(SectionedListStory())
         case .reorderableList: AnyView(ReorderableListStory())
         case .swipeList: AnyView(SwipeListStory())
+        case .refreshableList: AnyView(RefreshListStory())
         case .tree: AnyView(TreeStory(options: options))
         case .virtualList: AnyView(VirtualListStory())
         case .virtualStack: AnyView(VirtualStackStory())

@@ -11,10 +11,13 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
     private let overscan: Int
     private let scrollToIndex: Int?
     private let onScrollOffsetChange: ((CGPoint) -> Void)?
+    private let refresh: RefreshOptions?
     private let content: (Data.Element) -> Content
     @State private var viewport = ScrollViewport(offset: .zero, size: .zero)
     @State private var offset = CGPoint.zero
     @State private var previousTarget: Int?
+    @State private var pull: CGFloat = 0
+    @State private var refreshArmed = false
 
     public init(_ data: Data, id: KeyPath<Data.Element, ID>, rowHeight: Float,
                 spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
@@ -29,11 +32,13 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
     init(_ data: Data, id: KeyPath<Data.Element, ID>, rowHeight: Float,
          spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
          onScrollOffsetChange: ((CGPoint) -> Void)?,
+         refresh: RefreshOptions? = nil,
          @ViewBuilder content: @escaping (Data.Element) -> Content) {
         self.data = data; self.id = id
         self.rowHeight = max(1, rowHeight); self.spacing = max(0, spacing)
         self.overscan = max(0, overscan); self.scrollToIndex = scrollToIndex
         self.onScrollOffsetChange = onScrollOffsetChange
+        self.refresh = refresh
         self.content = content
     }
 
@@ -54,22 +59,54 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
             }
         }
         let total = max(0, Float(count) * stride - spacing)
+        let refreshInset: Float = refresh?.isRefreshing.wrappedValue == true ? 36 : 0
         let clampedOffset = max(0, min(Float(offset.y), max(0, total - Float(viewport.size.height))))
         let range = Self.visibleRange(count: count, rowStride: stride, offset: clampedOffset,
                                       height: Float(viewport.size.height), overscan: overscan)
-        return ScrollView(.vertical, scrollbarGutter: .stable,
-                          scrollOffset: Binding(get: { offset }, set: { if offset != $0 { offset = $0 } }),
-                          onViewportChange: { if viewport != $0 { viewport = $0 } },
-                          onGeometryChange: { geometry in
-                              onScrollOffsetChange?(geometry.offset)
-                          }) {
+        let scroll = ScrollView(.vertical, scrollbarGutter: .stable,
+                                scrollOffset: Binding(get: { offset }, set: {
+            if offset != $0 {
+                offset = $0
+                updateRefresh($0)
+            }
+        }),
+                                onViewportChange: { if viewport != $0 { viewport = $0 } },
+                                onGeometryChange: { geometry in
+                                    onScrollOffsetChange?(geometry.offset)
+                                }) {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                if refreshInset > 0 {
+                    Box {}.frame(height: refreshInset)
+                }
                 Box {}.frame(height: Float(range.lowerBound) * stride)
                 range.map { row(at: $0) }
                 Box {}.frame(height: max(0, total - Float(range.upperBound) * stride + (range.upperBound == count ? spacing : 0)))
+                if let refresh, pull > 4 || refresh.isRefreshing.wrappedValue {
+                    Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                        RefreshIndicator(pull: pull, threshold: CGFloat(refresh.threshold),
+                                         isRefreshing: refresh.isRefreshing.wrappedValue)
+                    }
+                    .frame(width: 140, height: 36)
+                    .absolutePosition(left: max(8, (Float(viewport.size.width) - 140) / 2),
+                                      top: 8 - Float(pull))
+                }
             }
-            .frame(height: total, minWidth: 0)
+            .frame(height: total + refreshInset, minWidth: 0)
         }
+        return scroll
+        .modifier(RefreshKeyboardModifier(refresh: refresh))
+    }
+
+    private func updateRefresh(_ next: CGPoint) {
+        let nextPull = max(0, -next.y)
+        if pull != nextPull { pull = nextPull }
+        guard let refresh else { return }
+        if nextPull <= 1 { refreshArmed = false }
+        guard nextPull >= CGFloat(refresh.threshold),
+              !refreshArmed,
+              !refresh.isRefreshing.wrappedValue else { return }
+        refreshArmed = true
+        refresh.action()
     }
 
     private func row(at index: Int) -> AnyView {

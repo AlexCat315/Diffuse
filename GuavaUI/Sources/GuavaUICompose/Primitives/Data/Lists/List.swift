@@ -12,6 +12,7 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
     /// Authored logical spacing, before text scaling.
     public let rowSpacing: Float
     public let onActivate: ((Data.Element) -> Void)?
+    public let refresh: RefreshOptions?
     public let rowContent: (Data.Element, Bool) -> RowContent
 
     public init(_ data: Data,
@@ -20,13 +21,15 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
                 rowHeight: Float = 30,
                 rowSpacing: Float = 0,
                 onActivate: ((Data.Element) -> Void)? = nil,
-                @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
+                refresh: RefreshOptions? = nil,
+                 rowContent: @escaping (Data.Element, Bool) -> RowContent) {
         self.data = data
         self.id = id
         self.selection = selection
         self.rowHeight = max(1, rowHeight)
         self.rowSpacing = max(0, rowSpacing)
         self.onActivate = onActivate
+        self.refresh = refresh
         self.rowContent = rowContent
     }
 
@@ -37,7 +40,8 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
                 SelectionKeyHost(onKey: handleKey) {
                     VirtualStack(data, id: id, rowHeight: effectiveHeight, spacing: scaler.scale(rowSpacing),
                                  scrollToIndex: data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
-                                    .map { data.distance(from: data.startIndex, to: $0) }) { element in
+                                    .map { data.distance(from: data.startIndex, to: $0) },
+                                 onScrollOffsetChange: nil, refresh: refresh) { element in
                         let selected = isSelected(element)
                         _ListRowHost(isSelected: selected, rowHeight: effectiveHeight,
                                      onActivate: { activate(element) },
@@ -89,11 +93,13 @@ public extension List where Data.Element: Identifiable, ID == Data.Element.ID {
          rowHeight: Float = 30,
          rowSpacing: Float = 0,
          onActivate: ((Data.Element) -> Void)? = nil,
-         @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
+         refresh: RefreshOptions? = nil,
+          rowContent: @escaping (Data.Element, Bool) -> RowContent) {
         self.init(data, id: \.id,
                   selection: selection,
                   rowHeight: rowHeight, rowSpacing: rowSpacing,
                   onActivate: onActivate,
+                  refresh: refresh,
                   rowContent: rowContent)
     }
 }

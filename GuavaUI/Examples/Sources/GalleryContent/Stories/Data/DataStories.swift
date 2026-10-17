@@ -387,3 +387,36 @@ struct SwipeListStory: View {
         }
     }
 }
+
+struct RefreshListStory: View {
+    private let items = ["Inbox", "Design review", "Release notes", "Billing", "Research", "Archive"]
+    @State private var isRefreshing = false
+    @State private var refreshes = 0
+
+    var body: some View {
+        StorySection("Pull to refresh", "Touch pull past 64pt starts the caller-owned refresh; the indicator holds until the binding clears and freezes under reduced motion. Cmd+R or Ctrl+R is the keyboard path, and the explicit button is the pointer path.") {
+            Row(alignment: .center, spacing: 8) {
+                Button("Refresh now") { startRefresh() }.debugName("refresh-now")
+                Text("Refreshes: \(refreshes)").font(.caption)
+                    .foregroundColor(.onSurfaceMuted).debugName("refresh-count")
+            }
+            List(items.indices, id: \.self, selection: .constant(1), rowHeight: 44,
+                 refresh: RefreshOptions(isRefreshing: $isRefreshing, threshold: 64) {
+                startRefresh()
+            }) { index, _ in
+                Text(items[index])
+            }
+            .frame(height: 240)
+        }
+    }
+
+    private func startRefresh() {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        refreshes += 1
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            isRefreshing = false
+        }
+    }
+}
