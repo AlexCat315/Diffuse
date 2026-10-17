@@ -10,6 +10,8 @@ struct ShowcaseLaunch {
 
     init(arguments: [String]) {
         configuration = ApplicationConfiguration(title: "GuavaUI — Component Showcase") {
+            if let width = Self.extent("--width", arguments: arguments) { $0.window.width = width }
+            if let height = Self.extent("--height", arguments: arguments) { $0.window.height = height }
             $0.rendering.vsync = !arguments.contains("--no-vsync")
             $0.diagnostics.showsPerformanceHUD = arguments.contains("--performance-hud")
             $0.frames.policy = arguments.contains("--benchmark") ? .continuous : .eventDriven
@@ -25,5 +27,11 @@ struct ShowcaseLaunch {
             checkpoint = nil
             root = AnyView(GalleryView(initialPage: page))
         }
+    }
+
+    private static func extent(_ name: String, arguments: [String]) -> Int32? {
+        guard let index = arguments.firstIndex(of: name), arguments.indices.contains(index + 1),
+              let value = Int32(arguments[index + 1]), (1...8192).contains(value) else { return nil }
+        return value
     }
 }

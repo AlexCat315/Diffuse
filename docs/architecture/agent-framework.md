@@ -83,6 +83,20 @@ swift scripts/query-ui-devtools.swift 9229 query_ui_nodes '{"text":"More actions
 
 端口取实际 DevTools 启动输出。脚本也接受 `@参数文件.json`；需要启动令牌时通过 `GUAVA_DEVTOOLS_TOKEN` 环境变量提供，不把令牌放进命令行。脚本仅连接 loopback，10 秒超时；具体能力以 `--list` 返回值为准。
 
+### 操作与画面闭环
+
+原生 DevTools 的 `mirror.input` 把指针、滚轮、键盘和文本送入宿主输入分发器；`mirror.frame` 从当前窗口真实 DrawList 经已选择的渲染后端重放并读回画面。它们与上述只读诊断工具共用同一服务，`hello.capabilities` 必须同时声明 `mirror` 和 `diagnostics`。不需要操作系统自动化权限。
+
+```sh
+swift scripts/input-ui-devtools.swift 9229 --click-node NODE_ID
+swift scripts/input-ui-devtools.swift 9229 --input '[{"kind":"keyDown","key":"End"},{"kind":"keyUp","key":"End"}]'
+swift scripts/capture-ui-devtools.swift 9229 /tmp/guava-window.jpg
+```
+
+先通过 `query_ui_nodes` 的可见/输入过滤拿到当前节点 ID；点击入口重新查询节点的裁剪后命中区域，拒绝过期、隐藏或不可交互目标。原始输入接收 1–256 个事件的 JSON 数组（也可 `@文件`），坐标是窗口内容区逻辑点，不含桌面坐标或标题栏；输入确认代表送达宿主，操作后必须用 AI 查询核对状态，再截图检查实际画面。截图同时输出同名 JSON，包含逻辑/像素尺寸、帧序号和来源；不包含系统窗口 chrome、遮挡或合成器内容。两个入口仅连接 loopback，支持相同令牌环境变量并有 15 秒超时。当前图片校验使用 macOS ImageIO；支持范围以宿主的 mirror capability 为准。
+
+Gallery 可用 `--component tabs --width 390 --height 820` 在指定逻辑窗口尺寸启动，再通过这组入口验证窄窗、菜单及标题截断。布局与输入的场景回归仍覆盖尺寸动态往返和物理输入形态，截图不能代替 GPU 耗时或真机触摸测量。
+
 时间线为有界环形缓冲，每个 facade 最多保留八份采集。采集只统计自身窗口内遗漏的 spans，报告 dropped。与 Inspector 同时采集时共同使用 recorder，任何一方结束不会停止另一方。取消或 session reset 不发布未完成采集。空闲采集可为零事件。父子 CPU spans 重叠，不可求和当作帧耗时；CPU draw/present 指标不代表 GPU 执行时间。编译时源码位置需要重建才能跟随源码移动。
 
 ## Skills

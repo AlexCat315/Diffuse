@@ -56,7 +56,7 @@ def wait_for_bridge(child, port, log, renderer):
 
 
 def capture_window(port, destination):
-    capture = subprocess.run(["swift", str(ROOT / "scripts/capture-editor-devtools.swift"),
+    capture = subprocess.run(["swift", str(ROOT / "scripts/capture-ui-devtools.swift"),
                               str(port), str(destination)], capture_output=True, text=True, timeout=45)
     assert capture.returncode == 0, capture.stderr
     print(capture.stdout.strip(), flush=True)
