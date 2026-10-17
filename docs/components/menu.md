@@ -37,6 +37,6 @@ Popover 与右键菜单的入场组合透明度、4pt 位移和 `0.96 → 1` 缩
 
 ## 响应式与输入密度
 
-命令与子菜单行在 touch surface 上至少 44pt，pointer 保留 32pt 下限；长标题与文本缩放仍可使行自然增长。`maxVisibleRows` 的高度预算同样使用触摸下限，避免增大行高后仍按桌面密度裁剪菜单。Portal 继承触发节点的 surface 环境，嵌入表面与子浮层也能保持同一输入密度；输入切换保留已打开分支与行节点。
+命令与子菜单行在 touch surface 上至少 44pt，pointer 保留 32pt 下限；长标题与文本缩放仍可使行自然增长。`maxVisibleRows` 的高度预算同样使用触摸下限，避免增大行高后仍按桌面密度裁剪菜单。Portal 继承触发节点的 surface 环境，嵌入表面与子浮层也能保持同一输入密度；输入切换保留已打开分支与行节点。Select 弹层复用同一套约束：宽度不小于触发器并由 Portal 的 12pt viewportMargin 夹紧到窗口内；390pt Gallery `select` 实测触发器 286pt、弹层 346pt（x=32，右边界 378），长选项换行后行高自然增长。
 
 `RowDensityTests.menuRows` 验证来源表面与 PortalHost 环境不同的场景、禁用行、子菜单、视口高度、行底部点击展开、键盘关闭和 pointer 密度恢复；`scaledRows` 覆盖 100%/200% 文本缩放与 light/dark。手机系统触摸派发与窄宽视觉取样仍需真机验收。

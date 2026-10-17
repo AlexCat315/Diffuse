@@ -229,9 +229,9 @@
 **Select / Combobox**
 
 - 外观：触发器继承 field chrome；弹层菜单、`maxVisibleRows` 默认 8、内部滚动；Combobox 带搜索与清除。`[已实现]`
-- 手机：触发器单行截断并保留完整值（tooltip/辅助功能）；弹层宽度 ≥ 触发器宽度且 ≤ 窗口 − 24；行高 ≥ 44pt。`[未实现]`（触发器可换行、弹层固定 280、行高 32）
+- 手机：触发器单行截断并保留完整值（tooltip/辅助功能）；弹层宽度 ≥ 触发器宽度且 ≤ 窗口 − 24；行高按输入面取 32（指针）/ `max(44, minimumControlExtent)`（触摸），长选项自然增高。`[已实现]`
 - 平板 / 桌面：触发器与弹层自然宽度、hover 高亮。`[已实现]`
-- 交互与验收：键盘 Up/Down/Home/End/Enter/Escape、类型前缀查找；辅助功能 popup/值/展开态。验收：`--component select|combobox`（Menu 测试族）。
+- 交互与验收：键盘 Up/Down/Home/End/Enter/Escape、类型前缀查找；辅助功能 popup/值/展开态。验收：`--component select|combobox`、`RowDensityTests.menuRows`（Menu 触摸行高）、DevTools 390pt Select 弹层实测（宽 346、x=32、右边界 378，触发器 286）。
 
 **DatePicker / TimeField**
 
@@ -501,7 +501,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
 | 6 | Button / Select / DatePicker 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()`、AppBar 与 TabView 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
-| 10 | 浮层自适应：底部抽屉 Sheet、Select 弹层宽度与行高、菜单触摸展开子菜单 | `Overlays/*`、`Fields/Select.swift` | 对应浮层测试 + 390pt 取样 |
+| 10 | 浮层自适应：底部抽屉 Sheet、菜单触摸展开子菜单 | `Overlays/*` | 对应浮层测试 + 390pt 取样 |
 | 13 | 焦点环模态统一：仅键盘焦点绘制（Toggle/Slider/表格等当前点击也绘制） | 各控件 style | 统一断言助手 + 逐控件测试 |
 | 14 | 辅助功能补齐：滚动条/滚动位置语义、Select/Combobox 专用角色、hint/described-by | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
@@ -538,6 +538,8 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 第 11–12 项窄宽重排已完成：`Stepper` 按每步 148pt 加 24pt 连接段的横向预算在宽/窄两套 retained 分支间切换，窄分支纵向堆叠，Left/Right 停止导航、Up/Down 生效；`StepperOptions.minimumHorizontalStepWidth` 供长标题调用方提高预算。开发中的 390pt DevTools 实测发现，原地把同一 `Box` 从 `.row` 改成 `.column` 会让 Yoga 沿用旧行高、把步骤压成 0pt；改为 `ViewThatFits` 的两套稳定布局树后，步骤恢复 56pt 行高。`ButtonGroup` 改用可换行 flex line，段宽与 44pt 触摸高度保持；`Vec3Field` 以 96pt 基准和 88pt 最小轴宽换行，窄宽下 X/Y 一行、Z 下一行。`NarrowReflowTests` 在 390/720pt、触摸输入下验证堆叠/单行几何、换行位置、44pt 段高与轴感知键盘。Gallery `stepper`、`buttonGroup`、`vec3Field` 页与自适应预览已更新；DevTools `query_ui_nodes` 实测 390pt 步骤为 y=446/526/606 × 56pt，720pt 为同一 y=294、x=102/302/502；ButtonGroup 260pt 五段换行；Vec3Field 390pt 的 X/Y 同 y=409、Z y=437，720pt 全宽 X/Y/Z 同 y=277。`capture-ui` 截图确认纵向连接线、分段换行与 Vec3 的 X/Y→Z 排布。
 
 CommandPalette compact 几何已完成：`SurfaceReader` 读取 surface 尺寸与输入，compact 下使用 `viewport − 16` 宽、`min(560, viewport − 16)` 高、8pt inset 并居中；触摸面结果行取 `max(36, minimumControlExtent)`、header 36，指针保持 36/28。`CommandPaletteAdaptiveTests` 在 390pt 触摸面断言 374×560 panel 与 44pt 行，在 1280pt 指针面断言 640×440 与 36pt 行。DevTools 在 390×820 真机窗口中打开 Gallery `commandPalette`，`query_ui_nodes` 的 `role=dialog` 返回 374×560、位置 (8,130)，`capture-ui` 确认搜索行、结果区与 footer 均在窗口内；宿主默认指针输入下现场行高为 36，触摸 44pt 由单元测试覆盖。软键盘出现后的结果区收缩仍由宿主 IME/安全区处理。
+
+Select 弹层宽度与行高已完成：触发器继续单行截断并保留完整辅助功能值；弹层复用 Menu 的 `MenuWindowBounds` 与 `MenuRowMetrics`，宽度不小于触发器、由 Portal `viewportMargin` 夹紧在窗口 − 24 内，行高按指针 32 / 触摸 44 取最大值，长选项自然换行增高。DevTools 在 390×820 打开 Gallery `select`：触发器 286pt，弹层宽 346pt、x=32、右边界 378（窗口 390，右/左各 12pt），行高 32 为宿主指针面；触摸 44pt 由 `RowDensityTests.menuRows` 覆盖。`capture-ui` 确认长选项与禁用项都在窗口内。第 10 项剩余 Sheet 底部呈现与菜单触摸展开子菜单验收。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排/swipe/下拉刷新仍按 [缺失清单](gaps.md#29-列表能力包p1) 跟踪。
 
