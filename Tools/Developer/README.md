@@ -36,7 +36,8 @@ dependency direction stays one-way.
 | `native-bootstrap [--force]` | CI / build | Build Engine + GuavaUI native dependencies |
 | `ios-native [--sdk S] [--arch A]` | CI / build | Stage isolated iOS native dependencies |
 | `ios-simulator udid\|validate` | CI | Pick a simulator and verify a built `.app` renders |
-| `validate <operation>` | CI / Manual / Dev | MCP protocol, editor loop, DevTools and session checks |
+| `validate <operation>` | CI / Manual | MCP protocol, editor loop, Crystal Rush and agent diagnostics |
+| `devtools <operation>` | Manual / Dev | Drive or inspect a running app's DevTools endpoint |
 | `android <operation>` | Manual | Android device validation harnesses |
 | `browser <operation>` | CI / Manual / Dev | Headless Chromium checks over CDP |
 | `gpu-regression run\|verify DIR` | CI | Run and verify the GPU regression inventory |
@@ -51,11 +52,12 @@ Gate legend:
 - **Build** — a setup/staging step shared by CI and local builds.
 
 `validate mcp-protocol` runs in `ci-guava-mcp.yml`. `editor-loop`,
-`crystal-rush`, `agent-diagnostics` and `session` are manual checks;
-`query-ui`, `input-ui`, `capture-ui` and `record-timings` are DevTools clients,
-not validation gates. `android` operations require a device; `browser verify`,
-`verify-dev` and `web-plugins` are CI checks, while `native-demo` is manual and
-`dev`, `serve` and `build-fonts` are development/build utilities.
+`crystal-rush` and `agent-diagnostics` are manual checks. `devtools session`
+is a manual check; `query-ui`, `input-ui`, `capture-ui` and `record-timings`
+are development clients, not validation gates. `android` operations require a
+device; `browser verify`, `verify-dev` and `web-plugins` are CI checks, while
+`native-demo` is manual and `dev`, `serve` and `build-fonts` are
+development/build utilities.
 
 Only cross-process and cross-device behavior belongs here. Application
 behavior belongs in the application package's tests. If an operation neither

@@ -10,7 +10,7 @@ internal import ToolSupport
 /// list through its renderer's DevTools mirror. Also called in-process by the
 /// editor loop.
 enum CaptureUI {
-  static let usage = "guava-dev validate capture-ui PORT OUTPUT.jpg"
+  static let usage = "guava-dev devtools capture-ui PORT OUTPUT.jpg"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

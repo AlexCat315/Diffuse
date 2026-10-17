@@ -37,3 +37,9 @@ jobs:
           for command in maintainability boundaries shader vulkan media plugins native-bootstrap ios-native; do
             swift run --package-path Tools/Developer guava-dev "$command" --help
           done
+      - name: Smoke test host-only command entry points
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          swift run --package-path Tools/Developer guava-dev validate --help
+          swift run --package-path Tools/Developer guava-dev devtools --help

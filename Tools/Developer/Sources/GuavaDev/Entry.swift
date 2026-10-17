@@ -46,10 +46,11 @@ enum GuavaDev {
     case "ios-simulator": try IOSSimulator.run(arguments)
     #if !os(Windows)
       case "validate": try RuntimeValidation.run(arguments)
+      case "devtools": try DevToolsCommands.run(arguments)
       case "android": try AndroidValidation.run(arguments)
       case "browser": try Browser.run(arguments)
     #else
-      case "validate", "android", "browser":
+      case "validate", "devtools", "android", "browser":
         throw ToolError.message("\(verb) requires a macOS or Linux host")
     #endif
     case "gpu-regression": try RegressionReport.run(arguments)
@@ -70,7 +71,8 @@ enum GuavaDev {
       guava-dev native-bootstrap [--force]         build Engine + GuavaUI native deps
       guava-dev ios-native [--sdk S] [--arch A]    stage isolated iOS native deps
       guava-dev ios-simulator <udid|validate> …    pick a simulator and verify a built .app
-      guava-dev validate <mcp-protocol|crystal-rush|agent-diagnostics|editor-loop|session> …
+      guava-dev validate <mcp-protocol|crystal-rush|agent-diagnostics|editor-loop> …
+      guava-dev devtools <query-ui|input-ui|capture-ui|record-timings|session> …
       guava-dev android <validate|demo|gallery|game|logging> …
       guava-dev browser <verify|dev|verify-dev> …
       guava-dev gpu-regression <run|verify DIR>    run and verify GPU regression tests

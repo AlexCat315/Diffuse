@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Port of `scripts/input-ui-devtools.swift`: drive the host's input dispatcher
 /// through DevTools, without OS automation.
 enum InputUI {
-  static let usage = "guava-dev validate input-ui PORT --click-node NODE_ID | --input JSON_OR_@FILE"
+  static let usage = "guava-dev devtools input-ui PORT --click-node NODE_ID | --input JSON_OR_@FILE"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

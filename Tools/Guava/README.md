@@ -113,8 +113,8 @@ Inspector 的源码断点接入现有 VS Code/LLDB 工作流；CLI 尚未提供�
 swift test --package-path Tools/Guava
 swift run --package-path Tools/Developer guava-dev boundaries
 # 已启动带 --devtools 的应用后，验证真实协议及认证：
-swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp mac
-swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp android
+swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyApp mac
+swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyApp android
 ```
 
 Editor 也使用 guava.json 和应用自己的平台目录：`./guava run Editor --devtools`。SDK 当前来自源码 checkout，原生依赖初始化仍由 `guava-dev native-bootstrap` 负责；预编译 SDK 下载、公证和商店发布不在本轮工具中。

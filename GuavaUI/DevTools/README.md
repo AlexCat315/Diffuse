@@ -219,8 +219,8 @@ including GPU command submission/waiting; it is not GPU execution duration.
 Run against an existing CLI-managed session:
 
 ```sh
-swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp mac
-swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp android
+swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyApp mac
+swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyApp android
 ```
 
 
