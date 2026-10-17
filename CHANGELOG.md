@@ -33,6 +33,7 @@
 - 新增 viewport 高度类与方向：`UIEnvironment.Viewport.heightClass`/`orientation`（600/1000 阈值，方形归 landscape）与 `HeightClassReader`/`OrientationReader`。补齐 `ViewportTraitsTests`、Gallery `viewportTraits` 页与 DevTools 720/390/1200 实测；`ViewThatFits` 内在拟合仍待补。
 - 辅助功能补齐：`ScrollView` 暴露 `.scrollArea` 角色、可命名 label、实时百分比 value、键盘 help 与按页 increment/decrement；`Select`/`Combobox` 触发器改为 `.comboBox` 角色并保留当前值/展开态。补齐 `AccessibilitySemanticsTests` 与 DevTools scrollView/select 查询；`described-by` 与可聚焦滚动条 thumb 仍待补。
 - 浮层自适应验收完成：`BottomSheet` 在 390×800 为 390×280 贴底、1280×840 为 560×280 居中；`MenuHierarchyTests.touchSubmenu` 覆盖触摸面点击父行展开子菜单并执行叶子。补齐菜单触摸文档与 DevTools 截图。
+- 新增通用拖放协议：`DragScope` 持有类型化会话，`Draggable` 在 6pt 后开始拖动并投射 Portal 预览，`DropTarget` 只接受匹配 payload 并回调目标高亮；外部释放与类型不匹配不 drop。补齐 `DragAndDropTests`、Gallery `dragAndDrop` 页与 DevTools 720×820 实测（Camera → Lane A 得到 `A: Camera · B: empty`）。无自动滚动与键盘重排，集合重排仍用 `ReorderableList`。
 
 ## 0.0.9 — 2026-10-06
 

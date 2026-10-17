@@ -20,6 +20,7 @@ extension GalleryPage {
         case .swipeList: UIIcons.Action.moreHorizontal
         case .refreshableList: UIIcons.Navigation.refresh
         case .viewportTraits: UIIcons.Navigation.maximize
+        case .dragAndDrop: UIIcons.Action.grip
         case .tree: UIIcons.Editor.gitBranch
         case .chart: UIIcons.Data.chartLine
         case .icon: UIIcons.Status.sparkles

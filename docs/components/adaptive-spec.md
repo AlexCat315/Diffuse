@@ -569,6 +569,8 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 
 第 10 项浮层自适应已完成：`BottomSheet` 在 compact/medium 贴底全宽、expanded 退化为 `dialogWidth` 560 的居中面板，detent 与拖拽关闭沿用既有 Modal 契约；`MenuHierarchyTests.touchSubmenu` 新增 390pt 触摸面用例，点击父行直接打开子菜单并执行叶子。DevTools 在 390×800 测得 dialog 390×280、y=520，1280×840 测得 560×280、x=360/y=280；`capture-ui` 确认贴底与居中两种呈现。触摸子菜单无 hover 依赖，Portal 层级、焦点与展开语义保持。
 
+P1 通用拖放已完成：`DragScope` 持有类型化会话，`Draggable` 在 6pt 位移后夺取捕获并投射 Portal 预览，`DropTarget` 按 payload 类型与最深命中节点接收 drop，`onTargeted` 提供 hover 高亮；外部释放与类型不匹配不触发回调。`DragAndDropTests` 覆盖匹配 drop、外部取消与预览生命周期；Gallery `dragAndDrop` 页与 README 入口已接入；DevTools 720×820 将 Camera 拖入 Lane A 后查询到 `A: Camera · B: empty`。该协议不提供自动滚动或键盘重排，集合重排继续使用 `ReorderableList`。
+
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排、swipe 与下拉刷新均已实现，边界见 [缺失清单](gaps.md#29-列表能力包p1)。
 
 ## 6. 动效与动画（动画效果实现）

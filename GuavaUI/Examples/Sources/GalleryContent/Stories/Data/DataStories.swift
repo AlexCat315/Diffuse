@@ -420,3 +420,60 @@ struct RefreshListStory: View {
         }
     }
 }
+
+struct DragAndDropStory: View {
+    private let items = ["Camera", "Key Light", "Audio"]
+    @State private var laneA: String?
+    @State private var laneB: String?
+    @State private var hoverA = false
+    @State private var hoverB = false
+
+    var body: some View {
+        StorySection("Typed payloads", "Drag a tag into either lane. The preview is portal-rendered, the target highlights while hovered, and only a matching payload calls its drop closure. Escape is not required for a cancelled drag: releasing outside every target drops nothing.") {
+            DragScope {
+                Column(alignment: .leading, spacing: 16) {
+                    Row(alignment: .center, spacing: 8) {
+                        for item in items {
+                            AnyView(Draggable(item, preview: {
+                                Text(item).font(.caption).padding(horizontal: 8, vertical: 4)
+                                    .background(.surfaceVariant).cornerRadius(6)
+                            }) {
+                                Text(item).font(.caption).padding(horizontal: 10, vertical: 6)
+                                    .background(.surfaceRaised).cornerRadius(6)
+                            }
+                            .debugName("drag-chip-\(item)"))
+                        }
+                    }
+                    Row(alignment: .top, spacing: 12) {
+                        DropTarget(onTargeted: { hoverA = $0 },
+                                   onDrop: { laneA = $0 }) {
+                            lane(title: "Lane A", value: laneA, hovered: hoverA)
+                        }
+                        .debugName("drop-lane-A")
+                        DropTarget(onTargeted: { hoverB = $0 },
+                                   onDrop: { laneB = $0 }) {
+                            lane(title: "Lane B", value: laneB, hovered: hoverB)
+                        }
+                        .debugName("drop-lane-B")
+                    }
+                    Text("A: \(laneA ?? "empty") · B: \(laneB ?? "empty")")
+                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                        .debugName("drop-result")
+                }
+            }
+            .frame(height: 220)
+        }
+    }
+
+    private func lane(title: String, value: String?, hovered: Bool) -> some View {
+        Box(direction: .column, alignItems: .flexStart, spacing: 6) {
+            Text(title).font(.bodyStrong)
+            Text(value ?? "Drop here").font(.caption)
+                .foregroundColor(value == nil ? .onSurfaceMuted : .onSurface)
+        }
+        .padding(12)
+        .frame(width: 180, height: 90)
+        .background(hovered ? .selection : .surfaceSunken)
+        .cornerRadius(8)
+    }
+}

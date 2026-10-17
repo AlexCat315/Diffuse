@@ -52,6 +52,7 @@
 | List / MultiSelectList / SectionedList / ReorderableList | 单选、多选、区段/sticky、重排、虚拟化与行样式 | [list.md](list.md) |
 | SwipeList | 触摸滑动操作、Actions 按钮、上下文菜单与键盘选择 | [swipelist.md](swipelist.md) |
 | RefreshableList | 下拉刷新阈值、顶部 inset、Cmd+R 与 reducedMotion | [refresh.md](refresh.md) |
+| Drag & Drop | 类型化 payload、Portal 预览、目标高亮与取消 | [drag-and-drop.md](drag-and-drop.md) |
 | DataTable / DataTableModel | 实现与验证边界 | [data-table.md](data-table.md) |
 | Avatar / AvatarGroup | 实现与验证边界 | [avatar.md](avatar.md) |
 | Image / AsyncImage | 实现与验证边界 | [image.md](image.md) |
