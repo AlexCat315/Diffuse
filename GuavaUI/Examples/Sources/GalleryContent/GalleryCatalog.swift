@@ -9,7 +9,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
-    case table, dataTable, calendar, datePicker, timeField
+    case table, dataTable, calendar, datePicker, dateRangePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, splitButton, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
     case commandPalette, hoverCard, timeline, toolbar, appBar
     case link, statusBar, carousel, skeleton, stepper
@@ -88,6 +88,7 @@ public enum GalleryCatalog {
         .init(.dataTable, "DataTable", "Data", "Persistent large-data model, background sorting, frozen columns, multi-selection and cell editing."),
         .init(.calendar, "Calendar", "Inputs", "Calendar-aware month grids, disabled dates and keyboard day navigation."),
         .init(.datePicker, "DatePicker", "Inputs", "Optional date input with an anchored calendar and a clear action."),
+        .init(.dateRangePicker, "DateRangePicker", "Inputs", "Two-click range selection in a real calendar with endpoint and in-range highlighting."),
         .init(.timeField, "TimeField", "Inputs", "Validated time drafts, bounded values, seconds and keyboard stepping."),
         .init(.accordion, "Accordion", "Navigation", "Controlled single or multiple expansion with grouped keyboard focus."),
         .init(.breadcrumb, "Breadcrumb", "Navigation", "Destination paths with a collapsed intermediate-item menu."),

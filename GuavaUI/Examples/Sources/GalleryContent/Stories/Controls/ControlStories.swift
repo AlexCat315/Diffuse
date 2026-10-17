@@ -301,3 +301,24 @@ struct SplitButtonStory: View {
         }
     }
 }
+
+struct DateRangePickerStory: View {
+    let options: GalleryOptions
+    @State private var selection: ClosedRange<Date>?
+    let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter
+    }()
+
+    var body: some View {
+        StorySection("Date range", "Click a start day, then an end day. Clicking an earlier day swaps the bounds. The range is highlighted in the calendar and the trigger shows both endpoints.") {
+            DateRangePicker(selection: $selection) {
+                $0.presentation.isEnabled = options.isEnabled
+                $0.presentation.width = 280
+            }
+            Text(selection.map { "\(formatter.string(from: $0.lowerBound)) – \(formatter.string(from: $0.upperBound))" } ?? "No range selected")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

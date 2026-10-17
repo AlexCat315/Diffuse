@@ -14,7 +14,7 @@
 | 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Masonry P2、Grid/LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
 | 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、RangeSlider（active thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton 单一 Tab/共享 chrome P2、RangeSlider 独立 Tab/双 slider 语义 P2、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、SearchField、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
-| 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
+| 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM） | TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2、区间预设 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换/操作/位置） | ActionSheet/Popconfirm P2、菜单富内容 P2 |
@@ -80,9 +80,9 @@
 ### 2.8 DateRangePicker（P1）
 
 - 用途：日期区间（起点/终点）选择。
-- 外观：复用 Calendar 月视图；起点/终点填充、区间段高亮、hover 预览；弹层宽度夹紧窗口。`[未实现]`
-- 手机：单月一屏、日期格 ≥ 44；平板/桌面：可双月并排。`[未实现]`
-- 交互与验收：第一次点击设起点、第二次设终点，Escape 取消草稿，区间非法自动交换并提示；辅助功能读"开始日期/结束日期"；键盘方向键移动、Home/End（月内）与 PageUp/Down（月份）复用规范 3.2 已实现的 Calendar 导航契约。参考：Flutter `DateRangePicker`；Material 3 date range picker。
+- 实现：复用 Calendar 月视图/导航/可用日期；起点/终点 accent 填充、区间段 `stateLayerSelected`；触发器显示两端日期与 clear。`[已实现]`
+- 手机/平板：日期格沿用 Calendar 的 44pt 触摸下限；单月一屏，宽屏可配 `numberOfMonths=2`；弹层宽度由 Popover 夹紧。
+- 交互与验收：第一次点击设起点、第二次设终点，反向点击自动交换；Escape/外部点击关闭；键盘方向键、Home/End、PageUp/Down 复用 Calendar；a11y 触发器读完整区间。`DateRangePickerTests` 覆盖两击与交换；Gallery `dateRangePicker` 页提供真实日历与高亮。区间预设/最大长度仍由应用层负责。细节见 [DateRangePicker](daterangepicker.md)。
 
 ### 2.9 列表能力包（P1）
 
@@ -160,7 +160,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：NavigationStack、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）与 SplitButton（主/备动作）已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md) 与 [SplitButton](splitbutton.md)。
+**P1（常用能力）**：NavigationStack、列表多选/区段/重排/swipe/下拉刷新、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）、SplitButton（主/备动作）与 DateRangePicker 已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md) 与 [DateRangePicker](daterangepicker.md)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 
@@ -187,7 +187,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | MenuButton | `Menu`（已实现） | `MenuAnchor` / `PopupMenuButton` |
 | RangeSlider | 无内置（双 Slider 组合；已实现 active thumb） | `RangeSlider` |
 | SearchField | `.searchable`（已实现） | `SearchBar`、`SearchAnchor` |
-| DateRangePicker | 无内置（双 DatePicker 组合） | `showDateRangePicker` |
+| DateRangePicker | 无内置（双 DatePicker 组合；已实现真实日历） | `showDateRangePicker` |
 | WheelPicker | `Picker` + `.pickerStyle(.wheel)` | `CupertinoPicker`、`ListWheelScrollView` |
 | 多选/区段/重排/swipe/下拉刷新 | `List(selection:)`、`Section`、`onMove`、`swipeActions`、`refreshable` | `CheckboxListTile`、`ReorderableListView`、`Dismissible`、`RefreshIndicator` |
 | ZStack | `ZStack`（已实现） | `Stack` |

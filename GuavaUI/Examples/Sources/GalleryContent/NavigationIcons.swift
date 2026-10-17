@@ -42,7 +42,7 @@ extension GalleryPage {
         case .notification: UIIcons.Status.bell
         case .sidebar, .navigationDrawer, .navigationRail: UIIcons.Layout.sidebar
         case .table, .dataTable: UIIcons.Layout.table
-        case .calendar, .datePicker: UIIcons.Data.calendar
+        case .calendar, .datePicker, .dateRangePicker: UIIcons.Data.calendar
         case .timeField, .timeline: UIIcons.Data.clock
         case .breadcrumb, .pagination, .stepper: UIIcons.Navigation.arrowRight
         case .keyCap: UIIcons.Shape.key

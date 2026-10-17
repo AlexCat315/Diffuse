@@ -42,6 +42,7 @@ private struct AdaptiveControlSample: View {
     @State private var selected: Int? = 0
     @State private var tab = 0
     @State private var date: Date? = nil
+    @State private var dateRange: ClosedRange<Date>? = nil
     @State private var fraction: Float = 0.35
     @State private var range: ClosedRange<Double> = 20...80
     @State private var navigationOpen = false

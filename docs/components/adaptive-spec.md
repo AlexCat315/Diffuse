@@ -240,6 +240,13 @@
 - 平板 / 桌面：弹出日历，键盘可导航。`[已实现]`（日历部分）
 - 交互与验收：Escape 关闭、辅助功能 label/value/isExpanded；验收：`--component datePicker|timeField`。
 
+**DateRangePicker**
+
+- 外观：触发器显示起止日期 + clear + chevron；弹层复用 Calendar 月视图，端点 accent、区间段 `stateLayerSelected`。`[已实现]`
+- 手机：日期格沿用 Calendar 44pt 触摸下限；单月一屏；弹层宽度由 Popover 夹紧。`[已实现]`
+- 平板 / 桌面：可配双月并排；方向键/Home/End/PageUp/Down 复用 Calendar。`[已实现]`
+- 交互与验收：第一击设起点、第二击设终点，反向点击自动交换；Escape/外部点击关闭；a11y 触发器读完整区间；区间预设/最大长度由应用层负责。`DateRangePickerTests` 覆盖两击与交换；Gallery `--component dateRangePicker`。细节见 [DateRangePicker](daterangepicker.md)。
+
 **AssetRefField / JsonField**
 
 - 外观：AssetRefField 显示资源 + 清除 + drop 目标；JsonField 紧凑多行编辑、提交校验、拖拽调整高度、展开为带行号的大编辑器。`[已实现]`

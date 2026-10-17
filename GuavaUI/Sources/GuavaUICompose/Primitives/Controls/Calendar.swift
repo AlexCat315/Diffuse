@@ -116,7 +116,7 @@ public struct CalendarView: View {
         else { session.month = next }
     }
 }
-private struct CalendarDayModifier: ViewModifier {
+struct CalendarDayModifier: ViewModifier {
     let day: Date
     let isTabStop: Bool
     func apply(node: Node) {
@@ -125,7 +125,7 @@ private struct CalendarDayModifier: ViewModifier {
         if !node.isFocusable, FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
     }
 }
-private struct CalendarKeyHost<Content: View>: _PrimitiveView {
+struct CalendarKeyHost<Content: View>: _PrimitiveView {
     let onNavigate: (Date, UInt32) -> Bool
     let content: Content
     init(onNavigate: @escaping (Date, UInt32) -> Bool, @ViewBuilder content: () -> Content) { self.onNavigate = onNavigate; self.content = content() }
@@ -140,7 +140,7 @@ private struct CalendarKeyHost<Content: View>: _PrimitiveView {
     }
     var _children: [any View] { [content] }
 }
-private struct CalendarDayStyle: ButtonStyle {
+struct CalendarDayStyle: ButtonStyle {
     let cellSize: Float
     let isCurrentMonth: Bool
     let isToday: Bool

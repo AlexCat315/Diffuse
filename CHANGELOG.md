@@ -15,6 +15,7 @@
 - 新增 `MenuButton` 与 `Popover.triggerStyle`：常规按钮触发器 + Portal 菜单，保留 expanded 语义、Escape/外部点击关闭与菜单键盘导航；补齐 `menubutton.md`、单元测试、Gallery 页与 DevTools 打开/选择/截图验收。
 - 新增 `RangeSlider`：双 thumb、就近 active thumb、`minimumSpan` 夹紧、键盘/Home/End 与组合 a11y 值；补齐 `rangeslider.md`、单元测试、Gallery 页与 DevTools 拖动/截图验收。两个 thumb 的独立 Tab/双 slider 语义仍待补。
 - 新增 `SplitButton`：主按钮 + MenuButton 箭头，主/备两区独立命中与禁用同步；补齐 `splitbutton.md`、单元测试、Gallery 页与 DevTools 主/备动作验收。单一 Tab + 左右分区与共享 1px 分隔 chrome 仍待补。
+- 新增 `DateRangePicker`：真实 Calendar 两击区间、端点/区间高亮、反向点击交换、触发器显示起止日期；补齐 `daterangepicker.md`、单元测试、Gallery 页与 DevTools 选择/截图验收。区间预设与最大长度由应用层负责。
 
 ## 0.0.9 — 2026-10-06
 
