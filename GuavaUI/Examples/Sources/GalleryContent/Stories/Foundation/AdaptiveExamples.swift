@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -63,6 +63,9 @@ private struct AdaptiveControlSample: View {
     @State private var dndLane: String?
     @State private var dndHover = false
     @State private var accordionExpanded: Set<Int> = [0]
+    @State private var radioValue: Int? = 0
+    @State private var paginationPage = 2
+    @State private var carouselPage = 0
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
             sample
@@ -255,6 +258,39 @@ private struct AdaptiveControlSample: View {
             $0.presentation.width = 240
             $0.presentation.isEnabled = options.isEnabled
         })
+        case .icon: AnyView(Icon(UIIcons.Action.check, size: 24))
+        case .avatar: AnyView(Avatar("Alex Morgan"))
+        case .panel: AnyView(Panel("Inspector", accessory: {
+            Icon(UIIcons.Action.moreHorizontal, size: .small)
+        }, content: {
+            Text("Panel content").padding(12)
+        }).frame(width: .percent(100), height: .points(130)))
+        case .scrollView: AnyView(ScrollView(.vertical) {
+            Column(alignment: .leading, spacing: 8) {
+                Text("Scrollable content").font(.caption)
+                Text("Second line").font(.caption)
+            }.padding(12)
+        }.frame(width: .percent(100), height: .points(100)))
+        case .statusBar: AnyView(StatusBar {
+            StatusBarText("Ready", detail: "3 items")
+        } trailing: {
+            StatusBarText("Ln 1", detail: "Col 4")
+        }.frame(width: .percent(100)))
+        case .carousel: AnyView(Carousel(pages: [
+            CarouselPage(0) { Text("Page 1").frame(height: 90) },
+            CarouselPage(1) { Text("Page 2").frame(height: 90) }
+        ], selection: $carouselPage).frame(height: 130))
+        case .breadcrumb: AnyView(Breadcrumb([
+            BreadcrumbItem(0, "Workspace"), BreadcrumbItem(1, "Assets"), BreadcrumbItem(2, "Camera")
+        ], onSelect: { _ in }).frame(width: .percent(100)))
+        case .pagination: AnyView(Pagination(page: $paginationPage, totalPages: 8).frame(width: .percent(100)))
+        case .radio: AnyView(RadioGroup(selection: $radioValue, options: [
+            RadioOption(0, "Option one"), RadioOption(1, "Option two")
+        ]) { $0.isEnabled = options.isEnabled })
+        case .timeline: AnyView(Timeline(events: [
+            TimelineEvent("Created", detail: "Workspace", trailing: "09:12", tone: .success),
+            TimelineEvent("Updated", detail: "Permissions", trailing: "10:04", tone: .info)
+        ]).frame(width: .percent(100)))
         default: AnyView(EmptyView())
         }
     }
