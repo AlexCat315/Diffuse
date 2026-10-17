@@ -74,7 +74,7 @@
 | `Box` / `Row` / `Column` / `Spacer` | 默认只收缩 `flex(shrink: >0)` 的子项；`Row` 不自动换行，需要换行的工具栏/标签排显式用 `Box(wrap: .wrap)` 或 `ViewThatFits`。`Column` 不拉伸子节点到父宽。`Spacer` 与 `.flex()` 兄弟争抢剩余空间，固定间距不要用 `Spacer` 冒充 | `[已实现]` |
 | `ScrollView` / `BoundedScrollView` | 先按内容测量；`BoundedScrollView` 在 min/max 高度内先长大再滚动。溢出轴在边界处按 `.whenScrollable` 停留（顶部/底部继续吃滚动，不带动父级），非溢出轴允许事件透传；滚动条用 `.stable` gutter 预留 12pt 不压尾部控件 | `[已实现]`；键盘 Page/Home/End 与滚动条辅助功能 `[未实现]` |
 | `SplitView` | 空间足够时优先满足两侧 minimum；比例范围与像素最小冲突时像素最小优先。未启用 compact 时，空间不足按两个最小尺寸的比例共享并裁剪。`compact` 按容器轴向长度（默认阈值 600pt）切换为单面板 + 页签，保留两个面板的节点、草稿、滚动与请求比例；恢复双栏时重新应用约束。拖拽/键盘/辅助功能才写回比例 binding；触摸分隔柄 ≥ 44pt | `[已实现]`；API 与边界见 [SplitView](splitview.md) |
-| `Grid` / `LazyGrid` | `fixed` 列保持像素宽并在不足时滚动或收缩；`flexible(minimum:)` 不跌破 minimum；`adaptive(minimum:)` 按可用宽度减少列数直至最小列数。窄于单列 minimum 时退化为单列并允许横向滚动或自身滚动 | 列策略 `[已实现]`；单列退化后的滚动兜底、span/二维窗口化 `[未实现]` |
+| `Grid` / `LazyGrid` | `fixed` 保持 authored 宽，`flexible(minimum:)` 不跌破 minimum，`adaptive(minimum:)` 随宽度减少列数。Grid 在 minimum 超宽时横向滚动；命名字段列按优先级隐藏并提供 Columns 菜单。LazyGrid 使用有界视口与窗口化行高 | Grid 列策略、显隐与滚动兜底 `[已实现]`，见 [布局](layout.md#grid-字段列)；span/二维窗口化仍缺 |
 | `ViewThatFits` / `LayoutThatFits` | 按容器实测宽（默认阈值 600）或候选测量选择布局；两分支各自保留节点与 `@State`，隐藏分支不参与布局/绘制/输入/辅助功能并释放焦点与指针捕获；重任务由应用按当前形态控制 | `[已实现]` |
 | `ContainerSizeReader` | 发布自身内容盒（扣 padding/border）实测尺寸；首次收到 `.zero`，变化 < 0.5pt 不发布；父级必须有界宽。卡片内部自适应用它，不用窗口宽度 | `[已实现]` |
 | `WidthClassReader` | 读取 surface 级 width class（窗口级），用于壳层：导航收敛、栏位切换；不用于卡片内部 | `[已实现]` |
@@ -91,6 +91,7 @@
 - 大集合（List/Tree/Table/DataTable/VirtualStack）必须使用窗口化协议，空间不足不改变虚拟化契约：List/Tree/Table/DataTable 先按 `TextScaler` 缩放 authored 行高，触摸面再应用 44pt 下限；窗口化 extent 与滚动范围使用同一高度，切回指针保留字号缩放并移除触摸下限。通用 VirtualStack 使用调用方传入的实际高度。
 - 已知可变行高用 `VariableVirtualStack`；未知高度测量 `[未实现]`。普通 `ScrollView` 不自动窗口化，长列表必须显式选择容器。
 - 数据表列在窄宽下：`TableColumn.visibility` 声明必要列或自动列优先级；Table / DataTable 按实际宽度隐藏低优先列，提供横向滚动、显隐菜单及可选用户选择 binding。冻结列和活动编辑不参与隐藏，规则与超宽冻结区兜底见 [数据表](data-table.md#列优先级与可见性)。`[已实现]`
+- Grid 命名字段列使用同一 `ColumnVisibility`，隐藏后仍保留源行槽位与局部状态；内置显隐入口和 minimum 横向滚动，匿名 adaptive 卡片流保持原语义。`[已实现]`
 
 ## 2. 视觉与密度基线
 
@@ -254,7 +255,10 @@
 - 平板 / 桌面：两轴窗口化、列宽拖拽、键盘单元格导航。`[已实现]`
 - 交互与验收：键盘导航（箭头/Home/End/PageUp/PageDown/F2/Escape/Cmd+A）、编辑提交/取消、辅助功能 row/cell/slider（列宽）。验收：`DataTableInteractionTests`、`RowDensityTests`、`TextScaleRowTests.collectionGeometry` / `dataTableNavigation`、`--component table|dataTable`。
 
-**LazyGrid**
+**Grid / LazyGrid**
+
+- Grid 的命名 fixed/flexible 字段列按 minimum 和优先级自动隐藏，必要列保留，提供 ≥44pt 的 Columns 入口与菜单、用户选择 binding 和恢复自动模式。源行槽位、节点、局部编辑草稿不因显隐改变；隐藏子树不绘制、不接输入、不暴露语义，所属附属浮层关闭。必要列或显式显示超宽时横向滚动，匿名 adaptive 退化至 minimum 后同样可滚动。`[已实现]`
+- Grid 验收：`GridColumnsTests` 覆盖三档宽度、100%/200%、三种输入、明暗主题、RTL、状态、菜单、滚动和 AI 查询；`CustomLayoutVisibilityTests` 覆盖缓存绘制与命中，`--component layout` 提供可交互示例。GridLayout 仅负责布局算法，菜单与滚动由 Grid facade 提供；span、二维窗口化及通用 ScrollView 触摸拖动/键盘滚动仍待补齐。
 
 - 固定与已知可变行高均接收未缩放逻辑高度，行高和行间距自动跟随 `TextScaler`；列宽与列间距不参与字号缩放。变量模式复用 authored 前缀索引，不因字号变化或滚动遍历全部数据。`[已实现]`
 - 窗口化、占位、单元格高度与滚动 extent 使用同一份缩放几何；字号恢复后夹紧超出范围的滚动位置，保留重叠可见单元格身份。验收：`TextScaleRowTests.collectionGeometry` / `variableGrid`、`LazyGridTests`。
@@ -420,6 +424,7 @@ guava showcase gallery --android --component NAME
 | Form / PropertyGrid 标签、列数、编辑状态与 AI 诊断定位 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/FieldLayoutTests.swift` |
 | Toolbar 优先级、菜单、密度与焦点交接 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/ToolbarOverflowTests.swift` |
 | Table / DataTable 列优先级、显隐、排序、编辑迁移、会话和 AI 查询 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TableColumnsTests.swift` |
+| Grid 列优先级、源行槽位、草稿、附属浮层、菜单、滚动与 AI 查询 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/GridColumnsTests.swift` |
 | Calendar 月内首尾/翻月、日期限制、实际焦点、禁用与 DatePicker 提交 | `GuavaUI/Tests/GuavaUIComposeTests/Calendar/KeyboardNavigationTests.swift` |
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
@@ -449,7 +454,6 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 4 | Grid 列优先级、隐藏与"列可见性"入口；Table / DataTable 已完成，见下方记录 | `Layout/Grid/*` | Grid 列策略与窄宽验收，单列 minimum 的滚动兜底 |
 | 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
 | 6 | Button / Select / DatePicker / Tab 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()` 与 AppBar 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
 | 9 | ScrollView 触摸拖动/惯性、键盘滚动（箭头/Page/Home/End）、横向滚动条 gutter | `Layout/ScrollView.swift` | 触摸滚动测试 + `scrollview` 页；键盘测试 |
@@ -461,11 +465,11 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
-编号稳定保留已完成项的空位。建议顺序：先做 4（数据密度，直接影响手机/平板可用性），再做 5–6（截断），然后 9–16（输入与语义补齐）。1–3、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+编号稳定保留已完成项的空位。建议顺序：先做 5–6（截断），然后 9–16（输入与语义补齐）。1–4、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
 AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单，按实际容器在 1 / 3 个平铺操作之间收敛；标题与文字主操作使用统一的单行省略能力，保留全文及 heading 语义，安全区由宿主消费。组件、菜单和原生角色测试及 Gallery 可交互页已经接入；第 6 项仍保留既有控件的逐项采用工作，不能由 AppBar 的完成代替。
 
-第 4 项的 Table / DataTable 已实现共享列策略：必要列、冻结列和活动草稿优先，按实际分配与当前列宽移除低优先自动列；内置 Columns 菜单、显隐 binding 和恢复自动模式。显隐不改变排序、记录、选择或列宽，隐藏焦点列交接并释放捕获，键盘跳过隐藏列，程序化导航可揭示目标。`TableColumnsTests` 覆盖容器/字号/输入/主题矩阵、菜单、排序、编辑、会话重置和经校验的 AI 查询；Gallery 两页增加优先级和三预览。通用 Grid 的列策略与滚动兜底仍保留在第 4 项。
+第 4 项已实现：Grid、Table、DataTable 共享 `ColumnVisibility` 与 Columns 菜单，按实际分配移除低优先自动列，支持显隐 binding 和恢复自动模式。Table / DataTable 的必要列、冻结列和活动草稿优先；显隐不改变排序、记录、选择或列宽，隐藏焦点列交接并释放捕获，键盘跳过隐藏列，程序化导航可揭示目标。Grid 命名字段列保留源行槽位、节点与局部草稿，必要 minimum 超宽仍可横向滚动；普通 adaptive 卡片流保持原语义。`TableColumnsTests`、`GridColumnsTests` 覆盖容器/字号/输入/主题矩阵、菜单、会话和经校验的 AI 查询；Gallery 三页均有交互与三预览。初始隐藏单元格输出有限的零几何，隐藏时关闭所属附属浮层；DevTools 的 `get_diagnostics.layoutIssues` 可定位非有限或负尺寸及源码，避免查询只返回 JSON 编码失败。
 
 第 1 项命令工具栏溢出已实现：`Toolbar(items:)` 以实测按钮树分配自然宽度，支持优先级、始终保留、始终溢出及图标命令；隐藏 inline 节点仍挂载但不绘制、不接输入、不暴露语义。`ToolbarOverflowTests` 覆盖三档宽度、100%/200% 字号、三种输入集合、菜单操作、节点保留和焦点交接；Gallery Toolbar 已接入自动预览。自定义任意内容仍由应用显式重排，真机触摸和读屏继续按第 4 节取样。
 

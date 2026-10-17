@@ -50,7 +50,7 @@ public final class LayerAwareNodeRenderer {
                          into frame: DrawList,
                          placed: Affine2D,
                          parentClipStack: [UIRect]) {
-        guard let node = obj.node else { return }
+        guard let node = obj.node, node.isLayoutVisible else { return }
         let f = node.frame
         let own = node.placementStep(scrolling: .zero).followed(by: placed)
         let origin = own.origin
@@ -172,6 +172,7 @@ public final class LayerAwareNodeRenderer {
                                           into list: DrawList,
                                           placed: Affine2D,
                                           clipStack: [UIRect]) {
+        guard node.isLayoutVisible else { return }
         let firstVertex = list.vertices.count
         let own = node.placementStep(scrolling: .zero).followed(by: placed)
         let origin = own.origin

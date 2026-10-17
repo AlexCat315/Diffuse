@@ -117,6 +117,10 @@ public final class UIDiagnostics {
     }
     public func resetCaptures() { traces.reset() }
     public var stateObservationAvailable: Bool { state != nil }
+    func layoutIssues(limit: Int) -> UIDiagnosticLayoutSummary {
+        let issues = nodes().compactMap(\.geometryIssue)
+        return UIDiagnosticLayoutSummary(total: issues.count, items: Array(issues.prefix(min(100, max(1, limit)))))
+    }
 }
 
 public struct UIStateQuery: Codable, Sendable {

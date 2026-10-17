@@ -106,7 +106,7 @@ public final class Node: @unchecked Sendable {
     public var allowsHitTesting: Bool = true
 
     public var acceptsSubtreeInput: Bool {
-        allowsHitTesting && isInteractionEnabled && (parent?.acceptsSubtreeInput ?? true)
+        isLayoutVisible && allowsHitTesting && isInteractionEnabled && (parent?.acceptsSubtreeInput ?? true)
     }
 
     /// When true, this node may receive keyboard focus (FocusChain consideration).

@@ -142,7 +142,7 @@ public final class SceneEditor: @unchecked Sendable {
     /// inspectable; clipping, scrolling and invisible subtrees match rendering.
     public func pick(at point: CGPoint) -> Node? {
         func visit(_ node: Node) -> Node? {
-            guard node.opacity > 0, node.subtreeOpacity > 0, node.layoutNode?.display != Display.none else { return nil }
+            guard node.isLayoutVisible, node.opacity > 0, node.subtreeOpacity > 0, node.layoutNode?.display != Display.none else { return nil }
             let inside = node.absoluteFrame.contains(point)
             if !inside && node.clipsToBounds { return nil }
             let children = node.children.enumerated().sorted {

@@ -17,6 +17,41 @@ private extension JSONValue {
 @Suite("AI diagnostics", .serialized)
 @MainActor
 struct DiagnosticsTests {
+    @Test func overviewReportsInvalidGeometryWithoutLosingJSONAndQueriesIdentifyTheNode() throws {
+        let tree = NodeTree(), root = Node(), broken = Node(), negative = Node(), valid = Node()
+        tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 300, height: 200)
+        root.addChild(broken); root.addChild(negative); root.addChild(valid)
+        broken.frame = CGRect(x: 0, y: 0, width: CGFloat.nan, height: 20)
+        broken.sourceLocation = .init(fileID: "App/Grid.swift", filePath: "/project/Grid.swift", line: 47, column: 2)
+        broken.accessibility = AccessibilitySemantics(.button) { $0.label = "Broken" }
+        negative.frame = CGRect(x: 0, y: 0, width: -4, height: 20)
+        negative.accessibility = AccessibilitySemantics(.button) { $0.label = "Negative" }
+        valid.frame = CGRect(x: 20, y: 20, width: 60, height: 30)
+        valid.accessibility = AccessibilitySemantics(.button) { $0.label = "Valid" }
+        let diagnostics = UIDiagnostics(tree: tree)
+        let overview = diagnostics.handleReadRequest(DevToolsEnvelope(type: "diagnostics.call", payload: .object([
+            "name": .string("get_diagnostics"), "arguments": .object(["limit": .number(1)])
+        ])))
+        #expect(overview.type == "diagnostics.call.ok")
+        let issues = try #require(overview.payload?.objectValue?["data"]?.objectValue?["layoutIssues"]?.objectValue)
+        #expect(issues["total"]?.diagnosticNumber == 2)
+        let first = try #require(issues["items"]?.diagnosticArray?.first?.objectValue)
+        #expect(first["nodeID"]?.stringValue == String(broken.id.rawValue))
+        #expect(first["invalidValues"]?.objectValue?["width"]?.stringValue?.lowercased().contains("nan") == true)
+        #expect(first["source"]?.objectValue?["line"]?.diagnosticNumber == 47)
+        let visible = diagnostics.handleReadRequest(DevToolsEnvelope(type: "diagnostics.call", payload: .object([
+            "name": .string("query_ui_nodes"), "arguments": .object(["role": .string("button"), "visible_only": .bool(true)])
+        ])))
+        #expect(visible.type == "diagnostics.call.ok")
+        #expect(visible.payload?.objectValue?["data"]?.objectValue?["total"]?.diagnosticNumber == 1)
+        let invalid = diagnostics.handleReadRequest(DevToolsEnvelope(type: "diagnostics.call", payload: .object([
+            "name": .string("query_ui_nodes"), "arguments": .object(["node_id": .string(String(broken.id.rawValue))])
+        ])))
+        #expect(invalid.type == "diagnostics.call.err")
+        #expect(invalid.payload?.objectValue?["message"]?.stringValue?.contains(String(broken.id.rawValue)) == true)
+        #expect(invalid.payload?.objectValue?["message"]?.stringValue?.contains("get_diagnostics") == true)
+    }
+
     @Test func immediateWireReadsShareToolboxSchemasResultsAndRedaction() async throws {
         let tree = NodeTree(), root = Node(), child = Node()
         root.addChild(child); tree.root = root

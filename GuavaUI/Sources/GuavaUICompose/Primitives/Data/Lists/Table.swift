@@ -26,7 +26,7 @@ public struct TableColumn<Record>: Identifiable {
     public let id: String
     public let title: String
     public var layout = TableColumnLayout()
-    public var visibility: TableColumnVisibility = .required
+    public var visibility: ColumnVisibility = .required
     /// Equal comparisons retain source order in both sort directions.
     public var compare: (@Sendable (Record, Record) -> ComparisonResult)?
     public var textEditing: TableTextEditing<Record>?

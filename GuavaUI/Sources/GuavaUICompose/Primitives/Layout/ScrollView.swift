@@ -588,6 +588,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     }
 
     private static func contentBounds(for node: Node, origin: CGPoint) -> CGRect {
+        guard node.isLayoutVisible else { return .null }
         let frame = node.frame.offsetBy(dx: origin.x, dy: origin.y)
         var bounds = frame
 

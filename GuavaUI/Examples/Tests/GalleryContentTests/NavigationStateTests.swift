@@ -61,7 +61,7 @@ struct NavigationStateTests {
         try AnimatorScheduler.$current.withValue(AnimatorScheduler()) {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             defer { graph.install(root: EmptyView()) }
-            graph.install(root: LayoutFoundationExamples().theme(.defaultLight).textScaler(.init(2)))
+            graph.install(root: LayoutFoundationExamples(options: GalleryOptions()).theme(.defaultLight).textScaler(.init(2)))
             for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 900, height: 1_000) }
             func all(_ node: Node) -> [Node] { [node] + node.children.flatMap(all) }
             let viewport = try #require(all(graph.tree.root!).first {

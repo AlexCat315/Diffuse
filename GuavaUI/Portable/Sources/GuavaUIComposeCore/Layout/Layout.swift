@@ -21,7 +21,7 @@ public struct ProposedViewSize: Equatable, Sendable {
 /// nodes, storage, lifecycle, or mutable view state.
 public struct LayoutSubview {
     private let measure: (ProposedViewSize) -> CGSize
-    private let place: (CGPoint, ProposedViewSize) -> Void
+    private let place: (CGPoint, ProposedViewSize, Bool) -> Void
     /// The owning container's logical direction. A child may override its
     /// own content direction without changing the container's placement.
     public let layoutDirection: Direction
@@ -29,11 +29,15 @@ public struct LayoutSubview {
     init(_ node: LayoutNode) {
         layoutDirection = node.parent?.customLayoutDirection ?? node.customLayoutDirection
         measure = { node.measureForCustomLayout(width: $0.width, height: $0.height) }
-        place = { node.placeForCustomLayout(at: $0, width: $1.width, height: $1.height) }
+        place = { node.placeForCustomLayout(at: $0, width: $1.width, height: $1.height, isVisible: $2) }
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize) -> CGSize { measure(proposal) }
-    public func place(at point: CGPoint, proposal: ProposedViewSize = .unspecified) { place(point, proposal) }
+    /// Hidden placements retain their views, excluding them from paint, input
+    /// and accessibility. Layout algorithms still own their geometry and gaps.
+    public func place(at point: CGPoint, proposal: ProposedViewSize = .unspecified, isVisible: Bool = true) {
+        place(point, proposal, isVisible)
+    }
 }
 
 /// Implement only the geometry of a container. Ordinary child views need no

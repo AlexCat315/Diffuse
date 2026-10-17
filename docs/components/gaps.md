@@ -11,7 +11,7 @@
 
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
-| 布局与容器 | Box/Row/Column/Spacer/Divider、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | ZStack/Overlay 公共层叠容器 P1、Masonry P2、LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
+| 布局与容器 | Box/Row/Column/Spacer/Divider、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | ZStack/Overlay 公共层叠容器 P1、Masonry P2、Grid/LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
 | 命令与选择 | Button/IconButton、ButtonGroup、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton/MenuButton P1、RangeSlider P1、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | SearchField P1、OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
@@ -159,7 +159,7 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应。DataTable / Table 列优先级与显隐菜单、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。通用 Grid 的余项继续由规范第 5-4 项跟踪。
+**P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
 **P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail 与 AdaptiveSidebar 统一壳层已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)。
 

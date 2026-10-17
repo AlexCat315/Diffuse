@@ -140,6 +140,7 @@ struct WorkspaceStory: View {
 }
 
 struct LayoutStory: View {
+    let options: GalleryOptions
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
           StorySection("Flex layout", "Layout containers arrange children; spacing and alignment belong to the owning container.") {
@@ -151,7 +152,7 @@ struct LayoutStory: View {
                 for i in 1...3 { AnyView(Text("Column \(i)").padding(24).background(.surfaceVariant).cornerRadius(6).flex(Float(i), shrink: 1, basis: 0)) }
             }
           }
-          LayoutFoundationExamples()
+          LayoutFoundationExamples(options: options)
         }
     }
 }

@@ -30,6 +30,7 @@ public struct NodeRenderer {
     /// origin is what lets a scale reach this node's children — an origin alone
     /// has nowhere to record how much bigger or smaller they should be drawn.
     private func renderNode(_ node: Node, list: DrawList, placed: Affine2D) {
+        guard node.isLayoutVisible else { return }
         let firstVertex = list.vertices.count
         let f = node.frame
         let own = node.placementStep(scrolling: .zero).followed(by: placed)

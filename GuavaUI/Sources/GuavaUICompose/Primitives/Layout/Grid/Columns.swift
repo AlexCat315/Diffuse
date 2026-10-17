@@ -6,12 +6,20 @@ public enum GridColumn: Equatable, Sendable {
     case fixed(CGFloat)
     case flexible(minimum: CGFloat = 0, maximum: CGFloat = .infinity)
     case adaptive(minimum: CGFloat, maximum: CGFloat = .infinity)
+    /// Named field columns preserve their source slot when hidden. Use fixed
+    /// or flexible sizing; adaptive card flows remain anonymous columns.
+    indirect case named(id: String, title: String, sizing: GridColumn, visibility: ColumnVisibility = .required)
 }
 
 /// Resolves column widths without measuring or constructing child views.
 enum GridTrackResolver {
+    static func minimumWidth(columns: [GridColumn], spacing: CGFloat) -> CGFloat {
+        columns.reduce(0) { $0 + limits(for: $1).minimum }
+            + finiteNonnegative(spacing) * CGFloat(max(0, columns.count - 1))
+    }
     static func widths(columns: [GridColumn], availableWidth: CGFloat?, spacing: CGFloat,
                        intrinsicWidths: [CGFloat] = []) -> GridTracks {
+        let columns = columns.map(\.sizing)
         guard !columns.isEmpty else { return GridTracks(groups: [], spacing: 0) }
         let gap = finiteNonnegative(spacing)
         let limits = columns.map { limits(for: $0) }
@@ -86,7 +94,14 @@ enum GridTrackResolver {
             return (minimum, upperBound(maximum, minimum: minimum))
         case let .adaptive(minimum, _):
             return (max(1, finiteNonnegative(minimum)), .infinity)
+        case let .named(_, _, sizing, _): return limits(for: sizing)
         }
+    }
+}
+
+extension GridColumn {
+    var sizing: GridColumn {
+        if case .named(_, _, let sizing, _) = self { sizing } else { self }
     }
 }
 

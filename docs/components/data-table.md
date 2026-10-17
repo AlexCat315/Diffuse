@@ -55,7 +55,7 @@ Table 与 DataTable 共用行高解析：先按 `TextScaler` 缩放 authored `ro
 
 ### 列优先级与可见性
 
-`Table` 与 `DataTable` 共用 `TableColumn.visibility`。默认 `.required` 保留列；`.automatic(priority:)` 按实际容器宽度移除低优先列，相同优先级先移除靠后的列。列宽使用当前拖拽宽度，不缩小列宽、字号或触摸行高来塞进视口。冻结前缀与正在编辑的列不自动隐藏，至少保留一列。
+`Table` 与 `DataTable` 的 `TableColumn.visibility` 使用与命名 Grid 共享的 `ColumnVisibility`。默认 `.required` 保留列；`.automatic(priority:)` 按实际容器宽度移除低优先列，相同优先级先移除靠后的列。列宽使用当前拖拽宽度，不缩小列宽、字号或触摸行高来塞进视口。冻结前缀与正在编辑的列不自动隐藏，至少保留一列。
 
 ```swift
 let details = TableColumn<AssetRow>("details", "Details", configure: {

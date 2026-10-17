@@ -1,6 +1,6 @@
 import Foundation
 import GuavaPlatformCore
-import GuavaUIScene
+@_spi(CustomLayout) import GuavaUIScene
 
 /// Materialises `View` trees into the underlying `NodeTree`, and recomposes
 /// affected subtrees when `@State` writes invalidate them through `Recomposer`.
@@ -142,9 +142,15 @@ public final class ViewGraph {
         return layoutRoot.subtreeIsDirty
     }
 
-    private func writeLayoutBack(node: Node, parentOrigin: CGPoint = .zero) {
-        if let ln = layoutOf[ObjectIdentifier(node)] {
-            node.frame = ln.frame
+    private func writeLayoutBack(node: Node, parentOrigin: CGPoint = .zero, parentPlacementVisible: Bool = true) {
+        let layout = layoutOf[ObjectIdentifier(node)]
+        let placementVisible = parentPlacementVisible && (layout?.customLayoutIsVisible ?? true)
+        if let ln = layout {
+            node.setLayoutVisibility(ln.customLayoutIsVisible)
+            // Hidden retained slots are not measured. Their Yoga descendants
+            // may never have had a layout; publish the suppressed geometry,
+            // rather than uninitialized probe frames, until they are placed.
+            node.frame = placementVisible ? ln.frame : .zero
         }
         let absoluteOrigin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
                                      y: parentOrigin.y + node.frame.origin.y)
@@ -154,7 +160,7 @@ public final class ViewGraph {
         let childOrigin = CGPoint(x: absoluteOrigin.x - node.contentOffset.x,
                                   y: absoluteOrigin.y - node.contentOffset.y)
         for child in node.children {
-            writeLayoutBack(node: child, parentOrigin: childOrigin)
+            writeLayoutBack(node: child, parentOrigin: childOrigin, parentPlacementVisible: placementVisible)
         }
         node.layoutDidUpdate?(node)
     }

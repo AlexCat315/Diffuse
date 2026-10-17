@@ -2,12 +2,14 @@ import Foundation
 import GuavaUI
 
 struct LayoutFoundationExamples: View {
+    let options: GalleryOptions
     @State private var narrow = false
     @State private var rtl = false
     @State private var target: Int? = nil
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            GridColumnExamples(options: options)
             StorySection("Measured grid", "Fixed, flexible and adaptive tracks share the public Layout measurement and placement contract. Row heights follow their tallest content.") {
                 Grid(columns: [.fixed(100), .flexible(minimum: 120), .flexible(minimum: 120)],
                      columnSpacing: 12, rowSpacing: 12) {

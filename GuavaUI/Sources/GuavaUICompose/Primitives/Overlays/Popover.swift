@@ -126,6 +126,11 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
             node.firstResource(PortalResource.self)?.dismiss(node: node)
             return
         }
+        guard node.acceptsSubtreeInput else {
+            node.firstResource(PortalResource.self)?.unmount(node: node)
+            onDismiss()
+            return
+        }
         let position = Self.popoverPosition(for: node, width: width, placement: placement)
 
         // Register / update the overlay entry through the node-owned resource.

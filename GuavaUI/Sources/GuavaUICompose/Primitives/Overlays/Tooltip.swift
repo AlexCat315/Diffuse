@@ -55,6 +55,7 @@ public struct Tooltip<Target: View, Content: View>: View {
 }
 
 private struct CoordinateTooltipHost: _PrimitiveView {
+    private static var availabilityKey: String { "GuavaUI.tooltip.coordinate.available" }
     let anchor: TooltipAnchor
     let content: AnyView
     let options: TooltipOptions
@@ -66,8 +67,18 @@ private struct CoordinateTooltipHost: _PrimitiveView {
     }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
+        node.attachments[Self.availabilityKey] = node.acceptsSubtreeInput
+        node.layoutDidUpdate = { node in
+            let available = node.acceptsSubtreeInput
+            guard node.attachments[Self.availabilityKey] as? Bool != available else { return }
+            node.attachments[Self.availabilityKey] = available
+            updatePresentation(node)
+        }
+        updatePresentation(node)
+    }
+    private func updatePresentation(_ node: Node) {
         guard let resource = node.firstResource(PortalResource.self) else { return }
-        guard isPresented, options.isEnabled else { resource.unmount(node: node); return }
+        guard node.acceptsSubtreeInput, isPresented, options.isEnabled else { resource.unmount(node: node); return }
         let store = node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
         resource.present(in: store, position: CGPoint(x: anchor.rect.minX, y: anchor.rect.maxY + CGFloat(options.gap)),
                          width: nil, content: AnyView(content.frame(maxWidth: options.maxWidth).theme(node.theme).allowsHitTesting(false)))
@@ -152,7 +163,7 @@ final class TooltipSession: NodeResource, AnyAnimationController {
         if elapsed >= options.delay { isFinished = true; show() }
     }
     private func show() {
-        guard let node, let content else { return }
+        guard let node, node.acceptsSubtreeInput, let content else { return }
         presented = true
         node.firstResource(PortalResource.self)?.present(in: node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current,
             position: position(node), width: nil,
@@ -163,6 +174,7 @@ final class TooltipSession: NodeResource, AnyAnimationController {
         CGPoint(x: node.absoluteFrame.minX, y: node.absoluteFrame.maxY + CGFloat(options.gap))
     }
     func updatePosition() {
+        if let node, !node.acceptsSubtreeInput { dismiss(); return }
         guard presented, let node, let resource = node.firstResource(PortalResource.self), let id = resource.entryID else { return }
         let store = node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
         store.updatePosition(id, position: position(node))

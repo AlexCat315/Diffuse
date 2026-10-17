@@ -38,7 +38,7 @@ public struct HitTester {
     private static func walk(node: Node,
                              pointInParent: CGPoint,
                              path: inout [Node]) -> HitResult? {
-        guard node.allowsHitTesting, node.isInteractionEnabled else { return nil }
+        guard node.isLayoutVisible, node.allowsHitTesting, node.isInteractionEnabled else { return nil }
         // A node collapsed to nothing by a transition has no area to hit.
         // Checked before the inverse, because a zero scale has no inverse and
         // the fallback would report the node at full size — the one answer

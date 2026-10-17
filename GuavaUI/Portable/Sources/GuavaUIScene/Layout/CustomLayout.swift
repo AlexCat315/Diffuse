@@ -5,6 +5,7 @@ struct LayoutCalculationState {
     var subtreeDirty = false
     var custom: CustomLayoutState?
     var placedFrame: CGRect?
+    var placementIsVisible = true
 }
 
 /// The Compose adapter owns the public value-based layout API. This bridge
@@ -40,6 +41,7 @@ final class CustomLayoutState {
         measurements.removeValue(forKey: ObjectIdentifier(child))
         probes.removeValue(forKey: ObjectIdentifier(child))
         child.calculation.placedFrame = nil
+        child.calculation.placementIsVisible = true
     }
 
     func size(of child: LayoutNode, width: CGFloat?, height: CGFloat?, direction: Direction) -> CGSize {
@@ -137,8 +139,12 @@ extension LayoutNode {
         return owner.size(of: self, width: width, height: height, direction: customLayoutDirection)
     }
 
-    @_spi(CustomLayout) public func placeForCustomLayout(at point: CGPoint, width: CGFloat?, height: CGFloat?) {
+    @_spi(CustomLayout) public var customLayoutIsVisible: Bool { calculation.placementIsVisible }
+
+    @_spi(CustomLayout) public func placeForCustomLayout(at point: CGPoint, width: CGFloat?, height: CGFloat?, isVisible: Bool) {
         guard let owner = parent?.calculation.custom else { return }
+        calculation.placementIsVisible = isVisible
+        guard isVisible else { calculation.placedFrame = .zero; return }
         owner.layout(self, width: width, height: height, direction: customLayoutDirection)
         placeCustomLayouts()
         calculation.placedFrame = CGRect(origin: point, size: yogaFrame.size)

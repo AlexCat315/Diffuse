@@ -49,7 +49,7 @@ struct CustomLayoutTests: GuavaUIComposeSerializedSuite {
         container.setCustomLayout(measure: { _, _, _ in CGSize(width: 80, height: 20) }, place: { bounds, children in
             placements += 1
             let x = children[0].customLayoutDirection == .rtl ? bounds.maxX - 20 : bounds.minX
-            children[0].placeForCustomLayout(at: CGPoint(x: x, y: 0), width: 20, height: 10)
+            children[0].placeForCustomLayout(at: CGPoint(x: x, y: 0), width: 20, height: 10, isVisible: true)
         })
         container.addChild(child)
         root.calculateLayout(availableWidth: 80, availableHeight: 20, direction: .ltr)

@@ -145,7 +145,7 @@ public extension GalleryPage {
         case .boundedScroll: AnyView(BoundedScrollStory())
         case .propertyGrid: AnyView(PropertyGridStory(options: options))
         case .workspace: AnyView(WorkspaceStory())
-        case .layout: AnyView(LayoutStory())
+        case .layout: AnyView(LayoutStory(options: options))
         case .animation: AnyView(AnimationStory(options: options))
         case .theme: AnyView(ThemeStory())
         case .badge: AnyView(BadgeStory())

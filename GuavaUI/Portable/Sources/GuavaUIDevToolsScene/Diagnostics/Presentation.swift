@@ -26,16 +26,19 @@ public struct UIDiagnosticPresentation: Codable, Sendable {
         }
         let inputScope = modalInput(in: root)
         func visit(_ node: Node, clip: CGRect?, draws: Bool, input: Bool) -> CGRect? {
-            let draws = draws && node.opacity > 0 && node.subtreeOpacity > 0
-            let input = input && node.allowsHitTesting && node.isInteractionEnabled
-                && node.accessibility?.state.isEnabled != false
             let bounds = node.absoluteFrame
+            let valid = [node.frame.origin.x, node.frame.origin.y, node.frame.size.width, node.frame.size.height,
+                         bounds.minX, bounds.minY, bounds.width, bounds.height].allSatisfy(\.isFinite)
+                && node.frame.size.width >= 0 && node.frame.size.height >= 0
+            let draws = draws && valid && node.isLayoutVisible && node.opacity > 0 && node.subtreeOpacity > 0
+            let input = input && node.isLayoutVisible && node.allowsHitTesting && node.isInteractionEnabled
+                && node.accessibility?.state.isEnabled != false
             var own: CGRect?
             if draws, bounds.width > 0, bounds.height > 0 {
                 let visible = clip.map { $0.intersection(bounds) } ?? bounds
                 if !visible.isEmpty { own = visible }
             }
-            let childClip = node.clipsToBounds ? (clip.map { $0.intersection(bounds) } ?? bounds) : clip
+            let childClip = node.clipsToBounds ? (valid ? (clip.map { $0.intersection(bounds) } ?? bounds) : .null) : clip
             var descendants: CGRect?
             for child in node.children {
                 if let frame = visit(child, clip: childClip, draws: draws, input: input) {

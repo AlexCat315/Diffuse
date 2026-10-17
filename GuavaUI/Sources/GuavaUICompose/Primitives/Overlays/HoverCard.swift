@@ -104,7 +104,7 @@ final class HoverCardSession: NodeResource, AnyAnimationController {
         isFinished = true; pending = nil; elapsed = 0; scheduler?.unregister(self)
     }
     private func show() {
-        guard let node, let content, options.isEnabled else { return }
+        guard let node, node.acceptsSubtreeInput, let content, options.isEnabled else { return }
         presented = true
         let surface = ThemeReader { [weak self] theme in
             HoverCardAccessory(owner: node, content: AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
@@ -125,6 +125,7 @@ final class HoverCardSession: NodeResource, AnyAnimationController {
     }
     private func position(_ node: Node) -> CGPoint { CGPoint(x: node.absoluteFrame.minX, y: node.absoluteFrame.maxY + 6) }
     func updatePosition() {
+        if let node, !node.acceptsSubtreeInput { dismiss(); return }
         guard presented, let node, let id = node.firstResource(PortalResource.self)?.entryID else { return }
         let store = node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
         store.updatePosition(id, position: position(node))

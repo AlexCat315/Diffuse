@@ -83,7 +83,7 @@ public enum AccessibilityTree {
         collect(root, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues)
     }
     private static func collect(_ node: Node, clip: CGRect, combinesText: Bool, resolveValues: Bool) -> [AccessibilityElement] {
-        guard node.isInteractionEnabled, node.opacity > 0, node.subtreeOpacity > 0,
+        guard node.isLayoutVisible, node.isInteractionEnabled, node.opacity > 0, node.subtreeOpacity > 0,
               node.accessibility?.isHidden != true else { return [] }
         let bounds = node.absoluteFrame
         let childClip = node.clipsToBounds ? clip.intersection(bounds) : clip
@@ -116,7 +116,7 @@ public enum AccessibilityTree {
 
     private static func labelText(in node: Node) -> [String] {
         node.children.flatMap { child -> [String] in
-            guard child.isInteractionEnabled, child.opacity > 0, child.subtreeOpacity > 0 else { return [] }
+            guard child.isLayoutVisible, child.isInteractionEnabled, child.opacity > 0, child.subtreeOpacity > 0 else { return [] }
             if let semantics = child.accessibility {
                 if semantics.isHidden { return [] }
                 if semantics.role == .staticText { return [semantics.label] }

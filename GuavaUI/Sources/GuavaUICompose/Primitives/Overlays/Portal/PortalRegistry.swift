@@ -143,6 +143,8 @@ public final class PortalStore {
         dismissals[id] = (anchor, dismiss)
     }
 
+    func requestDismissal(_ id: String) { dismissals[id]?.dismiss() }
+
     /// Observe the click before normal routing; leave it available to the
     /// underlying control so switching menus works in one click.
     func dismissOutside(_ point: CGPoint) {
@@ -339,6 +341,11 @@ final class PortalResource: NodeResource {
     }
 
     func updatePosition(_ position: CGPoint) {
+        if let owner, !owner.acceptsSubtreeInput {
+            if let id = entryID { store?.requestDismissal(id) }
+            unmount(node: owner)
+            return
+        }
         guard let id = entryID else { return }
         store?.updatePosition(id, position: position)
     }

@@ -89,7 +89,7 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | 层叠内容 | absolutePosition / zIndex 与 Portal 支持绘制层级；缺独立公共 ZStack/Overlay 布局容器 |
 | 大集合 | VariableVirtualStack 提供已知可变行高、稳定 ID 锚点及窗口化；仍缺未知高度估测和统一加载协议 |
 | 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；ContainerSizeReader 发布自身内容盒实测尺寸（容器查询，0.5pt 抗抖动阈值）；ViewThatFits 的 `wide:` / `compact:` 两套内容往返切换保留各自状态与节点；WidthClassReader 读取窗口级 compact/medium/expanded；默认容器阈值与 `UIEnvironment.Viewport.compactMaximumWidth` 一致 |
-| Grid | Grid/GridLayout 有 fixed/flexible/adaptive 列、测量行高及 RTL 对齐；LazyGrid 有等宽列与已知固定/可变行高窗口化；仍缺 span、显式 intrinsic 轨道和二维窗口化 |
+| Grid | Grid/GridLayout 有 fixed/flexible/adaptive 列、测量行高及 RTL 对齐；Grid 具备命名字段列、优先级、显隐菜单和 minimum 横向滚动兜底；LazyGrid 有等宽列与已知固定/可变行高窗口化；仍缺 span、显式 intrinsic 轨道和二维窗口化 |
 | 应用自定义布局 | 公开 Layout / ProposedViewSize / LayoutSubview / LayoutContainer；容器尺寸查询由 ContainerSizeReader 覆盖；仍缺 baseline/alignment guide API 与 safeAreaInsets/frame-in-container 全量 proxy |
 | 表单/属性布局 | Form / PropertyGrid 已有专门用途；不能代替通用约束或网格系统 |
 | 特殊布局 | layoutDirection 贯通 Flex、自定义布局和逻辑 padding；SafeArea 嵌套消费宿主提供的逻辑 insets；平台自动 insets、完整组件 RTL/双向文字、Anchor/约束布局和 Masonry 仍缺 |
@@ -100,7 +100,7 @@ LazyGrid 的 `.variable(...)` 提供每行未缩放逻辑高度（含最后不�
 
 ## 自定义测量与放置（2026-10-12）
 
-应用实现 `Layout.sizeThatFits(proposal:subviews:) -> CGSize` 与 `placeSubviews(in:proposal:subviews:)`，然后直接 `MyLayout() { ordinaryViews }`。子视图保持普通 View，不需要 Node、全局注册或生命周期适配。`LayoutSubview.sizeThatFits(_:)` 返回自然测量结果，`place(at:proposal:)` 放置子视图；算法只能在这次测量/放置期间使用这些短期值，测量必须确定且不能改变 UI 状态。
+应用实现 `Layout.sizeThatFits(proposal:subviews:) -> CGSize` 与 `placeSubviews(in:proposal:subviews:)`，然后直接 `MyLayout() { ordinaryViews }`。子视图保持普通 View，不需要 Node、全局注册或生命周期适配。`LayoutSubview.sizeThatFits(_:)` 返回自然测量结果，`place(at:proposal:isVisible:)` 放置子视图，`isVisible` 默认 true；false 保留节点与局部状态，停止该子树的绘制、输入和辅助功能，释放其焦点及指针捕获，不改写 authored opacity 或输入设置。算法只能在这次测量/放置期间使用这些短期值，测量必须确定且不能改变 UI 状态。
 
 proposal 使用逻辑点；nil 是 intrinsic，非有限值归一化为 nil，负值为零。有限 proposal 是空间建议，不覆盖子视图的显式固定尺寸或 minimum；算法决定溢出、换行或退让。bounds 是扣除 padding/border 的内容区域，坐标相对容器。框架使用有界 proposal 缓存，子树变化跨自定义布局边界失效；普通 Flex 继续交给 Yoga。
 
@@ -143,6 +143,32 @@ SafeArea 的 insets 由宿主提供，桌面默认零；它不推断操作系统
 大集合详见 [可变行高窗口化](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VariableVirtualStackTests.swift)，候选算法详见 [响应式布局](standard.md)。画廊 `--component layout` 展示测量 Grid、自适应列、候选切换、RTL/insets、100K LazyGrid 和 100K 可变行高列表。普通 ScrollView 不因此自动窗口化。
 
 ## 响应式与输入密度
+
+### Grid 字段列
+
+普通 `.fixed` / `.flexible` / `.adaptive` 保持按行排列；`Grid` 在 minimum 超出分配宽度时提供横向滚动，交互单元格仍由调用方保证足够尺寸。需要列级显隐时，每列使用唯一非空 ID 与标题的 `.named`，sizing 选 `.fixed` 或 `.flexible`。命名字段列与匿名自适应卡片流不能混用。
+
+```swift
+Grid(columns: [
+    .named(id: "name", title: "Name", sizing: .fixed(180)),
+    .named(id: "count", title: "Quantity", sizing: .fixed(120), visibility: .automatic(priority: 10)),
+    .named(id: "notes", title: "Notes", sizing: .flexible(minimum: 200), visibility: .automatic())
+], columnSpacing: 12, rowSpacing: 8, columnVisibility: $columnChoices, isEnabled: isEnabled) {
+    Button("Open") { openAsset() }
+    Text("7 items")
+    TextField("Notes", text: $notes)
+}
+```
+
+`ColumnVisibility` 与 Table / DataTable 共用：默认 `.required` 保留；自动列按实际可用宽度和 minimum 移除低优先列，同优先级先移除靠后的列，至少保留一列。字号不缩小，行高由可见单元格实测。`columnVisibility` 是可选 `[String: Bool]` binding：true 强制显示、false 隐藏、缺省自动，必要列优先；无 binding 时选择属于当前挂载会话，卸载重置。命名 Grid 内置 Columns 菜单、当前数量及 Automatic columns 重置；入口和菜单行至少 44pt，必要列禁用并勾选。强制显示或必要 minimum 超宽时横向滚动；滚轮及程序揭示可用，通用触摸拖动与键盘滚动仍见规范第 5-9 项。
+
+单元格按声明时的列数分行；隐藏列不把下一行数据移入空槽，恢复后保留节点、局部计数和编辑草稿。需要空槽请提供 `Box {}`，`EmptyView` 不占单元格。隐藏期间节点仍挂载，订阅和资源仍存活；所属 Popover、Tooltip、HoverCard 关闭，独立模态由应用管理。禁用 Grid 会关闭列菜单并释放焦点与捕获。直接使用 `GridLayout` 时，显隐选择传普通值 `columnVisibility`，菜单和滚动由宿主提供。
+
+`GridColumnsTests` 覆盖 390/720/1280pt、100%/200% 字号、三种输入、明暗主题、RTL、源行对齐、首次隐藏几何、草稿、附属浮层、菜单、会话重置、横向揭示和经校验的 AI 查询。`CustomLayoutVisibilityTests` 验证直接与缓存绘制、焦点、命中和语义。Gallery `layout` 提供可编辑示例及窄/宽/触摸预览。
+
+2026-10-17 macOS 原生 Gallery 验收：1280pt / 约 720pt 显示三列，390pt 自动保留 Asset；即时 AI 查询中隐藏 Notes 的可见可交互节点数为 0，手动恢复后为 1，同一输入框仍保留已输入草稿。恢复自动模式重新隐藏，必要列操作可用。200% 字号下 Columns 入口为 125×50pt，菜单行为 52pt，Asset 仍禁用并勾选；切换暗色后草稿与操作结果保留。前后 `get_diagnostics.layoutIssues.total` 均为 0。横向滚轮及程序揭示另由场景交互测试覆盖；以上取样不代表物理设备触摸或 GPU 帧时间测量。
+
+### LazyGrid 文本缩放
 
 LazyGrid 的固定与已知可变行高、行间距随 `TextScaler` 缩放一次；列宽与列间距保留 authored 几何。可变行高的前缀索引按 authored 高度建立，解析字号时共享索引，窗口化查询仍为 O(log n)。占位、单元格高度、可见范围和滚动 extent 使用同一缩放几何，恢复字号时夹紧越界滚动位置。LazyGrid 可承载非交互内容，因此不自动提升所有单元格到 44pt；交互单元格由调用方提供足够的 authored 行高。
 

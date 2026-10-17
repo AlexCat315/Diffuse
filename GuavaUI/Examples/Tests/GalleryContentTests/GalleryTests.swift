@@ -49,8 +49,9 @@ struct GalleryTests {
                     #expect(graph.layoutSnapshot().first { $0.debugName == "gallery-shell" }?.frame.height == 820,
                             "Application root collapsed for \(page)")
                     func validate(_ node: Node) {
-                        #expect(node.frame.width.isFinite && node.frame.height.isFinite, "Invalid layout for \(page)")
-                        #expect(node.frame.width >= 0 && node.frame.height >= 0, "Negative size for \(page)")
+                        let location = "\(page) node \(node.id.rawValue) \(String((node.viewTag ?? "unknown").prefix(100))) \(node.frame)"
+                        #expect(node.frame.width.isFinite && node.frame.height.isFinite, "Invalid layout for \(location)")
+                        #expect(node.frame.width >= 0 && node.frame.height >= 0, "Negative size for \(location)")
                         node.children.forEach(validate)
                     }
                     if let root = tree.root { validate(root) }
