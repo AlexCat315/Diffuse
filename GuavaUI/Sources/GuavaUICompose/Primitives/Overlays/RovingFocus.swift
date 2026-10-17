@@ -47,6 +47,11 @@ struct RovingItemModifier: ViewModifier {
     }
 }
 
+/// A request can outlive the frame that selected an item hidden by layout.
+final class RovingFocusRequest {
+    var target: AnyHashable?
+}
+
 /// A keyboard boundary whose enabled items have one sequential Tab stop.
 struct RovingFocusHost<Content: View>: _PrimitiveView {
     let enabledItems: [AnyHashable]
@@ -54,23 +59,43 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
     let onSelect: (AnyHashable) -> Void
     let wraps: Bool
     let command: (KeyEvent) -> SelectionNavigation?
+    private let focusRequest: RovingFocusRequest?
     let content: Content
     init(enabledItems: [AnyHashable], selection: @escaping () -> AnyHashable?, onSelect: @escaping (AnyHashable) -> Void,
          wraps: Bool = true, command: @escaping (KeyEvent) -> SelectionNavigation? = { SelectionNavigation.command(for: $0.scancode) },
+         focusRequest: RovingFocusRequest? = nil,
          @ViewBuilder content: () -> Content) {
         self.enabledItems = enabledItems; self.selection = selection
-        self.onSelect = onSelect; self.wraps = wraps; self.command = command; self.content = content()
+        self.onSelect = onSelect; self.wraps = wraps; self.command = command; self.focusRequest = focusRequest; self.content = content()
     }
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
+        let request = focusRequest ?? node.attachments["__roving.focusRequest"] as? RovingFocusRequest ?? RovingFocusRequest()
+        node.attachments["__roving.focusRequest"] = request
+        if let target = request.target, !enabledItems.contains(target) { request.target = nil }
+        func locate(_ target: AnyHashable, in root: Node) -> Node? {
+            var pending = [root]
+            while let item = pending.popLast() {
+                if item.attachments["__roving.item"] as? AnyHashable == target, item.isFocusable { return item }
+                pending.append(contentsOf: item.children.reversed())
+            }
+            return nil
+        }
+        func resolveFocus(in root: Node) {
+            guard let target = request.target, let item = locate(target, in: root), item.acceptsSubtreeInput else { return }
+            FocusChainHolder.current?.focus(item)
+            ScrollReveal.reveal(item)
+            request.target = nil
+        }
+        node.layoutDidUpdate = { node in resolveFocus(in: node) }
         node.attachments["__roving.tabStop"] = {
             let selected = selection()
             return selected.flatMap { enabledItems.contains($0) ? $0 : nil } ?? enabledItems.first
         } as () -> AnyHashable?
         InteractionRegistryHolder.current?.setKey(node) { [weak node] event, phase in
             guard phase == .bubble, let command = command(event), let node else { return .ignored }
-            var source = selection()
+            var source = request.target ?? selection()
             if let focused = FocusChainHolder.current?.focused {
                 var candidate: Node? = focused
                 var focusedItem: AnyHashable?
@@ -81,27 +106,17 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
                 // Text fields and other controls inside a panel keep their
                 // unhandled arrow keys; only group headers participate here.
                 guard let focusedItem, enabledItems.contains(focusedItem) else { return .ignored }
-                source = focusedItem
+                source = request.target ?? focusedItem
             }
             guard let target = command.destination(in: enabledItems, from: source, wraps: wraps) else { return .ignored }
             onSelect(target)
+            request.target = target
             func updateTabStops(_ candidate: Node) {
                 if let id = candidate.attachments["__roving.item"] as? AnyHashable { candidate.isTabStop = id == target }
                 candidate.children.forEach(updateTabStops)
             }
             updateTabStops(node)
-            func locate(_ candidate: Node) -> Node? {
-                var pending = [candidate]
-                while let item = pending.popLast() {
-                    if item.attachments["__roving.item"] as? AnyHashable == target, item.isFocusable { return item }
-                    pending.append(contentsOf: item.children.reversed())
-                }
-                return nil
-            }
-            if let targetNode = locate(node) {
-                FocusChainHolder.current?.focus(targetNode)
-                ScrollReveal.reveal(targetNode)
-            }
+            resolveFocus(in: node)
             return .handled
         }
     }

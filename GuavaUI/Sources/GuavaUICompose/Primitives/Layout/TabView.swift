@@ -50,6 +50,8 @@ public enum TabOverflow: Sendable, Hashable {
     case wrap
     /// The strip scrolls horizontally. Use it when the strip must stay one line.
     case scroll
+    /// Keep the selected tab in the strip and list hidden tabs in a menu.
+    case menu
 }
 
 /// Multi-panel container with a single active panel.
@@ -74,20 +76,17 @@ public struct TabView<ID: Hashable>: View {
 
     public var selection: Binding<ID>
     public var tabs: [TabItem<ID>]
-    public var variant: TabVariant
-    public var placement: TabStripPlacement
-    public var overflow: TabOverflow
-    public var isEnabled: Bool
+    public var variant: TabVariant = .bar
+    public var placement: TabStripPlacement = .adaptive
+    public var overflow: TabOverflow = .wrap
+    public var isEnabled = true
+    @State private var focusRequest = RovingFocusRequest()
 
     public init(selection: Binding<ID>,
                 tabs: [TabItem<ID>],
                 configure: (inout Self) -> Void = { _ in }) {
         self.selection = selection
         self.tabs = tabs
-        self.variant = .bar
-        self.placement = .adaptive
-        self.overflow = .wrap
-        self.isEnabled = true
         configure(&self)
         precondition(Set(tabs.map(\.id)).count == tabs.count, "Tab IDs must be unique")
     }
@@ -104,7 +103,8 @@ public struct TabView<ID: Hashable>: View {
                 // events can arrive inside one render pass, and a captured value
                 // would send the second arrow from the previous selection.
                 selection: { AnyHashable(selection.wrappedValue) },
-                onSelect: { if let id = $0.base as? ID { selection.wrappedValue = id } }
+                onSelect: { if let id = $0.base as? ID { selection.wrappedValue = id } },
+                focusRequest: focusRequest
             ) {
                 Box(direction: placement == .top ? .column : .columnReverse, alignItems: .stretch, spacing: 0) {
                     strip(tabStop: tabStop, placement: placement, surface: surface)
@@ -116,36 +116,40 @@ public struct TabView<ID: Hashable>: View {
 
     @ViewBuilder private var contentArea: some View {
         if let active = tabs.first(where: { $0.id == selection.wrappedValue && $0.isEnabled }) {
-            active.content.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+            active.content.id(active.id).flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
         }
     }
 
     private func strip(tabStop: ID?, placement: TabStripPlacement, surface: UIEnvironment) -> some View {
-        let items = Box(direction: .row,
-                        alignItems: .center,
-                        justifyContent: .flexStart,
-                        wrap: overflow == .wrap ? .wrap : .noWrap,
-                        spacing: variant == .segmented ? 2 : 0) {
-            for tab in tabs {
-                AnyView(_TabBarItem(label: tab.label,
-                                    icon: tab.icon,
-                                    badge: tab.badge,
-                                    isSelected: tab.id == selection.wrappedValue,
-                                    isEnabled: isEnabled && tab.isEnabled,
-                                    variant: variant,
-                                    indicator: variant == .bar ? (placement == .top ? .bottom : .top) : .none,
-                                    onSelect: { selection.wrappedValue = tab.id },
-                                    onClose: tab.onClose)
-                    .modifier(RovingItemModifier(id: AnyHashable(tab.id), isTabStop: tab.id == tabStop)))
+        ContainerSizeReader { size in
+            let indicator: IndicatorPlacement = variant == .bar ? (placement == .top ? .bottom : .top) : .none
+            let items: AnyView
+            if overflow == .menu {
+                items = AnyView(TabOverflowStrip(tabs: tabs, selection: selection, tabStop: tabStop,
+                    isEnabled: isEnabled, variant: variant, indicator: indicator, focusRequest: focusRequest))
+            } else {
+                items = AnyView(Box(direction: .row,
+                                alignItems: .center,
+                                justifyContent: .flexStart,
+                                wrap: overflow == .wrap ? .wrap : .noWrap,
+                                spacing: variant == .segmented ? 2 : 0) {
+                    for tab in tabs {
+                        AnyView(TabStripItem(tab: tab, selection: selection, isEnabled: isEnabled,
+                                            variant: variant, indicator: indicator, tabStop: tabStop,
+                                            maximumWidth: size.width > 0 ? Float(max(44, size.width - (variant == .segmented ? 6 : 0))) : .greatestFiniteMagnitude)
+                            .id(tab.id))
+                    }
+                    Spacer()
+                })
             }
-            Spacer()
+            let segmented = variant == .segmented
+            let styled = AnyView(items.padding(segmented ? 3 : 0)
+                .background(segmented ? SemanticColorRef.surfaceVariant : .surface)
+                .cornerRadius(ThemeMetric { segmented ? $0.radius.md : 0 }))
+            guard overflow == .scroll else { return styled }
+            let height = max(Float(40), surface.input.contains(.touch) ? surface.minimumControlExtent + (variant == .segmented ? 6 : 0) : 0)
+            return AnyView(ScrollView(.horizontal) { styled }.frame(minHeight: height).flex(0, shrink: 0))
         }
-        let styled = variant == .segmented
-            ? AnyView(items.padding(3).background(SemanticColorRef.surfaceVariant).cornerRadius(.controlRadius))
-            : AnyView(items.background(SemanticColorRef.surface))
-        guard overflow == .scroll else { return styled }
-        let height = max(Float(40), surface.input.contains(.touch) ? surface.minimumControlExtent + (variant == .segmented ? 6 : 0) : 0)
-        return AnyView(ScrollView(.horizontal) { styled }.frame(minHeight: height).flex(0, shrink: 0))
     }
 }
 
@@ -153,44 +157,54 @@ enum IndicatorPlacement: Sendable {
     case top, bottom, none
 }
 
-private struct _TabBarItem: View {
-    let label: String
-    let icon: BundleImageResource?
-    let badge: String?
-    let isSelected: Bool
+struct TabStripItem<ID: Hashable>: View {
+    let tab: TabItem<ID>
+    let selection: Binding<ID>
     let isEnabled: Bool
     let variant: TabVariant
     let indicator: IndicatorPlacement
-    let onSelect: () -> Void
-    let onClose: (() -> Void)?
+    let tabStop: ID?
+    var maximumWidth: Float = .greatestFiniteMagnitude
+    @State private var chromeWidth: Float = 0
 
     var body: some View {
-        Button(isEnabled: isEnabled, isSelected: isSelected, action: onSelect) {
-            Row(alignment: .center, spacing: 6) {
-                if let icon {
-                    Icon(icon, size: .medium).accessibilityHidden()
+        let enabled = isEnabled && tab.isEnabled
+        let minimumWidth = max(44, chromeWidth + variant.horizontalPadding * 2)
+        return Button(isEnabled: enabled, isSelected: tab.id == selection.wrappedValue,
+                      tooltip: tab.label, action: { selection.wrappedValue = tab.id }) {
+            TabLabelLayout(onMinimumWidth: { width in
+                if chromeWidth != Float(width) { chromeWidth = Float(width) }
+            }) {
+                Box(direction: .row, spacing: 0) {
+                    if let icon = tab.icon { Icon(icon, size: .medium).accessibilityHidden() }
                 }
-                Text(label).font(.label)
-                if let badge {
-                    Badge(badge) { $0.variant = .solid; $0.isEnabled = isEnabled }
-                        .accessibilityHidden()
-                }
-                if let onClose {
-                    Button(icon: .resource(UIIcons.Action.x),
-                           size: 10,
-                           isEnabled: isEnabled,
-                           tooltip: "Close \(label)",
-                           action: onClose)
-                        .buttonStyle(.ghost)
-                        .controlSize(.mini)
-                        .accessibilityLabel("Close \(label)")
+                Text(tab.label).truncatingTail().font(.label).accessibilityHidden()
+                Row(alignment: .center, spacing: 6) {
+                    if let badge = tab.badge {
+                        Badge(badge) { $0.variant = .solid; $0.isEnabled = enabled }
+                            .flex(0, shrink: 0).accessibilityHidden()
+                    }
+                    if let onClose = tab.onClose {
+                        Button(icon: .resource(UIIcons.Action.x),
+                               size: 10,
+                               isEnabled: enabled,
+                               tooltip: "Close \(tab.label)",
+                               action: onClose)
+                            .buttonStyle(.ghost)
+                            .controlSize(.mini)
+                            .flex(0, shrink: 0).accessibilityLabel("Close \(tab.label)")
+                    }
                 }
             }
         }
         .buttonStyle(TabBarItemStyle(variant: variant, indicator: indicator))
+        .compositionLocal(ActionControlAccessibility.label, tab.label)
+        .modifier(RovingItemModifier(id: AnyHashable(tab.id), isTabStop: tab.id == tabStop))
+        .frame(minWidth: minimumWidth, maxWidth: max(minimumWidth, maximumWidth))
         .accessibility {
             $0.role = .tab
-            $0.state.isSelected = isSelected
+            $0.label = tab.label
+            $0.state.isSelected = tab.id == selection.wrappedValue
         }
     }
 }
@@ -217,8 +231,8 @@ private struct TabBarItemStyle: ButtonStyle {
         let theme = c.theme
         let disabledInk = theme.textEmphasis.disabled ?? theme.colors.onSurfaceMuted
         let style = resolvedStyle(c, theme: theme, disabledInk: disabledInk)
-        return Row(alignment: .center) { AnyView(c.label) }
-            .padding(horizontal: style.paddingX, vertical: 7)
+        return Box(direction: .column, alignItems: .stretch) { AnyView(c.label) }
+            .padding(horizontal: variant.horizontalPadding, vertical: 7)
             .foregroundColor(style.ink)
             .background(style.fill)
             .cornerRadius(style.radius)
@@ -236,8 +250,7 @@ private struct TabBarItemStyle: ButtonStyle {
                             : c.isPressed ? theme.colors.stateLayerPressed
                             : c.isHovered ? theme.colors.stateLayerHover
                             : .clear,
-                         radius: theme.radius.sm,
-                         paddingX: 14)
+                         radius: theme.radius.sm)
         case .segmented:
             return Style(ink: ink,
                          fill: !c.isEnabled ? .clear
@@ -245,16 +258,14 @@ private struct TabBarItemStyle: ButtonStyle {
                             : c.isPressed ? theme.colors.stateLayerPressed
                             : c.isHovered ? theme.colors.stateLayerHover
                             : .clear,
-                         radius: theme.radius.sm,
-                         paddingX: 12)
+                         radius: theme.radius.sm)
         case .card:
             return Style(ink: ink,
                          fill: !c.isEnabled ? .clear
                             : c.isSelected ? theme.colors.surfaceRaised
                             : c.isHovered ? theme.colors.stateLayerHover
                             : .clear,
-                         radius: theme.radius.md,
-                         paddingX: 14)
+                         radius: theme.radius.md)
         }
     }
 
@@ -266,6 +277,5 @@ private struct TabBarItemStyle: ButtonStyle {
         let ink: Color
         let fill: Color
         let radius: Float
-        let paddingX: Float
     }
 }

@@ -64,8 +64,10 @@ private struct AdaptiveControlSample: View {
         case .calendar: AnyView(CalendarView(selection: $date) { $0.presentation.isEnabled = options.isEnabled })
         case .tabs: AnyView(TabView(selection: $tab, tabs: [
             TabItem("Overview", id: 0, isEnabled: options.isEnabled) { Text("Overview panel").padding(12) },
-            TabItem("Details", id: 1, isEnabled: options.isEnabled) { Text("Details panel").padding(12) }
-        ]) { $0.overflow = .scroll }.frame(width: .percent(100), height: .points(132)))
+            TabItem("Details", id: 1, isEnabled: options.isEnabled) { Text("Details panel").padding(12) },
+            TabItem("Workspace permissions and collaboration", id: 2, isEnabled: options.isEnabled) { Text("Permissions panel").padding(12) },
+            TabItem("Unavailable", id: 3, isEnabled: false) { EmptyView() }
+        ]) { $0.overflow = .menu; $0.isEnabled = options.isEnabled }.frame(width: .percent(100), height: .points(132)))
         case .buttonGroup: AnyView(ButtonGroup([ButtonGroupItem(0, "Grid"), ButtonGroupItem(1, "List")], selection: $selected, isEnabled: options.isEnabled))
         case .stepper: AnyView(Stepper([StepperItem(0, "Configure"), StepperItem(1, "Review")], selection: $selected) { $0.isEnabled = options.isEnabled }.frame(width: .percent(100)))
         case .toolbar: AnyView(Toolbar(items: [

@@ -138,7 +138,7 @@ public extension GalleryPage {
         case .popover: AnyView(PopoverStory(options: options))
         case .modal: AnyView(ModalStory(options: options))
         case .disclosure: AnyView(DisclosureStory(options: options))
-        case .tabs: AnyView(TabsStory())
+        case .tabs: AnyView(TabsStory(options: options))
         case .panel: AnyView(PanelStory())
         case .splitView: AnyView(SplitStory())
         case .scrollView: AnyView(ScrollStory())

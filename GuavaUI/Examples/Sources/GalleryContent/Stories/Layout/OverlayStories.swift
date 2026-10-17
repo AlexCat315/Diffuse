@@ -138,18 +138,21 @@ struct DisclosureStory: View {
 }
 
 struct TabsStory: View {
+    let options: GalleryOptions
     @State private var selection = "overview"
     @State private var segment = "day"
     @State private var documents = ["Scene.guava", "Material.guava", "Notes.md"]
+    @State private var documentSelection = "Scene.guava"
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Content tabs", "Arrow keys wrap among enabled tabs and move actual focus. Home and End choose the edges.") {
+            StorySection("Content tabs", "The selected tab stays visible. More tabs lists hidden pages. Arrow keys, Home and End reach every enabled tab; long titles retain their full tooltip and name.") {
                 TabView(selection: $selection, tabs: [
-                    TabItem("Overview", id: "overview") { $0.icon = UIIcons.File.file } content: { Text("Project overview").padding(20) },
+                    TabItem("Overview", id: "overview") { $0.icon = UIIcons.File.file } content: { TabsOverviewPanel(isEnabled: options.isEnabled) },
                     TabItem("Unavailable", id: "disabled", isEnabled: false) { Text("Disabled content") },
                     TabItem("Activity", id: "activity") { $0.icon = UIIcons.Data.activity; $0.badge = "3" } content: { Text("Recent activity").padding(20) },
-                    TabItem("Settings", id: "settings") { $0.icon = UIIcons.Action.settings } content: { Text("Project settings").padding(20) }
-                ]).frame(height: 220)
+                    TabItem("Settings", id: "settings") { $0.icon = UIIcons.Action.settings } content: { Text("Project settings").padding(20) },
+                    TabItem("Workspace permissions and international collaboration 👩🏽‍💻", id: "permissions") { Text("Permission settings").padding(20) }
+                ]) { $0.overflow = .menu; $0.isEnabled = options.isEnabled }.frame(height: 220)
                 Text("Active tab: \(selection)").font(.caption).foregroundColor(.onSurfaceMuted)
             }
             StorySection("Variants", "A segmented strip picks a value; a card strip keeps folder semantics; both use the same items.") {
@@ -157,19 +160,37 @@ struct TabsStory: View {
                     TabItem("Day", id: "day") { Text("Day view").padding(16) },
                     TabItem("Week", id: "week") { Text("Week view").padding(16) },
                     TabItem("Month", id: "month") { Text("Month view").padding(16) }
-                ]) { $0.variant = .segmented }
+                ]) { $0.variant = .segmented; $0.isEnabled = options.isEnabled }
                 TabView(selection: $segment, tabs: [
                     TabItem("Day", id: "day") { Text("Day view").padding(16) },
                     TabItem("Week", id: "week") { Text("Week view").padding(16) },
                     TabItem("Month", id: "month") { Text("Month view").padding(16) }
-                ]) { $0.variant = .card }.frame(height: 120)
+                ]) { $0.variant = .card; $0.isEnabled = options.isEnabled }.frame(height: 120)
             }
             StorySection("Closable tabs", "A tab with a close action renders its own close control; closing falls back to the nearest remaining tab.") {
-                TabView(selection: .constant("Scene.guava"), tabs: documents.map { name in
-                    TabItem(name, id: name) { $0.icon = UIIcons.File.fileText; $0.onClose = { documents.removeAll { $0 == name } } } content: { Text("Editing \(name)").padding(20) }
-                }).frame(height: 160)
+                TabView(selection: $documentSelection, tabs: documents.map { name in
+                    TabItem(name, id: name) {
+                        $0.icon = UIIcons.File.fileText
+                        $0.onClose = {
+                            guard let index = documents.firstIndex(of: name) else { return }
+                            documents.remove(at: index)
+                            if documentSelection == name { documentSelection = documents.isEmpty ? "" : documents[min(index, documents.count - 1)] }
+                        }
+                    } content: { Text("Editing \(name)").padding(20) }
+                }) { $0.overflow = .menu; $0.isEnabled = options.isEnabled }.frame(height: 160)
                 if documents.isEmpty { Text("All documents closed — reset the example to restore them.").font(.caption).foregroundColor(.onSurfaceMuted) }
             }
         }
+    }
+}
+
+private struct TabsOverviewPanel: View {
+    let isEnabled: Bool
+    @State private var count = 0
+    var body: some View {
+        Column(spacing: 8) {
+            Text("Project overview")
+            Button("Tab count \(count)", isEnabled: isEnabled) { count += 1 }.buttonStyle(.secondary)
+        }.padding(20)
     }
 }

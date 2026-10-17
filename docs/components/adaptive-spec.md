@@ -80,7 +80,7 @@
 | `WidthClassReader` | 读取 surface 级 width class（窗口级），用于壳层：导航收敛、栏位切换；不用于卡片内部 | `[已实现]` |
 | `SafeArea` | 只应用宿主提供的 logical insets，嵌套时只消费未使用边；桌面默认零；不推断刘海/软键盘/窗口 chrome。宿主要求：手机竖屏底部 inset 含 home indicator，横屏含侧边；IME 出现由宿主处理，组件不用占位 | `[已实现]`；IME 联动 `[部分]` |
 | `Form` / `PropertyGrid` | 按字段实测宽度在 leading ↔ stacked 间切换；共享 `labelPlacement` 和 `minValueWidth` 语义。Form 最大列数随宽度减少，值槽保留节点与编辑状态；完整标签进 tooltip 与语义 | 重排 `[已实现]`；通用省略号见第 5-6 项，API 见 [Form](form.md) |
-| `TabView` 标签条 | 单行不换行；超出时按 `overflow` 横向滚动或折叠菜单；compact 时按 `TabStripPlacement.adaptive` 移到内容下方，节点与状态保留 | 换边/滚动 `[已实现]`；折叠菜单 `[未实现]` |
+| `TabView` 标签条 | 标题内部单行省略，全文进 tooltip/语义；整项按 `overflow` 换行、横向滚动或折叠菜单，menu 保留所选项与可达入口；compact 时按 `TabStripPlacement.adaptive` 移到内容下方，节点与状态保留 | 换边、滚动、溢出菜单与标题截断 `[已实现]`，见 [TabView](tab.md) |
 | `Toolbar` | `items:` 按命令自然宽度与优先级收进 overflow 菜单，`.always` 保留主操作；提供图标时使用图标与完整名称。触摸命中 ≥ 44pt，主命令自身超宽时保留尺寸并横向滚动；自定义内容闭包由应用安排重排 | 命令溢出 `[已实现]`，见 [Toolbar](toolbar.md) |
 | `Sidebar` | expanded 常驻；compact/medium 按壳层选择折叠为抽屉/覆盖层或 rail；抽屉打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt（触摸） | 常驻列表、[NavigationDrawer](navigation-drawer.md)、[NavigationRail](navigation-rail.md) 及 [AdaptiveSidebar](sidebar.md#自适应壳层) 统一壳层 `[已实现]` |
 | `Workspace` | widthClass != expanded 时自动进入紧凑呈现：单面板 + 面板选择器；expanded 恢复停靠树。折叠、比例、活动面板作为会话保留，不写入文档 | 紧凑切换 `[已实现]`；标签条键盘与完整语义 `[部分]` |
@@ -275,9 +275,9 @@
 **TabView**
 
 - 外观：strip + divider + 内容；选中 2px accent 指示；可选关闭按钮（ghost mini + tooltip/名称）。`[已实现]`
-- 手机：`placement = .adaptive` 在 compact 把 strip 移到内容下方，节点与状态保留；strip 横向滚动，触摸标签与关闭 ≥ 44pt；隐藏标签必须有可达入口（溢出菜单）。`[部分]`（换边/滚动/触摸已实现；溢出菜单未实现）
-- 平板 / 桌面：strip 在顶部；`.wrap` 或 `.scroll` 由调用方选择；roving focus。`[已实现]`
-- 交互与验收：方向键/Home/End 在标签间移动、单选 tab 语义 + isSelected、关闭按钮独立停靠点。验收：`AdaptiveNavigationTests`、`TouchDensityTests` tabs、`--component tabs` 三预览。
+- 手机：`placement = .adaptive` 在 compact 把 strip 移到内容下方，节点与状态保留；触摸标签与关闭 ≥44pt。`.menu` 保留选中项，隐藏标签进入 More tabs（入口及行 ≥44pt）；标题单行省略并保留完整 tooltip/名称，图标、徽标和关闭按钮保留尺寸，极窄时横向滚动。`[已实现]`
+- 平板 / 桌面：strip 在顶部；`.wrap`、`.scroll` 或 `.menu` 由调用方选择；roving focus。`[已实现]`
+- 交互与验收：方向键/Home/End 可选择隐藏项并在实际放置后聚焦，支持同帧连续按键；禁用项跳过，菜单 Escape 恢复入口，选中菜单项聚焦该标签。标签语义、完整原文和关闭按钮独立停靠点均保留。验收：`TabOverflowTests`、`AdaptiveNavigationTests`、`TouchDensityTests` tabs、`--component tabs` 三预览；通用 ScrollView 触摸拖动仍见第 5-9 项。
 
 **AppBar / NavigationBar**
 
@@ -427,6 +427,7 @@ guava showcase gallery --android --component NAME
 | Grid 列优先级、源行槽位、草稿、附属浮层、菜单、滚动与 AI 查询 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/GridColumnsTests.swift` |
 | Calendar 月内首尾/翻月、日期限制、实际焦点、禁用与 DatePicker 提交 | `GuavaUI/Tests/GuavaUIComposeTests/Calendar/KeyboardNavigationTests.swift` |
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
+| TabView 菜单、隐藏项焦点、三种模式截断、极窄布局与 AI 查询 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TabOverflowTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
 | 容器查询发布与阈值 | `ContainerQueryTests.swift` |
@@ -454,8 +455,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 5 | TabView 溢出菜单模式（隐藏标签可达入口）与标签标题截断 | `Layout/TabView.swift` | `AdaptiveNavigationTests` 扩展 |
-| 6 | Button / Select / DatePicker / Tab 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()` 与 AppBar 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
+| 6 | Button / Select / DatePicker 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()`、AppBar 与 TabView 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
 | 9 | ScrollView 触摸拖动/惯性、键盘滚动（箭头/Page/Home/End）、横向滚动条 gutter | `Layout/ScrollView.swift` | 触摸滚动测试 + `scrollview` 页；键盘测试 |
 | 10 | 浮层自适应：底部抽屉 Sheet、Select/CommandPalette 弹层宽度与行高、菜单触摸展开子菜单 | `Overlays/*`、`Fields/Select.swift` | 对应浮层测试 + 390pt 取样 |
 | 11 | Stepper / ButtonGroup 窄宽替代布局（纵向或滚动） | `Navigation/Stepper/*`、`Layout/NavigationComponents.swift` | 390pt 取样 + 布局测试 |
@@ -465,7 +465,9 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
-编号稳定保留已完成项的空位。建议顺序：先做 5–6（截断），然后 9–16（输入与语义补齐）。1–4、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+编号稳定保留已完成项的空位。建议顺序：先做 6（截断），然后 9–16（输入与语义补齐）。1–5、7–8 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+
+第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 
 AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单，按实际容器在 1 / 3 个平铺操作之间收敛；标题与文字主操作使用统一的单行省略能力，保留全文及 heading 语义，安全区由宿主消费。组件、菜单和原生角色测试及 Gallery 可交互页已经接入；第 6 项仍保留既有控件的逐项采用工作，不能由 AppBar 的完成代替。
 

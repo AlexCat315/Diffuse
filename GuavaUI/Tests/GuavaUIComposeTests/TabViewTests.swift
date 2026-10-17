@@ -27,6 +27,44 @@ private func findProbe(_ root: Node, id: Int) -> Node? {
 
 @Suite("TabView selection")
 struct TabViewTests {
+    private struct CountPanel: View {
+        @State private var count = 0
+        var body: some View { Button("Count \(count)") { count += 1 }.accessibilityLabel("Count \(count)") }
+    }
+    private final class SwitchingTabs: View {
+        @State var selection = 0
+        var body: some View {
+            TabView(selection: $selection, tabs: [
+                TabItem("First", id: 0) { CountPanel() },
+                TabItem("Second", id: 1) { CountPanel() }
+            ]).frame(width: 390, height: 220)
+        }
+    }
+
+    @Test("Different tabs with the same panel type keep independent mounted state")
+    func switchingSamePanelType() throws { try GlobalTestLock.locked {
+        let old = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = old }
+        let fixture = SwitchingTabs(), graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: fixture)
+        defer { graph.install(root: EmptyView()) }
+        func settle() { for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 390, height: 220) } }
+        func counter(_ node: Node?) -> Node? {
+            guard let node else { return nil }
+            if node.isFocusable && node.accessibility?.label.hasPrefix("Count ") == true { return node }
+            return node.children.lazy.compactMap(counter).first
+        }
+        settle()
+        let first = try #require(counter(graph.tree.root))
+        first.accessibilityActions.activate?(); settle()
+        #expect(first.accessibility?.label == "Count 1")
+        fixture.selection = 1; settle()
+        let second = try #require(counter(graph.tree.root))
+        #expect(second !== first && second.accessibility?.label == "Count 0")
+        fixture.selection = 0; settle()
+        let remounted = try #require(counter(graph.tree.root))
+        #expect(remounted !== second && remounted !== first && remounted.accessibility?.label == "Count 0")
+    } }
 
     @Test("Initial render shows only the selected tab's content")
     func showsActiveContent() { GlobalTestLock.locked {
