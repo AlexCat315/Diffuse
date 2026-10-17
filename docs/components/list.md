@@ -59,6 +59,33 @@ MultiSelectList(items, id: \.id, selection: $selection,
 - 行节点 role=listItem、selected 态由集合 membership 决定；列表本身仍是唯一键盘 host/Tab 停靠。
 - 视觉、虚拟化、滚动与 List 完全共用 `_ListRowHost`/`VirtualStack`/`ListRowStyle`。
 
+## SectionedList
+
+```swift
+SectionedList([
+    ListSection("favorites", title: "Favorites", items: favorites),
+    ListSection("scene", title: "Scene", footer: "3 objects", items: scene),
+], selection: $selectedID, onActivate: { open($0) }) { item, isSelected in
+    Text(item.title)
+}
+```
+
+| 参数 | 默认 | 说明 |
+| ---- | ---- | ---- |
+| `sections` | 必填 | `[ListSection<SectionID, Item>]` |
+| `selection` | `.constant(nil)` | 单选 `Item.ID?` binding |
+| `rowHeight` | 30 | 区段内 item 行高；header/footer 同高 |
+| `rowSpacing` | 0 | 行间距；同时作用于 header/footer |
+| `onActivate` | nil | Return/点击后的激活 |
+
+- 区段按传入顺序平铺；`title`/`footer` 为空时不生成对应行。
+- header/footer role=staticText，不进入焦点顺序、不参与键盘选择。
+- 方向键/Home/End 只在 item 行之间移动，跨区段时跳过 header/footer。
+- 普通点击/Return 复用 `_ListRowHost` 与 `ListRowStyle`；`scrollToIndex` 跟随 cursor。
+- 当前 header 非 sticky；footer 是平面文本，不支持独立交互内容。
+- 行高统一为 `rowHeight`（触摸 44）；section header 不再单独用 28pt，以保证虚拟化行高一致。
+- 虚拟化使用 `VirtualStack`；`ListSection` 与 item 数据应稳定，避免每次 body 重新构造大量临时值。
+
 ## Tokens (DefaultListRowStyle)
 
 选中态不在这张表里各自推导：`SelectionAppearance.resolve(.navigation, theme:)` 是唯一的
@@ -109,13 +136,14 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 
 ## Verification
 
+- `SectionedListTests`：header/footer 文本、2 个 item 行、点击与键盘选择/激活。
 - `MultiSelectListTests.pointerSelection`：点击 20、Shift-click 40、Cmd-click 30 的集合变化。
 - `MultiSelectListTests.keyboardSelection`：Shift+Arrow 扩展、普通 Arrow 收拢、Cmd+A 全选。
 - Gallery `multiSelectList` 页提供 12 行、初始选中与状态文本。
 
 ## File map
 
-- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift)
+- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift)
 - Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DefaultListRowStyle.swift)
 
 ## 响应式与输入密度

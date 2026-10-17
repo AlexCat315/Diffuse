@@ -266,3 +266,44 @@ struct MultiSelectListStory: View {
         }
     }
 }
+
+struct SectionedListStory: View {
+    private struct Item: Identifiable {
+        let id: Int
+        let title: String
+    }
+
+    private var sections: [ListSection<String, Item>] {
+        [
+            ListSection("favorites", title: "Favorites", items: [
+                Item(id: 1, title: "Main Camera"),
+                Item(id: 2, title: "Key Light"),
+            ]),
+            ListSection("scene", title: "Scene", footer: "3 objects", items: [
+                Item(id: 3, title: "Player"),
+                Item(id: 4, title: "Ground"),
+                Item(id: 5, title: "Trigger"),
+            ]),
+            ListSection("hidden", title: "Hidden", items: [
+                Item(id: 6, title: "Debug Gizmo"),
+            ])
+        ]
+    }
+
+    @State private var selected: Int? = 1
+    @State private var activated = "No activation yet"
+
+    var body: some View {
+        StorySection("Sectioned list", "Headers and footers stay outside the focus order; arrows move only through item rows, including across section boundaries.") {
+            SectionedList(sections, selection: $selected, onActivate: { activated = "Activated \($0.title)" }) { item, isSelected in
+                Row(alignment: .center, spacing: 10) {
+                    Text(item.title).font(.body)
+                    Spacer()
+                    if isSelected { Badge("Selected", tone: .info) }
+                }
+            }.frame(height: 340)
+            Text("Selected: \(selected.map(String.init) ?? "None")  ·  \(activated)")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

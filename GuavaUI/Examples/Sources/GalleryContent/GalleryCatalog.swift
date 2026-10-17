@@ -4,7 +4,7 @@ import GuavaUIRuntime
 public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rangeSlider, rating, textField, textArea, codeEditor
     case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
-    case list, multiSelectList, tree, virtualList, virtualStack, chart, icon, image, avatar
+    case list, multiSelectList, sectionedList, tree, virtualList, virtualStack, chart, icon, image, avatar
     case menu, menuButton, contextMenu, popover, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, zStack, animation, theme, badge, alert, progress, empty
@@ -48,6 +48,7 @@ public enum GalleryCatalog {
         .init(.assetRef, "AssetRef / DropTarget", "Inputs", "Typed asset references, picker, clear action and accepted kinds."),
         .init(.list, "List", "Data", "Single selection, arrow-key navigation and activation."),
         .init(.multiSelectList, "MultiSelectList", "Data", "Shift range, Cmd/Ctrl toggle, keyboard extension and select-all."),
+        .init(.sectionedList, "SectionedList", "Data", "Flat section headers and footers over the virtualized list contract."),
         .init(.tree, "Tree", "Data", "Hierarchy, expansion, selection and search with automatic expansion."),
         .init(.virtualList, "VirtualList", "Data", "A fixed-height scroll window over ten thousand rows."),
         .init(.virtualStack, "VirtualStack", "Data", "Viewport-driven materialization and scroll-to-index."),

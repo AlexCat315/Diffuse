@@ -263,9 +263,9 @@
 
 ### 3.4 数据集合
 
-**List / MultiSelectList / Tree**
+**List / MultiSelectList / SectionedList / Tree**
 
-- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 使用同一行 host；Tree 每级缩进 16、箭头列 18。`[已实现]`
+- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点；Tree 每级缩进 16、箭头列 18。`[已实现]`
 - Tree 指示线只保留低对比度竖线（1pt、`onSurfaceMuted` 的 24% alpha），移除横向连接；禁用、同步延迟子节点、Home / End 与 Option / Alt + Left / Right 全部折叠 / 展开已完成，具体边界见 [Tree](tree.md)。
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`

@@ -89,7 +89,7 @@
 按同一行契约（触摸 ≥ 44、单行截断、完整值可达）补齐：
 
 - **多选与区间选择**：Checkbox 列或 Cmd/Shift 点选；Shift 区间以锚点延伸；辅助功能 selected 态。`MultiSelectList` 已实现 Cmd/Ctrl 切换、Shift 区间、Shift+Arrow、Cmd/Ctrl+A；Checkbox 列仍由调用方组合。`[已实现]`，见 [List](list.md#multiselectlist)。
-- **区段（sections）**：区段头/尾、可选 sticky；DataTable 之外的表状列表先支持平面区段。`[未实现]`
+- **区段（sections）**：区段头/尾、可选 sticky；DataTable 之外的表状列表先支持平面区段。`SectionedList` 已实现平面 header/footer 与跨区段键盘选择；sticky 未实现。`[部分]`，见 [List](list.md#sectionedlist)。
 - **重排（reorder）**：拖拽把手 ≥ 44 或长按起拖；放置指示线；Esc 取消；辅助功能提供"上移/下移"操作（键盘与读屏可达）。`[未实现]`
 - **滑动操作（swipe actions）**：仅触摸面；滑动露出 1–2 个操作，操作按钮 ≥ 44；键盘通过上下文菜单提供等效入口；不把滑动作为唯一路径。`[未实现]`
 - **下拉刷新**：阈值与阻尼、指示器、完成后回弹；reducedMotion 时指示器静止；键盘/命令提供等效刷新入口。`[未实现]`
@@ -133,7 +133,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | Select / Combobox | 远程/异步结果（按需）、触发器宽度联动 | P2 |
 | DatePicker / TimeField | 12/24 小时与时区、滚轮（见 2.12）；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择（见 2.8）；Home/End/PageUp/Down 已实现，见 [日历导航](calendar.md) | P1 |
-| List | 多选已实现；区段/重排/swipe/下拉刷新仍缺（见 2.9） | P1（多选已完成） |
+| List | 多选、平面区段已实现；sticky/重排/swipe/下拉刷新仍缺（见 2.9） | P1（多选/区段已完成） |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |
 | Chart | pie/area/scatter/stacked、图例交互、数据点选择 | P2 |
@@ -160,7 +160,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：NavigationStack、列表区段/重排/swipe/下拉刷新、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）、SplitButton（主/备动作）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与列表多选已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 与 [List](list.md#multiselectlist)。
+**P1（常用能力）**：NavigationStack、列表 sticky 区段/重排/swipe/下拉刷新、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）、SplitButton（主/备动作）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化、列表多选与平面区段已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 与 [SectionedList](list.md#sectionedlist)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 
