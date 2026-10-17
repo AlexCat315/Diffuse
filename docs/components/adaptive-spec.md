@@ -508,15 +508,9 @@ guava showcase gallery --android --component NAME
 
 Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主上覆盖 390pt 触摸 + 键盘、720pt 混合输入、1280pt 指针 + 键盘，验证 Home/End、PageUp/PageDown、日期限制与空月、闰年/月底/跨年/DST、受控多月份窗口、禁用释放焦点，以及 DatePicker 导航不提交、Enter 提交后关闭并恢复触发器焦点。`NavigationStateTests.calendarKeyboard` 验证 Gallery 周末禁用故事。`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过；手机真机视觉仍按上述矩阵验收。
 
-## 5. 未实现项清单（按本文验收）
+## 5. 规范完成清单（按本文验收）
 
-以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核，是本文契约中当前**未实现**的部分。每项按"位置 → 验收归属"列出；实现后从清单移除并在第 3 节改为 `[已实现]`。完整缺失组件（列表能力包等）与既有组件的其他功能缺口见[组件覆盖与缺失清单](gaps.md)。
-
-| # | 条目 | 位置 | 验收归属 |
-| --- | --- | --- | --- |
-| 16 | Gallery 预览覆盖 76/92 页（累计新增 41 页）；其余页面继续扩充 `AdaptiveControlExamples.supports` 及逐页窄宽验收 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
-
-编号稳定保留已完成项的空位。剩余第 16 项（预览覆盖）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核。截至 2026-10-18，第 5 节清单已全部清空；第 6、10、14、15、16 项的完成证据见本节末尾记录。完整缺失组件与既有组件的其他功能缺口继续由[组件覆盖与缺失清单](gaps.md)跟踪。
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 
@@ -532,7 +526,7 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 
 第 2 项中的 NavigationRail 已实现：72/56pt 两种形态、2pt 指示条、44pt 行高、受约束的主题图标、完整 tooltip/语义与头尾槽位；`SidebarPresentation` 在同一目的地节点上切换普通栏和 Rail，保留选择、焦点与槽位状态。`NavigationRailTests` 覆盖宽度/字号/输入/主题矩阵、长词换行、模式切换、显露及普通滚动、生命周期与 AI 名称发现；Gallery 新增独立页和三种预览。显露操作补齐重排后的实际滚动范围与目标坐标换算，roving 目标发现使用线性遍历。统一壳层现已由 AdaptiveSidebar 完成。
 
-第 2 项统一壳层已完成：`AdaptiveSidebar` 按容器实际分配在 <600pt 抽屉、600…<1000pt Rail、≥1000pt Sidebar 间切换，同一导航和页面保留节点、草稿、滚动及展开会话。焦点随模态开关和布局交接，关闭立即禁用输入，边缘/左滑遵守输入意图，动画可反转并响应减少动画。`AdaptiveSidebarTests` 覆盖完整宽度/字号/输入/主题矩阵与真实 AI `query_ui_nodes`；Gallery 已接入壳层与换行工具栏，`AdaptiveShellTests` 验证故事、搜索和主题入口，Sidebar 增加三预览。第 16 项仅保留尚未覆盖页面的预览与窄宽验收；参数和边界见 [Sidebar](sidebar.md#自适应壳层)。
+第 2 项统一壳层已完成：`AdaptiveSidebar` 按容器实际分配在 <600pt 抽屉、600…<1000pt Rail、≥1000pt Sidebar 间切换，同一导航和页面保留节点、草稿、滚动及展开会话。焦点随模态开关和布局交接，关闭立即禁用输入，边缘/左滑遵守输入意图，动画可反转并响应减少动画。`AdaptiveSidebarTests` 覆盖完整宽度/字号/输入/主题矩阵与真实 AI `query_ui_nodes`；Gallery 已接入壳层与换行工具栏，`AdaptiveShellTests` 验证故事、搜索和主题入口，Sidebar 增加三预览。第 16 项已覆盖全部 Gallery 页面；参数和边界见 [Sidebar](sidebar.md#自适应壳层)。
 
 第 3 项表单标签重排已实现：Form / PropertyGrid 共享 `FieldLabelPlacement` 与首选值槽宽度，按容器而非窗口决定标签位置，Form 列数变化只重新放置原字段；属性网格默认使用内在行高，标题与输入遵守缩放和触摸下限。条件/数组经普通 modifier 修饰后不再于首次更新重建用户组件；`StructuralModifierTests` 验证状态保留及卸载默认值。`FieldLayoutTests` 同时通过 AI 诊断 facade 查询可读字段名称与实际几何，防止只修视觉而遗漏语义。设备输入取样仍按第 4 节验收。
 
@@ -568,7 +562,7 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 
 第 14 项的滚动位置、选择角色、described-by 与可聚焦 thumb 已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。独立 `Scrollbar` companion 提供 `.slider` thumb：拖动、方向键/Page/Home/End、increment/decrement、`setValue` 与 focus ring；与 ScrollView 绑定同一 offset。`AccessibilitySemanticsTests` 覆盖滚动语义、comboBox 与 describedBy；`ScrollbarTests` 覆盖键盘/辅助功能/拖动/几何。DevTools 在 `button` 页验证 describedBy help，在 `scrollView`/`select` 页验证角色与位置，在 `scrollbar` 页拖到底得到 `value=100%`、`Offset: 220`，PageUp 回到 0%。`Scrollbar` 是 companion，ScrollView 内建 chrome 不自动叠加；该边界已记录在 [Scrollbar](scrollbar.md)。
 
-第 16 项预览覆盖继续扩充：`AdaptiveControlExamples.supports` 由 35 页增至 76 页，新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、theme，并为 scrollbar/dragAndDrop/accordion/timeline 等设置单独高度。每页仍生成 narrow/wide pointer 与 narrow touch 三档。DevTools 在 `scrollbar` 页查询到 story thumb（12×260）及三档 adaptive thumb（12×100），在 `timeline`/`tree` 页查询到三档 390/720×160 预览，在 `colorField` 页查询到三档 390/720×150 预览。剩余 16 页（编辑器、覆盖层、工作区等）继续按页面类型补齐。
+第 16 项 Gallery 预览覆盖已完成：`AdaptiveControlExamples.supports` 覆盖全部 92 个 Gallery 页面，每页生成 narrow/wide pointer 与 narrow touch 三档；新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、theme、codeEditor、menu、contextMenu、popover、modal、dialog、alertDialog、sheet、bottomSheet、commandPalette、hoverCard、animation、introduction、image、workspace、notification，并按页面设置预览高度。DevTools 在 scrollbar/timeline/tree/colorField/dialog 等页验证三档容器物化（如 adaptive-dialog-touch 为 390×104）；`swift test --package-path GuavaUI/Examples` 27/27。
 
 第 10 项浮层自适应已完成：`BottomSheet` 在 compact/medium 贴底全宽、expanded 退化为 `dialogWidth` 560 的居中面板，detent 与拖拽关闭沿用既有 Modal 契约；`MenuHierarchyTests.touchSubmenu` 新增 390pt 触摸面用例，点击父行直接打开子菜单并执行叶子。DevTools 在 390×800 测得 dialog 390×280、y=520，1280×840 测得 560×280、x=360/y=280；`capture-ui` 确认贴底与居中两种呈现。触摸子菜单无 hover 依赖，Portal 层级、焦点与展开语义保持。
 

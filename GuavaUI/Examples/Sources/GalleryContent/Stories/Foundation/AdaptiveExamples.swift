@@ -1,6 +1,7 @@
 import Foundation
 import GuavaUI
 import GuavaUIRuntime
+import GuavaUIWorkspace
 
 /// Deterministic container and input previews, shared by the affected stories.
 struct AdaptiveControlExamples: View {
@@ -8,7 +9,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .theme: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .theme, .codeEditor, .menu, .contextMenu, .popover, .modal, .dialog, .alertDialog, .sheet, .bottomSheet, .commandPalette, .hoverCard, .animation, .introduction, .image, .workspace, .notification: true
         default: false
         }
     }
@@ -21,7 +22,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualList || page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualList || page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .codeEditor ? 150 : page == .workspace ? 220 : page == .image ? 120 : page == .introduction || page == .notification ? 100 : page == .animation ? 100 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -74,6 +75,16 @@ private struct AdaptiveControlSample: View {
     @State private var json: TextBuffer = "{\"name\": \"Guava\"}"
     @State private var asset: AssetRef? = AssetRef(id: "camera", name: "Camera", kind: "image")
     @State private var time: TimeOfDay? = TimeOfDay(hour: 9, minute: 30)
+    @State private var popoverOpen = false
+    @State private var modalOpen = false
+    @State private var dialogOpen = false
+    @State private var alertDialogOpen = false
+    @State private var sheetOpen = false
+    @State private var bottomSheetOpen = false
+    @State private var commandOpen = false
+    @State private var animationVisible = true
+    @State private var toast = ToastController()
+    @State private var workspaceController = WorkspaceController(document: WorkspaceStory.defaultDocument())
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
             sample
@@ -358,6 +369,106 @@ private struct AdaptiveControlSample: View {
                 Text("Muted").foregroundColor(.onSurfaceMuted)
             }
         }.frame(width: .percent(100)))
+        case .codeEditor: AnyView(TextField("", text: $text) { input in
+            input.layout.axis = .vertical
+            input.layout.wrapsLines = true
+            input.layout.maxVisibleLines = 6
+            input.behavior.disabled = !options.isEnabled
+        }.frame(width: .percent(100), height: .points(110)))
+        case .menu: AnyView(MenuButton("Menu", entries: [
+            .item(MenuItem(id: "rename", title: "Rename") {}),
+            .item(MenuItem(id: "delete", title: "Delete", role: .destructive) {})
+        ], isEnabled: options.isEnabled))
+        case .contextMenu: AnyView(ContextMenu(entries: {
+            [.item(MenuItem(id: "inspect", title: "Inspect") {})]
+        }) {
+            Text("Right-click for menu").font(.caption)
+                .padding(horizontal: 12, vertical: 8)
+                .background(.surfaceVariant).cornerRadius(6)
+        })
+        case .popover: AnyView(Column(alignment: .leading, spacing: 8) {
+            Popover(isPresented: $popoverOpen, width: 200, label: {
+                Button("Open popover") { popoverOpen.toggle() }
+            }, content: {
+                Text("Popover content").padding(12)
+            })
+        })
+        case .modal: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Open modal") { modalOpen = true }
+            Modal(isPresented: $modalOpen) {
+                Box(direction: .column, alignItems: .stretch) {
+                    Text("Modal content").padding(16)
+                    Button("Close") { modalOpen = false }.buttonStyle(.secondary).padding(16)
+                }.frame(width: 260, height: 180)
+            }
+        })
+        case .dialog: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Open dialog") { dialogOpen = true }
+            Dialog(isPresented: $dialogOpen, title: "Edit profile") {
+                Text("Dialog content").padding(12)
+            } footer: {
+                Button("Close") { dialogOpen = false }
+            }
+        })
+        case .alertDialog: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Delete") { alertDialogOpen = true }.buttonStyle(.destructive)
+            AlertDialog(isPresented: $alertDialogOpen, title: "Delete?",
+                        message: "This cannot be undone.", onConfirm: {})
+        })
+        case .sheet: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Open sheet") { sheetOpen = true }
+            Sheet(isPresented: $sheetOpen, configure: { $0.edge = .trailing; $0.extent = 260 }) {
+                Text("Sheet content").padding(16)
+            }
+        })
+        case .bottomSheet: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Open bottom sheet") { bottomSheetOpen = true }
+            BottomSheet(isPresented: $bottomSheetOpen) {
+                Text("Bottom sheet content").padding(16)
+            }
+        })
+        case .commandPalette: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Open commands") { commandOpen = true }
+            CommandPalette(isPresented: $commandOpen, items: [
+                CommandItem("Save") {},
+                CommandItem("Open settings", group: "Workspace") {}
+            ])
+        })
+        case .hoverCard: AnyView(HoverCard(width: 220, label: {
+            Text("Hover target").font(.caption).padding(8).background(.surfaceVariant).cornerRadius(6)
+        }, content: {
+            Text("Hover card detail").padding(12)
+        }))
+        case .animation: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Toggle animation") { animationVisible.toggle() }
+            AnimatedVisibility(isVisible: animationVisible) {
+                Text("Animated content").font(.caption).padding(8)
+            }
+        })
+        case .introduction: AnyView(Column(alignment: .leading, spacing: 6) {
+            Text("GuavaUI").font(.title)
+            Text("Component showcase").font(.body).foregroundColor(.onSurfaceMuted)
+        }.frame(width: .percent(100)))
+        case .image: AnyView(AsyncImage(url: ImageStory.resource.url, width: 180, height: 90,
+            contentMode: .fit) { phase in
+            switch phase {
+            case .success(let image):
+                image
+            case .failure:
+                Text("Image unavailable").font(.caption)
+            default:
+                Text("Loading image…").font(.caption)
+            }
+        }.frame(width: 180, height: 90))
+        case .notification: AnyView(Column(alignment: .leading, spacing: 8) {
+            Button("Notify") {
+                toast.post(ToastNotification("Project saved") { $0.tone = .success })
+            }
+            NotificationHost(toast)
+        })
+        case .workspace: AnyView(WorkspaceView(controller: workspaceController) { id in
+            AnyView(Text(id.rawValue.capitalized).padding(8))
+        }.frame(width: .percent(100), height: .points(190)))
         default: AnyView(EmptyView())
         }
     }
