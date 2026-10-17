@@ -53,7 +53,7 @@ struct SplitStory: View {
 
 struct ScrollStory: View {
     var body: some View {
-        StorySection("Native scroll stream", "Trackpad points and OS momentum are followed directly; wheel lines move by 30pt. No extra fling is inferred after input stops. At an edge, outward input passes to the outer viewport.") {
+        StorySection("Native scroll stream", "Trackpad points and OS momentum are followed directly; wheel lines move by 30pt. Click the list and use PageUp/PageDown or Home/End for keyboard scrolling. Touch surfaces can drag the content directly.") {
             ScrollView(.vertical, scrollbarGutter: .stable) {
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
                     for i in 0..<40 { AnyView(Text("Scrollable line \(i + 1)").font(.body).padding(10).background(i % 2 == 0 ? .surfaceVariant : .surface)) }

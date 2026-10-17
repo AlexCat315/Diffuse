@@ -74,7 +74,7 @@
 | `Box` / `Row` / `Column` / `Spacer` | 默认只收缩 `flex(shrink: >0)` 的子项；`Row` 不自动换行，需要换行的工具栏/标签排显式用 `Box(wrap: .wrap)` 或 `ViewThatFits`。`Column` 不拉伸子节点到父宽。`Spacer` 与 `.flex()` 兄弟争抢剩余空间，固定间距不要用 `Spacer` 冒充 | `[已实现]` |
 | `ZStack` / `ZStackLayout` | 测量到最大子视图，子视图按 proposal 测量后按 `alignment` 层叠；后声明的在上并优先接收指针；不自动裁剪溢出，条件卸载的分支不绘制/不接输入/不暴露语义；RTL 下 leading/trailing 按逻辑边解析 | `[已实现]`，见 [ZStack](zstack.md) |
 | `View.overlay(alignment:)` / `OverlayLayout` | base 决定测量尺寸；overlay 按 base bounds 对齐，不参与父级布局；overlay 后声明并优先接收指针；overlay 大于 base 时允许溢出 | `[已实现]`，见 [ZStack](zstack.md) |
-| `ScrollView` / `BoundedScrollView` | 先按内容测量；`BoundedScrollView` 在 min/max 高度内先长大再滚动。溢出轴在边界处按 `.whenScrollable` 停留（顶部/底部继续吃滚动，不带动父级），非溢出轴允许事件透传；滚动条用 `.stable` gutter 预留 12pt 不压尾部控件 | `[已实现]`；键盘 Page/Home/End 与滚动条辅助功能 `[未实现]` |
+| `ScrollView` / `BoundedScrollView` | 先按内容测量；`BoundedScrollView` 在 min/max 高度内先长大再滚动。溢出轴在边界处按 `.whenScrollable` 停留（顶部/底部继续吃滚动，不带动父级），非溢出轴允许事件透传；滚动条用 `.stable` gutter 预留 12pt 不压尾部控件 | `[已实现]`；键盘 Page/Home/End 与触摸拖动已实现，滚动条辅助功能 `[未实现]` |
 | `SplitView` | 空间足够时优先满足两侧 minimum；比例范围与像素最小冲突时像素最小优先。未启用 compact 时，空间不足按两个最小尺寸的比例共享并裁剪。`compact` 按容器轴向长度（默认阈值 600pt）切换为单面板 + 页签，保留两个面板的节点、草稿、滚动与请求比例；恢复双栏时重新应用约束。拖拽/键盘/辅助功能才写回比例 binding；触摸分隔柄 ≥ 44pt | `[已实现]`；API 与边界见 [SplitView](splitview.md) |
 | `Grid` / `LazyGrid` | `fixed` 保持 authored 宽，`flexible(minimum:)` 不跌破 minimum，`adaptive(minimum:)` 随宽度减少列数。Grid 在 minimum 超宽时横向滚动；命名字段列按优先级隐藏并提供 Columns 菜单。LazyGrid 使用有界视口与窗口化行高 | Grid 列策略、显隐与滚动兜底 `[已实现]`，见 [布局](layout.md#grid-字段列)；span/二维窗口化仍缺 |
 | `ViewThatFits` / `LayoutThatFits` | 按容器实测宽（默认阈值 600）或候选测量选择布局；两分支各自保留节点与 `@State`，隐藏分支不参与布局/绘制/输入/辅助功能并释放焦点与指针捕获；重任务由应用按当前形态控制 | `[已实现]` |
@@ -281,7 +281,7 @@
 **Grid / LazyGrid**
 
 - Grid 的命名 fixed/flexible 字段列按 minimum 和优先级自动隐藏，必要列保留，提供 ≥44pt 的 Columns 入口与菜单、用户选择 binding 和恢复自动模式。源行槽位、节点、局部编辑草稿不因显隐改变；隐藏子树不绘制、不接输入、不暴露语义，所属附属浮层关闭。必要列或显式显示超宽时横向滚动，匿名 adaptive 退化至 minimum 后同样可滚动。`[已实现]`
-- Grid 验收：`GridColumnsTests` 覆盖三档宽度、100%/200%、三种输入、明暗主题、RTL、状态、菜单、滚动和 AI 查询；`CustomLayoutVisibilityTests` 覆盖缓存绘制与命中，`--component layout` 提供可交互示例。GridLayout 仅负责布局算法，菜单与滚动由 Grid facade 提供；span、二维窗口化及通用 ScrollView 触摸拖动/键盘滚动仍待补齐。
+- Grid 验收：`GridColumnsTests` 覆盖三档宽度、100%/200%、三种输入、明暗主题、RTL、状态、菜单、滚动和 AI 查询；`CustomLayoutVisibilityTests` 覆盖缓存绘制与命中，`--component layout` 提供可交互示例。GridLayout 仅负责布局算法，菜单与滚动由 Grid facade 提供；span、二维窗口化及滚动条辅助功能仍待补齐。
 
 - 固定与已知可变行高均接收未缩放逻辑高度，行高和行间距自动跟随 `TextScaler`；列宽与列间距不参与字号缩放。变量模式复用 authored 前缀索引，不因字号变化或滚动遍历全部数据。`[已实现]`
 - 窗口化、占位、单元格高度与滚动 extent 使用同一份缩放几何；字号恢复后夹紧超出范围的滚动位置，保留重叠可见单元格身份。验收：`TextScaleRowTests.collectionGeometry` / `variableGrid`、`LazyGridTests`。
@@ -300,7 +300,7 @@
 - 外观：strip + divider + 内容；选中 2px accent 指示；可选关闭按钮（ghost mini + tooltip/名称）。`[已实现]`
 - 手机：`placement = .adaptive` 在 compact 把 strip 移到内容下方，节点与状态保留；触摸标签与关闭 ≥44pt。`.menu` 保留选中项，隐藏标签进入 More tabs（入口及行 ≥44pt）；标题单行省略并保留完整 tooltip/名称，图标、徽标和关闭按钮保留尺寸，极窄时横向滚动。`[已实现]`
 - 平板 / 桌面：strip 在顶部；`.wrap`、`.scroll` 或 `.menu` 由调用方选择；roving focus。`[已实现]`
-- 交互与验收：方向键/Home/End 可选择隐藏项并在实际放置后聚焦，支持同帧连续按键；禁用项跳过，菜单 Escape 恢复入口，选中菜单项聚焦该标签。标签语义、完整原文和关闭按钮独立停靠点均保留。验收：`TabOverflowTests`、`AdaptiveNavigationTests`、`TouchDensityTests` tabs、`--component tabs` 三预览；通用 ScrollView 触摸拖动仍见第 5-9 项。
+- 交互与验收：方向键/Home/End 可选择隐藏项并在实际放置后聚焦，支持同帧连续按键；禁用项跳过，菜单 Escape 恢复入口，选中菜单项聚焦该标签。标签语义、完整原文和关闭按钮独立停靠点均保留。验收：`TabOverflowTests`、`AdaptiveNavigationTests`、`TouchDensityTests` tabs、`--component tabs` 三预览；通用 ScrollView 触摸拖动/键盘滚动见第 5-9 项。
 
 **AppBar / NavigationBar**
 
@@ -496,12 +496,11 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 ## 5. 未实现项清单（按本文验收）
 
-以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核，是本文契约中当前**未实现**的部分。每项按"位置 → 验收归属"列出；实现后从清单移除并在第 3 节改为 `[已实现]`。完整缺失组件（RangeSlider、SearchField、列表能力包等）与既有组件的其他功能缺口见[组件覆盖与缺失清单](gaps.md)。
+以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核，是本文契约中当前**未实现**的部分。每项按"位置 → 验收归属"列出；实现后从清单移除并在第 3 节改为 `[已实现]`。完整缺失组件（列表能力包、CommandPalette 虚拟化等）与既有组件的其他功能缺口见[组件覆盖与缺失清单](gaps.md)。
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
 | 6 | Button / Select / DatePicker 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()`、AppBar 与 TabView 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
-| 9 | ScrollView 触摸拖动/惯性、键盘滚动（箭头/Page/Home/End）、横向滚动条 gutter | `Layout/ScrollView.swift` | 触摸滚动测试 + `scrollview` 页；键盘测试 |
 | 10 | 浮层自适应：底部抽屉 Sheet、Select/CommandPalette 弹层宽度与行高、菜单触摸展开子菜单 | `Overlays/*`、`Fields/Select.swift` | 对应浮层测试 + 390pt 取样 |
 | 11 | Stepper / ButtonGroup 窄宽替代布局（纵向或滚动） | `Navigation/Stepper/*`、`Layout/NavigationComponents.swift` | 390pt 取样 + 布局测试 |
 | 12 | NumberField / Vec3Field 窄宽重排（两行或滚动） | `Fields/NumberField.swift`、`Fields/Vec3Field.swift` | 390pt 取样 + 布局测试 |

@@ -33,6 +33,15 @@ Sidebar、Tab 等键盘组显露目标时，ScrollView 先用本轮节点几何�
 
 DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMode` 传 points/lines/pages，并统一方向，只对 point 输入做画面到逻辑坐标的比例换算。InputRecording 格式升级为 version 2，直接保存完整事件，未增加旧格式解码层。
 
+## 触摸拖动与键盘
+
+- 触摸面（`UIEnvironment.input` 含 `.touch`）可在内容区拖动：按下只登记起点，不抢子控件点击；超过 4pt 阈值后捕获指针，用 `ScrollAnimator.move(to:)` 跟随，释放交给 `settle()` 进入惯性与边界回弹。
+- 指针面（鼠标/触控板）不启用内容拖动，避免与文本选择、按钮拖拽冲突；鼠标仍走 wheel/滚动条。
+- ScrollView 节点是键盘 Tab 停靠点。聚焦后 ArrowUp/Down/Left/Right 行滚动 40pt，PageUp/PageDown 滚一屏的 90%，Home/End 到两端；只处理实际可滚动的轴，无位移时不吞事件。
+- 键盘滚动是立即定位，不启动惯性；触摸释放才走 `settle()`。`.reducedMotion()` 仍会关闭框架添加的运动。
+
+滚动条本身的辅助功能语义、可聚焦 thumb 与带时长的程序滚动仍未实现，见下节。
+
 ## 嵌套与滚动条
 
 `.overlay` 将滚动条置于内容上方；`.stable` 在纵向 trailing 预留 12pt 槽，避免盖住尾部控件。只有内容溢出才绘制条；hover/拖动显示，离开淡出。软件自定义手势若产生越界位移，thumb 缩短且仍位于轨道内。
@@ -51,8 +60,8 @@ TextField 与 CodeEditor 的内部视口采用同样的有溢出边界隔离；�
 
 - Windows/Linux 精确设备、手势 phase 和系统 momentum 的原生补充；macOS 仍需真实触控板/鼠标/平滑驱动的长时间录制验证。
 - 离散滚轮的可打断平滑目标插值、显式开始/结束/停止控制器和带时长的程序定位。
-- 独立 Scrollbar/统一 ScrollHandle、显示策略/尺寸/配色主题、可访问性滚动条语义与键盘 Page/Home/End 操作。
-- touch/pan、滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接。
+- 独立 Scrollbar/统一 ScrollHandle、显示策略/尺寸/配色主题、可访问性滚动条语义与可聚焦 thumb。
+- 滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接。
 - Windows/Linux、120Hz、真实设备的视觉抖动和停止延迟，以及 GPU/合成器完成时间证据。当前合成输入验证不能代替这些证据。
 
 ## 实现

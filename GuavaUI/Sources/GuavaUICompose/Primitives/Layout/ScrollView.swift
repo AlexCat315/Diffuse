@@ -18,8 +18,15 @@ private struct _ScrollViewDragState {
     var thumbLength: CGFloat
 }
 
+private struct _ScrollViewContentDragState {
+    var start: CGPoint
+    var offsetStart: CGPoint
+    var dragged = false
+}
+
 private enum _ScrollViewAttachmentKeys {
     static let dragState = "__scrollview_scrollbar_drag_state"
+    static let contentDragState = "__scrollview_content_drag_state"
     static let isHovered = "__scrollview_scrollbar_is_hovered"
     static let chromeOpacity = "__scrollview_scrollbar_chrome_opacity"
     static let contentSize = "__scrollview_content_size"
@@ -159,6 +166,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // it always sees the current callbacks instead of a stale one.
         let motion = _ScrollViewAttachmentKeys.motionAnimator(for: node,
                                                              physics: Self.resolvedPhysics(on: node))
+        node.isFocusable = true
+        let supportsTouchDrag = node.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch)
         if node.attachments[_ScrollViewAttachmentKeys.pendingOffset] == nil {
             if node.prefersReducedMotion { motion.finishImmediately() }
             Self.publishScrollRange(to: motion, on: node)
@@ -264,6 +273,44 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 let nextOffset = motion.scrollDirectly(by: CGPoint(x: CGFloat(dx), y: CGFloat(dy)))
                 return consumePolicy.result(didScroll: nextOffset != previousOffset, canScroll: true)
             }
+            registry.setKey(node, route: .scroll) { event, phase in
+                guard phase == .target else { return .ignored }
+                guard Self.publishScrollRange(to: motion, on: node) else { return .ignored }
+                let viewport = Self.visibleViewportRect(for: node)
+                let line: CGFloat = 40
+                let page = max(line, viewport.height * 0.9)
+                var dx: CGFloat = 0
+                var dy: CGFloat = 0
+                switch event.scancode {
+                case Scancode.arrowUp:
+                    dy = -line
+                case Scancode.arrowDown:
+                    dy = line
+                case Scancode.arrowLeft:
+                    dx = -line
+                case Scancode.arrowRight:
+                    dx = line
+                case Scancode.pageUp:
+                    dy = -page
+                case Scancode.pageDown:
+                    dy = page
+                case Scancode.home:
+                    dx = -motion.offset.x
+                    dy = -motion.offset.y
+                case Scancode.end:
+                    dx = motion.maximumOffset.x - motion.offset.x
+                    dy = motion.maximumOffset.y - motion.offset.y
+                default:
+                    return .ignored
+                }
+                if axes == .vertical { dx = 0 }
+                if axes == .horizontal { dy = 0 }
+                guard dx != 0 || dy != 0 else { return .ignored }
+                let previous = motion.offset
+                motion.stopCoasting()
+                let next = motion.scrollDirectly(by: CGPoint(x: dx, y: dy))
+                return next != previous ? .handled : .ignored
+            }
             registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
                 switch pointerPhase {
                 case .down:
@@ -303,21 +350,50 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                         Self.setScrollbarChromeVisible(true, on: node)
                         return .handled
                     }
+                    if supportsTouchDrag {
+                        node.attachments[_ScrollViewAttachmentKeys.contentDragState] =
+                            _ScrollViewContentDragState(start: local, offsetStart: node.contentOffset)
+                    }
                     return .ignored
                 case .up:
-                    guard node.attachments[_ScrollViewAttachmentKeys.dragState] != nil else {
-                        return .ignored
+                    if node.attachments[_ScrollViewAttachmentKeys.dragState] != nil {
+                        node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
+                        PointerCaptureHolder.current?.release()
+                        // A thumb release preserves its absolute placement.
+                        motion.finishImmediately()
+                        let isHovered = node.attachments[_ScrollViewAttachmentKeys.isHovered] as? Bool ?? false
+                        Self.setScrollbarChromeVisible(isHovered, on: node)
+                        return .handled
                     }
-                    node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
-                    PointerCaptureHolder.current?.release()
-                    // A thumb release preserves its absolute placement.
-                    motion.finishImmediately()
-                    let isHovered = node.attachments[_ScrollViewAttachmentKeys.isHovered] as? Bool ?? false
-                    Self.setScrollbarChromeVisible(isHovered, on: node)
-                    return .handled
+                    if let state = node.attachments[_ScrollViewAttachmentKeys.contentDragState]
+                        as? _ScrollViewContentDragState {
+                        node.attachments[_ScrollViewAttachmentKeys.contentDragState] = nil
+                        guard state.dragged else { return .ignored }
+                        PointerCaptureHolder.current?.release()
+                        motion.settle()
+                        return .handled
+                    }
+                    return .ignored
                 }
             }
             registry.setMotion(node, route: .scrollChrome) { event, _ in
+                if let state = node.attachments[_ScrollViewAttachmentKeys.contentDragState]
+                    as? _ScrollViewContentDragState {
+                    let local = Self.localPoint(x: event.x, y: event.y, in: node)
+                    let dx = local.x - state.start.x
+                    let dy = local.y - state.start.y
+                    if !state.dragged && hypot(dx, dy) < 4 { return .ignored }
+                    var nextState = state
+                    if !nextState.dragged {
+                        nextState.dragged = true
+                        PointerCaptureHolder.current?.acquire(node)
+                    }
+                    node.attachments[_ScrollViewAttachmentKeys.contentDragState] = nextState
+                    _ = motion.move(to: CGPoint(
+                        x: axes == .vertical ? state.offsetStart.x : state.offsetStart.x - dx,
+                        y: axes == .horizontal ? state.offsetStart.y : state.offsetStart.y - dy))
+                    return .handled
+                }
                 guard let state = node.attachments[_ScrollViewAttachmentKeys.dragState]
                         as? _ScrollViewDragState else {
                     return .ignored
