@@ -312,3 +312,39 @@ struct SectionedListStory: View {
         }
     }
 }
+
+struct ReorderableListStory: View {
+    private struct Item: Identifiable {
+        let id: Int
+        let title: String
+    }
+
+    @State private var items = [
+        Item(id: 0, title: "Main Camera"),
+        Item(id: 1, title: "Key Light"),
+        Item(id: 2, title: "Player"),
+        Item(id: 3, title: "Ground"),
+        Item(id: 4, title: "Trigger"),
+        Item(id: 5, title: "Audio Source")
+    ]
+
+    var body: some View {
+        StorySection("Reorderable list", "Drag the 44pt grip to move a row: a 2pt accent line marks the insertion point, Escape cancels, and Up/Down (or the assistive increment/decrement actions) move the focused row without a pointer.") {
+            ReorderableList(items, id: \.id, rowHeight: 36,
+                            rowLabel: { $0.title },
+                            onMove: { from, to in
+                guard items.indices.contains(from), (0..<items.count).contains(to) else { return }
+                let moved = items.remove(at: from)
+                items.insert(moved, at: to)
+            }) { item, isDragging in
+                Row(alignment: .center, spacing: 10) {
+                    Text(item.title).font(.body)
+                    Spacer()
+                    if isDragging { Badge("Moving", tone: .info) }
+                }
+            }.frame(height: 300)
+            Text("Order: \(items.map(\.title).joined(separator: " → "))")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

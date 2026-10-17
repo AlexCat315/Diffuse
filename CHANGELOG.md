@@ -25,6 +25,7 @@
 - `CommandPalette` compact 自适应：`SurfaceReader` 读取表面尺寸与输入，<600pt 时使用 `viewport − 16` 宽、`min(560, viewport − 16)` 高、8pt inset 居中，触摸结果行 ≥44、header 36；桌面保持 640×440 顶部与 36/28 行高。补齐 `CommandPaletteAdaptiveTests` 与 Gallery/DevTools 390pt 实测；软键盘收缩仍由宿主 IME 处理。
 - 验证并记录 Select 弹层窄宽行为：复用 Menu 的行高与 Portal 夹紧，390pt 下触发器 286pt、弹层 346pt（x=32，右边界 378），指针行高 32、触摸 ≥44；补充 `adaptive-spec.md` / `menu.md` 验收，无需新增兼容层。
 - 焦点环统一为仅键盘焦点可见：Toggle 的开关/复选框自绘路径与 Slider/RangeSlider 的 style 快照改用 `focused && isFocusVisible`；`FocusRingTests` 渲染 DrawList 验证指针无 `focusRing` 顶点、键盘有，DevTools 720pt 点击 Toggle 后数值翻转但截图与点击前一致（无环）。
+- 新增 `ReorderableList`：44pt 拖拽 handle、2pt 放置线、Escape 取消、一次 `onMove`；聚焦 handle 后 Up/Down 与辅助功能 increment/decrement 移动同一行，触摸行高/handle ≥44。补齐 `ReorderableListTests`、Gallery `reorderableList` 页与自适应预览；当前为非虚拟列表，视口边缘自动滚动仍待补。
 
 ## 0.0.9 — 2026-10-06
 

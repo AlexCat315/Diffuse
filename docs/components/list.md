@@ -95,6 +95,32 @@ SectionedList([
 - 固定标题默认按列表常见所在的高一层面板取 `.surfaceRaised`；放在 `surface` 或自定义卡片上时，
   把 `stickyHeaderBackground` 设为该表面的颜色 token，避免出现色带。
 
+## ReorderableList
+
+```swift
+ReorderableList(items, id: \.id, rowLabel: { $0.title }, onMove: { from, to in
+    let moved = items.remove(at: from)
+    items.insert(moved, at: to)
+}) { item, isDragging in
+    Row { Text(item.title); Spacer() }
+}
+```
+
+| 参数 | 默认 | 说明 |
+| ---- | ---- | ---- |
+| `data` / `id` | 必填 | 调用方持有的顺序与稳定 ID |
+| `rowHeight` | 36 | 未缩放行高；触摸面提升到 44 |
+| `rowSpacing` | 0 | 未缩放行距 |
+| `isEnabled` | true | 关闭后 handle 不接指针、不参与焦点 |
+| `rowLabel` | 空 | handle 的辅助功能名称来源；为空时用 “Reorder item N” |
+| `onMove` | 必填 | `(from, to)`，`to` 是移除后的最终索引 |
+| `rowContent` | 必填 | `(item, isDragging)`；拖动中的行可自行弱化/高亮 |
+
+- 每行尾部有 44pt 宽拖拽 handle（`UIIcons.Action.grip`）。指针拖动期间在目标边界绘制 2pt accent 放置线；释放才调用一次 `onMove`，Escape 取消且不改顺序。
+- 键盘聚焦 handle 后 Up/Down 立即上移/下移；辅助功能为 slider 语义，value 为 `"Position x of n"`，increment/decrement 映射同一操作。
+- 行身份由 `id` 保留，移动后焦点、草稿与行内容节点跟随原行。
+- 当前为全量挂载的非虚拟列表（适合设置、图层、播放列表等中等规模顺序），拖到视口边缘的自动滚动尚未实现；大集合应等待后续虚拟化重排。
+
 ## Tokens (DefaultListRowStyle)
 
 选中态不在这张表里各自推导：`SelectionAppearance.resolve(.navigation, theme:)` 是唯一的
@@ -122,6 +148,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - **`scrollToIndex` 首次布局不生效**：第一帧还没有视口高度，此时做 reveal 会多滚一行并把这次请求消费掉，所以本来可见的目标也会把列表滚过头。`VariableVirtualStack` 用同一条规则。
 - **多选**：使用 `MultiSelectList`；List 保持单选。多选行仍由同一个 `_ListRowHost` 处理点击，modifier 由指针事件传入。
 - **sticky 区段**：`SectionedList(stickyHeaders: true)` 根据真实滚动 offset 计算当前区段；标题只在原行滚出顶部后接替，下一标题进入标题高度范围时上推它。计算复用虚拟化的固定 `rowHeight + rowSpacing`，因此触摸行高、字号缩放和 `scrollToIndex` 显露都得到同一条几何。固定副本不参与命中与语义，滚动仍由同一个 `ScrollView` 接收。
+- **重排**：`ReorderableList` 在每行尾部提供 44pt handle；指针拖动只由 handle 的捕获事务驱动，放置线覆盖显示而不改变行几何，释放后一次回调；Escape 取消、方向键与辅助功能 increment/decrement 走同一 `onMove`。顺序属于调用方，组件不持久化。
 
 ## Authoring rules
 
@@ -151,11 +178,12 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - `SectionedListTests.stickyHeadersDisabled`：默认关闭时滚动不生成固定标题，普通 header 仍在行内。
 - `MultiSelectListTests.pointerSelection`：点击 20、Shift-click 40、Cmd-click 30 的集合变化。
 - `MultiSelectListTests.keyboardSelection`：Shift+Arrow 扩展、普通 Arrow 收拢、Cmd+A 全选。
-- Gallery `multiSelectList` 页提供 12 行、初始选中与状态文本；`sectionedList` 页提供可滚动的三段列表并默认开启 sticky。
+- `ReorderableListTests`：指针拖动显示放置线并只移动一次、键盘与辅助功能 increment/decrement、Escape 取消且不改顺序、触摸 handle ≥44pt。
+- Gallery `multiSelectList` 页提供 12 行、初始选中与状态文本；`sectionedList` 页提供可滚动的三段列表并默认开启 sticky；`reorderableList` 页提供 6 行真实拖动与顺序文本。
 
 ## File map
 
-- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift)
+- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [ReorderableList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/ReorderableList.swift)
 - Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DefaultListRowStyle.swift)
 
 ## 响应式与输入密度
@@ -163,5 +191,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 List 先用 `TextScaler` 缩放 authored `rowHeight` 与 `rowSpacing`，再在 touch surface 上把行高提升至至少 44pt。行 host、VirtualStack 的窗口化与滚动 extent 使用同一高度；返回 pointer 后仅移除触摸下限，字号缩放仍生效。不要在调用方预先缩放这两个参数。通用 VirtualList/VirtualStack 不假定每行可交互，仍使用调用方的实际高度。touch-only surface 不展示行 hover。
 
 `TextScaleRowTests.collectionGeometry` 覆盖 390/720/1280pt、light/dark、100%/125%/200% 字号与输入切换，验证缩放一次、行间距、窗口化及状态保留。
+
+`ReorderableList` 使用同一条缩放与触摸下限规则；指针/键盘 handle 高度为 `max(scaledRowHeight, touch ? 44 : 0)`，触摸面行高与 handle 均为 44pt。当前非虚拟化，行数与滚动由外层固定高度的 `ScrollView` 管理。
 
 SectionedList 的 sticky 标题使用与虚拟化相同的已缩放行高与触摸下限：sticky 容器的标题高度取 `effectiveHeight`，下一标题位置取 `entryIndex × (effectiveHeight + scaledSpacing)`。因此字号或输入集合变化后，固定标题与行几何不会错位。

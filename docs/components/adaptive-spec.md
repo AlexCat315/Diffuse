@@ -263,13 +263,14 @@
 
 ### 3.4 数据集合
 
-**List / MultiSelectList / SectionedList / Tree**
+**List / MultiSelectList / SectionedList / ReorderableList / Tree**
 
-- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点，可选 sticky 标题固定当前区段并由下一标题上推；Tree 每级缩进 16、箭头列 18。`[已实现]`
+- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点，可选 sticky 标题固定当前区段并由下一标题上推；ReorderableList 行尾 44pt handle；Tree 每级缩进 16、箭头列 18。`[已实现]`
 - Tree 指示线只保留低对比度竖线（1pt、`onSurfaceMuted` 的 24% alpha），移除横向连接；禁用、同步延迟子节点、Home / End 与 Option / Alt + Left / Right 全部折叠 / 展开已完成，具体边界见 [Tree](tree.md)。
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
-- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；MultiSelectList 支持 Shift/Cmd 点选、Shift+Arrow、Cmd/Ctrl+A；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。验收：`MultiSelectListTests`、`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
+- 重排：`ReorderableList` 提供 44pt 拖拽 handle、2pt 放置线、Escape 取消与一次 `onMove`；聚焦 handle 后 Up/Down 和辅助功能 increment/decrement 移动同一行，行身份与焦点跟随原行。当前为全量挂载的非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
+- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；MultiSelectList 支持 Shift/Cmd 点选、Shift+Arrow、Cmd/Ctrl+A；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。验收：`MultiSelectListTests`、`ReorderableListTests`、`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
 
 **Table / DataTable**
 
@@ -541,6 +542,8 @@ CommandPalette compact 几何已完成：`SurfaceReader` 读取 surface 尺寸�
 Select 弹层宽度与行高已完成：触发器继续单行截断并保留完整辅助功能值；弹层复用 Menu 的 `MenuWindowBounds` 与 `MenuRowMetrics`，宽度不小于触发器、由 Portal `viewportMargin` 夹紧在窗口 − 24 内，行高按指针 32 / 触摸 44 取最大值，长选项自然换行增高。DevTools 在 390×820 打开 Gallery `select`：触发器 286pt，弹层宽 346pt、x=32、右边界 378（窗口 390，右/左各 12pt），行高 32 为宿主指针面；触摸 44pt 由 `RowDensityTests.menuRows` 覆盖。`capture-ui` 确认长选项与禁用项都在窗口内。第 10 项剩余 Sheet 底部呈现与菜单触摸展开子菜单验收。
 
 第 13 项焦点环已统一：Toggle 的开关/复选框自绘路径与 Slider/RangeSlider 的 `SliderStyleConfiguration` 都改为 `focused && isFocusVisible`，与 Button-based 样式、Rating 和表格头共用同一键盘可见性来源。`FocusRingTests.customDrawnControlsFollowFocusVisibility` 直接渲染 Toggle/Slider/RangeSlider 的 DrawList，断言指针焦点时没有 `focusRing` 顶点、键盘焦点时存在；既有 Button ring 测试继续覆盖样式路径。DevTools 在 720×820 Gallery `toggle` 点击 Notifications 后数值翻转、焦点目标移动，但 `capture-ui` 与点击前像素一致（无环）；键盘环由渲染顶点断言覆盖。
+
+列表重排已完成：`ReorderableList` 在行尾提供 44pt handle，指针拖动期间以 2pt accent 放置线标记目标边界，释放后只调用一次 `onMove(from, to)`；Escape 取消、聚焦 handle 后 Up/Down 以及辅助功能 increment/decrement 走同一移动路径。根节点提供 flex 布局节点并从实际 ScrollView viewport 读取内容宽度，避免内容按 handle 的固有宽度收缩。`ReorderableListTests` 覆盖指针放置线与单次移动、键盘/辅助功能移动并保持焦点、Escape 取消、触摸 44pt handle。Gallery `reorderableList` 页与自适应预览已接入；DevTools 在 720×820 上从 Main Camera 的 handle（x=618）下拖 72pt，截图确认 “Moving” 行与 2pt 放置线，释放后顺序查询为 `Key Light → Main Camera → Player → Ground → Trigger → Audio Source`。当前为非虚拟列表，视口边缘自动滚动仍待补。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排/swipe/下拉刷新仍按 [缺失清单](gaps.md#29-列表能力包p1) 跟踪。
 
