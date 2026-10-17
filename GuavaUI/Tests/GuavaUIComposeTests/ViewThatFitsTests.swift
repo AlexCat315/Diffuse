@@ -28,6 +28,16 @@ struct ViewThatFitsTests: GuavaUIComposeSerializedSuite {
             }.frame(width: width, height: 100)
         }
     }
+    private struct IntrinsicHarness: View {
+        @State var width: Float = 200
+        var body: some View {
+            ViewThatFits(fitting: .intrinsic) {
+                Counter(name: "wide").frame(width: 160)
+            } compact: {
+                Counter(name: "compact").frame(width: 60)
+            }.frame(width: width, height: 100)
+        }
+    }
     private func nodes(_ root: Node) -> [Node] { [root] + root.children.flatMap(nodes) }
     private func named(_ name: String, in graph: ViewGraph) -> Node? {
         nodes(graph.tree.root!).first { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == name }
@@ -96,5 +106,32 @@ struct ViewThatFitsTests: GuavaUIComposeSerializedSuite {
         let compact = try #require(named("compact", in: graph))
         #expect(compact.acceptsSubtreeInput)
         #expect(!wide.acceptsSubtreeInput)
+    } }
+
+    @Test("intrinsic mode selects by natural content and retains both branches")
+    func intrinsicFitting() throws { try GlobalTestLock.locked {
+        let oldRegistry = InteractionRegistryHolder.current, oldFocus = FocusChainHolder.current
+        let oldCapture = PointerCaptureHolder.current
+        let registry = InteractionRegistry(), focus = FocusChain(), capture = PointerCapture()
+        InteractionRegistryHolder.current = registry; FocusChainHolder.current = focus; PointerCaptureHolder.current = capture
+        defer { InteractionRegistryHolder.current = oldRegistry; FocusChainHolder.current = oldFocus; PointerCaptureHolder.current = oldCapture }
+        let harness = IntrinsicHarness(), graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: harness)
+        let wide = try #require(named("wide", in: graph))
+        let compact = try #require(named("compact", in: graph))
+        settle(graph, width: 200)
+        #expect(wide.acceptsSubtreeInput && !compact.acceptsSubtreeInput)
+        #expect(AccessibilityTree.snapshot(root: graph.tree.root!).map(\.semantics.label) == ["wide"])
+        wide.accessibilityActions.activate?(); settle(graph, width: 200)
+        #expect(wide.attachments["test.counter"] as? Int == 1)
+        harness.width = 100
+        settle(graph, width: 100)
+        #expect(!wide.acceptsSubtreeInput && compact.acceptsSubtreeInput)
+        #expect(AccessibilityTree.snapshot(root: graph.tree.root!).map(\.semantics.label) == ["compact"])
+        focus.focus(wide)
+        harness.width = 200
+        settle(graph, width: 200)
+        #expect(named("wide", in: graph) === wide && wide.attachments["test.counter"] as? Int == 1)
+        #expect(compact.attachments["test.counter"] as? Int == 0)
     } }
 }

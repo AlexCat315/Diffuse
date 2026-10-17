@@ -6,25 +6,79 @@ import GuavaUIRuntime
 /// local state until this container is removed. Inactive branches remain mounted
 /// but take no layout space, paint no pixels and receive no input or accessibility.
 /// App-owned drafts can still use shared bindings across the two presentations.
-/// This is a width-threshold selector; it does not measure intrinsic content fit.
+/// Selection can use an explicit width threshold or measure the wide branch's
+/// intrinsic size. Intrinsic mode mounts both branches immediately so it can
+/// measure them; hidden branches still stop paint, input and accessibility.
 public struct ViewThatFits<Wide: View, Compact: View>: View {
-    private let threshold: CGFloat
+    public enum Mode: Sendable, Equatable {
+        case threshold(CGFloat)
+        case intrinsic
+    }
+
+    private let mode: Mode
     private let wide: () -> Wide
     private let compact: () -> Compact
 
     public init(threshold: CGFloat = CGFloat(UIEnvironment.Viewport.compactMaximumWidth),
                 @ViewBuilder wide: @escaping () -> Wide,
                 @ViewBuilder compact: @escaping () -> Compact) {
-        self.threshold = threshold.isFinite ? max(0, threshold) : 0
+        self.init(fitting: .threshold(threshold), wide: wide, compact: compact)
+    }
+
+    /// `intrinsic` selects wide while its measured natural width/height fit;
+    /// otherwise compact. Measurement uses an unspecified proposal so a parent
+    /// width cannot make a wrapping wide branch look like it fits.
+    public init(fitting mode: Mode,
+                @ViewBuilder wide: @escaping () -> Wide,
+                @ViewBuilder compact: @escaping () -> Compact) {
+        switch mode {
+        case .threshold(let value):
+            self.mode = .threshold(value.isFinite ? max(0, value) : 0)
+        case .intrinsic:
+            self.mode = .intrinsic
+        }
         self.wide = wide; self.compact = compact
     }
 
-    public var body: some View {
-        ContainerSizeReader { size in
-            Box(direction: .column, alignItems: .stretch) {
-                RetainedResponsiveBranch(isActive: size.width >= threshold, content: wide).id("wide")
-                RetainedResponsiveBranch(isActive: size.width < threshold, content: compact).id("compact")
+    @ViewBuilder public var body: some View {
+        switch mode {
+        case .threshold(let threshold):
+            ContainerSizeReader { size in
+                Box(direction: .column, alignItems: .stretch) {
+                    RetainedResponsiveBranch(isActive: size.width >= threshold, content: wide).id("wide")
+                    RetainedResponsiveBranch(isActive: size.width < threshold, content: compact).id("compact")
+                }
             }
+        case .intrinsic:
+            IntrinsicFittingLayout() {
+                wide()
+                compact()
+            }
+        }
+    }
+}
+
+private struct IntrinsicFittingLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: [LayoutSubview]) -> CGSize {
+        guard let wide = subviews.first else { return .zero }
+        let natural = wide.sizeThatFits(ProposedViewSize(width: nil, height: nil))
+        let fitsWidth = proposal.width.map { natural.width <= $0 + 0.5 } ?? true
+        let fitsHeight = proposal.height.map { natural.height <= $0 + 0.5 } ?? true
+        if fitsWidth, fitsHeight { return wide.sizeThatFits(proposal) }
+        return (subviews.count > 1 ? subviews[1] : wide).sizeThatFits(proposal)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
+                       subviews: [LayoutSubview]) {
+        guard let wide = subviews.first else { return }
+        let natural = wide.sizeThatFits(ProposedViewSize(width: nil, height: nil))
+        let fitsWidth = natural.width <= bounds.width + 0.5
+        let fitsHeight = natural.height <= bounds.height + 0.5
+        let chosen = fitsWidth && fitsHeight ? 0 : min(1, subviews.count - 1)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: bounds.origin,
+                          proposal: ProposedViewSize(width: bounds.width, height: bounds.height),
+                          isVisible: index == chosen)
         }
     }
 }

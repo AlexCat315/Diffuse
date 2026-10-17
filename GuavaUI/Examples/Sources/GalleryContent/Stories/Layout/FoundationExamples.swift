@@ -46,6 +46,25 @@ struct LayoutFoundationExamples: View {
                         chip("Settings")
                     }
                 }.frame(width: narrow ? 300 : 620).debugName("layout-view-that-fits")
+            }
+            StorySection("Intrinsic fitting", "This selector measures its wide branch at an unspecified width. It chooses compact only when that natural width or height cannot fit the allocated container.") {
+                ViewThatFits(fitting: .intrinsic) {
+                    Row(spacing: 8) {
+                        Text("Intrinsic wide").font(.caption)
+                        chip("Files")
+                        chip("Preview")
+                        chip("Settings")
+                    }
+                } compact: {
+                    Column(spacing: 8) {
+                        Text("Intrinsic compact").font(.caption)
+                        chip("Files")
+                        chip("Preview")
+                        chip("Settings")
+                    }
+                }.frame(width: narrow ? 180 : 620).debugName("layout-intrinsic-fit")
+            }
+            StorySection("Container queries", "Content follows the width actually available to it, not the window. The switch above resizes this container; each branch keeps its own subtree and local state when selected again.") {
                 WidthClassReader { widthClass in
                     Text("Surface width class: \(String(describing: widthClass))")
                         .font(.caption).foregroundColor(.onSurfaceMuted)

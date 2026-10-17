@@ -77,7 +77,7 @@
 | `ScrollView` / `BoundedScrollView` | 先按内容测量；`BoundedScrollView` 在 min/max 高度内先长大再滚动。溢出轴在边界处按 `.whenScrollable` 停留（顶部/底部继续吃滚动，不带动父级），非溢出轴允许事件透传；滚动条用 `.stable` gutter 预留 12pt 不压尾部控件 | `[已实现]`；键盘 Page/Home/End 与触摸拖动已实现，滚动条辅助功能 `[未实现]` |
 | `SplitView` | 空间足够时优先满足两侧 minimum；比例范围与像素最小冲突时像素最小优先。未启用 compact 时，空间不足按两个最小尺寸的比例共享并裁剪。`compact` 按容器轴向长度（默认阈值 600pt）切换为单面板 + 页签，保留两个面板的节点、草稿、滚动与请求比例；恢复双栏时重新应用约束。拖拽/键盘/辅助功能才写回比例 binding；触摸分隔柄 ≥ 44pt | `[已实现]`；API 与边界见 [SplitView](splitview.md) |
 | `Grid` / `LazyGrid` | `fixed` 保持 authored 宽，`flexible(minimum:)` 不跌破 minimum，`adaptive(minimum:)` 随宽度减少列数。Grid 在 minimum 超宽时横向滚动；命名字段列按优先级隐藏并提供 Columns 菜单。LazyGrid 使用有界视口与窗口化行高 | Grid 列策略、显隐与滚动兜底 `[已实现]`，见 [布局](layout.md#grid-字段列)；span/二维窗口化仍缺 |
-| `ViewThatFits` / `LayoutThatFits` | 按容器实测宽（默认阈值 600）或候选测量选择布局；两分支各自保留节点与 `@State`，隐藏分支不参与布局/绘制/输入/辅助功能并释放焦点与指针捕获；重任务由应用按当前形态控制 | `[已实现]` |
+| `ViewThatFits` / `LayoutThatFits` | 按容器实测宽（默认阈值 600）、intrinsic 自然尺寸或候选测量选择布局；两分支各自保留节点与 `@State`，隐藏分支不参与布局/绘制/输入/辅助功能并释放焦点与指针捕获；重任务由应用按当前形态控制 | `[已实现]` |
 | `ContainerSizeReader` | 发布自身内容盒（扣 padding/border）实测尺寸；首次收到 `.zero`，变化 < 0.5pt 不发布；父级必须有界宽。卡片内部自适应用它，不用窗口宽度 | `[已实现]` |
 | `WidthClassReader` | 读取 surface 级 width class（窗口级），用于壳层：导航收敛、栏位切换；不用于卡片内部 | `[已实现]` |
 | `HeightClassReader` / `OrientationReader` | 读取 surface 级 height class（<600 / 600–999 / ≥1000）与横竖屏（方形归 landscape）；与宽度类一样只用于壳层，不用于卡片内部 | `[已实现]` |
@@ -514,10 +514,9 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
 | 14 | 辅助功能补齐：described-by 关系；滚动区域位置语义、Select/Combobox comboBox 角色与 help hint 已完成 | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
-| 15 | `ViewThatFits` 从固定阈值扩展到内在内容拟合（高度类/方向读取已完成） | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
-编号稳定保留已完成项的空位。建议顺序：10、14–16（浮层、输入与语义补齐）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+编号稳定保留已完成项的空位。建议顺序：14、16（语义补齐与预览覆盖）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 
@@ -563,7 +562,9 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 
 第 6 项控制标题截断已完成：`Button`、`Link`、`MenuButton` 的字符串入口与 `DatePicker` 触发标题统一使用 `Text.truncatingTail()`；Button/Link 默认把完整标题作为 tooltip，MenuButton 可通过 `tooltip:` 把完整标题放入 trigger description，DatePicker 的标题额外附加完整 tooltip。`Select`/`Combobox` 原有单行省略与 trigger description 保持不变；菜单项仍按文档自然换行，不属于控制标题。`TruncationTests` 在 150/170pt 约束下验证 button/link/menu/date 标题 `clipsToBounds` 且辅助功能名称完整。Gallery `button` 页新增 “Long labels” 分区与 `long-button`/`long-link`/`long-menu`/`long-date`；DevTools 720×820 查询到标题文本宽 126/146/125/158pt，悬停后 portal 中出现完整 234pt tooltip。
 
-第 15 项的高度类/方向读取已完成：`UIEnvironment.Viewport` 新增 `heightClass` 与 `orientation`，阈值与宽度类一致（600/1000），方形归 landscape；`HeightClassReader`/`OrientationReader` 从 `SurfaceEnvironment` 读取并驱动壳层内容，不额外测量。`ViewportTraitsTests` 覆盖 599/600/999/1000 边界、方形与横竖屏切换，以及 reader 在 1280×720 → 390×500 → 1200×1100 变化下的重算。Gallery `viewportTraits` 页与 README 入口已接入；DevTools 在 720×820 实测 medium/medium/portrait，390×820 实测 compact/medium/portrait，1200×842 实测 expanded/medium/landscape。`ViewThatFits` 的内在内容拟合仍保留在第 15 项待办。
+第 15 项的高度类/方向读取已完成：`UIEnvironment.Viewport` 新增 `heightClass` 与 `orientation`，阈值与宽度类一致（600/1000），方形归 landscape；`HeightClassReader`/`OrientationReader` 从 `SurfaceEnvironment` 读取并驱动壳层内容，不额外测量。`ViewportTraitsTests` 覆盖 599/600/999/1000 边界、方形与横竖屏切换，以及 reader 在 1280×720 → 390×500 → 1200×1100 变化下的重算。Gallery `viewportTraits` 页与 README 入口已接入；DevTools 在 720×820 实测 medium/medium/portrait，390×820 实测 compact/medium/portrait，1200×842 实测 expanded/medium/landscape。
+
+第 15 项的内在内容拟合已完成：`ViewThatFits(fitting: .intrinsic)` 在 unspecified 宽高下测量 wide 分支，只有自然宽高都放得下时才选 wide，否则选 compact；`threshold:` 初始化保持原行为。intrinsic 模式立即挂载两套分支以便测量，隐藏分支通过 `LayoutSubview.place(isVisible:false)` 停止绘制/输入/语义并释放焦点与捕获，两套分支的节点与 `@State` 均保留。`ViewThatFitsTests.intrinsicFitting` 覆盖 200/100pt 切换、隐藏分支不可交互、状态往返保持。Gallery 新增 `viewThatFits` 页；DevTools 720×820 截图确认 wide 行与 compact 列，按钮在 520/180pt 提案间切换。
 
 第 14 项的滚动位置与选择角色已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。`AccessibilitySemanticsTests` 覆盖滚动的 label/value/help 与 increment 后位置变化，以及两个选择触发器的 comboBox 角色、值、展开态与 activate。DevTools 在 `scrollView` 页查询到 0%/78% 的滚动区域与完整 help，在 `select` 页查询到多个 `comboBox` 角色及当前值。`described-by` 关系与独立可聚焦滚动条 thumb 仍未实现，保留在第 14 项。
 
