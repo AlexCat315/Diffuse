@@ -98,10 +98,10 @@ adb logcat -s Guava:I
 
 `timings=true` 最多记录 6000 条 `android.frame`，包含 Compose / layout / 绘制列表准备、帧槽等待、drawable 获取、atlas 上传、命令录制、队列提交、呈现的 CPU 墙钟耗时，以及几何量。`android.pacing` 每秒报告显示回调、提交帧、空闲回调、按当前刷新率估算的遗漏刷新周期、回调耗时与投递延迟，最多 120 条。它们不代表 GPU 执行耗时或实际屏幕呈现帧率；显式启用后的 Debug 快照开销只计入 callbackWork。Debug 广播可设置运行参数重建场景并开始新的测量；仅切换 snapshots 不重建场景。仓库输入自动化已显式开启自动快照。需要检查状态时，也可发送 `--es demoAction snapshot` 的 `com.guava.probe.DEMO_INPUT` 广播写出一次快照，这不要求 snapshots=true，并可用于 benchmark。
 
-显示时钟的独立主机测试可运行：
+显示时钟属于平台无关的 contract 包，作为普通测试运行：
 
 ```sh
-swift run --package-path Tools/Developer guava-dev android frame-clock
+swift test --package-path Platforms/Android/Contract
 ```
 
 真机报告与截图分别放在 `gallery-run-*`、`demo-run-*`、`game-run-*`、`run-*/results`。脚本通过 debug APK 的输入广播调用同一 InputConnection / 游戏按键路径。英文输入另外确认真实系统 IME 已连接；回调回放不等同于所有输入法的人工验收。测试会重新启动验证应用；方向检查只调整应用请求，结束时可用 `--ei orientation -1` 恢复传感器方向。

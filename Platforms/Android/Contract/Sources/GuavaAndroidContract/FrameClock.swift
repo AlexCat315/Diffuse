@@ -1,9 +1,15 @@
 /// Uses Choreographer's monotonic display timestamp, including idle callbacks.
-/// A new surface starts a fresh clock, so background time never advances a scene.
-struct DisplayFrameClock {
+/// A new surface starts a fresh clock, so background time never advances a
+/// scene.
+///
+/// Kept in the platform-neutral contract package so the Android app and host
+/// tests exercise one implementation instead of a copied assertion target.
+public struct DisplayFrameClock {
     private var previous: UInt64?
 
-    mutating func advance(to timestamp: UInt64) -> Double {
+    public init() {}
+
+    public mutating func advance(to timestamp: UInt64) -> Double {
         guard let previous else {
             self.previous = timestamp
             return 1.0 / 60.0

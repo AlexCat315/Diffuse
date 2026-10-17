@@ -69,3 +69,10 @@ jobs:
       - name: Build (release)
         working-directory: GuavaMcp
         run: swift build -c release
+
+      - name: Verify stdio protocol contract
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          GUAVA_MCP_EXECUTABLE: ${{ github.workspace }}/GuavaMcp/.build/release/GuavaMCP
+        run: swift run --package-path Tools/Developer guava-dev validate mcp-protocol

@@ -25,21 +25,41 @@ dependency direction stays one-way.
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `maintainability [--report]` | Reject new oversized Swift declarations |
-| `boundaries` | Validate package/product/app boundaries |
-| `shader compile\|rebuild\|bootstrap-slang` | Compile Slang artifacts and stage `slangc` |
-| `vulkan bootstrap` | Build pinned Vulkan headers/loader |
-| `media [--platform N] [--check]` | Build pinned LGPL FFmpeg |
-| `plugins stage\|prepare\|verify` | Stage Wasmtime and run the portable probe |
-| `native-bootstrap [--force]` | Build Engine + GuavaUI native dependencies |
-| `ios-native [--sdk S] [--arch A]` | Stage isolated iOS native dependencies |
-| `ios-simulator udid\|validate` | Pick a simulator and verify a built `.app` renders |
-| `validate <operation>` | MCP protocol, editor loop, DevTools and session checks |
-| `android <operation>` | Android device validation harnesses |
-| `browser <operation>` | Headless Chromium checks over CDP |
-| `gpu-regression run\|verify DIR` | Run and verify the GPU regression inventory |
+| Command | Gate | Purpose |
+| --- | --- | --- |
+| `maintainability [--report]` | CI | Reject new oversized Swift declarations |
+| `boundaries` | CI | Validate package/product/app boundaries |
+| `shader compile\|rebuild\|bootstrap-slang` | CI / build | Compile Slang artifacts and stage `slangc` |
+| `vulkan bootstrap` | CI / build | Build pinned Vulkan headers/loader |
+| `media [--platform N] [--check]` | CI | Build pinned LGPL FFmpeg |
+| `plugins stage\|prepare\|verify` | CI | Stage Wasmtime and run the portable probe |
+| `native-bootstrap [--force]` | CI / build | Build Engine + GuavaUI native dependencies |
+| `ios-native [--sdk S] [--arch A]` | CI / build | Stage isolated iOS native dependencies |
+| `ios-simulator udid\|validate` | CI | Pick a simulator and verify a built `.app` renders |
+| `validate <operation>` | CI / Manual / Dev | MCP protocol, editor loop, DevTools and session checks |
+| `android <operation>` | Manual | Android device validation harnesses |
+| `browser <operation>` | CI / Manual / Dev | Headless Chromium checks over CDP |
+| `gpu-regression run\|verify DIR` | CI | Run and verify the GPU regression inventory |
+
+Gate legend:
+
+- **CI** — a workflow runs this command on relevant changes (or on a scheduled,
+  self-hosted runner). It is a gate; a failure blocks the change.
+- **Manual** — needs a built application, device, simulator, window, or GPU. It
+  is a release checklist item, not CI coverage.
+- **Dev** — a local development or debugging utility; it is not a test.
+- **Build** — a setup/staging step shared by CI and local builds.
+
+`validate mcp-protocol` runs in `ci-guava-mcp.yml`. `editor-loop`,
+`crystal-rush`, `agent-diagnostics` and `session` are manual checks;
+`query-ui`, `input-ui`, `capture-ui` and `record-timings` are DevTools clients,
+not validation gates. `android` operations require a device; `browser verify`,
+`verify-dev` and `web-plugins` are CI checks, while `native-demo` is manual and
+`dev`, `serve` and `build-fonts` are development/build utilities.
+
+Only cross-process and cross-device behavior belongs here. Application
+behavior belongs in the application package's tests. If an operation neither
+launches a real artifact nor has a gate, it is a tool, not a validation.
 
 Run `guava-dev --help`, or `guava-dev <command> --help`, for the full flag list.
 

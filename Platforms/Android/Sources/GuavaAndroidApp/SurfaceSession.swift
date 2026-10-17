@@ -3,6 +3,7 @@ import Foundation
 import NativeRHI
 import GuavaUICore
 import GuavaUIRuntime
+import GuavaAndroidContract
 import CAndroidHost
 
 /// JNI serializes this surface's GPU and scene operations on the UI thread.
