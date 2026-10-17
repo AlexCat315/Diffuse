@@ -334,9 +334,9 @@
 **Breadcrumb / Pagination**
 
 - 外观：Breadcrumb 超过 `maxVisibleItems`（默认 4）折叠中段为"…"菜单；Pagination 用兄弟窗口 + 省略 gap。`[已实现]`
-- 手机：Breadcrumb 保留首尾与"…"入口；Pagination 保留当前页、首尾与前后按钮，省略中段；命中 ≥ 44pt。`[部分]`（折叠策略已实现；触摸尺寸与窄宽取样需补）
+- 手机：Breadcrumb 保留首尾与"…"入口；Pagination 保留当前页、首尾与前后按钮，省略中段；命中 ≥ 44pt。`[已实现]`
 - 平板 / 桌面：完整路径与页码窗口。`[已实现]`
-- 交互与验收：菜单/按钮键盘与辅助功能；验收：`--component breadcrumb|pagination`。
+- 交互与验收：菜单/按钮键盘与辅助功能；`TouchDensityTests` 将 Breadcrumb/Pagination 纳入 44pt 触摸族检查；DevTools 在 390 touch 预览测得 Breadcrumb 链接 44×88、Pagination 前后按钮 44×78、页码按钮 44×44。验收：`--component breadcrumb|pagination`。
 
 **Accordion / DisclosureGroup**
 

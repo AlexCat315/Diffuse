@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Breadcrumb / Pagination 触摸验收补齐：`TouchDensityTests` 将两者纳入 44pt 触摸族；DevTools 390 touch 预览测得链接 44×88、前后按钮 44×78、页码 44×44。adaptive-spec 对应行改为 `[已实现]`。
 - `ColorField` 弹层宽度改为自适应：`min(280, max(176, viewport − 24))`，390/720 为 280、200 为 176，hex 与通道行不因窄而隐藏。`ControlDensityTests` 覆盖宽度档位；DevTools 实测 `color-picker-panel` 280×184，并补齐 `colorfield.md`。
 - `Slider` 补齐刻度与 Page 键：`showsTicks` 在每个离散 step 位置绘制 1pt 刻度（最多 40 段）；PageUp/PageDown 移动 10 个 step 并夹紧。`SliderTests` 覆盖 Page 键与刻度渲染；Gallery `slider` 页的 Stepped 示例展示刻度，DevTools PageUp 将 3.0 移到 5.0。
 - `RangeSlider` 补齐 P1 双 thumb 语义：两个 thumb 各有独立 Tab 停靠、`Range start`/`Range end` slider 角色与独立 value，父节点为 group；焦点/指针各自移动对应 thumb，focus ring 只画在聚焦 thumb 上。`RangeSliderTests` 5/5 覆盖指针、minSpan、键盘、双 Tab 与焦点环；DevTools 查询到每个实例的两条 slider 语义。

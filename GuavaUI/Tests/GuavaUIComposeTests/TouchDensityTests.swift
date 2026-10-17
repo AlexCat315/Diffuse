@@ -50,6 +50,8 @@ struct TouchDensityTests: GuavaUIComposeSerializedSuite {
             List(0..<8, id: \.self, rowHeight: 30) { item, _ in Text("Row \(item)") }
                 .frame(width: 240, height: 100).debugName("list")
             CalendarView(selection: .constant(nil)).debugName("calendar")
+            Breadcrumb([BreadcrumbItem(0, "Workspace"), BreadcrumbItem(1, "Assets"), BreadcrumbItem(2, "Camera"), BreadcrumbItem(3, "Shot 04")], onSelect: { _ in }).debugName("breadcrumb")
+            Pagination(page: .constant(3), totalPages: 8).debugName("pagination")
             TabView(selection: .constant(0), tabs: [TabItem("Overview", id: 0, configure: { $0.onClose = {} }) { Box {}.frame(height: 40) }, TabItem("Details", id: 1) { EmptyView() }]) {
                 $0.variant = .segmented; $0.overflow = .scroll
             }.frame(width: 320, height: 130).debugName("tabs")
