@@ -95,4 +95,6 @@ State 切换走语义动效 `.animation(.semantic(.fast, in: theme), value: conf
 
 Button 与基于 Button 的 Stepper、ButtonGroup、Tab 在 surface 输入包含 touch 时，命中布局宽高至少 44pt。共享布局 floor 与调用方 minWidth/minHeight 独立，切回 pointer 后恢复当前 authored minima。hover 仅在支持 pointer 的 surface 生效；touch + pointer 同时保留 44pt 密度和 hover。
 
+字符串标题使用单行尾部省略，并默认把完整标题作为 tooltip（`Link` 同）；`MenuButton` 可通过 `tooltip:` 显式提供完整标题，`DatePicker` 总是附加完整 tooltip。自定义 label 的换行/省略仍由调用方负责。`TruncationTests` 在 150/170pt 约束下覆盖这四个入口。
+
 `ButtonGroup` 的段不再随父宽压缩：宽度不足时按段换行，每段保持 authored 宽度与 ≥44pt 触摸高度；roving focus 仍只有单一 Tab 停靠点，方向键可跨行移动。`NarrowReflowTests.buttonGroupReflow` 在 220pt 验证换行、在 720pt 验证单行；Gallery `--component buttonGroup` 提供 260pt 五段示例。

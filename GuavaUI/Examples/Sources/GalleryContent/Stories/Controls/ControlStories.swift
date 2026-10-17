@@ -5,6 +5,8 @@ struct ButtonStory: View {
     let options: GalleryOptions
     @State private var clicks = 0
     @State private var selected = false
+    @State private var date: Date? = nil
+    private let longTitle = "A very long action label that cannot fit"
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Variants", "Visual treatments communicate action priority.") {
@@ -36,6 +38,24 @@ struct ButtonStory: View {
                     Button("\(selected ? "Selected" : "Select me")", isEnabled: options.isEnabled, isSelected: selected) { selected.toggle() }.buttonStyle(.toggle)
                     Text("Actions: \(clicks)").font(.caption).foregroundColor(.onSurfaceMuted)
                 }
+            }
+            StorySection("Long labels", "Constrained controls keep one line with a trailing ellipsis; the full string stays in the tooltip and accessible name.") {
+                Row(alignment: .top, spacing: 12) {
+                    Box(direction: .column, alignItems: .stretch) {
+                        Button(longTitle, isEnabled: options.isEnabled) { clicks += 1 }
+                    }.frame(width: 150).debugName("long-button")
+                    Box(direction: .column, alignItems: .stretch) {
+                        Link(longTitle) { clicks += 1 }
+                    }.frame(width: 150).debugName("long-link")
+                    Box(direction: .column, alignItems: .stretch) {
+                        MenuButton(longTitle, entries: [.item(MenuItem(title: "Action") { clicks += 1 })], tooltip: longTitle)
+                    }.frame(width: 150).debugName("long-menu")
+                }
+                Row(alignment: .center, spacing: 12) {
+                    DatePicker(selection: $date, configure: { $0.presentation.placeholder = longTitle; $0.presentation.width = 180 })
+                        .debugName("long-date")
+                }
+                Text("Hover a truncated control to read the full label.").font(.caption).foregroundColor(.onSurfaceMuted)
             }
             StorySection("Sizes", "The same control responds to the shared density provider.") {
                 Row(alignment: .center, spacing: 12) {

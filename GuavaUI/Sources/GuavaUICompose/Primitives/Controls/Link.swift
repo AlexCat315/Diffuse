@@ -73,8 +73,8 @@ public extension Link where Label == Text {
          tooltip: String? = nil,
          configure: (inout Self) -> Void = { _ in },
          action: @escaping () -> Void) {
-        self.init(tooltip: tooltip, action: action) {
-            Text(title)
+        self.init(tooltip: tooltip ?? title, action: action) {
+            Text(title).truncatingTail()
         }
         self.isEnabled = isEnabled
         configure(&self)

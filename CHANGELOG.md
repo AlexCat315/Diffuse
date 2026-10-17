@@ -29,6 +29,7 @@
 - 新增 `NavigationStack`：caller-owned `[Route]` 栈、root/path 页面 retained 挂载、push/pop move+opacity、深链首帧恢复与容器尺寸填充；隐藏页不参与输入/焦点/语义但保留草稿。补齐 `NavigationStackTests`、Gallery `navigationStack` 页与自适应预览；平台返回手势、新页标题焦点与重复入栈去重仍待补。
 - 新增 `SwipeList`：仅触摸面左滑露出最多两个 74pt 操作，行尾 44pt Actions 按钮与右键上下文菜单提供非滑动入口；行高触摸 ≥44，纵向手势交给 ScrollView。`ScrollView` 触摸拖动改为轴感知阈值。补齐 `SwipeListTests`、Gallery `swipeList` 页与自适应预览；当前非虚拟化，RTL 仍待补。
 - 新增 `List`/`VirtualStack` 下拉刷新：`RefreshOptions` 以触摸 overscroll 阈值触发一次、`isRefreshing` 保持指示器并预留 36pt inset，Cmd+R/Ctrl+R 为键盘入口，`Spinner` 在 reducedMotion 下冻结。补齐 `RefreshTests`、Gallery `refreshableList` 页与自适应预览；异步生命周期由调用方持有。
+- 既有控件标题统一单行省略：`Button`/`Link` 默认以完整标题作为 tooltip，`MenuButton` 可显式传 `tooltip:`，`DatePicker` 触发标题附加完整 tooltip；`Select`/`Combobox` 沿用 trigger description。补齐 `TruncationTests`、Gallery Button “Long labels” 分区与 DevTools 悬停全文验收。
 
 ## 0.0.9 — 2026-10-06
 

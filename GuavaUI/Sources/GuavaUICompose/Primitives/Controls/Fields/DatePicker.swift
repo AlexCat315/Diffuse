@@ -24,11 +24,12 @@ public struct DatePicker: View {
     public var body: some View {
         let formatter = DateFormatter(); formatter.dateStyle = .medium; formatter.locale = options.calendar.locale
         formatter.calendar = options.calendar.calendar; formatter.timeZone = options.calendar.calendar.timeZone
+        let dateLabel = selection.wrappedValue.map(formatter.string) ?? options.presentation.placeholder
         return Popover(isPresented: $isPresented, isEnabled: options.presentation.isEnabled,
                        width: Float(options.calendar.presentation.numberOfMonths) * (options.calendar.presentation.cellSize * 7 + 36), label: {
             Row(alignment: .center, spacing: 8) {
-                Text(selection.wrappedValue.map(formatter.string) ?? options.presentation.placeholder).font(.label)
-                Spacer()
+                Text(dateLabel).truncatingTail().font(.label).tooltip(dateLabel)
+                    .flex(1, shrink: 1).frame(minWidth: 0)
                 if options.presentation.isClearable && selection.wrappedValue != nil {
                     Button(icon: .resource(UIIcons.Action.x), size: 12, isEnabled: options.presentation.isEnabled,
                            tooltip: "Clear date") { selection.wrappedValue = nil }.buttonStyle(.ghost).controlSize(.mini)

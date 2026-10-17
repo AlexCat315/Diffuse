@@ -48,6 +48,9 @@ public struct MenuButton<Label: View>: View {
 | `width` | `nil` | 菜单宽度；`nil` 使用内容自然宽度 |
 | `placement` | `.start` | 与触发器的水平对齐方式 |
 | `label` | 必填 | 自定义触发内容；`Text` 版本可直接传标题 |
+| `tooltip` | `nil` | 可选完整标题 tooltip；`Text` 版本接收并显示 |
+
+`MenuButton("…")` 的字符串标题使用单行尾部省略，完整标题保留在 accessibility label；传入 `tooltip:` 时同时作为触发器 tooltip。自定义 `label` 的省略/换行仍由调用方负责。
 
 `Popover` 新增 `triggerStyle: AnyButtonStyle?`：`MenuButton` 用 `SecondaryButtonStyle` 提供按钮 chrome；需要裸触发器时传自定义 style。
 

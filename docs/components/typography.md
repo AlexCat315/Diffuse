@@ -14,7 +14,7 @@
 
 `Text("完整标题 👩🏽‍💻").truncated().font(.bodyStrong)` 按实际分配绘制单行尾部省略号，同时保留完整 tooltip 与辅助功能名称。它不会切开 emoji ZWJ、组合音标或旗帜；显式换行合并为空格，连省略号都放不下时不绘制残缺字符。测量与绘制复用同一套字体、字距、缩放及缓存；缩窄、放大和实时改字都会重新选择可见文本。`lineLimit(1)` 仍只禁用换行，需要省略号时显式使用 `truncated()`；此 API 不处理多行省略。
 
-AppBar 已应用。其他 Button / Select / DatePicker / Tab / 表格标题的采用仍由自适应规范第 5-6 项跟踪，不能因通用能力存在就认定逐控件截断全部完成。`SingleLineTextTests` 验证 grapheme 边界、零宽度、shaping 和实际绘制，AppBar 通过真实 tooltip 与 heading 验证全文出口。
+AppBar、TabView、`Button`/`Link`/`MenuButton` 的字符串标题、`DatePicker` 与 `Select`/`Combobox` 触发标题均已应用单行省略。Button/Link 与 DatePicker 的完整标题进入 tooltip；MenuButton 可显式传 `tooltip:`，Select/Combobox 通过 trigger description 保留完整名称。菜单项标题仍按 [Menu](menu.md) 的文档自然换行，不属于控制标题。`SingleLineTextTests` 验证 grapheme 边界、零宽度、shaping 和实际绘制，AppBar 通过真实 tooltip 与 heading 验证全文出口；`TruncationTests` 在窄约束下覆盖 Button/Link/MenuButton/DatePicker 的 `clipsToBounds` 与完整辅助功能名称。
 
 ## 彩色字体
 

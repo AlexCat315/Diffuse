@@ -362,7 +362,7 @@
 
 **MenuButton**
 
-- 外观：secondary 按钮触发器 + Popover 菜单；触发器保留 hover/press/focus/disabled 与 expanded 语义，菜单复用 Menu 的材质、行高和滚动。`[已实现]`
+- 外观：secondary 按钮触发器 + Popover 菜单；触发器保留 hover/press/focus/disabled 与 expanded 语义，菜单复用 Menu 的材质、行高和滚动。字符串标题单行省略，完整名称留在 accessibility label，可选 `tooltip:` 提供全文。`[已实现]`
 - 手机：触发器与菜单行沿用 44pt 触摸下限；菜单下方不足时由 Popover 翻转/夹紧。`[已实现]`
 - 平板 / 桌面：菜单在触发器下方展开；键盘 Enter/Space 打开，Up/Down/Home/End/Enter/Escape 沿用 Menu。`[已实现]`
 - 交互与验收：选择菜单项执行一次并关闭；外部点击/再次点击触发器关闭；`MenuButtonTests` 覆盖打开、执行、关闭与禁用；Gallery `--component menuButton`。细节见 [MenuButton](menubutton.md)。
@@ -509,13 +509,12 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 6 | Button / Select / DatePicker 等既有标题采用单行省略号 + 完整 tooltip；通用 `Text.truncated()`、AppBar 与 TabView 已完成 | 各控件 | 对应控件及页面窄宽验收；通用能力见 [排版](typography.md#单行省略号) |
 | 10 | 浮层自适应：底部抽屉 Sheet、菜单触摸展开子菜单 | `Overlays/*` | 对应浮层测试 + 390pt 取样 |
 | 14 | 辅助功能补齐：滚动条/滚动位置语义、Select/Combobox 专用角色、hint/described-by | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
 | 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
-编号稳定保留已完成项的空位。建议顺序：先做 6（截断），然后 10、14–16（浮层、输入与语义补齐）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
+编号稳定保留已完成项的空位。建议顺序：10、14–16（浮层、输入与语义补齐）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 
@@ -558,6 +557,8 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 列表滑动操作已完成：`SwipeList` 在触摸面左滑露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；横向阈值 8pt，纵向手势仍交给 `ScrollView`。`ScrollView` 的触摸拖动改为轴感知阈值，避免垂直滚动抢占横向滑动。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口；行选择、键盘 Up/Down/Home/End/Return 与辅助功能 activate 走 `SelectionKeyHost`。`SwipeListTests` 覆盖触摸滑动与 44pt 操作、Actions 按钮非滑动路径、纵向滚动不误触、禁用态与指针面不响应滑动。Gallery `swipeList` 页与自适应预览已接入；DevTools 在 720×820 点击 Inbox 行 Actions 后查询到 Archive（74×52）和 Delete，执行 Archive 后 `swipe-log` 为 “Archived Inbox”。当前为全量挂载的非虚拟列表，RTL 滑动方向仍待补。
 
 列表下拉刷新已完成：`List`/`VirtualStack` 的 `RefreshOptions` 在 `ScrollView` 负向 overscroll 越过阈值时只触发一次；`isRefreshing` 控制顶部 36pt inset 与指示器，清除后内容回弹。指示器使用 `Spinner`，reducedMotion 下冻结；Cmd+R/Ctrl+R 在列表子树内触发同一 action。`ScrollView` 仍保持原始根节点，指示器以绝对定位放进滚动内容，因此列表宽度不被包装层压缩。`RefreshTests` 覆盖触摸下拉只触发一次、指示器保持到绑定清除、Cmd+R 与重复按键去重。Gallery `refreshableList` 页与自适应预览已接入；DevTools 在 720×820 点击 `Refresh now` 后查询到 `Refreshing`，计数变为 `Refreshes: 1`，3 秒后指示器移除且列表恢复宽度 548pt。触摸下拉的宿主实测受 DevTools pointer 输入限制，由单元测试覆盖。
+
+第 6 项控制标题截断已完成：`Button`、`Link`、`MenuButton` 的字符串入口与 `DatePicker` 触发标题统一使用 `Text.truncatingTail()`；Button/Link 默认把完整标题作为 tooltip，MenuButton 可通过 `tooltip:` 把完整标题放入 trigger description，DatePicker 的标题额外附加完整 tooltip。`Select`/`Combobox` 原有单行省略与 trigger description 保持不变；菜单项仍按文档自然换行，不属于控制标题。`TruncationTests` 在 150/170pt 约束下验证 button/link/menu/date 标题 `clipsToBounds` 且辅助功能名称完整。Gallery `button` 页新增 “Long labels” 分区与 `long-button`/`long-link`/`long-menu`/`long-date`；DevTools 720×820 查询到标题文本宽 126/146/125/158pt，悬停后 portal 中出现完整 234pt tooltip。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排、swipe 与下拉刷新均已实现，边界见 [缺失清单](gaps.md#29-列表能力包p1)。
 

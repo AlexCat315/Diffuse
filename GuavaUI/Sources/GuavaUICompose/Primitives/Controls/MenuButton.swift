@@ -11,6 +11,7 @@ public struct MenuButton<Label: View>: View {
     public let placement: PopoverPlacement
     public let label: Label
     public let accessibilityLabel: String?
+    public let tooltip: String?
 
     @State private var presented = false
 
@@ -19,12 +20,14 @@ public struct MenuButton<Label: View>: View {
                 width: Float? = nil,
                 placement: PopoverPlacement = .start,
                 accessibilityLabel: String? = nil,
+                tooltip: String? = nil,
                 @ViewBuilder label: () -> Label) {
         self.entries = entries
         self.isEnabled = isEnabled
         self.width = width
         self.placement = placement
         self.accessibilityLabel = accessibilityLabel
+        self.tooltip = tooltip
         self.label = label()
     }
 
@@ -38,7 +41,7 @@ public struct MenuButton<Label: View>: View {
             Menu(entries, width: width, onItemActivated: { presented = false })
         }
         if let accessibilityLabel {
-            popover.triggerDescription = PopoverTriggerDescription(label: accessibilityLabel)
+            popover.triggerDescription = PopoverTriggerDescription(label: accessibilityLabel, help: tooltip)
         }
         return popover
     }
@@ -49,10 +52,11 @@ public extension MenuButton where Label == Text {
          entries: [MenuEntry],
          isEnabled: Bool = true,
          width: Float? = nil,
-         placement: PopoverPlacement = .start) {
+         placement: PopoverPlacement = .start,
+         tooltip: String? = nil) {
         self.init(entries: entries, isEnabled: isEnabled, width: width, placement: placement,
-                  accessibilityLabel: title) {
-            Text(title)
+                  accessibilityLabel: title, tooltip: tooltip) {
+            Text(title).truncatingTail()
         }
     }
 }

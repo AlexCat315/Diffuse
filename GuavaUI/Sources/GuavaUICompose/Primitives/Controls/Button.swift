@@ -125,8 +125,8 @@ public extension Button where Label == Text {
          tooltip: String? = nil,
          action: @escaping () -> Void) {
         self.init(role: role, isEnabled: isEnabled, isLoading: isLoading, isSelected: isSelected,
-                  tooltip: tooltip, action: action) {
-            Text(title)
+                  tooltip: tooltip ?? title, action: action) {
+            Text(title).truncatingTail()
         }
     }
 
