@@ -27,6 +27,7 @@ public struct Popover<Label: View, Content: View>: View {
     public let isEnabled: Bool
     public let width: Float?
     public let placement: PopoverPlacement
+    public let triggerStyle: AnyButtonStyle?
     public let label: Label
     public let content: Content
     public let onKey: ((KeyEvent, EventPhase) -> EventResult)?
@@ -37,6 +38,7 @@ public struct Popover<Label: View, Content: View>: View {
                 isEnabled: Bool = true,
                 width: Float? = nil,
                 placement: PopoverPlacement = .start,
+                triggerStyle: AnyButtonStyle? = nil,
                 onKey: ((KeyEvent, EventPhase) -> EventResult)? = nil,
                 @ViewBuilder label: () -> Label,
                 @ViewBuilder content: () -> Content) {
@@ -44,6 +46,7 @@ public struct Popover<Label: View, Content: View>: View {
         self.isEnabled = isEnabled
         self.width = width
         self.placement = placement
+        self.triggerStyle = triggerStyle
         self.onKey = onKey
         self.label = label()
         self.content = content()
@@ -74,11 +77,16 @@ public struct Popover<Label: View, Content: View>: View {
         .zIndex(isPresented.wrappedValue ? 10_000 : 0)
     }
 
-    private var trigger: some View {
-        Button(role: .normal, isEnabled: isEnabled, tooltip: triggerDescription?.help,
-               action: { isPresented.wrappedValue.toggle() }) { label }
-            .buttonStyle(PopoverTriggerStyle())
-            .compositionLocal(ActionControlAccessibility.isExpanded, isEnabled && isPresented.wrappedValue)
+    @ViewBuilder private var trigger: some View {
+        let button = Button(role: .normal, isEnabled: isEnabled, tooltip: triggerDescription?.help,
+                            action: { isPresented.wrappedValue.toggle() }) { label }
+        if let triggerStyle {
+            button.buttonStyle(triggerStyle)
+                .compositionLocal(ActionControlAccessibility.isExpanded, isEnabled && isPresented.wrappedValue)
+        } else {
+            button.buttonStyle(PopoverTriggerStyle())
+                .compositionLocal(ActionControlAccessibility.isExpanded, isEnabled && isPresented.wrappedValue)
+        }
     }
 }
 

@@ -248,3 +248,24 @@ struct SearchFieldStory: View {
         }
     }
 }
+
+struct MenuButtonStory: View {
+    let options: GalleryOptions
+    @State private var last = "None"
+
+    var body: some View {
+        StorySection("Button-triggered menu", "The trigger keeps regular button chrome and expanded semantics. The menu closes on action selection, Escape or an outside click.") {
+            Row(alignment: .center, spacing: 12) {
+                MenuButton("Options", entries: [
+                    .item(MenuItem(id: "rename", title: "Rename") { last = "Rename" }),
+                    .item(MenuItem(id: "duplicate", title: "Duplicate") { last = "Duplicate" }),
+                    .separator("separator"),
+                    .item(MenuItem(id: "delete", title: "Delete", role: .destructive) { last = "Delete" }),
+                ], isEnabled: options.isEnabled, width: 200)
+                MenuButton("Disabled", entries: [.item(MenuItem(id: "none", title: "Unavailable") {})],
+                           isEnabled: false, width: 200)
+            }
+            Text("Last action: \(last)").font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

@@ -21,7 +21,7 @@ extension GalleryPage {
         case .icon: UIIcons.Status.sparkles
         case .image, .carousel: UIIcons.Media.image
         case .avatar: UIIcons.User.user
-        case .menu, .contextMenu, .commandPalette: UIIcons.Action.moreHorizontal
+        case .menu, .menuButton, .contextMenu, .commandPalette: UIIcons.Action.moreHorizontal
         case .popover, .tooltip, .hoverCard: UIIcons.Shape.messageSquare
         case .modal, .dialog, .alertDialog: UIIcons.Layout.panelTop
         case .disclosure, .accordion: UIIcons.Navigation.chevronDown

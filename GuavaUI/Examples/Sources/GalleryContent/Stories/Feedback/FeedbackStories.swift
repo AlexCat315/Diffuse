@@ -135,6 +135,7 @@ public extension GalleryPage {
         case .avatar: AnyView(AvatarStory(options: options))
         case .image: AnyView(ImageStory(options: options))
         case .menu: AnyView(MenuStory(options: options))
+        case .menuButton: AnyView(MenuButtonStory(options: options))
         case .contextMenu: AnyView(ContextMenuStory(options: options))
         case .popover: AnyView(PopoverStory(options: options))
         case .modal: AnyView(ModalStory(options: options))

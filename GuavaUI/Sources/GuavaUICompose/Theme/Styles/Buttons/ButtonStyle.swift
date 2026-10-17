@@ -156,6 +156,10 @@ public extension View {
     func buttonStyle<S: ButtonStyle>(_ style: S) -> some View {
         compositionLocal(ButtonStyleEnvironment.key, AnyButtonStyle(style))
     }
+
+    func buttonStyle(_ style: AnyButtonStyle) -> some View {
+        compositionLocal(ButtonStyleEnvironment.key, style)
+    }
 }
 
 // MARK: - Convenience statics

@@ -337,6 +337,13 @@
 
 ### 3.6 浮层与反馈面
 
+**MenuButton**
+
+- 外观：secondary 按钮触发器 + Popover 菜单；触发器保留 hover/press/focus/disabled 与 expanded 语义，菜单复用 Menu 的材质、行高和滚动。`[已实现]`
+- 手机：触发器与菜单行沿用 44pt 触摸下限；菜单下方不足时由 Popover 翻转/夹紧。`[已实现]`
+- 平板 / 桌面：菜单在触发器下方展开；键盘 Enter/Space 打开，Up/Down/Home/End/Enter/Escape 沿用 Menu。`[已实现]`
+- 交互与验收：选择菜单项执行一次并关闭；外部点击/再次点击触发器关闭；`MenuButtonTests` 覆盖打开、执行、关闭与禁用；Gallery `--component menuButton`。`SplitButton` 的单一 Tab 停靠仍待实现。细节见 [MenuButton](menubutton.md)。
+
 **Menu / ContextMenu**
 
 - 外观：Portal 浮层、独立宽度、行高随文字、子菜单独立 Portal；窗口边界夹紧，下方不足翻上、左右翻转。`[已实现]`

@@ -5,7 +5,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rating, textField, textArea, codeEditor
     case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
     case list, tree, virtualList, virtualStack, chart, icon, image, avatar
-    case menu, contextMenu, popover, modal, disclosure, tabs
+    case menu, menuButton, contextMenu, popover, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
@@ -54,6 +54,7 @@ public enum GalleryCatalog {
         .init(.avatar, "Avatar", "Data", "Asynchronous images, Unicode initials, stable theme colors and overlapping member groups."),
         .init(.image, "Image", "Data", "Fit/fill/stretch, asynchronous loading, explicit errors and retry."),
         .init(.menu, "Menu", "Overlays", "Nested commands, keyboard navigation, checked states and scrollable menus."),
+        .init(.menuButton, "MenuButton", "Controls", "A button-triggered menu with regular trigger chrome, keyboard dismissal and action callbacks."),
         .init(.contextMenu, "ContextMenu", "Overlays", "Right-click actions attached to a real target."),
         .init(.popover, "Popover", "Overlays", "Anchored overlays, flipping, dismissal and nested input."),
         .init(.modal, "Modal", "Overlays", "Focus confinement, Escape dismissal and restoration."),
