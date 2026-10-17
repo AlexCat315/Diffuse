@@ -5,7 +5,7 @@ extension GalleryPage {
     var navigationIcon: BundleImageResource {
         switch self {
         case .introduction: UIIcons.Layout.dashboard
-        case .button, .buttonGroup: UIIcons.Action.target
+        case .button, .buttonGroup, .splitButton: UIIcons.Action.target
         case .checkbox: UIIcons.Shape.squareCheck
         case .toggle, .slider, .rangeSlider, .numberField, .vec3Field: UIIcons.Action.sliders
         case .rating: UIIcons.Status.star

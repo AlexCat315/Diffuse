@@ -10,6 +10,7 @@ public struct MenuButton<Label: View>: View {
     public let width: Float?
     public let placement: PopoverPlacement
     public let label: Label
+    public let accessibilityLabel: String?
 
     @State private var presented = false
 
@@ -17,23 +18,29 @@ public struct MenuButton<Label: View>: View {
                 isEnabled: Bool = true,
                 width: Float? = nil,
                 placement: PopoverPlacement = .start,
+                accessibilityLabel: String? = nil,
                 @ViewBuilder label: () -> Label) {
         self.entries = entries
         self.isEnabled = isEnabled
         self.width = width
         self.placement = placement
+        self.accessibilityLabel = accessibilityLabel
         self.label = label()
     }
 
     public var body: some View {
-        Popover(isPresented: $presented,
-                isEnabled: isEnabled,
-                width: width,
-                placement: placement,
-                triggerStyle: AnyButtonStyle(SecondaryButtonStyle()),
-                label: { label }) {
+        var popover = Popover(isPresented: $presented,
+                              isEnabled: isEnabled,
+                              width: width,
+                              placement: placement,
+                              triggerStyle: AnyButtonStyle(SecondaryButtonStyle()),
+                              label: { label }) {
             Menu(entries, width: width, onItemActivated: { presented = false })
         }
+        if let accessibilityLabel {
+            popover.triggerDescription = PopoverTriggerDescription(label: accessibilityLabel)
+        }
+        return popover
     }
 }
 
@@ -43,7 +50,8 @@ public extension MenuButton where Label == Text {
          isEnabled: Bool = true,
          width: Float? = nil,
          placement: PopoverPlacement = .start) {
-        self.init(entries: entries, isEnabled: isEnabled, width: width, placement: placement) {
+        self.init(entries: entries, isEnabled: isEnabled, width: width, placement: placement,
+                  accessibilityLabel: title) {
             Text(title)
         }
     }

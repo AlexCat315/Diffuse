@@ -10,7 +10,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case layout, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
     case table, dataTable, calendar, datePicker, timeField
-    case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
+    case accordion, breadcrumb, pagination, buttonGroup, splitButton, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
     case commandPalette, hoverCard, timeline, toolbar, appBar
     case link, statusBar, carousel, skeleton, stepper
 
@@ -93,6 +93,7 @@ public enum GalleryCatalog {
         .init(.breadcrumb, "Breadcrumb", "Navigation", "Destination paths with a collapsed intermediate-item menu."),
         .init(.pagination, "Pagination", "Navigation", "Bounded page navigation, boundary states and compact page windows."),
         .init(.buttonGroup, "ButtonGroup", "Controls", "Controlled segments with one Tab stop and disabled-item navigation."),
+        .init(.splitButton, "SplitButton", "Controls", "Primary action plus an adjacent menu trigger with independent disabled behavior."),
         .init(.tag, "Tag", "Data", "Semantic tags with independent removal actions."),
         .init(.keyCap, "Kbd / KeyCap", "Data", "Platform-aware keyboard hints."),
         .init(.label, "Label", "Inputs", "Associated field labels, focus activation, required state and help."),

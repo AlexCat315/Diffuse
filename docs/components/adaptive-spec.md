@@ -349,7 +349,14 @@
 - 外观：secondary 按钮触发器 + Popover 菜单；触发器保留 hover/press/focus/disabled 与 expanded 语义，菜单复用 Menu 的材质、行高和滚动。`[已实现]`
 - 手机：触发器与菜单行沿用 44pt 触摸下限；菜单下方不足时由 Popover 翻转/夹紧。`[已实现]`
 - 平板 / 桌面：菜单在触发器下方展开；键盘 Enter/Space 打开，Up/Down/Home/End/Enter/Escape 沿用 Menu。`[已实现]`
-- 交互与验收：选择菜单项执行一次并关闭；外部点击/再次点击触发器关闭；`MenuButtonTests` 覆盖打开、执行、关闭与禁用；Gallery `--component menuButton`。`SplitButton` 的单一 Tab 停靠仍待实现。细节见 [MenuButton](menubutton.md)。
+- 交互与验收：选择菜单项执行一次并关闭；外部点击/再次点击触发器关闭；`MenuButtonTests` 覆盖打开、执行、关闭与禁用；Gallery `--component menuButton`。细节见 [MenuButton](menubutton.md)。
+
+**SplitButton**
+
+- 外观：主 secondary 按钮 + 相邻 MenuButton 箭头；主/备两区独立命中、禁用同步，菜单复用 MenuButton 的 Portal 与键盘导航。`[部分]`
+- 手机：主/箭头均沿用 44pt 触摸下限；主按钮填充剩余宽度，箭头自然宽度。`[已实现]`
+- 平板 / 桌面：主按钮执行默认动作，箭头打开菜单；菜单在锚点下方展开。`[已实现]`
+- 交互与验收：主/箭头各自独立 Tab 停靠与键盘激活；当前尚未实现“Tab 一次进入整体 + 左右分区”的单一焦点和共享 1px 分隔 chrome。`SplitButtonTests` 覆盖主/备动作与禁用；Gallery `--component splitButton`。细节见 [SplitButton](splitbutton.md)。
 
 **Menu / ContextMenu**
 

@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .select, .combobox, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .select, .combobox, .rating, .list, .calendar, .tabs, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
         default: false
         }
     }
@@ -82,6 +82,7 @@ private struct AdaptiveControlSample: View {
             TabItem("Unavailable", id: 3, isEnabled: false) { EmptyView() }
         ]) { $0.overflow = .menu; $0.isEnabled = options.isEnabled }.frame(width: .percent(100), height: .points(132)))
         case .buttonGroup: AnyView(ButtonGroup([ButtonGroupItem(0, "Grid"), ButtonGroupItem(1, "List")], selection: $selected, isEnabled: options.isEnabled))
+        case .splitButton: AnyView(SplitButton("Run", entries: [.item(MenuItem(id: "export", title: "Export") { text = TextBuffer("Export") })], isEnabled: options.isEnabled) { text = TextBuffer("Run") })
         case .stepper: AnyView(Stepper([StepperItem(0, "Configure"), StepperItem(1, "Review")], selection: $selected) { $0.isEnabled = options.isEnabled }.frame(width: .percent(100)))
         case .toolbar: AnyView(Toolbar(items: [
             ToolbarItem(MenuItem(id: "save", title: "Save") { number += 1 }, placement: .always),

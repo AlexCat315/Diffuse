@@ -284,3 +284,20 @@ struct RangeSliderStory: View {
         }
     }
 }
+
+struct SplitButtonStory: View {
+    let options: GalleryOptions
+    @State private var last = "None"
+
+    var body: some View {
+        StorySection("Primary + menu", "The left zone runs the default action; the arrow opens the same menu used by MenuButton. Both zones have independent hit areas and disabled behavior.") {
+            SplitButton("Save", entries: [
+                .item(MenuItem(id: "saveAs", title: "Save as…") { last = "Save as" }),
+                .item(MenuItem(id: "export", title: "Export") { last = "Export" }),
+                .separator("sep"),
+                .item(MenuItem(id: "discard", title: "Discard", role: .destructive) { last = "Discard" }),
+            ], isEnabled: options.isEnabled, menuWidth: 200, action: { last = "Save" })
+            Text("Last action: \(last)").font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

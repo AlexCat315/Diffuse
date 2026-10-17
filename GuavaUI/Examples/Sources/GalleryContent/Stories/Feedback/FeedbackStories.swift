@@ -174,6 +174,7 @@ public extension GalleryPage {
         case .breadcrumb: AnyView(BreadcrumbStory())
         case .pagination: AnyView(PaginationStory(options: options))
         case .buttonGroup: AnyView(ButtonGroupStory(options: options))
+        case .splitButton: AnyView(SplitButtonStory(options: options))
         case .tag: AnyView(TagStory(options: options))
         case .keyCap: AnyView(KeyCapStory())
         case .label: AnyView(LabelStory())
