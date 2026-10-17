@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .searchField, .numberField, .select, .combobox, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
+        case .button, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .select, .combobox, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
         default: false
         }
     }
@@ -43,6 +43,7 @@ private struct AdaptiveControlSample: View {
     @State private var tab = 0
     @State private var date: Date? = nil
     @State private var fraction: Float = 0.35
+    @State private var range: ClosedRange<Double> = 20...80
     @State private var navigationOpen = false
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
@@ -55,6 +56,7 @@ private struct AdaptiveControlSample: View {
         case .checkbox: AnyView(Checkbox(isOn: $enabled, isEnabled: options.isEnabled))
         case .toggle: AnyView(Toggle(isOn: $enabled, isEnabled: options.isEnabled))
         case .slider: AnyView(Slider(value: $value, range: 0...5, isEnabled: options.isEnabled).frame(width: .percent(100)))
+        case .rangeSlider: AnyView(RangeSlider(values: $range, in: 0...100, step: 1, minimumSpan: 5, isEnabled: options.isEnabled).frame(width: .percent(100)))
         case .textField: AnyView(TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled }.frame(width: .percent(100)))
         case .searchField: AnyView(SearchField(text: $text, suggestions: ["Camera", "Canvas"], isEnabled: options.isEnabled).frame(width: .percent(100)))
         case .numberField: AnyView(NumberField(value: $number, isEnabled: options.isEnabled, showsStepper: true).frame(width: .percent(100)))

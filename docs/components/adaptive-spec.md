@@ -161,6 +161,13 @@
 - 平板 / 桌面：hover/press thumb 反馈；恢复 24pt 原生高度。`[已实现]`
 - 交互与验收：指针拖动、方向键、Home/End、辅助功能 slider setValue / increment / decrement；Page 键与离散刻度视觉 `[未实现]`。验收：`TouchDensityTests` slider、Gallery `--component slider`。
 
+**RangeSlider**
+
+- 外观：双 thumb 共用 SliderStyle 轨道；active thumb 在键盘聚焦时绘制 focusRing；区间填充。`[部分]`
+- 手机：触摸命中由 `applyTouchControlExtent` 提升到 44pt；窄宽随父容器收缩。`[已实现]`
+- 平板 / 桌面：指针就近选择 active thumb；方向键/Home/End 移动 active；hover 沿用 SliderStyle。`[已实现]`
+- 交互与验收：`minimumSpan` 夹紧；a11y value 为 `"lower – upper"`，增减作用于 active thumb；两个 thumb 的独立 Tab 停靠/双 slider 语义仍待补。`RangeSliderTests` 覆盖指针、minSpan 与键盘；Gallery `--component rangeSlider`。细节见 [RangeSlider](rangeslider.md)。
+
 **Rating**
 
 - 外观：星 12/16/20/28（mini/small/regular/large），可交互高度 ≥ 32；半星预览；只读用 image 语义。`[已实现]`

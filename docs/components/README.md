@@ -42,6 +42,7 @@
 | MenuButton | 按钮触发的菜单与 expanded 语义 | [menubutton.md](menubutton.md) |
 | JsonField | 文档已写 | [jsonfield.md](jsonfield.md) |
 | Slider | 文档已写 | [slider.md](slider.md) |
+| RangeSlider | 双 thumb、active thumb 与 minSpan | [rangeslider.md](rangeslider.md) |
 | Rating | 实现与验证边界 | [rating.md](rating.md) |
 | Calendar / DatePicker | 月份键盘导航、日期限制与焦点 | [calendar.md](calendar.md) |
 | List / ListRow | 文档已写 | [list.md](list.md) |

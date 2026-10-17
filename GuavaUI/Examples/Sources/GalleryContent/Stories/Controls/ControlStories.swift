@@ -269,3 +269,18 @@ struct MenuButtonStory: View {
         }
     }
 }
+
+struct RangeSliderStory: View {
+    let options: GalleryOptions
+    @State private var values: ClosedRange<Double> = 20...80
+
+    var body: some View {
+        StorySection("Range selection", "Click near a thumb and drag it. Arrow keys move the active thumb, Home/End jump to the bounds, and the minimum span prevents crossing.") {
+            RangeSlider(values: $values, in: 0...100, step: 1, minimumSpan: 10,
+                        isEnabled: options.isEnabled)
+                .frame(maxWidth: 420)
+            Text("Selected: \(Int(values.lowerBound)) – \(Int(values.upperBound))")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

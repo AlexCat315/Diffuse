@@ -12,7 +12,7 @@
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
 | 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Masonry P2、Grid/LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
-| 命令与选择 | Button/IconButton、ButtonGroup、MenuButton、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton P1、RangeSlider P1、FAB P2、布尔控件 label 槽 P2 |
+| 命令与选择 | Button/IconButton、ButtonGroup、MenuButton、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、RangeSlider（active thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton P1、RangeSlider 独立 Tab/双 slider 语义 P2、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、SearchField、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
@@ -66,9 +66,9 @@
 ### 2.6 RangeSlider（P1）
 
 - 用途：区间选择（曝光区间、帧范围、价格/尺寸过滤）。
-- 外观：双 thumb，各自 18pt 视觉；两端值标签可选；最小间距由调用方声明；轨道与 Slider 共用样式 token。`[未实现]`
-- 手机：命中区 ≥ 44、thumb 不重叠（近距时推挤或合并显示）；平板/桌面：hover 高亮活动 thumb。`[未实现]`
-- 交互与验收：拖动、方向键移动活动 thumb、Home/End、Tab 在两个 thumb 间切换；辅助功能暴露"起点/终点"两个 slider 值；非法输入（start > end − minGap）夹紧。参考：Flutter `RangeSlider`。
+- 实现：双 thumb 共用 SliderStyle 轨道；指针按距离选择 active thumb；`minimumSpan` 夹紧；a11y value 为 `"lower – upper"`，增减作用于 active thumb。`[部分]`
+- 手机/平板：触摸命中由 `applyTouchControlExtent` 提升到 44；指针 hover/focus 沿用 SliderStyle；thumb 近距时仍各自命中，不合并。
+- 交互与验收：拖动、方向键移动 active thumb、Home/End；Tab 仍走系统焦点遍历，两个 thumb 的独立 Tab 停靠与两个独立 slider 语义尚未实现。`RangeSliderTests` 覆盖指针、minSpan 与键盘；Gallery `rangeSlider` 页提供真实拖动。细节见 [RangeSlider](rangeslider.md)。
 
 ### 2.7 SearchField（P1，已实现）
 
@@ -160,7 +160,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：NavigationStack、SplitButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField 与 MenuButton 已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md) 与 [MenuButton](menubutton.md)。
+**P1（常用能力）**：NavigationStack、SplitButton、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton 与 RangeSlider（active thumb）已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md) 与 [RangeSlider](rangeslider.md)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 
@@ -185,7 +185,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | NavigationStack / 路由 | `NavigationStack`、`NavigationPath` | `Navigator`、`Router` API |
 | SplitButton | `Menu` + `Button` 组合 | `SplitButton`、`MenuAnchor` |
 | MenuButton | `Menu`（已实现） | `MenuAnchor` / `PopupMenuButton` |
-| RangeSlider | 无内置（双 Slider 组合） | `RangeSlider` |
+| RangeSlider | 无内置（双 Slider 组合；已实现 active thumb） | `RangeSlider` |
 | SearchField | `.searchable`（已实现） | `SearchBar`、`SearchAnchor` |
 | DateRangePicker | 无内置（双 DatePicker 组合） | `showDateRangePicker` |
 | WheelPicker | `Picker` + `.pickerStyle(.wheel)` | `CupertinoPicker`、`ListWheelScrollView` |

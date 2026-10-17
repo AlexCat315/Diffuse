@@ -13,6 +13,7 @@
 - 新增 `SearchField`：TextField chrome + 前导搜索图标 + clear，联想列表支持过滤、方向键/Return/Escape 与指针选择；补齐 `searchfield.md`、单元测试、Gallery 页与 DevTools 输入/截图验收。
 - 新增 `BottomSheet`：44pt 拖拽柄、detent 展开/退档/关闭、compact 贴底与 expanded 居中退化；复用 Modal 焦点/Escape/backdrop，补齐 `bottom-sheet.md`、单元测试、Gallery 页与 DevTools 拖拽/截图验收。
 - 新增 `MenuButton` 与 `Popover.triggerStyle`：常规按钮触发器 + Portal 菜单，保留 expanded 语义、Escape/外部点击关闭与菜单键盘导航；补齐 `menubutton.md`、单元测试、Gallery 页与 DevTools 打开/选择/截图验收。
+- 新增 `RangeSlider`：双 thumb、就近 active thumb、`minimumSpan` 夹紧、键盘/Home/End 与组合 a11y 值；补齐 `rangeslider.md`、单元测试、Gallery 页与 DevTools 拖动/截图验收。两个 thumb 的独立 Tab/双 slider 语义仍待补。
 
 ## 0.0.9 — 2026-10-06
 

@@ -7,7 +7,7 @@ extension GalleryPage {
         case .introduction: UIIcons.Layout.dashboard
         case .button, .buttonGroup: UIIcons.Action.target
         case .checkbox: UIIcons.Shape.squareCheck
-        case .toggle, .slider, .numberField, .vec3Field: UIIcons.Action.sliders
+        case .toggle, .slider, .rangeSlider, .numberField, .vec3Field: UIIcons.Action.sliders
         case .rating: UIIcons.Status.star
         case .textField, .textArea, .label: UIIcons.Text.type
         case .searchField: UIIcons.Action.search

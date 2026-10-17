@@ -115,6 +115,7 @@ public extension GalleryPage {
         case .checkbox: AnyView(CheckboxStory(options: options))
         case .toggle: AnyView(ToggleStory(options: options))
         case .slider: AnyView(SliderStory(options: options))
+        case .rangeSlider: AnyView(RangeSliderStory(options: options))
         case .rating: AnyView(RatingStory(options: options))
         case .textField: AnyView(TextFieldStory(options: options))
         case .searchField: AnyView(SearchFieldStory(options: options))
