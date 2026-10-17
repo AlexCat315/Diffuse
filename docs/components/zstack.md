@@ -43,6 +43,25 @@ public struct ZStackLayout: Layout {
 
 `ZStackLayout` 也可以直接用于 `LayoutThatFits` 等自定义布局候选。
 
+### 把内容附在某个视图上：`.overlay(alignment:content:)`
+
+`ZStack` 解决“多个兄弟谁在上”的问题；如果你只是想把文字/角标附在**某一个**子视图上，用 `.overlay`，它和 SwiftUI 同名 API 同构：
+
+```swift
+Box {}.frame(width: 150, height: 72)
+    .background(.accent)
+    .cornerRadius(10)
+    .overlay(alignment: .leading) {
+        Text("Top-left layer")
+            .font(.bodyStrong)
+            .foregroundColor(.onAccent)
+            .padding(horizontal: 14)
+    }
+    .padding(14)
+```
+
+`OverlayLayout` 以 base 的测量尺寸为准：overlay 不参与父级布局测量，只按 base 的 bounds 对齐；overlay 大于 base 时仍可溢出绘制。命中测试中 overlay 是后声明的子视图，优先接收指针。
+
 ## Sizing
 
 - 容器尺寸 = 最大子视图尺寸；子视图不会被隐式拉伸。
@@ -50,6 +69,7 @@ public struct ZStackLayout: Layout {
 - 不裁剪溢出：子视图大于容器时继续绘制；需要裁剪时调用方加 `.clipped()`。
 - 对齐只影响子视图在容器 bounds 内的位置，不改变测量结果。
 - RTL 下 `.leading` / `.trailing` 按逻辑边解析；子视图自己的 `layoutDirection` 决定偏移方向。
+- `.overlay` 的 base 决定尺寸；overlay 的尺寸不改变 base 或父级布局。
 
 ## Tokens
 
@@ -86,6 +106,7 @@ public struct ZStackLayout: Layout {
 - 需要裁剪时显式 `.clipped()`；否则溢出内容可能遮挡相邻布局。
 - 需要跨裁剪、跟随锚点或模态焦点时用 Portal，不要用 `ZStack` 模拟。
 - 不要把 `ZStack` 当作布局压缩容器；需要 flex/shrink 时用 `Box` / `Row` / `Column`。
+- 把一个子视图的内容放到另一个子视图上时，优先用 `.overlay(alignment:)`；它按 base 的 bounds 布局，不会因为字号或 padding 漂移。没有 overlay 的等价写法是把内容作为 base 自己的 `Box`/`ZStack` 子节点；不要用并列的 `Text` + padding 去“对位”，否则测量、字号变化和裁剪会让它看起来偏移或溢出。
 
 ## Verification
 
@@ -94,6 +115,8 @@ public struct ZStackLayout: Layout {
 - `measuresAndAligns`：测量到最大子视图；`topLeading` / `center` 对齐位置。
 - `rtlAlignment`：`.leading` 在 RTL 下映射到右侧。
 - `topmostChildWinsHitTesting`：重叠按钮只有后声明者被激活。
+- `cardContentStaysInsideItsBox`：卡片文字必须作为卡片 `Box` 的子节点，几何不得越出卡片边界（防止“看似右对齐”的并列 padding 写法回归）。
+- `OverlayTests.alignment` / `OverlayTests.hitTesting`：`.overlay` 不改变 base 尺寸、按 base bounds 对齐、overlay 优先接收指针。
 
 Gallery `zStack` 页提供分层卡片、角标、重叠按钮和显示/隐藏前层开关；`AdaptiveControlExamples` 提供 390/720/390-touch 三组预览。
 

@@ -295,8 +295,12 @@ struct ZStackStory: View {
                 ZStack(alignment: .bottomTrailing) {
                     ZStack(alignment: .topLeading) {
                         Box {}.frame(width: 320, height: 180).background(.surfaceVariant).cornerRadius(12)
-                        Box {}.frame(width: 120, height: 72).background(.accent).cornerRadius(10).padding(14)
-                        Text("Top-left layer").font(.bodyStrong).foregroundColor(.onAccent).padding(28)
+                        Box {}.frame(width: 150, height: 72).background(.accent).cornerRadius(10)
+                            .overlay(alignment: .leading) {
+                                Text("Top-left layer").font(.bodyStrong).foregroundColor(.onAccent)
+                                    .padding(horizontal: 14)
+                            }
+                            .padding(14)
                     }
                     Badge("Overlay", tone: .success).padding(14)
                 }.frame(width: 320, height: 180)

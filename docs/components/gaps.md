@@ -98,8 +98,8 @@
 ### 2.10 ZStack / Overlay（P1，已实现）
 
 - 用途：公共层叠容器（徽标叠加、加载遮罩、内容层叠）；跨裁剪浮层仍用 Portal。
-- 实现：`ZStack(alignment:)` / `ZStackLayout`；子视图按声明顺序层叠，后声明的在上；测量到最大子视图，不自动裁剪。
-- 交互与验收：指针按后声明优先命中；条件分支卸载后不绘制/不接输入/不暴露语义；RTL 下 leading/trailing 按逻辑边解析。`ZStackTests` 覆盖测量、对齐、RTL 与重叠命中；Gallery `zStack` 页提供分层卡片、角标和显示/隐藏前层开关。细节见 [ZStack](zstack.md)。
+- 实现：`ZStack(alignment:)` / `ZStackLayout` 按声明顺序层叠，后声明的在上，测量到最大子视图且不自动裁剪；`View.overlay(alignment:)` / `OverlayLayout` 把内容附在单个 base 上，base 决定尺寸，overlay 不参与父级测量。
+- 交互与验收：指针按后声明优先命中；条件分支卸载后不绘制/不接输入/不暴露语义；RTL 下 leading/trailing 按逻辑边解析。`ZStackTests` / `OverlayTests` 覆盖测量、对齐、RTL、重叠命中与 overlay 命中；Gallery `zStack` 页提供分层卡片、角标和显示/隐藏前层开关。细节见 [ZStack](zstack.md)。
 
 ### 2.11 BottomSheet 增强（P0）
 

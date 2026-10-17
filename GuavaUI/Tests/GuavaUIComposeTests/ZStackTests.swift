@@ -105,3 +105,28 @@ struct ZStackTests: GuavaUIComposeSerializedSuite {
         }
     }
 }
+
+
+extension ZStackTests {
+    @Test("Card content stays inside its own Box instead of a padded sibling")
+    func cardContentStaysInsideItsBox() throws {
+        let prior = TextEnvironmentHolder.current
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = prior }
+        try GlobalTestLock.locked {
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: ZStack(alignment: .topLeading) {
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    Text("Top-left layer").font(.bodyStrong).debugName("label")
+                }.frame(width: 120, height: 72).background(.accent).debugName("accent")
+            }.frame(width: 320, height: 180))
+            graph.computeLayout(width: 320, height: 180)
+            let accent = try named("accent", in: graph)
+            let label = try named("label", in: graph)
+            #expect(label.absoluteFrame.minX >= accent.absoluteFrame.minX)
+            #expect(label.absoluteFrame.maxX <= accent.absoluteFrame.maxX)
+            #expect(label.absoluteFrame.minY >= accent.absoluteFrame.minY)
+            #expect(label.absoluteFrame.maxY <= accent.absoluteFrame.maxY)
+        }
+    }
+}
