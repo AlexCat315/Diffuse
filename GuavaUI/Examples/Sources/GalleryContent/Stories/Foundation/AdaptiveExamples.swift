@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualList || page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -66,6 +66,10 @@ private struct AdaptiveControlSample: View {
     @State private var radioValue: Int? = 0
     @State private var paginationPage = 2
     @State private var carouselPage = 0
+    @State private var treeSelection: String? = "camera"
+    @State private var treeExpanded: Set<String> = ["scene", "lights"]
+    @State private var treeSelectedIDs: Set<String> = ["camera"]
+    @State private var disclosureOpen = true
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
             sample
@@ -291,6 +295,41 @@ private struct AdaptiveControlSample: View {
             TimelineEvent("Created", detail: "Workspace", trailing: "09:12", tone: .success),
             TimelineEvent("Updated", detail: "Permissions", trailing: "10:04", tone: .info)
         ]).frame(width: .percent(100)))
+        case .tree: AnyView(Tree(galleryTree, id: \.id, children: { $0.children },
+            hasChildren: { !$0.children.isEmpty }, configure: { tree in
+                tree.isEnabled = options.isEnabled
+                tree.selection.primary = $treeSelection
+                tree.selection.multiple = $treeSelectedIDs
+                tree.selection.expanded = $treeExpanded
+                tree.search.text = { $0.title }
+            }) { node, _, _, _ in
+                Text(node.title).font(.body)
+            }.frame(width: .percent(100), height: .points(140)))
+        case .virtualList: AnyView(VirtualList(Array(0..<300), id: \.self, rowHeight: 28) { row in
+            Text("Row \(row + 1)").padding(horizontal: 8)
+        }.frame(width: .percent(100), height: .points(110)))
+        case .virtualStack: AnyView(VirtualStack(Array(0..<300), id: \.self, rowHeight: 28) { row in
+            Text("Record \(row + 1)").padding(horizontal: 8)
+        }.frame(width: .percent(100), height: .points(110)))
+        case .chart: AnyView(BarChart([12, 19, 16, 28, 21, 35]).frame(width: .percent(100), height: .points(110)))
+        case .boundedScroll: AnyView(BoundedScrollView(contentHeight: 240, minHeight: 90, maxHeight: 150) {
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                for row in 0..<8 {
+                    AnyView(Text("Row \(row + 1)").font(.caption).frame(height: 30))
+                }
+            }
+        }.frame(width: .percent(100)))
+        case .label: AnyView(Form([
+            FormField("adaptive-label", "Display name", configure: { $0.isRequired = true; $0.help = "Visible to teammates" }) {
+                TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled }
+            }
+        ]).frame(width: .percent(100)))
+        case .disclosure: AnyView(DisclosureGroup("Project details", isExpanded: $disclosureOpen,
+            isEnabled: options.isEnabled) {
+            Text("Collapsible content").padding(8)
+        }.frame(width: .percent(100)))
+        case .alert: AnyView(Alert("Project saved", message: "All changes are available.", tone: .success)
+            .frame(width: .percent(100)))
         default: AnyView(EmptyView())
         }
     }
