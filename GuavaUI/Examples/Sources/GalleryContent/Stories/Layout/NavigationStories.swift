@@ -239,3 +239,33 @@ struct BottomSheetStory: View {
         }
     }
 }
+
+struct NavigationStackStory: View {
+    @State private var path: [String] = []
+    @State private var draft: TextBuffer = "Draft kept across push and pop"
+
+    var body: some View {
+        StorySection("Page stack", "Push and pop keep the root mounted. Only the top page is painted and interactive; the incoming page slides in with a fade, and a non-empty initial path restores the same page on launch.") {
+            NavigationStack(path: $path) {
+                Column(alignment: .leading, spacing: 12) {
+                    Text("Workspace").font(.headline).foregroundColor(.onSurface).debugName("nav-root-title")
+                    TextField("Draft", text: $draft)
+                    Row(alignment: .center, spacing: 8) {
+                        Button("Open details") { path.append("details") }.debugName("nav-open-details")
+                        Button("Open settings") { path.append("settings") }.debugName("nav-open-settings")
+                    }
+                    Text("Root draft: \(draft.stringValue)").font(.caption).foregroundColor(.onSurfaceMuted)
+                }.padding(16).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } destination: { route in
+                Column(alignment: .leading, spacing: 12) {
+                    Text(route.capitalized).font(.headline).foregroundColor(.onSurface).debugName("nav-page-title-\(route)")
+                    Text("This page is on top of the stack. The root still owns its draft.")
+                        .font(.body).foregroundColor(.onSurfaceMuted)
+                    Button("Back") { path.removeLast() }.debugName("nav-back")
+                }.padding(16).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }.frame(height: 260)
+            Text("Path: \(path.isEmpty ? "root" : path.joined(separator: " → "))")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

@@ -33,7 +33,17 @@ public struct AnimatedVisibility<Content: View>: View {
 
     /// Navigation changes presentation without changing the identity of its slots.
     init(isVisible: Bool, transition: Transition, retainsContent: Bool, @ViewBuilder content: () -> Content) {
-        self.init(isVisible: isVisible, transition: transition, content: content)
+        self.init(isVisible: isVisible, transition: transition, animation: nil,
+                  animateOnMount: false, retainsContent: retainsContent,
+                  onVisibilitySettled: nil, content: content)
+    }
+
+    init(isVisible: Bool, transition: Transition, animation: Animation? = nil,
+         animateOnMount: Bool = false, retainsContent: Bool,
+         onVisibilitySettled: ((Bool) -> Void)? = nil, @ViewBuilder content: () -> Content) {
+        self.isVisible = isVisible; self.transition = transition; self.animation = animation
+        self.animateOnMount = animateOnMount; self.content = content()
+        self.onVisibilitySettled = onVisibilitySettled
         self.retainsContent = retainsContent
     }
 

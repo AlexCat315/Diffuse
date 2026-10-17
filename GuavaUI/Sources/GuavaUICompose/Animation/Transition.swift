@@ -71,6 +71,19 @@ public struct Transition: Equatable, Sendable {
         case .trailing: return Transition(Effect(x: d))
         }
     }
+
+    /// Asymmetric page transition for a navigation push/pop: the incoming page
+    /// slides from the trailing edge while the outgoing page slides to the
+    /// leading edge (forward), or the reverse when returning.
+    static func navigation(distance: Float, forward: Bool) -> Transition {
+        let d = distance.isFinite ? max(0, distance) : 0
+        let incoming = Effect(opacity: 0, x: forward ? d : -d)
+        let outgoing = Effect(opacity: 0, x: forward ? -d : d)
+        var transition = Transition.identity
+        transition.insertion = incoming
+        transition.removal = outgoing
+        return transition
+    }
     /// Grows or shrinks the subtree about a normalized point in its own frame,
     /// `(0, 0)` being the top-left corner and `(0.5, 0.5)` the centre.
     ///

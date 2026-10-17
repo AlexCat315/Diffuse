@@ -23,6 +23,7 @@ extension GalleryPage {
         case .image, .carousel: UIIcons.Media.image
         case .avatar: UIIcons.User.user
         case .menu, .menuButton, .contextMenu, .commandPalette: UIIcons.Action.moreHorizontal
+        case .navigationStack: UIIcons.Navigation.arrowLeft
         case .popover, .tooltip, .hoverCard: UIIcons.Shape.messageSquare
         case .modal, .dialog, .alertDialog: UIIcons.Layout.panelTop
         case .disclosure, .accordion: UIIcons.Navigation.chevronDown

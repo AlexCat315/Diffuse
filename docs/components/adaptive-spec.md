@@ -303,6 +303,12 @@
 - 平板 / 桌面：strip 在顶部；`.wrap`、`.scroll` 或 `.menu` 由调用方选择；roving focus。`[已实现]`
 - 交互与验收：方向键/Home/End 可选择隐藏项并在实际放置后聚焦，支持同帧连续按键；禁用项跳过，菜单 Escape 恢复入口，选中菜单项聚焦该标签。标签语义、完整原文和关闭按钮独立停靠点均保留。验收：`TabOverflowTests`、`AdaptiveNavigationTests`、`TouchDensityTests` tabs、`--component tabs` 三预览；通用 ScrollView 触摸拖动/键盘滚动见第 5-9 项。
 
+**NavigationStack**
+
+- 外观：root + `[Route]` 路径页叠放；顶层页从 trailing 滑入并淡入，旧顶页向 leading 滑出；pop 时顶层页反向显露。页面背景取 `theme.colors.background`，隐藏页不绘制。`[部分]`
+- 状态：root 与 path 页面保持挂载，隐藏页不接输入/焦点/语义但保留 `@State`、草稿与滚动；非空初始 path 直接恢复深链。`[部分]`
+- 交互与验收：宿主负责平台返回并删除最后一个 route；组件不消费 Escape。新页标题焦点与动画期间去重尚未内置，由页面/调用方负责。`NavigationStackTests` 覆盖 push/pop 保留 root、深链与多页可见性；Gallery `navigationStack` 提供真实 push/back 与草稿。`[部分]`，API 见 [NavigationStack](navigationstack.md)。
+
 **AppBar / NavigationBar**
 
 - 外观：48pt 基线、44pt 命中、bodyStrong 单行省略标题与 ghost 返回；实际容器 <600pt 最多一个操作，其他宽度最多三个，剩余操作复用 Toolbar / Menu；宽模式可见副标题。`[已实现]`
@@ -544,6 +550,8 @@ Select 弹层宽度与行高已完成：触发器继续单行截断并保留完�
 第 13 项焦点环已统一：Toggle 的开关/复选框自绘路径与 Slider/RangeSlider 的 `SliderStyleConfiguration` 都改为 `focused && isFocusVisible`，与 Button-based 样式、Rating 和表格头共用同一键盘可见性来源。`FocusRingTests.customDrawnControlsFollowFocusVisibility` 直接渲染 Toggle/Slider/RangeSlider 的 DrawList，断言指针焦点时没有 `focusRing` 顶点、键盘焦点时存在；既有 Button ring 测试继续覆盖样式路径。DevTools 在 720×820 Gallery `toggle` 点击 Notifications 后数值翻转、焦点目标移动，但 `capture-ui` 与点击前像素一致（无环）；键盘环由渲染顶点断言覆盖。
 
 列表重排已完成：`ReorderableList` 在行尾提供 44pt handle，指针拖动期间以 2pt accent 放置线标记目标边界，释放后只调用一次 `onMove(from, to)`；Escape 取消、聚焦 handle 后 Up/Down 以及辅助功能 increment/decrement 走同一移动路径。根节点提供 flex 布局节点并从实际 ScrollView viewport 读取内容宽度，避免内容按 handle 的固有宽度收缩。`ReorderableListTests` 覆盖指针放置线与单次移动、键盘/辅助功能移动并保持焦点、Escape 取消、触摸 44pt handle。Gallery `reorderableList` 页与自适应预览已接入；DevTools 在 720×820 上从 Main Camera 的 handle（x=618）下拖 72pt，截图确认 “Moving” 行与 2pt 放置线，释放后顺序查询为 `Key Light → Main Camera → Player → Ground → Trigger → Audio Source`。当前为非虚拟列表，视口边缘自动滚动仍待补。
+
+NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 caller-owned `[Route]` 为栈，root 与 path 页面通过 `AnimatedVisibility(retainsContent:)` 保持挂载，隐藏页不进入命中/焦点/辅助功能树；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页反向显露。非空初始 path 首帧恢复深链；`ContainerSizeReader` 把页面固定到实际容器尺寸。`NavigationStackTests` 覆盖 push/pop 后 root 草稿保留、深链与多页仅顶层可见。Gallery `navigationStack` 页与自适应预览已接入；DevTools 在 720×820 点击 `Open details` 后查询到 Details 标题与 `Path: details`，点击 Back 后 root 草稿仍为 “Draft kept across push and pop”。平台返回手势、新页标题焦点和动画期间重复入栈去重仍由宿主/调用方负责。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排/swipe/下拉刷新仍按 [缺失清单](gaps.md#29-列表能力包p1) 跟踪。
 

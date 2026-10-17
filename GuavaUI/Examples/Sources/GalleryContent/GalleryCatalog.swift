@@ -11,7 +11,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
     case table, dataTable, calendar, datePicker, dateRangePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, splitButton, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
-    case commandPalette, hoverCard, timeline, toolbar, appBar
+    case commandPalette, hoverCard, timeline, toolbar, appBar, navigationStack
     case link, statusBar, carousel, skeleton, stepper
 
     public var entry: GalleryEntry { GalleryCatalog.entries.first { $0.page == self }! }
@@ -106,6 +106,7 @@ public enum GalleryCatalog {
         .init(.sheet, "Sheet", "Overlays", "An edge panel using modal focus and dismissal policies."),
         .init(.bottomSheet, "BottomSheet", "Overlays", "Detent heights, drag-to-expand/dismiss and a centered wide-surface fallback."),
         .init(.commandPalette, "Command Palette", "Overlays", "Ranked fuzzy search over commands with keyboard-first selection."),
+        .init(.navigationStack, "NavigationStack", "Navigation", "A session-owned page stack with retained pages, push/pop motion and deep-link restore."),
         .init(.hoverCard, "HoverCard", "Overlays", "Delayed hover detail that survives the pointer moving onto the card."),
         .init(.timeline, "Timeline", "Data", "Ordered events on a rail with per-event outcome glyphs."),
         .init(.toolbar, "Toolbar", "Controls", "One height and spacing rhythm, grouped controls and separators."),
