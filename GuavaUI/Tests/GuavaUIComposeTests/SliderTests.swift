@@ -241,4 +241,60 @@ struct SliderTests: GuavaUIComposeSerializedSuite {
         _ = pointer(evt, .up, .target)
         #expect(capture.target == nil)
     } }
+
+    @Test("PageUp and PageDown move by ten steps and clamp")
+    func pageKeys() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        let focus = FocusChain()
+        FocusChainHolder.current = focus
+        defer { FocusChainHolder.current = nil; InteractionRegistryHolder.current = nil }
+
+        let (binding, read) = makeBinding(50)
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: Slider(value: binding, range: 0...100, step: 1))
+        graph.computeLayout(width: 200, height: 24)
+
+        let h = host(in: tree)
+        focus.focus(h)
+        let dispatcher = EventDispatcher(tree: tree, interactions: registry,
+                                         capture: PointerCapture(), focusChain: focus)
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.pageUp, keycode: 0,
+                                              modifiers: [], isRepeat: false)))
+        #expect(read() == 60)
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.pageDown, keycode: 0,
+                                              modifiers: [], isRepeat: false)))
+        #expect(read() == 50)
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.pageUp, keycode: 0,
+                                              modifiers: [], isRepeat: false)))
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.pageUp, keycode: 0,
+                                              modifiers: [], isRepeat: false)))
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.pageUp, keycode: 0,
+                                              modifiers: [], isRepeat: false)))
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.pageUp, keycode: 0,
+                                              modifiers: [], isRepeat: false)))
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.pageUp, keycode: 0,
+                                              modifiers: [], isRepeat: false)))
+        #expect(read() == 100)
+    } }
+
+    @Test("Discrete ticks add one mark per step")
+    func tickMarks() { GlobalTestLock.locked {
+        func vertices(showsTicks: Bool) -> Int {
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root: Slider(value: .constant(0.5), range: 0...1, step: 0.25,
+                                       showsTicks: showsTicks))
+            graph.computeLayout(width: 200, height: 24)
+            func find(_ node: Node) -> Node? {
+                node.accessibility?.role == .slider ? node : node.children.compactMap(find).first
+            }
+            let slider = find(tree.root!)!
+            let list = DrawList()
+            slider.draw?(list, .zero)
+            return list.vertices.count
+        }
+        #expect(vertices(showsTicks: true) > vertices(showsTicks: false))
+    } }
 }

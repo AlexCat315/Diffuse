@@ -90,8 +90,8 @@ struct SliderStory: View {
                 Slider(value: $continuous, isEnabled: options.isEnabled, onEditingChanged: { editing = $0 })
                 Text("Value: \(continuous)  ·  \(editing ? "Dragging" : "Idle")").font(.caption).foregroundColor(.onSurfaceMuted)
             }
-            StorySection("Stepped & disabled", "Steps are relative to the lower bound and clamp at the range edges.") {
-                Slider(value: $stepped, range: 0...5, step: 1, isEnabled: options.isEnabled)
+            StorySection("Stepped & disabled", "Steps are relative to the lower bound and clamp at the range edges; PageUp/PageDown move ten steps and ticks mark each step.") {
+                Slider(value: $stepped, range: 0...5, step: 1, isEnabled: options.isEnabled, showsTicks: true)
                 Slider(value: .constant(0.4), isEnabled: false)
                 Text("Step: \(Int(stepped))").font(.caption).foregroundColor(.onSurfaceMuted)
             }

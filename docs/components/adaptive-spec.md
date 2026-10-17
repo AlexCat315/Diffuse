@@ -160,7 +160,7 @@
 - 外观：高 24pt、thumb 18、track 4、填充 accent；disabled 全 surfaceVariant。`[已实现]`
 - 手机：命中区 ≥ 44pt 且轨道居中；每行一个滑杆；数值标签同行放不下时移至下一行而不截断。`[已实现]`（44pt 命中）；标签重排由调用方布局。
 - 平板 / 桌面：hover/press thumb 反馈；恢复 24pt 原生高度。`[已实现]`
-- 交互与验收：指针拖动、方向键、Home/End、辅助功能 slider setValue / increment / decrement；Page 键与离散刻度视觉 `[未实现]`。验收：`TouchDensityTests` slider、Gallery `--component slider`。
+- 交互与验收：指针拖动、方向键、Home/End、PageUp/PageDown（10 step）、辅助功能 slider setValue / increment / decrement；`showsTicks` 在离散 step 上绘制刻度。验收：`SliderTests`（Page 键、刻度、拖动/指针捕获）、`TouchDensityTests` slider、Gallery `--component slider`。
 
 **RangeSlider**
 

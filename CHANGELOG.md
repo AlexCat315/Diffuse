@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `Slider` 补齐刻度与 Page 键：`showsTicks` 在每个离散 step 位置绘制 1pt 刻度（最多 40 段）；PageUp/PageDown 移动 10 个 step 并夹紧。`SliderTests` 覆盖 Page 键与刻度渲染；Gallery `slider` 页的 Stepped 示例展示刻度，DevTools PageUp 将 3.0 移到 5.0。
 - `RangeSlider` 补齐 P1 双 thumb 语义：两个 thumb 各有独立 Tab 停靠、`Range start`/`Range end` slider 角色与独立 value，父节点为 group；焦点/指针各自移动对应 thumb，focus ring 只画在聚焦 thumb 上。`RangeSliderTests` 5/5 覆盖指针、minSpan、键盘、双 Tab 与焦点环；DevTools 查询到每个实例的两条 slider 语义。
 - `SplitButton` 补齐 P1 交互：单一 Tab 停靠进入整体，左右方向键在主按钮与箭头之间移动并同步 roving Tab stop；两区之间新增共享 1px `.border` 分隔线。`SplitButtonTests` 3/3 覆盖双区动作、禁用与 roving 焦点；DevTools 在 390/720 自适应预览确认主按钮 333/663pt、箭头 56pt。
 - `NavigationStack` 补齐 P1 边界：新增 `.navigationTitle`，新顶页布局后自动聚焦 heading（无可见键盘环）；过渡 settle 前的第二次 path 变化被拒绝并写回上一次接受的栈。`NavigationStackTests` 5/5 覆盖标题焦点与去重；Gallery 标题改为 heading，DevTools 查询 `Details` 得到 `role=heading`。平台返回仍由宿主处理。

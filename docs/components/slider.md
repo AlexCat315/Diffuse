@@ -40,13 +40,15 @@
 ## Behavior
 
 - **指针**：down 把 thumb 锁定到光标 X 位置；motion 时持续更新 binding；up 释放并触发 `onEditingChanged?(false)`。
-- **键盘**：← / ↓ 减小、→ / ↑ 增大，Home / End 到范围两端（Page 键未实现）。
+- **键盘**：← / ↓ 减小、→ / ↑ 增大，Home / End 到范围两端；PageUp / PageDown 移动 10 个 step（连续滑块的 step 为 span/100，即 10% 区间），并在边界夹紧。
 - **step**：非 nil 时把值四舍五入到最近的 step 倍数。
+- **ticks**：`showsTicks: true` 且提供 `step` 时，在每个离散 step 位置绘制 1pt 刻度；最多 40 段，避免密集噪声。
 
 ## Authoring rules
 
 ✅ 应当：
 - `Slider(value: $volume, range: 0...1)` —— range 任意，必要时给 `step`
+- 需要离散刻度时用 `Slider(value: $level, range: 0...5, step: 1, showsTicks: true)`
 - 旁边并列展示数值标签：`Row(alignment: .center, spacing: 12) { Slider(...).flex(); Text("\(Int(value*100))").frame(width: 50) }`
 - 自定义视觉走 `SliderStyle` 协议 + `.sliderStyle(_:)`
 
@@ -56,8 +58,6 @@
 
 ## Known issues / TODO
 
-- Page 键未实现（方向键 / Home / End 已实现）
-- 没有 tick mark / discrete step 视觉提示
 - 没有 vertical 方向
 
 ## References

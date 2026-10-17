@@ -22,17 +22,21 @@ public struct Slider: View {
     public let step: Double?
     public let isEnabled: Bool
     public let onEditingChanged: ((Bool) -> Void)?
+    /// Draws a small tick at every discrete `step` position.
+    public let showsTicks: Bool
 
     public init(value: Binding<Double>,
                 range: ClosedRange<Double> = 0...1,
                 step: Double? = nil,
                 isEnabled: Bool = true,
-                onEditingChanged: ((Bool) -> Void)? = nil) {
+                onEditingChanged: ((Bool) -> Void)? = nil,
+                showsTicks: Bool = false) {
         self.value = value
         self.range = range
         self.step = step.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         self.isEnabled = isEnabled
         self.onEditingChanged = onEditingChanged
+        self.showsTicks = showsTicks
     }
 
     public var body: some View {
@@ -40,7 +44,8 @@ public struct Slider: View {
                         range: range,
                         step: step,
                         isEnabled: isEnabled,
-                        onEditingChanged: onEditingChanged)
+                        onEditingChanged: onEditingChanged,
+                        showsTicks: showsTicks)
     }
 }
 
@@ -52,6 +57,7 @@ struct _StatefulSlider: View {
     let step: Double?
     let isEnabled: Bool
     let onEditingChanged: ((Bool) -> Void)?
+    let showsTicks: Bool
 
     var body: some View {
         SliderHost(
@@ -59,7 +65,8 @@ struct _StatefulSlider: View {
             range: range,
             step: step,
             isEnabled: isEnabled,
-            onEditingChanged: onEditingChanged
+            onEditingChanged: onEditingChanged,
+            showsTicks: showsTicks
         )
     }
 }
@@ -72,6 +79,7 @@ struct SliderHost: _PrimitiveView {
     let step: Double?
     let isEnabled: Bool
     let onEditingChanged: ((Bool) -> Void)?
+    let showsTicks: Bool
 
     static let pressedKey = "__slider_pressed"
     static let hoveredKey = "__slider_hovered"
@@ -187,6 +195,8 @@ struct SliderHost: _PrimitiveView {
             switch event.scancode {
             case Scancode.arrowLeft, Scancode.arrowDown: next = value.wrappedValue - increment
             case Scancode.arrowRight, Scancode.arrowUp: next = value.wrappedValue + increment
+            case Scancode.pageUp: next = value.wrappedValue + increment * 10
+            case Scancode.pageDown: next = value.wrappedValue - increment * 10
             case Scancode.home: next = range.lowerBound
             case Scancode.end: next = range.upperBound
             default: return .ignored
@@ -291,6 +301,22 @@ struct SliderHost: _PrimitiveView {
             list.addRoundedRect(fillRect,
                                 radius: appearance.trackCornerRadius,
                                 color: appearance.fillColor)
+        }
+
+        if showsTicks, let step, step > 0 {
+            let tickCount = Int(((span / step) + 0.0001).rounded(.down))
+            if tickCount > 0, tickCount <= 40 {
+                let tickHeight = min(6, max(3, appearance.trackHeight + 3))
+                let tickY = originY + (height - tickHeight) * 0.5
+                for index in 0...tickCount {
+                    let tickX = originX + Float(index) / Float(tickCount) * width
+                    list.addRoundedRect(
+                        UIRect(x: min(max(originX, tickX - 0.5), originX + width - 1),
+                               y: tickY, width: 1, height: tickHeight),
+                        radius: 0.5,
+                        color: node.theme.colors.onSurfaceMuted)
+                }
+            }
         }
 
         // Thumb — clamp the centre so the circle stays inside the host frame
