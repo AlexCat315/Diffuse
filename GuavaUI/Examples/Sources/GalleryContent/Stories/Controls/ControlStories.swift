@@ -176,13 +176,14 @@ struct ColorStory: View {
 
 struct SelectStory: View {
     let options: GalleryOptions
-    @State private var quality = "balanced"
+    @State private var quality = "high"
     var body: some View {
         StorySection("Typed options", "Open with Space or Return, move with arrows, select with Return and dismiss with Escape.") {
             Select(selection: $quality, options: [
                 SelectOption(value: "fast", label: "Fast"), SelectOption(value: "balanced", label: "Balanced"),
-                SelectOption(value: "high", label: "High quality"), SelectOption(value: "offline", label: "Unavailable", isEnabled: false)
-            ], isEnabled: options.isEnabled).frame(width: 260)
+                SelectOption(value: "high", label: "High quality · International collaboration and workspace permissions 👩🏽‍💻"),
+                SelectOption(value: "offline", label: "Unavailable", isEnabled: false)
+            ], isEnabled: options.isEnabled).frame(maxWidth: 360)
             Text("Selected: \(quality)").font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }

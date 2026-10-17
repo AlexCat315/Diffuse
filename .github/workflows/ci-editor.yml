@@ -9,7 +9,7 @@ on:
       - 'GuavaUI/**'
       - '.github/workflows/ci-editor.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
   pull_request:
     paths:
@@ -18,7 +18,7 @@ on:
       - 'GuavaUI/**'
       - '.github/workflows/ci-editor.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
 
 jobs:
@@ -60,12 +60,12 @@ jobs:
       - name: Build native dependencies
         if: runner.os != 'Windows'
         shell: bash
-        run: python3 bootstrap.py --force
+        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
 
       - name: Build native dependencies (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: python bootstrap.py --force
+        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
 
       - name: Resolve packages
         shell: bash

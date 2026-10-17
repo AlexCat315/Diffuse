@@ -7,22 +7,22 @@
 在仓库根目录独立准备当前主机依赖：
 
 ```sh
-python3 Engine/third-party/wasmtime/stage.py
-python3 Engine/third-party/wasmtime/stage.py --check
+swift run --package-path Tools/Developer guava-dev plugins stage
+swift run --package-path Tools/Developer guava-dev plugins stage --check
 ```
 
 指定其他目标或交叉构建输出目录：
 
 ```sh
-python3 Engine/third-party/wasmtime/stage.py --platform android-arm64 --vendor Engine/build/android-validation/native/vendor
+swift run --package-path Tools/Developer guava-dev plugins stage --platform android-arm64 --vendor Engine/build/android-validation/native/vendor
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-python3 Engine/third-party/wasmtime/stage.py --platform ios-arm64
-python3 Engine/third-party/wasmtime/stage.py --platform ios-arm64-simulator
+swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64
+swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64-simulator
 ```
 
-普通桌面/Android构建需要 Python 3.11+、CMake 和 curl。iOS 构建另外需要 macOS、Xcode、Rust/Cargo 及所选 iOS Rust target；构建使用源码自带的 Cargo.lock，原生预编译包不需要 Rust。
+普通桌面/Android构建需要 CMake 和 curl。iOS 构建另外需要 macOS、Xcode、Rust/Cargo 及所选 iOS Rust target；构建使用源码自带的 Cargo.lock，原生预编译包不需要 Rust。
 
-产物位于 `Engine/vendor/Wasmtime.artifactbundle`；各平台 variant 可同时存在。每个 variant 自带源码来源、归档 SHA256、静态库 SHA256 和执行方式的 `provenance.json`。`--vendor` 对应 SwiftPM 的 `GUAVA_ENGINE_ARTIFACT_ROOT`，该环境变量必须是相对 Engine 包根目录的路径。全量 `bootstrap.py`、Engine CMake 和 Guava Android CLI 使用同一套 staging 实现。旧的动态 XCFramework 不再保留。
+产物位于 `Engine/vendor/Wasmtime.artifactbundle`；各平台 variant 可同时存在。每个 variant 自带源码来源、归档 SHA256、静态库 SHA256 和执行方式的 `provenance.json`。`--vendor` 对应 SwiftPM 的 `GUAVA_ENGINE_ARTIFACT_ROOT`，该环境变量必须是相对 Engine 包根目录的路径。全量 `swift run --package-path Tools/Developer guava-dev native-bootstrap`、Engine CMake 和 Guava Android CLI 使用同一套 staging 实现。旧的动态 XCFramework 不再保留。
 
 | 平台 | 可用目标 | 执行方式 |
 | --- | --- | --- |
@@ -43,7 +43,7 @@ python3 Engine/third-party/wasmtime/stage.py --platform ios-arm64-simulator
 cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe \
   -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
 cmake --build Engine/build/plugin-probe
-python3 Engine/Validation/Plugins/verify.py --probe Engine/build/plugin-probe/GuavaPluginProbe
+swift run --package-path Tools/Developer guava-dev plugins verify --probe Engine/build/plugin-probe/GuavaPluginProbe
 swift build --package-path Engine --product GuavaPluginHost
 swift test --package-path Engine --filter PluginRuntimeTests
 ```

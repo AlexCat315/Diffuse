@@ -100,7 +100,7 @@ macOS 彩色 emoji 接入共享文字排版和独立 RGBA 图集，支持普通�
 验证：
 
 ```sh
-python3 scripts/check-swift-maintainability.py
+swift run --package-path Tools/Developer guava-dev maintainability
 swift test --package-path GuavaUI
 swift test --package-path Editor
 ```

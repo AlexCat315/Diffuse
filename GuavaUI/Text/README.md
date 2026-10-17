@@ -15,9 +15,10 @@ cmake --install GuavaUI/build/native --prefix /tmp/guava-font-install
 swift test --package-path GuavaUI/Text
 ```
 
-The browser's `build_fonts.py` builds these pinned sources with the installed
-Swift WASI SDK and stages separate static-library artifact bundles. Its build
-script sets `GUAVA_TEXT_ARTIFACT_ROOT`; desktop artifacts remain in `GuavaUI/vendor`.
+The browser's `guava-dev browser build-fonts` operation builds these pinned
+sources with the installed Swift WASI SDK and stages separate static-library
+artifact bundles. Its build script sets `GUAVA_TEXT_ARTIFACT_ROOT`; desktop
+artifacts remain in `GuavaUI/vendor`.
 Do not export this override globally when switching back to desktop builds.
 
 ```swift

@@ -185,7 +185,7 @@ cadence. `cpuThroughputFPS` is a CPU work estimate, not measured display FPS.
 The macOS SDL loop flushes pending Core Animation transactions before drawable
 acquisition. Unlocked native window display, State/layout updates, CPU timeline,
 Metal mirror and pointer input have passed
-`verify_native_demo.py --require-presented`; the check requires submitted frames
+`npm run verify:native-demo -- --require-presented`; the check requires submitted frames
 after each update.
 Native window zoom and restore have also passed visual acceptance; the demo now
 reallocates its MSAA target when the drawable dimensions change.
@@ -194,11 +194,10 @@ Run the native Inspector acceptance suite without a Wasm SDK or GPU:
 
 ```bash
 swift build --package-path GuavaUI/Portable --product GuavaUIDevToolsProbe
-python3 GuavaUI/Browser/verify.py --native-only
+swift run --package-path Tools/Developer guava-dev browser verify --native-only
 ```
 
-The Python runner needs the [Python requirements](../Browser/requirements-dev.txt)
-and Chromium. It exercises real WebSocket
+The runner needs Chromium. It exercises real WebSocket
 source/profile, picking/styles, selected state values, timeline start/stop/export,
 breakpoint URLs and disconnect/reconnect cleanup.
 
@@ -220,8 +219,8 @@ including GPU command submission/waiting; it is not GPU execution duration.
 Run against an existing CLI-managed session:
 
 ```sh
-node scripts/verify-development-session.mjs /path/to/MyApp mac
-node scripts/verify-development-session.mjs /path/to/MyApp android
+swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp mac
+swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp android
 ```
 
 

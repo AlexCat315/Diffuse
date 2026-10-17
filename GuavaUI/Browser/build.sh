@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 # The compiler and SDK versions must match. Override for another installed pair.
 sdk="${GUAVA_WASM_SDK:-swift-6.4.1-RELEASE_wasm}"
 configuration="${GUAVA_WASM_CONFIGURATION:-debug}"
-python3 build_fonts.py
+swift run --package-path ../../Tools/Developer guava-dev browser build-fonts
 export GUAVA_TEXT_ARTIFACT_ROOT="../Browser/.build/font-vendor"
 exports=(guava_render guava_set_scale guava_font_alloc guava_font_load guava_atlas guava_atlas_size
          guava_pointer guava_key guava_text guava_vertices guava_vertex_bytes

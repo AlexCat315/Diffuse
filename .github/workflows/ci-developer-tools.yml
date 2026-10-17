@@ -1,0 +1,39 @@
+name: Developer tools
+
+on:
+  push:
+    branches: [main]
+    paths: ['Tools/Developer/**', 'GuavaUI/Browser/package.json', 'GuavaUI/Browser/build.sh', 'Engine/Sources/Bridge/CImageDecodeBridge/stb_image.h', '.github/workflows/ci-developer-tools.yml']
+  pull_request:
+    paths: ['Tools/Developer/**', 'GuavaUI/Browser/package.json', 'GuavaUI/Browser/build.sh', 'Engine/Sources/Bridge/CImageDecodeBridge/stb_image.h', '.github/workflows/ci-developer-tools.yml']
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, xcode-27, windows-2025-vs2026]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        if: runner.os != 'macOS'
+        with:
+          swift-version: '6.4.1'
+      - uses: browser-actions/setup-chrome@v2
+        if: runner.os != 'Windows'
+        with:
+          chrome-version: stable
+          install-dependencies: true
+      - name: Test repository tools
+        shell: bash
+        env:
+          GUAVA_TEST_CHROMIUM: '1'
+        run: swift test --package-path Tools/Developer
+      - name: Smoke test safe command entry points
+        shell: bash
+        run: |
+          swift run --package-path Tools/Developer guava-dev --help
+          for command in maintainability boundaries shader vulkan media plugins native-bootstrap ios-native; do
+            swift run --package-path Tools/Developer guava-dev "$command" --help
+          done

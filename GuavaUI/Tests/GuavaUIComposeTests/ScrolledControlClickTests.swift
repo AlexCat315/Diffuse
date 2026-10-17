@@ -218,20 +218,13 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
 
         // …and the overlay must register at the trigger's on-screen position,
         // not its unscrolled layout position.
-        guard let entry = PortalStoreHolder.current.entries.first else { return }
-        guard let overlayHost = firstNode(in: tree.root, where: {
-            $0.firstResource(PortalResource.self) != nil
-        }), let popoverBox = overlayHost.parent else {
-            Issue.record("popover overlay host was not materialized")
-            return
-        }
-        let boxOrigin = visualOrigin(of: popoverBox)
+        let anchor = CGRect(origin: visualOrigin(of: trigger), size: trigger.frame.size)
         guard let measuredSlot = firstNode(in: tree.root, where: {
             $0.attachments[LayoutDebugAttachmentKey.layoutRole] as? String == "portal-entry"
         }) else { Issue.record("portal entry was not materialized"); return }
         let expected = PortalPlacement.fit(
-            position: CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height),
-            size: measuredSlot.frame.size, in: tree.root!.absoluteFrame, anchor: popoverBox.absoluteFrame)
+            position: CGPoint(x: anchor.minX, y: anchor.maxY),
+            size: measuredSlot.frame.size, in: tree.root!.absoluteFrame, anchor: anchor, margin: 12)
         #expect(abs(measuredSlot.absoluteFrame.minX - expected.minX) < 0.5)
         #expect(abs(measuredSlot.absoluteFrame.minY - expected.minY) < 0.5)
     } }
@@ -296,13 +289,6 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         })
         #expect(menuScrollView != nil)
 
-        guard let overlayHost = firstNode(in: tree.root, where: {
-            $0.firstResource(PortalResource.self) != nil
-        }), let popoverBox = overlayHost.parent else {
-            Issue.record("popover overlay host was not materialized")
-            return
-        }
-
         scrollView.contentOffset = CGPoint(x: 0, y: 120)
         NodeRenderer().render(root: tree.root!, into: DrawList())
 
@@ -310,13 +296,13 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
             Issue.record("select menu closed unexpectedly")
             return
         }
-        let boxOrigin = visualOrigin(of: popoverBox)
+        let anchor = CGRect(origin: visualOrigin(of: trigger), size: trigger.frame.size)
         guard let measuredSlot = firstNode(in: tree.root, where: {
             $0.attachments[LayoutDebugAttachmentKey.layoutRole] as? String == "portal-entry"
         }) else { Issue.record("portal entry was not materialized"); return }
         let expected = PortalPlacement.fit(
-            position: CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height),
-            size: measuredSlot.frame.size, in: tree.root!.absoluteFrame, anchor: popoverBox.absoluteFrame)
+            position: CGPoint(x: anchor.minX, y: anchor.maxY),
+            size: measuredSlot.frame.size, in: tree.root!.absoluteFrame, anchor: anchor, margin: 12)
         #expect(abs(measuredSlot.absoluteFrame.minX - expected.minX) < 0.5)
         #expect(abs(measuredSlot.absoluteFrame.minY - expected.minY) < 0.5)
         #expect(updatedEntry.position.y < initialPosition.y - 20)
@@ -329,7 +315,7 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         }
         let fitted = PortalPlacement.fit(position: expected.origin, size: portalEntryNode.frame.size,
                                          in: portalWindowBounds(portalEntryNode),
-                                         anchor: PortalStoreHolder.current.anchor(for: updatedEntry.id))
+                                         anchor: PortalStoreHolder.current.anchor(for: updatedEntry.id), margin: 12)
         #expect(abs(portalEntryNode.absoluteFrame.minX - fitted.minX) < 0.5)
         #expect(abs(portalEntryNode.absoluteFrame.minY - fitted.minY) < 0.5)
     } }

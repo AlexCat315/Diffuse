@@ -17,9 +17,10 @@ struct NativeDependencies {
         try Shell.run(["cmake", "--install", fonts.path])
         var mediaEnvironment = ProcessInfo.processInfo.environment
         mediaEnvironment["ANDROID_NDK_HOME"] = toolchain.ndk.path
-        let mediaScript = toolchain.root.appendingPathComponent("Engine/Media/Native/stage.py").path
-        if (try? Shell.run(["python3", mediaScript, "--platform", "android-arm64", "--check"], environment: mediaEnvironment, quiet: true)) == nil {
-            try Shell.run(["python3", mediaScript, "--platform", "android-arm64"], environment: mediaEnvironment)
+        if (try? DeveloperTool.run(["media", "--platform", "android-arm64", "--check"],
+                                   root: toolchain.root, environment: mediaEnvironment, quiet: true)) == nil {
+            try DeveloperTool.run(["media", "--platform", "android-arm64"],
+                                  root: toolchain.root, environment: mediaEnvironment)
         }
         return Artifacts(engine: engine.appendingPathComponent("vendor"), text: fonts.appendingPathComponent("vendor"))
     }

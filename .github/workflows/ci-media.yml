@@ -21,14 +21,14 @@ jobs:
       - name: Build and verify real media
         shell: bash
         run: |
-          python Engine/Media/Native/stage.py
-          python Engine/Media/Native/stage.py --check
+          swift run --package-path Tools/Developer guava-dev media
+          swift run --package-path Tools/Developer guava-dev media --check
           swift test --package-path Engine/Media
           swift test --package-path Editor/Documents
       - name: Compile iOS library
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          python Engine/Media/Native/stage.py --platform ios-arm64-simulator
+          swift run --package-path Tools/Developer guava-dev media --platform ios-arm64-simulator
           swift build --package-path Engine/Media --target MediaRuntime --build-system native \
             --triple arm64-apple-ios16.0-simulator --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)"

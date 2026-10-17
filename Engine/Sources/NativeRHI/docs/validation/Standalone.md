@@ -22,20 +22,20 @@
 
 ## 验证命令
 
-在仓库根目录、Swift 6.4.0 环境中执行。已安装 Slang 时直接设置 `SLANGC`；首次安装可运行 `python3 scripts/bootstrap-rhi-slang.py`。
+在仓库根目录、Swift 6.4.0 环境中执行。已安装 Slang 时直接设置 `SLANGC`；首次安装可运行 `swift run --package-path Tools/Developer guava-dev shader bootstrap-slang`。
 
 ```sh
 export SLANGC="$PWD/Engine/vendor/slang/bin/slangc"
 cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
 cmake --build Engine/build/native --parallel --config Release
-python3 scripts/test-rhi-shader-toolchain.py
-python3 scripts/compile-native-renderer-shaders.py --check
-python3 scripts/test-gpu-regression-verifier.py
+swift test --package-path Tools/Developer --filter ShaderToolchainTests
+swift run --package-path Tools/Developer guava-dev shader rebuild --check
+swift test --package-path Tools/Developer --filter RegressionReportTests
 swift test --package-path Engine
 swift test --package-path GuavaUI
 swift test --package-path Editor
-bash scripts/test-gpu-regression.sh
-python3 scripts/check-swift-maintainability.py --report
+swift run --package-path Tools/Developer guava-dev gpu-regression run
+swift run --package-path Tools/Developer guava-dev maintainability --report
 ```
 
 GPU 回归报告和场景像素默认写入 `Engine/build/gpu-regression/`；每次运行的日志及 XML 位于独立的 `run-*` 子目录。
@@ -64,7 +64,7 @@ GPU 回归报告和场景像素默认写入 `Engine/build/gpu-regression/`；每
 
 移除旧后端后，重复原生会话用于验证确定性、资源重建和历史状态。它不是独立 shader 正确性基准；实际像素变化、几何覆盖、粒子状态/事件、工作组一致性、视口所有权及失败恢复由专门断言验证。旧 WGPU 对照报告和 benchmark JSON 保留为历史证据，不代表当前可以运行的对照路径。
 
-本轮没有执行完整的 Editor 窗口/MCP 脚本编译、热重载和导出流程脚本 `scripts/validate-editor-native-loop.py`；相关包测试和 GPU 窗口集成分别验证。
+本轮没有执行完整的 Editor 窗口/MCP 脚本编译、热重载和导出流程命令 `swift run --package-path Tools/Developer guava-dev validate editor-loop`；相关包测试和 GPU 窗口集成分别验证。
 
 ## Android 真机补充验证（2026-10-12）
 
@@ -76,7 +76,7 @@ Swift 6.4.0 + Android SDK + NDK r30 已在 Android 16 / ARM64 / Adreno 710 上�
 
 Android APK 已进一步运行桌面和浏览器共用的 `CounterView`。字体依赖由 NDK 从仓库固定的 FreeType / HarfBuzz 子模块构建，实际文字经共享 FontAtlas / DrawList / NativeDrawListRenderer 在 Vulkan 上呈现。Java 宿主管理 Choreographer、Surface 和 InputConnection。
 
-`scripts/android/verify-demo.py` 在同一台 Android 16 / Adreno 710 设备通过 22 个检查点，并检查计数字形截图变化、主题背景像素、拖出取消和空闲时停止 GPU 提交。真实 Android IME 绑定与英文按键提交通过；中文预编辑、提交、取消、代理对及组合字素通过 debug 广播调用同一 InputConnection 验证。后者是回调回放，尚不代表所有系统输入法的人工验收。
+`swift run --package-path Tools/Developer guava-dev android demo` 在同一台 Android 16 / Adreno 710 设备通过 22 个检查点，并检查计数字形截图变化、主题背景像素、拖出取消和空闲时停止 GPU 提交。真实 Android IME 绑定与英文按键提交通过；中文预编辑、提交、取消、代理对及组合字素通过 debug 广播调用同一 InputConnection 验证。后者是回调回放，尚不代表所有系统输入法的人工验收。
 
 Activity 重建、回到桌面再返回、横竖屏窗口重排均保留计数、主题与已提交文字；焦点、预编辑和 GPU 会话不进入持久状态。横竖屏截图也检查了平板兼容窗口中的真实 Surface 偏移。
 

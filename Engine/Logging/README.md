@@ -104,7 +104,7 @@ swift test --package-path Engine/Logging
 swift test --package-path Tools/Guava
 swift test --package-path GuavaUI/Portable
 swift test --package-path Editor --filter ConsoleLoggingTests
-node scripts/verify-development-session.mjs /path/to/App mac
-node scripts/verify-development-session.mjs /path/to/App android
-python3 scripts/android/verify-logging.py /path/to/App
+swift run --package-path Tools/Developer guava-dev validate session /path/to/App mac
+swift run --package-path Tools/Developer guava-dev validate session /path/to/App android
+swift run --package-path Tools/Developer guava-dev android logging /path/to/App
 ```

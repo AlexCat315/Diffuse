@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout: true
+        case .button, .checkbox, .toggle, .slider, .textField, .numberField, .select, .combobox, .rating, .list, .calendar, .tabs, .buttonGroup, .stepper, .toolbar, .appBar, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout: true
         default: false
         }
     }
@@ -57,6 +57,11 @@ private struct AdaptiveControlSample: View {
         case .slider: AnyView(Slider(value: $value, range: 0...5, isEnabled: options.isEnabled).frame(width: .percent(100)))
         case .textField: AnyView(TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled }.frame(width: .percent(100)))
         case .numberField: AnyView(NumberField(value: $number, isEnabled: options.isEnabled, showsStepper: true).frame(width: .percent(100)))
+        case .select: AnyView(Select(selection: Binding(get: { selected ?? -1 }, set: { selected = $0 }), options: selectionOptions,
+            isEnabled: options.isEnabled).frame(width: .percent(100)))
+        case .combobox: AnyView(Combobox(selection: $selected, options: selectionOptions) {
+            $0.isEnabled = options.isEnabled
+        }.frame(width: .percent(100)))
         case .rating: AnyView(Rating("Preview score", value: $value) { $0.selection.isEnabled = options.isEnabled; $0.selection.precision = .half })
         case .list: AnyView(List(0..<20, id: \.self, selection: $selected) { index, _ in Text("Item \(index + 1)") }.frame(width: .percent(100), height: .points(132)))
         case .table, .dataTable: AnyView(AdaptiveTableSample(data: page == .dataTable, options: options).frame(width: .percent(100), height: .percent(100)))
@@ -117,5 +122,11 @@ private struct AdaptiveControlSample: View {
             }.frame(width: .percent(100), height: .points(210)))
         default: AnyView(EmptyView())
         }
+    }
+
+    private var selectionOptions: [SelectOption<Int>] {
+        [SelectOption(value: 0, label: "Workspace permissions and international collaboration 👩🏽‍💻"),
+         SelectOption(value: 1, label: "Personal workspace"),
+         SelectOption(value: 2, label: "Unavailable", isEnabled: false)]
     }
 }

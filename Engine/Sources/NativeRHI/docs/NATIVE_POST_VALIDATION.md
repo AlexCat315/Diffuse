@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRenderer r5 后处理与历史缓存
 
@@ -22,15 +22,15 @@ NativePostTests 比较生产 WGPURenderer 的实际 viewport：24 帧覆盖逐�
 
 所有对照帧检查 RGB 平均通道误差 <0.5、差值 >3 的像素 <1%。实际 Native/WGPU PPM 保存于 `/tmp/guava-native-post`；本机还查看了组合效果和正交场景的读回图像。alpha 不参与 RGB 比较。
 
-受影响范围执行 85 项 NativeRHI XCTest、23 项 NativeRenderer XCTest、32 项渲染线程/相机/生产 GPU/shader Swift Testing。包含实际 Metal 窗口的 r5 后处理呈现、缩放与错误输入恢复。旧测试中的“r5 尚未支持”和“稳定帧必须重画不透明通道”断言随功能更新并复测通过；容量策略更新后再次通过全部 NativeRenderer 测试和纹理复制测试。Slang 工具链 5 项 Python 测试及 Swift 结构检查通过；既有 46 项超限指标未增加。
+受影响范围执行 85 项 NativeRHI XCTest、23 项 NativeRenderer XCTest、32 项渲染线程/相机/生产 GPU/shader Swift Testing。包含实际 Metal 窗口的 r5 后处理呈现、缩放与错误输入恢复。旧测试中的“r5 尚未支持”和“稳定帧必须重画不透明通道”断言随功能更新并复测通过；容量策略更新后再次通过全部 NativeRenderer 测试和纹理复制测试。Slang 工具链 5 项测试及 Swift 结构检查通过；既有 46 项超限指标未增加。
 
 ```sh
 GUAVA_WGPU_BACKEND=metal GUAVA_RUN_GPU_SMOKE_TESTS=1 \
 SLANGC="$PWD/Engine/vendor/slang/bin/slangc" \
 swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.|RenderThreadTests|MeshSurfaceAndVisibilityTests|RenderCameraMatricesTests|RenderBackendGPUSmokeTests/(orthographic|opaqueCache|editorGrid|transparent|material)|ShaderCatalogTests'
-python3 scripts/check-swift-maintainability.py --report
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" python3 scripts/test-rhi-shader-toolchain.py
+swift run --package-path Tools/Developer guava-dev maintainability --report
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Tools/Developer --filter ShaderToolchainTests
 ```
 
 ## Release 后处理负载

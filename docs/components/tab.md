@@ -62,5 +62,5 @@ TabView 需要有界高度，当前内容填充剩余空间。selection 不命�
 ## File map
 
 - [TabView 与标签样式](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/TabView.swift)
-- [溢出布局](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/Tabs/StripLayout.swift)、[菜单呈现](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/Tabs/MenuStrip.swift)、[标签槽测量](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/Tabs/LabelLayout.swift)
+- [溢出布局](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/Tabs/StripLayout.swift)、[菜单呈现](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/Tabs/MenuStrip.swift)、[标签槽测量](../../GuavaUI/Sources/GuavaUICompose/Primitives/Controls/InlineLabelLayout.swift)
 - [专项测试](../../GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TabOverflowTests.swift)

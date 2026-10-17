@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRHI 编辑器网格 pass
 
@@ -39,7 +39,7 @@ Packet 的 `renderSettings.enableEditorGrid` 决定是否绘制，spacing、相�
 
 ```sh
 SLANGC="$PWD/Engine/vendor/slang/bin/slangc" \
-  python3 scripts/compile-native-renderer-shaders.py
+  swift run --package-path Tools/Developer guava-dev shader rebuild
 ```
 
 Bundled Metal 产物省略 `#line`，不会嵌入开发机器的绝对路径。DXIL 可在具有 DXC/dxcompiler 的环境中通过 `--targets dxil` 生成；本轮未生成或验证 DX12 renderer shader，缺失时会明确报错。
@@ -54,8 +54,8 @@ export GUAVA_RUN_GPU_SMOKE_TESTS=1
 export GUAVA_WGPU_BACKEND=metal
 swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.|RenderThreadTests|RenderCameraMatricesTests|editorGrid'
-python3 scripts/check-swift-maintainability.py
-python3 scripts/test-rhi-shader-toolchain.py
+swift run --package-path Tools/Developer guava-dev maintainability
+swift test --package-path Tools/Developer --filter ShaderToolchainTests
 ```
 
 WGPU reference 检查启用 WGPU validation。原生 Windows/Linux Vulkan 与 DX12 本轮不做 GPU 验证。

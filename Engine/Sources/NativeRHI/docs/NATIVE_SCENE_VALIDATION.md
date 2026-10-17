@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRenderer 场景迁移
 
@@ -24,7 +24,7 @@ EngineHost/RenderThread 发送原有 RenderPacket，不创建第二套场景模�
 
 材质解析通过 ResolvedMeshMaterial 与 WGPU 共用。导入 baseColorFactor 与运行时覆盖相乘；本轮修正了 WGPU 丢失导入 RGB 因子的行为。MeshInstanceUniforms 的 160 字节布局也由两条路径共用。顶点沿用 MeshAsset 的 96 字节布局。
 
-Slang 仅在离线生成阶段使用。基础几何/深度产物已捆绑 Metal 和 SPIR-V；运行时只加载 ShaderArtifact。DX12 管线使用同一抽象，但本机无 DXC，尚未生成/验证该 pass 的 DXIL。可在支持 DXC 的环境运行 `compile-native-renderer-shaders.py --targets dxil`。
+Slang 仅在离线生成阶段使用。基础几何/深度产物已捆绑 Metal 和 SPIR-V；运行时只加载 ShaderArtifact。DX12 管线使用同一抽象，但本机无 DXC，尚未生成/验证该 pass 的 DXIL。可在支持 DXC 的环境运行 `swift run --package-path Tools/Developer guava-dev shader rebuild --targets dxil`。
 
 ## 本机验证
 
@@ -34,8 +34,8 @@ GUAVA_WGPU_BACKEND=metal GUAVA_RUN_GPU_SMOKE_TESTS=1 \
 swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.|AssetRegistryTests|MeshAssetCatalogTests|MeshSurfaceAndVisibilityTests|RenderThreadTests'
 
-python3 scripts/check-swift-maintainability.py
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" python3 scripts/test-rhi-shader-toolchain.py
+swift run --package-path Tools/Developer guava-dev maintainability
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Tools/Developer --filter ShaderToolchainTests
 ```
 
 NativeOpaqueTests 对照生产 WGPURenderer（包括实际资源目录与 frame planner），而非新写一个同构 WGSL 参考：

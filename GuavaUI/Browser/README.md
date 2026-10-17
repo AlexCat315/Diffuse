@@ -28,8 +28,8 @@ npm run serve
 ```
 
 打开 <http://127.0.0.1:8080>。在 macOS/Linux 主机编译；`dist/` 包含浏览器运行
-依赖，无需运行时 CDN。主机还需 CMake、Ninja、Python 3，以及 Swift 工具链里的
-clang/clang++/llvm-ar。`build_fonts.py` 增量构建现有子模块，不修改上游源码。
+依赖，无需运行时 CDN。主机还需 CMake、Ninja，以及 Swift 工具链里的
+clang/clang++/llvm-ar。`npm run build:fonts` 增量构建现有子模块，不修改上游源码。
 Yoga/HarfBuzz 禁用 C++ 异常；FreeType 字体校验使用 SDK 的 `libsetjmp` 和 Wasm
 异常处理指令，因此浏览器需支持 Wasm exception handling。原生编译设置不受影响。
 
@@ -144,8 +144,6 @@ swift test --package-path GuavaUI/Portable
 swift test --package-path GuavaUI/Text # 先构建原生字体依赖，见 ../Text/README.md
 swift build --package-path GuavaUI/Portable
 cd GuavaUI/Browser
-python3 -m pip install -r requirements-dev.txt
-python3 -m playwright install chromium
 npm run build
 npm run verify
 npm run verify:dev
@@ -164,7 +162,7 @@ Inspector 重连、缩放和原生 WebSocket。文字检查包含中文/Emoji �
 开发脚本验证真实 Swift 编译、错误恢复与状态保留，
 会临时修改宿主源码并在退出时还原。
 
-`python3 verify.py --require-webgpu` 强制 WebGPU 像素验收；
+`npm run verify -- --require-webgpu` 强制 WebGPU 像素验收；
 `--require-hardware-gpu` 还拒绝软件适配器，严格模式使用 `--enable-gpu` 允许无头
 Chromium 选择硬件 GPU；默认无头模式会强制软件渲染。
 `--skip-native` 只验证浏览器，`--screenshot` 在严格模式保存 WebGPU 画面。
@@ -174,7 +172,7 @@ CI 覆盖共享字体、Linux/Windows Portable 和浏览器流程，并上传构
 
 仓库还提供手动触发的 `GuavaUI hardware WebGPU acceptance` 工作流。配置带
 `self-hosted, linux, x64, guava-webgpu` 标签、可用物理 GPU/驱动、Chromium 系统依赖及
-CMake/Ninja/Python/Node 的 runner 后，从 Actions 手动运行，它会严格检查适配器和
+CMake/Ninja/Node 的 runner 后，从 Actions 手动运行，它会严格检查适配器和
 文字/几何像素，保存日志与 WebGPU 截图。
 
 此前 Linux/Swift 6.4.1 的完整桌面测试集、7 项字体集成测试、Portable、1×/2× 图集像素
@@ -192,14 +190,14 @@ text remains private from observation. Compose/commit, layout and text/draw-list
 spans share one monotonic clock. Timeline export measures CPU generation, while
 WebGPU submission remains owned by JavaScript.
 
-`python3 verify.py --native-only` validates the real native WebSocket host and
-Inspector without building Wasm or requiring a GPU. Install Playwright/Chromium
-and build `GuavaUIDevToolsProbe` first. Full `verify.py` additionally exercises the
+`npm run verify -- --native-only` validates the real native WebSocket host and
+Inspector without building Wasm or requiring a GPU. Install Chromium
+and build `GuavaUIDevToolsProbe` first. Full `npm run verify` additionally exercises the
 Wasm renderer and input pipeline.
 
 For a live macOS GPU/mirror check, run `GUAVA_DEVTOOLS=1 swift run --package-path
 GuavaUI/Examples GuavaUIDemo --shared-counter` from the repository root, then
-`python3 GuavaUI/Browser/verify_native_demo.py`. This checks live State values,
+`npm run verify:native-demo`. This checks live State values,
 actual padding-driven Yoga layout, CPU timeline spans, Metal mirror pixels and
 remote pointer input. The app remains running after the check.
 The check restores the original checkpoint. Add `--require-presented` to require

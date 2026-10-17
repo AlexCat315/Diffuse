@@ -151,10 +151,11 @@ private struct _StatefulSelect<Value: Hashable>: View {
 
     @State var isPresented: Bool = false
     @State var isHovered: Bool = false
+    @State private var chromeWidth: Float = 0
 
     var body: some View {
         ThemeReader { theme in
-        Popover(isPresented: $isPresented,
+        var popover = Popover(isPresented: $isPresented,
                 isEnabled: select.isEnabled,
                 width: select.width,
                 label: {
@@ -167,12 +168,16 @@ private struct _StatefulSelect<Value: Hashable>: View {
             // width. It used to widen to the 2pt focus ring, which read as a
             // second, louder control sitting under the popup; the ring is now
             // reserved for keyboard focus, which the trigger style draws.
-            Row(alignment: .center, spacing: 8) {
-                Text(selectedLabel)
+            InlineLabelLayout(spacing: 8, onMinimumWidth: { width in
+                if chromeWidth != Float(width) { chromeWidth = Float(width) }
+            }) {
+                Box {}
+                Text(selectedLabel).truncatingTail()
                     .font(.body)
                     .foregroundColor(select.isEnabled ? .onSurface : .onSurfaceDisabled)
-                    .flex()
+                    .accessibilityHidden()
                 Icon(isPresented ? UIIcons.Navigation.chevronUp : UIIcons.Navigation.chevronDown, size: .small, color: .onSurfaceMuted)
+                    .accessibilityHidden()
             }
             .padding(horizontal: 10, vertical: 6)
             .frame(minHeight: 32)
@@ -186,12 +191,15 @@ private struct _StatefulSelect<Value: Hashable>: View {
             }
         }, content: {
             Menu(menuEntries,
-                 width: select.width,
                  maxVisibleRows: select.maxVisibleRows,
                  onItemActivated: {
                 isPresented = false
             })
         })
+        popover.sizing = .anchor
+        popover.triggerDescription = .init(label: selectedLabel,
+            value: select.options.first(where: { $0.value == select.selection.wrappedValue })?.label ?? "", help: selectedLabel)
+        return popover.frame(minWidth: max(44, chromeWidth + 24 + theme.inputs.borderWidth * 2))
         }
     }
 

@@ -14,15 +14,10 @@ enum ToolchainSetup {
     static func run(_ arguments: Arguments, root: URL) throws {
         try report(arguments, root: root)
         if arguments.platform == .ios {
-            try Shell.run(["python3", root.appendingPathComponent("scripts/bootstrap-ios.py").path], at: root)
+            try DeveloperTool.run(["ios-native"], root: root)
         } else if arguments.platform != .android {
             // SDK native archives are built once, shared by all application projects.
-            #if os(Windows)
-            let python = "python"
-            #else
-            let python = "python3"
-            #endif
-            try Shell.run([python, root.appendingPathComponent("bootstrap.py").path], at: root)
+            try DeveloperTool.run(["native-bootstrap"], root: root)
         }
         print("Ready. guava create app MyApp; guava run MyApp --\(arguments.platform.rawValue)")
     }

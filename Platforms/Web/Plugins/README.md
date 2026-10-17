@@ -50,9 +50,7 @@ const result = await plugin.prepare('safe.reader.inspect', { enabled: true }, {
 
 ```sh
 npm test --prefix Platforms/Web/Plugins
-python3 -m pip install -r GuavaUI/Browser/requirements-dev.txt
-python3 -m playwright install chromium
-python3 Platforms/Web/Plugins/tests/browser.py \
+swift run --package-path Tools/Developer guava-dev browser web-plugins \
   --host "$(swift build --package-path Engine --show-bin-path)/GuavaPluginHost" \
   --probe Engine/build/plugin-probe/GuavaPluginProbe
 ```

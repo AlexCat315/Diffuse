@@ -27,6 +27,7 @@ public struct TabItem<ID: Hashable>: Identifiable {
 
 /// Visual treatment of a `TabView` strip.
 public enum TabVariant: Sendable, Hashable {
+    var horizontalPadding: Float { self == .segmented ? 12 : 14 }
     /// Underlined document strip sitting flush with the content.
     case bar
     /// Single pill that selects a value rather than a document.
@@ -172,7 +173,7 @@ struct TabStripItem<ID: Hashable>: View {
         let minimumWidth = max(44, chromeWidth + variant.horizontalPadding * 2)
         return Button(isEnabled: enabled, isSelected: tab.id == selection.wrappedValue,
                       tooltip: tab.label, action: { selection.wrappedValue = tab.id }) {
-            TabLabelLayout(onMinimumWidth: { width in
+            InlineLabelLayout(onMinimumWidth: { width in
                 if chromeWidth != Float(width) { chromeWidth = Float(width) }
             }) {
                 Box(direction: .row, spacing: 0) {

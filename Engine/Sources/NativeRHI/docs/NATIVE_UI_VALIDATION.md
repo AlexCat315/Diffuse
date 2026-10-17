@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRHI UI 迁移验证
 
@@ -40,7 +40,7 @@
 - 资源生命周期覆盖 no-active-frame、录制放弃、submit 失败、提交期间后续 patch、重复旧 token 确认、resize / unregister / sibling sync、外部图片在 asynchronous submit 期间释放、跨设备拒绝与失败 configure 后继续使用原管线。8 帧不等待 idle 的双 renderer 绘制覆盖不同 logical viewport、超过 4 MiB 的 vertex upload chunk 和 frame-ring 复用。
 - 非有限 vertex / scissor、错误 indices / batch ranges 与溢出 viewport 不留下部分 commands；超大有限 scissor 可安全钳制。失败 font registration 保留 atlas dirty state。
 
-本轮 NativeRHI 101 项 XCTest、NativeRenderer 39 项 XCTest、GuavaUI 全包测试与 shader 工具链 8 项 Python 测试通过。Swift maintainability 检查通过，现有 46 项超限指标未增加。
+本轮 NativeRHI 101 项 XCTest、NativeRenderer 39 项 XCTest、GuavaUI 全包测试与 shader 工具链 8 项测试通过。Swift maintainability 检查通过，现有 46 项超限指标未增加。
 
 ## 场景 viewport 与快照所有权
 
@@ -66,8 +66,8 @@ Windows/Linux 的 Vulkan 与 Windows 的 DX12 实现及对应测试入口已同�
 SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.'
 swift test --package-path GuavaUI --jobs 4
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" python3 scripts/compile-native-renderer-shaders.py --ui-only
-python3 scripts/check-swift-maintainability.py --report
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift run --package-path Tools/Developer guava-dev shader rebuild --ui-only
+swift run --package-path Tools/Developer guava-dev maintainability --report
 ```
 
 ## 同等工作量的 release 性能
@@ -236,7 +236,7 @@ GuavaUI 全包回归通过，随后修改的数组计数读取经 Release 的 11
 
 ## 真实 Editor 循环与整窗对照
 
-`validate-editor-native-loop.py` 现在默认显式选择 NativeRHI；`--renderer both` 顺序运行 NativeRHI / WGPU 的事件驱动和连续帧循环，并自动比较暂停后的整窗内容。临时 app、项目、布局和脚本信任与日常项目分开。Native 启动须出现 `NativeRenderer ready`，且不能出现 WGPU 初始化或任何渲染失败日志。监听端口可早于首帧布局／字体栅格化开放，脚本先取得非空窗口画面，再检查桥接的交互响应。
+`swift run --package-path Tools/Developer guava-dev validate editor-loop` 现在默认显式选择 NativeRHI；`--renderer both` 顺序运行 NativeRHI / WGPU 的事件驱动和连续帧循环，并自动比较暂停后的整窗内容。临时 app、项目、布局和脚本信任与日常项目分开。Native 启动须出现 `NativeRenderer ready`，且不能出现 WGPU 初始化或任何渲染失败日志。监听端口可早于首帧布局／字体栅格化开放，脚本先取得非空窗口画面，再检查桥接的交互响应。
 
 `get_runtime_state` 增加已提交帧的编号、可见网格数、draw count 和 viewport 有效性。脚本等待新帧、有效 viewport 和非零可见网格后才暂停截图，避免将已经更新的仿真实体数当作渲染完成。该检查发现 NativeRenderer 漏填 `visibleMeshInstanceCount`；现从相机 visibility plan 填写，与 WGPU 使用相同定义。剔除、LOD 和对照场景的统计回归覆盖此修复。
 
@@ -247,7 +247,7 @@ GuavaUI 全包回归通过，随后修改的数组计数读取经 Release 的 11
 ```sh
 swift build --package-path Editor --jobs 4
 swift build --package-path GuavaMcp --product GuavaMCP
-python3 scripts/validate-editor-native-loop.py --renderer both
+swift run --package-path Tools/Developer guava-dev validate editor-loop --renderer both
 # 默认检查两种循环；--mode event-driven / continuous 可单独检查。
 # 临时目录保留每条路径的启动／暂停 JPEG、渲染状态、比较报告和日志。
 ```

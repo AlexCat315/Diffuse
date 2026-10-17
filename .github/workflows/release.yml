@@ -116,7 +116,7 @@ jobs:
         uses: ./.github/actions/setup-toolchains
 
       - name: Build native dependencies
-        run: python3 bootstrap.py --force
+        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
 
       - name: Build Editor, Player, and MCP
         shell: bash
@@ -235,7 +235,7 @@ jobs:
 
       - name: Build native dependencies
         shell: pwsh
-        run: python bootstrap.py --force
+        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
 
       - name: Build Editor, Player, and MCP
         shell: pwsh
@@ -402,7 +402,7 @@ jobs:
 
       - name: Build native dependencies
         shell: bash
-        run: python3 bootstrap.py --force
+        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
 
       - name: Build Editor, Player, and MCP
         shell: bash

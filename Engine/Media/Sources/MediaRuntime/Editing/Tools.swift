@@ -3,7 +3,7 @@ import Foundation
 
 public enum FFmpegTools {
     /// Installed workstations ship a pinned tool beside their executable.
-    /// Source builds use the same tool staged by Native/stage.py.
+    /// Source builds use the same tool staged by `guava-dev media`.
     public static func executable() throws -> URL {
         #if os(Windows)
         let name = "ffmpeg.exe"
@@ -38,7 +38,7 @@ public enum FFmpegTools {
         let package = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         candidates.append(package.appendingPathComponent("vendor/FFmpeg.artifactbundle/\(variant)/bin/\(name)"))
         guard let result = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) else {
-            throw MediaError.export("Pinned FFmpeg tool is missing. Run bootstrap.py or configure GUAVA_FFMPEG_EXECUTABLE.")
+            throw MediaError.export("Pinned FFmpeg tool is missing. Run `guava-dev native-bootstrap` or configure GUAVA_FFMPEG_EXECUTABLE.")
         }
         return result
     }

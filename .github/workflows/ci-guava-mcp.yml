@@ -9,7 +9,7 @@ on:
       - 'GuavaUI/Portable/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
   pull_request:
     paths:
@@ -18,7 +18,7 @@ on:
       - 'GuavaUI/Portable/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
 
 # SwiftPM validates every Engine binary target even when GuavaMCP only
@@ -61,7 +61,7 @@ jobs:
 
       - name: Build native dependencies
         shell: bash
-        run: python bootstrap.py --force
+        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
 
       - name: Swift version
         run: swift --version

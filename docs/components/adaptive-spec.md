@@ -431,7 +431,7 @@ guava showcase gallery --android --component NAME
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
 | 容器查询发布与阈值 | `ContainerQueryTests.swift` |
-| Android 设备逐页启动 | `scripts/android/verify-gallery.py`（页面名直接来自 `GalleryCatalog.swift`） |
+| Android 设备逐页启动 | `guava-dev android gallery`（页面名直接来自 `GalleryCatalog.swift`） |
 | 通用回归 | `swift test --package-path GuavaUI` |
 
 新控件进入验收的门槛：

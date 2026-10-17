@@ -11,9 +11,7 @@ on:
       - 'Platforms/Android/Sources/**'
       - 'Platforms/Android/Contract/Sources/**'
       - 'GuavaUI/Platforms/Android/Sources/**'
-      - 'scripts/check-swift-maintainability.py'
-      - 'scripts/test-swift-maintainability.py'
-      - 'scripts/swift-maintainability-baseline.json'
+      - 'Tools/Developer/**'
       - '.github/workflows/ci-swift-maintainability.yml'
   pull_request:
     paths:
@@ -24,9 +22,7 @@ on:
       - 'Platforms/Android/Sources/**'
       - 'Platforms/Android/Contract/Sources/**'
       - 'GuavaUI/Platforms/Android/Sources/**'
-      - 'scripts/check-swift-maintainability.py'
-      - 'scripts/test-swift-maintainability.py'
-      - 'scripts/swift-maintainability-baseline.json'
+      - 'Tools/Developer/**'
       - '.github/workflows/ci-swift-maintainability.yml'
 
 jobs:
@@ -34,7 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.1'
       - name: Check type and initializer size
         run: |
-          python3 scripts/test-swift-maintainability.py
-          python3 scripts/check-swift-maintainability.py
+          swift test --package-path Tools/Developer --filter MaintainabilityTests
+          swift run --package-path Tools/Developer guava-dev maintainability

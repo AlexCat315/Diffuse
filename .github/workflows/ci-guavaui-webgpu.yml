@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
 
 # Opt-in: this runner must have a working physical GPU, its Linux drivers,
-# Chromium dependencies, CMake/Ninja, Python and Node. Cloud CI stays separate.
+# Chromium with its system dependencies, and a Swift toolchain. Cloud CI stays
+# separate.
 jobs:
   hardware-webgpu:
     runs-on: [self-hosted, linux, x64, guava-webgpu]
@@ -29,11 +30,7 @@ jobs:
         run: |
           npm ci
           npm run build
-          python3 -m venv "$RUNNER_TEMP/guava-browser-python"
-          source "$RUNNER_TEMP/guava-browser-python/bin/activate"
-          python3 -m pip install -r requirements-dev.txt
-          python3 -m playwright install chromium
-          python3 verify.py --require-hardware-gpu --skip-native --screenshot "$RUNNER_TEMP/webgpu.png" 2>&1 | tee "$RUNNER_TEMP/webgpu.log"
+          npm run verify -- --require-hardware-gpu --skip-native --screenshot "$RUNNER_TEMP/webgpu.png" 2>&1 | tee "$RUNNER_TEMP/webgpu.log"
       - name: Upload acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4

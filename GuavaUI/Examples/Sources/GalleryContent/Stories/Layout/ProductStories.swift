@@ -50,14 +50,15 @@ struct FormStory: View {
 
 struct ComboboxStory: View {
     let options: GalleryOptions
-    @State private var city: String? = nil
+    @State private var city: String? = "shanghai"
     var body: some View {
         StorySection("Searchable selection", "Search in English or Chinese, use Up/Down and Return, or clear the selection. Unavailable options cannot be chosen.") {
             Combobox(selection: $city, options: [
-                SelectOption(value: "beijing", label: "北京 · Beijing"), SelectOption(value: "shanghai", label: "上海 · Shanghai"),
+                SelectOption(value: "beijing", label: "北京 · Beijing"),
+                SelectOption(value: "shanghai", label: "上海 · Shanghai · International collaboration workspace 👩🏽‍💻"),
                 SelectOption(value: "hongkong", label: "香港 · Hong Kong"), SelectOption(value: "london", label: "London"),
                 SelectOption(value: "unavailable", label: "Unavailable", isEnabled: false)
-            ]) { $0.isEnabled = options.isEnabled; $0.placeholder = "Choose a city" }
+            ]) { $0.isEnabled = options.isEnabled; $0.placeholder = "Choose a city" }.frame(maxWidth: 360)
             Text("Selected: \(city ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }

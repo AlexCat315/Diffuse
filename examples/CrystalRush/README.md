@@ -28,7 +28,7 @@ adb -s DEVICE_SERIAL install -r Engine/build/android-validation/CrystalRush.apk
 adb -s DEVICE_SERIAL shell am start -W -n com.guava.game.crystalrush/com.guava.probe.MainActivity
 ```
 
-屏幕底部提供移动、加速、开始和重开按钮。项目脚本与播放器静态链接，场景、资源和中文 GuavaUI HUD 一起打包；暂停与旋转保留当前游戏会话。`scripts/android/verify-game.py` 验收真实场景绘制、触摸输入和生命周期，Release 与生产签名选项见 Android 接入说明。
+屏幕底部提供移动、加速、开始和重开按钮。项目脚本与播放器静态链接，场景、资源和中文 GuavaUI HUD 一起打包；暂停与旋转保留当前游戏会话。`guava-dev android game` 验收真实场景绘制、触摸输入和生命周期，Release 与生产签名选项见 Android 接入说明。
 
 ## 编辑与重新导出
 
@@ -45,8 +45,8 @@ swift run --package-path Editor EditorApp --project-dir "$PWD/examples/CrystalRu
 ```bash
 swift build --package-path Editor
 swift build --package-path GuavaMcp
-python3 scripts/check-guava-mcp-protocol.py
-python3 scripts/validate-crystal-rush-mcp.py
+swift run --package-path Tools/Developer guava-dev validate mcp-protocol
+swift run --package-path Tools/Developer guava-dev validate crystal-rush
 ```
 
 验证脚本会为这个样例启动独立的无窗口编辑器，显式信任样例脚本、确认可撤销的场景草稿，在随机本机端口上通过 MCP 编译和导出，最后让打包后的 Player 模拟 120 帧。完整请求和结果保存在 `validation/mcp-transcript.json`。

@@ -25,9 +25,9 @@ swiftly use 6.4.1
 swift --version
 ```
 
-macOS 还需要 Apple Command Line Tools（`xcode-select --install`），以及 Git、CMake、Ninja、Python 3；安装了 Homebrew 时可运行 `brew install git cmake ninja python`。Apple 的安装界面需要用户完成。
+macOS 还需要 Apple Command Line Tools（`xcode-select --install`），以及 Git、CMake、Ninja；安装了 Homebrew 时可运行 `brew install git cmake ninja`。Apple 的安装界面需要用户完成。
 
-Windows 需要 Swift 官方页面列出的 Visual Studio C++ 工具和 Windows SDK，再安装 Swift；使用 Developer PowerShell。Linux 需要本机 C/C++ 编译器、CMake、Ninja、Python 3、pkg-config，以及窗口系统开发包、Vulkan SDK 和可用驱动。不同发行版请按其包管理器安装；`guava doctor --linux` 提供诊断入口。
+Windows 需要 Swift 官方页面列出的 Visual Studio C++ 工具和 Windows SDK，再安装 Swift；使用 Developer PowerShell。Linux 需要本机 C/C++ 编译器、CMake、Ninja、pkg-config，以及窗口系统开发包、Vulkan SDK 和可用驱动。不同发行版请按其包管理器安装；`guava doctor --linux` 提供诊断入口。
 
 ## 2. 安装 CLI 与源码 SDK
 
@@ -113,11 +113,11 @@ guava run --android --device SERIAL --devtools
 
 | 目标 | 应用开发所需增量工具 |
 | --- | --- |
-| macOS | Swift 6.4.1、Apple SDK、Git、CMake、Ninja、Python 3 |
-| Windows | Swift 6.4.1、Visual Studio C++ / Windows SDK、Git、CMake、Ninja、Python 3、Vulkan SDK / 驱动 |
-| Linux | Swift 6.4.1、C/C++、Git、CMake、Ninja、Python 3、窗口系统开发包、Vulkan SDK / 驱动 |
-| Android | Swift / Git / CMake / Ninja / Python 3 / make + JDK 21、Android SDK / NDK r30、匹配的 Swift Android SDK；不要求 Node |
-| iOS / iPadOS | macOS、完整 Xcode、Swift、Python 3、make、CMake、Ninja、Rust 与对应 iOS target |
-| 浏览器原型 | 单独的 Swift / Wasm SDK 配对、Node、CMake、Ninja、Python；并非普通桌面 / Android 应用的前置条件 |
+| macOS | Swift 6.4.1、Apple SDK、Git、CMake、Ninja |
+| Windows | Swift 6.4.1、Visual Studio C++ / Windows SDK、Git、CMake、Ninja、Vulkan SDK / 驱动 |
+| Linux | Swift 6.4.1、C/C++、Git、CMake、Ninja、窗口系统开发包、Vulkan SDK / 驱动 |
+| Android | Swift / Git / CMake / Ninja / make + JDK 21、Android SDK / NDK r30、匹配的 Swift Android SDK；不要求 Node |
+| iOS / iPadOS | macOS、完整 Xcode、Swift、make、CMake、Ninja、Rust 与对应 iOS target |
+| 浏览器原型 | 单独的 Swift / Wasm SDK 配对、Node、CMake、Ninja，验证时还需要 Chromium；并非普通桌面 / Android 应用的前置条件 |
 
 源码 SDK 会带来原生编译工具的安装负担。未来发布预编译 SDK 时，应把原生依赖随各主机/目标架构打包；Swift 编译器和目标平台 SDK 仍是编译用户代码的工具，不能被 CLI 的安装名义隐藏。

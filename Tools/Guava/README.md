@@ -111,13 +111,13 @@ Inspector 的源码断点接入现有 VS Code/LLDB 工作流；CLI 尚未提供�
 
 ```sh
 swift test --package-path Tools/Guava
-python3 scripts/check-module-boundaries.py
+swift run --package-path Tools/Developer guava-dev boundaries
 # 已启动带 --devtools 的应用后，验证真实协议及认证：
-node scripts/verify-development-session.mjs /path/to/MyApp mac
-node scripts/verify-development-session.mjs /path/to/MyApp android
+swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp mac
+swift run --package-path Tools/Developer guava-dev validate session /path/to/MyApp android
 ```
 
-Editor 也使用 guava.json 和应用自己的平台目录：`./guava run Editor --devtools`。SDK 当前来自源码 checkout，原生依赖初始化仍由 bootstrap.py 负责；预编译 SDK 下载、公证和商店发布不在本轮工具中。
+Editor 也使用 guava.json 和应用自己的平台目录：`./guava run Editor --devtools`。SDK 当前来自源码 checkout，原生依赖初始化仍由 `guava-dev native-bootstrap` 负责；预编译 SDK 下载、公证和商店发布不在本轮工具中。
 
 
-默认项目包含 `Platforms/iOS/Application.xcodeproj`，与桌面和 Android 共用 AppContent。`guava devices --ios` 列出目标，`guava run MyApp --ios --simulator UDID` 使用模拟器，真机使用 `--device ID --team TEAM_ID`。Xcode 工程通过 CLI 自动设置共享包和原生库路径；依赖构建输出位于 SDK 的 `Engine/build/ios-*/` 与 `GuavaUI/build/ios-*/`，不会替换桌面库。构建需要完整 Xcode、Ninja、CMake、Python 和已安装相应 iOS target 的 Rust。
+默认项目包含 `Platforms/iOS/Application.xcodeproj`，与桌面和 Android 共用 AppContent。`guava devices --ios` 列出目标，`guava run MyApp --ios --simulator UDID` 使用模拟器，真机使用 `--device ID --team TEAM_ID`。Xcode 工程通过 CLI 自动设置共享包和原生库路径；依赖构建输出位于 SDK 的 `Engine/build/ios-*/` 与 `GuavaUI/build/ios-*/`，不会替换桌面库。构建需要完整 Xcode、Ninja、CMake 和已安装相应 iOS target 的 Rust。

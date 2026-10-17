@@ -9,11 +9,10 @@ on:
       - 'Platforms/Android/**'
       - 'Tools/Guava/**'
       - 'examples/GuavaUIStarter/**'
-      - 'scripts/check-module-boundaries.py'
+      - 'Tools/Developer/**'
       - 'Engine/**'
       - '.github/workflows/ci-guavaui.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
       - 'cmake/**'
   pull_request:
     paths:
@@ -22,7 +21,7 @@ on:
       - 'Platforms/Android/**'
       - 'Tools/Guava/**'
       - 'examples/GuavaUIStarter/**'
-      - 'scripts/check-module-boundaries.py'
+      - 'Tools/Developer/**'
       - 'Engine/**'
 
 jobs:
@@ -74,7 +73,7 @@ jobs:
           swift test
           swift test --package-path Examples
           swift test --package-path ../Tools/Guava
-          python3 ../scripts/check-module-boundaries.py
+          swift run --package-path ../Tools/Developer guava-dev boundaries
 
   portable:
     name: Portable DevTools (${{ matrix.os }})
@@ -112,15 +111,15 @@ jobs:
         run: swift sdk install https://download.swift.org/swift-6.4.1-release/wasm-sdk/swift-6.4.1-RELEASE/swift-6.4.1-RELEASE_wasm.artifactbundle.tar.gz --checksum 783e6128d174d9f975b4eda68be02a5960681b723ef372e6876a7c2543a365d8
       - name: Build native diagnostic host
         run: swift build --package-path GuavaUI/Portable
+      - uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-dependencies: true
       - name: Build Wasm and run browser checks
         working-directory: GuavaUI/Browser
         run: |
           npm ci
           npm run build
-          python3 -m venv "$RUNNER_TEMP/guava-browser-python"
-          source "$RUNNER_TEMP/guava-browser-python/bin/activate"
-          python3 -m pip install -r requirements-dev.txt
-          python3 -m playwright install --with-deps chromium
           npm run verify
           npm run verify:dev
 

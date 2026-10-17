@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "bash build.sh",
-    "serve": "python3 -m http.server 8080 --bind 127.0.0.1 --directory dist",
-    "verify": "python3 verify.py",
-    "dev": "python3 dev.py",
-    "verify:dev": "python3 verify_dev.py"
+    "build:fonts": "swift run --package-path ../../Tools/Developer guava-dev browser build-fonts",
+    "serve": "swift run --package-path ../../Tools/Developer guava-dev browser serve",
+    "verify": "swift run --package-path ../../Tools/Developer guava-dev browser verify",
+    "verify:dev": "swift run --package-path ../../Tools/Developer guava-dev browser verify-dev",
+    "verify:native-demo": "swift run --package-path ../../Tools/Developer guava-dev browser native-demo",
+    "dev": "swift run --package-path ../../Tools/Developer guava-dev browser dev"
   },
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "0.4.2"

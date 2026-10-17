@@ -89,7 +89,7 @@ Metal 通过 graphics command buffer 排队 present，保证它在先前绘制�
 - Vulkan：SPIR-V，保留实际 entry point 名称；要求 Vulkan 1.1 与 timeline semaphore（1.2 核心或 KHR 扩展），使用核心 render pass。UI 产物为 SPIR-V 1.3；LocalSizeId 额外要求 maintenance4，超出物理设备版本的 shader 会在原生创建前拒绝。
 - DX12：DXIL，当前工具使用 shader model 6.6，后端检查相同要求。编译需要 DXC/dxcompiler；本机没有该依赖，DXIL 产物未验证。
 
-`scripts/compile-rhi-shader.py` 固定 Slang **2026.19**。编译器通过 `--slangc` 或 `SLANGC` 显式提供；编译时不下载。目标反射与 SPIR-V 逻辑反射用于区分普通资源和 push constant，原始目标 reflection 保留供检查。编译/反射失败不会覆盖已有产物。`ShaderInterface` 直接序列化 typed specialization constants 和工作组维度对应的 constant ID；Metal function constants 与 Vulkan VkSpecializationInfo 共用同一类型/值输入，物理 dispatch 和 LocalSizeId 一致。Vulkan 设备必须启用 maintenance4 才能使用 LocalSizeId。DXIL 不能运行时改 numthreads，粒子工具链在 Windows 编译完整的 1–256 离线代码族，Native loader 按工作组大小选择；缺失变体会明确失败。
+`Tools/Developer` 的 `ShaderToolchain` 固定 Slang **2026.19**。编译器通过 `--slangc` 或 `SLANGC` 显式提供；编译时不下载。目标反射与 SPIR-V 逻辑反射用于区分普通资源和 push constant，原始目标 reflection 保留供检查。编译/反射失败不会覆盖已有产物。`ShaderInterface` 直接序列化 typed specialization constants 和工作组维度对应的 constant ID；Metal function constants 与 Vulkan VkSpecializationInfo 共用同一类型/值输入，物理 dispatch 和 LocalSizeId 一致。Vulkan 设备必须启用 maintenance4 才能使用 LocalSizeId。DXIL 不能运行时改 numthreads，粒子工具链在 Windows 编译完整的 1–256 离线代码族，Native loader 按工作组大小选择；缺失变体会明确失败。
 
 `dispatch(groupsX:groupsY:groupsZ:)` 和 `drawMeshTasks` 的单位都是 workgroup 数量。local size 来自 shader module，例如 local size `(8,1,1)` 配合两个 groups 执行 16 个线程。当前 Slang mesh/task JSON 缺少 local size，必须显式传 `--threadgroup-size`，与 `numthreads` 一致。
 
@@ -100,20 +100,20 @@ Metal 光追仍使用原生 MSL；Slang Metal RT 和 Metal Shader Converter 不�
 macOS arm64：
 
 ```sh
-python3 scripts/bootstrap-rhi-slang.py
+swift run --package-path Tools/Developer guava-dev shader bootstrap-slang
 export SLANGC="$PWD/Engine/vendor/slang/bin/slangc"
 swift test --package-path Engine --filter 'NativeRHITests\.' --jobs 4
-python3 scripts/test-rhi-shader-toolchain.py
-python3 scripts/compile-native-renderer-shaders.py --check
-bash scripts/test-gpu-regression.sh
-python3 scripts/check-swift-maintainability.py
+swift test --package-path Tools/Developer --filter ShaderToolchainTests
+swift run --package-path Tools/Developer guava-dev shader rebuild --check
+swift run --package-path Tools/Developer guava-dev gpu-regression run
+swift run --package-path Tools/Developer guava-dev maintainability
 ```
 
 macOS 只使用 Metal，不链接 Vulkan loader，不加载 Vulkan ICD，也不执行 Vulkan GPU 测试。Slang 是离线工具，产物无需运行时编译器。
 
 Android 使用 Swift 6.4.0 Android SDK、NDK r30 与系统 libvulkan，默认 RGBA8 surface；工具链和真机复现见 `Platforms/Android/README.md`。
 
-Windows / Linux 使用安装的 Vulkan SDK，非系统位置设置 `VULKAN_SDK`。可在对应宿主上运行 `scripts/bootstrap-rhi-vulkan.py`，校验固定 Vulkan-Headers / Loader **1.4.328** 的 SHA-256 并安装到忽略的 `Engine/vendor/vulkan-sdk`；脚本在 macOS 明确拒绝运行。Windows 还需 Windows SDK 的 D3D12 / DXGI；DXIL shader 编译需 DXC。
+Windows / Linux 使用安装的 Vulkan SDK，非系统位置设置 `VULKAN_SDK`。可在对应宿主上运行 `swift run --package-path Tools/Developer guava-dev vulkan bootstrap`，校验固定 Vulkan-Headers / Loader **1.4.328** 的 SHA-256 并安装到忽略的 `Engine/vendor/vulkan-sdk`；脚本在 macOS 明确拒绝运行。Windows 还需 Windows SDK 的 D3D12 / DXGI；DXIL shader 编译需 DXC。
 
 `SurfaceDescriptor.kind` 区分 CAMetalLayer、HWND、Xlib Window 和 Wayland wl_surface。Xlib/Wayland 使用 `display`；Xlib 的 `nativeHandle` 保存 Window 的 pointer bit pattern。Vulkan 仅启用宿主实际提供的 WSI 扩展，并从已创建的 instance 解析 instance dispatch 命令。Surface 创建失败会释放对象；swapchain 检查 graphics queue 的呈现支持、请求的颜色格式和原生 drawable extent。仅有其他 queue family 支持呈现时，当前会明确拒绝该 surface。
 

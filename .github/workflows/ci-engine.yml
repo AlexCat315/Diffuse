@@ -9,7 +9,7 @@ on:
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
   pull_request:
     paths:
@@ -18,7 +18,7 @@ on:
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
 
 jobs:
@@ -43,6 +43,12 @@ jobs:
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
 
+      - uses: browser-actions/setup-chrome@v2
+        if: runner.os == 'Linux'
+        with:
+          chrome-version: stable
+          install-dependencies: true
+
       - name: Swift version
         shell: bash
         run: swift --version
@@ -64,7 +70,7 @@ jobs:
       - name: Build native deps via CMake (SDL3 + Imath + OpenEXR + Jolt)
         shell: bash
         run: |
-          # Mirror bootstrap.py exactly: a blanket build (ALL) first builds every
+          # Mirror guava-dev native-bootstrap exactly: a blanket build (ALL) first builds every
           # bundled lib (all webp variants, plutovg, lunasvg, jolt, ocio/openexr,
           # SDL3 via stage_sdl3 ALL) so the install step finds them; stage_sdl3 /
           # stage_image_decode then stage the bundles; --prefix keeps stray
@@ -82,7 +88,7 @@ jobs:
 
       - name: Build pinned FFmpeg
         shell: bash
-        run: python Engine/Media/Native/stage.py
+        run: swift run --package-path Tools/Developer guava-dev media
 
       - name: Build pure-Swift targets
         shell: bash
@@ -128,10 +134,8 @@ jobs:
           npm test --prefix Platforms/Web/Plugins
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
           cmake --build Engine/build/plugin-probe --parallel 4
-          python -m pip install -r GuavaUI/Browser/requirements-dev.txt
-          python -m playwright install chromium
           host_bin=$(swift build --package-path Engine --show-bin-path)
-          python Platforms/Web/Plugins/tests/browser.py --host "$host_bin/GuavaPluginHost" --probe Engine/build/plugin-probe/GuavaPluginProbe
+          swift run --package-path Tools/Developer guava-dev browser web-plugins --host "$host_bin/GuavaPluginHost" --probe Engine/build/plugin-probe/GuavaPluginProbe
 
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'

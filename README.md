@@ -88,10 +88,9 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
   - **macOS**: Xcode Command Line Tools
   - **Linux**: GCC or Clang
   - **Windows**: Visual Studio 2026 (C++ workload)
-- Python 3.14
 - Node.js 26.10.0 / npm (website)
 - Git
-- Graphics: system Metal on macOS; DX12 by default on Windows, with the Windows SDK and DXC for shader compilation; Vulkan on Linux (`libvulkan-dev`). Configure the Windows Vulkan fallback with `python scripts/bootstrap-rhi-vulkan.py` and `VULKAN_SDK`.
+- Graphics: system Metal on macOS; DX12 by default on Windows, with the Windows SDK and DXC for shader compilation; Vulkan on Linux (`libvulkan-dev`). Configure the Windows Vulkan fallback with `swift run --package-path Tools/Developer guava-dev vulkan bootstrap` and `VULKAN_SDK`.
 
 ### First build
 
@@ -99,11 +98,11 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
 git clone https://github.com/AlexCat315/GuavaStudio.git
 cd GuavaStudio
 git submodule update --init --recursive
-python bootstrap.py
+swift run --package-path Tools/Developer guava-dev native-bootstrap
 swift build --package-path Editor
 ```
 
-`bootstrap.py` compiles the native C/C++ dependencies (Yoga, FreeType, HarfBuzz, SDL3, Jolt, OpenEXR/Imath) for each package into its `vendor/` directory and wraps them for SwiftPM. On macOS it also verifies and stages the pinned official Wasmtime Component C API dynamic artifact. It is cross-platform and initializes the MSVC toolchain on Windows.
+The `guava-dev native-bootstrap` command compiles the native C/C++ dependencies (Yoga, FreeType, HarfBuzz, SDL3, Jolt, OpenEXR/Imath) for each package into its `vendor/` directory and wraps them for SwiftPM. On macOS it also verifies and stages the pinned official Wasmtime Component C API dynamic artifact. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 
@@ -111,7 +110,7 @@ After the first bootstrap, day-to-day development only needs:
 swift build --package-path Editor
 ```
 
-> **Force rebuild of native deps:** `python bootstrap.py --force`
+> **Force rebuild of native deps:** `swift run --package-path Tools/Developer guava-dev native-bootstrap --force`
 
 ### Run the website locally
 

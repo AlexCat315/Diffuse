@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRenderer PBR、阴影与 HDR
 
@@ -14,7 +14,7 @@ macOS 构建与探针仅使用 Metal；Vulkan 面向原生 Windows/Linux。SPIR-
 
 CPU 验证还检查未迁移的 UI/TAA packet 会在开始 GPU 帧之前明确拒绝，恢复支持的输入后可继续使用。Metal 窗口测试验证 CAMetalLayer 的 HDR 呈现、持续帧、resize、阴影分辨率变更，以及错误 packet 后恢复。现有 grid/opaque 测试继续覆盖实例化、镜像/双面、遮罩深度、资源替换/删除/回滚、裁剪、LOD 和渲染线程的真实 packet。
 
-最终选择范围执行 83 项 NativeRHI XCTest、13 项 NativeRenderer XCTest、26 项渲染线程/可见性/生产 GPU 与 shader catalog Swift Testing、6 项资产目录 Swift Testing，均无失败或跳过。Slang 工具链 5 项 Python 测试通过；Swift 结构检查通过，既有 46 项超限指标未增加。
+最终选择范围执行 83 项 NativeRHI XCTest、13 项 NativeRenderer XCTest、26 项渲染线程/可见性/生产 GPU 与 shader catalog Swift Testing、6 项资产目录 Swift Testing，均无失败或跳过。Slang 工具链 5 项测试通过；Swift 结构检查通过，既有 46 项超限指标未增加。
 
 生产 WGPU 从 r3 才发布可读回的 viewport，因此 WGPU 画面对照使用 r3/r4。r1 与深度预通道的输出等价由 NativeOpaqueTests 单独检查，不把未发布的 viewport 误判为 GPU 渲染失败。
 
@@ -24,8 +24,8 @@ GUAVA_WGPU_BACKEND=metal GUAVA_RUN_GPU_SMOKE_TESTS=1 \
 swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.|RenderThreadTests|MeshSurfaceAndVisibilityTests|MeshAssetCatalogTests|AssetRegistryTests|RenderBackendGPUSmokeTests/(material|directionalShadow|multiDirectionalShadow|directionalCascades|editorGridPaints)|ShaderCatalogTests'
 
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" python3 scripts/test-rhi-shader-toolchain.py
-python3 scripts/check-swift-maintainability.py --report
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Tools/Developer --filter ShaderToolchainTests
+swift run --package-path Tools/Developer guava-dev maintainability --report
 ```
 
 ## Release 性能探针

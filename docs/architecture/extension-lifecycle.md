@@ -352,7 +352,7 @@ public struct PluginRequirement: Codable, Sendable, Equatable, Hashable {
 
 - `CapabilityExposureTests`：收窄失效的四种场景；
 - `EditorPluginReloadTests`：真实宿主端到端（含宿主二进制定位与 WAT 编译夹具）；
-- `PluginRuntimeTests`（含 typed unload、停止后代际失效与重复故障回归）、`WorkflowScopeTests`（3）、Editor 构建、`EditorPluginAuthorizationStoreTests`（3）、`EditorPluginManagementSecurityTests`（3）、`scripts/check-guava-mcp-protocol.py`（工具清单新增 `reload_plugin`）全部通过（2026-10-16）。
+- `PluginRuntimeTests`（含 typed unload、停止后代际失效与重复故障回归）、`WorkflowScopeTests`（3）、Editor 构建、`EditorPluginAuthorizationStoreTests`（3）、`EditorPluginManagementSecurityTests`（3）、`guava-dev validate mcp-protocol`（工具清单新增 `reload_plugin`）全部通过（2026-10-16）。
 
 ---
 
@@ -380,8 +380,8 @@ public struct PluginRequirement: Codable, Sendable, Equatable, Hashable {
 swift test --package-path Engine --filter 'CapabilityRuntimeTests|IntentRuntimeTests|PluginRuntimeTests|AIRuntimeTests'
 swift test --package-path Editor --filter 'EditorPluginReloadTests|EditorToolPolicyTests|EditorPluginAuthorizationStoreTests|EditorPluginManagementSecurityTests|EditorAIRequestPolicyTests|EditorAgentTransactionTests|EditorProjectToolsTests|EditorDiagnosticsTests|WorkstationTests'
 swift build --package-path GuavaMcp
-python3 scripts/check-guava-mcp-protocol.py
-python3 scripts/check-swift-maintainability.py
+swift run --package-path Tools/Developer guava-dev validate mcp-protocol
+swift run --package-path Tools/Developer guava-dev maintainability
 npm --prefix Platforms/Web/Plugins test
 ```
 

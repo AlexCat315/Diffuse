@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Testing
 @testable import GuavaUIRuntime
 @testable import GuavaUICompose
@@ -193,36 +194,72 @@ private final class ImageTestUIQueue: @unchecked Sendable {
     func drain() { let jobs = lock.withLock { let result = self.jobs; self.jobs = []; return result }; jobs.forEach { $0() } }
 }
 private struct ImageHTTPFixture {
-    let process: Process
-    let port: Int
+    private let server: ImageHTTPServer
+    init() throws { server = try ImageHTTPServer() }
+    func url(_ path: String) -> URL { server.url(path) }
+    func stop() { server.stop() }
+}
+
+/// A minimal localhost HTTP server so the transport test exercises real sockets
+/// instead of a mock. It serves `/ok`, `/missing`, `/large`, a held `/slow`
+/// request and the `/slow-started` probe that reports when `/slow` arrived.
+private final class ImageHTTPServer: @unchecked Sendable {
+    private(set) var port = 0
+    private let listener: NWListener
+    private let lock = NSLock()
+    private var slowStarted = false
+    private var held: [NWConnection] = []
+
     init() throws {
-        process = Process(); let output = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        process.arguments = ["-u", "-c", Self.program]
-        process.standardOutput = output; process.standardError = FileHandle.nullDevice
-        try process.run()
-        port = Int(String(decoding: output.fileHandleForReading.availableData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))!
+        listener = try NWListener(using: .tcp, on: .any)
+        let ready = DispatchSemaphore(value: 0)
+        listener.stateUpdateHandler = { if case .ready = $0 { ready.signal() } }
+        listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        listener.start(queue: .global())
+        guard ready.wait(timeout: .now() + 10) == .success, let port = listener.port?.rawValue else {
+            throw AsyncImageError.networkFailed("HTTP fixture did not start")
+        }
+        self.port = Int(port)
     }
+
     func url(_ path: String) -> URL { URL(string: "http://127.0.0.1:\(port)/\(path)")! }
-    func stop() { if process.isRunning { process.terminate() } }
-    private static let program = #"""
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-import threading
-slow_started = threading.Event()
-class Handler(BaseHTTPRequestHandler):
-    def log_message(self, *args): pass
-    def do_GET(self):
-        if self.path == '/slow':
-            slow_started.set()
-            threading.Event().wait() # Held until the fixture process stops.
-        self.send_response(404 if self.path == '/missing' else 200)
-        self.end_headers()
-        data = b'x' * 2048 if self.path == '/large' else b'image data'
-        if self.path == '/slow-started': data = b'started' if slow_started.is_set() else b'pending'
-        try: self.wfile.write(data)
-        except BrokenPipeError: pass
-server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-print(server.server_port, flush=True)
-server.serve_forever()
-"""#
+
+    func stop() {
+        listener.cancel()
+        let connections = lock.withLock { let value = held; held = []; return value }
+        connections.forEach { $0.cancel() }
+    }
+
+    private func accept(_ connection: NWConnection) {
+        connection.start(queue: .global())
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, _, _ in
+            guard let self, let data, let request = String(data: data, encoding: .utf8),
+                  let target = request.split(separator: " ").dropFirst().first else {
+                connection.cancel(); return
+            }
+            let path = String(target.split(separator: "?").first ?? target)
+            switch path {
+            case "/slow":
+                // Held open until the client cancels; the connection must stay retained.
+                self.lock.withLock { self.slowStarted = true; self.held.append(connection) }
+            case "/slow-started":
+                let started = self.lock.withLock { self.slowStarted }
+                self.respond(connection, status: 200, body: Data((started ? "started" : "pending").utf8))
+            case "/missing":
+                self.respond(connection, status: 404, body: Data())
+            case "/large":
+                self.respond(connection, status: 200, body: Data(repeating: UInt8(ascii: "x"), count: 2048))
+            default:
+                self.respond(connection, status: 200, body: Data("image data".utf8))
+            }
+        }
+    }
+
+    private func respond(_ connection: NWConnection, status: Int, body: Data) {
+        let head = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Not Found")\r\n"
+            + "Content-Length: \(body.count)\r\nConnection: close\r\n\r\n"
+        var payload = Data(head.utf8)
+        payload.append(body)
+        connection.send(content: payload, completion: .contentProcessed { _ in connection.cancel() })
+    }
 }

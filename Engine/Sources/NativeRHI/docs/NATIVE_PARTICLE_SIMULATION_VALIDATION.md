@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRenderer resident GPU 粒子模拟
 
@@ -44,7 +44,7 @@ Apple M1 的实际 Metal GPU 对照覆盖 1/37/64/255/256 个 physical threads�
 
 22 个连续完整绘制帧覆盖两个 emitter 换序、过时 CPU seed、spawn、整帧 source 扩容、预算改变、清空/恢复、viewport 扩大/缩小、混合 CPU/GPU 粒子、alpha/additive、12 格真实 BMP atlas、HDR Bloom/TAA/FXAA。resident state 和 converted instance 按实际存储顺序逐 Float 比较（容差 0.0001），身份字段精确比较，并拒绝非有限值；不先按身份重排。模拟/实例/sort/cull/indirect 的统计与 snapshot 数量一致。该序列 RGB 最大通道误差 1，>3 像素为 0；最高平均通道误差 0.00002713。
 
-完整执行的 87 项 NativeRHI XCTest、39 项 NativeRenderer XCTest 和 37 项生产 GPU Swift Testing 均通过。着色器目录测试同步稳定算法的资源断言后，7 项单独复跑通过；收紧 UInt 身份/有限值检查后，3 项 instance 测试再次通过。Slang 工具链 8 项 Python 测试通过；Swift maintainability 仍为 46 项既有超限指标，无新增。
+完整执行的 87 项 NativeRHI XCTest、39 项 NativeRenderer XCTest 和 37 项生产 GPU Swift Testing 均通过。着色器目录测试同步稳定算法的资源断言后，7 项单独复跑通过；收紧 UInt 身份/有限值检查后，3 项 instance 测试再次通过。Slang 工具链 8 项测试通过；Swift maintainability 仍为 46 项既有超限指标，无新增。
 
 验证命令：
 
@@ -53,8 +53,8 @@ GUAVA_WGPU_BACKEND=metal GUAVA_RUN_GPU_SMOKE_TESTS=1 \
 SLANGC="$PWD/Engine/vendor/slang/bin/slangc" \
 swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.|ShaderCatalogTests|RenderBackendGPUSmokeTests'
-python3 scripts/check-swift-maintainability.py --report
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" python3 scripts/test-rhi-shader-toolchain.py
+swift run --package-path Tools/Developer guava-dev maintainability --report
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Tools/Developer --filter ShaderToolchainTests
 ```
 
 ## Release 模拟绘制探针

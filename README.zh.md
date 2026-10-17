@@ -18,10 +18,9 @@
   - macOS: Xcode 27.0 / Command Line Tools
   - Linux: GCC 或 Clang
   - Windows: Visual Studio 2026 (C++ workload)
-- Python 3.14.8
 - Node.js 26.10.0 / npm （官网）
 - Git
-- 图形后端：macOS 使用系统 Metal；Windows 默认 DX12，需要 Windows SDK，shader 编译需要 DXC；Linux 使用 Vulkan，可安装 `libvulkan-dev`。Windows 的 Vulkan 候选后端可通过 `python scripts/bootstrap-rhi-vulkan.py` 和 `VULKAN_SDK` 配置。
+- 图形后端：macOS 使用系统 Metal；Windows 默认 DX12，需要 Windows SDK，shader 编译需要 DXC；Linux 使用 Vulkan，可安装 `libvulkan-dev`。Windows 的 Vulkan 候选后端可通过 `swift run --package-path Tools/Developer guava-dev vulkan bootstrap` 和 `VULKAN_SDK` 配置。
 
 ### 第一次构建
 
@@ -29,11 +28,11 @@
 git clone https://github.com/AlexCat315/GuavaStudio.git
 cd GuavaStudio
 git submodule update --init --recursive
-python bootstrap.py
+swift run --package-path Tools/Developer guava-dev native-bootstrap
 swift build --package-path Editor
 ```
 
-`bootstrap.py` 跨平台统一：编译 Engine + GuavaUI 的 C/C++ 原生依赖（CMake），Windows 下自动初始化 MSVC 工具链。
+`guava-dev native-bootstrap` 跨平台统一：编译 Engine + GuavaUI 的 C/C++ 原生依赖（CMake），Windows 下自动初始化 MSVC 工具链。
 
 后续日常开发只需要：
 
@@ -41,7 +40,7 @@ swift build --package-path Editor
 swift build --package-path Editor
 ```
 
-> **强制重编译原生依赖**：`python bootstrap.py --force`
+> **强制重编译原生依赖**：`swift run --package-path Tools/Developer guava-dev native-bootstrap --force`
 
 ### 本地运行官方网站
 

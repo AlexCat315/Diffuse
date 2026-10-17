@@ -2,9 +2,9 @@ name: Plugin runtimes
 on:
   push:
     branches: [main]
-    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', '.github/workflows/ci-plugins.yml']
+    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/**', '.github/workflows/ci-plugins.yml']
   pull_request:
-    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', '.github/workflows/ci-plugins.yml']
+    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/**', '.github/workflows/ci-plugins.yml']
   workflow_dispatch:
 
 jobs:
@@ -19,23 +19,28 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
-        with: {python-version: '3.14.8'}
-      - run: python -m pip install cmake==4.4.4 ninja==1.13.2
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        if: runner.os != 'macOS'
+        with: {swift-version: '6.4.1'}
+      - name: Install CMake and Ninja
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: '4.4.4'
+          ninjaVersion: '1.13.2'
       - name: Verify staging transactions
-        run: python -m unittest discover -s Engine/third-party/wasmtime/tests
+        run: swift test --package-path Tools/Developer --filter PluginStagingTests
       - name: Stage pinned runtime and build portable probe
         shell: bash
         run: |
-          python Engine/third-party/wasmtime/stage.py --platform '${{ matrix.platform }}'
+          swift run --package-path Tools/Developer guava-dev plugins stage --platform '${{ matrix.platform }}'
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/${{ matrix.platform }}"
           cmake --build Engine/build/plugin-probe --config Release --parallel 4
-          python Engine/Validation/Plugins/verify.py --probe '${{ matrix.probe }}'
+          swift run --package-path Tools/Developer guava-dev plugins verify --probe '${{ matrix.probe }}'
       - name: Android static-link gate
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          python Engine/third-party/wasmtime/stage.py --platform android-arm64
+          swift run --package-path Tools/Developer guava-dev plugins stage --platform android-arm64
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-android -G Ninja \
             -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/android-arm64" \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
@@ -46,15 +51,15 @@ jobs:
         shell: bash
         run: |
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          python Engine/third-party/wasmtime/stage.py --platform ios-arm64
-          python Engine/third-party/wasmtime/stage.py --platform ios-arm64-simulator
+          swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64
+          swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64-simulator
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-ios -G Ninja \
             -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/ios-arm64-simulator" \
             -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
             -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0
           cmake --build Engine/build/plugin-ios --parallel 4
-          python Engine/Validation/Plugins/prepare.py --probe '${{ matrix.probe }}' --output "$RUNNER_TEMP/plugin-fixtures"
-          simulator_id=$(xcrun simctl list devices available -j | python -c 'import json,sys; print(next(d["udid"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["name"].startswith("iPhone")))')
+          swift run --package-path Tools/Developer guava-dev plugins prepare --probe '${{ matrix.probe }}' --output "$RUNNER_TEMP/plugin-fixtures"
+          simulator_id=$(swift run --package-path Tools/Developer guava-dev ios-simulator udid --prefix iPhone)
           xcrun simctl boot "$simulator_id"
           xcrun simctl bootstatus "$simulator_id" -b
           xcrun simctl spawn "$simulator_id" "$PWD/Engine/build/plugin-ios/GuavaPluginProbe.app/GuavaPluginProbe" \

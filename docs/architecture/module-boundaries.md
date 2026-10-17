@@ -99,8 +99,8 @@ Android 的平台基础设施放在 GuavaUI 内会把游戏播放器、APK 工�
 ## 约束检查
 
 ```sh
-python3 scripts/check-module-boundaries.py
-python3 scripts/check-swift-maintainability.py
+swift run --package-path Tools/Developer guava-dev boundaries
+swift run --package-path Tools/Developer guava-dev maintainability
 swift test --package-path GuavaUI
 swift test --package-path GuavaUI/Examples
 swift test --package-path GuavaUI/Portable

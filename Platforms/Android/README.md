@@ -14,13 +14,13 @@ swift sdk list
 export ANDROID_NDK_HOME=/absolute/path/to/android-ndk-r30
 ```
 
-使用方构建需要 CMake、Ninja、JDK 21，以及匹配的 Swift 6.4.1 release；无需 Python。Android SDK 需要 `platform-tools`、`platforms;android-36`、`build-tools;36.1.0`，NDK 版本为 `30.0.16248370`。`--android-sdk` / `--ndk` 可覆盖自动发现路径；`GUAVA_SWIFT_EXECUTABLE` 可指定 Swift 可执行文件。Swift CLI 当前面向 macOS / Linux 构建主机；Windows 主机尚未接入。
+使用方构建需要 CMake、Ninja、JDK 21，以及匹配的 Swift 6.4.1 release。Android SDK 需要 `platform-tools`、`platforms;android-36`、`build-tools;36.1.0`，NDK 版本为 `30.0.16248370`。`--android-sdk` / `--ndk` 可覆盖自动发现路径；`GUAVA_SWIFT_EXECUTABLE` 可指定 Swift 可执行文件。Swift CLI 当前面向 macOS / Linux 构建主机；Windows 主机尚未接入。
 
 ```sh
 git submodule update --init Engine/third-party/sdl3 Engine/third-party/jolt GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
 ```
 
-[Guava CLI](../../Tools/Guava/README.md) 是不依赖 UI / 引擎二进制的独立 Swift 工具包。它直接调用 SwiftPM、CMake、JDK 和 Android SDK，不调用 Python。原生依赖从仓库固定源码构建 SDL3、Jolt、lunasvg / plutovg、WebP、FreeType 和 HarfBuzz。Android artifact bundles 位于忽略的 `Engine/build/android-validation/native/vendor` 和 `fonts-cmake/vendor`，通过 `GUAVA_ENGINE_ARTIFACT_ROOT` / `GUAVA_TEXT_ARTIFACT_ROOT` 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
+[Guava CLI](../../Tools/Guava/README.md) 是不依赖 UI / 引擎二进制的独立 Swift 工具包。它直接调用 SwiftPM、CMake、JDK 和 Android SDK。原生依赖从仓库固定源码构建 SDL3、Jolt、lunasvg / plutovg、WebP、FreeType 和 HarfBuzz。Android artifact bundles 位于忽略的 `Engine/build/android-validation/native/vendor` 和 `fonts-cmake/vendor`，通过 `GUAVA_ENGINE_ARTIFACT_ROOT` / `GUAVA_TEXT_ARTIFACT_ROOT` 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
 
 参考 [Swift Android SDK 官方说明](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html)、[Swift 6.4 发布说明](https://www.swift.org/blog/swift-6.4-released/)、[SDL Android 宿主约定](https://wiki.libsdl.org/SDL3/README-android)。
 
@@ -68,23 +68,19 @@ SwiftPM resource bundles 自动打包并解包；模板的 `AppResources.bundle`
 guava showcase gallery --android --device DEVICE_SERIAL
 ```
 
-以下仅为仓库内部验收，需要 Python 3；截图比较额外需要 Pillow。使用 GuavaUI 和构建 / 导出应用无需安装它们。
-
 ```sh
-python3 -m venv Engine/build/android-validation/verify-venv
-Engine/build/android-validation/verify-venv/bin/python -m pip install Pillow
-Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-gallery.py --serial DEVICE_SERIAL
-Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-demo.py --serial DEVICE_SERIAL
-python3 scripts/android/validate.py --serial DEVICE_SERIAL
+swift run --package-path Tools/Developer guava-dev android gallery --serial DEVICE_SERIAL
+swift run --package-path Tools/Developer guava-dev android demo --serial DEVICE_SERIAL
+swift run --package-path Tools/Developer guava-dev android validate --serial DEVICE_SERIAL
 ```
 
 默认 APK 运行完整 **GuavaUI Gallery（72 个页面）**。可用 `--component textField` 选择入口，或用 `guava showcase counter --android` 运行共享的 CounterExample。Gallery 与桌面使用同一 `GalleryView` 和所有 story，没有另一份 Android 组件实现。
 
-`verify-gallery.py` 遍历完整目录，为每页保存真实屏幕截图、像素检查和语义快照；另检查 Checkbox、Slider、长按 ContextMenu、TextField 选择替换 / 中文预编辑、前后台状态保留和手指滚动。`--pages` 可运行选定页面。语义快照来自共享 AccessibilityTree，包含可见控件的角色、标签、值和裁剪后的几何。
+`guava-dev android gallery` 遍历完整目录，为每页保存真实屏幕截图、像素检查和语义快照；另检查 Checkbox、Slider、长按 ContextMenu、TextField 选择替换 / 中文预编辑、前后台状态保留和手指滚动。`--pages` 可运行选定页面。语义快照来自共享 AccessibilityTree，包含可见控件的角色、标签、值和裁剪后的几何。
 
 `--interactions-only` 可单独重跑组件交互。手指滑动转换为具有开始 / 改变 / 结束阶段的点单位滚动；长按在抬起时依据实际手势时长和移动距离确认，避免慢帧延迟事件投递后把滑动误判为长按。外接鼠标滚轮和键盘导航走共享事件路由。
 
-`verify-demo.py` 回归 SharedCounter 的触摸、重组、字形像素、亮暗主题、IME、UTF-16 / 字素删除、Activity 重建、横竖屏、前后台和空闲停帧。`validate.py` 独立运行七项 GPU / 布局探针，检查 transfer、compute、1x / 4x raster、DrawList、深度、scissor 和数据读回。截图脚本需要 Pillow。
+`guava-dev android demo` 回归 SharedCounter 的触摸、重组、字形像素、亮暗主题、IME、UTF-16 / 字素删除、Activity 重建、横竖屏、前后台和空闲停帧。`guava-dev android validate` 独立运行七项 GPU / 布局探针，检查 transfer、compute、1x / 4x raster、DrawList、深度、scissor 和数据读回。
 
 Android 由 `Choreographer` 显示刷新回调提供帧时机和动画时间戳，最多保留一个待处理回调；渲染完成后直接请求下次刷新，不追加 sleep。空闲回调跳过 GPU 工作，暂停时取消回调并释放窗口资源，恢复或 Surface 重建时重置动画时钟。Vulkan swapchain 的 VSync 设置只控制呈现模式，与是否持续重绘独立。
 
@@ -105,9 +101,7 @@ adb logcat -s Guava:I
 显示时钟的独立主机测试可运行：
 
 ```sh
-swiftc Platforms/Android/Sources/GuavaAndroidApp/Frame/Clock.swift scripts/android/frame-clock-tests.swift \
-  -o /tmp/guava-android-frame-clock-tests
-/tmp/guava-android-frame-clock-tests
+swift run --package-path Tools/Developer guava-dev android frame-clock
 ```
 
 真机报告与截图分别放在 `gallery-run-*`、`demo-run-*`、`game-run-*`、`run-*/results`。脚本通过 debug APK 的输入广播调用同一 InputConnection / 游戏按键路径。英文输入另外确认真实系统 IME 已连接；回调回放不等同于所有输入法的人工验收。测试会重新启动验证应用；方向检查只调整应用请求，结束时可用 `--ei orientation -1` 恢复传感器方向。
@@ -125,12 +119,12 @@ guava export game examples/CrystalRush --android \
 adb -s DEVICE_SERIAL install -r Engine/build/android-validation/CrystalRush.apk
 adb -s DEVICE_SERIAL shell am start -W -n com.guava.game.crystalrush/com.guava.probe.MainActivity
 
-Engine/build/android-validation/verify-venv/bin/python scripts/android/verify-game.py --serial DEVICE_SERIAL
+swift run --package-path Tools/Developer guava-dev android game --serial DEVICE_SERIAL
 ```
 
 导出先调用 `GuavaProjectExport` / `ProjectExporter`，校验场景、绑定及资源依赖，再生成移动端构建输入。每个项目 Swift 脚本独占一个模块，允许多个脚本都使用既有的 `GameScript` 约定；聚合注册器按稳定 asset ID 注册进 GameRuntime。SwiftPM 将这些模块与播放器一起交叉编译、静态链接进 APK。手机无需 Swift 编译器，不依赖桌面动态脚本库。源代码与 `.guava/static-scripts.json` 属于主机构建输入，打包时排除。
 
-APK 包含 Player 可加载的场景 save document、asset index、模型及其外部纹理 / buffer、音频和项目 catalog。应用通过原有 GameApplication / EngineHost 驱动脚本、场景、物理、音频和 NativeRenderer，GuavaUI HUD 与三维画面一起合成。屏幕控制条提供 WASD、Sprint、Start、Restart，可同时按住移动与加速；硬件方向键、键盘和 A / B 手柄按钮也映射到这些输入。`verify-game.py` 专门验收 CrystalRush 的真实场景、中文 HUD、开始、持续移动、重开、后台停帧和横竖屏恢复。
+APK 包含 Player 可加载的场景 save document、asset index、模型及其外部纹理 / buffer、音频和项目 catalog。应用通过原有 GameApplication / EngineHost 驱动脚本、场景、物理、音频和 NativeRenderer，GuavaUI HUD 与三维画面一起合成。屏幕控制条提供 WASD、Sprint、Start、Restart，可同时按住移动与加速；硬件方向键、键盘和 A / B 手柄按钮也映射到这些输入。`guava-dev android game` 专门验收 CrystalRush 的真实场景、中文 HUD、开始、持续移动、重开、后台停帧和横竖屏恢复。
 
 Release 构建与签名：
 
@@ -152,9 +146,9 @@ guava export game /absolute/path/to/MyGame --android \
 场景 renderer 在 Android 选择 `Shaders/Native/spirv-mobile`，使用 Vulkan 1.1 可接收的 SPIR-V 1.3。七个可配置粒子 compute kernel 具有完整 1…256 固定工作组变体，保留共同反射 ABI，不要求 maintenance4 / LocalSizeId。桌面 Vulkan、Metal、DX12 的 shader profile 保持各自配置。UI 继续使用已有的 SPIR-V 1.3 产物。
 
 ```sh
-python3 scripts/bootstrap-rhi-slang.py
-python3 scripts/compile-native-renderer-shaders.py --targets spirv-mobile
-python3 scripts/test-rhi-shader-toolchain.py
+swift run --package-path Tools/Developer guava-dev shader bootstrap-slang
+swift run --package-path Tools/Developer guava-dev shader rebuild --targets spirv-mobile
+swift test --package-path Tools/Developer --filter ShaderToolchainTests
 ```
 
 产物在仓库内随代码交付，APK 只打包对应的 Vulkan target。生成器使用固定 Slang 2026.19；基础编译、工作组变体 ABI 和整个批次全部成功后才发布产物。测试解析所有移动端 SPIR-V，包括每一个工作组变体，检查版本、LocalSizeId 和真实 LocalSize。

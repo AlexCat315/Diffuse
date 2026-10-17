@@ -17,8 +17,7 @@ struct IOSBuild {
             throw ToolError.invalid("iOS device builds require --team APPLE_TEAM_ID and a configured signing identity")
         }
         let variant = "ios-\(arch)" + (device == nil ? "-simulator" : "")
-        try Shell.run(["python3", root.appendingPathComponent("scripts/bootstrap-ios.py").path,
-                       "--sdk", sdk, "--arch", arch], at: root)
+        try DeveloperTool.run(["ios-native", "--sdk", sdk, "--arch", arch], root: root)
         var environment = SwiftPackage.environment(root: root)
         environment["GUAVA_ENGINE_ARTIFACT_ROOT"] = "build/\(variant)/vendor"
         environment["GUAVA_TEXT_ARTIFACT_ROOT"] = "../build/\(variant)/vendor"

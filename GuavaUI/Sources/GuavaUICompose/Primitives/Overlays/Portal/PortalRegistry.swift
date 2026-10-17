@@ -13,6 +13,7 @@ public struct PortalEntry: Identifiable {
     public var placement: PortalPlacementMode = .belowAnchor
     var parentID: String?
     var isExiting = false
+    var fit = PortalFitConstraints()
 
     public init(id: String,
                 position: CGPoint,
@@ -69,7 +70,8 @@ public final class PortalStore {
         if let slotNode = slotNodes[id]?.node {
             if slotNode.frame.origin != position {
                 slotNode.frame = PortalPlacement.fit(position: position, size: slotNode.frame.size,
-                                                      in: portalWindowBounds(slotNode), anchor: anchor(for: id), placement: entry.placement)
+                                                      in: portalWindowBounds(slotNode), anchor: anchor(for: id),
+                                                      margin: CGFloat(entry.fit.viewportMargin), placement: entry.placement)
             }
         } else if slotNodes[id] != nil {
             slotNodes.removeValue(forKey: id)
@@ -84,6 +86,10 @@ public final class PortalStore {
         guard var entry = storage[id], entry.fillsWindow != fillsWindow || entry.placement != placement || entry.parentID != parentID else { return }
         entry.fillsWindow = fillsWindow; entry.placement = placement; entry.parentID = parentID
         storage[id] = entry; notifyChanged()
+    }
+    func configureFit(_ id: String, fit: PortalFitConstraints) {
+        guard var entry = storage[id], entry.fit != fit else { return }
+        entry.fit = fit; storage[id] = entry; notifyChanged()
     }
     func anchor(for id: String) -> CGRect? { dismissals[id]?.anchor() }
     func frame(_ id: String) -> CGRect? { slotNodes[id]?.node?.absoluteFrame }
@@ -348,6 +354,11 @@ final class PortalResource: NodeResource {
         }
         guard let id = entryID else { return }
         store?.updatePosition(id, position: position)
+    }
+
+    func updateFit(_ fit: PortalFitConstraints) {
+        guard let id = entryID else { return }
+        store?.configureFit(id, fit: fit)
     }
 
     var frame: CGRect? { entryID.flatMap { store?.frame($0) } }

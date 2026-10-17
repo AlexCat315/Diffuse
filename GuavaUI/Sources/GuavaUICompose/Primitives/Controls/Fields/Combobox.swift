@@ -20,12 +20,24 @@ private struct ComboboxSession<Value: Hashable> {
     var focusRequest = 0
 }
 
+private struct ComboboxRowMetrics {
+    let authoredHeight: Float
+    let displayedHeight: Float
+    let triggerMinimum: Float
+    init(theme: Theme, scaler: TextScaler, surface: UIEnvironment) {
+        authoredHeight = max(32, theme.typography.label.lineHeight + 12)
+        displayedHeight = max(scaler.scale(authoredHeight), surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
+        triggerMinimum = max(32, scaler.scale(theme.typography.label.lineHeight) + 12)
+    }
+}
+
 /// Searchable typed selection. Query, highlight and overlay state are transient and separate from the value.
 public struct Combobox<Value: Hashable>: View {
     public let selection: Binding<Value?>
     public let options: [SelectOption<Value>]
     public var presentation = ComboboxPresentation()
     @State private var session = ComboboxSession<Value>()
+    @State private var chromeWidth: Float = 0
     public init(selection: Binding<Value?>, options: [SelectOption<Value>],
                 configure: (inout ComboboxPresentation) -> Void = { _ in }) {
         self.selection = selection; self.options = options
@@ -38,15 +50,18 @@ public struct Combobox<Value: Hashable>: View {
     }
     public var body: some View {
         ThemeReader { theme in
-            TextScalerReader { scaler in
-                content(rowHeight: max(32, scaler.scale(theme.typography.label.lineHeight) + 12))
+            SurfaceReader { surface in
+                TextScalerReader { scaler in
+                    content(rows: ComboboxRowMetrics(theme: theme, scaler: scaler, surface: surface))
+                }
             }
         }
     }
-    private func content(rowHeight: Float) -> some View {
+    private func content(rows: ComboboxRowMetrics) -> some View {
         let matches = Self.matching(options, query: session.query.stringValue)
-        let title = options.first { $0.value == selection.wrappedValue }?.label ?? presentation.placeholder
-        return Popover(isPresented: Binding(get: { session.isPresented }, set: { open in
+        let selectedLabel = options.first { $0.value == selection.wrappedValue }?.label
+        let title = selectedLabel ?? presentation.placeholder
+        var popover = Popover(isPresented: Binding(get: { session.isPresented }, set: { open in
             if open && !session.isPresented {
                 session.query = ""; session.highlighted = selection.wrappedValue; session.focusRequest += 1
             }
@@ -65,16 +80,21 @@ public struct Combobox<Value: Hashable>: View {
             }
             return .ignored
         }, label: {
-            Row(alignment: .center, spacing: 8) {
-                Text(title).lineLimit(1).font(.label).foregroundColor(selection.wrappedValue == nil ? .placeholder : .onSurface)
-                Spacer()
+            InlineLabelLayout(spacing: 8, onMinimumWidth: { width in
+                if chromeWidth != Float(width) { chromeWidth = Float(width) }
+            }) {
+                Box {}
+                Text(title).truncatingTail().font(.label).foregroundColor(selectedLabel == nil ? .placeholder : .onSurface)
+                    .accessibilityHidden()
+                Row(alignment: .center, spacing: 8) {
                 if presentation.isClearable, selection.wrappedValue != nil {
                     Button(icon: .resource(UIIcons.Action.x), size: 12, isEnabled: presentation.isEnabled,
                            tooltip: "Clear selection") { selection.wrappedValue = nil }
-                        .buttonStyle(.ghost).controlSize(.mini)
+                        .buttonStyle(.ghost).controlSize(.mini).accessibilityLabel("Clear selection")
                 }
-                Icon(UIIcons.Navigation.chevronDown, size: .small)
-            }.padding(horizontal: 10, vertical: 4).frame(minHeight: rowHeight).background(.surface).cornerRadius(.inputRadius).border(.border, width: 1)
+                Icon(UIIcons.Navigation.chevronDown, size: .small).accessibilityHidden()
+                }
+            }.padding(horizontal: 10, vertical: 4).frame(minHeight: rows.triggerMinimum).background(.surface).cornerRadius(.inputRadius).border(.border, width: 1)
         }, content: {
             Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 TextField(presentation.searchPlaceholder, text: Binding(get: { session.query }, set: { query in
@@ -98,16 +118,19 @@ public struct Combobox<Value: Hashable>: View {
                 else {
                     List(matches, id: \.value, selection: Binding(get: { session.highlighted }, set: { value in
                         session.highlighted = value
-                    }), rowHeight: rowHeight, onActivate: { if $0.isEnabled { choose($0.value) } }) { option, _ in
+                    }), rowHeight: rows.authoredHeight, onActivate: { if $0.isEnabled { choose($0.value) } }) { option, _ in
                         Row(alignment: .center, spacing: 8) {
-                            Text(option.label).font(.label).foregroundColor(option.isEnabled ? .onSurface : .onSurfaceDisabled)
-                            Spacer()
-                            if option.value == selection.wrappedValue { Icon(UIIcons.Action.check, size: .small) }
+                            Text(option.label).truncated().font(.label).foregroundColor(option.isEnabled ? .onSurface : .onSurfaceDisabled)
+                                .flex(1, shrink: 1).frame(minWidth: 0)
+                            if option.value == selection.wrappedValue { Icon(UIIcons.Action.check, size: .small).flex(0, shrink: 0) }
                         }
-                    }.frame(height: Float(min(presentation.maxVisibleRows, matches.count)) * rowHeight).flex(0, shrink: 0)
+                    }.frame(height: Float(min(presentation.maxVisibleRows, matches.count)) * rows.displayedHeight).flex(0, shrink: 0)
                 }
             }.padding(8).glassSurface(.controlRadius)
-        }).frame(width: presentation.width)
+        })
+        popover.sizing = .anchor
+        popover.triggerDescription = .init(label: title, value: selectedLabel ?? "", help: title)
+        return popover.frame(width: presentation.width, minWidth: max(44, chromeWidth + 26))
     }
     private func choose(_ value: Value) {
         guard presentation.isEnabled, options.contains(where: { $0.value == value && $0.isEnabled }) else { return }

@@ -165,10 +165,8 @@ private struct LSPProcessFixture {
     init(mode: String = "normal") throws {
         self.mode = mode
         root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-lsp-process-\(UUID().uuidString)")
-        executable = root.appendingPathComponent("sourcekit-fixture")
+        executable = try LSPFixtureServer.executable()
         try FileManager.default.createDirectory(at: root.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
-        try Self.server.write(to: executable, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
     var environment: [String: String] { ["GUAVA_TEST_LSP_ROOT": root.path, "GUAVA_TEST_LSP_MODE": mode] }
@@ -187,55 +185,190 @@ private struct LSPProcessFixture {
             try #require(JSONSerialization.jsonObject(with: Data($0.utf8), options: .fragmentsAllowed) as? String)
         }
     }
-    private static let server = #"""
-#!/usr/bin/python3
-import os, sys, json, threading, time
-if '--help' in sys.argv:
-    print('test language server')
-    sys.exit(0)
-root = os.environ['GUAVA_TEST_LSP_ROOT']
-count_file = os.path.join(root, 'count')
-count = int(open(count_file).read()) + 1 if os.path.exists(count_file) else 1
-open(count_file, 'w').write(str(count))
-def send(message, fragmented=False):
-    body = json.dumps(message).encode()
-    packet = ('Content-Length: %d\r\n\r\n' % len(body)).encode() + body
-    if fragmented:
-        for byte in packet:
-            os.write(1, bytes([byte]))
-    else:
-        os.write(1, packet)
-while True:
-    length = 0
-    while True:
-        line = sys.stdin.buffer.readline()
-        if not line: sys.exit(0)
-        if line in (b'\r\n', b'\n'): break
-        if line.lower().startswith(b'content-length:'): length = int(line.split(b':')[1])
-    message = json.loads(sys.stdin.buffer.read(length))
-    method = message.get('method')
-    if method == 'test/crash' or (method == 'textDocument/hover' and count == 1 and os.environ['GUAVA_TEST_LSP_MODE'] == 'crash-first-hover'):
-        sys.stderr.write('fixture unexpected exit\n'); sys.stderr.flush(); os._exit(31)
-    if method == 'textDocument/didOpen':
-        with open(os.path.join(root, 'opened.jsonl'), 'a') as file:
-            file.write(json.dumps(message['params']['textDocument']['text']) + '\n')
-        if os.environ['GUAVA_TEST_LSP_MODE'] == 'crash-after-open':
-            def crash():
-                time.sleep(0.15)
-                os._exit(32)
-            threading.Thread(target=crash, daemon=True).start()
-    if method == 'exit': sys.exit(0)
-    if 'id' in message:
-        result = None
-        if method == 'initialize':
-            if os.environ['GUAVA_TEST_LSP_MODE'] == 'slow-initialize':
-                open(os.path.join(root, 'initializing'), 'w').close()
-                time.sleep(5)
-            result = {'capabilities': {}}
-        if method == 'textDocument/hover': result = {'contents': {'kind': 'markdown', 'value': 'recovered symbol'}}
-        if method == 'test/burst':
-            for i in range(200): send({'jsonrpc': '2.0', 'method': 'test/notification', 'params': i}, True)
+}
+
+/// Compiles the in-repo Swift language-server fixture once per test process.
+///
+/// The fixture speaks the same subset of LSP the production client exercises:
+/// framed JSON-RPC on stdio, deliberate crash modes, and byte-fragmented bursts.
+private enum LSPFixtureServer {
+    private static let compiled = Result { try build() }
+
+    static func executable() throws -> URL { try compiled.get() }
+
+    private static func build() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-lsp-fixture-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("main.swift")
+        let binary = directory.appendingPathComponent("sourcekit-fixture")
+        try script.write(to: source, atomically: true, encoding: .utf8)
+
+        let process = Process()
+        process.executableURL = try compiler()
+        process.arguments = [source.path, "-o", binary.path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let log = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw LSPFixtureError("failed to compile the language-server fixture:\n\(String(decoding: log, as: UTF8.self))")
+        }
+        return binary
+    }
+
+    private static func compiler() throws -> URL {
+        let environment = ProcessInfo.processInfo.environment
+        if let override = environment["GUAVA_SWIFTC"], !override.isEmpty,
+           FileManager.default.isExecutableFile(atPath: override) {
+            return URL(fileURLWithPath: override)
+        }
+        #if os(Windows)
+        let name = "swiftc.exe"
+        let separator: Character = ";"
+        #else
+        let name = "swiftc"
+        let separator: Character = ":"
+        #endif
+        for directory in (environment["PATH"] ?? "").split(separator: separator) {
+            let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent(name)
+            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+        }
+        throw LSPFixtureError("swiftc is not on PATH; set GUAVA_SWIFTC to a Swift compiler")
+    }
+
+    private struct LSPFixtureError: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
+    }
+
+    private static let script = #"""
+import Dispatch
+import Foundation
+
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
+import Darwin
+#endif
+
+func crash(_ status: Int32) -> Never {
+    FileHandle.standardError.write(Data("fixture unexpected exit\n".utf8))
+    exit(status)
+}
+
+if CommandLine.arguments.contains("--help") {
+    FileHandle.standardOutput.write(Data("test language server\n".utf8))
+    exit(0)
+}
+
+let environment = ProcessInfo.processInfo.environment
+let root = environment["GUAVA_TEST_LSP_ROOT"] ?? ""
+let mode = environment["GUAVA_TEST_LSP_MODE"] ?? "normal"
+
+func rootFile(_ name: String) -> URL {
+    URL(fileURLWithPath: root).appendingPathComponent(name)
+}
+
+let countFile = rootFile("count")
+var count = 1
+if let existing = try? String(contentsOf: countFile, encoding: .utf8), let previous = Int(existing) {
+    count = previous + 1
+}
+try? String(count).write(to: countFile, atomically: true, encoding: .utf8)
+
+let openedFile = rootFile("opened.jsonl")
+FileManager.default.createFile(atPath: openedFile.path, contents: nil)
+let opened = try? FileHandle(forWritingTo: openedFile)
+
+var buffer: [UInt8] = []
+
+func readByte() -> UInt8? {
+    while buffer.isEmpty {
+        let chunk = (try? FileHandle.standardInput.read(upToCount: 4096)) ?? nil
+        guard let chunk, !chunk.isEmpty else { return nil }
+        buffer.append(contentsOf: chunk)
+    }
+    return buffer.removeFirst()
+}
+
+func readLine() -> [UInt8]? {
+    var line: [UInt8] = []
+    while let byte = readByte() {
+        if byte == 0x0A {
+            if line.last == 0x0D { line.removeLast() }
+            return line
+        }
+        line.append(byte)
+    }
+    return nil
+}
+
+func send(_ message: Any, fragmented: Bool = false) {
+    guard let body = try? JSONSerialization.data(withJSONObject: message, options: [.sortedKeys]) else { return }
+    let packet = Array("Content-Length: \(body.count)\r\n\r\n".utf8) + [UInt8](body)
+    if fragmented {
+        for byte in packet { FileHandle.standardOutput.write(Data([byte])) }
+    } else {
+        FileHandle.standardOutput.write(Data(packet))
+    }
+}
+
+while true {
+    var length = 0
+    while true {
+        guard let header = readLine() else { exit(0) }
+        if header.isEmpty { break }
+        let text = String(decoding: header, as: UTF8.self).lowercased()
+        if text.hasPrefix("content-length:") {
+            length = Int(text.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)) ?? 0
+        }
+    }
+    var body: [UInt8] = []
+    while body.count < length {
+        guard let byte = readByte() else { exit(0) }
+        body.append(byte)
+    }
+    let message = (try? JSONSerialization.jsonObject(with: Data(body), options: [.fragmentsAllowed])) as? [String: Any] ?? [:]
+    let method = message["method"] as? String
+
+    if method == "test/crash" || (method == "textDocument/hover" && count == 1 && mode == "crash-first-hover") {
+        crash(31)
+    }
+    if method == "textDocument/didOpen" {
+        let document = (message["params"] as? [String: Any])?["textDocument"] as? [String: Any]
+        let text = document?["text"] as? String ?? ""
+        if let handle = opened, let encoded = try? JSONSerialization.data(withJSONObject: text, options: [.fragmentsAllowed]) {
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: encoded + Data([0x0A]))
+        }
+        if mode == "crash-after-open" {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.15) { exit(32) }
+        }
+    }
+    if method == "exit" { exit(0) }
+    if let id = message["id"] {
+        var result: Any = NSNull()
+        if method == "initialize" {
+            if mode == "slow-initialize" {
+                FileManager.default.createFile(atPath: rootFile("initializing").path, contents: nil)
+                Thread.sleep(forTimeInterval: 5)
+            }
+            result = ["capabilities": [String: Any]()]
+        }
+        if method == "textDocument/hover" {
+            result = ["contents": ["kind": "markdown", "value": "recovered symbol"]]
+        }
+        if method == "test/burst" {
+            for index in 0..<200 {
+                send(["jsonrpc": "2.0", "method": "test/notification", "params": index], fragmented: true)
+            }
             result = 200
-        send({'jsonrpc': '2.0', 'id': message['id'], 'result': result})
+        }
+        send(["jsonrpc": "2.0", "id": id, "result": result])
+    }
+}
 """#
 }

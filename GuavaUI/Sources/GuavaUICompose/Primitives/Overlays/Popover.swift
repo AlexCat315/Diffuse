@@ -6,6 +6,14 @@ public enum PopoverPlacement: Sendable, Equatable {
     case end
 }
 
+enum PopoverSizing: Equatable { case content, anchor }
+
+struct PopoverTriggerDescription {
+    let label: String
+    var value = ""
+    var help: String?
+}
+
 /// Anchored overlay opened by a labelled trigger button.
 ///
 /// The popup is portal-rendered, so it escapes any clipping or stacking
@@ -22,6 +30,8 @@ public struct Popover<Label: View, Content: View>: View {
     public let label: Label
     public let content: Content
     public let onKey: ((KeyEvent, EventPhase) -> EventResult)?
+    var sizing: PopoverSizing = .content
+    var triggerDescription: PopoverTriggerDescription?
 
     public init(isPresented: Binding<Bool>,
                 isEnabled: Bool = true,
@@ -40,17 +50,19 @@ public struct Popover<Label: View, Content: View>: View {
     }
 
     public var body: some View {
-        Box(direction: .column, alignItems: .flexStart, spacing: 0) {
-            Button(role: .normal,
-                   isEnabled: isEnabled,
-                   action: { isPresented.wrappedValue.toggle() }) {
-                label
+        if !isEnabled && isPresented.wrappedValue { isPresented.wrappedValue = false }
+        return Box(direction: .column, alignItems: sizing == .anchor ? .stretch : .flexStart, spacing: 0) {
+            if let description = triggerDescription {
+                trigger.compositionLocal(ActionControlAccessibility.label, description.label)
+                    .compositionLocal(ActionControlAccessibility.value, description.value)
+            } else {
+                trigger
             }
-            .buttonStyle(PopoverTriggerStyle())
 
-            _PopoverOverlayHost(isPresented: isPresented.wrappedValue,
+            _PopoverOverlayHost(isPresented: isEnabled && isPresented.wrappedValue,
                                 width: width,
                                 placement: placement,
+                                sizing: sizing,
                                 onDismiss: { isPresented.wrappedValue = false },
                                 keyHandler: onKey) {
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
@@ -60,6 +72,13 @@ public struct Popover<Label: View, Content: View>: View {
             }
         }
         .zIndex(isPresented.wrappedValue ? 10_000 : 0)
+    }
+
+    private var trigger: some View {
+        Button(role: .normal, isEnabled: isEnabled, tooltip: triggerDescription?.help,
+               action: { isPresented.wrappedValue.toggle() }) { label }
+            .buttonStyle(PopoverTriggerStyle())
+            .compositionLocal(ActionControlAccessibility.isExpanded, isEnabled && isPresented.wrappedValue)
     }
 }
 
@@ -89,6 +108,7 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     let isPresented: Bool
     let width: Float?
     let placement: PopoverPlacement
+    let sizing: PopoverSizing
     let content: Content
     let keyHandler: ((KeyEvent, EventPhase) -> EventResult)?
     let onDismiss: () -> Void
@@ -96,16 +116,19 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     private struct PositionIdentity: Equatable {
         let width: Float?
         let placement: PopoverPlacement
+        let sizing: PopoverSizing
     }
 
     init(isPresented: Bool, width: Float?,
          placement: PopoverPlacement,
+         sizing: PopoverSizing = .content,
          onDismiss: @escaping () -> Void,
          keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
          @ViewBuilder content: () -> Content) {
         self.isPresented = isPresented
         self.width = width
         self.placement = placement
+        self.sizing = sizing
         self.keyHandler = keyHandler
         self.onDismiss = onDismiss
         self.content = content()
@@ -157,6 +180,7 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
                          .combined(with: .move(edge: .top, distance: 6))
                          .combined(with: PortalResource.surfaceReveal(
                             anchor: placement == .end ? CGPoint(x: 1, y: 0) : .zero, theme: node.theme)))
+        node.firstResource(PortalResource.self)?.updateFit(fit(for: node))
         node.firstResource(PortalResource.self)?.setDismissal(
             anchor: { [weak node] in node.map { Self.anchorFrame(for: $0) ?? .zero } ?? .zero },
             dismiss: onDismiss
@@ -164,14 +188,16 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         node.attachments[LayoutDebugAttachmentKey.debugName] =
             "popover-store-\(ObjectIdentifier(portalStore))-entries-\(portalStore.entries.count)"
         node.updateOverlayDraw(identity: PositionIdentity(width: width,
-                                                          placement: placement)) { [weak node] _, _ in
+                                                          placement: placement, sizing: sizing)) { [weak node] _, _ in
             guard let node else { return }
             node.firstResource(PortalResource.self)?
                 .updatePosition(Self.popoverPosition(for: node, width: width, placement: placement))
+            node.firstResource(PortalResource.self)?.updateFit(fit(for: node))
         }
         node.layoutDidUpdate = { [width, placement] node in
             node.firstResource(PortalResource.self)?
                 .updatePosition(Self.popoverPosition(for: node, width: width, placement: placement))
+            node.firstResource(PortalResource.self)?.updateFit(fit(for: node))
         }
 
         node.isFocusable = false
@@ -185,14 +211,17 @@ struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         layout.positionType = .absolute
         layout.setPosition(0, edge: .left)
         layout.setPositionPercent(100, edge: .top)
-        if let width {
-            layout.width = width
-        }
+        layout.width = sizing == .anchor ? 0 : width
     }
 
     var _children: [any View] {
         // Content is portal-rendered via the window-scoped PortalStore + PortalHost
         []
+    }
+
+    private func fit(for node: Node) -> PortalFitConstraints {
+        guard sizing == .anchor else { return .init() }
+        return .init(minimumWidth: Float(Self.anchorFrame(for: node)?.width ?? 0), viewportMargin: 12)
     }
 
     private static func popoverPosition(for node: Node,

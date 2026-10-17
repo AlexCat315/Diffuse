@@ -8,7 +8,7 @@ on:
       - 'docs/**'
       - '.github/workflows/ci-website.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
   pull_request:
     paths:
@@ -16,7 +16,7 @@ on:
       - 'docs/**'
       - '.github/workflows/ci-website.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
+      - 'Tools/Developer/**'
       - 'cmake/**'
 
 permissions:

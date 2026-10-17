@@ -8,12 +8,9 @@ on:
       - 'Engine/**'
       - 'Editor/**'
       - 'GuavaUI/**'
-      - 'scripts/*rhi*'
-      - 'scripts/compile-native-renderer-shaders.py'
-      - 'scripts/*gpu-regression*'
+      - 'Tools/Developer/**'
       - '.github/workflows/ci-gpu.yml'
       - '.github/actions/setup-toolchains/**'
-      - 'bootstrap.py'
       - 'cmake/**'
   schedule:
     - cron: '17 19 * * *'
@@ -56,17 +53,17 @@ jobs:
 
       - name: Verify pinned shader toolchain and bundled artifacts
         run: |
-          python3 scripts/bootstrap-rhi-slang.py --destination "$RUNNER_TEMP/guava-slang"
+          swift run --package-path Tools/Developer guava-dev shader bootstrap-slang --destination "$RUNNER_TEMP/guava-slang"
           export SLANGC="$RUNNER_TEMP/guava-slang/bin/slangc"
-          python3 scripts/test-rhi-shader-toolchain.py
-          python3 scripts/test-gpu-regression-verifier.py
-          python3 scripts/compile-native-renderer-shaders.py --check
+          swift test --package-path Tools/Developer --filter ShaderToolchainTests
+          swift test --package-path Tools/Developer --filter RegressionReportTests
+          swift run --package-path Tools/Developer guava-dev shader rebuild --check
           SLANGC="$SLANGC" swift test --package-path Engine --filter NativeRHITests
 
       - name: Run actual GPU regressions
         env:
           GUAVA_GPU_TEST_OUTPUT_DIR: ${{ runner.temp }}/guava-gpu-regression
-        run: bash scripts/test-gpu-regression.sh
+        run: swift run --package-path Tools/Developer guava-dev gpu-regression run
 
       - name: Save pixel captures, test report and device log
         if: always()

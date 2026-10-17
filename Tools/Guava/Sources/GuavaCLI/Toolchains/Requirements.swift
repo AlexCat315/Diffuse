@@ -12,15 +12,10 @@ struct ToolchainCheck {
 
 enum ToolchainRequirements {
     static func inspect(_ arguments: Arguments, root: URL) -> [ToolchainCheck] {
-        let common = "Install Git, CMake, Ninja and Python 3. macOS: brew install git cmake ninja python; "
-            + "Ubuntu/Debian: sudo apt-get install git cmake ninja-build python3 build-essential pkg-config. "
-            + "Windows: winget install Git.Git Kitware.CMake Ninja-build.Ninja Python.Python.3.13; reopen the terminal."
-        #if os(Windows)
-        let python = "python"
-        #else
-        let python = "python3"
-        #endif
-        let commands = ["git", "cmake", "ninja", python]
+        let common = "Install Git, CMake and Ninja. macOS: brew install git cmake ninja; "
+            + "Ubuntu/Debian: sudo apt-get install git cmake ninja-build build-essential pkg-config. "
+            + "Windows: winget install Git.Git Kitware.CMake Ninja-build.Ninja; reopen the terminal."
+        let commands = ["git", "cmake", "ninja"]
         var checks = commands.map { ToolchainCheck.executable($0, remedy: common) }
         for name in ["sh", "make"] {
             checks.append(.executable(name, remedy: "FFmpeg source builds require a POSIX shell and GNU make. macOS: install Xcode tools; Linux: install make; Windows: install MSYS2 make and add its usr/bin to PATH."))

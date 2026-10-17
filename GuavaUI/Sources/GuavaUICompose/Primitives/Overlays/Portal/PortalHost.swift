@@ -154,14 +154,28 @@ private struct _PortalEntrySlot: _PrimitiveView {
         node.allowsHitTesting = !entry.isExiting
         node.isInteractionEnabled = !entry.isExiting
         node.clipsToBounds = !entry.fillsWindow
+        if !entry.fillsWindow {
+            let window = portalWindowBounds(node)
+            let range = entry.fit.widthRange(in: window)
+            node.layoutNode?.minWidth = range.minimum
+            node.layoutNode?.maxWidth = range.maximum
+            node.layoutNode?.maxHeight = Float(max(0, window.height - CGFloat(entry.fit.viewportMargin) * 2))
+        } else {
+            node.layoutNode?.minWidth = nil
+            node.layoutNode?.maxWidth = nil
+            node.layoutNode?.maxHeight = nil
+        }
         node.layoutDidUpdate = { node in
             guard !entry.fillsWindow else { return }
             let window = portalWindowBounds(node)
             let fitted = PortalPlacement.fit(position: entry.position, size: node.frame.size,
-                                              in: window, anchor: store.anchor(for: entry.id), placement: entry.placement)
+                                              in: window, anchor: store.anchor(for: entry.id),
+                                              margin: CGFloat(entry.fit.viewportMargin), placement: entry.placement)
             node.frame = fitted
-            node.layoutNode?.maxWidth = Float(max(0, window.width - 12))
-            node.layoutNode?.maxHeight = Float(max(0, window.height - 12))
+            let range = entry.fit.widthRange(in: window)
+            node.layoutNode?.minWidth = range.minimum
+            node.layoutNode?.maxWidth = range.maximum
+            node.layoutNode?.maxHeight = Float(max(0, window.height - CGFloat(entry.fit.viewportMargin) * 2))
         }
     }
 
@@ -190,7 +204,9 @@ private struct _PortalEntrySlot: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         if entry.fillsWindow { return [entry.content] }
         let window = portalWindowBounds(node)
+        let range = entry.fit.widthRange(in: window)
         return [ScrollView(.vertical, scrollbarGutter: .overlay) { entry.content }
-            .frame(maxWidth: Float(max(0, window.width - 12)), maxHeight: Float(max(0, window.height - 12)))]
+            .frame(minWidth: range.minimum, maxWidth: range.maximum,
+                   maxHeight: Float(max(0, window.height - CGFloat(entry.fit.viewportMargin) * 2)))]
     }
 }

@@ -35,8 +35,8 @@ AI 与 MCP 共用诊断工具：`get_diagnostics`、`query_ui_nodes`、`query_ui
 验证入口：
 
 ```bash
-python3 scripts/check-guava-mcp-protocol.py
-python3 scripts/validate-crystal-rush-mcp.py
+swift run --package-path Tools/Developer guava-dev validate mcp-protocol
+swift run --package-path Tools/Developer guava-dev validate crystal-rush
 ```
 
 `EditorApp --mcp-headless --project-dir <project>` 为本地自动化提供无 GPU 的宿主。只有显式传入 `--trust-project-scripts` 才信任项目；`--approve-scene-edits` 自动确认可撤销的场景预览，不确认破坏性修改。这些参数由启动编辑器的人选择，不是 MCP 工具。

@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRenderer 透明、蒙皮和变形网格
 
@@ -24,8 +24,8 @@ SLANGC="$PWD/Engine/vendor/slang/bin/slangc" \
 GUAVA_WGPU_BACKEND=metal GUAVA_RUN_GPU_SMOKE_TESTS=1 \
 swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.|RenderThreadTests|MeshSurfaceAndVisibilityTests|RenderCameraMatricesTests|DeformableMeshUploadTests|RenderBackendGPUSmokeTests/(transparent|skinned|material)|ShaderCatalogTests'
-python3 scripts/check-swift-maintainability.py --report
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" python3 scripts/test-rhi-shader-toolchain.py
+swift run --package-path Tools/Developer guava-dev maintainability --report
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Tools/Developer --filter ShaderToolchainTests
 ```
 
 ## Release 动态负载
@@ -50,7 +50,7 @@ GUAVA_WGPU_BACKEND=metal Engine/.build/release/NativeRHIPassProbe \
 
 本场景的整批吞吐通过对照，1080p CPU frame p50 则增加约 0.10 ms，仍需在完整 renderer 的性能评估中保留这一指标。720p 最终 RGB 平均通道误差 0.000126、最大差 1、差值 >3 的像素 0；1080p 平均误差 0.000133、最大差 4、差值 >3 的像素 1/2,073,600，均通过像素门限。alpha 不参与 RGB 比较。
 
-原始报告：[720p](benchmarks/native-animated-m1-720.json)、[1080p](benchmarks/native-animated-m1-1080.json)。探针同时输出实际 Native/WGPU PPM。受影响范围执行 83 项 NativeRHI XCTest、17 项 NativeRenderer XCTest、25 项渲染/资源/shader Swift Testing，均通过；阴影边界更新后又执行动画对照、4 项相机/阴影 CPU 测试和 3 项生产阴影 GPU 测试。Slang 工具链 5 项 Python 测试与 Swift 结构检查通过，既有 46 项超限指标未增加。
+原始报告：[720p](benchmarks/native-animated-m1-720.json)、[1080p](benchmarks/native-animated-m1-1080.json)。探针同时输出实际 Native/WGPU PPM。受影响范围执行 83 项 NativeRHI XCTest、17 项 NativeRenderer XCTest、25 项渲染/资源/shader Swift Testing，均通过；阴影边界更新后又执行动画对照、4 项相机/阴影 CPU 测试和 3 项生产阴影 GPU 测试。Slang 工具链 5 项测试与 Swift 结构检查通过，既有 46 项超限指标未增加。
 
 ## 默认切换前剩余范围
 

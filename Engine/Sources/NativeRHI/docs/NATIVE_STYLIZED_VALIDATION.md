@@ -1,4 +1,4 @@
-> Historical migration report: the WGPU reference and its commands were retired. Use `bash scripts/test-gpu-regression.sh` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
+> Historical migration report: the WGPU reference and its commands were retired. Use `swift run --package-path Tools/Developer guava-dev gpu-regression run` and `NativeRHIPassProbe` for current NativeRHI validation. Measurements below describe the original comparison.
 
 # NativeRenderer 风格化角色路径
 
@@ -22,15 +22,15 @@ NativeStylizedTests 使用生产 WGPURenderer 的真实 offscreen 输出：默�
 
 每个 RGB 对照帧检查平均通道误差 <0.5、差值 >3 的像素 <1%。图像保存于 `/tmp/guava-native-stylized`。默认场景与多项材质/动画参数的对照最大差为 1；连续历史后少量边缘差值另由逐帧门限检查，不能据此声称所有帧逐像素相同。
 
-本机执行 85 项 NativeRHI XCTest、28 项 NativeRenderer XCTest（包含追加的薄片背面用例），以及 9 项 shader catalog/生产风格化 GPU Swift Testing。总计 37 帧新增实际 RGB 对照；所有检查通过。Slang 工具链 5 项 Python 测试和 Swift 结构检查通过，既有 46 项超限指标未增加。
+本机执行 85 项 NativeRHI XCTest、28 项 NativeRenderer XCTest（包含追加的薄片背面用例），以及 9 项 shader catalog/生产风格化 GPU Swift Testing。总计 37 帧新增实际 RGB 对照；所有检查通过。Slang 工具链 5 项测试和 Swift 结构检查通过，既有 46 项超限指标未增加。
 
 ```sh
 GUAVA_WGPU_BACKEND=metal GUAVA_RUN_GPU_SMOKE_TESTS=1 \
 SLANGC="$PWD/Engine/vendor/slang/bin/slangc" \
 swift test --package-path Engine --jobs 4 \
   --filter 'NativeRHITests\.|NativeRendererTests\.|ShaderCatalogTests|RenderBackendGPUSmokeTests/(stylized|materialDoubleSided)'
-python3 scripts/check-swift-maintainability.py --report
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" python3 scripts/test-rhi-shader-toolchain.py
+swift run --package-path Tools/Developer guava-dev maintainability --report
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Tools/Developer --filter ShaderToolchainTests
 ```
 
 ## Release 负载
