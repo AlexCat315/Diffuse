@@ -64,23 +64,29 @@ private struct RangeSliderHost: _PrimitiveView {
     func _makeNode() -> Node {
         let node = Node()
         node.isHitTestable = true
-        node.isFocusable = true
+        node.isFocusable = false
         return node
+    }
+
+    var _children: [any View] {
+        [RangeThumbHandle(thumb: .lower, values: values, range: range, step: step,
+                          minimumSpan: minimumSpan, isEnabled: isEnabled),
+         RangeThumbHandle(thumb: .upper, values: values, range: range, step: step,
+                          minimumSpan: minimumSpan, isEnabled: isEnabled)]
     }
 
     func _updateNode(_ node: Node) {
         node.applyTouchControlExtent()
         if !node.supportsControlHover { node.attachments[Self.hoveredKey] = false }
-        node.isFocusable = isEnabled
+        node.isFocusable = false
         updateAccessibility(node)
         node.accessibilityActions = AccessibilityActions()
-        if isEnabled {
-            let increment = step ?? (range.upperBound - range.lowerBound) / 100
-            node.accessibilityActions.increment = { moveActive(by: increment, node: node) }
-            node.accessibilityActions.decrement = { moveActive(by: -increment, node: node) }
-        } else {
+        if !isEnabled {
             if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
-            if FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
+            if let focused = FocusChainHolder.current?.focused,
+               focused.attachments["range.thumb"] != nil {
+                FocusChainHolder.current?.clear()
+            }
             node.attachments[Self.pressedKey] = false
             node.attachments[Self.hoveredKey] = false
         }
@@ -119,6 +125,7 @@ private struct RangeSliderHost: _PrimitiveView {
                     onEditingChanged?(true)
                 }
                 chooseThumb(at: event.x, node: node)
+                focusHandle(activeThumb(node), node: node)
                 writeActiveValue(forWindowX: event.x, node: node)
                 node.markRenderDirty(reason: .styleSet(field: "rangeSliderValue"))
                 return .handled
@@ -138,32 +145,12 @@ private struct RangeSliderHost: _PrimitiveView {
             node.markRenderDirty(reason: .styleSet(field: "rangeSliderValue"))
             return .handled
         }
-        registry.setKey(node) { event, phase in
-            guard phase == .target else { return .ignored }
-            let increment = step ?? (range.upperBound - range.lowerBound) / 100
-            switch event.scancode {
-            case Scancode.arrowLeft, Scancode.arrowDown:
-                snapshot.moveActive(by: -increment, node: node)
-            case Scancode.arrowRight, Scancode.arrowUp:
-                snapshot.moveActive(by: increment, node: node)
-            case Scancode.home:
-                snapshot.moveActive(to: range.lowerBound, node: node)
-            case Scancode.end:
-                snapshot.moveActive(to: range.upperBound, node: node)
-            default:
-                return .ignored
-            }
-            node.markRenderDirty(reason: .styleSet(field: "rangeSliderValue"))
-            return .handled
-        }
     }
 
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
         layout.height = 24
-        layout.setMeasureFunc { width, widthMode, _, _ in
-            CGSize(width: CGFloat(widthMode == .undefined ? 160 : min(160, width)), height: 24)
-        }
+        layout.minWidth = 160
         return layout
     }
 
@@ -219,12 +206,54 @@ private struct RangeSliderHost: _PrimitiveView {
     }
 
     private func moveActive(to raw: Double, node: Node) {
-        let active = activeThumb(node)
+        moveThumb(activeThumb(node), to: raw, node: node)
+    }
+
+    private func updateAccessibility(_ node: Node) {
+        node.accessibility = AccessibilitySemantics(.group) {
+            $0.label = "Range"
+            $0.state.isEnabled = isEnabled
+            $0.combinesChildren = false
+        }
+        let current = normalized(values.wrappedValue)
+        for (thumb, child) in thumbNodes(in: node) {
+            child.accessibility = AccessibilitySemantics(.slider) {
+                $0.label = thumb == .lower ? "Range start" : "Range end"
+                $0.state.isEnabled = isEnabled
+                $0.value = format(thumb == .lower ? current.lowerBound : current.upperBound)
+            }
+        }
+    }
+
+    private func thumbNodes(in node: Node) -> [(RangeThumb, Node)] {
+        var found: [(RangeThumb, Node)] = []
+        func walk(_ candidate: Node) {
+            if let raw = candidate.attachments["range.thumb"] as? String,
+               let thumb = RangeThumb(rawValue: raw) {
+                found.append((thumb, candidate))
+            }
+            for child in candidate.children { walk(child) }
+        }
+        walk(node)
+        return found
+    }
+
+    private func focusHandle(_ thumb: RangeThumb, node: Node) {
+        guard let handle = handleNode(thumb, in: node) else { return }
+        node.attachments[Self.activeKey] = thumb.rawValue
+        FocusChainHolder.current?.focus(handle, visible: false)
+    }
+
+    private func handleNode(_ thumb: RangeThumb, in node: Node) -> Node? {
+        thumbNodes(in: node).first { $0.0 == thumb }?.1
+    }
+
+    private func moveThumb(_ thumb: RangeThumb, to raw: Double, node: Node) {
         let current = normalized(values.wrappedValue)
         let target = snap(raw)
         var lower = current.lowerBound
         var upper = current.upperBound
-        switch active {
+        switch thumb {
         case .lower:
             lower = min(target, upper - minimumSpan)
             lower = max(range.lowerBound, lower)
@@ -232,9 +261,7 @@ private struct RangeSliderHost: _PrimitiveView {
             upper = max(target, lower + minimumSpan)
             upper = min(range.upperBound, upper)
         }
-        if lower > upper {
-            lower = upper
-        }
+        if lower > upper { lower = upper }
         let next = lower...upper
         if next != current {
             values.wrappedValue = next
@@ -242,12 +269,10 @@ private struct RangeSliderHost: _PrimitiveView {
         }
     }
 
-    private func updateAccessibility(_ node: Node) {
+    private func moveThumb(_ thumb: RangeThumb, by delta: Double, node: Node) {
         let current = normalized(values.wrappedValue)
-        node.accessibility = AccessibilitySemantics(.slider) {
-            $0.state.isEnabled = isEnabled
-            $0.value = "\(format(current.lowerBound)) – \(format(current.upperBound))"
-        }
+        moveThumb(thumb, to: thumb == .lower ? current.lowerBound + delta : current.upperBound + delta,
+                  node: node)
     }
 
     private func moveActive(by delta: Double, node: Node) {
@@ -302,15 +327,19 @@ private struct RangeSliderHost: _PrimitiveView {
         }
 
         let half = appearance.thumbDiameter * 0.5
-        let focus = FocusChainHolder.current?.focused === node
-            && FocusChainHolder.current?.isFocusVisible == true
+        let focusedNode = FocusChainHolder.current?.focused
+        let focusVisible = FocusChainHolder.current?.isFocusVisible == true
+        let lowerHandle = handleNode(.lower, in: node)
+        let upperHandle = handleNode(.upper, in: node)
         for (thumb, centreX) in [(RangeThumb.lower, lowerX), (.upper, upperX)] {
             let clamped = min(max(originX + half, centreX), originX + width - half)
             let rect = UIRect(x: clamped - half,
                               y: originY + (height - appearance.thumbDiameter) * 0.5,
                               width: appearance.thumbDiameter,
                               height: appearance.thumbDiameter)
-            if focus && thumb == active {
+            let focused = focusVisible
+                && (thumb == .lower ? focusedNode === lowerHandle : focusedNode === upperHandle)
+            if focused {
                 list.addRoundedRect(UIRect(x: rect.minX - 2, y: rect.minY - 2,
                                            width: rect.width + 4, height: rect.height + 4),
                                     radius: (rect.height + 4) * 0.5,
@@ -325,6 +354,128 @@ private struct RangeSliderHost: _PrimitiveView {
             list.addRoundedRect(rect, radius: appearance.thumbDiameter * 0.5,
                                 color: appearance.thumbColor)
         }
+    }
+}
+
+private struct RangeThumbHandle: View {
+    let thumb: RangeThumb
+    let values: Binding<ClosedRange<Double>>
+    let range: ClosedRange<Double>
+    let step: Double?
+    let minimumSpan: Double
+    let isEnabled: Bool
+
+    var body: some View {
+        _RangeThumbHandleNode(thumb: thumb, values: values, range: range, step: step,
+                              minimumSpan: minimumSpan, isEnabled: isEnabled)
+    }
+}
+
+/// A focusable, semantics-bearing overlay for one thumb. The parent owns the
+/// shared track, pointer capture and drawing; this node contributes its own
+/// Tab stop, slider value and keyboard behavior.
+private struct _RangeThumbHandleNode: _PrimitiveView {
+    let thumb: RangeThumb
+    let values: Binding<ClosedRange<Double>>
+    let range: ClosedRange<Double>
+    let step: Double?
+    let minimumSpan: Double
+    let isEnabled: Bool
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.attachments["range.thumb"] = thumb.rawValue
+        configure(node)
+        return node
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.positionType = .absolute
+        layout.setPosition(0, edge: .top)
+        layout.setPosition(0, edge: .left)
+        layout.setWidthPercent(100)
+        layout.setHeightPercent(100)
+        return layout
+    }
+
+    func _updateNode(_ node: Node) {
+        configure(node)
+    }
+
+    private func configure(_ node: Node) {
+        node.isFocusable = isEnabled
+        node.isTabStop = isEnabled
+        node.isHitTestable = false
+        node.cursor = isEnabled ? .pointer : .notAllowed
+        let current = normalized(values.wrappedValue)
+        node.accessibility = AccessibilitySemantics(.slider) {
+            $0.label = thumb == .lower ? "Range start" : "Range end"
+            $0.state.isEnabled = isEnabled
+            $0.value = format(thumb == .lower ? current.lowerBound : current.upperBound)
+        }
+        node.accessibilityActions = AccessibilityActions()
+        guard isEnabled else { return }
+        let increment = step ?? (range.upperBound - range.lowerBound) / 100
+        node.accessibilityActions.increment = { move(by: increment) }
+        node.accessibilityActions.decrement = { move(by: -increment) }
+        InteractionRegistryHolder.current?.setKey(node) { event, phase in
+            guard phase == .target else { return .ignored }
+            switch event.scancode {
+            case Scancode.arrowLeft, Scancode.arrowDown:
+                move(by: -increment)
+            case Scancode.arrowRight, Scancode.arrowUp:
+                move(by: increment)
+            case Scancode.home:
+                move(to: range.lowerBound)
+            case Scancode.end:
+                move(to: range.upperBound)
+            default:
+                return .ignored
+            }
+            return .handled
+        }
+    }
+
+    private func normalized(_ raw: ClosedRange<Double>) -> ClosedRange<Double> {
+        let lower = min(max(range.lowerBound, raw.lowerBound), range.upperBound)
+        let upper = min(max(range.lowerBound, raw.upperBound), range.upperBound)
+        guard lower <= upper else { return range.lowerBound...range.upperBound }
+        return lower...upper
+    }
+
+    private func snap(_ raw: Double) -> Double {
+        guard let step, step > 0 else { return raw }
+        let lo = range.lowerBound
+        let n = ((raw - lo) / step).rounded()
+        return min(range.upperBound, max(range.lowerBound, lo + n * step))
+    }
+
+    private func move(by delta: Double) {
+        let current = normalized(values.wrappedValue)
+        move(to: thumb == .lower ? current.lowerBound + delta : current.upperBound + delta)
+    }
+
+    private func move(to raw: Double) {
+        let current = normalized(values.wrappedValue)
+        let target = snap(raw)
+        var lower = current.lowerBound
+        var upper = current.upperBound
+        switch thumb {
+        case .lower:
+            lower = min(target, upper - minimumSpan)
+            lower = max(range.lowerBound, lower)
+        case .upper:
+            upper = max(target, lower + minimumSpan)
+            upper = min(range.upperBound, upper)
+        }
+        if lower > upper { lower = upper }
+        let next = lower...upper
+        if next != current { values.wrappedValue = next }
+    }
+
+    private func format(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(format: "%.2f", value)
     }
 }
 

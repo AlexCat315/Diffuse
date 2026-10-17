@@ -31,8 +31,16 @@ struct RangeSliderTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    private func slider(_ graph: ViewGraph) throws -> Node {
-        try #require(nodes(graph.tree.root).first { $0.accessibility?.role == .slider })
+    private func range(_ graph: ViewGraph) throws -> Node {
+        try #require(nodes(graph.tree.root).first {
+            $0.accessibility?.role == .group && $0.accessibility?.label == "Range"
+        })
+    }
+
+    private func thumb(_ graph: ViewGraph, _ label: String) throws -> Node {
+        try #require(nodes(graph.tree.root).first {
+            $0.accessibility?.role == .slider && $0.accessibility?.label == label
+        })
     }
 
     private func point(_ node: Node, fraction: Float) -> Float {
@@ -49,7 +57,7 @@ struct RangeSliderTests: GuavaUIComposeSerializedSuite {
                     .frame(width: 200)
             })
             graph.computeLayout(width: 400, height: 100)
-            guard let node = try? slider(graph) else {
+            guard let node = try? range(graph) else {
                 Issue.record("range slider was not mounted")
                 return
             }
@@ -65,7 +73,8 @@ struct RangeSliderTests: GuavaUIComposeSerializedSuite {
             graph.recomposer.commitAll()
             #expect(values.lowerBound == 10)
             #expect(values.upperBound == 80)
-            #expect(node.accessibility?.value == "10 – 80")
+            #expect((try? thumb(graph, "Range start"))?.accessibility?.value == "10")
+            #expect((try? thumb(graph, "Range end"))?.accessibility?.value == "80")
         }
     }
 
@@ -79,7 +88,7 @@ struct RangeSliderTests: GuavaUIComposeSerializedSuite {
                     .frame(width: 200)
             })
             graph.computeLayout(width: 400, height: 100)
-            guard let node = try? slider(graph) else {
+            guard let node = try? range(graph) else {
                 Issue.record("range slider was not mounted")
                 return
             }
@@ -107,8 +116,8 @@ struct RangeSliderTests: GuavaUIComposeSerializedSuite {
                     .frame(width: 200)
             })
             graph.computeLayout(width: 400, height: 100)
-            guard let node = try? slider(graph) else {
-                Issue.record("range slider was not mounted")
+            guard let node = try? thumb(graph, "Range start") else {
+                Issue.record("range start thumb was not mounted")
                 return
             }
             focus.focus(node)
@@ -123,6 +132,58 @@ struct RangeSliderTests: GuavaUIComposeSerializedSuite {
             dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.home, keycode: 0,
                                                   modifiers: [], isRepeat: false)))
             #expect(values.lowerBound == 0)
+        }
+    }
+
+    @Test("Both thumbs are independent Tab stops with separate values")
+    func independentTabStops() throws {
+        withScene { graph, _, focus, _ in
+            var values: ClosedRange<Double> = 20...80
+            graph.install(root: Row {
+                RangeSlider(values: Binding(get: { values }, set: { values = $0 }),
+                            in: 0...100, step: 1)
+                    .frame(width: 200)
+            })
+            graph.computeLayout(width: 400, height: 100)
+            guard let lower = try? thumb(graph, "Range start"),
+                  let upper = try? thumb(graph, "Range end") else {
+                Issue.record("range thumbs were not mounted")
+                return
+            }
+            #expect(lower.isTabStop && upper.isTabStop)
+            focus.focus(lower)
+            let next = focus.focusNext(in: graph.tree.root!)
+            #expect(next === upper)
+            #expect(upper.accessibility?.value == "80")
+            focus.focus(upper)
+            let previous = focus.focusPrevious(in: graph.tree.root!)
+            #expect(previous === lower)
+        }
+    }
+
+    @Test("Keyboard focus draws the ring on the focused thumb")
+    func focusedThumbRing() throws {
+        withScene { graph, _, focus, _ in
+            graph.install(root: Row {
+                RangeSlider(values: .constant(20...80), in: 0...100, step: 1)
+                    .frame(width: 200)
+            })
+            graph.computeLayout(width: 400, height: 100)
+            guard let host = try? range(graph),
+                  let lower = try? thumb(graph, "Range start") else {
+                Issue.record("range was not mounted")
+                return
+            }
+            let ring = host.theme.colors.focusRing.rgba8
+            func ringVertices() -> Int {
+                let list = DrawList()
+                host.draw?(list, host.absoluteOrigin)
+                return list.vertices.filter { $0.color == ring }.count
+            }
+            focus.focus(lower, visible: false)
+            #expect(ringVertices() == 0)
+            focus.focus(lower, visible: true)
+            #expect(ringVertices() > 0)
         }
     }
 }

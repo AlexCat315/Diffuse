@@ -164,10 +164,10 @@
 
 **RangeSlider**
 
-- 外观：双 thumb 共用 SliderStyle 轨道；active thumb 在键盘聚焦时绘制 focusRing；区间填充。`[部分]`
+- 外观：双 thumb 共用 SliderStyle 轨道；聚焦 thumb 在键盘焦点时绘制 focusRing；区间填充。`[已实现]`
 - 手机：触摸命中由 `applyTouchControlExtent` 提升到 44pt；窄宽随父容器收缩。`[已实现]`
-- 平板 / 桌面：指针就近选择 active thumb；方向键/Home/End 移动 active；hover 沿用 SliderStyle。`[已实现]`
-- 交互与验收：`minimumSpan` 夹紧；a11y value 为 `"lower – upper"`，增减作用于 active thumb；两个 thumb 的独立 Tab 停靠/双 slider 语义仍待补。`RangeSliderTests` 覆盖指针、minSpan 与键盘；Gallery `--component rangeSlider`。细节见 [RangeSlider](rangeslider.md)。
+- 平板 / 桌面：指针就近选择 active thumb；聚焦 thumb 后方向键/Home/End 移动它；hover 沿用 SliderStyle。`[已实现]`
+- 交互与验收：`minimumSpan` 夹紧；两个 thumb 各自是独立 Tab 停靠，并分别暴露 "Range start"/"Range end" slider 语义与独立 value；父节点为 group。`RangeSliderTests` 5/5 覆盖指针、minSpan、键盘、双 Tab 与 focused-thumb ring；Gallery `--component rangeSlider`。细节见 [RangeSlider](rangeslider.md)。
 
 **Rating**
 

@@ -13,8 +13,8 @@
 
 - **track**：与 `Slider` 共用 `SliderStyle` token
 - **range fill**：两个 thumb 之间
-- **thumb**：start / end；active thumb 在键盘聚焦时绘制 focusRing
-- **active thumb**：指针就近选择；键盘只移动 active thumb
+- **thumb**：start / end；每个 thumb 都是独立的焦点节点，键盘聚焦时绘制 focusRing
+- **focus**：指针按下就近选择 thumb 并把焦点切到它；键盘只移动当前聚焦的 thumb
 
 ## API
 
@@ -64,9 +64,8 @@ RangeSlider(values: $values, in: 0...100, step: 1, minimumSpan: 10)
 ## Behavior
 
 - **指针**：按下点距离哪个 thumb 更近就选哪个；随后 motion 更新该 thumb；up 释放捕获。
-- **键盘**：Left/Down、Right/Up、Home/End 移动 active thumb；Step 默认 `span / 100`，提供 `step` 时按步长吸附。
-- **辅助功能**：role=slider，value 为 `"lower – upper"`；increment/decrement 作用于 active thumb。
-- **限制**：当前是一个焦点节点；Tab 仍执行系统焦点遍历，没有实现两个 thumb 各自的 Tab 停靠，也没有暴露两个独立 slider 值。需要双 thumb 独立语义时使用两个 `Slider` 或等待后续增强。
+- **键盘**：两个 thumb 各自是独立 Tab 停靠。聚焦哪个 thumb，Left/Down、Right/Up、Home/End 就移动哪个；Step 默认 `span / 100`，提供 `step` 时按步长吸附。
+- **辅助功能**：父节点 role=group、label="Range"；两个 thumb 分别是 role=slider，label 为 "Range start"/"Range end"，各自暴露独立 value 与 increment/decrement。
 - **方向**：当前只实现水平方向，与 Slider 一致。
 
 ## Authoring rules
@@ -74,15 +73,17 @@ RangeSlider(values: $values, in: 0...100, step: 1, minimumSpan: 10)
 - 曝光区间、帧范围、价格过滤用 `RangeSlider`；单值用 `Slider`。
 - 指针靠近哪个 thumb 就拖哪个；不要依赖“总是先移动 start”。
 - `minimumSpan` 应小于等于 `range` 跨度；跨度不足时组件退化为整段。
-- 需要两个独立可聚焦 thumb 的严格 a11y 场景，暂用两个 `Slider` 组合并在应用层校验先后。
+- 需要两个独立可聚焦 thumb 的严格 a11y 场景直接用 `RangeSlider`；只有值之间没有区间约束时才拆成两个 `Slider`。
 
 ## Verification
 
 单元测试（`GuavaUI/Tests/GuavaUIComposeTests/RangeSliderTests.swift`）：
 
-- `pointerDrag`：按下 lower 附近并拖动，lower 更新、upper 不变，a11y value 同步。
+- `pointerDrag`：按下 lower 附近并拖动，lower 更新、upper 不变，两个 thumb 的 value 同步。
 - `minimumSpan`：lower 不能越过 `upper - minimumSpan`。
-- `keyboard`：Right 增加 active thumb；End/Home 夹紧到边界。
+- `keyboard`：聚焦 "Range start" 后 Right 增加 lower；End/Home 夹紧到边界。
+- `independentTabStops`：两个 thumb 都是 Tab stop，focusNext/focusPrevious 在两者间移动，各带独立 value。
+- `focusedThumbRing`：指针焦点不画环，键盘焦点只在聚焦 thumb 上画环。
 
 Gallery `rangeSlider` 页提供可拖动区间、最小间距与实时 `Selected` 文本；`AdaptiveControlExamples` 提供 390/720/390-touch 预览。
 

@@ -66,9 +66,9 @@
 ### 2.6 RangeSlider（P1）
 
 - 用途：区间选择（曝光区间、帧范围、价格/尺寸过滤）。
-- 实现：双 thumb 共用 SliderStyle 轨道；指针按距离选择 active thumb；`minimumSpan` 夹紧；a11y value 为 `"lower – upper"`，增减作用于 active thumb。`[部分]`
+- 实现：双 thumb 共用 SliderStyle 轨道；指针按距离选择 active thumb；`minimumSpan` 夹紧；每个 thumb 暴露独立 slider 语义（"Range start"/"Range end"），父节点为 group。`[已实现]`
 - 手机/平板：触摸命中由 `applyTouchControlExtent` 提升到 44；指针 hover/focus 沿用 SliderStyle；thumb 近距时仍各自命中，不合并。
-- 交互与验收：拖动、方向键移动 active thumb、Home/End；Tab 仍走系统焦点遍历，两个 thumb 的独立 Tab 停靠与两个独立 slider 语义尚未实现。`RangeSliderTests` 覆盖指针、minSpan 与键盘；Gallery `rangeSlider` 页提供真实拖动。细节见 [RangeSlider](rangeslider.md)。
+- 交互与验收：两个 thumb 各自是独立 Tab 停靠；聚焦哪个 thumb，方向键/Home/End 就移动哪个；指针按下就近 thumb 并把焦点切到对应 thumb。`RangeSliderTests` 5/5 覆盖指针、minSpan、键盘、双 Tab 与 focused-thumb ring；Gallery `rangeSlider` 页提供真实拖动；DevTools 在 720×820 查询到每个实例的两条 `slider` 语义。细节见 [RangeSlider](rangeslider.md)。
 
 ### 2.7 SearchField（P1，已实现）
 
