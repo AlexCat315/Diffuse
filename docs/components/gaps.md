@@ -11,7 +11,7 @@
 
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
-| 布局与容器 | Box/Row/Column/Spacer/Divider、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | ZStack/Overlay 公共层叠容器 P1、Masonry P2、Grid/LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
+| 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Masonry P2、Grid/LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
 | 命令与选择 | Button/IconButton、ButtonGroup、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton/MenuButton P1、RangeSlider P1、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | SearchField P1、OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
@@ -95,12 +95,11 @@
 - **下拉刷新**：阈值与阻尼、指示器、完成后回弹；reducedMotion 时指示器静止；键盘/命令提供等效刷新入口。`[未实现]`
 - 验收：以上各能力分别提供触摸/键盘/辅助功能断言与 390/720 取样；重排与滑动的状态属 session。参考：SwiftUI `List(selection:)`/`onMove`/`swipeActions`/`refreshable`；Flutter `RefreshIndicator`/`ReorderableListView`/`Dismissible`。
 
-### 2.10 ZStack / Overlay（P1）
+### 2.10 ZStack / Overlay（P1，已实现）
 
-- 用途：公共层叠容器（徽标叠加、加载遮罩、底层布局已用 `absolutePosition`/`zIndex`/Portal 组合）。
-- 外观：子视图按自然尺寸层叠；后声明的在上；不自动裁剪。`[未实现]`
-- 手机/平板：无差异；遮罩层点击穿透策略由调用方声明，a11y 只读可见层。`[未实现]`
-- 交互与验收：命中测试从上到下；隐藏层不参与输入与辅助功能；与 Portal 的分工：ZStack 属内容层叠，Portal 属跨裁剪浮层。参考：SwiftUI `ZStack`；Flutter `Stack`。
+- 用途：公共层叠容器（徽标叠加、加载遮罩、内容层叠）；跨裁剪浮层仍用 Portal。
+- 实现：`ZStack(alignment:)` / `ZStackLayout`；子视图按声明顺序层叠，后声明的在上；测量到最大子视图，不自动裁剪。
+- 交互与验收：指针按后声明优先命中；条件分支卸载后不绘制/不接输入/不暴露语义；RTL 下 leading/trailing 按逻辑边解析。`ZStackTests` 覆盖测量、对齐、RTL 与重叠命中；Gallery `zStack` 页提供分层卡片、角标和显示/隐藏前层开关。细节见 [ZStack](zstack.md)。
 
 ### 2.11 BottomSheet 增强（P0）
 
@@ -162,7 +161,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层与 Toast 操作/位置已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层) 与 [Toast](toast.md)。
+**P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置与 ZStack 已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md) 与 [ZStack](zstack.md)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 
@@ -191,7 +190,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | DateRangePicker | 无内置（双 DatePicker 组合） | `showDateRangePicker` |
 | WheelPicker | `Picker` + `.pickerStyle(.wheel)` | `CupertinoPicker`、`ListWheelScrollView` |
 | 多选/区段/重排/swipe/下拉刷新 | `List(selection:)`、`Section`、`onMove`、`swipeActions`、`refreshable` | `CheckboxListTile`、`ReorderableListView`、`Dismissible`、`RefreshIndicator` |
-| ZStack | `ZStack` | `Stack` |
+| ZStack | `ZStack`（已实现） | `Stack` |
 | BottomSheet | `.sheet` + `presentationDetents` | `showModalBottomSheet` |
 | RichText / Markdown | `Text(markdown:)`、`AttributedString` | `flutter_markdown`（三方） |
 | TreeTable | `Table` + `OutlineGroup` 组合 | `TreeView` 套件（三方） |

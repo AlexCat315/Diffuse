@@ -7,7 +7,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case list, tree, virtualList, virtualStack, chart, icon, image, avatar
     case menu, contextMenu, popover, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
-    case layout, animation, theme, badge, alert, progress, empty
+    case layout, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
     case table, dataTable, calendar, datePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet
@@ -65,6 +65,7 @@ public enum GalleryCatalog {
         .init(.propertyGrid, "PropertyGrid", "Layout", "Inspector rows, sections, custom sizing and empty state."),
         .init(.workspace, "Workspace / Dock", "Layout", "Draggable tabs, split layouts and document serialization."),
         .init(.layout, "Box / Row / Column", "Layout", "Alignment, spacing, flex sizing, spacers and dividers."),
+        .init(.zStack, "ZStack / Overlay", "Layout", "Layered content, alignment, topmost hit testing and retained hidden branches."),
         .init(.animation, "Animation", "Foundation", "Visibility, curves, springs, keyframes, phases, loops, shared geometry, numeric transitions and completion."),
         .init(.theme, "Theme / Typography", "Foundation", "Light and dark semantic surfaces, text and status colors."),
         .init(.badge, "Badge", "Feedback", "Compact labels using semantic status tones."),

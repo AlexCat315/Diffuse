@@ -284,3 +284,38 @@ private struct CarouselCard: View {
         .background(tint)
     }
 }
+
+struct ZStackStory: View {
+    @State private var showsFront = true
+    @State private var last = "none"
+
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Layered content", "Later children paint on top and receive pointer input first. The stack measures to its largest child; overflow stays painted unless the caller clips it.") {
+                ZStack(alignment: .bottomTrailing) {
+                    ZStack(alignment: .topLeading) {
+                        Box {}.frame(width: 320, height: 180).background(.surfaceVariant).cornerRadius(12)
+                        Box {}.frame(width: 120, height: 72).background(.accent).cornerRadius(10).padding(14)
+                        Text("Top-left layer").font(.bodyStrong).foregroundColor(.onAccent).padding(28)
+                    }
+                    Badge("Overlay", tone: .success).padding(14)
+                }.frame(width: 320, height: 180)
+            }
+            StorySection("Hit testing", "Click the overlapping buttons. The later child is on top; the earlier one remains reachable outside it.") {
+                Row(alignment: .center, spacing: 8) {
+                    Checkbox(isOn: $showsFront)
+                    Text("Show front layer").font(.caption)
+                }
+                ZStack {
+                    Button("Back layer") { last = "back" }
+                        .buttonStyle(.secondary).frame(width: 220, height: 72)
+                    if showsFront {
+                        Button("Front layer") { last = "front" }
+                            .frame(width: 120, height: 44)
+                    }
+                }.frame(width: 220, height: 72)
+                Text("Last activated: \(last)").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+        }
+    }
+}

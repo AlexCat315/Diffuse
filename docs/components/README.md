@@ -56,6 +56,7 @@
 | NavigationDrawer | 模态导航、窗口拟合、关闭策略与手势 | [navigation-drawer.md](navigation-drawer.md) |
 | NavigationRail | 72/56pt 导航轨、完整名称与呈现保留 | [navigation-rail.md](navigation-rail.md) |
 | Box / Row / Column | 文档已写 | [layout.md](layout.md) |
+| ZStack / Overlay | 层叠、对齐、命中顺序与溢出边界 | [zstack.md](zstack.md) |
 
 ## 通用约定
 
