@@ -246,3 +246,23 @@ struct AssetStory: View {
         }
     }
 }
+
+struct MultiSelectListStory: View {
+    @State private var selection: Set<Int> = [2]
+    @State private var activated = "No activation yet"
+
+    var body: some View {
+        StorySection("Multi-select list", "Click selects one row; Shift-click selects a range; Cmd/Ctrl-click toggles. Focus the list and use Shift+Arrow to extend, Cmd/Ctrl+A to select all.") {
+            MultiSelectList(Array(0..<12), id: \.self, selection: $selection,
+                            onActivate: { activated = "Activated row \($0 + 1)" }) { row, isSelected in
+                Row(alignment: .center, spacing: 10) {
+                    Text("Document \(row + 1)").font(.body)
+                    Spacer()
+                    if isSelected { Badge("Selected", tone: .info) }
+                }
+            }.frame(height: 280)
+            Text("Selected: \(selection.sorted().map { String($0 + 1) }.joined(separator: ", "))  ·  \(activated)")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

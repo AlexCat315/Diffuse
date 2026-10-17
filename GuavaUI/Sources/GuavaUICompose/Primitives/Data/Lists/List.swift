@@ -106,7 +106,17 @@ struct _ListRowHost: _PrimitiveView {
     let isSelected: Bool
     let rowHeight: Float
     let onActivate: () -> Void
+    let onTap: ((KeyModifiers) -> Void)?
     let content: AnyView
+
+    init(isSelected: Bool, rowHeight: Float, onActivate: @escaping () -> Void,
+         onTap: ((KeyModifiers) -> Void)? = nil, content: AnyView) {
+        self.isSelected = isSelected
+        self.rowHeight = rowHeight
+        self.onActivate = onActivate
+        self.onTap = onTap
+        self.content = content
+    }
 
     func _makeNode() -> Node {
         let n = Node()
@@ -146,7 +156,9 @@ struct _ListRowHost: _PrimitiveView {
                 node.attachments[Self.pressedKey] = false
                 if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
                 if was {
-                    if node.absoluteFrame.contains(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))) { captured() }
+                    if node.absoluteFrame.contains(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))) {
+                        if let onTap { onTap(event.modifiers) } else { captured() }
+                    }
                     return .handled
                 }
                 return .ignored

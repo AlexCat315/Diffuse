@@ -15,7 +15,7 @@ extension GalleryPage {
         case .colorField, .theme: UIIcons.Editor.brush
         case .select, .combobox: UIIcons.Navigation.chevronsUpDown
         case .assetRef: UIIcons.Shape.paperclip
-        case .list, .virtualList, .virtualStack: UIIcons.Text.list
+        case .list, .multiSelectList, .virtualList, .virtualStack: UIIcons.Text.list
         case .tree: UIIcons.Editor.gitBranch
         case .chart: UIIcons.Data.chartLine
         case .icon: UIIcons.Status.sparkles

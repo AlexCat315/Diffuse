@@ -48,7 +48,7 @@
 | Rating | 实现与验证边界 | [rating.md](rating.md) |
 | Calendar / DatePicker | 月份键盘导航、日期限制与焦点 | [calendar.md](calendar.md) |
 | DateRangePicker | 真实日历、两击区间与高亮 | [daterangepicker.md](daterangepicker.md) |
-| List / ListRow | 文档已写 | [list.md](list.md) |
+| List / MultiSelectList / ListRow | 单选、多选、虚拟化与行样式 | [list.md](list.md) |
 | DataTable / DataTableModel | 实现与验证边界 | [data-table.md](data-table.md) |
 | Avatar / AvatarGroup | 实现与验证边界 | [avatar.md](avatar.md) |
 | Image / AsyncImage | 实现与验证边界 | [image.md](image.md) |
