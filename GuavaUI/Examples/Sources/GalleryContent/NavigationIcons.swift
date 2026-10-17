@@ -10,6 +10,7 @@ extension GalleryPage {
         case .toggle, .slider, .numberField, .vec3Field: UIIcons.Action.sliders
         case .rating: UIIcons.Status.star
         case .textField, .textArea, .label: UIIcons.Text.type
+        case .searchField: UIIcons.Action.search
         case .codeEditor, .jsonField: UIIcons.Editor.code
         case .colorField, .theme: UIIcons.Editor.brush
         case .select, .combobox: UIIcons.Navigation.chevronsUpDown

@@ -27,6 +27,7 @@
 | Toggle | 文档已写 | [toggle.md](toggle.md) |
 | Checkbox | 文档已写 | [checkbox.md](checkbox.md) |
 | TextField | 文档已写 | [textfield.md](textfield.md) |
+| SearchField | 搜索输入、联想与键盘选择 | [searchfield.md](searchfield.md) |
 | Text / Typography / Color glyphs | 实现与验证边界 | [typography.md](typography.md) |
 | NumberField | 文档已写 | [numberfield.md](numberfield.md) |
 | Vec3Field | 文档已写 | [vec3field.md](vec3field.md) |

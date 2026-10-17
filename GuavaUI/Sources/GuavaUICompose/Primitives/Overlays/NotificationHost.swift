@@ -71,7 +71,7 @@ private struct ToastPresenter: _PrimitiveView {
         guard !notifications.isEmpty else { resource?.unmount(node: node); return }
         let bounds = portalWindowBounds(node)
         let actualWidth = min(width, max(120, Float(bounds.width) - 32))
-        let surface = node.compositionValue(of: SurfaceEnvironment.key) ?? UIEnvironment()
+        let surface = node.compositionValue(of: SurfaceEnvironment.key)
         let safePadding = position == .bottomLeading || position == .bottomTrailing
             ? EdgeInsets(bottom: surface.safeArea.bottom)
             : EdgeInsets(top: surface.safeArea.top)

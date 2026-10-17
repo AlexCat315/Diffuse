@@ -117,6 +117,7 @@ public extension GalleryPage {
         case .slider: AnyView(SliderStory(options: options))
         case .rating: AnyView(RatingStory(options: options))
         case .textField: AnyView(TextFieldStory(options: options))
+        case .searchField: AnyView(SearchFieldStory(options: options))
         case .textArea: AnyView(TextAreaStory(options: options))
         case .codeEditor: AnyView(CodeEditorStory(options: options))
         case .numberField: AnyView(NumberFieldStory(options: options))

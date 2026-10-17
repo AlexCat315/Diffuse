@@ -3,7 +3,7 @@ import GuavaUIRuntime
 
 public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rating, textField, textArea, codeEditor
-    case numberField, vec3Field, colorField, select, jsonField, assetRef
+    case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
     case list, tree, virtualList, virtualStack, chart, icon, image, avatar
     case menu, contextMenu, popover, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
@@ -36,6 +36,7 @@ public enum GalleryCatalog {
         .init(.slider, "Slider", "Controls", "Continuous and stepped values with pointer capture and keyboard control."),
         .init(.rating, "Rating", "Controls", "Whole and half stars, pointer preview, keyboard selection, read-only scores and density."),
         .init(.textField, "TextField", "Inputs", "Single-line input, password, clear action, adornments and character limits."),
+        .init(.searchField, "SearchField", "Inputs", "Query input with a leading search icon, clear action, submit and suggestion keyboard navigation."),
         .init(.textArea, "TextArea", "Inputs", "Multiline text with wrapping, scrolling and a resize grip."),
         .init(.codeEditor, "Code Editor", "Inputs", "Rope text, visible lines, diagnostic and completion UI, undo and source navigation."),
         .init(.numberField, "NumberField", "Inputs", "Commit on submit or blur, bounded values and keyboard stepping."),

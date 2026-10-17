@@ -660,6 +660,15 @@ public struct TextField: View {
                          textureID: env.atlasTextureID,
                          atlas: env.atlas)
         }
+        if let leadingIcon = decoration.leadingIcon {
+            let iconSize = leadingIconSize(lineHeight: resolvedLineHeight)
+            drawIcon(leadingIcon,
+                     at: Float(origin.x) + insetX,
+                     y: textOriginY + (resolvedLineHeight - iconSize) * 0.5,
+                     size: iconSize,
+                     list: list,
+                     color: resolvedPlaceholderColor.multipliedAlpha(node.opacity))
+        }
         if let prefix = decoration.prefix, !prefix.isEmpty {
             let prependWidth: Float = {
                 guard let prepend = decoration.prepend, !prepend.isEmpty else { return 0 }
@@ -668,11 +677,14 @@ public struct TextField: View {
                                               maxWidth: .infinity, alignment: .leading)
                 return layout.totalWidth + insetX * 2 + theme.spacing.sm
             }()
+            let iconWidth = decoration.leadingIcon == nil
+                ? 0
+                : leadingIconSize(lineHeight: resolvedLineHeight) + theme.spacing.xs
             let layout = env.cachedLayout(text: prefix, font: resolvedFont,
                                           lineHeight: resolvedLineHeight,
                                           maxWidth: .infinity, alignment: .leading)
             list.addText(layout,
-                         origin: (Float(origin.x) + insetX + prependWidth, textOriginY),
+                         origin: (Float(origin.x) + insetX + prependWidth + iconWidth, textOriginY),
                          color: glyphColor,
                          textureID: env.atlasTextureID,
                          atlas: env.atlas)
@@ -1001,11 +1013,18 @@ public struct TextField: View {
                                           maxWidth: .infinity, alignment: .leading)
             width += layout.totalWidth + theme.spacing.xs
         }
+        if decoration.leadingIcon != nil {
+            width += leadingIconSize(lineHeight: lineHeight) + theme.spacing.xs
+        }
         width += lineNumberGutterWidth(env: env,
                                        font: font,
                                        lineHeight: lineHeight,
                                        theme: theme)
         return width
+    }
+
+    func leadingIconSize(lineHeight: Float) -> Float {
+        max(12, lineHeight * 0.8)
     }
 
     private func lineNumberGutterWidth(env: TextEnvironment,
@@ -1120,28 +1139,40 @@ public struct TextField: View {
         max(4, (minimumFieldHeight - lineHeight) * 0.5)
     }
 
+    /// Draw a bundled SVG as an alpha mask. Falls back silently when no
+    /// registry or resource is available (headless tests).
+    private func drawIcon(_ resource: BundleImageResource,
+                          at x: Float,
+                          y: Float,
+                          size: Float,
+                          list: DrawList,
+                          color: Color) {
+        guard let url = resource.url,
+              let registry = ImageAssetRegistryHolder.current else { return }
+        let scale = max(1, ContentScaleHolder.current)
+        let px = max(1, Int((size * scale).rounded()))
+        guard let asset = try? registry.texture(url: url, size: (px, px)) else { return }
+        list.retainResource(asset)
+        list.addImageMaskQuad(rect: UIRect(x: x, y: y, width: size, height: size),
+                              textureID: asset.textureID,
+                              tint: color)
+    }
+
     /// Render the clear affordance at `(x, y)` using the bundled close SVG so
-    /// it matches every other icon. Falls back silently when no registry or
-    /// resource is available (headless tests).
+    /// it matches every other icon.
     private func drawClearGlyph(at x: Float,
                                 y: Float,
                                 size: Float,
                                 list: DrawList,
                                 color: Color) {
-        guard let url = UIIcons.Action.x.url,
-              let registry = ImageAssetRegistryHolder.current else { return }
-        let scale = max(1, ContentScaleHolder.current)
         let side = size * 0.7
-        let px = max(1, Int((side * scale).rounded()))
-        guard let asset = try? registry.texture(url: url, size: (px, px)) else { return }
         let inset = (size - side) * 0.5
-        list.retainResource(asset)
-        list.addImageMaskQuad(rect: UIRect(x: x + inset,
-                                           y: y + inset,
-                                           width: side,
-                                           height: side),
-                              textureID: asset.textureID,
-                              tint: color)
+        drawIcon(UIIcons.Action.x,
+                 at: x + inset,
+                 y: y + inset,
+                 size: side,
+                 list: list,
+                 color: color)
     }
 
     private static func installMeasureFunc(on layout: LayoutNode, snapshot: TextField) {

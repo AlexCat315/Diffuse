@@ -227,3 +227,24 @@ struct LinkStory: View {
         }
     }
 }
+
+struct SearchFieldStory: View {
+    let options: GalleryOptions
+    @State private var query = TextBuffer("")
+    @State private var last = "None"
+
+    var body: some View {
+        StorySection("Search input", "Type to filter suggestions. Arrow keys move the highlight, Return selects it, Escape clears, and the field keeps the regular TextField chrome and clear action.") {
+            SearchField(
+                text: $query,
+                placeholder: "Search components",
+                suggestions: ["Camera", "Canvas", "Counter", "Timeline", "Toolbar"],
+                isEnabled: options.isEnabled,
+                onSubmit: { last = "submitted “\($0)”" },
+                onSuggestionSelected: { last = "selected “\($0)”" }
+            ).frame(maxWidth: 420)
+            Text("Query: \(query.stringValue) · \(last)")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}

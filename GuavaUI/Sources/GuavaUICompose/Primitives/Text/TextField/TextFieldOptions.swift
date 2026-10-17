@@ -30,11 +30,40 @@ public struct TextFieldDecoration: Equatable {
     public var suffix: String?
     public var prepend: String?
     public var append: String?
+    /// Decorative leading glyph rendered inside the field chrome. It reserves
+    /// text inset but is not hit-testable; use `prefix` for authored text.
+    public var leadingIcon: BundleImageResource?
     public var textColor: Color?
     public var placeholderColor: Color?
     public var cursorColor: Color?
     public var selectionColor: Color?
     public init() {}
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.size == rhs.size
+            && lhs.showWordLimit == rhs.showWordLimit
+            && lhs.prefix == rhs.prefix
+            && lhs.suffix == rhs.suffix
+            && lhs.prepend == rhs.prepend
+            && lhs.append == rhs.append
+            && same(lhs.leadingIcon, rhs.leadingIcon)
+            && lhs.textColor == rhs.textColor
+            && lhs.placeholderColor == rhs.placeholderColor
+            && lhs.cursorColor == rhs.cursorColor
+            && lhs.selectionColor == rhs.selectionColor
+    }
+
+    private static func same(_ lhs: BundleImageResource?, _ rhs: BundleImageResource?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil): return true
+        case (let lhs?, let rhs?):
+            return lhs.name == rhs.name
+                && lhs.fileExtension == rhs.fileExtension
+                && lhs.subdirectory == rhs.subdirectory
+                && lhs.bundle === rhs.bundle
+        default: return false
+        }
+    }
 }
 
 public struct TextFieldCodeEditing {

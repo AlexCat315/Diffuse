@@ -198,6 +198,13 @@
 - 平板 / 桌面：恢复 authored 高度与 hover scrollbar；键盘 F1/补全等不依赖指针。`[已实现]`
 - 交互与验收：完整编辑键位、提交/取消、Unicode 与文本缩放、辅助功能 role=textField + 值延迟生成。验收：`TouchDensityTests` field、`TextField*`/`CodeEditingUITests`；Gallery `--component textField`。
 
+**SearchField**
+
+- 外观：TextField chrome + 装饰性前导搜索图标 + clear action；联想列表内联在字段下方，选中项使用 `stateLayerSelected`。`[已实现]`
+- 手机：字段沿用 TextField 的 44pt 命中；联想行由 Button 提供 44pt 触摸命中；窄宽随父容器收缩，候选长文本不撑出容器。`[已实现]`
+- 平板 / 桌面：常规字段密度；方向键/Return/Escape 与指针选择均可用。`[已实现]`
+- 交互与验收：Escape 清空或取消、Return 提交、ArrowUp/Down 移动候选高亮；辅助功能 role=textField + label "Search"；`SearchFieldTests` 覆盖清空、选择与提交；Gallery `--component searchField` 提供真实输入与联想。细节见 [SearchField](searchfield.md)。
+
 **NumberField / Vec3Field**
 
 - 外观：NumberField 为 TextField + 可选步进列（最小 22pt）；Vec3Field 为三个可收缩轴单元 + 固定轴字母。`[已实现]`
