@@ -26,5 +26,6 @@ public extension View {
     }
     func accessibilityLabel(_ label: String) -> some View { accessibility { $0.label = label } }
     func accessibilityIdentifier(_ identifier: String) -> some View { accessibility { $0.identifier = identifier } }
+    func accessibilityDescribedBy(_ identifier: String) -> some View { accessibility { $0.describedBy = identifier } }
     func accessibilityHidden(_ hidden: Bool = true) -> some View { accessibility { $0.isHidden = hidden } }
 }

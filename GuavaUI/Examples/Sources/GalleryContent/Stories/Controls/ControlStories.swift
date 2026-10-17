@@ -30,6 +30,14 @@ struct ButtonStory: View {
                         Row(alignment: .center, spacing: 6) { Text("Custom content"); Icon(UIIcons.Navigation.chevronDown, size: 12) }
                     }.buttonStyle(.secondary)
                 }
+                Row(alignment: .center, spacing: 12) {
+                    Text("Applies to the current workspace.")
+                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                        .accessibilityIdentifier("workspace-hint")
+                    Button("Apply to workspace", isEnabled: options.isEnabled) { clicks += 1 }
+                        .accessibilityDescribedBy("workspace-hint")
+                        .debugName("described-button")
+                }
             }
             StorySection("States", "Loading blocks duplicate activation; selected and disabled states remain distinguishable.") {
                 Row(alignment: .center, spacing: 12) {

@@ -24,6 +24,8 @@ public struct AccessibilitySemantics: Sendable, Equatable, Codable {
     public var value = ""
     public var help = ""
     public var identifier = ""
+    /// Identifier of another element whose label/value describes this one.
+    public var describedBy: String?
     public var state = AccessibilityState()
     /// A control combines decorative text, while retaining nested actionable controls.
     public var combinesChildren = false
@@ -81,7 +83,35 @@ public struct AccessibilityElement {
 
 public enum AccessibilityTree {
     public static func snapshot(root: Node, viewport: CGRect? = nil, resolveValues: Bool = true) -> [AccessibilityElement] {
-        collect(root, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues)
+        let elements = collect(root, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues)
+        var byIdentifier: [String: AccessibilityElement] = [:]
+        func index(_ list: [AccessibilityElement]) {
+            for element in list {
+                if !element.semantics.identifier.isEmpty {
+                    byIdentifier[element.semantics.identifier] = byIdentifier[element.semantics.identifier] ?? element
+                }
+                index(element.children)
+            }
+        }
+        index(elements)
+        func resolve(_ list: [AccessibilityElement]) -> [AccessibilityElement] {
+            list.map { element in
+                var semantics = element.semantics
+                if let identifier = semantics.describedBy,
+                   let target = byIdentifier[identifier] {
+                    let description = target.semantics.label.isEmpty
+                        ? target.semantics.value : target.semantics.label
+                    if !description.isEmpty, !semantics.help.contains(description) {
+                        semantics.help = semantics.help.isEmpty
+                            ? description : semantics.help + ". " + description
+                    }
+                }
+                return AccessibilityElement(node: element.node, semantics: semantics,
+                                            frame: element.frame,
+                                            children: resolve(element.children))
+            }
+        }
+        return resolve(elements)
     }
     private static func collect(_ node: Node, clip: CGRect, combinesText: Bool, resolveValues: Bool) -> [AccessibilityElement] {
         guard node.isLayoutVisible, node.isInteractionEnabled, node.opacity > 0, node.subtreeOpacity > 0,
@@ -106,6 +136,27 @@ public enum AccessibilityTree {
         else if semantic.state.isSecure { semantic.value = String(repeating: "•", count: semantic.value.count) }
         return [AccessibilityElement(node: node, semantics: semantic, frame: frame, children: children)]
     }
+    /// Resolves `describedBy` links for clients that read semantics directly
+    /// instead of walking `snapshot` (for example DevTools node queries).
+    package static func resolvingDescriptions(
+        in meanings: [String: AccessibilitySemantics]
+    ) -> [String: AccessibilitySemantics] {
+        var byIdentifier: [String: AccessibilitySemantics] = [:]
+        for semantics in meanings.values where !semantics.identifier.isEmpty {
+            byIdentifier[semantics.identifier] = byIdentifier[semantics.identifier] ?? semantics
+        }
+        return meanings.mapValues { semantics in
+            var resolved = semantics
+            guard let identifier = resolved.describedBy,
+                  let target = byIdentifier[identifier] else { return resolved }
+            let description = target.label.isEmpty ? target.value : target.label
+            if !description.isEmpty, !resolved.help.contains(description) {
+                resolved.help = resolved.help.isEmpty ? description : resolved.help + ". " + description
+            }
+            return resolved
+        }
+    }
+
     /// Shared by native accessibility and agent diagnostics; never evaluates a
     /// lazy value provider or treats an editable field value as its label.
     package static func resolvedLabel(for node: Node) -> String {

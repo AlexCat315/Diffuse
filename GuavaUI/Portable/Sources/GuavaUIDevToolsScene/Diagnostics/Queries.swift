@@ -50,6 +50,7 @@ public final class UIDiagnostics {
             node.children.forEach(collectMeanings)
         }
         collectMeanings(root)
+        meanings = AccessibilityTree.resolvingDescriptions(in: meanings)
         func collect(_ node: NodeSummary, parent: String?) {
             var value = node
             value.children = []

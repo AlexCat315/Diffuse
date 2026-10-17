@@ -513,7 +513,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 14 | 辅助功能补齐：described-by 关系；滚动区域位置语义、Select/Combobox comboBox 角色与 help hint 已完成 | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
+| 14 | 辅助功能补齐：独立可聚焦滚动条 thumb；described-by、滚动区域位置语义、Select/Combobox comboBox 角色与 help hint 已完成 | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
 编号稳定保留已完成项的空位。建议顺序：14、16（语义补齐与预览覆盖）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
@@ -566,7 +566,7 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 
 第 15 项的内在内容拟合已完成：`ViewThatFits(fitting: .intrinsic)` 在 unspecified 宽高下测量 wide 分支，只有自然宽高都放得下时才选 wide，否则选 compact；`threshold:` 初始化保持原行为。intrinsic 模式立即挂载两套分支以便测量，隐藏分支通过 `LayoutSubview.place(isVisible:false)` 停止绘制/输入/语义并释放焦点与捕获，两套分支的节点与 `@State` 均保留。`ViewThatFitsTests.intrinsicFitting` 覆盖 200/100pt 切换、隐藏分支不可交互、状态往返保持。Gallery 新增 `viewThatFits` 页；DevTools 720×820 截图确认 wide 行与 compact 列，按钮在 520/180pt 提案间切换。
 
-第 14 项的滚动位置与选择角色已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。`AccessibilitySemanticsTests` 覆盖滚动的 label/value/help 与 increment 后位置变化，以及两个选择触发器的 comboBox 角色、值、展开态与 activate。DevTools 在 `scrollView` 页查询到 0%/78% 的滚动区域与完整 help，在 `select` 页查询到多个 `comboBox` 角色及当前值。`described-by` 关系与独立可聚焦滚动条 thumb 仍未实现，保留在第 14 项。
+第 14 项的滚动位置、选择角色与 described-by 已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。`AccessibilitySemanticsTests` 覆盖滚动的 label/value/help 与 increment 后位置变化、两个选择触发器的 comboBox 角色/值/展开态/activate，以及 `describedBy` 引用目标标签追加到 help（缺失目标不追加）。DevTools `button` 页查询 `Apply to workspace` 的 help 为 `Apply to workspace. Applies to the current workspace.`，验证查询路径同样解析描述关系。DevTools 在 `scrollView` 页查询到 0%/78% 的滚动区域与完整 help，在 `select` 页查询到多个 `comboBox` 角色及当前值。`described-by` 已由 `AccessibilityTree` 与 DevTools 查询解析；独立可聚焦滚动条 thumb 仍未实现，保留在第 14 项。
 
 第 10 项浮层自适应已完成：`BottomSheet` 在 compact/medium 贴底全宽、expanded 退化为 `dialogWidth` 560 的居中面板，detent 与拖拽关闭沿用既有 Modal 契约；`MenuHierarchyTests.touchSubmenu` 新增 390pt 触摸面用例，点击父行直接打开子菜单并执行叶子。DevTools 在 390×800 测得 dialog 390×280、y=520，1280×840 测得 560×280、x=360/y=280；`capture-ui` 确认贴底与居中两种呈现。触摸子菜单无 hover 依赖，Portal 层级、焦点与展开语义保持。
 

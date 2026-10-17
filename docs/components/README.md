@@ -30,6 +30,7 @@
 | SearchField | 搜索输入、联想与键盘选择 | [searchfield.md](searchfield.md) |
 | Text / Typography / Color glyphs | 实现与验证边界 | [typography.md](typography.md) |
 | Viewport Traits | width/height class、orientation reader 与 600/1000 阈值 | [viewport-traits.md](viewport-traits.md) |
+| Accessibility | 语义树、describedBy、scrollArea 与 comboBox | [accessibility.md](accessibility.md) |
 | NumberField | 文档已写 | [numberfield.md](numberfield.md) |
 | Vec3Field | 文档已写 | [vec3field.md](vec3field.md) |
 | AssetRefField / AssetDropTarget | 文档已写 | [assetref.md](assetref.md) |

@@ -69,6 +69,31 @@ struct AccessibilitySemanticsTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private struct DescribedHarness: View {
+        var body: some View {
+            Column(alignment: .leading, spacing: 8) {
+                Text("Uses the system locale")
+                    .accessibilityIdentifier("locale-hint")
+                Button("Apply") {}
+                    .accessibilityDescribedBy("locale-hint")
+                Button("Cancel") {}
+                    .accessibilityDescribedBy("missing-hint")
+            }
+        }
+    }
+
+    @Test("describedBy appends the referenced element's description")
+    func describedBy() throws {
+        try withGraph(DescribedHarness()) { graph in
+            let snapshot = AccessibilityTree.snapshot(root: graph.tree.root!)
+            let buttons = snapshot.filter { $0.semantics.role == .button }
+            let apply = try #require(buttons.first { $0.semantics.label == "Apply" })
+            #expect(apply.semantics.help.contains("Uses the system locale"))
+            let cancel = try #require(buttons.first { $0.semantics.label == "Cancel" })
+            #expect(!cancel.semantics.help.contains("Uses the system locale"))
+        }
+    }
+
     @Test("Scroll views expose a scroll area with position and page actions")
     func scrollArea() throws {
         try withGraph(ScrollHarness()) { graph in

@@ -35,6 +35,7 @@
 - 浮层自适应验收完成：`BottomSheet` 在 390×800 为 390×280 贴底、1280×840 为 560×280 居中；`MenuHierarchyTests.touchSubmenu` 覆盖触摸面点击父行展开子菜单并执行叶子。补齐菜单触摸文档与 DevTools 截图。
 - 新增通用拖放协议：`DragScope` 持有类型化会话，`Draggable` 在 6pt 后开始拖动并投射 Portal 预览，`DropTarget` 只接受匹配 payload 并回调目标高亮；外部释放与类型不匹配不 drop。补齐 `DragAndDropTests`、Gallery `dragAndDrop` 页与 DevTools 720×820 实测（Camera → Lane A 得到 `A: Camera · B: empty`）。无自动滚动与键盘重排，集合重排仍用 `ReorderableList`。
 - `ViewThatFits` 新增 `fitting: .intrinsic`：在 unspecified 宽高下测量 wide 分支，自然宽高都放得下才选 wide，否则选 compact；两套分支保留节点与状态，隐藏分支停止绘制/输入/语义。补齐 intrinsic 单元测试、Gallery `viewThatFits` 页与 DevTools 520/180pt 实测。
+- 辅助功能新增 `describedBy`：`AccessibilitySemantics.describedBy` + `accessibilityDescribedBy(_:)`，由 `AccessibilityTree` 与 DevTools 查询把引用目标的 label/value 追加到 help；缺失目标不改写。补齐单元测试、Gallery Button “Described by” 示例与 DevTools 实测；独立可聚焦滚动条 thumb 仍待补。
 
 ## 0.0.9 — 2026-10-06
 
