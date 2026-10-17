@@ -22,6 +22,7 @@
 - 新增 `SectionedList`：平面 section header/footer、跨区段键盘选择、`VirtualStack` 虚拟化与单行选中；header/footer 不进入焦点。补齐 `SectionedListTests`、Gallery `sectionedList` 页与 DevTools 行选择验收。重排/swipe/下拉刷新仍待补。
 - `SectionedList` 增加 `stickyHeaders`：当前区段标题随滚动固定在视口顶部，下一标题上推并在到达顶部后接替；固定条覆盖行内容区、保留稳定滚动条槽并以 1pt 底部分隔线收边，固定副本不参与焦点、命中与语义，列表外层裁剪。`VirtualStack` 增加内部滚动 offset 观察入口，固定标题与 `scrollToIndex`/触摸行高/字号缩放共用同一几何。补齐 sticky 单元测试（含仅一份语义断言）、Gallery 三段可滚动示例、自适应预览与 DevTools 滚动条拖动/截图验收。重排/swipe/下拉刷新仍待补。
 - 窄宽重排：`Stepper` 按每步 148pt 预算在宽/窄 retained 分支间切换，窄宽纵向堆叠并改用 Up/Down；`StepperOptions.minimumHorizontalStepWidth` 可提高长标题预算。`ButtonGroup` 段改为可换行且不压缩；`Vec3Field` 以 96pt 基准/88pt 最小宽换行，窄宽 X/Y 一行、Z 下一行。补齐 `NarrowReflowTests`（390/720、触摸、轴感知键盘）、三个 Gallery 页与自适应预览；DevTools 实测 390pt 三步骤为 56pt 纵向行、720pt 单行，并截图确认 ButtonGroup/Vec3 换行。原地切换同一 `Box` 方向曾把步骤压成 0pt，改用 retained 宽/窄树后修复。
+- `CommandPalette` compact 自适应：`SurfaceReader` 读取表面尺寸与输入，<600pt 时使用 `viewport − 16` 宽、`min(560, viewport − 16)` 高、8pt inset 居中，触摸结果行 ≥44、header 36；桌面保持 640×440 顶部与 36/28 行高。补齐 `CommandPaletteAdaptiveTests` 与 Gallery/DevTools 390pt 实测；软键盘收缩仍由宿主 IME 处理。
 
 ## 0.0.9 — 2026-10-06
 

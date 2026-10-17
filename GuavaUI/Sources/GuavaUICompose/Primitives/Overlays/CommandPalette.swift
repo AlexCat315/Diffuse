@@ -84,19 +84,35 @@ public struct CommandPalette: View {
 
     public var body: some View {
         ThemeReader { theme in
-            Modal(isPresented: isPresented) {
-                $0.geometry.width = 640
-                $0.geometry.height = 440
-                $0.geometry.inset = 72
-                $0.geometry.cornerRadius = theme.radius.md
-                $0.geometry.placement = .top
-            } content: {
-                Column(alignment: .leading, spacing: 0) {
-                    _PresentationWatcher(isPresented: isPresented) { open() }
-                    AnyView(searchField)
-                    AnyView(Divider())
-                    AnyView(results)
-                    AnyView(footer)
+            SurfaceReader { surface in
+                let compact = surface.viewport.width < UIEnvironment.Viewport.compactMaximumWidth
+                let touch = surface.input.contains(.touch)
+                let itemHeight = touch ? max(Self.rowHeight, surface.minimumControlExtent) : Self.rowHeight
+                let headerHeight = touch ? max(Self.headerHeight, 36) : Self.headerHeight
+                Modal(isPresented: isPresented) {
+                    if compact {
+                        // A phone loses too much width and height to the desktop
+                        // 72pt inset. Use a 16pt window inset and the measured
+                        // surface height so the result viewport stays visible.
+                        $0.geometry.width = max(240, surface.viewport.width - 16)
+                        $0.geometry.height = min(560, max(240, surface.viewport.height - 16))
+                        $0.geometry.inset = 8
+                        $0.geometry.placement = .center
+                    } else {
+                        $0.geometry.width = 640
+                        $0.geometry.height = 440
+                        $0.geometry.inset = 72
+                        $0.geometry.placement = .top
+                    }
+                    $0.geometry.cornerRadius = theme.radius.md
+                } content: {
+                    Column(alignment: .leading, spacing: 0) {
+                        _PresentationWatcher(isPresented: isPresented) { open() }
+                        AnyView(searchField)
+                        AnyView(Divider())
+                        AnyView(results(itemHeight: itemHeight, headerHeight: headerHeight))
+                        AnyView(footer)
+                    }.debugName("commandPalette.panel")
                 }
             }
         }
@@ -195,7 +211,7 @@ public struct CommandPalette: View {
         .debugName("commandPalette.search")
     }
 
-    @ViewBuilder private var results: some View {
+    @ViewBuilder private func results(itemHeight: Float, headerHeight: Float) -> some View {
         if visible.isEmpty {
             EmptyState(emptyTitle, message: emptyMessage) {
                 $0.prominence = .compact
@@ -203,7 +219,12 @@ public struct CommandPalette: View {
             }
             .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
         } else {
-            VariableVirtualStack(entries, id: \.id, rowHeight: { entry, _, _ in entry.rowHeight },
+            VariableVirtualStack(entries, id: \.id, rowHeight: { entry, _, _ in
+                switch entry {
+                case .header: return headerHeight
+                case .item: return itemHeight
+                }
+            },
                                  scrollToIndex: highlightedEntryIndex) { entry in
                 switch entry {
                 case .header(let title):
@@ -211,10 +232,10 @@ public struct CommandPalette: View {
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                         .padding(horizontal: 14)
-                        .frame(height: Self.headerHeight)
+                        .frame(height: headerHeight)
                         .accessibility { $0.role = .staticText }
                 case .item(let item):
-                    row(item)
+                    row(item, height: itemHeight)
                 }
             }
             .debugName("commandPalette.results")
@@ -223,7 +244,7 @@ public struct CommandPalette: View {
         }
     }
 
-    private func row(_ item: CommandItem) -> some View {
+    private func row(_ item: CommandItem, height: Float) -> some View {
         let isHighlighted = item.id == effectiveHighlight
         return Button(isEnabled: item.isEnabled, isSelected: isHighlighted, action: { run(item) }) {
             Row(alignment: .center, spacing: 10) {
@@ -243,7 +264,7 @@ public struct CommandPalette: View {
         }
         .buttonStyle(CommandRowStyle())
         .modifier(CommandResultModifier())
-        .frame(width: .percent(100)).frame(height: Self.rowHeight)
+        .frame(width: .percent(100)).frame(height: height)
         .onHover { hovered in
             if hovered, item.isEnabled { highlightedID = item.id }
         }
@@ -272,14 +293,6 @@ public struct CommandPalette: View {
     }
 }
 
-private extension CommandEntry {
-    var rowHeight: Float {
-        switch self {
-        case .header: return CommandPalette.headerHeight
-        case .item: return CommandPalette.rowHeight
-        }
-    }
-}
 
 /// Renders the highlighted row as a selection rather than as a button press:
 /// the palette's highlight is a cursor, and pressing it does not happen until

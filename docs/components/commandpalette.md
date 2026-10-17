@@ -42,7 +42,7 @@ CommandPalette(isPresented: $open, items: [
 ## Virtualization
 
 - 结果通过 `VariableVirtualStack` 渲染：
-  - 行高：header 28pt、item 36pt
+  - 行高：header 28pt、item 36pt；触摸面下 header 36 / item ≥44
   - `overscan = 3`
   - `scrollToIndex = highlightedEntryIndex`，键盘移动后自动显露
   - 结果容器 `width: 100%`，行与选中背景铺满
@@ -52,10 +52,11 @@ CommandPalette(isPresented: $open, items: [
 
 ## Sizing
 
-- Modal 固定 640×440，`inset 72`，顶部放置。
+- 平板/桌面（surface 宽 ≥600）：Modal 640×440，`inset 72`，顶部放置。
+- compact（<600）：宽 `max(240, viewport − 16)`、高 `min(560, max(240, viewport − 16))`，`inset 8`，居中；结果区取剩余高度，仍使用同一虚拟化行预算。
 - 搜索行、footer 固定；结果区取剩余高度。
-- 行高不随结果数量变化；`VariableVirtualStack` 使用同一 `TextScaler` 测量。
-- 手机：固定 440 与行预算仍是已知限制；未做软键盘/窗口高度自适应。
+- 行高不随结果数量变化；`VariableVirtualStack` 使用同一 `TextScaler` 测量。指针行高 36 / header 28；触摸面行高 ≥44 / header 36。
+- 软键盘出现后的结果区收缩仍由宿主 IME/安全区处理，组件不做猜测；compact 几何已不再使用固定 440。
 
 ## Tokens
 
@@ -103,6 +104,7 @@ CommandPalette(isPresented: $open, items: [
 
 - `ProductInteractionRegressionTests.commandInput`：真实搜索输入、跳过 disabled、PageUp/PageDown、Return 执行。
 - `ProductInteractionRegressionTests.commandVirtualization`：1000 条命令挂载行 < 60。
+- `CommandPaletteAdaptiveTests`：390pt 触摸面的 374×560 panel、44pt 结果行、36pt header；1280pt 指针面的 640×440 panel 与 36pt 行。
 - `FeedbackComponentTests` 覆盖排序/分组投影。
 
 Gallery `commandPalette` 页提供 8 条命令、分组、快捷键、禁用项与 `Last run`。
@@ -123,6 +125,8 @@ guava-dev devtools input-ui 9229 --input \
   '[{"kind":"keyDown","key":"ArrowDown"},{"kind":"keyDown","key":"Enter"}]'
 guava-dev devtools capture-ui 9229 /tmp/guava-palette.jpg
 ```
+
+compact 实测（`--width 390 --height 820`）：`query_ui_nodes` 的 `role=dialog` 返回 374×560、位置 (8,130)；`capture-ui` 确认搜索行、结果区和 footer 都落在窗口内。触摸行高由 `CommandPaletteAdaptiveTests` 在 390pt 触摸表面断言，DevTools 宿主默认指针输入因此现场行高为 36。
 
 ## References
 
