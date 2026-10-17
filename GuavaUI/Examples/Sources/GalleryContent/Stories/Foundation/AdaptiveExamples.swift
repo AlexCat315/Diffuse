@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .sectionedList, .reorderableList, .swipeList, .refreshableList, .calendar, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -58,6 +58,11 @@ private struct AdaptiveControlSample: View {
     @State private var refreshPreview = false
     @State private var navigationPath: [String] = []
     @State private var navigationOpen = false
+    @State private var multiSelection: Set<Int> = [1]
+    @State private var scrollbarOffset: CGFloat = 0
+    @State private var dndLane: String?
+    @State private var dndHover = false
+    @State private var accordionExpanded: Set<Int> = [0]
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
             sample
@@ -200,6 +205,56 @@ private struct AdaptiveControlSample: View {
             ])]) {
                 TextField("Retained draft", text: $text) { $0.behavior.disabled = !options.isEnabled }.padding(12)
             }.frame(width: .percent(100), height: .points(210)))
+        case .multiSelectList: AnyView(MultiSelectList(0..<12, id: \.self, selection: $multiSelection) { index, _ in
+            Text("Item \(index + 1)")
+        }.frame(width: .percent(100), height: .points(140)))
+        case .scrollbar: AnyView(Row(alignment: .center, spacing: 12) {
+            Scrollbar(offset: $scrollbarOffset, contentExtent: 800, viewportExtent: 100)
+                .frame(width: 12, height: 100)
+            Text("Offset \(Int(scrollbarOffset))").font(.caption)
+        })
+        case .viewportTraits: AnyView(Column(alignment: .leading, spacing: 4) {
+            ViewportTraitLabels()
+        })
+        case .viewThatFits: AnyView(ViewThatFits(fitting: .intrinsic) {
+            Row(spacing: 8) { Text("Wide"); Text("Files"); Text("Preview"); Text("Settings") }
+        } compact: {
+            Column(spacing: 4) { Text("Compact"); Text("Files"); Text("Preview"); Text("Settings") }
+        }.frame(width: .percent(100), height: .points(100)))
+        case .dragAndDrop: AnyView(DragScope {
+            Column(alignment: .leading, spacing: 8) {
+                Draggable("Camera", preview: { Text("Camera").font(.caption).padding(6).background(.surfaceVariant) }) {
+                    Text("Camera").font(.caption).padding(horizontal: 10, vertical: 6).background(.surfaceRaised).cornerRadius(6)
+                }
+                DropTarget(onTargeted: { dndHover = $0 }, onDrop: { dndLane = $0 }) {
+                    Text(dndLane ?? "Drop here").font(.caption)
+                        .frame(width: 120, height: 44)
+                        .background(dndHover ? .selection : .surfaceSunken).cornerRadius(8)
+                }
+            }
+        }.frame(height: 160))
+        case .menuButton: AnyView(MenuButton("Actions", entries: [
+            .item(MenuItem(id: "duplicate", title: "Duplicate") {}),
+            .item(MenuItem(id: "delete", title: "Delete", role: .destructive) {})
+        ], isEnabled: options.isEnabled))
+        case .tooltip: AnyView(Text("Hover for details").tooltip("Full tooltip description").padding(8))
+        case .link: AnyView(Link("Open documentation") {})
+        case .badge: AnyView(Badge("Beta") { $0.tone = .info })
+        case .tag: AnyView(Tag("Design") { $0.tone = .info })
+        case .keyCap: AnyView(KeyCap(["⌘", "K"]))
+        case .progress: AnyView(ProgressView(value: 0.6).frame(width: .percent(100)))
+        case .empty: AnyView(EmptyState("No results", message: "Try another search") {})
+        case .skeleton: AnyView(Skeleton {
+            $0.appearance.height = 20
+            $0.appearance.shape = .rectangle(cornerRadius: 4)
+        }.frame(width: .percent(100)))
+        case .accordion: AnyView(Accordion([
+            AccordionItem(0, "Details") { Text("Accordion content") }
+        ], expanded: $accordionExpanded).frame(width: .percent(100), height: .points(120)))
+        case .datePicker: AnyView(DatePicker(selection: $date) {
+            $0.presentation.width = 240
+            $0.presentation.isEnabled = options.isEnabled
+        })
         default: AnyView(EmptyView())
         }
     }
@@ -293,5 +348,22 @@ struct ViewThatFitsStory: View {
         Text(title).font(.caption)
             .padding(horizontal: 10, vertical: 6)
             .background(.surfaceVariant).cornerRadius(6)
+    }
+}
+
+
+private struct ViewportTraitLabels: View {
+    var body: some View {
+        WidthClassReader { width in
+            HeightClassReader { height in
+                OrientationReader { orientation in
+                    Column(alignment: .leading, spacing: 4) {
+                        Text("Width: \(width)").font(.caption)
+                        Text("Height: \(height)").font(.caption)
+                        Text("Orientation: \(orientation)").font(.caption)
+                    }
+                }
+            }
+        }
     }
 }
