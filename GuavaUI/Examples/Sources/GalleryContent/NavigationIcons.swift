@@ -27,6 +27,7 @@ extension GalleryPage {
         case .disclosure, .accordion: UIIcons.Navigation.chevronDown
         case .tabs, .workspace: UIIcons.Editor.layers
         case .panel, .sheet: UIIcons.Layout.panelRight
+        case .bottomSheet: UIIcons.Layout.panelBottom
         case .splitView: UIIcons.Layout.columns2
         case .scrollView, .boundedScroll: UIIcons.Navigation.arrowDown
         case .propertyGrid, .form: UIIcons.Action.settings

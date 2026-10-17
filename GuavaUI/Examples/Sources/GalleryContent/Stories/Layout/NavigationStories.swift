@@ -201,3 +201,35 @@ struct SheetStory: View {
         }
     }
 }
+
+struct BottomSheetStory: View {
+    let options: GalleryOptions
+    @State private var open = false
+    @State private var notifications = true
+
+    var body: some View {
+        StorySection("Bottom sheet", "Open the sheet, then drag its handle up for the larger detent or down to dismiss. On wide surfaces it degrades to a centered dialog-sized panel; Escape and the backdrop still dismiss through the modal contract.") {
+            Button("Open bottom sheet", isEnabled: options.isEnabled) { open = true }
+            BottomSheet(isPresented: $open, configure: {
+                $0.detents = [280, 480]
+                $0.initialDetent = 0
+                $0.dragDismissThreshold = 70
+            }) {
+                Box(direction: .column, alignItems: .stretch, spacing: 14) {
+                    Text("Quick actions").font(.headline)
+                    Text("Drag the handle up for more space, or down to close.").font(.caption).foregroundColor(.onSurfaceMuted)
+                    Divider()
+                    Row(alignment: .center, spacing: 12) {
+                        Toggle(isOn: $notifications, isEnabled: options.isEnabled)
+                        Text("Notifications").font(.body)
+                    }
+                    Spacer()
+                    Row(alignment: .center, spacing: 8) {
+                        Spacer()
+                        Button("Close") { open = false }.buttonStyle(.secondary)
+                    }
+                }.padding(20)
+            }
+        }
+    }
+}

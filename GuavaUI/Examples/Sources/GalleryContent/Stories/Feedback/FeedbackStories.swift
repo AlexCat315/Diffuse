@@ -178,6 +178,7 @@ public extension GalleryPage {
         case .dialog: AnyView(DialogStory())
         case .alertDialog: AnyView(AlertDialogStory())
         case .sheet: AnyView(SheetStory(options: options))
+        case .bottomSheet: AnyView(BottomSheetStory(options: options))
         case .commandPalette: AnyView(CommandPaletteStory(options: options))
         case .hoverCard: AnyView(HoverCardStory(options: options))
         case .timeline: AnyView(TimelineStory())

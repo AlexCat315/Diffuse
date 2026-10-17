@@ -35,6 +35,7 @@
 | Modal / ContextMenu / TransitionView | 文档已写 | [interaction.md](interaction.md) |
 | 动画系统 | 属性 / 弹簧 / 轨道 / 相位 / 循环 / 共享几何 / 数值 / 生命周期 | [animation.md](animation.md) |
 | Sheet | 实现与验证边界 | [sheet.md](sheet.md) |
+| BottomSheet | detent、拖拽与宽屏退化 | [bottom-sheet.md](bottom-sheet.md) |
 | Tooltip | 实现与验证边界 | [tooltip.md](tooltip.md) |
 | Toast / Notification | 队列、操作按钮、位置与安全区 | [toast.md](toast.md) |
 | Menu / ContextMenu / Select | 实现与验证边界 | [menu.md](menu.md) |

@@ -11,6 +11,7 @@
 - 新增 `ZStack` / `ZStackLayout`：按声明顺序层叠、测量到最大子视图、后声明优先命中、RTL 逻辑边；补齐 `zstack.md`、单元测试、Gallery 页与 DevTools 点击/截图验收。
 - 新增 `View.overlay(alignment:)` / `OverlayLayout`：overlay 以 base 尺寸为准、不改变父级布局并优先命中；ZStack Gallery 卡片改用 overlay，避免并列 Text + padding 的偏移问题。
 - 新增 `SearchField`：TextField chrome + 前导搜索图标 + clear，联想列表支持过滤、方向键/Return/Escape 与指针选择；补齐 `searchfield.md`、单元测试、Gallery 页与 DevTools 输入/截图验收。
+- 新增 `BottomSheet`：44pt 拖拽柄、detent 展开/退档/关闭、compact 贴底与 expanded 居中退化；复用 Modal 焦点/Escape/backdrop，补齐 `bottom-sheet.md`、单元测试、Gallery 页与 DevTools 拖拽/截图验收。
 
 ## 0.0.9 — 2026-10-06
 

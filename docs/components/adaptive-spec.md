@@ -358,6 +358,13 @@
 - 平板 / 桌面：居中模态、Sheet 侧边抽屉。`[已实现]`
 - 交互与验收：焦点进入并循环、Escape/背景按配置关闭、关闭后焦点还原、禁用不打开；辅助功能 role=dialog + label/help。验收：Modal/Sheet 测试族、`--component modal|dialog|alertDialog|sheet`。
 
+**BottomSheet**
+
+- 外观：全宽拖拽柄（44pt 命中 / 36×4 视觉）、detent 高度档位、内容区；复用 Modal 的 backdrop、焦点与 Escape。`[已实现]`
+- 手机 / 平板：compact/medium 贴底全宽；向下拖超过位移/速度阈值关闭，第一档之上先退档；向上拖进入下一档；内容不接拖拽。`[已实现]`
+- 平板 / 桌面：expanded 表面退化为居中面板（`dialogWidth` 默认 560、`dialogInset` 16）；仍保留 detent 高度。`[已实现]`
+- 交互与验收：关闭后焦点还原；释放无惯性尾段，reducedMotion 安全；辅助功能 handle label `Resize sheet`，内容 role=dialog。`BottomSheetTests` 覆盖关闭、展开与宽屏退化；Gallery `bottomSheet` 页提供真实拖拽。细节见 [BottomSheet](bottom-sheet.md)。
+
 ### 3.7 展示与反馈
 
 **Text / Typography / Icon**

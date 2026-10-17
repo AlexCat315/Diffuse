@@ -17,7 +17,7 @@
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
-| 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换/操作/位置） | BottomSheet 拖拽与自适应 P0、ActionSheet/Popconfirm P2、菜单富内容 P2 |
+| 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换/操作/位置） | ActionSheet/Popconfirm P2、菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Banner 由 Alert 覆盖 |
 | 展示与媒体 | Text/Typography、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/Label、ViewportHost、ScriptCanvasView | RichText/Markdown P2、视频播放组件（应用层按需）、GIF/WebP、EXIF/渐进、缓存淘汰 P2 |
 | 拖放与交互 | AssetDropTarget、Tree DnD、Workspace 拖拽、PointerCapture | 通用 drag & drop 协议（任意 payload/列表重排）P1 |
@@ -103,10 +103,9 @@
 
 ### 2.11 BottomSheet 增强（P0）
 
-- 用途：手机底部抽屉；当前 Sheet 已有 bottom 边，但无拖拽关闭与手机自适应（规范 5-10 已列浮层自适应）。
-- 外观：顶部拖拽把手 ≥ 44 命中；全宽；高度档位（中/大）或内容自适应；桌面可退化为 Dialog。`[未实现]`
-- 手机：下滑关闭（阻尼 + 速度阈值）、上滑展开档位；Escape/背景关闭保留；打开时焦点进入并循环。`[未实现]`
-- 交互与验收：拖拽中内容不接输入；关闭后焦点还原；reducedMotion 下省略拖拽惯性。参考：SwiftUI `.presentationDetents`/`sheet`；Material 3 bottom sheet。
+- 用途：手机底部抽屉；复用 `Modal` 的焦点、Escape 和 backdrop，新增 detent 与拖拽。
+- 实现：`BottomSheet` 提供全宽 44pt 拖拽柄、2–3 档高度、向上展开/向下收缩或关闭；compact/medium 贴底，expanded 退化为居中面板。`[已实现]`
+- 交互与验收：下拉超过位移/速度阈值关闭，第一档之上先退档；拖拽中内容不接输入；关闭后焦点还原；释放无惯性尾段，reducedMotion 安全。`BottomSheetTests` 覆盖关闭、展开与宽屏退化；Gallery `bottomSheet` 页提供真实拖拽。细节见 [BottomSheet](bottom-sheet.md)。
 
 ### 2.12 其他缺失（P2/P3，压缩规范）
 
@@ -159,7 +158,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
+**P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
 **P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack 与 SearchField 已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md) 与 [SearchField](searchfield.md)。
 
@@ -191,7 +190,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | WheelPicker | `Picker` + `.pickerStyle(.wheel)` | `CupertinoPicker`、`ListWheelScrollView` |
 | 多选/区段/重排/swipe/下拉刷新 | `List(selection:)`、`Section`、`onMove`、`swipeActions`、`refreshable` | `CheckboxListTile`、`ReorderableListView`、`Dismissible`、`RefreshIndicator` |
 | ZStack | `ZStack`（已实现） | `Stack` |
-| BottomSheet | `.sheet` + `presentationDetents` | `showModalBottomSheet` |
+| BottomSheet | `.sheet` + `presentationDetents`（已实现） | `showModalBottomSheet` |
 | RichText / Markdown | `Text(markdown:)`、`AttributedString` | `flutter_markdown`（三方） |
 | TreeTable | `Table` + `OutlineGroup` 组合 | `TreeView` 套件（三方） |
 | Toast 操作 | 无内置（已实现） | `SnackBar` + `SnackBarAction` |

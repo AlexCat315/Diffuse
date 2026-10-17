@@ -10,7 +10,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case layout, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
     case table, dataTable, calendar, datePicker, timeField
-    case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet
+    case accordion, breadcrumb, pagination, buttonGroup, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
     case commandPalette, hoverCard, timeline, toolbar, appBar
     case link, statusBar, carousel, skeleton, stepper
 
@@ -97,6 +97,7 @@ public enum GalleryCatalog {
         .init(.dialog, "Dialog", "Overlays", "Structured headers, scrollable content and action slots."),
         .init(.alertDialog, "AlertDialog", "Overlays", "Confirmation and cancellation with loading and destructive roles."),
         .init(.sheet, "Sheet", "Overlays", "An edge panel using modal focus and dismissal policies."),
+        .init(.bottomSheet, "BottomSheet", "Overlays", "Detent heights, drag-to-expand/dismiss and a centered wide-surface fallback."),
         .init(.commandPalette, "Command Palette", "Overlays", "Ranked fuzzy search over commands with keyboard-first selection."),
         .init(.hoverCard, "HoverCard", "Overlays", "Delayed hover detail that survives the pointer moving onto the card."),
         .init(.timeline, "Timeline", "Data", "Ordered events on a rail with per-event outcome glyphs."),
