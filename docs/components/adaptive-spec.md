@@ -92,7 +92,7 @@
 ### 1.2 虚拟化与大数据
 
 - 大集合（List/Tree/Table/DataTable/VirtualStack）必须使用窗口化协议，空间不足不改变虚拟化契约：List/Tree/Table/DataTable 先按 `TextScaler` 缩放 authored 行高，触摸面再应用 44pt 下限；窗口化 extent 与滚动范围使用同一高度，切回指针保留字号缩放并移除触摸下限。通用 VirtualStack 使用调用方传入的实际高度。
-- 已知可变行高用 `VariableVirtualStack`；未知高度测量 `[未实现]`。普通 `ScrollView` 不自动窗口化，长列表必须显式选择容器。
+- 已知可变行高用 `VariableVirtualStack`，显式 `rowHeight` 契约 `[已实现]`；未知高度自动测量属于 P2 长尾，当前需调用方提供高度。普通 `ScrollView` 不自动窗口化，长列表必须显式选择容器。
 - 数据表列在窄宽下：`TableColumn.visibility` 声明必要列或自动列优先级；Table / DataTable 按实际宽度隐藏低优先列，提供横向滚动、显隐菜单及可选用户选择 binding。冻结列和活动编辑不参与隐藏，规则与超宽冻结区兜底见 [数据表](data-table.md#列优先级与可见性)。`[已实现]`
 - Grid 命名字段列使用同一 `ColumnVisibility`，隐藏后仍保留源行槽位与局部状态；内置显隐入口和 minimum 横向滚动，匿名 adaptive 卡片流保持原语义。`[已实现]`
 
