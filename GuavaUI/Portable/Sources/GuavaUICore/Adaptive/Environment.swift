@@ -6,6 +6,8 @@ public struct UIEnvironment: Sendable, Hashable {
     public struct Viewport: Sendable, Hashable {
         public static let compactMaximumWidth: Float = 600
         public static let expandedMinimumWidth: Float = 1000
+        public static let compactMaximumHeight: Float = 600
+        public static let expandedMinimumHeight: Float = 1000
         public var width: Float = 1280
         public var height: Float = 720
         public var scale: Float = 1
@@ -14,6 +16,15 @@ public struct UIEnvironment: Sendable, Hashable {
             width < Self.compactMaximumWidth ? .compact
                 : width < Self.expandedMinimumWidth ? .medium
                 : .expanded
+        }
+        public var heightClass: HeightClass {
+            height < Self.compactMaximumHeight ? .compact
+                : height < Self.expandedMinimumHeight ? .medium
+                : .expanded
+        }
+        /// Square viewports count as landscape; width wins ties.
+        public var orientation: Orientation {
+            width >= height ? .landscape : .portrait
         }
     }
     public struct Insets: Sendable, Hashable {
@@ -32,6 +43,8 @@ public struct UIEnvironment: Sendable, Hashable {
         public static let pen = Input(rawValue: 8)
     }
     public enum WidthClass: Sendable, Hashable { case compact, medium, expanded }
+    public enum HeightClass: Sendable, Hashable { case compact, medium, expanded }
+    public enum Orientation: Sendable, Hashable { case portrait, landscape }
     public var viewport = Viewport()
     public var safeArea = Insets()
     public var input: Input = [.pointer, .keyboard]

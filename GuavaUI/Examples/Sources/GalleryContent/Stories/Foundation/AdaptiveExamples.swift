@@ -210,3 +210,54 @@ private struct AdaptiveControlSample: View {
          SelectOption(value: 2, label: "Unavailable", isEnabled: false)]
     }
 }
+
+struct ViewportTraitsStory: View {
+    var body: some View {
+        SurfaceReader { surface in
+            StorySection("Viewport traits", "Width and height classes use independent 600/1000pt thresholds. Orientation is portrait below square and landscape at or above it; readers recompose when the surface changes without remounting their content.") {
+                WidthClassReader { width in
+                    HeightClassReader { height in
+                        OrientationReader { orientation in
+                            Column(alignment: .leading, spacing: 10) {
+                                Text("Viewport: \(Int(surface.viewport.width)) × \(Int(surface.viewport.height))")
+                                    .font(.caption).foregroundColor(.onSurfaceMuted)
+                                    .debugName("viewport-size")
+                                Text("Width class: \(Self.name(width))")
+                                    .font(.body).debugName("viewport-width-class")
+                                Text("Height class: \(Self.name(height))")
+                                    .font(.body).debugName("viewport-height-class")
+                                Text("Orientation: \(Self.name(orientation))")
+                                    .font(.body).debugName("viewport-orientation")
+                                Text("Compact < 600 · Medium 600–999 · Expanded ≥ 1000")
+                                    .font(.caption).foregroundColor(.onSurfaceMuted)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static func name(_ width: UIEnvironment.WidthClass) -> String {
+        switch width {
+        case .compact: "compact"
+        case .medium: "medium"
+        case .expanded: "expanded"
+        }
+    }
+
+    private static func name(_ height: UIEnvironment.HeightClass) -> String {
+        switch height {
+        case .compact: "compact"
+        case .medium: "medium"
+        case .expanded: "expanded"
+        }
+    }
+
+    private static func name(_ orientation: UIEnvironment.Orientation) -> String {
+        switch orientation {
+        case .portrait: "portrait"
+        case .landscape: "landscape"
+        }
+    }
+}

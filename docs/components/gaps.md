@@ -11,7 +11,7 @@
 
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
-| 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Masonry P2、Grid/LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
+| 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader/HeightClassReader/OrientationReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Masonry P2、Grid/LazyGrid span P2、程序滚动无时长动画（scrollview.md） |
 | 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、RangeSlider（active thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton 单一 Tab/共享 chrome P2、RangeSlider 独立 Tab/双 slider 语义 P2、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、SearchField、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM） | TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2、区间预设 P2 |

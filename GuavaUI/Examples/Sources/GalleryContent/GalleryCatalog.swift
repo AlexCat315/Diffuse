@@ -12,7 +12,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case table, dataTable, calendar, datePicker, dateRangePicker, timeField
     case accordion, breadcrumb, pagination, buttonGroup, splitButton, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
     case commandPalette, hoverCard, timeline, toolbar, appBar, navigationStack
-    case link, statusBar, carousel, skeleton, stepper
+    case link, statusBar, carousel, skeleton, stepper, viewportTraits
 
     public var entry: GalleryEntry { GalleryCatalog.entries.first { $0.page == self }! }
 }
@@ -75,6 +75,7 @@ public enum GalleryCatalog {
         .init(.layout, "Box / Row / Column", "Layout", "Alignment, spacing, flex sizing, spacers and dividers."),
         .init(.zStack, "ZStack / Overlay", "Layout", "Layered content, alignment, topmost hit testing and retained hidden branches."),
         .init(.animation, "Animation", "Foundation", "Visibility, curves, springs, keyframes, phases, loops, shared geometry, numeric transitions and completion."),
+        .init(.viewportTraits, "Viewport Traits", "Foundation", "Width/height classes and orientation derived from the surface viewport."),
         .init(.theme, "Theme / Typography", "Foundation", "Light and dark semantic surfaces, text and status colors."),
         .init(.badge, "Badge", "Feedback", "Compact labels using semantic status tones."),
         .init(.alert, "Alert", "Feedback", "Inline feedback with a title, detail and status tone."),

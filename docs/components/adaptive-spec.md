@@ -80,6 +80,7 @@
 | `ViewThatFits` / `LayoutThatFits` | 按容器实测宽（默认阈值 600）或候选测量选择布局；两分支各自保留节点与 `@State`，隐藏分支不参与布局/绘制/输入/辅助功能并释放焦点与指针捕获；重任务由应用按当前形态控制 | `[已实现]` |
 | `ContainerSizeReader` | 发布自身内容盒（扣 padding/border）实测尺寸；首次收到 `.zero`，变化 < 0.5pt 不发布；父级必须有界宽。卡片内部自适应用它，不用窗口宽度 | `[已实现]` |
 | `WidthClassReader` | 读取 surface 级 width class（窗口级），用于壳层：导航收敛、栏位切换；不用于卡片内部 | `[已实现]` |
+| `HeightClassReader` / `OrientationReader` | 读取 surface 级 height class（<600 / 600–999 / ≥1000）与横竖屏（方形归 landscape）；与宽度类一样只用于壳层，不用于卡片内部 | `[已实现]` |
 | `SafeArea` | 只应用宿主提供的 logical insets，嵌套时只消费未使用边；桌面默认零；不推断刘海/软键盘/窗口 chrome。宿主要求：手机竖屏底部 inset 含 home indicator，横屏含侧边；IME 出现由宿主处理，组件不用占位 | `[已实现]`；IME 联动 `[部分]` |
 | `Form` / `PropertyGrid` | 按字段实测宽度在 leading ↔ stacked 间切换；共享 `labelPlacement` 和 `minValueWidth` 语义。Form 最大列数随宽度减少，值槽保留节点与编辑状态；完整标签进 tooltip 与语义 | 重排 `[已实现]`；通用省略号见第 5-6 项，API 见 [Form](form.md) |
 | `TabView` 标签条 | 标题内部单行省略，全文进 tooltip/语义；整项按 `overflow` 换行、横向滚动或折叠菜单，menu 保留所选项与可达入口；compact 时按 `TabStripPlacement.adaptive` 移到内容下方，节点与状态保留 | 换边、滚动、溢出菜单与标题截断 `[已实现]`，见 [TabView](tab.md) |
@@ -483,6 +484,7 @@ guava showcase gallery --android --component NAME
 | TabView compact 换边且保留面板状态 | `AdaptiveNavigationTests.swift` |
 | TabView 菜单、隐藏项焦点、三种模式截断、极窄布局与 AI 查询 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TabOverflowTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
+| 高度类、方向与 viewport reader | `ViewportTraitsTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
 | 容器查询发布与阈值 | `ContainerQueryTests.swift` |
 | Android 设备逐页启动 | `guava-dev android gallery`（页面名直接来自 `GalleryCatalog.swift`） |
@@ -511,7 +513,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | --- | --- | --- | --- |
 | 10 | 浮层自适应：底部抽屉 Sheet、菜单触摸展开子菜单 | `Overlays/*` | 对应浮层测试 + 390pt 取样 |
 | 14 | 辅助功能补齐：滚动条/滚动位置语义、Select/Combobox 专用角色、hint/described-by | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
-| 15 | 高度类/方向读取；`ViewThatFits` 从固定阈值扩展到内在内容拟合 | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
+| 15 | `ViewThatFits` 从固定阈值扩展到内在内容拟合（高度类/方向读取已完成） | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
 编号稳定保留已完成项的空位。建议顺序：10、14–16（浮层、输入与语义补齐）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
@@ -559,6 +561,8 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 列表下拉刷新已完成：`List`/`VirtualStack` 的 `RefreshOptions` 在 `ScrollView` 负向 overscroll 越过阈值时只触发一次；`isRefreshing` 控制顶部 36pt inset 与指示器，清除后内容回弹。指示器使用 `Spinner`，reducedMotion 下冻结；Cmd+R/Ctrl+R 在列表子树内触发同一 action。`ScrollView` 仍保持原始根节点，指示器以绝对定位放进滚动内容，因此列表宽度不被包装层压缩。`RefreshTests` 覆盖触摸下拉只触发一次、指示器保持到绑定清除、Cmd+R 与重复按键去重。Gallery `refreshableList` 页与自适应预览已接入；DevTools 在 720×820 点击 `Refresh now` 后查询到 `Refreshing`，计数变为 `Refreshes: 1`，3 秒后指示器移除且列表恢复宽度 548pt。触摸下拉的宿主实测受 DevTools pointer 输入限制，由单元测试覆盖。
 
 第 6 项控制标题截断已完成：`Button`、`Link`、`MenuButton` 的字符串入口与 `DatePicker` 触发标题统一使用 `Text.truncatingTail()`；Button/Link 默认把完整标题作为 tooltip，MenuButton 可通过 `tooltip:` 把完整标题放入 trigger description，DatePicker 的标题额外附加完整 tooltip。`Select`/`Combobox` 原有单行省略与 trigger description 保持不变；菜单项仍按文档自然换行，不属于控制标题。`TruncationTests` 在 150/170pt 约束下验证 button/link/menu/date 标题 `clipsToBounds` 且辅助功能名称完整。Gallery `button` 页新增 “Long labels” 分区与 `long-button`/`long-link`/`long-menu`/`long-date`；DevTools 720×820 查询到标题文本宽 126/146/125/158pt，悬停后 portal 中出现完整 234pt tooltip。
+
+第 15 项的高度类/方向读取已完成：`UIEnvironment.Viewport` 新增 `heightClass` 与 `orientation`，阈值与宽度类一致（600/1000），方形归 landscape；`HeightClassReader`/`OrientationReader` 从 `SurfaceEnvironment` 读取并驱动壳层内容，不额外测量。`ViewportTraitsTests` 覆盖 599/600/999/1000 边界、方形与横竖屏切换，以及 reader 在 1280×720 → 390×500 → 1200×1100 变化下的重算。Gallery `viewportTraits` 页与 README 入口已接入；DevTools 在 720×820 实测 medium/medium/portrait，390×820 实测 compact/medium/portrait，1200×842 实测 expanded/medium/landscape。`ViewThatFits` 的内在内容拟合仍保留在第 15 项待办。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排、swipe 与下拉刷新均已实现，边界见 [缺失清单](gaps.md#29-列表能力包p1)。
 
@@ -803,7 +807,7 @@ withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1),
 
 | 需求 | SwiftUI | Flutter / Material 3 |
 | --- | --- | --- |
-| 宽度类与设备判定 | `horizontalSizeClass`、`verticalSizeClass` | `MediaQuery.sizeOf`、`LayoutBuilder` |
+| 宽度/高度类与设备判定 | `horizontalSizeClass`、`verticalSizeClass` | `MediaQuery.sizeOf`、`LayoutBuilder` |
 | 容器级自适应 | `ViewThatFits`、自定义 `Layout` | `LayoutBuilder`、`CustomMultiChildLayout` |
 | 标签条换边 | `TabView` 位置配合 size class | `NavigationBar`（compact）↔ `NavigationRail`（medium）↔ `Drawer` |
 | 侧栏收敛 | `NavigationSplitView` 的 column visibility | `NavigationRail` / `NavigationDrawer` |
