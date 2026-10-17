@@ -139,7 +139,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | Chart | pie/area/scatter/stacked、图例交互、数据点选择 | P2 |
 | Timeline | 分组/折叠、缩放 | P2 |
 | Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义；触摸展开验收见规范 5-10，触摸行高与水平翻转已有 | P2 |
-| CommandPalette | 几何高固定 440；结果列表全量创建（未虚拟化）；无最近使用记录与自定义页脚；模糊匹配与分组已有 | P1/P2 |
+| CommandPalette | 结果列表已虚拟化（视口 + overscan）；几何高固定 440、无最近使用记录与自定义页脚；模糊匹配与分组已有 | P1/P2（虚拟化已完成；移动端高度/最近使用待补） |
 | Sheet / Modal | 拖拽关闭与自适应（见 2.11）；其余契约完整 | P1 |
 | Sidebar | 可调整宽度、嵌套子菜单、项级操作/上下文菜单 | P1 |
 | Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
@@ -160,7 +160,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：NavigationStack、列表多选/区段/重排/swipe/下拉刷新、CommandPalette 虚拟化、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）、SplitButton（主/备动作）、DateRangePicker 与 ScrollView 输入（触摸拖动/键盘）已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md) 与 [ScrollView](scrollview.md)。
+**P1（常用能力）**：NavigationStack、列表多选/区段/重排/swipe/下拉刷新、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）、SplitButton（主/备动作）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）与 CommandPalette 虚拟化已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md) 与 [CommandPalette](commandpalette.md)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 

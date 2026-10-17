@@ -60,8 +60,6 @@ public struct CommandItem: Identifiable {
 public struct CommandPalette: View {
     @State private var query = TextBuffer.empty
     @State private var highlightedID: String?
-    @State private var scrollOffset = CGPoint.zero
-    @State private var viewportHeight: Float = 0
     @State private var focusToken = 0
 
     public var isPresented: Binding<Bool>
@@ -108,7 +106,6 @@ public struct CommandPalette: View {
 
     private func open() {
         query = .empty
-        scrollOffset = .zero
         highlightedID = firstSelectable?.id
         focusToken += 1
     }
@@ -148,7 +145,6 @@ public struct CommandPalette: View {
             highlightedID = nil; return
         }
         highlightedID = candidates[index].id
-        scrollHighlightIntoView()
     }
 
     private func run(_ item: CommandItem) {
@@ -162,40 +158,12 @@ public struct CommandPalette: View {
         run(item)
     }
 
-    /// Keeps the highlighted row visible using known row heights rather than a
-    /// measured geometry pass: the list is uniform by design, so the arithmetic
-    /// is exact and never lags a frame behind the selection.
-    private func scrollHighlightIntoView() {
-        guard let highlightedID = effectiveHighlight, viewportHeight > 1 else { return }
-        var y: Float = 0
-        for entry in entries {
-            switch entry {
-            case .header:
-                y += Self.headerHeight
-            case .item(let item):
-                if item.id == highlightedID { reveal(y); return }
-                y += Self.rowHeight
-            }
-        }
-    }
-
-    private func reveal(_ y: Float) {
-        let viewport = CGFloat(viewportHeight)
-        let rowHeight = CGFloat(Self.rowHeight)
-        var offset = scrollOffset.y
-        if CGFloat(y) < offset {
-            offset = CGFloat(y)
-        } else if CGFloat(y) + rowHeight > offset + viewport {
-            offset = CGFloat(y) + rowHeight - viewport
-        }
-        let contentHeight = CGFloat(entries.reduce(Float(0)) { total, entry in
-            switch entry {
-            case .header: total + Self.headerHeight
-            case .item: total + Self.rowHeight
-            }
+    private var highlightedEntryIndex: Int? {
+        guard let highlightedID = effectiveHighlight else { return nil }
+        return entries.firstIndex(where: {
+            if case .item(let item) = $0 { return item.id == highlightedID }
+            return false
         })
-        offset = max(0, min(offset, max(0, contentHeight - viewport)))
-        if abs(offset - scrollOffset.y) > 0.5 { scrollOffset.y = offset }
     }
 
     // MARK: - Pieces
@@ -220,7 +188,6 @@ public struct CommandPalette: View {
             }
             input.events.onChange = { _ in
                 highlightedID = firstSelectable?.id
-                scrollOffset = .zero
             }
             input.events.onClear = { highlightedID = firstSelectable?.id }
         }
@@ -236,27 +203,23 @@ public struct CommandPalette: View {
             }
             .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
         } else {
-            ScrollView(.vertical, scrollOffset: $scrollOffset, onGeometryChange: { geometry in
-                let height = Float(geometry.viewportSize.height)
-                if abs(height - viewportHeight) > 0.5 { viewportHeight = height }
-            }) {
-                Column(alignment: .leading, spacing: 0) {
-                    for entry in entries {
-                        switch entry {
-                        case .header(let title):
-                            AnyView(Text(title.uppercased())
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
-                                .padding(horizontal: 14)
-                                .frame(height: Self.headerHeight)
-                                .accessibility { $0.role = .staticText })
-                        case .item(let item):
-                            AnyView(row(item))
-                        }
-                    }
+            VariableVirtualStack(entries, id: \.id, rowHeight: { entry, _, _ in entry.rowHeight },
+                                 scrollToIndex: highlightedEntryIndex) { entry in
+                switch entry {
+                case .header(let title):
+                    Text(title.uppercased())
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                        .padding(horizontal: 14)
+                        .frame(height: Self.headerHeight)
+                        .accessibility { $0.role = .staticText }
+                case .item(let item):
+                    row(item)
                 }
             }
-            .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+            .debugName("commandPalette.results")
+            .frame(width: .percent(100), minHeight: 0)
+            .flex(1, shrink: 1, basis: 0)
         }
     }
 
@@ -276,10 +239,11 @@ public struct CommandPalette: View {
                     KeyCap(shortcut).accessibilityHidden()
                 }
             }
+            .frame(width: .percent(100))
         }
         .buttonStyle(CommandRowStyle())
         .modifier(CommandResultModifier())
-        .frame(height: Self.rowHeight)
+        .frame(width: .percent(100)).frame(height: Self.rowHeight)
         .onHover { hovered in
             if hovered, item.isEnabled { highlightedID = item.id }
         }
@@ -308,6 +272,15 @@ public struct CommandPalette: View {
     }
 }
 
+private extension CommandEntry {
+    var rowHeight: Float {
+        switch self {
+        case .header: return CommandPalette.headerHeight
+        case .item: return CommandPalette.rowHeight
+        }
+    }
+}
+
 /// Renders the highlighted row as a selection rather than as a button press:
 /// the palette's highlight is a cursor, and pressing it does not happen until
 /// Return or a click.
@@ -327,6 +300,7 @@ private struct CommandRowStyle: ButtonStyle {
             fill = .clear
         }
         return Row(alignment: .center) { AnyView(c.label) }
+            .frame(width: .percent(100))
             .padding(horizontal: 14, vertical: 0)
             .background(fill)
             .border(c.isSelected ? theme.colors.accent.multipliedAlpha(0.5) : .clear, width: 1)

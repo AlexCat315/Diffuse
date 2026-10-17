@@ -17,6 +17,7 @@
 - 新增 `SplitButton`：主按钮 + MenuButton 箭头，主/备两区独立命中与禁用同步；补齐 `splitbutton.md`、单元测试、Gallery 页与 DevTools 主/备动作验收。单一 Tab + 左右分区与共享 1px 分隔 chrome 仍待补。
 - 新增 `DateRangePicker`：真实 Calendar 两击区间、端点/区间高亮、反向点击交换、触发器显示起止日期；补齐 `daterangepicker.md`、单元测试、Gallery 页与 DevTools 选择/截图验收。区间预设与最大长度由应用层负责。
 - `ScrollView` 补齐触摸拖动/惯性、4pt 拖动阈值与指针捕获，以及聚焦后的 Arrow/Page/Home/End 键盘滚动；新增 `ScrollViewInputTests`，Gallery `scrollView` 页补充键盘/触摸提示，DevTools 实测 PageDown 偏移。滚动条辅助功能、锚定与带时长程序滚动仍待补。
+- `CommandPalette` 结果改用 `VariableVirtualStack`：仅挂载视口 + overscan 行，键盘 highlight 通过 `scrollToIndex` 自动显露；1000 条命令挂载行 <60，行宽/选中背景铺满。补齐 `commandpalette.md`、虚拟化测试与 DevTools 搜索/执行验收。固定 440 的移动端高度与最近使用记录仍待补。
 
 ## 0.0.9 — 2026-10-06
 

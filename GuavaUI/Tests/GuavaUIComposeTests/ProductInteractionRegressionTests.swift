@@ -26,7 +26,11 @@ struct ProductInteractionRegressionTests: GuavaUIComposeSerializedSuite {
         }
     }
     private func settle(_ graph: ViewGraph) {
-        for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 900, height: 700) }
+        for _ in 0..<12 {
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: 900, height: 700)
+            AnimatorScheduler.current.tick(deltaTime: 1.0 / 60.0)
+        }
     }
     private func buttons(_ graph: ViewGraph) -> [Node] {
         nodes(graph.tree.root!).filter { $0.attachments[ButtonHost.markerKey] as? Bool == true }
@@ -81,6 +85,27 @@ struct ProductInteractionRegressionTests: GuavaUIComposeSerializedSuite {
             #expect(buttons(graph).first { $0.accessibility?.label == "Go Last" }?.accessibility?.state.isSelected == true)
             dispatcher.dispatch(.keyDown(key(Scancode.return))); settle(graph)
             #expect(!open && ran == "last")
+        }
+    }
+
+    @Test("Command palette virtualizes large result sets")
+    func commandVirtualization() {
+        withScene { graph, _, _, _ in
+            var open = true
+            let items = (0..<1_000).map {
+                CommandItem("Command \($0)", id: "command-\($0)") {}
+            }
+            graph.install(root: LayerRoot {
+                CommandPalette(isPresented: Binding(get: { open }, set: { open = $0 }), items: items)
+            })
+            for _ in 0..<20 {
+                graph.recomposer.commitAll()
+                graph.computeLayout(width: 900, height: 700)
+                AnimatorScheduler.current.tick(deltaTime: 0.1)
+            }
+            let rows = buttons(graph).filter { ($0.accessibility?.label ?? "").hasPrefix("Command ") }
+            #expect(rows.count > 0)
+            #expect(rows.count < 60)
         }
     }
 

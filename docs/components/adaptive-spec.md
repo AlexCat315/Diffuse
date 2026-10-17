@@ -344,10 +344,10 @@
 
 **CommandPalette**
 
-- 外观：搜索行 + 结果列表 + 快捷键提示；默认几何高 440。`[已实现]`
-- 手机：占满窗口宽（减 16pt inset）、结果行 ≥ 44pt、软键盘出现后结果区收缩且当前项可见。`[未实现]`（固定 440 与行预算）
+- 外观：搜索行 + 结果列表 + 快捷键提示；默认几何高 440；结果经 `VariableVirtualStack` 只挂载视口 + overscan。`[已实现]`
+- 手机：占满窗口宽（减 16pt inset）、结果行 ≥ 44pt、软键盘出现后结果区收缩且当前项可见。`[未实现]`（固定 440 与行预算；结果虚拟化已完成）
 - 平板 / 桌面：固定宽度居中、键盘上下移动。`[已实现]`
-- 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；验收：`--component commandPalette` + 200% 行预算测试。
+- 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；1000 条结果只挂载 <60 行，`scrollToIndex` 跟随 highlight；验收：`--component commandPalette`、`ProductInteractionRegressionTests.commandVirtualization` + 200% 行预算测试。
 
 ### 3.6 浮层与反馈面
 
@@ -496,7 +496,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 ## 5. 未实现项清单（按本文验收）
 
-以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核，是本文契约中当前**未实现**的部分。每项按"位置 → 验收归属"列出；实现后从清单移除并在第 3 节改为 `[已实现]`。完整缺失组件（列表能力包、CommandPalette 虚拟化等）与既有组件的其他功能缺口见[组件覆盖与缺失清单](gaps.md)。
+以下条目来自对 `GuavaUICompose` 与 Gallery 的代码复核，是本文契约中当前**未实现**的部分。每项按"位置 → 验收归属"列出；实现后从清单移除并在第 3 节改为 `[已实现]`。完整缺失组件（列表能力包等）与既有组件的其他功能缺口见[组件覆盖与缺失清单](gaps.md)。
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |

@@ -1,9 +1,16 @@
 import Foundation
 
 /// Ranking and result projection are shared by rendering, selection and scrolling.
-enum CommandEntry {
+enum CommandEntry: Identifiable {
     case header(String)
     case item(CommandItem)
+
+    var id: String {
+        switch self {
+        case .header(let title): return "header:\(title)"
+        case .item(let item): return "item:\(item.id)"
+        }
+    }
 }
 
 enum CommandSearch {
