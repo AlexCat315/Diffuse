@@ -64,4 +64,11 @@ struct ControlDensityTests: GuavaUIComposeSerializedSuite {
         #expect(snapshot.first { $0.debugName == "explicit-field" }?.absoluteFrame.height == 40)
         #expect(snapshot.first { $0.debugName == "large-button" }?.absoluteFrame.height == 40)
     } }
+
+    @Test("color picker width follows the viewport and keeps its minimum")
+    func colorPickerWidth() {
+        #expect(ColorField.panelWidth(for: 720) == 280)
+        #expect(ColorField.panelWidth(for: 390) == 280)
+        #expect(ColorField.panelWidth(for: 200) == 176)
+    }
 }

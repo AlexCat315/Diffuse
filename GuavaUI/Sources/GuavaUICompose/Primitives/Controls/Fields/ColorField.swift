@@ -36,6 +36,10 @@ public struct ColorField: View {
     public var body: some View {
         _StatefulColorField(field: self)
     }
+
+    static func panelWidth(for viewport: Float) -> Float {
+        min(280, max(176, viewport - 24))
+    }
 }
 
 // MARK: - Stateful wrapper
@@ -55,10 +59,14 @@ private struct _StatefulColorField: View {
                         showsInlineValues: field.showsInlineValues,
                         showsInlineChannels: field.showsInlineChannels)
         }, content: {
-            ColorPickerPanel(color: field.color, showAlpha: field.showAlpha)
-                .padding(10)
-                .frame(width: 220)
-                .glassSurface(.controlRadius)
+            SurfaceReader { surface in
+                let width = ColorField.panelWidth(for: Float(surface.viewport.width))
+                ColorPickerPanel(color: field.color, showAlpha: field.showAlpha)
+                    .padding(10)
+                    .frame(width: width)
+                    .glassSurface(.controlRadius)
+                    .debugName("color-picker-panel")
+            }
         })
     }
 }

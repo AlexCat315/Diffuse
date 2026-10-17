@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `ColorField` 弹层宽度改为自适应：`min(280, max(176, viewport − 24))`，390/720 为 280、200 为 176，hex 与通道行不因窄而隐藏。`ControlDensityTests` 覆盖宽度档位；DevTools 实测 `color-picker-panel` 280×184，并补齐 `colorfield.md`。
 - `Slider` 补齐刻度与 Page 键：`showsTicks` 在每个离散 step 位置绘制 1pt 刻度（最多 40 段）；PageUp/PageDown 移动 10 个 step 并夹紧。`SliderTests` 覆盖 Page 键与刻度渲染；Gallery `slider` 页的 Stepped 示例展示刻度，DevTools PageUp 将 3.0 移到 5.0。
 - `RangeSlider` 补齐 P1 双 thumb 语义：两个 thumb 各有独立 Tab 停靠、`Range start`/`Range end` slider 角色与独立 value，父节点为 group；焦点/指针各自移动对应 thumb，focus ring 只画在聚焦 thumb 上。`RangeSliderTests` 5/5 覆盖指针、minSpan、键盘、双 Tab 与焦点环；DevTools 查询到每个实例的两条 slider 语义。
 - `SplitButton` 补齐 P1 交互：单一 Tab 停靠进入整体，左右方向键在主按钮与箭头之间移动并同步 roving Tab stop；两区之间新增共享 1px `.border` 分隔线。`SplitButtonTests` 3/3 覆盖双区动作、禁用与 roving 焦点；DevTools 在 390/720 自适应预览确认主按钮 333/663pt、箭头 56pt。

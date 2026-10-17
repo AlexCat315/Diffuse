@@ -27,6 +27,7 @@
 | Toggle | 文档已写 | [toggle.md](toggle.md) |
 | Checkbox | 文档已写 | [checkbox.md](checkbox.md) |
 | TextField | 文档已写 | [textfield.md](textfield.md) |
+| ColorField | RGBA 通道、hex 与自适应弹层宽度 | [colorfield.md](colorfield.md) |
 | SearchField | 搜索输入、联想与键盘选择 | [searchfield.md](searchfield.md) |
 | Text / Typography / Color glyphs | 实现与验证边界 | [typography.md](typography.md) |
 | Viewport Traits | width/height class、orientation reader 与 600/1000 阈值 | [viewport-traits.md](viewport-traits.md) |
