@@ -133,6 +133,7 @@ public extension GalleryPage {
         case .reorderableList: AnyView(ReorderableListStory())
         case .swipeList: AnyView(SwipeListStory())
         case .refreshableList: AnyView(RefreshListStory())
+        case .scrollbar: AnyView(ScrollbarStory())
         case .viewportTraits: AnyView(ViewportTraitsStory())
         case .viewThatFits: AnyView(ViewThatFitsStory())
         case .dragAndDrop: AnyView(DragAndDropStory())

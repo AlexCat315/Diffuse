@@ -19,6 +19,7 @@ extension GalleryPage {
         case .reorderableList: UIIcons.Action.grip
         case .swipeList: UIIcons.Action.moreHorizontal
         case .refreshableList: UIIcons.Navigation.refresh
+        case .scrollbar: UIIcons.Layout.rows3
         case .viewportTraits: UIIcons.Navigation.maximize
         case .viewThatFits: UIIcons.Layout.columns2
         case .dragAndDrop: UIIcons.Action.grip

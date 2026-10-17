@@ -40,7 +40,7 @@ DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMod
 - ScrollView 节点是键盘 Tab 停靠点。聚焦后 ArrowUp/Down/Left/Right 行滚动 40pt，PageUp/PageDown 滚一屏的 90%，Home/End 到两端；只处理实际可滚动的轴，无位移时不吞事件。
 - 键盘滚动是立即定位，不启动惯性；触摸释放才走 `settle()`。`.reducedMotion()` 仍会关闭框架添加的运动。
 
-滚动条 thumb 的独立语义/可聚焦 thumb 与带时长的程序滚动仍未实现；滚动区域本身已有语义，见下节。
+独立 `Scrollbar` companion 已提供可聚焦 thumb（见 [Scrollbar](scrollbar.md)）；ScrollView 内建 chrome 不会自动叠加它，带时长的程序滚动仍待补。
 
 ## 嵌套与滚动条
 
@@ -70,7 +70,7 @@ ScrollView(.vertical, accessibilityLabel: "Timeline") {
 
 - Windows/Linux 精确设备、手势 phase 和系统 momentum 的原生补充；macOS 仍需真实触控板/鼠标/平滑驱动的长时间录制验证。
 - 离散滚轮的可打断平滑目标插值、显式开始/结束/停止控制器和带时长的程序定位。
-- 独立 Scrollbar/统一 ScrollHandle、显示策略/尺寸/配色主题；滚动区域语义与位置已实现，可聚焦 thumb 仍待补。
+- 统一 ScrollHandle、显示策略/尺寸/配色主题；独立 `Scrollbar` 已提供可聚焦 thumb。
 - 滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接。
 - Windows/Linux、120Hz、真实设备的视觉抖动和停止延迟，以及 GPU/合成器完成时间证据。当前合成输入验证不能代替这些证据。
 

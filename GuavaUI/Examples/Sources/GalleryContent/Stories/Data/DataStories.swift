@@ -477,3 +477,32 @@ struct DragAndDropStory: View {
         .cornerRadius(8)
     }
 }
+
+struct ScrollbarStory: View {
+    @State private var offset: CGFloat = 0
+
+    var body: some View {
+        StorySection("Focusable thumb", "The scrollbar is a real slider: drag the thumb, focus it with Tab, then use arrows, Page Up/Down, Home or End. Bind the same offset into a ScrollView to keep the two in sync.") {
+            Row(alignment: .top, spacing: 12) {
+                ScrollView(.vertical, scrollbarGutter: .overlay,
+                           scrollOffset: Binding(
+                            get: { CGPoint(x: 0, y: offset) },
+                            set: { offset = $0.y })) {
+                    Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                        for index in 0..<20 {
+                            AnyView(Text("Row \(index + 1)").frame(height: 24))
+                        }
+                    }.frame(height: 480)
+                }
+                .frame(width: 300, height: 260)
+                .debugName("scrollbar-viewport")
+
+                Scrollbar(offset: $offset, contentExtent: 480, viewportExtent: 260)
+                    .frame(width: 12, height: 260)
+                    .debugName("focusable-scrollbar")
+            }
+            Text("Offset: \(Int(offset))").font(.caption)
+                .foregroundColor(.onSurfaceMuted).debugName("scrollbar-offset")
+        }
+    }
+}

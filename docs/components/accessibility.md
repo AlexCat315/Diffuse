@@ -33,7 +33,7 @@ Button("Apply to workspace") { apply() }
 
 - `describedBy` 是单跳引用；不递归展开目标的描述，也不检测循环引用。
 - 语义快照按可见裁剪与交互可用性过滤；隐藏目标不参与解析。
-- 独立可聚焦滚动条 thumb、平台专用 live region 仍未实现。
+- 独立 `Scrollbar` companion 提供可聚焦 thumb；`ScrollView` 不会自动叠加它。平台专用 live region 仍未实现。
 - 读屏实际播报依赖宿主原生桥；单元测试与 DevTools 查询验证语义树内容，不替代真机读屏取样。
 
 ## 验证

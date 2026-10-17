@@ -4,7 +4,7 @@ import GuavaUIRuntime
 public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rangeSlider, rating, textField, textArea, codeEditor
     case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
-    case list, multiSelectList, sectionedList, reorderableList, swipeList, refreshableList, tree, virtualList, virtualStack, chart, icon, image, avatar
+    case list, multiSelectList, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, avatar
     case menu, menuButton, contextMenu, popover, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, zStack, animation, theme, badge, alert, progress, empty
@@ -52,6 +52,7 @@ public enum GalleryCatalog {
         .init(.reorderableList, "ReorderableList", "Data", "Drag handles, a drop indicator and keyboard moves over a caller-owned order."),
         .init(.swipeList, "SwipeList", "Data", "Trailing swipe actions on touch, plus an always-available row actions button and context menu."),
         .init(.refreshableList, "RefreshableList", "Data", "Touch pull-to-refresh with threshold damping, an idle/frozen indicator and Cmd+R."),
+        .init(.scrollbar, "Scrollbar", "Data", "A focusable slider thumb bound to a ScrollView offset."),
         .init(.tree, "Tree", "Data", "Hierarchy, expansion, selection and search with automatic expansion."),
         .init(.virtualList, "VirtualList", "Data", "A fixed-height scroll window over ten thousand rows."),
         .init(.virtualStack, "VirtualStack", "Data", "Viewport-driven materialization and scroll-to-index."),
