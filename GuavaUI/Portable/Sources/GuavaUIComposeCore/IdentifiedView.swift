@@ -11,8 +11,9 @@ public protocol _AnyIdentifiedView {
 /// alongside the wrapped content.
 ///
 /// Reconciler behaviour (Phase 2):
-/// - The wrapper is transparent for materialisation: it expands to its
-///   inner content. The produced node copies `id` into `Node.key`.
+/// - Single-root content keeps its node, stamped with `id` in `Node.key`.
+///   Structural content (tuples, conditionals and arrays) owns one keyed,
+///   layout-transparent anchor so its children reconcile as one identity.
 /// - During reconcile, `(viewTag, key)` matches a previously identified node
 ///   even after sibling reorder. State stored in the node's `attachments`
 ///   and any nested user-view scopes anchored on it survive the reorder.

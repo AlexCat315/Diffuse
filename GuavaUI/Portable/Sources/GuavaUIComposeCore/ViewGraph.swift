@@ -234,6 +234,15 @@ public final class ViewGraph {
         classify(view).key
     }
 
+    /// An identified tuple/conditional needs one keyed anchor. Do not unwrap
+    /// another identity here: its existing anchor already owns that boundary.
+    private static func isDirectStructuralContent(_ view: any View) -> Bool {
+        if view is any _StructuralView { return true }
+        if let source = view as? _AnySourceLocatedView { return isDirectStructuralContent(source._sourceContent) }
+        if let any = view as? AnyView { return isDirectStructuralContent(any.storage) }
+        return false
+    }
+
     /// Result of unwrapping `_IdentifiedView` / `AnyView` layers around a view.
     struct SlotInfo {
         let view: any View
@@ -466,7 +475,11 @@ public final class ViewGraph {
             return
         }
         if let identified = view as? _AnyIdentifiedView {
-            updateInPlace(node: node, view: identified._content, layoutParent: layoutParent)
+            if Self.isDirectStructuralContent(identified._content) {
+                reconcileChildren(parent: node, layoutParent: layoutParent, newViews: [identified._content])
+            } else {
+                updateInPlace(node: node, view: identified._content, layoutParent: layoutParent)
+            }
             node.key = identified._id
             return
         }
@@ -556,6 +569,15 @@ public final class ViewGraph {
         //     each produced top-level node so the next reconcile can reuse
         //     by `(tag, key)`.
         if let identified = view as? _AnyIdentifiedView {
+            if Self.isDirectStructuralContent(identified._content) {
+                let anchor = Node()
+                anchor.isHitTestable = false
+                anchor.viewTag = Self.slotTag(view)
+                anchor.key = identified._id
+                parent.addChild(anchor)
+                _ = materialise(identified._content, into: anchor, layoutParent: layoutParent)
+                return [anchor]
+            }
             let nodes = materialise(identified._content,
                                     into: parent,
                                     layoutParent: layoutParent)

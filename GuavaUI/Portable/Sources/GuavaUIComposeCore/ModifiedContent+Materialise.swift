@@ -4,7 +4,7 @@ import GuavaUIScene
 /// `ModifiedContent` without knowing its generic parameters at the call site.
 public protocol _AnyModifiedContent {
     /// Ordinary modifiers share their content's node and therefore its key.
-    /// Scope/around modifiers create a new anchor and keep the child's key local.
+    /// Scope, around and structural modifiers own an anchor and keep child keys local.
     var _inheritedSlotKey: AnyHashable? { get }
 
     func _materialiseInto(parent: Node,
@@ -28,7 +28,8 @@ extension ModifiedContent: _AnyModifiedContent {
 
     public var _inheritedSlotKey: AnyHashable? {
         guard !(modifier is _ScopeApplyingModifier),
-              !(modifier is _AroundApplyingModifier) else { return nil }
+              !(modifier is _AroundApplyingModifier),
+              !Self.hasStructuralContent(content) else { return nil }
         return ViewGraph.slotKey(content)
     }
 

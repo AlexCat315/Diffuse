@@ -180,4 +180,6 @@ LazyGrid 的固定与已知可变行高、行间距随 `TextScaler` 缩放一次
 
 组件局部状态更新、更换内部布局根时，ComposeCore 会按声明顺序重新施加调用方修饰器，避免组件内部的百分比尺寸覆盖调用方固定尺寸。AnyView 包装的多次同型修饰器也逐个保留；父更新替换该声明列表，避免保存过期值或无限追加。重放不会把键盘导航组的过期 tab-stop 恢复回来，焦点以当前组状态为准。
 
+`.id(value)` 为条件、元组和数组提供一个带 key 的透明身份锚点，使整组内容按单个身份匹配。外层普通尺寸/样式修饰器拥有结构锚点时，子 key 留在所属边界；更新修饰器或重排组不会误重建组内局部状态。改变 ID 或移除内容会卸载旧子树，恢复使用默认状态。`StructuralModifierTests.identifiedConditional` / `identifiedArrays` 覆盖多层修饰、组重排、同名子 ID 的隔离和卸载恢复。
+
 本地 Motrix MyGo 的 `dashboard.go`、`downloads.go`、`widgets.go` 主要通过 Row/Column、Grow、MinWidth(0)、滚动视口与裁剪卡片组织界面；其层次还依赖 palette、间距、圆角和文字字距。GuavaUI 已有相应 Flex 原语，不需要为相同几何再增加一套容器名称。但它的产品级 28/36pt 固定高度不能直接成为通用框架的行高契约，仍需按字体缩放与内容测量调整。
