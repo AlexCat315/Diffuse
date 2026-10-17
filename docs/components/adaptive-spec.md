@@ -514,7 +514,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 16 | Gallery 预览覆盖 69/92 页（累计新增 34 页）；其余页面继续扩充 `AdaptiveControlExamples.supports` 及逐页窄宽验收 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
+| 16 | Gallery 预览覆盖 76/92 页（累计新增 41 页）；其余页面继续扩充 `AdaptiveControlExamples.supports` 及逐页窄宽验收 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
 编号稳定保留已完成项的空位。剩余第 16 项（预览覆盖）。1–5、7–13 与动画相关 17–21 的已实现能力见下方记录、第 6 节及 [动画系统](animation.md)。每项实现时同步更新组件文档的“响应式与输入密度”小节与本节状态。
 
@@ -568,7 +568,7 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 
 第 14 项的滚动位置、选择角色、described-by 与可聚焦 thumb 已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。独立 `Scrollbar` companion 提供 `.slider` thumb：拖动、方向键/Page/Home/End、increment/decrement、`setValue` 与 focus ring；与 ScrollView 绑定同一 offset。`AccessibilitySemanticsTests` 覆盖滚动语义、comboBox 与 describedBy；`ScrollbarTests` 覆盖键盘/辅助功能/拖动/几何。DevTools 在 `button` 页验证 describedBy help，在 `scrollView`/`select` 页验证角色与位置，在 `scrollbar` 页拖到底得到 `value=100%`、`Offset: 220`，PageUp 回到 0%。`Scrollbar` 是 companion，ScrollView 内建 chrome 不自动叠加；该边界已记录在 [Scrollbar](scrollbar.md)。
 
-第 16 项预览覆盖继续扩充：`AdaptiveControlExamples.supports` 由 35 页增至 69 页，新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert，并为 scrollbar/dragAndDrop/accordion/timeline 等设置单独高度。每页仍生成 narrow/wide pointer 与 narrow touch 三档。DevTools 在 `scrollbar` 页查询到 story thumb（12×260）及三档 adaptive thumb（12×100），在 `timeline` 页查询到三档 390/720×160 预览，在 `tree` 页查询到三档 390/720×160 预览。剩余 23 页（编辑器、覆盖层、工作区等）继续按页面类型补齐。
+第 16 项预览覆盖继续扩充：`AdaptiveControlExamples.supports` 由 35 页增至 76 页，新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、theme，并为 scrollbar/dragAndDrop/accordion/timeline 等设置单独高度。每页仍生成 narrow/wide pointer 与 narrow touch 三档。DevTools 在 `scrollbar` 页查询到 story thumb（12×260）及三档 adaptive thumb（12×100），在 `timeline`/`tree` 页查询到三档 390/720×160 预览，在 `colorField` 页查询到三档 390/720×150 预览。剩余 16 页（编辑器、覆盖层、工作区等）继续按页面类型补齐。
 
 第 10 项浮层自适应已完成：`BottomSheet` 在 compact/medium 贴底全宽、expanded 退化为 `dialogWidth` 560 的居中面板，detent 与拖拽关闭沿用既有 Modal 契约；`MenuHierarchyTests.touchSubmenu` 新增 390pt 触摸面用例，点击父行直接打开子菜单并执行叶子。DevTools 在 390×800 测得 dialog 390×280、y=520，1280×840 测得 560×280、x=360/y=280；`capture-ui` 确认贴底与居中两种呈现。触摸子菜单无 hover 依赖，Portal 层级、焦点与展开语义保持。
 

@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .theme: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualList || page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualList || page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -70,6 +70,10 @@ private struct AdaptiveControlSample: View {
     @State private var treeExpanded: Set<String> = ["scene", "lights"]
     @State private var treeSelectedIDs: Set<String> = ["camera"]
     @State private var disclosureOpen = true
+    @State private var color = Color(red: 88, green: 126, blue: 231)
+    @State private var json: TextBuffer = "{\"name\": \"Guava\"}"
+    @State private var asset: AssetRef? = AssetRef(id: "camera", name: "Camera", kind: "image")
+    @State private var time: TimeOfDay? = TimeOfDay(hour: 9, minute: 30)
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
             sample
@@ -330,6 +334,30 @@ private struct AdaptiveControlSample: View {
         }.frame(width: .percent(100)))
         case .alert: AnyView(Alert("Project saved", message: "All changes are available.", tone: .success)
             .frame(width: .percent(100)))
+        case .textArea: AnyView(ResizableTextArea("Write a note…", text: $text, minHeight: 80,
+            maxHeight: 150, disabled: !options.isEnabled).frame(width: .percent(100)))
+        case .colorField: AnyView(ColorField(color: $color, isEnabled: options.isEnabled,
+            showsInlineValues: true).frame(width: .percent(100)))
+        case .jsonField: AnyView(JsonField(text: $json, minHeight: 90, isEnabled: options.isEnabled)
+            .frame(width: .percent(100)))
+        case .assetRef: AnyView(AssetRefField(value: $asset, acceptedKinds: ["image"],
+            pickerOptions: [AssetRef(id: "light", name: "Key Light", kind: "image")],
+            placeholder: "Drop image", isEnabled: options.isEnabled).frame(width: .percent(100)))
+        case .dateRangePicker: AnyView(DateRangePicker(selection: $dateRange) {
+            $0.presentation.width = 260
+            $0.presentation.isEnabled = options.isEnabled
+        })
+        case .timeField: AnyView(TimeField(value: $time) {
+            $0.isEnabled = options.isEnabled
+            $0.minuteStep = 5
+        }.frame(width: 200))
+        case .theme: AnyView(ThemeReader { theme in
+            Row(spacing: 10) {
+                Text("Accent").foregroundColor(.accent)
+                Text("Surface").padding(6).background(theme.colors.surfaceRaised)
+                Text("Muted").foregroundColor(.onSurfaceMuted)
+            }
+        }.frame(width: .percent(100)))
         default: AnyView(EmptyView())
         }
     }

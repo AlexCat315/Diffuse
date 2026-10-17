@@ -37,7 +37,7 @@
 - `ViewThatFits` 新增 `fitting: .intrinsic`：在 unspecified 宽高下测量 wide 分支，自然宽高都放得下才选 wide，否则选 compact；两套分支保留节点与状态，隐藏分支停止绘制/输入/语义。补齐 intrinsic 单元测试、Gallery `viewThatFits` 页与 DevTools 520/180pt 实测。
 - 辅助功能新增 `describedBy`：`AccessibilitySemantics.describedBy` + `accessibilityDescribedBy(_:)`，由 `AccessibilityTree` 与 DevTools 查询把引用目标的 label/value 追加到 help；缺失目标不改写。补齐单元测试、Gallery Button “Described by” 示例与 DevTools 实测。
 - 新增独立 `Scrollbar`：可聚焦 slider thumb、拖动/方向键/Page/Home/End、辅助功能 increment/decrement 与 `setValue`、focus ring，并与 ScrollView offset 绑定。补齐 `ScrollbarTests`、Gallery `scrollbar` 页与 DevTools 拖动/键盘实测；ScrollView 内建 chrome 不自动叠加该 companion。
-- 自适应预览覆盖从 35 页扩至 69 页：新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert 的三档预览与逐页高度。DevTools 验证 scrollbar 的三档 adaptive thumb、timeline 与 tree 的 390/720×160 三档容器。
+- 自适应预览覆盖从 35 页扩至 76 页：新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、theme 的三档预览与逐页高度。DevTools 验证 scrollbar 的三档 adaptive thumb、timeline/tree 的 390/720×160 与 colorField 的 390/720×150 三档容器。
 
 ## 0.0.9 — 2026-10-06
 
