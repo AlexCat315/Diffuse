@@ -187,6 +187,8 @@ private extension AccessibilityRole {
         case .progress: return .progressIndicator
         case .image: return .image
         case .link: return .link
+        case .scrollArea: return .scrollArea
+        case .comboBox: return .comboBox
         }
     }
 }

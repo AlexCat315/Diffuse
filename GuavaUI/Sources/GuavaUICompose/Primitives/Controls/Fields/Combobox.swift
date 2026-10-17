@@ -131,6 +131,7 @@ public struct Combobox<Value: Hashable>: View {
         popover.sizing = .anchor
         popover.triggerDescription = .init(label: title, value: selectedLabel ?? "", help: title)
         return popover.frame(width: presentation.width, minWidth: max(44, chromeWidth + 26))
+            .compositionLocal(ActionControlAccessibility.role, .comboBox)
     }
     private func choose(_ value: Value) {
         guard presentation.isEnabled, options.contains(where: { $0.value == value && $0.isEnabled }) else { return }

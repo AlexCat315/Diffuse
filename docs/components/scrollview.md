@@ -4,7 +4,7 @@
 
 ```swift
 ScrollView(.vertical, scrollbarGutter: .stable,
-           scrollOffset: $offset,
+           scrollOffset: , accessibilityLabel: "Content",
            onGeometryChange: { geometry in /* offset / viewportSize / contentSize */ }) {
     Box(direction: .column, alignItems: .stretch, spacing: 8) {
         rows
@@ -40,7 +40,7 @@ DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMod
 - ScrollView 节点是键盘 Tab 停靠点。聚焦后 ArrowUp/Down/Left/Right 行滚动 40pt，PageUp/PageDown 滚一屏的 90%，Home/End 到两端；只处理实际可滚动的轴，无位移时不吞事件。
 - 键盘滚动是立即定位，不启动惯性；触摸释放才走 `settle()`。`.reducedMotion()` 仍会关闭框架添加的运动。
 
-滚动条本身的辅助功能语义、可聚焦 thumb 与带时长的程序滚动仍未实现，见下节。
+滚动条 thumb 的独立语义/可聚焦 thumb 与带时长的程序滚动仍未实现；滚动区域本身已有语义，见下节。
 
 ## 嵌套与滚动条
 
@@ -56,11 +56,21 @@ TextField 与 CodeEditor 的内部视口采用同样的有溢出边界隔离；�
 
 这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；已知可变行高可使用 [VariableVirtualStack](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VariableVirtualStackTests.swift)，未知高度的自动测量仍缺失。此前版本的原生绘制计时方法和数值见 [滚动与布局历史验证记录](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/ButtonScrollViewTests.swift)。
 
+## 辅助功能
+
+`ScrollView` 暴露 `.scrollArea` 语义：`accessibilityLabel`（默认 "Scrollable content"）、当前位置百分比（垂直 `80%`，水平 `80%`，双轴 `Horizontal 80%, vertical 40%`）与键盘滚动 hint。辅助功能 increment/decrement 每次滚动约一页（视口 − 40pt），偏移变化后 value 随之重算。滚动条 thumb 仍不是独立可聚焦节点，屏幕阅读器通过滚动区域本身操作。
+
+```swift
+ScrollView(.vertical, accessibilityLabel: "Timeline") {
+    TimelineRows()
+}
+```
+
 ## 尚未完成
 
 - Windows/Linux 精确设备、手势 phase 和系统 momentum 的原生补充；macOS 仍需真实触控板/鼠标/平滑驱动的长时间录制验证。
 - 离散滚轮的可打断平滑目标插值、显式开始/结束/停止控制器和带时长的程序定位。
-- 独立 Scrollbar/统一 ScrollHandle、显示策略/尺寸/配色主题、可访问性滚动条语义与可聚焦 thumb。
+- 独立 Scrollbar/统一 ScrollHandle、显示策略/尺寸/配色主题；滚动区域语义与位置已实现，可聚焦 thumb 仍待补。
 - 滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接。
 - Windows/Linux、120Hz、真实设备的视觉抖动和停止延迟，以及 GPU/合成器完成时间证据。当前合成输入验证不能代替这些证据。
 

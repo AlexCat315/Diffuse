@@ -103,6 +103,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public var onViewportChange: ((ScrollViewport) -> Void)?
     public var scrollOffset: Binding<CGPoint>?
     public let onGeometryChange: ((ScrollGeometry) -> Void)?
+    public let accessibilityLabel: String?
 
     /// Logical points per line increment. Precise point input bypasses this.
     public var wheelStep: Float = 30
@@ -118,7 +119,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 scrollOffset: Binding<CGPoint>? = nil,
                 onViewportChange: ((ScrollViewport) -> Void)? = nil,
                 onGeometryChange: ((ScrollGeometry) -> Void)? = nil,
-                @ViewBuilder content: () -> Content) {
+                accessibilityLabel: String? = nil,
+                 content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
         self.scrollbarGutter = scrollbarGutter
@@ -126,6 +128,35 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         self.scrollOffset = scrollOffset
         self.onViewportChange = onViewportChange
         self.onGeometryChange = onGeometryChange
+        self.accessibilityLabel = accessibilityLabel
+    }
+
+    private static func updateAccessibility(node: Node, label: String?, axes: ScrollAxis) {
+        let size = visibleViewportRect(for: node).size
+        let content = cachedScrollableContentSize(for: node)
+        let maxX = max(0, content.width - size.width)
+        let maxY = max(0, content.height - size.height)
+        let x = maxX > 0 ? min(100, max(0, Int((node.contentOffset.x / maxX * 100).rounded()))) : 0
+        let y = maxY > 0 ? min(100, max(0, Int((node.contentOffset.y / maxY * 100).rounded()))) : 0
+        let value: String
+        switch axes {
+        case .vertical: value = "\(y)%"
+        case .horizontal: value = "\(x)%"
+        case .both: value = "Horizontal \(x)%, vertical \(y)%"
+        }
+        node.accessibility = AccessibilitySemantics(.scrollArea) {
+            $0.label = label ?? "Scrollable content"
+            $0.value = value
+            $0.help = "Use arrow keys, Page Up/Down, Home and End to scroll"
+        }
+    }
+
+    private static func pageScroll(_ node: Node, axes: ScrollAxis, forward: Bool) {
+        guard let motion = node.attachments[_ScrollViewAttachmentKeys.motion] as? ScrollAnimator else { return }
+        let viewport = visibleViewportRect(for: node).size
+        let dx = (axes == .vertical ? 0 : max(40, viewport.width - 40)) * (forward ? 1 : -1)
+        let dy = (axes == .horizontal ? 0 : max(40, viewport.height - 40)) * (forward ? 1 : -1)
+        motion.scrollDirectly(by: CGPoint(x: dx, y: dy))
     }
 
     public func _makeNode() -> Node {
@@ -144,8 +175,18 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             onViewportChange?(snapshot)
             onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: size,
                                             contentSize: Self.cachedScrollableContentSize(for: node)))
+            Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes)
         }
         node.attachments[_ScrollViewAttachmentKeys.report] = report
+        Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes)
+        node.accessibilityActions.increment = { [weak node] in
+            guard let node else { return }
+            Self.pageScroll(node, axes: axes, forward: true)
+        }
+        node.accessibilityActions.decrement = { [weak node] in
+            guard let node else { return }
+            Self.pageScroll(node, axes: axes, forward: false)
+        }
         if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset {
             // The child tree still has its previous layout at this point. A
             // new binding offset may target newly grown content, so adopting

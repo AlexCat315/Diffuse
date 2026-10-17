@@ -31,6 +31,7 @@
 - 新增 `List`/`VirtualStack` 下拉刷新：`RefreshOptions` 以触摸 overscroll 阈值触发一次、`isRefreshing` 保持指示器并预留 36pt inset，Cmd+R/Ctrl+R 为键盘入口，`Spinner` 在 reducedMotion 下冻结。补齐 `RefreshTests`、Gallery `refreshableList` 页与自适应预览；异步生命周期由调用方持有。
 - 既有控件标题统一单行省略：`Button`/`Link` 默认以完整标题作为 tooltip，`MenuButton` 可显式传 `tooltip:`，`DatePicker` 触发标题附加完整 tooltip；`Select`/`Combobox` 沿用 trigger description。补齐 `TruncationTests`、Gallery Button “Long labels” 分区与 DevTools 悬停全文验收。
 - 新增 viewport 高度类与方向：`UIEnvironment.Viewport.heightClass`/`orientation`（600/1000 阈值，方形归 landscape）与 `HeightClassReader`/`OrientationReader`。补齐 `ViewportTraitsTests`、Gallery `viewportTraits` 页与 DevTools 720/390/1200 实测；`ViewThatFits` 内在拟合仍待补。
+- 辅助功能补齐：`ScrollView` 暴露 `.scrollArea` 角色、可命名 label、实时百分比 value、键盘 help 与按页 increment/decrement；`Select`/`Combobox` 触发器改为 `.comboBox` 角色并保留当前值/展开态。补齐 `AccessibilitySemanticsTests` 与 DevTools scrollView/select 查询；`described-by` 与可聚焦滚动条 thumb 仍待补。
 
 ## 0.0.9 — 2026-10-06
 

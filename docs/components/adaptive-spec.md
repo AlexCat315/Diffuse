@@ -232,7 +232,7 @@
 - 外观：触发器继承 field chrome；弹层菜单、`maxVisibleRows` 默认 8、内部滚动；Combobox 带搜索与清除。`[已实现]`
 - 手机：触发器单行截断并保留完整值（tooltip/辅助功能）；弹层宽度 ≥ 触发器宽度且 ≤ 窗口 − 24；行高按输入面取 32（指针）/ `max(44, minimumControlExtent)`（触摸），长选项自然增高。`[已实现]`
 - 平板 / 桌面：触发器与弹层自然宽度、hover 高亮。`[已实现]`
-- 交互与验收：键盘 Up/Down/Home/End/Enter/Escape、类型前缀查找；辅助功能 popup/值/展开态。验收：`--component select|combobox`、`RowDensityTests.menuRows`（Menu 触摸行高）、DevTools 390pt Select 弹层实测（宽 346、x=32、右边界 378，触发器 286）。
+- 交互与验收：键盘 Up/Down/Home/End/Enter/Escape、类型前缀查找；辅助功能为 `comboBox` 角色，label/value 为当前值、`isExpanded` 反映弹层；help 保留完整值。验收：`--component select|combobox`、`RowDensityTests.menuRows`（Menu 触摸行高）、DevTools 390pt Select 弹层实测（宽 346、x=32、右边界 378，触发器 286）。
 
 **DatePicker / TimeField**
 
@@ -485,6 +485,7 @@ guava showcase gallery --android --component NAME
 | TabView 菜单、隐藏项焦点、三种模式截断、极窄布局与 AI 查询 | `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TabOverflowTests.swift` |
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
 | 高度类、方向与 viewport reader | `ViewportTraitsTests.swift` |
+| 滚动区域位置/角色与 comboBox | `AccessibilitySemanticsTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
 | 容器查询发布与阈值 | `ContainerQueryTests.swift` |
 | Android 设备逐页启动 | `guava-dev android gallery`（页面名直接来自 `GalleryCatalog.swift`） |
@@ -512,7 +513,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
 | 10 | 浮层自适应：底部抽屉 Sheet、菜单触摸展开子菜单 | `Overlays/*` | 对应浮层测试 + 390pt 取样 |
-| 14 | 辅助功能补齐：滚动条/滚动位置语义、Select/Combobox 专用角色、hint/described-by | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
+| 14 | 辅助功能补齐：described-by 关系；滚动区域位置语义、Select/Combobox comboBox 角色与 help hint 已完成 | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
 | 15 | `ViewThatFits` 从固定阈值扩展到内在内容拟合（高度类/方向读取已完成） | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
 
@@ -563,6 +564,8 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 第 6 项控制标题截断已完成：`Button`、`Link`、`MenuButton` 的字符串入口与 `DatePicker` 触发标题统一使用 `Text.truncatingTail()`；Button/Link 默认把完整标题作为 tooltip，MenuButton 可通过 `tooltip:` 把完整标题放入 trigger description，DatePicker 的标题额外附加完整 tooltip。`Select`/`Combobox` 原有单行省略与 trigger description 保持不变；菜单项仍按文档自然换行，不属于控制标题。`TruncationTests` 在 150/170pt 约束下验证 button/link/menu/date 标题 `clipsToBounds` 且辅助功能名称完整。Gallery `button` 页新增 “Long labels” 分区与 `long-button`/`long-link`/`long-menu`/`long-date`；DevTools 720×820 查询到标题文本宽 126/146/125/158pt，悬停后 portal 中出现完整 234pt tooltip。
 
 第 15 项的高度类/方向读取已完成：`UIEnvironment.Viewport` 新增 `heightClass` 与 `orientation`，阈值与宽度类一致（600/1000），方形归 landscape；`HeightClassReader`/`OrientationReader` 从 `SurfaceEnvironment` 读取并驱动壳层内容，不额外测量。`ViewportTraitsTests` 覆盖 599/600/999/1000 边界、方形与横竖屏切换，以及 reader 在 1280×720 → 390×500 → 1200×1100 变化下的重算。Gallery `viewportTraits` 页与 README 入口已接入；DevTools 在 720×820 实测 medium/medium/portrait，390×820 实测 compact/medium/portrait，1200×842 实测 expanded/medium/landscape。`ViewThatFits` 的内在内容拟合仍保留在第 15 项待办。
+
+第 14 项的滚动位置与选择角色已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset\/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment\/decrement 每次滚动约一页；`Select`\/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label\/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`\/`comboBox` 角色映射。`AccessibilitySemanticsTests` 覆盖滚动的 label\/value\/help 与 increment 后位置变化，以及两个选择触发器的 comboBox 角色、值、展开态与 activate。DevTools 在 `scrollView` 页查询到 0%\/78% 的滚动区域与完整 help，在 `select` 页查询到多个 `comboBox` 角色及当前值。`described-by` 关系与独立可聚焦滚动条 thumb 仍未实现，保留在第 14 项。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排、swipe 与下拉刷新均已实现，边界见 [缺失清单](gaps.md#29-列表能力包p1)。
 

@@ -200,6 +200,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
         popover.triggerDescription = .init(label: selectedLabel,
             value: select.options.first(where: { $0.value == select.selection.wrappedValue })?.label ?? "", help: selectedLabel)
         return popover.frame(minWidth: max(44, chromeWidth + 24 + theme.inputs.borderWidth * 2))
+            .compositionLocal(ActionControlAccessibility.role, .comboBox)
         }
     }
 
