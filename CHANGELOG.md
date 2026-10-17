@@ -6,6 +6,7 @@
 - 增加原生场景 GPU 回归、着色器产物一致性校验与编译失败保护，修复共享 UI 绘制器的多窗口 MSAA 状态覆盖，并复用固定环境光的 CPU 烘焙结果。
 - Android 显示帧时钟断言移入平台无关的 `GuavaAndroidContract` 测试；MCP stdio 协议契约成为 CI 门禁；`guava-dev` 命令标明 CI / Manual / Dev gate。
 - `guava-dev` 的 DevTools 客户端从 `validate` 移到 `devtools`：`query-ui`、`input-ui`、`capture-ui`、`record-timings`、`session`。
+- Toast 支持最多两个内联操作、四角定位与 `.automatic`（compact 底部、其余右上）并计入安全区；补齐 `toast.md`、单元测试与 DevTools 真实点击/截图验收。
 
 ## 0.0.9 — 2026-10-06
 

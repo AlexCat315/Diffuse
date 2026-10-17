@@ -67,13 +67,29 @@ struct ComboboxStory: View {
 struct NotificationStory: View {
     @State private var controller = ToastController(maxVisible: 3)
     @State private var count = 0
+    @State private var position: ToastPosition = .automatic
     var body: some View {
-        StorySection("Toast queue", "Notifications appear at the window edge. Hover pauses expiry. Add several to see the bounded queue, or replace the same stable ID.") {
+        StorySection("Toast queue", "Notifications appear at the window edge. Hover pauses expiry. Add several to see the bounded queue, replace the same stable ID, or use an inline action. Compact surfaces anchor at the bottom; wider surfaces at the top trailing edge.") {
             Row(alignment: .center, spacing: 10) {
                 Button("Notify") {
                     count += 1
                     controller.post(ToastNotification("Project saved · \(count)") { $0.tone = .success; $0.message = "Your changes are available." })
                 }
+                Button("Toast with undo") {
+                    count += 1
+                    let saved = count
+                    controller.post(ToastNotification("Project saved · \(saved)", id: "saved-\(saved)") {
+                        $0.tone = .success
+                        $0.duration = nil
+                        $0.message = "Your changes are available."
+                        $0.actions = [
+                            ToastAction("Undo", id: "undo") { count = max(0, saved - 1) },
+                            ToastAction("Retry", id: "retry") {
+                                controller.post(ToastNotification("Retrying save", id: "retry") { $0.duration = 2 })
+                            },
+                        ]
+                    })
+                }.buttonStyle(.secondary)
                 Button("Replace status") {
                     count += 1
                     controller.post(ToastNotification("Import status · \(count)", id: "import") { $0.message = "This status replaces the previous import notification." })
@@ -81,8 +97,16 @@ struct NotificationStory: View {
                 Button("Persistent warning") { controller.post(ToastNotification("Action required", id: "warning") { $0.duration = nil; $0.tone = .warning; $0.message = "Dismiss this notification when you have read it." }) }.buttonStyle(.warning)
                 Button("Clear") { controller.clear() }.buttonStyle(.ghost)
             }
+            Row(alignment: .center, spacing: 10) {
+                Text("Position").font(.caption).foregroundColor(.onSurfaceMuted)
+                Select(selection: $position, options: [
+                    SelectOption(value: .automatic, label: "Automatic"),
+                    SelectOption(value: .topTrailing, label: "Top trailing"),
+                    SelectOption(value: .bottomTrailing, label: "Bottom trailing"),
+                ], width: 180)
+            }
             Text("Visible: \(controller.notifications.count) · Queued: \(controller.queuedCount)").font(.caption).foregroundColor(.onSurfaceMuted)
-            NotificationHost(controller)
+            NotificationHost(controller, position: position)
         }
     }
 }

@@ -17,7 +17,7 @@
 | 日期时间 | Calendar、DatePicker、TimeField（文本 HH:MM） | DateRangePicker P1、TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List 多选/区段/重排/swipe P1、下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | NavigationStack/路由 P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
-| 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换） | BottomSheet 拖拽与自适应 P0、Toast 操作按钮与位置 P1、ActionSheet/Popconfirm P2、菜单富内容 P2 |
+| 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换/操作/位置） | BottomSheet 拖拽与自适应 P0、ActionSheet/Popconfirm P2、菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Banner 由 Alert 覆盖 |
 | 展示与媒体 | Text/Typography、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/Label、ViewportHost、ScriptCanvasView | RichText/Markdown P2、视频播放组件（应用层按需）、GIF/WebP、EXIF/渐进、缓存淘汰 P2 |
 | 拖放与交互 | AssetDropTarget、Tree DnD、Workspace 拖拽、PointerCapture | 通用 drag & drop 协议（任意 payload/列表重排）P1 |
@@ -120,8 +120,9 @@
 | FAB | P2 | 圆形 56，主操作 | 仅触摸面出现/或桌面显式启用；避开底部安全区 | 滚动隐藏可选；a11y 名称必填 | Material FAB |
 | OTP / PIN | P3 | N 个方格、自动前进 | 数字键盘、粘贴分发 | Backspace 退格、粘贴全填、a11y 整值读写 | 移动生态惯例 |
 | ActionSheet / Popconfirm | P2 | 由 AlertDialog + Sheet + Popover 组合 | 窄宽用底部弹出 | 复用 Modal 焦点/关闭契约 | SwiftUI `confirmationDialog`；Flutter `showModalBottomSheet` |
-| Toast 操作与位置 | P1 | 卡片内最多 1–2 个操作（撤销/重试）；位置可配（默认右上，手机默认底部） | 手机底部避开 home 指示条 | 操作键盘可达、悬停暂停、退出动画 | Material Snackbar action；SwiftUI 自定义 |
 | Menu 富内容 | P2 | 图标槽、任意行内容、链接语义 | 触摸行 ≥ 44 | 与现有键盘导航共用；富内容不破坏前缀查找 | Radix DropdownMenu；Fluent Menu |
+
+Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘可达、`ToastPosition` 四角定位与 `.automatic`（compact 底部，medium/expanded 右上），并计入宿主安全区。细节见 [Toast](toast.md)；仅进出动画仍为 P2。
 
 ## 3. 既有组件功能缺口（不含规范第 5 节条目）
 
@@ -155,13 +156,13 @@
 | Icon / Typography | 彩色字形仅 macOS；RTL 双向段落完整语义 | P2 |
 | Link | 访问态、外链确认（按需） | P3 |
 | 拖放 | 通用 payload 协议与列表重排（见 2.9/2.10） | P1 |
-| Toast / Notification | 操作按钮、位置配置、进出动画（见 2.12） | P1 |
+| Toast / Notification | 进出动画；操作按钮与位置配置已完成，见 [Toast](toast.md) | P2 |
 
 ## 4. 优先级与建议顺序
 
 **P0（手机/平板可用性阻塞）**：BottomSheet 拖拽与自适应。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、Toast 操作与位置、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail 与 AdaptiveSidebar 统一壳层已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)。
+**P1（常用能力）**：NavigationStack、SplitButton/MenuButton、RangeSlider、DateRangePicker、列表多选/区段/重排/swipe/下拉刷新、SearchField、ZStack、CommandPalette 虚拟化、ScrollView 输入补齐（规范 5-9）、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层与 Toast 操作/位置已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层) 与 [Toast](toast.md)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 
@@ -194,4 +195,4 @@
 | BottomSheet | `.sheet` + `presentationDetents` | `showModalBottomSheet` |
 | RichText / Markdown | `Text(markdown:)`、`AttributedString` | `flutter_markdown`（三方） |
 | TreeTable | `Table` + `OutlineGroup` 组合 | `TreeView` 套件（三方） |
-| Toast 操作 | 无内置 | `SnackBar` + `SnackBarAction` |
+| Toast 操作 | 无内置（已实现） | `SnackBar` + `SnackBarAction` |

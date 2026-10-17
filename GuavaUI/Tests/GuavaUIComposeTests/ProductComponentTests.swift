@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Testing
 import GuavaUIRuntime
 @testable import GuavaUICompose
@@ -7,6 +8,12 @@ import GuavaUIRuntime
 @MainActor
 struct ProductComponentTests: GuavaUIComposeSerializedSuite {
     private func nodes(_ root: Node) -> [Node] { [root] + root.children.flatMap(nodes) }
+    private func settle(_ graph: ViewGraph, width: Float = 800, height: Float = 600) {
+        for _ in 0..<4 {
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: width, height: height)
+        }
+    }
     private func key(_ code: UInt32) -> KeyEvent { KeyEvent(scancode: code, keycode: 0, modifiers: [], isRepeat: false) }
     private func withScene(_ body: (ViewGraph, InteractionRegistry, FocusChain, PointerCapture, PortalStore) -> Void) {
         GlobalTestLock.locked {
@@ -107,6 +114,74 @@ struct ProductComponentTests: GuavaUIComposeSerializedSuite {
         #expect(center.notifications.first?.id == "b")
         center.advance(by: 1)
         #expect(center.notifications.isEmpty)
+    }
+
+    @Test("Toast automatic position uses the compact bottom edge and wide top trailing edge")
+    func toastPositionResolution() {
+        #expect(ToastPosition.automatic.resolved(for: .compact) == .bottomTrailing)
+        #expect(ToastPosition.automatic.resolved(for: .medium) == .topTrailing)
+        #expect(ToastPosition.automatic.resolved(for: .expanded) == .topTrailing)
+        let bounds = CGRect(x: 0, y: 0, width: 800, height: 600)
+        #expect(ToastPosition.topTrailing.origin(in: bounds, width: 360) == CGPoint(x: 424, y: 16))
+        #expect(ToastPosition.bottomLeading.origin(in: bounds, width: 360) == CGPoint(x: 16, y: 600))
+    }
+
+    @Test("Toast action buttons invoke once and dismiss by default")
+    func toastActionPointer() {
+        withScene { graph, registry, focus, capture, _ in
+            let controller = ToastController()
+            var invoked = 0
+            controller.post(ToastNotification("Saved", id: "saved") {
+                $0.duration = nil
+                $0.actions = [ToastAction("Undo", id: "undo") { invoked += 1 }]
+            })
+            graph.install(root: LayerRoot { NotificationHost(controller, position: .topTrailing) })
+            settle(graph)
+            guard let action = nodes(graph.tree.root!).first(where: {
+                $0.accessibility?.label == "Undo" && $0.accessibility?.role == .button
+            }) else {
+                Issue.record("toast action button was not mounted")
+                return
+            }
+            let frame = action.absoluteFrame
+            let dispatcher = EventDispatcher(tree: graph.tree, interactions: registry,
+                                             capture: capture, focusChain: focus)
+            let event = MouseButtonEvent(button: .left, x: Float(frame.midX),
+                                         y: Float(frame.midY), clicks: 1)
+            dispatcher.dispatch(.mouseButtonDown(event)); graph.recomposer.commitAll()
+            dispatcher.dispatch(.mouseButtonUp(event)); graph.recomposer.commitAll()
+            #expect(invoked == 1)
+            #expect(controller.notifications.isEmpty)
+        }
+    }
+
+    @Test("Toast action buttons remain keyboard reachable")
+    func toastActionKeyboard() {
+        withScene { graph, registry, focus, capture, _ in
+            let controller = ToastController()
+            var invoked = 0
+            controller.post(ToastNotification("Saved", id: "saved") {
+                $0.duration = nil
+                $0.actions = [
+                    ToastAction("Undo", id: "undo", dismissesNotification: false) { invoked += 1 },
+                ]
+            })
+            graph.install(root: LayerRoot { NotificationHost(controller, position: .topTrailing) })
+            settle(graph)
+            guard let action = nodes(graph.tree.root!).first(where: {
+                $0.accessibility?.label == "Undo" && $0.accessibility?.role == .button
+            }) else {
+                Issue.record("toast action button was not mounted")
+                return
+            }
+            focus.focus(action)
+            let dispatcher = EventDispatcher(tree: graph.tree, interactions: registry,
+                                             capture: capture, focusChain: focus)
+            dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.return, keycode: 0,
+                                                  modifiers: [], isRepeat: false)))
+            #expect(invoked == 1)
+            #expect(controller.notifications.map(\.id) == ["saved"])
+        }
     }
 
     @Test("Notification clocks and tooltip portals leave with their owning subtree")

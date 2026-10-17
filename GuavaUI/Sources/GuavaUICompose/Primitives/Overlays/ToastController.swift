@@ -1,6 +1,32 @@
 import Foundation
 import GuavaUIRuntime
 
+/// One inline action rendered inside a toast card.
+///
+/// A toast may offer up to two actions (for example Undo and Retry). The
+/// action is a real button, so it keeps the normal keyboard and accessibility
+/// contract; invoking it dismisses the notification by default.
+public struct ToastAction: Identifiable {
+    public let id: String
+    public let title: String
+    public let role: ButtonRole
+    /// Whether invoking the action also dismisses its notification.
+    public let dismissesNotification: Bool
+    public let action: () -> Void
+
+    public init(_ title: String,
+                id: String = UUID().uuidString,
+                role: ButtonRole = .normal,
+                dismissesNotification: Bool = true,
+                action: @escaping () -> Void) {
+        self.id = id
+        self.title = title
+        self.role = role
+        self.dismissesNotification = dismissesNotification
+        self.action = action
+    }
+}
+
 public struct ToastNotification: Identifiable {
     public let id: String
     public let title: String
@@ -9,6 +35,8 @@ public struct ToastNotification: Identifiable {
     /// Nil keeps a notification visible until explicitly dismissed.
     public var duration: Double? = 5
     public var isDismissible = true
+    /// At most two actions are rendered; extra entries are ignored.
+    public var actions: [ToastAction] = []
     public init(_ title: String, id: String = UUID().uuidString, configure: (inout Self) -> Void = { _ in }) {
         self.id = id; self.title = title; configure(&self)
         duration = duration.map { $0.isFinite ? max(0, $0) : 5 }

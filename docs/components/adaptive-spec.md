@@ -376,6 +376,7 @@
 
 - 外观：反馈组件不参与布局竞争，按自身尺寸呈现；Skeleton 保持最终内容几何。`[已实现]`
 - 手机：Alert 宽 ≤ 窗口 − 32、操作按钮 ≥ 44pt 且可纵向堆叠；Notification 单行标题 + 换行正文；Empty 自然居中。`[部分]`
+- Notification / Toast：队列、稳定 ID 替换、时长与 hover 暂停；最多两个内联操作（撤销/重试），操作是真实按钮、键盘可达；`.automatic` 定位在 compact 底部、medium/expanded 右上，并计入宿主 `safeArea`。`[已实现]`，细节见 [Toast](toast.md)。
 - 平板 / 桌面：inline alert 与窗口宽度自适应。`[已实现]`
 - 交互与验收：Progress 暴露数值语义；Alert 操作键盘可达；验收：`--component alert|progress|notification|skeleton|empty`。
 
