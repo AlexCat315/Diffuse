@@ -16,13 +16,13 @@ struct NavigationStackTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             NavigationStack(path: $path) {
                 Column(alignment: .leading, spacing: 8) {
-                    Text("Root").font(.headline).debugName("nav-root")
+                    Text("Root").font(.headline).navigationTitle("Root").debugName("nav-root")
                     Text("Root count \(rootCount)").font(.body)
                     Button("Increment root") { rootCount += 1 }
                 }
             } destination: { route in
                 Column(alignment: .leading, spacing: 8) {
-                    Text(route).font(.headline).debugName("nav-page-\(route)")
+                    Text(route).font(.headline).navigationTitle(route).debugName("nav-page-\(route)")
                     Text("Page \(route)").font(.body)
                     Button("Back") { if !path.isEmpty { path.removeLast() } }
                 }
@@ -107,6 +107,57 @@ struct NavigationStackTests: GuavaUIComposeSerializedSuite {
             settle(graph)
             #expect(labels(graph).contains("details"))
             #expect(!labels(graph).contains("settings"))
+        }
+    }
+
+    private func withFocusedScene(_ harness: Harness,
+                                  _ body: (ViewGraph, PlatformInputContext) throws -> Void) rethrows {
+        try GlobalTestLock.locked {
+            let context = PlatformInputContext()
+            let previous = TextEnvironmentHolder.current
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+            defer { TextEnvironmentHolder.current = previous }
+            try context.withCurrent {
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+                graph.install(root: harness)
+                settle(graph)
+                defer { graph.install(root: EmptyView()) }
+                try body(graph, context)
+            }
+        }
+    }
+
+    @Test("A pushed page focuses its title without a visible keyboard ring")
+    func titleFocus() throws {
+        let harness = Harness(initialPath: [])
+        try withFocusedScene(harness) { graph, context in
+            #expect(context.focusChain.focused?.accessibility?.identifier == "navigation.title")
+            #expect(context.focusChain.focused?.accessibility?.label == "Root")
+            harness.$path.wrappedValue = ["details"]
+            settle(graph)
+            #expect(context.focusChain.focused?.accessibility?.label == "details")
+            #expect(context.focusChain.isFocusVisible == false)
+            harness.$path.wrappedValue = []
+            settle(graph)
+            #expect(context.focusChain.focused?.accessibility?.label == "Root")
+        }
+    }
+
+    @Test("A second path change during the transition is rejected")
+    func transitionGuard() throws {
+        let harness = Harness(initialPath: [])
+        try withFocusedScene(harness) { graph, _ in
+            harness.$path.wrappedValue = ["details"]
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: 400, height: 300)
+            AnimatorScheduler.current.tick(deltaTime: 0.01)
+            harness.$path.wrappedValue = ["details", "settings"]
+            settle(graph)
+            #expect(harness.$path.wrappedValue == ["details"])
+
+            harness.$path.wrappedValue = ["details", "settings"]
+            settle(graph)
+            #expect(harness.$path.wrappedValue == ["details", "settings"])
         }
     }
 }

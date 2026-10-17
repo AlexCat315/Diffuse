@@ -22,6 +22,8 @@ public struct NavigationStack<Route: Hashable, Root: View, Destination: View>: V
     public let transitionDistance: Float
 
     @State private var lastCount: Int
+    @State private var lastRoutes: [Route]
+    @State private var isAnimating = false
 
     public init(path: Binding<[Route]>,
                 transitionDistance: Float = 32,
@@ -32,6 +34,7 @@ public struct NavigationStack<Route: Hashable, Root: View, Destination: View>: V
         self.root = root
         self.destination = destination
         _lastCount = State(wrappedValue: path.wrappedValue.count)
+        _lastRoutes = State(wrappedValue: path.wrappedValue)
     }
 
     private var routes: [Route] { path.wrappedValue }
@@ -43,7 +46,16 @@ public struct NavigationStack<Route: Hashable, Root: View, Destination: View>: V
                 let forward = routes.count >= lastCount
                 ZStack(alignment: .topLeading) {
                     _NavigationPathWatcher(count: routes.count) { count in
-                        if lastCount != count { lastCount = count }
+                        guard count != lastCount else { return }
+                        if isAnimating {
+                            if path.wrappedValue != lastRoutes {
+                                path.wrappedValue = lastRoutes
+                            }
+                            return
+                        }
+                        lastRoutes = path.wrappedValue
+                        lastCount = count
+                        isAnimating = true
                     }
                     AnyView(page(route: nil, index: 0, isTop: routes.isEmpty,
                                  forward: forward, theme: theme,
@@ -62,8 +74,12 @@ public struct NavigationStack<Route: Hashable, Root: View, Destination: View>: V
                       width: Float, height: Float) -> some View {
         let transition = Transition.navigation(distance: transitionDistance, forward: forward)
         return AnimatedVisibility(isVisible: isTop, transition: transition,
-                                  animateOnMount: index > 0, retainsContent: true) {
-            pageContent(route: route, theme: theme, width: width, height: height)
+                                  animateOnMount: index > 0, retainsContent: true,
+                                  onVisibilitySettled: { visible in
+            if visible, isAnimating { isAnimating = false }
+        }) {
+            _NavigationPageFocusHost(isTop: isTop,
+                content: pageContent(route: route, theme: theme, width: width, height: height))
         }
         .id(route.map { AnyHashable($0) } ?? AnyHashable("navigation.root"))
     }
@@ -106,4 +122,64 @@ private struct _NavigationPathWatcher: _PrimitiveView {
         node.attachments["navigation.path.count"] = count
         if let previous, previous != count { onChange(count) }
     }
+}
+
+
+/// Marks a page title as the focus target for a NavigationStack push/pop.
+/// The stack focuses it without a visible keyboard ring once the new page has
+/// laid out; ordinary keyboard traversal continues from there.
+public extension View {
+    func navigationTitle(_ title: String) -> some View {
+        accessibility {
+            $0.role = .heading
+            $0.label = title
+            $0.identifier = "navigation.title"
+        }
+    }
+}
+
+private struct _NavigationPageFocusHost<Content: View>: _PrimitiveView {
+    let isTop: Bool
+    let content: Content
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.alignItems = .stretch
+        return layout
+    }
+
+    func _updateNode(_ node: Node) {
+        let wasTop = node.attachments["navigation.page.isTop"] as? Bool ?? false
+        node.attachments["navigation.page.isTop"] = isTop
+        if !isTop {
+            node.attachments["navigation.page.titleFocused"] = false
+            return
+        }
+        guard !wasTop else { return }
+        node.layoutDidUpdate = { node in
+            guard node.attachments["navigation.page.isTop"] as? Bool == true,
+                  node.attachments["navigation.page.titleFocused"] as? Bool != true,
+                  let title = findTitle(in: node),
+                  let chain = FocusChainHolder.current else { return }
+            node.attachments["navigation.page.titleFocused"] = true
+            chain.focus(title, visible: false)
+        }
+    }
+
+    private func findTitle(in node: Node) -> Node? {
+        if node.accessibility?.identifier == "navigation.title" { return node }
+        if node.accessibility?.role == .heading { return node }
+        for child in node.children {
+            if let found = findTitle(in: child) { return found }
+        }
+        return nil
+    }
+
+    var _children: [any View] { [content] }
 }

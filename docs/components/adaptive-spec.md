@@ -308,9 +308,9 @@
 
 **NavigationStack**
 
-- 外观：root + `[Route]` 路径页叠放；顶层页从 trailing 滑入并淡入，旧顶页向 leading 滑出；pop 时顶层页反向显露。页面背景取 `theme.colors.background`，隐藏页不绘制。`[部分]`
-- 状态：root 与 path 页面保持挂载，隐藏页不接输入/焦点/语义但保留 `@State`、草稿与滚动；非空初始 path 直接恢复深链。`[部分]`
-- 交互与验收：宿主负责平台返回并删除最后一个 route；组件不消费 Escape。新页标题焦点与动画期间去重尚未内置，由页面/调用方负责。`NavigationStackTests` 覆盖 push/pop 保留 root、深链与多页可见性；Gallery `navigationStack` 提供真实 push/back 与草稿。`[部分]`，API 见 [NavigationStack](navigationstack.md)。
+- 外观：root + `[Route]` 路径页叠放；顶层页从 trailing 滑入并淡入，旧顶页向 leading 滑出；pop 时顶层页反向显露。页面背景取 `theme.colors.background`，隐藏页不绘制。`[已实现]`
+- 状态：root 与 path 页面保持挂载，隐藏页不接输入/焦点/语义但保留 `@State`、草稿与滚动；非空初始 path 直接恢复深链。`[已实现]`
+- 交互与验收：平台返回由宿主删除最后一个 route，组件不消费 Escape；页面标题加 `.navigationTitle` 后，新顶页布局完成即把焦点移到 heading 且不显示键盘环；过渡 settle 前的第二次 path 变化被拒绝并写回上一次接受的栈。`NavigationStackTests` 覆盖 push/pop 保留 root、深链、多页可见性、标题焦点与过渡去重；Gallery `navigationStack` 提供真实 push/back 与草稿。`[已实现]`，API 见 [NavigationStack](navigationstack.md)。
 
 **AppBar / NavigationBar**
 
@@ -548,7 +548,7 @@ Select 弹层宽度与行高已完成：触发器继续单行截断并保留完�
 
 列表重排已完成：`ReorderableList` 在行尾提供 44pt handle，指针拖动期间以 2pt accent 放置线标记目标边界，释放后只调用一次 `onMove(from, to)`；Escape 取消、聚焦 handle 后 Up/Down 以及辅助功能 increment/decrement 走同一移动路径。根节点提供 flex 布局节点并从实际 ScrollView viewport 读取内容宽度，避免内容按 handle 的固有宽度收缩。`ReorderableListTests` 覆盖指针放置线与单次移动、键盘/辅助功能移动并保持焦点、Escape 取消、触摸 44pt handle。Gallery `reorderableList` 页与自适应预览已接入；DevTools 在 720×820 上从 Main Camera 的 handle（x=618）下拖 72pt，截图确认 “Moving” 行与 2pt 放置线，释放后顺序查询为 `Key Light → Main Camera → Player → Ground → Trigger → Audio Source`。当前为非虚拟列表，视口边缘自动滚动仍待补。
 
-NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 caller-owned `[Route]` 为栈，root 与 path 页面通过 `AnimatedVisibility(retainsContent:)` 保持挂载，隐藏页不进入命中/焦点/辅助功能树；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页反向显露。非空初始 path 首帧恢复深链；`ContainerSizeReader` 把页面固定到实际容器尺寸。`NavigationStackTests` 覆盖 push/pop 后 root 草稿保留、深链与多页仅顶层可见。Gallery `navigationStack` 页与自适应预览已接入；DevTools 在 720×820 点击 `Open details` 后查询到 Details 标题与 `Path: details`，点击 Back 后 root 草稿仍为 “Draft kept across push and pop”。平台返回手势、新页标题焦点和动画期间重复入栈去重仍由宿主/调用方负责。
+NavigationStack 已完成：`NavigationStack(path:root:destination:)` 以 caller-owned `[Route]` 为栈，root 与 path 页面通过 `AnimatedVisibility(retainsContent:)` 保持挂载，隐藏页不进入命中/焦点/辅助功能树；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页反向显露。非空初始 path 首帧恢复深链；`ContainerSizeReader` 把页面固定到实际容器尺寸。页面标题加 `.navigationTitle` 后，新顶页布局完成即把焦点移到 heading（`visible:false`，无键盘环）；过渡 settle 前的第二次 path 变化被拒绝并写回上一次接受的栈。`NavigationStackTests` 覆盖 push/pop 后 root 草稿保留、深链、多页仅顶层可见、标题焦点与过渡去重。Gallery `navigationStack` 页与自适应预览已接入；DevTools 在 720×820 点击 `Open details` 后查询到 Details（`role=heading`）与 `Path: details`，点击 Back 后 root 草稿仍为 “Draft kept across push and pop”。平台返回手势由宿主删除最后一个 route；该边界已记录在 [NavigationStack](navigationstack.md)。
 
 列表滑动操作已完成：`SwipeList` 在触摸面左滑露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；横向阈值 8pt，纵向手势仍交给 `ScrollView`。`ScrollView` 的触摸拖动改为轴感知阈值，避免垂直滚动抢占横向滑动。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口；行选择、键盘 Up/Down/Home/End/Return 与辅助功能 activate 走 `SelectionKeyHost`。`SwipeListTests` 覆盖触摸滑动与 44pt 操作、Actions 按钮非滑动路径、纵向滚动不误触、禁用态与指针面不响应滑动。Gallery `swipeList` 页与自适应预览已接入；DevTools 在 720×820 点击 Inbox 行 Actions 后查询到 Archive（74×52）和 Delete，执行 Archive 后 `swipe-log` 为 “Archived Inbox”。当前为全量挂载的非虚拟列表，RTL 滑动方向仍待补。
 

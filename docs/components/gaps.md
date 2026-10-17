@@ -16,7 +16,7 @@
 | 文本与数值输入 | TextField/TextArea/CodeEditor、SearchField、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM） | TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2、区间预设 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、MultiSelectList（Shift/Cmd/键盘多选）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
-| 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | NavigationStack 核心已实现（平台返回/标题焦点待补）P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
+| 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | NavigationStack（平台返回由宿主）P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换/操作/位置） | ActionSheet/Popconfirm P2、菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Banner 由 Alert 覆盖 |
 | 展示与媒体 | Text/Typography、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/Label、ViewportHost、ScriptCanvasView | RichText/Markdown P2、视频播放组件（应用层按需）、GIF/WebP、EXIF/渐进、缓存淘汰 P2 |
@@ -52,9 +52,9 @@
 ### 2.4 NavigationStack / 路由（P1）
 
 - 用途：页面栈、返回、深链与状态保留；当前应用自行管理根视图切换。
-- 外观：`NavigationStack` 以 caller-owned `[Route]` 为栈，root 与路径页在栈内保持挂载；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页以反向 move+opacity 显露（被移除页立即卸载）；reducedMotion 由 `AnimatedVisibility` 直接吸附。`[部分]`
-- 行为：栈与路径属 session；旋转与宽度类切换保留栈与页面内状态（页在栈内保持挂载）；非空初始 path 在首帧恢复深链。平台返回键/边缘手势由宿主删除最后一个 route；组件不消费 Escape。`[部分]`
-- 交互与验收：返回动画期间不重复入栈由持有 path 的调用方/宿主去重；辅助功能焦点落在新页标题尚未内置，页面应自行设置焦点。参考：SwiftUI `NavigationStack`；Flutter `Navigator`。`[部分]`，API 与边界见 [NavigationStack](navigationstack.md)。
+- 外观：`NavigationStack` 以 caller-owned `[Route]` 为栈，root 与路径页在栈内保持挂载；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页以反向 move+opacity 显露（被移除页立即卸载）；reducedMotion 由 `AnimatedVisibility` 直接吸附。`[已实现]`
+- 行为：栈与路径属 session；旋转与宽度类切换保留栈与页面内状态（页在栈内保持挂载）；非空初始 path 在首帧恢复深链。平台返回键/边缘手势由宿主删除最后一个 route；组件不消费 Escape。`[已实现]`（平台返回由宿主）
+- 交互与验收：组件在过渡 settle 前拒绝第二次 path 变化并写回上一次接受的栈；页面标题使用 `.navigationTitle`，新顶页布局后自动聚焦 heading 且不显示键盘环；平台返回由宿主删除最后一个 route。参考：SwiftUI `NavigationStack`；Flutter `Navigator`。`[已实现]`，API 与边界见 [NavigationStack](navigationstack.md)。
 
 ### 2.5 SplitButton / MenuButton（P1）
 

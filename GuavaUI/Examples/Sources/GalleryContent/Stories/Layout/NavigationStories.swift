@@ -248,7 +248,7 @@ struct NavigationStackStory: View {
         StorySection("Page stack", "Push and pop keep the root mounted. Only the top page is painted and interactive; the incoming page slides in with a fade, and a non-empty initial path restores the same page on launch.") {
             NavigationStack(path: $path) {
                 Column(alignment: .leading, spacing: 12) {
-                    Text("Workspace").font(.headline).foregroundColor(.onSurface).debugName("nav-root-title")
+                    Text("Workspace").font(.headline).foregroundColor(.onSurface).navigationTitle("Workspace").debugName("nav-root-title")
                     TextField("Draft", text: $draft)
                     Row(alignment: .center, spacing: 8) {
                         Button("Open details") { path.append("details") }.debugName("nav-open-details")
@@ -258,7 +258,7 @@ struct NavigationStackStory: View {
                 }.padding(16).frame(maxWidth: .infinity, maxHeight: .infinity)
             } destination: { route in
                 Column(alignment: .leading, spacing: 12) {
-                    Text(route.capitalized).font(.headline).foregroundColor(.onSurface).debugName("nav-page-title-\(route)")
+                    Text(route.capitalized).font(.headline).foregroundColor(.onSurface).navigationTitle(route.capitalized).debugName("nav-page-title-\(route)")
                     Text("This page is on top of the stack. The root still owns its draft.")
                         .font(.body).foregroundColor(.onSurfaceMuted)
                     Button("Back") { path.removeLast() }.debugName("nav-back")

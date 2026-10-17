@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `NavigationStack` 补齐 P1 边界：新增 `.navigationTitle`，新顶页布局后自动聚焦 heading（无可见键盘环）；过渡 settle 前的第二次 path 变化被拒绝并写回上一次接受的栈。`NavigationStackTests` 5/5 覆盖标题焦点与去重；Gallery 标题改为 heading，DevTools 查询 `Details` 得到 `role=heading`。平台返回仍由宿主处理。
 - 移除 wgpu-native、RHIWGPU、旧 WGSL 渲染路径与 Rust 构建要求；Engine、Editor、Player 和 GuavaUI 统一使用 NativeRHI。
 - 增加原生场景 GPU 回归、着色器产物一致性校验与编译失败保护，修复共享 UI 绘制器的多窗口 MSAA 状态覆盖，并复用固定环境光的 CPU 烘焙结果。
 - Android 显示帧时钟断言移入平台无关的 `GuavaAndroidContract` 测试；MCP stdio 协议契约成为 CI 门禁；`guava-dev` 命令标明 CI / Manual / Dev gate。
