@@ -118,11 +118,25 @@ struct AsyncImageTests {
         await #expect(throws: AsyncImageError.downloadTooLarge) {
             try await ImageDataDownload.load(url: server.url("large"), policy: limited)
         }
-        let task = Task { try await ImageDataDownload.load(url: server.url("slow"), policy: .init()) }
-        try await Task.sleep(for: .milliseconds(80))
-        let start = ContinuousClock.now; task.cancel()
-        await #expect(throws: CancellationError.self) { try await task.value }
-        #expect(start.duration(to: .now) < .seconds(1))
+        let slowURL = server.url("slow")
+        let task = Task.detached { try await ImageDataDownload.load(url: slowURL, policy: .init()) }
+        try await wait {
+            let status = try? await ImageDataDownload.load(url: server.url("slow-started"), policy: .init())
+            return status == Data("started".utf8)
+        }
+        // Main-actor layout suites may delay this test's continuation. Measure
+        // transport cancellation on the worker that awaits the held request.
+        let cancellation = await Task.detached {
+            let start = ContinuousClock.now; task.cancel()
+            do {
+                _ = try await task.value
+                return (cancelled: false, duration: start.duration(to: .now))
+            } catch {
+                return (cancelled: error is CancellationError, duration: start.duration(to: .now))
+            }
+        }.value
+        #expect(cancellation.cancelled)
+        #expect(cancellation.duration < .seconds(1))
     }
     @Test("Missing local files expose a bounded error instead of a Foundation debug dump")
     func missingFile() async {
@@ -193,14 +207,19 @@ private struct ImageHTTPFixture {
     func stop() { if process.isRunning { process.terminate() } }
     private static let program = #"""
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-import time
+import threading
+slow_started = threading.Event()
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args): pass
     def do_GET(self):
-        if self.path == '/slow': time.sleep(2)
+        if self.path == '/slow':
+            slow_started.set()
+            threading.Event().wait() # Held until the fixture process stops.
         self.send_response(404 if self.path == '/missing' else 200)
         self.end_headers()
-        try: self.wfile.write(b'x' * 2048 if self.path == '/large' else b'image data')
+        data = b'x' * 2048 if self.path == '/large' else b'image data'
+        if self.path == '/slow-started': data = b'started' if slow_started.is_set() else b'pending'
+        try: self.wfile.write(data)
         except BrokenPipeError: pass
 server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
 print(server.server_port, flush=True)
