@@ -71,10 +71,10 @@ SplitButton("Save", entries: [
 ## Behavior
 
 - **指针**：两个独立命中区；主按钮与箭头互不触发对方动作。
-- **键盘**：主按钮与箭头各自是普通 Button，Enter/Space 激活；菜单内沿用 Menu 键盘导航。
+- **键盘**：单一 Tab 停靠进入整体，进入时焦点在主按钮；左右方向键在主/箭头之间移动，并把 roving Tab stop 同步到获得焦点的分区。两区各自 Enter/Space 激活；菜单内沿用 Menu 键盘导航。
 - **辅助功能**：主按钮名称来自 label；箭头 label 为 `"More actions"`；菜单行保留 role/禁用/选中态。
-- **焦点**：当前是两个独立 Tab 停靠，没有实现“Tab 进入整体 + 左右分区”的单一焦点模型。需要严格 split-button 键盘模型时，后续应改为单一 host。
-- **视觉**：当前是两个相邻的 secondary 按钮，没有合并成共享 1px 分隔的单体 chrome；功能与命中正确，视觉合并待补。
+- **焦点**：SplitButton 持有唯一 Tab stop，避免 Tab 在同一个 split button 内停顿两次；方向键切换分区后，下一次 Tab 从当前分区离开。
+- **视觉**：两段之间绘制 1px `.border` 分隔线，主按钮填充剩余宽度；两段各自保留 `SecondaryButtonStyle` 的圆角 chrome。分隔线不是可命中的第三区，也不进入辅助功能树。
 
 ## Authoring rules
 
@@ -89,8 +89,9 @@ SplitButton("Save", entries: [
 
 - `zones`：主按钮执行一次；箭头打开菜单；选择 `Save as` 执行一次并关闭。
 - `disabled`：两区点击都不执行、不打开 Portal。
+- `rovingZones`：初始只有主按钮是 Tab stop；Right 把焦点和 Tab stop 移到箭头，Left 返回主按钮。
 
-Gallery `splitButton` 页提供 Save、Save as、Export、Discard 与状态文本。
+Gallery `splitButton` 页提供 Save、Save as、Export、Discard 与状态文本；自适应预览增加 stretch 容器，390pt 下主按钮 333pt + 1px 分隔线 + 箭头 56pt，720pt 下主按钮 663pt。
 
 DevTools 闭环：
 

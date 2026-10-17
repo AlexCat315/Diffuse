@@ -176,7 +176,9 @@ private struct AdaptiveControlSample: View {
             ButtonGroupItem(2, "Timeline"), ButtonGroupItem(3, "Inspector"),
             ButtonGroupItem(4, "Materials")
         ], selection: $selected, isEnabled: options.isEnabled))
-        case .splitButton: AnyView(SplitButton("Run", entries: [.item(MenuItem(id: "export", title: "Export") { text = TextBuffer("Export") })], isEnabled: options.isEnabled) { text = TextBuffer("Run") })
+        case .splitButton: AnyView(Box(direction: .column, alignItems: .stretch) {
+            SplitButton("Run", entries: [.item(MenuItem(id: "export", title: "Export") { text = TextBuffer("Export") })], isEnabled: options.isEnabled) { text = TextBuffer("Run") }
+        }.frame(width: .percent(100)))
         case .stepper: AnyView(Stepper([
             StepperItem(0, "Configure") { $0.detail = "Workspace"; $0.status = .completed },
             StepperItem(1, "Review") { $0.detail = "Permissions" },

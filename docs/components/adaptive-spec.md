@@ -370,10 +370,10 @@
 
 **SplitButton**
 
-- 外观：主 secondary 按钮 + 相邻 MenuButton 箭头；主/备两区独立命中、禁用同步，菜单复用 MenuButton 的 Portal 与键盘导航。`[部分]`
+- 外观：主 secondary 按钮 + 相邻 MenuButton 箭头，两区共享 1px `.border` 分隔线；主/备两区独立命中、禁用同步，菜单复用 MenuButton 的 Portal 与键盘导航。`[已实现]`
 - 手机：主/箭头均沿用 44pt 触摸下限；主按钮填充剩余宽度，箭头自然宽度。`[已实现]`
 - 平板 / 桌面：主按钮执行默认动作，箭头打开菜单；菜单在锚点下方展开。`[已实现]`
-- 交互与验收：主/箭头各自独立 Tab 停靠与键盘激活；当前尚未实现“Tab 一次进入整体 + 左右分区”的单一焦点和共享 1px 分隔 chrome。`SplitButtonTests` 覆盖主/备动作与禁用；Gallery `--component splitButton`。细节见 [SplitButton](splitbutton.md)。
+- 交互与验收：单一 Tab 停靠进入整体，左右方向键在主/箭头两区之间移动并同步 roving Tab stop；两区各自 Enter/Space 激活。`SplitButtonTests` 覆盖主/备动作、禁用与 roving 焦点；Gallery `--component splitButton`。细节见 [SplitButton](splitbutton.md)。
 
 **Menu / ContextMenu**
 

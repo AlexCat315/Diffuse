@@ -59,9 +59,9 @@
 ### 2.5 SplitButton / MenuButton（P1）
 
 - **MenuButton**：常规按钮触发器 + Popover + Menu；保留 hover/press/focus/disabled、expanded 语义、Escape/外部点击关闭与菜单键盘导航。`[已实现]`，见 [MenuButton](menubutton.md)。
-- **SplitButton**：主操作 + 下拉备选；左侧主按钮 + 右侧 MenuButton 箭头；两区各自命中 ≥ 44（触摸）且禁用同步；菜单复用 Menu 契约。`[部分]`，见 [SplitButton](splitbutton.md)
+- **SplitButton**：主操作 + 下拉备选；左侧主按钮 + 右侧 MenuButton 箭头；两区各自命中 ≥ 44（触摸）且禁用同步；两区共享 1px `.border` 分隔线；菜单复用 Menu 契约。`[已实现]`，见 [SplitButton](splitbutton.md)
 - SplitButton 手机/桌面：主按钮填充剩余宽度，箭头自然宽度；下拉从锚点下方展开，底部不足上翻。`[已实现]`
-- SplitButton 交互与验收：主/箭头各自独立命中与键盘激活，菜单复用 Menu；当前是两个 Tab 停靠、两个相邻 secondary 按钮，尚未实现单一 Tab + 左右分区的共享 chrome 模型。`SplitButtonTests` 覆盖主/备动作与禁用；Gallery `splitButton` 页提供真实操作。参考：Fluent SplitButton；Material `SplitButton`。
+- SplitButton 交互与验收：单一 Tab 停靠进入整体，左右方向键在主/箭头两区之间移动并同步 roving Tab stop；两区各自 Enter/Space 激活，菜单复用 Menu；两段仍各自保留 secondary 圆角 chrome，1px 分隔线位于两段之间。`SplitButtonTests` 覆盖主/备动作、禁用与 roving 焦点；Gallery `splitButton` 页提供真实操作。参考：Fluent SplitButton；Material `SplitButton`。
 
 ### 2.6 RangeSlider（P1）
 

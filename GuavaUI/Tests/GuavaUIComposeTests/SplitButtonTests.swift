@@ -115,4 +115,32 @@ struct SplitButtonTests: GuavaUIComposeSerializedSuite {
             #expect(portal.entries.isEmpty)
         }
     }
+
+    @Test("The pair owns one Tab stop and Left/Right switches zones")
+    func rovingZones() {
+        withScene { graph, registry, focus, capture, _ in
+            graph.install(root: LayerRoot {
+                SplitButton("Save", entries: [.item(MenuItem(id: "saveAs", title: "Save as") {})],
+                            action: {})
+            })
+            settle(graph)
+            let hosts = buttons(graph)
+            #expect(hosts.count == 2)
+            guard hosts.count == 2 else { return }
+            #expect(hosts[0].isTabStop && !hosts[1].isTabStop)
+            focus.focus(hosts[0])
+            let dispatcher = EventDispatcher(tree: graph.tree, interactions: registry,
+                                             capture: capture, focusChain: focus)
+            dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.arrowRight, keycode: 0,
+                                                  modifiers: [], isRepeat: false)))
+            settle(graph)
+            #expect(focus.focused === hosts[1])
+            #expect(!hosts[0].isTabStop && hosts[1].isTabStop)
+            dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.arrowLeft, keycode: 0,
+                                                  modifiers: [], isRepeat: false)))
+            settle(graph)
+            #expect(focus.focused === hosts[0])
+            #expect(hosts[0].isTabStop && !hosts[1].isTabStop)
+        }
+    }
 }
