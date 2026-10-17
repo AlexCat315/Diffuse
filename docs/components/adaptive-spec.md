@@ -486,6 +486,7 @@ guava showcase gallery --android --component NAME
 | 宽度类与 `minimumControlExtent` | `AdaptiveEnvironmentTests.swift` |
 | 高度类、方向与 viewport reader | `ViewportTraitsTests.swift` |
 | 滚动区域位置/角色与 comboBox | `AccessibilitySemanticsTests.swift` |
+| 菜单触摸子菜单 | `MenuHierarchyTests.swift` |
 | ViewThatFits 分支状态保留 | `ViewThatFitsTests.swift` |
 | 容器查询发布与阈值 | `ContainerQueryTests.swift` |
 | Android 设备逐页启动 | `guava-dev android gallery`（页面名直接来自 `GalleryCatalog.swift`） |
@@ -512,7 +513,6 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | # | 条目 | 位置 | 验收归属 |
 | --- | --- | --- | --- |
-| 10 | 浮层自适应：底部抽屉 Sheet、菜单触摸展开子菜单 | `Overlays/*` | 对应浮层测试 + 390pt 取样 |
 | 14 | 辅助功能补齐：described-by 关系；滚动区域位置语义、Select/Combobox comboBox 角色与 help hint 已完成 | `GuavaUIScene/Accessibility.swift`、各控件 | 语义快照测试 |
 | 15 | `ViewThatFits` 从固定阈值扩展到内在内容拟合（高度类/方向读取已完成） | `Portable/Adaptive/*`、`Layout/Responsive/*` | 新 API 测试 |
 | 16 | Gallery 预览仅覆盖 `AdaptiveControlExamples.supports` 中的页面；自适应壳层已完成 | `Examples/Sources/GalleryContent/Stories/Foundation/AdaptiveExamples.swift` | 继续扩充 `supports` 列表及逐页窄宽验收 |
@@ -565,7 +565,9 @@ NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 
 
 第 15 项的高度类/方向读取已完成：`UIEnvironment.Viewport` 新增 `heightClass` 与 `orientation`，阈值与宽度类一致（600/1000），方形归 landscape；`HeightClassReader`/`OrientationReader` 从 `SurfaceEnvironment` 读取并驱动壳层内容，不额外测量。`ViewportTraitsTests` 覆盖 599/600/999/1000 边界、方形与横竖屏切换，以及 reader 在 1280×720 → 390×500 → 1200×1100 变化下的重算。Gallery `viewportTraits` 页与 README 入口已接入；DevTools 在 720×820 实测 medium/medium/portrait，390×820 实测 compact/medium/portrait，1200×842 实测 expanded/medium/landscape。`ViewThatFits` 的内在内容拟合仍保留在第 15 项待办。
 
-第 14 项的滚动位置与选择角色已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset\/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment\/decrement 每次滚动约一页；`Select`\/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label\/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`\/`comboBox` 角色映射。`AccessibilitySemanticsTests` 覆盖滚动的 label\/value\/help 与 increment 后位置变化，以及两个选择触发器的 comboBox 角色、值、展开态与 activate。DevTools 在 `scrollView` 页查询到 0%\/78% 的滚动区域与完整 help，在 `select` 页查询到多个 `comboBox` 角色及当前值。`described-by` 关系与独立可聚焦滚动条 thumb 仍未实现，保留在第 14 项。
+第 14 项的滚动位置与选择角色已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。`AccessibilitySemanticsTests` 覆盖滚动的 label/value/help 与 increment 后位置变化，以及两个选择触发器的 comboBox 角色、值、展开态与 activate。DevTools 在 `scrollView` 页查询到 0%/78% 的滚动区域与完整 help，在 `select` 页查询到多个 `comboBox` 角色及当前值。`described-by` 关系与独立可聚焦滚动条 thumb 仍未实现，保留在第 14 项。
+
+第 10 项浮层自适应已完成：`BottomSheet` 在 compact/medium 贴底全宽、expanded 退化为 `dialogWidth` 560 的居中面板，detent 与拖拽关闭沿用既有 Modal 契约；`MenuHierarchyTests.touchSubmenu` 新增 390pt 触摸面用例，点击父行直接打开子菜单并执行叶子。DevTools 在 390×800 测得 dialog 390×280、y=520，1280×840 测得 560×280、x=360/y=280；`capture-ui` 确认贴底与居中两种呈现。触摸子菜单无 hover 依赖，Portal 层级、焦点与展开语义保持。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排、swipe 与下拉刷新均已实现，边界见 [缺失清单](gaps.md#29-列表能力包p1)。
 

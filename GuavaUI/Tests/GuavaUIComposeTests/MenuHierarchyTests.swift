@@ -92,6 +92,34 @@ struct MenuHierarchyTests: GuavaUIComposeSerializedSuite {
         #expect(context.focusChain.activeScopeRoot == nil)
     } }
 
+    @Test("A touch tap opens a submenu without hover")
+    func touchSubmenu() throws { try scene { graph, _, portal, scheduler, dispatcher in
+        let probe = Probe()
+        let branch = MenuSubmenu(id: "branch", title: "Tools", entries: [
+            .item(MenuItem(id: "leaf", title: "Build") { probe.actions += 1 })
+        ])
+        let harness = Harness(entries: [.submenu(branch)])
+        var surface = UIEnvironment()
+        surface.input = [.touch]
+        surface.viewport.width = 390
+        surface.viewport.height = 600
+        graph.install(root: harness.surfaceEnvironment(surface)); settle(graph)
+        harness.$shown.wrappedValue = true; settle(graph); scheduler.tick(deltaTime: 1); settle(graph)
+        let parent = try row("branch", graph: graph)
+        let event = MouseButtonEvent(button: .left, x: Float(parent.absoluteFrame.midX),
+                                     y: Float(parent.absoluteFrame.midY), clicks: 1)
+        dispatcher.dispatch(.mouseButtonDown(event)); dispatcher.dispatch(.mouseButtonUp(event))
+        settle(graph); scheduler.tick(deltaTime: 0.2); settle(graph)
+        #expect(portal.entries.count == 2)
+        #expect(parent.accessibility?.state.isExpanded == true)
+        let leaf = try row("leaf", graph: graph)
+        let leafEvent = MouseButtonEvent(button: .left, x: Float(leaf.absoluteFrame.midX),
+                                         y: Float(leaf.absoluteFrame.midY), clicks: 1)
+        dispatcher.dispatch(.mouseButtonDown(leafEvent)); dispatcher.dispatch(.mouseButtonUp(leafEvent))
+        settle(graph)
+        #expect(probe.actions == 1 && !harness.shown && portal.entries.isEmpty)
+    } }
+
     @Test("Home, End and typeahead reveal offscreen items using their actual geometry")
     func scrollNavigation() throws { try scene { graph, context, _, scheduler, dispatcher in
         let harness = Harness(entries: (0..<100).map { .item(MenuItem(id: "item-\($0)", title: "Command \($0)") {}) })

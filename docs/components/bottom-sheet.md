@@ -104,7 +104,7 @@ BottomSheet(isPresented: $open, configure: {
 - `dragExpands`：向上拖进入第二档，content 高度 400。
 - `expandedSurface`：expanded 表面退化为宽 560 的居中面板。
 
-Gallery `bottomSheet` 页提供打开、拖拽、detent 与关闭；`Sheet` 页保留简单四边 Sheet 对照。
+Gallery `bottomSheet` 页提供打开、拖拽、detent 与关闭；`Sheet` 页保留简单四边 Sheet 对照。DevTools 实测 390×800 时 dialog 为 390×280、y=520（底部贴边），1280×840 时为 560×280、x=360/y=280（居中）。
 
 DevTools 闭环：
 
