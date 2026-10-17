@@ -27,6 +27,7 @@
 - 焦点环统一为仅键盘焦点可见：Toggle 的开关/复选框自绘路径与 Slider/RangeSlider 的 style 快照改用 `focused && isFocusVisible`；`FocusRingTests` 渲染 DrawList 验证指针无 `focusRing` 顶点、键盘有，DevTools 720pt 点击 Toggle 后数值翻转但截图与点击前一致（无环）。
 - 新增 `ReorderableList`：44pt 拖拽 handle、2pt 放置线、Escape 取消、一次 `onMove`；聚焦 handle 后 Up/Down 与辅助功能 increment/decrement 移动同一行，触摸行高/handle ≥44。补齐 `ReorderableListTests`、Gallery `reorderableList` 页与自适应预览；当前为非虚拟列表，视口边缘自动滚动仍待补。
 - 新增 `NavigationStack`：caller-owned `[Route]` 栈、root/path 页面 retained 挂载、push/pop move+opacity、深链首帧恢复与容器尺寸填充；隐藏页不参与输入/焦点/语义但保留草稿。补齐 `NavigationStackTests`、Gallery `navigationStack` 页与自适应预览；平台返回手势、新页标题焦点与重复入栈去重仍待补。
+- 新增 `SwipeList`：仅触摸面左滑露出最多两个 74pt 操作，行尾 44pt Actions 按钮与右键上下文菜单提供非滑动入口；行高触摸 ≥44，纵向手势交给 ScrollView。`ScrollView` 触摸拖动改为轴感知阈值。补齐 `SwipeListTests`、Gallery `swipeList` 页与自适应预览；当前非虚拟化，RTL 与下拉刷新仍待补。
 
 ## 0.0.9 — 2026-10-06
 

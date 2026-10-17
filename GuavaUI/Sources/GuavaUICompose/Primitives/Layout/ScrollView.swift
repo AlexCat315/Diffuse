@@ -382,7 +382,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     let local = Self.localPoint(x: event.x, y: event.y, in: node)
                     let dx = local.x - state.start.x
                     let dy = local.y - state.start.y
-                    if !state.dragged && hypot(dx, dy) < 4 { return .ignored }
+                    if !state.dragged {
+                        let along = axes == .horizontal ? abs(dx) : axes == .vertical ? abs(dy) : max(abs(dx), abs(dy))
+                        let across = axes == .horizontal ? abs(dy) : axes == .vertical ? abs(dx) : 0
+                        guard along >= 4, along >= across else { return .ignored }
+                    }
                     var nextState = state
                     if !nextState.dragged {
                         nextState.dragged = true

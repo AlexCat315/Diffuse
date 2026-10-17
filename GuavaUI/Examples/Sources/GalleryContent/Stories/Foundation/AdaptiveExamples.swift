@@ -8,7 +8,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .sectionedList, .reorderableList, .calendar, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .sectionedList, .reorderableList, .swipeList, .calendar, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack: true
         default: false
         }
     }
@@ -21,7 +21,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -54,6 +54,7 @@ private struct AdaptiveControlSample: View {
     @State private var fraction: Float = 0.35
     @State private var range: ClosedRange<Double> = 20...80
     @State private var reorderItems = Array(0..<6)
+    @State private var swipeSelection: Int? = 1
     @State private var navigationPath: [String] = []
     @State private var navigationOpen = false
     var body: some View {
@@ -101,6 +102,15 @@ private struct AdaptiveControlSample: View {
             }) { index, _ in
                 Text("Item \(index + 1)")
             }.frame(width: .percent(100), height: .points(160)))
+        case .swipeList: AnyView(SwipeList(0..<5, id: \.self, selection: $swipeSelection,
+            rowHeight: 44, rowSpacing: 1, isEnabled: options.isEnabled,
+            rowLabel: { "Row \($0 + 1)" },
+            actions: { _ in
+                [SwipeAction(title: "Archive") {},
+                 SwipeAction(title: "Delete", tone: .danger) {}]
+            }) { index, _ in
+                Text("Row \(index + 1)")
+            }.frame(width: .percent(100), height: .points(170)))
         case .navigationStack: AnyView(NavigationStack(path: $navigationPath) {
             Column(alignment: .leading, spacing: 8) {
                 Text("Root").font(.headline)

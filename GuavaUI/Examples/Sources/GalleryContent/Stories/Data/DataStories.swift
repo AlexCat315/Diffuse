@@ -348,3 +348,42 @@ struct ReorderableListStory: View {
         }
     }
 }
+
+struct SwipeListStory: View {
+    private let items = ["Inbox", "Design review", "Release notes", "Billing", "Research"]
+    @State private var selection: Int? = 1
+    @State private var log = "No actions yet"
+
+    var body: some View {
+        StorySection("Swipe actions", "Touch rows reveal up to two trailing actions. Every row also has an actions button and a right-click menu, so pointer, keyboard and assistive clients can run the same commands without swiping.") {
+            SwipeList(items.indices, id: \.self, selection: $selection,
+                      rowHeight: 52, rowSpacing: 2,
+                      rowLabel: { items[$0] },
+                      actions: { index in
+                [
+                    SwipeAction(id: "archive-\(index)", title: "Archive") {
+                        log = "Archived \(items[index])"
+                    },
+                    SwipeAction(id: "delete-\(index)", title: "Delete", tone: .danger) {
+                        log = "Deleted \(items[index])"
+                    }
+                ]
+            }, onActivate: { index in
+                log = "Opened \(items[index])"
+            }) { index, selected in
+                Row(alignment: .center, spacing: 10) {
+                    Icon(UIIcons.Shape.circle, size: 16,
+                         color: selected ? .accent : .onSurfaceMuted)
+                    Column(alignment: .leading, spacing: 2) {
+                        Text(items[index]).font(.body).foregroundColor(.onSurface)
+                        Text("Swipe left or use the row actions button")
+                            .font(.caption).foregroundColor(.onSurfaceMuted)
+                    }
+                }
+                .frame(height: 52)
+            }
+            .frame(height: 260)
+            Text(log).font(.caption).foregroundColor(.onSurfaceMuted).debugName("swipe-log")
+        }
+    }
+}

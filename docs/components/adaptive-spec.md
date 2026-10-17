@@ -270,6 +270,7 @@
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
 - 重排：`ReorderableList` 提供 44pt 拖拽 handle、2pt 放置线、Escape 取消与一次 `onMove`；聚焦 handle 后 Up/Down 和辅助功能 increment/decrement 移动同一行，行身份与焦点跟随原行。当前为全量挂载的非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
+- 滑动操作：`SwipeList` 只在触摸面启用左滑，横向阈值 8pt，纵向手势交给 `ScrollView`；最多露出两个 74pt 宽、行高 ≥44 的 trailing 操作。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。当前为全量挂载。`[已实现]`，API 见 [SwipeList](swipelist.md)。
 - 交互与验收：List 方向键/Home/End/Enter + listItem 语义；MultiSelectList 支持 Shift/Cmd 点选、Shift+Arrow、Cmd/Ctrl+A；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。验收：`MultiSelectListTests`、`ReorderableListTests`、`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
 
 **Table / DataTable**
@@ -553,7 +554,9 @@ Select 弹层宽度与行高已完成：触发器继续单行截断并保留完�
 
 NavigationStack 核心已完成：`NavigationStack(path:root:destination:)` 以 caller-owned `[Route]` 为栈，root 与 path 页面通过 `AnimatedVisibility(retainsContent:)` 保持挂载，隐藏页不进入命中/焦点/辅助功能树；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页反向显露。非空初始 path 首帧恢复深链；`ContainerSizeReader` 把页面固定到实际容器尺寸。`NavigationStackTests` 覆盖 push/pop 后 root 草稿保留、深链与多页仅顶层可见。Gallery `navigationStack` 页与自适应预览已接入；DevTools 在 720×820 点击 `Open details` 后查询到 Details 标题与 `Path: details`，点击 Back 后 root 草稿仍为 “Draft kept across push and pop”。平台返回手势、新页标题焦点和动画期间重复入栈去重仍由宿主/调用方负责。
 
-列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排/swipe/下拉刷新仍按 [缺失清单](gaps.md#29-列表能力包p1) 跟踪。
+列表滑动操作已完成：`SwipeList` 在触摸面左滑露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；横向阈值 8pt，纵向手势仍交给 `ScrollView`。`ScrollView` 的触摸拖动改为轴感知阈值，避免垂直滚动抢占横向滑动。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口；行选择、键盘 Up/Down/Home/End/Return 与辅助功能 activate 走 `SelectionKeyHost`。`SwipeListTests` 覆盖触摸滑动与 44pt 操作、Actions 按钮非滑动路径、纵向滚动不误触、禁用态与指针面不响应滑动。Gallery `swipeList` 页与自适应预览已接入；DevTools 在 720×820 点击 Inbox 行 Actions 后查询到 Archive（74×52）和 Delete，执行 Archive 后 `swipe-log` 为 “Archived Inbox”。当前为全量挂载的非虚拟列表，RTL 滑动方向与下拉刷新仍待补。
+
+列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排已实现、swipe 见 SwipeList，下拉刷新仍按 [缺失清单](gaps.md#29-列表能力包p1) 跟踪。
 
 ## 6. 动效与动画（动画效果实现）
 

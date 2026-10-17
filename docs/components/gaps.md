@@ -15,7 +15,7 @@
 | 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed）/RadioGroup、Slider、RangeSlider（active thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | SplitButton 单一 Tab/共享 chrome P2、RangeSlider 独立 Tab/双 slider 语义 P2、FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField/TextArea/CodeEditor、SearchField、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM） | TimePicker/滚轮 P2、周/月/年选择 P2、12/24 小时与时区 P2、区间预设 P2 |
-| 集合与数据 | List（单选/虚拟化/键盘）、MultiSelectList（Shift/Cmd/键盘多选）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | List swipe/下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
+| 集合与数据 | List（单选/虚拟化/键盘）、MultiSelectList（Shift/Cmd/键盘多选）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline）、Timeline、Tag | 列表下拉刷新 P1、TreeTable P2、DataTable 高级能力 P2、Chart 更多图形 P2 |
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | NavigationStack 核心已实现（平台返回/标题焦点待补）P1、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Toast/Notification（队列/时长/暂停/替换/操作/位置） | ActionSheet/Popconfirm P2、菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Banner 由 Alert 覆盖 |
@@ -91,7 +91,7 @@
 - **多选与区间选择**：Checkbox 列或 Cmd/Shift 点选；Shift 区间以锚点延伸；辅助功能 selected 态。`MultiSelectList` 已实现 Cmd/Ctrl 切换、Shift 区间、Shift+Arrow、Cmd/Ctrl+A；Checkbox 列仍由调用方组合。`[已实现]`，见 [List](list.md#multiselectlist)。
 - **区段（sections）**：区段头/尾、可选 sticky；DataTable 之外的表状列表先支持平面区段。`SectionedList` 已实现平面 header/footer、sticky 固定标题（下一标题上推）与跨区段键盘选择；`stickyHeaders` 默认关闭，固定副本不进入焦点/命中/语义。`[已实现]`，见 [List](list.md#sectionedlist)。
 - **重排（reorder）**：`ReorderableList` 已实现 44pt 拖拽把手、2pt 放置线、Escape 取消、Up/Down 与辅助功能 increment/decrement；行身份与焦点跟随原行。当前为非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
-- **滑动操作（swipe actions）**：仅触摸面；滑动露出 1–2 个操作，操作按钮 ≥ 44；键盘通过上下文菜单提供等效入口；不把滑动作为唯一路径。`[未实现]`
+- **滑动操作（swipe actions）**：`SwipeList` 仅在触摸面启用左滑，露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；指针、键盘与读屏通过行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。全量挂载。`[已实现]`
 - **下拉刷新**：阈值与阻尼、指示器、完成后回弹；reducedMotion 时指示器静止；键盘/命令提供等效刷新入口。`[未实现]`
 - 验收：以上各能力分别提供触摸/键盘/辅助功能断言与 390/720 取样；重排与滑动的状态属 session。参考：SwiftUI `List(selection:)`/`onMove`/`swipeActions`/`refreshable`；Flutter `RefreshIndicator`/`ReorderableListView`/`Dismissible`。
 
@@ -133,7 +133,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | Select / Combobox | 远程/异步结果（按需）、触发器宽度联动 | P2 |
 | DatePicker / TimeField | 12/24 小时与时区、滚轮（见 2.12）；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择（见 2.8）；Home/End/PageUp/Down 已实现，见 [日历导航](calendar.md) | P1 |
-| List | 多选、平面区段、sticky 区段与重排已实现；swipe/下拉刷新仍缺（见 2.9） | P1（多选/区段/sticky/重排已完成） |
+| List | 多选、平面区段、sticky 区段、重排与 SwipeList 已实现；下拉刷新仍缺（见 2.9） | P1（多选/区段/sticky/重排/swipe 已完成） |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |
 | Chart | pie/area/scatter/stacked、图例交互、数据点选择 | P2 |
@@ -160,7 +160,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：列表 swipe/下拉刷新、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）、SplitButton（主/备动作）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排与 NavigationStack 核心已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 与 [SectionedList](list.md#sectionedlist)。
+**P1（常用能力）**：列表下拉刷新、通用拖放。NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（active thumb）、SplitButton（主/备动作）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作与 NavigationStack 核心已补齐，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 与 [SwipeList](swipelist.md)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 
@@ -189,7 +189,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | SearchField | `.searchable`（已实现） | `SearchBar`、`SearchAnchor` |
 | DateRangePicker | 无内置（双 DatePicker 组合；已实现真实日历） | `showDateRangePicker` |
 | WheelPicker | `Picker` + `.pickerStyle(.wheel)` | `CupertinoPicker`、`ListWheelScrollView` |
-| 多选/区段/重排/swipe/下拉刷新 | `List(selection:)`、`Section`、`onMove`、`swipeActions`、`refreshable` | `CheckboxListTile`、`ReorderableListView`、`Dismissible`、`RefreshIndicator` |
+| 多选/区段/重排/swipe（已实现）/下拉刷新 | `List(selection:)`、`Section`、`onMove`、`swipeActions`、`refreshable` | `CheckboxListTile`、`ReorderableListView`、`Dismissible`、`RefreshIndicator` |
 | ZStack | `ZStack`（已实现） | `Stack` |
 | BottomSheet | `.sheet` + `presentationDetents`（已实现） | `showModalBottomSheet` |
 | RichText / Markdown | `Text(markdown:)`、`AttributedString` | `flutter_markdown`（三方） |
