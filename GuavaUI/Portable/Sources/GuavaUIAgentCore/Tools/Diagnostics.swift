@@ -1,34 +1,85 @@
 import Foundation
 
-/// Canonical tool contracts used by embedded agents and MCP. Hosts implement
-/// the queries they can supply and report unavailable data explicitly.
-public enum UIDiagnosticTools {
+/// The canonical diagnostic tool registry. Name, schema and the immediate-read
+/// capability live together so the DevTools wire adapter, the MCP toolbox and
+/// the handlers cannot drift into separate string lists.
+public enum UIDiagnosticTool: String, CaseIterable, Sendable {
+    case getDiagnostics = "get_diagnostics"
+    case queryUINodes = "query_ui_nodes"
+    case queryUIRecomposition = "query_ui_recomposition"
+    case queryUIState = "query_ui_state"
+    case captureUITrace = "capture_ui_trace"
+    case getUITrace = "get_ui_trace"
+    case compareUITraces = "compare_ui_traces"
+    case listSkills = "list_skills"
+    case readSkill = "read_skill"
+
     private static func object(_ properties: [String: JSONSchema] = [:], required: [String] = []) -> JSONSchema {
         .object(properties: properties, required: required, additionalProperties: false)
     }
+
     private static var text: JSONSchema { .string(minLength: 1, maxLength: 256) }
+
     private static var paging: [String: JSONSchema] {
         ["offset": .integer(minimum: 0, maximum: 1_000_000), "limit": .integer(minimum: 1, maximum: 100)]
     }
-    public static let tools: [AgentTool] = [
-        AgentTool(name: "get_diagnostics", description: "Read bounded diagnostic issues with evidence and data availability. Recommendations are hypotheses to verify.",
-            schema: object(["limit": .integer(minimum: 1, maximum: 100)])),
-        AgentTool(name: "query_ui_nodes", description: "Query live UI nodes by accessible label, role or source. Returns flat paged results, clipped visible bounds and effective input availability, including modal scopes. Use visible_only to exclude hidden/offscreen nodes; input_enabled_only also excludes disabled or modal-blocked controls. IDs expire on unmount.",
-            schema: object(paging.merging(["node_id": text, "text": text, "role": text, "source": text, "visible_only": .boolean(), "input_enabled_only": .boolean()]) { _, new in new })),
-        AgentTool(name: "query_ui_recomposition", description: "Query owning components sorted by total inclusive CPU time, including counts and invalidation causes. Child durations overlap; do not sum them as frame time.",
-            schema: object(paging.merging(["text": text, "minimum_count": .integer(minimum: 0, maximum: 1_000_000)]) { _, new in new })),
-        AgentTool(name: "query_ui_state", description: "List opted-in state metadata. Read summaries only for explicit ids; private state is never exposed. Unmounted ids are reported as missing.",
-            schema: object(paging.merging(["scope_id": text, "ids": .array(of: text, maximumItems: 128)]) { _, new in new })),
-        AgentTool(name: "capture_ui_trace", description: "Capture actual UI CPU spans for 50–5000 ms without forcing frames. Returns a session capture id and summary; idle captures may be empty. Does not measure GPU execution.",
-            schema: object(["duration_ms": .integer(minimum: 50, maximum: 5000)])),
-        AgentTool(name: "get_ui_trace", description: "Read paged events from a retained capture. At most eight bounded captures are retained in this session.",
-            schema: object(paging.merging(["capture_id": text]) { _, new in new }, required: ["capture_id"])),
-        AgentTool(name: "compare_ui_traces", description: "Compare counts, average and P95 CPU span times by phase for two retained captures. Different workloads and dropped spans limit comparison; changes do not prove causality.",
-            schema: object(["baseline_id": text, "candidate_id": text], required: ["baseline_id", "candidate_id"])),
-        AgentTool(name: "list_skills", description: "List the host's available task guides without loading their bodies.", schema: object()),
-        AgentTool(name: "read_skill", description: "Read a named task guide. Instructions do not grant tools or execute code.",
-            schema: object(["name": text], required: ["name"])),
-    ]
+
+    /// The contract exposed to MCP clients, embedded agents and DevTools.
+    public var definition: AgentTool {
+        switch self {
+        case .getDiagnostics:
+            AgentTool(name: rawValue, description: "Read bounded diagnostic issues with evidence and data availability. Recommendations are hypotheses to verify.",
+                schema: Self.object(["limit": .integer(minimum: 1, maximum: 100)]))
+        case .queryUINodes:
+            AgentTool(name: rawValue, description: "Query live UI nodes by accessible label, role or source. Returns flat paged results, clipped visible bounds and effective input availability, including modal scopes. Use visible_only to exclude hidden/offscreen nodes; input_enabled_only also excludes disabled or modal-blocked controls. IDs expire on unmount.",
+                schema: Self.object(Self.paging.merging(["node_id": Self.text, "text": Self.text, "role": Self.text, "source": Self.text, "visible_only": .boolean(), "input_enabled_only": .boolean()]) { _, new in new }))
+        case .queryUIRecomposition:
+            AgentTool(name: rawValue, description: "Query owning components sorted by total inclusive CPU time, including counts and invalidation causes. Child durations overlap; do not sum them as frame time.",
+                schema: Self.object(Self.paging.merging(["text": Self.text, "minimum_count": .integer(minimum: 0, maximum: 1_000_000)]) { _, new in new }))
+        case .queryUIState:
+            AgentTool(name: rawValue, description: "List opted-in state metadata. Read summaries only for explicit ids; private state is never exposed. Unmounted ids are reported as missing.",
+                schema: Self.object(Self.paging.merging(["scope_id": Self.text, "ids": .array(of: Self.text, maximumItems: 128)]) { _, new in new }))
+        case .captureUITrace:
+            AgentTool(name: rawValue, description: "Capture actual UI CPU spans for 50–5000 ms without forcing frames. Returns a session capture id and summary; idle captures may be empty. Does not measure GPU execution.",
+                schema: Self.object(["duration_ms": .integer(minimum: 50, maximum: 5000)]))
+        case .getUITrace:
+            AgentTool(name: rawValue, description: "Read paged events from a retained capture. At most eight bounded captures are retained in this session.",
+                schema: Self.object(Self.paging.merging(["capture_id": Self.text]) { _, new in new }, required: ["capture_id"]))
+        case .compareUITraces:
+            AgentTool(name: rawValue, description: "Compare counts, average and P95 CPU span times by phase for two retained captures. Different workloads and dropped spans limit comparison; changes do not prove causality.",
+                schema: Self.object(["baseline_id": Self.text, "candidate_id": Self.text], required: ["baseline_id", "candidate_id"]))
+        case .listSkills:
+            AgentTool(name: rawValue, description: "List the host's available task guides without loading their bodies.", schema: Self.object())
+        case .readSkill:
+            AgentTool(name: rawValue, description: "Read a named task guide. Instructions do not grant tools or execute code.",
+                schema: Self.object(["name": Self.text], required: ["name"]))
+        }
+    }
+
+    /// Tools the native DevTools wire adapter may execute synchronously in the
+    /// host's frame inbox. Trace reads and comparisons stay on the asynchronous
+    /// toolbox because they depend on retained capture state.
+    public var isImmediateRead: Bool {
+        switch self {
+        case .captureUITrace, .getUITrace, .compareUITraces: return false
+        case .getDiagnostics, .queryUINodes, .queryUIRecomposition, .queryUIState,
+             .listSkills, .readSkill: return true
+        }
+    }
+
+    public static var immediateReadTools: [UIDiagnosticTool] {
+        allCases.filter(\.isImmediateRead)
+    }
+}
+
+/// Canonical tool contracts used by embedded agents and MCP. Hosts implement
+/// the queries they can supply and report unavailable data explicitly.
+public enum UIDiagnosticTools {
+    public static let tools: [AgentTool] = UIDiagnosticTool.allCases.map(\.definition)
+
+    public static func tool(named name: String) -> UIDiagnosticTool? {
+        UIDiagnosticTool(rawValue: name)
+    }
 
     public static func skills() throws -> AgentSkillLibrary {
         try AgentSkillLibrary(skills: [AgentSkill(name: "ui-diagnostics", description: "Investigate UI layout, state and performance with runtime evidence.", instructions: """

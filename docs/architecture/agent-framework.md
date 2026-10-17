@@ -71,6 +71,8 @@ let result = try await agent.run(messages: [AgentMessage(role: .user, text: "当
 
 开启原生 DevTools 后，`hello.capabilities` 中的 `diagnostics` 表示支持实际窗口的 AI 查询。`diagnostics.tools` 返回当前可调用的 MCP 工具定义；`diagnostics.call` 接收 `{name, arguments}`，返回同一 toolbox 的 `{ok, data}`。当前即时查询包括 `get_diagnostics`、`query_ui_nodes`、`query_ui_recomposition`、`query_ui_state`、`list_skills`、`read_skill`。参数 Schema、分页、脱敏与 SDK 共用；输入最多 256 KiB，结果最多 512 KiB，错误通过标准 `.err` envelope 返回。这些读取不占用 Inspector 的编辑租约。
 
+工具定义只有一份：`UIDiagnosticTool` enum 同时持有 `name`、`schema`、`readOnly` 和 `isImmediateRead`；`UIDiagnosticTools.tools` 由它生成，DevTools 的即时读取集合由 `isImmediateRead` 决定，MCP/AgentSession 使用完整 `tools`。`UIDiagnostics` 的 handler 对同一 enum 穷举并解码类型化入参（`QueryNodesInput` 等），字段改名会在解码处失败，而不是静默退回默认值。新增工具只需要增加一个 case、一个 schema 和一个 handler 分支；不再维护第二份 wire 字符串白名单。
+
 原生 SDL 循环通过宿主的帧 inbox 执行这些同步读取，连接断开或服务重启后丢弃旧请求。异步 Trace 采集仍通过进程内 toolbox 或已有 `timeline.*` 流使用，不在即时查询列表中承诺可用。
 
 可以在仓库根目录直接查询已启动的原生窗口：

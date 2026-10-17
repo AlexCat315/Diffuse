@@ -52,6 +52,22 @@ struct DiagnosticsTests {
         #expect(invalid.payload?.objectValue?["message"]?.stringValue?.contains("get_diagnostics") == true)
     }
 
+    @Test func diagnosticRegistryIsTheSingleDefinitionSource() {
+        #expect(UIDiagnosticTool.allCases.map(\.rawValue) == UIDiagnosticTools.tools.map(\.name))
+        #expect(Set(UIDiagnosticTool.allCases.map(\.rawValue)).count == UIDiagnosticTool.allCases.count)
+        #expect(UIDiagnosticTool.immediateReadTools.map(\.rawValue) == [
+            "get_diagnostics", "query_ui_nodes", "query_ui_recomposition", "query_ui_state",
+            "list_skills", "read_skill",
+        ])
+        for tool in UIDiagnosticTool.allCases {
+            let definition = tool.definition
+            #expect(definition.name == tool.rawValue)
+            #expect(definition.readOnly)
+            #expect(definition.schema.additionalProperties == false)
+            #expect(Set(definition.schema.required).isSubset(of: Set(definition.schema.properties.keys)))
+        }
+    }
+
     @Test func immediateWireReadsShareToolboxSchemasResultsAndRedaction() async throws {
         let tree = NodeTree(), root = Node(), child = Node()
         root.addChild(child); tree.root = root
