@@ -144,7 +144,7 @@
 | Timeline | 分组/折叠、缩放；容器窄宽重排、完整时间语义与 200% 字号已完成，见 [Timeline](timeline.md) | P2 |
 | Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义；触摸展开验收见规范 5-10，触摸行高与水平翻转已有 | P2 |
 | CommandPalette | 结果列表已虚拟化（视口 + overscan）；compact 几何、触摸行高、模糊匹配、分组、session 级最近使用与自定义 footer 已完成 | 已完成 |
-| Sheet / Modal | 拖拽关闭与自适应（见 2.11）；其余契约完整 | P1 |
+| Sheet / Modal / Dialog | BottomSheet 拖拽与自适应（见 2.11）、居中模态 compact 宽度、Dialog 操作堆叠与 AlertDialog 字号高度已完成，见 [Dialog](dialog.md) | 已完成 |
 | Sidebar | 嵌套导航、项级操作/上下文菜单、展开会话、键盘/辅助功能与可调整栏宽已实现；行内前后任意 View 插槽未实现，见 [Sidebar](sidebar.md#项级操作) | P2 |
 | Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
 | Workspace | N 面板联动、折叠阈值/吸附、pin 专属视觉、浮动为应用内层、文档解码校验与可版本化格式、a11y/RTL、chrome 硬编码清理（见 [workspace.md](workspace.md)） | P2 |

@@ -158,12 +158,14 @@ struct DialogStory: View {
     @State private var name: TextBuffer = "Guava"
     var body: some View {
         StorySection("Structured dialog", "Header, scrollable content and actions share the modal focus and dismissal policy.") {
-            Button("Edit profile") { open = true }
-            Dialog(isPresented: $open, title: "Edit profile", configure: { $0.description = "Update your display name"; $0.modal.geometry.width = 460; $0.modal.geometry.height = 280 }) {
+            Button("Edit profile") { open = true }.debugName("dialog-open")
+            TextScalerReader { scaler in
+            Dialog(isPresented: $open, title: "Edit profile", configure: { $0.description = "Update your display name"; $0.modal.geometry.width = 460; $0.modal.geometry.height = max(320, scaler.scale(220) + 80) }) {
                 Form([FormField("profile-name", "Name") { TextField("Name", text: $name) }])
             } footer: {
                 Button("Cancel") { open = false }.buttonStyle(.secondary)
                 Button("Save") { open = false }
+            }
             }
             Text("Name: \(name.stringValue)").font(.caption).foregroundColor(.onSurfaceMuted)
         }
@@ -174,7 +176,7 @@ struct AlertDialogStory: View {
     @State private var deleted = false
     var body: some View {
         StorySection("Confirm a destructive action", "The example only changes local state. Confirmation and cancellation have distinct visual roles.") {
-            Button("Delete example", role: .destructive) { open = true }
+            Button("Delete example", role: .destructive) { open = true }.debugName("alert-dialog-open")
             AlertDialog(isPresented: $open, title: "Delete example?", message: "This removes the example from this local preview.", configure: {
                 $0.isDestructive = true; $0.confirmTitle = "Delete"
             }) { deleted = true }

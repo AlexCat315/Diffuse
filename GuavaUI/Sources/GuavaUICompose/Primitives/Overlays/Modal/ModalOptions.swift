@@ -12,6 +12,11 @@ public struct ModalGeometry {
         width = width.isFinite ? max(64, width) : 760; height = height.isFinite ? max(64, height) : 560
         inset = inset.isFinite ? max(0, inset) : 16; cornerRadius = cornerRadius.isFinite ? max(0, cornerRadius) : 8
     }
+    mutating func fitCompactWindow(_ size: CGSize) {
+        guard placement == .center, size.width < CGFloat(UIEnvironment.Viewport.compactMaximumWidth) else { return }
+        inset = min(inset, 8)
+        width = max(0, Float(size.width) - 2 * inset)
+    }
     func transition(size: CGSize) -> Transition {
         switch placement {
         case .center: .opacity.combined(with: .move(edge: .bottom, distance: 12))
@@ -31,7 +36,7 @@ public struct ModalOptions {
     public var geometry = ModalGeometry()
     public var dismissal = ModalDismissal()
     var backdrop: ModalBackdrop = .standard
-    var surface: SemanticColorRef = .surface
+    var surface: SemanticColorRef = .surfaceFloating
     var fitsContentHeight = false
     var translationY: Float = 0
     public init() {}

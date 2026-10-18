@@ -48,6 +48,7 @@ private struct _ModalPresenter<Content: View>: _PrimitiveView {
         let store = node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
         var fitted = options
         fittingGeometry?(&fitted.geometry, portalWindowBounds(node).size)
+        fitted.geometry.fitCompactWindow(portalWindowBounds(node).size)
         resource?.present(in: store, position: .zero, width: nil,
                           content: AnyView(AnimatedVisibility(isVisible: isPresented.wrappedValue,
                             transition: .opacity, animateOnMount: true,
@@ -101,7 +102,7 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
                           height: min(CGFloat(options.geometry.height), max(0, bounds.height - CGFloat(options.geometry.inset * 2))))
         return [AnimatedVisibility(isVisible: isVisible, transition: options.geometry.transition(size: size), animateOnMount: true) {
             content.frame(width: .percent(100), height: options.fitsContentHeight ? nil : .percent(100)).accessibility { $0.role = .dialog }
-                .background(options.surface).cornerRadius(options.geometry.cornerRadius).border(.border, width: 1)
+                .background(options.surface).cornerRadius(options.geometry.cornerRadius).border(.border, width: 1).surfaceFinish()
         }
         // Fixed dialogs need a definite animation-host height for flexible
         // content. Action sheets instead measure their bounded intrinsic height.

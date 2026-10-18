@@ -19,11 +19,12 @@ public struct Dialog<Content: View, Footer: View>: View {
         self.isPresented = isPresented; self.title = title; self.content = content(); self.footer = footer(); configure(&options)
     }
     public var body: some View {
+        SurfaceReader { surface in
         Modal(isPresented: isPresented, configure: { $0 = options.modal }) {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 12) {
                     Column(alignment: .leading, spacing: 5) {
-                        Text(title).font(.headline)
+                        Text(title).font(.headline).frame(minWidth: 0)
                         if !options.description.isEmpty { Text(options.description).font(.caption).foregroundColor(.onSurfaceMuted) }
                     }.flex(1, shrink: 1)
                     if options.showsCloseButton {
@@ -31,10 +32,14 @@ public struct Dialog<Content: View, Footer: View>: View {
                     }
                 }.padding(18).flex(0, shrink: 0)
                 Divider()
-                ScrollView(.vertical, scrollbarGutter: .stable) { content.padding(18).flex(0, shrink: 0) }.flex(1, shrink: 1, basis: 0).frame(minHeight: 0)
+                ScrollView(.vertical, scrollbarGutter: .stable) { content.padding(18).flex(0, shrink: 0) }
+                    .flex(options.modal.fitsContentHeight ? 0 : 1, shrink: 1,
+                          basis: options.modal.fitsContentHeight ? nil : 0).frame(minHeight: 0)
                 Divider()
-                Row(alignment: .center, spacing: 8) { Spacer(); footer }.padding(14).flex(0, shrink: 0)
+                DialogActionsLayout(stacks: surface.viewport.widthClass == .compact) { footer }
+                    .padding(14).flex(0, shrink: 0)
             }.accessibility { $0.role = .dialog; $0.label = title; $0.help = options.description }
+        }
         }
     }
 }
@@ -61,16 +66,21 @@ public struct AlertDialog: View {
         self.isPresented = isPresented; self.title = title; self.message = message; self.onConfirm = onConfirm; configure(&options)
     }
     public var body: some View {
+        TextScalerReader { scaler in
         Dialog(isPresented: isPresented, title: title, configure: {
-            $0.modal.geometry.width = 420; $0.modal.geometry.height = 240
+            $0.modal.geometry.width = 420
+            $0.modal.geometry.height = max(280, scaler.scale(200) + 80)
+            $0.modal.fitsContentHeight = true
             $0.modal.dismissal.closesOnBackdrop = !options.isConfirming; $0.modal.dismissal.closesOnEscape = !options.isConfirming
             $0.showsCloseButton = false
         }, content: { Text(message).font(.body).foregroundColor(.onSurfaceVariant) }, footer: {
             Button(options.cancelTitle, isEnabled: !options.isConfirming) { isPresented.wrappedValue = false }.buttonStyle(.secondary)
             Button(options.confirmTitle, role: options.isDestructive ? .destructive : .normal, isLoading: options.isConfirming) {
+                guard isPresented.wrappedValue, !options.isConfirming else { return }
                 onConfirm(); if options.dismissAfterConfirm { isPresented.wrappedValue = false }
-            }
+            }.buttonStyle(options.isDestructive ? AnyButtonStyle(DestructiveButtonStyle()) : AnyButtonStyle(PrimaryButtonStyle()))
         })
+        }
     }
 }
 public struct SheetOptions {

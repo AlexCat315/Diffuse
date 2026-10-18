@@ -438,8 +438,8 @@
 
 **Modal / Dialog / AlertDialog / Sheet**
 
-- 外观：Modal 居中、默认 760×560、inset 16；Dialog header/body/footer；AlertDialog 420×240；Sheet 沿边、extent 默认 400。`[已实现]`
-- 手机：对话框占满窗口宽（减 16pt）、按钮纵向排列且 ≥ 44pt；Sheet 的 bottom 呈现等价于底部抽屉并占满宽度；内容区滚动。`[部分]`（占满/纵向按钮未实现；Sheet 已占满对应边）
+- 外观：Modal 居中、默认 760×560、inset 16；Dialog header/body/footer；AlertDialog 宽 420、按内容收高，高度上限随字号增长（100% 为 280、200% 为 480）；浮层使用 `surfaceFloating` 与轻阴影，危险确认使用 error 实底；Sheet 沿边、extent 默认 400。`[已实现]`
+- 手机：居中对话框占满窗口宽（默认减 16pt），Dialog 操作按声明顺序纵排且触摸 ≥44pt；其他宽度动作自然宽度放不下也纵排，保留同一组节点。正文独立滚动，header/footer 固定；Sheet 沿边契约见 [Sheet](sheet.md)。`[已实现]`，参数与显式高度边界见 [Dialog](dialog.md)
 - 平板 / 桌面：居中模态、Sheet 侧边抽屉。`[已实现]`
 - 交互与验收：焦点进入并循环、Escape/背景按配置关闭、关闭后焦点还原、禁用不打开；辅助功能 role=dialog + label/help。验收：Modal/Sheet 测试族、`--component modal|dialog|alertDialog|sheet`。
 
