@@ -17,7 +17,7 @@ struct MenuPointerRoutingTests: GuavaUIComposeSerializedSuite {
             let _ = FocusChainHolder.current?.commandTarget
             LayerRoot {
                 Column(spacing: 0) {
-                    Popover(isPresented: $shown, width: 160) {
+                    Popover(isPresented: $shown, width: 160, surface: .content, overflow: .flip) {
                         Text("Open").frame(width: 80, height: 28)
                     } content: {
                         Menu([.item(MenuItem(id: "popover-action", title: "Action") {

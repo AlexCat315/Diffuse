@@ -14,6 +14,8 @@ public struct PortalEntry: Identifiable {
     var parentID: String?
     var isExiting = false
     var fit = PortalFitConstraints()
+    /// Resolve against measured content in the same layout pass as the slot.
+    var positionForSize: ((CGSize) -> CGPoint)?
 
     public init(id: String,
                 position: CGPoint,
@@ -69,7 +71,7 @@ public final class PortalStore {
         guard var entry = storage[id] else { return }
         if let slotNode = slotNodes[id]?.node {
             if slotNode.frame.origin != position {
-                slotNode.frame = PortalPlacement.fit(position: position, size: slotNode.frame.size,
+                slotNode.frame = PortalPlacement.fit(position: entry.positionForSize?(slotNode.frame.size) ?? position, size: slotNode.frame.size,
                                                       in: portalWindowBounds(slotNode), anchor: anchor(for: id),
                                                       margin: CGFloat(entry.fit.viewportMargin), placement: entry.placement)
             }
@@ -82,10 +84,14 @@ public final class PortalStore {
         notifyChanged()
     }
 
-    func configure(_ id: String, fillsWindow: Bool, placement: PortalPlacementMode, parentID: String?) {
-        guard var entry = storage[id], entry.fillsWindow != fillsWindow || entry.placement != placement || entry.parentID != parentID else { return }
+    func configure(_ id: String, fillsWindow: Bool, placement: PortalPlacementMode, parentID: String?,
+                   positionForSize: ((CGSize) -> CGPoint)?) {
+        guard var entry = storage[id] else { return }
+        let changed = entry.fillsWindow != fillsWindow || entry.placement != placement || entry.parentID != parentID
         entry.fillsWindow = fillsWindow; entry.placement = placement; entry.parentID = parentID
-        storage[id] = entry; notifyChanged()
+        entry.positionForSize = positionForSize
+        storage[id] = entry
+        if changed { notifyChanged() }
     }
     func configureFit(_ id: String, fit: PortalFitConstraints) {
         guard var entry = storage[id], entry.fit != fit else { return }
@@ -270,6 +276,7 @@ final class PortalResource: NodeResource {
                  content: AnyView,
                  fillsWindow: Bool = false,
                  placement: PortalPlacementMode = .belowAnchor,
+                 positionForSize: ((CGSize) -> CGPoint)? = nil,
                  transition: Transition? = nil) {
         let current = resolvedStore ?? PortalStoreHolder.current
         var ancestor = owner?.parent
@@ -309,7 +316,10 @@ final class PortalResource: NodeResource {
                                        width: width,
                                        content: presented)
         }
-        if let id = entryID { current.configure(id, fillsWindow: fillsWindow, placement: placement, parentID: parentID) }
+        if let id = entryID {
+            current.configure(id, fillsWindow: fillsWindow, placement: placement, parentID: parentID,
+                              positionForSize: positionForSize)
+        }
     }
 
     /// Opening may take its time; closing may not.

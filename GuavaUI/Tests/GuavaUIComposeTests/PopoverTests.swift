@@ -98,7 +98,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             Column(alignment: .leading, spacing: 8) {
                 Popover(isPresented: $isPresented,
-                        width: 120) {
+                        width: 120, surface: .content, overflow: .flip) {
                     _PopoverProbe(id: "trigger", width: 80, height: 20)
                 } content: {
                     _PopoverProbe(id: "menu", width: 120, height: 60)
@@ -111,17 +111,18 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
     private struct EndPlacementHarness: View {
         @State var isPresented: Bool = true
+        let offset: Float
 
         var body: some View {
             Column(alignment: .leading, spacing: 0) {
                 Popover(isPresented: $isPresented,
                         width: 140,
-                        placement: .end) {
+                        placement: .bottomTrailing, surface: .content, overflow: .flip) {
                     _PopoverProbe(id: "trigger", width: 80, height: 20)
                 } content: {
                     _PopoverProbe(id: "menu", width: 140, height: 60)
                 }
-            }
+            }.padding(EdgeInsets(leading: offset))
         }
     }
 
@@ -134,12 +135,15 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         let recomposer = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomposer)
 
-        graph.install(root: EndPlacementHarness())
+        graph.install(root: EndPlacementHarness(offset: 100))
         graph.computeLayout(width: 240, height: 200)
 
         let entry = PortalStoreHolder.current.entries.first
-        #expect(entry?.position.x == -60)
+        #expect(entry?.position.x == 40)
         #expect(entry?.position.y == 20)
+        graph.install(root: EndPlacementHarness(offset: 0))
+        graph.computeLayout(width: 240, height: 200)
+        #expect(PortalStoreHolder.current.entries.first?.position.x == 6)
     } }
 
     @Test("Opening Popover does not move following siblings")
@@ -176,7 +180,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             LayerRoot {
                 Popover(isPresented: $isPresented,
-                        width: 140) {
+                        width: 140, surface: .content, overflow: .flip) {
                     _PopoverProbe(id: "trigger", width: 80, height: 24)
                 } content: {
                     Menu([
@@ -198,7 +202,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             LayerRoot {
                 Popover(isPresented: $isPresented,
-                        width: 140) {
+                        width: 140, surface: .content, overflow: .flip) {
                     _PopoverProbe(id: "trigger", width: 80, height: 24)
                 } content: {
                     Menu([
@@ -228,7 +232,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                     // StoreScope recomposition while a dropdown is open.
                     let _ = tick
                     Popover(isPresented: $isPresented,
-                            width: 140) {
+                            width: 140, surface: .content, overflow: .flip) {
                         _PopoverProbe(id: "trigger", width: 80, height: 24)
                     } content: {
                         Menu([
@@ -308,7 +312,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                 Column(alignment: .leading, spacing: 0) {
                     if showPopover {
                         Popover(isPresented: $isPresented,
-                                width: 140) {
+                                width: 140, surface: .content, overflow: .flip) {
                             _PopoverProbe(id: "trigger", width: 80, height: 24)
                         } content: {
                             Menu([
@@ -370,7 +374,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             LayerRoot {
                 Popover(isPresented: $isPresented,
-                        width: 140) {
+                        width: 140, surface: .content, overflow: .flip) {
                     _PopoverProbe(id: "tree-scoped-trigger", width: 80, height: 24)
                 } content: {
                     Menu([
@@ -391,7 +395,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
         var body: some View {
             Popover(isPresented: $isPresented,
-                    width: 140) {
+                    width: 140, surface: .content, overflow: .flip) {
                 _PopoverProbe(id: "nested-trigger", width: 80, height: 24)
             } content: {
                 Menu([

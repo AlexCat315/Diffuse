@@ -14,7 +14,7 @@ struct MenuHierarchyTests: GuavaUIComposeSerializedSuite {
         var nearEdge = false
         var body: some View {
             LayerRoot {
-                Popover(isPresented: $shown, width: 180) { Text("Open") } content: {
+                Popover(isPresented: $shown, width: 180, surface: .content, overflow: .flip) { Text("Open") } content: {
                     Menu(entries, width: 180, maxVisibleRows: 4, onItemActivated: { shown = false })
                 }
                 .absolutePosition(left: nearEdge ? 450 : 0, top: nearEdge ? 310 : 0)

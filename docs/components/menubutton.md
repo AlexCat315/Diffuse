@@ -36,7 +36,7 @@ public struct MenuButton<Label: View>: View {
     public init(entries: [MenuEntry],
                 isEnabled: Bool = true,
                 width: Float? = nil,
-                placement: PopoverPlacement = .start,
+                placement: PopoverPlacement = .bottomLeading,
                 @ViewBuilder label: () -> Label)
 }
 ```
@@ -46,7 +46,7 @@ public struct MenuButton<Label: View>: View {
 | `entries` | 必填 | `MenuEntry` 数组 |
 | `isEnabled` | `true` | 禁用时触发器不展开 |
 | `width` | `nil` | 菜单宽度；`nil` 使用内容自然宽度 |
-| `placement` | `.start` | 与触发器的水平对齐方式 |
+| `placement` | `.bottomLeading` | 与触发器的方位及对齐方式 |
 | `label` | 必填 | 自定义触发内容；`Text` 版本可直接传标题 |
 | `tooltip` | `nil` | 可选完整标题 tooltip；`Text` 版本接收并显示 |
 

@@ -13,7 +13,7 @@ struct SurfaceRevealTests: GuavaUIComposeSerializedSuite {
         init(trailing: Bool, reducedMotion: Bool) { self.trailing = trailing; self.reducedMotion = reducedMotion }
         var body: some View {
             LayerRoot {
-                Popover(isPresented: $shown, width: 180, placement: trailing ? .end : .start) {
+                Popover(isPresented: $shown, width: 180, placement: trailing ? .bottomTrailing : .bottomLeading, surface: .content, overflow: .flip) {
                     Text("Open")
                 } content: {
                     Menu([.item(MenuItem(id: "command", title: "Command") { self.actions += 1 })],

@@ -401,9 +401,16 @@
 - 平板 / 桌面：hover 180ms 展开子菜单、前缀查找、快捷键列。`[已实现]`
 - 交互与验收：Up/Down/Home/End/Right/Left/Escape/Enter/类型查找；辅助功能逐行 role、禁用与选中态。验收：Menu 测试族、`--component menu|contextMenu`。
 
+**Popconfirm**
+
+- 外观：复用 Popover 的同一卡片与指针；280pt 卡片外围各 10pt 指针区，不透明 `surfaceFloating`、1pt border、主题圆角与 low shadow。触发器使用 secondary，危险操作使用红色文字；仅确认按钮使用 error 实底。`[已实现]`
+- 手机：气泡宽度按窗口夹紧，Cancel/Confirm ≥44pt 触摸命中；长标题/说明换行；不依赖 hover。`[已实现]`
+- 平板 / 桌面：共用 `PopoverPlacement` 十二个方位，RTL 解析 leading/trailing；top/bottom/侧向保持在指定侧，空间不足时限制该侧可用尺寸并内部滚动，保留窗口 8pt 边距。再次点击触发器、外部点击或 Escape 关闭。`[已实现]`
+- 交互与验收：打开后焦点进入气泡，Tab 在真实 Cancel/Confirm Button 间移动；Confirm 只执行一次，Cancel/Escape 不调用 `onConfirm`；按钮有完整 a11y label，不默认显示重复 tooltip，触发器暴露 expanded。`PopconfirmTests` 验证十二向/RTL 的实际 Portal 坐标、390/720/1280 × 字号/主题/输入矩阵与生命周期；Gallery 使用紧凑定位面板，窄屏使用单锚点预览。细节见 [Popconfirm](popconfirm.md)。
+
 **Popover / HoverCard / Tooltip**
 
-- 外观：Popover 锚定 + 启动对齐；HoverCard 300 宽；Tooltip 自然宽度 ≤ 320、450ms 延迟、键盘焦点同样触发。`[已实现]`
+- 外观：Popover 默认共用带箭头卡片，十二向定位，`.constrain` 保持指定侧并内部滚动；菜单/选择器显式采用 `.content` 表面与 `.flip` 避让。HoverCard 300 宽；Tooltip 自然宽度 ≤ 320、450ms 延迟、键盘焦点同样触发。普通文字 Button 只在显式配置 `tooltip:` 时显示提示。`[已实现]`，见 [Popover](popover.md)。
 - 手机：Tooltip/HoverCard 不作为信息唯一入口（触摸无 hover），等效信息必须在内容内或点击可达；浮层宽度 ≤ 窗口 − 24。`[部分]`（等入口由内容保证；宽度已夹紧）
 - 平板 / 桌面：hover 触发、指针移出关闭、Escape 关闭。`[已实现]`
 - 交互与验收：辅助功能 help / 可读文本；焦点与 Escape 行为一致；验收：Tooltip 测试族、`--component tooltip|hoverCard|popover`。
@@ -581,7 +588,7 @@ NavigationStack 已完成：`NavigationStack(path:root:destination:)` 以 caller
 
 第 14 项的滚动位置、选择角色、described-by 与可聚焦 thumb 已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。独立 `Scrollbar` companion 提供 `.slider` thumb：拖动、方向键/Page/Home/End、increment/decrement、`setValue` 与 focus ring；与 ScrollView 绑定同一 offset。`AccessibilitySemanticsTests` 覆盖滚动语义、comboBox 与 describedBy；`ScrollbarTests` 覆盖键盘/辅助功能/拖动/几何。DevTools 在 `button` 页验证 describedBy help，在 `scrollView`/`select` 页验证角色与位置，在 `scrollbar` 页拖到底得到 `value=100%`、`Offset: 220`，PageUp 回到 0%。`Scrollbar` 是 companion，ScrollView 内建 chrome 不自动叠加；该边界已记录在 [Scrollbar](scrollbar.md)。
 
-第 16 项 Gallery 预览覆盖已完成：`AdaptiveControlExamples.supports` 覆盖全部 95 个 Gallery 页面，每页生成 narrow/wide pointer 与 narrow touch 三档；新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、timePicker、wheelPicker、theme、textEditor、menu、contextMenu、popover、modal、dialog、alertDialog、sheet、bottomSheet、commandPalette、hoverCard、animation、introduction、image、workspace、notification，并按页面设置预览高度。DevTools 在 scrollbar/timeline/tree/colorField/dialog 等页验证三档容器物化（如 adaptive-dialog-touch 为 390×104）；`swift test --package-path GuavaUI/Examples` 27/27。
+第 16 项 Gallery 预览覆盖已完成：`AdaptiveControlExamples.supports` 覆盖全部 96 个 Gallery 页面，每页生成 narrow/wide pointer 与 narrow touch 三档；新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、timePicker、wheelPicker、popconfirm、theme、textEditor、menu、contextMenu、popover、modal、dialog、alertDialog、sheet、bottomSheet、commandPalette、hoverCard、animation、introduction、image、workspace、notification，并按页面设置预览高度。DevTools 在 scrollbar/timeline/tree/colorField/dialog 等页验证三档容器物化（如 adaptive-dialog-touch 为 390×104）；`swift test --package-path GuavaUI/Examples` 27/27。
 
 第 10 项浮层自适应已完成：`BottomSheet` 在 compact/medium 贴底全宽、expanded 退化为 `dialogWidth` 560 的居中面板，detent 与拖拽关闭沿用既有 Modal 契约；`MenuHierarchyTests.touchSubmenu` 新增 390pt 触摸面用例，点击父行直接打开子菜单并执行叶子。DevTools 在 390×800 测得 dialog 390×280、y=520，1280×840 测得 560×280、x=360/y=280；`capture-ui` 确认贴底与居中两种呈现。触摸子菜单无 hover 依赖，Portal 层级、焦点与展开语义保持。
 

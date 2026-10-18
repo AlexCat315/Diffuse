@@ -101,6 +101,31 @@ struct GalleryTests {
         }
     }
 
+    @Test("Placement playground keeps its trigger ring inside the preview at large text sizes")
+    func placementPreviewBounds() throws {
+        let oldText = TextEnvironmentHolder.current
+        TextEnvironmentHolder.current = TextEnvironment.bootstrapped(atlasTextureID: 1, primaryFontName: SystemFontDefaults.primaryFontName)
+        defer { TextEnvironmentHolder.current = oldText }
+        for width: Float in [300, 390, 720] { for scale: Float in [1, 2] {
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: Box(direction: .column, alignItems: .stretch) {
+                PopoverPlacementExample(options: GalleryOptions(), onAction: { _ in })
+            }.frame(width: width).textScaler(.init(scale)))
+            defer { graph.install(root: EmptyView()) }
+            for _ in 0..<8 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 1000) }
+            let preview = try #require(graph.layoutSnapshot().first { $0.debugName == "popover-placement-preview" })
+            func nodes(_ root: Node) -> [Node] { [root] + root.children.flatMap(nodes) }
+            let triggers = nodes(try #require(graph.tree.root)).filter {
+                $0.accessibility?.role == .button && $0.accessibility?.label != nil
+            }
+            #expect(triggers.count == (width >= 368 ? 12 : 1))
+            for trigger in triggers {
+                #expect(preview.absoluteFrame.insetBy(dx: -1, dy: -1).contains(trigger.absoluteFrame))
+                if width < 368 { #expect(abs(trigger.absoluteFrame.midX - preview.absoluteFrame.midX) < 1) }
+            }
+        } }
+    }
+
     @Test("Rating commits pointer input through the actual gallery's nested scroll content")
     func ratingPointer() {
         let oldText = TextEnvironmentHolder.current, oldRegistry = InteractionRegistryHolder.current

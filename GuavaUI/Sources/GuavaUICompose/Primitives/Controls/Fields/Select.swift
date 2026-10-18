@@ -158,7 +158,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
         var popover = Popover(isPresented: $isPresented,
                 isEnabled: select.isEnabled,
                 width: select.width,
-                label: {
+                surface: .content, overflow: .flip, label: {
             // Trigger reads as a text input: same sunken fill, border, and
             // radius the TextField/NumberField use (theme.inputs), so a Select
             // sits flush with the fields around it in a property grid instead

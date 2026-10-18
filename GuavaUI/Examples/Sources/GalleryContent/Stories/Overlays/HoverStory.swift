@@ -29,7 +29,7 @@ struct HoverCardStory: View {
                 }) {
                     profile
                 }
-                Popover(isPresented: $profileOpen, isEnabled: options.isEnabled, width: 360, label: {
+                Popover(isPresented: $profileOpen, isEnabled: options.isEnabled, width: 360, surface: .content, overflow: .flip, label: {
                     Text("Open profile").font(.label)
                 }, content: { profile.padding(16).background(.surfaceFloating).cornerRadius(8) })
                 Text(following ? "Following Ada" : "Not following Ada").font(.caption).foregroundColor(.onSurfaceMuted)

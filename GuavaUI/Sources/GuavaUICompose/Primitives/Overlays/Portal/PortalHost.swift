@@ -159,7 +159,7 @@ private struct _PortalEntrySlot: _PrimitiveView {
             let range = entry.fit.widthRange(in: window)
             node.layoutNode?.minWidth = range.minimum
             node.layoutNode?.maxWidth = range.maximum
-            node.layoutNode?.maxHeight = Float(max(0, window.height - CGFloat(entry.fit.viewportMargin) * 2))
+            node.layoutNode?.maxHeight = entry.fit.heightLimit(in: window)
         } else {
             node.layoutNode?.minWidth = nil
             node.layoutNode?.maxWidth = nil
@@ -168,14 +168,14 @@ private struct _PortalEntrySlot: _PrimitiveView {
         node.layoutDidUpdate = { node in
             guard !entry.fillsWindow else { return }
             let window = portalWindowBounds(node)
-            let fitted = PortalPlacement.fit(position: entry.position, size: node.frame.size,
+            let fitted = PortalPlacement.fit(position: entry.positionForSize?(node.frame.size) ?? entry.position, size: node.frame.size,
                                               in: window, anchor: store.anchor(for: entry.id),
                                               margin: CGFloat(entry.fit.viewportMargin), placement: entry.placement)
             node.frame = fitted
             let range = entry.fit.widthRange(in: window)
             node.layoutNode?.minWidth = range.minimum
             node.layoutNode?.maxWidth = range.maximum
-            node.layoutNode?.maxHeight = Float(max(0, window.height - CGFloat(entry.fit.viewportMargin) * 2))
+            node.layoutNode?.maxHeight = entry.fit.heightLimit(in: window)
         }
     }
 
@@ -207,6 +207,6 @@ private struct _PortalEntrySlot: _PrimitiveView {
         let range = entry.fit.widthRange(in: window)
         return [ScrollView(.vertical, scrollbarGutter: .overlay) { entry.content }
             .frame(minWidth: range.minimum, maxWidth: range.maximum,
-                   maxHeight: Float(max(0, window.height - CGFloat(entry.fit.viewportMargin) * 2)))]
+                   maxHeight: entry.fit.heightLimit(in: window))]
     }
 }

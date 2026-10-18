@@ -97,7 +97,7 @@ public struct AssetRefField: View {
                     Popover(isPresented: $isPickerPresented,
                             isEnabled: isEnabled,
                             width: 240,
-                            placement: .end) {
+                            placement: .bottomTrailing, surface: .content, overflow: .flip) {
                         Icon(isPickerPresented ? UIIcons.Navigation.chevronUp : UIIcons.Navigation.chevronDown,
                              size: 10,
                              color: .onSurfaceMuted)

@@ -24,7 +24,7 @@ struct InspectorScriptHeaderActions: View {
                     .buttonStyle(.ghost)
                     .debugName("inspector-script-open-\(group.id)")
             }
-            Popover(isPresented: $isMenuPresented, width: 220) {
+            Popover(isPresented: $isMenuPresented, width: 220, surface: .content, overflow: .flip) {
                 Text("···").font(.bodyStrong).padding(horizontal: 4, vertical: 3)
             } content: {
                 Menu(isChoosingScript ? scriptEntries : actionEntries, width: 220, maxVisibleRows: 12,
@@ -91,7 +91,7 @@ struct InspectorScriptAddButton: View {
     @State private var isPresented = false
 
     var body: some View {
-        Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 240) {
+        Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 240, surface: .content, overflow: .flip) {
             Row(alignment: .center, spacing: 5) {
                 Text("+").font(.caption).foregroundColor(.onSurfaceVariant)
                 Text(L("Add Script")).font(.caption).foregroundColor(.onSurfaceVariant)

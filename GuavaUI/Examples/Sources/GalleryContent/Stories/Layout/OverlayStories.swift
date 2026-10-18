@@ -39,7 +39,7 @@ struct MenuStory: View {
     }
     var body: some View {
         StorySection("Nested commands", "Use Up/Down, Home/End or type a label. Right opens a branch; Left and Escape return one level. A leaf closes the entire popup.") {
-            Popover(isPresented: $open, isEnabled: options.isEnabled, width: 260) {
+            Popover(isPresented: $open, isEnabled: options.isEnabled, width: 260, surface: .content, overflow: .flip) {
                 Row(alignment: .center, spacing: 8) { Text("Workspace commands").font(.body); Icon(UIIcons.Navigation.chevronDown, size: 12) }
             } content: { Menu(entries, width: 260, onItemActivated: { open = false }) }
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted)
@@ -48,7 +48,7 @@ struct MenuStory: View {
             Menu(entries, width: 260)
         }
         StorySection("Scrollable menu", "100 commands with nested branches. Keyboard navigation reveals the active row; a child closes when its anchor scrolls away.") {
-            Popover(isPresented: $manyOpen, isEnabled: options.isEnabled, width: 240) {
+            Popover(isPresented: $manyOpen, isEnabled: options.isEnabled, width: 240, surface: .content, overflow: .flip) {
                 Row(alignment: .center, spacing: 8) { Text("100 commands").font(.body); Icon(UIIcons.Navigation.chevronDown, size: 12) }
             } content: { Menu(manyEntries, width: 240, maxVisibleRows: 6, onItemActivated: { manyOpen = false }) }
         }
@@ -91,7 +91,7 @@ struct PopoverStory: View {
                     Text("Project name").font(.bodyStrong)
                     TextField("Name", text: $name)
                     Button("Done") { open = false }
-                }.padding(16).background(.surfaceFloating).cornerRadius(8).border(.border, width: 1)
+                }
             })
             Text("Name: \(name.stringValue)").font(.caption).foregroundColor(.onSurfaceMuted)
         }

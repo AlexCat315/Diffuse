@@ -19,7 +19,7 @@ struct ViewportProjectionSelector: View {
     ]
 
     var body: some View {
-        Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 180,
+        Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 180, surface: .content, overflow: .flip,
                 onKey: viewportPopoverDismissOnEscape($isPresented)) {
             Row(alignment: .center, spacing: 5) {
                 Text(label, lineLimit: 1).font(.caption)
@@ -81,7 +81,7 @@ struct ViewportSnapSelector: View {
             let _ = observed.translateSnapStep
             let _ = observed.rotateSnapStepDegrees
             let _ = observed.scaleSnapStep
-            Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 280,
+            Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 280, surface: .content, overflow: .flip,
                     onKey: viewportPopoverDismissOnEscape($isPresented)) {
                 Row(alignment: .center, spacing: 5) {
                     Text(L("Snapping"), lineLimit: 1).font(.caption)

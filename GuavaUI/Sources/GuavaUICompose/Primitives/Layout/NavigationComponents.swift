@@ -23,7 +23,7 @@ public struct Breadcrumb<ID: Hashable>: View {
                 AnyView(Row(alignment: .center, spacing: 4) {
                     if index > 0 { Icon(UIIcons.Navigation.chevronRight, size: .small, color: .onSurfaceMuted).accessibilityHidden() }
                     if collapsed && index == trailingStart {
-                        Popover(isPresented: $isPresented, width: 240, label: { Text("…").font(.label).padding(horizontal: 8) }) {
+                        Popover(isPresented: $isPresented, width: 240, surface: .content, overflow: .flip, label: { Text("…").font(.label).padding(horizontal: 8) }) {
                             Menu(items[1..<trailingStart].map { entry in .item(MenuItem(id: entry.id, title: entry.title, isEnabled: entry.isEnabled, action: { onSelect(entry.id); isPresented = false })) }, width: 240)
                         }.accessibilityLabel("Hidden path items")
                         Icon(UIIcons.Navigation.chevronRight, size: .small, color: .onSurfaceMuted).accessibilityHidden()

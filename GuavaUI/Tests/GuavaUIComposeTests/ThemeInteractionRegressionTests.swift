@@ -103,7 +103,7 @@ struct ThemeInteractionRegressionTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             LayerRoot {
                 Column(alignment: .leading, spacing: 70) {
-                    Popover(isPresented: $presented, width: 120) {
+                    Popover(isPresented: $presented, width: 120, surface: .content, overflow: .flip) {
                         Text("Menu").frame(width: 80, height: 24)
                     } content: {
                         Text("Contents").frame(width: 120, height: 48)

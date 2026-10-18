@@ -136,7 +136,7 @@ private struct MenuHarness: View {
     @State var shown = false
     var body: some View {
         LayerRoot {
-            Popover(isPresented: $shown, width: 180) { Text("Open") } content: {
+            Popover(isPresented: $shown, width: 180, surface: .content, overflow: .flip) { Text("Open") } content: {
                 Menu([.item(MenuItem(id: "one", title: "One") {}),
                       .item(MenuItem(id: "two", title: "Two") {})],
                      width: 180, maxVisibleRows: 4, onItemActivated: { shown = false })

@@ -1730,7 +1730,7 @@ private struct PhysicsDebugSelector: View {
 
     var body: some View {
         Popover(isPresented: $isPresented,
-                width: 210,
+                width: 210, surface: .content, overflow: .flip,
                 onKey: viewportPopoverDismissOnEscape($isPresented)) {
             Row(alignment: .center, spacing: 5) {
                 if compact {
@@ -1996,7 +1996,7 @@ private struct RenderScaleSelector: View {
 
     var body: some View {
         Popover(isPresented: $isPresented,
-                width: 168,
+                width: 168, surface: .content, overflow: .flip,
                 onKey: viewportPopoverDismissOnEscape($isPresented)) {
             Row(alignment: .center, spacing: 5) {
                 Text("\(percent)%", lineLimit: 1)
@@ -2041,7 +2041,7 @@ private struct ViewModeSelector: View {
 
     var body: some View {
         Popover(isPresented: $isPresented,
-                width: 128,
+                width: 128, surface: .content, overflow: .flip,
                 onKey: viewportPopoverDismissOnEscape($isPresented)) {
             Row(alignment: .center, spacing: 5) {
                 Text(Self.label(for: shadingMode), lineLimit: 1)

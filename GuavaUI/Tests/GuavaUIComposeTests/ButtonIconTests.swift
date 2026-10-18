@@ -168,6 +168,29 @@ struct ButtonIconTests: GuavaUIComposeSerializedSuite {
         } }
     } }
 
+    @Test("A text button has no repeated title tooltip; an explicit explanation still opens")
+    @MainActor
+    func textButtonTooltipIsExplicit() throws { try GlobalTestLock.locked {
+        let context = PlatformInputContext(), portal = PortalStore(), scheduler = AnimatorScheduler()
+        context.addScopedAmbient(PortalStoreAmbient(portal))
+        let prior = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = prior }
+        try context.withCurrent { try AnimatorScheduler.$current.withValue(scheduler) {
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            defer { graph.install(root: EmptyView()) }
+            graph.install(root: LayerRoot { Button("Cancel") {} }); graph.computeLayout(width: 320, height: 180)
+            let button = try #require(findButtonHost(graph.tree.root!))
+            context.interactions.handlers(for: button).hover?(.enter); context.focusChain.focus(button)
+            scheduler.tick(deltaTime: 1)
+            #expect(portal.entries.isEmpty && button.accessibility?.help == "")
+            graph.install(root: LayerRoot { Button("Cancel", tooltip: "Keep the current document") {} })
+            graph.computeLayout(width: 320, height: 180)
+            let explicit = try #require(findButtonHost(graph.tree.root!))
+            context.interactions.handlers(for: explicit).hover?(.enter); scheduler.tick(deltaTime: 0.5)
+            #expect(portal.entries.count == 1 && explicit.accessibility?.help == "Keep the current document")
+        } }
+    } }
+
     @Test("Keyboard button tooltips fit the window, preserve focus and dismiss with Escape")
     @MainActor
     func tooltipKeyboardAndPlacement() throws { try GlobalTestLock.locked {

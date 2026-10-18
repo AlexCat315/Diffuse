@@ -76,7 +76,7 @@ struct ScriptPanel: View {
                 }
                 .buttonStyle(.primary)
             }
-            Popover(isPresented: $isActionsMenuPresented, width: 200) {
+            Popover(isPresented: $isActionsMenuPresented, width: 200, surface: .content, overflow: .flip) {
                 Text("···").font(.bodyStrong).padding(horizontal: 5, vertical: 3)
             } content: {
                 Menu(actionEntries, width: 200, onItemActivated: { isActionsMenuPresented = false })
@@ -275,7 +275,7 @@ struct ScriptPanel: View {
 
     private func editorHeader(_ file: DynamicScriptManager.ScriptFile) -> some View {
         Row(alignment: .center, spacing: 0) {
-            Popover(isPresented: $isFileMenuPresented, width: 240) {
+            Popover(isPresented: $isFileMenuPresented, width: 240, surface: .content, overflow: .flip) {
                 Row(alignment: .center, spacing: 6) {
                     Text("S").font(.label).foregroundColor(.accent)
                     Text("\(file.displayName).swift", lineLimit: 1)

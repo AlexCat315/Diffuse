@@ -85,7 +85,7 @@ struct ToolbarCommands: View {
                             }.id(item.command.id)
                         }
                         ToolbarRetainedCommand(isVisible: !overflow.isEmpty, focus: focus, isOverflow: true) {
-                            Popover(isPresented: $isPresented, isEnabled: isEnabled, placement: .end) {
+                            Popover(isPresented: $isPresented, isEnabled: isEnabled, placement: .bottomTrailing, surface: .content, overflow: .flip) {
                                 if presentation.usesOverflowIcon {
                                     Box(direction: .column, alignItems: .center, justifyContent: .center) {
                                         Icon(UIIcons.Action.moreHorizontal, size: 20).iconScaling(.fixed).flex(0, shrink: 0)

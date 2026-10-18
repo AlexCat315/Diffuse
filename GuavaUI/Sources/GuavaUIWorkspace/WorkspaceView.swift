@@ -115,7 +115,7 @@ private struct _WorkspaceCompactView: View {
             ?? panels.first { $0.id.rawValue == "viewport" } ?? panels.first
         Column(alignment: .leading, spacing: 0) {
             if let selected {
-                Popover(isPresented: $isPresented, width: 240) {
+                Popover(isPresented: $isPresented, width: 240, surface: .content, overflow: .flip) {
                     Text(selected.title + " ▾").font(.label).padding(8)
                 } content: {
                     Menu(panels.map { panel in
@@ -803,7 +803,7 @@ private struct _WorkspaceTabBar: View {
             .frame(height: .percent(100), minWidth: 0)
             .debugName("workspace-tabs-scroll-\(group.id.rawValue)")
             if group.panels.count > 1 {
-                Popover(isPresented: $overflowPresented, width: max(240, scaler.scale(200)), placement: .end) {
+                Popover(isPresented: $overflowPresented, width: max(240, scaler.scale(200)), placement: .bottomTrailing, surface: .content, overflow: .flip) {
                     Icon(UIIcons.Action.moreHorizontal, size: 12)
                         .frame(width: control, height: control)
                         .accessibility { $0.label = "All panels" }

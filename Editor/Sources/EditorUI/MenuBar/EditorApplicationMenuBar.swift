@@ -58,7 +58,7 @@ struct EditorApplicationMenuBar: View {
         )
 
         return AnyView(Popover(isPresented: isPresented,
-                               width: 240) {
+                               width: 240, surface: .content, overflow: .flip) {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 Text(menu.title)
                     .font(.body)

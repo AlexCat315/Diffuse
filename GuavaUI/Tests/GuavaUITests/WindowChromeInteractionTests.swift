@@ -140,7 +140,7 @@ final class WindowChromeInteractionTests: XCTestCase {
                 }
             }
         )
-        return Popover(isPresented: binding, width: 220) {
+        return Popover(isPresented: binding, width: 220, surface: .content, overflow: .flip) {
             Text(name)
                 .font(.body)
                 .padding(horizontal: 10, vertical: 0)

@@ -26,7 +26,7 @@ public struct DatePicker: View {
         formatter.calendar = options.calendar.calendar; formatter.timeZone = options.calendar.calendar.timeZone
         let dateLabel = selection.wrappedValue.map(formatter.string) ?? options.presentation.placeholder
         return Popover(isPresented: $isPresented, isEnabled: options.presentation.isEnabled,
-                       width: Float(options.calendar.presentation.numberOfMonths) * (options.calendar.presentation.cellSize * 7 + 36), label: {
+                       width: Float(options.calendar.presentation.numberOfMonths) * (options.calendar.presentation.cellSize * 7 + 36), surface: .content, overflow: .flip, label: {
             Row(alignment: .center, spacing: 8) {
                 Text(dateLabel).truncatingTail().font(.label).tooltip(dateLabel)
                     .flex(1, shrink: 1).frame(minWidth: 0)

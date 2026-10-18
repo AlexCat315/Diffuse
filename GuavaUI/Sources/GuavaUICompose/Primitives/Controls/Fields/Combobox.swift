@@ -66,7 +66,7 @@ public struct Combobox<Value: Hashable>: View {
                 session.query = ""; session.highlighted = selection.wrappedValue; session.focusRequest += 1
             }
             session.isPresented = open
-        }), isEnabled: presentation.isEnabled, width: presentation.width, onKey: { event, phase in
+        }), isEnabled: presentation.isEnabled, width: presentation.width, surface: .content, overflow: .flip, onKey: { event, phase in
             guard phase != .capture else { return .ignored }
             let enabled = matches.filter(\.isEnabled).map(\.value)
             if let command = SelectionNavigation.command(for: event.scancode) {

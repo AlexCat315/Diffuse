@@ -194,7 +194,7 @@ struct RowDensityTests: GuavaUIComposeSerializedSuite {
                 .item(MenuItem(id: "last", title: "Last") {})
             ]
             let harness = Harness(width: 390, content:
-                Popover(isPresented: .constant(true), width: 220) { Text("Menu") } content: {
+                Popover(isPresented: .constant(true), width: 220, surface: .content, overflow: .flip) { Text("Menu") } content: {
                     Menu(entries, width: 220, maxVisibleRows: 2)
                 })
             harness.input = [.touch, .keyboard]

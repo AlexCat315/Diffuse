@@ -16,7 +16,7 @@ struct ColumnVisibilityPicker: View {
                     .buttonStyle(.secondary).frame(minWidth: 44, minHeight: 44)
                     .compositionLocal(ActionControlAccessibility.label, "Column visibility")
                     .compositionLocal(ActionControlAccessibility.isExpanded, isPresented)
-                _PopoverOverlayHost(isPresented: isPresented, width: nil, placement: .start,
+                AnchoredOverlayHost(isPresented: isPresented, width: nil, placement: .bottomLeading,
                     onDismiss: { isPresented = false }) {
                     Menu(entries(visible: visible), onItemActivated: { isPresented = false }, onDismiss: { isPresented = false })
                         .compositionLocal(MenuRowMetrics.minimumHeight, 44)

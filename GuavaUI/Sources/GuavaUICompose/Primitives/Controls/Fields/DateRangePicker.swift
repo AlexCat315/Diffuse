@@ -38,7 +38,7 @@ public struct DateRangePicker: View {
         return Popover(isPresented: $isPresented,
                        isEnabled: options.presentation.isEnabled,
                        width: width,
-                       label: {
+                       surface: .content, overflow: .flip, label: {
             Row(alignment: .center, spacing: 8) {
                 Text(labelText(formatter)).font(.label)
                 Spacer()

@@ -318,7 +318,7 @@ struct InspectorPanel: View {
         @State private var isPresented: Bool = false
 
         var body: some View {
-            Popover(isPresented: $isPresented, width: 230) {
+            Popover(isPresented: $isPresented, width: 230, surface: .content, overflow: .flip) {
                 Row(alignment: .center, spacing: 5) {
                     Text(selectedLabel, lineLimit: 1)
                         .font(.caption)
@@ -397,7 +397,7 @@ struct InspectorPanel: View {
         @State private var isPresented: Bool = false
 
         var body: some View {
-            Popover(isPresented: $isPresented, width: 220) {
+            Popover(isPresented: $isPresented, width: 220, surface: .content, overflow: .flip) {
                 Row(alignment: .center, spacing: 5) {
                     Text(selectedLabel, lineLimit: 1)
                         .font(.caption)
@@ -541,7 +541,7 @@ struct InspectorPanel: View {
         let content: () -> Content
 
         var body: some View {
-            Popover(isPresented: $isPresented, width: 300) {
+            Popover(isPresented: $isPresented, width: 300, surface: .content, overflow: .flip) {
                 Row(alignment: .center, spacing: 4) {
                     Text(L("Mixed value")).font(.caption).foregroundColor(.onSurfaceVariant).flex()
                     Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
@@ -880,7 +880,7 @@ private struct ComponentActionsBar: View {
                 } else {
                     Popover(isPresented: exclusivePresentation(for: .add),
                             width: 280,
-                            placement: .end,
+                            placement: .bottomTrailing, surface: .content, overflow: .flip,
                             onKey: dismissOnEscape(.add)) {
                         actionLabel(symbol: "+",
                                     title: L("Add"),
@@ -908,7 +908,7 @@ private struct ComponentActionsBar: View {
                 } else {
                     Popover(isPresented: exclusivePresentation(for: .reset),
                             width: 280,
-                            placement: .end,
+                            placement: .bottomTrailing, surface: .content, overflow: .flip,
                             onKey: dismissOnEscape(.reset)) {
                         actionLabel(symbol: "↺",
                                     title: L("Reset"),
@@ -925,7 +925,7 @@ private struct ComponentActionsBar: View {
 
                     Popover(isPresented: exclusivePresentation(for: .remove),
                             width: 280,
-                            placement: .end,
+                            placement: .bottomTrailing, surface: .content, overflow: .flip,
                             onKey: dismissOnEscape(.remove)) {
                         actionLabel(symbol: "−",
                                     title: L("Remove"),

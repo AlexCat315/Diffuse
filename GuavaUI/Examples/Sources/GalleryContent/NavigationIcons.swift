@@ -31,7 +31,7 @@ extension GalleryPage {
         case .avatar: UIIcons.User.user
         case .menu, .menuButton, .contextMenu, .commandPalette: UIIcons.Action.moreHorizontal
         case .navigationStack: UIIcons.Navigation.arrowLeft
-        case .popover, .tooltip, .hoverCard: UIIcons.Shape.messageSquare
+        case .popover, .popconfirm, .tooltip, .hoverCard: UIIcons.Shape.messageSquare
         case .modal, .dialog, .alertDialog: UIIcons.Layout.panelTop
         case .disclosure, .accordion: UIIcons.Navigation.chevronDown
         case .tabs, .workspace: UIIcons.Editor.layers

@@ -18,7 +18,7 @@ public struct MenuButton<Label: View>: View {
     public init(entries: [MenuEntry],
                 isEnabled: Bool = true,
                 width: Float? = nil,
-                placement: PopoverPlacement = .start,
+                placement: PopoverPlacement = .bottomLeading,
                 accessibilityLabel: String? = nil,
                 tooltip: String? = nil,
                 @ViewBuilder label: () -> Label) {
@@ -36,7 +36,7 @@ public struct MenuButton<Label: View>: View {
                               isEnabled: isEnabled,
                               width: width,
                               placement: placement,
-                              triggerStyle: AnyButtonStyle(SecondaryButtonStyle()),
+                              surface: .content, overflow: .flip, triggerStyle: AnyButtonStyle(SecondaryButtonStyle()),
                               label: { label }) {
             Menu(entries, width: width, onItemActivated: { presented = false })
         }
@@ -52,7 +52,7 @@ public extension MenuButton where Label == Text {
          entries: [MenuEntry],
          isEnabled: Bool = true,
          width: Float? = nil,
-         placement: PopoverPlacement = .start,
+         placement: PopoverPlacement = .bottomLeading,
          tooltip: String? = nil) {
         self.init(entries: entries, isEnabled: isEnabled, width: width, placement: placement,
                   accessibilityLabel: title, tooltip: tooltip) {

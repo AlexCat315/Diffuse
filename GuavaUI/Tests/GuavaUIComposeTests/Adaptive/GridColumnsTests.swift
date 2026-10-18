@@ -22,7 +22,7 @@ struct GridColumnsTests: GuavaUIComposeSerializedSuite {
     private struct CellPopup: View {
         @State private var open = false
         var body: some View {
-            Popover(isPresented: $open) { Text("Cell popup").padding(8) } content: {
+            Popover(isPresented: $open, surface: .content, overflow: .flip) { Text("Cell popup").padding(8) } content: {
                 Menu([.item(MenuItem(id: "action", title: "Cell action") {})], onItemActivated: { open = false })
             }.frame(width: 140, height: 44).compositionLocal(ActionControlAccessibility.label, "Cell popup")
         }

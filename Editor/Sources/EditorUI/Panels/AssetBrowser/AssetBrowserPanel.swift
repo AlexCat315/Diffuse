@@ -680,7 +680,7 @@ private struct AssetSortSelector: View {
     @State private var isPresented: Bool = false
 
     var body: some View {
-        Popover(isPresented: $isPresented, width: 150) {
+        Popover(isPresented: $isPresented, width: 150, surface: .content, overflow: .flip) {
             Row(alignment: .center, spacing: 5) {
                 Text(label(for: sortMode.wrappedValue), lineLimit: 1)
                     .font(.caption)

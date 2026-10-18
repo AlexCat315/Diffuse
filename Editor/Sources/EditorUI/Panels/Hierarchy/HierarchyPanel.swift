@@ -738,7 +738,7 @@ private struct HierarchyPanelHeader: View {
 
     @ViewBuilder
     private func actionsControl() -> some View {
-        Popover(isPresented: $isActionsPresented, width: 220) {
+        Popover(isPresented: $isActionsPresented, width: 220, surface: .content, overflow: .flip) {
             actionLabel()
         } content: {
             Menu(selectionActions,
@@ -755,7 +755,7 @@ private struct HierarchyPanelHeader: View {
         if isAuthoringEnabled {
             Popover(isPresented: $isCreatePresented,
                     width: 240,
-                    placement: .end) {
+                    placement: .bottomTrailing, surface: .content, overflow: .flip) {
                 createLabel()
             } content: {
                 Menu(createEntries(),

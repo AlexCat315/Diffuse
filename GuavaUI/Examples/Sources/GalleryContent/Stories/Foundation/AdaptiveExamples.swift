@@ -9,7 +9,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .timePicker, .wheelPicker, .theme, .textEditor, .menu, .contextMenu, .popover, .modal, .dialog, .alertDialog, .sheet, .bottomSheet, .commandPalette, .hoverCard, .animation, .introduction, .image, .workspace, .notification: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .timePicker, .wheelPicker, .theme, .textEditor, .menu, .contextMenu, .popover, .popconfirm, .modal, .dialog, .alertDialog, .sheet, .bottomSheet, .commandPalette, .hoverCard, .animation, .introduction, .image, .workspace, .notification: true
         default: false
         }
     }
@@ -22,7 +22,7 @@ struct AdaptiveControlExamples: View {
     }
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualList || page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .textEditor ? 150 : page == .wheelPicker ? 190 : page == .timePicker ? 190 : page == .workspace ? 220 : page == .image ? 120 : page == .introduction || page == .notification ? 100 : page == .animation ? 100 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .multiSelectList ? 150 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualList || page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .textEditor ? 150 : page == .wheelPicker ? 190 : page == .timePicker ? 190 : page == .popconfirm ? 150 : page == .workspace ? 220 : page == .image ? 120 : page == .introduction || page == .notification ? 100 : page == .animation ? 100 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
         return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
@@ -277,6 +277,7 @@ private struct AdaptiveControlSample: View {
         case .accordion: AnyView(Accordion([
             AccordionItem(0, "Details") { Text("Accordion content") }
         ], expanded: $accordionExpanded).frame(width: .percent(100), height: .points(120)))
+        case .popconfirm: AnyView(Popconfirm("Preview deletion", title: "Delete this item?", message: "This cannot be undone.", confirmTitle: "Delete", role: .destructive, isEnabled: options.isEnabled) {})
         case .timePicker: AnyView(Box(direction: .row, alignItems: .center, justifyContent: .center) {
             TimePicker(selection: $pickerTime) { $0.minuteStep = 5; $0.isEnabled = options.isEnabled }
                 .frame(width: 320)
@@ -403,9 +404,9 @@ private struct AdaptiveControlSample: View {
         })
         case .popover: AnyView(Column(alignment: .leading, spacing: 8) {
             Popover(isPresented: $popoverOpen, width: 200, label: {
-                Button("Open popover") { popoverOpen.toggle() }
+                Text("Open popover").padding(8)
             }, content: {
-                Text("Popover content").padding(12)
+                Text("Popover content")
             })
         })
         case .modal: AnyView(Column(alignment: .leading, spacing: 8) {

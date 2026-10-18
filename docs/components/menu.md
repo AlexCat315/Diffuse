@@ -3,7 +3,7 @@
 菜单现在由独立的描述模型、导航会话、行宿主和 Portal 放置组成；不再把菜单渲染和 Select 的键盘状态混在一个文件里。
 
 ```swift
-Popover(isPresented: $open, width: 240) {
+Popover(isPresented: $open, width: 240, surface: .content, overflow: .flip) {
     Text("Workspace commands")
 } content: {
     Menu([

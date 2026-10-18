@@ -4,6 +4,8 @@ import GuavaUIRuntime
 public enum PortalPlacementMode: Sendable, Equatable {
     case belowAnchor
     case besideAnchor
+    /// The owner has resolved its side and available region; only clamp here.
+    case fixed
 }
 
 public enum PortalPlacement {

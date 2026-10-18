@@ -52,7 +52,7 @@ private struct _StatefulColorField: View {
     var body: some View {
         Popover(isPresented: $isPresented,
                 isEnabled: field.isEnabled,
-                label: {
+                surface: .content, overflow: .flip, label: {
             ColorSwatch(color: field.color.wrappedValue,
                         isEnabled: field.isEnabled,
                         showAlpha: field.showAlpha,

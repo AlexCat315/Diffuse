@@ -21,7 +21,7 @@ private struct DynamicScaleScene: View {
                     Button(icon: .resource(UIIcons.Action.check)) {}.debugName("dynamic-icon-button")
                     Button(icon: .resource(UIIcons.Action.check), isLoading: true) {}.debugName("dynamic-loading-button")
                     TextField(text: .constant("Edit me")).font(.body).frame(width: 300).debugName("dynamic-field")
-                    Popover(isPresented: .constant(true), width: 300, label: { Text("Anchor") }, content: {
+                    Popover(isPresented: .constant(true), width: 300, surface: .content, overflow: .flip, label: { Text("Anchor") }, content: {
                         Text("Dynamic overlay").font(.body)
                         Icon(UIIcons.Action.check).debugName("dynamic-overlay-icon")
                     })
@@ -138,7 +138,7 @@ struct DesignSystemTests: GuavaUIComposeSerializedSuite {
             theme.typography.body = .init(font: .system(size: 18), lineHeight: 26)
             theme.extensions[BrandTokens.self].editorial = .init(font: .system(size: 22), lineHeight: 30)
             graph.install(root: LayerRoot {
-                Popover(isPresented: .constant(true), width: 300, label: { Text("Trigger") }, content: {
+                Popover(isPresented: .constant(true), width: 300, surface: .content, overflow: .flip, label: { Text("Trigger") }, content: {
                     Text("Overlay").font(.body)
                     Text("Overlay extension").font(SemanticFontRef { $0.extensions[BrandTokens.self].editorial })
                 }).theme(theme).textScaler(.init(1.5))
@@ -231,7 +231,7 @@ struct DesignSystemTests: GuavaUIComposeSerializedSuite {
             graph.install(root: LayerRoot {
                 Column {
                     Icon(UIIcons.Action.check).debugName("theme-fixed-icon")
-                    Popover(isPresented: .constant(true), width: 200, label: { Text("Anchor") }) {
+                    Popover(isPresented: .constant(true), width: 200, surface: .content, overflow: .flip, label: { Text("Anchor") }) {
                         Icon(UIIcons.Action.check).debugName("local-overlay-icon")
                     }.iconScaling(.factor(1.5))
                 }.theme(theme).textScaler(.init(2))

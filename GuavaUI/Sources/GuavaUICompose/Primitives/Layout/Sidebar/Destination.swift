@@ -101,8 +101,8 @@ struct SidebarDestination<ID: Hashable>: View {
             isPresented: $showsActions,
             isEnabled: item.isEnabled,
             width: 220,
-            placement: .end,
-            triggerStyle: AnyButtonStyle(GhostButtonStyle()),
+            placement: .bottomTrailing,
+            surface: .content, overflow: .flip, triggerStyle: AnyButtonStyle(GhostButtonStyle()),
             label: {
                 Icon(UIIcons.Action.moreHorizontal, size: .small)
                     .frame(width: 16, height: 16)
