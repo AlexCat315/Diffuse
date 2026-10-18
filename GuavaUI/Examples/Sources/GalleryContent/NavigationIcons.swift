@@ -9,9 +9,9 @@ extension GalleryPage {
         case .checkbox: UIIcons.Shape.squareCheck
         case .toggle, .slider, .rangeSlider, .numberField, .vec3Field: UIIcons.Action.sliders
         case .rating: UIIcons.Status.star
-        case .textField, .textArea, .label: UIIcons.Text.type
+        case .textField, .textArea, .textEditor, .label: UIIcons.Text.type
         case .searchField: UIIcons.Action.search
-        case .codeEditor, .jsonField: UIIcons.Editor.code
+        case .jsonField: UIIcons.Editor.code
         case .colorField, .theme: UIIcons.Editor.brush
         case .select, .combobox: UIIcons.Navigation.chevronsUpDown
         case .assetRef: UIIcons.Shape.paperclip

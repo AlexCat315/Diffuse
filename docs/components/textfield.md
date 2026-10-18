@@ -19,6 +19,15 @@ TextField(text: $source) { input in
 }.font(.mono).frame(width: 640, height: 400)
 ```
 
+## 编辑器外观
+
+`TextField` 是多行文本与代码编辑的统一入口，不存在独立的 `CodeEditor` 类型。代码行号、缩进、诊断、补全和语法颜色是可选能力，由 `codeEditing` 配置开启；关闭后就是普通软换行文本编辑器。Gallery 的 **Text Editor** 页用同一个字段演示两种模式。
+
+- 行号 gutter 默认透明，只保留一条 1pt 分隔线；短文档不会出现整块灰色竖条。需要底色时传 `codeEditing.lineNumberGutterColor`。
+- 开启行号时垂直内边距至少 8pt，首行/末行不再贴住输入框边缘。
+- 文档头（文件名、语言 badge、Code mode）和状态栏（Ln/Col、Spaces/Wrap、UTF-8）由调用方组合；字段本身只负责编辑表面。
+- 外层容器负责圆角和裁剪，字段可用自定义 `TextFieldStyle` 去掉自己的边框，避免双层输入框。
+
 ## 存储与边界
 
 - `TextBuffer(_:)` 从文件/程序化字符串建立 Rope；`.stringValue` 是完整文档序列化操作，应放在保存、解析 JSON 或提交 authored settings 的边界。

@@ -120,7 +120,7 @@ public extension GalleryPage {
         case .textField: AnyView(TextFieldStory(options: options))
         case .searchField: AnyView(SearchFieldStory(options: options))
         case .textArea: AnyView(TextAreaStory(options: options))
-        case .codeEditor: AnyView(CodeEditorStory(options: options))
+        case .textEditor: AnyView(TextEditorStory(options: options))
         case .numberField: AnyView(NumberFieldStory(options: options))
         case .vec3Field: AnyView(Vec3Story(options: options))
         case .colorField: AnyView(ColorStory(options: options))

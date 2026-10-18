@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Gallery 的 “Code Editor” 更名为 **Text Editor**，明确 `TextField` 是通用多行编辑器（`codeEditing` 只是可选能力）。示例增加整合式编辑器外壳：文件名/语言 badge、Code mode 切换、Ln/Col + Spaces/Wrap + UTF-8 状态栏；plain 模式软换行并移除行号/诊断。代码行号 gutter 默认透明并增加 8pt 垂直内边距，不再出现整块灰色空槽和贴边首行。TextField/JsonField 测试 50/50，DevTools 复核 code/plain 两种状态。
 - Sidebar 选择高亮改用新的 `.sidebar` source-list 角色：`fill = surfaceVariant`，hover/press 只叠中性 `stateLayer`，不再把 accent 蓝叠成淡紫色 Material 选中态。`SidebarContentTests` 断言 sidebar 与 navigation 角色颜色分离；DevTools 1000×760 hover 选中项为中性灰、整行 220pt。
 - `DrawList.addLine` 加入单物理像素 alpha fringe 与圆角端帽：Checkbox 勾、Spinner 弧线、图表折线不再出现阶梯锯齿；新增 `DrawListTests.lineCoverage` 断言不透明核心、透明 fringe 和索引边界。DevTools 4× 裁图复核勾选标记边缘。
 - Sidebar 行命中区与 hover/selection 背景改为整栏宽度：`destinationButton` 在行 Box 中占满主轴，不再按标题 intrinsic width 收缩；短项（Alert）与长项（Progress / Spinner）胶囊等宽。`SidebarHierarchyTests.fullWidthRows` 断言 Overview 与 Settings 行宽一致且 ≥250pt，DevTools 1000×760 hover 两项均宽 220pt。

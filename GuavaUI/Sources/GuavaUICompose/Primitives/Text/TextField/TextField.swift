@@ -1060,12 +1060,16 @@ public struct TextField: View {
                                                 theme: theme)
         guard gutterWidth > 0 else { return }
         let gutterX = textOriginX - gutterWidth
-        list.addRect(UIRect(x: gutterX,
-                            y: Float(origin.y),
-                            width: gutterWidth,
-                            height: frameHeight),
-                     color: (codeEditing.lineNumberGutterColor ?? theme.colors.surfaceVariant)
-                        .multipliedAlpha(node.opacity))
+        // Transparent by default: a full-height tinted slab reads as an empty
+        // control when the document is short. The separator alone is enough
+        // to anchor the numbers; callers can still supply a gutter colour.
+        if let gutterColor = codeEditing.lineNumberGutterColor {
+            list.addRect(UIRect(x: gutterX,
+                                y: Float(origin.y),
+                                width: gutterWidth,
+                                height: frameHeight),
+                         color: gutterColor.multipliedAlpha(node.opacity))
+        }
         list.addRect(UIRect(x: textOriginX - 1,
                             y: Float(origin.y),
                             width: 1,
@@ -1136,7 +1140,14 @@ public struct TextField: View {
     }
 
     func verticalInset(for lineHeight: Float) -> Float {
-        max(4, (minimumFieldHeight - lineHeight) * 0.5)
+        let base = max(4, (minimumFieldHeight - lineHeight) * 0.5)
+        // A code editor needs breathing room above the first line and below
+        // the last; the dense single-line field inset reads cramped once line
+        // numbers and diagnostics are present.
+        if codeEditing.showsLineNumbers && self.layout.axis == .vertical {
+            return max(8, base)
+        }
+        return base
     }
 
     /// Draw a bundled SVG as an alpha mask. Falls back silently when no
