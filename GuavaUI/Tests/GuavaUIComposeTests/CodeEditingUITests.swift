@@ -81,7 +81,19 @@ struct CodeEditingUITests: GuavaUIComposeSerializedSuite {
         let list = DrawList()
         TextDiagnosticGeometry.draw(segments, origin: (10, 10), opacity: 1, theme: .defaultDark, list: list)
         #expect(!list.vertices.isEmpty)
-        #expect(list.vertices.allSatisfy { $0.posY >= 27 && $0.posY <= 50 })
+        // A 1pt antialiased stroke includes a transparent fringe outside the
+        // centerline. Each underline must still stay on its own visible row.
+        for segment in segments {
+            let color: Color = switch segment.diagnostic.severity {
+            case .error: Theme.defaultDark.colors.error
+            case .warning: Theme.defaultDark.colors.warning
+            case .information: Theme.defaultDark.colors.accent
+            case .hint: Theme.defaultDark.colors.onSurfaceMuted
+            }
+            let vertices = list.vertices.filter { $0.color & 0x00FF_FFFF == color.rgba8 & 0x00FF_FFFF }
+            #expect(!vertices.isEmpty)
+            #expect(vertices.allSatisfy { $0.posY >= 10 + segment.baselineY - 1.5 && $0.posY <= 10 + segment.baselineY + 3 })
+        }
         #expect(values.overlapping(emoji..<(emoji + 1)).map(\.message) == ["Emoji"])
     } }
 
