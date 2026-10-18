@@ -356,6 +356,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 switch pointerPhase {
                 case .down:
                     guard event.button == .left else { return .ignored }
+                    let local = Self.localPoint(x: event.x, y: event.y, in: node)
+                    // Chrome routes are global. Its expanded hit lane must
+                    // remain inside this viewport and every ancestor clip.
+                    guard Self.visibleViewportRect(for: node).contains(local) else { return .ignored }
                     // Pressing anywhere inside the container grabs content that
                     // is still coasting — the same "touch to stop" every
                     // scrollable surface has. Never consumes the event, so a
@@ -364,7 +368,6 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     guard eventPhase == .capture || eventPhase == .target else {
                         return .ignored
                     }
-                    let local = Self.localPoint(x: event.x, y: event.y, in: node)
                     let geometry = Self.scrollbarGeometry(for: node,
                                                           axes: axes,
                                                           trackThickness: trackThickness,

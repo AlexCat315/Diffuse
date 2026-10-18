@@ -10,6 +10,7 @@ public struct GalleryView: View {
   @State private var resetGeneration = 0
   @State private var textScale: Double? = 1
   @State private var navigationOpen = false
+  @State private var navigationWidth: Float = 240
 
   public init(initialPage: GalleryPage = .introduction, appearance: Appearance = .light) {
     _page = State(wrappedValue: initialPage)
@@ -25,6 +26,7 @@ public struct GalleryView: View {
       AdaptiveSidebar(
         "GuavaUI navigation", isPresented: $navigationOpen,
         selection: Binding(get: { page }, set: { if let selected = $0 { page = selected } }),
+        width: $navigationWidth,
         sections: navigationSections,
         configure: {
           $0.allowsEdgeSwipe = true

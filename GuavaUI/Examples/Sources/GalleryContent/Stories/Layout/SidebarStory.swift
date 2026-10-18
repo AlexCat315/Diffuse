@@ -17,6 +17,7 @@ struct SidebarStory: View {
     }
 
     var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
         StorySection("Workspace navigation", "Native SidebarItem icons follow IconTheme and Scale. Up / Down and Home / End select enabled destinations and reveal them inside the scrolling pane.") {
             Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 16) {
                 Button("Open as drawer", isEnabled: options.isEnabled) { drawerOpen = true }
@@ -57,6 +58,8 @@ struct SidebarStory: View {
                     .background(.surface).cornerRadius(.panelRadius).border(.border, width: 1)
             }
             NavigationDrawer("Guava workspace", isPresented: $drawerOpen, selection: $selection, sections: sections)
+        }
+        ResizableSidebarExample(options: options)
         }
     }
 

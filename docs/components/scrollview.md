@@ -3,8 +3,10 @@
 可裁剪的纵向、横向或双轴滚动容器。内容尺寸由真实布局测量；普通 ScrollView 不会自动把大量内容变成虚拟列表。
 
 ```swift
+@State var offset: CGPoint = .zero
+
 ScrollView(.vertical, scrollbarGutter: .stable,
-           scrollOffset: , accessibilityLabel: "Content",
+           scrollOffset: $offset, accessibilityLabel: "Content",
            onGeometryChange: { geometry in /* offset / viewportSize / contentSize */ }) {
     Box(direction: .column, alignItems: .stretch, spacing: 8) {
         rows
@@ -47,6 +49,8 @@ DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMod
 ## 嵌套与滚动条
 
 `.overlay` 将滚动条置于内容上方；`.stable` 在纵向 trailing 预留 12pt 槽，避免盖住尾部控件。只有内容溢出才绘制条；hover/拖动显示，离开淡出。软件自定义手势若产生越界位移，thumb 缩短且仍位于轨道内。
+
+内建 chrome 的扩大命中区限制在视口与祖先裁剪的交集内，不能抢占相邻按钮或 Sidebar 调宽分隔柄；捕获成功后，移出视口仍可继续拖拽和释放。`ScrollViewInputTests` 覆盖普通边界和祖先裁剪边界。祖先应用 `.allowsHitTesting(false)` 时立即取消该子树的指针捕获与焦点，恢复输入后仍可正常开始新操作；Sidebar 的调宽生命周期测试覆盖此路径。
 
 ScrollView / BoundedScrollView 默认 `.whenScrollable`：当前输入轴有内容溢出时，子视口在顶部和底部仍消费滚动，重复滚动或开启新手势都不会带动父级。指针移到父视口后，新手势可以正常滚动父级；已有 phase / 系统 momentum 流继续保留原消费者。没有溢出的轴允许事件交给父级，横向标签条不会截住纯纵向滚动。零增量的生命周期包不推测输入轴，也不会抢先锁定视口。
 

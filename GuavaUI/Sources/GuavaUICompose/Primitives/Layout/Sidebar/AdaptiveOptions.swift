@@ -18,6 +18,7 @@ public struct SidebarLayoutPolicy: Sendable, Hashable {
 
 public struct AdaptiveSidebarOptions {
   public var layout = SidebarLayoutPolicy()
+  public var resizing = SidebarResizeOptions()
   public var drawer = NavigationDrawerOptions()
   public var openLabel = "Open navigation"
   /// A rightward gesture beginning within the leading 24pt opens compact navigation.
@@ -34,16 +35,25 @@ struct SidebarGeometry {
   let dockedWidth: Float
   let panelWidth: Float
   let isModal: Bool
+  let resizeHandleWidth: Float
+  let resizeRange: ClosedRange<Float>
   var isVisible: Bool { mode != .compact || isModal }
 
-  init(width: Float, policy: SidebarLayoutPolicy, isPresented: Bool) {
+  init(width: Float, policy: SidebarLayoutPolicy, isPresented: Bool,
+       requestedWidth: Float? = nil, resizing: SidebarResizeOptions = .init(), handleExtent: Float = 7) {
     viewportWidth = max(0, width)
     mode =
       width < policy.compactMaximumWidth
       ? .compact : width < policy.expandedMinimumWidth ? .rail : .expanded
+    let initialRange = resizing.range(in: viewportWidth, handle: handleExtent)
+    resizeHandleWidth = mode == .expanded && requestedWidth != nil && initialRange.upperBound > initialRange.lowerBound
+      ? handleExtent : 0
+    resizeRange = resizing.range(in: viewportWidth, handle: resizeHandleWidth)
+    let requested = requestedWidth?.isFinite == true ? requestedWidth! : policy.sidebarWidth
+    let resolved = requestedWidth == nil ? policy.sidebarWidth : max(resizeRange.lowerBound, min(resizeRange.upperBound, requested))
     dockedWidth =
       mode == .expanded
-      ? min(policy.sidebarWidth, viewportWidth)
+      ? min(resolved, viewportWidth)
       : mode == .rail ? (policy.showsRailLabels ? 72 : 56) : 0
     isModal = mode != .expanded && isPresented
     panelWidth = isModal || mode == .compact ? min(320, max(0, viewportWidth - 56)) : dockedWidth

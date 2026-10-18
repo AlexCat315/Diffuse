@@ -87,7 +87,7 @@ struct AdaptiveShellTests {
         #expect(nodes(graph.tree.root).contains { $0.layoutNode?.textInputs?.text == "Actions: 1" })
         let scroll = try named("gallery-content", graph)
         #expect(scroll.frame.height > 250 && scroll.absoluteFrame.maxX <= CGFloat(width))
-        #expect(scroll.absoluteFrame.minX == (width < 600 ? 0 : width < 1000 ? 56 : 240))
+        #expect(scroll.absoluteFrame.minX == (width < 600 ? 0 : width < 1000 ? 56 : 247))
         for name in ["gallery-size", "gallery-text-scale", "gallery-reset"] {
           let frame = try named(name, graph).absoluteFrame
           #expect(frame.minX >= 0 && frame.maxX <= CGFloat(width))

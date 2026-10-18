@@ -5,6 +5,41 @@ import GuavaUIRuntime
 
 @Suite("ScrollView input", .serialized)
 struct ScrollViewInputTests: GuavaUIComposeSerializedSuite {
+    @Test("Global scrollbar hit lanes cannot capture adjacent controls or cross an ancestor clip", arguments: [false, true])
+    func chromeBounds(clipped: Bool) throws {
+        try GlobalTestLock.locked {
+            let old = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+            defer { TextEnvironmentHolder.current = old }
+            let context = PlatformInputContext()
+            try context.withCurrent {
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+                var calls = 0
+                let pane: Float = clipped ? 80 : 100
+                graph.install(root: Box(direction: .row, alignItems: .stretch) {
+                    Box(direction: .column, alignItems: .flexStart) {
+                        ScrollView(.vertical) { Box {}.frame(height: 600) }.frame(width: 100, height: 100)
+                    }.frame(width: pane).flex(0, shrink: 0).clipped()
+                    Button("Adjacent") { calls += 1 }.frame(width: 44, height: 100).flex(0, shrink: 0)
+                }.frame(width: pane + 44, height: 100))
+                defer { graph.install(root: EmptyView()) }
+                for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: pane + 44, height: 100) }
+                let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
+                    capture: context.pointerCapture, focusChain: context.focusChain)
+                let event = MouseButtonEvent(button: .left, x: pane + 2, y: 50, clicks: 1)
+                dispatcher.dispatch(.mouseButtonDown(event))
+                #expect(context.pointerCapture.target?.accessibility?.role == .button)
+                dispatcher.dispatch(.mouseButtonUp(event))
+                #expect(calls == 1 && context.pointerCapture.target == nil)
+                if !clipped {
+                    dispatcher.dispatch(.mouseButtonDown(.init(button: .left, x: 96, y: 50, clicks: 1)))
+                    #expect(context.pointerCapture.target?.accessibility?.role == .scrollArea)
+                    dispatcher.dispatch(.mouseButtonUp(.init(button: .left, x: 96, y: 150, clicks: 1)))
+                    #expect(context.pointerCapture.target == nil)
+                }
+            }
+        }
+    }
+
     private func nodes(_ node: Node?) -> [Node] {
         guard let node else { return [] }
         return [node] + node.children.flatMap { nodes($0) }

@@ -8,6 +8,7 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
   private let title: String
   private let presentation: Binding<Bool>?
   private let selection: Binding<ID?>
+  private let width: Binding<Float>?
   private let sections: [SidebarSection<ID>]
   private let options: AdaptiveSidebarOptions
   private let header: Header
@@ -17,7 +18,7 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
   @State private var focus = SidebarFocusHandoff()
 
   public init(
-    _ title: String, isPresented: Binding<Bool>? = nil, selection: Binding<ID?>,
+    _ title: String, isPresented: Binding<Bool>? = nil, selection: Binding<ID?>, width: Binding<Float>? = nil,
     sections: [SidebarSection<ID>], configure: (inout AdaptiveSidebarOptions) -> Void = { _ in },
     @ViewBuilder header: () -> Header, @ViewBuilder footer: () -> Footer,
     @ViewBuilder content: () -> Content
@@ -25,10 +26,12 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
     self.title = title
     presentation = isPresented
     self.selection = selection
+    self.width = width
     self.sections = sections
     var options = AdaptiveSidebarOptions()
     configure(&options)
     options.layout.validate()
+    options.resizing.validate()
     self.options = options
     self.header = header()
     self.footer = footer()
@@ -40,7 +43,9 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
       ContainerSizeReader { size in
         let geometry = SidebarGeometry(
           width: size.width > 0 ? Float(size.width) : surface.viewport.width,
-          policy: options.layout, isPresented: isPresented.wrappedValue)
+          policy: options.layout, isPresented: isPresented.wrappedValue,
+          requestedWidth: width?.wrappedValue, resizing: options.resizing,
+          handleExtent: surface.input.contains(.touch) ? surface.minimumControlExtent : 7)
         SidebarShellHost(geometry: geometry, focus: focus) {
           HorizontalSwipeHost(
             onSwipe: { if $0 == .right { isPresented.wrappedValue = true } },
@@ -62,6 +67,10 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
                 }.flex(0, shrink: 0)
                 content.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
               }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
+              SidebarResizeHandle(value: width, extent: geometry.resizeHandleWidth,
+                                  range: geometry.resizeRange, viewport: geometry.viewportWidth,
+                                  resolvedWidth: geometry.dockedWidth,
+                                  label: options.resizing.label, focus: focus)
               SidebarLayer(
                 geometry: geometry, focus: focus, dismissal: options.drawer.dismissal,
                 onDismiss: { isPresented.wrappedValue = false }
@@ -87,7 +96,7 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
             }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
           }.flex(1, shrink: 1, basis: 0)
         }.flex(1, shrink: 1, basis: 0)
-      }.flex(1, shrink: 1, basis: 0)
+      }.flex(1, shrink: 1)
     }
   }
 
@@ -153,12 +162,12 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
 
 extension AdaptiveSidebar where Header == EmptyView, Footer == EmptyView {
   public init(
-    _ title: String, isPresented: Binding<Bool>? = nil, selection: Binding<ID?>,
+    _ title: String, isPresented: Binding<Bool>? = nil, selection: Binding<ID?>, width: Binding<Float>? = nil,
     sections: [SidebarSection<ID>], configure: (inout AdaptiveSidebarOptions) -> Void = { _ in },
     @ViewBuilder content: () -> Content
   ) {
     self.init(
-      title, isPresented: isPresented, selection: selection, sections: sections,
+      title, isPresented: isPresented, selection: selection, width: width, sections: sections,
       configure: configure,
       header: { EmptyView() }, footer: { EmptyView() }, content: content)
   }

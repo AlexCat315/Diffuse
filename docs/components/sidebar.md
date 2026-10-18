@@ -61,8 +61,9 @@ Tab 进入目的地分组一次。上/下键选择并聚焦上一项/下一项�
 ```swift
 @State var selection: String? = "overview"
 @State var navigationOpen = false
+@State var navigationWidth: Float = 240
 
-AdaptiveSidebar("Workspace", isPresented: $navigationOpen, selection: $selection,
+AdaptiveSidebar("Workspace", isPresented: $navigationOpen, selection: $selection, width: $navigationWidth,
     sections: [SidebarSection("workspace", items: [
         SidebarItem("overview", "Overview") { $0.icon = UIIcons.Layout.dashboard },
         SidebarItem("files", "Files") { $0.icon = UIIcons.File.folder }
@@ -87,6 +88,19 @@ AdaptiveSidebar("Workspace", isPresented: $navigationOpen, selection: $selection
 
 验收：`AdaptiveSidebarTests` 覆盖 390/720/1280pt、100%/200% 字号、三类输入、明暗主题、状态/滚动/节点保留、焦点交接、关闭策略、边缘/左滑、动画反转与卸载，并通过真实 AI `query_ui_nodes` 检查可见性、模态输入权限及关闭后隐藏。`RetainedVisibilityTests` 验证无渐隐的隐藏槽位在直接和缓存绘制中均不残留文字或图标。Gallery `AdaptiveShellTests` 检查壳层重排、故事状态、搜索、目的地与两种主题入口；Sidebar 页提供窄/宽/触摸预览。设备触摸与读屏仍按 [自适应规范](adaptive-spec.md) 第 4 节取样。
 
-嵌套子菜单、可调整栏宽、项级操作/上下文菜单及行内可自定义的前后任意 View 插槽仍未实现，不能将当前 Sidebar 视为与 GPUI Kit Sidebar 完全等价。
+### 调整栏宽
 
-macOS 原生 DevTools 取样：实际窗口 1224 → 722 → 390pt，主内容前导位置 240 → 56 → 0pt；导航目的地、搜索与内容节点 ID 保留，紧凑抽屉实际为 320×720pt。原生按钮计数跨切换保持为 1；此记录验证窗口布局和事件路径，不代替设备触摸或动画帧时间验收。
+传入可选 `width: Binding<Float>`，常驻栏会提供可拖拽、可键盘聚焦的分隔柄。省略 binding 时仍由 `options.layout.sidebarWidth` 提供固定宽度；独立 `Sidebar` 的外部尺寸继续由调用方布局管理。
+
+`options.resizing` 是独立的 `SidebarResizeOptions` 组：`minimumWidth` 默认 180、`maximumWidth` 默认 480、`minimumContentWidth` 默认 320、辅助功能 `label` 默认 "Resize navigation"。非有限值恢复默认值，最大宽度不会小于最小宽度。
+
+- 栏宽是逻辑点，不随文字或 DPI 缩放。实际宽度受容器和内容最小空间限制，但布局本身不改写请求 binding；再次变宽恢复请求宽度。非法请求只在显示时回退，用户操作才写入夹紧后的有效值。
+- 分隔柄单独占用 7pt 指针区域，触摸或混合输入占 44pt；视觉为 1pt 细线，悬停/拖动与键盘焦点有反馈。它不覆盖导航项或内容操作。空间不足以调整时隐藏分隔柄并优先保留主内容。
+- 拖拽捕获指针，离开分隔柄仍跟随；Escape 恢复本次拖拽起始宽度。Left/Right 移动 16pt，Shift 移动 32pt，Home/End 到当前可用范围两端。RTL 的方向键和拖动遵循物理方向，增减辅助功能动作仍表示逻辑栏宽增减。
+- slider 语义提供完整名称、当前点数、说明，以及 increment/decrement/setValue。切到 Rail 或抽屉时不保留隐藏分隔柄的输入或捕获，焦点交给选中目的地或打开按钮；禁用交互、形态/输入变化和卸载都会结束捕获。
+
+`SidebarResizeTests` 覆盖容器三档与阈值往返、100%/200%、明暗主题、三种输入、RTL、草稿/焦点/滚动/节点保留、拖拽/取消/键盘/辅助功能、约束与非法请求及真实 AI 查询。Gallery 主壳层已采用；Sidebar 页另有独立预览和宽度重置按钮。嵌套子菜单、项级操作/上下文菜单及行内可自定义的前后任意 View 插槽仍未实现。
+
+本轮 macOS DevTools 验收通过自身 AI `query_ui_nodes`、输入桥和 Metal 渲染捕获完成：1280pt 主壳层拖拽 96pt 后从 240 变为 336pt，Right 后语义为 352pt，Home/End 分别到 180/480pt；Left 后 464pt，主内容从 471pt 开始。720/390pt 的可见调宽 slider 查询均为零。三档窗口的明暗主题、100%/200% 字体取样中，布局诊断均为零；200% 的嵌入式预览保持指定的 220pt 高度，目的地与后续内容不重叠。跨形态节点、草稿、焦点和滚动保留由同一实例的测试矩阵验证，三档原生窗口分别启动取样，不作为跨窗口节点保留证据。
+
+先前固定栏宽的 macOS 原生 DevTools 取样：实际窗口 1224 → 722 → 390pt，主内容前导位置 240 → 56 → 0pt；导航目的地、搜索与内容节点 ID 保留，紧凑抽屉实际为 320×720pt。原生按钮计数跨切换保持为 1；这些记录验证窗口布局和事件路径，不代替设备触摸或动画帧时间验收。

@@ -5,6 +5,7 @@ private import GuavaUIRuntime
 final class SidebarFocusHandoff {
   weak var navigation: Node?
   weak var trigger: Node?
+  weak var resizer: Node?
   private weak var previous: Node?
   private weak var chain: FocusChain?
   private var mode: SidebarMode?
@@ -20,7 +21,9 @@ final class SidebarFocusHandoff {
       self.isModal = isModal
     }
     guard mode != nil, mode != next, let chain, let focused = chain.focused else { return }
-    if contains(focused, in: navigation) {
+    if focused === resizer, next != .expanded {
+      destination = next == .compact && !isModal ? .trigger : .navigation
+    } else if contains(focused, in: navigation) {
       destination = next == .compact && !isModal ? .trigger : .navigation
     } else if contains(focused, in: trigger), next != .compact {
       destination = .navigation

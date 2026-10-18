@@ -61,6 +61,7 @@ let package = Package(
         .target(
             name: "GuavaUICompose",
             dependencies: ["GuavaUIRuntime", .product(name: "GuavaLogging", package: "Logging"),
+                           .product(name: "GuavaUIScene", package: "Portable"),
                            .product(name: "GuavaUIComposeCore", package: "Portable"),
                            .product(name: "EngineKernel", package: "Engine"),
                            .product(name: "RenderBackend", package: "Engine")],
