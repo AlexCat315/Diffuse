@@ -8,17 +8,31 @@ import GuavaUIRuntime
 public struct Toggle: View {
     public let isOn: Binding<Bool>
     public let isEnabled: Bool
+    public let label: String?
 
     public init(isOn: Binding<Bool>,
-                isEnabled: Bool = true) {
+                isEnabled: Bool = true,
+                label: String? = nil) {
         self.isOn = isOn
         self.isEnabled = isEnabled
+        self.label = label
+    }
+
+    public init(_ label: String,
+                isOn: Binding<Bool>,
+                isEnabled: Bool = true) {
+        self.init(isOn: isOn, isEnabled: isEnabled, label: label)
     }
 
     public var body: some View {
-        _StatefulBoolControl(isOn: isOn,
-                             isEnabled: isEnabled,
-                             variant: .toggle)
+        let control = _StatefulBoolControl(isOn: isOn,
+                                           isEnabled: isEnabled,
+                                           variant: .toggle)
+        if let label {
+            BoolControlLabel(label: label, isEnabled: isEnabled, control: control)
+        } else {
+            control
+        }
     }
 }
 
@@ -28,24 +42,62 @@ public enum CheckboxState: Sendable, Equatable { case off, on, mixed }
 public struct Checkbox: View {
     public let state: Binding<CheckboxState>
     public let isEnabled: Bool
+    public let label: String?
 
-    public init(state: Binding<CheckboxState>, isEnabled: Bool = true) {
+    public init(state: Binding<CheckboxState>, isEnabled: Bool = true, label: String? = nil) {
         self.state = state
         self.isEnabled = isEnabled
+        self.label = label
     }
 
     public init(isOn: Binding<Bool>,
-                isEnabled: Bool = true) {
+                isEnabled: Bool = true,
+                label: String? = nil) {
         self.state = Binding(get: { isOn.wrappedValue ? .on : .off },
                              set: { isOn.wrappedValue = $0 == .on })
         self.isEnabled = isEnabled
+        self.label = label
+    }
+
+    public init(_ label: String,
+                state: Binding<CheckboxState>,
+                isEnabled: Bool = true) {
+        self.init(state: state, isEnabled: isEnabled, label: label)
+    }
+
+    public init(_ label: String,
+                isOn: Binding<Bool>,
+                isEnabled: Bool = true) {
+        self.init(isOn: isOn, isEnabled: isEnabled, label: label)
     }
 
     public var body: some View {
-        _StatefulBoolControl(isOn: Binding(get: { state.wrappedValue == .on },
+        let control = _StatefulBoolControl(isOn: Binding(get: { state.wrappedValue == .on },
                                           set: { state.wrappedValue = $0 ? .on : .off }),
                              isEnabled: isEnabled,
                              variant: state.wrappedValue == .mixed ? .mixedCheckbox : .checkbox)
+        if let label {
+            BoolControlLabel(label: label, isEnabled: isEnabled, control: control)
+        } else {
+            control
+        }
+    }
+}
+
+private struct BoolControlLabel<Control: View>: View {
+    let label: String
+    let isEnabled: Bool
+    let control: Control
+
+    var body: some View {
+        Row(alignment: .center, spacing: 8) {
+            control.compositionLocal(ActionControlAccessibility.label, label)
+            Text(label)
+                .font(.body)
+                .foregroundColor(isEnabled ? .onSurface : .onSurfaceDisabled)
+                .accessibilityHidden()
+        }
+        .frame(minWidth: 0)
     }
 }
 
@@ -108,6 +160,7 @@ struct BoolControlHost: _PrimitiveView {
         node.accessibility = AccessibilitySemantics(variant == .toggle ? .toggle : .checkbox) {
             $0.state.isEnabled = isEnabled; $0.state.isSelected = isOn.wrappedValue
             $0.value = variant == .mixedCheckbox ? "mixed" : isOn.wrappedValue ? "1" : "0"
+            if let label = node.compositionValue(of: ActionControlAccessibility.label) { $0.label = label }
         }
         node.accessibilityActions = AccessibilityActions()
         let toggle = { [weak node] in

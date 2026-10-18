@@ -82,9 +82,10 @@ struct CheckboxStory: View {
     @State private var mixed: CheckboxState = .mixed
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Selection", "Tab focuses the checkbox; Space and Return activate it. Dragging outside cancels activation.") {
-                Row(alignment: .center, spacing: 10) { Checkbox(isOn: $checked, isEnabled: options.isEnabled); Text("Accept the terms") }
-                Row(alignment: .center, spacing: 10) { Checkbox(state: $mixed, isEnabled: options.isEnabled); Text("Partially selected collection: \(String(describing: mixed))") }
+            StorySection("Selection", "Tab focuses the checkbox; Space and Return activate it. The label stays with the box and the full name is available to assistive clients.") {
+                Checkbox("Accept the terms", isOn: $checked, isEnabled: options.isEnabled)
+                Checkbox("Partially selected collection: \(String(describing: mixed))",
+                         state: $mixed, isEnabled: options.isEnabled)
                 Button("Reset mixed state") { mixed = .mixed }.buttonStyle(.ghost)
             }
             StorySection("Disabled", "Disabled controls are omitted from keyboard focus traversal.") {
@@ -105,9 +106,11 @@ struct ToggleStory: View {
     @State private var telemetry = false
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Settings", "A switch owns activation and animation; the application owns the value.") {
-                Row(alignment: .center, spacing: 12) { Toggle(isOn: $notifications, isEnabled: options.isEnabled); Text("Notifications: \(notifications ? "On" : "Off")") }
-                Row(alignment: .center, spacing: 12) { Toggle(isOn: $telemetry, isEnabled: options.isEnabled); Text("Usage analytics: \(telemetry ? "On" : "Off")") }
+            StorySection("Settings", "A switch owns activation and animation; the label slot keeps the setting name beside it, and the application owns the value.") {
+                Toggle("Notifications", isOn: $notifications, isEnabled: options.isEnabled)
+                Toggle("Usage analytics", isOn: $telemetry, isEnabled: options.isEnabled)
+                Text("Notifications: \(notifications ? "On" : "Off") · Usage analytics: \(telemetry ? "On" : "Off")")
+                    .font(.caption).foregroundColor(.onSurfaceMuted)
             }
             StorySection("Disabled", "The value stays visible while the setting cannot be changed.") {
                 Row(alignment: .center, spacing: 16) { Toggle(isOn: .constant(true), isEnabled: false); Toggle(isOn: .constant(false), isEnabled: false) }

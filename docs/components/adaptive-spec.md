@@ -152,9 +152,10 @@
 **Toggle / Checkbox / RadioGroup**
 
 - 外观：开关 track 38×20、方框 18pt；状态层用 composited；选中/开启走 accent 语义色。`[已实现]`
+- Label：`Toggle("Notifications", isOn:)` / `Checkbox("Accept the terms", isOn:)` 提供 trailing 文本槽；文本用于视觉与控件辅助功能名称，不额外创建可聚焦节点。`[已实现]`
 - 手机：行内 label 与控件并排；label 换行时控件顶部对齐；触摸时绘制缩小到 authored 尺寸但命中 ≥ 44pt。`[已实现]`
 - 平板 / 桌面：hover 状态只在 pointer 面出现；密度恢复 authored 24 / 18pt。`[已实现]`
-- 交互与验收：键盘 Space / Return；RadioGroup 单一 Tab 停靠 + 方向键循环；辅助功能 role=checkbox / toggle / radio，暴露 value 与 selected。焦点环统一为仅键盘焦点可见：Toggle 的开关/复选框绘制与 Slider/RangeSlider 的 style 快照都使用 `focused && isFocusVisible`，指针点击只移动焦点目标、不画环。`[已实现]`。验收：`FocusRingTests`（Button、Toggle、Slider、RangeSlider 的 ring 顶点）、`TouchDensityTests`（checkbox/toggle）、Gallery `--component checkbox|toggle`。
+- 交互与验收：键盘 Space / Return；RadioGroup 单一 Tab 停靠 + 方向键循环；辅助功能 role=checkbox / toggle / radio，暴露 value 与 selected。焦点环统一为仅键盘焦点可见：Toggle 的开关/复选框绘制与 Slider/RangeSlider 的 style 快照都使用 `focused && isFocusVisible`，指针点击只移动焦点目标、不画环。`[已实现]`。验收：`FocusRingTests`（Button、Toggle、Slider、RangeSlider 的 ring 顶点）、`TouchDensityTests`（checkbox/toggle）、`BoolControlLabelTests`（label 槽与单一可访问控件）、Gallery `--component checkbox|toggle`。
 
 ### 3.2 连续与离散值
 

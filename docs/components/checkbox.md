@@ -22,6 +22,7 @@
 
 ```swift
 Checkbox(isOn: $enabled)
+Checkbox("Accept the terms", isOn: $enabled)
 Checkbox(isOn: $enabled, isEnabled: false)
 ```
 
@@ -29,6 +30,7 @@ Checkbox(isOn: $enabled, isEnabled: false)
 | ---- | ---- | ---- |
 | `isOn` | 必填 | `Binding<Bool>` |
 | `isEnabled` | `true` | `false` 时禁用交互并使用禁用颜色 |
+| `label` | `nil` | trailing 文本槽；提供后控件辅助功能 label 使用该文本，不额外创建可聚焦节点 |
 
 ## Tokens
 
@@ -60,9 +62,11 @@ Checkbox(isOn: $enabled, isEnabled: false)
 
 ✅ 应当：
 - 在表格、列表、批量选择这类离散布尔场景使用 `Checkbox`
+- 简单行使用 `Checkbox("Accept the terms", isOn:)`；标签用于显示与辅助功能名称
 - 在 Inspector 的紧凑布尔行里优先用 `Checkbox`，如果视觉上不需要开关轨道
 
 ❌ 不应：
+- 在已有 label 的行里再传 `label`，产生重复文案
 - 把 `Checkbox` 当三态控件使用；当前只有 true / false
 - 用 `Button("Yes" / "No")` 伪装勾选框
 

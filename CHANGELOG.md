@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `Toggle` / `Checkbox` 新增 label 槽：`Toggle("Notifications", isOn:)` / `Checkbox("Accept the terms", isOn:)` 将文本放在控件 trailing，控件辅助功能 label 使用该文本且不新增可聚焦节点。`BoolControlLabelTests` 覆盖 label、单一 toggle/checkbox 语义与激活；Gallery Toggle/Checkbox 页改为带标签设置行。补齐 `adaptive-spec.md`、`gaps.md`、[Toggle](docs/components/toggle.md) 与 [Checkbox](docs/components/checkbox.md)。
+
 - `CommandPalette` 新增 `footer` `@ViewBuilder` 初始化器：自定义 footer 替换默认快捷键提示，保留顶部 1pt 分隔线、搜索/排序/最近使用/执行路径与面板几何。`CommandPaletteFooterTests` 覆盖自定义/默认 footer；Gallery Command Palette 页新增 “Open with project footer” 与 Aurora workspace footer。补齐 [CommandPalette](docs/components/commandpalette.md)、`adaptive-spec.md` 与 `gaps.md`。
 
 - `StatusBarText` 文本/detail 单行截断，leading 让位给 trailing 连接状态，完整内容保留在辅助功能 label/value；`DefaultPanelStyle` 标题单行截断并为 accessory 留位。`StatusBarPanelTruncationTests` 在 320pt 状态栏与 240/600pt 面板上验证截断行数、宽度与 a11y；Gallery StatusBar/Panel 页新增长分支与长标题示例，DevTools 720×820 实测状态文字单行截断、面板标题 203pt 且 accessory/连接状态完整可见。补齐 `adaptive-spec.md`、`gaps.md` 与 [Panel](docs/components/panel.md)。

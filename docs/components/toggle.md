@@ -21,6 +21,7 @@
 
 ```swift
 Toggle(isOn: $enabled)
+Toggle("Notifications", isOn: $enabled)
 Toggle(isOn: $enabled, isEnabled: false)
 ```
 
@@ -28,6 +29,7 @@ Toggle(isOn: $enabled, isEnabled: false)
 | ---- | ---- | ---- |
 | `isOn` | 必填 | `Binding<Bool>` |
 | `isEnabled` | `true` | `false` 时禁用交互并使用禁用颜色 |
+| `label` | `nil` | trailing 文本槽；提供后控件辅助功能 label 使用该文本，不额外创建可聚焦节点 |
 
 ## Tokens
 
@@ -60,10 +62,11 @@ Toggle(isOn: $enabled, isEnabled: false)
 
 ✅ 应当：
 - 在 `PropertyGrid` 这类已有外部标签的场景直接使用 `Toggle(isOn:)`
+- 简单设置行使用 `Toggle("Notifications", isOn:)`；标签只负责显示与辅助功能名称
 - 用 `isEnabled: false` 表达只读布尔状态，而不是手动禁用命中
 
 ❌ 不应：
-- 把 `Toggle` 当作带内置文本标签的复合行；标签应由上层布局提供
+- 在已有 label 的行里再传 `label`，产生重复文案
 - 继续用 `Button("On" / "Off")` 充当布尔输入
 
 ## Known issues / TODO
