@@ -17,6 +17,8 @@ NavigationDrawer("工作区", isPresented: $navigationOpen,
 
 自定义 `header` 与 `footer` 的初始化器可插入账户信息、说明和底部操作；标准标题/关闭按钮始终位于最上方。
 
+`expanded` 可选传入 `Binding<Set<ID>>`：抽屉、常驻栏和 Rail 可共享同一嵌套展开会话；省略时各呈现自己持有展开状态，关闭抽屉再打开仍保留本地集合。
+
 ## 尺寸与输入
 
 宽度为 `min(320, max(0, 实际窗口宽度 − 56))`，高度填满窗口，从 leading 边缘进入。计算来自 Portal 所属窗口的实际布局，不使用调用处卡片尺寸或可能过期的 surface width。打开时改变宽高、主题、字号或输入集合，会重新计算尺寸并保留当前节点、选择及仍挂载的 header/footer 状态。遮罩使用主题 `stateLayerSelected`；背景接收不到输入。

@@ -13,6 +13,8 @@ NavigationRail(selection: $destination, items: [
 
 带 `header` / `footer` 的初始化器提供顶部、底部任意 View 插槽；两者独立占位，中间目的地列表在有限高度内滚动。应用提供有界高度，Rail 自己确定宽度。槽位中的自定义操作应提供完整名称并保持可用的命中尺寸。
 
+`expanded` 可选传入 `Binding<Set<ID>>`：`SidebarItem.children` 形成嵌套分组时，Rail 与普通 Sidebar 共享同一展开会话；省略时 Rail 自己持有本地展开集合。
+
 ## 外观与输入
 
 选中目的地有 2pt accent 侧向指示条和主题 navigation 选中背景。行高至少 44pt，带文字形态使用 caption 并自然换行；200% 字号增加行高，不把文字压回固定高度。图标沿用 IconTheme 与缩放策略，解析一次后限制在轨道内部宽度，避免大型语义图标撑破固定轨道。缺少图标的目的地使用通用文件图标。
