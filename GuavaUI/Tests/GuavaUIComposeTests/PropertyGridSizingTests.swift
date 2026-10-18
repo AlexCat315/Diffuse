@@ -49,7 +49,10 @@ struct PropertyGridSizingTests {
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let harness = ControlledHarness()
         graph.install(root: harness)
-        let header = try #require(firstNode(tree.root) { registry.handlers(for: $0).key != nil })
+        let header = try #require(firstNode(tree.root) {
+            $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "property-section-header-component"
+                && registry.handlers(for: $0).key != nil
+        })
         _ = registry.handlers(for: header).key?(KeyEvent(scancode: 40, keycode: 0,
                                                        modifiers: [], isRepeat: false), .target)
         graph.recomposer.commitAll()

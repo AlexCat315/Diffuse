@@ -207,7 +207,6 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // it always sees the current callbacks instead of a stale one.
         let motion = _ScrollViewAttachmentKeys.motionAnimator(for: node,
                                                              physics: Self.resolvedPhysics(on: node))
-        node.isFocusable = true
         let supportsTouchDrag = node.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch)
         if node.attachments[_ScrollViewAttachmentKeys.pendingOffset] == nil {
             if node.prefersReducedMotion { motion.finishImmediately() }
@@ -250,6 +249,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             guard !Self.isLayoutSuppressed(node) else { return }
             Self.refreshScrollableContentSize(on: node)
             Self.publishScrollRange(to: motion, on: node)
+            ScrollKeyboardFocus.update(node, canScroll: motion.maximumOffset.x > 0.5 || motion.maximumOffset.y > 0.5)
             if let desired = node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.pendingOffset) as? CGPoint {
                 motion.adopt(desired)
             }

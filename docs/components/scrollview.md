@@ -37,10 +37,12 @@ DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMod
 
 - 触摸面（`UIEnvironment.input` 含 `.touch`）可在内容区拖动：按下只登记起点，不抢子控件点击；超过 4pt 阈值后捕获指针，用 `ScrollAnimator.move(to:)` 跟随，释放交给 `settle()` 进入惯性与边界回弹。
 - 指针面（鼠标/触控板）不启用内容拖动，避免与文本选择、按钮拖拽冲突；鼠标仍走 wheel/滚动条。
-- ScrollView 节点是键盘 Tab 停靠点。聚焦后 ArrowUp/Down/Left/Right 行滚动 40pt，PageUp/PageDown 滚一屏的 90%，Home/End 到两端；只处理实际可滚动的轴，无位移时不吞事件。
+- 有实际溢出且没有可 Tab 到达的子控件时，ScrollView 提供键盘 Tab 停靠点；菜单、表格、表单等已有内部操作入口时不额外抢占焦点。聚焦视口后 ArrowUp/Down/Left/Right 行滚动 40pt，PageUp/PageDown 滚一屏的 90%，Home/End 到两端；只处理实际可滚动的轴，无位移时不吞事件。
 - 键盘滚动是立即定位，不启动惯性；触摸释放才走 `settle()`。`.reducedMotion()` 仍会关闭框架添加的运动。
 
 独立 `Scrollbar` companion 已提供可聚焦 thumb（见 [Scrollbar](scrollbar.md)）；ScrollView 内建 chrome 不会自动叠加它，带时长的程序滚动仍待补。
+
+`ScrollKeyboardFocusTests` 验证无溢出 → 只读溢出 → 添加子按钮 → 恢复只读的焦点归属变化。`AppBarTests`、`MenuHierarchyTests`、`SelectionFieldTests` 与 `ProductInteractionRegressionTests` 验证滚动包装不增加工具栏停靠、不抢菜单初始焦点，选择/关闭仍回到原入口。零尺寸的内部视口不进入键盘链；实际溢出的只读视口保留 Page/Home/End 滚动入口。
 
 ## 嵌套与滚动条
 

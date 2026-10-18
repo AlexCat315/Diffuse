@@ -205,15 +205,16 @@ struct ProductInteractionRegressionTests: GuavaUIComposeSerializedSuite {
             dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(point.midX), y: Float(point.midY), deltaX: 0, deltaY: 0)))
             settle(graph)
             #expect(context.focusChain.focused === previous)
+            let cardID = try #require(trigger.firstResource(PortalResource.self)?.entryID)
             let action = try #require(buttons(graph).first { $0 !== previous })
             context.focusChain.focus(action); settle(graph)
             #expect(context.focusChain.focused === action && context.focusChain.accessoryRoots.count == 1)
             dispatcher.dispatch(.keyDown(key(Scancode.return))); settle(graph)
-            #expect(actions == 1 && !store.entries.isEmpty)
+            #expect(actions == 1 && store.contains(cardID))
             dispatcher.dispatch(.keyDown(key(Scancode.escape))); settle(graph)
-            #expect(store.entries.isEmpty && context.focusChain.focused === previous)
+            #expect(!store.contains(cardID) && context.focusChain.focused === previous)
             AnimatorScheduler.current.tick(deltaTime: 1); settle(graph)
-            #expect(store.entries.isEmpty)
+            #expect(!store.contains(cardID) && trigger.firstResource(PortalResource.self)?.entryID == nil)
         }
     }
 

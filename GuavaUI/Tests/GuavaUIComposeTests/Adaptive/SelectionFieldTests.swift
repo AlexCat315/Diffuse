@@ -178,7 +178,7 @@ struct SelectionFieldTests: GuavaUIComposeSerializedSuite {
             @MainActor func count() throws -> Int {
                 let response = diagnostic.handleReadRequest(.init(type: "diagnostics.call", payload: .object([
                     "name": .string("query_ui_nodes"), "arguments": .object([
-                        "text": .string(Self.placeholder), "role": .string("button"), "visible_only": .bool(true), "input_enabled_only": .bool(true)
+                        "text": .string(Self.placeholder), "role": .string("comboBox"), "visible_only": .bool(true), "input_enabled_only": .bool(true)
                     ])
                 ])))
                 #expect(response.type == "diagnostics.call.ok")
