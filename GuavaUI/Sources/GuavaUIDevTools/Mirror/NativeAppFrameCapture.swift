@@ -25,7 +25,7 @@ public final class NativeAppFrameCapture {
             }
             if target?.descriptor.width != size.x || target?.descriptor.height != size.y {
                 target = try TextureResource(device: device, descriptor: TextureDescriptor(width: size.x,
-                    height: size.y, format: .bgra8Unorm, usage: [.colorTarget, .transferSource]))
+                    height: size.y, format: .bgra8Unorm, usage: [.colorTarget, .transferSource, .sampled]))
             }
             guard let target else { throw RHIError.outOfMemory }
             try renderer.synchronizeTextures(from: source)
@@ -35,7 +35,8 @@ public final class NativeAppFrameCapture {
                 let commands = CommandBuffer()
                 let frame = try renderer.record(list: list, into: commands,
                     target: RenderColorTarget(texture: target.texture, loadAction: .clear(SIMD4(0, 0, 0, 1))),
-                    viewport: NativeUIViewport(pixels: size, logical: logical))
+                    viewport: NativeUIViewport(pixels: size, logical: logical),
+                    backdropSource: renderer.supportsBackdrop ? target.texture : nil)
                 try device.submit(commands)
                 frame.didSubmit()
             }

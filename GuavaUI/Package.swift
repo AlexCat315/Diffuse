@@ -186,6 +186,7 @@ let package = Package(
             dependencies: [
                 "GuavaUIDevTools",
                 "GuavaUIRuntime",
+                .product(name: "NativeRHI", package: "Engine"),
             ]
         ),
     ]

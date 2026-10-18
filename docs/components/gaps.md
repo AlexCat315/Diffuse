@@ -181,7 +181,7 @@ FAB 不作为待补组件：按[视觉基线](adaptive-spec.md#2-视觉与密度
 
 1. 每个新组件必须给出 390（触摸）/ 720（混合）/ 1280（指针）三档验收记录，并进入 `GalleryCatalog` 与 `AdaptiveControlExamples.supports`（或提供等价预览）；
 2. 列表类能力必须包含触摸（滑动/长按/拖动）与键盘/辅助功能等效入口的成对断言；不允许存在只能触摸完成的动作。
-3. 每项经 [DevTools AI 闭环](adaptive-spec.md#devtools-ai-闭环无需-computer-use)执行真实输入、查询结果（延迟输入值用指定 node_id + include_value 显式读取）、状态变化后的真实控件角色，并查看镜像画面，记录命令/测试名、实际尺寸和视觉结论；测试入口缺失或不好用时先完善再验收。完成代码、Gallery、测试与文档后单独提交 Git。
+3. 每项经 [DevTools AI 闭环](adaptive-spec.md#devtools-ai-闭环无需-computer-use)执行真实输入、查询结果（延迟输入值用指定 node_id + include_value 显式读取）、状态变化后的真实控件角色，并查看镜像画面，记录命令/测试名、实际尺寸和视觉结论；测试入口缺失或不好用时先完善再验收。原生镜像支持与窗口一致的 backdrop 模糊，并有 Metal 像素及 resize 回归。完成代码、Gallery、测试与文档后单独提交 Git。
 
 ## 6. 参考对照（缺失组件）
 

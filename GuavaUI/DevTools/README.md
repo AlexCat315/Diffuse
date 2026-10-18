@@ -272,6 +272,10 @@ Touch surfaces use GuavaUI's unified pointer dispatcher, including real touch
 scroll/refresh/swipe recognition and 44pt hit regions. They test component
 behavior; platform IME and physical device adapters still need device acceptance.
 The mirror replays the application's draw list and excludes OS compositor chrome.
+Its native render target is sampleable and supplies the renderer's backdrop
+source, so frosted menus and other backdrop effects match the application's
+rendering. `MirrorBackdropTests` verifies actual Metal pixels before and after
+capture resize.
 Native display links paused by hidden/occluded windows report themselves
 unavailable, so the host's deadline clock still advances animations. This keeps
 an AI-opened modal from remaining transparent when another test window covers
