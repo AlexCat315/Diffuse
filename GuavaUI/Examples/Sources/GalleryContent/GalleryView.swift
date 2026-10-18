@@ -8,13 +8,15 @@ public struct GalleryView: View {
   @State private var appearance: Appearance
   @State private var options = GalleryOptions()
   @State private var resetGeneration = 0
-  @State private var textScale: Double? = 1
+  @State private var textScale: Double?
   @State private var navigationOpen = false
   @State private var navigationWidth: Float = 240
 
-  public init(initialPage: GalleryPage = .introduction, appearance: Appearance = .light) {
+  public init(initialPage: GalleryPage = .introduction, appearance: Appearance = .light,
+              textScale: Double = 1) {
     _page = State(wrappedValue: initialPage)
     _appearance = State(wrappedValue: appearance)
+    _textScale = State(wrappedValue: min(2, max(1, textScale.isFinite ? textScale : 1)))
   }
 
   public var currentPage: GalleryPage { page }

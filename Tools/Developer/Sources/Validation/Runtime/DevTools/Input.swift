@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Port of `scripts/input-ui-devtools.swift`: drive the host's input dispatcher
 /// through DevTools, without OS automation.
 enum InputUI {
-  static let usage = "guava-dev devtools input-ui PORT --click-node NODE_ID | --input JSON_OR_@FILE"
+  static let usage = "guava-dev devtools input-ui PORT --click-node NODE_ID | --input JSON_OR_@FILE (events may include {\"kind\":\"wait\",\"milliseconds\":100})"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -27,7 +27,7 @@ enum InputUI {
           throw ToolError.message("Invalid DevTools endpoint")
         }
         let connection = DevToolsSocket(
-          url: endpoint, timeout: 15, maximumMessageSize: 32 * 1024 * 1024)
+          url: endpoint, timeout: 30, maximumMessageSize: 32 * 1024 * 1024)
         defer { connection.close() }
 
         var sequence = 0
@@ -61,7 +61,15 @@ enum InputUI {
         }
 
         _ = try await request("mirror.start", ["fps": 1, "quality": 0.5])
-        for event in events { _ = try await request("mirror.input", event) }
+        for event in events {
+          if event["kind"] as? String == "wait", let delay = event["milliseconds"] as? Double {
+            // Keep the same connection and pointer capture while the host
+            // composes, lays out and renders intermediate gesture frames.
+            try await Task.sleep(for: .milliseconds(delay))
+          } else {
+            _ = try await request("mirror.input", event)
+          }
+        }
         // A host-inbox read keeps the connection alive until the preceding
         // input deliveries have reached the host.
         _ = try await request(
@@ -103,7 +111,7 @@ enum InputUI {
   }
 
   /// Validates an inline or `@FILE` array of 1–256 input events.
-  private static func loadEvents(_ raw: String) throws -> [[String: Any]] {
+  static func loadEvents(_ raw: String) throws -> [[String: Any]] {
     let bytes =
       try raw.hasPrefix("@")
       ? Fs.read(URL(fileURLWithPath: String(raw.dropFirst())))
@@ -113,7 +121,7 @@ enum InputUI {
     else {
       throw ToolError.message("Input must be a JSON array of 1–256 events, at most 256 KiB")
     }
-    let kinds = ["pointerMove", "pointerDown", "pointerUp", "wheel", "keyDown", "keyUp", "text"]
+    let kinds = ["pointerMove", "pointerDown", "pointerUp", "wheel", "keyDown", "keyUp", "text", "wait"]
     func supported(_ value: Any, depth: Int = 0) -> Bool {
       if depth > 4 { return false }
       if let number = value as? NSNumber { return number.doubleValue.isFinite }
@@ -126,11 +134,17 @@ enum InputUI {
       }
       return false
     }
+    var totalWait = 0.0
     guard
       input.allSatisfy({ event in
         guard let kind = event["kind"] as? String, kinds.contains(kind) else { return false }
+        if kind == "wait" {
+          guard event.count == 2, let delay = event["milliseconds"] as? Double,
+            delay.isFinite, delay > 0, delay <= 2_000 else { return false }
+          totalWait += delay
+        }
         return event.values.allSatisfy { supported($0) }
-      })
+      }), totalWait <= 10_000
     else {
       throw ToolError.message("Input contains an unsupported kind, value or oversized string")
     }

@@ -514,6 +514,14 @@ guava showcase gallery --android --component NAME
 - 输入取样：桌面默认指针 + 键盘；触屏设备默认触摸 + 键盘；混合形态（平板 + 触控板）另行验证 hover 与 44pt 并存。
 - 性能基线：`--benchmark [--no-vsync]` + `GUAVA_FPS_LOG=1`；滚动与输入不得因重排产生持续重组（`graph.recomposer.hasPending == false`）。
 
+#### DevTools AI 闭环（无需 Computer Use）
+
+桌面 Gallery 可用 `--width 390|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口，配合 `--dark`、`--text-scale 2`、`--rtl`、`--reduce-motion` 取样。`GUAVA_DEVTOOLS=1 GUAVA_DEVTOOLS_PORT=9231` 开启该窗口的开发服务。启动设置只覆盖临时 surface，viewport 仍随真实窗口更新；宿主可能限制窗口高度，实际尺寸以镜像元数据为准。
+
+使用 `guava-dev devtools query-ui PORT query_ui_nodes JSON` 定位可见且可输入的节点，`input-ui PORT --click-node ID` 或 `--input @events.json` 操控，然后重新查询值/展开态/几何，并以 `capture-ui PORT OUTPUT.jpg` 生成真实 DrawList 镜像，直接检查明暗主题、间距、层次、对齐、截断和重叠。命令、完整示例与画面边界见 [DevTools AI 验收](../../GuavaUI/DevTools/README.md#ai-driven-component-acceptance)。输入已送达不等于组件测试通过；截图存在也不等于视觉验收通过，必须实际查看。
+
+拖拽序列可插入 `{"kind":"wait","milliseconds":100}`，在同一连接中保留捕获并等待真实重组/布局/绘制；单次 ≤2000ms、合计 ≤10000ms。先在目标内移动越过识别阈值，再拖出边界。touch surface 使用组件实际的统一输入分发，覆盖下拉/滑动/拖动；系统 IME 与设备适配器仍需真机验收。
+
 ### 4.3 自动化
 
 | 范围 | 入口 |
@@ -598,7 +606,7 @@ NavigationStack 已完成：`NavigationStack(path:root:destination:)` 以 caller
 
 列表滑动操作已完成：`SwipeList` 在触摸面左滑露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；横向阈值 8pt，纵向手势仍交给 `ScrollView`。`ScrollView` 的触摸拖动改为轴感知阈值，避免垂直滚动抢占横向滑动。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口；行选择、键盘 Up/Down/Home/End/Return 与辅助功能 activate 走 `SelectionKeyHost`。`SwipeListTests` 覆盖触摸滑动与 44pt 操作、Actions 按钮非滑动路径、纵向滚动不误触、禁用态与指针面不响应滑动。Gallery `swipeList` 页与自适应预览已接入；DevTools 在 720×820 点击 Inbox 行 Actions 后查询到 Archive（74×52）和 Delete，执行 Archive 后 `swipe-log` 为 “Archived Inbox”。当前为全量挂载的非虚拟列表，RTL 滑动方向仍待补。
 
-列表下拉刷新已完成：`List`/`VirtualStack` 的 `RefreshOptions` 在 `ScrollView` 负向 overscroll 越过阈值时只触发一次；`isRefreshing` 控制顶部 36pt inset 与指示器，清除后内容回弹。指示器使用 `Spinner`，reducedMotion 下冻结；Cmd+R/Ctrl+R 在列表子树内触发同一 action。`ScrollView` 仍保持原始根节点，指示器以绝对定位放进滚动内容，因此列表宽度不被包装层压缩。`RefreshTests` 覆盖触摸下拉只触发一次、指示器保持到绑定清除、Cmd+R 与重复按键去重。Gallery `refreshableList` 页与自适应预览已接入；DevTools 在 720×820 点击 `Refresh now` 后查询到 `Refreshing`，计数变为 `Refreshes: 1`，3 秒后指示器移除且列表恢复宽度 548pt。触摸下拉的宿主实测受 DevTools pointer 输入限制，由单元测试覆盖。
+列表下拉刷新已完成：`List`/`VirtualStack` 的 `RefreshOptions` 在 `ScrollView` 负向 overscroll 越过阈值时只触发一次；`isRefreshing` 控制顶部 36pt inset 与指示器，清除后内容回弹。指示器使用 `Spinner`，reducedMotion 下冻结；Cmd+R/Ctrl+R 在列表子树内触发同一 action。`ScrollView` 仍保持原始根节点，指示器以绝对定位放进滚动内容，因此列表宽度不被包装层压缩。`RefreshTests` 覆盖触摸下拉只触发一次、嵌套列表优先于父级识别拖动、指示器保持到绑定清除、Cmd+R 与重复按键去重。Gallery `refreshableList` 页与自适应预览已接入；2026-10-18 使用 `--width 390 --height 820 --input touch`，DevTools 在列表内从 (180,540) 经 (180,600) 拖到 (180,800)，AI 查询 `refresh-count` 从 `Refreshes: 0` 变为 `Refreshes: 1`，mirror 确认刷新胶囊、圆角卡片和选择行均正常，外层内容没有被拖走。测试暴露并修复了父 ScrollView 在 capture 阶段抢走内层触摸手势的问题。
 
 第 6 项控制标题截断已完成：`Button`、`Link`、`MenuButton` 的字符串入口与 `DatePicker` 触发标题统一使用 `Text.truncatingTail()`；Button/Link 默认把完整标题作为 tooltip，MenuButton 可通过 `tooltip:` 把完整标题放入 trigger description，DatePicker 的标题额外附加完整 tooltip。`Select`/`Combobox` 原有单行省略与 trigger description 保持不变；菜单项仍按文档自然换行，不属于控制标题。`TruncationTests` 在 150/170pt 约束下验证 button/link/menu/date 标题 `clipsToBounds` 且辅助功能名称完整。Gallery `button` 页新增 “Long labels” 分区与 `long-button`/`long-link`/`long-menu`/`long-date`；DevTools 720×820 查询到标题文本宽 126/146/125/158pt，悬停后 portal 中出现完整 234pt tooltip。
 

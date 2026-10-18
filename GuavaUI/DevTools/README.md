@@ -223,6 +223,42 @@ swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyA
 swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyApp android
 ```
 
+## AI-driven component acceptance
+
+No OS automation is needed. Build the Gallery, start a deterministic surface,
+query its live AI diagnostics, inject input through DevTools and inspect the
+renderer mirror:
+
+```sh
+swift build --package-path GuavaUI/Examples --product GuavaUIDemo
+GUAVA_DEVTOOLS=1 GUAVA_DEVTOOLS_PORT=9231 GuavaUI/Examples/.build/debug/GuavaUIDemo \
+  --component refreshableList --width 390 --height 820 --input touch
+swift run --package-path Tools/Developer guava-dev devtools query-ui 9231 --list
+swift run --package-path Tools/Developer guava-dev devtools query-ui 9231 query_ui_nodes \
+  '{"text":"refresh-count","visible_only":true}'
+swift run --package-path Tools/Developer guava-dev devtools capture-ui 9231 /tmp/refresh.jpg
+```
+
+Gallery flags: `--input touch|mixed|pointer`, `--dark`, `--text-scale 2`,
+`--rtl`, `--reduce-motion`. Width and height still follow the real window after
+resize. These overrides are transient and never change authored configuration.
+The host may clamp window height to the available display; use the mirror's
+logical dimensions and queried visible frames as the actual acceptance size.
+
+`input-ui PORT --click-node ID` resolves a live, visible, enabled hit region.
+`input-ui PORT --input @events.json` accepts pointer, wheel, keyboard and text
+events, plus `{"kind":"wait","milliseconds":100}` between events. Each wait is
+at most 2 seconds and the sequence's total wait budget is 10 seconds. One
+connection stays open throughout the sequence, preserving capture while the
+host produces intermediate frames. Start a drag with a small move inside the
+target before moving outside its bounds. Input acknowledgements confirm delivery;
+always query the resulting value and inspect a fresh mirror image to verify it.
+
+Touch surfaces use GuavaUI's unified pointer dispatcher, including real touch
+scroll/refresh/swipe recognition and 44pt hit regions. They test component
+behavior; platform IME and physical device adapters still need device acceptance.
+The mirror replays the application's draw list and excludes OS compositor chrome.
+
 
 ## Ownership and directory structure
 

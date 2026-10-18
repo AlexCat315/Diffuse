@@ -38,7 +38,7 @@ struct RefreshTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    private func scene(_ body: (ViewGraph, PlatformInputContext, EventDispatcher, Harness) throws -> Void) rethrows {
+    private func scene(nested: Bool = false, _ body: (ViewGraph, PlatformInputContext, EventDispatcher, Harness) throws -> Void) rethrows {
         try GlobalTestLock.locked {
             let context = PlatformInputContext()
             let previous = TextEnvironmentHolder.current
@@ -54,11 +54,41 @@ struct RefreshTests: GuavaUIComposeSerializedSuite {
                 let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
                                                  capture: context.pointerCapture,
                                                  focusChain: context.focusChain)
-                graph.install(root: harness.surfaceEnvironment(environment))
+                let root: AnyView
+                if nested {
+                    root = AnyView(ScrollView(.vertical) {
+                        Column {
+                            harness
+                            Text("Outer content").frame(height: 400)
+                        }
+                    }.frame(width: 360, height: 360))
+                } else {
+                    root = AnyView(harness)
+                }
+                graph.install(root: root.surfaceEnvironment(environment))
                 settle(graph)
                 defer { graph.install(root: EmptyView()) }
                 try body(graph, context, dispatcher, harness)
             }
+        }
+    }
+
+    @Test("A nested touch list refreshes without its parent stealing the drag")
+    func nestedPull() throws {
+        try scene(nested: true) { graph, _, dispatcher, harness in
+            let scrolls = nodes(graph.tree.root!).filter { $0.attachments[ScrollReveal.handlerKey] != nil }
+            #expect(scrolls.count == 2)
+            let inner = try #require(scrolls.last)
+            let point = inner.absoluteFrame.origin
+            let x = Float(point.x + 100), y = Float(point.y + 10)
+            dispatcher.dispatch(.mouseButtonDown(.init(button: .left, x: x, y: y, clicks: 1)))
+            dispatcher.dispatch(.mouseMotion(.init(x: x, y: y + 50, deltaX: 0, deltaY: 50)))
+            dispatcher.dispatch(.mouseMotion(.init(x: x, y: y + 220, deltaX: 0, deltaY: 170)))
+            settle(graph)
+            #expect(harness.model.refreshes == 1)
+            #expect(inner.contentOffset.y < 0)
+            #expect(scrolls.first?.contentOffset == .zero)
+            dispatcher.dispatch(.mouseButtonUp(.init(button: .left, x: x, y: y + 220, clicks: 1)))
         }
     }
 

@@ -488,7 +488,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     return .ignored
                 }
             }
-            registry.setMotion(node, route: .scrollChrome) { event, _ in
+            registry.setMotion(node, route: .scrollChrome) { event, phase in
+                // Let the deepest content gesture claim a touch drag first.
+                // Ancestors also observed the down event; handling capture
+                // here would steal nested scrolling, swipes and refreshes.
+                if phase == .capture,
+                   node.attachments[_ScrollViewAttachmentKeys.dragState] == nil { return .ignored }
                 if let state = node.attachments[_ScrollViewAttachmentKeys.contentDragState]
                     as? _ScrollViewContentDragState {
                     let local = Self.localPoint(x: event.x, y: event.y, in: node)
