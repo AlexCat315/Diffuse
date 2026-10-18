@@ -254,6 +254,20 @@ host produces intermediate frames. Start a drag with a small move inside the
 target before moving outside its bounds. Input acknowledgements confirm delivery;
 always query the resulting value and inspect a fresh mirror image to verify it.
 
+Input fields keep their values lazy. Ordinary node discovery does not read them.
+After locating the actual `textField` node (rather than a debug-name wrapper),
+explicitly request its current draft/value through the same AI query:
+
+```sh
+guava-dev devtools query-ui 9231 query_ui_nodes \
+  '{"node_id":"177","include_value":true}'
+```
+
+The response puts the value in `semantics.value` and reports `valueTruncated`.
+Output is capped at 4096 Unicode characters; `include_value` requires one
+`node_id`, and unmounted IDs fail. Secure fields return `<redacted>` without
+evaluating their value provider. No private `@State` is exposed by this read.
+
 Touch surfaces use GuavaUI's unified pointer dispatcher, including real touch
 scroll/refresh/swipe recognition and 44pt hit regions. They test component
 behavior; platform IME and physical device adapters still need device acceptance.

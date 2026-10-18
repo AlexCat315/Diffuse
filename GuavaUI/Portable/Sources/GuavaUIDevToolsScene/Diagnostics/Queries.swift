@@ -8,6 +8,8 @@ public struct UIDiagnosticNode: Codable, Sendable {
     public let parentID: String?
     public let semantics: AccessibilitySemantics?
     public let presentation: UIDiagnosticPresentation
+    /// Present only for an explicit single-node value read.
+    public var valueTruncated: Bool? = nil
 }
 
 public struct UIDiagnosticPage<Item: Codable & Sendable>: Codable, Sendable {
@@ -36,15 +38,23 @@ public final class UIDiagnostics {
         inspector = SceneInspector(tree: tree)
     }
 
-    private func nodes() -> [UIDiagnosticNode] {
+    private func nodes(valueNodeID: String? = nil) -> [UIDiagnosticNode] {
         var result: [UIDiagnosticNode] = []
         var meanings: [String: AccessibilitySemantics] = [:]
+        var truncatedValue: Bool?
         guard let root = tree.root else { return [] }
         let presentation = UIDiagnosticPresentation.capture(root: root)
         func collectMeanings(_ node: Node) {
             if var semantics = node.accessibility, !semantics.isHidden {
                 semantics.label = AccessibilityTree.resolvedLabel(for: node)
                 if semantics.state.isSecure { semantics.value = "<redacted>" }
+                if String(node.id.rawValue) == valueNodeID {
+                    // Secure values must not even invoke a lazy provider.
+                    let value = semantics.state.isSecure ? "<redacted>" : node.resolvedAccessibilityValue
+                    let preview = String(value.prefix(4097))
+                    truncatedValue = preview.count > 4096
+                    semantics.value = String(preview.prefix(4096))
+                }
                 meanings[String(node.id.rawValue)] = semantics
             }
             node.children.forEach(collectMeanings)
@@ -58,7 +68,7 @@ public final class UIDiagnostics {
             value.id = node.elementID ?? node.id
             if let presentation = presentation[value.id] {
                 result.append(UIDiagnosticNode(node: value, parentID: parent, semantics: meanings[value.id],
-                    presentation: presentation))
+                    presentation: presentation, valueTruncated: value.id == valueNodeID ? truncatedValue : nil))
             }
             for child in node.children { collect(child, parent: value.id) }
         }
@@ -68,8 +78,11 @@ public final class UIDiagnostics {
 
     public func queryNodes(id: String? = nil, text: String? = nil, role: String? = nil,
                            source: String? = nil, visibleOnly: Bool = false, inputEnabledOnly: Bool = false,
-                           offset: Int = 0, limit: Int = 50) throws -> UIDiagnosticPage<UIDiagnosticNode> {
-        let all = nodes()
+                           includeValue: Bool = false, offset: Int = 0, limit: Int = 50) throws -> UIDiagnosticPage<UIDiagnosticNode> {
+        if includeValue && id == nil {
+            throw AgentError.invalidConfiguration("include_value requires one explicit node_id.")
+        }
+        let all = nodes(valueNodeID: includeValue ? id : nil)
         if let id, !all.contains(where: { $0.node.id == id }) { throw AgentError.invalidConfiguration("Node is missing or unmounted: \(id)") }
         let matches = all.filter { item in
             let node = item.node

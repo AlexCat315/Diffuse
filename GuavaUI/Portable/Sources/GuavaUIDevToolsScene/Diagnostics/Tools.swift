@@ -29,6 +29,7 @@ private struct QueryNodesInput: Decodable {
     var source: String?
     var visibleOnly: Bool?
     var inputEnabledOnly: Bool?
+    var includeValue: Bool?
     var offset: Int?
     var limit: Int?
 
@@ -37,6 +38,7 @@ private struct QueryNodesInput: Decodable {
         case text, role, source
         case visibleOnly = "visible_only"
         case inputEnabledOnly = "input_enabled_only"
+        case includeValue = "include_value"
         case offset, limit
     }
 }
@@ -168,6 +170,7 @@ extension UIDiagnostics {
                 text: args.text, role: args.role, source: args.source,
                 visibleOnly: args.visibleOnly ?? false,
                 inputEnabledOnly: args.inputEnabledOnly ?? false,
+                includeValue: args.includeValue ?? false,
                 offset: args.offset ?? 0, limit: args.limit ?? 50)
             return try encodeNodes(page)
         case .queryUIRecomposition:

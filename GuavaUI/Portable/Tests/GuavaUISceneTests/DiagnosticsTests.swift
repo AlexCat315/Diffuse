@@ -135,7 +135,8 @@ struct DiagnosticsTests {
         }
         for arguments: JSONValue in [
             .array([]), .object(["limit": .number(0)]), .object(["unexpected": .bool(true)]),
-            .object(["node_id": .string("unmounted")]), .object(["text": .string(String(repeating: "x", count: 262_145))])
+            .object(["node_id": .string("unmounted")]), .object(["text": .string(String(repeating: "x", count: 262_145))]),
+            .object(["include_value": .bool(true)])
         ] {
             let result = call(arguments)
             #expect(result.type == "diagnostics.call.err")

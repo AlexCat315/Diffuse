@@ -34,6 +34,13 @@ struct AgentControlDiscoveryTests: GuavaUIComposeSerializedSuite {
             #expect(presentation["isVisible"] as? Bool == true && presentation["inputEnabled"] as? Bool == true)
             #expect(presentation["visibleFrame"] != nil)
             #expect(!String(decoding: result.json, as: UTF8.self).contains("Local private draft"))
+            if role == "textField" {
+                let node = try #require(items.first?["node"] as? [String: Any])
+                let id = try #require(node["id"] as? String)
+                let readInput = try JSONSerialization.data(withJSONObject: ["node_id": id, "include_value": true])
+                let value = try await toolbox.execute(name: "query_ui_nodes", input: readInput)
+                #expect(String(decoding: value.json, as: UTF8.self).contains("Local private draft"))
+            }
         }
         // Default pagination also passes the shared 512 KiB tool result limit.
         let all = try await toolbox.execute(name: "query_ui_nodes", input: Data("{}".utf8))

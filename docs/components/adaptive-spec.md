@@ -628,6 +628,8 @@ P1 通用拖放已完成：`DragScope` 持有类型化会话，`Draggable` 在 6
 
 NumberField / Vec3Field 的 locale 与轴高度已完成：`locale` 默认当前区域，五种 locale 的小数、数字与正负号往返，完整解析拒绝分组/尾随垃圾/非有限数值；数值绑定仍为 Float。Vec3 的 small 基线修正为与 TextField 一致的 28pt，按字号增长并取触摸 44pt 下限；实际编辑面填满显式高度。72 项数值/重排/TextField 回归通过。DevTools 实际 390×820 触摸输入 `12,75` 提交为 12.75；720×820 深色混合输入先步进、再输入非法后缀，恢复为 12,75，另一 locale 同步显示 12.75；390 深色触摸与 1280 浅色指针的 200% 三轴输入面均为 56pt，窄宽 X/Y → Z、宽屏三轴同排。镜像检查确认轴标签与输入对齐、无裁字，浅色细边框与深色凹面保持一致。见 [数值输入](numberfield.md)。
 
+DevTools AI 的输入值验收入口已补齐：普通节点查询继续不求值延迟输入值；对已发现的实际 `textField` 使用 `query_ui_nodes {node_id, include_value:true}` 显式读取当前值。返回 `semantics.value` 与 `valueTruncated`，最多 4096 个 Unicode 字符；缺少节点 ID、过期节点报错，安全字段始终脱敏且不调用值提供者。16 项 Portable AI 查询测试与真实 Compose 字段发现测试通过；DevTools 在 720×820 深色混合面直接读取节点 177，从输入前 `1,25` 到提交后 `12,75`，并核对镜像里的两个 locale 值一致。调用示例见 [DevTools](../../GuavaUI/DevTools/README.md#ai-driven-component-acceptance)。
+
 ## 6. 动效与动画（动画效果实现）
 
 分两类：**时间曲线**（用 `cubic-bezier` / ease 控制"速度怎么变"）与**物理动画**（弹簧、阻尼、惯性模拟真实运动）。GuavaUI 的实现层与 SwiftUI 同形：`withAnimation`、`.animation(_:value:)`、`AnimatedVisibility` + `Transition`、`Animation.spring(response:dampingFraction:)`，再加滚动的系统惯性与回弹。本章定义效果选型、参数与验收；[已实现] 等标注同前。

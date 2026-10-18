@@ -3,10 +3,50 @@ import Testing
 import GuavaUIScene
 import GuavaUIDevToolsScene
 import GuavaUIAgentCore
+import GuavaUIDevToolsProtocol
 
 @Suite("AI control presentation", .serialized)
 @MainActor
 struct DiagnosticPresentationTests {
+    @Test("Explicit single-node reads resolve live values, bound Unicode output and never read secure providers")
+    func explicitValues() async throws {
+        let tree = NodeTree(), root = Node(), field = Node(), secure = Node()
+        tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 390, height: 200)
+        root.addChild(field); root.addChild(secure)
+        field.accessibility = AccessibilitySemantics(.textField) { $0.label = "Amount" }
+        secure.accessibility = AccessibilitySemantics(.textField) { $0.state.isSecure = true }
+        var value = "12,75", reads = 0, secureReads = 0
+        field.accessibilityValueProvider = AccessibilityValueProvider(revision: 1) { reads += 1; return value }
+        secure.accessibilityValueProvider = AccessibilityValueProvider(revision: 1) { secureReads += 1; return "secret" }
+        let diagnostics = UIDiagnostics(tree: tree), toolbox = try diagnostics.toolbox()
+        let id = String(field.id.rawValue)
+        #expect(try diagnostics.queryNodes(id: id).items.first?.valueTruncated == nil)
+        _ = diagnostics.queryRecomposition()
+        #expect(reads == 0 && secureReads == 0)
+        #expect(throws: AgentError.self) { try diagnostics.queryNodes(includeValue: true) }
+        let first = try #require(diagnostics.queryNodes(id: id, includeValue: true).items.first)
+        #expect(first.semantics?.value == "12,75" && first.valueTruncated == false && reads == 1)
+        value = String(repeating: "🪴", count: 4097)
+        let bounded = try #require(diagnostics.queryNodes(id: id, includeValue: true).items.first)
+        #expect(bounded.semantics?.value.count == 4096 && bounded.valueTruncated == true)
+        #expect(bounded.semantics?.value.last == "🪴")
+        let secureID = String(secure.id.rawValue)
+        let protected = try #require(diagnostics.queryNodes(id: secureID, includeValue: true).items.first)
+        #expect(protected.semantics?.value == "<redacted>" && protected.valueTruncated == false)
+        #expect(secureReads == 0)
+        let arguments: JSONValue = .object(["node_id": .string(id), "include_value": .bool(true)])
+        let wire = diagnostics.handleReadRequest(.init(type: "diagnostics.call", payload: .object([
+            "name": .string("query_ui_nodes"), "arguments": arguments
+        ])))
+        let sdk = try await toolbox.execute(name: "query_ui_nodes", input: JSONEncoder().encode(arguments))
+        let wireData = try JSONEncoder().encode(wire.payload)
+        #expect(try JSONSerialization.jsonObject(with: wireData) as? NSDictionary
+            == JSONSerialization.jsonObject(with: sdk.json) as? NSDictionary)
+        root.removeChild(field)
+        #expect(throws: AgentError.self) { try diagnostics.queryNodes(id: id, includeValue: true) }
+        #expect(secureReads == 0)
+    }
+
     private func button(_ text: String, frame: CGRect) -> Node {
         let button = Node()
         button.frame = frame
