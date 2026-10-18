@@ -32,12 +32,32 @@ struct BadgeStory: View {
 }
 
 struct AlertStory: View {
+    @State private var dismissed = false
+    @State private var result = "No action yet"
+
     var body: some View {
-        StorySection("Inline feedback", "State the result and explain what the user can do next.") {
-            Alert("Project saved", message: "All changes are available in the workspace.", tone: .success)
-            Alert("Connection interrupted", message: "Retry when the connection is available.", tone: .warning)
-            Alert("Import failed", message: "The selected asset format is unsupported.", tone: .danger)
-            Alert("Update available", message: "Restart to use the new version.", tone: .info)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Actions & dismissal", "Actions stack when their natural widths no longer fit. Long titles and details wrap; the close button stays at the top.") {
+                if !dismissed {
+                    Alert("Reconnect to synchronize your workspace", message: "Your local changes are safe. Reconnect when the connection returns, or continue working offline.", tone: .warning) {
+                        $0.onDismiss = { dismissed = true; result = "Alert dismissed" }
+                    } actions: {
+                        Button("Reconnect to workspace") { result = "Reconnection requested" }.buttonStyle(.secondary)
+                            .debugName("alert-retry")
+                        Button("Work offline") { result = "Working offline" }.buttonStyle(.ghost)
+                            .debugName("alert-offline")
+                    }.debugName("alert-adaptive")
+                } else {
+                    Button("Show alert") { dismissed = false }
+                }
+                Text(result).font(.caption).foregroundColor(.onSurfaceMuted).debugName("alert-result")
+            }
+            StorySection("Inline feedback", "State the result and explain what the user can do next.") {
+                Alert("Project saved", message: "All changes are available in the workspace.", tone: .success)
+                Alert("Connection interrupted", message: "Retry when the connection is available.", tone: .warning)
+                Alert("Import failed", message: "The selected asset format is unsupported.", tone: .danger)
+                Alert("Update available", message: "Restart to use the new version.", tone: .info)
+            }
         }
     }
 }

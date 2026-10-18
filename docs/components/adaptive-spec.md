@@ -476,7 +476,7 @@
 **Alert / Progress / Notification / Skeleton / Empty**
 
 - 外观：反馈组件不参与布局竞争，按自身尺寸呈现；Skeleton 保持最终内容几何。`[已实现]`
-- 手机：Alert 宽 ≤ 窗口 − 32、操作按钮 ≥ 44pt 且可纵向堆叠；Notification 单行标题 + 换行正文；Empty 自然居中。`[部分]`
+- 手机：Alert 宽 ≤ 宿主 viewport − 32，compact 操作纵向堆叠，其他宽度按自然按钮预算不足时堆叠，触摸按钮 ≥44pt；标题/正文完整换行，关闭只占标题行，RTL 逻辑缩进保持。Notification 单行标题 + 换行正文；Empty 自然居中。`[已实现]`，见 `AlertAdaptiveTests` 与 [Alert](alert.md)。
 - Notification / Toast：队列、稳定 ID 替换、时长与 hover 暂停；最多两个内联操作（撤销/重试），操作是真实按钮、键盘可达；`.automatic` 定位在所有宽度右上，呈现 iOS 通知横幅并计入宿主 `safeArea`。`[已实现]`，细节见 [Toast](toast.md)。
 - Toast 以主题时长执行 12pt 位移、淡入淡出与高度收拢；退出即禁用输入/焦点/语义，最后一条离场后卸载 Portal。减少动画立即吸附，退出中同 ID 更新可反转且拒绝过期完成回调；宿主退出树额外条数不超过 `maxVisible`。`ToastAnimationTests` 覆盖中间进度、清理、替换与有界保留。`[已实现]`
 - 平板 / 桌面：inline alert 与窗口宽度自适应。`[已实现]`
@@ -577,7 +577,6 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | AssetRefField / JsonField | 清空/选择/展开入口的触摸目标与窄宽实测 | 390 触摸、720 混合、200% 字号及完整名称 |
 | List / MultiSelectList / SectionedList | 通用行的标题收敛与尾部徽标/状态保留；重排边缘自动滚动另见 gaps | 自定义 rowContent 不能由容器静默截断整个行；需可组合的行布局契约 |
 | Badge / Tag / KeyCap / Label | 长文本换行或显式收敛策略 | 不静默丢失文本，完整语义可达 |
-| Alert | 窄宽/大字号操作区堆叠与窗口预算 | AlertDialog、Notification 已完成，不能代替 Alert 本体 |
 | Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
 
 新项关闭时须更新对应契约、组件文档和下方证据，并单独提交；物理设备限制保持明示，不把未执行的设备测试记为通过。
@@ -650,6 +649,8 @@ SwipeList 的 RTL 与操作区已补齐：向逻辑 leading 滑动（LTR 左、R
 文档状态复核：Button 字符串截断、触摸子菜单、Rating RTL、Select 弹层宽度与 locale 数值的旧缺失状态已校正；FAB 按现有视觉基线明确不纳入，时区配置与时区选择入口分开描述。31 项截断/菜单/Rating/选择器测试通过；DevTools 在 390 RTL 触摸 Rating 点击第一颗后 ArrowLeft 得到 2.0，720 深色混合刷新得到 `Refreshes: 1`，1280 指针面长按钮为 150×32 且保持单行省略/完整名称，动作计数递增。镜像检查确认 Button/刷新面正常；Rating 窄宽说明与多星溢出已列为待修，未记作视觉验收通过。
 
 Rating Gallery 窄宽组合已修复：评分说明和操作独立下行，密度样本换行，多星带在卡片内横向滚动并保留滚动条。局部 LTR 滚动坐标不改变星序，布局后同步继承实际 RTL 方向且只在变化时重组。两项 Gallery 布局/真实点击测试通过，矩阵覆盖 24 个宽度/字号/方向/主题组合；DevTools 三档 Set 4 均返回 4.0，390 RTL 十星带 offset 从 0 经横向滚轮到 180、拖动滚动条到 198，再点击原先隐藏的第一颗得到 1.0。镜像确认 390 说明/按钮完整、720 深色层次清晰、1280 的 200% 文本无裁切，先前记录的 Rating 视觉问题已关闭。见 [Rating](rating.md#gallery-窄宽组合)。
+
+Alert 的窄宽与大字号操作区已完成：compact 纵向堆叠，其余容器按实际自然宽度自动收敛；共用 `ActionGroupLayout` 同时服务 Dialog，保留节点/焦点。关闭按钮仅占标题行，图标槽使用 IconMetrics（尊重文字缩放与主题/局部覆盖），长标题不被拉伸到远离 RTL 图标的一侧。23 项 Alert/Dialog/产品回归通过，其中 Alert 矩阵覆盖 72 个宽度/字号/方向/主题/variant 组合与自定义图标倍率；720→320→720 的同一动作节点/焦点及键盘回调保留。DevTools 390 触摸卡片 286×228，178×44 / 100×44 操作纵排；720 深色混合 200% 卡片 560×278，304×50 / 160×50 同行且标题图标有间隔；1280 RTL 指针卡片 929×108，标题、正文与操作沿逻辑 leading 对齐。三档重连后均为 `Reconnection requested`，关闭后均为 `Alert dismissed`；镜像确认无越界、无标题/图标重叠，明暗状态层次清晰。见 [Alert](alert.md)。
 
 ## 6. 动效与动画（动画效果实现）
 

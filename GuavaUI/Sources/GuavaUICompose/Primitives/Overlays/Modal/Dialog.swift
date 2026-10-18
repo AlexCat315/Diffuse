@@ -36,7 +36,7 @@ public struct Dialog<Content: View, Footer: View>: View {
                     .flex(options.modal.fitsContentHeight ? 0 : 1, shrink: 1,
                           basis: options.modal.fitsContentHeight ? nil : 0).frame(minHeight: 0)
                 Divider()
-                DialogActionsLayout(stacks: surface.viewport.widthClass == .compact) { footer }
+                ActionGroupLayout(stacks: surface.viewport.widthClass == .compact) { footer }
                     .padding(14).flex(0, shrink: 0)
             }.accessibility { $0.role = .dialog; $0.label = title; $0.help = options.description }
         }

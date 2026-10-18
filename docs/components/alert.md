@@ -12,9 +12,9 @@
 ```
 
 - **icon**：tone 对应的状态图标，默认显示
-- **title**：单行强调文本，完整语义进入 label
+- **title**：可换行的强调文本，完整语义进入 label
 - **message**：可换行的说明
-- **actions**：可选的真实按钮行
+- **actions**：可选真实按钮组，窄宽或字号预算不足时堆叠
 - **dismiss**：可选 trailing ghost 关闭按钮
 
 ## Variants
@@ -31,7 +31,7 @@
 
 ```swift
 Alert("Project saved", message: "All changes are available.", tone: .success) {}
-Alert("Import failed", message: "The format is unsupported.", tone: .error) {
+Alert("Import failed", message: "The format is unsupported.", tone: .danger) {
     $0.variant = .outline
     $0.onDismiss = { hide() }
 } actions: {
@@ -43,7 +43,7 @@ Alert("Import failed", message: "The format is unsupported.", tone: .error) {
 | ---- | ---- | ---- |
 | `title` | 必填 | 状态标题 |
 | `message` | `""` | 说明文本 |
-| `tone` | `.info` | success / warning / error / info |
+| `tone` | `.info` | neutral / success / warning / danger / info |
 | `variant` | `.soft` | 见上表 |
 | `icon` / `showsIcon` | tone 图标 / `true` | 覆盖或隐藏图标 |
 | `onDismiss` | `nil` | 设置后显示关闭按钮 |
@@ -51,10 +51,10 @@ Alert("Import failed", message: "The format is unsupported.", tone: .error) {
 ## Sizing / Tokens
 
 - 内边距 `theme.spacing.md`，图标与文本间距 `sm`，圆角 `theme.radius.md`。
-- 图标属于标题行，垂直居中于 `bodyStrong` 行盒；正文与操作行使用相同的文本缩进，因此三者左边缘严格一致。
-- 标题 `bodyStrong`，正文 `body`；正文可为空。
+- 图标槽与图标共用 IconMetrics，尊重主题/局部缩放覆盖；垂直行盒至少容纳图标和随字号缩放的 `bodyStrong` 第一行。正文与操作组复用同一逻辑 leading 缩进，RTL 镜像。关闭按钮仅占标题行，不挤占正文和操作区。
+- 标题 `bodyStrong`，正文 `body`；正文可为空。卡片最大宽度为宿主 viewport − 32，嵌入较窄容器时继续按容器收缩。
 - `.soft` 使用 `surfaceRaised` 与 `border`；`.filled` 使用 tone 与 `tone.ink(onSolid:)`。
-- 操作行使用真实 Button，触摸面遵守 44pt 下限；关闭按钮为 ghost icon button。
+- 操作使用真实 Button，触摸面遵守 44pt 下限；compact 纵向堆叠，其他表面按实际可用宽度和按钮自然宽度自动选择同行或堆叠。按钮顺序、节点与焦点保持，间距 8pt；关闭按钮为 ghost icon button。
 
 ## Behavior
 
@@ -69,9 +69,11 @@ Alert("Import failed", message: "The format is unsupported.", tone: .error) {
 - Gallery `alert` 页展示 success / warning / error / info 四张默认 `.soft` Alert。
 - DevTools 1000×760：查询到四项 `status`；`Project saved` 与 `All changes are available…` 的 staticText 均为 `x = 323`，`capture-ui` 确认图标居中于标题行、正文同边。
 - `ProductComponentTests.alertTextAlignment` 断言 title 与 message 的 `absoluteFrame.minX` 相等，防止只改视觉 padding 的回归。
-- 操作按钮和 dismiss 由 Gallery 其它状态页覆盖；`.filled` / `.outline` 由调用方按需取样。
+- `AlertAdaptiveTests`：三档宽度、100%/200%、LTR/RTL、明暗主题与三种 variant，覆盖标题/正文同边、动作边界、44pt 下限、完整 status 语义；720→320→720 保留同一动作节点/焦点并验证键盘重连与关闭回调。
+- Gallery 新增 Actions & dismissal，提供长文案、重连、离线、关闭与重新显示；DevTools 实际验收见规范第 5 节。
 
 ## File map
 
 - 主体：[Alert.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Feedback/Alert.swift)
+- 共用操作布局：[ActionGroup.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Layout/Responsive/ActionGroup.swift)
 - Gallery：[FeedbackStories.swift](../../GuavaUI/Examples/Sources/GalleryContent/Stories/Feedback/FeedbackStories.swift)

@@ -18,7 +18,7 @@ import GuavaUIRuntime
 /// ```
 public struct Alert<Actions: View>: View {
     public enum Variant: Sendable, Hashable {
-        /// Tinted wash. The default — it reads as part of the page.
+        /// Neutral grouped surface, with tone reserved for the glyph.
         case soft
         /// Transparent with a tinted edge, for stacking inside a bordered panel.
         case outline
@@ -58,56 +58,54 @@ public struct Alert<Actions: View>: View {
 
     public var body: some View {
         ThemeReader { theme in
-            let style = resolvedStyle(theme)
-            let iconExtent = theme.icons.medium
-            let textInset = showsIcon ? iconExtent + theme.spacing.sm : 0
+            SurfaceReader { surface in
+                TextScalerReader { scaler in
+                    IconMetricsReader { icons in
+                        content(theme: theme, surface: surface, scaler: scaler, iconExtent: icons.size(.medium))
+                    }
+                }
+            }
+        }
+    }
+
+    private func content(theme: Theme, surface: UIEnvironment, scaler: TextScaler, iconExtent: Float) -> some View {
+        let style = resolvedStyle(theme)
+        let textInset = showsIcon ? iconExtent + theme.spacing.sm : 0
+        return Box(direction: .column, alignItems: .stretch, spacing: 4) {
             Row(alignment: .top, spacing: theme.spacing.sm) {
-                Column(alignment: .leading, spacing: 4) {
-                    Row(alignment: .center, spacing: theme.spacing.sm) {
-                        if showsIcon {
-                            // The glyph belongs to the title line, so center it
-                            // in that line box and use the same extent to indent
-                            // the message and actions onto the title's edge.
-                            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                                Icon(icon ?? tone.icon, size: .medium, color: style.iconInk)
-                            }
-                            .frame(width: iconExtent, height: theme.typography.bodyStrong.lineHeight)
-                            .flex(0, shrink: 0)
-                            .accessibilityHidden()
+                Row(alignment: .top, spacing: theme.spacing.sm) {
+                    if showsIcon {
+                        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                            Icon(icon ?? tone.icon, size: .medium, color: style.iconInk)
                         }
-                        Text(title).font(.bodyStrong).foregroundColor(style.ink)
+                        .frame(width: iconExtent, height: max(iconExtent, scaler.scale(theme.typography.bodyStrong.lineHeight)))
+                        .debugName("alert-icon-slot")
+                        .flex(0, shrink: 0).accessibilityHidden()
                     }
-                    if !message.isEmpty {
-                        Box(direction: .row, alignItems: .flexStart) {
-                            Text(message).font(.body).foregroundColor(style.detail)
-                        }
-                        .padding(EdgeInsets(leading: textInset))
-                    }
-                    if hasActions {
-                        Row(alignment: .center, spacing: theme.spacing.xs) { actions }
-                            .padding(EdgeInsets(top: theme.spacing.xs, leading: textInset))
-                    }
-                }
-                .flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
+                    Text(title).font(.bodyStrong).foregroundColor(style.ink)
+                        .flex(0, shrink: 1).frame(minWidth: 0)
+                }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
                 if let onDismiss {
-                    Button(icon: .resource(UIIcons.Action.x),
-                           size: 14,
-                           tooltip: "Dismiss",
-                           action: onDismiss)
-                        .buttonStyle(.ghost)
-                        .controlSize(.small)
-                        .accessibilityLabel("Dismiss")
+                    Button(icon: .resource(UIIcons.Action.x), size: 14,
+                           tooltip: "Dismiss", action: onDismiss)
+                        .buttonStyle(.ghost).controlSize(.small).accessibilityLabel("Dismiss")
                 }
             }
-            .padding(theme.spacing.md)
-            .background(style.fill)
-            .cornerRadius(theme.radius.md)
-            .border(style.stroke, width: 1)
-            .accessibility {
-                $0.role = .status
-                $0.label = title
-                $0.help = message
+            if !message.isEmpty {
+                Box(direction: .row, alignItems: .flexStart) {
+                    Text(message).font(.body).foregroundColor(style.detail)
+                }.padding(EdgeInsets(leading: textInset))
             }
+            if hasActions {
+                ActionGroupLayout(stacks: surface.viewport.widthClass == .compact, alignment: .leading) { actions }
+                    .padding(EdgeInsets(top: theme.spacing.xs, leading: textInset))
+            }
+        }
+        .padding(theme.spacing.md)
+        .frame(maxWidth: max(0, surface.viewport.width - 32))
+        .background(style.fill).cornerRadius(theme.radius.md).border(style.stroke, width: 1)
+        .accessibility {
+            $0.role = .status; $0.label = title; $0.help = message
         }
     }
 

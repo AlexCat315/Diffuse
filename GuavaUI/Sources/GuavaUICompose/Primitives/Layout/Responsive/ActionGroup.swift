@@ -2,9 +2,10 @@ import GuavaUIRuntime
 
 /// Repositions the same action nodes across surface and content-size changes.
 /// Natural widths decide when a desktop footer also needs to stack.
-struct DialogActionsLayout: Layout {
+struct ActionGroupLayout: Layout {
     let stacks: Bool
-    private let spacing: CGFloat = 8
+    var alignment: HorizontalAlignment = .trailing
+    var spacing: CGFloat = 8
 
     private func vertical(width: CGFloat?, subviews: [LayoutSubview]) -> Bool {
         stacks || width.map { available in
@@ -28,17 +29,26 @@ struct DialogActionsLayout: Layout {
         let sizes = subviews.map { $0.sizeThatFits(column ? .init(width: bounds.width) : .unspecified) }
         let used = sizes.reduce(0) { $0 + $1.width } + spacing * CGFloat(max(0, sizes.count - 1))
         let rtl = subviews.first?.layoutDirection == .rtl
-        var offset: CGFloat = column ? 0 : max(0, bounds.width - used)
+        let start = horizontalOffset(available: bounds.width, used: used, rtl: rtl)
+        var offset: CGFloat = 0
         for (index, subview) in subviews.enumerated() {
             let size = sizes[index]
-            let x = column ? (rtl ? 0 : max(0, bounds.width - size.width))
-                : (rtl ? bounds.width - offset - size.width : offset)
+            let x = column ? horizontalOffset(available: bounds.width, used: size.width, rtl: rtl)
+                : start + (rtl ? used - offset - size.width : offset)
             subview.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + (column ? offset : (bounds.height - size.height) / 2)),
                           // An intrinsic action keeps its unspecified width.
                           // Feeding Yoga its rounded measured width can shave
                           // a fraction off the label and spuriously ellipsize it.
                           proposal: .init(width: column ? bounds.width : nil, height: size.height))
             offset += (column ? size.height : size.width) + spacing
+        }
+    }
+    private func horizontalOffset(available: CGFloat, used: CGFloat, rtl: Bool) -> CGFloat {
+        let free = max(0, available - used)
+        switch alignment {
+        case .leading: return rtl ? free : 0
+        case .center: return free / 2
+        case .trailing: return rtl ? 0 : free
         }
     }
 }
