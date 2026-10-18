@@ -321,7 +321,7 @@ public struct CommandPalette: View {
     }
 
     private func shortcutCaps(_ shortcut: KeyboardShortcut) -> some View {
-        // One quiet mono chip reads faster than a row of tiny keycaps and
+        // One quiet shortcut chip reads faster than a row of tiny keycaps and
         // keeps the trailing slot from dominating a 40pt command row.
         Text(shortcut.caps().joined(separator: " "))
             .font(.caption)

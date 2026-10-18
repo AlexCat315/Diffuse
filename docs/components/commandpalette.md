@@ -68,7 +68,7 @@ CommandPalette(isPresented: $open, items: [
 | Modal 背景/边框 | `Modal` 默认 surface |
 | 选中行 | `accent × 0.16` + accent 边框 |
 | hover/press | `stateLayerHover` / `stateLayerPressed` |
-| 标题/快捷键 | `onSurfaceMuted` / 单个紧凑 mono chip（无外框） |
+| 标题/快捷键 | `onSurfaceMuted` / 单个紧凑 shortcut chip（无外框） |
 | 空态 | `EmptyState` compact |
 
 ## States

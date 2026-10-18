@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- 修正 CommandPalette 视觉：桌面行高 36→40、header 28→24，桌面面板 440→560，8 条命令完整显示且点击区更宽松；快捷键改为单个紧凑 mono chip，选中行水平内缩 8pt 且去掉边缘描边，footer 移除整块边框改为 1pt 分隔线。Modal 的 `inset` 现在作为四边实际外边距，顶部放置保留 72pt，面板四角不再被窗口/内容裁坏。
+- 修正 CommandPalette 视觉：桌面行高 36→40、header 28→24，桌面面板 440→560，8 条命令完整显示且点击区更宽松；快捷键改为单个紧凑 shortcut chip，选中行水平内缩 8pt 且去掉边缘描边，footer 移除整块边框改为 1pt 分隔线。Modal 的 `inset` 现在作为四边实际外边距，顶部放置保留 72pt，面板四角不再被窗口/内容裁坏。
 - `Sidebar` / `AdaptiveSidebar` 支持递归嵌套导航：`SidebarItem.children` + 可选 `expanded` binding；分支只切换展开，Right/Left 展开/收起并进入/返回，选中深层项只展开祖先一次、仅精确叶子高亮。`SidebarHierarchyTests` 6/6 覆盖键盘、RTL、数据移除、390/720/1280 矩阵与 AI 查询；Gallery Sidebar 页新增 Nested navigation，DevTools 实测展开 Design team、选择 Audit log。
 - `CommandPalette` 新增 session 级最近使用：执行命令后记录最多 3 条，query 为空时置于 "RECENT" 分组并从原分组去重；`showsRecentCommands` 与 `recentCommandLimit` 可配置。`FeedbackComponentTests` 覆盖投影，DevTools 实测 Toggle Theme 二次打开后位于 RECENT。
 - Breadcrumb / Pagination 触摸验收补齐：`TouchDensityTests` 将两者纳入 44pt 触摸族；DevTools 390 touch 预览测得链接 44×88、前后按钮 44×78、页码 44×44。adaptive-spec 对应行改为 `[已实现]`。
