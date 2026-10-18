@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `CommandPalette` 新增 `footer` `@ViewBuilder` 初始化器：自定义 footer 替换默认快捷键提示，保留顶部 1pt 分隔线、搜索/排序/最近使用/执行路径与面板几何。`CommandPaletteFooterTests` 覆盖自定义/默认 footer；Gallery Command Palette 页新增 “Open with project footer” 与 Aurora workspace footer。补齐 [CommandPalette](docs/components/commandpalette.md)、`adaptive-spec.md` 与 `gaps.md`。
+
 - `StatusBarText` 文本/detail 单行截断，leading 让位给 trailing 连接状态，完整内容保留在辅助功能 label/value；`DefaultPanelStyle` 标题单行截断并为 accessory 留位。`StatusBarPanelTruncationTests` 在 320pt 状态栏与 240/600pt 面板上验证截断行数、宽度与 a11y；Gallery StatusBar/Panel 页新增长分支与长标题示例，DevTools 720×820 实测状态文字单行截断、面板标题 203pt 且 accessory/连接状态完整可见。补齐 `adaptive-spec.md`、`gaps.md` 与 [Panel](docs/components/panel.md)。
 
 - 新增 `ChartLegend`：`ChartSeries.title` 为序列提供图例名称，图例在宽容器单行、窄容器按整项折行；色块为装饰，完整标题作为辅助功能名称。`ChartLegendTests` 3/3 覆盖折行、空标题过滤、投影与 RTL；Gallery `chart` 页新增多序列图、宽/窄图例与 “Show signups” 开关，DevTools 实测窄图例换行、点击开关后图例项减少。补齐 [Chart](docs/components/chart.md)、`adaptive-spec.md` 与 `gaps.md`。

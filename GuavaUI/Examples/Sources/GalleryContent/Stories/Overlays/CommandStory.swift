@@ -4,6 +4,7 @@ import GuavaUIRuntime
 struct CommandPaletteStory: View {
     let options: GalleryOptions
     @State private var isPresented = false
+    @State private var customPresented = false
     @State private var lastRun = "none"
 
     private var items: [CommandItem] {
@@ -28,19 +29,39 @@ struct CommandPaletteStory: View {
     }
 
     var body: some View {
-        StorySection("Command palette", "Try “GO”, “go f” or “appearance”. Arrows move, Page Up/Down jump, Return runs and Escape closes. Disabled commands are skipped; run one and reopen to see it under Recent.") {
-            Row(alignment: .center, spacing: 12) {
-                Button("Open command palette", isEnabled: options.isEnabled) { isPresented = true }
-                    .debugName("command-open")
-                KeyCap(.primaryShift("P"))
-                Text("Last run: \(lastRun)").font(.caption).foregroundColor(.onSurfaceMuted)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Command palette", "Try “GO”, “go f” or “appearance”. Arrows move, Page Up/Down jump, Return runs and Escape closes. Disabled commands are skipped; run one and reopen to see it under Recent.") {
+                Row(alignment: .center, spacing: 12) {
+                    Button("Open command palette", isEnabled: options.isEnabled) { isPresented = true }
+                        .debugName("command-open")
+                    KeyCap(.primaryShift("P"))
+                    Text("Last run: \(lastRun)").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+                ShortcutHost(onKeyDown: { event in
+                    guard options.isEnabled, !event.isRepeat, event.scancode == Scancode.p,
+                          event.modifiers.hasShift, event.modifiers.hasGui || event.modifiers.hasCtrl else { return false }
+                    isPresented = true; return true
+                })
+                CommandPalette(isPresented: $isPresented, items: items)
             }
-            ShortcutHost(onKeyDown: { event in
-                guard options.isEnabled, !event.isRepeat, event.scancode == Scancode.p,
-                      event.modifiers.hasShift, event.modifiers.hasGui || event.modifiers.hasCtrl else { return false }
-                isPresented = true; return true
-            })
-            CommandPalette(isPresented: $isPresented, items: items)
+            StorySection("Custom footer", "A caller footer replaces the default shortcut hints while search, ranking, recent commands and execution stay intact.") {
+                Row(alignment: .center, spacing: 12) {
+                    Button("Open with project footer", isEnabled: options.isEnabled) { customPresented = true }
+                        .debugName("command-open-custom")
+                    Text("Last run: \(lastRun)").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+                CommandPalette(isPresented: $customPresented, items: items, footer: {
+                    Row(alignment: .center, spacing: 8) {
+                        Icon(UIIcons.File.folder, size: 12, color: .onSurfaceMuted)
+                        Text("Aurora workspace").font(.caption).foregroundColor(.onSurfaceMuted)
+                        Spacer()
+                        Text("Custom footer").font(.caption).foregroundColor(.onSurfaceMuted)
+                    }
+                    .padding(horizontal: 14, vertical: 8)
+                    .background(.surfaceRaised)
+                    .debugName("command-custom-footer")
+                })
+            }
         }
     }
 }

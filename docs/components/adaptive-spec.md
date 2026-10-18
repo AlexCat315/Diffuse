@@ -384,9 +384,10 @@
 **CommandPalette**
 
 - 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×560；结果经 `VariableVirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "Recent" 分组置顶。`[已实现]`
+- Footer：默认快捷键提示；调用方可通过 `CommandPalette(..., footer:)` 的 `@ViewBuilder` 完全替换，保留面板上方 1pt 分隔线、搜索/排序/最近使用/执行路径。`[已实现]`
 - 手机：compact 下宽 `viewport − 16`、高 `min(560, viewport − 16)`，`inset 8` 居中；结果行触摸 ≥44pt、header 36pt，指针保持 40/24。`[部分]`（几何与行高已完成；软键盘出现后的结果区收缩仍由宿主 IME/安全区处理）
 - 平板 / 桌面：640×560、顶部放置、键盘上下移动。`[已实现]`
-- 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；执行后记录最近命令（最多 3 条，session 级），再次打开时置于 Recent 并从原分组去重；1000 条结果只挂载 <60 行，`scrollToIndex` 跟随 highlight；验收：`CommandPaletteAdaptiveTests`（390 触摸 / 1280 指针几何与行高）、`FeedbackComponentTests`（Recent 投影）、`--component commandPalette`、`ProductInteractionRegressionTests.commandVirtualization` + 200% 行预算测试。
+- 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；执行后记录最近命令（最多 3 条，session 级），再次打开时置于 Recent 并从原分组去重；1000 条结果只挂载 <60 行，`scrollToIndex` 跟随 highlight；自定义 footer 替换默认提示；验收：`CommandPaletteAdaptiveTests`（390 触摸 / 1280 指针几何与行高）、`CommandPaletteFooterTests`（默认/自定义 footer）、`FeedbackComponentTests`（Recent 投影）、`--component commandPalette`、`ProductInteractionRegressionTests.commandVirtualization` + 200% 行预算测试。
 
 ### 3.6 浮层与反馈面
 

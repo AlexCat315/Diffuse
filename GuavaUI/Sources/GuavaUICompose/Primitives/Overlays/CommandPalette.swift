@@ -72,6 +72,7 @@ public struct CommandPalette: View {
     /// the query is empty. History is session-scoped and never persisted.
     public var showsRecentCommands = true
     public var recentCommandLimit = 3
+    private var customFooter: AnyView?
 
     static let rowHeight: Float = 40
     static let headerHeight: Float = 24
@@ -86,6 +87,15 @@ public struct CommandPalette: View {
         self.emptyMessage = "Try a different search term."
         configure(&self)
         recentCommandLimit = min(10, max(0, recentCommandLimit))
+    }
+
+    /// Replaces the default shortcut-hint footer with caller content.
+    public init<Footer: View>(isPresented: Binding<Bool>,
+                             items: [CommandItem],
+                             configure: (inout Self) -> Void = { _ in },
+                             @ViewBuilder footer: () -> Footer) {
+        self.init(isPresented: isPresented, items: items, configure: configure)
+        customFooter = AnyView(footer())
     }
 
     public var body: some View {
@@ -122,7 +132,7 @@ public struct CommandPalette: View {
                                 .background(SemanticColorRef.border)
                                 .padding(horizontal: 12)
                         )
-                        AnyView(footer)
+                        AnyView(customFooter ?? AnyView(defaultFooter))
                     }
                     .frame(width: .percent(100), height: .percent(100))
                     .debugName("commandPalette.panel")
@@ -332,7 +342,7 @@ public struct CommandPalette: View {
             .accessibilityHidden()
     }
 
-    private var footer: some View {
+    private var defaultFooter: some View {
         Row(alignment: .center, spacing: 14) {
             hint("↑↓", "navigate")
             hint("↵", "run")

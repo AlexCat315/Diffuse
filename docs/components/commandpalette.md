@@ -19,7 +19,7 @@
 - **results**：虚拟化列表，行高 40，分组标题 24；结果区水平内缩 8pt，选中行是圆角 pill，不压面板圆角或滚动条 gutter
 - **recent**：query 为空时，最近执行的命令置于 "Recent" 分组，并从原分组中移除避免重复
 - **highlight**：键盘/指针共用的选中行；Enter/点击执行
-- **footer**：快捷键提示与 `visible / total` 计数；上方 1pt 分隔线，不含整块边框或背景，避免方形底角穿出面板
+- **footer**：默认是快捷键提示与 `visible / total` 计数；调用方可传入自定义 footer 完全替换它。上方 1pt 分隔线由面板提供，footer 自身不含整块边框或背景，避免方形底角穿出面板。
 
 ## API
 
@@ -39,8 +39,21 @@ CommandPalette(isPresented: $open, items: [
 | `showsRecentCommands` | `true` | query 为空时显示最近执行分组 |
 | `recentCommandLimit` | `3` | 最近记录上限，夹取 0…10 |
 | `configure` | `{ _ in }` | 配置闭包（保留） |
+| `footer` | 默认提示 | 可选 `@ViewBuilder` 自定义 footer；传入后替换默认快捷键提示，仍保留面板上方 1pt 分隔线 |
 
 `CommandItem` 包含 `title/subtitle/group/keywords/icon/shortcut/isEnabled/action`。
+
+自定义 footer 示例：
+
+```swift
+CommandPalette(isPresented: $open, items: items, footer: {
+    Row(alignment: .center, spacing: 8) {
+        Text("Aurora workspace").font(.caption)
+        Spacer()
+        Text("Custom footer").font(.caption)
+    }.padding(horizontal: 14, vertical: 8)
+})
+```
 
 ## Virtualization
 
@@ -90,7 +103,7 @@ CommandPalette(isPresented: $open, items: [
 
 - **键盘**：搜索框始终持有焦点；方向键/Page/Return/Escape 被面板消费，不移动光标。
 - **指针**：点击行执行；hover 只更新 highlight，不执行。
-- **辅助功能**：每行 role=button、label 为 title、help 为 subtitle；footer role=group；搜索框为唯一 Tab 停靠。
+- **辅助功能**：每行 role=button、label 为 title、help 为 subtitle；默认 footer role=group，自定义 footer 保留调用方语义；搜索框为唯一 Tab 停靠。
 - **分组**：query 为空时按 group 插入 header；有 query 时不显示分组标题，结果按匹配度排序。
 - **最近使用**：`showsRecentCommands` 打开时，query 为空就在最前插入 "Recent" header 与最近执行的命令（最多 `recentCommandLimit` 条），其余命令保持原分组顺序；最近项从原分组移除，disabled 项不进入。记录只在本次 `CommandPalette` 挂载内保存，不写持久化存储。
 - **Portal/Modal**：沿用 Modal 的焦点约束、backdrop 与关闭后焦点还原。
@@ -100,7 +113,7 @@ CommandPalette(isPresented: $open, items: [
 - 命令集合大（数百到数千）时直接用 `CommandPalette`；不要自己先构造全量行视图。
 - `CommandItem.id` 必须稳定且唯一；虚拟化按 id 复用/回收行。
 - 不要把高频变化的临时状态放进 `CommandItem`；它是搜索数据，不是行状态。
-- 最近记录是 session 级便利能力；需要跨启动历史时由调用方持久化并在 `items` 顺序中体现，组件不写磁盘。自定义 footer 仍未内置。
+- 最近记录是 session 级便利能力；需要跨启动历史时由调用方持久化并在 `items` 顺序中体现，组件不写磁盘。自定义 footer 已内置，传入后替换默认提示但保留搜索、排序、最近使用与执行路径。
 - 排序/过滤由 `CommandSearch` 统一负责；不要在调用方预排序后假设面板保留顺序（无 query 时保留传入顺序）。
 
 ## Verification
@@ -110,6 +123,7 @@ CommandPalette(isPresented: $open, items: [
 - `ProductInteractionRegressionTests.commandInput`：真实搜索输入、跳过 disabled、PageUp/PageDown、Return 执行。
 - `ProductInteractionRegressionTests.commandVirtualization`：1000 条命令挂载行 < 60。
 - `CommandPaletteAdaptiveTests`：390pt 触摸面的 374×560 panel、44pt 结果行、36pt header；1280pt 指针面的 640×560 panel 与 40pt 行。
+- `CommandPaletteFooterTests`：自定义 footer 替换默认快捷键提示，默认 footer 在无自定义内容时保留。
 - `FeedbackComponentTests` 覆盖排序/分组投影，以及 Recent 置顶、去重、禁用过滤与关闭开关。
 
 Gallery `commandPalette` 页提供 8 条命令、分组、快捷键、禁用项与 `Last run`。
@@ -134,6 +148,8 @@ guava-dev devtools capture-ui 9229 /tmp/guava-palette.jpg
 compact 实测（`--width 390 --height 820`）：`query_ui_nodes` 的 `role=dialog` 返回 374×560、位置 (8,130)；`capture-ui` 确认搜索行、结果区和 footer 都落在窗口内。触摸行高由 `CommandPaletteAdaptiveTests` 在 390pt 触摸表面断言，DevTools 宿主默认指针输入因此现场行高为 40。
 
 Recent 实测（720×820）：打开面板 → 点击 `Toggle Theme` → 再次打开；`query_ui_nodes {"text":"Recent"}` 返回 564×24 的 header，`capture-ui` 显示 `Toggle Theme` 位于 Recent 分组首行并保持选中，原 View/Navigate 分组不重复。
+
+自定义 footer 实测（720×820）：点击 `Open with project footer` 后，`query_ui_nodes` 返回 `Aurora workspace`（x=106, y=607），默认 `Keyboard shortcuts` 计数为 0；点击 `Toggle Theme` 后面板关闭且 `Last run: Toggle Theme` 更新，`capture-ui` 确认 footer 替换与执行路径均正常。
 
 ## References
 
