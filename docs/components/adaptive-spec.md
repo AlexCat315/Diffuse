@@ -3,7 +3,7 @@
 本文把 [组件标准](standard.md) 的交付要求展开为可实现、可验收的逐项规范：先定义布局容器在空间不足时的统一处理阶梯，再逐项规定控件的默认外观、手机与平板上的重排方式，以及触摸、键盘和辅助功能交互；随后给出动效与动画（曲线、弹簧、进入/退出）的选型与实现；最后给出与 Gallery、单元测试和真机对应的验收方法。
 
 - 适用对象：`GuavaUI` 第一方容器与控件；应用自定义组件在其职责范围内复用同一套表面模型与阶梯。
-- 设计参考：SwiftUI（size class、`ViewThatFits`、`Layout`、focus/keyboard 语义）与 Flutter（`MediaQuery`、`LayoutBuilder`、Material 3 adaptive 的 bar/rail/drawer 收敛、`FittedBox`/`TextOverflow`、`ActionChip`/overflow menu 模式）。命名与 API 不必对齐，行为契约对齐。
+- 设计参考：SwiftUI（size class、`ViewThatFits`、`Layout`、focus/keyboard 语义）与 Flutter（`MediaQuery`、`LayoutBuilder`、 adaptive 的 bar/rail/drawer 收敛、`FittedBox`/`TextOverflow`、`ActionChip`/overflow menu 模式）。命名与 API 不必对齐，行为契约对齐。
 - 状态标注：第 1、3 节的关键行为在行尾带 `[已实现]`、`[部分]`、`[未实现]`，表示当前代码与本规范的差距；未实现项必须按第 5 节清单关闭，不能默认豁免。
 - 数值均为逻辑点。DPI 只影响栅格密度；`TextScaler` 只缩放一次。宿主提供 viewport、safeArea、input、reducesMotion，组件不得直接读取平台 API。
 
@@ -357,9 +357,9 @@
 
 **CommandPalette**
 
-- 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×440；结果经 `VariableVirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "RECENT" 分组置顶。`[已实现]`
-- 手机：compact 下宽 `viewport − 16`、高 `min(560, viewport − 16)`，`inset 8` 居中；结果行触摸 ≥44pt、header 36pt，指针保持 36/28。`[部分]`（几何与行高已完成；软键盘出现后的结果区收缩仍由宿主 IME/安全区处理）
-- 平板 / 桌面：640×440、顶部放置、键盘上下移动。`[已实现]`
+- 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×560；结果经 `VariableVirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "RECENT" 分组置顶。`[已实现]`
+- 手机：compact 下宽 `viewport − 16`、高 `min(560, viewport − 16)`，`inset 8` 居中；结果行触摸 ≥44pt、header 36pt，指针保持 40/24。`[部分]`（几何与行高已完成；软键盘出现后的结果区收缩仍由宿主 IME/安全区处理）
+- 平板 / 桌面：640×560、顶部放置、键盘上下移动。`[已实现]`
 - 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；执行后记录最近命令（最多 3 条，session 级），再次打开时置于 RECENT 并从原分组去重；1000 条结果只挂载 <60 行，`scrollToIndex` 跟随 highlight；验收：`CommandPaletteAdaptiveTests`（390 触摸 / 1280 指针几何与行高）、`FeedbackComponentTests`（Recent 投影）、`--component commandPalette`、`ProductInteractionRegressionTests.commandVirtualization` + 200% 行预算测试。
 
 ### 3.6 浮层与反馈面
@@ -543,7 +543,7 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 
 第 11–12 项窄宽重排已完成：`Stepper` 按每步 148pt 加 24pt 连接段的横向预算在宽/窄两套 retained 分支间切换，窄分支纵向堆叠，Left/Right 停止导航、Up/Down 生效；`StepperOptions.minimumHorizontalStepWidth` 供长标题调用方提高预算。开发中的 390pt DevTools 实测发现，原地把同一 `Box` 从 `.row` 改成 `.column` 会让 Yoga 沿用旧行高、把步骤压成 0pt；改为 `ViewThatFits` 的两套稳定布局树后，步骤恢复 56pt 行高。`ButtonGroup` 改用可换行 flex line，段宽与 44pt 触摸高度保持；`Vec3Field` 以 96pt 基准和 88pt 最小轴宽换行，窄宽下 X/Y 一行、Z 下一行。`NarrowReflowTests` 在 390/720pt、触摸输入下验证堆叠/单行几何、换行位置、44pt 段高与轴感知键盘。Gallery `stepper`、`buttonGroup`、`vec3Field` 页与自适应预览已更新；DevTools `query_ui_nodes` 实测 390pt 步骤为 y=446/526/606 × 56pt，720pt 为同一 y=294、x=102/302/502；ButtonGroup 260pt 五段换行；Vec3Field 390pt 的 X/Y 同 y=409、Z y=437，720pt 全宽 X/Y/Z 同 y=277。`capture-ui` 截图确认纵向连接线、分段换行与 Vec3 的 X/Y→Z 排布。
 
-CommandPalette compact 几何已完成：`SurfaceReader` 读取 surface 尺寸与输入，compact 下使用 `viewport − 16` 宽、`min(560, viewport − 16)` 高、8pt inset 并居中；触摸面结果行取 `max(36, minimumControlExtent)`、header 36，指针保持 36/28。`CommandPaletteAdaptiveTests` 在 390pt 触摸面断言 374×560 panel 与 44pt 行，在 1280pt 指针面断言 640×440 与 36pt 行。DevTools 在 390×820 真机窗口中打开 Gallery `commandPalette`，`query_ui_nodes` 的 `role=dialog` 返回 374×560、位置 (8,130)，`capture-ui` 确认搜索行、结果区与 footer 均在窗口内；宿主默认指针输入下现场行高为 36，触摸 44pt 由单元测试覆盖。软键盘出现后的结果区收缩仍由宿主 IME/安全区处理。
+CommandPalette compact 几何已完成：`SurfaceReader` 读取 surface 尺寸与输入，compact 下使用 `viewport − 16` 宽、`min(560, viewport − 16)` 高、8pt inset 并居中；触摸面结果行取 `max(40, minimumControlExtent)`、header 36，指针保持 40/24。`CommandPaletteAdaptiveTests` 在 390pt 触摸面断言 374×560 panel 与 44pt 行，在 1280pt 指针面断言 640×560 与 40pt 行。DevTools 在 390×820 真机窗口中打开 Gallery `commandPalette`，`query_ui_nodes` 的 `role=dialog` 返回 374×560、位置 (8,130)，`capture-ui` 确认搜索行、结果区与 footer 均在窗口内；宿主默认指针输入下现场行高为 40，触摸 44pt 由单元测试覆盖。软键盘出现后的结果区收缩仍由宿主 IME/安全区处理。
 
 Select 弹层宽度与行高已完成：触发器继续单行截断并保留完整辅助功能值；弹层复用 Menu 的 `MenuWindowBounds` 与 `MenuRowMetrics`，宽度不小于触发器、由 Portal `viewportMargin` 夹紧在窗口 − 24 内，行高按指针 32 / 触摸 44 取最大值，长选项自然换行增高。DevTools 在 390×820 打开 Gallery `select`：触发器 286pt，弹层宽 346pt、x=32、右边界 378（窗口 390，右/左各 12pt），行高 32 为宿主指针面；触摸 44pt 由 `RowDensityTests.menuRows` 覆盖。`capture-ui` 确认长选项与禁用项都在窗口内。第 10 项剩余 Sheet 底部呈现与菜单触摸展开子菜单验收。
 

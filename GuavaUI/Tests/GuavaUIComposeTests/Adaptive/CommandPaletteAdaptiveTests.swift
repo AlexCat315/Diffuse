@@ -79,14 +79,14 @@ struct CommandPaletteAdaptiveTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    @Test("Regular palette keeps the 640x440 desktop geometry and 36pt rows")
+    @Test("Regular palette keeps the 640x560 desktop geometry and 40pt rows")
     func regular() throws {
         try withPalette(width: 1280, height: 820, input: [.pointer, .keyboard]) { graph in
             let panel = try panel(graph)
             #expect(abs(panel.frame.width - 640) < 1)
-            #expect(abs(panel.frame.height - 440) < 1)
+            #expect(abs(panel.frame.height - 560) < 1)
             let row = try button("Toggle Theme", graph)
-            #expect(row.frame.height == 36)
+            #expect(row.frame.height == 40)
         }
     }
 }

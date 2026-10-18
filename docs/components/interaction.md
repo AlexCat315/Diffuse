@@ -21,7 +21,7 @@ LayerRoot {
 }
 ```
 
-`Modal` 居中显示并随窗口大小更新。模态存在时，Tab / Shift-Tab 在内部循环，背景快捷键和拖拽不继续执行。关闭时恢复打开前的焦点；原控件已卸载时不恢复到失效节点。`FocusScope` 通过 `ModalFocusResource` 管理同一焦点范围机制，已有编辑器模态也使用它；菜单使用 `restoresCommands: true`，让文本撤销和重做继续作用于打开菜单前的输入框。
+`Modal` 居中显示并随窗口大小更新。`ModalOptions.geometry.inset` 现在同时是面板距窗口四边的实际外边距（不只是尺寸上限）：顶部放置会保留顶部 inset，底部/侧边同理，圆角不会被窗口边缘裁掉。模态存在时，Tab / Shift-Tab 在内部循环，背景快捷键和拖拽不继续执行。关闭时恢复打开前的焦点；原控件已卸载时不恢复到失效节点。`FocusScope` 通过 `ModalFocusResource` 管理同一焦点范围机制，已有编辑器模态也使用它；菜单使用 `restoresCommands: true`，让文本撤销和重做继续作用于打开菜单前的输入框。
 
 ## 右键菜单
 

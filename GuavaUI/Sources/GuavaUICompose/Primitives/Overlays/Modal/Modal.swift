@@ -83,6 +83,12 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
         let layout = LayoutNode(); layout.positionType = .absolute
         layout.setPosition(0, edge: .left); layout.setPosition(0, edge: .top)
         layout.setPosition(0, edge: .right); layout.setPosition(0, edge: .bottom)
+        // `inset` is the documented margin from the window edge, not only a
+        // cap on the dialog size. Without padding, top/bottom placement put a
+        // rounded panel flush against the window and clipped its corners.
+        if options.geometry.inset > 0 {
+            layout.setPadding(options.geometry.inset, edge: .all)
+        }
         layout.flexDirection = .column
         layout.alignItems = options.geometry.placement == .leading ? .flexStart : options.geometry.placement == .trailing ? .flexEnd : .center
         layout.justifyContent = options.geometry.placement == .bottom ? .flexEnd : options.geometry.placement == .top ? .flexStart : .center

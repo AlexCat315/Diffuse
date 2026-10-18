@@ -73,8 +73,8 @@ public struct CommandPalette: View {
     public var showsRecentCommands = true
     public var recentCommandLimit = 3
 
-    static let rowHeight: Float = 36
-    static let headerHeight: Float = 28
+    static let rowHeight: Float = 40
+    static let headerHeight: Float = 24
 
     public init(isPresented: Binding<Bool>,
                 items: [CommandItem],
@@ -106,7 +106,7 @@ public struct CommandPalette: View {
                         $0.geometry.placement = .center
                     } else {
                         $0.geometry.width = 640
-                        $0.geometry.height = 440
+                        $0.geometry.height = 560
                         $0.geometry.inset = 72
                         $0.geometry.placement = .top
                     }
@@ -117,8 +117,15 @@ public struct CommandPalette: View {
                         AnyView(searchField)
                         AnyView(Divider())
                         AnyView(results(itemHeight: itemHeight, headerHeight: headerHeight))
+                        AnyView(
+                            Box {}.frame(height: 1)
+                                .background(SemanticColorRef.border)
+                                .padding(horizontal: 12)
+                        )
                         AnyView(footer)
-                    }.debugName("commandPalette.panel")
+                    }
+                    .frame(width: .percent(100), height: .percent(100))
+                    .debugName("commandPalette.panel")
                 }
             }
         }
@@ -222,6 +229,7 @@ public struct CommandPalette: View {
     // MARK: - Pieces
 
     private var searchField: some View {
+        Box(direction: .column, alignItems: .stretch) {
         TextField(placeholder, text: $query) { input in
             input.decoration.size = .large
             input.behavior.clearable = true
@@ -244,6 +252,8 @@ public struct CommandPalette: View {
             }
             input.events.onClear = { highlightedID = firstSelectable?.id }
         }
+        }
+        .frame(width: .percent(100))
         .padding(12)
         .debugName("commandPalette.search")
     }
@@ -254,6 +264,7 @@ public struct CommandPalette: View {
                 $0.prominence = .compact
                 $0.icon = UIIcons.Action.search
             }
+            .padding(horizontal: 6)
             .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
         } else {
             VariableVirtualStack(entries, id: \.id, rowHeight: { entry, _, _ in
@@ -275,6 +286,7 @@ public struct CommandPalette: View {
                     row(item, height: itemHeight)
                 }
             }
+            .padding(horizontal: 8)
             .debugName("commandPalette.results")
             .frame(width: .percent(100), minHeight: 0)
             .flex(1, shrink: 1, basis: 0)
@@ -294,7 +306,7 @@ public struct CommandPalette: View {
                 }
                 Spacer()
                 if let shortcut = item.shortcut {
-                    KeyCap(shortcut).accessibilityHidden()
+                    shortcutCaps(shortcut)
                 }
             }
             .frame(width: .percent(100))
@@ -308,6 +320,18 @@ public struct CommandPalette: View {
         .accessibility { $0.role = .button; $0.label = item.title; $0.help = item.subtitle }
     }
 
+    private func shortcutCaps(_ shortcut: KeyboardShortcut) -> some View {
+        // One quiet mono chip reads faster than a row of tiny keycaps and
+        // keeps the trailing slot from dominating a 40pt command row.
+        Text(shortcut.caps().joined(separator: " "))
+            .font(.caption)
+            .foregroundColor(.onSurfaceVariant)
+            .padding(horizontal: 7, vertical: 4)
+            .background(.surfaceVariant)
+            .cornerRadius(5)
+            .accessibilityHidden()
+    }
+
     private var footer: some View {
         Row(alignment: .center, spacing: 14) {
             hint("↑↓", "navigate")
@@ -318,7 +342,7 @@ public struct CommandPalette: View {
                 .font(.caption).foregroundColor(.onSurfaceMuted)
         }
         .padding(horizontal: 14, vertical: 8)
-        .border(SemanticColorRef.border, width: 1)
+        .debugName("commandPalette.footer")
         .accessibility { $0.role = .group; $0.label = "Keyboard shortcuts" }
     }
 
@@ -350,10 +374,9 @@ private struct CommandRowStyle: ButtonStyle {
             fill = .clear
         }
         return Row(alignment: .center) { AnyView(c.label) }
-            .frame(width: .percent(100))
+            .frame(width: .percent(100), height: .percent(100))
             .padding(horizontal: 14, vertical: 0)
             .background(fill)
-            .border(c.isSelected ? theme.colors.accent.multipliedAlpha(0.5) : .clear, width: 1)
             .cornerRadius(theme.radius.sm)
             .opacity(c.isEnabled ? 1 : 0.45)
     }
