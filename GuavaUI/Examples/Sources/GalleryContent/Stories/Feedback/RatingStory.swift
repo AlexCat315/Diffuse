@@ -12,35 +12,30 @@ struct RatingStory: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Whole stars", "Hover previews a score. Release inside to choose it; click the selected score again to clear. Release outside or press Escape to cancel.") {
-                Row(alignment: .center, spacing: 20) {
-                    Rating("Overall rating", value: $whole) { $0.selection.isEnabled = options.isEnabled }
+                RatingSample(Rating("Overall rating", value: $whole) { $0.selection.isEnabled = options.isEnabled }) {
                     Text("Score: \(whole) / 5").font(.bodyStrong)
                     Button("Set 4", isEnabled: options.isEnabled) { whole = 4 }
                     Button("Clear", isEnabled: options.isEnabled) { whole = 0 }
                 }
             }
-            StorySection("Half stars & keyboard", "Each rating has one Tab stop. Left/Down decrease; Right/Up increase; Home/End reach the bounds; Delete clears when allowed.") {
-                Row(alignment: .center, spacing: 20) {
-                    Rating("Half-star rating", value: $half) { $0.selection.precision = .half; $0.selection.isEnabled = options.isEnabled }
+            StorySection("Half stars & keyboard", "Each rating has one Tab stop. Left/Right follow the layout direction; Down/Up decrease/increase. Home/End reach the bounds; Delete clears when allowed. Swipe the strip gutter or scroll horizontally to reach wide ratings.") {
+                RatingSample(Rating("Half-star rating", value: $half) { $0.selection.precision = .half; $0.selection.isEnabled = options.isEnabled }) {
                     Text("Score: \(half) / 5").font(.bodyStrong)
                 }
-                Row(alignment: .center, spacing: 20) {
-                    Rating("Ten-star rating", value: $ten) { $0.selection.maximum = 10; $0.selection.isEnabled = options.isEnabled; $0.appearance.size = .small }
+                RatingSample(Rating("Ten-star rating", value: $ten) { $0.selection.maximum = 10; $0.selection.isEnabled = options.isEnabled; $0.appearance.size = .small }) {
                     Text("Score: \(ten) / 10").font(.caption).foregroundColor(.onSurfaceMuted)
                 }
             }
             StorySection("Read-only & disabled", "Read-only scores retain their exact fraction. Disabled ratings show the score with muted colors; neither accepts input or joins the Tab order.") {
-                Row(alignment: .center, spacing: 20) {
-                    Rating("Average customer score", value: .constant(4.25)) { $0.selection.isReadOnly = true; $0.appearance.filled = .success }
+                RatingSample(Rating("Average customer score", value: .constant(4.25)) { $0.selection.isReadOnly = true; $0.appearance.filled = .success }) {
                     Text("Average: 4.25 / 5").font(.body)
                 }
-                Row(alignment: .center, spacing: 20) {
-                    Rating("Disabled rating", value: .constant(2.5)) { $0.selection.isEnabled = false; $0.selection.precision = .half }
+                RatingSample(Rating("Disabled rating", value: .constant(2.5)) { $0.selection.isEnabled = false; $0.selection.precision = .half }) {
                     Text("Disabled: 2.5 / 5").font(.caption).foregroundColor(.onSurfaceMuted)
                 }
             }
             StorySection("Density & appearance", "SVG stars rasterize at their actual size and screen density. The seven-star example has a custom color and size, and keeps a minimum score of one half.") {
-                Row(alignment: .center, spacing: 24) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 24) {
                     for size in ControlSize.allCases {
                         AnyView(Column(alignment: .leading, spacing: 4) {
                             Text(String(describing: size).capitalized).font(.caption).foregroundColor(.onSurfaceMuted)
@@ -48,25 +43,21 @@ struct RatingStory: View {
                         })
                     }
                 }
-                Row(alignment: .center, spacing: 20) {
-                    Rating("Custom seven-star rating", value: $custom) {
+                RatingSample(Rating("Custom seven-star rating", value: $custom) {
                         $0.selection.maximum = 7; $0.selection.precision = .half; $0.selection.allowsClear = false
                         $0.selection.isEnabled = options.isEnabled
                         $0.appearance.starSize = 36; $0.appearance.spacing = 8; $0.appearance.filled = .accent
-                    }
+                    }) {
                     Text("Score: \(custom) / 7").font(.bodyStrong)
                 }
             }
             StorySection("RTL", "Stars run from the trailing edge: the rightmost star is the first point, filled half stars grow from the right, and Left/Right arrows mirror.") {
-                Row(alignment: .center, spacing: 20) {
-                    Rating("RTL rating", value: $rtl) {
-                        $0.selection.precision = .half
-                        $0.selection.isEnabled = options.isEnabled
-                    }
-                    .layoutDirection(.rtl)
-                    .debugName("rating-rtl")
+                RatingSample(Rating("RTL rating", value: $rtl) {
+                    $0.selection.precision = .half; $0.selection.isEnabled = options.isEnabled
+                }) {
                     Text("Score: \(rtl) / 5").font(.bodyStrong)
                 }
+                .layoutDirection(.rtl).debugName("rating-rtl")
             }
         }
     }

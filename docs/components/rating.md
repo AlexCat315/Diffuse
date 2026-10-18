@@ -49,3 +49,12 @@ RTL 已镜像星位、半星裁剪、指针候选和左右方向键；上下方�
 ## 响应式与输入密度
 
 可交互 Rating 在 touch surface 上为每颗星保留至少 44pt 的命中 lane，组件高度至少 44pt；星形仍使用 authored starSize 并在 lane 中居中。半星按 lane 的左右半区选择。touch-only surface 不产生被动 hover preview，但按下后的拖动仍可预览；只读评分保留紧凑展示尺寸。
+
+## Gallery 窄宽组合
+
+评分原语保留固有星位与触摸 lane；示例将分数和可换行操作放在独立下行，避免与星带争抢宽度。多星使用有界横向 ScrollView（底部保留滚动条），滚动坐标为 LTR，但评分本身显式继承外部方向；RTL 星序与键盘语义保持。拖动滚动条或横向滚轮可以显露两端星位，不能仅依赖卡片裁剪。
+
+`RatingLayoutTests.matrix` 覆盖 390/720/1280、100%/200%、明暗主题和 LTR/RTL；验证星带视口、评分说明边界和方向键。Gallery 原有 `ratingPointer` 继续验证真实指针提交。DevTools 三档 Set 4 均得到 4.0；390 RTL 十星带横向滚轮后 offset=180，拖动滚动条到 198，再点击原本隐藏的第一颗得到 1.0。三档镜像确认说明/按钮不越界，十星保留滚动条且无卡片外溢。
+
+- [RatingSample.swift](../../GuavaUI/Examples/Sources/GalleryContent/Stories/Feedback/RatingSample.swift)
+- [RatingLayoutTests.swift](../../GuavaUI/Examples/Tests/GalleryContentTests/RatingLayoutTests.swift)

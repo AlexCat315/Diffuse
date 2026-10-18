@@ -132,7 +132,7 @@
 | --- | --- | --- |
 | Toggle / Checkbox | label 槽位已实现；Checkbox 的 `CheckboxState.off/on/mixed` 也已实现，Toggle 仍采用 Bool 开关语义 | 已完成 |
 | Slider | 水平/垂直、RTL 映射、拖动/键盘/辅助功能已完成，见 [Slider](slider.md) | 已完成 |
-| Rating | RTL 映射/填充/方向键已实现；自定义图形及比半星更细的精度仍缺，见 [Rating](rating.md) | P2 |
+| Rating | RTL 映射/填充/方向键、多星示例滚动和窄宽评分说明重排已实现；自定义图形及比半星更细的精度仍缺，见 [Rating](rating.md) | P2 |
 | NumberField / Vec3Field | locale 小数、数字/符号与触摸/大字号轴单元已完成，见 [数值输入](numberfield.md)；拖拽 scrub、单轴重置与向量复制/粘贴仍缺 | P2 |
 | Select / Combobox | 触发器宽度下限与窗口夹紧已实现；异步请求、取消与加载状态由调用方数据层负责，组件级远程结果契约尚未提供 | P2（按需） |
 | DatePicker / TimeField | Calendar 配置可指定 timeZone，时区选择入口仍缺；TimeOfDay 是不含时区的墙钟值，转换由调用方负责；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |

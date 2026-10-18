@@ -176,7 +176,7 @@
 **Rating**
 
 - 外观：星 12/16/20/28（mini/small/regular/large），可交互高度 ≥ 32；半星预览；只读用 image 语义。`[已实现]`
-- 手机：每星命中 lane ≥ 44pt、组件高 ≥ 44pt；触摸面无被动 hover 预览，按下拖动仍预览；最大星数下放不下时整体裁剪绘制与命中，不允许负值布局。`[已实现]`
+- 手机：每星命中 lane ≥ 44pt、组件高 ≥ 44pt；触摸面无被动 hover 预览，按下拖动仍预览；原语按显式边界裁剪绘制与命中，不允许负值布局；多星组合使用横向滚动保留完整星带，Gallery 的评分说明和操作移到下行并换行。`[已实现]`
 - 平板 / 桌面：hover 预览、键盘焦点环 2pt；恢复紧凑展示尺寸。`[已实现]`
 - 交互与验收：方向键步进、Home/End、Delete 清空、Escape 取消；辅助功能 slider 语义 + setValue/increment/decrement。验收：Rating 测试族 + Gallery `--component rating` 的 narrow/wide/touch。
 
@@ -578,7 +578,6 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | List / MultiSelectList / SectionedList | 通用行的标题收敛与尾部徽标/状态保留；重排边缘自动滚动另见 gaps | 自定义 rowContent 不能由容器静默截断整个行；需可组合的行布局契约 |
 | Badge / Tag / KeyCap / Label | 长文本换行或显式收敛策略 | 不静默丢失文本，完整语义可达 |
 | Alert | 窄宽/大字号操作区堆叠与窗口预算 | AlertDialog、Notification 已完成，不能代替 Alert 本体 |
-| Rating | 窄宽下评分说明与多星示例超出卡片 | RTL 行为已通过，布局仍需单独修复与视觉验收 |
 | Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
 
 新项关闭时须更新对应契约、组件文档和下方证据，并单独提交；物理设备限制保持明示，不把未执行的设备测试记为通过。
@@ -649,6 +648,8 @@ DevTools AI 的输入值验收入口已补齐：普通节点查询继续不求�
 SwipeList 的 RTL 与操作区已补齐：向逻辑 leading 滑动（LTR 左、RTL 右）揭示 trailing 操作，位移与按钮排列一致；Escape 从操作按钮焦点真正收起。行宽扣除 stable 滚动条 12pt 保留区，避免 RTL 裁掉 Delete 左边缘；操作宽 74pt 随字号缩放并按行宽夹紧，标题单行省略，Gallery 移除固定内容高度避免 200% 副标题裁切。13 项滑动/滚动/刷新/Slider 测试通过，另有 6 项 SwipeList 测试（含 LTR/RTL × 100%/200% 四组合）通过。DevTools 390×820 触摸右滑揭示完整 74×52 操作；720 深色混合、1280 浅色指针 200% 使用 Actions 入口，后者操作为 148×104，Archive/Delete 保持单行。三档执行 Archive 后均查询到 `Archived Inbox`；镜像确认圆角、危险操作层次与行文本无裁切。
 
 文档状态复核：Button 字符串截断、触摸子菜单、Rating RTL、Select 弹层宽度与 locale 数值的旧缺失状态已校正；FAB 按现有视觉基线明确不纳入，时区配置与时区选择入口分开描述。31 项截断/菜单/Rating/选择器测试通过；DevTools 在 390 RTL 触摸 Rating 点击第一颗后 ArrowLeft 得到 2.0，720 深色混合刷新得到 `Refreshes: 1`，1280 指针面长按钮为 150×32 且保持单行省略/完整名称，动作计数递增。镜像检查确认 Button/刷新面正常；Rating 窄宽说明与多星溢出已列为待修，未记作视觉验收通过。
+
+Rating Gallery 窄宽组合已修复：评分说明和操作独立下行，密度样本换行，多星带在卡片内横向滚动并保留滚动条。局部 LTR 滚动坐标不改变星序，布局后同步继承实际 RTL 方向且只在变化时重组。两项 Gallery 布局/真实点击测试通过，矩阵覆盖 24 个宽度/字号/方向/主题组合；DevTools 三档 Set 4 均返回 4.0，390 RTL 十星带 offset 从 0 经横向滚轮到 180、拖动滚动条到 198，再点击原先隐藏的第一颗得到 1.0。镜像确认 390 说明/按钮完整、720 深色层次清晰、1280 的 200% 文本无裁切，先前记录的 Rating 视觉问题已关闭。见 [Rating](rating.md#gallery-窄宽组合)。
 
 ## 6. 动效与动画（动画效果实现）
 
