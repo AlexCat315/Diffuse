@@ -1,6 +1,6 @@
 # Slider
 
-连续单滑块。把一个 `Double` 绑定到一段 `ClosedRange<Double>`。
+连续单滑块。把一个 `Double` 绑定到一段 `ClosedRange<Double>`；`axis: .horizontal`（默认）或 `.vertical`。
 
 ## Anatomy
 
@@ -12,7 +12,7 @@
                        ↑ track (height 4)
 ```
 
-- **track**：水平细条，圆角 `theme.radius.sm`，颜色 `surfaceVariant`
+- **track**：沿主轴的细条，圆角 `theme.radius.sm`，颜色 `surfaceVariant`
 - **filled**：track 中已选区段，颜色 `accent`
 - **thumb**：圆形把手，直径 18，颜色 `accent`；focused 时叠 2px `focusRing` 描边
 
@@ -39,8 +39,8 @@
 
 ## Behavior
 
-- **指针**：down 把 thumb 锁定到光标 X 位置；motion 时持续更新 binding；up 释放并触发 `onEditingChanged?(false)`。
-- **键盘**：← / ↓ 减小、→ / ↑ 增大，Home / End 到范围两端；PageUp / PageDown 移动 10 个 step（连续滑块的 step 为 span/100，即 10% 区间），并在边界夹紧。
+- **指针**：horizontal 按 X、vertical 按 Y 映射，down 后捕获，拖出边界仍夹紧更新，up 释放并触发 `onEditingChanged?(false)`。垂直方向底部为最小、顶部为最大；水平填充从逻辑 leading 开始，RTL 右端为最小。
+- **键盘**：↓ 减小、↑ 增大；水平 ← / → 跟随阅读方向（RTL 反转），垂直 ← 减小 / → 增大。Home / End 到范围两端；PageUp / PageDown 移动 10 个 step（连续滑块的 step 为 span/100，即 10% 区间），并在边界夹紧。
 - **step**：非 nil 时把值四舍五入到最近的 step 倍数。
 - **ticks**：`showsTicks: true` 且提供 `step` 时，在每个离散 step 位置绘制 1pt 刻度；最多 40 段，避免密集噪声。
 
@@ -49,6 +49,7 @@
 ✅ 应当：
 - `Slider(value: $volume, range: 0...1)` —— range 任意，必要时给 `step`
 - 需要离散刻度时用 `Slider(value: $level, range: 0...5, step: 1, showsTicks: true)`
+- 垂直电平用 `Slider(value: $level, range: 0...100, step: 5, axis: .vertical).frame(height: 160)`；自然尺寸 24×160，触摸宽度至少 44pt。用 `.accessibilityLabel("Level")` 提供业务名称。
 - 旁边并列展示数值标签：`Row(alignment: .center, spacing: 12) { Slider(...).flex(); Text("\(Int(value*100))").frame(width: 50) }`
 - 自定义视觉走 `SliderStyle` 协议 + `.sliderStyle(_:)`
 
@@ -56,9 +57,11 @@
 - 改 thumbDiameter < 16（命中区会变得不可用）
 - 写 `Slider().padding(...)` —— Slider 自己留出 thumb 的横向空间
 
-## Known issues / TODO
+## 验收
 
-- 没有 vertical 方向
+`SliderAxisTests` 覆盖 390/720/1280 × touch/mixed/pointer、Y 轴点击与越界拖动、捕获释放、方向键、辅助功能赋值/步进和 RTL；既有 `SliderTests`、`FocusRingTests` 与 `TouchDensityTests` 继续验证水平行为、样式、刻度与焦点。
+
+2026-10-18 DevTools：390×820 touch 下从 (68,584) 上拖到 (68,520) 后按 ↑，AI 查询 `slider-vertical` 为 `95.0`、文字为 `95%`；720×820 dark/mixed 下目标宽 44、高 160，1280×820 pointer/200% 下目标宽 24、高 160。三张镜像已实际查看：圆角表面、细轨道、刻度、禁用对照与数值层级清晰，没有文字/轨道重叠；窄窗口通过外层滚动显露完整故事。
 
 ## References
 
@@ -70,8 +73,8 @@
 
 ## File map
 
-- 主体: [GuavaUICompose/Primitives/Slider.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Slider.swift)
-- Style 协议 + 默认: [GuavaUICompose/Theme/SliderStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/SliderStyle.swift)
+- API、输入、几何、绘制：[Slider](../../GuavaUI/Sources/GuavaUICompose/Primitives/Controls/Fields/Slider/)
+- Style 协议 + 默认：[SliderStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/Styles/Components/SliderStyle.swift)
 
 ## 响应式与输入密度
 

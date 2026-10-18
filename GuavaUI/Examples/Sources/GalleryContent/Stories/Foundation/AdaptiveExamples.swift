@@ -97,7 +97,10 @@ private struct AdaptiveControlSample: View {
         case .button: AnyView(Button("Save changes", isEnabled: options.isEnabled) { number += 1 })
         case .checkbox: AnyView(Checkbox(isOn: $enabled, isEnabled: options.isEnabled))
         case .toggle: AnyView(Toggle(isOn: $enabled, isEnabled: options.isEnabled))
-        case .slider: AnyView(Slider(value: $value, range: 0...5, isEnabled: options.isEnabled).frame(width: .percent(100)))
+        case .slider: AnyView(Row(alignment: .center, spacing: 16) {
+            Slider(value: $value, range: 0...5, isEnabled: options.isEnabled).flex(1, shrink: 1)
+            Slider(value: $value, range: 0...5, isEnabled: options.isEnabled, axis: .vertical).frame(height: 80)
+        }.frame(width: .percent(100)))
         case .rangeSlider: AnyView(RangeSlider(values: $range, in: 0...100, step: 1, minimumSpan: 5, isEnabled: options.isEnabled).frame(width: .percent(100)))
         case .textField: AnyView(TextField("Name", text: $text) { $0.behavior.disabled = !options.isEnabled }.frame(width: .percent(100)))
         case .searchField: AnyView(SearchField(text: $text, suggestions: ["Camera", "Canvas"], isEnabled: options.isEnabled).frame(width: .percent(100)))

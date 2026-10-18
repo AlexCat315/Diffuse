@@ -84,11 +84,24 @@ struct SliderStory: View {
     @State private var continuous = 0.6
     @State private var stepped = 3.0
     @State private var editing = false
+    @State private var vertical = 65.0
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Continuous", "Pointer capture preserves dragging outside the track. Arrows, Home and End work with keyboard focus.") {
                 Slider(value: $continuous, isEnabled: options.isEnabled, onEditingChanged: { editing = $0 })
                 Text("Value: \(continuous)  ·  \(editing ? "Dragging" : "Idle")").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+            StorySection("Vertical levels", "Drag upward to increase. Both orientations share keyboard, accessibility and theme styling; horizontal values follow the reading direction.") {
+                Row(alignment: .center, spacing: 24) {
+                    Slider(value: $vertical, range: 0...100, step: 5, showsTicks: true, axis: .vertical)
+                        .frame(height: 160).accessibilityLabel("Level").debugName("slider-vertical")
+                    Slider(value: .constant(35), range: 0...100, isEnabled: false, axis: .vertical)
+                        .frame(height: 160).accessibilityLabel("Disabled level")
+                    Column(alignment: .leading, spacing: 8) {
+                        Text("\(Int(vertical))%").font(.title).debugName("slider-vertical-value")
+                        Text("Level").font(.caption).foregroundColor(.onSurfaceMuted)
+                    }
+                }
             }
             StorySection("Stepped & disabled", "Steps are relative to the lower bound and clamp at the range edges; PageUp/PageDown move ten steps and ticks mark each step.") {
                 Slider(value: $stepped, range: 0...5, step: 1, isEnabled: options.isEnabled, showsTicks: true)

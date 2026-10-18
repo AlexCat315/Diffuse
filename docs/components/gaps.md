@@ -131,7 +131,7 @@
 | 组件 | 缺口 | 优先级 |
 | --- | --- | --- |
 | Toggle / Checkbox | label 槽位已实现；Checkbox 的 `CheckboxState.off/on/mixed` 也已实现，Toggle 仍采用 Bool 开关语义 | 已完成 |
-| Slider | 垂直方向 | P2 |
+| Slider | 水平/垂直、RTL 映射、拖动/键盘/辅助功能已完成，见 [Slider](slider.md) | 已完成 |
 | Rating | RTL、自定义图形/半星以上精度 | P2 |
 | NumberField / Vec3Field | locale 小数分隔、拖拽 scrub、单轴重置与向量复制/粘贴 | P2 |
 | Select / Combobox | 远程/异步结果（按需）、触发器宽度联动 | P2 |
