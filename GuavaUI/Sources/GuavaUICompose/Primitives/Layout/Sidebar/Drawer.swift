@@ -14,19 +14,21 @@ public struct NavigationDrawer<ID: Hashable, Header: View, Footer: View>: View {
     private let title: String
     private let isPresented: Binding<Bool>
     private let selection: Binding<ID?>
+    private let expanded: Binding<Set<ID>>?
     private let sections: [SidebarSection<ID>]
     private let options: NavigationDrawerOptions
     private let header: Header
     private let footer: Footer
 
     public init(
-        _ title: String, isPresented: Binding<Bool>, selection: Binding<ID?>,
+        _ title: String, isPresented: Binding<Bool>, selection: Binding<ID?>, expanded: Binding<Set<ID>>? = nil,
         sections: [SidebarSection<ID>], configure: (inout NavigationDrawerOptions) -> Void = { _ in },
         @ViewBuilder header: () -> Header, @ViewBuilder footer: () -> Footer
     ) {
         self.title = title
         self.isPresented = isPresented
         self.selection = selection
+        self.expanded = expanded
         self.sections = sections
         var options = NavigationDrawerOptions()
         configure(&options)
@@ -56,7 +58,7 @@ public struct NavigationDrawer<ID: Hashable, Header: View, Footer: View>: View {
                 }, isEnabled: options.allowsSwipeDismissal && isPresented.wrappedValue
             ) {
                 Sidebar(
-                    selection: selection, sections: sections, minimumRowHeight: 44,
+                    selection: selection, sections: sections, expanded: expanded, minimumRowHeight: 44,
                     onActivate: { _ in
                         if options.closesOnSelection { isPresented.wrappedValue = false }
                     },
@@ -81,11 +83,11 @@ public struct NavigationDrawer<ID: Hashable, Header: View, Footer: View>: View {
 
 extension NavigationDrawer where Header == EmptyView, Footer == EmptyView {
     public init(
-        _ title: String, isPresented: Binding<Bool>, selection: Binding<ID?>,
+        _ title: String, isPresented: Binding<Bool>, selection: Binding<ID?>, expanded: Binding<Set<ID>>? = nil,
         sections: [SidebarSection<ID>], configure: (inout NavigationDrawerOptions) -> Void = { _ in }
     ) {
         self.init(
-            title, isPresented: isPresented, selection: selection, sections: sections, configure: configure,
+            title, isPresented: isPresented, selection: selection, expanded: expanded, sections: sections, configure: configure,
             header: { EmptyView() }, footer: { EmptyView() })
     }
 }

@@ -321,10 +321,11 @@
 **Sidebar**
 
 - 外观：图标槽 + 标题 + 徽标；行高 ≥ 38；header/footer/滚动区各自边界。`[已实现]`
+- 嵌套：`SidebarItem.children` 让分支只切换展开，`expanded` binding 可选出；缩进每级 16pt（最多 5 级），disclosure 槽固定，深层选中只高亮精确叶子。程序化选择只展开祖先路径一次；外部折叠保留页面/节点并交接焦点。`[已实现]`，见 [Sidebar 嵌套导航](sidebar.md#嵌套导航)。
 - 手机 / 紧凑：独立 `NavigationDrawer` 复用 Sidebar 目的地，打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt，支持左滑关闭。`NavigationRail` 和 `SidebarPresentation.rail` 提供轨道形态并保留按钮/焦点；`AdaptiveSidebar` 按实际容器宽度自动切换常驻栏、Rail 和抽屉，并支持可选触摸边缘唤出。`[已实现]`
 - 平板 / 桌面：常驻分栏；图标/徽标/文字全部可见，`TextScaler` 200% 可用。`[已实现]`
 - 可调整常驻栏：`AdaptiveSidebar(width:)` 接收调用方宽度 binding；拖拽、RTL 方向键和辅助功能共用范围，触摸分隔柄 ≥44pt，实际容器约束不覆盖请求宽度，切换呈现保留会话。`[已实现]`，API 与验收见 [Sidebar 调整栏宽](sidebar.md#调整栏宽)。
-- 交互与验收：方向键/Home/End 循环、Enter/Space 选择、选中显露、辅助功能完整标题 + 选中/禁用 + 徽标 value。跨形态保留页面、槽位、滚动和展开会话。验收：`--component sidebar`、`NavigationStateTests`、`AdaptiveSidebarTests` 与 Gallery `AdaptiveShellTests`。
+- 交互与验收：Up/Down/Home/End 只遍历可见启用项；Right/Left（RTL 反转）展开/收起分支并进入/返回；Enter/Space 对分支切换展开、对叶子选择。辅助功能完整标题 + 选中/禁用 + 徽标 value + `isExpanded`。跨形态保留页面、槽位、滚动和展开会话。验收：`--component sidebar`、`NavigationStateTests`、`AdaptiveSidebarTests`、`SidebarHierarchyTests` 6/6 与 Gallery `AdaptiveShellTests`。
 
 **Toolbar**
 

@@ -9,6 +9,7 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
   private let presentation: Binding<Bool>?
   private let selection: Binding<ID?>
   private let width: Binding<Float>?
+  private let expanded: Binding<Set<ID>>?
   private let sections: [SidebarSection<ID>]
   private let options: AdaptiveSidebarOptions
   private let header: Header
@@ -19,6 +20,7 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
 
   public init(
     _ title: String, isPresented: Binding<Bool>? = nil, selection: Binding<ID?>, width: Binding<Float>? = nil,
+    expanded: Binding<Set<ID>>? = nil,
     sections: [SidebarSection<ID>], configure: (inout AdaptiveSidebarOptions) -> Void = { _ in },
     @ViewBuilder header: () -> Header, @ViewBuilder footer: () -> Footer,
     @ViewBuilder content: () -> Content
@@ -27,6 +29,7 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
     presentation = isPresented
     self.selection = selection
     self.width = width
+    self.expanded = expanded
     self.sections = sections
     var options = AdaptiveSidebarOptions()
     configure(&options)
@@ -123,6 +126,7 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
         selection: selection, sections: sections,
         presentation: geometry.mode == .rail && !geometry.isModal
           ? .rail(showsLabels: options.layout.showsRailLabels) : .expanded,
+        expanded: expanded,
         minimumRowHeight: geometry.mode == .expanded ? 38 : 44,
         onActivate: { _ in
           if geometry.isModal && options.drawer.closesOnSelection {
@@ -163,11 +167,12 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
 extension AdaptiveSidebar where Header == EmptyView, Footer == EmptyView {
   public init(
     _ title: String, isPresented: Binding<Bool>? = nil, selection: Binding<ID?>, width: Binding<Float>? = nil,
+    expanded: Binding<Set<ID>>? = nil,
     sections: [SidebarSection<ID>], configure: (inout AdaptiveSidebarOptions) -> Void = { _ in },
     @ViewBuilder content: () -> Content
   ) {
     self.init(
-      title, isPresented: isPresented, selection: selection, width: width, sections: sections,
+      title, isPresented: isPresented, selection: selection, width: width, expanded: expanded, sections: sections,
       configure: configure,
       header: { EmptyView() }, footer: { EmptyView() }, content: content)
   }

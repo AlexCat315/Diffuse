@@ -60,6 +60,7 @@ struct SidebarStory: View {
             NavigationDrawer("Guava workspace", isPresented: $drawerOpen, selection: $selection, sections: sections)
         }
         ResizableSidebarExample(options: options)
+        NestedSidebarExample(options: options)
         }
     }
 

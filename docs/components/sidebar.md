@@ -52,6 +52,30 @@ Tab 进入目的地分组一次。上/下键选择并聚焦上一项/下一项�
 
 `minimumRowHeight` 默认 38pt，可按呈现形态提高下限；触摸仍至少 44pt。`onActivate` 仅在点击或 Enter/Space 激活目的地后调用，方向键浏览只更新 selection，不触发该回调。[NavigationDrawer](navigation-drawer.md) 复用同一 Sidebar 数据、至少 44pt 行高和共享选择，并用激活回调关闭覆盖层。Gallery Sidebar 页提供 “Open as drawer” 入口。
 
+目的地可以递归嵌套。非空 `children` 让该行成为可展开分组：点击分组只展开/收起，不改变 selection；只有叶子目的地会写入 selection 并触发 `onActivate`。`expanded` 是可选 `Binding<Set<ID>>`，省略时组件持有本地会话。选中某个深层目的地时，组件只展开其祖先路径一次；外部折叠后选中页和节点保留，焦点交给最近的可用祖先。
+
+```swift
+Sidebar(selection: $selection, sections: [
+    SidebarSection("workspace", items: [
+        SidebarItem("projects", "Project spaces") {
+            $0.icon = UIIcons.File.folder
+            $0.children = [
+                SidebarItem("welcome", "Getting started"),
+                SidebarItem("team", "Design team") {
+                    $0.children = [SidebarItem("audit", "Audit log"),
+                                   SidebarItem("billing", "Billing") { $0.isEnabled = false }]
+                }
+            ]
+        }
+    ])
+], expanded: $expanded).frame(width: 280, height: 360)
+```
+
+- 行缩进按祖先数量每级 16pt，最多 5 级；分支左侧保留 16pt disclosure 槽，叶子保留同宽槽位，标题不跳动。
+- 分支展开状态通过 `accessibility.state.isExpanded` 与辅助功能 activate 暴露；分组只切换展开，不冒充目的地。只有精确选中的叶子绘制 selection 高亮，包含选中项的祖先只保持展开，避免多行同时显示为选中。
+- 键盘 Right（RTL 为 Left）在折叠时展开，已展开时进入首个可用子项；Left（RTL 为 Right）在展开时收起，否则回到父项。Up/Down/Home/End 只遍历当前可见且启用的项。Enter/Space 对分组切换展开，对叶子选择并触发 `onActivate`。
+- 数据删除、祖先禁用或整体禁用时，不可见/禁用节点不进入 Tab 链；焦点回退到最近可用祖先或首个可用目的地，selection 不被改写。`AnimatedVisibility(.identity, retainsContent:)` 保留折叠子树的节点与局部状态。
+
 `presentation` 默认 `.expanded`，也可使用 `.rail(showsLabels: true/false)` 收为 72/56pt 导航轨，同一组目的地按钮、选择、焦点及头尾槽位状态保留；标签和徽标在图标模式下保留完整 tooltip 与辅助功能信息。呈现与内容几何变化后会显露选中项，普通滚动不被持续拉回。独立 Rail API 与边界见 [NavigationRail](navigation-rail.md)。
 
 ## 自适应壳层
@@ -99,7 +123,7 @@ AdaptiveSidebar("Workspace", isPresented: $navigationOpen, selection: $selection
 - 拖拽捕获指针，离开分隔柄仍跟随；Escape 恢复本次拖拽起始宽度。Left/Right 移动 16pt，Shift 移动 32pt，Home/End 到当前可用范围两端。RTL 的方向键和拖动遵循物理方向，增减辅助功能动作仍表示逻辑栏宽增减。
 - slider 语义提供完整名称、当前点数、说明，以及 increment/decrement/setValue。切到 Rail 或抽屉时不保留隐藏分隔柄的输入或捕获，焦点交给选中目的地或打开按钮；禁用交互、形态/输入变化和卸载都会结束捕获。
 
-`SidebarResizeTests` 覆盖容器三档与阈值往返、100%/200%、明暗主题、三种输入、RTL、草稿/焦点/滚动/节点保留、拖拽/取消/键盘/辅助功能、约束与非法请求及真实 AI 查询。Gallery 主壳层已采用；Sidebar 页另有独立预览和宽度重置按钮。嵌套子菜单、项级操作/上下文菜单及行内可自定义的前后任意 View 插槽仍未实现。
+`SidebarResizeTests` 覆盖容器三档与阈值往返、100%/200%、明暗主题、三种输入、RTL、草稿/焦点/滚动/节点保留、拖拽/取消/键盘/辅助功能、约束与非法请求及真实 AI 查询。`SidebarHierarchyTests` 6/6 覆盖嵌套展开/收起、可见项遍历、程序化选择展开祖先、数据删除/禁用回退、本地展开 + Rail/RTL、AdaptiveSidebar 390/720/1280 × 100%/200% × 主题/输入矩阵，以及真实 AI `query_ui_nodes` 对折叠子项的隐藏。Gallery 主壳层已采用；Sidebar 页另有独立预览、宽度重置按钮与 “Nested navigation” 示例。项级操作/上下文菜单及行内可自定义的前后任意 View 插槽仍未实现。
 
 本轮 macOS DevTools 验收通过自身 AI `query_ui_nodes`、输入桥和 Metal 渲染捕获完成：1280pt 主壳层拖拽 96pt 后从 240 变为 336pt，Right 后语义为 352pt，Home/End 分别到 180/480pt；Left 后 464pt，主内容从 471pt 开始。720/390pt 的可见调宽 slider 查询均为零。三档窗口的明暗主题、100%/200% 字体取样中，布局诊断均为零；200% 的嵌入式预览保持指定的 220pt 高度，目的地与后续内容不重叠。跨形态节点、草稿、焦点和滚动保留由同一实例的测试矩阵验证，三档原生窗口分别启动取样，不作为跨窗口节点保留证据。
 

@@ -8,6 +8,8 @@ public struct SidebarItem<ID: Hashable>: Identifiable {
     public var iconSize: SemanticIconSize = .medium
     public var badge: String?
     public var isEnabled = true
+    /// A nonempty group expands instead of activating a destination.
+    public var children: [Self] = []
     public init(_ id: ID, _ title: String, configure: (inout Self) -> Void = { _ in }) {
         self.id = id; self.title = title; configure(&self)
     }

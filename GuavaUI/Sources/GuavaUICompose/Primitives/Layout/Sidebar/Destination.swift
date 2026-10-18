@@ -2,29 +2,54 @@ private import Foundation
 import GuavaUIRuntime
 
 struct SidebarDestination<ID: Hashable>: View {
-    let item: SidebarItem<ID>
+    let entry: SidebarHierarchy<ID>.Entry
     let selection: Binding<ID?>
+    let expanded: Binding<Set<ID>>
     let isTabStop: Bool
     let iconWidth: Float?
     let minimumRowHeight: Float
     let onActivate: (ID) -> Void
     let presentation: SidebarPresentation
     let iconExtent: Float
+    let disclosureLane: Bool
+    let contextLabel: String
+    private var item: SidebarItem<ID> {
+        var value = entry.item; value.isEnabled = entry.isEnabled; return value
+    }
+    private var isExpanded: Bool { expanded.wrappedValue.contains(item.id) }
+    /// Only the active leaf paints as selected. Branches that contain it stay
+    /// expanded and disclose the path, but three blue rows would read as three
+    /// simultaneous selections.
+    private var isSelected: Bool { selection.wrappedValue == item.id }
     var body: some View {
         SidebarSelectionRevealHost(isSelected: selection.wrappedValue == item.id, presentation: presentation) {
             Button(
-                isEnabled: item.isEnabled, isSelected: selection.wrappedValue == item.id,
-                tooltip: presentation.isRail ? item.badge.map { "\(item.title) (\($0))" } ?? item.title : nil,
+                isEnabled: item.isEnabled, isSelected: isSelected,
+                tooltip: presentation.isRail ? item.badge.map { "\(contextLabel) (\($0))" } ?? contextLabel : nil,
                 action: {
-                    selection.wrappedValue = item.id
-                    onActivate(item.id)
+                    if entry.isBranch {
+                        if isExpanded { expanded.wrappedValue.remove(item.id) }
+                        else { expanded.wrappedValue.insert(item.id) }
+                    } else {
+                        selection.wrappedValue = item.id
+                        onActivate(item.id)
+                    }
                 }
             ) {
                 if let width = presentation.railWidth {
                     RailDestinationLabel(
-                        item: item, showsLabels: presentation.showsLabels, iconExtent: min(iconExtent, width - 16))
+                        item: item, showsLabels: presentation.showsLabels, iconExtent: min(iconExtent, width - 16),
+                        isExpanded: entry.isBranch ? isExpanded : nil)
                 } else {
                     Row(alignment: .center, spacing: 10) {
+                        if disclosureLane {
+                            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                                if entry.isBranch {
+                                    Icon(isExpanded ? UIIcons.Action.minus : UIIcons.Action.plus, size: .small)
+                                        .accessibilityHidden()
+                                }
+                            }.frame(width: 16).flex(0, shrink: 0)
+                        }
                         if let iconWidth {
                             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                                 if let icon = item.icon {
@@ -39,11 +64,12 @@ struct SidebarDestination<ID: Hashable>: View {
                                 .flex(0, shrink: 0).accessibilityHidden()
                                 .debugName("sidebar-badge-\(item.id)")
                         }
-                    }
+                    }.padding(EdgeInsets(leading: Float(min(entry.ancestors.count, 5)) * 16))
                 }
             }.buttonStyle(SidebarItemStyle(minimumHeight: minimumRowHeight, presentation: presentation))
-                .compositionLocal(ActionControlAccessibility.label, item.title)
+                .compositionLocal(ActionControlAccessibility.label, presentation.isRail ? contextLabel : item.title)
                 .compositionLocal(ActionControlAccessibility.value, item.badge ?? "")
+                .compositionLocal(ActionControlAccessibility.isExpanded, entry.isBranch ? isExpanded : nil)
                 .modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: isTabStop))
                 .debugName("sidebar-item-\(item.id)")
         }.id(item.id)

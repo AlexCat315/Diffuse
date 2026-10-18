@@ -50,6 +50,7 @@ struct RovingItemModifier: ViewModifier {
 /// A request can outlive the frame that selected an item hidden by layout.
 final class RovingFocusRequest {
     var target: AnyHashable?
+    var visible = true
 }
 
 /// A keyboard boundary whose enabled items have one sequential Tab stop.
@@ -84,7 +85,7 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
         }
         func resolveFocus(in root: Node) {
             guard let target = request.target, let item = locate(target, in: root), item.acceptsSubtreeInput else { return }
-            FocusChainHolder.current?.focus(item)
+            FocusChainHolder.current?.focus(item, visible: request.visible)
             ScrollReveal.reveal(item)
             request.target = nil
         }
@@ -111,6 +112,7 @@ struct RovingFocusHost<Content: View>: _PrimitiveView {
             guard let target = command.destination(in: enabledItems, from: source, wraps: wraps) else { return .ignored }
             onSelect(target)
             request.target = target
+            request.visible = true
             func updateTabStops(_ candidate: Node) {
                 if let id = candidate.attachments["__roving.item"] as? AnyHashable { candidate.isTabStop = id == target }
                 candidate.children.forEach(updateTabStops)

@@ -141,7 +141,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义；触摸展开验收见规范 5-10，触摸行高与水平翻转已有 | P2 |
 | CommandPalette | 结果列表已虚拟化（视口 + overscan）；compact 几何、触摸行高、模糊匹配、分组与 session 级最近使用已完成；自定义页脚仍未内置 | P2（自定义页脚） |
 | Sheet / Modal | 拖拽关闭与自适应（见 2.11）；其余契约完整 | P1 |
-| Sidebar | 嵌套子菜单、项级操作/上下文菜单；AdaptiveSidebar 可调整栏宽已实现，见 [Sidebar](sidebar.md#调整栏宽) | P1 |
+| Sidebar | 嵌套导航、展开会话、键盘/辅助功能与可调整栏宽已实现；项级操作/上下文菜单仍未实现，见 [Sidebar](sidebar.md#嵌套导航) | P1（项级操作） |
 | Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
 | Workspace | N 面板联动、折叠阈值/吸附、pin 专属视觉、浮动为应用内层、文档解码校验与可版本化格式、a11y/RTL、chrome 硬编码清理（见 [workspace.md](workspace.md)） | P2 |
 | ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、锚定滚动、带时长程序滚动、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | P1（触摸/键盘已完成；滚动条 a11y、锚定与带时长程序滚动待补） |

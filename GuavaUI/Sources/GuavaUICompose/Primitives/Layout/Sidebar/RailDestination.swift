@@ -4,6 +4,7 @@ struct RailDestinationLabel<ID: Hashable>: View {
     let item: SidebarItem<ID>
     let showsLabels: Bool
     let iconExtent: Float
+    var isExpanded: Bool? = nil
 
     var body: some View {
         Box(direction: .column, alignItems: .center, spacing: 4) {
@@ -14,6 +15,10 @@ struct RailDestinationLabel<ID: Hashable>: View {
                 if item.badge != nil {
                     Box {}.frame(width: 6, height: 6).background(item.isEnabled ? .accent : .onSurfaceDisabled)
                         .cornerRadius(3).absolutePosition(top: 0, right: 0).accessibilityHidden()
+                }
+                if let isExpanded {
+                    Icon(isExpanded ? UIIcons.Action.minus : UIIcons.Action.plus, size: 10)
+                        .background(.surface).accessibilityHidden().absolutePosition(top: -4, right: -7)
                 }
             }.frame(width: iconExtent, height: iconExtent).flex(0, shrink: 0)
             if showsLabels {
