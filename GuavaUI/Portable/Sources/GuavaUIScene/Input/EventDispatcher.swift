@@ -99,15 +99,13 @@ public final class EventDispatcher {
                                minPriority: .modal) == .handled {
             return
         }
-        if deliverGlobalRoutes(kind: .pointer(event, .down),
-                               role: .scrollChrome,
-                               minPriority: .chrome) == .handled {
-            return
-        }
         guard let hit = hitTest(point: point) else {
             if event.button == .left { focusChain.focus(nil, visible: false) }
             return
         }
+        // Scroll chrome belongs to the actual hit path. A portal above a
+        // viewport must not arm a background touch gesture whose release
+        // will only visit the portal's ancestors.
         if deliverPriority(path: hit.path,
                            kind: .pointer(event, .down),
                            minPriority: .chrome,

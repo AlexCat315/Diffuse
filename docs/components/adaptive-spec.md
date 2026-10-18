@@ -657,6 +657,8 @@ AI 验收发现并修复单按钮容器的语义覆盖：显式 `.accessibility 
 
 2026-10-19，资源菜单的 AI 视觉验收发现原生 mirror 未提供 backdrop source，导致磨砂面后文字清晰透出。已让镜像目标可采样并传入同一目标作为背景源；实际 Metal 像素测试验证模糊对比度和 2× resize，12 项原生 backdrop 回归及新镜像测试通过。重新捕获 390 触摸 200%、720 深色混合、1280 RTL 指针 200% 的真实资源菜单，磨砂背景与文字层次均正常。此修复属于 DevTools 渲染保真能力；未修改原生菜单材质。
 
+资源菜单连续输入验收进一步修复了浮层后方的滚动手势污染：scroll chrome 只在实际命中路径上优先路由，浮层不会给被覆盖的 ScrollView 留下待完成触摸。`OverlayScrollInputTests.nextTouch` 验证菜单选择后自由移动不滚动、不夺取 capture，下一按钮一次点击生效；连同滚动、刷新、滑动、Slider 和事件路由共 30 项回归通过。DevTools 在 390 触摸 200%、720 深色混合与 1280 RTL 指针 200% 均以单次“选择 → 清空”得到 `Asset: None`，不需第二次点击；此前两个触摸面的首次清空失败已关闭。
+
 ## 6. 动效与动画（动画效果实现）
 
 分两类：**时间曲线**（用 `cubic-bezier` / ease 控制"速度怎么变"）与**物理动画**（弹簧、阻尼、惯性模拟真实运动）。GuavaUI 的实现层与 SwiftUI 同形：`withAnimation`、`.animation(_:value:)`、`AnimatedVisibility` + `Transition`、`Animation.spring(response:dampingFraction:)`，再加滚动的系统惯性与回弹。本章定义效果选型、参数与验收；[已实现] 等标注同前。
