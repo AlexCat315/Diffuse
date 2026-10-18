@@ -31,6 +31,7 @@ SwiftUI 也把默认使用入口收敛到 `import SwiftUI`、App / Scene / View�
 | `GuavaUI/Text` | FreeType / HarfBuzz、字体图集与排版 | 文字后端集成使用 |
 | `GuavaUIRuntime` | 原生字体 / 图像服务、SDL 宿主、NativeRHI UI renderer | 原生宿主、renderer 集成使用 |
 | `GuavaUICompose` | 原生组件、主题与引擎视口适配 | 通过 `GuavaUI` 获得普通组件 |
+| `GuavaUIWebView` | 宿主注入的网页布局、裁剪与生命周期；macOS 提供 WKWebView 后端 | 需要内嵌网页的应用显式导入 |
 | `GuavaUI` | Application、窗口生命周期、应用资源、诊断接线 | 默认入口 |
 | `GuavaUIWorkspace` | 工作台模型、面板元数据、注册表、停靠交互 | 工具应用显式导入 |
 | `GuavaUIAgent` | 通用工具契约、模型工具循环、MCP、skills 与 UI 诊断查询 | AI 集成显式导入；纯核心在 Portable，无 Editor / GPU 依赖 |
@@ -50,6 +51,7 @@ flowchart TD
   UI --> Compose[GuavaUICompose]
   UI --> Runtime[GuavaUIRuntime]
   Workspace[GuavaUIWorkspace 可选工作台] --> Compose
+  WebView[GuavaUIWebView 可选网页视图] --> Compose
   Compose --> Portable[Portable Compose / Scene]
   Compose --> Runtime
   Runtime --> Text[Text 排版]
@@ -60,6 +62,7 @@ flowchart TD
   CLI[Tools/Guava 统一 CLI] --> Contract
   Examples[Gallery / Counter 示例包] --> UI
   Examples --> Workspace
+  Examples --> WebView
   EditorUI[EditorUI] --> UI
   EditorUI --> Workspace
   EditorUI --> EditorCore[EditorCore]

@@ -4,7 +4,7 @@ import GuavaUIRuntime
 public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rangeSlider, rating, textField, textArea, textEditor
     case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
-    case list, multiSelectList, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, avatar
+    case list, multiSelectList, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, web, avatar
     case menu, menuButton, contextMenu, popover, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, zStack, animation, theme, badge, alert, progress, empty
@@ -60,6 +60,7 @@ public enum GalleryCatalog {
         .init(.icon, "Icon", "Data", "Bundled SVG resources tinted by the current semantic theme."),
         .init(.avatar, "Avatar", "Data", "Asynchronous images, Unicode initials, stable theme colors and overlapping member groups."),
         .init(.image, "Image", "Data", "Fit/fill/stretch, asynchronous loading, explicit errors and retry."),
+        .init(.web, "WebView", "Data", "A native browser view hosted above the composed surface, with navigation, clipping and lifecycle."),
         .init(.menu, "Menu", "Overlays", "Nested commands, keyboard navigation, checked states and scrollable menus."),
         .init(.menuButton, "MenuButton", "Controls", "A button-triggered menu with regular trigger chrome, keyboard dismissal and action callbacks."),
         .init(.contextMenu, "ContextMenu", "Overlays", "Right-click actions attached to a real target."),

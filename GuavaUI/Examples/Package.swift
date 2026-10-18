@@ -14,6 +14,7 @@ let package = Package(
         .target(name: "GalleryContent", dependencies: [
             .product(name: "CounterExample", package: "Counter"),
             .product(name: "GuavaUI", package: "GuavaUI"),
+            .product(name: "GuavaUIWebView", package: "GuavaUI"),
             .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
         ], resources: [.process("Resources")]),
         .executableTarget(name: "GuavaUIDemo", dependencies: [

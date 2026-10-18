@@ -14,10 +14,13 @@ try Application.run { Text("Hello, GuavaUI!").padding(24) }
 swift run --package-path examples/HelloUI HelloUI
 swift run --package-path GuavaUI/Examples GuavaUIDemo
 swift run --package-path GuavaUI/Examples GuavaUIDemo --component textField
+swift run --package-path GuavaUI/Examples GuavaUIDemo --component web
 swift run --package-path GuavaUI/Examples PetDemo
 ```
 
 框架内部仍按 Compose、Runtime、Text、Portable 划分职责；工作台、DevTools 和原生渲染集成使用显式模块。示例在 `Examples/` 独立包内，正式框架不依赖 Gallery 或 Counter。Counter 的纯 Compose 示例与测试位于 `examples/Counter`，可供浏览器和原生宿主共享。详见[模块边界与迁移](../docs/architecture/module-boundaries.md)。
+
+可选的 `GuavaUIWebView` 产品把平台原生网页视图接入 Compose 布局：GuavaUI 拥有 frame、裁剪与生命周期，浏览器视图由宿主的 `WebViewHost` 提供。macOS 已提供 `AppleWebKitHost`（`WKWebView`）；Windows / Linux / Android 需要各自的后端实现。网页是原生子视图，不进入 DrawList，因此不参与 DevTools 镜像、圆角/透明度合成或 z-order。详见[WebView](../docs/components/webview.md)。
 
 可选的 `GuavaUIAgent` 产品提供通用工具契约、模型工具调用循环、MCP 端点、skills 和 DevTools 诊断查询。纯模型与协议应用可直接使用 Portable 的 `GuavaUIAgentCore`，无需 Editor 或 GPU。详见[通用 AI 底层与应用适配](../docs/architecture/agent-framework.md)。
 

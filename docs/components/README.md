@@ -60,6 +60,7 @@
 | DataTable / DataTableModel | 实现与验证边界 | [data-table.md](data-table.md) |
 | Avatar / AvatarGroup | 实现与验证边界 | [avatar.md](avatar.md) |
 | Image / AsyncImage | 实现与验证边界 | [image.md](image.md) |
+| WebView | 宿主注入的原生网页视图、裁剪与生命周期；macOS WKWebView | [webview.md](webview.md) |
 | Tree / TreeRow | 文档已写 | [tree.md](tree.md) |
 | Panel | 文档已写 | [panel.md](panel.md) |
 | SplitView | 比例/最小尺寸、compact 单面板与交互 | [splitview.md](splitview.md) |

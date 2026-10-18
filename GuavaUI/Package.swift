@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "GuavaUIAndroid", targets: ["GuavaUIAndroid"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
+        .library(name: "GuavaUIWebView", targets: ["GuavaUIWebView"]),
         .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
         .library(name: "GuavaUI", targets: ["GuavaUI"]),
         .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
@@ -68,6 +69,15 @@ let package = Package(
             resources: [
                 .process("Resources"),
             ]
+        ),
+
+        // MARK: - WebView
+        // Native web content is a platform view, not a DrawList primitive. The
+        // portable target owns layout, clipping and lifecycle; each platform
+        // injects a WebViewHost backed by its system browser view.
+        .target(
+            name: "GuavaUIWebView",
+            dependencies: ["GuavaUICompose"]
         ),
 
         // MARK: - Workspace
@@ -154,6 +164,13 @@ let package = Package(
                 .product(name: "NativeRHI", package: "Engine"),
                 .product(name: "NativeRendererValidation", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
+            ]
+        ),
+        .testTarget(
+            name: "GuavaUIWebViewTests",
+            dependencies: [
+                "GuavaUIWebView",
+                "GuavaUICompose",
             ]
         ),
         .testTarget(

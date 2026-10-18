@@ -27,6 +27,7 @@ extension GalleryPage {
         case .chart: UIIcons.Data.chartLine
         case .icon: UIIcons.Status.sparkles
         case .image, .carousel: UIIcons.Media.image
+        case .web: UIIcons.Shape.globe
         case .avatar: UIIcons.User.user
         case .menu, .menuButton, .contextMenu, .commandPalette: UIIcons.Action.moreHorizontal
         case .navigationStack: UIIcons.Navigation.arrowLeft

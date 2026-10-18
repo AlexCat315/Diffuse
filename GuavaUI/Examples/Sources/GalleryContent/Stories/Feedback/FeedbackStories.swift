@@ -144,6 +144,7 @@ public extension GalleryPage {
         case .icon: AnyView(IconStory(options: options))
         case .avatar: AnyView(AvatarStory(options: options))
         case .image: AnyView(ImageStory(options: options))
+        case .web: AnyView(WebStory())
         case .menu: AnyView(MenuStory(options: options))
         case .menuButton: AnyView(MenuButtonStory(options: options))
         case .contextMenu: AnyView(ContextMenuStory(options: options))
