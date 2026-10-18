@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 新增 P2 `TimePicker`：复用 WheelPicker 组成 12/24 小时、可选秒与 AM/PM 列，`TimeOfDay?` 绑定、min/max 夹紧、minuteStep；`TimePickerTests` 2/2，Gallery `timePicker` 与 390/720/1280 预览。WheelPicker 行文本改为行容器双向居中，自适应预览固定 240pt 居中，音量卡在窄宽纵向堆叠，修复右侧裁切与直角边界。
 - 新增 P2 `WheelPicker`：五行视口、中央选中 band、按距离淡出、pointer 拖拽/点击、wheel、方向键/Home/End 与 slider a11y increment/decrement/setValue；disabled 行跳过。Gallery 新增 `wheelPicker` 三列时间 + 音量示例，`WheelPickerTests` 4 tests / 2 suites。DevTools 通过 keyboard/wheel 实测 value 逐格变化并截图验收 390/720/1280。
 - 新增可选 `GuavaUIWebView` 产品：`WebView` 在 Compose 树中承载平台原生网页视图，负责 frame、裁剪交集、隐藏/滚出视口、`NodeResource` 生命周期和状态回调；macOS 提供 `AppleWebKitHost`（`WKWebView`，含标题/加载/前进后退状态与文件/HTML 加载）。Demo 新增 `--component web` 页，提供离线 HTML、example.com、仓库页面与导航控件；非 macOS 平台显示后端缺失提示。`GuavaUIWebViewTests` 11/11 覆盖裁剪/隐藏/滚出/零尺寸、surface 创建/复用/重载/卸载与 handle 绑定；DevTools 实测本地 HTML、example.com、Reload 与前进后退状态。其他平台仍需实现 `WebViewHost`。
 - Text Editor 补齐 IDE 行级能力：按 `indentationWidth` 绘制的缩进参考线、光标括号匹配（跳过字符串/注释、±64 KiB 窗口）、当前行 accent 边框。移除 gutter、文档头和状态栏的分隔线，改用列宽、背景层级与留白分区。TextField 测试 50/50，DevTools 聚焦第 7 行验证边框/行号/括号高亮。

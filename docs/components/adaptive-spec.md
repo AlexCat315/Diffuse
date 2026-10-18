@@ -257,6 +257,13 @@
 - 平板 / 桌面：同一选择器可用于滚轮列或紧凑数字调节；hover 时整列保持命中；宽度由 Row 组合。`[已实现]`
 - 交互与验收：拖拽跟随手指、越半行提交、<4pt 视为点击；滚轮每事件一格；↑/←、↓/→、Home/End；disabled 行跳过；role=slider、increment/decrement/setValue。`WheelPickerTests` 4 tests / 2 suites 覆盖键盘/滚轮/拖拽/点击/a11y 与 disabled；Gallery `--component wheelPicker` 三列时间 + 单列音量；DevTools 390/720/1280 验收。细节见 [WheelPicker](wheelpicker.md)。
 
+**TimePicker**
+
+- 外观：复用 WheelPicker 的时/分/可选秒/AM-PM 列；每列 68pt，整组居中在表单 surface；不画外框，外框与 Popover 由宿主提供。`[已实现]`
+- 手机：列高沿用 44pt 触摸下限；12 小时制 3 列、24 小时制 2 列、显示秒时增加一列；390 下宽度收在卡片内。`[已实现]`
+- 平板 / 桌面：可在表单中横排，也可放入 Popover/Sheet；列宽不随字号缩小。`[已实现]`
+- 交互与验收：任一列变更即写 `TimeOfDay?`；12 小时 AM/PM 保持分钟/秒；分钟按 `minuteStep` 生成；候选按 min/max 总秒数夹紧；每列 slider 语义可增减。`TimePickerTests` 2/2；Gallery `--component timePicker` 12/24 与 seconds 开关；DevTools 验收三列与提交文案。细节见 [TimePicker](timepicker.md)。
+
 **AssetRefField / JsonField**
 
 - 外观：AssetRefField 显示资源 + 清除 + drop 目标；JsonField 紧凑多行编辑、提交校验、拖拽调整高度、展开为带行号的大编辑器。`[已实现]`
@@ -574,7 +581,7 @@ NavigationStack 已完成：`NavigationStack(path:root:destination:)` 以 caller
 
 第 14 项的滚动位置、选择角色、described-by 与可聚焦 thumb 已完成：`ScrollView` 暴露 `.scrollArea` 语义，`accessibilityLabel` 可命名，value 按实际 offset/maxOffset 输出百分比，help 提供键盘滚动提示，辅助功能 increment/decrement 每次滚动约一页；`Select`/`Combobox` 触发器改用 `.comboBox` 角色，保留当前值 label/value 与 `isExpanded`。macOS 原生桥新增 `scrollArea`/`comboBox` 角色映射。独立 `Scrollbar` companion 提供 `.slider` thumb：拖动、方向键/Page/Home/End、increment/decrement、`setValue` 与 focus ring；与 ScrollView 绑定同一 offset。`AccessibilitySemanticsTests` 覆盖滚动语义、comboBox 与 describedBy；`ScrollbarTests` 覆盖键盘/辅助功能/拖动/几何。DevTools 在 `button` 页验证 describedBy help，在 `scrollView`/`select` 页验证角色与位置，在 `scrollbar` 页拖到底得到 `value=100%`、`Offset: 220`，PageUp 回到 0%。`Scrollbar` 是 companion，ScrollView 内建 chrome 不自动叠加；该边界已记录在 [Scrollbar](scrollbar.md)。
 
-第 16 项 Gallery 预览覆盖已完成：`AdaptiveControlExamples.supports` 覆盖全部 92 个 Gallery 页面，每页生成 narrow/wide pointer 与 narrow touch 三档；新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、theme、codeEditor、menu、contextMenu、popover、modal、dialog、alertDialog、sheet、bottomSheet、commandPalette、hoverCard、animation、introduction、image、workspace、notification，并按页面设置预览高度。DevTools 在 scrollbar/timeline/tree/colorField/dialog 等页验证三档容器物化（如 adaptive-dialog-touch 为 390×104）；`swift test --package-path GuavaUI/Examples` 27/27。
+第 16 项 Gallery 预览覆盖已完成：`AdaptiveControlExamples.supports` 覆盖全部 95 个 Gallery 页面，每页生成 narrow/wide pointer 与 narrow touch 三档；新增 multiSelectList、scrollbar、viewportTraits、viewThatFits、dragAndDrop、menuButton、tooltip、link、badge、tag、keyCap、progress、empty、skeleton、accordion、datePicker、icon、avatar、panel、scrollView、statusBar、carousel、breadcrumb、pagination、radio、timeline、tree、virtualList、virtualStack、chart、boundedScroll、label、disclosure、alert、textArea、colorField、jsonField、assetRef、dateRangePicker、timeField、timePicker、wheelPicker、theme、textEditor、menu、contextMenu、popover、modal、dialog、alertDialog、sheet、bottomSheet、commandPalette、hoverCard、animation、introduction、image、workspace、notification，并按页面设置预览高度。DevTools 在 scrollbar/timeline/tree/colorField/dialog 等页验证三档容器物化（如 adaptive-dialog-touch 为 390×104）；`swift test --package-path GuavaUI/Examples` 27/27。
 
 第 10 项浮层自适应已完成：`BottomSheet` 在 compact/medium 贴底全宽、expanded 退化为 `dialogWidth` 560 的居中面板，detent 与拖拽关闭沿用既有 Modal 契约；`MenuHierarchyTests.touchSubmenu` 新增 390pt 触摸面用例，点击父行直接打开子菜单并执行叶子。DevTools 在 390×800 测得 dialog 390×280、y=520，1280×840 测得 560×280、x=360/y=280；`capture-ui` 确认贴底与居中两种呈现。触摸子菜单无 hover 依赖，Portal 层级、焦点与展开语义保持。
 

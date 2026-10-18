@@ -52,7 +52,7 @@ extension GalleryPage {
         case .sidebar, .navigationDrawer, .navigationRail: UIIcons.Layout.sidebar
         case .table, .dataTable: UIIcons.Layout.table
         case .calendar, .datePicker, .dateRangePicker: UIIcons.Data.calendar
-        case .timeField, .timeline, .wheelPicker: UIIcons.Data.clock
+        case .timeField, .timePicker, .timeline, .wheelPicker: UIIcons.Data.clock
         case .breadcrumb, .pagination, .stepper: UIIcons.Navigation.arrowRight
         case .keyCap: UIIcons.Shape.key
         case .toolbar, .appBar: UIIcons.Layout.panelTop

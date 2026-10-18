@@ -182,6 +182,7 @@ public extension GalleryPage {
         case .datePicker: AnyView(DatePickerStory(options: options))
         case .dateRangePicker: AnyView(DateRangePickerStory(options: options))
         case .timeField: AnyView(TimeFieldStory(options: options))
+        case .timePicker: AnyView(TimePickerStory(options: options))
         case .accordion: AnyView(AccordionStory(options: options))
         case .breadcrumb: AnyView(BreadcrumbStory())
         case .pagination: AnyView(PaginationStory(options: options))
