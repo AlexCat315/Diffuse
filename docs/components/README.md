@@ -78,6 +78,7 @@
 | NavigationRail | 72/56pt 导航轨、完整名称与呈现保留 | [navigation-rail.md](navigation-rail.md) |
 | NavigationStack | 路径栈、页面保留、push/pop 过渡与深链 | [navigationstack.md](navigationstack.md) |
 | Box / Row / Column | 文档已写 | [layout.md](layout.md) |
+| Masonry | 1–2 列平衡瀑布流、最短列放置与 RTL | [masonry.md](masonry.md) |
 | ViewThatFits | 阈值、intrinsic 宽高拟合与分支状态保留 | [layout.md](layout.md#自定义测量与放置2026-10-12) |
 | ZStack / Overlay | 层叠、对齐、命中顺序与溢出边界 | [zstack.md](zstack.md) |
 

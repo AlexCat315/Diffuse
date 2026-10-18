@@ -7,7 +7,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case list, multiSelectList, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, web, avatar
     case menu, menuButton, contextMenu, popover, popconfirm, actionSheet, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
-    case layout, zStack, animation, theme, badge, alert, progress, empty
+    case layout, masonry, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
     case table, dataTable, calendar, datePicker, dateRangePicker, timeField, timePicker, wheelPicker
     case accordion, breadcrumb, pagination, buttonGroup, splitButton, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
@@ -77,6 +77,7 @@ public enum GalleryCatalog {
         .init(.propertyGrid, "PropertyGrid", "Layout", "Inspector rows, sections, custom sizing and empty state."),
         .init(.workspace, "Workspace / Dock", "Layout", "Draggable tabs, split layouts and document serialization."),
         .init(.layout, "Box / Row / Column", "Layout", "Alignment, spacing, flex sizing, spacers and dividers."),
+        .init(.masonry, "Masonry", "Layout", "Balanced one- and two-column waterfall packing for mixed-height cards."),
         .init(.zStack, "ZStack / Overlay", "Layout", "Layered content, alignment, topmost hit testing and retained hidden branches."),
         .init(.animation, "Animation", "Foundation", "Visibility, curves, springs, keyframes, phases, loops, shared geometry, numeric transitions and completion."),
         .init(.viewportTraits, "Viewport Traits", "Foundation", "Width/height classes and orientation derived from the surface viewport."),

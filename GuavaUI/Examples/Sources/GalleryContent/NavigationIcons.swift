@@ -41,6 +41,7 @@ extension GalleryPage {
         case .scrollView, .boundedScroll: UIIcons.Navigation.arrowDown
         case .propertyGrid, .form: UIIcons.Action.settings
         case .layout: UIIcons.Layout.grid
+        case .masonry: UIIcons.Layout.columns2
         case .zStack: UIIcons.Editor.layers
         case .animation: UIIcons.Editor.play
         case .badge, .tag: UIIcons.Shape.tag

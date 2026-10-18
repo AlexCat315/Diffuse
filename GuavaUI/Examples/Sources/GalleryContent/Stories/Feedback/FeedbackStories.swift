@@ -160,6 +160,7 @@ public extension GalleryPage {
         case .propertyGrid: AnyView(PropertyGridStory(options: options))
         case .workspace: AnyView(WorkspaceStory())
         case .layout: AnyView(LayoutStory(options: options))
+        case .masonry: AnyView(MasonryStory(options: options))
         case .zStack: AnyView(ZStackStory())
         case .animation: AnyView(AnimationStory(options: options))
         case .theme: AnyView(ThemeStory())

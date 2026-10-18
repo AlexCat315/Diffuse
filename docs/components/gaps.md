@@ -11,7 +11,7 @@
 
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
-| 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader/HeightClassReader/OrientationReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Masonry P2、Grid/LazyGrid span P2 |
+| 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、Masonry、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader/HeightClassReader/OrientationReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Grid/LazyGrid span P2 |
 | 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed）/RadioGroup、Slider（刻度/Page）、RangeSlider（双 thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | FAB P2、布尔控件 label 槽 P2 |
 | 文本与数值输入 | TextField（含 Text Editor / 代码编辑）、TextArea、SearchField、NumberField（带步进）、Vec3Field、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | OTP/PIN P3、masked input P3、locale 小数 P2、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 周/月/年选择 P2、时区 P2、区间预设 P2 |
@@ -113,7 +113,6 @@
 | --- | --- | --- | --- | --- | --- |
 | TreeTable | P2 | 树缩进在首列 + 可调列 | 触摸行 ≥ 44；窄宽隐藏低优先列 | 键盘树导航 + 列头排序；展开态 a11y | SwiftUI `Table` + OutlineGroup；Fluent TreeGrid |
 | RichText / Markdown | P2 | 行内样式、链接、代码块、列表 | 正文换行、代码块横向滚动 | 选择/复制、链接辅助功能与键盘激活 | SwiftUI `Text(markdown:)`；Flutter `flutter_markdown` |
-| Masonry | P2 | 多列瀑布流、列平衡 | 1–2 列；窄宽单列 | 列数由宽度决定；滚动窗口化可选 | Flutter `MasonryGridView`（三方）；CSS columns |
 | OTP / PIN | P3 | N 个方格、自动前进 | 数字键盘、粘贴分发 | Backspace 退格、粘贴全填、a11y 整值读写 | 移动生态惯例 |
 | Menu 富内容 | P2 | 图标槽、任意行内容、链接语义 | 触摸行 ≥ 44 | 与现有键盘导航共用；富内容不破坏前缀查找 | Radix DropdownMenu；Fluent Menu |
 
@@ -121,7 +120,9 @@
 
 **ActionSheet 已实现（P2）**：所有宽度使用底部抽屉；compact 全宽贴底并带顶部拖拽区，支持下拉超过 80pt 或高速释放关闭、短拖回弹与外部点击关闭，不显示关闭图标；medium/expanded 为最大 560pt 的居中抽屉，右上提供 44pt 关闭图标。调用方提供打开 binding、稳定 ID 的操作数组与必填 `closeLabel`，组件不硬编码 Cancel/Close 文案；wide 关闭图标使用该名称作为辅助功能 label 与 tooltip。操作行 ≥44pt，行间使用 1pt 分隔线，hover/键盘焦点只叠中性 state layer；支持图标/危险/禁用；Up/Down/Home/End 跳过禁用并显露目标，wide 抽屉 Tab 从操作组移动到关闭图标。长列表独立滚动，头部固定；宽度变化只保留一个有效 Portal。`ActionSheetTests` 与 Gallery 三档预览覆盖布局/主题/字号/输入/RTL、拖拽、compact 无关闭图标、生命周期与 AI 查询。细节见 [ActionSheet](action-sheet.md)。
 
-Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘可达、`ToastPosition` 四角定位与 `.automatic`（所有宽度右上，iOS 通知横幅形态），并计入宿主安全区。细节见 [Toast](toast.md)；仅进出动画仍为 P2。
+**Masonry 已实现（P2）**：最短列放置、按宽度自动 1–2 列、列/项间距、RTL 与最大列数；卡片高度由子视图自然测量，不二次缩放字号。`MasonryTests` 覆盖最短列、列数上限、单列退化、间距与 RTL；Gallery `masonry` 提供 Add card/Reset 和 390/720/1280 预览，DevTools 实测 720pt 两列、390pt 单列，点击 Add card 后计数从 8 变 9 并重新平衡。当前不做跨列 span、行优先填充或窗口化；大集合使用 `LazyGrid`/`VirtualStack`。细节见 [Masonry](masonry.md)。
+
+**Toast 操作与位置已补齐**：最多两个内联操作、真实按钮键盘可达、`ToastPosition` 四角定位与 `.automatic`（所有宽度右上，iOS 通知横幅形态），并计入宿主安全区。细节见 [Toast](toast.md)；仅进出动画仍为 P2。
 
 **WheelPicker 与 TimePicker 已实现（P2）**：WheelPicker 提供五行视口、中央 band、拖拽/滚轮/点击/方向键、disabled 跳过与 slider a11y；TimePicker 在其上组合时/分/可选秒/AM-PM、12/24 小时与 min/max 夹紧。两者均有 390/720/1280 Gallery 预览、自动化测试与 DevTools 验收。细节见 [WheelPicker](wheelpicker.md) 与 [TimePicker](timepicker.md)。
 
@@ -165,7 +166,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
-**P2（长尾/体验）**：TreeTable、RichText/Markdown、Masonry、Chart 扩展、DataTable 高级能力、文本编辑器 snippets、图片缓存与解码能力、Workspace 深化。
+**P2（长尾/体验）**：TreeTable、RichText/Markdown、Chart 扩展、DataTable 高级能力、文本编辑器 snippets、图片缓存与解码能力、Workspace 深化。
 
 **P3（按需）**：OTP/PIN、masked input、外链确认等。
 

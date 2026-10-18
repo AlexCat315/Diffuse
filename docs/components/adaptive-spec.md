@@ -77,6 +77,7 @@
 | `ScrollView` / `BoundedScrollView` | 先按内容测量；`BoundedScrollView` 在 min/max 高度内先长大再滚动。溢出轴在边界处按 `.whenScrollable` 停留（顶部/底部继续吃滚动，不带动父级），非溢出轴允许事件透传；滚动条用 `.stable` gutter 预留 12pt 不压尾部控件 | `[已实现]`；键盘 Page/Home/End、触摸拖动、`ScrollRequest` 带时长程序滚动与 `.scrollAnchor()` 锚定已实现；独立 `Scrollbar` companion 提供可聚焦 thumb、slider 语义与拖动/键盘控制，ScrollView 内建 chrome 不单独进入语义树（见 [Scrollbar](scrollbar.md)） |
 | `SplitView` | 空间足够时优先满足两侧 minimum；比例范围与像素最小冲突时像素最小优先。未启用 compact 时，空间不足按两个最小尺寸的比例共享并裁剪。`compact` 按容器轴向长度（默认阈值 600pt）切换为单面板 + 页签，保留两个面板的节点、草稿、滚动与请求比例；恢复双栏时重新应用约束。拖拽/键盘/辅助功能才写回比例 binding；触摸分隔柄 ≥ 44pt | `[已实现]`；API 与边界见 [SplitView](splitview.md) |
 | `Grid` / `LazyGrid` | `fixed` 保持 authored 宽，`flexible(minimum:)` 不跌破 minimum，`adaptive(minimum:)` 随宽度减少列数。Grid 在 minimum 超宽时横向滚动；命名字段列按优先级隐藏并提供 Columns 菜单。LazyGrid 使用有界视口与窗口化行高 | Grid 列策略、显隐与滚动兜底 `[已实现]`，见 [布局](layout.md#grid-字段列)；span/二维窗口化仍缺 |
+| `Masonry` | 子视图按声明顺序进入当前最矮列；列数由 `minimumColumnWidth`、`maximumColumns` 与实际宽度决定，窄宽单列，RTL 镜像列顺序；高度取子视图自然高度，不做二次字号缩放 | `[已实现]`，见 [Masonry](masonry.md) |
 | `ViewThatFits` / `LayoutThatFits` | 按容器实测宽（默认阈值 600）、intrinsic 自然尺寸或候选测量选择布局；两分支各自保留节点与 `@State`，隐藏分支不参与布局/绘制/输入/辅助功能并释放焦点与指针捕获；重任务由应用按当前形态控制 | `[已实现]` |
 | `ContainerSizeReader` | 发布自身内容盒（扣 padding/border）实测尺寸；首次收到 `.zero`，变化 < 0.5pt 不发布；父级必须有界宽。卡片内部自适应用它，不用窗口宽度 | `[已实现]` |
 | `WidthClassReader` | 读取 surface 级 width class（窗口级），用于壳层：导航收敛、栏位切换；不用于卡片内部 | `[已实现]` |
@@ -305,6 +306,13 @@
 
 - 固定与已知可变行高均接收未缩放逻辑高度，行高和行间距自动跟随 `TextScaler`；列宽与列间距不参与字号缩放。变量模式复用 authored 前缀索引，不因字号变化或滚动遍历全部数据。`[已实现]`
 - 窗口化、占位、单元格高度与滚动 extent 使用同一份缩放几何；字号恢复后夹紧超出范围的滚动位置，保留重叠可见单元格身份。验收：`TextScaleRowTests.collectionGeometry` / `variableGrid`、`LazyGridTests`。
+
+**Masonry**
+
+- 外观：按声明顺序把子视图放入当前最矮列；列宽均分可用宽度，`columnSpacing` 只出现在列间，`itemSpacing` 只出现在同列卡片间。卡片高度由子视图自然测量，不二次缩放字号。`[已实现]`
+- 手机：宽度低于两列预算时自动单列；卡片以列宽测量，交互卡片自行保证 ≥44pt 命中；不虚拟化，长列表由调用方选择 `LazyGrid`/`VirtualStack`。`[已实现]`
+- 平板 / 桌面：1…`maximumColumns`（默认 2，上限 8）列，宽屏不会继续增加列数；RTL 下第 0 列位于 trailing，源顺序不变。`[已实现]`
+- 交互与验收：`MasonryTests` 覆盖最短列、列数上限、单列退化、列/项间距、RTL 与节点 identity；Gallery `masonry` 提供 Add card/Reset 和 390/720/1280 预览。DevTools 实测 720pt 两列、390pt 单列，点击 Add card 后卡片数变化；详见 [Masonry](masonry.md)。
 
 **Chart / Timeline**
 

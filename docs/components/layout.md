@@ -90,9 +90,10 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | 大集合 | VariableVirtualStack 提供已知可变行高、稳定 ID 锚点及窗口化；仍缺未知高度估测和统一加载协议 |
 | 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；ContainerSizeReader 发布自身内容盒实测尺寸（容器查询，0.5pt 抗抖动阈值）；ViewThatFits 的 `wide:` / `compact:` 两套内容支持阈值或 intrinsic 选择，往返切换保留各自状态与节点；WidthClassReader 读取窗口级 compact/medium/expanded；默认容器阈值与 `UIEnvironment.Viewport.compactMaximumWidth` 一致 |
 | Grid | Grid/GridLayout 有 fixed/flexible/adaptive 列、测量行高及 RTL 对齐；Grid 具备命名字段列、优先级、显隐菜单和 minimum 横向滚动兜底；LazyGrid 有等宽列与已知固定/可变行高窗口化；仍缺 span、显式 intrinsic 轨道和二维窗口化 |
+| Masonry | 最短列放置、按宽度自动 1–2 列、列/项间距与 RTL；高度由子视图自然测量；不虚拟化。详见 [Masonry](masonry.md) |
 | 应用自定义布局 | 公开 Layout / ProposedViewSize / LayoutSubview / LayoutContainer；容器尺寸查询由 ContainerSizeReader 覆盖；仍缺 baseline/alignment guide API 与 safeAreaInsets/frame-in-container 全量 proxy |
 | 表单/属性布局 | Form / PropertyGrid 已有专门用途；不能代替通用约束或网格系统 |
-| 特殊布局 | layoutDirection 贯通 Flex、自定义布局和逻辑 padding；SafeArea 嵌套消费宿主提供的逻辑 insets；平台自动 insets、完整组件 RTL/双向文字、Anchor/约束布局和 Masonry 仍缺 |
+| 特殊布局 | layoutDirection 贯通 Flex、自定义布局和逻辑 padding；SafeArea 嵌套消费宿主提供的逻辑 insets；平台自动 insets、完整组件 RTL/双向文字、Anchor/约束布局仍缺 |
 
 LazyGrid 的 `.variable(...)` 提供每行未缩放逻辑高度（含最后不完整行），数量必须等于 `ceil(itemCount / columns)`。数据或列数改变时，调用方同步更新 authored 高度值；字号改变时组件自动缩放高度与行间距，不要预先乘 `TextScaler`。它没有 VariableVirtualStack 的内容宽度/TextScaler 高度回调，也不自动测量未知行高。
 
@@ -172,6 +173,21 @@ Grid(columns: [
 单元格按声明时的列数分行；隐藏列不把下一行数据移入空槽，恢复后保留节点、局部计数和编辑草稿。需要空槽请提供 `Box {}`，`EmptyView` 不占单元格。隐藏期间节点仍挂载，订阅和资源仍存活；所属 Popover、Tooltip、HoverCard 关闭，独立模态由应用管理。禁用 Grid 会关闭列菜单并释放焦点与捕获。直接使用 `GridLayout` 时，显隐选择传普通值 `columnVisibility`，菜单和滚动由宿主提供。
 
 `GridColumnsTests` 覆盖 390/720/1280pt、100%/200% 字号、三种输入、明暗主题、RTL、源行对齐、首次隐藏几何、草稿、附属浮层、菜单、会话重置、横向揭示和经校验的 AI 查询。`CustomLayoutVisibilityTests` 验证直接与缓存绘制、焦点、命中和语义。Gallery `layout` 提供可编辑示例及窄/宽/触摸预览。
+
+### Masonry
+
+`Masonry` 是按最短列放置的瀑布流容器，适合高度不一的卡片墙。列数由 `floor((width + columnSpacing) / (minimumColumnWidth + columnSpacing))` 决定并夹在 1…`maximumColumns` 之间，默认最多 2 列；窄宽自动单列，宽屏也不会超过上限。列宽均分可用宽度；`columnSpacing` 只出现在列间，`itemSpacing` 只出现在同列卡片间。卡片以列宽测量，高度自然增长；文本缩放由卡片自身处理。RTL 下第 0 列位于 trailing，源顺序不变。
+
+```swift
+Masonry(minimumColumnWidth: 220, maximumColumns: 2,
+        columnSpacing: 14, itemSpacing: 14) {
+    for card in cards { CardView(card) }
+}
+```
+
+Masonry 只负责布局，不虚拟化、不排序、不管理卡片数据；大集合请使用 `LazyGrid` 或 `VirtualStack`，需要显式二维轨道请使用 `Grid`。`MasonryTests` 覆盖最短列、列数上限、单列退化、间距与 RTL；Gallery `masonry` 页提供 Add card/Reset 与窄/宽/触摸预览，DevTools 实测 720pt 为两列、390pt 为单列，点击 Add card 后卡片数与列平衡更新。
+
+2026-10-18 DevTools 实测：720×820 下卡片 frame 为两列（x=102/389，宽 273），390×820 下卡片单列排列；`input-ui` 点击 Add card 后计数从 8 变为 9，`capture-ui` 截图确认卡片墙、间距与文字裁切正常。
 
 2026-10-17 macOS 原生 Gallery 验收：1280pt / 约 720pt 显示三列，390pt 自动保留 Asset；即时 AI 查询中隐藏 Notes 的可见可交互节点数为 0，手动恢复后为 1，同一输入框仍保留已输入草稿。恢复自动模式重新隐藏，必要列操作可用。200% 字号下 Columns 入口为 125×50pt，菜单行为 52pt，Asset 仍禁用并勾选；切换暗色后草稿与操作结果保留。前后 `get_diagnostics.layoutIssues.total` 均为 0。横向滚轮及程序揭示另由场景交互测试覆盖；以上取样不代表物理设备触摸或 GPU 帧时间测量。
 

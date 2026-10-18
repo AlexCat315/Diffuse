@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增 P2 `Masonry` / `MasonryLayout`：按最短列放置的平衡瀑布流，列数由 `minimumColumnWidth`、`maximumColumns` 与实际宽度决定（窄宽自动单列，RTL 镜像列顺序），支持列间距、项间距与列内水平对齐。高度由子视图自然测量，不二次缩放字号；不虚拟化，大集合仍用 `LazyGrid`/`VirtualStack`。`MasonryTests` 4/4 覆盖最短列、单列退化、列数上限与 RTL；Gallery 新增 `masonry` 页与 390/720/1280 预览，DevTools 实测 720pt 两列、390pt 单列、Add card 后计数 8→9。补齐 [Masonry](docs/components/masonry.md)、`layout.md`、`adaptive-spec.md` 与 `gaps.md`。
+
 - `NavigationRail` / `Sidebar` 的纯图标轨改为居中的 40×40 圆角选择块：移除 2pt accent 侧条和铺满整行的选择/悬停底，选中态用 `surfaceVariant`，hover/press 只叠中性 state layer 并把图标从 `onSurfaceVariant` 提亮到 `onSurface`。带文字形态保留整行胶囊，但同样去掉 accent 侧条并改为对称内边距。`NavigationRailTests` 断言选择块与图标双向居中、无 accent 侧条及 hover 颜色；Gallery 窄宽壳层同步生效。
 
 - 新增 P2 `ActionSheet`：所有宽度统一为底部操作抽屉；compact 全宽贴底并带顶部拖拽柄，支持下拉/高速释放与外部点击关闭，短拖回弹，不显示关闭图标；medium/expanded 为最大 560pt 的居中抽屉，右上提供 44×44pt 关闭图标。头部固定、操作列表独立滚动并保留底部安全区；操作行之间使用 1pt 分隔线，hover/键盘焦点只叠中性 state layer，移除突兀的 accent 焦点边框。移除底部 Cancel，`closeLabel` 由调用方必填并用于 wide 关闭图标的辅助功能名称/tooltip，组件不硬编码英文文案。稳定 ID 操作、图标/危险/禁用、键盘导航与一次回调；跨宽度切换保留触发器与打开状态。Gallery 新增项目操作、长列表和三档预览，补齐两份规范及组件文档。
