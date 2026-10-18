@@ -287,4 +287,14 @@ struct SidebarHierarchyTests: GuavaUIComposeSerializedSuite {
       #expect(actions.frame.height >= 44)
     }
   }
+
+  @Test("Every destination paints the same full-row hover and selection surface")
+  func fullWidthRows() throws {
+    try scene { _, graph, _, _ in
+      let overview = try item("overview", graph)
+      let settings = try item("settings", graph)
+      #expect(overview.frame.width == settings.frame.width)
+      #expect(overview.frame.width >= 250)
+    }
+  }
 }

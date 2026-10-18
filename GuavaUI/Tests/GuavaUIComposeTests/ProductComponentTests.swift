@@ -367,4 +367,17 @@ struct ProductComponentTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    @Test("Alert title, message and actions share one leading text edge")
+    func alertTextAlignment() {
+        withScene { graph, _, _, _, _ in
+            graph.install(root: Alert("Project saved", message: "All changes are available.", tone: .success) {})
+            settle(graph)
+            let all = nodes(graph.tree.root!)
+            let title = all.first { $0.accessibility?.label == "Project saved" && $0.accessibility?.role != .status }!
+            let message = all.first { $0.accessibility?.label == "All changes are available." }!
+            #expect(title.absoluteFrame.minX == message.absoluteFrame.minX)
+            #expect(title.absoluteFrame.width > 0)
+        }
+    }
+
 }

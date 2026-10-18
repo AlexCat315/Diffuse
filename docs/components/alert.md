@@ -51,6 +51,7 @@ Alert("Import failed", message: "The format is unsupported.", tone: .error) {
 ## Sizing / Tokens
 
 - 内边距 `theme.spacing.md`，图标与文本间距 `sm`，圆角 `theme.radius.md`。
+- 图标属于标题行，垂直居中于 `bodyStrong` 行盒；正文与操作行使用相同的文本缩进，因此三者左边缘严格一致。
 - 标题 `bodyStrong`，正文 `body`；正文可为空。
 - `.soft` 使用 `surfaceRaised` 与 `border`；`.filled` 使用 tone 与 `tone.ink(onSolid:)`。
 - 操作行使用真实 Button，触摸面遵守 44pt 下限；关闭按钮为 ghost icon button。
@@ -60,12 +61,14 @@ Alert("Import failed", message: "The format is unsupported.", tone: .error) {
 - 非阻塞：Alert 自身不创建 modal scope，不抢焦点，不改变背景输入。
 - 辅助功能 role=`status`，label 为 title，help 为 message；图标装饰不重复朗读。
 - 关闭按钮的激活只调用 `onDismiss`，不改变页面其他状态。
-- 动态文案按实际宽度换行，不缩字号；窄容器下图标与文本保持顶部对齐。
+- 动态文案按实际宽度换行，不缩字号；窄容器下标题、正文与操作始终共享同一条 leading edge。
+- `showsIcon = false` 时文本缩进归零，标题直接贴齐卡片内边距。
 
 ## Verification
 
 - Gallery `alert` 页展示 success / warning / error / info 四张默认 `.soft` Alert。
-- DevTools 1000×760：查询到四项 `status`，`capture-ui` 确认中性卡片、tone 图标与正文对比度。
+- DevTools 1000×760：查询到四项 `status`；`Project saved` 与 `All changes are available…` 的 staticText 均为 `x = 323`，`capture-ui` 确认图标居中于标题行、正文同边。
+- `ProductComponentTests.alertTextAlignment` 断言 title 与 message 的 `absoluteFrame.minX` 相等，防止只改视觉 padding 的回归。
 - 操作按钮和 dismiss 由 Gallery 其它状态页覆盖；`.filled` / `.outline` 由调用方按需取样。
 
 ## File map

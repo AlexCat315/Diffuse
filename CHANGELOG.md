@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Sidebar 行命中区与 hover/selection 背景改为整栏宽度：`destinationButton` 在行 Box 中占满主轴，不再按标题 intrinsic width 收缩；短项（Alert）与长项（Progress / Spinner）胶囊等宽。`SidebarHierarchyTests.fullWidthRows` 断言 Overview 与 Settings 行宽一致且 ≥250pt，DevTools 1000×760 hover 两项均宽 220pt。
+- Alert 文本列重排：图标进入标题行并垂直居中，正文与操作通过同一 `textInset` 对齐到标题 leading edge；修复 `.padding(leading:)` 作用于 Text 时未产生缩进的问题。`ProductComponentTests.alertTextAlignment` 断言 title/message `minX` 相等，DevTools 两者均为 x=323。
 - Calendar 日期格改为 iOS 圆形形态：选中日期实心 accent 圆、今天 accent 圆环，hover/focus 同样保持圆形；替换原来的小圆角方形。Calendar 键盘导航测试通过，DevTools 选中 10 月 6 日后截图确认实心圆与今天 18 日圆环。
 - Alert 的默认 `.soft` 从 Material tonal 色块改为 iOS 中性状态卡：`surfaceRaised` + hairline，tone 只保留在图标；标题/正文恢复常规对比度。新增 `alert.md` 并加入组件索引，DevTools 截图复核四种 tone。
 - iOS 风格收口：Sheet 默认改为距窗口 12pt、圆角 14pt 的浮动面板（新增 `SheetOptions.inset/cornerRadius`），不再贴边方形；Toast 自动位置改为所有宽度右上，圆角 14pt 并加轻阴影，compact 不再使用底部 Snackbar 形态。SheetTests/ProductComponentTests 22/22，DevTools 实测 sheet 260×736 @ (728,12)、toast 右上带阴影。

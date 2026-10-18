@@ -27,7 +27,10 @@ struct SidebarDestination<ID: Hashable>: View {
     var body: some View {
         let row = SidebarSelectionRevealHost(isSelected: selection.wrappedValue == item.id, presentation: presentation) {
             Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                destinationButton
+                // The hit/selection surface is the whole row, not the label's
+                // intrinsic width. Otherwise short items get a shorter hover
+                // pill than long ones and the rail never looks like a list.
+                destinationButton.flex(1, shrink: 1, basis: 0)
                 if !presentation.isRail && !item.contextMenu.isEmpty {
                     actionsMenu
                         .frame(width: 44)

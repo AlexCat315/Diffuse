@@ -59,18 +59,33 @@ public struct Alert<Actions: View>: View {
     public var body: some View {
         ThemeReader { theme in
             let style = resolvedStyle(theme)
+            let iconExtent = theme.icons.medium
+            let textInset = showsIcon ? iconExtent + theme.spacing.sm : 0
             Row(alignment: .top, spacing: theme.spacing.sm) {
-                if showsIcon {
-                    Icon(icon ?? tone.icon, size: .medium, color: style.iconInk)
-                }
                 Column(alignment: .leading, spacing: 4) {
-                    Text(title).font(.bodyStrong).foregroundColor(style.ink)
+                    Row(alignment: .center, spacing: theme.spacing.sm) {
+                        if showsIcon {
+                            // The glyph belongs to the title line, so center it
+                            // in that line box and use the same extent to indent
+                            // the message and actions onto the title's edge.
+                            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                                Icon(icon ?? tone.icon, size: .medium, color: style.iconInk)
+                            }
+                            .frame(width: iconExtent, height: theme.typography.bodyStrong.lineHeight)
+                            .flex(0, shrink: 0)
+                            .accessibilityHidden()
+                        }
+                        Text(title).font(.bodyStrong).foregroundColor(style.ink)
+                    }
                     if !message.isEmpty {
-                        Text(message).font(.body).foregroundColor(style.detail)
+                        Box(direction: .row, alignItems: .flexStart) {
+                            Text(message).font(.body).foregroundColor(style.detail)
+                        }
+                        .padding(EdgeInsets(leading: textInset))
                     }
                     if hasActions {
                         Row(alignment: .center, spacing: theme.spacing.xs) { actions }
-                            .padding(EdgeInsets(top: theme.spacing.xs))
+                            .padding(EdgeInsets(top: theme.spacing.xs, leading: textInset))
                     }
                 }
                 .flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
