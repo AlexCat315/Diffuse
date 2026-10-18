@@ -40,7 +40,7 @@ struct RailDestinationStyle: ButtonStyle {
         }
         .frame(width: .percent(100), minHeight: minimumHeight)
         .foregroundColor(c.isEnabled ? c.isSelected ? .onSurface : .onSurfaceVariant : .onSurfaceDisabled)
-        .selectionHighlight(.navigation, isSelected: c.isSelected, isHovered: c.isHovered, isPressed: c.isPressed)
+        .selectionHighlight(.sidebar, isSelected: c.isSelected, isHovered: c.isHovered, isPressed: c.isPressed)
         .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: 1)
     }
 }

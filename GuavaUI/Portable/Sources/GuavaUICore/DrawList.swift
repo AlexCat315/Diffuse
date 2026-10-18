@@ -482,8 +482,12 @@ public final class DrawList {
         )
     }
 
-    /// Append a thin solid line between two screen-space points as a rotated
-    /// quad. Useful for overlay gizmos and debug visualization.
+    /// Append a thin solid line between two screen-space points.
+    ///
+    /// Uses an opaque core, a one-physical-pixel alpha fringe and rounded caps,
+    /// matching the coverage convention of `addRoundedRect`. A plain rotated
+    /// quad has hard stair-stepped sides; that is very visible on checkmarks,
+    /// spinner ticks and chart strokes at 1x.
     public func addLine(fromX x0: Float, fromY y0: Float,
                         toX x1: Float, toY y1: Float,
                         thickness: Float, color: Color) {
@@ -495,12 +499,60 @@ public final class DrawList {
         let nx = -dy * invLen
         let ny = dx * invLen
         let half = max(thickness, 0.5) * 0.5
-        let packed = color.rgba8
-        let v0 = UIVertex(posX: x0 + nx * half, posY: y0 + ny * half, u: -1, v: 0, color: packed)
-        let v1 = UIVertex(posX: x1 + nx * half, posY: y1 + ny * half, u: -1, v: 0, color: packed)
-        let v2 = UIVertex(posX: x1 - nx * half, posY: y1 - ny * half, u: -1, v: 0, color: packed)
-        let v3 = UIVertex(posX: x0 - nx * half, posY: y0 - ny * half, u: -1, v: 0, color: packed)
-        appendQuad(v0, v1, v2, v3, textureID: .none)
+        let feather = min(0.5 / max(1, pixelScale), half * 0.5)
+        let innerHalf = max(0, half - feather)
+        let outerHalf = half + feather
+        let opaque = color.rgba8
+        let clear = opaque & 0x00FF_FFFF
+        let baseIndex = UInt32(indices.count)
+
+        func vertex(_ x: Float, _ y: Float, _ packed: UInt32) -> UIVertex {
+            UIVertex(posX: x, posY: y, u: -1, v: 0, color: packed)
+        }
+        func append(_ a: UIVertex, _ b: UIVertex, _ c: UIVertex, _ d: UIVertex) {
+            let base = UInt32(vertices.count)
+            vertices.append(contentsOf: [a, b, c, d])
+            indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
+        }
+
+        if innerHalf > 0 {
+            append(vertex(x0 + nx * innerHalf, y0 + ny * innerHalf, opaque),
+                   vertex(x1 + nx * innerHalf, y1 + ny * innerHalf, opaque),
+                   vertex(x1 - nx * innerHalf, y1 - ny * innerHalf, opaque),
+                   vertex(x0 - nx * innerHalf, y0 - ny * innerHalf, opaque))
+        }
+        append(vertex(x0 + nx * innerHalf, y0 + ny * innerHalf, opaque),
+               vertex(x1 + nx * innerHalf, y1 + ny * innerHalf, opaque),
+               vertex(x1 + nx * outerHalf, y1 + ny * outerHalf, clear),
+               vertex(x0 + nx * outerHalf, y0 + ny * outerHalf, clear))
+        append(vertex(x0 - nx * innerHalf, y0 - ny * innerHalf, opaque),
+               vertex(x1 - nx * innerHalf, y1 - ny * innerHalf, opaque),
+               vertex(x1 - nx * outerHalf, y1 - ny * outerHalf, clear),
+               vertex(x0 - nx * outerHalf, y0 - ny * outerHalf, clear))
+
+        let capSegments = 8
+        for (cx, cy) in [(x0, y0), (x1, y1)] {
+            let center = UInt32(vertices.count)
+            vertices.append(vertex(cx, cy, opaque))
+            let ring = UInt32(vertices.count)
+            for step in 0...capSegments {
+                let angle = Float(step) / Float(capSegments) * 2 * .pi
+                let ox = cos(angle), oy = sin(angle)
+                vertices.append(vertex(cx + ox * innerHalf, cy + oy * innerHalf, opaque))
+                vertices.append(vertex(cx + ox * outerHalf, cy + oy * outerHalf, clear))
+            }
+            for step in 0..<capSegments {
+                let innerA = ring + UInt32(step) * 2
+                let outerA = innerA + 1
+                let innerB = ring + UInt32(step + 1) * 2
+                let outerB = innerB + 1
+                indices.append(contentsOf: [center, innerA, innerB])
+                indices.append(contentsOf: [innerA, outerA, outerB,
+                                            innerA, outerB, innerB])
+            }
+        }
+        let count = UInt32(indices.count) - baseIndex
+        if count > 0 { recordIndices(at: baseIndex, count: count, textureID: .none) }
     }
 
     /// Append a solid-color triangle. Used by CPU-projected geometry such as the

@@ -125,10 +125,11 @@ struct SidebarContentTests: GuavaUIComposeSerializedSuite {
             dispatcher(graph, context).dispatch(.mouseMotion(MouseMotionEvent(x: Float(frame.midX), y: Float(frame.midY), deltaX: 0, deltaY: 0)))
             settle(graph)
             #expect(row.accessibility?.state.isSelected == true && row.accessibility?.label == "Projects")
-            // Selection comes from the shared appearance, so a hovered *selected*
-            // destination layers the state layer over the same accent fill a list
-            // row uses.
-            let selection = SelectionAppearance.resolve(.navigation, theme: theme)
+            // Sidebar rows use the neutral source-list role: a hovered
+            // selection layers the state layer over the grouped fill, not the
+            // accent-tinted navigation colour used by tabs.
+            let selection = SelectionAppearance.resolve(.sidebar, theme: theme)
+            #expect(selection.fill == theme.colors.surfaceVariant)
             #expect(all(row).contains { $0.backgroundColor == selection.hoverFill.composited(over: selection.fill) })
         }
     }

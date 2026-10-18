@@ -201,7 +201,7 @@ struct SidebarItemStyle: ButtonStyle, Hashable {
                 .foregroundColor(c.isEnabled ? c.isSelected ? .onSurface : .onSurfaceVariant : .onSurfaceDisabled)
                 .padding(horizontal: 10, vertical: 7)
                 .selectionHighlight(
-                    .navigation,
+                    .sidebar,
                     isSelected: c.isSelected,
                     isHovered: c.isHovered,
                     isPressed: c.isPressed

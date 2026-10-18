@@ -94,6 +94,15 @@ IconMetricsReader { metrics in
 
 当前 TextScaler 是线性倍率，非法/非有限倍率回退 1。宿主需将自己的辅助功能或用户偏好交给框架；尚无 Windows/Linux 系统文字大小变化的自动订阅，也没有非线性动态字号曲线。部分历史组件（例如 CommandPalette 行预算、Calendar 日期格、PropertyGrid 行槽）仍有固定行高或虚拟化几何，不能据此宣称整个目录已通过 200% 大字体。画廊的 Text 控件用于逐页暴露和验证这些缺口。
 
+## 线条与抗锯齿
+
+`DrawList.addLine` 不再输出单个硬边 quad。它按 `pixelScale` 生成不透明核心、单物理像素 alpha fringe 和圆角端帽，与 `addRoundedRect` 的 coverage 约定一致。勾选标记、Spinner 弧线段、图表折线和调试线共用这条路径，所以在 1× 下也不会出现阶梯状锯齿。
+
+- fringe 只覆盖边界，不扩大到整个形状；半透明颜色不会因为重叠而发光。
+- 端帽使用同一 alpha fringe 的三角扇，折线端点不是方角。
+- 线条粗细的最小值仍为 0.5pt；非法/零长度线段直接跳过。
+- `DrawListTests.lineCoverage` 断言顶点包含不透明核心与透明 fringe、索引不越界，并保持单 batch。
+
 ## 验证
 
 `DesignSystemTests` 验证局部/自定义主题、任意字体族、一次缩放、输入测量与绘制、浮层继承、图标替换与显式尺寸；`SystemFontInstanceTests` 验证 macOS 真实可变字体坐标、字重轮廓和 1×/2× 光学尺寸及 advance。字体栅格化前后的布局 metrics 必须相同，见 `FontPipelineTests`。

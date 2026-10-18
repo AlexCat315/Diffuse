@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Sidebar 选择高亮改用新的 `.sidebar` source-list 角色：`fill = surfaceVariant`，hover/press 只叠中性 `stateLayer`，不再把 accent 蓝叠成淡紫色 Material 选中态。`SidebarContentTests` 断言 sidebar 与 navigation 角色颜色分离；DevTools 1000×760 hover 选中项为中性灰、整行 220pt。
+- `DrawList.addLine` 加入单物理像素 alpha fringe 与圆角端帽：Checkbox 勾、Spinner 弧线、图表折线不再出现阶梯锯齿；新增 `DrawListTests.lineCoverage` 断言不透明核心、透明 fringe 和索引边界。DevTools 4× 裁图复核勾选标记边缘。
 - Sidebar 行命中区与 hover/selection 背景改为整栏宽度：`destinationButton` 在行 Box 中占满主轴，不再按标题 intrinsic width 收缩；短项（Alert）与长项（Progress / Spinner）胶囊等宽。`SidebarHierarchyTests.fullWidthRows` 断言 Overview 与 Settings 行宽一致且 ≥250pt，DevTools 1000×760 hover 两项均宽 220pt。
 - Alert 文本列重排：图标进入标题行并垂直居中，正文与操作通过同一 `textInset` 对齐到标题 leading edge；修复 `.padding(leading:)` 作用于 Text 时未产生缩进的问题。`ProductComponentTests.alertTextAlignment` 断言 title/message `minX` 相等，DevTools 两者均为 x=323。
 - Calendar 日期格改为 iOS 圆形形态：选中日期实心 accent 圆、今天 accent 圆环，hover/focus 同样保持圆形；替换原来的小圆角方形。Calendar 键盘导航测试通过，DevTools 选中 10 月 6 日后截图确认实心圆与今天 18 日圆环。

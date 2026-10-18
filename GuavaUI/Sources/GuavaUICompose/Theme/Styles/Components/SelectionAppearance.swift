@@ -9,18 +9,19 @@ import GuavaUIRuntime
 /// colours and the geometry of each role live here and nowhere else, so a new
 /// row style inherits the house selection instead of inventing one.
 ///
-/// Two roles, because the two surfaces answer different questions:
+/// Three roles, because the surfaces answer different questions:
 ///
-/// - `navigation`: an inset, rounded pill, for surfaces that are a list of
-///   destinations. The pill reads as "you are here".
+/// - `sidebar`: the iOS/macOS source list pill. A neutral grouped fill keeps
+///   the selected destination quiet; the accent is reserved for controls.
+/// - `navigation`: an accent-tinted pill for tabs and compact navigation.
 /// - `dataRow`: an edge-to-edge band, for dense grids whose rows share
 ///   horizontal rules with their neighbours and must keep column alignment.
 ///
-/// Both roles share the same accent fill. A selected row has to be findable in
-/// a wall of thirty rows, and hover/press are state layers *on top of* the
-/// selection rather than replacements for it.
+/// Hover/press are state layers on top of the resting fill, so a selected row
+/// still answers the pointer without turning into a second accent colour.
 public struct SelectionAppearance: Equatable, Sendable {
     public enum Role: Sendable, Equatable {
+        case sidebar
         case navigation
         case dataRow
     }
@@ -39,12 +40,13 @@ public struct SelectionAppearance: Equatable, Sendable {
 
     public static func resolve(_ role: Role, theme: Theme) -> SelectionAppearance {
         let colors = theme.colors
-        return SelectionAppearance(fill: colors.selection,
+        let insetRole = role != .dataRow
+        return SelectionAppearance(fill: role == .sidebar ? colors.surfaceVariant : colors.selection,
                                    hoverFill: colors.stateLayerHover,
                                    pressedFill: colors.stateLayerPressed,
-                                   cornerRadius: role == .navigation ? theme.radius.md : 0,
-                                   horizontalInset: role == .navigation ? theme.spacing.sm : 0,
-                                   verticalInset: role == .navigation ? theme.spacing.xs : 0)
+                                   cornerRadius: insetRole ? theme.radius.md : 0,
+                                   horizontalInset: insetRole ? theme.spacing.sm : 0,
+                                   verticalInset: insetRole ? theme.spacing.xs : 0)
     }
 
     /// The fill for one interaction state. Selection is a resting state, not a

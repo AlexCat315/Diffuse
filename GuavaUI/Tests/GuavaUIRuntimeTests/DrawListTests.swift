@@ -34,6 +34,21 @@ struct DrawListTests {
         #expect(list.vertices[0].u == -1)
     }
 
+    @Test("Lines emit an opaque core, transparent fringe and rounded caps")
+    func lineCoverage() {
+        let list = DrawList()
+        list.pixelScale = 2
+        list.addLine(fromX: 2, fromY: 3, toX: 42, toY: 23,
+                     thickness: 2, color: .white)
+
+        #expect(list.vertices.count > 4)
+        #expect(list.indices.count > 6)
+        #expect(list.indices.allSatisfy { $0 < list.vertices.count })
+        #expect(list.vertices.contains { $0.color >> 24 == 0xFF })
+        #expect(list.vertices.contains { $0.color >> 24 == 0 })
+        #expect(list.batches.count == 1)
+    }
+
     @Test("Two adjacent rects merge into a single batch")
     func mergeAdjacentBatches() {
         let list = DrawList()
