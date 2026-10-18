@@ -13,6 +13,7 @@ public struct NumberField: View {
     public let step: Float?
     public let showsStepper: Bool
     public let mixedValueLabel: String?
+    public let locale: Locale
 
     public init(value: Binding<Float>,
                 decimals: Int = 2,
@@ -22,7 +23,8 @@ public struct NumberField: View {
                 maxValue: Float? = nil,
                 step: Float? = nil,
                 showsStepper: Bool = false,
-                mixedValueLabel: String? = nil) {
+                mixedValueLabel: String? = nil,
+                locale: Locale = .current) {
         self.value = value
         self.decimals = max(0, min(decimals, 6))
         self.size = size
@@ -32,36 +34,19 @@ public struct NumberField: View {
         self.step = step
         self.showsStepper = showsStepper
         self.mixedValueLabel = mixedValueLabel
+        self.locale = locale
     }
 
     public var body: some View {
         _StatefulNumberField(field: self)
     }
 
-    static func format(_ value: Float, decimals: Int) -> String {
-        let clamped = max(0, min(decimals, 6))
-        let formatted = String(format: "%.*f", clamped, value)
-        guard clamped > 0 else { return formatted == "-0" ? "0" : formatted }
-
-        var trimmed = formatted
-        while trimmed.last == "0" {
-            trimmed.removeLast()
-        }
-        if trimmed.last == "." {
-            trimmed.removeLast()
-        }
-        return trimmed.isEmpty || trimmed == "-0" ? "0" : trimmed
+    static func format(_ value: Float, decimals: Int, locale: Locale = .current) -> String {
+        NumericTextFormat(locale: locale, decimals: decimals).format(value)
     }
 
-    static func parse(_ text: String) -> Float? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let parsed = Float(trimmed),
-              parsed.isFinite
-        else {
-            return nil
-        }
-        return parsed
+    static func parse(_ text: String, locale: Locale = .current) -> Float? {
+        NumericTextFormat(locale: locale, decimals: 6).parse(text)
     }
 }
 
@@ -74,7 +59,7 @@ private struct _StatefulNumberField: View {
 
     var body: some View {
         let committed = field.mixedValueLabel == nil
-            ? NumberField.format(normalized(field.value.wrappedValue), decimals: field.decimals) : ""
+            ? NumberField.format(normalized(field.value.wrappedValue), decimals: field.decimals, locale: field.locale) : ""
         let committedBuffer = TextBuffer(committed)
         let input = TextField(field.mixedValueLabel ?? "", text: Binding(
                 get: { isEditing ? draft : committedBuffer },
@@ -145,7 +130,7 @@ private struct _StatefulNumberField: View {
     /// Stepping past a bound is a no-op, so the button reports it instead of
     /// swallowing the press.
     private var currentValue: Float {
-        isEditing ? NumberField.parse(draft.stringValue) ?? field.value.wrappedValue : field.value.wrappedValue
+        isEditing ? NumberField.parse(draft.stringValue, locale: field.locale) ?? field.value.wrappedValue : field.value.wrappedValue
     }
 
     private var canStepUp: Bool {
@@ -163,7 +148,7 @@ private struct _StatefulNumberField: View {
     private func commitDraft() {
         guard draftChanged else { return }
         draftChanged = false
-        if let parsed = NumberField.parse(draft.stringValue) {
+        if let parsed = NumberField.parse(draft.stringValue, locale: field.locale) {
             let next = normalized(parsed)
             if field.mixedValueLabel != nil || field.value.wrappedValue != next {
                 field.value.wrappedValue = next
@@ -173,7 +158,7 @@ private struct _StatefulNumberField: View {
         if committed != field.value.wrappedValue {
             field.value.wrappedValue = committed
         }
-        draft = TextBuffer(NumberField.format(committed, decimals: field.decimals))
+        draft = TextBuffer(NumberField.format(committed, decimals: field.decimals, locale: field.locale))
     }
 
     private func increment() {
@@ -189,7 +174,7 @@ private struct _StatefulNumberField: View {
         if field.value.wrappedValue != next {
             field.value.wrappedValue = next
         }
-        draft = TextBuffer(NumberField.format(next, decimals: field.decimals))
+        draft = TextBuffer(NumberField.format(next, decimals: field.decimals, locale: field.locale))
         draftChanged = false
     }
 

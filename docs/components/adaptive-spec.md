@@ -219,10 +219,10 @@
 
 **NumberField / Vec3Field**
 
-- 外观：NumberField 为 TextField + 可选步进列（最小 22pt）；Vec3Field 为三个可收缩轴单元 + 固定轴字母。`[已实现]`
-- 手机：步进按钮触摸 ≥ 44pt；Vec3Field 在宽度不足时按 96pt 基准换行，X/Y 一行、Z 下一行（极窄时逐行），轴单元最小 88pt 保持可编辑，不靠 clip 隐藏输入。`[已实现]`
+- 外观：NumberField 为 TextField + 可选步进列（最小 22pt）；Vec3Field 为三个可收缩轴单元 + 随字号缩放的轴字母。`[已实现]`
+- 手机：步进按钮触摸 ≥ 44pt；Vec3Field 在宽度不足时按 96pt 基准换行，X/Y 一行、Z 下一行（极窄时逐行），轴单元最小 88pt 保持可编辑，不靠 clip 隐藏输入；高度按字号与 44pt 触摸下限增长，内部输入面填满 chrome。`[已实现]`
 - 平板 / 桌面：单行三联编辑；Shift/Alt 步进语义保持。`[已实现]`
-- 交互与验收：提交/失焦解析、非法输入恢复、min/max 夹紧、辅助功能输入值；换行前后轴输入身份与草稿保留。验收：`NarrowReflowTests.vec3Reflow`、`--component numberField|vec3Field`。
+- 交互与验收：按 `locale` 提交/失焦完整解析、非法输入恢复、min/max 夹紧、辅助功能输入值；格式化不插入分组，绑定保持 Float。换行前后轴输入身份与草稿保留。验收：`NumericLocaleTests`、`NarrowReflowTests.vec3Reflow`、`--component numberField|vec3Field`。
 
 **ColorField**
 
@@ -625,6 +625,8 @@ NavigationStack 已完成：`NavigationStack(path:root:destination:)` 以 caller
 P1 通用拖放已完成：`DragScope` 持有类型化会话，`Draggable` 在 6pt 位移后夺取捕获并投射 Portal 预览，`DropTarget` 按 payload 类型与最深命中节点接收 drop，`onTargeted` 提供 hover 高亮；外部释放与类型不匹配不触发回调。`DragAndDropTests` 覆盖匹配 drop、外部取消与预览生命周期；Gallery `dragAndDrop` 页与 README 入口已接入；DevTools 720×820 将 Camera 拖入 Lane A 后查询到 `A: Camera · B: empty`。该协议不提供自动滚动或键盘重排，集合重排继续使用 `ReorderableList`。
 
 列表 sticky 区段已完成：`SectionedList(stickyHeaders: true)` 观察真实 `ScrollView` offset，按 `entryIndex × (已缩放行高 + 行距)` 解析当前区段；原 header 行滚出顶部后由固定副本接替，下一 header 进入标题高度范围时把它上推，到达顶部后完成交接。固定副本通过 `ContainerSizeReader` 取得列表实测宽度，覆盖行内容区并物理左对齐，保留右侧 12pt 稳定滚动条槽；底部 1pt 分隔线不改变行高。它关闭命中、隐藏语义，原 header 行仍是唯一语义来源。`SectionedListTests.stickyHeaders` 覆盖首段固定与宽度、上推 15pt、区段交接、边界处仅一份语义，以及 End 程序化显露后的跟随；`stickyHeadersDisabled` 验证默认关闭。Gallery `sectionedList` 页改为三段可滚动列表；DevTools 用 `input-ui` 滚动条拖动后，`query_ui_nodes` 返回固定 `Scene` 条带位于列表顶部（548×30、`hasBackground=true`、`inputEnabled=false`），`capture-ui` 截图确认左对齐、滚动条槽完整与底部半露行被分隔。重排、swipe 与下拉刷新均已实现，边界见 [缺失清单](gaps.md#29-列表能力包p1)。
+
+NumberField / Vec3Field 的 locale 与轴高度已完成：`locale` 默认当前区域，五种 locale 的小数、数字与正负号往返，完整解析拒绝分组/尾随垃圾/非有限数值；数值绑定仍为 Float。Vec3 的 small 基线修正为与 TextField 一致的 28pt，按字号增长并取触摸 44pt 下限；实际编辑面填满显式高度。72 项数值/重排/TextField 回归通过。DevTools 实际 390×820 触摸输入 `12,75` 提交为 12.75；720×820 深色混合输入先步进、再输入非法后缀，恢复为 12,75，另一 locale 同步显示 12.75；390 深色触摸与 1280 浅色指针的 200% 三轴输入面均为 56pt，窄宽 X/Y → Z、宽屏三轴同排。镜像检查确认轴标签与输入对齐、无裁字，浅色细边框与深色凹面保持一致。见 [数值输入](numberfield.md)。
 
 ## 6. 动效与动画（动画效果实现）
 

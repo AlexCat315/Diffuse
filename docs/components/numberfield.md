@@ -20,6 +20,7 @@
 NumberField(value: $x)
 NumberField(value: $rotation, decimals: 1, size: .small)
 NumberField(value: $mass, isEnabled: false)
+NumberField(value: $amount, locale: Locale(identifier: "de_DE")) // 12,5
 ```
 
 | 参数 | 默认值 | 说明 |
@@ -31,30 +32,45 @@ NumberField(value: $mass, isEnabled: false)
 | `minValue` / `maxValue` | `nil` | 提交与步进时夹紧；到达边界时步进按钮禁用 |
 | `step` | `nil` | 步进与输入归一化的步长 |
 | `showsStepper` | `false` | 显示紧凑上下箭头列；方向键步进不依赖它 |
+| `locale` | `.current` | 小数分隔符、数字与正负号；绑定始终为 `Float`，不保存格式化字符串 |
 
 ## Behavior
 
 - **提交时机**：`Return` 或失焦时提交
 - **键盘步进**：↑ / ↓ 调整值，Shift ×10、Alt ×0.1；达到 min / max 边界停止
-- **解析策略**：用 `Float(...)` 解析；失败则恢复到当前已提交值
+- **解析策略**：按 `locale` 归一化小数分隔、数字与正负号后完整解析；支持指数，拒绝分组符、尾随垃圾、NaN 和无穷值。失败时恢复当前已提交值；例如 `de_DE` 接受 `12,5`，拒绝 `1.234`，不会把它误当 1234。
 - **编辑体验**：聚焦后显示 draft，避免把 `1.`、`-` 这类中间态立刻回写成格式化结果
-- **格式化**：输出会去掉尾随 `0` 和孤立的小数点，例如 `1.50 -> 1.5`，`2.00 -> 2`
+- **格式化**：不插入千位分组；小数位上限夹紧在 0…6，移除尾随零并归一化舍入后的负零。`de_DE` 的 1.5 显示 `1,5`，`en_US_POSIX` 显示 `1.5`。
 
 ## Authoring rules
 
 ✅ 应当：
 - 在 Inspector 的单值数值字段使用 `NumberField`
 - 和 `Row` / `PropertyGrid` 组合成 `X / Y / Z` 三联编辑
-- 用 `.small` 放进 24-26pt 高的紧凑行
+- 指针面 `.small` 最小 28pt；触摸面至少 44pt，大字号应允许控件增高
 
 ❌ 不应：
 - 把 `NumberField` 当流程导航（那是 `Stepper`）；数值增减用 `showsStepper` 或方向键
-- 指望它做 locale-aware 小数分隔符；当前只接受 `.`
+- 在调用方把本地化字符串写进数值模型；模型保持 `Float`，显示与编辑交给 `locale`
 
 ## Known issues / TODO
 
 - 还没有拖拽 scrub
-- 还没有 locale decimal separator 支持
+- 单轴重置、向量复制/粘贴尚未提供内建入口
+
+## Vec3Field
+
+三个轴共享同一 `locale`、精度、步长和边界；轴 chrome 最小高度为 small 28 / regular 32 / large 40 乘文本缩放，触摸时再取 44pt 下限。内部实际输入面填满轴单元，轴标签同步缩放。每轴基准 96pt、最小 88pt，窄宽按 X/Y → Z 换行并保留草稿与焦点。
+
+```swift
+Vec3Field(x: $x, y: $y, z: $z, locale: Locale(identifier: "de_DE"))
+```
+
+## 验证
+
+- `NumericLocaleTests`：五种 locale 的数字/符号往返、严格拒绝非法值、真实事件提交/恢复/步进，390/720/1280 × 100%/200% 的三轴值与输入面高度。
+- `NumberFieldTests`、`NarrowReflowTests` 与 TextField 回归测试验证提交、边界、换行及显式高度的输入面。
+- Gallery `numberField` 的两个 locale 共享同一数值绑定，`vec3Field` 提供三轴与 mixed 示例；实际 DevTools 输入与镜像结果见 [自适应验收记录](adaptive-spec.md#5-规范完成清单按本文验收)。
 
 ## References
 
@@ -66,4 +82,6 @@ NumberField(value: $mass, isEnabled: false)
 
 ## File map
 
-- 主体: [GuavaUICompose/Primitives/NumberField.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/NumberField.swift)
+- [NumberField.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Controls/Fields/NumberField.swift)
+- [NumericTextFormat.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Controls/Fields/NumericTextFormat.swift)
+- [Vec3Field.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Controls/Fields/Vec3Field.swift)

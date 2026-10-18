@@ -1,3 +1,4 @@
+import Foundation
 import GuavaUI
 import GuavaUIRuntime
 
@@ -169,12 +170,25 @@ struct TextAreaStory: View {
 struct NumberFieldStory: View {
     let options: GalleryOptions
     @State private var amount: Float = 3.14
+    @State private var localized: Float = 1.25
     var body: some View {
-        StorySection("Numeric editing", "Invalid drafts revert on blur. Arrow keys step; Shift multiplies the step and Option divides it.") {
-            NumberField(value: $amount, isEnabled: options.isEnabled, minValue: 0, maxValue: 10, step: 0.25, showsStepper: true).frame(width: 220)
-            NumberField(value: .constant(0), isEnabled: options.isEnabled, mixedValueLabel: "Mixed value").frame(width: 220)
-            NumberField(value: .constant(42), isEnabled: false).frame(width: 220)
-            Text("Committed value: \(amount)").font(.caption).foregroundColor(.onSurfaceMuted)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Numeric editing", "Invalid drafts revert on blur. Arrow keys step; Shift multiplies the step and Option divides it.") {
+                NumberField(value: $amount, isEnabled: options.isEnabled, minValue: 0, maxValue: 10, step: 0.25, showsStepper: true).frame(width: 220)
+                NumberField(value: .constant(0), isEnabled: options.isEnabled, mixedValueLabel: "Mixed value").frame(width: 220)
+                NumberField(value: .constant(42), isEnabled: false).frame(width: 220)
+                Text("Committed value: \(amount)").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+            StorySection("Locale decimals", "The same numeric value uses a comma or point. Localized digits and signs parse strictly; grouping and trailing junk are rejected.") {
+                NumberField(value: $localized, isEnabled: options.isEnabled, step: 0.25,
+                            locale: Locale(identifier: "de_DE"))
+                    .accessibilityLabel("Comma decimal").debugName("number-comma")
+                NumberField(value: $localized, isEnabled: options.isEnabled,
+                            locale: Locale(identifier: "en_US_POSIX"))
+                    .accessibilityLabel("Point decimal").debugName("number-point")
+                Text("Numeric value: \(localized)").font(.caption).foregroundColor(.onSurfaceMuted)
+                    .debugName("locale-number-value")
+            }
         }
     }
 }
