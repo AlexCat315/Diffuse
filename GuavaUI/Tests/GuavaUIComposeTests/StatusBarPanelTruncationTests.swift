@@ -5,6 +5,30 @@ import GuavaUIRuntime
 
 @Suite("Status bar & panel truncation", .serialized)
 struct StatusBarPanelTruncationTests {
+    @Test("Multiple facts remain two layout slots with finite descendant geometry")
+    func multipleFacts() throws { try GlobalTestLock.locked {
+        try withText {
+            for width: Float in [120, 390, 720, 1280] {
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+                graph.install(root: StatusBar {
+                    StatusBarText("main")
+                    StatusBarText("UTF-8")
+                } trailing: {
+                    StatusBarText("Ln 42", detail: "Col 7")
+                    StatusBarText("Connected", tone: .success)
+                }.frame(width: .points(width)))
+                for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 40) }
+                for node in nodes(graph.tree.root) {
+                    #expect(node.frame.width.isFinite && node.frame.height.isFinite)
+                    #expect(node.frame.width >= 0 && node.frame.height >= 0)
+                }
+                let trailing = try #require(textNodes(in: graph.tree.root).first { $0.layoutNode?.textInputs?.text == "Connected" })
+                if width >= 390 { #expect(trailing.frame.width > 0) }
+                graph.install(root: EmptyView())
+            }
+        }
+    } }
+
     @Test("a long status fact truncates without hiding the trailing state")
     func statusBar() throws { try GlobalTestLock.locked {
         try withText {

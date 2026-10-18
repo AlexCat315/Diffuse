@@ -379,6 +379,7 @@
 - 手机：一页一屏、滑动一页/次；箭头 ≥ 44pt；StatusBar 单元格单行截断 + 完整语义，不允许因窄改变窗口内容高度。`[已实现]`
 - StatusBar / Panel：`StatusBarText` 的文本与 detail 单行截断，leading 先让位给 trailing 连接状态；完整文本保留在辅助功能 label/value。`DefaultPanelStyle` 标题单行截断并让出 accessory 槽位。`[已实现]`，`StatusBarPanelTruncationTests` 验证 320pt 状态栏与 240/600pt 面板。
 - 2026-10-18 DevTools 720×820：长分支状态栏文字单行截断，右侧 Connected 完整可见；240pt 面板标题截断到 203pt，Live badge 保留。`capture-ui` 截图复核无重叠、无换行。
+- 多个 leading/trailing 状态格各由一个真实 Row 拥有，防止透明 Tuple/AnyView 展开成超过两个布局子项、跳过放置并产生 NaN。`StatusBarPanelTruncationTests.multipleFacts` 覆盖 120/390/720/1280pt 的所有后代几何；多格不等宽，布局策略仍由调用方决定。
 - 平板 / 桌面：方向键/Home/End 导航；hover 箭头。`[已实现]`
 - 交互与验收：滑动 vs 点击不冲突（滑动取消按压）、辅助功能页标签 + 选中；验收：`CarouselStory`、`StatusBarStory`、`StatusBarPanelTruncationTests`。
 

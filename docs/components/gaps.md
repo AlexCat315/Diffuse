@@ -151,7 +151,7 @@
 | ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、带时长程序滚动（`ScrollRequest`）、`.scrollAnchor()` 锚定、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | 已实现 |
 | Form / PropertyGrid | 自适应标签、共享值槽阈值、列数重排、标签关联与 Form 校验摘要已实现，见 [form.md](form.md)；PropertyGrid 跨字段业务校验由应用管理 | 已实现 |
 | Carousel | 自动轮播、复杂指示器（按需）；滑动/键盘已有 | P2 |
-| StatusBar / Panel | 状态格单行截断、完整 a11y 值与 `DefaultPanelStyle` 标题截断已实现，见 [Panel](panel.md)；等宽策略仍由调用方声明 | 已完成 |
+| StatusBar / Panel | 状态格单行截断、完整 a11y 值、多个前后状态格的有限几何与 `DefaultPanelStyle` 标题截断已实现，见 [Panel](panel.md)；等宽策略仍由调用方声明 | 已完成 |
 | TextField（Text Editor） | snippet tab-stop、超长单行分段布局（[textfield.md](textfield.md) 边界） | P2 |
 | Image / AsyncImage | 缓存淘汰、在途合并、GIF/WebP 动画、EXIF、渐进解码（[image.md](image.md) 边界） | P2 |
 | Avatar | 状态角标、可交互成员弹层（[avatar.md](avatar.md) 边界） | P2 |

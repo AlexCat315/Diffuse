@@ -45,8 +45,8 @@ public struct StatusBar<Leading: View, Trailing: View>: View {
             Column(spacing: 0) {
                 if showsDivider { AnyView(Divider()) }
                 AnyView(StatusBarLayout(spacing: CGFloat(theme.spacing.md)) {
-                    AnyView(leading)
-                    AnyView(trailing)
+                    Row(alignment: .center, spacing: theme.spacing.md) { leading }.frame(minWidth: 0)
+                    Row(alignment: .center, spacing: theme.spacing.md) { trailing }.frame(minWidth: 0)
                 }
                 .frame(height: StatusBarMetrics.height)
                 .padding(horizontal: theme.spacing.md)
