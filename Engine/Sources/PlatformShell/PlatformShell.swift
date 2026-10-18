@@ -249,8 +249,8 @@ public protocol Shell: AnyObject {
     func displayRefreshRate(windowID: WindowID?) -> Double?
 
     /// Enable native display callbacks for this window. Returns false when the
-    /// platform cannot provide a native source; callers must choose an explicit
-    /// fallback. Implementations pause callbacks while a window is not visible.
+    /// platform cannot currently deliver callbacks (including a paused hidden
+    /// or occluded window); callers must choose an explicit fallback.
     @discardableResult
     func setDisplayRefreshEnabled(_ enabled: Bool, windowID: WindowID) -> Bool
     /// Consume the newest callback, coalescing callbacks missed during rendering.

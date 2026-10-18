@@ -43,7 +43,8 @@ final class NativeDisplayRefreshTests: XCTestCase {
 
         shell.hideWindow(window.id)
         shell.pollWindowEvents()
-        XCTAssertTrue(shell.setDisplayRefreshEnabled(true, windowID: window.id))
+        XCTAssertFalse(shell.setDisplayRefreshEnabled(true, windowID: window.id),
+                       "A paused display link must let the host use its animation fallback clock")
         shell.waitForEvents(timeout: 0.04)
         XCTAssertNil(shell.takeDisplayRefresh(windowID: window.id))
         shell.showWindow(window.id)

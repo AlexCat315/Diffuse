@@ -1146,7 +1146,11 @@ public final class SDL3Shell: Shell {
             displayRefreshSources[windowID] = source
         }
         let window = Unmanaged<NSWindow>.fromOpaque(pointer).takeUnretainedValue()
-        return source.configure(window: window, active: !handle.isMinimized && !handle.isOccluded && window.isVisible)
+        let active = !handle.isMinimized && !handle.isOccluded && window.isVisible
+        let configured = source.configure(window: window, active: active)
+        // A paused display link cannot pace the host. Report it unavailable
+        // so animations and offscreen diagnostics use the deadline fallback.
+        return configured && active
 #else
         return false
 #endif
