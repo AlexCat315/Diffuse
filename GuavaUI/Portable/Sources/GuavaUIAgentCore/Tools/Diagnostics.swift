@@ -31,7 +31,7 @@ public enum UIDiagnosticTool: String, CaseIterable, Sendable {
             AgentTool(name: rawValue, description: "Read bounded diagnostic issues with evidence and data availability. Recommendations are hypotheses to verify.",
                 schema: Self.object(["limit": .integer(minimum: 1, maximum: 100)]))
         case .queryUINodes:
-            AgentTool(name: rawValue, description: "Query live UI nodes by accessible label, role or source. Returns flat paged results, clipped visible bounds and effective input availability, including modal scopes. Use visible_only to exclude hidden/offscreen nodes; input_enabled_only also excludes disabled or modal-blocked controls. IDs expire on unmount.",
+            AgentTool(name: rawValue, description: "Query live UI nodes by accessible label, value, help, role or source. Text searches also match debug names and view tags; secure values are redacted before matching. Returns flat paged results, clipped visible bounds and effective input availability, including modal scopes. Use visible_only to exclude hidden/offscreen nodes; input_enabled_only also excludes disabled or modal-blocked controls. IDs expire on unmount.",
                 schema: Self.object(Self.paging.merging(["node_id": Self.text, "text": Self.text, "role": Self.text, "source": Self.text, "visible_only": .boolean(), "input_enabled_only": .boolean()]) { _, new in new }))
         case .queryUIRecomposition:
             AgentTool(name: rawValue, description: "Query owning components sorted by total inclusive CPU time, including counts and invalidation causes. Child durations overlap; do not sum them as frame time.",

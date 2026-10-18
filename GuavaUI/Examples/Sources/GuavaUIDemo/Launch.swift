@@ -15,6 +15,7 @@ struct ShowcaseLaunch {
             $0.rendering.vsync = !arguments.contains("--no-vsync")
             $0.diagnostics.showsPerformanceHUD = arguments.contains("--performance-hud")
             $0.frames.policy = arguments.contains("--benchmark") ? .continuous : .eventDriven
+            if let rate = Self.extent("--frame-rate", arguments: arguments) { $0.frames.targetRate = Double(rate) }
         }
         if arguments.contains("--shared-counter") {
             let counter = CounterView()

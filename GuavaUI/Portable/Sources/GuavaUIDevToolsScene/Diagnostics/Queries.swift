@@ -76,7 +76,9 @@ public final class UIDiagnostics {
             return (id == nil || node.id == id)
                 && (!visibleOnly || item.presentation.isVisible)
                 && (!inputEnabledOnly || item.presentation.inputEnabled)
-                && (text == nil || [node.debugName, node.viewTag, item.semantics?.label].compactMap { $0 }.contains { $0.localizedCaseInsensitiveContains(text!) })
+                && (text == nil || [node.debugName, node.viewTag, item.semantics?.label,
+                                   item.semantics?.value, item.semantics?.help].compactMap { $0 }
+                    .contains { $0.localizedCaseInsensitiveContains(text!) })
                 && (role == nil || node.semanticRole == role || node.layoutRole == role || item.semantics?.role.rawValue == role)
                 && (source == nil || node.source?.filePath.localizedCaseInsensitiveContains(source!) == true)
         }

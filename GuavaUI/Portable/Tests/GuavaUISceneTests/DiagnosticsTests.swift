@@ -17,6 +17,36 @@ private extension JSONValue {
 @Suite("AI diagnostics", .serialized)
 @MainActor
 struct DiagnosticsTests {
+    @Test func textSearchIncludesLiveValuesAndHelpWithoutMatchingSecureContents() throws {
+        let tree = NodeTree(), root = Node(), event = Node(), secure = Node()
+        tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 390, height: 500)
+        root.addChild(event); root.addChild(secure)
+        event.frame = CGRect(x: 12, y: 12, width: 300, height: 80)
+        event.accessibility = AccessibilitySemantics(.listItem) {
+            $0.label = "Compiled"; $0.value = "09:12 · Shanghai"; $0.help = "所有目标编译完成"
+        }
+        secure.accessibility = AccessibilitySemantics(.textField) {
+            $0.label = "Password"; $0.value = "private-needle"; $0.state.isSecure = true
+        }
+        let diagnostics = UIDiagnostics(tree: tree)
+        func query(_ text: String) -> DevToolsEnvelope {
+            diagnostics.handleReadRequest(.init(type: "diagnostics.call", payload: .object([
+                "name": .string("query_ui_nodes"), "arguments": .object(["text": .string(text)])
+            ])))
+        }
+        for text in ["compiled", "SHANGHAI", "所有目标"] {
+            let result = query(text)
+            #expect(result.type == "diagnostics.call.ok")
+            let data = try #require(result.payload?.objectValue?["data"]?.objectValue)
+            #expect(data["total"]?.diagnosticNumber == 1)
+            #expect(data["items"]?.diagnosticArray?.first?.objectValue?["node"]?.objectValue?["id"]?.stringValue == String(event.id.rawValue))
+        }
+        #expect(query("private-needle").payload?.objectValue?["data"]?.objectValue?["total"]?.diagnosticNumber == 0)
+        event.accessibility?.value = "10:04 · London"
+        #expect(query("Shanghai").payload?.objectValue?["data"]?.objectValue?["total"]?.diagnosticNumber == 0)
+        #expect(query("London").payload?.objectValue?["data"]?.objectValue?["total"]?.diagnosticNumber == 1)
+    }
+
     @Test func overviewReportsInvalidGeometryWithoutLosingJSONAndQueriesIdentifyTheNode() throws {
         let tree = NodeTree(), root = Node(), broken = Node(), negative = Node(), valid = Node()
         tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 300, height: 200)
