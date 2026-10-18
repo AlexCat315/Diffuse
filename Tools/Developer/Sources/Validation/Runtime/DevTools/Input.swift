@@ -114,18 +114,67 @@ enum InputUI {
       throw ToolError.message("Input must be a JSON array of 1–256 events, at most 256 KiB")
     }
     let kinds = ["pointerMove", "pointerDown", "pointerUp", "wheel", "keyDown", "keyUp", "text"]
+    func supported(_ value: Any, depth: Int = 0) -> Bool {
+      if depth > 4 { return false }
+      if let number = value as? NSNumber { return number.doubleValue.isFinite }
+      if let text = value as? String { return text.utf8.count <= 16_384 }
+      if let dictionary = value as? [String: Any] {
+        return dictionary.values.allSatisfy { supported($0, depth: depth + 1) }
+      }
+      if let array = value as? [Any] {
+        return array.count <= 64 && array.allSatisfy { supported($0, depth: depth + 1) }
+      }
+      return false
+    }
     guard
       input.allSatisfy({ event in
         guard let kind = event["kind"] as? String, kinds.contains(kind) else { return false }
-        return event.values.allSatisfy { value in
-          if let number = value as? NSNumber { return number.doubleValue.isFinite }
-          if let text = value as? String { return text.utf8.count <= 16_384 }
-          return value is [String: Any]
-        }
+        return event.values.allSatisfy { supported($0) }
       })
     else {
       throw ToolError.message("Input contains an unsupported kind, value or oversized string")
     }
-    return input
+    return input.map(normalizeKeyEvent)
+  }
+
+  private static func normalizeKeyEvent(_ event: [String: Any]) -> [String: Any] {
+    guard let kind = event["kind"] as? String, kind == "keyDown" || kind == "keyUp" else { return event }
+    var result = event
+    if result["key"] == nil, let scancode = result["scancode"] as? NSNumber {
+      result["key"] = keyName(for: scancode.intValue)
+    }
+    if let modifiers = result["modifiers"] as? [String] {
+      var mask = 0
+      for modifier in modifiers.map({ $0.lowercased() }) {
+        switch modifier {
+        case "shift": mask |= 1
+        case "ctrl", "control": mask |= 2
+        case "alt", "option": mask |= 4
+        case "gui", "cmd", "command", "meta": mask |= 8
+        default: break
+        }
+      }
+      result["modifiers"] = mask
+    }
+    return result
+  }
+
+  private static func keyName(for scancode: Int) -> String? {
+    switch scancode {
+    case 40, 88: return "Enter"
+    case 41: return "Escape"
+    case 42: return "Backspace"
+    case 43: return "Tab"
+    case 44: return "Space"
+    case 74: return "Home"
+    case 77: return "End"
+    case 75: return "PageUp"
+    case 78: return "PageDown"
+    case 79: return "ArrowRight"
+    case 80: return "ArrowLeft"
+    case 81: return "ArrowDown"
+    case 82: return "ArrowUp"
+    default: return nil
+    }
   }
 }
