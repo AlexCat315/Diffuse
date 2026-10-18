@@ -121,6 +121,7 @@ public extension GalleryPage {
         case .searchField: AnyView(SearchFieldStory(options: options))
         case .textArea: AnyView(TextAreaStory(options: options))
         case .textEditor: AnyView(TextEditorStory(options: options))
+        case .wheelPicker: AnyView(WheelPickerStory(options: options))
         case .numberField: AnyView(NumberFieldStory(options: options))
         case .vec3Field: AnyView(Vec3Story(options: options))
         case .colorField: AnyView(ColorStory(options: options))

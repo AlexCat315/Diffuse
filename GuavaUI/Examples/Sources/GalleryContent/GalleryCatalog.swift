@@ -9,7 +9,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
-    case table, dataTable, calendar, datePicker, dateRangePicker, timeField
+    case table, dataTable, calendar, datePicker, dateRangePicker, timeField, wheelPicker
     case accordion, breadcrumb, pagination, buttonGroup, splitButton, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
     case commandPalette, hoverCard, timeline, toolbar, appBar, navigationStack, dragAndDrop
     case link, statusBar, carousel, skeleton, stepper, viewportTraits, viewThatFits
@@ -99,6 +99,7 @@ public enum GalleryCatalog {
         .init(.datePicker, "DatePicker", "Inputs", "Optional date input with an anchored calendar and a clear action."),
         .init(.dateRangePicker, "DateRangePicker", "Inputs", "Two-click range selection in a real calendar with endpoint and in-range highlighting."),
         .init(.timeField, "TimeField", "Inputs", "Validated time drafts, bounded values, seconds and keyboard stepping."),
+        .init(.wheelPicker, "WheelPicker", "Inputs", "Five-row wheel selection with drag, wheel, keyboard, disabled rows and accessibility value actions."),
         .init(.accordion, "Accordion", "Navigation", "Controlled single or multiple expansion with grouped keyboard focus."),
         .init(.breadcrumb, "Breadcrumb", "Navigation", "Destination paths with a collapsed intermediate-item menu."),
         .init(.pagination, "Pagination", "Navigation", "Bounded page navigation, boundary states and compact page windows."),

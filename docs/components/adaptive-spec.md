@@ -250,6 +250,13 @@
 - 平板 / 桌面：可配双月并排；方向键/Home/End/PageUp/Down 复用 Calendar。`[已实现]`
 - 交互与验收：第一击设起点、第二击设终点，反向点击自动交换；Escape/外部点击关闭；a11y 触发器读完整区间；区间预设/最大长度由应用层负责。`DateRangePickerTests` 覆盖两击与交换；Gallery `--component dateRangePicker`。细节见 [DateRangePicker](daterangepicker.md)。
 
+**WheelPicker**
+
+- 外观：五行视口，选中行 `bodyStrong` + 中央 `surfaceVariant` 胶囊；上下行按距离递减透明度；不画行分隔线。`[已实现]`
+- 手机：行高 44pt，整列宽 = 调用方列宽；三列时/分/AM-PM 每列 72–82pt，不因窄缩字号；指针密度行高 32pt。`[已实现]`
+- 平板 / 桌面：同一选择器可用于滚轮列或紧凑数字调节；hover 时整列保持命中；宽度由 Row 组合。`[已实现]`
+- 交互与验收：拖拽跟随手指、越半行提交、<4pt 视为点击；滚轮每事件一格；↑/←、↓/→、Home/End；disabled 行跳过；role=slider、increment/decrement/setValue。`WheelPickerTests` 4 tests / 2 suites 覆盖键盘/滚轮/拖拽/点击/a11y 与 disabled；Gallery `--component wheelPicker` 三列时间 + 单列音量；DevTools 390/720/1280 验收。细节见 [WheelPicker](wheelpicker.md)。
+
 **AssetRefField / JsonField**
 
 - 外观：AssetRefField 显示资源 + 清除 + drop 目标；JsonField 紧凑多行编辑、提交校验、拖拽调整高度、展开为带行号的大编辑器。`[已实现]`
