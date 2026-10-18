@@ -193,7 +193,9 @@ struct SidebarItemStyle: ButtonStyle, Hashable {
     var presentation = SidebarPresentation.expanded
     func makeBody(configuration c: ButtonStyleConfiguration) -> AnyView {
         if presentation.isRail {
-            return AnyView(RailDestinationStyle(minimumHeight: max(44, minimumHeight)).makeBody(configuration: c))
+            return AnyView(RailDestinationStyle(minimumHeight: max(44, minimumHeight),
+                                                showsLabels: presentation.showsLabels)
+                .makeBody(configuration: c))
         }
         return AnyView(
             Box(direction: .row, alignItems: .center) { AnyView(c.label).flex(1, shrink: 1).frame(minWidth: 0) }

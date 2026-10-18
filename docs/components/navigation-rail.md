@@ -17,7 +17,7 @@ NavigationRail(selection: $destination, items: [
 
 ## 外观与输入
 
-选中目的地有 2pt accent 侧向指示条和主题 navigation 选中背景。行高至少 44pt，带文字形态使用 caption 并自然换行；200% 字号增加行高，不把文字压回固定高度。图标沿用 IconTheme 与缩放策略，解析一次后限制在轨道内部宽度，避免大型语义图标撑破固定轨道。缺少图标的目的地使用通用文件图标。
+纯图标轨的选中态是居中的 40×40 圆角方块（`surfaceVariant`），不再绘制 accent 侧条或铺满整行的深色带；hover/press 只在这块方形选择层上叠中性 state layer，并把图标从 `onSurfaceVariant` 提亮到 `onSurface`。带文字形态仍以整行胶囊承载图标与标题。行高至少 44pt，带文字形态使用 caption 并自然换行；200% 字号增加行高，不把文字压回固定高度。图标沿用 IconTheme 与缩放策略，解析一次后限制在轨道内部宽度，避免大型语义图标撑破固定轨道。缺少图标的目的地使用通用文件图标。
 
 徽标在 Rail 上显示为图标角落的小圆点，完整值保留在辅助功能 value 和 tooltip。所有目的地都有完整标题 tooltip；纯图标模式不会丢失名称。图标与圆点不重复朗读。禁用目的地不可聚焦、不可激活，语义保留禁用及选中状态。
 
@@ -39,7 +39,7 @@ Rail 不自行选择窗口形态：medium/expanded 可由壳层使用，compact 
 
 ## 验证
 
-`NavigationRailTests` 覆盖 390/720/1280pt、100%/200% 文字、明暗主题、三类输入、72/56pt 几何、完整名称、长词换行、图标约束、2pt 指示条、按钮/焦点/槽位状态保留、选择显露与普通滚动、键盘/触摸激活及禁用/卸载捕获清理。DevTools AI `query_ui_nodes` 可按完整名称和 button 角色发现纯图标目的地，并读取声明的选中态和徽标值。
+`NavigationRailTests` 覆盖 390/720/1280pt、100%/200% 文字、明暗主题、三类输入、72/56pt 几何、完整名称、长词换行、图标约束、居中 40×40 选择块与 hover 图标提亮、按钮/焦点/槽位状态保留、选择显露与普通滚动、键盘/触摸激活及禁用/卸载捕获清理。DevTools AI `query_ui_nodes` 可按完整名称和 button 角色发现纯图标目的地，并读取声明的选中态和徽标值。
 
 Gallery 提供 `--component navigationRail`、三种宽度/输入预览及同一 Sidebar 的三种呈现切换；`RailTests` 通过实际事件验证文字开关、共享选择和节点保留。设备触摸与读屏仍按规范第 4 节取样。
 

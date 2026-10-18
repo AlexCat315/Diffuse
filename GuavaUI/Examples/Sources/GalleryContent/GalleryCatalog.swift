@@ -5,7 +5,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rangeSlider, rating, textField, textArea, textEditor
     case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
     case list, multiSelectList, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, web, avatar
-    case menu, menuButton, contextMenu, popover, popconfirm, modal, disclosure, tabs
+    case menu, menuButton, contextMenu, popover, popconfirm, actionSheet, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, zStack, animation, theme, badge, alert, progress, empty
     case radio, form, combobox, notification, tooltip, sidebar, navigationDrawer, navigationRail
@@ -66,6 +66,7 @@ public enum GalleryCatalog {
         .init(.contextMenu, "ContextMenu", "Overlays", "Right-click actions attached to a real target."),
         .init(.popover, "Popover", "Overlays", "Anchored overlays, flipping, dismissal and nested input."),
         .init(.popconfirm, "Popconfirm", "Overlays", "Anchored destructive and normal confirmation with explicit confirm/cancel."),
+        .init(.actionSheet, "ActionSheet", "Overlays", "Bottom action drawer with drag and outside dismissal; wide drawers add a caller-localized close control."),
         .init(.modal, "Modal", "Overlays", "Focus confinement, Escape dismissal and restoration."),
         .init(.disclosure, "DisclosureGroup", "Navigation", "Caller-owned expansion with animated content."),
         .init(.tabs, "TabView", "Navigation", "Selected content, disabled tabs and arrow/Home/End navigation."),

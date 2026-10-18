@@ -68,6 +68,7 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
         switch options.backdrop {
         case .standard: node.backgroundColor = node.theme.colors.background.multipliedAlpha(0.6)
         case .selection: node.backgroundColor = node.theme.colors.stateLayerSelected
+        case .dimmed: node.backgroundColor = Color.black.multipliedAlpha(0.2)
         }
         InteractionRegistryHolder.current?.setPointer(node, route: InputHandlerRoute(role: .control, priority: .modal, debugName: "modal.backdrop")) { event, phase, eventPhase in
             guard eventPhase == .target else { return .ignored }
@@ -99,11 +100,12 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
         let size = CGSize(width: min(CGFloat(options.geometry.width), max(0, bounds.width - CGFloat(options.geometry.inset * 2))),
                           height: min(CGFloat(options.geometry.height), max(0, bounds.height - CGFloat(options.geometry.inset * 2))))
         return [AnimatedVisibility(isVisible: isVisible, transition: options.geometry.transition(size: size), animateOnMount: true) {
-            content.frame(width: .percent(100), height: .percent(100)).accessibility { $0.role = .dialog }
-                .background(.surface).cornerRadius(options.geometry.cornerRadius).border(.border, width: 1)
+            content.frame(width: .percent(100), height: options.fitsContentHeight ? nil : .percent(100)).accessibility { $0.role = .dialog }
+                .background(options.surface).cornerRadius(options.geometry.cornerRadius).border(.border, width: 1)
         }
-        // The animation host must own the dialog's size: flexible content
-        // otherwise has no definite height and can collapse to its flex basis.
-        .frame(width: Float(size.width), height: Float(size.height))]
+        // Fixed dialogs need a definite animation-host height for flexible
+        // content. Action sheets instead measure their bounded intrinsic height.
+        .frame(width: Float(size.width), height: options.fitsContentHeight ? nil : Float(size.height), maxHeight: Float(size.height))
+        .offset(y: options.translationY)]
     }
 }

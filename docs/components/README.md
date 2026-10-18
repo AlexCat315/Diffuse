@@ -43,6 +43,7 @@
 | Tooltip | 实现与验证边界 | [tooltip.md](tooltip.md) |
 | Popover | 共享箭头卡片、12 向定位与显式避让策略 | [popover.md](popover.md) |
 | Popconfirm | 复用 Popover 的锚定确认与显式确认按钮 | [popconfirm.md](popconfirm.md) |
+| ActionSheet | 底部操作抽屉、拖拽/外部关闭与调用方本地化关闭名称 | [action-sheet.md](action-sheet.md) |
 | Alert | iOS 中性内联状态卡、tone 图标与 variant | [alert.md](alert.md) |
 | Toast / Notification | 队列、操作按钮、位置与安全区 | [toast.md](toast.md) |
 | Menu / ContextMenu / Select | 实现与验证边界 | [menu.md](menu.md) |

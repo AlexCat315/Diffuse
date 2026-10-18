@@ -31,7 +31,10 @@ public struct ModalOptions {
     public var geometry = ModalGeometry()
     public var dismissal = ModalDismissal()
     var backdrop: ModalBackdrop = .standard
+    var surface: SemanticColorRef = .surface
+    var fitsContentHeight = false
+    var translationY: Float = 0
     public init() {}
 }
 
-enum ModalBackdrop { case standard, selection }
+enum ModalBackdrop { case standard, selection, dimmed }

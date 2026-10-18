@@ -9,7 +9,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .timePicker, .wheelPicker, .theme, .textEditor, .menu, .contextMenu, .popover, .popconfirm, .modal, .dialog, .alertDialog, .sheet, .bottomSheet, .commandPalette, .hoverCard, .animation, .introduction, .image, .workspace, .notification: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .multiSelectList, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualList, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .timePicker, .wheelPicker, .theme, .textEditor, .menu, .contextMenu, .popover, .popconfirm, .actionSheet, .modal, .dialog, .alertDialog, .sheet, .bottomSheet, .commandPalette, .hoverCard, .animation, .introduction, .image, .workspace, .notification: true
         default: false
         }
     }
@@ -278,6 +278,7 @@ private struct AdaptiveControlSample: View {
             AccordionItem(0, "Details") { Text("Accordion content") }
         ], expanded: $accordionExpanded).frame(width: .percent(100), height: .points(120)))
         case .popconfirm: AnyView(Popconfirm("Preview deletion", title: "Delete this item?", message: "This cannot be undone.", confirmTitle: "Delete", role: .destructive, isEnabled: options.isEnabled) {})
+        case .actionSheet: AnyView(ActionSheetPreview(isEnabled: options.isEnabled))
         case .timePicker: AnyView(Box(direction: .row, alignItems: .center, justifyContent: .center) {
             TimePicker(selection: $pickerTime) { $0.minuteStep = 5; $0.isEnabled = options.isEnabled }
                 .frame(width: 320)

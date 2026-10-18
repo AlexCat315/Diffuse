@@ -29,18 +29,59 @@ struct RailDestinationLabel<ID: Hashable>: View {
     }
 }
 
+/// The icon-only rail paints one compact, centered tile instead of a
+/// full-width band. The button keeps the whole row as its hit target; only the
+/// visible highlight shrinks to a square around the glyph.
+private let railIconTileExtent: Float = 40
+
 struct RailDestinationStyle: ButtonStyle {
     let minimumHeight: Float
-    func makeBody(configuration c: ButtonStyleConfiguration) -> some View {
-        Box(direction: .row, alignItems: .stretch) {
-            Box {}.frame(width: 2).background(c.isSelected ? c.theme.colors.accent : .clear)
-                .flex(0, shrink: 0).accessibilityHidden().debugName("rail-selection-indicator")
-            AnyView(c.label).padding(horizontal: 4, vertical: 8).flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
-            Box {}.frame(width: 2).flex(0, shrink: 0).accessibilityHidden()
+    var showsLabels: Bool = true
+
+    func makeBody(configuration c: ButtonStyleConfiguration) -> AnyView {
+        let theme = c.theme
+        let foreground: SemanticColorRef = !c.isEnabled
+            ? .onSurfaceDisabled
+            : (c.isSelected || c.isHovered ? .onSurface : .onSurfaceVariant)
+        let focus = c.isFocused ? theme.colors.focusRing : Color(r: 0, g: 0, b: 0, a: 0)
+        let focusWidth: Float = c.isFocused ? 1 : 0
+
+        if showsLabels {
+            // The whole row is the pill when labels are visible, so the icon
+            // and its wrapped title share one aligned surface. Symmetric
+            // padding replaces the old leading accent lane.
+            return AnyView(
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    AnyView(c.label).flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
+                }
+                .padding(horizontal: 6, vertical: 8)
+                .frame(width: .percent(100), minHeight: minimumHeight)
+                .foregroundColor(foreground)
+                .selectionHighlight(.sidebar, isSelected: c.isSelected,
+                                    isHovered: c.isHovered, isPressed: c.isPressed)
+                .border(focus, width: focusWidth)
+                .animation(.semantic(.fast, in: theme), value: c.interactionKey)
+            )
         }
-        .frame(width: .percent(100), minHeight: minimumHeight)
-        .foregroundColor(c.isEnabled ? c.isSelected ? .onSurface : .onSurfaceVariant : .onSurfaceDisabled)
-        .selectionHighlight(.sidebar, isSelected: c.isSelected, isHovered: c.isHovered, isPressed: c.isPressed)
-        .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: 1)
+
+        let appearance = SelectionAppearance.resolve(.sidebar, theme: theme)
+        let fill = appearance.fill(isSelected: c.isSelected,
+                                   isHovered: c.isHovered,
+                                   isPressed: c.isPressed)
+        return AnyView(
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Box(direction: .column, alignItems: .stretch, justifyContent: .center) {
+                    AnyView(c.label)
+                }
+                .frame(width: railIconTileExtent, height: railIconTileExtent)
+                .foregroundColor(foreground)
+                .background(fill)
+                .cornerRadius(appearance.cornerRadius)
+                .border(focus, width: focusWidth)
+                .animation(.semantic(.fast, in: theme), value: c.interactionKey)
+                .debugName("rail-selection-tile")
+            }
+            .frame(width: .percent(100), minHeight: minimumHeight)
+        )
     }
 }

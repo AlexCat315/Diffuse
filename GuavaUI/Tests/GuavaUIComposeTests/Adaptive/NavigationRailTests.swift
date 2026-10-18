@@ -237,11 +237,56 @@ struct NavigationRailTests: GuavaUIComposeSerializedSuite {
             #expect(harness.selected == 0)
             #expect(nodes(graph.tree.root).filter { $0.attachments["__roving.item"] != nil && $0.isTabStop }.count == 1)
             let selected = try row(0, graph)
-            let indicator = try #require(
-                nodes(selected).first {
-                    $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "rail-selection-indicator"
-                })
-            #expect(indicator.frame.width == 2 && indicator.backgroundColor == selected.theme.colors.accent)
+            #expect(nodes(selected).allSatisfy {
+                ($0.attachments[LayoutDebugAttachmentKey.debugName] as? String) != "rail-selection-indicator"
+            })
+            #expect(nodes(selected).allSatisfy {
+                ($0.attachments[LayoutDebugAttachmentKey.debugName] as? String) != "rail-selection-tile"
+            })
+        }
+    }
+
+    @Test(
+        "Icon-only rail centers a 40pt selection tile on the row, drops the accent lane, and lightens the glyph on hover"
+    )
+    func iconTile() throws {
+        try scene { harness, graph, _, input, _, _ in
+            harness.dark = true
+            harness.presentation = .rail(showsLabels: false)
+            harness.selected = 0
+            settle(graph, harness)
+
+            let selected = try row(0, graph)
+            let theme = selected.theme
+            let tile = try #require(nodes(selected).first {
+                ($0.attachments[LayoutDebugAttachmentKey.debugName] as? String) == "rail-selection-tile"
+            })
+            let glyph = try #require(nodes(selected).first { $0.viewTag?.contains(".Image") == true })
+            #expect(tile.frame.width == 40 && tile.frame.height == 40)
+            #expect(abs(tile.absoluteFrame.midX - selected.absoluteFrame.midX) < 0.5)
+            #expect(abs(tile.absoluteFrame.midY - selected.absoluteFrame.midY) < 0.5)
+            #expect(abs(glyph.absoluteFrame.midX - tile.absoluteFrame.midX) < 0.5)
+            #expect(abs(glyph.absoluteFrame.midY - tile.absoluteFrame.midY) < 0.5)
+            #expect(tile.backgroundColor == theme.colors.surfaceVariant)
+            #expect(glyph.inheritedForegroundColor == theme.colors.onSurface)
+            #expect(!nodes(selected).contains {
+                ($0.attachments[LayoutDebugAttachmentKey.debugName] as? String) == "rail-selection-indicator"
+            })
+
+            let hovered = try row(1, graph)
+            let hoverGlyph = try #require(nodes(hovered).first { $0.viewTag?.contains(".Image") == true })
+            #expect(hoverGlyph.inheritedForegroundColor == theme.colors.onSurfaceVariant)
+            let bounds = hovered.absoluteFrame
+            input.dispatch(.mouseMotion(MouseMotionEvent(x: Float(bounds.midX), y: Float(bounds.midY),
+                                                         deltaX: 0, deltaY: 0)))
+            settle(graph, harness)
+            let hoverTile = try #require(nodes(try row(1, graph)).first {
+                ($0.attachments[LayoutDebugAttachmentKey.debugName] as? String) == "rail-selection-tile"
+            })
+            let hoveredGlyph = try #require(
+                nodes(try row(1, graph)).first { $0.viewTag?.contains(".Image") == true })
+            #expect(hoverTile.backgroundColor == theme.colors.stateLayerHover)
+            #expect(hoveredGlyph.inheritedForegroundColor == theme.colors.onSurface)
         }
     }
 

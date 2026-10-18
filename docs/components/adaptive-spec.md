@@ -415,6 +415,14 @@
 - 平板 / 桌面：hover 触发、指针移出关闭、Escape 关闭。`[已实现]`
 - 交互与验收：辅助功能 help / 可读文本；焦点与 Escape 行为一致；验收：Tooltip 测试族、`--component tooltip|hoverCard|popover`。
 
+**ActionSheet**
+
+- 外观：底部抽屉在所有宽度生效；compact 全宽贴底并带顶部拖拽区，medium/expanded 为 `min(560, 窗口宽 − 24)`、距窗口 12pt 的居中抽屉。操作行均为真实 Button，行高 ≥44pt，行间使用 1pt 分隔线；hover/键盘焦点只叠中性 state layer，不画 accent 边框。危险操作使用红色文字/图标，禁用项保留名称并使用 disabled 颜色。`[已实现]`
+- 关闭图标：仅 medium/expanded 抽屉右上角显示 44×44pt；`closeLabel` 为必填 API，同时作为辅助功能名称与 tooltip；组件不内置 Cancel/Close 文案，所有文案由调用方本地化。`[已实现]`
+- 手机：顶部只有拖拽区，标题/说明固定，操作列表独立滚动并消费底部安全区；不显示关闭图标，下拉超过 80pt 或释放速度超过 900pt/s 关闭，短拖回弹；点击遮罩关闭。`[已实现]`
+- 平板 / 桌面：同一抽屉形态，无拖拽柄；点击遮罩、Escape 与右上关闭图标均可关闭；跨宽度阈值保留调用方打开状态和触发节点，只保留一个有效 Portal。`[已实现]`
+- 交互与验收：焦点进入首个启用操作，Up/Down/Home/End 跳过禁用并滚动显露；操作组单一 Tab 停靠，wide 抽屉 Tab 到关闭图标；执行先关闭再回调一次。关闭图标（wide）/Escape/外部点击只关闭，关闭后还原焦点。`ActionSheetTests` 覆盖 390/720/1280 × 字号/主题/输入/RTL、长列表/安全区、drag 回弹/关闭、compact 无关闭图标、行间分隔线、聚焦态无 accent 描边、调用方中文标签及 AI 查询；Gallery `actionSheet` 提供真实操作与三档预览。细节见 [ActionSheet](action-sheet.md)。
+
 **Modal / Dialog / AlertDialog / Sheet**
 
 - 外观：Modal 居中、默认 760×560、inset 16；Dialog header/body/footer；AlertDialog 420×240；Sheet 沿边、extent 默认 400。`[已实现]`
@@ -550,7 +558,7 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 
 第 2 项中的独立 NavigationDrawer 已实现：按实际窗口保留 56pt 外部空间，复用 Sidebar 的选择/显露与激活，提供标题、关闭、焦点约束/还原、独立关闭策略、左滑关闭和可反转的边缘动画。`NavigationDrawerTests` 覆盖窗口变化时节点与草稿保留、完整输入矩阵及生命周期；Gallery 新增独立页/三种预览，Sidebar 页共享选择。验证中补齐 DevTools AI 的模态输入权限与 `input_enabled_only` 筛选，`DiagnosticPresentationTests` 覆盖深层节点、嵌套模态、附属浮层和窗口隔离。统一壳层与可选边缘唤出现已由 AdaptiveSidebar 实现；设备输入取样见组件文档。
 
-第 2 项中的 NavigationRail 已实现：72/56pt 两种形态、2pt 指示条、44pt 行高、受约束的主题图标、完整 tooltip/语义与头尾槽位；`SidebarPresentation` 在同一目的地节点上切换普通栏和 Rail，保留选择、焦点与槽位状态。`NavigationRailTests` 覆盖宽度/字号/输入/主题矩阵、长词换行、模式切换、显露及普通滚动、生命周期与 AI 名称发现；Gallery 新增独立页和三种预览。显露操作补齐重排后的实际滚动范围与目标坐标换算，roving 目标发现使用线性遍历。统一壳层现已由 AdaptiveSidebar 完成。
+第 2 项中的 NavigationRail 已实现：72/56pt 两种形态、居中 40×40 选择块、44pt 行高、受约束的主题图标、完整 tooltip/语义与头尾槽位；`SidebarPresentation` 在同一目的地节点上切换普通栏和 Rail，保留选择、焦点与槽位状态。`NavigationRailTests` 覆盖宽度/字号/输入/主题矩阵、长词换行、模式切换、显露及普通滚动、生命周期与 AI 名称发现；Gallery 新增独立页和三种预览。显露操作补齐重排后的实际滚动范围与目标坐标换算，roving 目标发现使用线性遍历。统一壳层现已由 AdaptiveSidebar 完成。
 
 第 2 项统一壳层已完成：`AdaptiveSidebar` 按容器实际分配在 <600pt 抽屉、600…<1000pt Rail、≥1000pt Sidebar 间切换，同一导航和页面保留节点、草稿、滚动及展开会话。焦点随模态开关和布局交接，关闭立即禁用输入，边缘/左滑遵守输入意图，动画可反转并响应减少动画。`AdaptiveSidebarTests` 覆盖完整宽度/字号/输入/主题矩阵与真实 AI `query_ui_nodes`；Gallery 已接入壳层与换行工具栏，`AdaptiveShellTests` 验证故事、搜索和主题入口，Sidebar 增加三预览。第 16 项已覆盖全部 Gallery 页面；参数和边界见 [Sidebar](sidebar.md#自适应壳层)。
 

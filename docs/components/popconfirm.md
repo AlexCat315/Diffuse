@@ -73,4 +73,4 @@ Gallery 的 popconfirm 页包含 Delete/Archive、执行结果、禁用开关、
 
 ## 边界
 
-暂不提供异步确认中的 loading 状态、自定义触发 View 或宽度配置；应用可在确认后显示进度。ActionSheet 仍为单独的待补组件。
+暂不提供异步确认中的 loading 状态、自定义触发 View 或宽度配置；应用可在确认后显示进度。一组可取消的操作可使用 [ActionSheet](action-sheet.md)。

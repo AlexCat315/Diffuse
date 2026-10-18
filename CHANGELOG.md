@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `NavigationRail` / `Sidebar` 的纯图标轨改为居中的 40×40 圆角选择块：移除 2pt accent 侧条和铺满整行的选择/悬停底，选中态用 `surfaceVariant`，hover/press 只叠中性 state layer 并把图标从 `onSurfaceVariant` 提亮到 `onSurface`。带文字形态保留整行胶囊，但同样去掉 accent 侧条并改为对称内边距。`NavigationRailTests` 断言选择块与图标双向居中、无 accent 侧条及 hover 颜色；Gallery 窄宽壳层同步生效。
+
+- 新增 P2 `ActionSheet`：所有宽度统一为底部操作抽屉；compact 全宽贴底并带顶部拖拽柄，支持下拉/高速释放与外部点击关闭，短拖回弹，不显示关闭图标；medium/expanded 为最大 560pt 的居中抽屉，右上提供 44×44pt 关闭图标。头部固定、操作列表独立滚动并保留底部安全区；操作行之间使用 1pt 分隔线，hover/键盘焦点只叠中性 state layer，移除突兀的 accent 焦点边框。移除底部 Cancel，`closeLabel` 由调用方必填并用于 wide 关闭图标的辅助功能名称/tooltip，组件不硬编码英文文案。稳定 ID 操作、图标/危险/禁用、键盘导航与一次回调；跨宽度切换保留触发器与打开状态。Gallery 新增项目操作、长列表和三档预览，补齐两份规范及组件文档。
+
 - 新增 P2 `Popconfirm`，与 `Popover` 共用不透明卡片、箭头、焦点和十二向定位。指定方向保持不变，空间不足时限制视口并滚动；菜单/选择器显式选择 `.content` 表面与 `.flip` 避让。Cancel/Confirm 使用真实 Button，普通文字按钮取消默认重复 tooltip，额外提示通过 `tooltip:` 提供。危险操作仅确认按钮使用红色实底。Gallery 改为紧凑定位面板与窄屏单锚点预览；测试覆盖方向/RTL、主题/字号/输入矩阵、确认一次与焦点/清理，DevTools 实测取消、Escape、删除/归档及十二个指定方向。
 - 新增 P2 `TimePicker`：复用 WheelPicker 组成 12/24 小时、可选秒与 AM/PM 列，`TimeOfDay?` 绑定、min/max 夹紧、minuteStep；`TimePickerTests` 2/2，Gallery `timePicker` 与 390/720/1280 预览。WheelPicker 行文本改为行容器双向居中，自适应预览固定 240pt 居中，音量卡在窄宽纵向堆叠，修复右侧裁切与直角边界。
 - 新增 P2 `WheelPicker`：五行视口、中央选中 band、按距离淡出、pointer 拖拽/点击、wheel、方向键/Home/End 与 slider a11y increment/decrement/setValue；disabled 行跳过。Gallery 新增 `wheelPicker` 三列时间 + 音量示例，`WheelPickerTests` 4 tests / 2 suites。DevTools 通过 keyboard/wheel 实测 value 逐格变化并截图验收 390/720/1280。
