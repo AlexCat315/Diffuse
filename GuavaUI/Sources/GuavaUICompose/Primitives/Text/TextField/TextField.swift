@@ -615,6 +615,22 @@ public struct TextField: View {
                                              addonTrailing: addonTrailing)
         let textOriginX = viewport.textOriginX
         let textOriginY = viewport.textOriginY
+        let activeLineIndex = isFocused && codeEditing.showsLineNumbers && self.layout.axis == .vertical
+            ? current.lineIndex(forCharacterIndex: min(current.characterCount, max(0, state.selection.cursorIndex)))
+            : nil
+        if activeLineIndex != nil {
+            // IDE-style current-line band. It sits under the gutter numbers and
+            // the text, and is clipped to the visible field so a partially
+            // scrolled line does not paint outside the control.
+            let top = textOriginY + viewport.rawCaret.topY
+            let clippedTop = max(Float(origin.y), top)
+            let clippedBottom = min(Float(origin.y) + frameHeight, top + resolvedLineHeight)
+            if clippedBottom > clippedTop {
+                list.addRect(UIRect(x: Float(origin.x), y: clippedTop,
+                                    width: frameWidth, height: clippedBottom - clippedTop),
+                             color: theme.colors.stateLayerHover.multipliedAlpha(node.opacity * 0.7))
+            }
+        }
 
         // Paint prepend / append slabs and inline prefix / suffix glyphs.
         // Slabs draw under the text; inline glyphs are foreground tokens that
@@ -721,6 +737,7 @@ public struct TextField: View {
             drawLineNumbers(visibleLayout, source: current, origin: origin,
                             textOriginX: fixedTextOriginX, textOriginY: textOriginY,
                             frameHeight: frameHeight, lineHeight: resolvedLineHeight,
+                            activeLineIndex: activeLineIndex,
                             node: node, env: env, font: resolvedFont, list: list)
         }
         let textClip = UIRect(x: fixedTextOriginX, y: Float(origin.y),
@@ -1049,6 +1066,7 @@ public struct TextField: View {
                                  textOriginY: Float,
                                  frameHeight: Float,
                                  lineHeight: Float,
+                                 activeLineIndex: Int?,
                                  node: Node,
                                  env: TextEnvironment,
                                  font: Font,
@@ -1088,11 +1106,13 @@ public struct TextField: View {
                                                 maxWidth: .infinity,
                                                 alignment: .trailing)
             let numberBaseline = numberLayout.lines.first?.baselineY ?? lineHeight
+            let numberColor = activeLineIndex == lineNumber - 1
+                ? theme.colors.onSurface
+                : (codeEditing.lineNumberColor ?? theme.colors.onSurfaceMuted)
             list.addText(numberLayout,
                          origin: (gutterX + gutterWidth - theme.spacing.xs - numberLayout.totalWidth,
                                   textOriginY + line.baselineY - numberBaseline),
-                         color: (codeEditing.lineNumberColor ?? theme.colors.onSurfaceMuted)
-                            .multipliedAlpha(node.opacity),
+                         color: numberColor.multipliedAlpha(node.opacity),
                          textureID: env.atlasTextureID,
                          atlas: env.atlas)
         }

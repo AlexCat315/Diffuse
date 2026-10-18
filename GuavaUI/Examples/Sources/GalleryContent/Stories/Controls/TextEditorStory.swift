@@ -5,9 +5,13 @@ import GuavaUIRuntime
 /// A general multiline editor. The same `TextField` supports prose (soft wrap,
 /// no chrome) and code (line numbers, diagnostics, completion) without
 /// changing component.
+private let textEditorSampleSource = "struct Greeting {\n    let name: String\n\n    func message() -> String {\n        return name\n    }\n}\n"
+
 struct TextEditorStory: View {
     let options: GalleryOptions
-    @State private var source: TextBuffer = "struct Greeting {\n    let name: String\n\n    func message() -> String {\n        return name\n    }\n}\n"
+    @State private var source: TextBuffer = TextBuffer(textEditorSampleSource)
+    @State private var tokens = SwiftSyntax.tokens(in: textEditorSampleSource)
+    @State private var syntaxRevision = 0
     @State private var history = TextEditHistory()
     @State private var navigationRequest = 0
     @State private var navigationIndex = 0
@@ -33,8 +37,11 @@ struct TextEditorStory: View {
                 Button("Go to beginning", isEnabled: options.isEnabled) { navigate(to: 0) }
                     .buttonStyle(.secondary)
                 Button("Load 200,000 lines", isEnabled: options.isEnabled && codeMode) {
-                    source = TextBuffer((0..<200_000).map { "let value\($0) = \($0)" }.joined(separator: "\n"))
-                    hover = nil; navigate(to: source.lineRange(forLine: 100_000).upperBound)
+                    let loaded = TextBuffer((0..<200_000).map { "let value\($0) = \($0)" }.joined(separator: "\n"))
+                    source = loaded
+                    tokens = SwiftSyntax.tokens(in: loaded.stringValue)
+                    syntaxRevision += 1
+                    hover = nil; navigate(to: loaded.lineRange(forLine: 100_000).upperBound)
                     status = "200,000 lines · caret at line 100,001 · type, scroll, undo and redo"
                 }.buttonStyle(.secondary)
                 if codeMode {
@@ -48,7 +55,7 @@ struct TextEditorStory: View {
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     documentHeader
                     Box {}.frame(height: 1).background(.border)
-                    ResizableEditor(initialHeight: 280) { editor }
+                    ResizableEditor(initialHeight: 280) { editor(theme: theme) }
                     Box {}.frame(height: 1).background(.border)
                     statusBar
                 }
@@ -94,7 +101,7 @@ struct TextEditorStory: View {
         .background(.surfaceRaised)
     }
 
-    private var editor: some View {
+    private func editor(theme: Theme) -> some View {
         TextField("", text: $source) { input in
             input.layout.axis = .vertical
             input.layout.wrapsLines = !codeMode
@@ -103,6 +110,10 @@ struct TextEditorStory: View {
             input.codeEditing.indentationWidth = 4
             input.codeEditing.editHistory = history
             input.codeEditing.diagnostics = codeMode && showsDiagnostic ? TextDiagnostics([diagnostic]) : .empty
+            input.codeEditing.syntaxRevision = syntaxRevision
+            input.codeEditing.syntaxColorAtUTF8Offset = codeMode ? { _, offset in
+                SwiftSyntax.color(at: offset, tokens: tokens, theme: theme)
+            } : nil
             input.codeEditing.onRequestCompletion = codeMode ? { _, reply in
                 var print = TextCompletionItem(id: "print", label: "print", insertText: "print(value)")
                 print.detail = "Writes a value to standard output"
@@ -113,7 +124,11 @@ struct TextEditorStory: View {
             } : nil
             input.codeEditing.onAcceptCompletion = { status = "Accepted \($0.label)" }
             input.behavior.disabled = !options.isEnabled
-            input.events.onChange = { _ in hover = nil }
+            input.events.onChange = { buffer in
+                hover = nil
+                tokens = SwiftSyntax.tokens(in: buffer.stringValue)
+                syntaxRevision += 1
+            }
             input.events.onCaretChange = { caret = $0 }
             input.events.onHoverChange = { hover = $0 }
             if navigationRequest > 0 {
@@ -158,5 +173,113 @@ private struct TextEditorFieldStyle: TextFieldStyle {
         configuration.content
             .background(.surface)
             .border(configuration.isFocused ? configuration.theme.colors.focusRing : .clear, width: 1)
+    }
+}
+
+/// Small Swift lexer for the Gallery. Production Script editing uses
+/// Tree-sitter and LSP; this demo keeps the same `syntaxColorAtUTF8Offset`
+/// contract without pulling a parser into the component showcase.
+private enum SwiftSyntax {
+    enum Kind { case keyword, string, comment, number, type }
+
+    struct Token {
+        let range: Range<Int>
+        let kind: Kind
+    }
+
+    static let keywords: Set<String> = [
+        "actor", "any", "as", "async", "await", "break", "case", "catch", "class",
+        "continue", "default", "defer", "deinit", "do", "else", "enum", "extension",
+        "fallthrough", "false", "fileprivate", "final", "for", "func", "guard", "if",
+        "import", "in", "init", "inout", "internal", "is", "lazy", "let", "nil",
+        "open", "operator", "override", "private", "protocol", "public", "repeat",
+        "required", "return", "self", "Self", "some", "static", "struct", "switch",
+        "throw", "throws", "true", "try", "typealias", "unowned", "var", "weak",
+        "where", "while"
+    ]
+
+    static func tokens(in text: String) -> [Token] {
+        let bytes = Array(text.utf8)
+        // The 200k-line stress sample must not walk the whole document on
+        // every edit; syntax colouring is intentionally a demo-scale feature.
+        guard bytes.count <= 300_000 else { return [] }
+        var result: [Token] = []
+        var index = 0
+
+        func isDigit(_ byte: UInt8) -> Bool { byte >= 48 && byte <= 57 }
+        func isWordStart(_ byte: UInt8) -> Bool {
+            (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte == 95
+        }
+        func isWord(_ byte: UInt8) -> Bool { isWordStart(byte) || isDigit(byte) }
+        func append(_ range: Range<Int>, _ kind: Kind) {
+            if !range.isEmpty { result.append(Token(range: range, kind: kind)) }
+        }
+
+        while index < bytes.count {
+            let byte = bytes[index]
+            if byte == 47, index + 1 < bytes.count, bytes[index + 1] == 47 {
+                let start = index
+                while index < bytes.count, bytes[index] != 10 { index += 1 }
+                append(start..<index, .comment)
+                continue
+            }
+            if byte == 34 {
+                let start = index
+                index += 1
+                while index < bytes.count {
+                    if bytes[index] == 92 {
+                        index = min(bytes.count, index + 2)
+                    } else if bytes[index] == 34 {
+                        index += 1
+                        break
+                    } else {
+                        index += 1
+                    }
+                }
+                append(start..<index, .string)
+                continue
+            }
+            if isDigit(byte) {
+                let start = index
+                while index < bytes.count, isDigit(bytes[index]) { index += 1 }
+                append(start..<index, .number)
+                continue
+            }
+            if isWordStart(byte) {
+                let start = index
+                while index < bytes.count, isWord(bytes[index]) { index += 1 }
+                let word = String(decoding: bytes[start..<index], as: UTF8.self)
+                if keywords.contains(word) {
+                    append(start..<index, .keyword)
+                } else if let first = bytes[start...].first, first >= 65, first <= 90 {
+                    append(start..<index, .type)
+                }
+                continue
+            }
+            index += 1
+        }
+        return result
+    }
+
+    static func color(at offset: Int, tokens: [Token], theme: Theme) -> Color? {
+        var low = 0, high = tokens.count
+        while low < high {
+            let mid = (low + high) / 2
+            let token = tokens[mid]
+            if offset < token.range.lowerBound {
+                high = mid
+            } else if offset >= token.range.upperBound {
+                low = mid + 1
+            } else {
+                switch token.kind {
+                case .keyword: return theme.colors.accent
+                case .string: return theme.colors.success
+                case .comment: return theme.colors.onSurfaceMuted
+                case .number: return theme.colors.warning
+                case .type: return theme.colors.accentSecondary
+                }
+            }
+        }
+        return nil
     }
 }
