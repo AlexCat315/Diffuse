@@ -466,12 +466,12 @@
 - 平板 / 桌面：继续按 DPI 取物理尺寸；hover 不改变几何。`[已实现]`
 - 交互与验收：图片失败必须给出占位与重试路径；头像暴露完整姓名 image 语义；验收：Image/Avatar 测试族、`--component image|avatar`。
 
-**Badge / Tag / KeyCap / Label**
+**Badge / Tag / KeyCap / FieldLabel**
 
-- 外观：非交互装饰，尺寸随语义字号。`[已实现]`
-- 手机：不因窄而截断语义文本；长文本换成多行或由调用方收敛，不允许静默丢字。`[部分]`
+- 外观：Badge/KeyCap 为非交互标签；Tag 可有独立移除按钮，FieldLabel 可聚焦关联输入；尺寸随语义字号。`[已实现]`
+- 手机：Badge/Tag 标题在剩余宽度内完整换行，图标与 Tag 移除按钮不被挤小；KeyCap 按完整 cap 重排，单个长键名也可换行。FieldLabel 在 Form 中重排且文字块保持逻辑 leading，移除按钮/可激活标签触摸 ≥44pt。`[已实现]`，见 `CompactLabelTests` 与 [标签组件](labels.md)。
 - 平板 / 桌面：hover 无状态变化（非交互除外）。`[已实现]`
-- 交互与验收：装饰性内容 `accessibilityHidden`，语义值并入宿主；验收：`--component badge|tag|keyCap|label`。
+- 交互与验收：Badge/KeyCap 合并子文本避免重复朗读；Tag 保留独立移除按钮；装饰性实例由调用方显式 `accessibilityHidden` 并入宿主。FieldLabel 保留完整输入名称、帮助和激活关联。验收：`--component badge|tag|keyCap|label`，`CompactLabelTests.matrix`。
 
 **Alert / Progress / Notification / Skeleton / Empty**
 
@@ -576,7 +576,6 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | Workspace | 标签条完整键盘/辅助功能、RTL 与其余深化能力 | 见 [Workspace](workspace.md) 与 [功能缺口](gaps.md#3-既有组件功能缺口与完成边界) |
 | AssetRefField / JsonField | 清空/选择/展开入口的触摸目标与窄宽实测 | 390 触摸、720 混合、200% 字号及完整名称 |
 | List / MultiSelectList / SectionedList | 通用行的标题收敛与尾部徽标/状态保留；重排边缘自动滚动另见 gaps | 自定义 rowContent 不能由容器静默截断整个行；需可组合的行布局契约 |
-| Badge / Tag / KeyCap / Label | 长文本换行或显式收敛策略 | 不静默丢失文本，完整语义可达 |
 | Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
 
 新项关闭时须更新对应契约、组件文档和下方证据，并单独提交；物理设备限制保持明示，不把未执行的设备测试记为通过。
@@ -651,6 +650,8 @@ SwipeList 的 RTL 与操作区已补齐：向逻辑 leading 滑动（LTR 左、R
 Rating Gallery 窄宽组合已修复：评分说明和操作独立下行，密度样本换行，多星带在卡片内横向滚动并保留滚动条。局部 LTR 滚动坐标不改变星序，布局后同步继承实际 RTL 方向且只在变化时重组。两项 Gallery 布局/真实点击测试通过，矩阵覆盖 24 个宽度/字号/方向/主题组合；DevTools 三档 Set 4 均返回 4.0，390 RTL 十星带 offset 从 0 经横向滚轮到 180、拖动滚动条到 198，再点击原先隐藏的第一颗得到 1.0。镜像确认 390 说明/按钮完整、720 深色层次清晰、1280 的 200% 文本无裁切，先前记录的 Rating 视觉问题已关闭。见 [Rating](rating.md#gallery-窄宽组合)。
 
 Alert 的窄宽与大字号操作区已完成：compact 纵向堆叠，其余容器按实际自然宽度自动收敛；共用 `ActionGroupLayout` 同时服务 Dialog，保留节点/焦点。关闭按钮仅占标题行，图标槽使用 IconMetrics（尊重文字缩放与主题/局部覆盖），长标题不被拉伸到远离 RTL 图标的一侧。23 项 Alert/Dialog/产品回归通过，其中 Alert 矩阵覆盖 72 个宽度/字号/方向/主题/variant 组合与自定义图标倍率；720→320→720 的同一动作节点/焦点及键盘回调保留。DevTools 390 触摸卡片 286×228，178×44 / 100×44 操作纵排；720 深色混合 200% 卡片 560×278，304×50 / 160×50 同行且标题图标有间隔；1280 RTL 指针卡片 929×108，标题、正文与操作沿逻辑 leading 对齐。三档重连后均为 `Reconnection requested`，关闭后均为 `Alert dismissed`；镜像确认无越界、无标题/图标重叠，明暗状态层次清晰。见 [Alert](alert.md)。
+
+标签组件的长文本已补齐：Badge/Tag 在实际剩余宽度内完整换行并保持图标/移除按钮，KeyCap 按 cap 换行、单个长键名可换行；Badge/KeyCap 合并子文字避免重复朗读。FieldLabel 的关联按钮改为逻辑 leading 文字块，避免继承按钮居中布局；Gallery 字段示例改用实际容器宽度，并新增组合长标签、移除/恢复与关联输入。独立 KeyCap 源码从 Tag 文件拆出，公共调用不变。35 项标签/产品/设计系统/Form 回归通过，标签矩阵覆盖 24 个宽度/字号/方向/主题组合。DevTools 390 触摸、720 深色混合 200%、1280 RTL 指针的文本均完整，Tag 的移除后查询总数为 0；点击完整字段标签后注入 Alex，三档显式输入值查询均为 `Alex`。镜像检查确认 chip 层次、cap 换行、44pt 移除目标与标签/输入对齐，手机与大字号无越界。新文档见 [标签组件](labels.md)。
 
 ## 6. 动效与动画（动画效果实现）
 

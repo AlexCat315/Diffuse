@@ -5,22 +5,26 @@ struct BadgeStory: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Status tones", "Semantic status labels inherit the active theme.") {
-                Row(alignment: .center, spacing: 12) { for tone in StatusTone.allCases { Badge(String(describing: tone).capitalized, tone: tone) } }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) { for tone in StatusTone.allCases { Badge(String(describing: tone).capitalized, tone: tone) } }
+            }
+            StorySection("Long status", "Status text wraps inside the available width and keeps its complete meaning.") {
+                Badge("Workspace synchronization is waiting for a network connection", tone: .warning) { $0.showsDot = true }
+                    .debugName("badge-long")
             }
             StorySection("Variants", "Soft reads inside dense content, solid is a single callout, and outline sits beside a bordered surface.") {
-                Row(alignment: .center, spacing: 12) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) {
                     Badge("Running") { $0.tone = .success; $0.variant = .soft }
                     Badge("Running") { $0.tone = .success; $0.variant = .solid }
                     Badge("Running") { $0.tone = .success; $0.variant = .outline }
                 }
             }
             StorySection("Glyphs, dots and density", "The glyph carries the same meaning as the colour, so the tone survives a monochrome theme.") {
-                Row(alignment: .center, spacing: 12) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) {
                     Badge("Passing") { $0.tone = .success; $0.icon = UIIcons.Status.checkCircle }
                     Badge("3 failures") { $0.tone = .danger; $0.showsDot = true }
                     Badge("Unverified") { $0.tone = .neutral; $0.isEnabled = false }
                 }
-                Row(alignment: .center, spacing: 8) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                     Badge("Mini") { $0.tone = .info; $0.variant = .solid }.controlSize(.mini)
                     Badge("Small") { $0.tone = .info; $0.variant = .solid }.controlSize(.small)
                     Badge("Medium") { $0.tone = .info; $0.variant = .solid }.controlSize(.regular)

@@ -36,6 +36,10 @@ private struct FieldLabelHost: _PrimitiveView {
 }
 private struct FieldLabelStyle: ButtonStyle {
     func makeBody(configuration c: ButtonStyleConfiguration) -> some View {
-        AnyView(c.label).border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 1 : 0)
+        Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
+            AnyView(c.label).flex(0, shrink: 1).frame(minWidth: 0)
+        }
+        .flex(1, shrink: 1).frame(minWidth: 0)
+        .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 1 : 0)
     }
 }

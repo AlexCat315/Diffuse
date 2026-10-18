@@ -49,6 +49,7 @@ public struct Badge: _PrimitiveView {
     }
 
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
+    public func _updateLayout(_ layout: LayoutNode) { layout.minWidth = 0; layout.flexShrink = 1 }
 
     public func _updateNode(_ node: Node) {
         node.isFocusable = false
@@ -56,6 +57,7 @@ public struct Badge: _PrimitiveView {
             $0.label = title
             $0.value = String(describing: tone).capitalized
             $0.state.isEnabled = isEnabled
+            $0.combinesChildren = true
         }
     }
 
@@ -89,10 +91,13 @@ public struct Badge: _PrimitiveView {
             Row(alignment: .center, spacing: metrics.gap) {
                 if let icon {
                     Icon(icon, size: metrics.iconSize, color: ink)
+                        .flex(0, shrink: 0)
                 } else if showsDot {
                     Icon(UIIcons.Shape.dot, size: metrics.dotSize, color: ink)
+                        .flex(0, shrink: 0)
                 }
                 Text(title).font(metrics.font).foregroundColor(ink)
+                    .flex(0, shrink: 1).frame(minWidth: 0)
             }
             .padding(horizontal: metrics.paddingX, vertical: metrics.paddingY)
             .background(fill)

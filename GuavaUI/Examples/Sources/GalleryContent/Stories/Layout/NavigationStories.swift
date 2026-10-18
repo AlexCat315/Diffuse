@@ -99,12 +99,12 @@ struct ButtonGroupStory: View {
 }
 struct TagStory: View {
     let options: GalleryOptions
-    @State private var tags = ["Swift", "Rendering", "Editor"]
+    @State private var tags = ["Swift", "Rendering", "Editor", "Workspace collaboration reviewers awaiting approval"]
     @State private var filters = ["metal", "vulkan"]
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Removable tags", "Each remove action is an independent control. Reset restores the tags.") {
-                Row(alignment: .center, spacing: 8) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                     for title in tags {
                         AnyView(Tag(title) { $0.tone = .info; $0.isEnabled = options.isEnabled; $0.onRemove = { tags.removeAll { $0 == title } } })
                     }
@@ -112,14 +112,14 @@ struct TagStory: View {
                 if tags.isEmpty { Text("No tags selected").font(.caption).foregroundColor(.onSurfaceMuted) }
             }
             StorySection("Variants & glyphs", "Soft reads inside dense content; solid is a single callout; outline sits beside an already-bordered surface.") {
-                Row(alignment: .center, spacing: 8) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                     Tag("metal") { $0.variant = .soft; $0.isEnabled = options.isEnabled }
                     Tag("vulkan") { $0.variant = .solid; $0.tone = .info; $0.isEnabled = options.isEnabled }
                     Tag("deprecated") { $0.variant = .outline; $0.tone = .warning; $0.isEnabled = options.isEnabled }
                     Tag("renderer") { $0.icon = UIIcons.Editor.box; $0.variant = .outline; $0.isEnabled = options.isEnabled }
                     Tag("3 failures") { $0.showsDot = true; $0.tone = .danger; $0.isEnabled = options.isEnabled }
                 }
-                Row(alignment: .center, spacing: 8) {
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                     for title in filters {
                         AnyView(Tag(title) { $0.variant = .outline; $0.isEnabled = options.isEnabled; $0.onRemove = { filters.removeAll { $0 == title } } })
                     }
@@ -133,23 +133,41 @@ struct KeyCapStory: View {
     var body: some View {
         StorySection("Keyboard hints", "Platform-aware shortcut text uses the same formatter as command menus.") {
             Column(alignment: .leading, spacing: 10) {
-                Row(alignment: .center, spacing: 12) { KeyCap(.primary("S")); Text("Save").font(.label) }
-                Row(alignment: .center, spacing: 12) { KeyCap(.primaryShift("P")); Text("Command palette").font(.label) }
-                Row(alignment: .center, spacing: 12) { KeyCap(.primary("K"), platform: .windows); Text("Same shortcut on Windows").font(.label) }
-                Row(alignment: .center, spacing: 12) { KeyCap("Esc"); Text("Dismiss").font(.label) }
-                Row(alignment: .center, spacing: 12) { KeyCap(["↑", "↓"]); Text("Navigate").font(.label) }
-                Row(alignment: .center, spacing: 12) { KeyCap("⏎") { $0.isEnabled = false }; Text("Disabled hint").font(.label) }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) { KeyCap(.primary("S")); Text("Save").font(.label) }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) { KeyCap(.primaryShift("P")); Text("Command palette").font(.label) }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) { KeyCap(.primary("K"), platform: .windows); Text("Same shortcut on Windows").font(.label) }
+                KeyCap(["Control", "Option", "Workspace command palette"]).debugName("keycap-long")
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) { KeyCap("Esc"); Text("Dismiss").font(.label) }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) { KeyCap(["↑", "↓"]); Text("Navigate").font(.label) }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) { KeyCap("⏎") { $0.isEnabled = false }; Text("Disabled hint").font(.label) }
             }
         }
     }
 }
 struct LabelStory: View {
     @State private var name: TextBuffer = ""
+    @State private var showsTag = true
     var body: some View {
-        StorySection("Associated field labels", "Click the label to focus its input. The system receives the field name, required state and helper description.") {
-            Form([FormField("display-name", "Display name", configure: { $0.isRequired = true; $0.help = "Visible to your teammates" }) {
-                TextField("Enter a name", text: $name)
-            }]).frame(width: 360)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Content labels", "Status badges, removable tags and key caps keep their full text inside narrow cards. Field labels below name and focus an input.") {
+                Badge("Workspace synchronization is waiting for a network connection", tone: .warning) { $0.showsDot = true }
+                    .debugName("label-badge")
+                if showsTag {
+                    Tag("Workspace collaboration reviewers awaiting approval") {
+                        $0.icon = UIIcons.File.folder; $0.onRemove = { showsTag = false }
+                    }.debugName("label-tag")
+                } else {
+                    Button("Restore reviewer tag") { showsTag = true }
+                }
+                KeyCap(["Control", "Option", "Open workspace command palette"]).debugName("label-keycap")
+            }
+            StorySection("Associated field labels", "Click the label to focus its input. The system receives the field name, required state and helper description.") {
+                Form([FormField("display-name", "Display name for your workspace collaborators", configure: {
+                    $0.isRequired = true; $0.help = "Visible to your teammates"
+                }) {
+                    TextField("Enter a name", text: $name)
+                }]).frame(width: .percent(100))
+            }
         }
     }
 }
