@@ -1,5 +1,6 @@
 import Foundation
 import GuavaUIRuntime
+@_spi(CustomLayout) import GuavaUIScene
 
 /// One trailing action on a `SwipeList` row. The swipe surface shows at most
 /// two actions; the row's always-available actions menu exposes every entry, so
@@ -33,7 +34,7 @@ public struct SwipeAction: Identifiable {
 }
 
 /// Vertical list with trailing swipe actions. Selection and keyboard navigation
-/// follow `List`; a left swipe on a touch surface reveals up to two actions.
+/// follow `List`; a swipe toward the logical leading edge reveals two actions.
 /// Every row also carries an actions menu, so the same commands are reachable
 /// with a pointer, keyboard or screen reader.
 ///
@@ -89,13 +90,15 @@ public struct SwipeList<Data: RandomAccessCollection, ID: Hashable, RowContent: 
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ScrollView(.vertical, scrollbarGutter: .stable,
                                    onViewportChange: { viewport in
-                            let next = Float(viewport.size.width)
+                            // The reported viewport includes the reserved
+                            // scrollbar lane; row chrome must fit beside it.
+                            let next = max(1, Float(viewport.size.width) - ScrollView<EmptyView>.scrollbarGutterWidth)
                             if abs(next - viewportWidth) > 0.5 { viewportWidth = next }
                         }) {
                             Box(direction: .column, alignItems: .stretch, spacing: spacing) {
                                 for index in elements.indices {
                                     AnyView(row(elements[index], index: index, elements: elements,
-                                                height: height))
+                                                height: height, actionWidth: scaler.scale(_SwipeRow.actionWidth)))
                                 }
                             }
                             .frame(width: .points(width), height: .points(max(1, contentHeight)))
@@ -109,7 +112,7 @@ public struct SwipeList<Data: RandomAccessCollection, ID: Hashable, RowContent: 
     }
 
     private func row(_ element: Data.Element, index: Int, elements: [Data.Element],
-                     height: Float) -> some View {
+                     height: Float, actionWidth: Float) -> some View {
         let elementID = element[keyPath: id]
         let rowActions = isEnabled ? actions(element) : []
         return _SwipeRow(
@@ -118,6 +121,7 @@ public struct SwipeList<Data: RandomAccessCollection, ID: Hashable, RowContent: 
             isEnabled: isEnabled,
             rowHeight: height,
             rowWidth: viewportWidth,
+            actionWidth: actionWidth,
             actions: rowActions,
             onSelect: { activate(element) },
             content: AnyView(rowContent(element, selection.wrappedValue == elementID))
@@ -177,6 +181,7 @@ private struct _SwipeRow: View {
     let isEnabled: Bool
     let rowHeight: Float
     let rowWidth: Float
+    let actionWidth: Float
     let actions: [SwipeAction]
     let onSelect: () -> Void
     let content: AnyView
@@ -184,7 +189,8 @@ private struct _SwipeRow: View {
     @State private var reveal: CGFloat = 0
 
     private var swipeActions: [SwipeAction] { Array(actions.prefix(Self.maxActions)) }
-    private var maxReveal: CGFloat { CGFloat(swipeActions.count) * CGFloat(Self.actionWidth) }
+    private var actionExtent: Float { max(44, min(actionWidth, rowWidth / Float(max(1, swipeActions.count)))) }
+    private var maxReveal: CGFloat { CGFloat(swipeActions.count) * CGFloat(actionExtent) }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -200,7 +206,6 @@ private struct _SwipeRow: View {
                 }
             }
             .frame(width: max(1, rowWidth), height: rowHeight)
-            .offset(x: Float(reveal))
             .modifier(_SwipeGestureModifier(
                 label: label, isSelected: isSelected, isEnabled: isEnabled,
                 maxReveal: maxReveal,
@@ -226,11 +231,16 @@ private struct _SwipeRow: View {
         }
         .frame(height: rowHeight)
         .clipped()
+        .modifier(_SwipeEscapeModifier(isOpen: reveal < -0.5, dismiss: { setReveal(0, node: $0) }))
         .contextMenu(entries: { contextEntries })
     }
 
     private func snap(_ node: Node) {
         let target: CGFloat = reveal < -maxReveal * 0.45 ? -maxReveal : 0
+        setReveal(target, node: node)
+    }
+
+    private func setReveal(_ target: CGFloat, node: Node) {
         if node.prefersReducedMotion {
             reveal = target
         } else {
@@ -240,7 +250,7 @@ private struct _SwipeRow: View {
 
     @ViewBuilder
     private func actionButton(_ action: SwipeAction) -> some View {
-        let title = Text(action.title).font(.caption)
+        let title = Text(action.title).truncatingTail().font(.caption)
         if action.tone == .danger {
             Button(isEnabled: isEnabled && action.isEnabled, action: {
                 reveal = 0
@@ -248,7 +258,7 @@ private struct _SwipeRow: View {
             }) { title }
             .buttonStyle(.destructive)
             .accessibilityLabel(action.title)
-            .frame(width: Self.actionWidth, height: rowHeight)
+            .frame(width: actionExtent, height: rowHeight)
         } else {
             Button(isEnabled: isEnabled && action.isEnabled, action: {
                 reveal = 0
@@ -256,7 +266,7 @@ private struct _SwipeRow: View {
             }) { title }
             .buttonStyle(.secondary)
             .accessibilityLabel(action.title)
-            .frame(width: Self.actionWidth, height: rowHeight)
+            .frame(width: actionExtent, height: rowHeight)
         }
     }
 
@@ -282,6 +292,8 @@ private struct _SwipeGestureModifier: ViewModifier {
     let snap: (Node) -> Void
 
     func apply(node: Node) {
+        let rtl = node.layoutNode?.customLayoutDirection == .rtl
+        node.animatableSet(\.contentOffset, to: CGPoint(x: rtl ? reveal.wrappedValue : -reveal.wrappedValue, y: 0))
         node.isHitTestable = true
         node.attachments[LayoutDebugAttachmentKey.debugName] = "swipe-row-\(label)"
         node.applyTouchControlExtent()
@@ -364,14 +376,24 @@ private struct _SwipeGestureModifier: ViewModifier {
                 PointerCaptureHolder.current?.acquire(node)
                 node.backgroundColor = node.theme.colors.stateLayerPressed
             }
-            let next = min(0, max(-maxReveal, base + dx))
+            let direction: CGFloat = node.layoutNode?.customLayoutDirection == .rtl ? -1 : 1
+            let next = min(0, max(-maxReveal, base + dx * direction))
             if next != reveal.wrappedValue { reveal.wrappedValue = next }
             return .handled
         }
-        registry.setKey(node) { event, phase in
-            guard phase != .capture, event.scancode == Scancode.escape,
-                  reveal.wrappedValue < -0.5 else { return .ignored }
-            snap(node)
+    }
+}
+
+/// The key boundary contains both content and action buttons, so Escape also
+/// works while focus is on an action (which is a sibling of the content).
+private struct _SwipeEscapeModifier: ViewModifier {
+    let isOpen: Bool
+    let dismiss: (Node) -> Void
+
+    func apply(node: Node) {
+        InteractionRegistryHolder.current?.setKey(node) { event, phase in
+            guard phase != .capture, event.scancode == Scancode.escape, isOpen else { return .ignored }
+            dismiss(node)
             return .handled
         }
     }

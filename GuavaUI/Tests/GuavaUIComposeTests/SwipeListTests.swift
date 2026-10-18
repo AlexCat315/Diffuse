@@ -60,6 +60,8 @@ struct SwipeListTests: GuavaUIComposeSerializedSuite {
     }
 
     private func withScene(input: UIEnvironment.Input = [.touch, .keyboard],
+                          direction: Direction = .ltr,
+                          textScale: Float = 1,
                           _ body: (ViewGraph, PlatformInputContext, EventDispatcher, Harness) throws -> Void) rethrows {
         try GlobalTestLock.locked {
             let context = PlatformInputContext()
@@ -78,7 +80,7 @@ struct SwipeListTests: GuavaUIComposeSerializedSuite {
                 let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
                                                  capture: context.pointerCapture,
                                                  focusChain: context.focusChain)
-                graph.install(root: harness.surfaceEnvironment(environment))
+                graph.install(root: harness.surfaceEnvironment(environment).layoutDirection(direction).textScaler(.init(textScale)))
                 settle(graph)
                 defer { graph.install(root: EmptyView()) }
                 try body(graph, context, dispatcher, harness)
@@ -109,6 +111,46 @@ struct SwipeListTests: GuavaUIComposeSerializedSuite {
             #expect(context.pointerCapture.target == nil)
             archive.accessibilityActions.activate?()
             settle(graph)
+            #expect(harness.model.actions == ["archive-0"])
+        }
+    }
+
+    @Test("Trailing actions mirror their gesture and placement; Escape closes from an action", arguments: [false, true], [Float(1), Float(2)])
+    func mirroredActions(_ rtl: Bool, _ scale: Float) throws {
+        let direction: Direction = rtl ? .rtl : .ltr
+        try withScene(direction: direction, textScale: scale) { graph, context, dispatcher, harness in
+            let first = try row("Item 1", graph)
+            let bounds = first.absoluteFrame
+            let scroll = try #require(nodes(graph.tree.root!).first { $0.accessibility?.role == .scrollArea })
+            #expect(abs(first.frame.width - (scroll.frame.width - 12)) < 0.5)
+            #expect(bounds.minX >= scroll.absoluteFrame.minX)
+            #expect(bounds.maxX <= scroll.absoluteFrame.maxX - 12)
+            let delta: Float = direction == .rtl ? 140 : -140
+            swipe(first, dispatcher, by: -delta)
+            settle(graph)
+            #expect(button("Archive", graph) == nil)
+            swipe(first, dispatcher, by: delta)
+            settle(graph)
+            let archive = try #require(button("Archive", graph))
+            let delete = try #require(button("Delete", graph))
+            #expect(context.pointerCapture.target == nil)
+            let extent = min(CGFloat(74 * scale), bounds.width / 2)
+            #expect(archive.frame.height >= 44 && archive.frame.width == extent)
+            if direction == .rtl {
+                #expect(archive.absoluteFrame.maxX == bounds.minX + extent * 2)
+                #expect(delete.absoluteFrame.minX < archive.absoluteFrame.minX)
+            } else {
+                #expect(archive.absoluteFrame.minX == bounds.maxX - extent * 2)
+                #expect(delete.absoluteFrame.minX > archive.absoluteFrame.minX)
+            }
+            context.focusChain.focus(archive)
+            dispatcher.dispatch(.keyDown(.init(scancode: Scancode.escape, keycode: 0, modifiers: [], isRepeat: false)))
+            settle(graph)
+            #expect(button("Archive", graph) == nil && harness.model.actions.isEmpty)
+            let toggle = try #require(button("Actions for Item 1", graph))
+            toggle.accessibilityActions.activate?(); settle(graph)
+            let action = try #require(button("Archive", graph))
+            action.accessibilityActions.activate?(); settle(graph)
             #expect(harness.model.actions == ["archive-0"])
         }
     }

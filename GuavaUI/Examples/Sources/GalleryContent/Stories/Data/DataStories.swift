@@ -402,11 +402,11 @@ struct SwipeListStory: View {
                          color: selected ? .accent : .onSurfaceMuted)
                     Column(alignment: .leading, spacing: 2) {
                         Text(items[index]).font(.body).foregroundColor(.onSurface)
-                        Text("Swipe left or use the row actions button")
+                        Text("Swipe toward the leading edge or use Actions")
+                            .truncated()
                             .font(.caption).foregroundColor(.onSurfaceMuted)
                     }
                 }
-                .frame(height: 52)
             }
             .frame(height: 260)
             Text(log).font(.caption).foregroundColor(.onSurfaceMuted).debugName("swipe-log")

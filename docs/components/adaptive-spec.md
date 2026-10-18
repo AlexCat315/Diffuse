@@ -289,7 +289,7 @@
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
 - 重排：`ReorderableList` 提供 44pt 拖拽 handle、2pt 放置线、Escape 取消与一次 `onMove`；聚焦 handle 后 Up/Down 和辅助功能 increment/decrement 移动同一行，行身份与焦点跟随原行。当前为全量挂载的非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
-- 滑动操作：`SwipeList` 只在触摸面启用左滑，横向阈值 8pt，纵向手势交给 `ScrollView`；最多露出两个 74pt 宽、行高 ≥44 的 trailing 操作。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。当前为全量挂载。`[已实现]`，API 见 [SwipeList](swipelist.md)。
+- 滑动操作：`SwipeList` 只在触摸面启用向 leading 滑动（LTR 左滑 / RTL 右滑），横向阈值 8pt，纵向手势交给 `ScrollView`；最多露出两个 74pt 宽、行高 ≥44 的 trailing 操作。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。当前为全量挂载。`[已实现]`，API 见 [SwipeList](swipelist.md)。
 - 下拉刷新：`List`/`VirtualStack` 接受 `RefreshOptions(isRefreshing:threshold:action:)`；触摸下拉越过阈值（默认 64pt，含 ScrollView 阻尼）只触发一次，指示器在 `isRefreshing` 清除前保持并在顶部预留 36pt inset，完成后回弹；`Spinner` 在 reducedMotion 下冻结。Cmd+R/Ctrl+R 为键盘/命令入口，调用方也可提供显式按钮。`[已实现]`，API 与边界见 [RefreshableList](refresh.md)。
 - 交互与验收：List 方向键/Home/End/Enter + listItem 语义；MultiSelectList 支持 Shift/Cmd 点选、Shift+Arrow、Cmd/Ctrl+A；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。验收：`MultiSelectListTests`、`ReorderableListTests`、`RefreshTests`、`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
 
@@ -606,7 +606,7 @@ Select 弹层宽度与行高已完成：触发器继续单行截断并保留完�
 
 NavigationStack 已完成：`NavigationStack(path:root:destination:)` 以 caller-owned `[Route]` 为栈，root 与 path 页面通过 `AnimatedVisibility(retainsContent:)` 保持挂载，隐藏页不进入命中/焦点/辅助功能树；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页反向显露。非空初始 path 首帧恢复深链；`ContainerSizeReader` 把页面固定到实际容器尺寸。页面标题加 `.navigationTitle` 后，新顶页布局完成即把焦点移到 heading（`visible:false`，无键盘环）；过渡 settle 前的第二次 path 变化被拒绝并写回上一次接受的栈。`NavigationStackTests` 覆盖 push/pop 后 root 草稿保留、深链、多页仅顶层可见、标题焦点与过渡去重。Gallery `navigationStack` 页与自适应预览已接入；DevTools 在 720×820 点击 `Open details` 后查询到 Details（`role=heading`）与 `Path: details`，点击 Back 后 root 草稿仍为 “Draft kept across push and pop”。平台返回手势由宿主删除最后一个 route；该边界已记录在 [NavigationStack](navigationstack.md)。
 
-列表滑动操作已完成：`SwipeList` 在触摸面左滑露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；横向阈值 8pt，纵向手势仍交给 `ScrollView`。`ScrollView` 的触摸拖动改为轴感知阈值，避免垂直滚动抢占横向滑动。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口；行选择、键盘 Up/Down/Home/End/Return 与辅助功能 activate 走 `SelectionKeyHost`。`SwipeListTests` 覆盖触摸滑动与 44pt 操作、Actions 按钮非滑动路径、纵向滚动不误触、禁用态与指针面不响应滑动。Gallery `swipeList` 页与自适应预览已接入；DevTools 在 720×820 点击 Inbox 行 Actions 后查询到 Archive（74×52）和 Delete，执行 Archive 后 `swipe-log` 为 “Archived Inbox”。当前为全量挂载的非虚拟列表，RTL 滑动方向仍待补。
+列表滑动操作已完成：`SwipeList` 在触摸面左滑露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；横向阈值 8pt，纵向手势仍交给 `ScrollView`。`ScrollView` 的触摸拖动改为轴感知阈值，避免垂直滚动抢占横向滑动。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口；行选择、键盘 Up/Down/Home/End/Return 与辅助功能 activate 走 `SelectionKeyHost`。`SwipeListTests` 覆盖触摸滑动与 44pt 操作、Actions 按钮非滑动路径、纵向滚动不误触、禁用态与指针面不响应滑动。Gallery `swipeList` 页与自适应预览已接入；DevTools 在 720×820 点击 Inbox 行 Actions 后查询到 Archive（74×52）和 Delete，执行 Archive 后 `swipe-log` 为 “Archived Inbox”。当前为全量挂载的非虚拟列表；RTL 手势/位置与 Escape 收起已补齐，见本节后续验收。
 
 列表下拉刷新已完成：`List`/`VirtualStack` 的 `RefreshOptions` 在 `ScrollView` 负向 overscroll 越过阈值时只触发一次；`isRefreshing` 控制顶部 36pt inset 与指示器，清除后内容回弹。指示器使用 `Spinner`，reducedMotion 下冻结；Cmd+R/Ctrl+R 在列表子树内触发同一 action。`ScrollView` 仍保持原始根节点，指示器以绝对定位放进滚动内容，因此列表宽度不被包装层压缩。`RefreshTests` 覆盖触摸下拉只触发一次、嵌套列表优先于父级识别拖动、指示器保持到绑定清除、Cmd+R 与重复按键去重。Gallery `refreshableList` 页与自适应预览已接入；2026-10-18 使用 `--width 390 --height 820 --input touch`，DevTools 在列表内从 (180,540) 经 (180,600) 拖到 (180,800)，AI 查询 `refresh-count` 从 `Refreshes: 0` 变为 `Refreshes: 1`，mirror 确认刷新胶囊、圆角卡片和选择行均正常，外层内容没有被拖走。测试暴露并修复了父 ScrollView 在 capture 阶段抢走内层触摸手势的问题。
 
@@ -629,6 +629,8 @@ P1 通用拖放已完成：`DragScope` 持有类型化会话，`Draggable` 在 6
 NumberField / Vec3Field 的 locale 与轴高度已完成：`locale` 默认当前区域，五种 locale 的小数、数字与正负号往返，完整解析拒绝分组/尾随垃圾/非有限数值；数值绑定仍为 Float。Vec3 的 small 基线修正为与 TextField 一致的 28pt，按字号增长并取触摸 44pt 下限；实际编辑面填满显式高度。72 项数值/重排/TextField 回归通过。DevTools 实际 390×820 触摸输入 `12,75` 提交为 12.75；720×820 深色混合输入先步进、再输入非法后缀，恢复为 12,75，另一 locale 同步显示 12.75；390 深色触摸与 1280 浅色指针的 200% 三轴输入面均为 56pt，窄宽 X/Y → Z、宽屏三轴同排。镜像检查确认轴标签与输入对齐、无裁字，浅色细边框与深色凹面保持一致。见 [数值输入](numberfield.md)。
 
 DevTools AI 的输入值验收入口已补齐：普通节点查询继续不求值延迟输入值；对已发现的实际 `textField` 使用 `query_ui_nodes {node_id, include_value:true}` 显式读取当前值。返回 `semantics.value` 与 `valueTruncated`，最多 4096 个 Unicode 字符；缺少节点 ID、过期节点报错，安全字段始终脱敏且不调用值提供者。16 项 Portable AI 查询测试与真实 Compose 字段发现测试通过；DevTools 在 720×820 深色混合面直接读取节点 177，从输入前 `1,25` 到提交后 `12,75`，并核对镜像里的两个 locale 值一致。调用示例见 [DevTools](../../GuavaUI/DevTools/README.md#ai-driven-component-acceptance)。
+
+SwipeList 的 RTL 与操作区已补齐：向逻辑 leading 滑动（LTR 左、RTL 右）揭示 trailing 操作，位移与按钮排列一致；Escape 从操作按钮焦点真正收起。行宽扣除 stable 滚动条 12pt 保留区，避免 RTL 裁掉 Delete 左边缘；操作宽 74pt 随字号缩放并按行宽夹紧，标题单行省略，Gallery 移除固定内容高度避免 200% 副标题裁切。13 项滑动/滚动/刷新/Slider 测试通过，另有 6 项 SwipeList 测试（含 LTR/RTL × 100%/200% 四组合）通过。DevTools 390×820 触摸右滑揭示完整 74×52 操作；720 深色混合、1280 浅色指针 200% 使用 Actions 入口，后者操作为 148×104，Archive/Delete 保持单行。三档执行 Archive 后均查询到 `Archived Inbox`；镜像确认圆角、危险操作层次与行文本无裁切。
 
 ## 6. 动效与动画（动画效果实现）
 
