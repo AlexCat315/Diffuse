@@ -16,6 +16,20 @@ struct ScrollOffsetBindingTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private struct AnchorHarness: View {
+        @State var rows = Array(0..<24)
+        @State var offset = CGPoint.zero
+        var body: some View {
+            ScrollView(.vertical, scrollOffset: $offset) {
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    for row in rows {
+                        AnyView(Text("Row \(row)").frame(height: 40).scrollAnchor().id(row))
+                    }
+                }.flex(0, shrink: 0)
+            }.frame(width: 200, height: 100)
+        }
+    }
+
     private struct TimedHarness: View {
         @State var request: ScrollRequest?
         @State var offset = CGPoint.zero
@@ -113,6 +127,25 @@ struct ScrollOffsetBindingTests: GuavaUIComposeSerializedSuite {
         settle(graph)
         let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
         #expect(scroll.contentOffset.y == 700)
+    } }
+
+    @Test("a visible scroll anchor keeps its viewport position when content is prepended")
+    func scrollAnchor() throws { try GlobalTestLock.locked {
+        let context = PlatformInputContext()
+        try context.withCurrent {
+            let harness = AnchorHarness()
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: harness)
+            settle(graph)
+            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            harness.$offset.wrappedValue = CGPoint(x: 0, y: 400)
+            settle(graph)
+            #expect(scroll.contentOffset.y == 400)
+            harness.$rows.wrappedValue = [-3, -2, -1] + harness.rows
+            settle(graph)
+            #expect(scroll.contentOffset.y == 520)
+            #expect(harness.offset.y == 520)
+        }
     } }
 
 }

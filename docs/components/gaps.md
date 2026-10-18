@@ -143,7 +143,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | Sidebar | 嵌套导航、项级操作/上下文菜单、展开会话、键盘/辅助功能与可调整栏宽已实现；行内前后任意 View 插槽未实现，见 [Sidebar](sidebar.md#项级操作) | P2 |
 | Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
 | Workspace | N 面板联动、折叠阈值/吸附、pin 专属视觉、浮动为应用内层、文档解码校验与可版本化格式、a11y/RTL、chrome 硬编码清理（见 [workspace.md](workspace.md)） | P2 |
-| ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、带时长程序滚动（`ScrollRequest`）、残余增量交接；锚定滚动未实现（规范 5-9 + [scrollview.md](scrollview.md)） | P1（滚动锚定） |
+| ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、带时长程序滚动（`ScrollRequest`）、`.scrollAnchor()` 锚定、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | 已实现 |
 | Form / PropertyGrid | 自适应标签、共享值槽阈值、列数重排、标签关联与 Form 校验摘要已实现，见 [form.md](form.md)；PropertyGrid 跨字段业务校验由应用管理 | 已实现 |
 | Carousel | 自动轮播、复杂指示器（按需）；滑动/键盘已有 | P2 |
 | StatusBar / Panel | 状态格与标题截断策略（规范 1.1 已标部分） | P2 |
@@ -159,7 +159,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：新增组件与列表能力已实现；既有组件剩余 P1 缺口仅见 ScrollView 滚动锚定；Sidebar 嵌套/项级操作与带时长程序滚动已完成。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
+**P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
 **P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 

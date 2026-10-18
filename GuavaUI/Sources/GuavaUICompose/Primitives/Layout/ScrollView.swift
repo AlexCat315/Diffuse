@@ -36,6 +36,8 @@ private enum _ScrollViewAttachmentKeys {
     static let pendingOffset = "__scrollview_pending_offset"
     static let timedRequest = "__scrollview_timed_request"
     static let timedRequestID = "__scrollview_timed_request_id"
+    static let anchorMarker = "__scrollview_anchor"
+    static let anchorState = "__scrollview_anchor_state"
 
     static func motionAnimator(for node: Node,
                                physics: ScrollPhysics) -> ScrollAnimator {
@@ -59,6 +61,12 @@ private final class _ScrollMotionLifetime: NodeResource {
     init(_ animator: ScrollAnimator) { self.animator = animator }
     func mount(node: Node) {}
     func unmount(node: Node) { animator.cancel() }
+}
+
+private struct _ScrollViewAnchorState {
+    var nodeID: ObjectIdentifier
+    var relative: CGPoint
+    var contentSize: CGSize
 }
 
 private struct _ScrollViewScrollbarGeometry {
@@ -197,6 +205,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: size,
                                             contentSize: Self.cachedScrollableContentSize(for: node)))
             Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes)
+            if let motion = node.attachments[_ScrollViewAttachmentKeys.motion] as? ScrollAnimator {
+                Self.updateAnchor(on: node, motion: motion, axes: axes)
+            }
         }
         node.attachments[_ScrollViewAttachmentKeys.report] = report
         Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes)
@@ -294,6 +305,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             guard !Self.isLayoutSuppressed(node) else { return }
             Self.refreshScrollableContentSize(on: node)
             Self.publishScrollRange(to: motion, on: node)
+            Self.updateAnchor(on: node, motion: motion, axes: axes)
             ScrollKeyboardFocus.update(node, canScroll: motion.maximumOffset.x > 0.5 || motion.maximumOffset.y > 0.5)
             if let desired = node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.pendingOffset) as? CGPoint {
                 motion.adopt(desired)
@@ -692,6 +704,51 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         return max(0.4, 1 - excess / viewport)
     }
 
+    private static func updateAnchor(on node: Node, motion: ScrollAnimator, axes: ScrollAxis) {
+        var anchors: [Node] = []
+        func collect(_ candidate: Node) {
+            if candidate.attachments[_ScrollViewAttachmentKeys.anchorMarker] != nil {
+                anchors.append(candidate)
+            }
+            for child in candidate.children { collect(child) }
+        }
+        collect(node)
+        guard !anchors.isEmpty else {
+            node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.anchorState)
+            return
+        }
+        let origin = node.absoluteOrigin
+        let viewportHeight = max(1, visibleViewportRect(for: node).height)
+        func relative(_ anchor: Node) -> CGPoint {
+            CGPoint(x: anchor.absoluteFrame.minX - origin.x,
+                    y: anchor.absoluteFrame.minY - origin.y)
+        }
+        func intersectsViewport(_ anchor: Node) -> Bool {
+            let point = relative(anchor)
+            return point.y + anchor.absoluteFrame.height > 0 && point.y < viewportHeight
+        }
+        let visibleAnchors = anchors.filter(intersectsViewport)
+        let fullyVisible = visibleAnchors.filter { relative($0).y >= 0 }
+        let selected = fullyVisible.min { relative($0).y < relative($1).y }
+            ?? visibleAnchors.max { relative($0).y < relative($1).y }
+            ?? anchors[0]
+        let content = cachedScrollableContentSize(for: node)
+        var baseline = relative(selected)
+        if let previous = node.attachments[_ScrollViewAttachmentKeys.anchorState] as? _ScrollViewAnchorState,
+           previous.contentSize != content,
+           let old = anchors.first(where: { ObjectIdentifier($0) == previous.nodeID }) {
+            let delta = CGPoint(x: relative(old).x - previous.relative.x,
+                                y: relative(old).y - previous.relative.y)
+            var offset = node.contentOffset
+            if axes != .vertical { offset.x += delta.x }
+            if axes != .horizontal { offset.y += delta.y }
+            motion.adopt(offset)
+            baseline = previous.relative
+        }
+        node.attachments[_ScrollViewAttachmentKeys.anchorState] = _ScrollViewAnchorState(
+            nodeID: ObjectIdentifier(selected), relative: baseline, contentSize: content)
+    }
+
     private static func visibleViewportRect(for node: Node) -> CGRect {
         let nodeOrigin = node.absoluteOrigin
         var visible = CGRect(origin: nodeOrigin, size: node.frame.size)
@@ -938,4 +995,20 @@ public struct ScrollViewport: Equatable {
     public var offset: CGPoint
     public var size: CGSize
     public init(offset: CGPoint, size: CGSize) { self.offset = offset; self.size = size }
+}
+
+
+public extension View {
+    /// Marks this subtree as a scroll anchor. When content size changes,
+    /// ScrollView keeps the topmost visible anchor at the same viewport
+    /// position, which is what chat-history prepends need.
+    func scrollAnchor() -> some View {
+        modifier(ScrollAnchorModifier())
+    }
+}
+
+private struct ScrollAnchorModifier: ViewModifier {
+    func apply(node: Node) {
+        node.attachments[_ScrollViewAttachmentKeys.anchorMarker] = true
+    }
 }

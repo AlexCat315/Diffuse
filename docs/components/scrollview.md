@@ -62,6 +62,26 @@ Button("End") {
 - 旧 request 值不会重新触发；应用再次点击同一目标时要创建新的 `ScrollRequest`。
 - 帧推进由 `AnimatorScheduler` 驱动，不依赖 SwiftUI 事务；测试可手动 tick。
 
+## 滚动锚定
+
+给需要保持可见的内容加 `.scrollAnchor()`：
+
+```swift
+ScrollView(.vertical, scrollOffset: $offset) {
+    Box(direction: .column, alignItems: .stretch, spacing: 0) {
+        for message in messages {
+            MessageRow(message).scrollAnchor().id(message.id)
+        }
+    }
+}
+```
+
+- ScrollView 在当前视口内选择**最靠上的完整 anchor**（没有完整项时取仍相交的最后一项），记录它与视口的相对位置和 contentSize。
+- 下一次布局 contentSize 变化且同一节点的 identity 仍存在时，按 anchor 的位移修正 offset：在顶部插入聊天历史会增大 offset，当前阅读行保持原位；追加底部内容不会移动视口。
+- 普通滚动会刷新 anchor 基线，所以用户主动滚动不会被下一次布局拉回。
+- 锚点被卸载或消失时重新选择，不做猜测；多个 anchor 时只使用视口顶部那个。
+- 约束：只修正布局内容尺寸变化；异步图片在 anchor 上方改变高度仍要求调用方稳定行高或显式 `.scrollAnchor()`。横向锚定按 x 轴同样处理。
+
 ## 嵌套与滚动条
 
 `.overlay` 将滚动条置于内容上方；`.stable` 在纵向 trailing 预留 12pt 槽，避免盖住尾部控件。只有内容溢出才绘制条；hover/拖动显示，离开淡出。软件自定义手势若产生越界位移，thumb 缩短且仍位于轨道内。
@@ -93,7 +113,7 @@ ScrollView(.vertical, accessibilityLabel: "Timeline") {
 - Windows/Linux 精确设备、手势 phase 和系统 momentum 的原生补充；macOS 仍需真实触控板/鼠标/平滑驱动的长时间录制验证。
 - 显式开始/结束/停止控制器与连续目标插值。
 - 统一 ScrollHandle、显示策略/尺寸/配色主题；独立 `Scrollbar` 已提供可聚焦 thumb。
-- 滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接；带时长的程序滚动已由 `ScrollRequest` 补齐。
+- chat 历史预取、scroll-linked 动画和大增量残余交接；基础滚动锚定已由 `.scrollAnchor()` 补齐。
 - Windows/Linux、120Hz、真实设备的视觉抖动和停止延迟，以及 GPU/合成器完成时间证据。当前合成输入验证不能代替这些证据。
 
 ## 实现

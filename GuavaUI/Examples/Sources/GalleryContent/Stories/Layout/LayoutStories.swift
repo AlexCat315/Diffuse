@@ -51,21 +51,39 @@ struct SplitStory: View {
     }
 }
 
+private struct ScrollLine: Identifiable {
+    let id: Int
+    let title: String
+}
+
 struct ScrollStory: View {
     @State private var request: ScrollRequest?
     @State private var offset = CGPoint.zero
+    @State private var lines: [ScrollLine] = (0..<40).map {
+        ScrollLine(id: $0, title: "Scrollable line \($0 + 1)")
+    }
     var body: some View {
         StorySection("Native scroll stream", "Trackpad points and OS momentum are followed directly; wheel lines move by 30pt. Click the list and use PageUp/PageDown or Home/End for keyboard scrolling. Touch surfaces can drag the content directly; the buttons use a timed scroll request.") {
             Row(alignment: .center, spacing: 8) {
                 Button("Top") { request = ScrollRequest(offset: .zero, duration: 0.42) }.buttonStyle(.secondary)
                 Button("Middle") { request = ScrollRequest(offset: CGPoint(x: 0, y: 620), duration: 0.42) }.buttonStyle(.secondary)
                 Button("End") { request = ScrollRequest(offset: CGPoint(x: 0, y: 2_000), duration: 0.42) }.buttonStyle(.secondary)
+                Button("Load older") {
+                    let first = lines.first?.id ?? 0
+                    lines = ((first - 5)..<first).map {
+                        ScrollLine(id: $0, title: "Older line \($0 - first + 6)")
+                    } + lines
+                }.buttonStyle(.secondary)
                 Text("Offset: \(Int(offset.y))").font(.caption).foregroundColor(.onSurfaceMuted).debugName("scroll-offset")
             }
             ScrollView(.vertical, scrollbarGutter: .stable,
                        scrollOffset: $offset, scrollRequest: request) {
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    for i in 0..<40 { AnyView(Text("Scrollable line \(i + 1)").font(.body).padding(10).background(i % 2 == 0 ? .surfaceVariant : .surface)) }
+                    for line in lines {
+                        AnyView(Text(line.title).font(.body).padding(10)
+                            .background(line.id % 2 == 0 ? .surfaceVariant : .surface)
+                            .id(line.id).scrollAnchor())
+                    }
                 }.flex(0, shrink: 0)
             }.frame(height: 280).debugName("scroll-lab-viewport")
         }
