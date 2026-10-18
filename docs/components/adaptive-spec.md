@@ -88,7 +88,7 @@
 | `Toolbar` | `items:` 按命令自然宽度与优先级收进 overflow 菜单，`.always` 保留主操作；提供图标时使用图标与完整名称。触摸命中 ≥ 44pt，主命令自身超宽时保留尺寸并横向滚动；自定义内容闭包由应用安排重排 | 命令溢出 `[已实现]`，见 [Toolbar](toolbar.md) |
 | `Sidebar` | expanded 常驻；compact/medium 按壳层选择折叠为抽屉/覆盖层或 rail；抽屉打开时焦点进入、Escape 关闭、关闭后焦点还原；项行高 ≥ 44pt（触摸） | 常驻列表、[NavigationDrawer](navigation-drawer.md)、[NavigationRail](navigation-rail.md) 及 [AdaptiveSidebar](sidebar.md#自适应壳层) 统一壳层 `[已实现]` |
 | `Workspace` | widthClass != expanded 时自动进入紧凑呈现：单面板 + 面板选择器；expanded 恢复停靠树。折叠、比例、活动面板作为会话保留，不写入文档 | 紧凑切换 `[已实现]`；标签条键盘与完整语义 `[部分]` |
-| `Panel` / `StatusBar` / `Carousel` 等边框容器 | 标题/状态格单行截断并保留完整语义；`Carousel` 一页一屏、不因窄而缩小内容，方向键/滑动/Home/End 导航；`StatusBar` 单元格等高等宽策略由调用方声明 | 结构 `[已实现]`；状态格截断策略 `[部分]` |
+| `Panel` / `StatusBar` / `Carousel` 等边框容器 | 标题/状态格单行截断并保留完整语义；`Carousel` 一页一屏、不因窄而缩小内容，方向键/滑动/Home/End 导航；`StatusBar` 单元格等高等宽策略由调用方声明 | 结构 `[已实现]`；`StatusBarText` 单行截断与 `DefaultPanelStyle` 标题截断已实现，见 `StatusBarPanelTruncationTests` |
 
 ### 1.2 虚拟化与大数据
 
@@ -375,9 +375,11 @@
 **Carousel / StatusBar**
 
 - 外观：Carousel 页容器 + 可选箭头/指示点，页高由调用方定；StatusBar 统一 26pt 高度、单元格等高等宽策略。`[已实现]`
-- 手机：一页一屏、滑动一页/次；箭头 ≥ 44pt；StatusBar 单元格单行截断 + 完整语义，不允许因窄改变窗口内容高度。`[部分]`
+- 手机：一页一屏、滑动一页/次；箭头 ≥ 44pt；StatusBar 单元格单行截断 + 完整语义，不允许因窄改变窗口内容高度。`[已实现]`
+- StatusBar / Panel：`StatusBarText` 的文本与 detail 单行截断，leading 先让位给 trailing 连接状态；完整文本保留在辅助功能 label/value。`DefaultPanelStyle` 标题单行截断并让出 accessory 槽位。`[已实现]`，`StatusBarPanelTruncationTests` 验证 320pt 状态栏与 240/600pt 面板。
+- 2026-10-18 DevTools 720×820：长分支状态栏文字单行截断，右侧 Connected 完整可见；240pt 面板标题截断到 203pt，Live badge 保留。`capture-ui` 截图复核无重叠、无换行。
 - 平板 / 桌面：方向键/Home/End 导航；hover 箭头。`[已实现]`
-- 交互与验收：滑动 vs 点击不冲突（滑动取消按压）、辅助功能页标签 + 选中；验收：`CarouselStory`、`StatusBarStory`。
+- 交互与验收：滑动 vs 点击不冲突（滑动取消按压）、辅助功能页标签 + 选中；验收：`CarouselStory`、`StatusBarStory`、`StatusBarPanelTruncationTests`。
 
 **CommandPalette**
 

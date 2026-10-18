@@ -18,8 +18,11 @@ public struct DefaultPanelStyle: PanelStyle {
         return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: t.spacing.sm) {
                 Text(configuration.title)
+                    .truncatingTail()
                     .font(SemanticFontRef.label)
                     .foregroundColor(titleColor)
+                    .frame(minWidth: 0)
+                    .flex(0, shrink: 1)
                 Spacer(minLength: 0)
                 configuration.accessory
             }

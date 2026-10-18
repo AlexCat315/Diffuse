@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- 新增 `ChartLegend`：`ChartSeries.title` 为序列提供图例名称，图例在宽容器单行、窄容器按整项折行；色块为装饰，完整标题作为辅助功能名称。`ChartLegendTests` 2/2 覆盖折行、空标题过滤与投影；Gallery `chart` 页新增多序列图、宽/窄图例与 “Show signups” 开关，DevTools 实测窄图例换行、点击开关后图例项减少。补齐 [Chart](docs/components/chart.md)、`adaptive-spec.md` 与 `gaps.md`。
+- `StatusBarText` 文本/detail 单行截断，leading 让位给 trailing 连接状态，完整内容保留在辅助功能 label/value；`DefaultPanelStyle` 标题单行截断并为 accessory 留位。`StatusBarPanelTruncationTests` 在 320pt 状态栏与 240/600pt 面板上验证截断行数、宽度与 a11y；Gallery StatusBar/Panel 页新增长分支与长标题示例，DevTools 720×820 实测状态文字单行截断、面板标题 203pt 且 accessory/连接状态完整可见。补齐 `adaptive-spec.md`、`gaps.md` 与 [Panel](docs/components/panel.md)。
+
+- 新增 `ChartLegend`：`ChartSeries.title` 为序列提供图例名称，图例在宽容器单行、窄容器按整项折行；色块为装饰，完整标题作为辅助功能名称。`ChartLegendTests` 3/3 覆盖折行、空标题过滤、投影与 RTL；Gallery `chart` 页新增多序列图、宽/窄图例与 “Show signups” 开关，DevTools 实测窄图例换行、点击开关后图例项减少。补齐 [Chart](docs/components/chart.md)、`adaptive-spec.md` 与 `gaps.md`。
 
 - 新增 P2 `Masonry` / `MasonryLayout`：按最短列放置的平衡瀑布流，列数由 `minimumColumnWidth`、`maximumColumns` 与实际宽度决定（窄宽自动单列，RTL 镜像列顺序），支持列间距、项间距与列内水平对齐。高度由子视图自然测量，不二次缩放字号；不虚拟化，大集合仍用 `LazyGrid`/`VirtualStack`。`MasonryTests` 4/4 覆盖最短列、单列退化、列数上限与 RTL；Gallery 新增 `masonry` 页与 390/720/1280 预览，DevTools 实测 720pt 两列、390pt 单列、Add card 后计数 8→9。补齐 [Masonry](docs/components/masonry.md)、`layout.md`、`adaptive-spec.md` 与 `gaps.md`。
 

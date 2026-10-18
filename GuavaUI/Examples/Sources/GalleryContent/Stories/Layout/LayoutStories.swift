@@ -13,6 +13,16 @@ struct PanelStory: View {
                 Panel("Console") { Text("Inactive panel content").padding(24) }.flex(1, shrink: 1, basis: 0)
             }.frame(height: 180)
         }
+        StorySection("Long titles", "The panel title stays on one line and truncates; the accessory keeps its slot.") {
+            Box(direction: .row, alignItems: .stretch, spacing: 16) {
+                Panel("A workspace inspector title that is far too long for this narrow panel",
+                      isActive: true,
+                      accessory: { Badge("Live", tone: .success) },
+                      content: { Text("Header title truncation").padding(24) })
+                    .frame(width: 280, height: 130)
+                    .debugName("panel-long-title")
+            }
+        }
     }
 }
 
@@ -232,6 +242,18 @@ struct StatusBarStory: View {
                 }
                 .border(.border, width: 1)
                 .cornerRadius(8)
+            }
+            StorySection("Long branch names", "Each cell is one line; the leading fact truncates before it can push the trailing connection state out of the bar.") {
+                StatusBar(isEnabled: options.isEnabled) {
+                    StatusBarText("feature/workspace-permissions-and-collaboration",
+                                  icon: UIIcons.Editor.gitBranch)
+                } trailing: {
+                    StatusBarText("Connected", tone: .success)
+                }
+                .frame(width: 340)
+                .border(.border, width: 1)
+                .cornerRadius(8)
+                .debugName("status-long-title")
             }
         }
     }

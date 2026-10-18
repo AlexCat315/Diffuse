@@ -52,6 +52,7 @@ Panel("Console", isActive: true) {
 - 纯视觉容器；自身不接事件
 - `isActive` 切换由调用方决定（如焦点链 / 用户点击 header）
 - header 的 accessory 槽可以放任何 View（Button / Toggle / Text）
+- 标题保持单行，空间不足时截断并让出 accessory 槽位；完整标题仍是文本语义。`StatusBarPanelTruncationTests` 在 240/600pt 面板上验证行数与宽度差异。
 
 ## Authoring rules
 
