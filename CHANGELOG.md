@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `ScrollView` 新增 `ScrollRequest(offset:duration:)`：按新 identity 启动带时长缓动，目标夹到当前范围，滚轮/拖动/绑定写入/新 request 取消旧动画，duration 0 与 reducedMotion 直接吸附。`ScrollOffsetBindingTests.timedScroll` 覆盖动画中途、输入取消、夹紧与 reducedMotion；Gallery ScrollView 提供 Top/Middle/End，DevTools 实测 End 后 offset 1476。
 - `Sidebar` 新增项级操作：`SidebarItem.contextMenu` 支持 macOS 右键/Control-click 与 expanded 行尾 “….” 触发器，触摸/键盘可达，rail 保留右键；菜单使用不透明浮层避免穿透。`SidebarHierarchyTests` 8/8 覆盖 ellipsis、右键、42/44pt 触摸目标；Gallery Nested navigation 的 Audit log 提供 Archive/Duplicate，DevTools 实测执行后显示 Last action: Archive。
 - Success / Warning / Info 按钮从 Material tonal 色块改为 iOS tinted-bordered：浅色调、同色 hairline 和 tone 文本，hover/press 只叠加大约 10–16% 色调。Gallery Button/Notification 截图复验不再出现整块 pastel 按钮。
 - 视觉基线切换并参考为 iOS / macOS：规范移除 Material 3 命名、48dp 密度、FAB 计划项与 Material 参考行；组件文档的 References 收敛并参考到 Apple HIG/SwiftUI。已完成 UI 的全大写分组标题改为 title case（CommandPalette/Sidebar/SectionedList/Gallery MetricCard），CommandPalette 截图复验后保持 40pt 行高与 560pt 面板。

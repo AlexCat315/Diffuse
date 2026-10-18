@@ -14,7 +14,7 @@ ScrollView(.vertical, scrollbarGutter: .stable,
 }.frame(height: 280)
 ```
 
-`scrollOffset`、`onViewportChange`、`onGeometryChange` 均可省略。程序写入不同的绑定偏移会中断旧运动并夹到有效范围；这是立即定位，尚无公开的带时长 scrollTo 动画协议。回调可能在布局/绘制时运行，应用应比较快照后才更新状态，避免每帧重组不相关的内容。
+`scrollOffset`、`onViewportChange`、`onGeometryChange` 均可省略。程序写入不同的绑定偏移会中断旧运动并夹到有效范围，这是立即定位；需要带时长的程序滚动时使用 `scrollRequest:`（见下文）。回调可能在布局/绘制时运行，应用应比较快照后才更新状态，避免每帧重组不相关的内容。
 
 Sidebar、Tab 等键盘组显露目标时，ScrollView 先用本轮节点几何刷新滚动范围；若范围更新夹紧了偏移，同步换算目标的窗口坐标后再计算显露距离。这样在内容重排、字号或导航呈现变化时不会按旧偏移二次移动，普通用户滚动仍保持自己的位置。
 
@@ -42,9 +42,25 @@ DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMod
 - 有实际溢出且没有可 Tab 到达的子控件时，ScrollView 提供键盘 Tab 停靠点；菜单、表格、表单等已有内部操作入口时不额外抢占焦点。聚焦视口后 ArrowUp/Down/Left/Right 行滚动 40pt，PageUp/PageDown 滚一屏的 90%，Home/End 到两端；只处理实际可滚动的轴，无位移时不吞事件。
 - 键盘滚动是立即定位，不启动惯性；触摸释放才走 `settle()`。`.reducedMotion()` 仍会关闭框架添加的运动。
 
-独立 `Scrollbar` companion 已提供可聚焦 thumb（见 [Scrollbar](scrollbar.md)）；ScrollView 内建 chrome 不会自动叠加它，带时长的程序滚动仍待补。
+独立 `Scrollbar` companion 已提供可聚焦 thumb（见 [Scrollbar](scrollbar.md)）；ScrollView 内建 chrome 不会自动叠加它。
 
 `ScrollKeyboardFocusTests` 验证无溢出 → 只读溢出 → 添加子按钮 → 恢复只读的焦点归属变化。`AppBarTests`、`MenuHierarchyTests`、`SelectionFieldTests` 与 `ProductInteractionRegressionTests` 验证滚动包装不增加工具栏停靠、不抢菜单初始焦点，选择/关闭仍回到原入口。零尺寸的内部视口不进入键盘链；实际溢出的只读视口保留 Page/Home/End 滚动入口。
+
+## 程序化滚动
+
+```swift
+@State private var request: ScrollRequest?
+
+ScrollView(.vertical, scrollRequest: request) { content }
+Button("End") {
+    request = ScrollRequest(offset: CGPoint(x: 0, y: 2_000), duration: 0.42)
+}
+```
+
+- `ScrollRequest` 每次初始化获得新 `id`；ScrollView 只在 `id` 变化时消费。offset 在应用时按当前 content/viewport 夹到有效范围，并按轴清零另一轴。
+- `duration > 0` 时从当前 offset 缓动到目标；滚轮、拖动、`scrollOffset` 写入或新的 request 会取消旧动画。`duration == 0` 与 `.reducedMotion()` 直接吸附。
+- 旧 request 值不会重新触发；应用再次点击同一目标时要创建新的 `ScrollRequest`。
+- 帧推进由 `AnimatorScheduler` 驱动，不依赖 SwiftUI 事务；测试可手动 tick。
 
 ## 嵌套与滚动条
 
@@ -75,9 +91,9 @@ ScrollView(.vertical, accessibilityLabel: "Timeline") {
 ## 尚未完成
 
 - Windows/Linux 精确设备、手势 phase 和系统 momentum 的原生补充；macOS 仍需真实触控板/鼠标/平滑驱动的长时间录制验证。
-- 离散滚轮的可打断平滑目标插值、显式开始/结束/停止控制器和带时长的程序定位。
+- 显式开始/结束/停止控制器与连续目标插值。
 - 统一 ScrollHandle、显示策略/尺寸/配色主题；独立 `Scrollbar` 已提供可聚焦 thumb。
-- 滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接。
+- 滚动锚定、聊天历史加载保持位置、scroll-linked 动画和大增量残余交接；带时长的程序滚动已由 `ScrollRequest` 补齐。
 - Windows/Linux、120Hz、真实设备的视觉抖动和停止延迟，以及 GPU/合成器完成时间证据。当前合成输入验证不能代替这些证据。
 
 ## 实现

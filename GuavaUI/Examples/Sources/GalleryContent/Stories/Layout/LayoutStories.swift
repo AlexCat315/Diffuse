@@ -52,9 +52,18 @@ struct SplitStory: View {
 }
 
 struct ScrollStory: View {
+    @State private var request: ScrollRequest?
+    @State private var offset = CGPoint.zero
     var body: some View {
-        StorySection("Native scroll stream", "Trackpad points and OS momentum are followed directly; wheel lines move by 30pt. Click the list and use PageUp/PageDown or Home/End for keyboard scrolling. Touch surfaces can drag the content directly.") {
-            ScrollView(.vertical, scrollbarGutter: .stable) {
+        StorySection("Native scroll stream", "Trackpad points and OS momentum are followed directly; wheel lines move by 30pt. Click the list and use PageUp/PageDown or Home/End for keyboard scrolling. Touch surfaces can drag the content directly; the buttons use a timed scroll request.") {
+            Row(alignment: .center, spacing: 8) {
+                Button("Top") { request = ScrollRequest(offset: .zero, duration: 0.42) }.buttonStyle(.secondary)
+                Button("Middle") { request = ScrollRequest(offset: CGPoint(x: 0, y: 620), duration: 0.42) }.buttonStyle(.secondary)
+                Button("End") { request = ScrollRequest(offset: CGPoint(x: 0, y: 2_000), duration: 0.42) }.buttonStyle(.secondary)
+                Text("Offset: \(Int(offset.y))").font(.caption).foregroundColor(.onSurfaceMuted).debugName("scroll-offset")
+            }
+            ScrollView(.vertical, scrollbarGutter: .stable,
+                       scrollOffset: $offset, scrollRequest: request) {
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
                     for i in 0..<40 { AnyView(Text("Scrollable line \(i + 1)").font(.body).padding(10).background(i % 2 == 0 ? .surfaceVariant : .surface)) }
                 }.flex(0, shrink: 0)

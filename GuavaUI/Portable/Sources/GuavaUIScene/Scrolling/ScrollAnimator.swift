@@ -96,6 +96,7 @@ public final class ScrollAnimator: AnyAnimationController {
 
     private var xMotion = ScrollAxisMotion()
     private var yMotion = ScrollAxisMotion()
+    private var targetAnimation: AnimationController<CGPoint>?
     private weak var scheduler: AnimatorScheduler? = AnimatorScheduler.current
 
     private var trackerX = ScrollVelocityTracker()
@@ -303,6 +304,37 @@ public final class ScrollAnimator: AnyAnimationController {
         isFinished = true
     }
 
+    /// Move to an application-owned offset over a fixed duration. This is the
+    /// timed programmatic path; wheel, pointer and gesture input cancel it.
+    public func scroll(to target: CGPoint, duration: Double) {
+        let target = Self.constrain(target, to: maximumOffset)
+        guard duration.isFinite, duration > 0, target != position else {
+            adopt(target)
+            return
+        }
+        stopAnimation()
+        releaseDeadline = nil
+        resetTracking()
+        isFinished = false
+        let from = position
+        let controller = AnimationController(
+            from: from, to: target,
+            animation: Animation(duration: duration, curve: .easeInOut)) { [weak self] point in
+                guard let self else { return }
+                self.position = point
+                self.setOffset(self.visibleOffset(for: point))
+            }
+        controller.onFinish = { [weak self, weak controller] in
+            guard let self else { return }
+            self.position = target
+            self.setOffset(target)
+            if self.targetAnimation === controller { self.targetAnimation = nil }
+            self.isFinished = true
+        }
+        targetAnimation = controller
+        scheduler?.register(controller)
+    }
+
     /// Drop whatever motion is running without applying anything further.
     public func cancel() {
         releaseDeadline = nil
@@ -422,6 +454,8 @@ public final class ScrollAnimator: AnyAnimationController {
     }
 
     private func stopAnimation() {
+        targetAnimation?.cancel()
+        targetAnimation = nil
         stopSettling()
         stopGlide()
         stopDrivingFrames()

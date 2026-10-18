@@ -1,6 +1,7 @@
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
+import Foundation
 import GuavaUIRuntime
 
 private enum _ScrollViewDragAxis {
@@ -33,6 +34,8 @@ private enum _ScrollViewAttachmentKeys {
     static let motion = "__scrollview_motion"
     static let report = "__scrollview_report"
     static let pendingOffset = "__scrollview_pending_offset"
+    static let timedRequest = "__scrollview_timed_request"
+    static let timedRequestID = "__scrollview_timed_request_id"
 
     static func motionAnimator(for node: Node,
                                physics: ScrollPhysics) -> ScrollAnimator {
@@ -74,6 +77,21 @@ private struct _ScrollViewContentSizeCache {
 
 public enum ScrollAxis: Sendable, Equatable { case vertical, horizontal, both }
 
+/// One declarative programmatic scroll. A new identity starts a new animation;
+/// a duration of zero (or reduced motion) snaps immediately.
+public struct ScrollRequest: Equatable, Sendable {
+    public let id: UUID
+    public let offset: CGPoint
+    public let duration: Double
+
+    public init(offset: CGPoint, duration: Double = 0.32) {
+        self.id = UUID()
+        self.offset = CGPoint(x: offset.x.isFinite ? offset.x : 0,
+                              y: offset.y.isFinite ? offset.y : 0)
+        self.duration = duration.isFinite ? max(0, duration) : 0
+    }
+}
+
 public struct ScrollGeometry: Equatable, Sendable {
     public let offset: CGPoint
     public let viewportSize: CGSize
@@ -104,6 +122,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public var scrollOffset: Binding<CGPoint>?
     public let onGeometryChange: ((ScrollGeometry) -> Void)?
     public let accessibilityLabel: String?
+    public let scrollRequest: ScrollRequest?
 
     /// Logical points per line increment. Precise point input bypasses this.
     public var wheelStep: Float = 30
@@ -120,6 +139,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 onViewportChange: ((ScrollViewport) -> Void)? = nil,
                 onGeometryChange: ((ScrollGeometry) -> Void)? = nil,
                 accessibilityLabel: String? = nil,
+                scrollRequest: ScrollRequest? = nil,
                  content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
@@ -129,6 +149,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         self.onViewportChange = onViewportChange
         self.onGeometryChange = onGeometryChange
         self.accessibilityLabel = accessibilityLabel
+        self.scrollRequest = scrollRequest
     }
 
     private static func updateAccessibility(node: Node, label: String?, axes: ScrollAxis) {
@@ -194,6 +215,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             node.attachments[_ScrollViewAttachmentKeys.pendingOffset] = desired
             node.contentOffset = desired
         }
+        if let request = scrollRequest,
+           node.attachments[_ScrollViewAttachmentKeys.timedRequestID] as? UUID != request.id {
+            node.attachments[_ScrollViewAttachmentKeys.timedRequestID] = request.id
+            node.attachments[_ScrollViewAttachmentKeys.timedRequest] = request
+        }
         let axes = self.axes
         let step = self.wheelStep
         let consumePolicy = self.consumePolicy
@@ -212,6 +238,25 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             if node.prefersReducedMotion { motion.finishImmediately() }
             Self.publishScrollRange(to: motion, on: node)
             motion.adopt(node.contentOffset)
+        }
+        if let request = node.attachments[_ScrollViewAttachmentKeys.timedRequest] as? ScrollRequest {
+            if motion.maximumOffset == .zero, request.offset.x != 0 || request.offset.y != 0 {
+                // Content is not measured yet; keep the request for the first
+                // layout pass instead of clamping it to zero.
+                node.markDirty()
+            } else {
+                node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.timedRequest)
+                var target = CGPoint(x: min(max(0, request.offset.x), motion.maximumOffset.x),
+                                     y: min(max(0, request.offset.y), motion.maximumOffset.y))
+                if axes == .vertical { target.x = 0 }
+                if axes == .horizontal { target.y = 0 }
+                if node.prefersReducedMotion {
+                    motion.adopt(target)
+                } else {
+                    motion.scroll(to: target, duration: request.duration)
+                }
+                report(node)
+            }
         }
         node.attachments[ScrollReveal.handlerKey] = { [weak node] (target: CGRect) in
             guard let node else { return }
@@ -252,6 +297,17 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             ScrollKeyboardFocus.update(node, canScroll: motion.maximumOffset.x > 0.5 || motion.maximumOffset.y > 0.5)
             if let desired = node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.pendingOffset) as? CGPoint {
                 motion.adopt(desired)
+            }
+            if let request = node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.timedRequest) as? ScrollRequest {
+                var target = CGPoint(x: min(max(0, request.offset.x), motion.maximumOffset.x),
+                                     y: min(max(0, request.offset.y), motion.maximumOffset.y))
+                if axes == .vertical { target.x = 0 }
+                if axes == .horizontal { target.y = 0 }
+                if node.prefersReducedMotion {
+                    motion.adopt(target)
+                } else {
+                    motion.scroll(to: target, duration: request.duration)
+                }
             }
             report(node)
         }
