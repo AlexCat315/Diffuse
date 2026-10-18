@@ -269,7 +269,7 @@
 **AssetRefField / JsonField**
 
 - 外观：AssetRefField 显示资源 + 清除 + drop 目标；JsonField 紧凑多行编辑、提交校验、拖拽调整高度、展开为带行号的大编辑器。`[已实现]`
-- 手机：drop 目标在触摸面保留清空与选择入口（拖放不是唯一路径）；JsonField 展开模式占满窗口并 ≥ 44pt 操作按钮。`[部分]`（清空已有；展开按钮触摸尺寸需验收）
+- 手机：AssetRefField 保留 44×44 清空/选择入口，字段至少 52pt 并按名称/副标题自然增高；兼容 kind 同时约束选择与拖放，窄宽文本省略保留完整语义。`[已实现]`。JsonField 展开模式占满窗口并 ≥44pt 操作按钮，尚待补齐与实测。
 - 平板 / 桌面：拖放与展开均可；hover 提示。`[已实现]`
 - 交互与验收：Cmd+Return 提交、Escape 取消、校验失败保留草稿；验收：`--component assetRef|jsonField`。
 
@@ -574,7 +574,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | --- | --- | --- |
 | SafeArea / TextField / CommandPalette | 宿主软键盘 inset、光标显露与结果区收缩联动 | 模拟器/真机的真实 IME；桌面 touch surface 不能替代 |
 | Workspace | 标签条完整键盘/辅助功能、RTL 与其余深化能力 | 见 [Workspace](workspace.md) 与 [功能缺口](gaps.md#3-既有组件功能缺口与完成边界) |
-| AssetRefField / JsonField | 清空/选择/展开入口的触摸目标与窄宽实测 | 390 触摸、720 混合、200% 字号及完整名称 |
+| JsonField | 展开入口触摸目标、紧凑全高编辑器与窄宽实测 | 390 触摸、720 混合、200% 字号及完整名称；AssetRefField 已完成，见 [资源引用](assetref.md) |
 | List / MultiSelectList / SectionedList | 通用行的标题收敛与尾部徽标/状态保留；重排边缘自动滚动另见 gaps | 自定义 rowContent 不能由容器静默截断整个行；需可组合的行布局契约 |
 | Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
 

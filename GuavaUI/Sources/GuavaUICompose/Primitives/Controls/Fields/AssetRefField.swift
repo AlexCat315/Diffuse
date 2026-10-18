@@ -35,104 +35,81 @@ public struct AssetRefField: View {
     public let pickerOptions: [AssetRef]
     public let placeholder: String
     public let isEnabled: Bool
-    @State private var isPickerPresented: Bool = false
+    @State private var isPickerPresented = false
 
     public init(value: Binding<AssetRef?>,
                 activePayload: Binding<AssetDropPayload?> = .constant(nil),
-                acceptedKinds: Set<String> = [],
-                pickerOptions: [AssetRef] = [],
-                placeholder: String = "Drop asset",
-                isEnabled: Bool = true) {
-        self.value = value
-        self.activePayload = activePayload
-        self.acceptedKinds = acceptedKinds
-        self.pickerOptions = pickerOptions
-        self.placeholder = placeholder
-        self.isEnabled = isEnabled
+                acceptedKinds: Set<String> = [], pickerOptions: [AssetRef] = [],
+                placeholder: String = "Drop asset", isEnabled: Bool = true) {
+        self.value = value; self.activePayload = activePayload
+        self.acceptedKinds = acceptedKinds; self.pickerOptions = pickerOptions
+        self.placeholder = placeholder; self.isEnabled = isEnabled
     }
 
     public var body: some View {
-        AssetDropTarget(activePayload: activePayload,
-                        acceptedKinds: acceptedKinds,
-                        isEnabled: isEnabled,
-                        onDrop: { payload in
-            value.wrappedValue = AssetRef(payload: payload)
-        }) {
-            Row(alignment: .center, spacing: 8) {
-                AssetRefPreview(ref: value.wrappedValue,
-                                isEnabled: isEnabled)
-
-                Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                    Text(value.wrappedValue?.name ?? placeholder)
-                        .font(.caption)
-                        .foregroundColor(titleColor)
-                        .flex(1, shrink: 1, basis: 0)
-                        .clipped()
-
-                    if let subtitle = value.wrappedValue?.subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                            .flex(1, shrink: 1, basis: 0)
-                            .clipped()
-                    }
-                }
-                .flex(1, shrink: 1, basis: 0)
-                .clipped()
-
-                if value.wrappedValue != nil {
-                    Button(role: .normal,
-                           isEnabled: isEnabled,
-                           action: {
-                        value.wrappedValue = nil
-                    }) {
-                        Text("Clear")
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                    }
-                    .buttonStyle(.ghost)
-                }
-
-                if !pickerOptions.isEmpty {
-                    Popover(isPresented: $isPickerPresented,
-                            isEnabled: isEnabled,
-                            width: 240,
-                            placement: .bottomTrailing, surface: .content, overflow: .flip) {
-                        Icon(isPickerPresented ? UIIcons.Navigation.chevronUp : UIIcons.Navigation.chevronDown,
-                             size: 10,
-                             color: .onSurfaceMuted)
-                            .frame(width: 22, height: 22)
-                    } content: {
-                        Menu(pickerMenuEntries,
-                             width: 240,
-                             maxVisibleRows: 9,
-                             onItemActivated: {
-                            isPickerPresented = false
-                        })
-                    }
-                }
+        SurfaceReader { surface in
+            TextScalerReader { scaler in
+                field(minHeight: max(scaler.scale(32), surface.input.contains(.touch) ? 52 : 0))
             }
-            .padding(horizontal: 6, vertical: 4)
-            .frame(height: 32)
-            .background(.surfaceSunken)
-            .cornerRadius(.inputRadius)
-            .clipped()
         }
     }
 
+    private func field(minHeight: Float) -> some View {
+        AssetDropTarget(activePayload: activePayload, acceptedKinds: acceptedKinds,
+                        isEnabled: isEnabled, onDrop: { value.wrappedValue = AssetRef(payload: $0) }) {
+            Row(alignment: .center, spacing: 8) {
+                AssetRefPreview(ref: value.wrappedValue, isEnabled: isEnabled)
+                    .flex(0, shrink: 0).accessibilityHidden()
+                Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                    Text(value.wrappedValue?.name ?? placeholder)
+                        .truncatingTail().tooltip(value.wrappedValue?.name ?? placeholder)
+                        .font(.caption).foregroundColor(titleColor).flex(0, shrink: 1)
+                    if let subtitle = value.wrappedValue?.subtitle, !subtitle.isEmpty {
+                        Text(subtitle).truncatingTail().tooltip(subtitle)
+                            .font(.caption).foregroundColor(.onSurfaceMuted).flex(0, shrink: 1)
+                    }
+                }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
+                if value.wrappedValue != nil {
+                    Button(icon: .resource(UIIcons.Action.x), size: 12,
+                           isEnabled: isEnabled, tooltip: "Clear asset") { value.wrappedValue = nil }
+                        .buttonStyle(.ghost).controlSize(.mini).accessibilityLabel("Clear asset")
+                        .flex(0, shrink: 0).debugName("asset-clear")
+                }
+                if !pickerOptions.isEmpty { picker.flex(0, shrink: 0) }
+            }
+            .padding(horizontal: 6, vertical: 4).frame(minHeight: minHeight)
+            .background(.surfaceSunken).cornerRadius(.inputRadius).clipped()
+        }
+        .accessibility {
+            $0.role = .group; $0.label = value.wrappedValue?.name ?? placeholder
+            $0.value = [value.wrappedValue?.kind, value.wrappedValue?.subtitle].compactMap { $0 }.joined(separator: " · ")
+            $0.state.isEnabled = isEnabled; $0.combinesChildren = true
+        }
+    }
+
+    private var picker: some View {
+        var popover = Popover(isPresented: $isPickerPresented,
+            isEnabled: isEnabled && !pickerMenuEntries.isEmpty,
+            width: 240, placement: .bottomTrailing, surface: .content, overflow: .flip,
+            triggerStyle: AnyButtonStyle(GhostButtonStyle())) {
+                Icon(isPickerPresented ? UIIcons.Navigation.chevronUp : UIIcons.Navigation.chevronDown,
+                     size: 12, color: .onSurfaceMuted)
+            } content: {
+                Menu(pickerMenuEntries, width: 240, maxVisibleRows: 9,
+                     onItemActivated: { isPickerPresented = false })
+            }
+        popover.triggerDescription = PopoverTriggerDescription(label: "Choose asset", value: value.wrappedValue?.name ?? placeholder)
+        return popover.controlSize(.mini).debugName("asset-picker")
+    }
+
     private var titleColor: SemanticColorRef {
-        guard isEnabled else { return .onSurfaceMuted }
-        return value.wrappedValue == nil ? .onSurfaceMuted : .onSurface
+        !isEnabled || value.wrappedValue == nil ? .onSurfaceMuted : .onSurface
     }
 
     private var pickerMenuEntries: [MenuEntry] {
-        pickerOptions.map { option in
-            .item(MenuItem(id: option.id,
-                           title: menuTitle(for: option),
-                           isSelected: value.wrappedValue?.id == option.id,
-                           action: {
-                value.wrappedValue = option
-            }))
+        pickerOptions.filter { acceptedKinds.isEmpty || acceptedKinds.contains($0.kind) }.map { option in
+            .item(MenuItem(id: option.id, title: menuTitle(for: option),
+                           isSelected: value.wrappedValue?.id == option.id) { value.wrappedValue = option })
         }
     }
 
@@ -147,10 +124,13 @@ private struct AssetKindBadge: View {
     let isEnabled: Bool
 
     var body: some View {
-        Text(kind ?? "--")
+        Text(kind ?? "--").truncatingTail().tooltip(kind ?? "No asset")
             .font(.caption)
+            // This is thumbnail artwork; the field's accessible value keeps
+            // the full kind while its name and subtitle follow text scaling.
+            .textScaler(.identity)
             .foregroundColor(isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
-            .frame(width: 34, height: 20)
+            .padding(horizontal: 4, vertical: 2).frame(width: 34)
             .background(.surfaceOverlay)
             .cornerRadius(.rowRadius)
     }

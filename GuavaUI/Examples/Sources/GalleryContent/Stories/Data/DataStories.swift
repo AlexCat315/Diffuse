@@ -263,12 +263,13 @@ struct AssetStory: View {
     @State private var value: AssetRef? = nil
     private var assets: [AssetRef] {
         [.init(id: "landscape", name: "Landscape", subtitle: "Bundled SVG", kind: "texture", previewPath: ImageStory.resource.url?.path),
+         .init(id: "environment", name: "Environment reflection texture for the shared workspace", subtitle: "High dynamic range environment", kind: "texture"),
          .init(id: "material", name: "Matte material", kind: "material")]
     }
     var body: some View {
         StorySection("Asset reference", "Choose or clear a texture. The field accepts only the configured asset kind.") {
-            AssetRefField(value: $value, acceptedKinds: ["texture"], pickerOptions: assets, placeholder: "Choose a texture", isEnabled: options.isEnabled).frame(width: 420)
-            Text("Asset: \(value?.name ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
+            AssetRefField(value: $value, acceptedKinds: ["texture"], pickerOptions: assets, placeholder: "Choose a texture", isEnabled: options.isEnabled).frame(width: .percent(100)).debugName("asset-reference")
+            Text("Asset: \(value?.name ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted).debugName("asset-value")
         }
     }
 }
