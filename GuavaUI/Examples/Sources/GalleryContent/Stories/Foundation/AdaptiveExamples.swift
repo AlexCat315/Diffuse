@@ -308,10 +308,13 @@ private struct AdaptiveControlSample: View {
         case .radio: AnyView(RadioGroup(selection: $radioValue, options: [
             RadioOption(0, "Option one"), RadioOption(1, "Option two")
         ]) { $0.isEnabled = options.isEnabled })
-        case .timeline: AnyView(Timeline(events: [
-            TimelineEvent("Created", detail: "Workspace", trailing: "09:12", tone: .success),
-            TimelineEvent("Updated", detail: "Permissions", trailing: "10:04", tone: .info)
-        ]).frame(width: .percent(100)))
+        case .timeline: AnyView(ScrollView(.vertical) {
+            Timeline(events: [
+                TimelineEvent("Created", detail: "Workspace", trailing: "09:12", tone: .success),
+                TimelineEvent("Updated international collaboration permissions 👩🏽‍💻", detail: "All workspace profiles are available.",
+                              trailing: "10:04 · Shanghai", tone: .info)
+            ])
+        }.frame(width: .percent(100), height: .points(140)))
         case .tree: AnyView(Tree(galleryTree, id: \.id, children: { $0.children },
             hasChildren: { !$0.children.isEmpty }, configure: { tree in
                 tree.isEnabled = options.isEnabled

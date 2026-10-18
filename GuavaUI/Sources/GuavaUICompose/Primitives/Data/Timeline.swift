@@ -5,7 +5,8 @@ public struct TimelineEvent: Identifiable {
     public let id: String
     public var title: String
     public var detail: String
-    /// Right-aligned meta: a timestamp, a duration, an actor.
+    /// Trailing metadata: a timestamp, duration or actor. Moves below the title
+    /// when this timeline's content width is compact or both labels cannot fit.
     public var trailing: String
     public var tone: StatusTone
     /// Glyph override. `nil` uses the tone's glyph; set `showsIcon = false`
@@ -63,12 +64,13 @@ public struct Timeline: View {
 
     public var body: some View {
         ThemeReader { theme in
-            Column(alignment: .leading, spacing: 0) {
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 for (index, event) in events.enumerated() {
                     AnyView(_TimelineRow(event: event,
                                          isLast: index == events.count - 1,
                                          showsTrailingConnector: showsTrailingConnector)
-                        .padding(EdgeInsets(bottom: index == events.count - 1 ? 0 : theme.spacing.sm)))
+                        .padding(EdgeInsets(bottom: index == events.count - 1 ? 0 : theme.spacing.sm))
+                        .id(event.id))
                 }
             }
             .accessibility { $0.role = .list }
@@ -95,10 +97,9 @@ private struct _TimelineRow: View {
                     }
                 }
                 .frame(width: max(22, metrics.size(.medium)))
-                Column(alignment: .leading, spacing: 2) {
-                    Row(alignment: .center, spacing: theme.spacing.sm) {
+                Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                    TimelineHeadingLayout(spacing: theme.spacing.sm) {
                         Text(event.title).font(.bodyStrong).foregroundColor(.onSurface)
-                            .flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
                         if !event.trailing.isEmpty {
                             Text(event.trailing).font(.caption).foregroundColor(.onSurfaceMuted)
                         }
@@ -109,7 +110,10 @@ private struct _TimelineRow: View {
                 }
                 .flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
             }
-            .accessibility { $0.role = .listItem; $0.label = event.title; $0.help = event.detail }
+            .accessibility {
+                $0.role = .listItem; $0.label = event.title
+                $0.value = event.trailing; $0.help = event.detail
+            }
             }
         }
     }

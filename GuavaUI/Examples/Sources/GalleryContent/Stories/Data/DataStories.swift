@@ -216,10 +216,10 @@ private struct IconCell: View {
 /// Ordered events on a shared rail, used for build logs, history and activity.
 struct TimelineStory: View {
     var body: some View {
-        StorySection("Event sequence", "The connector carries the ordering; the glyph carries the outcome.") {
+        StorySection("Event sequence", "Metadata moves below the title in a narrow container. Long titles and details wrap at the current text scale; resizing keeps the same events.") {
             Timeline(events: [
                 TimelineEvent("Build started", detail: "Target: macOS · arm64", trailing: "09:12", tone: .info),
-                TimelineEvent("Shaders compiled", detail: "14 pipelines, 0 warnings", trailing: "09:12", tone: .success),
+                TimelineEvent("Shaders compiled for the international collaboration workspace 👩🏽‍💻", detail: "14 pipelines, 0 warnings. All target profiles are available for review.", trailing: "09:12 · Build worker in Shanghai", tone: .success),
                 TimelineEvent("Asset pack rebuilt", trailing: "09:13", tone: .neutral, isCompact: true),
                 TimelineEvent("Link failed", detail: "Undefined symbol: vkCreateBuffer", trailing: "09:14", tone: .danger),
                 TimelineEvent("Retry queued", trailing: "09:14", tone: .warning)
