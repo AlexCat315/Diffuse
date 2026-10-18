@@ -1,6 +1,6 @@
 # Calendar / DatePicker 日历导航
 
-`CalendarView` 提供月视图、可用日期规则和键盘焦点；日期选择由调用方 binding 持有。`DatePicker` 在弹层中复用同一日历，选择日期后提交并关闭。
+`CalendarView` 提供月视图、可用日期规则和键盘焦点；日期选择由调用方 binding 持有。选中日期使用实心圆形 accent，今天使用 accent 圆形描边，均为 iOS 月历形态。`DatePicker` 在弹层中复用同一日历，选择日期后提交并关闭。
 
 ```swift
 CalendarView(selection: $date) { options in

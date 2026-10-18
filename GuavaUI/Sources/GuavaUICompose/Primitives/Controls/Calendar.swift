@@ -148,7 +148,7 @@ struct CalendarDayStyle: ButtonStyle {
         Box(direction: .row, alignItems: .center, justifyContent: .center) { AnyView(c.label).font(.label) }
             .frame(width: cellSize, height: cellSize).background(c.isSelected ? c.theme.colors.accent : c.isHovered ? c.theme.colors.stateLayerHover : .clear)
             .foregroundColor(c.isSelected ? c.theme.colors.onAccent : c.isEnabled ? c.theme.colors.onSurface : c.theme.colors.onSurfaceMuted)
-            .opacity(isCurrentMonth ? 1 : 0.35).cornerRadius(c.theme.radius.sm)
+            .opacity(isCurrentMonth ? 1 : 0.35).cornerRadius(cellSize / 2)
             .border(c.isFocused ? c.theme.colors.focusRing : isToday ? c.theme.colors.accent : .clear, width: c.isFocused ? 2 : isToday ? 1 : 0)
     }
 }
