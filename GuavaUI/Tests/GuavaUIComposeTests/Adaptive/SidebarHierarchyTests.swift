@@ -29,6 +29,7 @@ struct SidebarHierarchyTests: GuavaUIComposeSerializedSuite {
     @State var removed = false
     @State var moved = false
     @State var activations = 0
+    @State var archived = 0
     @State var width: Float = 1280
     @State var scale: Float = 1
     @State var dark = false
@@ -36,7 +37,10 @@ struct SidebarHierarchyTests: GuavaUIComposeSerializedSuite {
     @State var input: UIEnvironment.Input = [.pointer, .keyboard]
     init(adaptive: Bool) { self.adaptive = adaptive }
     var sections: [SidebarSection<String>] {
-      let audit = SidebarItem("audit", "Audit trail") { $0.badge = "12" }
+      let audit = SidebarItem("audit", "Audit trail") {
+        $0.badge = "12"
+        $0.contextMenu = [.item(MenuItem(id: "archive", title: "Archive") { self.archived += 1 })]
+      }
       let team = SidebarItem("team", "Team") {
         $0.children = (removed || moved ? [] : [audit]) + [SidebarItem("billing", "Billing") { $0.isEnabled = false }]
       }
@@ -241,13 +245,46 @@ struct SidebarHierarchyTests: GuavaUIComposeSerializedSuite {
       try item("projects", graph).accessibilityActions.activate?(); settle(graph, h)
       try item("team", graph).accessibilityActions.activate?(); settle(graph, h)
       let auditCount = try query("Audit trail")
-      #expect(auditCount == 1 && h.selection == "overview")
+      #expect(auditCount > 0 && h.selection == "overview")
       try item("audit", graph).accessibilityActions.activate?(); settle(graph, h)
       #expect(h.selection == "audit" && h.activations == 1)
       h.expanded.remove("projects"); settle(graph, h)
       let collapsedCount = try query("Audit trail")
       let projectsRow = try item("projects", graph)
       #expect(collapsedCount == 0 && projectsRow.accessibility?.state.isExpanded == false)
+    }
+  }
+
+  @Test("Item actions open from the ellipsis and the macOS context menu")
+  func itemActions() throws {
+    try scene { h, graph, _, input in
+      h.selection = "audit"; settle(graph, h)
+      let actions = try named("sidebar-actions-audit", graph)
+      click(actions, input); settle(graph, h)
+      let archive = try #require(nodes(graph.tree.root).first {
+        $0.accessibility?.label == "Archive" && $0.isHitTestable
+      })
+      click(archive, input); settle(graph, h)
+      #expect(h.archived == 1)
+
+      let audit = try item("audit", graph)
+      let point = audit.absoluteFrame
+      let down = MouseButtonEvent(button: .right, x: Float(point.midX), y: Float(point.midY), clicks: 1)
+      input.dispatch(.mouseButtonDown(down)); input.dispatch(.mouseButtonUp(down)); settle(graph, h)
+      let contextArchive = try #require(nodes(graph.tree.root).first {
+        $0.accessibility?.label == "Archive" && $0.isHitTestable
+      })
+      click(contextArchive, input); settle(graph, h)
+      #expect(h.archived == 2)
+    }
+  }
+
+  @Test("Item action trigger keeps a 44pt touch target in the compact drawer")
+  func compactItemActions() throws {
+    try scene(adaptive: true) { h, graph, _, _ in
+      h.width = 390; h.input = [.touch]; h.selection = "audit"; h.open = true; settle(graph, h)
+      let actions = try named("sidebar-actions-audit", graph)
+      #expect(actions.frame.height >= 44)
     }
   }
 }

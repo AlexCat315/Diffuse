@@ -21,58 +21,105 @@ struct SidebarDestination<ID: Hashable>: View {
     /// expanded and disclose the path, but three blue rows would read as three
     /// simultaneous selections.
     private var isSelected: Bool { selection.wrappedValue == item.id }
+    @State private var showsActions = false
+
+    @ViewBuilder
     var body: some View {
-        SidebarSelectionRevealHost(isSelected: selection.wrappedValue == item.id, presentation: presentation) {
-            Button(
-                isEnabled: item.isEnabled, isSelected: isSelected,
-                tooltip: presentation.isRail ? item.badge.map { "\(contextLabel) (\($0))" } ?? contextLabel : nil,
-                action: {
-                    if entry.isBranch {
-                        if isExpanded { expanded.wrappedValue.remove(item.id) }
-                        else { expanded.wrappedValue.insert(item.id) }
-                    } else {
-                        selection.wrappedValue = item.id
-                        onActivate(item.id)
-                    }
+        let row = SidebarSelectionRevealHost(isSelected: selection.wrappedValue == item.id, presentation: presentation) {
+            Box(direction: .row, alignItems: .stretch, spacing: 0) {
+                destinationButton
+                if !presentation.isRail && !item.contextMenu.isEmpty {
+                    actionsMenu
+                        .frame(width: 44)
+                        .absolutePosition(top: 0, right: 0, bottom: 0)
+                        .zIndex(1)
+                        .debugName("sidebar-actions-\(item.id)")
                 }
-            ) {
-                if let width = presentation.railWidth {
-                    RailDestinationLabel(
-                        item: item, showsLabels: presentation.showsLabels, iconExtent: min(iconExtent, width - 16),
-                        isExpanded: entry.isBranch ? isExpanded : nil)
-                } else {
-                    Row(alignment: .center, spacing: 10) {
-                        if disclosureLane {
-                            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                                if entry.isBranch {
-                                    Icon(isExpanded ? UIIcons.Action.minus : UIIcons.Action.plus, size: .small)
-                                        .accessibilityHidden()
-                                }
-                            }.frame(width: 16).flex(0, shrink: 0)
-                        }
-                        if let iconWidth {
-                            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                                if let icon = item.icon {
-                                    Icon(icon, size: item.iconSize).accessibilityHidden()
-                                }
-                            }.frame(width: iconWidth).flex(0, shrink: 0)
-                        }
-                        Text(item.title).font(.label).flex(1, shrink: 1).frame(minWidth: 0)
-                            .debugName("sidebar-title-\(item.id)")
-                        if let badge = item.badge {
-                            Badge(badge, tone: .neutral) { $0.isEnabled = item.isEnabled }
-                                .flex(0, shrink: 0).accessibilityHidden()
-                                .debugName("sidebar-badge-\(item.id)")
-                        }
-                    }.padding(EdgeInsets(leading: Float(min(entry.ancestors.count, 5)) * 16))
-                }
-            }.buttonStyle(SidebarItemStyle(minimumHeight: minimumRowHeight, presentation: presentation))
-                .compositionLocal(ActionControlAccessibility.label, presentation.isRail ? contextLabel : item.title)
-                .compositionLocal(ActionControlAccessibility.value, item.badge ?? "")
-                .compositionLocal(ActionControlAccessibility.isExpanded, entry.isBranch ? isExpanded : nil)
-                .modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: isTabStop))
-                .debugName("sidebar-item-\(item.id)")
+            }.frame(width: .percent(100))
         }.id(item.id)
+        if item.contextMenu.isEmpty { row } else { row.contextMenu(item.contextMenu) }
+    }
+
+    private var destinationButton: some View {
+        Button(
+            isEnabled: item.isEnabled, isSelected: isSelected,
+            tooltip: presentation.isRail ? item.badge.map { "\(contextLabel) (\($0))" } ?? contextLabel : nil,
+            action: {
+                if entry.isBranch {
+                    if isExpanded { expanded.wrappedValue.remove(item.id) }
+                    else { expanded.wrappedValue.insert(item.id) }
+                } else {
+                    selection.wrappedValue = item.id
+                    onActivate(item.id)
+                }
+            }
+        ) {
+            if let width = presentation.railWidth {
+                RailDestinationLabel(
+                    item: item, showsLabels: presentation.showsLabels, iconExtent: min(iconExtent, width - 16),
+                    isExpanded: entry.isBranch ? isExpanded : nil)
+            } else {
+                Row(alignment: .center, spacing: 10) {
+                    if disclosureLane {
+                        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                            if entry.isBranch {
+                                Icon(isExpanded ? UIIcons.Action.minus : UIIcons.Action.plus, size: .small)
+                                    .accessibilityHidden()
+                            }
+                        }.frame(width: 16).flex(0, shrink: 0)
+                    }
+                    if let iconWidth {
+                        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                            if let icon = item.icon {
+                                Icon(icon, size: item.iconSize).accessibilityHidden()
+                            }
+                        }.frame(width: iconWidth).flex(0, shrink: 0)
+                    }
+                    Text(item.title).font(.label).flex(1, shrink: 1).frame(minWidth: 0)
+                        .debugName("sidebar-title-\(item.id)")
+                    if let badge = item.badge {
+                        Badge(badge, tone: .neutral) { $0.isEnabled = item.isEnabled }
+                            .flex(0, shrink: 0).accessibilityHidden()
+                            .debugName("sidebar-badge-\(item.id)")
+                    }
+                }.padding(EdgeInsets(leading: Float(min(entry.ancestors.count, 5)) * 16,
+                                     trailing: item.contextMenu.isEmpty || presentation.isRail ? 0 : 44))
+            }
+        }.buttonStyle(SidebarItemStyle(minimumHeight: minimumRowHeight, presentation: presentation))
+            .compositionLocal(ActionControlAccessibility.label, presentation.isRail ? contextLabel : item.title)
+            .compositionLocal(ActionControlAccessibility.value, item.badge ?? "")
+            .compositionLocal(ActionControlAccessibility.isExpanded, entry.isBranch ? isExpanded : nil)
+            .modifier(RovingItemModifier(id: AnyHashable(item.id), isTabStop: isTabStop))
+            .debugName("sidebar-item-\(item.id)")
+    }
+
+    private var actionsMenu: some View {
+        var popover = Popover(
+            isPresented: $showsActions,
+            isEnabled: item.isEnabled,
+            width: 220,
+            placement: .end,
+            triggerStyle: AnyButtonStyle(GhostButtonStyle()),
+            label: {
+                Icon(UIIcons.Action.moreHorizontal, size: .small)
+                    .frame(width: 16, height: 16)
+            },
+            content: {
+                FocusScope(restoresCommands: true) {
+                    Menu(item.contextMenu, width: 220,
+                         onItemActivated: { showsActions = false },
+                         onDismiss: { showsActions = false })
+                        // A context menu must occlude the row underneath; the
+                        // shared glass surface alone lets the disabled Billing
+                        // label read through it on an opaque sidebar.
+                        .background(.surfaceFloating)
+                        .cornerRadius(.controlRadius)
+                }
+            })
+        popover.triggerDescription = PopoverTriggerDescription(
+            label: "Actions for \(item.title)",
+            help: "Open item actions")
+        return popover
     }
 }
 

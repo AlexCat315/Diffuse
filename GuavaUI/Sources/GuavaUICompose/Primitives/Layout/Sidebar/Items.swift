@@ -10,6 +10,9 @@ public struct SidebarItem<ID: Hashable>: Identifiable {
     public var isEnabled = true
     /// A nonempty group expands instead of activating a destination.
     public var children: [Self] = []
+    /// Per-item actions. macOS right-click opens them; a trailing ellipsis
+    /// keeps the same menu reachable by pointer, keyboard and touch.
+    public var contextMenu: [MenuEntry] = []
     public init(_ id: ID, _ title: String, configure: (inout Self) -> Void = { _ in }) {
         self.id = id; self.title = title; configure(&self)
     }

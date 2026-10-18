@@ -7,6 +7,7 @@ struct NestedSidebarExample: View {
   @State private var expanded: Set<String> = ["nested-projects"]
   @State private var open = false
   @State private var draft: TextBuffer = "A retained nested document"
+  @State private var lastAction = "None"
 
   var body: some View {
     StorySection("Nested navigation", "Groups expand without changing the page. Up/Down visits visible items; Right opens a group or enters its first child, Left closes it or returns to its parent. Collapsing preserves the selected document.") {
@@ -24,6 +25,7 @@ struct NestedSidebarExample: View {
         Box(direction: .column, alignItems: .stretch, spacing: 12) {
           TextField("Nested document draft", text: $draft) { $0.behavior.disabled = !options.isEnabled }
           Text("Selected destination: \(selection ?? "none")").font(.caption)
+          Text("Last action: \(lastAction)").font(.caption).foregroundColor(.onSurfaceMuted)
         }.padding(12)
       }.frame(height: 280).border(.border, width: 1).clipped()
     }
@@ -34,13 +36,21 @@ struct NestedSidebarExample: View {
       item("nested-projects", "Project spaces", icon: UIIcons.File.folder, children: [
         item("nested-welcome", "Getting started"),
         item("nested-team", "Design team", children: [
-          item("nested-audit", "Audit log"), item("nested-billing", "Billing", enabled: false)
+          item("nested-audit", "Audit log", actions: [
+            .item(MenuItem(id: "archive", title: "Archive") { lastAction = "Archive" }),
+            .item(MenuItem(id: "duplicate", title: "Duplicate") { lastAction = "Duplicate" })
+          ]),
+          item("nested-billing", "Billing", enabled: false)
         ])
       ])
     ])]
   }
   private func item(_ id: String, _ title: String, icon: BundleImageResource? = nil,
-                    enabled: Bool = true, children: [SidebarItem<String>] = []) -> SidebarItem<String> {
-    SidebarItem(id, title) { $0.icon = icon; $0.isEnabled = enabled && options.isEnabled; $0.children = children }
+                    enabled: Bool = true, children: [SidebarItem<String>] = [],
+                    actions: [MenuEntry] = []) -> SidebarItem<String> {
+    SidebarItem(id, title) {
+      $0.icon = icon; $0.isEnabled = enabled && options.isEnabled
+      $0.children = children; $0.contextMenu = actions
+    }
   }
 }
