@@ -23,6 +23,10 @@ Button("Apply to workspace") { apply() }
 
 `describedBy` 在 `AccessibilityTree.snapshot` 与 DevTools 的节点查询中都会解析；目标缺失或隐藏时保持原 help 不变，不产生空描述。引用目标不会成为额外 Tab 停靠点。
 
+## 容器与单控件修饰
+
+纯名称/描述修饰可穿透包裹单个语义控件的布局层；显式设置 `group`、dialog、table、tree、list、row、cell 或 status 时则作用于容器自身，保留内部动作角色。不能因只剩一个按钮就把按钮变成 group。`AgentControlDiscoveryTests.groupRoles` 覆盖 0/1/2 个按钮及真实 AI 工具查询。
+
 ## 滚动与选择
 
 - `ScrollView`：`.scrollArea` 角色、可命名 `accessibilityLabel`、百分比 value、键盘滚动 help、按页 increment/decrement。滚动条 thumb 仍不是独立可聚焦节点。

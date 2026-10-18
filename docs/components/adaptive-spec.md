@@ -653,6 +653,8 @@ Alert 的窄宽与大字号操作区已完成：compact 纵向堆叠，其余容
 
 标签组件的长文本已补齐：Badge/Tag 在实际剩余宽度内完整换行并保持图标/移除按钮，KeyCap 按 cap 换行、单个长键名可换行；Badge/KeyCap 合并子文字避免重复朗读。FieldLabel 的关联按钮改为逻辑 leading 文字块，避免继承按钮居中布局；Gallery 字段示例改用实际容器宽度，并新增组合长标签、移除/恢复与关联输入。独立 KeyCap 源码从 Tag 文件拆出，公共调用不变。35 项标签/产品/设计系统/Form 回归通过，标签矩阵覆盖 24 个宽度/字号/方向/主题组合。DevTools 390 触摸、720 深色混合 200%、1280 RTL 指针的文本均完整，Tag 的移除后查询总数为 0；点击完整字段标签后注入 Alex，三档显式输入值查询均为 `Alex`。镜像检查确认 chip 层次、cap 换行、44pt 移除目标与标签/输入对齐，手机与大字号无越界。新文档见 [标签组件](labels.md)。
 
+AI 验收发现并修复单按钮容器的语义覆盖：显式 `.accessibility { role = .group }` 现在留在容器自身，纯名称/描述修饰仍可转交单个控件；不会把唯一的 Choose asset 从 button 改成 group。0/1/2 个动作的原生语义与真实 AI 查询回归通过；9 项辅助功能/资源字段测试通过。DevTools 三档均直接发现主字段的 Choose asset 并打开真实资源菜单，触摸目标 44×44；不再误操作同页的自适应预览。见 [辅助功能](accessibility.md#容器与单控件修饰)。
+
 ## 6. 动效与动画（动画效果实现）
 
 分两类：**时间曲线**（用 `cubic-bezier` / ease 控制"速度怎么变"）与**物理动画**（弹簧、阻尼、惯性模拟真实运动）。GuavaUI 的实现层与 SwiftUI 同形：`withAnimation`、`.animation(_:value:)`、`AnimatedVisibility` + `Transition`、`Animation.spring(response:dampingFraction:)`，再加滚动的系统惯性与回弹。本章定义效果选型、参数与验收；[已实现] 等标注同前。

@@ -7,6 +7,35 @@ import GuavaUIAgent
 @Suite("AI discovery of composed controls", .serialized)
 @MainActor
 struct AgentControlDiscoveryTests: GuavaUIComposeSerializedSuite {
+    @Test("Explicit groups preserve zero, one and multiple action roles in native and AI discovery")
+    func groupRoles() async throws {
+        for count in 0...2 {
+            let graph = GlobalTestLock.locked {
+                let previous = TextEnvironmentHolder.current
+                TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+                defer { TextEnvironmentHolder.current = previous }
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+                graph.install(root: Box(direction: .column) {
+                    if count >= 1 { Button("Pick asset") {} }
+                    if count >= 2 { Button("Clear asset") {} }
+                }.frame(width: 300, height: 120).accessibility {
+                    $0.role = .group; $0.label = "Asset actions"
+                })
+                for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 390, height: 200) }
+                return graph
+            }
+            defer { GlobalTestLock.locked { graph.install(root: EmptyView()) } }
+            let diagnostics = UIDiagnostics(tree: graph.tree), toolbox = try diagnostics.toolbox()
+            let group = try #require(diagnostics.queryNodes(text: "Asset actions", role: "group").items.first)
+            #expect(group.node.frame.w == 300 && group.node.frame.h == 120)
+            let result = try await toolbox.execute(name: "query_ui_nodes", input: Data(#"{"role":"button"}"#.utf8))
+            let response = try #require(JSONSerialization.jsonObject(with: result.json) as? [String: Any])
+            let page = try #require(response["data"] as? [String: Any])
+            #expect(page["total"] as? Int == count)
+            #expect(try diagnostics.queryNodes(text: "Pick asset", role: "button").total == (count == 0 ? 0 : 1))
+        }
+    }
+
     @Test("Validated AI tools discover real Form fields and ordinary buttons without evaluating private field values")
     func formTools() async throws {
         let graph = GlobalTestLock.locked {
