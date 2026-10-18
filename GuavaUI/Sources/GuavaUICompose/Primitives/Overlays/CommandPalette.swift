@@ -61,12 +61,17 @@ public struct CommandPalette: View {
     @State private var query = TextBuffer.empty
     @State private var highlightedID: String?
     @State private var focusToken = 0
+    @State private var recentIDs: [String] = []
 
     public var isPresented: Binding<Bool>
     public var items: [CommandItem]
     public var placeholder: String
     public var emptyTitle: String
     public var emptyMessage: String
+    /// Shows the commands run in this palette above their normal groups when
+    /// the query is empty. History is session-scoped and never persisted.
+    public var showsRecentCommands = true
+    public var recentCommandLimit = 3
 
     static let rowHeight: Float = 36
     static let headerHeight: Float = 28
@@ -80,6 +85,7 @@ public struct CommandPalette: View {
         self.emptyTitle = "No matching commands"
         self.emptyMessage = "Try a different search term."
         configure(&self)
+        recentCommandLimit = min(10, max(0, recentCommandLimit))
     }
 
     public var body: some View {
@@ -143,7 +149,28 @@ public struct CommandPalette: View {
     }
 
     private var entries: [CommandEntry] {
-        CommandSearch.entries(visible, groupsResults: trimmedQuery.isEmpty)
+        Self.displayEntries(items: visible,
+                            recentIDs: trimmedQuery.isEmpty ? recentIDs : [],
+                            showsRecent: showsRecentCommands && trimmedQuery.isEmpty,
+                            limit: recentCommandLimit,
+                            groupsResults: trimmedQuery.isEmpty)
+    }
+
+    static func displayEntries(items: [CommandItem], recentIDs: [String],
+                               showsRecent: Bool, limit: Int,
+                               groupsResults: Bool) -> [CommandEntry] {
+        let recent = showsRecent ? recentIDs.compactMap { id in
+            items.first { $0.id == id && $0.isEnabled }
+        }.prefix(max(0, limit)) : []
+        guard !recent.isEmpty else {
+            return CommandSearch.entries(items, groupsResults: groupsResults)
+        }
+        let recentItems = Array(recent)
+        let ids = Set(recentItems.map(\.id))
+        let remaining = items.filter { !ids.contains($0.id) }
+        return [.header("Recent")]
+            + recentItems.map(CommandEntry.item)
+            + CommandSearch.entries(remaining, groupsResults: groupsResults)
     }
 
     private var selectable: [CommandItem] {
@@ -165,8 +192,18 @@ public struct CommandPalette: View {
 
     private func run(_ item: CommandItem) {
         guard item.isEnabled else { return }
+        recordRecent(item.id)
         close()
         item.action()
+    }
+
+    private func recordRecent(_ id: String) {
+        guard recentCommandLimit > 0 else { return }
+        recentIDs.removeAll { $0 == id }
+        recentIDs.insert(id, at: 0)
+        if recentIDs.count > recentCommandLimit {
+            recentIDs.removeLast(recentIDs.count - recentCommandLimit)
+        }
     }
 
     private func runHighlighted() {

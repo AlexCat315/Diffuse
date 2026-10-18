@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `CommandPalette` 新增 session 级最近使用：执行命令后记录最多 3 条，query 为空时置于 "RECENT" 分组并从原分组去重；`showsRecentCommands` 与 `recentCommandLimit` 可配置。`FeedbackComponentTests` 覆盖投影，DevTools 实测 Toggle Theme 二次打开后位于 RECENT。
 - Breadcrumb / Pagination 触摸验收补齐：`TouchDensityTests` 将两者纳入 44pt 触摸族；DevTools 390 touch 预览测得链接 44×88、前后按钮 44×78、页码 44×44。adaptive-spec 对应行改为 `[已实现]`。
 - `ColorField` 弹层宽度改为自适应：`min(280, max(176, viewport − 24))`，390/720 为 280、200 为 176，hex 与通道行不因窄而隐藏。`ControlDensityTests` 覆盖宽度档位；DevTools 实测 `color-picker-panel` 280×184，并补齐 `colorfield.md`。
 - `Slider` 补齐刻度与 Page 键：`showsTicks` 在每个离散 step 位置绘制 1pt 刻度（最多 40 段）；PageUp/PageDown 移动 10 个 step 并夹紧。`SliderTests` 覆盖 Page 键与刻度渲染；Gallery `slider` 页的 Stepped 示例展示刻度，DevTools PageUp 将 3.0 移到 5.0。

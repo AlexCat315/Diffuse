@@ -28,7 +28,7 @@ struct CommandPaletteStory: View {
     }
 
     var body: some View {
-        StorySection("Command palette", "Try “GO”, “go f” or “appearance”. Arrows move, Page Up/Down jump, Return runs and Escape closes. Disabled commands are skipped.") {
+        StorySection("Command palette", "Try “GO”, “go f” or “appearance”. Arrows move, Page Up/Down jump, Return runs and Escape closes. Disabled commands are skipped; run one and reopen to see it under Recent.") {
             Row(alignment: .center, spacing: 12) {
                 Button("Open command palette", isEnabled: options.isEnabled) { isPresented = true }
                     .debugName("command-open")

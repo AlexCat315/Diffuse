@@ -53,6 +53,36 @@ func commandPaletteRanking() {
     #expect(CommandPalette.ranked(items, query: "   ").map(\.title) == items.map(\.title))
 }
 
+
+@Test("Recent commands lead the browse list once and never duplicate groups")
+func commandPaletteRecentEntries() {
+    let items = [
+        CommandItem("Open File", group: "File") {},
+        CommandItem("Toggle Theme", group: "View") {},
+        CommandItem("Deploy", group: "Build", isEnabled: false) {}
+    ]
+    let ids = CommandPalette.displayEntries(items: items, recentIDs: ["Toggle Theme", "missing"],
+                                             showsRecent: true, limit: 3,
+                                             groupsResults: false).map(\.id)
+    #expect(ids == ["header:Recent", "item:Toggle Theme", "item:Open File", "item:Deploy"])
+
+    let deduped = CommandPalette.displayEntries(items: items, recentIDs: ["Toggle Theme"],
+                                                 showsRecent: true, limit: 1,
+                                                 groupsResults: false).map(\.id)
+    #expect(deduped == ["header:Recent", "item:Toggle Theme", "item:Open File", "item:Deploy"])
+
+    let disabled = CommandPalette.displayEntries(items: items, recentIDs: ["Deploy"],
+                                                  showsRecent: true, limit: 3,
+                                                  groupsResults: false).map(\.id)
+    #expect(!disabled.contains("header:Recent"))
+    #expect(disabled.contains("item:Deploy"))
+
+    let hidden = CommandPalette.displayEntries(items: items, recentIDs: ["Toggle Theme"],
+                                                showsRecent: false, limit: 3,
+                                                groupsResults: false).map(\.id)
+    #expect(hidden == ["item:Open File", "item:Toggle Theme", "item:Deploy"])
+}
+
 // MARK: - Progress
 
 @Test("Progress clamps out-of-range values instead of drawing outside the track")

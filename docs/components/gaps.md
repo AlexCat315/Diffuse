@@ -139,7 +139,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | Chart | pie/area/scatter/stacked、图例交互、数据点选择 | P2 |
 | Timeline | 分组/折叠、缩放；容器窄宽重排、完整时间语义与 200% 字号已完成，见 [Timeline](timeline.md) | P2 |
 | Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义；触摸展开验收见规范 5-10，触摸行高与水平翻转已有 | P2 |
-| CommandPalette | 结果列表已虚拟化（视口 + overscan）；compact 几何与触摸行高已完成；无最近使用记录与自定义页脚；模糊匹配与分组已有 | P1/P2（虚拟化与移动端几何已完成；最近使用待补） |
+| CommandPalette | 结果列表已虚拟化（视口 + overscan）；compact 几何、触摸行高、模糊匹配、分组与 session 级最近使用已完成；自定义页脚仍未内置 | P2（自定义页脚） |
 | Sheet / Modal | 拖拽关闭与自适应（见 2.11）；其余契约完整 | P1 |
 | Sidebar | 嵌套子菜单、项级操作/上下文菜单；AdaptiveSidebar 可调整栏宽已实现，见 [Sidebar](sidebar.md#调整栏宽) | P1 |
 | Toolbar | 垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
