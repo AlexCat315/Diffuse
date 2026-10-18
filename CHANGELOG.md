@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Success / Warning / Info 按钮从 Material tonal 色块改为 iOS tinted-bordered：浅色调、同色 hairline 和 tone 文本，hover/press 只叠加大约 10–16% 色调。Gallery Button/Notification 截图复验不再出现整块 pastel 按钮。
 - 视觉基线切换为 iOS / macOS：规范移除 Material 3 命名、48dp 密度、FAB 计划项与 Material 参考行；组件文档的 References 收敛到 Apple HIG/SwiftUI。已完成 UI 的全大写分组标题改为 title case（CommandPalette/Sidebar/SectionedList/Gallery MetricCard），CommandPalette 截图复验后保持 40pt 行高与 560pt 面板。
 - 修正 CommandPalette 视觉：桌面行高 36→40、header 28→24，桌面面板 440→560，8 条命令完整显示且点击区更宽松；快捷键改为单个紧凑 shortcut chip，选中行水平内缩 8pt 且去掉边缘描边，footer 移除整块边框改为 1pt 分隔线。Modal 的 `inset` 现在作为四边实际外边距，顶部放置保留 72pt，面板四角不再被窗口/内容裁坏。
 - `Sidebar` / `AdaptiveSidebar` 支持递归嵌套导航：`SidebarItem.children` + 可选 `expanded` binding；分支只切换展开，Right/Left 展开/收起并进入/返回，选中深层项只展开祖先一次、仅精确叶子高亮。`SidebarHierarchyTests` 6/6 覆盖键盘、RTL、数据移除、390/720/1280 矩阵与 AI 查询；Gallery Sidebar 页新增 Nested navigation，DevTools 实测展开 Design team、选择 Audit log。

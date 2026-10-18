@@ -28,7 +28,7 @@
 
 ## Variants
 
-每个变体只通过 token 区分，不复制几何参数。
+每个变体只通过 token 区分，不复制几何参数。Success / Warning / Info 状态动作使用**浅色调 + 同色 hairline + tinted text**的 iOS tinted-bordered 形态，不使用整块不透明 pastel 填充。
 
 | Variant | Background (rest) | Foreground | Hover | Press | 用途 |
 | ------- | ----------------- | ---------- | ----- | ----- | ---- |
