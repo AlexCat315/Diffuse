@@ -83,9 +83,12 @@ extension Rating {
             guard let node else { return .ignored }
             guard phase == .target, event.modifiers.isDisjoint(with: [.ctrl, .gui, .alt]) else { return .ignored }
             let current = selection.clamped(session.binding.wrappedValue)
+            let rtl = session.configuration?.geometry.isRTL(node) == true
             switch event.scancode {
-            case Scancode.arrowLeft, Scancode.arrowDown: write(current - selection.precision.increment)
-            case Scancode.arrowRight, Scancode.arrowUp: write(current + selection.precision.increment)
+            case Scancode.arrowLeft: write(current + (rtl ? selection.precision.increment : -selection.precision.increment))
+            case Scancode.arrowRight: write(current + (rtl ? -selection.precision.increment : selection.precision.increment))
+            case Scancode.arrowDown: write(current - selection.precision.increment)
+            case Scancode.arrowUp: write(current + selection.precision.increment)
             case Scancode.home: write(0)
             case Scancode.end: write(Double(selection.maximum))
             case Scancode.backspace, Scancode.delete:

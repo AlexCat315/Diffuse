@@ -29,9 +29,10 @@ final class RatingPaint {
         let width = Float(node.frame.width), height = Float(node.frame.height)
         guard width > 0, height > 0 else { return }
         let bounds = UIRect(x: Float(origin.x), y: Float(origin.y), width: width, height: height)
+        let rtl = geometry.isRTL(node)
         list.pushClip(bounds); defer { list.popClip() }
         for index in 0..<geometry.maximum {
-            let rect = geometry.starRect(index, origin: origin, height: height)
+            let rect = geometry.starRect(index, origin: origin, height: height, rtl: rtl)
             if let asset = outline?.resolve(width: geometry.starSize, height: geometry.starSize) {
                 asset.retain(in: list)
                 list.addImageMaskQuad(rect: rect, textureID: asset.textureID, tint: palette.empty.multipliedAlpha(alpha))
@@ -39,7 +40,11 @@ final class RatingPaint {
             let fraction = Float(max(0, min(1, value - Double(index))))
             if fraction > 0, let asset = filled?.resolve(width: geometry.starSize, height: geometry.starSize) {
                 asset.retain(in: list)
-                if fraction < 1 { list.pushClip(UIRect(x: rect.x, y: rect.y, width: rect.width * fraction, height: rect.height)) }
+                if fraction < 1 {
+                    let filledWidth = rect.width * fraction
+                    let clipX = rtl ? rect.x + rect.width - filledWidth : rect.x
+                    list.pushClip(UIRect(x: clipX, y: rect.y, width: filledWidth, height: rect.height))
+                }
                 list.addImageMaskQuad(rect: rect, textureID: asset.textureID, tint: palette.filled.multipliedAlpha(alpha))
                 if fraction < 1 { list.popClip() }
             }

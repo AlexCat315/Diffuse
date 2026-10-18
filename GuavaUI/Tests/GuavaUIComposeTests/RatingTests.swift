@@ -29,7 +29,7 @@ struct RatingTests: GuavaUIComposeSerializedSuite {
     }
     private func pointer(_ node: Node, star: Int, fraction: Float = 0.75, yOffset: Float = 0) -> MouseButtonEvent {
         let geometry = (node.attachments["rating.session"] as! RatingSession).configuration!.geometry
-        let rect = geometry.starRect(star, origin: node.absoluteOrigin, height: Float(node.frame.height))
+        let rect = geometry.starRect(star, origin: node.absoluteOrigin, height: Float(node.frame.height), rtl: geometry.isRTL(node))
         return MouseButtonEvent(button: .left, x: rect.x + rect.width * fraction, y: rect.y + rect.height / 2 + yOffset, clicks: 1)
     }
 
@@ -106,6 +106,39 @@ struct RatingTests: GuavaUIComposeSerializedSuite {
         #expect(geometry.candidate(at: .greatestFiniteMagnitude, node: node, precision: .half) == 5)
         #expect(geometry.candidate(at: -.greatestFiniteMagnitude, node: node, precision: .half) == 0.5)
         #expect(geometry.candidate(at: .nan, node: node, precision: .half) == 0)
+    } }
+
+    @Test("RTL mirrors star order, hit candidates and arrow-key direction")
+    func rightToLeft() { withScene { graph, _, focus, _, dispatcher in
+        var value = 3.0
+        graph.install(root: Rating("RTL rating", value: Binding(get: { value }, set: { value = $0 })) {
+            $0.selection.precision = .half
+        }.layoutDirection(.rtl))
+        graph.computeLayout(width: 400, height: 100)
+        let node = host(graph)
+        let session = node.attachments["rating.session"] as! RatingSession
+        let geometry = session.configuration!.geometry
+
+        let rtl = geometry.isRTL(node)
+        #expect(rtl)
+        #expect(geometry.starRect(0, origin: node.absoluteOrigin, height: Float(node.frame.height), rtl: rtl).x >
+                geometry.starRect(4, origin: node.absoluteOrigin, height: Float(node.frame.height), rtl: rtl).x)
+
+        let rightHalf = pointer(node, star: 0, fraction: 0.75)
+        dispatcher.dispatch(.mouseButtonDown(rightHalf)); dispatcher.dispatch(.mouseButtonUp(rightHalf))
+        #expect(value == 0.5)
+        let leftWhole = pointer(node, star: 4, fraction: 0.25)
+        dispatcher.dispatch(.mouseButtonDown(leftWhole)); dispatcher.dispatch(.mouseButtonUp(leftWhole))
+        #expect(value == 5)
+
+        value = 3
+        focus.clear()
+        dispatcher.dispatch(.keyDown(key(Scancode.tab)))
+        #expect(focus.focused === node)
+        dispatcher.dispatch(.keyDown(key(Scancode.arrowLeft))); #expect(value == 3.5)
+        dispatcher.dispatch(.keyDown(key(Scancode.arrowRight))); #expect(value == 3)
+        dispatcher.dispatch(.keyDown(key(Scancode.arrowUp))); #expect(value == 3.5)
+        dispatcher.dispatch(.keyDown(key(Scancode.arrowDown))); #expect(value == 3)
     } }
 
     @Test("One Tab stop adjusts by half steps, ignores chords and cancels a captured press")

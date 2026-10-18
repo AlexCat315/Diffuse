@@ -16,16 +16,30 @@ struct RatingGeometry: Equatable {
         cellWidth = max(starSize + 8, selection.isInteractive && surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         spacing = appearance.spacing; maximum = selection.maximum
     }
-    func starRect(_ index: Int, origin: CGPoint, height: Float) -> UIRect {
-        UIRect(x: Float(origin.x) + 4 + (cellWidth - starSize) / 2 + Float(index) * stride,
+    /// Direction can be applied after the primitive's update pass, so draw and
+    /// input resolve it lazily instead of snapshoting a stale value.
+    func isRTL(_ node: Node) -> Bool {
+        var layout = node.layoutNode
+        while let current = layout {
+            if current.direction != .inherit { return current.direction == .rtl }
+            layout = current.parent
+        }
+        return false
+    }
+    func starRect(_ index: Int, origin: CGPoint, height: Float, rtl: Bool) -> UIRect {
+        let visualIndex = rtl ? maximum - 1 - index : index
+        return UIRect(x: Float(origin.x) + 4 + (cellWidth - starSize) / 2 + Float(visualIndex) * stride,
             y: Float(origin.y) + (height - starSize) / 2, width: starSize, height: starSize)
     }
     func candidate(at eventX: Float, node: Node, precision: RatingPrecision) -> Double {
         guard eventX.isFinite else { return 0 }
+        let rtl = isRTL(node)
         let x = max(0, min(width, eventX - Float(node.absoluteOrigin.x) - 4))
-        let index = min(maximum - 1, Int(x / stride))
-        let fraction = (x - Float(index) * stride) / cellWidth
-        let part = precision == .half && fraction <= 0.5 ? 0.5 : 1.0
+        let visualIndex = min(maximum - 1, Int(x / stride))
+        let fraction = (x - Float(visualIndex) * stride) / cellWidth
+        let index = rtl ? maximum - 1 - visualIndex : visualIndex
+        let isHalf = rtl ? fraction >= 0.5 : fraction <= 0.5
+        let part = precision == .half && isHalf ? 0.5 : 1.0
         return Double(index) + part
     }
     func contains(_ x: Float, _ y: Float, node: Node) -> Bool {

@@ -7,6 +7,7 @@ struct RatingStory: View {
     @State private var half = 2.5
     @State private var ten = 7.0
     @State private var custom = 3.0
+    @State private var rtl = 3.0
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
@@ -54,6 +55,17 @@ struct RatingStory: View {
                         $0.appearance.starSize = 36; $0.appearance.spacing = 8; $0.appearance.filled = .accent
                     }
                     Text("Score: \(custom) / 7").font(.bodyStrong)
+                }
+            }
+            StorySection("RTL", "Stars run from the trailing edge: the rightmost star is the first point, filled half stars grow from the right, and Left/Right arrows mirror.") {
+                Row(alignment: .center, spacing: 20) {
+                    Rating("RTL rating", value: $rtl) {
+                        $0.selection.precision = .half
+                        $0.selection.isEnabled = options.isEnabled
+                    }
+                    .layoutDirection(.rtl)
+                    .debugName("rating-rtl")
+                    Text("Score: \(rtl) / 5").font(.bodyStrong)
                 }
             }
         }
