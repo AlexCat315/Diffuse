@@ -72,7 +72,7 @@ struct CommandPaletteAdaptiveTests: GuavaUIComposeSerializedSuite {
             let row = try button("Toggle Theme", graph)
             #expect(row.frame.height == 44)
             let header = try #require(nodes(graph.tree.root).first {
-                $0.accessibility?.role == .staticText && $0.accessibility?.label == "VIEW"
+                $0.accessibility?.role == .staticText && $0.accessibility?.label == "View"
             })
             #expect(header.frame.height == 36)
             #expect(nodes(graph.tree.root).contains { $0.accessibility?.label == "Format Document" })

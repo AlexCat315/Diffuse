@@ -69,7 +69,6 @@ Panel("Console", isActive: true) {
 | 设计系统 | 借鉴点 |
 | -------- | ------ |
 | Fluent UI v9 | Card + CardHeader |
-| Material 3 | Card variants |
 | Radix Primitives | 暂无原生，参考 Dialog 的 header/content 拆分 |
 
 ## File map

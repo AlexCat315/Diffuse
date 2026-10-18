@@ -167,7 +167,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 
 | 设计系统 | 借鉴点 |
 | -------- | ------ |
-| Material 3 | List item 高度（48 standard, 30 dense） |
+| Apple HIG | 触摸行 ≥ 44pt；指针紧凑行保持 30/38pt |
 | Fluent UI v9 | 单选 / 多选模式分离（List / MultiSelectList） |
 | SwiftUI | `List(items, id:, selection:)` 调用形态 + ListStyle |
 

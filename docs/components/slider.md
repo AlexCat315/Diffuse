@@ -64,7 +64,6 @@
 
 | 设计系统 | 借鉴点 |
 | -------- | ------ |
-| Material 3 | continuous Slider 的 thumb 大小 + filled track 视觉 |
 | Fluent UI v9 | hover/press 反馈强度 |
 | Radix Primitives | `Slider.Root` + `Slider.Track` + `Slider.Range` + `Slider.Thumb` 槽位拆分 |
 | SwiftUI | `Slider(value:in:step:)` 调用形态 |

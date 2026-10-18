@@ -30,7 +30,7 @@ struct MetricCard: View {
     }
     private var card: some View {
         DashboardCard {
-            Text(title.uppercased()).font(.caption).letterSpacing(0.8).foregroundColor(.onSurfaceVariant)
+            Text(title).font(.caption).letterSpacing(0.8).foregroundColor(.onSurfaceVariant)
             Row(alignment: .bottom, spacing: 5) {
                 Text(value).font(.display).foregroundColor(.onSurface)
                 Text(unit).font(.label).foregroundColor(.onSurfaceVariant).padding(vertical: 5)

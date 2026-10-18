@@ -117,5 +117,4 @@ guava-dev devtools capture-ui 9229 /tmp/guava-daterange.jpg
 ## References
 
 - Flutter `showDateRangePicker`
-- Material 3 date range picker
 - SwiftUI 无内置 DateRangePicker（Calendar + 自定义状态）

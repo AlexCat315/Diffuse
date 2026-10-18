@@ -10,7 +10,7 @@
 4. **States** —— rest / hover / press / focus / selected / disabled 矩阵
 5. **Behavior** —— 键盘、指针、IME、辅助功能默认值
 6. **Authoring rules** —— 调用方应做 / 不应做的事
-7. **References** —— Material 3 / Fluent / Radix / Flutter Material / SwiftUI 对应组件
+7. **References** —— Apple HIG / SwiftUI 为主，Fluent / Radix 仅作交互对照
 
 底层 token 体系见 [standard.md](standard.md)。
 

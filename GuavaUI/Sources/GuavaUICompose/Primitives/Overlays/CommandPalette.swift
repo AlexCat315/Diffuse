@@ -276,7 +276,7 @@ public struct CommandPalette: View {
                                  scrollToIndex: highlightedEntryIndex) { entry in
                 switch entry {
                 case .header(let title):
-                    Text(title.uppercased())
+                    Text(title)
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                         .padding(horizontal: 14)

@@ -17,7 +17,7 @@
 
 - **search**：唯一 Tab 停靠点；输入即过滤
 - **results**：虚拟化列表，行高 40，分组标题 24；结果区水平内缩 8pt，选中行是圆角 pill，不压面板圆角或滚动条 gutter
-- **recent**：query 为空时，最近执行的命令置于 "RECENT" 分组，并从原分组中移除避免重复
+- **recent**：query 为空时，最近执行的命令置于 "Recent" 分组，并从原分组中移除避免重复
 - **highlight**：键盘/指针共用的选中行；Enter/点击执行
 - **footer**：快捷键提示与 `visible / total` 计数；上方 1pt 分隔线，不含整块边框或背景，避免方形底角穿出面板
 
@@ -133,7 +133,7 @@ guava-dev devtools capture-ui 9229 /tmp/guava-palette.jpg
 
 compact 实测（`--width 390 --height 820`）：`query_ui_nodes` 的 `role=dialog` 返回 374×560、位置 (8,130)；`capture-ui` 确认搜索行、结果区和 footer 都落在窗口内。触摸行高由 `CommandPaletteAdaptiveTests` 在 390pt 触摸表面断言，DevTools 宿主默认指针输入因此现场行高为 40。
 
-Recent 实测（720×820）：打开面板 → 点击 `Toggle Theme` → 再次打开；`query_ui_nodes {"text":"Recent"}` 返回 564×24 的 header，`capture-ui` 显示 `Toggle Theme` 位于 RECENT 分组首行并保持选中，原 VIEW/NAVIGATE 分组不重复。
+Recent 实测（720×820）：打开面板 → 点击 `Toggle Theme` → 再次打开；`query_ui_nodes {"text":"Recent"}` 返回 564×24 的 header，`capture-ui` 显示 `Toggle Theme` 位于 Recent 分组首行并保持选中，原 View/Navigate 分组不重复。
 
 ## References
 

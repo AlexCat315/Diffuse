@@ -117,7 +117,7 @@ public struct SectionedList<SectionID: Hashable, Item: Identifiable, RowContent:
     private func entryView(_ entry: Entry, height: Float) -> some View {
         switch entry {
         case .header(let id, let title):
-            Text(title.uppercased())
+            Text(title)
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
@@ -150,7 +150,7 @@ public struct SectionedList<SectionID: Hashable, Item: Identifiable, RowContent:
         // scrollbar lane clear when the bar is visible.
         Box {
             Box(direction: .row, alignItems: .center, spacing: 0) {
-                Text(header.title.uppercased())
+                Text(header.title)
                     .lineLimit(1)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)

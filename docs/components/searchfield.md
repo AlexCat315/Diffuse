@@ -123,4 +123,3 @@ guava-dev devtools capture-ui 9229 /tmp/guava-search.jpg
 
 - SwiftUI `.searchable` / `SearchField`
 - Flutter `SearchBar` / `SearchAnchor`
-- Material 3 search

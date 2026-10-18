@@ -126,5 +126,4 @@ guava-dev devtools capture-ui 9229 /tmp/guava-menubutton.jpg
 ## References
 
 - SwiftUI `Menu`
-- Material 3 `MenuAnchor`
 - Flutter `MenuAnchor` / `PopupMenuButton`

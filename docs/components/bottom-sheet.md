@@ -127,5 +127,4 @@ guava-dev devtools capture-ui 9229 /tmp/guava-bottomsheet.jpg
 ## References
 
 - SwiftUI `.sheet` + `.presentationDetents`
-- Material 3 bottom sheet
 - Flutter `showModalBottomSheet` / `DraggableScrollableSheet`

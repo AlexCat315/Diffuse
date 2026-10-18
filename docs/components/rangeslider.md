@@ -105,5 +105,4 @@ guava-dev devtools capture-ui 9229 /tmp/guava-range.jpg
 ## References
 
 - Flutter `RangeSlider`
-- Material 3 range slider
 - SwiftUI 无内置 RangeSlider（双 Slider 组合）

@@ -18,7 +18,7 @@
 
 | 槽位 | 默认值 | Token |
 | ---- | ------ | ----- |
-| chrome.height | 32 | 硬编码（Material compact size） |
+| chrome.height | 32 | 硬编码（macOS compact；触摸面提升到 44pt） |
 | chrome.cornerRadius | `theme.radius.md` | 10 (dark) / 10 (light) |
 | chrome.padding (h) | `theme.spacing.md` | 12 |
 | chrome.padding (v) | 0（高度由 frame 控制） | — |
@@ -79,11 +79,9 @@ State 切换走语义动效 `.animation(.semantic(.fast, in: theme), value: conf
 
 | 设计系统 | 对应组件 | 借鉴点 |
 | -------- | -------- | ------ |
-| Material 3 | Filled / Tonal / Outlined / Text Button | 5 个变体的语义 + state-layer overlay 体系 |
+| Apple HIG / SwiftUI | Button + ButtonStyle | 32pt 指针高度、44pt 触摸命中、克制的 chrome |
 | Fluent UI v9 | PrimaryButton / DefaultButton / SubtleButton | "subtle" ≈ ghost 的 hover 反馈强度 |
 | Radix Primitives | Button (asChild pattern) | label 完全由调用方决定的开放槽 |
-| Flutter Material | ElevatedButton / FilledButton / TextButton | 高度 36 / cornerRadius 8 的体感（我们略小） |
-| SwiftUI | Button + ButtonStyle | makeBody(configuration:) 协议形态直接对应 |
 
 ## File map
 

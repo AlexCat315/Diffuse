@@ -61,7 +61,7 @@
 - **MenuButton**：常规按钮触发器 + Popover + Menu；保留 hover/press/focus/disabled、expanded 语义、Escape/外部点击关闭与菜单键盘导航。`[已实现]`，见 [MenuButton](menubutton.md)。
 - **SplitButton**：主操作 + 下拉备选；左侧主按钮 + 右侧 MenuButton 箭头；两区各自命中 ≥ 44（触摸）且禁用同步；两区共享 1px `.border` 分隔线；菜单复用 Menu 契约。`[已实现]`，见 [SplitButton](splitbutton.md)
 - SplitButton 手机/桌面：主按钮填充剩余宽度，箭头自然宽度；下拉从锚点下方展开，底部不足上翻。`[已实现]`
-- SplitButton 交互与验收：单一 Tab 停靠进入整体，左右方向键在主/箭头两区之间移动并同步 roving Tab stop；两区各自 Enter/Space 激活，菜单复用 Menu；两段仍各自保留 secondary 圆角 chrome，1px 分隔线位于两段之间。`SplitButtonTests` 覆盖主/备动作、禁用与 roving 焦点；Gallery `splitButton` 页提供真实操作。参考：Fluent SplitButton；Material `SplitButton`。
+- SplitButton 交互与验收：单一 Tab 停靠进入整体，左右方向键在主/箭头两区之间移动并同步 roving Tab stop；两区各自 Enter/Space 激活，菜单复用 Menu；两段仍各自保留 secondary 圆角 chrome，1px 分隔线位于两段之间。`SplitButtonTests` 覆盖主/备动作、禁用与 roving 焦点；Gallery `splitButton` 页提供真实操作。参考：Fluent SplitButton；Apple `Menu` + `Button` 组合。
 
 ### 2.6 RangeSlider（P1）
 
@@ -115,7 +115,6 @@
 | RichText / Markdown | P2 | 行内样式、链接、代码块、列表 | 正文换行、代码块横向滚动 | 选择/复制、链接辅助功能与键盘激活 | SwiftUI `Text(markdown:)`；Flutter `flutter_markdown` |
 | TimePicker / WheelPicker | P2 | 滚轮或列表选择，选中行 accent | 触摸行 ≥ 44、吸附；平板可两列（时/分） | 上下键、Page、Home/End；a11y 可增减 | Flutter `CupertinoPicker`；SwiftUI `Picker(.wheel)` |
 | Masonry | P2 | 多列瀑布流、列平衡 | 1–2 列；窄宽单列 | 列数由宽度决定；滚动窗口化可选 | Flutter `MasonryGridView`（三方）；CSS columns |
-| FAB | P2 | 圆形 56，主操作 | 仅触摸面出现/或桌面显式启用；避开底部安全区 | 滚动隐藏可选；a11y 名称必填 | Material FAB |
 | OTP / PIN | P3 | N 个方格、自动前进 | 数字键盘、粘贴分发 | Backspace 退格、粘贴全填、a11y 整值读写 | 移动生态惯例 |
 | ActionSheet / Popconfirm | P2 | 由 AlertDialog + Sheet + Popover 组合 | 窄宽用底部弹出 | 复用 Modal 焦点/关闭契约 | SwiftUI `confirmationDialog`；Flutter `showModalBottomSheet` |
 | Menu 富内容 | P2 | 图标槽、任意行内容、链接语义 | 触摸行 ≥ 44 | 与现有键盘导航共用；富内容不破坏前缀查找 | Radix DropdownMenu；Fluent Menu |
@@ -162,7 +161,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 **P1（常用能力）**：新增组件与列表能力已实现；既有组件剩余 P1 缺口仍见第 3 节，包括 Sidebar 嵌套/项级操作，以及 ScrollView 锚定与带时长程序滚动。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
-**P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、FAB、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
+**P2（长尾/体验）**：TimePicker/滚轮、TreeTable、RichText/Markdown、Masonry、Chart 扩展、DataTable 高级能力、CodeEditor snippets、图片缓存与解码能力、Workspace 深化。
 
 **P3（按需）**：OTP/PIN、masked input、外链确认等。
 
@@ -177,7 +176,7 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 
 ## 6. 参考对照（缺失组件）
 
-| 缺失组件 | SwiftUI | Flutter / Material 3 |
+| 缺失组件 | SwiftUI / Apple HIG | Flutter（仅行为对照） |
 | --- | --- | --- |
 | AppBar / NavigationBar | `NavigationStack` + `toolbar` | `AppBar`、`SliverAppBar` |
 | NavigationDrawer | `NavigationSplitView`、`sidebar` | `NavigationDrawer`、`Drawer` |
@@ -194,4 +193,4 @@ Toast 操作与位置已补齐：最多两个内联操作、真实按钮键盘�
 | BottomSheet | `.sheet` + `presentationDetents`（已实现） | `showModalBottomSheet` |
 | RichText / Markdown | `Text(markdown:)`、`AttributedString` | `flutter_markdown`（三方） |
 | TreeTable | `Table` + `OutlineGroup` 组合 | `TreeView` 套件（三方） |
-| Toast 操作 | 无内置（已实现） | `SnackBar` + `SnackBarAction` |
+| Toast 操作 | 无系统等价（已实现） | 仅作行为对照，不采用 Snackbar 视觉 |

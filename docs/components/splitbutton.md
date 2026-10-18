@@ -112,5 +112,4 @@ guava-dev devtools capture-ui 9229 /tmp/guava-splitbutton.jpg
 ## References
 
 - Fluent SplitButton
-- Material 3 split button
 - SwiftUI `Menu` + `Button` 组合

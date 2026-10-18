@@ -64,7 +64,7 @@ public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
                                 }.max()
                                 Box(direction: .column, alignItems: .stretch, spacing: 3) {
                                     if !section.title.isEmpty && !presentation.isRail {
-                                        Text(section.title.uppercased()).font(.caption).foregroundColor(.onSurfaceMuted)
+                                        Text(section.title).font(.caption).foregroundColor(.onSurfaceMuted)
                                             .padding(horizontal: 8, vertical: 8)
                                     }
                                     for entry in entries {

@@ -78,7 +78,6 @@ Toggle(isOn: $enabled, isEnabled: false)
 | -------- | ------ |
 | SwiftUI | `Toggle(isOn:)` 的绑定形态 |
 | Fluent UI v9 | switch 的胶囊 track + thumb 语义 |
-| Material 3 | on/off 状态的 accent ramp 过渡 |
 
 另见：[checkbox.md](checkbox.md)
 

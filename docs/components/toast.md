@@ -131,6 +131,4 @@ Gallery `notification` 页提供 Notify、Toast with undo、Replace status、Per
 
 ## References
 
-- Material 3 Snackbar / SnackbarAction
-- Flutter `SnackBar` / `SnackBarAction`
 - SwiftUI 自定义 overlay + `.presentationDetents`（Toast 无系统内置）

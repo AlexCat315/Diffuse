@@ -3,7 +3,7 @@
 本文把 [组件标准](standard.md) 的交付要求展开为可实现、可验收的逐项规范：先定义布局容器在空间不足时的统一处理阶梯，再逐项规定控件的默认外观、手机与平板上的重排方式，以及触摸、键盘和辅助功能交互；随后给出动效与动画（曲线、弹簧、进入/退出）的选型与实现；最后给出与 Gallery、单元测试和真机对应的验收方法。
 
 - 适用对象：`GuavaUI` 第一方容器与控件；应用自定义组件在其职责范围内复用同一套表面模型与阶梯。
-- 设计参考：SwiftUI（size class、`ViewThatFits`、`Layout`、focus/keyboard 语义）与 Flutter（`MediaQuery`、`LayoutBuilder`、 adaptive 的 bar/rail/drawer 收敛、`FittedBox`/`TextOverflow`、`ActionChip`/overflow menu 模式）。命名与 API 不必对齐，行为契约对齐。
+- 设计参考：**Apple Human Interface Guidelines 与 SwiftUI**（size class、`ViewThatFits`、`Layout`、focus/keyboard 语义、44pt 触摸目标、vibrancy/材质、克制的阴影与圆角）。Flutter 仅作为自适应行为对照，不作为视觉风格来源；不采用 48dp 密度、FAB、elevation tint、全大写分组标题或 ripple 作为默认规范。命名与 API 不必对齐，行为契约对齐。
 - 状态标注：第 1、3 节的关键行为在行尾带 `[已实现]`、`[部分]`、`[未实现]`，表示当前代码与本规范的差距；未实现项必须按第 5 节清单关闭，不能默认豁免。
 - 数值均为逻辑点。DPI 只影响栅格密度；`TextScaler` 只缩放一次。宿主提供 viewport、safeArea、input、reducesMotion，组件不得直接读取平台 API。
 
@@ -97,6 +97,8 @@
 - Grid 命名字段列使用同一 `ColumnVisibility`，隐藏后仍保留源行槽位与局部状态；内置显隐入口和 minimum 横向滚动，匿名 adaptive 卡片流保持原语义。`[已实现]`
 
 ## 2. 视觉与密度基线
+
+视觉基线是 **iOS / macOS**：触摸目标统一 44pt（不是 48dp），指针面保持紧凑但可点；分组标题使用 title case，不使用全大写；浮层使用系统感的半透明材质、细边框和轻阴影，不使用 elevation tint/ripple；主操作用按钮或工具栏，不引入 FAB。曲线与弹簧以 Apple 的阻尼/响应模型为默认，`standard`/`emphasized` 等命名是通用缓动 token，不绑定某一设计系统。
 
 所有控件默认外观由当前 `Theme` 的语义 token 决定，不允许在组件内写死颜色：
 
@@ -357,10 +359,10 @@
 
 **CommandPalette**
 
-- 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×560；结果经 `VariableVirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "RECENT" 分组置顶。`[已实现]`
+- 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×560；结果经 `VariableVirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "Recent" 分组置顶。`[已实现]`
 - 手机：compact 下宽 `viewport − 16`、高 `min(560, viewport − 16)`，`inset 8` 居中；结果行触摸 ≥44pt、header 36pt，指针保持 40/24。`[部分]`（几何与行高已完成；软键盘出现后的结果区收缩仍由宿主 IME/安全区处理）
 - 平板 / 桌面：640×560、顶部放置、键盘上下移动。`[已实现]`
-- 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；执行后记录最近命令（最多 3 条，session 级），再次打开时置于 RECENT 并从原分组去重；1000 条结果只挂载 <60 行，`scrollToIndex` 跟随 highlight；验收：`CommandPaletteAdaptiveTests`（390 触摸 / 1280 指针几何与行高）、`FeedbackComponentTests`（Recent 投影）、`--component commandPalette`、`ProductInteractionRegressionTests.commandVirtualization` + 200% 行预算测试。
+- 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；执行后记录最近命令（最多 3 条，session 级），再次打开时置于 Recent 并从原分组去重；1000 条结果只挂载 <60 行，`scrollToIndex` 跟随 highlight；验收：`CommandPaletteAdaptiveTests`（390 触摸 / 1280 指针几何与行高）、`FeedbackComponentTests`（Recent 投影）、`--component commandPalette`、`ProductInteractionRegressionTests.commandVirtualization` + 200% 行预算测试。
 
 ### 3.6 浮层与反馈面
 
@@ -609,7 +611,7 @@ P1 通用拖放已完成：`DragScope` 持有类型化会话，`Draggable` 在 6
 | easeOutBack | cubic-bezier(0.34, 1.56, 0.64, 1) | 出现时轻微过冲再落位 |
 | easeInBack | cubic-bezier(0.36, 0, 0.66, -0.56) | 退出前先蓄力 |
 | easeInOutBack | cubic-bezier(0.68, -0.6, 0.32, 1.6) | 强调形变 |
-| emphasized | cubic-bezier(0.2, 0, 0, 1) | Material 大转场（已有 token） |
+| emphasized | cubic-bezier(0.2, 0, 0, 1) | 系统强调转场（已有 token） |
 
 Flutter 的 `easeOutBack` 属于这一类；`elasticOut` / `bounceOut` 是多段振荡函数，Bezier 表达不了，已提供命名曲线 `.elasticOut`（周期 0.4 的衰减振荡）与 `.bounceOut`（四次递衰抛物线）`[已实现]`。
 
@@ -617,11 +619,11 @@ Flutter 的 `easeOutBack` 属于这一类；`elasticOut` / `bounceOut` 是多段
 
 | 系统曲线 | cubic-bezier | GuavaUI |
 | --- | --- | --- |
-| Material standard / Android FastOutSlowIn | (.4,0,.2,1) | `Easing.standard` = `theme.motion.standardEasing` `[已实现]` |
-| Material emphasized | (.2,0,0,1) | `Easing.emphasized` = `theme.motion.emphasized` `[已实现]` |
-| Material decelerate（进入） | (0,0,.2,1) | `Easing.decelerate`、`.semantic(.entering)` `[已实现]` |
-| Material accelerate（退出） | (.4,0,1,1) | `Easing.accelerate`、`.semantic(.exiting)` `[已实现]` |
-| iOS spring | `response` + `dampingFraction` | `Animation.spring(response:dampingFraction:)` `[已实现]` |
+| system standard | (.4,0,.2,1) | `Easing.standard` = `theme.motion.standardEasing` `[已实现]` |
+| system emphasized | (.2,0,0,1) | `Easing.emphasized` = `theme.motion.emphasized` `[已实现]` |
+| system decelerate（进入） | (0,0,.2,1) | `Easing.decelerate`、`.semantic(.entering)` `[已实现]` |
+| system accelerate（退出） | (.4,0,1,1) | `Easing.accelerate`、`.semantic(.exiting)` `[已实现]` |
+| iOS spring（默认） | `response` + `dampingFraction` | `Animation.spring(response:dampingFraction:)` `[已实现]` |
 
 语义动效引用（应用与组件默认使用）：
 
@@ -808,11 +810,11 @@ withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1),
 - [设计系统与缩放](design-system.md)：token、`TextScaler`、图标策略；本文第 2 节只给验收基线。
 - 各组件文档末尾的"响应式与输入密度"小节保存该控件的现状细节；本文冲突时以本文契约与第 5 节状态为准。
 
-### 7.1 参考对照（SwiftUI / Flutter）
+### 7.1 参考对照（SwiftUI / 跨平台行为）
 
 用于实现时查找对应的成熟模式；行为契约对齐，名称与 API 不对齐。
 
-| 需求 | SwiftUI | Flutter / Material 3 |
+| 需求 | SwiftUI / Apple HIG | Flutter（仅行为对照） |
 | --- | --- | --- |
 | 宽度/高度类与设备判定 | `horizontalSizeClass`、`verticalSizeClass` | `MediaQuery.sizeOf`、`LayoutBuilder` |
 | 容器级自适应 | `ViewThatFits`、自定义 `Layout` | `LayoutBuilder`、`CustomMultiChildLayout` |
@@ -822,7 +824,7 @@ withAnimation(Animation(duration: 0.3, curve: .cubicBezier(0.34, 1.56, 0.64, 1),
 | 单行截断 | `lineLimit(1)` + `truncationMode(.tail)` | `maxLines` + `TextOverflow.ellipsis` |
 | 换行容器 | `FlowLayout`（自定义） | `Wrap` |
 | 滚动与虚拟化 | `List`、`LazyVStack`、`ScrollView` | `ListView.builder`、`SliverGrid` |
-| 触摸目标 | HIG 44pt | Material 48dp（本项目下限取 44pt，与既有密度契约一致） |
+| 触摸目标 | HIG 44pt | 本项目统一 44pt；不采用 48dp 密度 |
 | 安全区 | `safeAreaInset`、`ignoresSafeArea` | `SafeArea`、`MediaQuery.paddingOf` |
 | 焦点与键盘 | `focusable`、`FocusState`、`focusEffect` | `Focus`、`FocusTraversalGroup`、`Shortcuts` |
 | 辅助功能 | accessibility label/value/trait | `Semantics`（label/value/onTap） |
