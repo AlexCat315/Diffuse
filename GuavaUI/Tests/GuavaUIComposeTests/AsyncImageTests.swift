@@ -158,10 +158,11 @@ struct AsyncImageTests {
                   return asset
               }, enqueue: ui.enqueue)
     }
-    private func wait(_ condition: () async -> Bool) async throws {
-        // Other Compose suites perform synchronous layout on the main actor.
-        // This is a correctness wait, not a latency benchmark; allow those
-        // suites to finish before treating a pending worker as a failure.
+    @concurrent
+    private nonisolated func wait(_ condition: @Sendable () async -> Bool) async throws {
+        // Sample worker readiness on a concurrent executor. Synchronous layout
+        // suites can occupy the main actor longer than this deadline; that
+        // must not delay the next predicate check or manufacture a timeout.
         let deadline = ContinuousClock.now.advanced(by: .seconds(30))
         while !(await condition()) {
             guard ContinuousClock.now < deadline else { Issue.record("Image task did not settle"); throw CancellationError() }

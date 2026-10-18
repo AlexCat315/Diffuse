@@ -101,9 +101,12 @@ macOS 彩色 emoji 接入共享文字排版和独立 RGBA 图集，支持普通�
 
 ```sh
 swift run --package-path Tools/Developer guava-dev maintainability
-swift test --package-path GuavaUI
+swift test --package-path GuavaUI --no-parallel
+swift test --package-path GuavaUI/Examples --no-parallel
 swift test --package-path Editor
 ```
+
+原生 UI 测试共享字体、输入等进程级环境；完整回归显式使用 `--no-parallel` 隔离各测试场景，保留全部测试和断言。`FontAtlas` 按同一线程拥有的模型使用。Portable 测试可继续按默认模式运行。
 
 [Portable 核心](Portable/README.md)与[浏览器原型](Browser/README.md)可独立使用。浏览器原型尚未提供全部原生组件画廊。
 

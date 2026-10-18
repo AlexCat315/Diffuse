@@ -68,10 +68,12 @@ jobs:
         working-directory: GuavaUI
         # Run every test target, including GuavaUITests, and automatically
         # cover future targets without requiring workflow edits.
+        # Native UI suites share font/input environments. Serialize suites as
+        # well as their cases; FreeType atlases require one owning thread.
         run: |
           swift test --package-path ../Engine/Logging
-          swift test
-          swift test --package-path Examples
+          swift test --no-parallel
+          swift test --package-path Examples --no-parallel
           swift test --package-path ../Tools/Guava
           swift run --package-path ../Tools/Developer guava-dev boundaries
 

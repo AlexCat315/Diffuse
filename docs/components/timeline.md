@@ -31,8 +31,8 @@ Timeline(events: [
 2026-10-18 原生验收：macOS / Metal，390、720、1280 × light/dark × 100%/200%，通过 DevTools `query-ui`、`input-ui` 与 `capture-ui` 查询、切换和读取实际绘制画面。100% 下，主示例的短标题/长标题事件高度分别为 390pt 的 69/129pt、720pt 的 69/69pt、1280pt 的 48/48pt；1280pt 并排时间，大字号放不下时移到下一行。查询 `role=listItem, text="Build worker in Shanghai"` 能用时间值定位到唯一事件，`get_diagnostics.layoutIssues.total` 为 0。390pt 触摸嵌入预览在 200% 下保留独立 140pt 滚动视口；窗口宽度往返与物理输入形态的保留断言由上述组件测试覆盖。未使用操作系统自动化，原生截图不替代手机真机触摸验收。
 
 ```sh
-swift test --package-path GuavaUI --filter 'TimelineTests|timelineContent'
-swift test --package-path GuavaUI/Examples
+swift test --package-path GuavaUI --no-parallel --filter 'TimelineTests|timelineContent'
+swift test --package-path GuavaUI/Examples --no-parallel
 ```
 
 分组、折叠和时间轴缩放仍由 [缺口清单](gaps.md) 跟踪。
