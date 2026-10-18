@@ -23,10 +23,12 @@ TextField(text: $source) { input in
 
 `TextField` 是多行文本与代码编辑的统一入口，不存在独立的 `CodeEditor` 类型。代码行号、缩进、诊断、补全和语法颜色是可选能力，由 `codeEditing` 配置开启；关闭后就是普通软换行文本编辑器。Gallery 的 **Text Editor** 页用同一个字段演示两种模式。
 
-- 行号 gutter 默认透明，只保留一条 1pt 分隔线；短文档不会出现整块灰色竖条。需要底色时传 `codeEditing.lineNumberGutterColor`。
-- 当前行绘制贯穿编辑器宽度的低对比度 band，当前行号同步提亮；所有行和 band 使用同一个 `resolvedLineHeight`，行号按文本 baseline 对齐。
+- 行号 gutter 默认透明，不画整块底色，也不画竖分隔线；行号靠自身列宽和右对齐与正文分开。需要底色时传 `codeEditing.lineNumberGutterColor`。
+- 当前行绘制贯穿编辑器宽度的低对比度 band，当前行号同步提亮，并有一圈不抢眼的 accent 边框；所有行、边框和 band 使用同一个 `resolvedLineHeight`，行号按文本 baseline 对齐。
+- 缩进参考线按 `codeEditing.indentationWidth` 的列宽绘制，tab 按同一宽度展开；只画当前可见且确实有缩进的行。
+- 括号匹配在光标所在或前一个字符上查找 pair，高亮两个括号；跳过字符串、行注释和块注释中的括号。匹配窗口限制在 caret 前后 64 KiB，避免大文档每帧扫描全文。
 - 开启行号时垂直内边距至少 8pt，首行/末行不再贴住输入框边缘。
-- 文档头（文件名、语言 badge、Code mode）和状态栏（Ln/Col、Spaces/Wrap、UTF-8）由调用方组合；字段本身只负责编辑表面。
+- 文档头（文件名、语言 badge、Code mode）和状态栏（Ln/Col、Spaces/Wrap、UTF-8）由调用方组合；字段本身只负责编辑表面。两者只用背景层级与留白区分，不画水平分隔线。
 - 外层容器负责圆角和裁剪，字段可用自定义 `TextFieldStyle` 去掉自己的边框，避免双层输入框。
 - `codeEditing.syntaxColorAtUTF8Offset` 是唯一语法颜色入口。Gallery Text Editor 默认用轻量 Swift lexer 给关键字、类型、字符串、数字和注释着色；超过 30 万 UTF-8 字节的压力样例会关闭高亮，生产脚本编辑器仍走 Tree-sitter/LSP。
 

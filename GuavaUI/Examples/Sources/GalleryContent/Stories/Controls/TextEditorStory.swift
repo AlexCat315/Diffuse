@@ -54,9 +54,7 @@ struct TextEditorStory: View {
             ThemeReader { theme in
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     documentHeader
-                    Box {}.frame(height: 1).background(.border)
                     ResizableEditor(initialHeight: 280) { editor(theme: theme) }
-                    Box {}.frame(height: 1).background(.border)
                     statusBar
                 }
                 .background(.surface)

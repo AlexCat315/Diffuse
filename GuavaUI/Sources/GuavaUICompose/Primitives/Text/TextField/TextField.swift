@@ -630,6 +630,15 @@ public struct TextField: View {
                                     width: frameWidth, height: clippedBottom - clippedTop),
                              color: theme.colors.stateLayerHover.multipliedAlpha(node.opacity * 0.7))
             }
+            let fullyVisible = top >= Float(origin.y)
+                && top + resolvedLineHeight <= Float(origin.y) + frameHeight
+            if fullyVisible {
+                list.addRoundedRectStroke(
+                    UIRect(x: Float(origin.x) + 2, y: top + 1,
+                           width: max(0, frameWidth - 4), height: max(0, resolvedLineHeight - 2)),
+                    radius: 3, width: 1,
+                    color: theme.colors.accent.multipliedAlpha(node.opacity * 0.42))
+            }
         }
 
         // Paint prepend / append slabs and inline prefix / suffix glyphs.
@@ -743,6 +752,16 @@ public struct TextField: View {
         let textClip = UIRect(x: fixedTextOriginX, y: Float(origin.y),
                               width: viewport.availableTextWidth, height: frameHeight)
         list.pushClip(textClip)
+        if codeEditing.showsLineNumbers && self.layout.axis == .vertical {
+            drawIndentGuides(visibleLayout, source: current, textOriginX: fixedTextOriginX,
+                             textOriginY: textOriginY, lineHeight: resolvedLineHeight,
+                             node: node, env: env, font: resolvedFont, list: list)
+            drawBracketMatches(visibleLayout, source: current,
+                               caretIndex: state.selection.cursorIndex,
+                               textOriginX: fixedTextOriginX, textOriginY: textOriginY,
+                               lineHeight: resolvedLineHeight, node: node, env: env,
+                               font: resolvedFont, list: list)
+        }
         // Selection highlight first (drawn under the glyphs).
         if isFocused, !renderState.isComposing, let range = selectionRange(state), !current.isEmpty {
             engine.drawSelection(range,
@@ -1059,6 +1078,178 @@ public struct TextField: View {
         return numberLayout.totalWidth + theme.spacing.md
     }
 
+    private func drawIndentGuides(_ layout: TextLayoutResult,
+                                  source: TextBuffer,
+                                  textOriginX: Float,
+                                  textOriginY: Float,
+                                  lineHeight: Float,
+                                  node: Node,
+                                  env: TextEnvironment,
+                                  font: Font,
+                                  list: DrawList) {
+        let theme = node.theme
+        let tabWidth = codeEditing.indentationWidth ?? 4
+        let spaceWidth = env.cachedLayout(text: " ", font: font, lineHeight: lineHeight,
+                                          maxWidth: .infinity, alignment: .leading).totalWidth
+        guard spaceWidth > 0 else { return }
+        let color = theme.colors.onSurfaceMuted.multipliedAlpha(node.opacity * 0.18)
+        for line in layout.lines {
+            let bytes = source.utf8Bytes(inUTF8Range: Int(line.startCluster)..<Int(line.endCluster))
+            guard !bytes.isEmpty else { continue }
+            var columns = 0
+            for byte in bytes {
+                if byte == UInt8(ascii: " ") {
+                    columns += 1
+                } else if byte == UInt8(ascii: "\t") {
+                    columns += tabWidth - columns % tabWidth
+                } else {
+                    break
+                }
+            }
+            let levels = columns / tabWidth
+            guard levels > 0 else { continue }
+            let top = textOriginY + line.topY + 2
+            let height = max(0, lineHeight - 4)
+            for level in 1...levels {
+                let x = textOriginX + Float(level * tabWidth) * spaceWidth + 0.5
+                list.addRect(UIRect(x: x, y: top, width: 1, height: height), color: color)
+            }
+        }
+    }
+
+    private func drawBracketMatches(_ layout: TextLayoutResult,
+                                    source: TextBuffer,
+                                    caretIndex: Int,
+                                    textOriginX: Float,
+                                    textOriginY: Float,
+                                    lineHeight: Float,
+                                    node: Node,
+                                    env: TextEnvironment,
+                                    font: Font,
+                                    list: DrawList) {
+        let caret = source.utf8Offset(forCharacterIndex: min(source.characterCount, max(0, caretIndex)))
+        let windowStart = max(0, caret - 65_536)
+        let windowEnd = min(source.utf8Length, caret + 65_536)
+        guard windowEnd > windowStart else { return }
+        let bytes = source.utf8Bytes(inUTF8Range: windowStart..<windowEnd)
+        let code = Self.codeMask(bytes)
+        let localCaret = caret - windowStart
+        var target: Int?
+        if localCaret < bytes.count, code[localCaret], Self.isBracket(bytes[localCaret]) {
+            target = localCaret
+        } else if localCaret > 0, code[localCaret - 1], Self.isBracket(bytes[localCaret - 1]) {
+            target = localCaret - 1
+        }
+        guard let target, let localMatch = Self.matchingBracket(in: bytes, code: code, at: target) else { return }
+        let pair = [windowStart + target, windowStart + localMatch]
+        let color = node.theme.colors.accent.multipliedAlpha(node.opacity * 0.18)
+        for (offset, localOffset) in zip(pair, [target, localMatch]) {
+            let glyph = layout.lines.lazy.flatMap(\.glyphs).first { Int($0.cluster) == offset }
+            guard let glyph else { continue }
+            let bracket = String(decoding: bytes[localOffset..<localOffset + 1], as: UTF8.self)
+            let width = env.cachedLayout(text: bracket, font: font, lineHeight: lineHeight,
+                                         maxWidth: .infinity, alignment: .leading).totalWidth
+            guard width > 0 else { continue }
+            let lineTop = layout.lines.first { $0.glyphs.contains { $0.cluster == glyph.cluster } }?.topY ?? 0
+            list.addRoundedRect(
+                UIRect(x: textOriginX + glyph.x - 1, y: textOriginY + lineTop + 1,
+                       width: width + 2, height: max(0, lineHeight - 2)),
+                radius: 3, color: color)
+        }
+    }
+
+    private static func isBracket(_ byte: UInt8) -> Bool {
+        byte == 40 || byte == 41 || byte == 91 || byte == 93 || byte == 123 || byte == 125
+    }
+
+    private static func codeMask(_ bytes: [UInt8]) -> [Bool] {
+        var mask = Array(repeating: true, count: bytes.count)
+        var index = 0
+        while index < bytes.count {
+            let byte = bytes[index]
+            if byte == 47, index + 1 < bytes.count, bytes[index + 1] == 47 {
+                while index < bytes.count, bytes[index] != 10 {
+                    mask[index] = false
+                    index += 1
+                }
+                continue
+            }
+            if byte == 47, index + 1 < bytes.count, bytes[index + 1] == 42 {
+                mask[index] = false; mask[index + 1] = false
+                index += 2
+                while index < bytes.count {
+                    mask[index] = false
+                    if bytes[index] == 42, index + 1 < bytes.count, bytes[index + 1] == 47 {
+                        index += 1
+                        mask[index] = false
+                        index += 1
+                        break
+                    }
+                    index += 1
+                }
+                continue
+            }
+            if byte == 34 {
+                mask[index] = false
+                index += 1
+                while index < bytes.count {
+                    mask[index] = false
+                    if bytes[index] == 92 {
+                        index += 1
+                        if index < bytes.count { mask[index] = false }
+                    } else if bytes[index] == 34 {
+                        index += 1
+                        break
+                    }
+                    index += 1
+                }
+                continue
+            }
+            index += 1
+        }
+        return mask
+    }
+
+    private static func matchingBracket(in bytes: [UInt8], code: [Bool], at index: Int) -> Int? {
+        let openers: [UInt8: UInt8] = [40: 41, 91: 93, 123: 125]
+        let closers: [UInt8: UInt8] = [41: 40, 93: 91, 125: 123]
+        let byte = bytes[index]
+        if let close = openers[byte] {
+            var stack: [UInt8] = [close]
+            var cursor = index + 1
+            while cursor < bytes.count {
+                guard code[cursor] else { cursor += 1; continue }
+                let next = bytes[cursor]
+                if openers[next] != nil {
+                    stack.append(openers[next]!)
+                } else if closers[next] != nil {
+                    guard stack.last == next else { return nil }
+                    stack.removeLast()
+                    if stack.isEmpty { return cursor }
+                }
+                cursor += 1
+            }
+            return nil
+        }
+        if let open = closers[byte] {
+            var stack: [UInt8] = [open]
+            var cursor = index - 1
+            while cursor >= 0 {
+                guard code[cursor] else { cursor -= 1; continue }
+                let next = bytes[cursor]
+                if closers[next] != nil {
+                    stack.append(closers[next]!)
+                } else if openers[next] != nil {
+                    guard stack.last == next else { return nil }
+                    stack.removeLast()
+                    if stack.isEmpty { return cursor }
+                }
+                cursor -= 1
+            }
+        }
+        return nil
+    }
+
     private func drawLineNumbers(_ layout: TextLayoutResult,
                                  source: TextBuffer,
                                  origin: CGPoint,
@@ -1079,8 +1270,8 @@ public struct TextField: View {
         guard gutterWidth > 0 else { return }
         let gutterX = textOriginX - gutterWidth
         // Transparent by default: a full-height tinted slab reads as an empty
-        // control when the document is short. The separator alone is enough
-        // to anchor the numbers; callers can still supply a gutter colour.
+        // control when the document is short. No divider line either — the
+        // number column is separated by its own reserved width and alignment.
         if let gutterColor = codeEditing.lineNumberGutterColor {
             list.addRect(UIRect(x: gutterX,
                                 y: Float(origin.y),
@@ -1088,11 +1279,6 @@ public struct TextField: View {
                                 height: frameHeight),
                          color: gutterColor.multipliedAlpha(node.opacity))
         }
-        list.addRect(UIRect(x: textOriginX - 1,
-                            y: Float(origin.y),
-                            width: 1,
-                            height: frameHeight),
-                     color: theme.colors.onSurfaceMuted.multipliedAlpha(node.opacity * 0.22))
 
         let numberFont = Font.system(size: max(9, font.size - 2))
         var lastLineNumber = 0

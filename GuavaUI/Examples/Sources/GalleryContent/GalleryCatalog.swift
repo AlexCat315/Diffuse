@@ -39,7 +39,7 @@ public enum GalleryCatalog {
         .init(.textField, "TextField", "Inputs", "Single-line input, password, clear action, adornments and character limits."),
         .init(.searchField, "SearchField", "Inputs", "Query input with a leading search icon, clear action, submit and suggestion keyboard navigation."),
         .init(.textArea, "TextArea", "Inputs", "Multiline text with wrapping, scrolling and a resize grip."),
-        .init(.textEditor, "Text Editor", "Inputs", "Multiline prose and code editing: soft wrap, line numbers, diagnostics, completion, undo and source navigation."),
+        .init(.textEditor, "Text Editor", "Inputs", "Multiline prose and code editing: syntax colours, indent guides, bracket matching, current-line treatment, completion and undo."),
         .init(.numberField, "NumberField", "Inputs", "Commit on submit or blur, bounded values and keyboard stepping."),
         .init(.vec3Field, "Vec3Field", "Inputs", "Three-axis editing, numeric constraints and mixed values."),
         .init(.colorField, "ColorField", "Inputs", "RGBA channels and hexadecimal color input in a popover."),
