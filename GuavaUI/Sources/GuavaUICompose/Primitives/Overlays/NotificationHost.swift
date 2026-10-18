@@ -3,9 +3,9 @@ import GuavaUIRuntime
 
 /// Where toast cards are anchored inside the window.
 ///
-/// `.automatic` follows the surface width class: compact surfaces anchor at
-/// the bottom (above the home indicator), wider surfaces at the top trailing
-/// edge. The portal fit clamps the final frame inside the window.
+/// `.automatic` anchors at the top trailing edge at every width, matching an
+/// iOS notification banner rather than a bottom snackbar. The portal fit
+/// clamps the final frame inside the window.
 public enum ToastPosition: Sendable, Hashable {
     case automatic
     case topLeading
@@ -15,7 +15,7 @@ public enum ToastPosition: Sendable, Hashable {
 
     func resolved(for widthClass: UIEnvironment.WidthClass) -> ToastPosition {
         guard self == .automatic else { return self }
-        return widthClass == .compact ? .bottomTrailing : .topTrailing
+        return .topTrailing
     }
 
     /// Top-left origin passed to the portal. A bottom anchor uses the window
@@ -90,6 +90,7 @@ private struct ToastCard: View {
     let notification: ToastNotification
     let controller: ToastController
     var body: some View {
+        ThemeReader { theme in
         Box(direction: .row, alignItems: .flexStart, spacing: 10) {
             Box(direction: .column, alignItems: .stretch, spacing: 5) {
                 Text(notification.title).font(.bodyStrong).foregroundColor(notification.tone.color)
@@ -109,8 +110,10 @@ private struct ToastCard: View {
                     .debugName("toast-dismiss-\(notification.id)")
             }
         // Opaque on purpose: a toast must stay readable over whatever it covers.
-        }.padding(14).background(.surfaceFloating).cornerRadius(.controlRadius).border(.border, width: 1)
+        }.padding(14).background(.surfaceFloating).cornerRadius(.groupRadius).border(.border, width: 1)
+            .shadow(color: theme.elevation.low.color ?? .clear, offsetY: 2, blur: 10)
             .onHover { controller.setPaused($0, id: notification.id) }
+        }
     }
 
     private func actionButton(_ action: ToastAction) -> some View {

@@ -15,7 +15,7 @@
 - **host**：窗口级；`NotificationHost` 挂一次，所有通知通过 `ToastController` 进入同一队列
 - **card**：标题、正文、最多两个内联操作、可选关闭按钮
 - **queue**：`maxVisible` 控制同屏卡片数，其余排队
-- **anchor**：窗口四角之一；`.automatic` 在 compact 表面使用底部，其余使用右上
+- **anchor**：窗口四角之一；`.automatic` 在所有宽度使用右上，呈现 iOS 通知横幅而非底部 Snackbar
 
 ## API
 
@@ -58,7 +58,7 @@ NotificationHost(center, width: 360, position: .automatic)
 - 卡片 padding 14pt，队列间距 10pt；正文与操作行间距 5pt。
 - 操作按钮使用真实 `Button`，触摸面继续遵守 44pt 下限；桌面使用 small control size。
 - 关闭按钮是独立 ghost icon button，尺寸 12pt 图标 + 完整命中区。
-- `.automatic`：`compact` 表面底部、`medium`/`expanded` 右上；底部位置按宿主 `safeArea.bottom` 预留，顶部按 `safeArea.top` 预留。
+- `.automatic`：所有宽度使用右上；顶部按宿主 `safeArea.top` 预留，底部锚点仍按 `safeArea.bottom` 预留。
 
 ## Tokens
 
@@ -66,9 +66,10 @@ NotificationHost(center, width: 360, position: .automatic)
 | ---- | ---- |
 | 卡片背景 | `theme.colors.surfaceFloating` |
 | 边框 | `theme.colors.border` |
+| 阴影 | `theme.elevation.low`（offset 2 / blur 10） |
 | 标题色 | `tone.color` |
 | 正文色 | `theme.colors.onSurfaceVariant` |
-| 圆角 | `theme.radius.controlRadius` |
+| 圆角 | `theme.radius.groupRadius`（14） |
 | 字体 | `bodyStrong` / `body` |
 | 间距 | `theme.spacing` 等价值（当前使用 14/10/8/5） |
 
@@ -89,7 +90,7 @@ NotificationHost(center, width: 360, position: .automatic)
 - **队列**：`maxVisible` 至少 1；同 ID 替换保留位置，不重复入队。
 - **时间**：由 `ToastClock` 资源按帧推进，测试可用 `advance(by:)` 确定性驱动。
 - **操作**：最多两个；action 是普通按钮，键盘可达，语义名称即标题。
-- **定位**：Portal 在窗口内夹紧；`.automatic` 由 `WidthClassReader` 按实际表面宽度决定，不看平台。
+- **定位**：Portal 在窗口内夹紧；`.automatic` 固定右上，不看平台。
 - **安全区**：底部锚点把 `safeArea.bottom` 计入内容 padding，顶部锚点使用 `safeArea.top`；不读取平台 API。
 - **焦点**：Toast 不抢焦点；操作按钮只在用户 Tab 进入后获得焦点。
 - **减少动画**：未新增进出动画，因此不受 `reducesMotion` 影响；后续若加入进出动画必须遵守该开关。
@@ -107,7 +108,7 @@ NotificationHost(center, width: 360, position: .automatic)
 
 单元测试（`GuavaUI/Tests/GuavaUIComposeTests/ProductComponentTests.swift`）：
 
-- `toastPositionResolution`：compact → 底部，medium/expanded → 右上；leading/trailing 原点。
+- `toastPositionResolution`：compact/medium/expanded → 右上；leading/trailing 原点。
 - `toastActionPointer`：真实指针命中 action，调用一次并默认关闭通知。
 - `toastActionKeyboard`：Tab 聚焦 action 后 Return 激活，`dismissesNotification: false` 时保留通知。
 - `notificationQueue` / `transientResourceLifecycle`：队列、替换、暂停、时钟与 Portal 生命周期。

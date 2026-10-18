@@ -76,8 +76,17 @@ public struct AlertDialog: View {
 public struct SheetOptions {
     public var edge: ModalPlacement = .trailing
     public var extent: Float = 400
+    /// Margin from the window edge; keeps the rounded sheet visually floating.
+    public var inset: Float = 12
+    public var cornerRadius: Float = 14
     public var dismissal = ModalDismissal()
     public init() {}
+    mutating func validate() {
+        extent = extent.isFinite ? max(64, extent) : 400
+        inset = inset.isFinite ? max(0, inset) : 12
+        cornerRadius = cornerRadius.isFinite ? max(0, cornerRadius) : 14
+        if edge == .center { edge = .trailing }
+    }
 }
 public struct Sheet<Content: View>: View {
     public let isPresented: Binding<Bool>
@@ -85,12 +94,13 @@ public struct Sheet<Content: View>: View {
     private let content: Content
     public init(isPresented: Binding<Bool>, configure: (inout SheetOptions) -> Void = { _ in }, @ViewBuilder content: () -> Content) {
         self.isPresented = isPresented; self.content = content(); configure(&options)
-        options.extent = options.extent.isFinite ? max(64, options.extent) : 400
-        if options.edge == .center { options.edge = .trailing }
+        options.validate()
     }
     public var body: some View {
         Modal(isPresented: isPresented, configure: {
-            $0.geometry.placement = options.edge; $0.geometry.inset = 0; $0.geometry.cornerRadius = 0
+            $0.geometry.placement = options.edge
+            $0.geometry.inset = options.inset
+            $0.geometry.cornerRadius = options.cornerRadius
             let horizontalEdge = options.edge == .top || options.edge == .bottom
             $0.geometry.width = horizontalEdge ? .greatestFiniteMagnitude : options.extent
             $0.geometry.height = horizontalEdge ? options.extent : .greatestFiniteMagnitude

@@ -116,9 +116,9 @@ struct ProductComponentTests: GuavaUIComposeSerializedSuite {
         #expect(center.notifications.isEmpty)
     }
 
-    @Test("Toast automatic position uses the compact bottom edge and wide top trailing edge")
+    @Test("Toast automatic position uses the top trailing edge at every width")
     func toastPositionResolution() {
-        #expect(ToastPosition.automatic.resolved(for: .compact) == .bottomTrailing)
+        #expect(ToastPosition.automatic.resolved(for: .compact) == .topTrailing)
         #expect(ToastPosition.automatic.resolved(for: .medium) == .topTrailing)
         #expect(ToastPosition.automatic.resolved(for: .expanded) == .topTrailing)
         let bounds = CGRect(x: 0, y: 0, width: 800, height: 600)

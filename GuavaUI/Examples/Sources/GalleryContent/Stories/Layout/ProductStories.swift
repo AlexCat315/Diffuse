@@ -69,7 +69,7 @@ struct NotificationStory: View {
     @State private var count = 0
     @State private var position: ToastPosition = .automatic
     var body: some View {
-        StorySection("Toast queue", "Notifications appear at the window edge. Hover pauses expiry. Add several to see the bounded queue, replace the same stable ID, or use an inline action. Compact surfaces anchor at the bottom; wider surfaces at the top trailing edge.") {
+        StorySection("Toast queue", "Notifications appear at the window edge. Hover pauses expiry. Add several to see the bounded queue, replace the same stable ID, or use an inline action. Automatic positions the banner at the top trailing edge at every width.") {
             Row(alignment: .center, spacing: 10) {
                 Button("Notify") {
                     count += 1

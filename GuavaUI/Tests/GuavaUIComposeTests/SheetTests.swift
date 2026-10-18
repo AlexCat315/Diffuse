@@ -43,19 +43,19 @@ struct SheetTests: GuavaUIComposeSerializedSuite {
                 let panel = try #require(nodes(graph.tree.root).first { $0.accessibility?.role == .dialog })
                 let initial = panel.absoluteFrame
                 switch edge {
-                case .leading: #expect(initial.maxX <= 0.5)
-                case .trailing: #expect(initial.minX >= 799.5)
-                case .top: #expect(initial.maxY <= 0.5)
-                case .bottom: #expect(initial.minY >= 599.5)
+                case .leading: #expect(initial.maxX <= 12.5)
+                case .trailing: #expect(initial.minX >= 587.5)
+                case .top: #expect(initial.maxY <= 12.5)
+                case .bottom: #expect(initial.minY >= 387.5)
                 case .center: Issue.record("unexpected centered sheet")
                 }
                 scheduler.tick(deltaTime: 1); layout()
                 let frame = panel.absoluteFrame
                 switch edge {
-                case .leading: #expect(frame == CGRect(x: 0, y: 0, width: 200, height: 600))
-                case .trailing: #expect(frame == CGRect(x: 600, y: 0, width: 200, height: 600))
-                case .top: #expect(frame == CGRect(x: 0, y: 0, width: 800, height: 200))
-                case .bottom: #expect(frame == CGRect(x: 0, y: 400, width: 800, height: 200))
+                case .leading: #expect(frame == CGRect(x: 12, y: 12, width: 200, height: 576))
+                case .trailing: #expect(frame == CGRect(x: 588, y: 12, width: 200, height: 576))
+                case .top: #expect(frame == CGRect(x: 12, y: 12, width: 776, height: 200))
+                case .bottom: #expect(frame == CGRect(x: 12, y: 388, width: 776, height: 200))
                 case .center: break
                 }
                 #expect(context.focusChain.hasModalScope && context.focusChain.focused !== opener)
