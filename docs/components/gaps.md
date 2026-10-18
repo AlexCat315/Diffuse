@@ -122,7 +122,7 @@
 
 **Masonry 已实现（P2）**：最短列放置、按宽度自动 1–2 列、列/项间距、RTL 与最大列数；卡片高度由子视图自然测量，不二次缩放字号。`MasonryTests` 覆盖最短列、列数上限、单列退化、间距与 RTL；Gallery `masonry` 提供 Add card/Reset 和 390/720/1280 预览，DevTools 实测 720pt 两列、390pt 单列，点击 Add card 后计数从 8 变 9 并重新平衡。当前不做跨列 span、行优先填充或窗口化；大集合使用 `LazyGrid`/`VirtualStack`。细节见 [Masonry](masonry.md)。
 
-**Toast 操作与位置已补齐**：最多两个内联操作、真实按钮键盘可达、`ToastPosition` 四角定位与 `.automatic`（所有宽度右上，iOS 通知横幅形态），并计入宿主安全区。细节见 [Toast](toast.md)；仅进出动画仍为 P2。
+**Toast 操作、位置与过渡已补齐**：最多两个内联操作、真实按钮键盘可达、`ToastPosition` 四角定位与 `.automatic`（所有宽度右上，iOS 通知横幅形态），并计入宿主安全区。主题时长的位移/淡入淡出/收拢、退出即禁用、同 ID 反转去重、有界退出树与减少动画清理均已实现，见 [Toast](toast.md)。
 
 **WheelPicker 与 TimePicker 已实现（P2）**：WheelPicker 提供五行视口、中央 band、拖拽/滚轮/点击/方向键、disabled 跳过与 slider a11y；TimePicker 在其上组合时/分/可选秒/AM-PM、12/24 小时与 min/max 夹紧。两者均有 390/720/1280 Gallery 预览、自动化测试与 DevTools 验收。细节见 [WheelPicker](wheelpicker.md) 与 [TimePicker](timepicker.md)。
 
@@ -158,7 +158,7 @@
 | Icon / Typography | 彩色字形仅 macOS；RTL 双向段落完整语义 | P2 |
 | Link | 访问态、外链确认（按需） | P3 |
 | 拖放 | 通用 payload 协议已实现，见 [Drag & Drop](drag-and-drop.md)；列表重排见 ReorderableList | 已实现 |
-| Toast / Notification | 进出动画；操作按钮与位置配置已完成，见 [Toast](toast.md) | P2 |
+| Toast / Notification | 操作、位置、主题进出动画、减少动画与退出生命周期已完成，见 [Toast](toast.md) | 已完成 |
 
 ## 4. 优先级与建议顺序
 

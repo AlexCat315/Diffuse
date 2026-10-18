@@ -33,24 +33,29 @@ public struct NotificationHost: View {
     public let controller: ToastController
     public var width: Float = 360
     public var position: ToastPosition = .automatic
+    @State private var presentation = ToastPresentation()
     public init(_ controller: ToastController, width: Float = 360, position: ToastPosition = .automatic) {
         self.controller = controller
         self.width = max(120, width)
         self.position = position
     }
     public var body: some View {
-        WidthClassReader { widthClass in
-            ToastPresenter(controller: controller, notifications: controller.notifications,
-                           width: width, position: position.resolved(for: widthClass))
+        let entries = presentation.update(controller.notifications, limit: controller.maxVisible)
+        return WidthClassReader { widthClass in
+            ToastPresenter(controller: controller,
+                           entries: entries,
+                           width: width, position: position.resolved(for: widthClass),
+                           onExit: { presentation.remove(id: $0, revision: $1) })
         }
     }
 }
 
 private struct ToastPresenter: _PrimitiveView {
     let controller: ToastController
-    let notifications: [ToastNotification]
+    let entries: [ToastPresentation.Entry]
     let width: Float
     let position: ToastPosition
+    let onExit: (String, Int) -> Void
     func _makeNode() -> Node {
         let node = Node(); node.isHitTestable = false
         node.addResource(PortalResource()); node.addResource(ToastClock())
@@ -68,7 +73,7 @@ private struct ToastPresenter: _PrimitiveView {
     private func present(_ node: Node) {
         node.attachments["toast.windowBounds"] = portalWindowBounds(node)
         let resource = node.firstResource(PortalResource.self)
-        guard !notifications.isEmpty else { resource?.unmount(node: node); return }
+        guard !entries.isEmpty else { resource?.unmount(node: node); return }
         let bounds = portalWindowBounds(node)
         let actualWidth = min(width, max(120, Float(bounds.width) - 32))
         let surface = node.compositionValue(of: SurfaceEnvironment.key)
@@ -78,9 +83,18 @@ private struct ToastPresenter: _PrimitiveView {
         resource?.present(in: node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current,
                           position: position.origin(in: bounds, width: CGFloat(actualWidth)),
                           width: actualWidth, content: AnyView(Box(direction: .column, alignItems: .stretch, spacing: 10) {
-            for notification in notifications {
-                AnyView(ToastCard(notification: notification, controller: controller).id(notification.id)
-                    .debugName("toast-\(notification.id)"))
+            for entry in entries {
+                AnyView(AnimatedVisibility(isVisible: entry.isVisible,
+                    transition: .opacity.combined(with: .move(
+                        edge: position == .bottomLeading || position == .bottomTrailing ? .bottom : .top,
+                        distance: 12)).combined(with: .collapse),
+                    animateOnMount: true,
+                    onVisibilitySettled: { visible in
+                        if !visible { onExit(entry.notification.id, entry.revision) }
+                    }) {
+                        ToastCard(notification: entry.notification, controller: controller)
+                    }.accessibilityHidden(!entry.isVisible).id(entry.notification.id)
+                    .debugName("toast-\(entry.notification.id)"))
             }
         }.padding(safePadding)))
     }
@@ -93,10 +107,11 @@ private struct ToastCard: View {
         ThemeReader { theme in
         Box(direction: .row, alignItems: .flexStart, spacing: 10) {
             Box(direction: .column, alignItems: .stretch, spacing: 5) {
-                Text(notification.title).font(.bodyStrong).foregroundColor(notification.tone.color)
+                Text(notification.title).truncatingTail().tooltip(notification.title)
+                    .font(.bodyStrong).foregroundColor(notification.tone.color)
                 if !notification.message.isEmpty { Text(notification.message).font(.body).foregroundColor(.onSurfaceVariant) }
                 if !notification.actions.isEmpty {
-                    Row(alignment: .center, spacing: 8) {
+                    Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                         actionButton(notification.actions[0])
                         if notification.actions.count > 1 {
                             actionButton(notification.actions[1])

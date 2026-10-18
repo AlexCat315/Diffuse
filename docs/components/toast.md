@@ -93,7 +93,9 @@ NotificationHost(center, width: 360, position: .automatic)
 - **定位**：Portal 在窗口内夹紧；`.automatic` 固定右上，不看平台。
 - **安全区**：底部锚点把 `safeArea.bottom` 计入内容 padding，顶部锚点使用 `safeArea.top`；不读取平台 API。
 - **焦点**：Toast 不抢焦点；操作按钮只在用户 Tab 进入后获得焦点。
-- **减少动画**：未新增进出动画，因此不受 `reducesMotion` 影响；后续若加入进出动画必须遵守该开关。
+- **进出动画**：按所在边以 12pt 位移 + opacity + 高度收拢进入/退出，使用主题标准时长。队列立即响应 dismiss/expiry，已退出的画面只由宿主保留到过渡结束；关闭后的按钮立即退出输入/焦点/辅助功能。
+- **减少动画**：`reducesMotion` 立即吸附进入与退出终值，清理 Portal，不遗留退出时钟；通知的到期计时继续工作。
+- **替换与生命周期**：同 ID 更新不重复入场；退出过程中重新发布同 ID 反向继续，过期完成回调不能移除新通知。退出树最多额外保留 `maxVisible` 条，快速连续发布/关闭也有界；卸载宿主取消画面与时钟，控制器中的业务队列由调用方持有。
 
 ## Authoring rules
 
@@ -112,6 +114,7 @@ NotificationHost(center, width: 360, position: .automatic)
 - `toastActionPointer`：真实指针命中 action，调用一次并默认关闭通知。
 - `toastActionKeyboard`：Tab 聚焦 action 后 Return 激活，`dismissesNotification: false` 时保留通知。
 - `notificationQueue` / `transientResourceLifecycle`：队列、替换、暂停、时钟与 Portal 生命周期。
+- `ToastAnimationTests`：中间 opacity、退出立即禁用、最后一条清理 Portal、减少动画、退出中替换去重与有界保留。独立 NotificationHost 在空队列挂载后也订阅后续 post，无需外围视图读取队列驱动更新。
 
 真实 app 闭环（DevTools）：
 
@@ -129,6 +132,8 @@ guava-dev devtools capture-ui 9229 /tmp/guava-toast-action.jpg
 ```
 
 Gallery `notification` 页提供 Notify、Toast with undo、Replace status、Persistent warning、Clear 和位置选择，操作后可直接用 DevTools 查询/截图复核。
+
+2026-10-18 DevTools：390×820 touch 为 358×122pt 卡片，Undo/Retry/Dismiss 均 44pt 高；720×820 dark/mixed 为 360×122pt；1280×820 pointer/200% 为 360×204pt，正文自然换行、动作完整。三张镜像实际检查了明暗表面、字重层次、圆角、轻阴影和大字号；390 点击 Undo 并等待 400ms 后，AI 查询该通知的可见节点为 0。Gallery 命令区按宽度换行。源码按职责位于 [Toast](../../GuavaUI/Sources/GuavaUICompose/Primitives/Overlays/Toast/)。
 
 ## References
 

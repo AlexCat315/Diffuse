@@ -70,11 +70,11 @@ struct NotificationStory: View {
     @State private var position: ToastPosition = .automatic
     var body: some View {
         StorySection("Toast queue", "Notifications appear at the window edge. Hover pauses expiry. Add several to see the bounded queue, replace the same stable ID, or use an inline action. Automatic positions the banner at the top trailing edge at every width.") {
-            Row(alignment: .center, spacing: 10) {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 10) {
                 Button("Notify") {
                     count += 1
                     controller.post(ToastNotification("Project saved · \(count)") { $0.tone = .success; $0.message = "Your changes are available." })
-                }
+                }.debugName("toast-notify")
                 Button("Toast with undo") {
                     count += 1
                     let saved = count
@@ -89,13 +89,13 @@ struct NotificationStory: View {
                             },
                         ]
                     })
-                }.buttonStyle(.secondary)
+                }.buttonStyle(.secondary).debugName("toast-with-undo")
                 Button("Replace status") {
                     count += 1
                     controller.post(ToastNotification("Import status · \(count)", id: "import") { $0.message = "This status replaces the previous import notification." })
                 }.buttonStyle(.secondary)
                 Button("Persistent warning") { controller.post(ToastNotification("Action required", id: "warning") { $0.duration = nil; $0.tone = .warning; $0.message = "Dismiss this notification when you have read it." }) }.buttonStyle(.warning)
-                Button("Clear") { controller.clear() }.buttonStyle(.ghost)
+                Button("Clear") { controller.clear() }.buttonStyle(.ghost).debugName("toast-clear")
             }
             Row(alignment: .center, spacing: 10) {
                 Text("Position").font(.caption).foregroundColor(.onSurfaceMuted)

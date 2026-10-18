@@ -137,6 +137,8 @@ struct ProductComponentTests: GuavaUIComposeSerializedSuite {
             })
             graph.install(root: LayerRoot { NotificationHost(controller, position: .topTrailing) })
             settle(graph)
+            AnimatorScheduler.current.tick(deltaTime: 1)
+            settle(graph)
             guard let action = nodes(graph.tree.root!).first(where: {
                 $0.accessibility?.label == "Undo" && $0.accessibility?.role == .button
             }) else {
@@ -167,6 +169,8 @@ struct ProductComponentTests: GuavaUIComposeSerializedSuite {
                 ]
             })
             graph.install(root: LayerRoot { NotificationHost(controller, position: .topTrailing) })
+            settle(graph)
+            AnimatorScheduler.current.tick(deltaTime: 1)
             settle(graph)
             guard let action = nodes(graph.tree.root!).first(where: {
                 $0.accessibility?.label == "Undo" && $0.accessibility?.role == .button

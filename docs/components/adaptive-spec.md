@@ -478,6 +478,7 @@
 - 外观：反馈组件不参与布局竞争，按自身尺寸呈现；Skeleton 保持最终内容几何。`[已实现]`
 - 手机：Alert 宽 ≤ 窗口 − 32、操作按钮 ≥ 44pt 且可纵向堆叠；Notification 单行标题 + 换行正文；Empty 自然居中。`[部分]`
 - Notification / Toast：队列、稳定 ID 替换、时长与 hover 暂停；最多两个内联操作（撤销/重试），操作是真实按钮、键盘可达；`.automatic` 定位在所有宽度右上，呈现 iOS 通知横幅并计入宿主 `safeArea`。`[已实现]`，细节见 [Toast](toast.md)。
+- Toast 以主题时长执行 12pt 位移、淡入淡出与高度收拢；退出即禁用输入/焦点/语义，最后一条离场后卸载 Portal。减少动画立即吸附，退出中同 ID 更新可反转且拒绝过期完成回调；宿主退出树额外条数不超过 `maxVisible`。`ToastAnimationTests` 覆盖中间进度、清理、替换与有界保留。`[已实现]`
 - 平板 / 桌面：inline alert 与窗口宽度自适应。`[已实现]`
 - 交互与验收：Progress 暴露数值语义；Alert 操作键盘可达；验收：`--component alert|progress|notification|skeleton|empty`。
 
