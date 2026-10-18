@@ -147,7 +147,7 @@ private struct AssetKindBadge: View {
     let isEnabled: Bool
 
     var body: some View {
-        Text((kind ?? "--").uppercased())
+        Text(kind ?? "--")
             .font(.caption)
             .foregroundColor(isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
             .frame(width: 34, height: 20)
