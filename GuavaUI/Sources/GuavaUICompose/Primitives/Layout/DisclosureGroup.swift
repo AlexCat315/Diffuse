@@ -52,8 +52,9 @@ public extension DisclosureGroup where Label == AnyView {
          isEnabled: Bool = true,
          @ViewBuilder content: () -> Content) {
         self.init(isExpanded: isExpanded, isEnabled: isEnabled, content: content) {
-            AnyView(Text(title).font(.label).foregroundColor(.onSurfaceVariant)
-                .debugName("disclosure-label"))
+            AnyView(Text(title).truncatingTail().font(.label).foregroundColor(.onSurfaceVariant)
+                .frame(minWidth: 0)
+                .debugName("disclosure-label").tooltip(title))
         }
     }
 }

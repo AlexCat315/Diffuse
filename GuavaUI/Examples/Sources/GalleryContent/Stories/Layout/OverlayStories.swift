@@ -129,7 +129,7 @@ struct DisclosureStory: View {
     @State private var text: TextBuffer = "The draft survives collapse"
     var body: some View {
         StorySection("Collapsible content", "Expansion is caller-owned, so search and Expand All can control it.") {
-            DisclosureGroup("Project details", isExpanded: $expanded, isEnabled: options.isEnabled) {
+            DisclosureGroup("Project details · Workspace permissions and collaboration", isExpanded: $expanded, isEnabled: options.isEnabled) {
                 TextField("Description", text: $text).padding(8)
             }
             DisclosureGroup("Disabled section", isExpanded: .constant(false), isEnabled: false) { Text("Hidden") }

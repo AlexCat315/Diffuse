@@ -40,7 +40,7 @@ struct AccordionStory: View {
                         }
                     }
                 },
-                AccordionItem("diagnostics", "Diagnostics & activity") {
+                AccordionItem("diagnostics", "Diagnostics & activity · Workspace permissions and collaboration settings") {
                     Box(direction: .column, alignItems: .stretch, spacing: 12) {
                         Row(alignment: .center, spacing: 10) {
                             Checkbox(isOn: $diagnostics, isEnabled: options.isEnabled).debugName("accordion-diagnostics")

@@ -369,7 +369,7 @@
 **Accordion / DisclosureGroup**
 
 - 外观：标题行 + chevron + 内容过渡；`DisclosureGroup` 使用同一过渡机制。`[已实现]`
-- 手机：标题单行截断、内容自然换行；行命中 ≥ 44pt；展开内容不把父容器撑出可视区（外层滚动）。`[部分]`
+- 手机：字符串标题单行省略，全文保留 tooltip 与语义；正文自然换行，头部触摸 ≥44pt。外层 ScrollView 提供展开内容的滚动范围，组件不固定正文高度。`[已实现]`，`DisclosureAdaptiveTests` 覆盖 220pt 卡片与 200% 字号，API 与生命周期见 [Accordion / DisclosureGroup](disclosure.md)
 - 平板 / 桌面：`TextScaler` 200% 可操作；roving focus。`[已实现]`
 - 交互与验收：单一 Tab 停靠 + 方向键；辅助功能暴露 expanded；验收：`--component accordion|disclosure`、`NavigationStateTests`。
 

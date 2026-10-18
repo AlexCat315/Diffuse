@@ -38,7 +38,7 @@ struct DisclosureContainerTests: GuavaUIComposeSerializedSuite {
         for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 700) }
     }
 
-    @Test("Accordion wraps scaled titles, keeps expansion semantics through focus recomposition and skips disabled headers")
+    @Test("Accordion keeps scaled titles single-line, preserves expansion semantics and skips disabled headers")
     func accordionKeyboardAndSemantics() throws {
         try fixture { graph, context, scheduler in
             let scene = AccordionScene()
@@ -47,7 +47,7 @@ struct DisclosureContainerTests: GuavaUIComposeSerializedSuite {
             let headers = all(graph.tree.root!).filter { $0.accessibility?.role == .button && $0.accessibility?.state.isExpanded != nil }
             #expect(headers.count == 3)
             let first = try #require(headers.first), last = try #require(headers.last)
-            #expect(first.frame.height > 64)
+            #expect(first.frame.height == 64)
             #expect(headers[1].isFocusable == false)
             context.focusChain.focus(first); settle(graph)
             #expect(first.accessibility?.state.isExpanded == true)
@@ -80,7 +80,7 @@ struct DisclosureContainerTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    @Test("Disclosure and Panel headers grow around scaled text and accessories")
+    @Test("Disclosure and Panel headers fit one scaled title line and preserve accessories")
     func headerGeometry() throws {
         try fixture { graph, _, _ in
             graph.install(root: Box(direction: .column, alignItems: .stretch) {
@@ -92,7 +92,7 @@ struct DisclosureContainerTests: GuavaUIComposeSerializedSuite {
             settle(graph)
             let label = try #require(graph.layoutSnapshot().first { $0.debugName == "disclosure-label" }?.absoluteFrame)
             let header = try #require(graph.layoutSnapshot().first { $0.debugName == "disclosure-header" }?.absoluteFrame)
-            #expect(label.height >= 72 && header.contains(label))
+            #expect(label.height == 36 && header.contains(label))
             let title = try #require(all(graph.tree.root!).first { $0.layoutNode?.textInputs?.text == "Inspector" })
             let action = try #require(graph.layoutSnapshot().first { $0.debugName == "panel-action" }?.absoluteFrame)
             #expect(title.frame.height == 36 && action.height == 46)

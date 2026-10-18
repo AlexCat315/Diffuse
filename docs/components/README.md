@@ -39,6 +39,7 @@
 | AssetRefField / AssetDropTarget | 文档已写 | [assetref.md](assetref.md) |
 | Modal / ContextMenu / TransitionView | 文档已写 | [interaction.md](interaction.md) |
 | Dialog / AlertDialog | 自适应宽度、操作区、字号与确认状态 | [dialog.md](dialog.md) |
+| Accordion / DisclosureGroup | 单行完整名称、展开语义、键盘与过渡生命周期 | [disclosure.md](disclosure.md) |
 | 动画系统 | 属性 / 弹簧 / 轨道 / 相位 / 循环 / 共享几何 / 数值 / 生命周期 | [animation.md](animation.md) |
 | Sheet | 实现与验证边界 | [sheet.md](sheet.md) |
 | BottomSheet | detent、拖拽与宽屏退化 | [bottom-sheet.md](bottom-sheet.md) |

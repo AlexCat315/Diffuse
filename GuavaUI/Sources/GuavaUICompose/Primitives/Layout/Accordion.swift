@@ -38,7 +38,8 @@ public struct Accordion<ID: Hashable>: View {
                     AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         Button(isEnabled: isEnabled && item.isEnabled, action: { toggle(item.id); focused = item.id }) {
                             Row(alignment: .center, spacing: 8) {
-                                Text(item.title).font(.bodyStrong).flex(1, shrink: 1).frame(minWidth: 0)
+                                Text(item.title).truncatingTail().tooltip(item.title)
+                                    .font(.bodyStrong).flex(1, shrink: 1).frame(minWidth: 0)
                                 Icon(expanded.wrappedValue.contains(item.id) ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight, size: .small).accessibilityHidden()
                             }.padding(12)
                         }.buttonStyle(AccordionHeaderStyle())
