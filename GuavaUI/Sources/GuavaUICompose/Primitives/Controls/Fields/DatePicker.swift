@@ -25,8 +25,10 @@ public struct DatePicker: View {
         let formatter = DateFormatter(); formatter.dateStyle = .medium; formatter.locale = options.calendar.locale
         formatter.calendar = options.calendar.calendar; formatter.timeZone = options.calendar.calendar.timeZone
         let dateLabel = selection.wrappedValue.map(formatter.string) ?? options.presentation.placeholder
+        return SurfaceReader { surface in
+        let cellSize = max(options.calendar.presentation.cellSize, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         return Popover(isPresented: $isPresented, isEnabled: options.presentation.isEnabled,
-                       width: Float(options.calendar.presentation.numberOfMonths) * (options.calendar.presentation.cellSize * 7 + 36), surface: .content, overflow: .flip, label: {
+                       width: Float(options.calendar.presentation.numberOfMonths) * (cellSize * 7 + 36), surface: .content, overflow: .flip, label: {
             Row(alignment: .center, spacing: 8) {
                 Text(dateLabel).truncatingTail().font(.label).tooltip(dateLabel)
                     .flex(1, shrink: 1).frame(minWidth: 0)
@@ -44,6 +46,7 @@ public struct DatePicker: View {
             $0.label = options.presentation.placeholder
             $0.value = selection.wrappedValue.map(formatter.string) ?? ""
             $0.state.isExpanded = isPresented
+        }
         }
     }
 }

@@ -197,7 +197,7 @@
 **Calendar**
 
 - 外观：月视图、日期格由 `controlSize` 决定；前后月箭头为独立按钮。`[已实现]`
-- 手机：日期格 ≥ 44pt，单月一屏；放不下时整板横向滚动，不缩格。`[部分]`（触摸格下限已实现；整板滚动与窄宽取样待验收）
+- 手机：日期格 ≥44pt；放不下时整板横向滚动，不缩格，底部保留 12pt scrollbar lane。启用日期上的待完成点击可让位于滚动，不误提交；明确的 Slider 拖动仍独占捕获。`[已实现]`，`CalendarAdaptiveTests` 与 DevTools 286pt 月历视口验证
 - 平板 / 桌面：可多月份并排（`numberOfMonths`）；hover 日期反馈。`[已实现]`
 - 交互与验收：方向键移动（±1/±7）；Home/End 定位焦点所属月份的首个/最后一个可用日期，PageUp/PageDown 按日号翻月并夹到月末。不可用目标在目标月内查找，空月不改变焦点；导航不提交选择，Return/Space 才激活。多月份窗口仅在目标超出已显示范围时移动；禁用日期释放焦点。辅助功能每格 role=button + 完整日期/选中态，月份箭头有名称。`[已实现]`。验收：`CalendarKeyboardNavigationTests`、`TouchDensityTests` calendar、`NavigationStateTests.calendarKeyboard`、`--component calendar` 三预览；完整契约见 [Calendar / DatePicker](calendar.md)。
 
@@ -241,7 +241,7 @@
 **DatePicker / TimeField**
 
 - 外观：触发器最小宽 140 + 清除按钮；弹层按月份数取宽。`[已实现]`
-- 手机：触发器单行截断、弹层宽度 ≤ 窗口 − 24、日期格/时间格 ≥ 44pt。`[部分]`（弹层宽度与格高需补验收）
+- 手机：DatePicker 触发标题单行截断，弹层按实际触摸 cellSize 预算并夹到窗口 −24pt；Calendar/DateRangeCalendar 整板滚动，日期格不缩到 44pt 以下。TimeField 为文本输入，无日期格，继承 TextField 的触摸命中。`[已实现]`，390pt dark/touch DevTools 实测月历 344pt、日期格 44×44
 - 平板 / 桌面：弹出日历，键盘可导航。`[已实现]`（日历部分）
 - 交互与验收：Escape 关闭、辅助功能 label/value/isExpanded；验收：`--component datePicker|timeField`。
 

@@ -7,6 +7,38 @@ import GuavaUIRuntime
 struct SliderAxisTests: GuavaUIComposeSerializedSuite {
     private func nodes(_ node: Node) -> [Node] { [node] + node.children.flatMap(nodes) }
 
+    @Test("An intentional slider drag keeps capture inside a touch scroll container")
+    func exclusiveDrag() throws {
+        try GlobalTestLock.locked {
+            let context = PlatformInputContext()
+            try context.withCurrent {
+                var value = 0.0
+                var surface = UIEnvironment(); surface.input = [.touch]
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+                graph.install(root: ScrollView(.horizontal) {
+                    Row {
+                        Slider(value: Binding(get: { value }, set: { value = $0 })).frame(width: 160)
+                        Box {}.frame(width: 400, height: 44)
+                    }
+                }.frame(width: 200, height: 60).surfaceEnvironment(surface))
+                for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 200, height: 60) }
+                let all = nodes(graph.tree.root!)
+                let slider = try #require(all.first { $0.accessibility?.role == .slider })
+                let scroll = try #require(all.first { $0.accessibility?.role == .scrollArea })
+                let x = Float(slider.absoluteFrame.minX), y = Float(slider.absoluteFrame.midY)
+                let input = EventDispatcher(tree: graph.tree, interactions: context.interactions,
+                    capture: context.pointerCapture, focusChain: context.focusChain)
+                input.dispatch(.mouseButtonDown(.init(button: .left, x: x + 40, y: y, clicks: 1)))
+                input.dispatch(.mouseMotion(.init(x: x + 120, y: y, deltaX: 80, deltaY: 0)))
+                #expect(value == 0.75)
+                #expect(scroll.contentOffset.x == 0)
+                #expect(context.pointerCapture.target === slider)
+                input.dispatch(.mouseButtonUp(.init(button: .left, x: x + 120, y: y, clicks: 1)))
+                graph.install(root: EmptyView())
+            }
+        }
+    }
+
     @Test("Vertical sliders use the Y axis, stay touch-sized and preserve value semantics")
     func vertical() throws {
         try GlobalTestLock.locked {

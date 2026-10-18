@@ -136,7 +136,7 @@
 | NumberField / Vec3Field | locale 小数分隔、拖拽 scrub、单轴重置与向量复制/粘贴 | P2 |
 | Select / Combobox | 远程/异步结果（按需）、触发器宽度联动 | P2 |
 | DatePicker / TimeField | 时区；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
-| Calendar | 区间选择（见 2.8）；Home/End/PageUp/Down 已实现，见 [日历导航](calendar.md) | P1 |
+| Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动与触摸弹层预算已完成，见 [日历导航](calendar.md)；周/月/年模式仍为 P2 | P1 已完成 |
 | List | 多选、平面区段、sticky 区段、重排、SwipeList 与下拉刷新已实现（见 2.9） | P1（多选/区段/sticky/重排/swipe/refresh 已完成） |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |

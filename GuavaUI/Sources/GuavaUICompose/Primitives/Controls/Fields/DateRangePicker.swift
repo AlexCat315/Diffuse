@@ -33,15 +33,15 @@ public struct DateRangePicker: View {
 
     public var body: some View {
         let formatter = rangeFormatter
-        let width = Float(options.calendar.presentation.numberOfMonths)
-            * (options.calendar.presentation.cellSize * 7 + 36)
+        return SurfaceReader { surface in
+        let cellSize = max(options.calendar.presentation.cellSize, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         return Popover(isPresented: $isPresented,
                        isEnabled: options.presentation.isEnabled,
-                       width: width,
+                       width: Float(options.calendar.presentation.numberOfMonths) * (cellSize * 7 + 36),
                        surface: .content, overflow: .flip, label: {
             Row(alignment: .center, spacing: 8) {
-                Text(labelText(formatter)).font(.label)
-                Spacer()
+                Text(labelText(formatter)).truncatingTail().font(.label).tooltip(labelText(formatter))
+                    .flex(1, shrink: 1).frame(minWidth: 0)
                 if options.presentation.isClearable && selection.wrappedValue != nil {
                     Button(icon: .resource(UIIcons.Action.x), size: 12,
                            isEnabled: options.presentation.isEnabled,
@@ -67,6 +67,7 @@ public struct DateRangePicker: View {
             $0.label = options.presentation.placeholder
             $0.value = labelText(formatter)
             $0.state.isExpanded = isPresented
+        }
         }
     }
 
@@ -115,6 +116,7 @@ public struct DateRangeCalendar: View {
         SurfaceReader { surface in
             let cellSize = max(options.presentation.cellSize,
                                surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
+            ScrollView(.horizontal, scrollbarGutter: .stable) {
             CalendarKeyHost(onNavigate: navigate) {
                 Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 16) {
                     for index in 0..<options.presentation.numberOfMonths {
@@ -123,6 +125,7 @@ public struct DateRangeCalendar: View {
                     }
                 }
             }.accessibility { $0.role = .group; $0.label = "Date range" }
+            }.flex(0, shrink: 1).debugName("date-range-calendar-scroll")
         }
     }
 
@@ -165,7 +168,8 @@ public struct DateRangeCalendar: View {
                     }
                 })
             }
-        }.padding(10).background(.surface).cornerRadius(.controlRadius).border(.border, width: 1)
+        }.padding(10).frame(minWidth: cellSize * 7 + 32)
+            .background(.surface).cornerRadius(.controlRadius).border(.border, width: 1)
     }
 
     private func dayView(_ day: Date, currentMonth: Date, tabDay: Date?, cellSize: Float) -> some View {

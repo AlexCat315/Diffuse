@@ -148,6 +148,7 @@ public final class EventDispatcher {
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
             updateHoverPath(to: path)
+            if capture.allowsGestureTransfer, deliverScrollGesture(path: path, event: event) == .handled { return }
             _ = deliver(path: path, kind: .motion(event))
             return
         }
@@ -157,7 +158,19 @@ public final class EventDispatcher {
             return
         }
         updateHoverPath(to: hit.path)
+        if deliverScrollGesture(path: hit.path, event: event) == .handled { return }
         _ = deliver(path: hit.path, kind: .motion(event))
+    }
+
+    /// The deepest scroll container gets the first gesture attempt, before a
+    /// pending child tap consumes motion. Exclusive control drags skip this.
+    private func deliverScrollGesture(path: [Node], event: MouseMotionEvent) -> EventResult {
+        let kind = EventKind.motion(event)
+        for candidate in routeCandidates(in: path, kind: kind, minPriority: .chrome)
+            where candidate.route.role == .scrollChrome {
+            if invoke(node: candidate.node, kind: kind, phase: .target) == .handled { return .handled }
+        }
+        return .ignored
     }
 
     private func refreshHover(at point: CGPoint) {

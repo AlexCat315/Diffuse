@@ -34,6 +34,10 @@ CalendarView(selection: $date) { options in
 
 日期格在 touch 或混合输入 surface 上至少 44pt；pointer 使用 authored `cellSize`。宽度与输入能力分别由 surface 提供，组件不读取平台类型。每个已显示月份保留一个可用日期作为 Tab 入口，辅助功能暴露完整日期名称、选中与禁用状态。
 
-`CalendarKeyboardNavigationTests` 覆盖 390pt 触摸 + 键盘、720pt 混合输入、1280pt 指针 + 键盘，验证焦点与提交分离、月底/闰年/跨年/DST、可用范围与空月、多月份窗口、禁用释放焦点及 DatePicker 提交/关闭。`NavigationStateTests.calendarKeyboard` 验证 Gallery 的周末禁用故事。手机整板横向滚动兜底和真机视觉仍见 [跨平台控件规范](adaptive-spec.md)。
+整板使用横向 ScrollView，月份最小宽度为 `7 × cellSize + 32`（含六个 2pt 间隙与两侧 10pt padding）；窄于该宽度时滚动月份，不压缩日期格。`.stable` 为横向滚动条保留底部 12pt，避免覆盖末行。日期键盘命令先于外层滚动处理；焦点显露仍通过同一 ScrollView。待完成的日期点击可让位于拖动，起拖不会误选日期；Slider 等明确拖动保持独占捕获。
 
-本轮 macOS 宿主验证：`swift test --package-path GuavaUI` 与 `swift test --package-path GuavaUI/Examples` 均通过，Gallery 共 9 项测试通过。
+DatePicker / DateRangePicker 的弹层宽度预算使用触摸解析后的 cellSize，随后由 Popover 夹到窗口 −24pt；单月在 390pt 窗口中能完整显示七列，极窄或多月份仍可整板滚动。日期区间触发标题单行省略并保留全文 tooltip 与语义。
+
+`CalendarKeyboardNavigationTests` 覆盖 390pt 触摸 + 键盘、720pt 混合输入、1280pt 指针 + 键盘，验证焦点与提交分离、月底/闰年/跨年/DST、可用范围与空月、多月份窗口、禁用释放焦点及 DatePicker 提交/关闭。`CalendarAdaptiveTests.narrow` 覆盖普通/区间月历、200/286/390/720/1280pt、100%/200%、44pt 格、末行滚动条间距、从启用日期开始的整板拖动与不误选；`SliderAxisTests.exclusiveDrag` 防止滚动抢走滑杆拖动。`NavigationStateTests.calendarKeyboard` 验证 Gallery 的周末禁用故事。
+
+2026-10-18 DevTools：390×820 touch 的故事月历视口宽 286pt，从 (260,600) 左拖到 (80,600)，AI 查询 `calendar-scroll.contentOffset.x = 54`，镜像确认右侧星期日和日期列可达、末行没有被滚动条覆盖。390×820 dark/touch 的 DatePicker 弹层月历宽 344pt、日期格 44×44；点击 2026-10-20 后弹层关闭，触发器语义值与正文均为 `2026年10月20日`。两张镜像均实际检查了字号、对齐、圆形状态与明暗表面。

@@ -37,6 +37,7 @@ public struct CalendarView: View {
     public var body: some View {
         SurfaceReader { surface in
             let cellSize = max(options.presentation.cellSize, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
+            ScrollView(.horizontal, scrollbarGutter: .stable) {
             CalendarKeyHost(onNavigate: navigate) {
                 Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 16) {
                     for index in 0..<options.presentation.numberOfMonths {
@@ -44,6 +45,7 @@ public struct CalendarView: View {
                     }
                 }
             }.accessibility { $0.role = .group; $0.label = "Calendar" }
+            }.flex(0, shrink: 1).debugName("calendar-scroll")
         }
     }
     private var month: Date { options.visibleMonth?.wrappedValue ?? session.month }
@@ -73,7 +75,8 @@ public struct CalendarView: View {
                     }
                 })
             }
-        }.padding(10).background(.surface).cornerRadius(.controlRadius).border(.border, width: 1)
+        }.padding(10).frame(minWidth: cellSize * 7 + 32)
+            .background(.surface).cornerRadius(.controlRadius).border(.border, width: 1)
     }
     private func dayView(_ day: Date, currentMonth: Date, tabDay: Date?, cellSize: Float) -> some View {
         let inMonth = options.calendar.isDate(day, equalTo: currentMonth, toGranularity: .month)

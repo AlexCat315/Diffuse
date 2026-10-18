@@ -38,6 +38,7 @@ DevTools 的 wheel 桥也携带同一 typed group；浏览器镜像按 `deltaMod
 ## 触摸拖动与键盘
 
 - 触摸面（`UIEnvironment.input` 含 `.touch`）可在内容区拖动：按下只登记起点，不抢子控件点击；超过 4pt 阈值后捕获指针，用 `ScrollAnimator.move(to:)` 跟随，释放交给 `settle()` 进入惯性与边界回弹。
+- 同轴嵌套时最深滚动容器先识别，异轴按主位移判定。Button 的待完成点击可让位于滚动并取消按下态；Slider 等明确拖动默认独占捕获，不被滚动抢走。`.stable` 在纵轴右侧、横轴底部各预留 12pt（双轴两边均预留），避免 chrome 覆盖末列/末行。
 - 指针面（鼠标/触控板）不启用内容拖动，避免与文本选择、按钮拖拽冲突；鼠标仍走 wheel/滚动条。
 - 有实际溢出且没有可 Tab 到达的子控件时，ScrollView 提供键盘 Tab 停靠点；菜单、表格、表单等已有内部操作入口时不额外抢占焦点。聚焦视口后 ArrowUp/Down/Left/Right 行滚动 40pt，PageUp/PageDown 滚一屏的 90%，Home/End 到两端；只处理实际可滚动的轴，无位移时不吞事件。
 - 键盘滚动是立即定位，不启动惯性；触摸释放才走 `settle()`。`.reducedMotion()` 仍会关闭框架添加的运动。

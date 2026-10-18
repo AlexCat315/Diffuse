@@ -646,6 +646,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         } else {
             layout.setPadding(0, edge: .right)
         }
+        layout.setPadding(scrollbarGutter == .stable && axes != .vertical ? Self.scrollbarGutterWidth : 0,
+                          edge: .bottom)
     }
 
     public var _children: [any View] { [content] }

@@ -383,7 +383,7 @@ struct ButtonHost: _PrimitiveView {
             case .down:
                 node.firstResource(TooltipSession.self)?.dismiss()
                 node.attachments[ButtonHost.activePressKey] = true
-                PointerCaptureHolder.current?.acquire(node)
+                PointerCaptureHolder.current?.acquire(node, allowsGestureTransfer: true)
                 if requiresInteractionRecompose {
                     down()
                 } else {
