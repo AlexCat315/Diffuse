@@ -145,7 +145,7 @@
 **Button / IconButton**
 
 - 外观：chrome 32pt，5 个变体（primary/secondary/ghost/destructive/plain）；键盘焦点 2pt `focusRing`；disabled 不接动作。`[已实现]`
-- 手机：命中 ≥ 44pt，绘制可保持 32pt 高度但不能缩点击区；命令列保持主次顺序，primary 不被截断也不进溢出菜单。工具栏/对话框等单行上下文的长标题截断并保留完整 tooltip 与辅助功能名称；表单页按钮允许换行到两行。`[部分]`（换行已实现，单行截断未实现）
+- 手机：命中 ≥ 44pt，绘制可保持 32pt 高度但不能缩点击区；命令容器通过堆叠/滚动保留主操作，Toolbar 用 `.always` 声明必须保留的命令。字符串入口默认单行截断并保留完整 tooltip 与辅助功能名称；表单确需两行时用自定义 label 的 `Text(...).lineLimit(2)` 明确声明。`[已实现]`，见 `TruncationTests`。
 - 平板 / 桌面：命令并排、hover 反馈、mini 密度仅用于指针面；触控板用户同时得到 hover 与 44pt。`[已实现]`
 - 交互与验收：触摸命中区等于完整 chrome；键盘 Space / Return / KP Enter（忽略重复）；辅助功能 role=button、activate action，icon-only 名称取 tooltip。`[已实现]`。验收：`TouchDensityTests`（button/segment 44pt、密度恢复）、Gallery `--component button` 的 narrow/wide/touch 三预览。
 
@@ -410,7 +410,7 @@
 **Menu / ContextMenu**
 
 - 外观：Portal 浮层、独立宽度、行高随文字、子菜单独立 Portal；窗口边界夹紧，下方不足翻上、左右翻转。`[已实现]`
-- 手机：行高 ≥ 44pt，`maxVisibleRows` 预算使用触摸下限，子浮层继承来源 surface 的输入环境。`[已实现]`；菜单宽 ≤ 窗口 − 24、长标题换行或截断策略一致、触摸不依赖 hover 展开子菜单（点击展开）。`[部分]`（翻转与夹紧已实现；触摸展开需补验收）
+- 手机：行高 ≥ 44pt，`maxVisibleRows` 预算使用触摸下限，子浮层继承来源 surface 的输入环境。`[已实现]`；菜单宽 ≤ 窗口 − 24、长标题换行或截断策略一致、触摸不依赖 hover 展开子菜单（点击展开）。`[已实现]`，触摸展开与执行由 `MenuHierarchyTests.touchSubmenu` 验证，记录见第 5 节。
 - 平板 / 桌面：hover 180ms 展开子菜单、前缀查找、快捷键列。`[已实现]`
 - 交互与验收：Up/Down/Home/End/Right/Left/Escape/Enter/类型查找；辅助功能逐行 role、禁用与选中态。验收：Menu 测试族、`--component menu|contextMenu`。
 
@@ -568,6 +568,22 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 本节记录 `GuavaUICompose` 与 Gallery 原编号 1–21 项的完成证据；第 6、10、14、15、16 项的记录见本节末尾。第 1、3 节仍标为 `[部分]` 的具体契约，以及[组件覆盖与缺失清单](gaps.md)的剩余功能，仍需继续实现和验收，不能把编号清单完成视为两份文档全部完成。
 
+当前仍未关闭的自适应契约（第 3 节对应段落为验收要求）：
+
+| 范围 | 剩余工作 | 验收边界 |
+| --- | --- | --- |
+| SafeArea / TextField / CommandPalette | 宿主软键盘 inset、光标显露与结果区收缩联动 | 模拟器/真机的真实 IME；桌面 touch surface 不能替代 |
+| Workspace | 标签条完整键盘/辅助功能、RTL 与其余深化能力 | 见 [Workspace](workspace.md) 与 [功能缺口](gaps.md#3-既有组件功能缺口与完成边界) |
+| AssetRefField / JsonField | 清空/选择/展开入口的触摸目标与窄宽实测 | 390 触摸、720 混合、200% 字号及完整名称 |
+| List / MultiSelectList / SectionedList | 通用行的标题收敛与尾部徽标/状态保留；重排边缘自动滚动另见 gaps | 自定义 rowContent 不能由容器静默截断整个行；需可组合的行布局契约 |
+| Badge / Tag / KeyCap / Label | 长文本换行或显式收敛策略 | 不静默丢失文本，完整语义可达 |
+| Alert | 窄宽/大字号操作区堆叠与窗口预算 | AlertDialog、Notification 已完成，不能代替 Alert 本体 |
+| Rating | 窄宽下评分说明与多星示例超出卡片 | RTL 行为已通过，布局仍需单独修复与视觉验收 |
+| Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
+
+新项关闭时须更新对应契约、组件文档和下方证据，并单独提交；物理设备限制保持明示，不把未执行的设备测试记为通过。
+
+
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 
 AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单，按实际容器在 1 / 3 个平铺操作之间收敛；标题与文字主操作使用统一的单行省略能力，保留全文及 heading 语义，安全区由宿主消费。组件、菜单和原生角色测试及 Gallery 可交互页已经接入；第 6 项仍保留既有控件的逐项采用工作，不能由 AppBar 的完成代替。
@@ -598,7 +614,7 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 
 CommandPalette compact 几何已完成：`SurfaceReader` 读取 surface 尺寸与输入，compact 下使用 `viewport − 16` 宽、`min(560, viewport − 16)` 高、8pt inset 并居中；触摸面结果行取 `max(40, minimumControlExtent)`、header 36，指针保持 40/24。`CommandPaletteAdaptiveTests` 在 390pt 触摸面断言 374×560 panel 与 44pt 行，在 1280pt 指针面断言 640×560 与 40pt 行。DevTools 在 390×820 真机窗口中打开 Gallery `commandPalette`，`query_ui_nodes` 的 `role=dialog` 返回 374×560、位置 (8,130)，`capture-ui` 确认搜索行、结果区与 footer 均在窗口内；宿主默认指针输入下现场行高为 40，触摸 44pt 由单元测试覆盖。软键盘出现后的结果区收缩仍由宿主 IME/安全区处理。
 
-Select 弹层宽度与行高已完成：触发器继续单行截断并保留完整辅助功能值；弹层复用 Menu 的 `MenuWindowBounds` 与 `MenuRowMetrics`，宽度不小于触发器、由 Portal `viewportMargin` 夹紧在窗口 − 24 内，行高按指针 32 / 触摸 44 取最大值，长选项自然换行增高。DevTools 在 390×820 打开 Gallery `select`：触发器 286pt，弹层宽 346pt、x=32、右边界 378（窗口 390，右/左各 12pt），行高 32 为宿主指针面；触摸 44pt 由 `RowDensityTests.menuRows` 覆盖。`capture-ui` 确认长选项与禁用项都在窗口内。第 10 项剩余 Sheet 底部呈现与菜单触摸展开子菜单验收。
+Select 弹层宽度与行高已完成：触发器继续单行截断并保留完整辅助功能值；弹层复用 Menu 的 `MenuWindowBounds` 与 `MenuRowMetrics`，宽度不小于触发器、由 Portal `viewportMargin` 夹紧在窗口 − 24 内，行高按指针 32 / 触摸 44 取最大值，长选项自然换行增高。DevTools 在 390×820 打开 Gallery `select`：触发器 286pt，弹层宽 346pt、x=32、右边界 378（窗口 390，右/左各 12pt），行高 32 为宿主指针面；触摸 44pt 由 `RowDensityTests.menuRows` 覆盖。`capture-ui` 确认长选项与禁用项都在窗口内。这两项后续已完成，见本节“第 10 项浮层自适应已完成”的记录。
 
 第 13 项焦点环已统一：Toggle 的开关/复选框自绘路径与 Slider/RangeSlider 的 `SliderStyleConfiguration` 都改为 `focused && isFocusVisible`，与 Button-based 样式、Rating 和表格头共用同一键盘可见性来源。`FocusRingTests.customDrawnControlsFollowFocusVisibility` 直接渲染 Toggle/Slider/RangeSlider 的 DrawList，断言指针焦点时没有 `focusRing` 顶点、键盘焦点时存在；既有 Button ring 测试继续覆盖样式路径。DevTools 在 720×820 Gallery `toggle` 点击 Notifications 后数值翻转、焦点目标移动，但 `capture-ui` 与点击前像素一致（无环）；键盘环由渲染顶点断言覆盖。
 
@@ -631,6 +647,8 @@ NumberField / Vec3Field 的 locale 与轴高度已完成：`locale` 默认当前
 DevTools AI 的输入值验收入口已补齐：普通节点查询继续不求值延迟输入值；对已发现的实际 `textField` 使用 `query_ui_nodes {node_id, include_value:true}` 显式读取当前值。返回 `semantics.value` 与 `valueTruncated`，最多 4096 个 Unicode 字符；缺少节点 ID、过期节点报错，安全字段始终脱敏且不调用值提供者。16 项 Portable AI 查询测试与真实 Compose 字段发现测试通过；DevTools 在 720×820 深色混合面直接读取节点 177，从输入前 `1,25` 到提交后 `12,75`，并核对镜像里的两个 locale 值一致。调用示例见 [DevTools](../../GuavaUI/DevTools/README.md#ai-driven-component-acceptance)。
 
 SwipeList 的 RTL 与操作区已补齐：向逻辑 leading 滑动（LTR 左、RTL 右）揭示 trailing 操作，位移与按钮排列一致；Escape 从操作按钮焦点真正收起。行宽扣除 stable 滚动条 12pt 保留区，避免 RTL 裁掉 Delete 左边缘；操作宽 74pt 随字号缩放并按行宽夹紧，标题单行省略，Gallery 移除固定内容高度避免 200% 副标题裁切。13 项滑动/滚动/刷新/Slider 测试通过，另有 6 项 SwipeList 测试（含 LTR/RTL × 100%/200% 四组合）通过。DevTools 390×820 触摸右滑揭示完整 74×52 操作；720 深色混合、1280 浅色指针 200% 使用 Actions 入口，后者操作为 148×104，Archive/Delete 保持单行。三档执行 Archive 后均查询到 `Archived Inbox`；镜像确认圆角、危险操作层次与行文本无裁切。
+
+文档状态复核：Button 字符串截断、触摸子菜单、Rating RTL、Select 弹层宽度与 locale 数值的旧缺失状态已校正；FAB 按现有视觉基线明确不纳入，时区配置与时区选择入口分开描述。31 项截断/菜单/Rating/选择器测试通过；DevTools 在 390 RTL 触摸 Rating 点击第一颗后 ArrowLeft 得到 2.0，720 深色混合刷新得到 `Refreshes: 1`，1280 指针面长按钮为 150×32 且保持单行省略/完整名称，动作计数递增。镜像检查确认 Button/刷新面正常；Rating 窄宽说明与多星溢出已列为待修，未记作视觉验收通过。
 
 ## 6. 动效与动画（动画效果实现）
 

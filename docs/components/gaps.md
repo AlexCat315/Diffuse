@@ -2,7 +2,7 @@
 
 本文与[跨平台控件规范](adaptive-spec.md)互补：规范管**已有**容器的空间不足阶梯、控件重排与输入/动效契约；本文管**还缺什么**——完整缺失的组件、既有组件的功能缺口，以及优先级与验收口径。
 
-- 数据来源：`GuavaUI/Sources/GuavaUICompose/Primitives`、Gallery 97 页（`GalleryCatalog.swift`）、各组件文档与逐项代码复核。
+- 数据来源：`GuavaUI/Sources/GuavaUICompose/Primitives`、Gallery 98 页（`GalleryCatalog.swift`，页面数随目录更新）、各组件文档与逐项代码复核。
 - 范围：脱离 Guava 编辑器语境仍成立的通用 UI 能力。场景层级、Inspector 字段面板、Material Graph、媒体时间线等领域组件留在应用层，不进本清单。
 - 状态：`[未实现]` 完全缺失；`[部分]` 已有基础实现或可用组合替代；`[已实现]` 仅作对照。优先级 P0（手机/平板可用性阻塞）> P1（常用能力）> P2（长尾/体验）> P3（按需）。
 - 自适应工作由规范第 1、3 节的状态与第 5 节完成记录跟踪（Toolbar、Sidebar、Form、数据列、Tab、截断、缩放、触摸行高、滚动、浮层、焦点与 Gallery 等）；本文仅保留交叉引用，避免双份维护。
@@ -12,9 +12,9 @@
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
 | 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、Masonry、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader/HeightClassReader/OrientationReader、VirtualStack/VariableVirtualStack、Workspace、Form/PropertyGrid | Grid/LazyGrid span P2 |
-| 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed、label 槽）/RadioGroup、Slider（刻度/Page）、RangeSlider（双 thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | FAB P2 |
+| 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed、label 槽）/RadioGroup、Slider（刻度/Page）、RangeSlider（双 thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | 无通用缺失；FAB 按规范视觉基线不纳入 |
 | 文本与数值输入 | TextField（含 Text Editor / 代码编辑）、TextArea、SearchField、NumberField（步进/locale）、Vec3Field（locale/缩放）、Select/Combobox、ColorField、AssetRefField、JsonField、Label/Link/KeyCap | OTP/PIN P3、masked input P3、数值拖拽 scrub P2 |
-| 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 周/月/年选择 P2、时区 P2、区间预设 P2 |
+| 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 周/月/年选择 P2、时区选择入口 P2、区间预设 P2 |
 | 集合与数据 | List（单选/虚拟化/键盘）、MultiSelectList（Shift/Cmd/键盘多选）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualList/Stack、Chart（line/bar/sparkline/折行图例）、Timeline、Tag | TreeTable P2、DataTable 高级能力 P2、Chart 更多图形/图例选择 P2 |
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | 菜单富内容 P2 |
@@ -126,16 +126,16 @@
 
 **WheelPicker 与 TimePicker 已实现（P2）**：WheelPicker 提供五行视口、中央 band、拖拽/滚轮/点击/方向键、disabled 跳过与 slider a11y；TimePicker 在其上组合时/分/可选秒/AM-PM、12/24 小时与 min/max 夹紧。两者均有 390/720/1280 Gallery 预览、自动化测试与 DevTools 验收。细节见 [WheelPicker](wheelpicker.md) 与 [TimePicker](timepicker.md)。
 
-## 3. 既有组件功能缺口（不含规范第 5 节条目）
+## 3. 既有组件功能缺口与完成边界
 
 | 组件 | 缺口 | 优先级 |
 | --- | --- | --- |
 | Toggle / Checkbox | label 槽位已实现；Checkbox 的 `CheckboxState.off/on/mixed` 也已实现，Toggle 仍采用 Bool 开关语义 | 已完成 |
 | Slider | 水平/垂直、RTL 映射、拖动/键盘/辅助功能已完成，见 [Slider](slider.md) | 已完成 |
-| Rating | RTL、自定义图形/半星以上精度 | P2 |
+| Rating | RTL 映射/填充/方向键已实现；自定义图形及比半星更细的精度仍缺，见 [Rating](rating.md) | P2 |
 | NumberField / Vec3Field | locale 小数、数字/符号与触摸/大字号轴单元已完成，见 [数值输入](numberfield.md)；拖拽 scrub、单轴重置与向量复制/粘贴仍缺 | P2 |
-| Select / Combobox | 远程/异步结果（按需）、触发器宽度联动 | P2 |
-| DatePicker / TimeField | 时区；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
+| Select / Combobox | 触发器宽度下限与窗口夹紧已实现；异步请求、取消与加载状态由调用方数据层负责，组件级远程结果契约尚未提供 | P2（按需） |
+| DatePicker / TimeField | Calendar 配置可指定 timeZone，时区选择入口仍缺；TimeOfDay 是不含时区的墙钟值，转换由调用方负责；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动与触摸弹层预算已完成，见 [日历导航](calendar.md)；周/月/年模式仍为 P2 | P1 已完成 |
 | List | 多选、平面区段、sticky 区段、重排、SwipeList 与下拉刷新已实现（见 2.9） | P1（多选/区段/sticky/重排/swipe/refresh 已完成） |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
@@ -163,13 +163,15 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：已清空；BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
+**P0（手机/平板可用性阻塞）**：本清单的组件级项目已实现；宿主 IME 联动与真实设备/读屏验收仍按规范第 3、4 节跟踪。BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
 **P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
 **P2（长尾/体验）**：TreeTable、RichText/Markdown、Chart 扩展、DataTable 高级能力、文本编辑器 snippets、图片缓存与解码能力、Workspace 深化。
 
 **P3（按需）**：OTP/PIN、masked input、外链确认等。
+
+FAB 不作为待补组件：按[视觉基线](adaptive-spec.md#2-视觉与密度基线)，主操作使用 Button/AppBar/Toolbar。P2/P3 表仍是未完成功能清单，不能由 P0/P1 的完成推断全部组件已完成。
 
 排序依据：先补"壳层与触摸集合"（手机整屏可用性），再补"数据密度与常用输入"，最后补长尾与性能深化。领域组件（场景/资产/材质/时间线业务）不进入 GuavaUI。
 

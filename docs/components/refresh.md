@@ -35,11 +35,12 @@ List(items, id: \.self, selection: $selection,
 
 - 只有 `List`/`VirtualStack` 暴露 `refresh`；`Table`/`DataTable` 若需要刷新，应通过其内部 List 或外层命令接入。
 - `action` 是同步入口；异步生命周期由调用方写入 `isRefreshing`，组件不持有 Task。
-- 下拉手势依赖触摸拖动；DevTools 的 pointer 输入不会产生 overscroll，触摸路径由单元测试覆盖。
+- 下拉手势要求 surface 的 input 含 touch；DevTools 注入统一 pointer 事件时会按该 surface 走真实触摸识别。Gallery 用 `--input touch` 启动后即可验证 overscroll，无需 OS 自动化。
 - 指示器覆盖在滚动内容顶部；刷新中通过 36pt inset 让出空间，没有额外的下拉阻尼动画。
 
 ## 验证
 
+- DevTools 390×820 touch：按下 (180,540)，先移到 (180,600)，再拖到 (180,800) 并释放，查询 `refresh-count` 为 `Refreshes: 1`；镜像确认指示器显示，嵌套滚动捕获由 `RefreshTests.nestedPull` 覆盖。
 - `RefreshTests.pull`：触摸下拉越过 64pt 只触发一次，`isRefreshing` 为 true 时指示器保持，清除后指示器移除。
 - `RefreshTests.keyboard`：聚焦 ScrollView 后 Cmd+R 触发一次，重复 Cmd+R 在刷新中不再触发。
 - Gallery `refreshableList` 页：显式 Refresh now、计数文本与 6 行列表；DevTools 720×820 点击后查询到 `Refreshing`，计数 `Refreshes: 1`，3 秒后指示器消失；列表行宽 548pt。

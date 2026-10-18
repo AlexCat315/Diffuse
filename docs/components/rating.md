@@ -40,11 +40,11 @@ Rating("Customer score", value: $score) {
 
 参考本机 GPUI Kit 的 `crates/component/src/rating.rs`：吸收逐星预览、可控最大值、尺寸和禁用的设计。该快照使用整数值，点击已填充星会选中前一星。GuavaUI 明确选择“再次点击当前评分清零”的契约，并增加半星和键盘输入，行为并非逐字复刻。[上游 Rating 源码](https://github.com/longbridge/gpui-kit/blob/main/crates/component/src/rating.rs)。
 
-示例在 `GalleryContent/RatingStory.swift`，可用 `swift run --package-path GuavaUI/Examples GuavaUIDemo --component Rating` 打开。9 项 Rating 测试和独立画廊交互测试覆盖真实事件派发、半星命中、提交前的帧、捕获取消、配置变化、卸载、键盘、辅助功能、尺寸、SVG 解码及部分填充裁剪。
+示例在 [RatingStory.swift](../../GuavaUI/Examples/Sources/GalleryContent/Stories/Feedback/RatingStory.swift)，可用 `swift run --package-path GuavaUI/Examples GuavaUIDemo --component Rating` 打开。Rating 测试族和独立画廊交互测试覆盖真实事件派发、半星命中、提交前的帧、捕获取消、配置变化、卸载、键盘、辅助功能、尺寸、SVG 解码及部分填充裁剪。
 
-原生 Retina 窗口已确认明暗主题、12/16/20/28/36pt SVG、半星和 4.25 填充、禁用颜色、键盘步长、Home/End、清空策略、焦点环、辅助功能写入和独立重置。鼠标整星/半星命中、预览不提交、重复清零、内部拖动提交、外部释放取消及只读/禁用忽略输入也已完成原生验收。[Rating 验证](../guava-ui/evidence/rating-native.json)记录口径和限制。原生点击验收使用的 CUA 坐标仍待后续在输入驱动层稳定复现与修复。
+当前验收使用 `RatingTests` 与 Gallery 自有 DevTools 输入/查询/镜像，覆盖明暗主题、尺寸、部分填充、清空、焦点与捕获生命周期；未保存的旧坐标记录不作为当前通过依据。RTL 的直接触摸与方向键验收记录见 [自适应验收](adaptive-spec.md#5-规范完成清单按本文验收)。
 
-当前边界：水平 LTR 星形布局；未提供 RTL、其他评分图形、触摸专属手势和表单校验集成。
+RTL 已镜像星位、半星裁剪、指针候选和左右方向键；上下方向键保持增减语义。当前边界：只提供星形与整星/半星精度；其他图形、更细精度、触摸专属手势和表单校验集成仍未提供。
 
 ## 响应式与输入密度
 
