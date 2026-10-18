@@ -61,7 +61,7 @@ public struct Alert<Actions: View>: View {
             let style = resolvedStyle(theme)
             Row(alignment: .top, spacing: theme.spacing.sm) {
                 if showsIcon {
-                    Icon(icon ?? tone.icon, size: .medium, color: style.ink)
+                    Icon(icon ?? tone.icon, size: .medium, color: style.iconInk)
                 }
                 Column(alignment: .leading, spacing: 4) {
                     Text(title).font(.bodyStrong).foregroundColor(style.ink)
@@ -100,18 +100,23 @@ public struct Alert<Actions: View>: View {
         let base = tone.color.resolve(theme)
         switch variant {
         case .soft:
-            return Style(ink: base,
+            // iOS inline status card: neutral grouped surface, tone reserved
+            // for the glyph and hairline instead of tinting the whole block.
+            return Style(ink: theme.colors.onSurface,
+                         iconInk: base,
                          detail: theme.colors.onSurfaceVariant,
-                         fill: base.multipliedAlpha(0.1),
-                         stroke: base.multipliedAlpha(0.28))
+                         fill: theme.colors.surfaceRaised,
+                         stroke: theme.colors.border)
         case .outline:
-            return Style(ink: base,
+            return Style(ink: theme.colors.onSurface,
+                         iconInk: base,
                          detail: theme.colors.onSurfaceVariant,
                          fill: .clear,
                          stroke: base.multipliedAlpha(0.45))
         case .filled:
             let solidInk = tone.ink(onSolid: theme)
             return Style(ink: solidInk,
+                         iconInk: solidInk,
                          detail: solidInk.multipliedAlpha(0.88),
                          fill: base,
                          stroke: .clear)
@@ -120,6 +125,7 @@ public struct Alert<Actions: View>: View {
 
     private struct Style {
         let ink: Color
+        let iconInk: Color
         let detail: Color
         let fill: Color
         let stroke: Color

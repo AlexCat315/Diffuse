@@ -41,6 +41,7 @@
 | Sheet | 实现与验证边界 | [sheet.md](sheet.md) |
 | BottomSheet | detent、拖拽与宽屏退化 | [bottom-sheet.md](bottom-sheet.md) |
 | Tooltip | 实现与验证边界 | [tooltip.md](tooltip.md) |
+| Alert | iOS 中性内联状态卡、tone 图标与 variant | [alert.md](alert.md) |
 | Toast / Notification | 队列、操作按钮、位置与安全区 | [toast.md](toast.md) |
 | Menu / ContextMenu / Select | 实现与验证边界 | [menu.md](menu.md) |
 | MenuButton | 按钮触发的菜单与 expanded 语义 | [menubutton.md](menubutton.md) |

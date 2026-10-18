@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Alert 的默认 `.soft` 从 Material tonal 色块改为 iOS 中性状态卡：`surfaceRaised` + hairline，tone 只保留在图标；标题/正文恢复常规对比度。新增 `alert.md` 并加入组件索引，DevTools 截图复核四种 tone。
 - iOS 风格收口：Sheet 默认改为距窗口 12pt、圆角 14pt 的浮动面板（新增 `SheetOptions.inset/cornerRadius`），不再贴边方形；Toast 自动位置改为所有宽度右上，圆角 14pt 并加轻阴影，compact 不再使用底部 Snackbar 形态。SheetTests/ProductComponentTests 22/22，DevTools 实测 sheet 260×736 @ (728,12)、toast 右上带阴影。
 - `ScrollView` 新增 `.scrollAnchor()`：记录视口顶部完整 anchor 的相对位置与 contentSize，布局增长时按 anchor 位移修正 offset；顶部插入历史消息保持当前阅读行，普通滚动刷新基线，anchor 消失时重新选择。`ScrollOffsetBindingTests.scrollAnchor` 覆盖 prepend +120pt；Gallery ScrollView 提供 Load older，DevTools 实测 offset 0→220 且 Scrollable line 1 保持顶部。
 - `ScrollView` 新增 `ScrollRequest(offset:duration:)`：按新 identity 启动带时长缓动，目标夹到当前范围，滚轮/拖动/绑定写入/新 request 取消旧动画，duration 0 与 reducedMotion 直接吸附。`ScrollOffsetBindingTests.timedScroll` 覆盖动画中途、输入取消、夹紧与 reducedMotion；Gallery ScrollView 提供 Top/Middle/End，DevTools 实测 End 后 offset 1476。
