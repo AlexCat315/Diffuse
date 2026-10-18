@@ -92,6 +92,21 @@ struct VirtualStackStory: View {
 
 struct ChartStory: View {
     private let values: [Float] = [12, 19, 16, 28, 21, 35, 24, 31, 40, 34, 47, 42]
+    private let signups: [Float] = [8, 12, 10, 17, 14, 20, 18, 23, 27, 24, 30, 28]
+    private let conversions: [Float] = [3, 5, 4, 7, 6, 8, 7, 9, 11, 10, 12, 13]
+    private let latency: [Float] = [40, 38, 42, 36, 44, 41, 46, 43, 47, 45, 50, 48]
+    @State private var showsSignups = true
+
+    private var allSeries: [ChartSeries] {
+        [.line(values, color: .accent, title: "Revenue"),
+         .line(signups, color: .success, title: "Signups"),
+         .line(conversions, color: .warning, title: "Conversion"),
+         .line(latency, color: .info, title: "Latency")]
+    }
+    private var visibleSeries: [ChartSeries] {
+        allSeries.enumerated().compactMap { $0.offset == 1 && !showsSignups ? nil : $0.element }
+    }
+
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
             StorySection("Line & threshold", "A deterministic fixture makes changes easy to compare.") {
@@ -100,6 +115,17 @@ struct ChartStory: View {
             StorySection("Bars & sparkline", "Compact charts share the same rendering primitive.") {
                 BarChart(values).frame(height: 110)
                 SparklineChart(values).frame(height: 60)
+            }
+            StorySection("Series & legend", "Titled series feed the wrapping legend. Narrow containers wrap whole items; the chart and legend share the same visible series.") {
+                MonitorChart(series: visibleSeries).frame(height: 120)
+                ChartLegend(series: visibleSeries).frame(width: .percent(100)).debugName("chart-legend-wide")
+                Row(alignment: .center, spacing: 8) {
+                    Checkbox(isOn: $showsSignups).accessibilityLabel("Show signups").debugName("chart-legend-toggle")
+                    Text("Show signups").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+                Box {
+                    ChartLegend(series: allSeries).frame(width: 220).debugName("chart-legend-narrow")
+                }
             }
         }
     }

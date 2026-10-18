@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增 `ChartLegend`：`ChartSeries.title` 为序列提供图例名称，图例在宽容器单行、窄容器按整项折行；色块为装饰，完整标题作为辅助功能名称。`ChartLegendTests` 2/2 覆盖折行、空标题过滤与投影；Gallery `chart` 页新增多序列图、宽/窄图例与 “Show signups” 开关，DevTools 实测窄图例换行、点击开关后图例项减少。补齐 [Chart](docs/components/chart.md)、`adaptive-spec.md` 与 `gaps.md`。
+
 - 新增 P2 `Masonry` / `MasonryLayout`：按最短列放置的平衡瀑布流，列数由 `minimumColumnWidth`、`maximumColumns` 与实际宽度决定（窄宽自动单列，RTL 镜像列顺序），支持列间距、项间距与列内水平对齐。高度由子视图自然测量，不二次缩放字号；不虚拟化，大集合仍用 `LazyGrid`/`VirtualStack`。`MasonryTests` 4/4 覆盖最短列、单列退化、列数上限与 RTL；Gallery 新增 `masonry` 页与 390/720/1280 预览，DevTools 实测 720pt 两列、390pt 单列、Add card 后计数 8→9。补齐 [Masonry](docs/components/masonry.md)、`layout.md`、`adaptive-spec.md` 与 `gaps.md`。
 
 - `NavigationRail` / `Sidebar` 的纯图标轨改为居中的 40×40 圆角选择块：移除 2pt accent 侧条和铺满整行的选择/悬停底，选中态用 `surfaceVariant`，hover/press 只叠中性 state layer 并把图标从 `onSurfaceVariant` 提亮到 `onSurface`。带文字形态保留整行胶囊，但同样去掉 accent 侧条并改为对称内边距。`NavigationRailTests` 断言选择块与图标双向居中、无 accent 侧条及 hover 颜色；Gallery 窄宽壳层同步生效。

@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import GuavaUIRuntime
@@ -12,23 +12,30 @@ public struct ChartSeries: Sendable {
     public var values: [Float]
     public var color: SemanticColorRef
     public var mode: ChartRenderMode
+    /// Human-readable series name used by `ChartLegend`. Charts render the
+    /// values only; an empty title keeps the series out of the legend.
+    public var title: String
 
     public init(values: [Float],
                 color: SemanticColorRef = .accent,
-                mode: ChartRenderMode = .line) {
+                mode: ChartRenderMode = .line,
+                title: String = "") {
         self.values = values
         self.color = color
         self.mode = mode
+        self.title = title
     }
 
     public static func line(_ values: [Float],
-                            color: SemanticColorRef = .accent) -> ChartSeries {
-        ChartSeries(values: values, color: color, mode: .line)
+                            color: SemanticColorRef = .accent,
+                            title: String = "") -> ChartSeries {
+        ChartSeries(values: values, color: color, mode: .line, title: title)
     }
 
     public static func bar(_ values: [Float],
-                           color: SemanticColorRef = .accent) -> ChartSeries {
-        ChartSeries(values: values, color: color, mode: .bar)
+                           color: SemanticColorRef = .accent,
+                           title: String = "") -> ChartSeries {
+        ChartSeries(values: values, color: color, mode: .bar, title: title)
     }
 }
 
