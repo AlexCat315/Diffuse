@@ -22,6 +22,10 @@ struct Arguments {
     let requestedPlatform: AppPlatform?
     let configuration: BuildConfiguration
     let flags: Set<Flag>
+    /// Arguments after `--` on `run`, passed unchanged to the desktop application.
+    let applicationArguments: [String]
+    /// A DevTools client action on `devtools`; nil opens the Inspector.
+    let client: DevToolsClient?
     private let values: [Option: String]
 
     init(_ raw: [String]) throws {
@@ -62,8 +66,15 @@ struct Arguments {
         var values: [Option: String] = [:], subject: String?
         var flags: Set<Flag> = []
         var platform: AppPlatform?, configuration: BuildConfiguration?
+        var applicationArguments: [String] = [], client: DevToolsClient?
         while let token = tokens.popFirst() {
-            if token.hasPrefix("--"), let candidate = AppPlatform(rawValue: String(token.dropFirst(2))) {
+            if token == "--", operation == .run {
+                applicationArguments = Array(tokens)
+                break
+            } else if operation == .devtools, let action = try DevToolsClient(action: token, arguments: Array(tokens)) {
+                client = action
+                break
+            } else if token.hasPrefix("--"), let candidate = AppPlatform(rawValue: String(token.dropFirst(2))) {
                 guard platform == nil else { throw ToolError.invalid("Select exactly one platform") }
                 platform = candidate
             } else if token.hasPrefix("--"), let flag = Flag(rawValue: String(token.dropFirst(2))) {
@@ -121,6 +132,14 @@ struct Arguments {
         if flags.contains(.noOpen), operation == .run, !flags.contains(.devtools) {
             throw ToolError.invalid("--no-open requires --devtools")
         }
+        if !applicationArguments.isEmpty, [AppPlatform.android, .ios, .web].contains(selectedPlatform) {
+            throw ToolError.invalid("Application arguments after -- are supported for desktop runs")
+        }
+        if client != nil, flags.contains(.noOpen) {
+            throw ToolError.invalid("--no-open applies to the Inspector, not to DevTools client actions")
+        }
+        self.applicationArguments = applicationArguments
+        self.client = client
         self.flags = flags
         self.operation = operation
         self.subject = subject
@@ -170,3 +189,36 @@ struct Arguments {
 }
 
 enum Flag: String { case devtools, noOpen = "no-open", noParallel = "no-parallel" }
+
+/// One AI/automation client request against the project's live DevTools
+/// session. The session file is resolved by the CLI, so callers never copy
+/// endpoints or tokens.
+struct DevToolsClient: Equatable {
+    /// The repository tool operation (`guava-dev devtools <operation>`).
+    let operation: String
+    let arguments: [String]
+
+    /// Returns nil for a word that is not an action (it is then the project
+    /// directory); throws for an action with the wrong arguments.
+    init?(action: String, arguments: [String]) throws {
+        switch action {
+        case "list":
+            guard arguments.isEmpty else { throw ToolError.invalid("Use guava devtools list") }
+            (operation, self.arguments) = ("query-ui", ["--list"])
+        case "query":
+            // A bare JSON object queries nodes, the most common AI request.
+            if arguments.isEmpty { (operation, self.arguments) = ("query-ui", ["--list"]) }
+            else if arguments[0].hasPrefix("{") { (operation, self.arguments) = ("query-ui", ["query_ui_nodes"] + arguments) }
+            else { (operation, self.arguments) = ("query-ui", arguments) }
+        case "click":
+            guard arguments.count == 1 else { throw ToolError.invalid("Use guava devtools click NODE_ID") }
+            (operation, self.arguments) = ("input-ui", ["--click-node"] + arguments)
+        case "input":
+            guard arguments.count == 1 else { throw ToolError.invalid("Use guava devtools input JSON|@FILE") }
+            (operation, self.arguments) = ("input-ui", ["--input"] + arguments)
+        case "capture": (operation, self.arguments) = ("capture-ui", arguments)
+        case "timings": (operation, self.arguments) = ("record-timings", arguments)
+        default: return nil
+        }
+    }
+}

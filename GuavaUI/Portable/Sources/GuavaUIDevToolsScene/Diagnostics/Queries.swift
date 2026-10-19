@@ -22,6 +22,15 @@ public struct UIDiagnosticPage<Item: Codable & Sendable>: Codable, Sendable {
         self.items = Array(items[start..<end]); total = items.count
         nextOffset = end < items.count ? end : nil
     }
+
+    private init(items: [Item], total: Int, nextOffset: Int?) {
+        self.items = items; self.total = total; self.nextOffset = nextOffset
+    }
+
+    /// Projects each item while preserving paging.
+    func map<Other>(_ transform: (Item) -> Other) -> UIDiagnosticPage<Other> {
+        UIDiagnosticPage<Other>(items: items.map(transform), total: total, nextOffset: nextOffset)
+    }
 }
 
 /// Read-only facade over the same scene data used by the DevTools inspector.
@@ -143,4 +152,44 @@ public struct UIStateQuery: Codable, Sendable {
     public let metadata: UIDiagnosticPage<StateRegistry.Descriptor>
     public let values: [StateRegistry.Value]
     public let missingIDs: [String]
+}
+
+/// One-line node projection for AI clients (`compact: true`): identity,
+/// meaning, state, clipped geometry and authored source, without view-type
+/// dumps, layout internals or style overrides.
+public struct UIDiagnosticCompactNode: Codable, Sendable {
+    public let id: String
+    public let parentID: String?
+    public let role: String?
+    public let label: String?
+    public let value: String?
+    /// Non-default states only: selected, expanded, collapsed, disabled, invalid, readOnly.
+    public let state: [String]?
+    public let frame: NodeFrame?
+    public let inputEnabled: Bool
+    public let debugName: String?
+    /// `File.swift:line`.
+    public let source: String?
+
+    init(_ item: UIDiagnosticNode) {
+        let semantics = item.semantics
+        id = item.node.id
+        parentID = item.parentID
+        role = semantics?.role.rawValue ?? item.node.semanticRole
+        label = semantics.map(\.label).flatMap { $0.isEmpty ? nil : $0 }
+        value = semantics.map(\.value).flatMap { $0.isEmpty ? nil : $0 }
+        var state: [String] = []
+        if let semantics {
+            if semantics.state.isSelected { state.append("selected") }
+            if let expanded = semantics.state.isExpanded { state.append(expanded ? "expanded" : "collapsed") }
+            if !semantics.state.isEnabled { state.append("disabled") }
+            if semantics.state.isInvalid { state.append("invalid") }
+            if semantics.state.isReadOnly { state.append("readOnly") }
+        }
+        self.state = state.isEmpty ? nil : state
+        frame = item.presentation.visibleFrame
+        inputEnabled = item.presentation.inputEnabled
+        debugName = item.node.debugName
+        source = item.node.source.map { "\(($0.fileID as NSString).lastPathComponent):\($0.line)" }
+    }
 }

@@ -87,6 +87,8 @@ enum GuavaCLI {
           guava doctor [--mac|--win|--linux|--android|--ios]
           guava devices [--android|--ios]
           guava devtools [directory] [--session ID] [--no-open]
+          guava devtools [directory] [--session ID] list | query [TOOL] [JSON|@FILE] | click NODE_ID
+                                 | input JSON|@FILE | capture OUT.jpg [--settle-ms N] | timings OUT.json FRAMES WARMUP
 
         Directory defaults to the current project; platform defaults to the host; configuration defaults to debug.
         One guava.json owns application identity, SDK location and targets; UI lives in Sources/AppContent.
@@ -96,6 +98,8 @@ enum GuavaCLI {
 
         SDK selection: --engine-root PATH, GUAVA_ENGINE_ROOT, guava.json's toolchain.enginePath, or the installed SDK selection.
         Run: --devtools [--no-open] opens the Inspector; --profile enables optimized diagnostics.
+        Run: arguments after -- go to the desktop application, e.g. guava run GuavaUI/Examples -- --component list --width 390.
+        DevTools actions resolve the live session; query with a bare JSON object runs query_ui_nodes.
         Create: --platforms mac,android,ios selects native project templates.
         Build/run: --output PATH; Android: --android-sdk PATH --ndk PATH --device SERIAL
         iOS: --simulator UDID (default: booted); physical device: --device ID --team TEAM_ID

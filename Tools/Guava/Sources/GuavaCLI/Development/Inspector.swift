@@ -18,22 +18,34 @@ enum Inspector {
         #endif
     }
 
+    /// Opens the Inspector, or runs one client action (query, click, input,
+    /// capture, timings) against the same resolved live session.
     static func attach(_ arguments: Arguments, project: AppProject, root: URL) throws {
+        let (session, file) = try live(arguments, project: project)
+        guard let client = arguments.client else {
+            try present(session, root: root, open: !arguments.flags.contains(.noOpen))
+            return
+        }
+        try DeveloperTool.run(["devtools", client.operation, "@" + file.path] + client.arguments, root: root)
+    }
+
+    private static func live(_ arguments: Arguments, project: AppProject) throws -> (ManagedSession, URL) {
         let directory = project.buildDirectory.appendingPathComponent("devtools")
         guard FileManager.default.fileExists(atPath: directory.path) else { throw ToolError.invalid("No development session; start guava run --devtools or --profile") }
         let requested = arguments.value(.session)
-        var sessions: [ManagedSession] = []
+        var sessions: [(ManagedSession, URL)] = []
         for child in try Files.children(directory) {
-            guard let data = try? Data(contentsOf: child.appendingPathComponent("session.json")),
+            let file = child.appendingPathComponent("session.json")
+            guard let data = try? Data(contentsOf: file),
                   let session = try? JSONDecoder().decode(ManagedSession.self, from: data),
                   requested == nil || session.runtime.id == requested,
                   arguments.requestedPlatform == nil || session.platform == arguments.requestedPlatform else { continue }
-            if (try? isAlive(session)) == true { sessions.append(session) }
+            if (try? isAlive(session)) == true { sessions.append((session, file)) }
         }
-        guard sessions.count == 1, let session = sessions.first else {
-            throw ToolError.invalid(sessions.isEmpty ? "No live DevTools session for this application" : "Multiple live sessions: \(sessions.map { $0.runtime.id }.joined(separator: ", ")); select --session ID")
+        guard sessions.count == 1, let found = sessions.first else {
+            throw ToolError.invalid(sessions.isEmpty ? "No live DevTools session for this application" : "Multiple live sessions: \(sessions.map { $0.0.runtime.id }.joined(separator: ", ")); select --session ID")
         }
-        try present(session, root: root, open: !arguments.flags.contains(.noOpen))
+        return found
     }
 
     static func isAlive(_ session: ManagedSession) throws -> Bool {

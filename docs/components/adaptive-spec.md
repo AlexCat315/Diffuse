@@ -25,7 +25,7 @@
 | 设备类 | 典型宽度 | 典型输入 | hover | 安全区 | 验收取样 |
 | --- | --- | --- | --- | --- | --- |
 | 手机 | compact（< 600）；大屏手机横屏可能落 medium | touch-only 或 touch + keyboard | 无 | 顶部/底部非零，横屏侧边非零 | 390pt、触摸、无 hover |
-| 平板 | 竖屏 medium（600–999）；横屏多为 expanded | touch；接键盘/触控板时 touch + pointer + keyboard | 有（触控板/鼠标） | 非零 | 桌面 Gallery 可用 `--width 390|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口，配合|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口并开启开发服务，配合 `--dark`、`--text-scale 2`、`--rtl`、`--reduce-motion` 取样。pt 触摸；720pt 触摸 + 指针；≥1000pt |
+| 平板 | 竖屏 medium（600–999）；横屏多为 expanded | touch；接键盘/触控板时 touch + pointer + keyboard | 有（触控板/鼠标） | 非零 | 桌面 Gallery 用 `./guava run GuavaUI/Examples --mac --devtools --no-open -- --component NAME --width 390|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口并开启开发服务，配合 `--dark`、`--text-scale 2`、`--rtl`、`--reduce-motion` 取样。pt 触摸；720pt 触摸 + 指针；≥1000pt |
 | 桌面 | expanded（≥ 1000） | pointer + keyboard | 有 | 通常为零 | 1280pt 指针 + 键盘 |
 
 规则：
@@ -500,9 +500,9 @@
 ### 4.2 启动与取样
 
 ```sh
-# 桌面：直接打开某一页；名称大小写不敏感，接受 rawValue 或标题
-swift run --package-path GuavaUI/Examples GuavaUIDemo --component textField
-swift run --package-path GuavaUI/Examples GuavaUIDemo --component layout --performance-hud
+# 桌面：直接打开某一页；名称大小写不敏感，接受 rawValue 或标题；-- 之后的参数传给 Gallery
+./guava run GuavaUI/Examples --mac -- --component textField
+./guava run GuavaUI/Examples --mac -- --component layout --performance-hud
 
 # iOS 模拟器 / 真机
 ./guava run GuavaUI/Examples --ios --simulator UDID
@@ -518,9 +518,9 @@ guava showcase gallery --android --component NAME
 
 #### DevTools AI 闭环（无需 Computer Use）
 
-桌面 Gallery 可用 `--width 390|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口，配合 `--dark`、`--text-scale 2`、`--rtl`、`--reduce-motion` 取样。`GUAVA_DEVTOOLS=1 GUAVA_DEVTOOLS_PORT=9231` 开启该窗口的开发服务。启动设置只覆盖临时 surface，viewport 仍随真实窗口更新；宿主可能限制窗口高度，实际尺寸以镜像元数据为准。
+桌面 Gallery 用 `./guava run GuavaUI/Examples --mac --devtools --no-open -- --component NAME --width 390|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口并开启开发服务，配合 `--dark`、`--text-scale 2`、`--rtl`、`--reduce-motion` 取样。启动设置只覆盖临时 surface，viewport 仍随真实窗口更新；宿主可能限制窗口高度，实际尺寸以镜像元数据为准。
 
-使用 `guava-dev devtools query-ui PORT query_ui_nodes JSON` 定位可见且可输入的节点，`input-ui PORT --click-node ID` 或 `--input @events.json` 操控，然后重新查询值/展开态/几何，并以 `capture-ui PORT OUTPUT.jpg` 生成真实 DrawList 镜像，直接检查明暗主题、间距、层次、对齐、截断和重叠。命令、完整示例与画面边界见 [DevTools AI 验收](../../GuavaUI/DevTools/README.md#ai-driven-component-acceptance)。输入已送达不等于组件测试通过；截图存在也不等于视觉验收通过，必须实际查看。
+使用 `./guava devtools GuavaUI/Examples query '{"text":"…","visible_only":true,"compact":true}'` 定位可见且可输入的节点（CLI 自动解析当前会话），`click NODE_ID` 或 `input @events.json` 操控，然后重新查询值/展开态/几何，并以 `capture OUTPUT.jpg` 生成真实 DrawList 镜像，直接检查明暗主题、间距、层次、对齐、截断和重叠。命令、完整示例与画面边界见 [DevTools AI 验收](../../GuavaUI/DevTools/README.md#ai-driven-component-acceptance)。输入已送达不等于组件测试通过；截图存在也不等于视觉验收通过，必须实际查看。
 
 拖拽序列可插入 `{"kind":"wait","milliseconds":100}`，在同一连接中保留捕获并等待真实重组/布局/绘制；单次 ≤2000ms、合计 ≤10000ms。先在目标内移动越过识别阈值，再拖出边界。touch surface 使用组件实际的统一输入分发，覆盖下拉/滑动/拖动；系统 IME 与设备适配器仍需真机验收。
 

@@ -227,18 +227,25 @@ guava-dev devtools session /path/to/MyApp android
 
 No OS automation is needed. Start the Gallery through the Guava CLI, query its
 live AI diagnostics, inject input through DevTools and inspect the renderer mirror.
-Use the actual session directory published under `.guava/build/devtools`:
+Arguments after `--` go to the Gallery, so a page, width and input mode are
+selected at launch. `guava devtools` actions resolve the project's single live
+session (add `--session ID` when several run):
 
 ```sh
-./guava run GuavaUI/Examples --mac --devtools --no-open
-guava-dev devtools query-ui @GuavaUI/Examples/.guava/build/devtools/SESSION/session.json --list
-guava-dev devtools query-ui @GuavaUI/Examples/.guava/build/devtools/SESSION/session.json query_ui_nodes \
-  '{"text":"Search components","visible_only":true}'
-guava-dev devtools capture-ui @GuavaUI/Examples/.guava/build/devtools/SESSION/session.json /tmp/gallery.jpg
+./guava run GuavaUI/Examples --mac --devtools --no-open -- --component list --width 390 --input touch
+./guava devtools GuavaUI/Examples list                     # available AI tools
+./guava devtools GuavaUI/Examples query '{"text":"Document 5","visible_only":true,"compact":true}'
+./guava devtools GuavaUI/Examples click NODE_ID
+./guava devtools GuavaUI/Examples input @events.json
+./guava devtools GuavaUI/Examples capture /tmp/gallery.jpg --settle-ms 400
 ```
 
-`query-ui`, `input-ui`, `capture-ui` and `record-timings` accept a port or an
-`@session.json` / `@runtime.json` file. Managed sessions retain their authentication
+A bare JSON object runs `query_ui_nodes`; `query TOOL JSON` runs any other tool.
+`compact: true` returns one short record per node (id, role, label, value,
+non-default state, clipped frame, `File.swift:line`) instead of the full
+layout/style/view-type payload. The same actions are available as
+`guava-dev devtools query-ui|input-ui|capture-ui|record-timings`, which
+accept a port or an `@session.json` / `@runtime.json` file. Managed sessions retain their authentication
 token and device-forwarded port inside the connection; copying a token into shell
 commands is unnecessary. Select a component through the Gallery search, then
 inspect the narrow/wide/touch previews and change scale or appearance in the UI.

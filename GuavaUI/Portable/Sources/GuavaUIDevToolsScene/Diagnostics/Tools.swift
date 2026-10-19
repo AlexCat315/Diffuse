@@ -30,12 +30,13 @@ private struct QueryNodesInput: Decodable {
     var visibleOnly: Bool?
     var inputEnabledOnly: Bool?
     var includeValue: Bool?
+    var compact: Bool?
     var offset: Int?
     var limit: Int?
 
     enum CodingKeys: String, CodingKey {
         case nodeID = "node_id"
-        case text, role, source
+        case text, role, source, compact
         case visibleOnly = "visible_only"
         case inputEnabledOnly = "input_enabled_only"
         case includeValue = "include_value"
@@ -172,7 +173,9 @@ extension UIDiagnostics {
                 inputEnabledOnly: args.inputEnabledOnly ?? false,
                 includeValue: args.includeValue ?? false,
                 offset: args.offset ?? 0, limit: args.limit ?? 50)
-            return try encodeNodes(page)
+            guard args.compact == true else { return try encodeNodes(page) }
+            try validateGeometry(page)
+            return try AgentToolResult.encode(QueryResponse(data: page.map(UIDiagnosticCompactNode.init)))
         case .queryUIRecomposition:
             let args = try decode(RecompositionInput.self, from: input)
             return try encodeNodes(queryRecomposition(text: args.text,
@@ -204,9 +207,13 @@ extension UIDiagnostics {
     }
 
     private func encodeNodes(_ page: UIDiagnosticPage<UIDiagnosticNode>) throws -> AgentToolResult {
+        try validateGeometry(page)
+        return try AgentToolResult.encode(QueryResponse(data: page))
+    }
+
+    private func validateGeometry(_ page: UIDiagnosticPage<UIDiagnosticNode>) throws {
         if let invalid = page.items.compactMap(\.geometryIssue).first {
             throw AgentError.invalidConfiguration("Node \(invalid.nodeID) has invalid layout geometry. Use get_diagnostics.layoutIssues for values and source.")
         }
-        return try AgentToolResult.encode(QueryResponse(data: page))
     }
 }

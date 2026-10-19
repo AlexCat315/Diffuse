@@ -102,7 +102,21 @@ guava build --android --release \
 
 Android 使用启动参数传递临时配置，不依赖电脑环境变量。CLI 建立 ADB 动态端口转发，保持运行会话；应用结束或 Ctrl+C 后清理转发与本地记录。后台/Surface 暂停期间，场景诊断请求仍通过 Android 主线程 Handler 处理。
 
-`guava devtools [directory] --session ID` 可选择已有会话，`--mac` / `--android` 可过滤平台。状态和会话记录都在 `.guava/build/devtools`，不会写回 guava.json 或场景 checkpoint。
+`guava devtools [directory] --session ID` 可选择已有会话，`--mac` / `--android` 可过滤平台。
+
+AI/自动化客户端用同一会话解析执行动作，无需复制端点或令牌：
+
+```sh
+guava devtools [directory] list                       # 可用 AI 工具
+guava devtools [directory] query '{"text":"Save","visible_only":true,"compact":true}'
+guava devtools [directory] query get_diagnostics '{}'
+guava devtools [directory] click NODE_ID
+guava devtools [directory] input @events.json
+guava devtools [directory] capture out.jpg --settle-ms 400
+guava devtools [directory] timings out.json FRAMES WARMUP
+```
+
+裸 JSON 对象执行 `query_ui_nodes`；`"compact":true` 返回每节点一行的精简记录（id、角色、名称、值、非默认状态、可见几何与 `File.swift:line`）。`run` 中 `--` 之后的参数原样传给桌面应用，例如 `guava run GuavaUI/Examples --devtools --no-open -- --component list --width 390 --input touch`。状态和会话记录都在 `.guava/build/devtools`，不会写回 guava.json 或场景 checkpoint。
 
 Profile 使用 Swift Release 优化并定义 GUAVA_PROFILE，保留诊断服务；Android Profile 允许 ADB 调试访问，普通 Release 不启用此入口。树、时间线和镜像仍按订阅采集。当前时间线是 CPU spans，帧 timing 包括主机渲染提交与等待，不代表 GPU 执行或实际显示 FPS。Android 暂无画面镜像，按 capabilities 隐藏该功能。
 

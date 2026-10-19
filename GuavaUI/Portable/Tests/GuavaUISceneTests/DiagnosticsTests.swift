@@ -47,6 +47,38 @@ struct DiagnosticsTests {
         #expect(query("London").payload?.objectValue?["data"]?.objectValue?["total"]?.diagnosticNumber == 1)
     }
 
+    @Test func compactQueriesReturnOneShortRecordPerNodeWithStateAndSecureRedaction() throws {
+        let tree = NodeTree(), root = Node(), row = Node(), secure = Node()
+        tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 390, height: 500)
+        root.addChild(row); root.addChild(secure)
+        row.frame = CGRect(x: 12, y: 40, width: 300, height: 44)
+        row.accessibility = AccessibilitySemantics(.listItem) {
+            $0.label = "Document 3"; $0.state.isSelected = true; $0.state.isExpanded = false; $0.state.isEnabled = false
+        }
+        secure.frame = CGRect(x: 12, y: 100, width: 300, height: 44)
+        secure.accessibility = AccessibilitySemantics(.textField) {
+            $0.label = "Password"; $0.value = "private-needle"; $0.state.isSecure = true
+        }
+        let diagnostics = UIDiagnostics(tree: tree)
+        let response = diagnostics.handleReadRequest(.init(type: "diagnostics.call", payload: .object([
+            "name": .string("query_ui_nodes"), "arguments": .object(["role": .string("listItem"), "compact": .bool(true)])
+        ])))
+        #expect(response.type == "diagnostics.call.ok")
+        let data = try #require(response.payload?.objectValue?["data"]?.objectValue)
+        #expect(data["total"]?.diagnosticNumber == 1)
+        let item = try #require(data["items"]?.diagnosticArray?.first?.objectValue)
+        #expect(item["id"]?.stringValue == String(row.id.rawValue))
+        #expect(item["label"]?.stringValue == "Document 3" && item["role"]?.stringValue == "listItem")
+        #expect(item["state"]?.diagnosticArray?.compactMap(\.stringValue) == ["selected", "collapsed", "disabled"])
+        #expect(item["frame"]?.objectValue?["h"]?.diagnosticNumber == 44)
+        #expect(item["node"] == nil && item["semantics"] == nil)
+        let password = diagnostics.handleReadRequest(.init(type: "diagnostics.call", payload: .object([
+            "name": .string("query_ui_nodes"), "arguments": .object(["role": .string("textField"), "compact": .bool(true)])
+        ])))
+        let field = try #require(password.payload?.objectValue?["data"]?.objectValue?["items"]?.diagnosticArray?.first?.objectValue)
+        #expect(field["value"]?.stringValue != "private-needle")
+    }
+
     @Test func overviewReportsInvalidGeometryWithoutLosingJSONAndQueriesIdentifyTheNode() throws {
         let tree = NodeTree(), root = Node(), broken = Node(), negative = Node(), valid = Node()
         tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 300, height: 200)

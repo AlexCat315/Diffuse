@@ -45,3 +45,28 @@ import Testing
     let attach = try Arguments(["devtools", "MyApp", "--session", "session-id", "--no-open"])
     #expect(attach.operation == .devtools && attach.value(.session) == "session-id")
 }
+
+@Test func runForwardsApplicationArgumentsAfterSeparator() throws {
+    let request = try Arguments(["run", "Gallery", "--mac", "--devtools", "--no-open", "--", "--component", "list", "--width", "390"])
+    #expect(request.subject == "Gallery" && request.flags == [.devtools, .noOpen])
+    #expect(request.applicationArguments == ["--component", "list", "--width", "390"])
+    #expect(try Arguments(["run"]).applicationArguments.isEmpty)
+    #expect(throws: (any Error).self) { try Arguments(["build", "--", "--width", "390"]) }
+    #expect(throws: (any Error).self) { try Arguments(["run", "--android", "--", "--width", "390"]) }
+}
+
+@Test func devtoolsClientActionsResolveToRepositoryOperations() throws {
+    let query = try Arguments(["devtools", "Gallery", "--session", "S", "query", #"{"text":"List"}"#])
+    #expect(query.subject == "Gallery" && query.value(.session) == "S")
+    #expect(query.client == (try DevToolsClient(action: "query", arguments: [#"{"text":"List"}"#])))
+    #expect(query.client?.operation == "query-ui" && query.client?.arguments == ["query_ui_nodes", #"{"text":"List"}"#])
+    #expect(try Arguments(["devtools", "list"]).client?.arguments == ["--list"])
+    #expect(try Arguments(["devtools", "query", "get_diagnostics", "{}"]).client?.arguments == ["get_diagnostics", "{}"])
+    #expect(try Arguments(["devtools", "click", "42"]).client?.arguments == ["--click-node", "42"])
+    #expect(try Arguments(["devtools", "input", "@events.json"]).client?.operation == "input-ui")
+    let capture = try Arguments(["devtools", "capture", "out.jpg", "--settle-ms", "400"])
+    #expect(capture.client?.operation == "capture-ui" && capture.client?.arguments == ["out.jpg", "--settle-ms", "400"])
+    #expect(try Arguments(["devtools", "Gallery"]).client == nil)
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "click"]) }
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "--no-open", "list"]) }
+}
