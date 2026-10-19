@@ -24,6 +24,25 @@ struct ObservableStateTrackingTests: GuavaUIComposeSerializedSuite {
         #expect(recomposer.hasPending == false)
     } }
 
+    @Test("Reads inside a reader closure belong to the enclosing view")
+    func readerClosureReadInvalidatesEnclosingScope() { GlobalTestLock.locked {
+        let store = TestObservableStore()
+        let counter = BodyCounter()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: NodeTree(), recomposer: recomposer)
+
+        graph.install(root: ReaderObservedValueView(store: store, counter: counter))
+        #expect(counter.count == 1)
+
+        store.value = 1
+        #expect(recomposer.hasPending == true)
+        recomposer.commitAll()
+        #expect(counter.count == 2)
+        store.value = 2
+        #expect(recomposer.hasPending == true, "the dependency survives the recomposition")
+        recomposer.commitAll()
+    } }
+
     @Test("Dependencies are replaced on each body evaluation")
     func dependenciesAreClearedWhenBodyStopsReading() { GlobalTestLock.locked {
         let store = TestObservableStore()
@@ -234,6 +253,16 @@ private struct ObservedValueView: View {
     var body: some View {
         let _ = counter.bump()
         Text("value \(store.value)")
+    }
+}
+
+private struct ReaderObservedValueView: View {
+    let store: TestObservableStore
+    let counter: BodyCounter
+
+    var body: some View {
+        let _ = counter.bump()
+        ThemeReader { _ in Text("value \(store.value)") }
     }
 }
 

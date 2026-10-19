@@ -793,10 +793,11 @@ final class ViewScope {
         let previous = graph.activeRecompositionScope
         graph.activeRecompositionScope = anchor.id.rawValue
         defer { graph.activeRecompositionScope = previous }
-        let body = trackedBody(scopeID: ObjectIdentifier(anchor))
-        graph.reconcileChildren(parent: anchor,
-                                layoutParent: layoutParent,
-                                newViews: [body])
+        tracked(scopeID: ObjectIdentifier(anchor)) {
+            graph.reconcileChildren(parent: anchor,
+                                    layoutParent: layoutParent,
+                                    newViews: [body()])
+        }
         ModifierReplay.apply(from: anchor, graph: graph)
         recordTiming(start: start, initial: false, reasons: reasons)
     }
@@ -833,8 +834,9 @@ final class ViewScope {
         let previous = graph.activeRecompositionScope
         graph.activeRecompositionScope = anchor.id.rawValue
         defer { graph.activeRecompositionScope = previous }
-        let body = trackedBody(scopeID: ObjectIdentifier(anchor))
-        _ = graph.materialise(body, into: anchor, layoutParent: layoutParent)
+        tracked(scopeID: ObjectIdentifier(anchor)) {
+            _ = graph.materialise(body(), into: anchor, layoutParent: layoutParent)
+        }
         recordTiming(start: start, initial: true, reasons: [])
     }
 
@@ -852,15 +854,19 @@ final class ViewScope {
         }
     }
 
-    private func trackedBody(scopeID: ObjectIdentifier) -> any View {
+    /// Tracks observable reads for the body and for the primitives it
+    /// materialises: reader closures (`ThemeReader`, `TextScalerReader`, …)
+    /// run in `_children(for:)` after `body` returns, and belong to this view.
+    /// Nested user views push their own scope, so reads go to the nearest one.
+    private func tracked(scopeID: ObjectIdentifier, _ work: () -> Void) {
         ObservableStateTracking.withScope(id: scopeID,
                                           invalidate: { [weak self] in self?.schedule(reason: .init(kind: "observable")) },
-                                          invalidateTracked: { [weak self] reason in self?.schedule(reason: reason) }) {
-            if isMaterialisedDirectly(view) {
-                return view
-            }
-            return anyBody(of: view)
-        }
+                                          invalidateTracked: { [weak self] reason in self?.schedule(reason: reason) },
+                                          work)
+    }
+
+    private func body() -> any View {
+        isMaterialisedDirectly(view) ? view : anyBody(of: view)
     }
 
     /// Defensive guard for bodyless view forms. These should normally be
