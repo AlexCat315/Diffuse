@@ -106,14 +106,9 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
   private var isPresented: Binding<Bool> { presentation ?? $localPresentation }
 
   private var openButton: some View {
-    Button(icon: .resource(UIIcons.Layout.panelLeft), tooltip: options.openLabel) {
+    SidebarToggle(label: options.openLabel, isExpanded: isPresented.wrappedValue) {
       focus.focusOpener(label: options.openLabel)
       isPresented.wrappedValue = true
-    }
-    .buttonStyle(.ghost).frame(minWidth: 44, minHeight: 44)
-    .accessibility {
-      $0.label = options.openLabel
-      $0.state.isExpanded = isPresented.wrappedValue
     }
   }
 
@@ -145,13 +140,11 @@ public struct AdaptiveSidebar<ID: Hashable, Header: View, Footer: View, Content:
               isVisible: geometry.isModal, transition: .identity, retainsContent: true
             ) {
               Box(direction: .row, alignItems: .center, spacing: 8) {
-                Text(title).font(.bodyStrong).flex(1, shrink: 1).frame(minWidth: 0)
-                Button(icon: .resource(UIIcons.Action.x), tooltip: options.drawer.closeLabel) {
+                SidebarToggle(label: options.drawer.closeLabel, isExpanded: true) {
                   isPresented.wrappedValue = false
                 }
-                .buttonStyle(.ghost).frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel(options.drawer.closeLabel).flex(0, shrink: 0)
-              }.padding(horizontal: 12, vertical: 8)
+                Text(title).truncated().font(.bodyStrong).flex(1, shrink: 1).frame(minWidth: 0)
+              }.padding(horizontal: 12, vertical: 4)
             }
             header
           }

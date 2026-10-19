@@ -42,4 +42,4 @@ public struct ModalOptions {
     public init() {}
 }
 
-enum ModalBackdrop { case standard, selection, dimmed }
+enum ModalBackdrop { case standard, dimmed }

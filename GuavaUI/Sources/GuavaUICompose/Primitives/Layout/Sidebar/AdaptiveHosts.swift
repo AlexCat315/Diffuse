@@ -84,7 +84,7 @@ struct SidebarBackdrop: _PrimitiveView {
     return layout
   }
   func _updateNode(_ node: Node) {
-    node.backgroundColor = node.theme.colors.stateLayerSelected
+    node.backgroundColor = node.theme.colors.overlay
     node.accessibility = AccessibilitySemantics(.group) { $0.isHidden = true }
     InteractionRegistryHolder.current?.setPointer(
       node,

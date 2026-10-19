@@ -122,14 +122,16 @@ public final class FocusChain {
     public func pushScope(_ root: Node, restoresCommands: Bool = false) {
         guard !scopes.contains(where: { $0.root === root }) else { return }
         scopes.append(Scope(root: root, previous: focused, visible: isFocusVisible, restoresCommands: restoresCommands))
-        focus(focusables(in: root).first ?? root)
+        focus(focusables(in: root).first ?? root, visible: isFocusVisible)
     }
 
     public func settleScope(_ root: Node) {
         guard activeScopeRoot === root else { return }
         if focused == nil || focused === root {
             let candidates = focusables(in: root).filter { $0 !== root }
-            if let first = candidates.first(where: { $0.attachments[TextInputAttachmentKey.areaResolver] != nil }) ?? candidates.first { focus(first) }
+            if let first = candidates.first(where: { $0.attachments[TextInputAttachmentKey.areaResolver] != nil }) ?? candidates.first {
+                focus(first, visible: isFocusVisible)
+            }
         }
     }
 
@@ -152,8 +154,8 @@ public final class FocusChain {
            previous.isFocusable, previous.acceptsSubtreeInput, permitsInput(previous) {
             focus(previous, visible: scope.visible)
         } else if let active = activeScopeRoot {
-            focus(focusables(in: active).first ?? active)
-        } else { focus(nil) }
+            focus(focusables(in: active).first ?? active, visible: isFocusVisible)
+        } else { focus(nil, visible: scope.visible) }
     }
 
     private func isDescendant(_ node: Node, of root: Node) -> Bool {
@@ -216,7 +218,7 @@ public final class FocusChain {
     }
 
     public func clear() {
-        focus(nil)
+        focus(nil, visible: isFocusVisible)
     }
 
     public func contains(_ node: Node, in root: Node) -> Bool { isDescendant(node, of: root) }

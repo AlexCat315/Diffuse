@@ -271,7 +271,7 @@ struct ButtonHost: _PrimitiveView {
         if !node.supportsControlHover {
             node.attachments[ButtonHost.hoveredKey] = false
             onHoverChange(false)
-            node.firstResource(TooltipSession.self)?.dismiss()
+            node.firstResource(TooltipSession.self)?.setHovered(false)
         }
         node.isFocusable = isEnabled
         node.accessibility = AccessibilitySemantics(node.compositionValue(of: ActionControlAccessibility.role)) {

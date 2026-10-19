@@ -598,7 +598,9 @@ AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单�
 
 第 2 项中的 SplitView 单面板部分已实现：`SplitCompactPresentation` 按容器自身轴向长度切换，页签支持完整名称、换行、键盘与触摸；双侧保留节点、本地状态和滚动，折叠不覆盖请求比例，隐藏时交接焦点并取消捕获。分隔柄随输入集合在 7pt / 44pt 命中区间切换。`SplitPresentationTests` 覆盖横纵阈值、三档宽度、100%/200% 文字、明暗主题、三类输入、草稿和滚动保留及卸载重置，并通过 DevTools AI `query_ui_nodes` 验证可见性和输入状态；Gallery 已增加三种预览及 `SplitTests`。设备触摸/读屏仍按第 4 节取样。
 
-第 2 项中的独立 NavigationDrawer 已实现：按实际窗口保留 56pt 外部空间，复用 Sidebar 的选择/显露与激活，提供标题、关闭、焦点约束/还原、独立关闭策略、左滑关闭和可反转的边缘动画。`NavigationDrawerTests` 覆盖窗口变化时节点与草稿保留、完整输入矩阵及生命周期；Gallery 新增独立页/三种预览，Sidebar 页共享选择。验证中补齐 DevTools AI 的模态输入权限与 `input_enabled_only` 筛选，`DiagnosticPresentationTests` 覆盖深层节点、嵌套模态、附属浮层和窗口隔离。统一壳层与可选边缘唤出现已由 AdaptiveSidebar 实现；设备输入取样见组件文档。
+导航覆盖层现共用中性主题 `overlay` 遮罩，紧凑展开/收起使用同一图标与前导位置，并暴露 expanded 状态。Modal/FocusScope 自动焦点保持输入模态，指针/触摸打开不再自动触发首个按钮的键盘焦点和 Tooltip；后续 Tab 与键盘打开仍正常反馈。
+
+第 2 项中的独立 NavigationDrawer 已实现：按实际窗口保留 56pt 外部空间，复用 Sidebar 的选择/显露与激活，提供标题、侧栏折叠图标、焦点约束/还原、独立关闭策略、左滑关闭和可反转的边缘动画。`NavigationDrawerTests` 覆盖窗口变化时节点与草稿保留、完整输入矩阵及生命周期；Gallery 新增独立页/三种预览，Sidebar 页共享选择。验证中补齐 DevTools AI 的模态输入权限与 `input_enabled_only` 筛选，`DiagnosticPresentationTests` 覆盖深层节点、嵌套模态、附属浮层和窗口隔离。统一壳层与可选边缘唤出现已由 AdaptiveSidebar 实现；设备输入取样见组件文档。
 
 第 2 项中的 NavigationRail 已实现：72/56pt 两种形态、居中 40×40 选择块、44pt 行高、受约束的主题图标、完整 tooltip/语义与头尾槽位；`SidebarPresentation` 在同一目的地节点上切换普通栏和 Rail，保留选择、焦点与槽位状态。`NavigationRailTests` 覆盖宽度/字号/输入/主题矩阵、长词换行、模式切换、显露及普通滚动、生命周期与 AI 名称发现；Gallery 新增独立页和三种预览。显露操作补齐重排后的实际滚动范围与目标坐标换算，roving 目标发现使用线性遍历。统一壳层现已由 AdaptiveSidebar 完成。
 

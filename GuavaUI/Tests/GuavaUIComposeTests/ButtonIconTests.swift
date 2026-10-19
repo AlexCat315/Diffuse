@@ -191,22 +191,30 @@ struct ButtonIconTests: GuavaUIComposeSerializedSuite {
         } }
     } }
 
-    @Test("Keyboard button tooltips fit the window, preserve focus and dismiss with Escape")
+    @Test("Keyboard button tooltips fit the window, preserve focus and dismiss with Escape",
+          arguments: [UIEnvironment.Input.touch, [.pointer, .keyboard], [.touch, .pointer, .keyboard]])
     @MainActor
-    func tooltipKeyboardAndPlacement() throws { try GlobalTestLock.locked {
+    func tooltipKeyboardAndPlacement(input: UIEnvironment.Input) throws { try GlobalTestLock.locked {
         let context = PlatformInputContext(), portal = PortalStore(), scheduler = AnimatorScheduler()
         context.addScopedAmbient(PortalStoreAmbient(portal))
         let prior = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
         defer { TextEnvironmentHolder.current = prior }
         try context.withCurrent { try AnimatorScheduler.$current.withValue(scheduler) {
             var activations = 0
+            var surface = UIEnvironment(); surface.input = input
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: LayerRoot {
                 Column { Spacer(); Button(icon: .texture(7), tooltip: "Open Scene…") { activations += 1 } }
                     .frame(width: 320, height: 180)
-            }); graph.computeLayout(width: 320, height: 180)
+            }.surfaceEnvironment(surface)); graph.computeLayout(width: 320, height: 180)
             let host = try #require(findButtonHost(graph.tree.root!))
-            context.focusChain.focus(host, visible: true); scheduler.tick(deltaTime: 0.46)
+            context.interactions.handlers(for: host).hover?(.enter)
+            scheduler.tick(deltaTime: 0.46)
+            #expect(portal.entries.count == (input.contains(.pointer) ? 1 : 0))
+            context.interactions.handlers(for: host).hover?(.leave)
+            context.focusChain.focus(host, visible: true)
+            for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 320, height: 180) }
+            scheduler.tick(deltaTime: 0.46)
             #expect(portal.entries.count == 1)
             graph.recomposer.commitAll(); graph.computeLayout(width: 320, height: 180)
             graph.recomposer.commitAll(); graph.computeLayout(width: 320, height: 180)

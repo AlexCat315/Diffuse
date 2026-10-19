@@ -118,7 +118,10 @@ private struct TooltipHost<Target: View>: _PrimitiveView {
         let session = node.firstResource(TooltipSession.self)!
         session.configure(content: content, options: options,
                           focused: focusVisible && focused.map { FocusChainHolder.current?.contains($0, in: node) == true } == true)
-        InteractionRegistryHolder.current?.setHover(node) { phase in session.setHovered(phase == .enter) }
+        if !node.supportsControlHover { session.setHovered(false) }
+        InteractionRegistryHolder.current?.setHover(node) { phase in
+            session.setHovered(phase == .enter && node.supportsControlHover)
+        }
         InteractionRegistryHolder.current?.setPointer(node) { _, phase, _ in
             if phase == .down { session.dismiss() }; return .ignored
         }

@@ -37,7 +37,7 @@
 ### 2.2 NavigationDrawer（P0，Sidebar 的抽屉形态）
 
 - 用途：compact/medium 宽度下 Sidebar 的覆盖层形态；[NavigationDrawer](navigation-drawer.md) 已实现，[AdaptiveSidebar](sidebar.md#自适应壳层) 已按宽度统一三种形态。
-- 外观：按实际窗口拟合宽度 `min(320, 窗口 − 56)`；遮罩 `stateLayerSelected` 强度；顶部标题与关闭；行高 ≥ 44。`[已实现]`
+- 外观：按实际窗口拟合宽度 `min(320, 窗口 − 56)`；中性主题 `overlay` 遮罩；顶部标题与同一侧栏折叠图标；行高 ≥ 44。`[已实现]`
 - 手机：按钮打开；焦点进入并循环、Escape 关闭、关闭后还原；选中项显露；左滑关闭并取消子按钮按下。可选边缘唤出由 AdaptiveSidebar 提供（仅紧凑触摸容器前导 24pt 起始的右滑）。`[已实现]`（独立按钮入口与壳层手势入口）
 - 平板/桌面：可显式打开 Drawer，常驻形态使用 Sidebar，轨道使用 NavigationRail；AdaptiveSidebar 按容器宽度自动切换。`[已实现]`
 - 交互与验收：展开与选择由应用 session binding 持有，窗口变化保留；辅助功能为带完整名称的 dialog。`NavigationDrawerTests` 覆盖宽度/字号/主题/输入、展开/关闭/焦点/手势/生命周期和 AI 查询；Gallery `DrawerTests` 覆盖独立页与 Sidebar 共享选择。

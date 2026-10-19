@@ -10,7 +10,7 @@ struct NavigationDrawerStory: View {
     var body: some View {
         StorySection(
             "Modal workspace navigation",
-            "Open a leading drawer with a title and close action. Its width follows the actual window, leaving at least 56 points outside. Arrow keys browse without closing; Enter commits. Swipe left to dismiss or press Escape; focus returns to the opener."
+            "Open a leading drawer, then collapse it with the sidebar toggle or tap outside. Its width follows the window, leaving at least 56 points outside. Arrow keys browse; Enter chooses. Swipe left or press Escape to dismiss; focus returns to the opener."
         ) {
             Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 16) {
                 Button("Open navigation", isEnabled: options.isEnabled) { open = true }

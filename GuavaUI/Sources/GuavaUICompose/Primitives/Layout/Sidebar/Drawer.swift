@@ -4,7 +4,7 @@ public struct NavigationDrawerOptions {
     public var dismissal = ModalDismissal()
     public var closesOnSelection = true
     public var allowsSwipeDismissal = true
-    public var closeLabel = "Close navigation"
+    public var closeLabel = "Collapse navigation"
     public init() {}
 }
 
@@ -45,7 +45,6 @@ public struct NavigationDrawer<ID: Hashable, Header: View, Footer: View>: View {
                 $0.geometry.inset = 0
                 $0.geometry.cornerRadius = 0
                 $0.dismissal = options.dismissal
-                $0.backdrop = .selection
             },
             fittingGeometry: { geometry, window in
                 geometry.width = min(320, max(0, Float(window.width) - 56))
@@ -65,12 +64,10 @@ public struct NavigationDrawer<ID: Hashable, Header: View, Footer: View>: View {
                     header: {
                         Box(direction: .column, alignItems: .stretch) {
                             Box(direction: .row, alignItems: .center, spacing: 8) {
-                                Text(title).font(.bodyStrong).flex(1, shrink: 1).frame(minWidth: 0)
-                                Button(icon: .resource(UIIcons.Action.x), tooltip: options.closeLabel) {
+                                SidebarToggle(label: options.closeLabel, isExpanded: true) {
                                     isPresented.wrappedValue = false
                                 }
-                                .buttonStyle(.ghost).frame(minWidth: 44, minHeight: 44)
-                                .accessibilityLabel(options.closeLabel).flex(0, shrink: 0)
+                                Text(title).truncated().font(.bodyStrong).flex(1, shrink: 1).frame(minWidth: 0)
                             }.padding(horizontal: 12, vertical: 8)
                             header
                         }

@@ -149,7 +149,7 @@ struct NavigationDrawerTests: GuavaUIComposeSerializedSuite {
                             #expect(note.resolvedAccessibilityValue == draft)
                             #expect(context.focusChain.focused?.id == note.id)
                             #expect((try row(29, graph)).frame.height >= 44)
-                            #expect((try control("Close navigation", graph)).frame.height >= 44)
+                            #expect((try control("Collapse navigation", graph)).frame.height >= 44)
                             let selected = try diagnostics.queryNodes(
                                 text: "Destination 29", role: "button", visibleOnly: true)
                             // Editing a header must not continuously pull the scroll viewport back to selection.
@@ -235,9 +235,28 @@ struct NavigationDrawerTests: GuavaUIComposeSerializedSuite {
             #expect(!harness.open && !context.focusChain.hasModalScope)
             harness.open = true
             settle(graph, harness)
-            click(try control("Close navigation", graph).absoluteFrame, input)
+            click(try control("Collapse navigation", graph).absoluteFrame, input)
             settle(graph, harness)
             #expect(!harness.open && portals.entries.isEmpty)
+        }
+    }
+
+    @Test("Pointer opening does not show an automatic tooltip; the collapse toggle and modal scrim retain their semantics")
+    func pointerPresentation() throws {
+        try scene { h, graph, context, portals, scheduler, input in
+            let opener = try control("Open navigation", graph)
+            click(opener.absoluteFrame, input); settle(graph, h)
+            #expect(!context.focusChain.isFocusVisible)
+            scheduler.tick(deltaTime: 1); settle(graph, h)
+            #expect(portals.entries.count == 1)
+            let toggle = try control("Collapse navigation", graph)
+            #expect(toggle.accessibility?.state.isExpanded == true)
+            let backdrop = try #require(nodes(graph.tree.root).first {
+                context.interactions.handlers(for: $0).pointerRoute?.debugName == "modal.backdrop"
+            })
+            #expect(backdrop.backgroundColor == backdrop.theme.colors.overlay)
+            click(toggle.absoluteFrame, input); settle(graph, h)
+            #expect(!h.open && context.focusChain.focused === opener && !context.focusChain.isFocusVisible)
         }
     }
 
@@ -298,7 +317,7 @@ struct NavigationDrawerTests: GuavaUIComposeSerializedSuite {
             scheduler.tick(deltaTime: 1)
             settle(graph, harness)
             #expect((try panel(graph)).id == dialog.id)
-            let close = try control("Close navigation", graph)
+            let close = try control("Collapse navigation", graph)
             let event = MouseButtonEvent(
                 button: .left, x: Float(close.absoluteFrame.midX), y: Float(close.absoluteFrame.midY), clicks: 1)
             input.dispatch(.mouseButtonDown(event))
@@ -359,7 +378,7 @@ struct NavigationDrawerTests: GuavaUIComposeSerializedSuite {
         let diagnostics = UIDiagnostics(tree: graph.tree, state: graph.stateRegistry)
         let toolbox = try diagnostics.toolbox()
         for (text, role, expected) in [
-            ("Workspace navigation", "dialog", 1), ("Close navigation", "button", 1),
+            ("Workspace navigation", "dialog", 1), ("Collapse navigation", "button", 1),
             ("Background action", "button", 0),
         ] {
             let input = try JSONSerialization.data(withJSONObject: [

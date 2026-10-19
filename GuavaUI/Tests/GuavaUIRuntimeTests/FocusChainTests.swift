@@ -3,6 +3,32 @@ import Testing
 
 @Suite("FocusChain")
 struct FocusChainTests {
+    @Test("Automatic modal focus preserves pointer or keyboard visibility through delayed children and nested scopes")
+    func scopeModality() {
+        for visible in [false, true] {
+            let tree = Node(), opener = Node(), modal = Node(), nested = Node(), button = Node()
+            opener.isFocusable = true; modal.isFocusable = true; nested.isFocusable = true; button.isFocusable = true
+            for node in [opener, modal, nested] { tree.addChild(node) }
+            let focus = FocusChain()
+            focus.focus(opener, visible: visible); focus.pushScope(modal)
+            #expect(focus.focused === modal && focus.isFocusVisible == visible)
+            modal.addChild(button); focus.settleScope(modal)
+            #expect(focus.focused === button && focus.isFocusVisible == visible)
+            focus.clear(); focus.settleScope(modal)
+            #expect(focus.focused === button && focus.isFocusVisible == visible)
+            focus.pushScope(nested); focus.settleScope(nested)
+            #expect(focus.focused === nested && focus.isFocusVisible == visible)
+            focus.popScope(nested)
+            #expect(focus.focused === button && focus.isFocusVisible == visible)
+            focus.focusNext(in: tree)
+            #expect(focus.isFocusVisible)
+            focus.popScope(modal)
+            #expect(focus.focused === opener && focus.isFocusVisible == visible)
+            focus.pushScope(modal); tree.removeChild(opener); focus.popScope(modal)
+            #expect(focus.focused == nil && focus.isFocusVisible == visible)
+        }
+    }
+
     @Test("Parent menu columns remain pointer-accessible above a modal, while a newer modal blocks the old hierarchy")
     func transientColumns() {
         let tree = Node(), dialog = Node(), parentMenu = Node(), childMenu = Node(), newerDialog = Node()

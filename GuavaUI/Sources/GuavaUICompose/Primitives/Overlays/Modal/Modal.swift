@@ -67,8 +67,7 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = true; node.clipsToBounds = true; return node }
     func _updateNode(_ node: Node) {
         switch options.backdrop {
-        case .standard: node.backgroundColor = node.theme.colors.background.multipliedAlpha(0.6)
-        case .selection: node.backgroundColor = node.theme.colors.stateLayerSelected
+        case .standard: node.backgroundColor = node.theme.colors.overlay
         case .dimmed: node.backgroundColor = Color.black.multipliedAlpha(0.2)
         }
         InteractionRegistryHolder.current?.setPointer(node, route: InputHandlerRoute(role: .control, priority: .modal, debugName: "modal.backdrop")) { event, phase, eventPhase in

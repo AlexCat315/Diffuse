@@ -304,6 +304,37 @@ struct AdaptiveSidebarTests: GuavaUIComposeSerializedSuite {
     }
   }
 
+  @Test("Open and collapse share the leading toggle position; pointer focus stays quiet and keyboard focus remains visible")
+  func togglePresentation() throws {
+    try scene { h, graph, context, input, scheduler in
+      h.width = 390; settle(graph, h)
+      let trigger = try opener(graph), origin = trigger.absoluteFrame
+      click(trigger, input); settle(graph, h)
+      #expect(h.open && !context.focusChain.isFocusVisible)
+      scheduler.tick(deltaTime: 1); settle(graph, h)
+      let toggle = try #require(nodes(graph.tree.root).first {
+        $0.isFocusable && $0.accessibility?.label == "Collapse navigation" && $0.acceptsSubtreeInput
+      })
+      #expect(toggle.firstResource(PortalResource.self)?.entryID == nil)
+      #expect(toggle.absoluteFrame == origin && toggle.accessibility?.state.isExpanded == true)
+      let backdrop = try #require(nodes(graph.tree.root).first {
+        context.interactions.handlers(for: $0).pointerRoute?.debugName == "sidebar.backdrop"
+      })
+      #expect(backdrop.backgroundColor == backdrop.theme.colors.overlay)
+      click(toggle, input); settle(graph, h)
+      #expect(!h.open && context.focusChain.focused === trigger && !context.focusChain.isFocusVisible)
+      input.dispatch(.mouseMotion(.init(x: 350, y: 200, deltaX: 320, deltaY: 180)))
+      context.focusChain.focus(trigger)
+      key(Scancode.return, input); settle(graph, h)
+      #expect(h.open && context.focusChain.isFocusVisible)
+      #expect(context.focusChain.focused === toggle)
+      scheduler.tick(deltaTime: 1); settle(graph, h)
+      #expect(toggle.firstResource(PortalResource.self)?.entryID != nil)
+      key(Scancode.escape, input); settle(graph, h)
+      #expect(!h.open && context.focusChain.focused === trigger && context.focusChain.isFocusVisible)
+    }
+  }
+
   @Test("Pointer and accessibility activation restore the compact or rail opener after modal slots change visibility")
   func openerRestoration() throws {
     try scene { harness, graph, context, input, _ in
@@ -467,7 +498,7 @@ struct AdaptiveSidebarTests: GuavaUIComposeSerializedSuite {
       settle(graph, harness)
       let close = try #require(
         nodes(graph.tree.root).first {
-          $0.accessibility?.label == "Close navigation" && $0.isFocusable
+          $0.accessibility?.label == "Collapse navigation" && $0.isFocusable
         })
       let frame = close.absoluteFrame
       input.dispatch(
