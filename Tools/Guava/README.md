@@ -112,7 +112,7 @@ guava devtools [directory] query '{"text":"Save","visible_only":true,"compact":t
 guava devtools [directory] query get_diagnostics '{}'
 guava devtools [directory] click NODE_ID
 guava devtools [directory] input @events.json --capture after.jpg   # 投递后立即取样瞬态
-guava devtools [directory] capture out.jpg --settle-ms 400
+guava devtools [directory] capture out.jpg --settle-ms 400 --scale 2   # 2x 取样细线与圆角
 guava devtools [directory] timings out.json FRAMES WARMUP
 ```
 

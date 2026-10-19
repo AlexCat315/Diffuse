@@ -66,12 +66,14 @@ final class InputSequenceTests: XCTestCase {
   }
 
   func testCaptureSettlingIsOptionalAndBounded() throws {
-    XCTAssertEqual(try CaptureUI.settleMilliseconds(["9231", "out.jpg"]), 0)
-    XCTAssertEqual(try CaptureUI.settleMilliseconds(["9231", "out.jpg", "--settle-ms", "400"]), 400)
+    XCTAssertEqual(try CaptureUI.options(["9231", "out.jpg"]), .init())
+    XCTAssertEqual(try CaptureUI.options(["9231", "out.jpg", "--settle-ms", "400"]).settleMilliseconds, 400)
+    XCTAssertEqual(try CaptureUI.options(["9231", "out.jpg", "--scale", "2", "--settle-ms", "100"]), .init(settleMilliseconds: 100, scale: 2))
     for args in [[], ["9231"], ["9231", "out.jpg", "--settle-ms", "-1"],
                  ["9231", "out.jpg", "--settle-ms", "2001"],
-                 ["9231", "out.jpg", "--settle-ms", "NaN"]] {
-      XCTAssertThrowsError(try CaptureUI.settleMilliseconds(args))
+                 ["9231", "out.jpg", "--settle-ms", "NaN"], ["9231", "out.jpg", "--scale", "4"],
+                 ["9231", "out.jpg", "--scale"], ["9231", "out.jpg", "--zoom", "2"]] {
+      XCTAssertThrowsError(try CaptureUI.options(args))
     }
   }
 }

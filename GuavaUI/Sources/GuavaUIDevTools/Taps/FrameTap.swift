@@ -48,6 +48,7 @@ public final class FrameTap {
 
     private var enabled = false
     private var quality: Double = 0.7
+    private var scale: Double = 1
     private var minFrameInterval: TimeInterval = 1.0 / 15.0
     private var lastCaptureAt: TimeInterval = 0
 
@@ -68,7 +69,8 @@ public final class FrameTap {
 
     public var isActive: Bool { enabled }
 
-    public func start(fps: Double, quality: Double) {
+    public func start(fps: Double, quality: Double, scale: Double = 1) {
+        self.scale = scale.isFinite ? max(1, min(3, scale)) : 1
         let clampedFps = max(1.0, min(60.0, fps))
         self.minFrameInterval = 1.0 / clampedFps
         self.quality = max(0.1, min(1.0, quality))
@@ -127,7 +129,9 @@ public final class FrameTap {
         // A remote inspector does not need Retina-native pixels. Capturing at
         // logical resolution (capped for very large windows) cuts GPU readback,
         // JPEG size, WebSocket traffic, and browser decode pressure sharply.
-        let targetSize = Self.targetSize(logical: logical)
+        // Visual acceptance may ask for more, up to the native pixel density.
+        let native = Double(widthPx) / Double(max(1, logical.width))
+        let targetSize = Self.targetSize(logical: logical, scale: min(scale, max(1, native)))
         let captureWidthPx = targetSize.width
         let captureHeightPx = targetSize.height
 
@@ -177,10 +181,11 @@ public final class FrameTap {
         }
     }
 
-    private static func targetSize(logical: (width: Float, height: Float)) -> (width: UInt32, height: UInt32) {
+    private static func targetSize(logical: (width: Float, height: Float), scale requested: Double) -> (width: UInt32, height: UInt32) {
         let logicalWidth = max(1, Double(logical.width))
         let logicalHeight = max(1, Double(logical.height))
-        let scale = min(1, min(1_920 / logicalWidth, 1_080 / logicalHeight))
+        let budget = requested > 1 ? (3_840.0, 2_160.0) : (1_920.0, 1_080.0)
+        let scale = min(requested, min(budget.0 / logicalWidth, budget.1 / logicalHeight))
         return (
             width: UInt32(max(1, (logicalWidth * scale).rounded(.up))),
             height: UInt32(max(1, (logicalHeight * scale).rounded(.up)))
@@ -260,7 +265,7 @@ public final class FrameTap {
     public var isActive: Bool { false }
 
     public init(sink: Sink, capture: @escaping Capture, reset: @escaping () -> Void = {}) {}
-    public func start(fps: Double, quality: Double) {}
+    public func start(fps: Double, quality: Double, scale: Double = 1) {}
     public func stop() {}
     public func capture(drawList: DrawList,
                         widthPx: UInt32,

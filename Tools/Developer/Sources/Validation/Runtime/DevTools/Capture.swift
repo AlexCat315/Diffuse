@@ -10,36 +10,52 @@ internal import ToolSupport
 /// list through its renderer's DevTools mirror. Also called in-process by the
 /// editor loop.
 enum CaptureUI {
-  static let usage = "guava-dev devtools capture-ui PORT|@SESSION_FILE OUTPUT.jpg [--settle-ms 0...2000]"
+  static let usage = "guava-dev devtools capture-ui PORT|@SESSION_FILE OUTPUT.jpg [--settle-ms 0...2000] [--scale 1...3]"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
       Terminal.info(usage)
       return
     }
-    let settle = try settleMilliseconds(arguments)
-    try capture(endpoint: DevToolsEndpoint.resolve(arguments[0]), destination: URL(fileURLWithPath: arguments[1]), settleMilliseconds: settle)
+    let options = try options(arguments)
+    try capture(endpoint: DevToolsEndpoint.resolve(arguments[0]), destination: URL(fileURLWithPath: arguments[1]),
+                settleMilliseconds: options.settleMilliseconds, scale: options.scale)
   }
 
-  static func settleMilliseconds(_ arguments: [String]) throws -> Int {
-    if arguments.count == 2 { return 0 }
-    guard arguments.count == 4, arguments[2] == "--settle-ms",
-          let delay = Int(arguments[3]), (0...2000).contains(delay) else {
-      throw ToolError.message("Usage: \(usage)")
+  struct Options: Equatable {
+    var settleMilliseconds = 0
+    /// Pixels per logical point; 2 inspects hairlines and radii at Retina density.
+    var scale: Double = 1
+  }
+
+  static func options(_ arguments: [String]) throws -> Options {
+    guard arguments.count >= 2 else { throw ToolError.message("Usage: \(usage)") }
+    var options = Options(), rest = arguments.dropFirst(2)[...]
+    while let flag = rest.popFirst() {
+      guard let value = rest.popFirst() else { throw ToolError.message("Usage: \(usage)") }
+      switch flag {
+      case "--settle-ms":
+        guard let delay = Int(value), (0...2000).contains(delay) else { throw ToolError.message("Usage: \(usage)") }
+        options.settleMilliseconds = delay
+      case "--scale":
+        guard let scale = Double(value), scale.isFinite, (1...3).contains(scale) else { throw ToolError.message("Usage: \(usage)") }
+        options.scale = scale
+      default: throw ToolError.message("Usage: \(usage)")
+      }
     }
-    return delay
+    return options
   }
 
-  static func capture(endpoint: URL, destination: URL, settleMilliseconds: Int = 0) throws {
+  static func capture(endpoint: URL, destination: URL, settleMilliseconds: Int = 0, scale: Double = 1) throws {
     #if !canImport(Darwin)
       throw ToolError.message("DevTools capture requires macOS")
     #else
-      try AsyncBridge.wait { try await perform(endpoint: endpoint, destination: destination, settleMilliseconds: settleMilliseconds) }
+      try AsyncBridge.wait { try await perform(endpoint: endpoint, destination: destination, settleMilliseconds: settleMilliseconds, scale: scale) }
     #endif
   }
 
   #if canImport(Darwin)
-    private static func perform(endpoint: URL, destination: URL, settleMilliseconds: Int) async throws {
+    private static func perform(endpoint: URL, destination: URL, settleMilliseconds: Int, scale: Double) async throws {
       let connection = DevToolsSocket(
         url: endpoint, timeout: 15, maximumMessageSize: 32 * 1024 * 1024)
       defer { connection.close() }
@@ -53,10 +69,16 @@ enum CaptureUI {
       }
       if settleMilliseconds > 0 { try await Task.sleep(for: .milliseconds(settleMilliseconds)) }
       try await connection.send([
-        "type": "mirror.start", "id": 1, "payload": ["fps": 1, "quality": 1],
+        "type": "mirror.start", "id": 1, "payload": ["fps": 1, "quality": 1, "scale": scale],
       ])
       var capture: [String: Any] = [:]
+      // Other envelopes keep arriving while the host fails to capture, so
+      // bound the wait as a whole rather than per message.
+      let deadline = ContinuousClock.now + .seconds(15)
       while capture.isEmpty {
+        guard ContinuousClock.now < deadline else {
+          throw ToolError.message("No mirror frame within 15 s; the application log reports mirror capture failures")
+        }
         let envelope = try await connection.receiveEnvelope()
         if envelope["type"] as? String == "mirror.frame" {
           capture = envelope["payload"] as? [String: Any] ?? [:]

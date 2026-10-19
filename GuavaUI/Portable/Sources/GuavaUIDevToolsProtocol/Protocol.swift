@@ -302,11 +302,16 @@ public struct ErrorPayload: Codable, Sendable {
 public struct MirrorStartPayload: Codable, Sendable {
     public var fps: Double?
     public var quality: Double?
+    /// Capture pixels per logical point (1–3, at most the native scale). Live
+    /// inspectors use 1; visual checks of hairlines and radii ask for 2.
+    public var scale: Double?
 
     public init(fps: Double? = nil,
-                quality: Double? = nil) {
+                quality: Double? = nil,
+                scale: Double? = nil) {
         self.fps = fps
         self.quality = quality
+        self.scale = scale
     }
 }
 

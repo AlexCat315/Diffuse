@@ -20,8 +20,8 @@ public final class NativeAppFrameCapture {
 
     public func capture(list: DrawList, size: SIMD2<Int>, logical: SIMD2<Float>) throws -> FrameTap.Pixels {
         try device.withFrameSession {
-            guard size.x > 0 && size.y > 0 && size.x <= 1_920 && size.y <= 1_080 else {
-                throw RHIError.invalidArgument("mirror capture extent exceeds 1920x1080")
+            guard size.x > 0 && size.y > 0 && size.x <= 3_840 && size.y <= 2_160 else {
+                throw RHIError.invalidArgument("mirror capture extent exceeds 3840x2160")
             }
             if target?.descriptor.width != size.x || target?.descriptor.height != size.y {
                 target = try TextureResource(device: device, descriptor: TextureDescriptor(width: size.x,

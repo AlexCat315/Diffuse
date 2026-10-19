@@ -194,7 +194,8 @@ public final class DevTools {
             guard let self else { return }
             self.frameTap?.start(
                 fps: payload.fps ?? 15,
-                quality: payload.quality ?? 0.7
+                quality: payload.quality ?? 0.7,
+                scale: payload.scale ?? 1
             )
             self.onMirrorStart?()
         }

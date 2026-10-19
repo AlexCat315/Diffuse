@@ -282,6 +282,11 @@ For modal and menu entrance animations, use
 its animations before the mirror starts; it is a sampling delay, not an assertion
 that an async operation has completed. Query the expected state as well.
 
+Mirror captures default to one pixel per logical point. Add `--scale 2` (1–3,
+up to the display density) to inspect hairlines, corner radii and antialiasing
+at Retina resolution; the capture fails after 15 s when the host cannot produce
+a frame, and the application log names the reason.
+
 After locating the actual `textField` node (rather than a debug-name wrapper),
 explicitly request its current draft/value through the same AI query:
 
