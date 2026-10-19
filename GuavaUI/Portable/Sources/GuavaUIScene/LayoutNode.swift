@@ -338,12 +338,21 @@ public final class LayoutNode: @unchecked Sendable {
     }
 
     private func applyMinimumSize() {
-        let floor = attachments["__minimumSizeFloor"] as? CGSize
-        let width = floor.map { max(minWidth ?? 0, Float($0.width)) } ?? minWidth ?? .nan
-        let height = floor.map { max(minHeight ?? 0, Float($0.height)) } ?? minHeight ?? .nan
-        YGNodeStyleSetMinWidth(ygNode, width)
-        YGNodeStyleSetMinHeight(ygNode, height)
+        let (width, height) = effectiveMinimum
+        YGNodeStyleSetMinWidth(ygNode, width ?? .nan)
+        YGNodeStyleSetMinHeight(ygNode, height ?? .nan)
+        // Yoga uses a fixed dimension as the flex basis without clamping it
+        // to the minimum, so a definite parent would size to the smaller
+        // authored value; write fixed sizes already raised to their minimum.
+        if case .points = widthStyle { writeWidthStyle() }
+        if case .points = heightStyle { writeHeightStyle() }
         markLayoutDirtyHint()
+    }
+
+    private var effectiveMinimum: (width: Float?, height: Float?) {
+        let floor = attachments["__minimumSizeFloor"] as? CGSize
+        return (floor.map { max(minWidth ?? 0, Float($0.width)) } ?? minWidth,
+                floor.map { max(minHeight ?? 0, Float($0.height)) } ?? minHeight)
     }
 
     public var maxHeight: Float? {
@@ -549,29 +558,31 @@ public final class LayoutNode: @unchecked Sendable {
     private func applyWidthStyle(_ style: LayoutStyleValue) {
         guard widthStyle != style else { return }
         widthStyle = style
-        switch style {
-        case .points(let value):
-            YGNodeStyleSetWidth(ygNode, value)
-        case .percent(let value):
-            YGNodeStyleSetWidthPercent(ygNode, value)
-        case .auto:
-            YGNodeStyleSetWidthAuto(ygNode)
-        }
+        writeWidthStyle()
         markLayoutDirtyHint()
     }
 
     private func applyHeightStyle(_ style: LayoutStyleValue) {
         guard heightStyle != style else { return }
         heightStyle = style
-        switch style {
-        case .points(let value):
-            YGNodeStyleSetHeight(ygNode, value)
-        case .percent(let value):
-            YGNodeStyleSetHeightPercent(ygNode, value)
-        case .auto:
-            YGNodeStyleSetHeightAuto(ygNode)
-        }
+        writeHeightStyle()
         markLayoutDirtyHint()
+    }
+
+    private func writeWidthStyle() {
+        switch widthStyle {
+        case .points(let value): YGNodeStyleSetWidth(ygNode, max(value, effectiveMinimum.width ?? value))
+        case .percent(let value): YGNodeStyleSetWidthPercent(ygNode, value)
+        case .auto: YGNodeStyleSetWidthAuto(ygNode)
+        }
+    }
+
+    private func writeHeightStyle() {
+        switch heightStyle {
+        case .points(let value): YGNodeStyleSetHeight(ygNode, max(value, effectiveMinimum.height ?? value))
+        case .percent(let value): YGNodeStyleSetHeightPercent(ygNode, value)
+        case .auto: YGNodeStyleSetHeightAuto(ygNode)
+        }
     }
 
     private func markLayoutDirtyHint() {
