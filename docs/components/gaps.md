@@ -135,7 +135,7 @@
 | Slider | 水平/垂直、RTL 映射、拖动/键盘/辅助功能已完成，见 [Slider](slider.md) | 已完成 |
 | Rating | RTL 映射/填充/方向键、多星示例滚动、窄宽评分说明重排、自定义图形（`RatingSymbol`）与 1–20 等分精度已实现，见 [Rating](rating.md) | 完成 |
 | NumberField / Vec3Field | locale 小数、触摸/大字号轴单元；`NumberField(prefix:resetValue:)` 前缀芯片拖拽 scrub（每 4pt 一步，Shift ×10 / Option ×0.1）、双击单轴重置，Vec3Field 复用同一芯片并提供复制/粘贴/重置向量菜单（`Vec3FieldTests`，DevTools 720 拖拽 X 1→2、右键菜单） | 已完成 |
-| Select / Combobox | 触发器宽度下限与窗口夹紧已实现；异步请求、取消与加载状态由调用方数据层负责，组件级远程结果契约尚未提供 | P2（按需） |
+| Select / Combobox | 触发器宽度下限与窗口夹紧已实现；Combobox 远程结果契约（`ComboboxSearch`：防抖、取消、加载/失败/重试/最小长度状态）已实现，见 [Combobox](combobox.md) | 完成 |
 | DatePicker / TimeField | Calendar 配置可指定 timeZone，时区选择入口仍缺；TimeOfDay 是不含时区的墙钟值，转换由调用方负责；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动与触摸弹层预算已完成，见 [日历导航](calendar.md)；周/月/年模式仍为 P2 | P1 已完成 |
 | List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动仍待补 | P1 已完成；边缘自动滚动 P2 |

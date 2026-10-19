@@ -29,6 +29,7 @@
 | TextField | 文档已写 | [textfield.md](textfield.md) |
 | ColorField | RGBA 通道、hex 与自适应弹层宽度 | [colorfield.md](colorfield.md) |
 | SearchField | 搜索输入、联想与键盘选择 | [searchfield.md](searchfield.md) |
+| Combobox | 可搜索单选、本地过滤与远程结果契约 | [combobox.md](combobox.md) |
 | Text / Typography / Color glyphs | 实现与验证边界 | [typography.md](typography.md) |
 | Viewport Traits | width/height class、orientation reader 与 600/1000 阈值 | [viewport-traits.md](viewport-traits.md) |
 | Accessibility | 语义树、describedBy、scrollArea 与 comboBox | [accessibility.md](accessibility.md) |

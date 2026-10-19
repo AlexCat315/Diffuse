@@ -1,3 +1,4 @@
+import Foundation
 import GuavaUI
 import GuavaUIRuntime
 
@@ -51,16 +52,42 @@ struct FormStory: View {
 struct ComboboxStory: View {
     let options: GalleryOptions
     @State private var city: String? = "shanghai"
+    @State private var airport: String?
     var body: some View {
-        StorySection("Searchable selection", "Search in English or Chinese, use Up/Down and Return, or clear the selection. Unavailable options cannot be chosen.") {
-            Combobox(selection: $city, options: [
-                SelectOption(value: "beijing", label: "北京 · Beijing"),
-                SelectOption(value: "shanghai", label: "上海 · Shanghai · International collaboration workspace 👩🏽‍💻"),
-                SelectOption(value: "hongkong", label: "香港 · Hong Kong"), SelectOption(value: "london", label: "London"),
-                SelectOption(value: "unavailable", label: "Unavailable", isEnabled: false)
-            ]) { $0.isEnabled = options.isEnabled; $0.placeholder = "Choose a city" }.frame(maxWidth: 360)
-            Text("Selected: \(city ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Searchable selection", "Search in English or Chinese, use Up/Down and Return, or clear the selection. Unavailable options cannot be chosen.") {
+                Combobox(selection: $city, options: [
+                    SelectOption(value: "beijing", label: "北京 · Beijing"),
+                    SelectOption(value: "shanghai", label: "上海 · Shanghai · International collaboration workspace 👩🏽‍💻"),
+                    SelectOption(value: "hongkong", label: "香港 · Hong Kong"), SelectOption(value: "london", label: "London"),
+                    SelectOption(value: "unavailable", label: "Unavailable", isEnabled: false)
+                ]) { $0.isEnabled = options.isEnabled; $0.placeholder = "Choose a city" }.frame(maxWidth: 360)
+                Text("Selected: \(city ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+            StorySection("Remote results", "Results come from a simulated server with 600 ms latency. Typing waits for a pause and cancels the previous request; older results stay dimmed while the next ones load. Search for “offline” to see the failure state and Retry.") {
+                Combobox(selection: $airport, search: ComboboxSearch(results: AirportDirectory.search)) {
+                    $0.isEnabled = options.isEnabled; $0.placeholder = "Choose an airport"; $0.searchPlaceholder = "City or code…"
+                }.frame(maxWidth: 360).debugName("combobox-remote")
+                Text("Selected: \(airport ?? "None")").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
         }
+    }
+}
+
+/// A stand-in for a network service: fixed latency, server-side matching, and
+/// a failure for one query so the story can show error recovery.
+private enum AirportDirectory {
+    struct Offline: LocalizedError { var errorDescription: String? { "The airport service is unreachable." } }
+    static let airports = [
+        ("PEK", "Beijing Capital"), ("PVG", "Shanghai Pudong"), ("HKG", "Hong Kong"), ("LHR", "London Heathrow"),
+        ("CDG", "Paris Charles de Gaulle"), ("FRA", "Frankfurt"), ("BER", "Berlin Brandenburg"), ("NRT", "Tokyo Narita"),
+        ("HND", "Tokyo Haneda"), ("SFO", "San Francisco"), ("JFK", "New York JFK"), ("SIN", "Singapore Changi"),
+    ]
+    @Sendable static func search(_ query: String) async throws -> [SelectOption<String>] {
+        try await Task.sleep(for: .milliseconds(600))
+        if query.localizedCaseInsensitiveContains("offline") { throw Offline() }
+        return airports.filter { query.isEmpty || $0.0.localizedCaseInsensitiveContains(query) || $0.1.localizedCaseInsensitiveContains(query) }
+            .map { SelectOption(value: $0.0, label: "\($0.0) · \($0.1)") }
     }
 }
 

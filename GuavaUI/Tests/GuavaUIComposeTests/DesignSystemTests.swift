@@ -354,4 +354,59 @@ struct DesignSystemTests: GuavaUIComposeSerializedSuite {
             }
         }
     }
+    @Test("A remote Combobox requests on open, shows loading, lists results and keeps the chosen label")
+    func remoteCombobox() throws {
+        final class Queue: @unchecked Sendable {
+            let lock = NSLock(); var items: [() -> Void] = []
+            func enqueue(_ work: @escaping () -> Void) { lock.withLock { items.append(work) } }
+            func drain() {
+                for _ in 0..<400 where lock.withLock({ items.isEmpty }) { Thread.sleep(forTimeInterval: 0.005) }
+                lock.withLock { defer { items.removeAll() }; return items }.forEach { $0() }
+            }
+        }
+        let cities = ["Berlin", "Bern", "Paris"]
+        let queue = Queue(), oldScheduler = UIWorkSchedulerHolder.enqueue
+        UIWorkSchedulerHolder.enqueue = queue.enqueue
+        defer { UIWorkSchedulerHolder.enqueue = oldScheduler }
+        try fixture { graph in
+            final class Selection { var value: Int? }
+            let selection = Selection()
+            let context = PlatformInputContext()
+            try context.withCurrent {
+                graph.install(root: LayerRoot {
+                    Combobox(selection: Binding(get: { selection.value }, set: { selection.value = $0 }), selectedLabel: nil,
+                             search: ComboboxSearch(results: { query in
+                                 cities.enumerated().filter { query.isEmpty || $0.element.localizedCaseInsensitiveContains(query) }
+                                     .map { SelectOption(value: $0.offset, label: $0.element) }
+                             }) { $0.delay = .zero }).debugName("remote-combobox")
+                })
+                settle(graph)
+                func find(_ value: String) -> Node? {
+                    func walk(_ node: Node) -> Node? {
+                        if node.layoutNode?.textInputs?.text == value { return node }
+                        for child in node.children { if let match = walk(child) { return match } }
+                        return nil
+                    }
+                    return walk(graph.tree.root!)
+                }
+                let frame = try #require(graph.layoutSnapshot().first { $0.debugName == "remote-combobox" }?.absoluteFrame)
+                let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
+                    capture: context.pointerCapture, focusChain: context.focusChain)
+                let click = MouseButtonEvent(button: .left, x: Float(frame.midX), y: Float(frame.midY), clicks: 1)
+                dispatcher.dispatch(.mouseButtonDown(click)); dispatcher.dispatch(.mouseButtonUp(click)); settle(graph)
+                #expect(find("Searching…") != nil)
+                queue.drain(); settle(graph)
+                #expect(find("Searching…") == nil && find("Paris") != nil)
+                dispatcher.dispatch(.textInput("ber")); settle(graph)
+                queue.drain(); settle(graph)
+                #expect(find("Paris") == nil && find("Bern") != nil)
+                dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.arrowDown, keycode: 0, modifiers: [], isRepeat: false)))
+                dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.return, keycode: 0, modifiers: [], isRepeat: false)))
+                settle(graph)
+                #expect(selection.value == 1)
+                #expect(PortalStoreHolder.current.entries.isEmpty)
+                #expect(find("Bern") != nil, "the trigger keeps the chosen label")
+            }
+        }
+    }
 }
