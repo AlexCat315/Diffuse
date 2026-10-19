@@ -471,6 +471,7 @@ public final class SDL3Shell: Shell {
 #if os(macOS)
     private var titleBarDoubleClickMonitor: Any?
     private var scrollInput: AppKitScrollInput?
+    private var terminationSignals: TerminationSignalWake?
     private var displayRefreshSources: [WindowID: MacDisplayRefreshSource] = [:]
 #endif
 
@@ -834,6 +835,10 @@ public final class SDL3Shell: Shell {
     }
 
     nonisolated public func wakeEventLoop() {
+        Self.pushWakeEvent()
+    }
+
+    nonisolated fileprivate static func pushWakeEvent() {
         var event = SDL_Event()
         event.type = UInt32(GUAVA_SDL_EVENT_WAKE)
         _ = SDL_PushEvent(&event)
@@ -1200,6 +1205,7 @@ public final class SDL3Shell: Shell {
         didInitializeSDL = true
 #if os(macOS)
         scrollInput = AppKitScrollInput()
+        terminationSignals = TerminationSignalWake()
         installTitleBarDoubleClickMonitor()
 #endif
     }
@@ -1209,6 +1215,7 @@ public final class SDL3Shell: Shell {
 #if os(macOS)
         scrollInput?.stop()
         scrollInput = nil
+        terminationSignals = nil
         if let titleBarDoubleClickMonitor {
             NSEvent.removeMonitor(titleBarDoubleClickMonitor)
             self.titleBarDoubleClickMonitor = nil
@@ -1374,3 +1381,25 @@ private let _sdl3ChromeHitTest: @convention(c) (OpaquePointer?, UnsafePointer<SD
 
         return SDL_HITTEST_NORMAL
     }
+
+#if os(macOS)
+/// SDL's SIGINT/SIGTERM handlers only record the signal; the quit event is
+/// produced on the next pump. An idle shell blocked in `SDL_WaitEventTimeout`
+/// never pumps, so Ctrl+C or `kill` went unnoticed until some other event. A
+/// kqueue signal source observes the signal alongside SDL's handler and wakes
+/// the loop, which then pumps the quit event.
+private final class TerminationSignalWake {
+    private let sources: [any DispatchSourceSignal]
+
+    init() {
+        sources = [SIGINT, SIGTERM].map { signal in
+            let source = DispatchSource.makeSignalSource(signal: signal, queue: .global(qos: .userInitiated))
+            source.setEventHandler { SDL3Shell.pushWakeEvent() }
+            source.resume()
+            return source
+        }
+    }
+
+    deinit { sources.forEach { $0.cancel() } }
+}
+#endif
