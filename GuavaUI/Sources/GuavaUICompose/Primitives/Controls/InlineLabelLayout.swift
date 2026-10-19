@@ -1,7 +1,8 @@
 internal import Foundation
 
 /// Three retained slots: leading glyph, flexible title, trailing controls.
-/// Only the title yields width. The measured chrome minimum belongs to the
+/// Only the title yields or takes width: in a wider frame it absorbs the
+/// slack, so trailing controls (a chevron, a close button) sit at the edge. The measured chrome minimum belongs to the
 /// control, so an enclosing maximum can never shrink its chrome.
 struct InlineLabelLayout: Layout {
     var spacing: CGFloat = 6
@@ -17,7 +18,8 @@ struct InlineLabelLayout: Layout {
         let rtl = subviews.first?.layoutDirection == .rtl
         var cursor = rtl ? bounds.maxX : bounds.minX
         for index in subviews.indices {
-            let size = plan.slots[index]
+            var size = plan.slots[index]
+            if index == 1 { size.width = max(size.width, bounds.width - plan.minimumWidth) }
             let x = rtl ? cursor - size.width : cursor
             subviews[index].place(at: CGPoint(x: x, y: bounds.minY + (bounds.height - size.height) / 2),
                                   proposal: .init(width: size.width, height: size.height))

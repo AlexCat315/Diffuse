@@ -99,7 +99,10 @@ private struct PopoverTriggerStyle: ButtonStyle {
         let theme = configuration.theme
         // The ring lives on its own wrapper node. Modifiers on an AnyView land
         // on the label's node, so a clear ring would erase a label's border.
+        // It fills the button's row: an anchor-width trigger (Combobox,
+        // Select) spans its frame, and a hugging trigger has no space to fill.
         return Box(direction: .column, alignItems: .stretch, spacing: 0) { AnyView(configuration.label) }
+            .flex(1, shrink: 1).frame(minWidth: 0)
             .cornerRadius(theme.inputs.radius)
             .border(configuration.isFocused ? theme.colors.focusRing : .clear,
                     width: configuration.isFocused ? 2 : 0)

@@ -50,6 +50,16 @@ struct ChromeRegressionTests {
         graph.install(root: EmptyView())
     } }
 
+    @Test("An empty Combobox trigger spans its width instead of hugging a short placeholder")
+    func emptyComboboxTrigger() throws { try GlobalTestLock.locked {
+        let old = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = old }
+        let graph = render(Box { Combobox(selection: .constant(Int?.none), options: [SelectOption(value: 1, label: "One")]) })
+        let chrome = try #require(nodes(graph.tree.root).filter { $0.borderWidth >= 1 && $0.borderColor.map { $0.a > 0 } == true }.max { $0.frame.width < $1.frame.width })
+        #expect(chrome.frame.width == 280, "\(chrome.frame)")
+        graph.install(root: EmptyView())
+    } }
+
     @Test("A Select trigger keeps its input border; the trigger's focus ring does not erase it")
     func selectBorder() throws { try GlobalTestLock.locked {
         let old = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
