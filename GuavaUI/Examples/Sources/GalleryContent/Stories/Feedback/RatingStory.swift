@@ -14,8 +14,8 @@ struct RatingStory: View {
             StorySection("Whole stars", "Hover previews a score. Release inside to choose it; click the selected score again to clear. Release outside or press Escape to cancel.") {
                 RatingSample(Rating("Overall rating", value: $whole) { $0.selection.isEnabled = options.isEnabled }) {
                     Text("Score: \(whole) / 5").font(.bodyStrong)
-                    Button("Set 4", isEnabled: options.isEnabled) { whole = 4 }
-                    Button("Clear", isEnabled: options.isEnabled) { whole = 0 }
+                    Button("Set 4", isEnabled: options.isEnabled) { whole = 4 }.buttonStyle(.secondary)
+                    Button("Clear", isEnabled: options.isEnabled) { whole = 0 }.buttonStyle(.ghost)
                 }
             }
             StorySection("Half stars & keyboard", "Each rating has one Tab stop. Left/Right follow the layout direction; Down/Up decrease/increase. Home/End reach the bounds; Delete clears when allowed. Swipe the strip gutter or scroll horizontally to reach wide ratings.") {

@@ -87,7 +87,9 @@ struct CheckboxStory: View {
                 Checkbox("Accept the terms", isOn: $checked, isEnabled: options.isEnabled)
                 Checkbox("Partially selected collection: \(String(describing: mixed))",
                          state: $mixed, isEnabled: options.isEnabled)
-                Button("Reset mixed state") { mixed = .mixed }.buttonStyle(.ghost)
+                Row(alignment: .center, spacing: 0) {
+                    Button("Reset mixed state") { mixed = .mixed }.buttonStyle(.secondary)
+                }
             }
             StorySection("Disabled", "Disabled controls are omitted from keyboard focus traversal.") {
                 Row(alignment: .center, spacing: 16) {

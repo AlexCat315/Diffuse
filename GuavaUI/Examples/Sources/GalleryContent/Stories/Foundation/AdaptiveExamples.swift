@@ -14,21 +14,31 @@ struct AdaptiveControlExamples: View {
         }
     }
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            preview("Narrow · pointer", width: 390, input: [.pointer, .keyboard])
-            preview("Wide · pointer", width: 720, input: [.pointer, .keyboard])
-            preview("Narrow · touch", width: 390, input: [.touch])
+        StorySection("Adaptive previews", "Each frame is a fixed surface width and input mode. Touch reserves 44pt targets; pointer surfaces keep hover.") {
+            Box(direction: .column, alignItems: .flexStart, spacing: 16) {
+                preview("390 pt · Pointer", width: 390, input: [.pointer, .keyboard])
+                preview("720 pt · Pointer", width: 720, input: [.pointer, .keyboard])
+                preview("390 pt · Touch", width: 390, input: [.touch])
+            }
         }
     }
+    /// A labeled device frame: the sample sits top-leading at the frame's exact
+    /// width, and scrolls horizontally when the page is narrower.
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .masonry ? 190 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .textEditor ? 150 : page == .wheelPicker ? 190 : page == .timePicker ? 190 : page == .popconfirm ? 150 : page == .workspace ? 220 : page == .image ? 120 : page == .introduction || page == .notification ? 100 : page == .animation ? 100 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 104
-        return StorySection(title, "The same component at an explicit surface width and input modality. Touch controls reserve at least 44 points; pointer hover remains available on pointer surfaces.") {
+        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .masonry ? 190 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .textEditor ? 150 : page == .wheelPicker ? 190 : page == .timePicker ? 190 : page == .popconfirm ? 150 : page == .workspace ? 220 : page == .image ? 120 : page == .introduction || page == .notification ? 100 : page == .animation ? 100 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 0
+        // Zero lets a single control hug its content; scrolling samples keep a height.
+        let frameHeight: Float? = height > 0 ? height + 32 : nil
+        return Column(alignment: .leading, spacing: 6) {
+            Text(title).font(.caption).foregroundColor(.onSurfaceMuted)
             ScrollView(.horizontal) {
                 AdaptiveControlSample(page: page, options: options)
-                    .frame(width: width, height: height).surfaceEnvironment(surface)
+                    .frame(width: .points(width), height: frameHeight.map { .points($0) } ?? .auto).surfaceEnvironment(surface)
                     .debugName("adaptive-\(page.rawValue)-\(input.contains(.touch) ? "touch" : width < 600 ? "narrow" : "wide")")
-            }.frame(height: height)
+            }
+            .frame(maxWidth: width + 2)
+            .frame(height: frameHeight.map { .points($0) } ?? .auto)
+            .border(.border, width: 1).cornerRadius(.inputRadius).clipped()
         }
     }
 }
@@ -88,9 +98,11 @@ private struct AdaptiveControlSample: View {
     @State private var toast = ToastController()
     @State private var workspaceController = WorkspaceController(document: WorkspaceStory.defaultDocument())
     var body: some View {
-        Box(direction: .column, alignItems: .flexStart, justifyContent: .center, spacing: 12) {
+        Box(direction: .column, alignItems: .flexStart, justifyContent: .flexStart, spacing: 12) {
             sample
-        }.controlSize(options.size)
+        }
+        .padding(16)
+        .controlSize(options.size)
     }
     private var sample: AnyView {
         switch page {

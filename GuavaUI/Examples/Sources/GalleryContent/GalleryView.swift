@@ -160,7 +160,7 @@ public struct GalleryView: View {
         Checkbox(isOn: Binding(get: { !options.isEnabled }, set: { options.isEnabled = !$0 }))
         Text("Disabled").font(.caption).foregroundColor(.onSurfaceVariant)
       }
-      Button("Reset example") { resetGeneration += 1 }.buttonStyle(.ghost).debugName(
+      Button("Reset example") { resetGeneration += 1 }.buttonStyle(.secondary).debugName(
         "gallery-reset")
     }.controlSize(.small).padding(horizontal: 24, vertical: 10).flex(0, shrink: 0)
   }
