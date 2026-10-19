@@ -68,6 +68,8 @@ import Testing
     #expect(capture.client?.operation == "capture-ui" && capture.client?.arguments == ["out.jpg", "--settle-ms", "400"])
     #expect(try Arguments(["devtools", "Gallery"]).client == nil)
     #expect(throws: (any Error).self) { try Arguments(["devtools", "click"]) }
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "click", ""]) }
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "activate", "abc"]) }
     #expect(throws: (any Error).self) { try Arguments(["devtools", "--no-open", "list"]) }
 }
 

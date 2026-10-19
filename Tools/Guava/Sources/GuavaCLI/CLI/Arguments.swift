@@ -212,16 +212,26 @@ struct DevToolsClient: Equatable {
             else { (operation, self.arguments) = ("query-ui", arguments) }
         case "click":
             guard Self.capturing(arguments) else { throw ToolError.invalid("Use guava devtools click NODE_ID [--capture OUT.jpg]") }
+            try Self.requireNodeID(arguments[0])
             (operation, self.arguments) = ("input-ui", ["--click-node"] + arguments)
         case "input":
             guard Self.capturing(arguments) else { throw ToolError.invalid("Use guava devtools input JSON|@FILE [--capture OUT.jpg]") }
             (operation, self.arguments) = ("input-ui", ["--input"] + arguments)
         case "activate":
             guard (1...2).contains(arguments.count) else { throw ToolError.invalid("Use guava devtools activate NODE_ID [activate|increment|decrement]") }
+            try Self.requireNodeID(arguments[0])
             (operation, self.arguments) = ("activate-ui", arguments)
         case "capture": (operation, self.arguments) = ("capture-ui", arguments)
         case "timings": (operation, self.arguments) = ("record-timings", arguments)
         default: return nil
+        }
+    }
+
+    /// Node ids come from `query`; an empty or non-numeric one is a typo or an
+    /// empty query result, reported here rather than as a host schema error.
+    private static func requireNodeID(_ id: String) throws {
+        guard !id.isEmpty, id.allSatisfy(\.isNumber) else {
+            throw ToolError.invalid("NODE_ID must be a node id from guava devtools query (got \"\(id)\")")
         }
     }
 
