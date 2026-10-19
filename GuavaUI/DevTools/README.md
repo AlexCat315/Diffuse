@@ -236,11 +236,14 @@ session (add `--session ID` when several run):
 ./guava devtools GuavaUI/Examples list                     # available AI tools
 ./guava devtools GuavaUI/Examples query '{"text":"Document 5","visible_only":true,"compact":true}'
 ./guava devtools GuavaUI/Examples click NODE_ID
-./guava devtools GuavaUI/Examples input @events.json
+./guava devtools GuavaUI/Examples input @events.json --capture /tmp/after.jpg
 ./guava devtools GuavaUI/Examples capture /tmp/gallery.jpg --settle-ms 400
 ```
 
 A bare JSON object runs `query_ui_nodes`; `query TOOL JSON` runs any other tool.
+`click` and `input` accept `--capture OUT.jpg`, which mirrors the window as soon
+as delivery completes. Use it for transient states (a scroll indicator that fades,
+a transition in flight); a separate `capture` call starts a new CLI process first.
 `compact: true` returns one short record per node (id, role, label, value,
 non-default state, clipped frame, `File.swift:line`) instead of the full
 layout/style/view-type payload. The same actions are available as

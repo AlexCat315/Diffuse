@@ -70,3 +70,11 @@ import Testing
     #expect(throws: (any Error).self) { try Arguments(["devtools", "click"]) }
     #expect(throws: (any Error).self) { try Arguments(["devtools", "--no-open", "list"]) }
 }
+
+@Test func inputActionsCanCaptureTransientStatesInTheSameRun() throws {
+    #expect(try Arguments(["devtools", "input", "@drag.json", "--capture", "out.jpg"]).client?.arguments
+        == ["--input", "@drag.json", "--capture", "out.jpg"])
+    #expect(try Arguments(["devtools", "click", "7", "--capture", "out.jpg"]).client?.arguments
+        == ["--click-node", "7", "--capture", "out.jpg"])
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "input", "@drag.json", "--settle-ms", "4"]) }
+}

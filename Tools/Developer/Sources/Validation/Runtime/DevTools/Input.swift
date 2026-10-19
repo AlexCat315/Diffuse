@@ -4,18 +4,19 @@ internal import ToolSupport
 /// Port of `scripts/input-ui-devtools.swift`: drive the host's input dispatcher
 /// through DevTools, without OS automation.
 enum InputUI {
-  static let usage = "guava-dev devtools input-ui PORT|@SESSION_FILE --click-node NODE_ID | --input JSON_OR_@FILE (events may include {\"kind\":\"wait\",\"milliseconds\":100})"
+  static let usage = "guava-dev devtools input-ui PORT|@SESSION_FILE --click-node NODE_ID | --input JSON_OR_@FILE [--capture OUTPUT.jpg] (events may include {\"kind\":\"wait\",\"milliseconds\":100}; --capture mirrors the window right after delivery, for transient states)"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
       Terminal.info(usage)
       return
     }
-    guard arguments.count == 3,
+    guard arguments.count == 3 || (arguments.count == 5 && arguments[3] == "--capture"),
       ["--click-node", "--input"].contains(arguments[1])
     else {
       throw ToolError.message("Usage: \(usage)")
     }
+    let capture = arguments.count == 5 ? URL(fileURLWithPath: arguments[4]) : nil
     let endpoint = try DevToolsEndpoint.resolve(arguments[0])
     let target = arguments[1]
     let raw = arguments[2]
@@ -77,6 +78,9 @@ enum InputUI {
           "Delivered \(events.count) input events through DevTools; query or capture the resulting UI to verify behavior."
         )
       }
+      // A second connection is opened at once, so transient states such as a
+      // fading indicator or a mid-flight transition are still on screen.
+      if let capture { try CaptureUI.capture(endpoint: endpoint, destination: capture) }
     #endif
   }
 

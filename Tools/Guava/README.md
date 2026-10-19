@@ -111,7 +111,7 @@ guava devtools [directory] list                       # 可用 AI 工具
 guava devtools [directory] query '{"text":"Save","visible_only":true,"compact":true}'
 guava devtools [directory] query get_diagnostics '{}'
 guava devtools [directory] click NODE_ID
-guava devtools [directory] input @events.json
+guava devtools [directory] input @events.json --capture after.jpg   # 投递后立即取样瞬态
 guava devtools [directory] capture out.jpg --settle-ms 400
 guava devtools [directory] timings out.json FRAMES WARMUP
 ```

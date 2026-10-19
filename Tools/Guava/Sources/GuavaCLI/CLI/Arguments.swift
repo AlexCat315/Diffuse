@@ -211,14 +211,19 @@ struct DevToolsClient: Equatable {
             else if arguments[0].hasPrefix("{") { (operation, self.arguments) = ("query-ui", ["query_ui_nodes"] + arguments) }
             else { (operation, self.arguments) = ("query-ui", arguments) }
         case "click":
-            guard arguments.count == 1 else { throw ToolError.invalid("Use guava devtools click NODE_ID") }
+            guard Self.capturing(arguments) else { throw ToolError.invalid("Use guava devtools click NODE_ID [--capture OUT.jpg]") }
             (operation, self.arguments) = ("input-ui", ["--click-node"] + arguments)
         case "input":
-            guard arguments.count == 1 else { throw ToolError.invalid("Use guava devtools input JSON|@FILE") }
+            guard Self.capturing(arguments) else { throw ToolError.invalid("Use guava devtools input JSON|@FILE [--capture OUT.jpg]") }
             (operation, self.arguments) = ("input-ui", ["--input"] + arguments)
         case "capture": (operation, self.arguments) = ("capture-ui", arguments)
         case "timings": (operation, self.arguments) = ("record-timings", arguments)
         default: return nil
         }
+    }
+
+    /// One operand, optionally followed by `--capture OUT.jpg`.
+    private static func capturing(_ arguments: [String]) -> Bool {
+        arguments.count == 1 || (arguments.count == 3 && arguments[1] == "--capture")
     }
 }
