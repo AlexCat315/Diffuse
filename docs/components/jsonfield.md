@@ -18,7 +18,7 @@ JsonField(text: $parameters) { committed in
 
 - `Cmd-Return` commits valid JSON.
 - Invalid JSON stays in the draft across blur/refocus and does not overwrite the bound value.
-- Drag the lower grip to resize the inline editor; overflowing text scrolls inside the field.
+- Resize the inline editor using its separate lower lane (44pt for touch/mixed, 28pt for pointer). Drag or use Up/Down, Shift/Page Up/Down, Home/End; Escape rolls back a drag. The named slider supports assistive increment/decrement/setValue, with its actual text viewport height as the value. Localize `JsonFieldLabels.resize`. Overflowing text scrolls inside the field; resizing reveals the moved handle without trapping ordinary scrolling.
 - The compact toolbar exposes format, revert and expand actions as SVG icons with tooltips. Validation errors appear only when needed.
 - `Format` pretty-prints with sorted keys for stable diffs. `Revert` restores the current edit's starting value.
 - Expand fills a compact window; at 600pt and wider it opens a centered editor up to 760×560pt with 16pt margins. Both layouts retain the same draft, history, focus and portal during resize, with line numbers and a named dialog/heading.

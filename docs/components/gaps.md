@@ -153,7 +153,7 @@
 | Form / PropertyGrid | 自适应标签、共享值槽阈值、列数重排、标签关联与 Form 校验摘要已实现，见 [form.md](form.md)；PropertyGrid 跨字段业务校验由应用管理 | 已实现 |
 | Carousel | 自动轮播、复杂指示器（按需）；滑动/键盘已有 | P2 |
 | StatusBar / Panel | 状态格单行截断、完整 a11y 值、多个前后状态格的有限几何与 `DefaultPanelStyle` 标题截断已实现，见 [Panel](panel.md)；等宽策略仍由调用方声明 | 已完成 |
-| TextField（Text Editor） | 平面编辑样式、稳定行号留白、中性当前行、Gallery 窄宽与生产 ScriptCodeEditor 视觉已完善，见 [验收](textfield.md#编辑器视觉与交互验收)；resize grip 的触摸目标与键盘/a11y、snippet tab-stop、超长单行分段布局仍缺 | P2 |
+| TextField（Text Editor） | 平面编辑样式、稳定行号留白、中性当前行、Gallery 窄宽与生产 ScriptCodeEditor 视觉已完善，见 [验收](textfield.md#编辑器视觉与交互验收)；共用 resize grip 已补齐 44/28pt 命中区、键盘/a11y、取消/清理与滚动显露。snippet tab-stop、超长单行分段布局仍缺 | P2 |
 | Image / AsyncImage | 缓存淘汰、在途合并、GIF/WebP 动画、EXIF、渐进解码（[image.md](image.md) 边界） | P2 |
 | Avatar | 状态角标、可交互成员弹层（[avatar.md](avatar.md) 边界） | P2 |
 | Icon / Typography | 彩色字形仅 macOS；RTL 双向段落完整语义 | P2 |

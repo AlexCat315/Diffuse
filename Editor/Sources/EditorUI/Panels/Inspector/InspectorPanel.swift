@@ -603,7 +603,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorJSONInput(text: binding, minHeight: minHeight,
                                      labels: JsonFieldLabels(format: L("Format"), revert: L("Revert"),
                                                              valid: L("Valid JSON"), empty: L("Empty saves as {}"),
-                                                             expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel")))
+                                                             expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel"),
+                                                             resize: L("Editor height")))
                 .id(identity).debugName("inspector-json-\(identity)"))
         case .colliderShapeInstances, .entityReference, .particleCurve, .particleSubEmitters, .particleModuleStack:
             // Compound editors resolve through the control registry above; reaching

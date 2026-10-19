@@ -54,7 +54,9 @@ struct TextEditorStory: View {
                 SurfaceReader { surface in
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     documentHeader
-                    ResizableEditor(initialHeight: 320) { editor(theme: theme, compact: surface.viewport.widthClass == .compact) }
+                    ResizableEditor(initialHeight: 320, isResizable: options.isEnabled) {
+                        editor(theme: theme, compact: surface.viewport.widthClass == .compact)
+                    }
                     statusBar
                 }
                 .background(.surfaceSunken)

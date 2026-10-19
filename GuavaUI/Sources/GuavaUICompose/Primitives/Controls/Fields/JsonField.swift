@@ -24,19 +24,20 @@ public struct JsonFieldLabels: Sendable {
     public var expand: String
     public var apply: String
     public var cancel: String
-    public var done: String { get { apply } set { apply = newValue } }
+    public var resize: String
 
     public init(format: String = "Format", revert: String = "Revert",
                 valid: String = "Valid JSON", empty: String = "Empty saves as {}",
                 expand: String = "Expand JSON Editor", apply: String = "Apply", cancel: String = "Cancel",
-                done: String? = nil) {
+                resize: String = "Editor height") {
         self.format = format
         self.revert = revert
         self.valid = valid
         self.empty = empty
         self.expand = expand
-        self.apply = done ?? apply
+        self.apply = apply
         self.cancel = cancel
+        self.resize = resize
     }
 }
 
@@ -159,10 +160,12 @@ private struct _StatefulJsonField: View {
                     .debugName("json-expand")
             }
             ResizableTextArea(field.placeholder, text: draftBinding, minHeight: field.minHeight,
-                              disabled: !field.isEnabled, codeEditing: inlineCodeOptions, onSubmit: { _ = commitDraft() },
+                              disabled: !field.isEnabled, resizeLabel: field.labels.resize,
+                              codeEditing: inlineCodeOptions, onSubmit: { _ = commitDraft() },
                               onFocus: beginEditing,
                               onBlur: { if !isExpanded { _ = commitDraft() } })
                 .font(.mono)
+                .textFieldStyle(.editor).background(.surfaceSunken)
                 .border(validation.isAcceptable ? .border : .error, width: 1)
                 .cornerRadius(.inputRadius)
                 .clipped()

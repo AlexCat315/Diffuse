@@ -37,7 +37,9 @@ struct TextEditorLayoutTests {
                     #expect(control.absoluteFrame.minX >= 0 && control.absoluteFrame.maxX <= CGFloat(available))
                     if width != 1280 { #expect(control.frame.height >= 44) }
                 }
-                #expect(field.frame.width > 100 && field.frame.height >= 300)
+                let handle = try #require(all.first { $0.accessibility?.role == .slider && $0.accessibility?.label == "Editor height" })
+                #expect(field.frame.width > 100 && field.frame.height >= 240)
+                #expect(abs(field.frame.height + handle.frame.height - 320) < 1)
                 let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
                                                 capture: context.pointerCapture, focusChain: context.focusChain)
                 context.focusChain.focus(field)

@@ -161,7 +161,7 @@ struct TextAreaStory: View {
     var body: some View {
         StorySection("Resizable text area", "The container controls height; the text field controls its own scrolling.") {
             ResizableTextArea("Write a note…", text: $text, minHeight: 90, maxHeight: 320, disabled: !options.isEnabled)
-                .frame(width: 520)
+                .frame(maxWidth: 520)
             Text("\(text.characterCount) characters").font(.caption).foregroundColor(.onSurfaceMuted)
         }
     }

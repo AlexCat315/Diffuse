@@ -43,7 +43,13 @@ Gallery 的操作栏、文档头和状态信息会换行，控件采用带完整
 
 macOS DevTools 镜像验收：Gallery 1280×820 指针、720×820 深色混合、390×820 触摸 200%；查询字段真实 `textField` 角色，切换到普通文本，输入并显式读取内容，检查换行、边距、状态栏和主题。生产 `EditorApp --script-editor-demo` 的 1280×720 窗口也通过 `input-ui` 替换内容、`query_ui_nodes` 显式读值、Cmd-Z 恢复，再切换明暗主题与定位首行；`capture-ui --settle-ms 400` 实际检查了平整底色、行号、语法颜色、当前行和 caret。所有操作都通过项目 DevTools 执行。
 
-Resize grip 的触摸目标与键盘/辅助功能等效入口尚需完善；这不等于编辑器全部功能完成。snippet tab-stop 与超长单行分段布局仍见下方边界。
+### 调整编辑区高度
+
+`ResizableEditor`、`ResizableTextArea` 和内联 `JsonField` 共用独立的高度调节区：触摸/混合输入高 44pt，指针高 28pt，细小的居中 grip 不占用文本命中区域。`resizeLabel`（JSON 为 `JsonFieldLabels.resize`）由调用方本地化，辅助功能暴露命名 slider，数值为实际正文视口高度；支持 increment/decrement/setValue。
+
+拖动下边缘调整高度，Escape 撤回本次拖动；键盘 Up/Down 减少/增加 16pt，Shift 或 Page Up/Down 为 64pt，Home/End 到达上下限，Tab 继续导航。指针聚焦不自动画键盘焦点框，键盘调节时显示焦点；高度变化后滚动容器会显露新的 grip 位置，普通滚轮仍可自由滚动。禁用、切换输入密度和卸载均释放拖动捕获；无效或过小的范围仍保证完整编辑区和命中区。
+
+`ResizableEditor` 的高度参数包含调节区；`ResizableTextArea` 的参数表示正文高度。两者保留临时高度、文本节点及草稿，不把拖动状态写入文档。`EditorHeightTests` 覆盖 108 组尺寸/字号/输入/主题组合及实际输入、辅助动作、禁用清理和滚动显露。DevTools 在 390×820 触摸 200% JSON、720×820 深色混合 TextArea、1280×820 指针 TextEditor 中执行拖动、Escape、键盘和显式读值，再检查镜像的留白、边界及焦点。snippet tab-stop 与超长单行分段布局仍见下方边界。
 
 ## 存储与边界
 
