@@ -27,4 +27,31 @@ final class InputSequenceTests: XCTestCase {
       XCTAssertThrowsError(try InputUI.loadEvents(raw))
     }
   }
+
+  func testShortcutsNormalizeLettersDigitsAndRejectUndeliverableKeys() throws {
+    let events = try InputUI.loadEvents("""
+      [{"kind":"keyDown","scancode":4,"modifiers":["cmd"]},
+       {"kind":"keyUp","scancode":29},
+       {"kind":"keyDown","scancode":30},
+       {"kind":"keyDown","key":"KeyZ","modifiers":["cmd","shift"]}]
+      """)
+    XCTAssertEqual(events.compactMap { $0["key"] as? String }, ["KeyA", "KeyZ", "Digit1", "KeyZ"])
+    XCTAssertEqual(events[0]["modifiers"] as? Int, 8)
+    XCTAssertEqual(events[3]["modifiers"] as? Int, 9)
+    for raw in ["[{\"kind\":\"keyDown\",\"key\":\"a\"}]",
+                "[{\"kind\":\"keyDown\",\"scancode\":500}]",
+                "[{\"kind\":\"keyDown\"}]"] {
+      XCTAssertThrowsError(try InputUI.loadEvents(raw))
+    }
+  }
+
+  func testCaptureSettlingIsOptionalAndBounded() throws {
+    XCTAssertEqual(try CaptureUI.settleMilliseconds(["9231", "out.jpg"]), 0)
+    XCTAssertEqual(try CaptureUI.settleMilliseconds(["9231", "out.jpg", "--settle-ms", "400"]), 400)
+    for args in [[], ["9231"], ["9231", "out.jpg", "--settle-ms", "-1"],
+                 ["9231", "out.jpg", "--settle-ms", "2001"],
+                 ["9231", "out.jpg", "--settle-ms", "NaN"]] {
+      XCTAssertThrowsError(try CaptureUI.settleMilliseconds(args))
+    }
+  }
 }

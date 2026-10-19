@@ -148,14 +148,17 @@ enum InputUI {
     else {
       throw ToolError.message("Input contains an unsupported kind, value or oversized string")
     }
-    return input.map(normalizeKeyEvent)
+    return try input.map(normalizeKeyEvent)
   }
 
-  private static func normalizeKeyEvent(_ event: [String: Any]) -> [String: Any] {
+  private static func normalizeKeyEvent(_ event: [String: Any]) throws -> [String: Any] {
     guard let kind = event["kind"] as? String, kind == "keyDown" || kind == "keyUp" else { return event }
     var result = event
     if result["key"] == nil, let scancode = result["scancode"] as? NSNumber {
       result["key"] = keyName(for: scancode.intValue)
+    }
+    guard let key = result["key"] as? String, (4...99).contains(where: { keyName(for: $0) == key }) else {
+      throw ToolError.message("Keyboard input requires a supported KeyboardEvent.code (for example KeyA, Enter or ArrowUp) or USB-HID scancode")
     }
     if let modifiers = result["modifiers"] as? [String] {
       var mask = 0
@@ -175,7 +178,14 @@ enum InputUI {
 
   private static func keyName(for scancode: Int) -> String? {
     switch scancode {
-    case 40, 88: return "Enter"
+    case 4...29: return "Key" + String(UnicodeScalar(65 + scancode - 4)!)
+    case 30...38: return "Digit\(scancode - 29)"
+    case 39: return "Digit0"
+    case 58...69: return "F\(scancode - 57)"
+    case 89...97: return "Numpad\(scancode - 88)"
+    case 98: return "Numpad0"
+    case 40: return "Enter"
+    case 88: return "NumpadEnter"
     case 41: return "Escape"
     case 42: return "Backspace"
     case 43: return "Tab"
@@ -188,6 +198,29 @@ enum InputUI {
     case 80: return "ArrowLeft"
     case 81: return "ArrowDown"
     case 82: return "ArrowUp"
+    case 45: return "Minus"
+    case 46: return "Equal"
+    case 47: return "BracketLeft"
+    case 48: return "BracketRight"
+    case 49: return "Backslash"
+    case 51: return "Semicolon"
+    case 52: return "Quote"
+    case 53: return "Backquote"
+    case 54: return "Comma"
+    case 55: return "Period"
+    case 56: return "Slash"
+    case 57: return "CapsLock"
+    case 70: return "PrintScreen"
+    case 71: return "ScrollLock"
+    case 72: return "Pause"
+    case 73: return "Insert"
+    case 76: return "Delete"
+    case 83: return "NumLock"
+    case 84: return "NumpadDivide"
+    case 85: return "NumpadMultiply"
+    case 86: return "NumpadSubtract"
+    case 87: return "NumpadAdd"
+    case 99: return "NumpadDecimal"
     default: return nil
     }
   }

@@ -10,29 +10,39 @@ internal import ToolSupport
 /// list through its renderer's DevTools mirror. Also called in-process by the
 /// editor loop.
 enum CaptureUI {
-  static let usage = "guava-dev devtools capture-ui PORT OUTPUT.jpg"
+  static let usage = "guava-dev devtools capture-ui PORT OUTPUT.jpg [--settle-ms 0...2000]"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
       Terminal.info(usage)
       return
     }
-    guard arguments.count == 2, let port = UInt16(arguments[0]), port > 0 else {
+    let settle = try settleMilliseconds(arguments)
+    guard let port = UInt16(arguments[0]), port > 0 else {
       throw ToolError.message("Usage: \(usage)")
     }
-    try capture(port: port, destination: URL(fileURLWithPath: arguments[1]))
+    try capture(port: port, destination: URL(fileURLWithPath: arguments[1]), settleMilliseconds: settle)
   }
 
-  static func capture(port: UInt16, destination: URL) throws {
+  static func settleMilliseconds(_ arguments: [String]) throws -> Int {
+    if arguments.count == 2 { return 0 }
+    guard arguments.count == 4, arguments[2] == "--settle-ms",
+          let delay = Int(arguments[3]), (0...2000).contains(delay) else {
+      throw ToolError.message("Usage: \(usage)")
+    }
+    return delay
+  }
+
+  static func capture(port: UInt16, destination: URL, settleMilliseconds: Int = 0) throws {
     #if !canImport(Darwin)
       throw ToolError.message("DevTools capture requires macOS")
     #else
-      try AsyncBridge.wait { try await perform(port: port, destination: destination) }
+      try AsyncBridge.wait { try await perform(port: port, destination: destination, settleMilliseconds: settleMilliseconds) }
     #endif
   }
 
   #if canImport(Darwin)
-    private static func perform(port: UInt16, destination: URL) async throws {
+    private static func perform(port: UInt16, destination: URL, settleMilliseconds: Int) async throws {
       guard let endpoint = DevToolsSocket.loopback(port: port, token: true) else {
         throw ToolError.message("Invalid DevTools endpoint")
       }
@@ -47,6 +57,7 @@ enum CaptureUI {
       else {
         throw ToolError.message("DevTools mirror is unavailable")
       }
+      if settleMilliseconds > 0 { try await Task.sleep(for: .milliseconds(settleMilliseconds)) }
       try await connection.send([
         "type": "mirror.start", "id": 1, "payload": ["fps": 1, "quality": 1],
       ])
@@ -80,6 +91,7 @@ enum CaptureUI {
         "hello": hello, "capture": capture,
         "source": "selected-renderer offscreen replay of the actual window draw list",
         "captureIncludesCompositor": false,
+        "settleMilliseconds": settleMilliseconds,
       ]
       try JSON.write(
         report, to: destination.deletingPathExtension().appendingPathExtension("json"), pretty: true

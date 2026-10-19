@@ -255,6 +255,18 @@ target before moving outside its bounds. Input acknowledgements confirm delivery
 always query the resulting value and inspect a fresh mirror image to verify it.
 
 Input fields keep their values lazy. Ordinary node discovery does not read them.
+Keyboard events use browser `KeyboardEvent.code`, for example
+`{"kind":"keyDown","key":"KeyA","modifiers":["cmd"]}`. Numeric USB-HID
+`scancode` is also accepted by the CLI, including letters and digits. Unsupported
+or missing key codes fail before delivery instead of reporting a successful
+sequence whose shortcut was ignored.
+
+For modal and menu entrance animations, use
+`capture-ui PORT OUTPUT.jpg --settle-ms 400`. The optional delay is bounded to
+0–2000 ms and recorded in the capture's JSON sidecar. It lets the host advance
+its animations before the mirror starts; it is a sampling delay, not an assertion
+that an async operation has completed. Query the expected state as well.
+
 After locating the actual `textField` node (rather than a debug-name wrapper),
 explicitly request its current draft/value through the same AI query:
 

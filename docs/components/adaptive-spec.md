@@ -524,6 +524,8 @@ guava showcase gallery --android --component NAME
 
 拖拽序列可插入 `{"kind":"wait","milliseconds":100}`，在同一连接中保留捕获并等待真实重组/布局/绘制；单次 ≤2000ms、合计 ≤10000ms。先在目标内移动越过识别阈值，再拖出边界。touch surface 使用组件实际的统一输入分发，覆盖下拉/滑动/拖动；系统 IME 与设备适配器仍需真机验收。
 
+键盘 `key` 使用 `KeyboardEvent.code`（如 `KeyA`，不是 `a`）；CLI 也支持 USB-HID `scancode`，包含字母、数字与常用导航键，无效键在发送前报错。浮层进入动画后可用 `capture-ui PORT OUTPUT.jpg --settle-ms 400` 再取样；等待限于 0–2000ms 并写入 JSON 侧录，不代替状态断言。`InputSequenceTests` 验证快捷键转换、拒绝无法投递的键与等待边界。
+
 ### 4.3 自动化
 
 | 范围 | 入口 |
