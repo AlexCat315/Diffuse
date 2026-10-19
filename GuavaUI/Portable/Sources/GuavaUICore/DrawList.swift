@@ -81,6 +81,10 @@ public final class DrawList {
 
     /// Stack of clip rectangles applied via `pushClip` / `popClip`.
     private var clipStack: [UIRect] = []
+    /// Rounded content masks applied to geometry on the CPU (`pushMask`).
+    private var masks: [UIRoundedRect] = []
+    /// Outlines for `masks`, tessellated once per push.
+    private var maskOutlines: [[(x: Float, y: Float)]] = []
     public private(set) var viewportBounds: UIRect?
     /// Backdrop awaiting the next emitted primitive. Consumed by
     /// `recordIndices`, which also starts a fresh batch for it.
@@ -98,6 +102,8 @@ public final class DrawList {
         batches.removeAll(keepingCapacity: true)
         resources.reset()
         clipStack.removeAll(keepingCapacity: true)
+        masks.removeAll(keepingCapacity: true)
+        maskOutlines.removeAll(keepingCapacity: true)
         pendingBackdrop = nil
         viewportBounds = nil
         reveal = nil
@@ -149,6 +155,34 @@ public final class DrawList {
 
     public var currentClip: UIRect? { clipStack.last }
 
+    /// Push a container clip: its scissor and, when rounded, its content mask.
+    public func pushClip(_ clip: UIClip) {
+        pushClip(clip.rect)
+        if let mask = clip.mask { pushMask(mask) }
+    }
+
+    public func popClip(_ clip: UIClip) {
+        if clip.mask != nil { popMask() }
+        popClip()
+    }
+
+    /// Cut subsequent geometry to a rounded rectangle. Scissors stay
+    /// rectangular; triangles reaching outside the mask's straight interior
+    /// are clipped against its outline, so rounded containers keep children
+    /// inside their corners on every backend.
+    public func pushMask(_ mask: UIRoundedRect) {
+        guard mask.radius > 0 else { masks.append(mask); maskOutlines.append([]); return }
+        masks.append(mask)
+        maskOutlines.append(mask.outline(segments: cornerSegmentCount(for: mask.radius)))
+    }
+
+    public func popMask() {
+        guard !masks.isEmpty else { return }
+        masks.removeLast(); maskOutlines.removeLast()
+    }
+
+    public var currentMasks: [UIRoundedRect] { masks }
+
     /// Apply a container's alpha to descendant geometry, including cached
     /// child layers. Local painters already apply their own node's opacity.
     public func multiplyOpacity(fromVertexIndex start: Int, by opacity: Float) {
@@ -182,6 +216,8 @@ public final class DrawList {
         self.batches = batches
         self.resources = resources
         clipStack.removeAll(keepingCapacity: true)
+        masks.removeAll(keepingCapacity: true)
+        maskOutlines.removeAll(keepingCapacity: true)
         viewportBounds = nil
         reveal = nil
     }
@@ -204,6 +240,34 @@ public final class DrawList {
     public func append(_ other: DrawList,
                 vertexTranslationX: Float,
                 vertexTranslationY: Float) {
+        let firstBatch = batches.count
+        appendUnmasked(other, vertexTranslationX: vertexTranslationX, vertexTranslationY: vertexTranslationY)
+        // Cached layers and scaled painters reach the frame through here, so
+        // an enclosing rounded container still cuts their corners.
+        if masks.contains(where: { $0.radius > 0 }) { maskBatches(from: firstBatch) }
+    }
+
+    /// Re-index appended batches after clipping them to the active masks.
+    private func maskBatches(from first: Int) {
+        guard first < batches.count else { return }
+        let indexStart = Int(batches[first].indexOffset)
+        let original = Array(indices[indexStart...])
+        indices.removeSubrange(indexStart...)
+        var offset = UInt32(indexStart)
+        for batch in first..<batches.count {
+            let local = Int(batches[batch].indexOffset) - indexStart
+            let before = UInt32(indices.count)
+            indices.append(contentsOf: original[local..<(local + Int(batches[batch].indexCount))])
+            let count = applyMasks(from: before, count: batches[batch].indexCount)
+            batches[batch].indexOffset = offset
+            batches[batch].indexCount = count
+            offset += count
+        }
+    }
+
+    private func appendUnmasked(_ other: DrawList,
+                                vertexTranslationX: Float,
+                                vertexTranslationY: Float) {
         resources.append(other.resources)
         // A reveal describes the whole frame, so it travels with the geometry
         // into the frame list even when the node that raised it was recorded
@@ -598,6 +662,8 @@ public final class DrawList {
     /// offscreen pass between whole batches, so the frosted fill has to start
     /// one rather than ride along with the shadow or container behind it.
     private func recordIndices(at baseIndex: UInt32, count: UInt32, textureID: TextureID) {
+        let count = masks.contains(where: { $0.radius > 0 }) ? applyMasks(from: baseIndex, count: count) : count
+        guard count > 0 else { pendingBackdrop = nil; return }
         let scissor = clipStack.last
         let backdrop = pendingBackdrop
         pendingBackdrop = nil
@@ -617,6 +683,41 @@ public final class DrawList {
                 backdrop: backdrop
             ))
         }
+    }
+
+    /// Clip the triangles just emitted (`baseIndex..<baseIndex+count`) to the
+    /// active rounded masks and return the new index count. Triangles inside
+    /// every mask's straight interior are kept untouched, so only geometry
+    /// near a rounded edge pays for clipping.
+    private func applyMasks(from baseIndex: UInt32, count: UInt32) -> UInt32 {
+        let start = Int(baseIndex), end = start + Int(count)
+        let active = masks.indices.filter { masks[$0].radius > 0 }
+        let emitted = Array(indices[start..<end])
+        var kept: [UInt32] = []
+        kept.reserveCapacity(emitted.count)
+        var changed = false
+        for triangle in stride(from: 0, to: emitted.count - 2, by: 3) {
+            let ids = [emitted[triangle], emitted[triangle + 1], emitted[triangle + 2]]
+            let corners = ids.map { vertices[Int($0)] }
+            let xs = corners.map(\.posX), ys = corners.map(\.posY)
+            let bounds = UIRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+            if active.allSatisfy({ masks[$0].contains(bounds) }) {
+                kept.append(contentsOf: ids)
+                continue
+            }
+            changed = true
+            let polygon = RoundedClipper.clip(corners, against: active.map { maskOutlines[$0] })
+            guard polygon.count >= 3 else { continue }
+            let first = UInt32(vertices.count)
+            vertices.append(contentsOf: polygon)
+            for fan in 1..<(polygon.count - 1) {
+                kept.append(contentsOf: [first, first + UInt32(fan), first + UInt32(fan + 1)])
+            }
+        }
+        guard changed else { return count }
+        indices.removeSubrange(start..<end)
+        indices.append(contentsOf: kept)
+        return UInt32(kept.count)
     }
 
     private func emitRoundedRectGeometry(rect: UIRect, radius r: Float, color packed: UInt32) {

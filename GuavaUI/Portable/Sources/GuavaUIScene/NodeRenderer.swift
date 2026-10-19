@@ -105,7 +105,11 @@ public struct NodeRenderer {
             }
         }
 
-        // 5. Custom content (Text/Image/etc).
+        // 5. Custom content (Text/Image/etc). A rounded clipping container
+        //    keeps it and its children inside the inner rounded edge.
+        let mask = contentMask(node, x: absX, y: absY, width: width, height: height,
+                               radius: radius, borderWidth: borderWidth)
+        if let mask { list.pushMask(mask) }
         if let draw = node.draw {
             paintScaled(draw, into: list, origin: CGPoint(x: Double(absX), y: Double(absY)), scale: scale)
         }
@@ -124,6 +128,7 @@ public struct NodeRenderer {
                 renderNode(child, list: list, placed: content)
             }
         }
+        if mask != nil { list.popMask() }
 
         // 7. Overlay (scrollbars, focus rings drawn above content).
         list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)

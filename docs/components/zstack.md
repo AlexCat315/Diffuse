@@ -67,6 +67,7 @@ Box {}.frame(width: 150, height: 72)
 - 容器尺寸 = 最大子视图尺寸；子视图不会被隐式拉伸。
 - 子视图按 available proposal 测量；需要填满容器时显式 `.frame(maxWidth: .infinity, maxHeight: .infinity)`。
 - 不裁剪溢出：子视图大于容器时继续绘制；需要裁剪时调用方加 `.clipped()`。
+- 圆角裁剪：带 `cornerRadius` 的 `.clipped()` 容器把内容和子视图裁到边框内侧的圆角（矩形 inset 边框宽度，半径同步减去边框），子视图的方形填充不会溢出圆角或压住边框。GPU scissor 仍是矩形，触及圆角区的三角形在 CPU 端按圆角多边形精确裁剪（位置、UV、颜色线性插值），所有后端一致；见 `RoundedClipTests`。
 - 对齐只影响子视图在容器 bounds 内的位置，不改变测量结果。
 - RTL 下 `.leading` / `.trailing` 按逻辑边解析；子视图自己的 `layoutDirection` 决定偏移方向。
 - `.overlay` 的 base 决定尺寸；overlay 的尺寸不改变 base 或父级布局。

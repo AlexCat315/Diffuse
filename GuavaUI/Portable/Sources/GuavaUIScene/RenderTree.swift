@@ -59,7 +59,7 @@ public final class RenderObject {
     /// Parent clip stack snapshot at last record. Cache is only valid when
     /// the current parent clip stack equals this snapshot, otherwise scissor
     /// rects baked into `cachedLayerList.batches` are stale.
-    public var lastClipStack: [UIRect] = []
+    public var lastClipStack: [UIClip] = []
 
     init(node: Node) {
         self.node = node

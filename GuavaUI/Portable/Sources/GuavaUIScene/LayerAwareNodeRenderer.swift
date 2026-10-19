@@ -49,7 +49,7 @@ public final class LayerAwareNodeRenderer {
     private func compose(_ obj: RenderObject,
                          into frame: DrawList,
                          placed: Affine2D,
-                         parentClipStack: [UIRect]) {
+                         parentClipStack: [UIClip]) {
         guard let node = obj.node, node.isLayoutVisible else { return }
         let f = node.frame
         let own = node.placementStep(scrolling: .zero).followed(by: placed)
@@ -92,7 +92,8 @@ public final class LayerAwareNodeRenderer {
                    !node.clipsToBounds,
                    own.a == obj.lastPlacement?.a,
                    own.shadowScale == obj.lastPlacement?.shadowScale,
-                   let cachedPlacement = obj.lastPlacement {
+                   let cachedPlacement = obj.lastPlacement,
+                   !Self.crossesRoundedCorner(obj.cachedPaintBounds, from: cachedPlacement, to: own, clips: parentClipStack) {
                     frame.append(
                         cached,
                         vertexTranslationX: own.e - cachedPlacement.e,
@@ -130,7 +131,7 @@ public final class LayerAwareNodeRenderer {
             layerList.pixelScale = frame.pixelScale
             layerList.setViewportBounds(frame.viewportBounds)
             // Push the parent clip stack so nested clips intersect properly.
-            for rect in parentClipStack { layerList.pushClip(rect) }
+            for clip in parentClipStack { layerList.pushClip(clip) }
             recordSelfAndDescendants(
                 obj,
                 node: node,
@@ -138,7 +139,7 @@ public final class LayerAwareNodeRenderer {
                 placed: placed,
                 clipStack: parentClipStack
             )
-            for _ in parentClipStack { layerList.popClip() }
+            for clip in parentClipStack.reversed() { layerList.popClip(clip) }
             obj.cachedLayerList = layerList
             obj.cachedPaintBounds = obj.children.isEmpty ? RenderCulling.bounds(of: layerList) : nil
             obj.lastPlacement = own
@@ -171,7 +172,7 @@ public final class LayerAwareNodeRenderer {
                                           node: Node,
                                           into list: DrawList,
                                           placed: Affine2D,
-                                          clipStack: [UIRect]) {
+                                          clipStack: [UIClip]) {
         guard node.isLayoutVisible else { return }
         let firstVertex = list.vertices.count
         let own = node.placementStep(scrolling: .zero).followed(by: placed)
@@ -208,6 +209,9 @@ public final class LayerAwareNodeRenderer {
                    radius: radius, borderWidth: borderWidth)
         emitBackground(node, into: list, x: originX, y: originY, w: width, h: height,
                        radius: radius, borderWidth: borderWidth)
+        let mask = contentMask(node, x: originX, y: originY, width: width, height: height,
+                               radius: radius, borderWidth: borderWidth)
+        if let mask { list.pushMask(mask) }
         if let draw = node.draw {
             paintScaled(draw, into: list, origin: CGPoint(x: Double(originX), y: Double(originY)), scale: scale)
         }
@@ -216,7 +220,7 @@ public final class LayerAwareNodeRenderer {
         // by -contentOffset and then scaled. The offset stays fractional
         // throughout motion and at rest.
         let content = node.placementStep(scrolling: node.contentOffset).followed(by: placed)
-        let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack
+        let childClipStack: [UIClip] = clipped ? clipStack + [UIClip(clipRect!, mask: mask)] : clipStack
         let children = node.childrenMayNeedZSort ? renderOrderedChildren(of: obj) : obj.children
         let descendantStart = list.vertices.count
         for child in children {
@@ -238,6 +242,7 @@ public final class LayerAwareNodeRenderer {
                 )
             }
         }
+        if mask != nil { list.popMask() }
 
         list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)
         if let overlay = node.overlayDraw {
@@ -248,6 +253,17 @@ public final class LayerAwareNodeRenderer {
         if clipped {
             list.popClip()
         }
+    }
+
+    /// A cached leaf was clipped where it was recorded. If it touched a rounded
+    /// corner there, or would touch one after moving, re-record it instead of
+    /// translating geometry that was cut for the old position.
+    private static func crossesRoundedCorner(_ bounds: UIRect?, from old: Affine2D, to new: Affine2D, clips: [UIClip]) -> Bool {
+        let masks = clips.compactMap(\.mask)
+        guard !masks.isEmpty else { return false }
+        guard let bounds else { return true }
+        let moved = UIRect(x: bounds.x + new.e - old.e, y: bounds.y + new.f - old.f, width: bounds.width, height: bounds.height)
+        return masks.contains { $0.touchesCorner(bounds) || $0.touchesCorner(moved) }
     }
 
     // MARK: - Painter helpers (mirror NodeRenderer.swift)
