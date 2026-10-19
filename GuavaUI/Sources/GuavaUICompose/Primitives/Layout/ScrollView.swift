@@ -148,7 +148,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 onGeometryChange: ((ScrollGeometry) -> Void)? = nil,
                 accessibilityLabel: String? = nil,
                 scrollRequest: ScrollRequest? = nil,
-                 content: () -> Content) {
+                @ViewBuilder content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
         self.scrollbarGutter = scrollbarGutter

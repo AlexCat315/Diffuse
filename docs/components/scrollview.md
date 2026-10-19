@@ -1,5 +1,7 @@
 # ScrollView
 
+内容闭包使用 `@ViewBuilder`，条件空态/内容、可选区段及子视图集合与其他容器采用同一语法；内容布局由 `Column`/`Box` 明确声明。`ScrollViewInputTests.contentBuilder` 覆盖空态/非空分支，生产 Editor 的条件诊断面板构建通过。
+
 可裁剪的纵向、横向或双轴滚动容器。内容尺寸由真实布局测量；普通 ScrollView 不会自动把大量内容变成虚拟列表。
 
 ```swift

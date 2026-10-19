@@ -583,6 +583,8 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 JsonField 紧凑展开已补齐：Gallery 去除 520pt 固定宽度，展开入口在 390pt / 200% 字号下可达；compact 全高编辑器与宽屏居中编辑器共用草稿、历史与 Portal，标题保留全文语义，验证区及全宽堆叠操作不进入编辑滚动。`JsonEditorTests` 验证三档宽度、两档字号、三种输入、主题/RTL、安全区、长文案、窗口变化及实际提交/取消/焦点；`JsonFieldTests` / `EditorInteractionTests` 覆盖原有事务。DevTools 三档真实输入均提交 `{"value":42}`，无效草稿禁用 Apply，Escape 不改提交值；等待动画后的镜像已检查全高布局、底部可达性与错误换行。详见 [JsonField](jsonfield.md#acceptance)。
 
+生产编辑器验收补齐了 ScrollView 的 `@ViewBuilder` 内容入口：条件空态/内容、可选区段与集合可正常编译；`ScrollViewInputTests.contentBuilder` 覆盖空/非空内容与有限几何，生产 `EditorApp` 构建通过。该修复不改变滚动与布局策略，内容排列仍由 Column/Box 明确声明。
+
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 

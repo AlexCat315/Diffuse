@@ -5,6 +5,28 @@ import GuavaUIRuntime
 
 @Suite("ScrollView input", .serialized)
 struct ScrollViewInputTests: GuavaUIComposeSerializedSuite {
+    @Test("Scroll content accepts conditional branches and repeated children", arguments: [false, true])
+    func contentBuilder(empty: Bool) throws { try GlobalTestLock.locked {
+        let old = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = old }
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: ScrollView(.vertical) {
+            if empty {
+                AnyView(Text("Empty document"))
+            } else {
+                AnyView(Column {
+                    (0..<3).map { AnyView(Text("Section \($0)").frame(height: 100)) }
+                })
+            }
+        }.frame(width: 200, height: 120))
+        graph.computeLayout(width: 200, height: 120)
+        let labels = nodes(graph.tree.root).compactMap { $0.accessibility?.label }.filter { !$0.isEmpty }
+        #expect(labels.contains("Empty document") == empty)
+        #expect(labels.filter { $0.hasPrefix("Section ") }.count == (empty ? 0 : 3))
+        #expect(nodes(graph.tree.root).allSatisfy { $0.frame.width.isFinite && $0.frame.height.isFinite })
+        graph.install(root: EmptyView())
+    } }
+
     @Test("Global scrollbar hit lanes cannot capture adjacent controls or cross an ancestor clip", arguments: [false, true])
     func chromeBounds(clipped: Bool) throws {
         try GlobalTestLock.locked {
