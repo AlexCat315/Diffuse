@@ -10,7 +10,7 @@ import GuavaUIRuntime
 /// Scrolling locates rows in O(log n) and constructs only the viewport plus
 /// overscan. IDs must be unique and stable. Keep persistent row data in the
 /// model, since fully offscreen views are unmounted.
-public struct VariableVirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
+struct VariableVirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     private let data: Data
     private let id: KeyPath<Data.Element, ID>
     private let rowHeight: (Data.Element, Float, TextScaler) -> Float
@@ -24,7 +24,7 @@ public struct VariableVirtualStack<Data: RandomAccessCollection, ID: Hashable, C
     @State private var offset = CGPoint.zero
     @State private var previousTarget: Int?
 
-    public init(_ data: Data, id: KeyPath<Data.Element, ID>,
+    init(_ data: Data, id: KeyPath<Data.Element, ID>,
                 rowHeight: @escaping (Data.Element, Float, TextScaler) -> Float,
                 spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
                 @ViewBuilder content: @escaping (Data.Element) -> Content) {
@@ -37,7 +37,7 @@ public struct VariableVirtualStack<Data: RandomAccessCollection, ID: Hashable, C
         self.content = content
     }
 
-    public var body: some View {
+    var body: some View {
         SurfaceReader { surface in
             TextScalerReader { scaler in scrollView(scaler: scaler, gutter: ScrollView<EmptyView>.stableGutterWidth(on: surface)) }
         }

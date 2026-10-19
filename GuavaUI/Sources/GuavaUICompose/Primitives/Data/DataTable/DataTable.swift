@@ -99,7 +99,7 @@ public struct DataTable<Record: Sendable, ID: Hashable & Sendable>: View {
             reveal(row: row, column: columns.firstIndex { $0.id == options.navigation.columnID })
         }
         let geometry = geometry
-        let rows = VirtualStack<[Int], Int, EmptyView>.visibleRange(count: model.count, rowStride: options.layout.rowHeight,
+        let rows = FixedVirtualStack<[Int], Int, EmptyView>.visibleRange(count: model.count, rowStride: options.layout.rowHeight,
             offset: Float(session.offset.y), height: Float(session.viewport.size.height), overscan: 3)
         // Empty tables have no row scroller to publish a viewport. Their
         // headers still use the allocated width rather than an empty window.

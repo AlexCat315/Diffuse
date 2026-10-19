@@ -175,7 +175,6 @@ public extension GalleryPage {
         case .viewThatFits: AnyView(ViewThatFitsStory())
         case .dragAndDrop: AnyView(DragAndDropStory())
         case .tree: AnyView(TreeStory(options: options))
-        case .virtualList: AnyView(VirtualListStory())
         case .virtualStack: AnyView(VirtualStackStory())
         case .chart: AnyView(ChartStory())
         case .icon: AnyView(IconStory(options: options))

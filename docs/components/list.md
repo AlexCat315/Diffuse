@@ -167,9 +167,9 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - **指针**：down + up 在同一行内 → 写 `selection.wrappedValue = id`
 - **键盘**：↑ / ↓ 移动选择，Home / End 到首尾，Return / keypad Enter 选择当前行
 - **滚动**：外层 `ScrollView(.vertical)`，wheel 自动支持；只挂载视口附近的行，用占位高度保留完整滚动范围。
-- **虚拟化**：`List` 内部使用 `VirtualStack`；`VirtualStack(data, id: \.id, rowHeight: 30, scrollToIndex: target)` 和 `VirtualList(data, id: \.id, rowHeight: 30)` 可单独使用，默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。
+- **虚拟化**：`List` 内部使用 `VirtualStack`；`VirtualStack(data, id: \.id, rowHeight: 30, scrollToIndex: target)` 可单独使用（闭包 `rowHeight` 为可变行高形态），默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。
 - **调用方的尺寸约束生效**：`List` 最外层是键盘 host，所以 `.frame`/`.flex` 落在它上面，内部滚动容器取剩余高度并裁切。缺少这条时滚动容器会按自身内容撑高，行会画到容器外面去。
-- **`scrollToIndex` 首次布局不生效**：第一帧还没有视口高度，此时做 reveal 会多滚一行并把这次请求消费掉，所以本来可见的目标也会把列表滚过头。`VariableVirtualStack` 用同一条规则。
+- **`scrollToIndex` 首次布局不生效**：第一帧还没有视口高度，此时做 reveal 会多滚一行并把这次请求消费掉，所以本来可见的目标也会把列表滚过头。可变行高形态用同一条规则。
 - **多选**：`List(selection: Binding<Set<ID>>)`；单选与多选共用同一实现、行 host 与键盘路径。多选行仍由同一个 `_ListRowHost` 处理点击，modifier 由指针事件传入。
 - **sticky 区段**：`SectionedList(stickyHeaders: true)` 根据真实滚动 offset 计算当前区段；标题只在原行滚出顶部后接替，下一标题进入标题高度范围时上推它。计算复用虚拟化的固定 `rowHeight + rowSpacing`，因此触摸行高、字号缩放和 `scrollToIndex` 显露都得到同一条几何。固定副本不参与命中与语义，滚动仍由同一个 `ScrollView` 接收。
 - **重排**：`ReorderableList` 在每行尾部提供 44pt handle；指针拖动只由 handle 的捕获事务驱动，放置线覆盖显示而不改变行几何，释放后一次回调；Escape 取消、方向键与辅助功能 increment/decrement 走同一 `onMove`。顺序属于调用方，组件不持久化。
@@ -227,7 +227,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 
 ## 响应式与输入密度
 
-List 先用 `TextScaler` 缩放 authored `rowHeight` 与 `rowSpacing`，再在 touch surface 上把行高提升至至少 44pt。行 host、VirtualStack 的窗口化与滚动 extent 使用同一高度；返回 pointer 后仅移除触摸下限，字号缩放仍生效。不要在调用方预先缩放这两个参数。通用 VirtualList/VirtualStack 不假定每行可交互，仍使用调用方的实际高度。touch-only surface 不展示行 hover。
+List 先用 `TextScaler` 缩放 authored `rowHeight` 与 `rowSpacing`，再在 touch surface 上把行高提升至至少 44pt。行 host、VirtualStack 的窗口化与滚动 extent 使用同一高度；返回 pointer 后仅移除触摸下限，字号缩放仍生效。不要在调用方预先缩放这两个参数。通用 VirtualStack 不假定每行可交互，仍使用调用方的实际高度。touch-only surface 不展示行 hover。
 
 `TextScaleRowTests.collectionGeometry` 覆盖 390/720/1280pt、light/dark、100%/125%/200% 字号与输入切换，验证缩放一次、行间距、窗口化及状态保留。
 

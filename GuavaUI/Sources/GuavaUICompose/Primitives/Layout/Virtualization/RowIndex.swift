@@ -95,7 +95,7 @@ struct VariableRowIndex<ID: Hashable> {
             positions.reserveCapacity(ids.count)
             for (index, id) in ids.enumerated() {
                 precondition(positions.updateValue(index, forKey: id) == nil,
-                             "VariableVirtualStack requires unique row IDs")
+                             "VirtualStack requires unique row IDs")
             }
             self.ids = ids
             sums.rebuild(nextHeights.map { $0 + nextSpacing })

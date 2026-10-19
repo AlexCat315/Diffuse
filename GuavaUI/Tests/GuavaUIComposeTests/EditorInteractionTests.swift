@@ -367,7 +367,7 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
     @Test("virtual list mounts a bounded row set and keeps the full scroll extent")
     func virtualRows() throws { try withRig { rig in
         let graph = rig.graph
-        graph.install(root: VirtualList((0..<10000).map(Item.init), id: \.id, rowHeight: 30) { item in
+        graph.install(root: VirtualStack((0..<10000).map(Item.init), id: \.id, rowHeight: 30) { item in
             Text("Row \(item.id)").debugName("virtual-row-\(item.id)")
         }.frame(height: 300))
         for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: 240, height: 300) }

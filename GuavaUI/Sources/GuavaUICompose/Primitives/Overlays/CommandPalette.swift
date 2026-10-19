@@ -282,7 +282,7 @@ public struct CommandPalette: View {
             .padding(horizontal: 6)
             .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
         } else {
-            VariableVirtualStack(entries, id: \.id, rowHeight: { entry, _, _ in
+            VirtualStack(entries, id: \.id, rowHeight: { entry, _, _ in
                 switch entry {
                 case .header: return headerHeight
                 case .item: return itemHeight

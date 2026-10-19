@@ -101,7 +101,7 @@ TextField 与 CodeEditor 的内部视口采用同样的有溢出边界隔离；�
 
 内容偏移改变绘制/命中几何，稳定内容不需要每帧重跑 Yoga。保留渲染器可复用文字等叶子的绘制缓存；本轮新增实际缓存顶点边界与视口/裁剪相交判断，不再把完全不可见的缓存叶子反复追加到帧列表。自定义 painter 超出 Node.frame 的实际绘制仍被保留；有明确裁剪边界的离屏子树可整体跳过。
 
-这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；已知可变行高可使用 [VariableVirtualStack](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VariableVirtualStackTests.swift)，未知高度的自动测量仍缺失。此前版本的原生绘制计时方法和数值见 [滚动与布局历史验证记录](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/ButtonScrollViewTests.swift)。
+这属于绘制剔除，并不减少普通 ScrollView 的节点数或首次构建成本。大集合应使用 VirtualStack / List / Tree / DataTable 对应的窗口化协议；已知可变行高可使用 [VirtualStack 的可变行高形态](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VirtualStackVariableRowsTests.swift)，未知高度的自动测量仍缺失。此前版本的原生绘制计时方法和数值见 [滚动与布局历史验证记录](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/ButtonScrollViewTests.swift)。
 
 ## 辅助功能
 

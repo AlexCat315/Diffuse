@@ -70,16 +70,6 @@ struct TreeStory: View {
     }
 }
 
-struct VirtualListStory: View {
-    var body: some View {
-        StorySection("10,000 rows", "Only a small window is materialized; the scroll extent represents the complete collection.") {
-            VirtualList(Array(0..<10_000), id: \.self, rowHeight: 30) { row in
-                Text("Row \(row + 1)").font(.body).padding(horizontal: 8)
-            }.frame(height: 330)
-        }
-    }
-}
-
 struct VirtualStackStory: View {
     @State private var target = 0
     var body: some View {

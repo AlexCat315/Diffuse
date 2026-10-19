@@ -64,7 +64,7 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
             TextScalerReader { scaler in
                 let effectiveHeight = max(scaler.scale(rowHeight), surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
                 SelectionKeyHost(onKey: handleKey) {
-                    VirtualStack(data, id: id, rowHeight: effectiveHeight, spacing: scaler.scale(rowSpacing),
+                    FixedVirtualStack(data, id: id, rowHeight: effectiveHeight, spacing: scaler.scale(rowSpacing),
                                  scrollToIndex: (cursor ?? selection.first).flatMap(index(of:)),
                                  onScrollOffsetChange: nil, refresh: refresh) { element in
                         let selected = selection.contains(element[keyPath: id])

@@ -3,7 +3,8 @@ import GuavaUIRuntime
 
 /// Fixed-height rows are created only within the viewport plus overscan. Row
 /// identity survives scrolling; persistent row data belongs in the model.
-public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
+/// Public callers use `VirtualStack`; collections use the offset and refresh seams.
+struct FixedVirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     private let data: Data
     private let id: KeyPath<Data.Element, ID>
     private let rowHeight: Float
@@ -19,19 +20,11 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
     @State private var pull: CGFloat = 0
     @State private var refreshArmed = false
 
-    public init(_ data: Data, id: KeyPath<Data.Element, ID>, rowHeight: Float,
-                spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
-                @ViewBuilder content: @escaping (Data.Element) -> Content) {
-        self.init(data, id: id, rowHeight: rowHeight, spacing: spacing, overscan: overscan,
-                  scrollToIndex: scrollToIndex, onScrollOffsetChange: nil, content: content)
-    }
-
-    /// Internal seam for containers that need the live offset to pin content
-    /// (for example `SectionedList`'s sticky header). Not part of the public
-    /// virtualization contract.
+    /// `onScrollOffsetChange` lets containers pin content to the live offset
+    /// (for example `SectionedList`'s sticky header).
     init(_ data: Data, id: KeyPath<Data.Element, ID>, rowHeight: Float,
          spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
-         onScrollOffsetChange: ((CGPoint) -> Void)?,
+         onScrollOffsetChange: ((CGPoint) -> Void)? = nil,
          refresh: RefreshOptions? = nil,
          @ViewBuilder content: @escaping (Data.Element) -> Content) {
         self.data = data; self.id = id
@@ -42,7 +35,7 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
         self.content = content
     }
 
-    public var body: some View {
+    var body: some View {
         let stride = rowHeight + spacing
         let count = data.count
         // The first layout has no viewport yet. Revealing against a zero-height
@@ -118,7 +111,7 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
             .id(element[keyPath: id]))
     }
 
-    public static func visibleRange(count: Int, rowStride: Float, offset: Float,
+    static func visibleRange(count: Int, rowStride: Float, offset: Float,
                                     height: Float, overscan: Int) -> Range<Int> {
         let stride = max(1, rowStride)
         let first = max(0, min(count, Int(max(0, offset) / stride) - max(0, overscan)))

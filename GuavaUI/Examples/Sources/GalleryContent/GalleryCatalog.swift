@@ -4,7 +4,7 @@ import GuavaUIRuntime
 public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rangeSlider, rating, textField, textArea, textEditor
     case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
-    case list, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, web, avatar
+    case list, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualStack, chart, icon, image, web, avatar
     case menu, menuButton, contextMenu, popover, popconfirm, actionSheet, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, masonry, zStack, animation, theme, badge, alert, progress, empty
@@ -53,8 +53,7 @@ public enum GalleryCatalog {
         .init(.refreshableList, "RefreshableList", "Data", "Touch pull-to-refresh with threshold damping, an idle/frozen indicator and Cmd+R."),
         .init(.scrollbar, "Scrollbar", "Data", "A focusable slider thumb bound to a ScrollView offset."),
         .init(.tree, "Tree", "Data", "Hierarchy, expansion, selection and search with automatic expansion."),
-        .init(.virtualList, "VirtualList", "Data", "A fixed-height scroll window over ten thousand rows."),
-        .init(.virtualStack, "VirtualStack", "Data", "Viewport-driven materialization and scroll-to-index."),
+        .init(.virtualStack, "VirtualStack", "Data", "Fixed or variable row heights, viewport-driven materialization and scroll-to-index."),
         .init(.chart, "Chart", "Data", "Sparklines, bars, multiple series, thresholds and markers."),
         .init(.icon, "Icon", "Data", "Bundled SVG resources tinted by the current semantic theme."),
         .init(.avatar, "Avatar", "Data", "Asynchronous images, Unicode initials, stable theme colors and overlapping member groups."),

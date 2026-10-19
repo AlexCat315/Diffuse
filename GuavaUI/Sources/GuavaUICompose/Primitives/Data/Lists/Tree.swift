@@ -99,7 +99,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         }) {
         _TreeGhostContainer(dragCursorPos: activeDrag != nil ? session.dragCursorPos : nil,
                             rowHeight: layout.rowHeight) {
-        VirtualStack(entries, id: \.nodeKey, rowHeight: layout.rowHeight, spacing: layout.rowSpacing,
+        FixedVirtualStack(entries, id: \.nodeKey, rowHeight: layout.rowHeight, spacing: layout.rowSpacing,
                      scrollToIndex: entries.firstIndex { $0.nodeKey == options.selection.primaryKey.wrappedValue || $0.id == options.selection.primary.wrappedValue }) { entry in
             TreeGuideOverlayHost(rows: [TreeGuideRowSnapshot(depth: entry.depth,
                                   ancestorHasNextSiblings: entry.ancestorHasNextSiblings,

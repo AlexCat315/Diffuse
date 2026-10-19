@@ -87,7 +87,7 @@ public struct SectionedList<SectionID: Hashable, Item: Identifiable, RowContent:
                     let sticky = stickyHeader(in: entries, offset: scrollOffset,
                                               rowHeight: effectiveHeight, spacing: spacing)
                     SelectionKeyHost(onKey: handleKey) {
-                        VirtualStack(entries, id: \.id, rowHeight: effectiveHeight,
+                        FixedVirtualStack(entries, id: \.id, rowHeight: effectiveHeight,
                                      spacing: spacing,
                                      scrollToIndex: cursorIndex(in: entries),
                                      onScrollOffsetChange: { value in

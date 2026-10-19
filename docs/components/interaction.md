@@ -40,4 +40,4 @@ EntityRow(entity)
 
 ## 列表虚拟化
 
-`VirtualStack(data,id:rowHeight:)` 只挂载视口附近的固定高度行，用占位高度保留完整滚动范围，并支持 `scrollToIndex`。`List`、`Tree`、脚本导航和资源列表使用它。`VirtualList(data,id:rowHeight:)` 保留独立使用入口；两者默认在视口前后各多挂载 3 行，视口应有明确高度。
+`VirtualStack(data,id:rowHeight:)` 只挂载视口附近的固定高度行，用占位高度保留完整滚动范围，并支持 `scrollToIndex`。`List`、`Tree`、脚本导航和资源列表使用它。传入闭包 `rowHeight: { element, width, scaler in … }` 即为已知可变行高（缓存累计高度，O(log n) 定位）；两种形态默认在视口前后各多挂载 3 行，视口应有明确高度。

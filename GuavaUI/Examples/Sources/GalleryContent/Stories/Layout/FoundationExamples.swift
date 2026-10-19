@@ -97,7 +97,7 @@ struct LayoutFoundationExamples: View {
             }
             StorySection("Variable rows · 100,000 items", "Known row heights alternate between one and three lines. A cached cumulative index locates the viewport without scanning all rows during scrolling.") {
                 Button("Reveal item 50,001") { target = target == nil ? 50_000 : nil }.buttonStyle(.secondary)
-                VariableVirtualStack(0..<100_000, id: \.self, rowHeight: { index, _, scaler in
+                VirtualStack(0..<100_000, id: \.self, rowHeight: { index, _, scaler in
                     scaler.scale(index % 3 == 0 ? 84 : 36)
                 }, spacing: 6, scrollToIndex: target) { index in
                     Text(index % 3 == 0 ? "Item \(index + 1)\nA taller row\nwith three authored lines" : "Item \(index + 1)")

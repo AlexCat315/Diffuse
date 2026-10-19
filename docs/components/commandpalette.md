@@ -57,7 +57,7 @@ CommandPalette(isPresented: $open, items: items, footer: {
 
 ## Virtualization
 
-- 结果通过 `VariableVirtualStack` 渲染：
+- 结果通过可变行高的 `VirtualStack` 渲染：
   - 行高：header 24pt、item 40pt；触摸面下 header 36 / item ≥44
   - `overscan = 3`
   - `scrollToIndex = highlightedEntryIndex`，键盘移动后自动显露
@@ -71,7 +71,7 @@ CommandPalette(isPresented: $open, items: items, footer: {
 - 平板/桌面（surface 宽 ≥600）：Modal 640×560，`inset 72`，顶部放置并保留 72pt 窗口外边距；圆角完整可见。
 - compact（<600）：宽 `max(240, viewport − 16)`、高 `min(560, max(240, viewport − 16))`，`inset 8`，居中；结果区取剩余高度，仍使用同一虚拟化行预算。
 - 搜索行、footer 固定；结果区取剩余高度。
-- 行高不随结果数量变化；`VariableVirtualStack` 使用同一 `TextScaler` 测量。指针行高 40 / header 24；触摸面行高 ≥44 / header 36。
+- 行高不随结果数量变化；可变行高 `VirtualStack` 使用同一 `TextScaler` 测量。指针行高 40 / header 24；触摸面行高 ≥44 / header 36。
 - 软键盘出现后的结果区收缩仍由宿主 IME/安全区处理，组件不做猜测；compact 几何已不再使用固定 440。
 
 ## Tokens

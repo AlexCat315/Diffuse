@@ -93,7 +93,7 @@
 ### 1.2 虚拟化与大数据
 
 - 大集合（List/Tree/Table/DataTable/VirtualStack）必须使用窗口化协议，空间不足不改变虚拟化契约：List/Tree/Table/DataTable 先按 `TextScaler` 缩放 authored 行高，触摸面再应用 44pt 下限；窗口化 extent 与滚动范围使用同一高度，切回指针保留字号缩放并移除触摸下限。通用 VirtualStack 使用调用方传入的实际高度。
-- 已知可变行高用 `VariableVirtualStack`，显式 `rowHeight` 契约 `[已实现]`；未知高度自动测量属于 P2 长尾，当前需调用方提供高度。普通 `ScrollView` 不自动窗口化，长列表必须显式选择容器。
+- 已知可变行高用 `VirtualStack(…, rowHeight: { element, width, scaler in … })`，显式 `rowHeight` 契约 `[已实现]`；未知高度自动测量属于 P2 长尾，当前需调用方提供高度。普通 `ScrollView` 不自动窗口化，长列表必须显式选择容器。
 - 数据表列在窄宽下：`TableColumn.visibility` 声明必要列或自动列优先级；Table / DataTable 按实际宽度隐藏低优先列，提供横向滚动、显隐菜单及可选用户选择 binding。冻结列和活动编辑不参与隐藏，规则与超宽冻结区兜底见 [数据表](data-table.md#列优先级与可见性)。`[已实现]`
 - Grid 命名字段列使用同一 `ColumnVisibility`，隐藏后仍保留源行槽位与局部状态；内置显隐入口和 minimum 横向滚动，匿名 adaptive 卡片流保持原语义。`[已实现]`
 
@@ -385,7 +385,7 @@
 
 **CommandPalette**
 
-- 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×560；结果经 `VariableVirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "Recent" 分组置顶。`[已实现]`
+- 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×560；结果经可变行高 `VirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "Recent" 分组置顶。`[已实现]`
 - Footer：默认快捷键提示；调用方可通过 `CommandPalette(..., footer:)` 的 `@ViewBuilder` 完全替换，保留面板上方 1pt 分隔线、搜索/排序/最近使用/执行路径。`[已实现]`
 - 手机：compact 下宽 `viewport − 16`、高 `min(560, max(240, viewport − safeArea.bottom − 16))`，`inset 8` 居中；结果行触摸 ≥44pt、header 36pt，指针保持 40/24。`[已实现]`（几何与行高已完成；软键盘出现时宿主增加 `safeArea.bottom`，面板高度与结果区在同一帧收缩；真机 IME 仍按第 4 节验收）
 - 平板 / 桌面：640×560、顶部放置、键盘上下移动。`[已实现]`

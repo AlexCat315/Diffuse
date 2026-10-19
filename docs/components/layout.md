@@ -87,7 +87,7 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | 裁剪与滚动 | ScrollView / BoundedScrollView；测量真实内容，原生滚动直接跟随平台，支持稳定 gutter；自定义手势可显式使用惯性/回弹 |
 | 双面板与 IDE 工作区 | SplitView 与 Workspace；详见各自的约束与缺口 |
 | 层叠内容 | absolutePosition / zIndex 与 Portal 支持绘制层级；缺独立公共 ZStack/Overlay 布局容器 |
-| 大集合 | VariableVirtualStack 提供已知可变行高、稳定 ID 锚点及窗口化；仍缺未知高度估测和统一加载协议 |
+| 大集合 | VirtualStack 的闭包行高形态提供已知可变行高、稳定 ID 锚点及窗口化；仍缺未知高度估测和统一加载协议 |
 | 响应式候选布局 | LayoutThatFits 为同一组子视图选择候选 Layout；ContainerSizeReader 发布自身内容盒实测尺寸（容器查询，0.5pt 抗抖动阈值）；ViewThatFits 的 `wide:` / `compact:` 两套内容支持阈值或 intrinsic 选择，往返切换保留各自状态与节点；WidthClassReader 读取窗口级 compact/medium/expanded；默认容器阈值与 `UIEnvironment.Viewport.compactMaximumWidth` 一致 |
 | Grid | Grid/GridLayout 有 fixed/flexible/adaptive 列、测量行高及 RTL 对齐；Grid 具备命名字段列、优先级、显隐菜单和 minimum 横向滚动兜底；LazyGrid 有等宽列与已知固定/可变行高窗口化；仍缺 span、显式 intrinsic 轨道和二维窗口化 |
 | Masonry | 最短列放置、按宽度自动 1–2 列、列/项间距与 RTL；高度由子视图自然测量；不虚拟化。详见 [Masonry](masonry.md) |
@@ -95,7 +95,7 @@ Box(direction: .column, alignItems: .stretch) { EmptyView() }
 | 表单/属性布局 | Form / PropertyGrid 已有专门用途；不能代替通用约束或网格系统 |
 | 特殊布局 | layoutDirection 贯通 Flex、自定义布局和逻辑 padding；SafeArea 嵌套消费宿主提供的逻辑 insets；平台自动 insets、完整组件 RTL/双向文字、Anchor/约束布局仍缺 |
 
-LazyGrid 的 `.variable(...)` 提供每行未缩放逻辑高度（含最后不完整行），数量必须等于 `ceil(itemCount / columns)`。数据或列数改变时，调用方同步更新 authored 高度值；字号改变时组件自动缩放高度与行间距，不要预先乘 `TextScaler`。它没有 VariableVirtualStack 的内容宽度/TextScaler 高度回调，也不自动测量未知行高。
+LazyGrid 的 `.variable(...)` 提供每行未缩放逻辑高度（含最后不完整行），数量必须等于 `ceil(itemCount / columns)`。数据或列数改变时，调用方同步更新 authored 高度值；字号改变时组件自动缩放高度与行间距，不要预先乘 `TextScaler`。它没有 VirtualStack（闭包行高） 的内容宽度/TextScaler 高度回调，也不自动测量未知行高。
 
 测量与尺寸基础已先于新容器落地。已有 Yoga Flex 不必重新命名或重复包装；StackLayout 提供自然尺寸算法供候选布局组合，伸展/压缩仍用 Box/Row/Column。
 
@@ -148,7 +148,7 @@ SafeArea(.horizontal) { content }
 
 SafeArea 的 insets 由宿主提供，桌面默认零；它不推断操作系统刘海、软键盘或窗口 chrome。嵌套容器只消费尚未使用的边。显式 left/right 定位保持物理方向；leading/trailing padding 使用 Yoga start/end。方向一致不等于所有控件的图标、键盘和 bidi 文本已经验收。
 
-大集合详见 [可变行高窗口化](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VariableVirtualStackTests.swift)，候选算法详见 [响应式布局](standard.md)。画廊 `--component layout` 展示测量 Grid、自适应列、候选切换、RTL/insets、100K LazyGrid 和 100K 可变行高列表。普通 ScrollView 不因此自动窗口化。
+大集合详见 [可变行高窗口化](https://github.com/AlexCat315/GuavaStudio/blob/main/GuavaUI/Tests/GuavaUIComposeTests/VirtualStackVariableRowsTests.swift)，候选算法详见 [响应式布局](standard.md)。画廊 `--component layout` 展示测量 Grid、自适应列、候选切换、RTL/insets、100K LazyGrid 和 100K 可变行高列表。普通 ScrollView 不因此自动窗口化。
 
 ## 响应式与输入密度
 

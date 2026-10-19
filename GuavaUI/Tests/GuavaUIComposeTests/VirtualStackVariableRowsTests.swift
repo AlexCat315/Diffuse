@@ -4,7 +4,7 @@ import GuavaUIRuntime
 @testable import GuavaUICompose
 
 @Suite("Variable-height virtualization", .serialized)
-struct VariableVirtualStackTests: GuavaUIComposeSerializedSuite {
+struct VirtualStackVariableRowsTests: GuavaUIComposeSerializedSuite {
     @Test("prefix updates and offset lookup agree with uneven row extents")
     func prefixIndex() {
         var sums = VirtualRowSums([10, 30, 5, 50])
@@ -135,7 +135,7 @@ struct VariableVirtualStackTests: GuavaUIComposeSerializedSuite {
         let counters: Counters
 
         var body: some View {
-            VariableVirtualStack(data, id: \.id, rowHeight: { item, width, scaler in
+            VirtualStack(data, id: \.id, rowHeight: { item, width, scaler in
                 counters.measurements += 1
                 counters.width = width
                 return scaler.scale(item.height) * (width < 250 ? 2 : 1)
