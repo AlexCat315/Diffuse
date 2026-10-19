@@ -16,21 +16,34 @@ TextField(text: $source) { input in
     input.layout.wrapsLines = false
     input.codeEditing.showsLineNumbers = true
     input.codeEditing.indentationWidth = 4
-}.font(.mono).frame(width: 640, height: 400)
+}.textFieldStyle(.editor).font(.monospaced(size: 15)).lineHeight(24)
+    .frame(width: 640, height: 400)
 ```
 
 ## 编辑器外观
 
 `TextField` 是多行文本与代码编辑的统一入口，不存在独立的 `CodeEditor` 类型。代码行号、缩进、诊断、补全和语法颜色是可选能力，由 `codeEditing` 配置开启；关闭后就是普通软换行文本编辑器。Gallery 的 **Text Editor** 页用同一个字段演示两种模式。
 
-- 行号 gutter 默认透明，不画整块底色，也不画竖分隔线；行号靠自身列宽和右对齐与正文分开。需要底色时传 `codeEditing.lineNumberGutterColor`。
-- 当前行绘制贯穿编辑器宽度的低对比度 band，当前行号同步提亮，并有一圈不抢眼的 accent 边框；所有行、边框和 band 使用同一个 `resolvedLineHeight`，行号按文本 baseline 对齐。
-- 缩进参考线按 `codeEditing.indentationWidth` 的列宽绘制，tab 按同一宽度展开；只画当前可见且确实有缩进的行。
+- 行号 gutter 默认透明，不画整块底色，也不画竖分隔线；行号与正文使用同一字体和 baseline，右对齐，正文与行号末端间距至少 24pt（大字号时不少于一 em）。至少预留三位数字，9→10→100 行时正文起点不跳动；更大文档按实际位数增长。需要底色或颜色时传 `codeEditing.lineNumberGutterColor` / `lineNumberColor`。
+- 当前行使用贯穿编辑器宽度的低对比度中性色 band，当前行号同步提亮；不再画 accent 矩形描边。所有行和 band 使用同一个 `resolvedLineHeight`。
+- 缩进参考线在前一级缩进列的空白处绘制，避免贴住代码首字形；tab 与 spaces 共用列宽。相邻行及内部空行合并为连续 0.5pt 中性细线，不再每行留上下断口；横向滚动与正文使用同一坐标，只保留可见深度。软换行的续行回到正文起点，不画穿过续行单词的引导线。只检查可见行及有界缩进前缀，避免大文档扫描。
 - 括号匹配在光标所在或前一个字符上查找 pair，高亮两个括号；跳过字符串、行注释和块注释中的括号。匹配窗口限制在 caret 前后 64 KiB，避免大文档每帧扫描全文。
 - 开启行号时垂直内边距至少 8pt，首行/末行不再贴住输入框边缘。
 - 文档头（文件名、语言 badge、Code mode）和状态栏（Ln/Col、Spaces/Wrap、UTF-8）由调用方组合；字段本身只负责编辑表面。两者只用背景层级与留白区分，不画水平分隔线。
-- 外层容器负责圆角和裁剪，字段可用自定义 `TextFieldStyle` 去掉自己的边框，避免双层输入框。
+- 外层容器负责圆角和裁剪；`.textFieldStyle(.editor)` 使用统一 `surfaceSunken` 平面，去掉嵌套输入框边框。焦点由 caret、选区与代码当前行表达。该样式只负责表面，普通表单字段继续使用默认样式；字体与行距仍由调用方/主题声明，Gallery 和生产 ScriptCodeEditor 默认使用 15pt 等宽字体、24pt 行距。
 - `codeEditing.syntaxColorAtUTF8Offset` 是唯一语法颜色入口。Gallery Text Editor 默认用轻量 Swift lexer 给关键字、类型、字符串、数字和注释着色；超过 30 万 UTF-8 字节的压力样例会关闭高亮，生产脚本编辑器仍走 Tree-sitter/LSP。
+
+Gallery 的操作栏、文档头和状态信息会换行，控件采用带完整标签的 Checkbox；compact 代码预览软换行，宽屏代码保留横向浏览，普通文本一直软换行。代码/普通文本切换保留同一个输入节点、草稿与历史，不因展示模式重建编辑会话。
+
+## 编辑器视觉与交互验收
+
+参考 Zed 的同底色行号栏、低对比当前行、舒适字号/行距和克制语法配色，验收关注阅读层次而非复制窗口 chrome。`TextEditorAppearanceTests` 验证三位数范围内稳定的正文起点、行号与正文间距、明暗主题当前行、平面编辑样式及普通表单边框保持。`TextEditorLayoutTests` 覆盖 390/720/1280、100%/200%、明暗主题、触摸控件边界和实际键入后切换模式仍保留草稿；输入、长文档和 LSP UI 由既有测试继续覆盖。
+
+`TextIndentGuidesTests` 覆盖嵌套块、内部空行连续性、滚动窗口的空行上下文、tab、水平可见深度及软换行不压文字。DevTools 另外把 `AudioEngine.swift` 前 55 行载入临时生产编辑器，检查明暗主题的间距及连续引导线；长行样例横移 40pt 后正文和引导线共同移动，行号保持固定。测试临时缓冲区不改实际源码文件。
+
+macOS DevTools 镜像验收：Gallery 1280×820 指针、720×820 深色混合、390×820 触摸 200%；查询字段真实 `textField` 角色，切换到普通文本，输入并显式读取内容，检查换行、边距、状态栏和主题。生产 `EditorApp --script-editor-demo` 的 1280×720 窗口也通过 `input-ui` 替换内容、`query_ui_nodes` 显式读值、Cmd-Z 恢复，再切换明暗主题与定位首行；`capture-ui --settle-ms 400` 实际检查了平整底色、行号、语法颜色、当前行和 caret。所有操作都通过项目 DevTools 执行。
+
+Resize grip 的触摸目标与键盘/辅助功能等效入口尚需完善；这不等于编辑器全部功能完成。snippet tab-stop 与超长单行分段布局仍见下方边界。
 
 ## 存储与边界
 

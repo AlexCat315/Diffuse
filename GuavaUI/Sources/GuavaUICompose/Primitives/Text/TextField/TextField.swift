@@ -630,15 +630,6 @@ public struct TextField: View {
                                     width: frameWidth, height: clippedBottom - clippedTop),
                              color: theme.colors.stateLayerHover.multipliedAlpha(node.opacity * 0.7))
             }
-            let fullyVisible = top >= Float(origin.y)
-                && top + resolvedLineHeight <= Float(origin.y) + frameHeight
-            if fullyVisible {
-                list.addRoundedRectStroke(
-                    UIRect(x: Float(origin.x) + 2, y: top + 1,
-                           width: max(0, frameWidth - 4), height: max(0, resolvedLineHeight - 2)),
-                    radius: 3, width: 1,
-                    color: theme.colors.accent.multipliedAlpha(node.opacity * 0.42))
-            }
         }
 
         // Paint prepend / append slabs and inline prefix / suffix glyphs.
@@ -753,8 +744,9 @@ public struct TextField: View {
                               width: viewport.availableTextWidth, height: frameHeight)
         list.pushClip(textClip)
         if codeEditing.showsLineNumbers && self.layout.axis == .vertical {
-            drawIndentGuides(visibleLayout, source: current, textOriginX: fixedTextOriginX,
+            drawIndentGuides(visibleLayout, source: current, textOriginX: textOriginX,
                              textOriginY: textOriginY, lineHeight: resolvedLineHeight,
+                             visibleX: state.scroll.horizontal.offset..<(state.scroll.horizontal.offset + viewport.availableTextWidth),
                              node: node, env: env, font: resolvedFont, list: list)
             drawBracketMatches(visibleLayout, source: current,
                                caretIndex: state.selection.cursorIndex,
@@ -1069,13 +1061,16 @@ public struct TextField: View {
                                        theme: Theme) -> Float {
         guard codeEditing.showsLineNumbers, self.layout.axis == .vertical else { return 0 }
         let lineCount = text.wrappedValue.lineCount
-        let numberFont = Font.system(size: max(9, font.size - 2))
-        let numberLayout = env.cachedLayout(text: String(repeating: "8", count: String(lineCount).count),
-                                            font: numberFont,
+        let numberLayout = env.cachedLayout(text: String(repeating: "8", count: max(3, String(lineCount).count)),
+                                            font: font,
                                             lineHeight: lineHeight,
                                             maxWidth: .infinity,
                                             alignment: .trailing)
-        return numberLayout.totalWidth + theme.spacing.md
+        return numberLayout.totalWidth + lineNumberTextGap(font: font, theme: theme) + theme.spacing.lg
+    }
+
+    private func lineNumberTextGap(font: Font, theme: Theme) -> Float {
+        max(theme.spacing.xxl, font.size)
     }
 
     private func drawIndentGuides(_ layout: TextLayoutResult,
@@ -1083,6 +1078,7 @@ public struct TextField: View {
                                   textOriginX: Float,
                                   textOriginY: Float,
                                   lineHeight: Float,
+                                  visibleX: Range<Float>,
                                   node: Node,
                                   env: TextEnvironment,
                                   font: Font,
@@ -1092,28 +1088,11 @@ public struct TextField: View {
         let spaceWidth = env.cachedLayout(text: " ", font: font, lineHeight: lineHeight,
                                           maxWidth: .infinity, alignment: .leading).totalWidth
         guard spaceWidth > 0 else { return }
-        let color = theme.colors.onSurfaceMuted.multipliedAlpha(node.opacity * 0.18)
-        for line in layout.lines {
-            let bytes = source.utf8Bytes(inUTF8Range: Int(line.startCluster)..<Int(line.endCluster))
-            guard !bytes.isEmpty else { continue }
-            var columns = 0
-            for byte in bytes {
-                if byte == UInt8(ascii: " ") {
-                    columns += 1
-                } else if byte == UInt8(ascii: "\t") {
-                    columns += tabWidth - columns % tabWidth
-                } else {
-                    break
-                }
-            }
-            let levels = columns / tabWidth
-            guard levels > 0 else { continue }
-            let top = textOriginY + line.topY + 2
-            let height = max(0, lineHeight - 4)
-            for level in 1...levels {
-                let x = textOriginX + Float(level * tabWidth) * spaceWidth + 0.5
-                list.addRect(UIRect(x: x, y: top, width: 1, height: height), color: color)
-            }
+        let color = theme.colors.onSurfaceMuted.multipliedAlpha(node.opacity * 0.14)
+        for guide in TextIndentGuides.segments(in: layout, source: source, tabWidth: tabWidth,
+                                              spaceWidth: spaceWidth, lineHeight: lineHeight, visibleX: visibleX) {
+            list.addRect(UIRect(x: textOriginX + guide.x, y: textOriginY + guide.top,
+                                width: 0.5, height: guide.height), color: color)
         }
     }
 
@@ -1280,23 +1259,22 @@ public struct TextField: View {
                          color: gutterColor.multipliedAlpha(node.opacity))
         }
 
-        let numberFont = Font.system(size: max(9, font.size - 2))
         var lastLineNumber = 0
         for line in layout.lines {
             let lineNumber = source.lineIndex(forCharacterIndex: source.characterIndex(forUTF8Offset: Int(line.startCluster))) + 1
             guard lineNumber != lastLineNumber else { continue }
             lastLineNumber = lineNumber
             let numberLayout = env.cachedLayout(text: String(lineNumber),
-                                                font: numberFont,
+                                                font: font,
                                                 lineHeight: lineHeight,
                                                 maxWidth: .infinity,
                                                 alignment: .trailing)
             let numberBaseline = numberLayout.lines.first?.baselineY ?? lineHeight
             let numberColor = activeLineIndex == lineNumber - 1
                 ? theme.colors.onSurface
-                : (codeEditing.lineNumberColor ?? theme.colors.onSurfaceMuted)
+                : (codeEditing.lineNumberColor ?? theme.colors.onSurfaceMuted.multipliedAlpha(0.65))
             list.addText(numberLayout,
-                         origin: (gutterX + gutterWidth - theme.spacing.xs - numberLayout.totalWidth,
+                         origin: (gutterX + gutterWidth - lineNumberTextGap(font: font, theme: theme) - numberLayout.totalWidth,
                                   textOriginY + line.baselineY - numberBaseline),
                          color: numberColor.multipliedAlpha(node.opacity),
                          textureID: env.atlasTextureID,

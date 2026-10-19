@@ -43,8 +43,6 @@ struct ScriptCodeEditor: View {
                     input.codeEditing.onRequestHover = { anchor in handleHover(anchor) }
                     input.codeEditing.indentationWidth = 4
                     input.codeEditing.editHistory = editHistory
-                    input.codeEditing.lineNumberColor = theme.colors.onSurfaceMuted
-                    input.codeEditing.lineNumberGutterColor = theme.colors.surface
                     input.codeEditing.syntaxRevision = syntaxSession.revision
                     input.codeEditing.syntaxColorAtUTF8Offset = { _, offset in syntaxSession.color(atUTF8Offset: offset, light: light) }
                     input.navigation.caretRequestID = navigation.map { AnyHashable($0.id) }
@@ -64,10 +62,10 @@ struct ScriptCodeEditor: View {
                     input.decoration.cursorColor = theme.colors.onSurface
                     input.decoration.selectionColor = theme.colors.selection
                 }
-                .textFieldStyle(ScriptCodeEditorTextFieldStyle())
-                .font(.mono)
+                .textFieldStyle(.editor)
+                .font(.mono).font(.monospaced(size: 15)).lineHeight(24)
+                .accessibilityLabel(L("Source code"))
                 .frame(minHeight: 0)
-                .padding(horizontal: 4, vertical: 4)
                 .background(.surfaceSunken)
                 .flex(1, shrink: 1)
 
@@ -111,11 +109,4 @@ struct ScriptCodeEditor: View {
     }
 
     static func countLines(in text: TextBuffer) -> Int { text.lineCount }
-}
-
-private struct ScriptCodeEditorTextFieldStyle: TextFieldStyle {
-    func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
-        configuration.content
-            .background(.surfaceSunken)
-    }
 }

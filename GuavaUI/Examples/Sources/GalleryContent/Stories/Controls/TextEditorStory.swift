@@ -15,7 +15,7 @@ struct TextEditorStory: View {
     @State private var history = TextEditHistory()
     @State private var navigationRequest = 0
     @State private var navigationIndex = 0
-    @State private var showsDiagnostic = true
+    @State private var showsDiagnostic = false
     @State private var codeMode = true
     @State private var caret = TextFieldCaretState.initial
     @State private var hover: TextFieldHoverAnchor?
@@ -33,7 +33,7 @@ struct TextEditorStory: View {
             "Text editing",
             "A multiline editor for prose and code. Code mode adds line numbers, indentation, diagnostics and completion; plain mode soft-wraps and removes code chrome."
         ) {
-            Row(alignment: .center, spacing: 12) {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) {
                 Button("Go to beginning", isEnabled: options.isEnabled) { navigate(to: 0) }
                     .buttonStyle(.secondary)
                 Button("Load 200,000 lines", isEnabled: options.isEnabled && codeMode) {
@@ -45,22 +45,23 @@ struct TextEditorStory: View {
                     status = "200,000 lines · caret at line 100,001 · type, scroll, undo and redo"
                 }.buttonStyle(.secondary)
                 if codeMode {
-                    Checkbox(isOn: $showsDiagnostic, isEnabled: options.isEnabled)
-                    Text("Sample warning").font(.caption).foregroundColor(.onSurfaceMuted)
+                    Checkbox("Sample warning", isOn: $showsDiagnostic, isEnabled: options.isEnabled)
                 }
                 Box {}.flex(1)
             }
 
             ThemeReader { theme in
+                SurfaceReader { surface in
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     documentHeader
-                    ResizableEditor(initialHeight: 280) { editor(theme: theme) }
+                    ResizableEditor(initialHeight: 320) { editor(theme: theme, compact: surface.viewport.widthClass == .compact) }
                     statusBar
                 }
-                .background(.surface)
+                .background(.surfaceSunken)
                 .border(.border, width: 1)
                 .cornerRadius(theme.radius.md)
                 .clipped()
+                }
             }
 
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted)
@@ -71,21 +72,20 @@ struct TextEditorStory: View {
     }
 
     private var documentHeader: some View {
-        Row(alignment: .center, spacing: 8) {
+        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
             Icon(UIIcons.Editor.code, size: .small, color: .onSurfaceMuted)
-            Text(codeMode ? "Greeting.swift" : "Notes.txt").font(.label)
-            Badge(codeMode ? "Swift" : "Plain text", tone: codeMode ? .info : .neutral)
+            Text(codeMode ? "Greeting.swift" : "Notes.txt").truncated().font(.label)
+                .flex(1, shrink: 1, basis: 0).frame(minWidth: 60)
             Box {}.flex(1)
-            Checkbox(isOn: $codeMode, isEnabled: options.isEnabled)
-            Text("Code mode").font(.caption).foregroundColor(.onSurfaceMuted)
+            Checkbox("Code mode", isOn: $codeMode, isEnabled: options.isEnabled)
         }
-        .padding(horizontal: 12)
-        .frame(height: 36)
+        .padding(horizontal: 14, vertical: 8)
+        .frame(minHeight: 40)
         .background(.surfaceRaised)
     }
 
     private var statusBar: some View {
-        Row(alignment: .center, spacing: 12) {
+        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 12) {
             Text("Ln \(caretLine + 1), Col \(caretColumn)").font(.caption)
                 .debugName("text-editor-caret")
             Box {}.flex(1)
@@ -94,15 +94,15 @@ struct TextEditorStory: View {
             Text(codeMode ? "Swift" : "Plain text").font(.caption)
         }
         .foregroundColor(.onSurfaceMuted)
-        .padding(horizontal: 12)
-        .frame(height: 28)
+        .padding(horizontal: 14, vertical: 6)
+        .frame(minHeight: 28)
         .background(.surfaceRaised)
     }
 
-    private func editor(theme: Theme) -> some View {
+    private func editor(theme: Theme, compact: Bool) -> some View {
         TextField("", text: $source) { input in
             input.layout.axis = .vertical
-            input.layout.wrapsLines = !codeMode
+            input.layout.wrapsLines = !codeMode || compact
             input.layout.maxVisibleLines = 24
             input.codeEditing.showsLineNumbers = codeMode
             input.codeEditing.indentationWidth = 4
@@ -135,7 +135,9 @@ struct TextEditorStory: View {
             }
         }
         .font(codeMode ? .mono : .body)
-        .textFieldStyle(TextEditorFieldStyle())
+        .font(codeMode ? .monospaced(size: 15) : theme.typography.body.font).lineHeight(codeMode ? 24 : 22)
+        .textFieldStyle(.editor)
+        .accessibilityLabel(codeMode ? "Swift source" : "Plain text document")
         .flex(1, shrink: 1)
         .frame(minHeight: 0)
         .debugName("gallery-text-editor")
@@ -160,17 +162,6 @@ struct TextEditorStory: View {
     private func navigate(to index: Int) {
         navigationIndex = index
         navigationRequest += 1
-    }
-}
-
-/// The editor owns the chrome (header, status, rounded clipping), so the field
-/// itself becomes a flat content slot inside it instead of a second bordered
-/// input.
-private struct TextEditorFieldStyle: TextFieldStyle {
-    func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
-        configuration.content
-            .background(.surface)
-            .border(configuration.isFocused ? configuration.theme.colors.focusRing : .clear, width: 1)
     }
 }
 
@@ -269,12 +260,13 @@ private enum SwiftSyntax {
             } else if offset >= token.range.upperBound {
                 low = mid + 1
             } else {
+                let light = theme.colors.surfaceSunken.r > 0.5
                 switch token.kind {
-                case .keyword: return theme.colors.accent
-                case .string: return theme.colors.success
-                case .comment: return theme.colors.onSurfaceMuted
-                case .number: return theme.colors.warning
-                case .type: return theme.colors.accentSecondary
+                case .keyword: return light ? Color(red: 0x86, green: 0x3D, blue: 0xA0) : Color(red: 0xC6, green: 0x91, blue: 0xDD)
+                case .string: return light ? Color(red: 0x36, green: 0x73, blue: 0x3B) : Color(red: 0xA0, green: 0xC9, blue: 0x85)
+                case .comment: return light ? Color(red: 0x6C, green: 0x75, blue: 0x80) : Color(red: 0x8B, green: 0x94, blue: 0xA1)
+                case .number: return light ? Color(red: 0x9B, green: 0x64, blue: 0x20) : Color(red: 0xDC, green: 0xAC, blue: 0x77)
+                case .type: return light ? Color(red: 0x2D, green: 0x73, blue: 0x9D) : Color(red: 0x78, green: 0xB9, blue: 0xE8)
                 }
             }
         }

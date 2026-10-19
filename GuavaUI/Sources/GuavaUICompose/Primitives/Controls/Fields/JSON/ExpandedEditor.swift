@@ -42,7 +42,7 @@ struct JsonExpandedEditor: View {
                     input.events.onCancel = cancel
                 }
                 .font(.mono).accessibilityLabel(labels.expand)
-                .textFieldStyle(JsonExpandedFieldStyle())
+                .textFieldStyle(.editor)
                 .frame(minHeight: 0).padding(8).flex(1, shrink: 1, basis: 0)
                 .debugName("json-expanded-input")
                 Divider()
@@ -98,11 +98,5 @@ struct JsonExpandedEditor: View {
                        after: .init(buffer: after, cursor: after.characterCount), kind: .atomic,
                        time: ProcessInfo.processInfo.systemUptime)
         draft.wrappedValue = after
-    }
-}
-
-private struct JsonExpandedFieldStyle: TextFieldStyle {
-    func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
-        configuration.content.background(.surface)
     }
 }
