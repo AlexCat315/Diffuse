@@ -19,6 +19,7 @@ struct CalendarModesTests: GuavaUIComposeSerializedSuite {
         calendar().date(from: DateComponents(year: year, month: month, day: day))!
     }
     private func nodes(_ root: Node) -> [Node] { [root] + root.children.flatMap(nodes) }
+    private func hasText(_ node: Node) -> Bool { node.layoutNode?.textInputs != nil }
     private func buttons(_ graph: ViewGraph) -> [Node] {
         nodes(graph.tree.root!).filter { $0.accessibility?.role == .button && $0.accessibility?.isHidden != true }
     }
@@ -58,6 +59,30 @@ struct CalendarModesTests: GuavaUIComposeSerializedSuite {
             let next = try #require(weeks.first { $0.accessibility?.label.hasPrefix("Week 12,") == true })
             next.accessibilityActions.activate?(); settle(graph)
             #expect(store.selection == date(2024, 3, 18))
+        }
+    }
+
+    @Test("Week numbers are centred in the row band, and today keeps the row's type size")
+    func weekRowAlignment() throws {
+        let store = Store(); store.selection = date(2024, 3, 11)
+        try render(store, granularity: .week) { graph in
+            let row = try #require(buttons(graph).first { $0.accessibility?.state.isSelected == true })
+            let texts = nodes(row).filter(hasText)
+            #expect(texts.count == 8)
+            // Text draws from the top of its box, so a number stretched to the
+            // row height would sit high even with a centred frame.
+            for text in texts {
+                #expect(text.absoluteFrame.height < row.absoluteFrame.height - 8)
+                #expect(abs(text.absoluteFrame.midY - row.absoluteFrame.midY) < 1, "\(text.layoutNode?.textInputs?.text ?? "") at \(text.absoluteFrame) in \(row.absoluteFrame)")
+            }
+            // Columns line up with the header: Wk over week numbers, weekdays over days.
+            let header = nodes(graph.tree.root!).filter(hasText).filter { $0.absoluteFrame.height == 24 }
+                .map(\.absoluteFrame.midX).sorted()
+            let columns = texts.map(\.absoluteFrame.midX).sorted()
+            #expect(header.count == 8 && columns.count == 8)
+            #expect(zip(header, columns).allSatisfy { abs($0 - $1) < 1 }, "header \(header) vs row \(columns)")
+            let heights = Dictionary(texts.map { ($0.layoutNode?.textInputs?.text ?? "", $0.absoluteFrame.height) }) { first, _ in first }
+            #expect(heights["13"] != nil && heights["13"] == heights["12"], "today 13 vs 12: \(heights)")
         }
     }
 

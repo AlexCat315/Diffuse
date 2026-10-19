@@ -181,13 +181,23 @@ public struct CalendarView: View {
         let label = "Week \(calendar.component(.weekOfYear, from: start)), " + range.string(from: days[0], to: days[6])
         return Button(isEnabled: available, isSelected: selected, action: { choose(start) }) {
             Row(alignment: .center, spacing: 2) {
-                Text(String(calendar.component(.weekOfYear, from: start))).font(.caption).opacity(0.6)
-                    .frame(width: Self.weekNumberWidth, height: cellSize)
+                // Each number sits centred in its own cell box: a Text given
+                // the full cell height would draw at the top of the row.
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    Text(String(calendar.component(.weekOfYear, from: start))).font(.caption).opacity(0.75)
+                }.frame(width: Self.weekNumberWidth, height: cellSize)
                 for day in days {
-                    AnyView(Text(String(calendar.component(.day, from: day)))
-                        .font(calendar.isDate(day, inSameDayAs: options.today) ? .bodyStrong : .label)
-                        .frame(width: cellSize, height: cellSize)
-                        .opacity(calendar.isDate(day, equalTo: currentMonth, toGranularity: .month) ? 1 : 0.4))
+                    // The ring is inset inside a full cell: padding on a fixed frame
+                    // shrinks inward (border-box), so it cannot pad the cell out.
+                    AnyView(Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                            Text(String(calendar.component(.day, from: day))).font(.label)
+                        }
+                        .frame(width: cellSize - 6, height: cellSize - 6).cornerRadius((cellSize - 6) / 2)
+                        .border(todayRing(day, selected: selected), width: calendar.isDate(day, inSameDayAs: options.today) ? 1 : 0)
+                    }
+                    .frame(width: cellSize, height: cellSize)
+                    .opacity(calendar.isDate(day, equalTo: currentMonth, toGranularity: .month) ? 1 : 0.4))
                 }
             }
         }.buttonStyle(CalendarCellStyle(width: nil, height: cellSize, isCurrentMonth: true, isToday: false))
@@ -195,6 +205,11 @@ public struct CalendarView: View {
             .modifier(CalendarDayModifier(day: start, isTabStop: tabCell == start)).focusRequest(focusToken(start, isFocusable: available))
             .accessibility { $0.role = .button; $0.label = label; $0.state.isSelected = selected }
             .id(start)
+    }
+
+    private func todayRing(_ day: Date, selected: Bool) -> SemanticColorRef {
+        guard options.calendar.isDate(day, inSameDayAs: options.today) else { return .clear }
+        return selected ? .onAccent : .accent
     }
 
     // MARK: Months and years
