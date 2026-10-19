@@ -46,6 +46,11 @@ public final class DevToolsSession {
                 return Self.error(request, code: "invalid_state", message: "mirror.input requires an active mirror subscription")
             }
             message = DevToolsCodec.decode(MirrorInputPayload.self, request.payload) == nil ? "mirror.input requires payload" : nil
+        case "mirror.activate":
+            if !subscriptions.contains(.mirror) {
+                return Self.error(request, code: "invalid_state", message: "mirror.activate requires an active mirror subscription")
+            }
+            message = DevToolsCodec.decode(MirrorActivatePayload.self, request.payload) == nil ? "mirror.activate requires payload.node_id" : nil
         case "mirror.start":
             message = request.payload != nil && DevToolsCodec.decode(MirrorStartPayload.self, request.payload) == nil ? "mirror.start payload is malformed" : nil
         case "input.replay":

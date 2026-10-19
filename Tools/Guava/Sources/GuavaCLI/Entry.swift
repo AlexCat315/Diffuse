@@ -88,7 +88,8 @@ enum GuavaCLI {
           guava devices [--android|--ios]
           guava devtools [directory] [--session ID] [--no-open]
           guava devtools [directory] [--session ID] list | query [TOOL] [JSON|@FILE]
-                                 | click NODE_ID [--capture OUT.jpg] | input JSON|@FILE [--capture OUT.jpg]
+                                 | click NODE_ID [--capture OUT.jpg] | activate NODE_ID [increment|decrement]
+                                 | input JSON|@FILE [--capture OUT.jpg]
                                  | capture OUT.jpg [--settle-ms N] | timings OUT.json FRAMES WARMUP
 
         Directory defaults to the current project; platform defaults to the host; configuration defaults to debug.

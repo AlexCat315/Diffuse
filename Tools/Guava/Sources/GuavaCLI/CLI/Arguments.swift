@@ -216,6 +216,9 @@ struct DevToolsClient: Equatable {
         case "input":
             guard Self.capturing(arguments) else { throw ToolError.invalid("Use guava devtools input JSON|@FILE [--capture OUT.jpg]") }
             (operation, self.arguments) = ("input-ui", ["--input"] + arguments)
+        case "activate":
+            guard (1...2).contains(arguments.count) else { throw ToolError.invalid("Use guava devtools activate NODE_ID [activate|increment|decrement]") }
+            (operation, self.arguments) = ("activate-ui", arguments)
         case "capture": (operation, self.arguments) = ("capture-ui", arguments)
         case "timings": (operation, self.arguments) = ("record-timings", arguments)
         default: return nil

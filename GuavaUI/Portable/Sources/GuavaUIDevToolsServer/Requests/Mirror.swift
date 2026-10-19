@@ -53,6 +53,26 @@ extension DevServer {
                           message: "mirror.input requires payload")
             }
 
+        case "mirror.activate":
+            guard isSubscribed(.mirror, connection: conn) else {
+                sendError(for: env, on: conn, code: "invalid_state",
+                          message: "mirror.activate requires an active mirror subscription")
+                return
+            }
+            guard let request = decodePayload(MirrorActivatePayload.self, from: env.payload) else {
+                sendError(for: env, on: conn, code: "bad_request", message: "mirror.activate requires payload.node_id")
+                return
+            }
+            runOnHostMain { [weak self] in
+                guard let self else { return }
+                let failure: String? = self.host.mirror.activate.map { $0(request) } ?? "Host cannot perform accessibility actions"
+                if let failure {
+                    self.sendError(for: env, on: conn, code: "not_found", message: failure)
+                } else {
+                    self.sendOK(for: env, on: conn)
+                }
+            }
+
         default: break
         }
     }

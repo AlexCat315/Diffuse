@@ -315,6 +315,26 @@ public struct MirrorStartPayload: Codable, Sendable {
     }
 }
 
+/// Run one accessibility action on a node found by `query_ui_nodes`.
+public struct MirrorActivatePayload: Codable, Sendable {
+    public enum Action: String, Codable, Sendable { case activate, increment, decrement }
+    public var nodeID: String
+    public var action: Action
+
+    public init(nodeID: String, action: Action = .activate) {
+        self.nodeID = nodeID
+        self.action = action
+    }
+
+    enum CodingKeys: String, CodingKey { case nodeID = "node_id", action }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        nodeID = try container.decode(String.self, forKey: .nodeID)
+        action = try container.decodeIfPresent(Action.self, forKey: .action) ?? .activate
+    }
+}
+
 public struct MirrorStoppedPayload: Codable, Sendable {
     public var reason: String
 

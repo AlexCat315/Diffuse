@@ -79,6 +79,25 @@ struct DiagnosticsTests {
         #expect(field["value"]?.stringValue != "private-needle")
     }
 
+    @Test func accessibilityActionsRunByNodeIDWithoutGeometry() throws {
+        let tree = NodeTree(), root = Node(), item = Node(), disabled = Node()
+        tree.root = root; root.addChild(item); root.addChild(disabled)
+        var activated = 0, stepped = 0
+        item.accessibility = AccessibilitySemantics(.button) { $0.label = "Checkbox" }
+        item.accessibilityActions.activate = { activated += 1 }
+        item.accessibilityActions.increment = { stepped += 1 }
+        disabled.accessibility = AccessibilitySemantics(.button) { $0.state.isEnabled = false }
+        disabled.accessibilityActions.activate = { activated += 100 }
+        let actions = UIAccessibilityActions(tree: tree)
+        #expect(actions.perform(.init(nodeID: String(item.id.rawValue))) == nil && activated == 1)
+        #expect(actions.perform(.init(nodeID: String(item.id.rawValue), action: .increment)) == nil && stepped == 1)
+        #expect(actions.perform(.init(nodeID: String(item.id.rawValue), action: .decrement))?.contains("no decrement") == true)
+        #expect(actions.perform(.init(nodeID: String(disabled.id.rawValue)))?.contains("disabled") == true && activated == 1)
+        #expect(actions.perform(.init(nodeID: "999999"))?.contains("missing") == true)
+        let decoded = try JSONDecoder().decode(MirrorActivatePayload.self, from: Data(#"{"node_id":"7"}"#.utf8))
+        #expect(decoded.nodeID == "7" && decoded.action == .activate)
+    }
+
     @Test func overviewReportsInvalidGeometryWithoutLosingJSONAndQueriesIdentifyTheNode() throws {
         let tree = NodeTree(), root = Node(), broken = Node(), negative = Node(), valid = Node()
         tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 300, height: 200)

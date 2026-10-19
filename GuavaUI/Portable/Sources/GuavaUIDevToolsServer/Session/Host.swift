@@ -37,6 +37,8 @@ public struct DevToolsHost {
         public var start: (@MainActor (MirrorStartPayload) -> Void)? = nil
         public var stop: (@MainActor () -> Void)? = nil
         public var input: (@MainActor (MirrorInputPayload) -> Void)? = nil
+        /// Returns nil on success, or the reason the action could not run.
+        public var activate: (@MainActor (MirrorActivatePayload) -> String?)? = nil
         public init() {}
     }
     public var mirror = Mirror()

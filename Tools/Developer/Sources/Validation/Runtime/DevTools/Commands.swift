@@ -13,6 +13,7 @@ package enum DevToolsCommands {
     switch operation {
     case "query-ui": try QueryUI.run(flags)
     case "input-ui": try InputUI.run(flags)
+    case "activate-ui": try ActivateUI.run(flags)
     case "capture-ui": try CaptureUI.run(flags)
     case "record-timings": try RecordTimings.run(flags)
     case "session": try DevelopmentSession.run(flags)
@@ -25,7 +26,7 @@ package enum DevToolsCommands {
   }
 
   static let operations = [
-    "query-ui", "input-ui", "capture-ui", "record-timings", "session",
+    "query-ui", "input-ui", "activate-ui", "capture-ui", "record-timings", "session",
   ]
 
   static let usage = """
@@ -33,6 +34,7 @@ package enum DevToolsCommands {
 
       query-ui PORT --list|TOOL …   Run one read-only AI tool against the live window
       input-ui PORT …               Deliver input events through DevTools
+      activate-ui PORT NODE [ACTION] Activate, increment or decrement a node by id
       capture-ui PORT OUTPUT.jpg    Capture the window draw list through the mirror
       record-timings PORT OUT.json FRAMES WARMUP
                                     Record presented window frame timings

@@ -207,6 +207,8 @@ public final class DevTools {
             guard let event = InputBridge.event(from: payload) else { return }
             self?.inputDelivery?(event)
         }
+        let actions = UIAccessibilityActions(tree: diagnosticTree)
+        server.host.mirror.activate = { @MainActor payload in actions.perform(payload) }
     }
 
 }

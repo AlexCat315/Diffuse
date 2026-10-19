@@ -78,3 +78,9 @@ import Testing
         == ["--click-node", "7", "--capture", "out.jpg"])
     #expect(throws: (any Error).self) { try Arguments(["devtools", "input", "@drag.json", "--settle-ms", "4"]) }
 }
+
+@Test func activateRunsAnAccessibilityActionByNodeID() throws {
+    #expect(try Arguments(["devtools", "activate", "566"]).client?.arguments == ["566"])
+    #expect(try Arguments(["devtools", "activate", "566", "increment"]).client?.operation == "activate-ui")
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "activate"]) }
+}

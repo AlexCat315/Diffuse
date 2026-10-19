@@ -236,6 +236,7 @@ session (add `--session ID` when several run):
 ./guava devtools GuavaUI/Examples list                     # available AI tools
 ./guava devtools GuavaUI/Examples query '{"text":"Document 5","visible_only":true,"compact":true}'
 ./guava devtools GuavaUI/Examples click NODE_ID
+./guava devtools GuavaUI/Examples activate NODE_ID              # accessibility action, no geometry needed
 ./guava devtools GuavaUI/Examples input @events.json --capture /tmp/after.jpg
 ./guava devtools GuavaUI/Examples capture /tmp/gallery.jpg --settle-ms 400
 ```
