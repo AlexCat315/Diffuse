@@ -269,7 +269,7 @@
 **AssetRefField / JsonField**
 
 - 外观：AssetRefField 显示资源 + 清除 + drop 目标；JsonField 紧凑多行编辑、提交校验、拖拽调整高度、展开为带行号的大编辑器。`[已实现]`
-- 手机：AssetRefField 保留 44×44 清空/选择入口，字段至少 52pt 并按名称/副标题自然增高；兼容 kind 同时约束选择与拖放，窄宽文本省略保留完整语义。`[已实现]`。JsonField 展开模式占满窗口并 ≥44pt 操作按钮，尚待补齐与实测。
+- 手机：AssetRefField 保留 44×44 清空/选择入口，字段至少 52pt 并按名称/副标题自然增高；兼容 kind 同时约束选择与拖放，窄宽文本省略保留完整语义。JsonField 在 compact 全高展开，安全区消费一次；标题收敛且保留全文，底部操作全宽堆叠、触摸 ≥44pt，编辑区独立滚动，旋转保留草稿与焦点。`[已实现]`，见 [JSON 编辑器](jsonfield.md#acceptance)。
 - 平板 / 桌面：拖放与展开均可；hover 提示。`[已实现]`
 - 交互与验收：Cmd+Return 提交、Escape 取消、校验失败保留草稿；验收：`--component assetRef|jsonField`。
 
@@ -576,11 +576,12 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | --- | --- | --- |
 | SafeArea / TextField / CommandPalette | 宿主软键盘 inset、光标显露与结果区收缩联动 | 模拟器/真机的真实 IME；桌面 touch surface 不能替代 |
 | Workspace | 标签条完整键盘/辅助功能、RTL 与其余深化能力 | 见 [Workspace](workspace.md) 与 [功能缺口](gaps.md#3-既有组件功能缺口与完成边界) |
-| JsonField | 展开入口触摸目标、紧凑全高编辑器与窄宽实测 | 390 触摸、720 混合、200% 字号及完整名称；AssetRefField 已完成，见 [资源引用](assetref.md) |
 | List / MultiSelectList / SectionedList | 通用行的标题收敛与尾部徽标/状态保留；重排边缘自动滚动另见 gaps | 自定义 rowContent 不能由容器静默截断整个行；需可组合的行布局契约 |
 | Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
 
 新项关闭时须更新对应契约、组件文档和下方证据，并单独提交；物理设备限制保持明示，不把未执行的设备测试记为通过。
+
+JsonField 紧凑展开已补齐：Gallery 去除 520pt 固定宽度，展开入口在 390pt / 200% 字号下可达；compact 全高编辑器与宽屏居中编辑器共用草稿、历史与 Portal，标题保留全文语义，验证区及全宽堆叠操作不进入编辑滚动。`JsonEditorTests` 验证三档宽度、两档字号、三种输入、主题/RTL、安全区、长文案、窗口变化及实际提交/取消/焦点；`JsonFieldTests` / `EditorInteractionTests` 覆盖原有事务。DevTools 三档真实输入均提交 `{"value":42}`，无效草稿禁用 Apply，Escape 不改提交值；等待动画后的镜像已检查全高布局、底部可达性与错误换行。详见 [JsonField](jsonfield.md#acceptance)。
 
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。

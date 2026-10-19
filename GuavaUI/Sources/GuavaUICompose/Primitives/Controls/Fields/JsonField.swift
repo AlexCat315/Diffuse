@@ -170,62 +170,13 @@ private struct _StatefulJsonField: View {
             if case let .invalid(message) = validation {
                 Text(message, lineLimit: 2).font(.caption).foregroundColor(.error)
             }
-            Modal(isPresented: $isExpanded) {
-                expandedEditor
+            Modal(isPresented: $isExpanded, configure: { _ in },
+                  fittingGeometry: JsonExpandedEditor.fit) {
+                JsonExpandedEditor(draft: $expandedDraft, labels: field.labels, history: expandedHistory,
+                                   apply: applyExpandedDraft, cancel: { isExpanded = false })
             }
         }
         .frame(minWidth: 0)
-    }
-
-    private var expandedEditor: some View {
-        let result = JsonField.validate(expandedDraft.stringValue)
-        return Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            Row(alignment: .center, spacing: 6) {
-                Text(field.labels.expand).font(.bodyStrong)
-                Spacer(minLength: 0)
-                Button(icon: .resource(UIIcons.Action.format), size: 14,
-                       isEnabled: result.isAcceptable, tooltip: field.labels.format, action: {
-                    if let pretty = JsonField.prettyPrinted(expandedDraft.stringValue) {
-                        recordReplacement(before: expandedDraft, after: TextBuffer(pretty), in: expandedHistory)
-                        expandedDraft = TextBuffer(pretty)
-                    }
-                }).buttonStyle(.ghost)
-                Button(icon: .resource(UIIcons.Action.x), size: 12,
-                       tooltip: field.labels.cancel, action: { isExpanded = false }).buttonStyle(.ghost)
-            }
-            .padding(horizontal: 14, vertical: 8)
-            Divider()
-            TextField(field.placeholder, text: $expandedDraft) { input in
-                input.layout.axis = .vertical
-                input.layout.maxVisibleLines = 128
-                input.codeEditing.showsLineNumbers = true
-                input.codeEditing.indentationWidth = 2
-                input.codeEditing.editHistory = expandedHistory
-                input.events.onSubmit = applyExpandedDraft
-                input.events.onCancel = { isExpanded = false }
-            }
-                .font(.mono)
-                .frame(minHeight: 0)
-                .padding(8)
-                .flex(1, shrink: 1, basis: 0)
-            Divider()
-            Row(alignment: .center, spacing: 8) {
-                if case let .invalid(message) = result {
-                    Text(message, lineLimit: 2).font(.caption).foregroundColor(.error).flex(1, shrink: 1, basis: 0)
-                } else {
-                    Icon(UIIcons.Action.check, size: 11, color: .success)
-                    Text(field.labels.valid).font(.caption).foregroundColor(.onSurfaceMuted)
-                }
-                Spacer(minLength: 0)
-                Button(field.labels.cancel, action: { isExpanded = false }).buttonStyle(.ghost)
-                Button(field.labels.apply, isEnabled: result.isAcceptable, action: applyExpandedDraft)
-                    .buttonStyle(.primary).debugName("json-apply")
-            }
-            .padding(horizontal: 14, vertical: 10)
-        }
-        .background(.surfaceFloating).border(.border, width: 1).cornerRadius(.controlRadius).clipped()
-        .flex(1, shrink: 1, basis: 0)
-        .debugName("json-expanded-editor")
     }
 
     private func beginEditing() {

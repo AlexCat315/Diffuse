@@ -239,7 +239,9 @@ struct JsonStory: View {
     @State private var json: TextBuffer = "{\"name\":\"Guava\",\"enabled\":true,\"version\":1}"
     var body: some View {
         StorySection("Structured input", "Format valid JSON, try a syntax error, then revert to the original value.") {
-            JsonField(text: $json, isEnabled: options.isEnabled).frame(width: 520)
+            JsonField(text: $json, isEnabled: options.isEnabled).frame(maxWidth: 520)
+            Text("Committed: \(json.stringValue)").font(.caption).foregroundColor(.onSurfaceMuted)
+                .debugName("json-committed")
         }
     }
 }
