@@ -46,6 +46,7 @@
 | BottomSheet | detent、拖拽与宽屏退化 | [bottom-sheet.md](bottom-sheet.md) |
 | Tooltip | 实现与验证边界 | [tooltip.md](tooltip.md) |
 | Popover | 共享箭头卡片、12 向定位与显式避让策略 | [popover.md](popover.md) |
+| Carousel | 分页、自动轮播与位置指示器 | [carousel.md](carousel.md) |
 | Popconfirm | 复用 Popover 的锚定确认与显式确认按钮 | [popconfirm.md](popconfirm.md) |
 | ActionSheet | 底部操作抽屉、拖拽/外部关闭与调用方本地化关闭名称 | [action-sheet.md](action-sheet.md) |
 | Badge / Tag / KeyCap / FieldLabel | 长文本换行、移除、快捷键口述与输入关联 | [labels.md](labels.md) |

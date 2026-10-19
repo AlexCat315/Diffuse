@@ -35,7 +35,9 @@ public struct Carousel<ID: Hashable>: View {
     /// Caller-owned selection. `nil` keeps the current page inside the view.
     public var selection: Binding<ID>?
     public var showsArrows = true
-    public var showsIndicators = true
+    public var indicator: CarouselIndicator = .automatic
+    /// Automatic rotation; `nil` (the default) only moves on request.
+    public var autoplay: CarouselAutoplay?
     /// Wrapping keeps the gesture useful on the last page; turn it off for
     /// onboarding flows that must end.
     public var allowsWrap = true
@@ -43,6 +45,7 @@ public struct Carousel<ID: Hashable>: View {
     public var isEnabled = true
 
     @State private var internalSelection: ID?
+    @State private var rotation = CarouselAutoplaySession()
 
     public init(pages: [CarouselPage<ID>],
                 selection: Binding<ID>? = nil,
@@ -54,27 +57,40 @@ public struct Carousel<ID: Hashable>: View {
 
     public var body: some View {
         ThemeReader { theme in
-            SelectionKeyHost(isEnabled: isEnabled && !pages.isEmpty, onKey: handleKey) {
-                Column(alignment: .center, spacing: theme.spacing.sm) {
-                    AnyView(viewport(in: theme))
-                    if showsIndicators, pages.count > 1 {
-                        AnyView(indicators(in: theme))
-                    }
-                    if let caption = currentPage?.caption, !caption.isEmpty {
-                        AnyView(Text(caption)
-                            .font(.caption)
-                            .foregroundColor(theme.colors.onSurfaceMuted))
+            ReducedMotionReader { reducedMotion in
+                let paused = rotation.isPaused(reducedMotion: reducedMotion)
+                CarouselAutoplayHost(session: rotation, interval: paused ? nil : runningInterval,
+                                     advance: { move(1) }, page: { currentIndex }) {
+                    SelectionKeyHost(isEnabled: isEnabled && !pages.isEmpty, onKey: handleKey) {
+                        Column(alignment: .center, spacing: theme.spacing.sm) {
+                            AnyView(viewport(in: theme))
+                            if autoplay != nil || indicator.resolved(pageCount: pages.count) != .hidden {
+                                AnyView(controls(in: theme, paused: paused))
+                            }
+                            if let caption = currentPage?.caption, !caption.isEmpty {
+                                AnyView(Text(caption)
+                                    .font(.caption)
+                                    .foregroundColor(theme.colors.onSurfaceMuted))
+                            }
+                        }
+                        .onHover { rotation.isHovered = $0 }
+                        .accessibility {
+                            $0.role = .group
+                            $0.label = "Carousel"
+                            $0.value = pages.isEmpty ? "No pages" : "Page \(currentIndex + 1) of \(pages.count)"
+                            $0.state.isEnabled = isEnabled
+                        }
+                        .opacity(isEnabled ? 1 : 0.55)
                     }
                 }
-                .accessibility {
-                    $0.role = .group
-                    $0.label = "Carousel"
-                    $0.value = pages.isEmpty ? "No pages" : "Page \(currentIndex + 1) of \(pages.count)"
-                    $0.state.isEnabled = isEnabled
-                }
-                .opacity(isEnabled ? 1 : 0.55)
             }
         }
+    }
+
+    /// The interval while rotation can make progress.
+    private var runningInterval: Double? {
+        guard let autoplay, isEnabled, pages.count > 1, allowsWrap || canStep(1) else { return nil }
+        return autoplay.interval
     }
 
     // MARK: - Structure
@@ -92,19 +108,46 @@ public struct Carousel<ID: Hashable>: View {
             .background(theme.colors.surfaceSunken))
             if showsArrows, pages.count > 1 { AnyView(stepButton(1)) }
         }
-        if let height { AnyView(row.frame(height: height.isFinite ? max(1, height) : 180)) } else { AnyView(row) }
+        // The viewport spans the carousel: in the centred column a hugging row
+        // would resize with each page and move the arrows.
+        let spanning = row.frame(width: .percent(100))
+        if let height { AnyView(spanning.frame(height: height.isFinite ? max(1, height) : 180)) } else { AnyView(spanning) }
     }
 
-    @ViewBuilder private func indicators(in theme: Theme) -> some View {
+    /// Pause control (whenever autoplay is configured) and the position indicator.
+    private func controls(in theme: Theme, paused: Bool) -> some View {
+        Row(alignment: .center, spacing: 6) {
+            if autoplay != nil, pages.count > 1 {
+                Button(icon: .resource(paused ? UIIcons.Editor.play : UIIcons.Editor.pause), size: 12, isEnabled: isEnabled,
+                       tooltip: paused ? "Play" : "Pause") { rotation.setPaused(!paused) }
+                    .buttonStyle(.ghost).controlSize(.mini)
+                    .accessibilityLabel(paused ? "Start automatic rotation" : "Pause automatic rotation")
+                    .debugName("carousel-autoplay")
+            }
+            switch indicator.resolved(pageCount: pages.count) {
+            case .dots: AnyView(dots(in: theme, paused: paused))
+            case .fraction:
+                AnyView(Text("\(currentIndex + 1) / \(pages.count)").font(.caption)
+                    .foregroundColor(theme.colors.onSurfaceMuted).accessibilityHidden())
+            case .automatic, .hidden: AnyView(EmptyView())
+            }
+        }
+    }
+
+    private func dots(in theme: Theme, paused: Bool) -> some View {
         Row(alignment: .center, spacing: 6) {
             for index in pages.indices {
                 AnyView(Button(isEnabled: isEnabled,
                                tooltip: "Page \(index + 1)",
                                action: { go(to: index) }) {
-                    Box(direction: .row, alignItems: .center, spacing: 0) {}
-                        .frame(width: index == currentIndex ? 16 : 7, height: 7)
-                        .background(index == currentIndex ? theme.colors.accent : theme.colors.onSurfaceMuted)
-                        .cornerRadius(3.5)
+                    if index == currentIndex {
+                        CarouselProgressDot(session: rotation, interval: paused ? nil : runningInterval)
+                    } else {
+                        Box(direction: .row, alignItems: .center, spacing: 0) {}
+                            .frame(width: 7, height: 7)
+                            .background(theme.colors.onSurfaceMuted.multipliedAlpha(0.45))
+                            .cornerRadius(3.5)
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Page \(index + 1)")

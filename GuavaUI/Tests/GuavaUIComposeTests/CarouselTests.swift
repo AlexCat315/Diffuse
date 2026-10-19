@@ -137,4 +137,116 @@ struct CarouselTests: GuavaUIComposeSerializedSuite {
             #expect(semantics?.value == "Page 2 of 3")
         }
     }
+    // MARK: - Autoplay and indicators
+
+    private func settle(_ graph: ViewGraph) {
+        for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: 360, height: 260) }
+    }
+    private func tick(_ seconds: Double, _ graph: ViewGraph) {
+        AnimatorScheduler.current.tick(deltaTime: seconds); settle(graph)
+    }
+    private func labelled(_ label: String, in graph: ViewGraph) -> Node? {
+        nodes(graph.tree.root!).first { $0.accessibility?.label == label }
+    }
+
+    @Test("Autoplay advances each interval, and a manual page change restarts the interval")
+    func autoplayAdvances() {
+        withScene { graph, registry, _ in
+            var page = "page-0"
+            graph.install(root: Carousel(pages: pages(), selection: Binding(get: { page }, set: { page = $0 })) {
+                $0.autoplay = CarouselAutoplay(interval: 2)
+            })
+            settle(graph)
+            tick(1.5, graph); #expect(page == "page-0")
+            tick(0.6, graph); #expect(page == "page-1")
+            tick(1.5, graph)
+            _ = registry.handlers(for: keyNode(in: graph, registry)!).key!(key(Scancode.arrowRight), .target)
+            settle(graph); #expect(page == "page-2")
+            tick(1.5, graph); #expect(page == "page-2", "the manual change restarted the interval")
+            tick(0.6, graph); #expect(page == "page-0", "rotation wraps")
+        }
+    }
+
+    @Test("Hover, focus inside and the pause control stop rotation; without wrapping it stops at the end")
+    func autoplayPauses() {
+        withScene { graph, registry, _ in
+            var page = "page-0"
+            graph.install(root: Carousel(pages: pages(), selection: Binding(get: { page }, set: { page = $0 })) {
+                $0.autoplay = CarouselAutoplay(interval: 2); $0.allowsWrap = false
+            })
+            settle(graph)
+            let hover = nodes(graph.tree.root!).compactMap { registry.handlers(for: $0).hover }.first!
+            hover(.enter); tick(3, graph); #expect(page == "page-0", "hovered")
+            hover(.leave); tick(2.1, graph); #expect(page == "page-1")
+
+            let pause = labelled("Pause automatic rotation", in: graph)!
+            pause.accessibilityActions.activate?(); settle(graph)
+            tick(5, graph); #expect(page == "page-1", "paused by the viewer")
+            #expect(labelled("Start automatic rotation", in: graph) != nil)
+            labelled("Start automatic rotation", in: graph)!.accessibilityActions.activate?(); settle(graph)
+            tick(2.1, graph); #expect(page == "page-2")
+            tick(10, graph); #expect(page == "page-2", "no wrap: rotation ends on the last page")
+        }
+    }
+
+    @Test("Keyboard focus inside the carousel pauses rotation")
+    func autoplayFocusPauses() {
+        withScene { graph, _, _ in
+            let oldFocus = FocusChainHolder.current, focus = FocusChain()
+            FocusChainHolder.current = focus; defer { FocusChainHolder.current = oldFocus }
+            var page = "page-0"
+            graph.install(root: Carousel(pages: pages(), selection: Binding(get: { page }, set: { page = $0 })) {
+                $0.autoplay = CarouselAutoplay(interval: 2)
+            })
+            settle(graph)
+            focus.focus(labelled("Next page", in: graph)!)
+            tick(3, graph); #expect(page == "page-0")
+            focus.clear()
+            tick(2.1, graph); #expect(page == "page-1")
+        }
+    }
+
+    @Test("Reduced motion starts paused with a visible start control")
+    func autoplayReducedMotion() {
+        withScene { graph, _, _ in
+            var page = "page-0"
+            graph.install(root: Carousel(pages: pages(), selection: Binding(get: { page }, set: { page = $0 })) {
+                $0.autoplay = CarouselAutoplay(interval: 2)
+            }.reducedMotion())
+            settle(graph)
+            tick(5, graph); #expect(page == "page-0")
+            #expect(labelled("Start automatic rotation", in: graph) != nil)
+            #expect(CarouselAutoplay(interval: 0.1).interval == 2 && CarouselAutoplay(interval: .nan).interval == 5)
+        }
+    }
+
+    @Test("The viewport spans the carousel, so pages of different widths never move the arrows")
+    func stableViewport() {
+        withScene { graph, registry, _ in
+            var page = 0
+            let pages = [CarouselPage(0) { Text("A") }, CarouselPage(1) { Text("A much wider page title") }]
+            graph.install(root: Carousel(pages: pages, selection: Binding(get: { page }, set: { page = $0 })).frame(width: 400))
+            settle(graph)
+            let first = swipeNode(in: graph, registry)!.frame
+            page = 1; graph.install(root: Carousel(pages: pages, selection: Binding(get: { page }, set: { page = $0 })).frame(width: 400))
+            settle(graph)
+            let second = swipeNode(in: graph, registry)!.frame
+            #expect(first == second && first.width > 300, "\(first) vs \(second)")
+        }
+    }
+
+    @Test("Automatic indicators use dots up to eight pages and a count beyond")
+    func indicatorStyles() {
+        withScene { graph, _, _ in
+            let many = (0..<9).map { index in CarouselPage(index) { Text("Page \(index)") } }
+            graph.install(root: Carousel(pages: many)); settle(graph)
+            #expect(labelled("Page 1", in: graph) == nil)
+            #expect(nodes(graph.tree.root!).contains { $0.layoutNode?.textInputs?.text == "1 / 9" })
+            graph.install(root: Carousel(pages: pages())); settle(graph)
+            #expect(labelled("Page 3", in: graph) != nil)
+            graph.install(root: Carousel(pages: pages()) { $0.indicator = .hidden }); settle(graph)
+            #expect(labelled("Page 3", in: graph) == nil)
+            #expect(CarouselIndicator.dots.resolved(pageCount: 1) == .hidden)
+        }
+    }
 }

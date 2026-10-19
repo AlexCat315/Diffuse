@@ -272,7 +272,7 @@ struct CarouselStory: View {
                 Carousel(pages: Self.pages, selection: $page) {
                     $0.isEnabled = options.isEnabled
                     $0.showsArrows = showsArrows
-                    $0.showsIndicators = showsIndicators
+                    $0.indicator = showsIndicators ? .automatic : .hidden
                     $0.allowsWrap = allowsWrap
                     $0.height = 176
                 }
@@ -281,6 +281,19 @@ struct CarouselStory: View {
                     Checkbox(isOn: $showsIndicators, isEnabled: options.isEnabled); Text("Indicators").font(.caption)
                     Checkbox(isOn: $allowsWrap, isEnabled: options.isEnabled); Text("Wrap").font(.caption)
                     Text("Page: \(page)").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+            }
+            StorySection("Autoplay", "Pages advance every 4 s; the active dot fills with the interval. Hovering or focusing the carousel pauses it, a manual page change restarts the interval, and the play/pause control stops rotation. With reduced motion it starts paused.") {
+                Carousel(pages: Self.pages) {
+                    $0.isEnabled = options.isEnabled
+                    $0.autoplay = CarouselAutoplay(interval: 4)
+                    $0.height = 140
+                }.debugName("carousel-autoplay-sample")
+            }
+            StorySection("Many pages", "Beyond eight pages dots stop being countable, so the automatic indicator shows the position as a count.") {
+                Carousel(pages: Self.numbered) {
+                    $0.isEnabled = options.isEnabled
+                    $0.height = 96
                 }
             }
             StorySection("No wrap, no chrome", "Onboarding flows end where the last page ends: wrapping off, controls reduced to the indicators.") {
@@ -293,6 +306,14 @@ struct CarouselStory: View {
             }
             StorySection("Empty collection", "An empty carousel has no page action or keyboard stop. A missing selection falls back to the first available page without rewriting the binding.") {
                 Carousel<String>(pages: []) { $0.height = 72 }
+            }
+        }
+    }
+
+    private static var numbered: [CarouselPage<Int>] {
+        (1...12).map { index in
+            CarouselPage(index) {
+                CarouselCard("Slide \(index)", detail: "One of twelve pages.", tint: Color(r: 0.30, g: 0.55, b: 0.95))
             }
         }
     }
@@ -329,6 +350,7 @@ private struct CarouselCard: View {
             Text(detail).font(.caption).foregroundColor(Color.white.multipliedAlpha(0.85))
             Button("Page action · \(clicks)") { clicks += 1 }.buttonStyle(.secondary)
         }
+        .padding(horizontal: 16)
         .flex()
         .background(tint)
     }

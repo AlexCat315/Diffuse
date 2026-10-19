@@ -375,7 +375,7 @@
 
 **Carousel / StatusBar**
 
-- 外观：Carousel 页容器 + 可选箭头/指示点，页高由调用方定；StatusBar 统一 26pt 高度、单元格等高等宽策略。`[已实现]`
+- 外观：Carousel 页容器占满宽度 + 可选箭头/指示器（≤8 页圆点，更多为计数），可选自动轮播（悬停/聚焦暂停、播放/暂停控件、减少动态效果默认暂停，见 [Carousel](carousel.md)），页高由调用方定；StatusBar 统一 26pt 高度、单元格等高等宽策略。`[已实现]`
 - 手机：一页一屏、滑动一页/次；箭头 ≥ 44pt；StatusBar 单元格单行截断 + 完整语义，不允许因窄改变窗口内容高度。`[已实现]`
 - StatusBar / Panel：`StatusBarText` 的文本与 detail 单行截断，leading 先让位给 trailing 连接状态；完整文本保留在辅助功能 label/value。`DefaultPanelStyle` 标题单行截断并让出 accessory 槽位。`[已实现]`，`StatusBarPanelTruncationTests` 验证 320pt 状态栏与 240/600pt 面板。
 - 2026-10-18 DevTools 720×820：长分支状态栏文字单行截断，右侧 Connected 完整可见；240pt 面板标题截断到 203pt，Live badge 保留。`capture-ui` 截图复核无重叠、无换行。

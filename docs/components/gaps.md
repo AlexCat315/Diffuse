@@ -152,7 +152,7 @@
 | Workspace | N 面板联动、折叠阈值/吸附、pin 专属视觉、浮动为应用内层、文档解码校验与可版本化格式、a11y/RTL、chrome 硬编码清理（见 [workspace.md](workspace.md)） | P2 |
 | ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、带时长程序滚动（`ScrollRequest`）、`.scrollAnchor()` 锚定、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | 已实现 |
 | Form / PropertyGrid | 自适应标签、共享值槽阈值、列数重排、标签关联与 Form 校验摘要已实现，见 [form.md](form.md)；PropertyGrid 跨字段业务校验由应用管理 | 已实现 |
-| Carousel | 自动轮播、复杂指示器（按需）；滑动/键盘已有 | P2 |
+| Carousel | 自动轮播（悬停/聚焦暂停、播放/暂停、减少动态效果）、圆点/计数指示器与进度、全宽视口已实现，见 [Carousel](carousel.md) | 完成 |
 | StatusBar / Panel | 状态格单行截断、完整 a11y 值、多个前后状态格的有限几何与 `DefaultPanelStyle` 标题截断已实现，见 [Panel](panel.md)；等宽策略仍由调用方声明 | 已完成 |
 | TextField（Text Editor） | 平面编辑样式、稳定行号留白、中性当前行及共用 resize grip 已完善；断点/行级图标/折叠、44pt 触摸菜单、文档会话和 AST/LSP 集成已补齐，见 [gutter](editor-gutter.md) 与 [视觉验收](textfield.md#编辑器视觉与交互验收)。脚本调试运行时后端由应用提供；snippet tab-stop、超长单行分段布局仍缺 | P2 |
 | Image / AsyncImage | 缓存淘汰、在途合并、GIF/WebP 动画、EXIF、渐进解码（[image.md](image.md) 边界） | P2 |
