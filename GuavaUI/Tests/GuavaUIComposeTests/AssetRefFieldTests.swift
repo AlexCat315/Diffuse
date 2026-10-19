@@ -9,6 +9,30 @@ struct AssetRefFieldTests: GuavaUIComposeSerializedSuite {
         var value: AssetRef?
     }
 
+    @Test("Kinds without a preview map to a glyph by keyword, case-insensitively")
+    func kindGlyphs() {
+        #expect(AssetKindTile.icon(for: "image") == UIIcons.Media.image)
+        #expect(AssetKindTile.icon(for: "Texture") == UIIcons.Media.image)
+        #expect(AssetKindTile.icon(for: "Static Mesh") == UIIcons.Editor.box)
+        #expect(AssetKindTile.icon(for: "material") == UIIcons.Editor.brush)
+        #expect(AssetKindTile.icon(for: "weird") == UIIcons.File.file)
+        #expect(AssetKindTile.icon(for: nil) == UIIcons.File.file)
+    }
+
+    @Test("The thumbnail slot draws a glyph, never the kind as truncated text")
+    func thumbnailIsAGlyph() { GlobalTestLock.locked {
+        let old = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = old }
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        for value in [AssetRef?.none, AssetRef(id: "cam", name: "Camera", kind: "image")] {
+            graph.install(root: AssetRefField(value: .constant(value), acceptedKinds: ["image"]).frame(width: 220))
+            graph.computeLayout(width: 220, height: 80)
+            func texts(_ node: Node) -> [String] { [node.layoutNode?.textInputs?.text].compactMap { $0 } + node.children.flatMap(texts) }
+            #expect(!texts(graph.tree.root!).contains("image"), "kind text: \(texts(graph.tree.root!))")
+        }
+        graph.install(root: EmptyView())
+    } }
+
     @Test("AssetDropRegistry dispatches a matching payload to the target")
     func registryDropDispatchesToTarget() { GlobalTestLock.locked {
         let registry = AssetDropRegistry()

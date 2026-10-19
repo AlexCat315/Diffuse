@@ -58,7 +58,7 @@ public struct AssetRefField: View {
         AssetDropTarget(activePayload: activePayload, acceptedKinds: acceptedKinds,
                         isEnabled: isEnabled, onDrop: { value.wrappedValue = AssetRef(payload: $0) }) {
             Row(alignment: .center, spacing: 8) {
-                AssetRefPreview(ref: value.wrappedValue, isEnabled: isEnabled)
+                AssetRefPreview(ref: value.wrappedValue, acceptedKinds: acceptedKinds, isEnabled: isEnabled)
                     .flex(0, shrink: 0).accessibilityHidden()
                 Box(direction: .column, alignItems: .stretch, spacing: 1) {
                     Text(value.wrappedValue?.name ?? placeholder)
@@ -78,7 +78,7 @@ public struct AssetRefField: View {
                 if !pickerOptions.isEmpty { picker.flex(0, shrink: 0) }
             }
             .padding(horizontal: 6, vertical: 4).frame(minHeight: minHeight)
-            .background(.surfaceSunken).cornerRadius(.inputRadius).clipped()
+            .background(.surface).cornerRadius(.inputRadius).border(.border, width: 1).clipped()
         }
         .accessibility {
             $0.role = .group; $0.label = value.wrappedValue?.name ?? placeholder
@@ -119,38 +119,68 @@ public struct AssetRefField: View {
     }
 }
 
-private struct AssetKindBadge: View {
+/// Thumbnail stand-in when an asset has no preview image: a glyph for its
+/// kind. Kind strings are free-form ("image", "Texture", "Static Mesh"), so
+/// they match by keyword; the full kind stays in the tooltip and the field's
+/// accessible value instead of being truncated into a 34pt tile.
+struct AssetKindTile: View {
     let kind: String?
     let isEnabled: Bool
+    /// True when the tile previews what the empty field accepts.
+    var isPlaceholder = false
 
     var body: some View {
-        Text(kind ?? "--").truncatingTail().tooltip(kind ?? "No asset")
-            .font(.caption)
-            // This is thumbnail artwork; the field's accessible value keeps
-            // the full kind while its name and subtitle follow text scaling.
-            .textScaler(.identity)
-            .foregroundColor(isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
-            .padding(horizontal: 4, vertical: 2).frame(width: 34)
-            .background(.surfaceOverlay)
-            .cornerRadius(.rowRadius)
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            Icon(Self.icon(for: kind), size: 14,
+                 color: !isEnabled || isPlaceholder ? .onSurfaceMuted : .onSurfaceVariant)
+        }
+        .frame(width: 34, height: 24)
+        .background(.surfaceVariant)
+        .cornerRadius(.rowRadius)
+        .tooltip(kind ?? "No asset")
+    }
+
+    static func icon(for kind: String?) -> BundleImageResource {
+        guard let kind = kind?.lowercased() else { return UIIcons.File.file }
+        let groups: [([String], BundleImageResource)] = [
+            (["image", "texture", "sprite", "png", "jpg", "jpeg", "webp", "svg"], UIIcons.Media.image),
+            (["mesh", "model", "gltf", "glb", "obj"], UIIcons.Editor.box),
+            (["material", "shader"], UIIcons.Editor.brush),
+            (["audio", "sound", "music", "wav", "mp3"], UIIcons.Media.music),
+            (["video", "movie", "mp4"], UIIcons.Media.video),
+            (["scene", "prefab", "level"], UIIcons.Editor.layers),
+            (["script", "code", "swift"], UIIcons.File.fileCode),
+            (["text", "json", "document"], UIIcons.File.fileText),
+            (["package", "bundle", "archive"], UIIcons.File.package),
+        ]
+        return groups.first { keywords, _ in keywords.contains { kind.contains($0) } }?.1 ?? UIIcons.File.file
     }
 }
 
 private struct AssetRefPreview: View {
     let ref: AssetRef?
+    let acceptedKinds: Set<String>
     let isEnabled: Bool
 
     var body: some View {
         if let previewPath = ref?.previewPath, !previewPath.isEmpty {
             AsyncImage(url: URL(fileURLWithPath: previewPath), width: 34, height: 24) {
-                AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
+                tile
             }
             .opacity(isEnabled ? 1 : 0.55)
             .clipped()
-            .background(.surfaceOverlay)
+            .background(.surfaceVariant)
             .cornerRadius(.rowRadius)
         } else {
-            AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
+            tile
         }
+    }
+
+    /// An empty field that accepts one kind shows that kind's glyph, muted,
+    /// as a hint of what it takes.
+    private var tile: AssetKindTile {
+        if let ref { return AssetKindTile(kind: ref.kind, isEnabled: isEnabled) }
+        return AssetKindTile(kind: acceptedKinds.count == 1 ? acceptedKinds.first : nil,
+                             isEnabled: isEnabled, isPlaceholder: true)
     }
 }

@@ -24,7 +24,7 @@ AssetRefField(value: $texture,
 
 - 凹面输入底色、inputRadius、水平 6/垂直 4pt padding；预览 34×24，不按文字缩放放大像素。
 - 字段按内容自然增高，最小为 32pt 乘文字缩放；触摸时至少 52pt，为内部 44pt 按钮和上下 padding 留出空间，不使用固定 32pt 高度裁掉操作。
-- 名称、副标题和 kind 单行省略并提供全文 tooltip；字段语义始终保存完整名称、kind 与副标题。名称与副标题跟随文字缩放，预览中的 kind fallback 保持缩略图字号。文字列可收缩，预览、清空和选择按钮不被挤小。
+- 名称与副标题单行省略并提供全文 tooltip，跟随文字缩放；字段语义始终保存完整名称、kind 与副标题。没有预览图时，缩略图位显示按 kind 关键词（不区分大小写）选出的图标：image/texture → 图像，mesh/model → 立方体，material/shader → 画笔，audio、video、scene、script、text、package 各有对应图标，其余为通用文件；完整 kind 只在 tooltip 和语义中，不再把 kind 文字截断成 “im…”。空字段只接受一种 kind 时，以弱化色显示该 kind 的图标，提示可拖入的内容。文字列可收缩，预览、清空和选择按钮不被挤小。
 - 清空使用 ghost ×，名称为 `Clear asset`；选择使用 ghost chevron，名称为 `Choose asset`，暴露当前值与展开态。触摸目标至少 44×44。
 - 选择菜单在锚点下方展开，240pt 首选宽度、窗口夹紧、空间不足翻转；触摸行至少 44pt，长选项在菜单中完整换行。选择后关闭，Escape/外部点击取消。
 
@@ -34,7 +34,7 @@ AssetRefField(value: $texture,
 
 `AssetDropTarget` 通过场景的 `AssetDropRegistryHolder.current` 注册实时矩形。拖拽源在释放时提交 `AssetDropPayload`，兼容且启用的目标接收它；布局变化使用 live node frame，不维护另一套命中表。高亮与 activePayload 是运行会话状态；宿主负责安装/释放其注册表。
 
-弹层需要窗口根部的 PortalHost，通常由 LayerRoot 提供。预览加载失败显示 kind fallback；没有 pickerOptions 的应用应提供自己的资源选择入口，不能只依赖拖放。
+弹层需要窗口根部的 PortalHost，通常由 LayerRoot 提供。预览加载失败时回退到同一 kind 图标；没有 pickerOptions 的应用应提供自己的资源选择入口，不能只依赖拖放。
 
 ## 验收
 
@@ -48,3 +48,5 @@ Gallery `assetRef` 页使用实际容器宽度，包含长名称/副标题和一
 
 - [AssetRefField.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Controls/Fields/AssetRefField.swift)
 - [AssetDropTarget.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Overlays/AssetDropTarget.swift)
+
+字段 chrome 与其他输入一致：surface 底色、1pt 输入边框和输入圆角，缩略图格为 34×24 的 surfaceVariant 圆角块；拖放时的接受/拒绝高亮仍叠加在其上。`AssetRefFieldTests.kindGlyphs` 覆盖关键词映射，`thumbnailIsAGlyph` 确认空值和有值时字段内都没有 kind 文字。DevTools 在 1280 Gallery `--component assetRef` 的浅色与深色主题下截图确认：三个自适应预览和 “Choose a texture” 空字段都显示图像图标格，字段边界清晰。
