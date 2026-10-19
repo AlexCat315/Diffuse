@@ -168,7 +168,7 @@ enum DeveloperPerformanceMonitorID: String, Hashable, CaseIterable {
         }
     }
 
-    var chartMode: ChartRenderMode {
+    var chartMode: ChartMark {
         switch self {
         case .renderDrawCalls,
              .renderPasses,
@@ -400,7 +400,7 @@ struct DeveloperProfilerOverview: View {
                     DeveloperProfilerLegend(label: L("Simulation"), color: .accentSecondary)
                     DeveloperProfilerLegend(label: "16.7 ms", color: .warning)
                 }
-                MonitorChart(series: [.line(cpu, color: .accent),
+                Chart([.line(cpu, color: .accent),
                                        .line(present, color: .success),
                                        .line(simulation, color: .accentSecondary)],
                              thresholds: [ChartThreshold(value: 16.7, color: .warning)],
@@ -1033,12 +1033,10 @@ private struct DeveloperProfilerFrameGraph: View {
                                             selectedSampleIndex: selectedSampleIndex)
                 .frame(height: 44)
 
-            MonitorChart(values: values,
-                         color: .accent,
-                         mode: .line,
-                         threshold: ChartThreshold(value: 16.7, color: .warning),
-                         marker: developerProfilerMarker(samples: visibleSamples,
-                                                         selectedSample: selectedSample),
+            Chart([.line(values)],
+                  thresholds: [ChartThreshold(value: 16.7, color: .warning)],
+                  markers: developerProfilerMarker(samples: visibleSamples,
+                                                   selectedSample: selectedSample).map { [$0] } ?? [],
                          style: ChartStyle(minValue: 0,
                                            maxValue: graphMaxValue,
                                            gridLineCount: 5,
@@ -1651,12 +1649,12 @@ private struct DeveloperPerformanceMonitorGraphCard: View {
                     .buttonStyle(.ghost)
                 }
 
-                MonitorChart(values: monitor.values,
-                             color: monitor.status == .nominal ? monitor.category.color : developerPerformanceStatusColor(monitor.status),
-                             mode: monitor.id.chartMode,
-                             threshold: monitor.limit.map { ChartThreshold(value: $0, color: .warning) },
-                             marker: developerPerformanceMonitorMarker(monitor: monitor,
-                                                                       selectedSampleIndex: selectedSampleIndex.wrappedValue),
+                Chart([ChartSeries(values: monitor.values,
+                                   color: monitor.status == .nominal ? monitor.category.color : developerPerformanceStatusColor(monitor.status),
+                                   mark: monitor.id.chartMode)],
+                      thresholds: monitor.limit.map { [ChartThreshold(value: $0, color: .warning)] } ?? [],
+                      markers: developerPerformanceMonitorMarker(monitor: monitor,
+                                                                 selectedSampleIndex: selectedSampleIndex.wrappedValue).map { [$0] } ?? [],
                              style: ChartStyle(minValue: 0,
                                                gridLineCount: 5,
                                                lineWidth: 1.4,

@@ -76,7 +76,7 @@ private func developerTraceMonitorColor(_ track: DeveloperTraceTrack) -> Semanti
     }
 }
 
-private func developerTraceMonitorMode(_ track: DeveloperTraceTrack) -> ChartRenderMode {
+private func developerTraceMonitorMode(_ track: DeveloperTraceTrack) -> ChartMark {
     switch track {
     case .frame, .cpu, .gpuPresent, .particles:
         return .line

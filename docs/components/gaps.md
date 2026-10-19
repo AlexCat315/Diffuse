@@ -15,7 +15,7 @@
 | 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed、label 槽）/RadioGroup、Slider（刻度/Page）、RangeSlider（双 thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | 无通用缺失；FAB 按规范视觉基线不纳入 |
 | 文本与数值输入 | TextField（含 Text Editor / 代码编辑）、TextArea、SearchField、NumberField（步进/locale）、Vec3Field（locale/缩放）、Select/Combobox、ColorField、AssetRefField、JsonField、FieldLabel/Link/KeyCap | OTP/PIN P3、masked input P3、数值拖拽 scrub P2 |
 | 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 周/月/年选择 P2、时区选择入口 P2、区间预设 P2 |
-| 集合与数据 | List（单选/多选按 binding 类型、虚拟化/键盘）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualStack（固定/可变行高）、Chart（line/bar/sparkline/折行图例）、Timeline、Tag | TreeTable P2、DataTable 高级能力 P2、Chart 更多图形/图例选择 P2 |
+| 集合与数据 | List（单选/多选按 binding 类型、虚拟化/键盘）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualStack（固定/可变行高）、Chart（line/area/分组或堆叠 bar/scatter/pie·donut、可切换图例、数据点选择）、Timeline、Tag | TreeTable P2、DataTable 高级能力 P2 |
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | 菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Alert 窄宽操作堆叠、关闭与大字号、Badge 长文本已补齐，Banner 由 Alert 覆盖 |
@@ -141,7 +141,7 @@
 | List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动仍待补 | P1 已完成；边缘自动滚动 P2 |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |
-| Chart | pie/area/scatter/stacked、图例选择、数据点选择；多序列标题、折行图例与系列开关已实现，见 [Chart](chart.md) | P2 |
+| Chart | pie/donut、area、scatter、分组与堆叠 bar、图例切换与数据点选择（指针/触摸/键盘/辅助功能）已在单一 `Chart` 中实现，见 [Chart](chart.md)；坐标轴刻度标签、时间轴、缩放平移仍缺 | 已完成；轴标签/缩放 P3 |
 | Timeline | 分组/折叠、缩放；容器窄宽重排、完整时间语义与 200% 字号已完成，见 [Timeline](timeline.md) | P2 |
 | Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义；触摸展开验收见规范 5-10，触摸行高与水平翻转已有 | P2 |
 | CommandPalette | 结果列表已虚拟化（视口 + overscan）；compact 几何、触摸行高、模糊匹配、分组、session 级最近使用与自定义 footer 已完成 | 已完成 |
@@ -168,7 +168,7 @@
 
 **P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
-**P2（长尾/体验）**：TreeTable、RichText/Markdown、Chart 扩展、DataTable 高级能力、文本编辑器 snippets、图片缓存与解码能力、Workspace 深化。
+**P2（长尾/体验）**：TreeTable、RichText/Markdown、DataTable 高级能力、文本编辑器 snippets、图片缓存与解码能力、Workspace 深化。
 
 **P3（按需）**：OTP/PIN、masked input、外链确认等。
 

@@ -87,44 +87,68 @@ struct VirtualStackStory: View {
 }
 
 struct ChartStory: View {
-    private let values: [Float] = [12, 19, 16, 28, 21, 35, 24, 31, 40, 34, 47, 42]
+    private let revenue: [Float] = [12, 19, 16, 28, 21, 35, 24, 31, 40, 34, 47, 42]
     private let signups: [Float] = [8, 12, 10, 17, 14, 20, 18, 23, 27, 24, 30, 28]
-    private let conversions: [Float] = [3, 5, 4, 7, 6, 8, 7, 9, 11, 10, 12, 13]
-    private let latency: [Float] = [40, 38, 42, 36, 44, 41, 46, 43, 47, 45, 50, 48]
-    @State private var showsSignups = true
-
-    private var allSeries: [ChartSeries] {
-        [.line(values, color: .accent, title: "Revenue"),
-         .line(signups, color: .success, title: "Signups"),
-         .line(conversions, color: .warning, title: "Conversion"),
-         .line(latency, color: .info, title: "Latency")]
-    }
-    private var visibleSeries: [ChartSeries] {
-        allSeries.enumerated().compactMap { $0.offset == 1 && !showsSignups ? nil : $0.element }
-    }
+    private let online: [Float] = [14, 18, 12, 22, 19, 25]
+    private let retail: [Float] = [9, 7, 11, 8, 12, 10]
+    private let latency: [Float] = [120, 180, 240, 310, 360, 420, 470, 520, 610, 700]
+    private let errors: [Float] = [1.2, 1.6, 2.1, 2.0, 2.9, 3.4, 3.1, 4.2, 4.8, 5.6]
+    @State private var point: ChartPoint?
+    @State private var hidden: Set<String> = []
+    @State private var stacked = false
+    @State private var slice: ChartPoint?
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Line & threshold", "A deterministic fixture makes changes easy to compare.") {
-                MonitorChart(values: values, threshold: ChartThreshold(value: 30, color: .warning), marker: ChartMarker(index: 8, color: .success)).frame(height: 130)
+            StorySection("Trend", "Area and line marks with a threshold. Hover or drag to inspect a value; click or tap pins it, arrows step and Escape clears. Legend items show or hide a series.") {
+                Chart([.area(revenue, color: .accent, title: "Revenue"), .line(signups, color: .success, title: "Signups")],
+                      thresholds: [ChartThreshold(value: 30, color: .warning)]) {
+                    $0.label = "Monthly revenue and signups"
+                    $0.selection.point = $point
+                    $0.legend.placement = .bottom
+                    $0.legend.hiddenSeries = $hidden
+                }
+                .frame(height: 200).debugName("chart-trend")
+                Text(point.map { "Selected: \($0.series == 0 ? "Revenue" : "Signups") · month \($0.index + 1)" } ?? "Nothing selected")
+                    .font(.caption).foregroundColor(.onSurfaceMuted).debugName("chart-trend-selection")
             }
-            StorySection("Bars & sparkline", "Compact charts share the same rendering primitive.") {
-                BarChart(values).frame(height: 110)
-                SparklineChart(values).frame(height: 60)
-            }
-            StorySection("Series & legend", "Titled series feed the wrapping legend. Narrow containers wrap whole items; the chart and legend share the same visible series.") {
-                MonitorChart(series: visibleSeries).frame(height: 120)
-                ChartLegend(series: visibleSeries).frame(width: .percent(100)).debugName("chart-legend-wide")
+            StorySection("Grouped and stacked bars", "Bar series sit side by side per category, or accumulate when stacked.") {
                 Row(alignment: .center, spacing: 8) {
-                    Checkbox(isOn: $showsSignups).accessibilityLabel("Show signups").debugName("chart-legend-toggle")
-                    Text("Show signups").font(.caption).foregroundColor(.onSurfaceMuted)
+                    Checkbox("Stacked", isOn: $stacked).debugName("chart-stacked")
                 }
-                Box {
-                    ChartLegend(series: allSeries).frame(width: 220).debugName("chart-legend-narrow")
+                Chart([.bar(online, color: .accent, title: "Online"), .bar(retail, color: .warning, title: "Retail")],
+                      style: ChartStyle(stacking: stacked ? .stacked : .none)) {
+                    $0.label = "Sales by channel"
+                    $0.selection.point = $point2
+                    $0.legend.placement = .bottom
                 }
+                .frame(height: 180).debugName("chart-bars")
+            }
+            StorySection("Scatter", "Points use their own x values; selection picks the nearest point.") {
+                Chart([.points(x: latency, y: errors, color: .error, title: "Error rate")]) {
+                    $0.label = "Error rate by latency"
+                    $0.selection.point = $point3
+                    $0.selection.valueText = { String(format: "%.1f%%", $0) }
+                }
+                .frame(height: 160).debugName("chart-scatter")
+            }
+            StorySection("Donut", "Slices take the categorical palette. Selecting a slice lifts it and shows its share.") {
+                Chart(slices: [ChartSlice("Desktop", value: 58), ChartSlice("Mobile", value: 31),
+                               ChartSlice("Tablet", value: 8), ChartSlice("Other", value: 3)]) {
+                    $0.label = "Sessions by device"
+                    $0.selection.point = $slice
+                    $0.legend.placement = .bottom
+                }
+                .frame(height: 220).debugName("chart-donut")
+            }
+            StorySection("Sparkline", "A compact trend for cards and table cells.") {
+                Chart([.area(revenue, color: .success)], style: .sparkline).frame(width: 160, height: 40)
             }
         }
     }
+
+    @State private var point2: ChartPoint?
+    @State private var point3: ChartPoint?
 }
 
 /// Browses the whole bundled icon set: every glyph, its name, and the size it

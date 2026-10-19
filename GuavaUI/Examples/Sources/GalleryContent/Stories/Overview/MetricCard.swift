@@ -37,7 +37,7 @@ struct MetricCard: View {
             }
             if history.isEmpty { Spacer() }
             else {
-                SparklineChart(history, color: tone, style: ChartStyle(minValue: 0, maxValue: 100, gridLineCount: 0, lineWidth: 2, contentInset: 2))
+                Chart([.area(history, color: tone)], style: ChartStyle(minValue: 0, maxValue: 100, gridLineCount: 0, lineWidth: 2, contentInset: 2))
                     .frame(height: 42).accessibilityHidden()
             }
             Text(detail).font(.caption).foregroundColor(.onSurfaceMuted)

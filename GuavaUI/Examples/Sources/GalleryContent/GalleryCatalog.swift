@@ -54,7 +54,7 @@ public enum GalleryCatalog {
         .init(.scrollbar, "Scrollbar", "Data", "A focusable slider thumb bound to a ScrollView offset."),
         .init(.tree, "Tree", "Data", "Hierarchy, expansion, selection and search with automatic expansion."),
         .init(.virtualStack, "VirtualStack", "Data", "Fixed or variable row heights, viewport-driven materialization and scroll-to-index."),
-        .init(.chart, "Chart", "Data", "Sparklines, bars, multiple series, thresholds and markers."),
+        .init(.chart, "Chart", "Data", "Line, area, grouped or stacked bars, scatter and donut charts with selection and a toggleable legend."),
         .init(.icon, "Icon", "Data", "Bundled SVG resources tinted by the current semantic theme."),
         .init(.avatar, "Avatar", "Data", "Asynchronous images, Unicode initials, stable theme colors and overlapping member groups."),
         .init(.image, "Image", "Data", "Fit/fill/stretch, asynchronous loading, explicit errors and retry."),

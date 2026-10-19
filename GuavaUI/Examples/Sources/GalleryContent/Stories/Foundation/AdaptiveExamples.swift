@@ -60,6 +60,7 @@ private struct AdaptiveControlSample: View {
     @State private var navigationPath: [String] = []
     @State private var navigationOpen = false
     @State private var scrollbarOffset: CGFloat = 0
+    @State private var chartPoint: ChartPoint?
     @State private var dndLane: String?
     @State private var dndHover = false
     @State private var wheel: Int = 2
@@ -346,7 +347,7 @@ private struct AdaptiveControlSample: View {
         case .virtualStack: AnyView(VirtualStack(Array(0..<300), id: \.self, rowHeight: 28) { row in
             Text("Record \(row + 1)").padding(horizontal: 8)
         }.frame(width: .percent(100), height: .points(110)))
-        case .chart: AnyView(BarChart([12, 19, 16, 28, 21, 35]).frame(width: .percent(100), height: .points(110)))
+        case .chart: AnyView(Chart([.bar([12, 19, 16, 28, 21, 35], title: "Orders")]) { $0.selection.point = $chartPoint }.frame(width: .percent(100), height: .points(110)))
         case .boundedScroll: AnyView(BoundedScrollView(contentHeight: 240, minHeight: 90, maxHeight: 150) {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 for row in 0..<8 {
