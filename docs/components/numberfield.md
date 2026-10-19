@@ -32,12 +32,16 @@ NumberField(value: $amount, locale: Locale(identifier: "de_DE")) // 12,5
 | `minValue` / `maxValue` | `nil` | 提交与步进时夹紧；到达边界时步进按钮禁用 |
 | `step` | `nil` | 步进与输入归一化的步长 |
 | `showsStepper` | `false` | 显示紧凑上下箭头列；方向键步进不依赖它 |
+| `prefix` | `nil` | `NumberField.Prefix("W", tint: .accent)`：输入框内前导标签芯片，与文本共用一个圆角边框与焦点环，并作为拖拽 scrub 手柄 |
+| `resetValue` | `nil` | 双击前缀芯片恢复为该值 |
 | `locale` | `.current` | 小数分隔符、数字与正负号；绑定始终为 `Float`，不保存格式化字符串 |
 
 ## Behavior
 
 - **提交时机**：`Return` 或失焦时提交
 - **键盘步进**：↑ / ↓ 调整值，Shift ×10、Alt ×0.1；达到 min / max 边界停止
+- **拖拽 scrub**：有 `prefix` 时水平拖动芯片实时改值，每 4pt 一个 `step`（未指定为 1）；按下时按住 Shift ×10、Option/Alt ×0.1；结果夹紧到 min / max，并同步正在编辑的草稿
+- **重置**：有 `resetValue` 时双击芯片恢复
 - **解析策略**：按 `locale` 归一化小数分隔、数字与正负号后完整解析；支持指数，拒绝分组符、尾随垃圾、NaN 和无穷值。失败时恢复当前已提交值；例如 `de_DE` 接受 `12,5`，拒绝 `1.234`，不会把它误当 1234。
 - **编辑体验**：聚焦后显示 draft，避免把 `1.`、`-` 这类中间态立刻回写成格式化结果
 - **格式化**：不插入千位分组；小数位上限夹紧在 0…6，移除尾随零并归一化舍入后的负零。`de_DE` 的 1.5 显示 `1,5`，`en_US_POSIX` 显示 `1.5`。
@@ -55,8 +59,8 @@ NumberField(value: $amount, locale: Locale(identifier: "de_DE")) // 12,5
 
 ## Known issues / TODO
 
-- 还没有拖拽 scrub
-- 单轴重置、向量复制/粘贴尚未提供内建入口
+- 拖拽调整的修饰键在按下时决定（指针移动事件不携带修饰键）
+- 芯片不进入 Tab 顺序：键盘与读屏使用文本输入与方向键步进；芯片名称作为输入框辅助功能标签
 
 ## Vec3Field
 

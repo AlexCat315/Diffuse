@@ -173,8 +173,10 @@ struct NumberFieldStory: View {
     @State private var localized: Float = 1.25
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Numeric editing", "Invalid drafts revert on blur. Arrow keys step; Shift multiplies the step and Option divides it.") {
+            StorySection("Numeric editing", "Invalid drafts revert on blur. Arrow keys step; Shift multiplies the step and Option divides it. A prefix chip scrubs by dragging and resets on double-click.") {
                 NumberField(value: $amount, isEnabled: options.isEnabled, minValue: 0, maxValue: 10, step: 0.25, showsStepper: true).frame(width: 220)
+                NumberField(value: $amount, isEnabled: options.isEnabled, minValue: 0, maxValue: 10, step: 0.25,
+                            prefix: NumberField.Prefix("W", tint: .accent), resetValue: 1).frame(width: 220).debugName("number-scrub")
                 NumberField(value: .constant(0), isEnabled: options.isEnabled, mixedValueLabel: "Mixed value").frame(width: 220)
                 NumberField(value: .constant(42), isEnabled: false).frame(width: 220)
                 Text("Committed value: \(amount)").font(.caption).foregroundColor(.onSurfaceMuted)
@@ -199,8 +201,9 @@ struct Vec3Story: View {
     @State private var y: Float = 2
     @State private var z: Float = 3
     var body: some View {
-        StorySection("Transform", "Each axis shares numeric validation. Wide rows keep X/Y/Z on one line; narrow rows wrap X/Y before Z instead of squeezing the fields.") {
-            Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, step: 0.1).frame(width: .percent(100))
+        StorySection("Transform", "Drag an axis chip to scrub it (hold Shift for coarse, Option for fine); double-click a chip to reset that axis. Right-click the row to copy, paste or reset the vector. Wide rows keep X/Y/Z on one line; narrow rows wrap.") {
+            Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, step: 0.1, resetValue: SIMD3(0, 0, 0))
+                .frame(width: .percent(100)).debugName("vec3-transform")
             Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, mixedAxes: ["x", "z"]).frame(width: 240)
             Text("Position: \(x), \(y), \(z)").font(.caption).foregroundColor(.onSurfaceMuted)
         }

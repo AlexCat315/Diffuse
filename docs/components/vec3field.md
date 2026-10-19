@@ -26,6 +26,19 @@ inputs survive the reflow.
 geometry. Gallery `--component vec3Field` includes a 240pt mixed-value example
 and a full-width example for the same comparison.
 
+## Scrub, Reset And Copy/Paste
+
+Each axis is a `NumberField` whose colored axis chip is the scrub handle: drag
+it horizontally to change that axis (one step per 4pt; Shift ×10, Option ×0.1
+when held at press). With `resetValue: SIMD3(0, 0, 0)`, double-clicking a chip
+resets that axis. Right-clicking the row offers Copy Vector (locale-independent
+`1, -2.5, 0`), Paste Vector (accepts `1, 2, 3`, `(1 2 3)`, `[1;2;3]` and
+`Vector3(1, 2, 3)`; disabled when the clipboard does not parse) and Reset.
+Chip and text share one rounded border, focus ring and the touch/text-scale
+height; the text fields are labeled X, Y and Z for assistive clients.
+`Vec3FieldTests` cover scrub math, parsing, a real chip drag, double-click reset
+and paste through the menu.
+
 ## Notes
 
 - Defaults to `.small` text-field sizing and two decimal places.

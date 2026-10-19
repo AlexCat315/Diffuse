@@ -3,7 +3,23 @@ import EngineKernel
 import GuavaUIRuntime
 
 /// Numeric text field that keeps an editable draft and commits parsed floats on submit or blur.
+///
+/// With a `prefix`, a leading label chip is drawn inside the field. Dragging
+/// the chip horizontally scrubs the value (one step per 4pt; hold Shift when
+/// starting for ×10, Option/Alt for ×0.1). With a `resetValue`, double-clicking
+/// the chip restores it.
 public struct NumberField: View {
+    /// A short leading label, such as an axis name, that doubles as the scrub handle.
+    public struct Prefix {
+        public var title: String
+        public var tint: SemanticColorRef
+
+        public init(_ title: String, tint: SemanticColorRef = .onSurfaceMuted) {
+            self.title = title
+            self.tint = tint
+        }
+    }
+
     public let value: Binding<Float>
     public let decimals: Int
     public let size: TextField.Size
@@ -13,6 +29,8 @@ public struct NumberField: View {
     public let step: Float?
     public let showsStepper: Bool
     public let mixedValueLabel: String?
+    public let prefix: Prefix?
+    public let resetValue: Float?
     public let locale: Locale
 
     public init(value: Binding<Float>,
@@ -24,6 +42,8 @@ public struct NumberField: View {
                 step: Float? = nil,
                 showsStepper: Bool = false,
                 mixedValueLabel: String? = nil,
+                prefix: Prefix? = nil,
+                resetValue: Float? = nil,
                 locale: Locale = .current) {
         self.value = value
         self.decimals = max(0, min(decimals, 6))
@@ -34,6 +54,8 @@ public struct NumberField: View {
         self.step = step
         self.showsStepper = showsStepper
         self.mixedValueLabel = mixedValueLabel
+        self.prefix = prefix
+        self.resetValue = resetValue
         self.locale = locale
     }
 
@@ -90,27 +112,81 @@ private struct _StatefulNumberField: View {
             }
         }
 
-        guard field.showsStepper else {
-            return AnyView(input)
-        }
+        // A prefix joins the scrub chip to the field's own chrome, so border,
+        // hover and focus ring wrap both.
+        let styled = field.prefix.map { AnyView(prefixed(input, prefix: $0)) } ?? AnyView(input)
+        return AnyView(stepped(styled))
+    }
 
-        // Compact spinner. Keyboard stepping (arrow keys) stays the primary
-        // path; the buttons exist so the field is usable with the pointer too.
-        return AnyView(
-            Row(alignment: .center, spacing: 2) {
-                input
-                    .flex()
-                Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                    stepButton(UIIcons.Navigation.chevronUp,
-                               title: "Increment",
-                               isEnabled: canStepUp) { increment() }
-                    stepButton(UIIcons.Navigation.chevronDown,
-                               title: "Decrement",
-                               isEnabled: canStepDown) { decrement() }
+    /// Height follows the size and text scale, with the 44pt touch floor, so
+    /// the chip and the text grow together.
+    private func prefixed(_ input: some View, prefix: NumberField.Prefix) -> some View {
+        SurfaceReader { surface in
+            TextScalerReader { scaler in
+                // TextField owns its layout height, so a fixed-height column sizes it.
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    input
+                        .textFieldStyle(NumericPrefixFieldStyle(chip: AnyView(scrubChip(prefix))))
+                        .accessibilityLabel(prefix.title)
+                        .flex(1, shrink: 1, basis: 0)
                 }
-                .frame(minWidth: 22)
+                .frame(height: max(scaler.scale(prefixHeight), surface.input.contains(.touch) ? surface.minimumControlExtent : 0))
             }
-        )
+        }
+    }
+
+    private var prefixHeight: Float {
+        switch field.size {
+        case .large: 40
+        case .automatic, .regular: 32
+        case .small: 28
+        }
+    }
+
+    @ViewBuilder
+    private func stepped(_ input: some View) -> some View {
+            if field.showsStepper {
+                // Compact spinner. Keyboard stepping (arrow keys) stays the primary
+                // path; the buttons exist so the field is usable with the pointer too.
+                Row(alignment: .center, spacing: 2) {
+                    input
+                        .flex()
+                    Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                        stepButton(UIIcons.Navigation.chevronUp,
+                                   title: "Increment",
+                                   isEnabled: canStepUp) { increment() }
+                        stepButton(UIIcons.Navigation.chevronDown,
+                                   title: "Decrement",
+                                   isEnabled: canStepDown) { decrement() }
+                    }
+                    .frame(minWidth: 22)
+                }
+            } else {
+                input
+            }
+    }
+
+    @ViewBuilder
+    private func scrubChip(_ prefix: NumberField.Prefix) -> some View {
+        let scrub = NumericScrub(perPoint: resolvedStep / 4, clamp: { clampedValue($0) }, reset: field.resetValue)
+        NumericScrubHandle(value: Binding(get: { currentValue }, set: { set($0) }), scrub: scrub,
+                                      isEnabled: field.isEnabled) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Text(prefix.title).font(.label).foregroundColor(prefix.tint)
+            }
+            .frame(minWidth: 22)
+            .padding(horizontal: 5)
+        }
+        .background(prefix.tint.opacity(field.isEnabled ? 0.12 : 0.05))
+        .tooltip(field.resetValue == nil ? "Drag to adjust \(prefix.title)" : "Drag to adjust \(prefix.title); double-click to reset")
+    }
+
+    /// Writes a scrubbed or reset value and keeps an open draft in step.
+    private func set(_ raw: Float) {
+        let next = normalized(raw)
+        if field.value.wrappedValue != next || field.mixedValueLabel != nil { field.value.wrappedValue = next }
+        draft = TextBuffer(NumberField.format(next, decimals: field.decimals, locale: field.locale))
+        draftChanged = false
     }
 
     private func stepButton(_ icon: BundleImageResource,
