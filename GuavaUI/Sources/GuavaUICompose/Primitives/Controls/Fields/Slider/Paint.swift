@@ -28,13 +28,20 @@ extension SliderHost {
 
         if showsTicks, let step, span.isFinite, span > 0 {
             let count = (span / step).rounded(.down)
-            if count.isFinite, count >= 1, count <= 40 {
+            // Small dots inside the track: light over the fill, muted beyond it,
+            // hidden under the thumb, and omitted when they would crowd together.
+            let spacing = count > 0 ? geometry.length / Float(count) : 0
+            if count.isFinite, count >= 1, count <= 40, spacing >= 10 {
+                let dot = max(2, min(3, appearance.trackHeight - 1))
+                let thumbHalf = appearance.thumbDiameter / 2 + 1
                 for index in 0...Int(count) {
                     let tick = geometry.position(for: Float(Double(index) * step / span))
+                    guard abs(tick - position) > thumbHalf else { continue }
+                    let filled = tick >= fillStart && tick <= fillStart + fillLength
+                    let color = filled ? node.theme.colors.onAccent.multipliedAlpha(0.7) : node.theme.colors.onSurfaceMuted.multipliedAlpha(0.55)
                     list.addRoundedRect(geometry.rect(
-                        at: min(max(0, tick - 0.5), max(0, geometry.length - 1)), length: 1,
-                        thickness: min(6, max(3, appearance.trackHeight + 3)), origin: origin),
-                        radius: 0.5, color: node.theme.colors.onSurfaceMuted)
+                        at: min(max(0, tick - dot / 2), max(0, geometry.length - dot)), length: dot,
+                        thickness: dot, origin: origin), radius: dot / 2, color: color)
                 }
             }
         }

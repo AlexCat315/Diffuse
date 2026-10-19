@@ -82,7 +82,15 @@ private struct AvatarGroupSlot: _PrimitiveView {
     let zIndex: Float
     let content: AnyView
     func _makeNode() -> Node { Node() }
-    func _updateNode(_ node: Node) { node.zIndex = zIndex }
+    func _updateNode(_ node: Node) {
+        node.zIndex = zIndex
+        // A surface-colored ring above the avatar separates overlapping members.
+        let ring = node.theme.colors.surface, diameter = diameter
+        node.updateOverlayDraw(identity: ring) { list, origin in
+            list.addRoundedRectStroke(UIRect(x: Float(origin.x) - 1, y: Float(origin.y) - 1, width: diameter + 2, height: diameter + 2),
+                                      radius: diameter / 2 + 1, width: 2, color: ring)
+        }
+    }
     func _makeLayoutNode() -> LayoutNode? { let layout = LayoutNode(); _updateLayout(layout); return layout }
     func _updateLayout(_ layout: LayoutNode) {
         layout.positionType = .absolute; layout.setPosition(x, edge: .left); layout.setPosition(0, edge: .top)

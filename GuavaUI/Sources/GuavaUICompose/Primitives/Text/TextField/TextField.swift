@@ -1060,8 +1060,9 @@ public struct TextField: View {
         recordCaretActivity(state)
     }
 
+    /// Leading/trailing text inset; 8pt keeps text clear of the border.
     func horizontalInset(theme: Theme) -> Float {
-        max(4, theme.spacing.sm)
+        max(4, theme.spacing.md)
     }
 
     /// Width consumed by `prepend` slab + `prefix` glyph at the leading edge,

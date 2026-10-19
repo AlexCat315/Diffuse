@@ -97,7 +97,9 @@ public struct Popover<Label: View, Content: View>: View {
 private struct PopoverTriggerStyle: ButtonStyle {
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let theme = configuration.theme
-        return AnyView(configuration.label)
+        // The ring lives on its own wrapper node. Modifiers on an AnyView land
+        // on the label's node, so a clear ring would erase a label's border.
+        return Box(direction: .column, alignItems: .stretch, spacing: 0) { AnyView(configuration.label) }
             .cornerRadius(theme.inputs.radius)
             .border(configuration.isFocused ? theme.colors.focusRing : .clear,
                     width: configuration.isFocused ? 2 : 0)

@@ -69,8 +69,9 @@ public struct Tag: _PrimitiveView {
                     Icon(icon, size: metrics.iconSize, color: style.ink)
                         .flex(0, shrink: 0)
                 } else if showsDot {
-                    Icon(UIIcons.Shape.dot, size: metrics.dotSize, color: style.ink)
-                        .flex(0, shrink: 0)
+                    Box {}.frame(width: metrics.dotSize, height: metrics.dotSize)
+                        .background(style.ink).cornerRadius(metrics.dotSize / 2)
+                        .accessibilityHidden().flex(0, shrink: 0)
                 }
                 Text(title).font(metrics.font).foregroundColor(style.ink)
                     .flex(0, shrink: 1).frame(minWidth: 0)

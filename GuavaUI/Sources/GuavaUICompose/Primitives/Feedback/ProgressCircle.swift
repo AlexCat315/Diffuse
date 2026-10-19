@@ -91,7 +91,8 @@ public struct ProgressCircle: _PrimitiveView {
             let ringThickness = max(1.5, self.resolvedThickness(for: size))
             let outer = size / 2 - ringThickness / 2
             let inner = max(0.5, outer - ringThickness)
-            let track = theme.colors.surfaceSunken.multipliedAlpha(alpha)
+            // Same track tone as Slider: sunken surfaces are white in light themes.
+            let track = theme.colors.surfaceVariant.multipliedAlpha(alpha)
             paintRing(list: list, cx: cx, cy: cy, inner: inner, outer: outer,
                       from: 0, sweep: 2 * .pi, color: track)
             if indeterminate {

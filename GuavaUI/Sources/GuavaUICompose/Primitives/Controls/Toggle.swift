@@ -264,6 +264,12 @@ struct BoolControlHost: _PrimitiveView {
         }
     }
 
+    /// Centered within a touch-sized target, leading-aligned when stretched wider.
+    static func leadingOffset(available: Float, content: Float) -> Float {
+        let excess = max(0, available - content)
+        return available <= 44 ? excess * 0.5 : 0
+    }
+
     private func renderToggle(node: Node, origin: CGPoint, list: DrawList) {
         let frame = node.frame
         let width = Float(frame.width)
@@ -276,8 +282,11 @@ struct BoolControlHost: _PrimitiveView {
         let trackHeight: Float = 20
         let thumbDiameter: Float = 16
         let thumbInset: Float = 2
-        let trackWidth = node.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch) ? min(width, 38) : width
-        let trackRect = UIRect(x: originX + (width - trackWidth) * 0.5,
+        // The switch keeps its intrinsic size. A touch extent centers it in the
+        // 44pt target; a layout that stretches the control (a form value slot)
+        // leaves it at the leading edge instead of painting a full-width pill.
+        let trackWidth = min(width, variant.layoutSize.width)
+        let trackRect = UIRect(x: originX + Self.leadingOffset(available: width, content: trackWidth),
                                y: originY + (height - trackHeight) * 0.5,
                                width: trackWidth,
                                height: trackHeight)
@@ -335,8 +344,8 @@ struct BoolControlHost: _PrimitiveView {
         let colors = node.theme.colors
         let originX = Float(origin.x)
         let originY = Float(origin.y)
-        let edge = node.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch) ? min(width, height, variant.layoutSize.width) : min(width, height)
-        let boxRect = UIRect(x: originX + (width - edge) * 0.5,
+        let edge = min(width, height, variant.layoutSize.width)
+        let boxRect = UIRect(x: originX + Self.leadingOffset(available: width, content: edge),
                              y: originY + (height - edge) * 0.5,
                              width: edge,
                              height: edge)

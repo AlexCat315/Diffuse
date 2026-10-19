@@ -52,23 +52,26 @@ public struct EmptyState<Action: View>: View {
     public var body: some View {
         ThemeReader { theme in
             let metrics = Metrics(prominence: prominence, theme: theme)
-            Column(alignment: .center, spacing: metrics.gap) {
-                if showsIcon {
-                    Icon(icon ?? UIIcons.File.inbox, size: metrics.iconSize, color: .onSurfaceMuted)
-                        .padding(metrics.chipPadding)
-                        .background(theme.colors.surfaceVariant)
-                        .cornerRadius(theme.radius.pill)
-                        .accessibilityHidden()
+            // The capped column centers itself in whatever space the parent gives.
+            Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 0) {
+                Column(alignment: .center, spacing: metrics.gap) {
+                    if showsIcon {
+                        Icon(icon ?? UIIcons.File.inbox, size: metrics.iconSize, color: .onSurfaceMuted)
+                            .padding(metrics.chipPadding)
+                            .background(theme.colors.surfaceVariant)
+                            .cornerRadius(theme.radius.pill)
+                            .accessibilityHidden()
+                    }
+                    Text(title).font(metrics.titleFont).foregroundColor(.onSurface)
+                    if !message.isEmpty {
+                        Text(message).font(.body).foregroundColor(.onSurfaceMuted)
+                    }
+                    if hasAction {
+                        action.padding(EdgeInsets(top: metrics.actionGap))
+                    }
                 }
-                Text(title).font(metrics.titleFont).foregroundColor(.onSurface)
-                if !message.isEmpty {
-                    Text(message).font(.body).foregroundColor(.onSurfaceMuted)
-                }
-                if hasAction {
-                    action.padding(EdgeInsets(top: metrics.actionGap))
-                }
+                .frame(maxWidth: metrics.maxWidth)
             }
-            .frame(maxWidth: metrics.maxWidth)
             .padding(metrics.padding)
             .accessibility {
                 $0.role = .group

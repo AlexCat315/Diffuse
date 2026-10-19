@@ -87,14 +87,22 @@ public struct Badge: _PrimitiveView {
             stroke = base.multipliedAlpha(isEnabled ? 0.45 : 0.2)
             strokeWidth = 1
         }
+        // No title: a bare status dot (for activity feeds and list rows),
+        // not an empty pill.
+        if title.isEmpty, icon == nil, showsDot {
+            let size = metrics.dotSize + 3
+            return [Box {}.frame(width: size, height: size).background(isEnabled ? base : disabledInk).cornerRadius(size / 2)]
+        }
         return [
             Row(alignment: .center, spacing: metrics.gap) {
                 if let icon {
                     Icon(icon, size: metrics.iconSize, color: ink)
                         .flex(0, shrink: 0)
                 } else if showsDot {
-                    Icon(UIIcons.Shape.dot, size: metrics.dotSize, color: ink)
-                        .flex(0, shrink: 0)
+                    // A drawn disc: the dot glyph fills only a fraction of its icon box.
+                    Box {}.frame(width: metrics.dotSize, height: metrics.dotSize)
+                        .background(ink).cornerRadius(metrics.dotSize / 2)
+                        .accessibilityHidden().flex(0, shrink: 0)
                 }
                 Text(title).font(metrics.font).foregroundColor(ink)
                     .flex(0, shrink: 1).frame(minWidth: 0)
