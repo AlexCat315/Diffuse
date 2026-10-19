@@ -4,7 +4,7 @@ import GuavaUIRuntime
 public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case introduction, button, checkbox, toggle, slider, rangeSlider, rating, textField, textArea, textEditor
     case numberField, vec3Field, colorField, select, jsonField, assetRef, searchField
-    case list, multiSelectList, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, web, avatar
+    case list, sectionedList, reorderableList, swipeList, refreshableList, scrollbar, tree, virtualList, virtualStack, chart, icon, image, web, avatar
     case menu, menuButton, contextMenu, popover, popconfirm, actionSheet, modal, disclosure, tabs
     case panel, splitView, scrollView, boundedScroll, propertyGrid, workspace
     case layout, masonry, zStack, animation, theme, badge, alert, progress, empty
@@ -47,7 +47,6 @@ public enum GalleryCatalog {
         .init(.jsonField, "JsonField", "Inputs", "Multiline JSON validation, formatting and revert."),
         .init(.assetRef, "AssetRef / DropTarget", "Inputs", "Typed asset references, picker, clear action and accepted kinds."),
         .init(.list, "List", "Data", "Single selection, arrow-key navigation and activation."),
-        .init(.multiSelectList, "MultiSelectList", "Data", "Shift range, Cmd/Ctrl toggle, keyboard extension and select-all."),
         .init(.sectionedList, "SectionedList", "Data", "Sticky section headers and footers over the virtualized list contract."),
         .init(.reorderableList, "ReorderableList", "Data", "Drag handles, a drop indicator and keyboard moves over a caller-owned order."),
         .init(.swipeList, "SwipeList", "Data", "Trailing swipe actions on touch, plus an always-available row actions button and context menu."),

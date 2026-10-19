@@ -33,6 +33,7 @@ struct ListStory: View {
             Text("Selection: \(selected.map(String.init) ?? "None")  ·  \(activated)").font(.caption).foregroundColor(.onSurfaceMuted)
             if let selected { Text(galleryDocumentTitle(selected)).font(.caption).foregroundColor(.onSurfaceMuted) }
         }
+        MultipleSelectionListStory()
     }
 }
 
@@ -279,13 +280,13 @@ struct AssetStory: View {
     }
 }
 
-struct MultiSelectListStory: View {
+private struct MultipleSelectionListStory: View {
     @State private var selection: Set<Int> = [2]
     @State private var activated = "No activation yet"
 
     var body: some View {
-        StorySection("Multi-select list", "Click selects one row; Shift-click selects a range; Cmd/Ctrl-click toggles. Focus the list and use Shift+Arrow to extend, Cmd/Ctrl+A to select all.") {
-            MultiSelectList(Array(0..<12), id: \.self, selection: $selection,
+        StorySection("Multiple selection", "Pass a Set binding to List. Click selects one row; Shift-click selects a range; Cmd/Ctrl-click toggles. Focus the list and use Shift+Arrow to extend, Space to toggle and Cmd/Ctrl+A to select all.") {
+            List(Array(0..<12), id: \.self, selection: $selection,
                             onActivate: { activated = "Activated \(galleryDocumentTitle($0))" }) { row, isSelected in
                 ListRow(galleryDocumentTitle(row), leading: {
                     Icon(UIIcons.File.fileText, size: .medium, color: .onSurfaceMuted).accessibilityHidden()

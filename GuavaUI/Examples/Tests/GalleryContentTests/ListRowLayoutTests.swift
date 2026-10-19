@@ -11,7 +11,6 @@ struct ListRowLayoutTests {
     private func story(_ page: GalleryPage) -> AnyView {
         switch page {
         case .list: AnyView(ListStory())
-        case .multiSelectList: AnyView(MultiSelectListStory())
         default: AnyView(SectionedListStory())
         }
     }
@@ -21,7 +20,7 @@ struct ListRowLayoutTests {
         let old = TextEnvironmentHolder.current
         TextEnvironmentHolder.current = .bootstrapped(atlasTextureID: 1, primaryFontName: SystemFontDefaults.primaryFontName)
         defer { TextEnvironmentHolder.current = old }
-        for page in [GalleryPage.list, .multiSelectList, .sectionedList] {
+        for page in [GalleryPage.list, .sectionedList] {
             for width: Float in [330, 600, 970] { for scale: Float in [1, 2] { for dark in [false, true] {
                 let context = PlatformInputContext()
                 try context.withCurrent {

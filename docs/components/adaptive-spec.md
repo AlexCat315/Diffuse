@@ -282,16 +282,16 @@
 
 ### 3.4 数据集合
 
-**List / MultiSelectList / SectionedList / ReorderableList / Tree**
+**List / SectionedList / ReorderableList / Tree**
 
-- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点，可选 sticky 标题固定当前区段并由下一标题上推；ReorderableList 行尾 44pt handle；Tree 每级缩进 16、箭头列 18。`[已实现]`
+- 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；多选 List 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点，可选 sticky 标题固定当前区段并由下一标题上推；ReorderableList 行尾 44pt handle；Tree 每级缩进 16、箭头列 18。`[已实现]`
 - Tree 指示线只保留低对比度竖线（1pt、`onSurfaceMuted` 的 24% alpha），移除横向连接；禁用、同步延迟子节点、Home / End 与 Option / Alt + Left / Right 全部折叠 / 展开已完成，具体边界见 [Tree](tree.md)。
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；`ListRow` 标题单行省略，完整文本保留辅助功能/tooltip；前后槽保留徽标/状态，极窄时横向滚动。RTL 与条件空槽共用同一布局；自定义 rowContent 由作者选择该行契约。`[已实现]`，见 [ListRow](list.md#listrow标题与前后槽位)。
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
 - 重排：`ReorderableList` 提供 44pt 拖拽 handle、2pt 放置线、Escape 取消与一次 `onMove`；聚焦 handle 后 Up/Down 和辅助功能 increment/decrement 移动同一行，行身份与焦点跟随原行。当前为全量挂载的非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
 - 滑动操作：`SwipeList` 只在触摸面启用向 leading 滑动（LTR 左滑 / RTL 右滑），横向阈值 8pt，纵向手势交给 `ScrollView`；最多露出两个 74pt 宽、行高 ≥44 的 trailing 操作。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。当前为全量挂载。`[已实现]`，API 见 [SwipeList](swipelist.md)。
 - 下拉刷新：`List`/`VirtualStack` 接受 `RefreshOptions(isRefreshing:threshold:action:)`；触摸下拉越过阈值（默认 64pt，含 ScrollView 阻尼）只触发一次，指示器在 `isRefreshing` 清除前保持并在顶部预留 36pt inset，完成后回弹；`Spinner` 在 reducedMotion 下冻结。Cmd+R/Ctrl+R 为键盘/命令入口，调用方也可提供显式按钮。`[已实现]`，API 与边界见 [RefreshableList](refresh.md)。
-- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；MultiSelectList 支持 Shift/Cmd 点选、Shift+Arrow、Cmd/Ctrl+A；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。验收：`MultiSelectListTests`、`ReorderableListTests`、`RefreshTests`、`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
+- 交互与验收：List 方向键/Home/End/Enter + listItem 语义；多选 List（`Set` binding）支持 Shift/Cmd 点选、Shift+Arrow、Space、Cmd/Ctrl+A；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。验收：`ListMultipleSelectionTests`、`ReorderableListTests`、`RefreshTests`、`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
 
 **Table / DataTable**
 

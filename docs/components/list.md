@@ -1,6 +1,6 @@
-# List / MultiSelectList / ListRow
+| Fluent UI v9 | 单选 / 多选为同一 List 的模式（GuavaUI 按 binding 类型选择） |# List / ListRow
 
-垂直列表，固定行高并按可见区域虚拟化。`List` 是单选；`MultiSelectList` 使用稳定 ID 集合，支持 Shift 区间、Cmd/Ctrl 切换、键盘扩展与全选。行视觉（选区填充、padding、字体）走 `ListRowStyle`。
+垂直列表，固定行高并按可见区域虚拟化。`List` 按 selection binding 的类型选择模式：`Binding<ID?>` 为单选，`Binding<Set<ID>>` 为多选（Shift 区间、Cmd/Ctrl 切换、键盘扩展、Space 切换与全选），与 SwiftUI `List(selection:)` 一致。行视觉（选区填充、padding、字体）走 `ListRowStyle`。
 
 ## Anatomy
 
@@ -36,7 +36,7 @@ List(items, id: \.id, selection: $selectedID, rowHeight: 30, rowSpacing: 0) { it
 
 ## ListRow：标题与前后槽位
 
-`ListRow` 是可选的通用单行内容，供 `List`、`MultiSelectList` 与 `SectionedList` 共用；列表仍接受任意自定义 View。它继承外层字体与颜色，不决定选择状态或行高。
+`ListRow` 是可选的通用单行内容，供 `List`（单选/多选）与 `SectionedList` 共用；列表仍接受任意自定义 View。它继承外层字体与颜色，不决定选择状态或行高。
 
 ```swift
 ListRow(item.title, leading: {
@@ -54,20 +54,22 @@ ListRow(item.title, leading: {
 - 标题的完整值保留在辅助功能名称及截断 tooltip。触摸面应同时在详情或选中状态区展示完整值；Gallery 通过选中行下方的状态文本提供此入口。
 - 尾槽可放独立按钮；其点击优先于行选择，不把操作误判为选行。复杂多行内容仍由调用方自行布局和预算行高。
 
-## MultiSelectList
+## 多选
+
+传入 `Set` binding 即为多选，没有单独的多选组件：
 
 ```swift
 @State private var selection: Set<Item.ID> = []
 
-MultiSelectList(items, id: \.id, selection: $selection,
-                onActivate: { open($0) }) { item, isSelected in
+List(items, id: \.id, selection: $selection,
+     onActivate: { open($0) }) { item, isSelected in
     ListRow(item.title)
 }
 ```
 
 | 参数 | 默认 | 说明 |
 | ---- | ---- | ---- |
-| `selection` | `.constant([])` | 稳定 ID 集合 binding |
+| `selection` | 必填 | 稳定 ID 集合 binding；单选形式默认 `.constant(nil)` |
 | `rowHeight` | 30 | 与 List 同一条缩放/触摸规则 |
 | `rowSpacing` | 0 | 与 List 同一条缩放规则 |
 | `onActivate` | nil | Return 或行点击后的激活回调 |
@@ -168,7 +170,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - **虚拟化**：`List` 内部使用 `VirtualStack`；`VirtualStack(data, id: \.id, rowHeight: 30, scrollToIndex: target)` 和 `VirtualList(data, id: \.id, rowHeight: 30)` 可单独使用，默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。
 - **调用方的尺寸约束生效**：`List` 最外层是键盘 host，所以 `.frame`/`.flex` 落在它上面，内部滚动容器取剩余高度并裁切。缺少这条时滚动容器会按自身内容撑高，行会画到容器外面去。
 - **`scrollToIndex` 首次布局不生效**：第一帧还没有视口高度，此时做 reveal 会多滚一行并把这次请求消费掉，所以本来可见的目标也会把列表滚过头。`VariableVirtualStack` 用同一条规则。
-- **多选**：使用 `MultiSelectList`；List 保持单选。多选行仍由同一个 `_ListRowHost` 处理点击，modifier 由指针事件传入。
+- **多选**：`List(selection: Binding<Set<ID>>)`；单选与多选共用同一实现、行 host 与键盘路径。多选行仍由同一个 `_ListRowHost` 处理点击，modifier 由指针事件传入。
 - **sticky 区段**：`SectionedList(stickyHeaders: true)` 根据真实滚动 offset 计算当前区段；标题只在原行滚出顶部后接替，下一标题进入标题高度范围时上推它。计算复用虚拟化的固定 `rowHeight + rowSpacing`，因此触摸行高、字号缩放和 `scrollToIndex` 显露都得到同一条几何。固定副本不参与命中与语义，滚动仍由同一个 `ScrollView` 接收。
 - **重排**：`ReorderableList` 在每行尾部提供 44pt handle；指针拖动只由 handle 的捕获事务驱动，放置线覆盖显示而不改变行几何，释放后一次回调；Escape 取消、方向键与辅助功能 increment/decrement 走同一 `onMove`。顺序属于调用方，组件不持久化。
 
@@ -190,7 +192,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 | 设计系统 | 借鉴点 |
 | -------- | ------ |
 | Apple HIG | 触摸行 ≥ 44pt；指针紧凑行保持 30/38pt |
-| Fluent UI v9 | 单选 / 多选模式分离（List / MultiSelectList） |
+| Fluent UI v9 | 单选 / 多选为同一 List 的模式（GuavaUI 按 binding 类型选择） |
 | SwiftUI | `List(items, id:, selection:)` 调用形态 + ListStyle |
 
 ## Verification
@@ -202,8 +204,8 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - `SectionedListTests`：header/footer 文本、2 个 item 行、点击与键盘选择/激活。
 - `SectionedListTests.stickyHeaders`：通过真实 `ScrollView` offset 验证首区段标题固定、下一标题上推 15pt、标题交接，以及 End 程序化显露后固定标题跟随到末区段；固定副本隐藏语义、关闭命中。
 - `SectionedListTests.stickyHeadersDisabled`：默认关闭时滚动不生成固定标题，普通 header 仍在行内。
-- `MultiSelectListTests.pointerSelection`：点击 20、Shift-click 40、Cmd-click 30 的集合变化。
-- `MultiSelectListTests.keyboardSelection`：Shift+Arrow 扩展、普通 Arrow 收拢、Cmd+A 全选。
+- `ListMultipleSelectionTests.pointerSelection`：点击 20、Shift-click 40、Cmd-click 30 的集合变化。
+- `ListMultipleSelectionTests.keyboardSelection`：Shift+Arrow 扩展、普通 Arrow 收拢、Cmd+A 全选。
 - `ReorderableListTests`：指针拖动显示放置线并只移动一次、键盘与辅助功能 increment/decrement、Escape 取消且不改顺序、触摸 handle ≥44pt。
 - `SwipeListTests`：触摸左滑与 44pt 操作、Actions 按钮/上下文菜单的非滑动路径、纵向滚动让路、禁用态与指针面不响应滑动。
 - `RefreshTests`：触摸下拉只触发一次且指示器保持到 binding 清除；Cmd+R 触发一次并忽略刷新中的重复按键。
@@ -220,7 +222,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 ## File map
 
 - 通用行: [Row.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Row.swift)
-- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [ReorderableList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/ReorderableList.swift) · [SwipeList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SwipeList.swift) · [Refresh.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Refresh.swift)
+- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [Selection.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Selection.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [ReorderableList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/ReorderableList.swift) · [SwipeList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SwipeList.swift) · [Refresh.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Refresh.swift)
 - Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/Styles/Components/DefaultListRowStyle.swift)
 
 ## 响应式与输入密度

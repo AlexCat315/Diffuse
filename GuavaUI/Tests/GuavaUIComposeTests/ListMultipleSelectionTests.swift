@@ -4,7 +4,7 @@ import GuavaUIRuntime
 @testable import GuavaUICompose
 
 @Suite("Multi-select list", .serialized)
-struct MultiSelectListTests: GuavaUIComposeSerializedSuite {
+struct ListMultipleSelectionTests: GuavaUIComposeSerializedSuite {
     private func nodes(_ node: Node?) -> [Node] {
         guard let node else { return [] }
         return [node] + node.children.flatMap { nodes($0) }
@@ -52,7 +52,7 @@ struct MultiSelectListTests: GuavaUIComposeSerializedSuite {
     func pointerSelection() {
         withScene { graph, registry, focus, capture in
             var selection: Set<Int> = []
-            graph.install(root: MultiSelectList([10, 20, 30, 40], id: \.self,
+            graph.install(root: List([10, 20, 30, 40], id: \.self,
                                                 selection: Binding(get: { selection }, set: { selection = $0 })) { item, _ in
                 Text("\(item)")
             }.frame(width: 200, height: 500))
@@ -83,7 +83,7 @@ struct MultiSelectListTests: GuavaUIComposeSerializedSuite {
     func keyboardSelection() {
         withScene { graph, registry, focus, capture in
             var selection: Set<Int> = []
-            graph.install(root: MultiSelectList([10, 20, 30, 40], id: \.self,
+            graph.install(root: List([10, 20, 30, 40], id: \.self,
                                                 selection: Binding(get: { selection }, set: { selection = $0 })) { item, _ in
                 Text("\(item)")
             }.frame(width: 200, height: 500))

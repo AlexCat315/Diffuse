@@ -1,28 +1,30 @@
 import GuavaUIRuntime
 
-/// Vertical, single-selection list. Visual chrome (selection fill, padding,
-/// hover preview) is delegated to the active `ListRowStyle` via
-/// `.listRowStyle(_:)`; defaults to `DefaultListRowStyle`.
+/// Vertical, virtualized list with single or multiple selection.
+///
+/// Pass `Binding<ID?>` for single selection or `Binding<Set<ID>>` for
+/// multiple selection. With multiple selection a plain click selects one row,
+/// Shift-click extends from the anchor, Cmd/Ctrl-click toggles, Shift+Arrow
+/// extends, Space toggles the cursor row and Cmd/Ctrl+A selects everything.
+/// Visual chrome is delegated to the active `ListRowStyle`.
 public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>: View {
-    public let data: Data
-    public let id: KeyPath<Data.Element, ID>
-    public let selection: Binding<ID?>
+    private let data: Data
+    private let id: KeyPath<Data.Element, ID>
+    private let selection: CollectionSelection<ID>
     /// Authored logical height, before text scaling and the touch density floor.
-    public let rowHeight: Float
+    private let rowHeight: Float
     /// Authored logical spacing, before text scaling.
-    public let rowSpacing: Float
-    public let onActivate: ((Data.Element) -> Void)?
-    public let refresh: RefreshOptions?
-    public let rowContent: (Data.Element, Bool) -> RowContent
+    private let rowSpacing: Float
+    private let onActivate: ((Data.Element) -> Void)?
+    private let refresh: RefreshOptions?
+    private let rowContent: (Data.Element, Bool) -> RowContent
 
-    public init(_ data: Data,
-                id: KeyPath<Data.Element, ID>,
-                selection: Binding<ID?> = .constant(nil),
-                rowHeight: Float = 30,
-                rowSpacing: Float = 0,
-                onActivate: ((Data.Element) -> Void)? = nil,
-                refresh: RefreshOptions? = nil,
-                 rowContent: @escaping (Data.Element, Bool) -> RowContent) {
+    @State private var anchor: ID?
+    @State private var cursor: ID?
+
+    private init(_ data: Data, id: KeyPath<Data.Element, ID>, selection: CollectionSelection<ID>,
+                 rowHeight: Float, rowSpacing: Float, onActivate: ((Data.Element) -> Void)?,
+                 refresh: RefreshOptions?, rowContent: @escaping (Data.Element, Bool) -> RowContent) {
         self.data = data
         self.id = id
         self.selection = selection
@@ -33,18 +35,42 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
         self.rowContent = rowContent
     }
 
+    public init(_ data: Data,
+                id: KeyPath<Data.Element, ID>,
+                selection: Binding<ID?> = .constant(nil),
+                rowHeight: Float = 30,
+                rowSpacing: Float = 0,
+                onActivate: ((Data.Element) -> Void)? = nil,
+                refresh: RefreshOptions? = nil,
+                @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
+        self.init(data, id: id, selection: .single(selection), rowHeight: rowHeight, rowSpacing: rowSpacing,
+                  onActivate: onActivate, refresh: refresh, rowContent: rowContent)
+    }
+
+    public init(_ data: Data,
+                id: KeyPath<Data.Element, ID>,
+                selection: Binding<Set<ID>>,
+                rowHeight: Float = 30,
+                rowSpacing: Float = 0,
+                onActivate: ((Data.Element) -> Void)? = nil,
+                refresh: RefreshOptions? = nil,
+                @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
+        self.init(data, id: id, selection: .multiple(selection), rowHeight: rowHeight, rowSpacing: rowSpacing,
+                  onActivate: onActivate, refresh: refresh, rowContent: rowContent)
+    }
+
     public var body: some View {
         SurfaceReader { surface in
             TextScalerReader { scaler in
                 let effectiveHeight = max(scaler.scale(rowHeight), surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
                 SelectionKeyHost(onKey: handleKey) {
                     VirtualStack(data, id: id, rowHeight: effectiveHeight, spacing: scaler.scale(rowSpacing),
-                                 scrollToIndex: data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
-                                    .map { data.distance(from: data.startIndex, to: $0) },
+                                 scrollToIndex: (cursor ?? selection.first).flatMap(index(of:)),
                                  onScrollOffsetChange: nil, refresh: refresh) { element in
-                        let selected = isSelected(element)
+                        let selected = selection.contains(element[keyPath: id])
                         _ListRowHost(isSelected: selected, rowHeight: effectiveHeight,
                                      onActivate: { activate(element) },
+                                     onTap: selection.allowsMultiple ? { tap(element, $0) } : nil,
                                      content: AnyView(rowContent(element, selected)))
                     }
                     // The keyboard host is the outermost node, so it is where a caller's
@@ -57,10 +83,59 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
         }
     }
 
+    private func index(of target: ID) -> Int? {
+        data.firstIndex { $0[keyPath: id] == target }
+            .map { data.distance(from: data.startIndex, to: $0) }
+    }
+
+    private func element(at index: Int) -> Data.Element {
+        data[data.index(data.startIndex, offsetBy: index)]
+    }
+
+    private func ids(between first: ID, and second: ID) -> [ID]? {
+        guard let start = index(of: first), let end = index(of: second) else { return nil }
+        return data.dropFirst(min(start, end)).prefix(abs(end - start) + 1).map { $0[keyPath: id] }
+    }
+
+    private func tap(_ element: Data.Element, _ modifiers: KeyModifiers) {
+        let value = element[keyPath: id]
+        if modifiers.contains(.shift), let anchor, let range = ids(between: anchor, and: value) {
+            selection.replace(with: range)
+        } else if modifiers.contains(.gui) || modifiers.contains(.ctrl) {
+            selection.toggle(value)
+            anchor = value
+        } else {
+            selection.replace(with: [value])
+            anchor = value
+        }
+        cursor = value
+    }
+
+    private func activate(_ element: Data.Element) {
+        let value = element[keyPath: id]
+        selection.replace(with: [value])
+        anchor = value
+        cursor = value
+        onActivate?(element)
+    }
+
     private func handleKey(_ event: KeyEvent) -> Bool {
         guard !data.isEmpty else { return false }
-        let current = data.firstIndex { $0[keyPath: id] == selection.wrappedValue }
-            .map { data.distance(from: data.startIndex, to: $0) }
+        let multiple = selection.allowsMultiple
+        let current = (multiple ? cursor : nil).flatMap(index(of:)) ?? selection.first.flatMap(index(of:))
+        if multiple, event.modifiers.contains(.gui) || event.modifiers.contains(.ctrl), event.scancode == Scancode.a {
+            selection.replace(with: data.map { $0[keyPath: id] })
+            anchor = data.first.map { $0[keyPath: id] }
+            cursor = data.last.map { $0[keyPath: id] }
+            return true
+        }
+        if multiple, event.scancode == Scancode.space, let current {
+            let value = element(at: current)[keyPath: id]
+            selection.toggle(value)
+            anchor = value
+            cursor = value
+            return true
+        }
         let next: Int
         switch event.scancode {
         case Scancode.arrowDown: next = min(data.count - 1, (current ?? -1) + 1)
@@ -69,21 +144,20 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
         case Scancode.end: next = data.count - 1
         case Scancode.return, Scancode.keypadEnter:
             guard let current else { return false }
-            onActivate?(data[data.index(data.startIndex, offsetBy: current)])
+            if multiple { activate(element(at: current)) } else { onActivate?(element(at: current)) }
             return true
-        default: return false
+        default:
+            return false
         }
-        selection.wrappedValue = data[data.index(data.startIndex, offsetBy: next)][keyPath: id]
+        let value = element(at: next)[keyPath: id]
+        if multiple, event.modifiers.contains(.shift), let anchor, let range = ids(between: anchor, and: value) {
+            selection.replace(with: range)
+        } else {
+            selection.replace(with: [value])
+            anchor = value
+        }
+        cursor = value
         return true
-    }
-
-    private func isSelected(_ element: Data.Element) -> Bool {
-        selection.wrappedValue == element[keyPath: id]
-    }
-
-    private func activate(_ element: Data.Element) {
-        selection.wrappedValue = element[keyPath: id]
-        onActivate?(element)
     }
 }
 
@@ -94,13 +168,20 @@ public extension List where Data.Element: Identifiable, ID == Data.Element.ID {
          rowSpacing: Float = 0,
          onActivate: ((Data.Element) -> Void)? = nil,
          refresh: RefreshOptions? = nil,
-          rowContent: @escaping (Data.Element, Bool) -> RowContent) {
-        self.init(data, id: \.id,
-                  selection: selection,
-                  rowHeight: rowHeight, rowSpacing: rowSpacing,
-                  onActivate: onActivate,
-                  refresh: refresh,
-                  rowContent: rowContent)
+         @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
+        self.init(data, id: \.id, selection: selection, rowHeight: rowHeight, rowSpacing: rowSpacing,
+                  onActivate: onActivate, refresh: refresh, rowContent: rowContent)
+    }
+
+    init(_ data: Data,
+         selection: Binding<Set<ID>>,
+         rowHeight: Float = 30,
+         rowSpacing: Float = 0,
+         onActivate: ((Data.Element) -> Void)? = nil,
+         refresh: RefreshOptions? = nil,
+         @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
+        self.init(data, id: \.id, selection: selection, rowHeight: rowHeight, rowSpacing: rowSpacing,
+                  onActivate: onActivate, refresh: refresh, rowContent: rowContent)
     }
 }
 

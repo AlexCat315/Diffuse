@@ -166,7 +166,6 @@ public extension GalleryPage {
         case .jsonField: AnyView(JsonStory(options: options))
         case .assetRef: AnyView(AssetStory(options: options))
         case .list: AnyView(ListStory())
-        case .multiSelectList: AnyView(MultiSelectListStory())
         case .sectionedList: AnyView(SectionedListStory())
         case .reorderableList: AnyView(ReorderableListStory())
         case .swipeList: AnyView(SwipeListStory())

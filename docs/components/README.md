@@ -1,4 +1,4 @@
-# GuavaUI 组件设计参考
+| List / SectionedList / ReorderableList |# GuavaUI 组件设计参考
 
 本目录收录组件设计契约。索引标记仅代表文档存在，不表示组件已达到完整或生产成熟状态。
 
@@ -62,7 +62,7 @@
 | DateRangePicker | 真实日历、两击区间与高亮 | [daterangepicker.md](daterangepicker.md) |
 | TimePicker | 内联时/分/秒/AM-PM 滚轮与范围夹紧 | [timepicker.md](timepicker.md) |
 | WheelPicker | 五行滚轮、拖拽/滚轮/键盘与 disabled 跳过 | [wheelpicker.md](wheelpicker.md) |
-| List / MultiSelectList / SectionedList / ReorderableList | 单选、多选、区段/sticky、重排、虚拟化与行样式 | [list.md](list.md) |
+| List / SectionedList / ReorderableList | 单选、多选、区段/sticky、重排、虚拟化与行样式 | [list.md](list.md) |
 | SwipeList | 触摸滑动操作、Actions 按钮、上下文菜单与键盘选择 | [swipelist.md](swipelist.md) |
 | RefreshableList | 下拉刷新阈值、顶部 inset、Cmd+R 与 reducedMotion | [refresh.md](refresh.md) |
 | Drag & Drop | 类型化 payload、Portal 预览、目标高亮与取消 | [drag-and-drop.md](drag-and-drop.md) |

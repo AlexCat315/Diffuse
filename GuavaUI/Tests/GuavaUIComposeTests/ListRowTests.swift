@@ -36,7 +36,7 @@ struct ListRowTests: GuavaUIComposeSerializedSuite {
             case .single:
                 List(0..<count, id: \.self, selection: $selected, onActivate: { self.activated = $0 }) { index, _ in self.row(index) }
             case .multiple:
-                MultiSelectList(0..<count, id: \.self, selection: $multiple, onActivate: { self.activated = $0 }) { index, _ in self.row(index) }
+                List(0..<count, id: \.self, selection: $multiple, onActivate: { self.activated = $0 }) { index, _ in self.row(index) }
             case .sections:
                 SectionedList([ListSection("a", title: "Favorites", items: (0..<count / 2).map(Item.init)),
                                ListSection("b", title: "Scene", items: (count / 2..<count).map(Item.init))],
