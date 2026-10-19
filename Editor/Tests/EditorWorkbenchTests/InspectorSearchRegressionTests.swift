@@ -6,11 +6,12 @@ import Testing
 @testable import EditorUI
 
 @Suite("Inspector search regressions", .serialized)
+@MainActor
 struct InspectorSearchRegressionTests {
     @Test("the themed script surface fills its viewport and leaves the footer at the bottom")
     func scriptViewport() throws { try WorkbenchUITestSupport.withEnvironment { registry, _ in
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: ScriptCodeEditor(source: .constant("let value = 1"), hover: .constant(.hidden),
+        graph.install(root: ScriptCodeEditor(source: .constant("let value = 1"), annotations: .constant(.init()), hover: .constant(.hidden),
                                              caretLabel: .constant("Ln 1, Col 1"), onChange: { _ in },
                                              onHover: { _ in }, onHoverEnd: {})
             .theme(EditorVisualTheme.make(dark: false))

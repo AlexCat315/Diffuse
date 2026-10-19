@@ -20,6 +20,10 @@ struct TextEditorStory: View {
     @State private var caret = TextFieldCaretState.initial
     @State private var hover: TextFieldHoverAnchor?
     @State private var status = "Press Control-Space at the end of a line to request completion"
+    @State private var breakpoints = [TextBreakpoint(line: 3)]
+    @State private var foldRegions = [TextFoldRegion(lines: 0...6), TextFoldRegion(lines: 3...5)]
+    @State private var bookmarked = true
+    @State private var pausedPreview = false
 
     private var diagnostic: TextDiagnostic {
         let range = source.lineRange(forLine: 0)
@@ -41,11 +45,13 @@ struct TextEditorStory: View {
                     source = loaded
                     tokens = SwiftSyntax.tokens(in: loaded.stringValue)
                     syntaxRevision += 1
+                    foldRegions = []; breakpoints = []
                     hover = nil; navigate(to: loaded.lineRange(forLine: 100_000).upperBound)
                     status = "200,000 lines · caret at line 100,001 · type, scroll, undo and redo"
                 }.buttonStyle(.secondary)
                 if codeMode {
                     Checkbox("Sample warning", isOn: $showsDiagnostic, isEnabled: options.isEnabled)
+                    Checkbox("Paused line preview", isOn: $pausedPreview, isEnabled: options.isEnabled)
                 }
                 Box {}.flex(1)
             }
@@ -67,7 +73,7 @@ struct TextEditorStory: View {
             }
 
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted)
-            Text("Tab / Return accepts completion · Escape dismisses · Up / Down chooses · Undo reverses the whole edit")
+            Text("F9 toggles a breakpoint · Primary-Alt-Left/Right folds or expands · gutter icons expose named actions · touch uses a line menu")
                 .font(.caption).foregroundColor(.onSurfaceMuted)
             hoverTooltip
         }
@@ -107,6 +113,10 @@ struct TextEditorStory: View {
             input.layout.wrapsLines = !codeMode || compact
             input.layout.maxVisibleLines = 24
             input.codeEditing.showsLineNumbers = codeMode
+            input.codeEditing.gutter.breakpoints = $breakpoints
+            input.codeEditing.gutter.markers = gutterMarkers
+            input.codeEditing.gutter.executionLine = pausedPreview ? 4 : nil
+            input.codeEditing.folding.regions = foldRegions
             input.codeEditing.indentationWidth = 4
             input.codeEditing.editHistory = history
             input.codeEditing.diagnostics = codeMode && showsDiagnostic ? TextDiagnostics([diagnostic]) : .empty
@@ -127,6 +137,7 @@ struct TextEditorStory: View {
             input.events.onChange = { buffer in
                 hover = nil
                 tokens = SwiftSyntax.tokens(in: buffer.stringValue)
+                foldRegions = SwiftSyntax.folds(in: buffer, tokens: tokens)
                 syntaxRevision += 1
             }
             input.events.onCaretChange = { caret = $0 }
@@ -157,6 +168,27 @@ struct TextEditorStory: View {
         source.lineIndex(forCharacterIndex: min(caret.caretIndex, source.characterCount))
     }
 
+    private var gutterMarkers: [TextGutterMarker] {
+        var result: [TextGutterMarker] = []
+        if bookmarked, source.lineCount > 1 {
+            result.append(TextGutterMarker("bookmark", line: 1, label: "Remove bookmark", icon: UIIcons.Status.bookmark) {
+                bookmarked = false; status = "Bookmark removed"
+            })
+        }
+        if let function = foldRegions.first(where: { $0.lines.lowerBound > 0 }) {
+            result.append(TextGutterMarker("run", line: function.lines.lowerBound,
+                label: "Preview Greeting.message", icon: UIIcons.Editor.play) {
+                status = "Greeting.message preview: Hello, Guava"
+            })
+        }
+        if showsDiagnostic {
+            result.append(TextGutterMarker("warning", line: 0, label: diagnostic.message, icon: UIIcons.Status.alertTriangle) {
+                status = diagnostic.message; navigate(to: 0)
+            })
+        }
+        return result
+    }
+
     private var caretColumn: Int {
         caret.caretIndex - source.lineRange(forLine: caretLine).lowerBound + 1
     }
@@ -176,6 +208,24 @@ private enum SwiftSyntax {
     struct Token {
         let range: Range<Int>
         let kind: Kind
+    }
+
+    static func folds(in buffer: TextBuffer, tokens: [Token]) -> [TextFoldRegion] {
+        guard buffer.utf8Length <= 300_000 else { return [] }
+        let bytes = Array(buffer.stringValue.utf8)
+        var stack: [Int] = [], regions: [TextFoldRegion] = [], token = 0
+        for offset in bytes.indices {
+            while token < tokens.count && tokens[token].range.upperBound <= offset { token += 1 }
+            if token < tokens.count, tokens[token].range.contains(offset),
+               tokens[token].kind == .string || tokens[token].kind == .comment { continue }
+            if bytes[offset] == 123 { stack.append(offset) }
+            else if bytes[offset] == 125, let start = stack.popLast() {
+                let first = buffer.lineIndex(forCharacterIndex: buffer.characterIndex(forUTF8Offset: start))
+                let last = buffer.lineIndex(forCharacterIndex: buffer.characterIndex(forUTF8Offset: offset))
+                if first < last { regions.append(TextFoldRegion(lines: first...last)) }
+            }
+        }
+        return regions.sorted { $0.lines.lowerBound < $1.lines.lowerBound }
     }
 
     static let keywords: Set<String> = [

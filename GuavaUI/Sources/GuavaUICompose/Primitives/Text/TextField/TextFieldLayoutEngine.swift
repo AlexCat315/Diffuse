@@ -24,6 +24,7 @@ extension TextField {
             let atlasID: ObjectIdentifier
             let availableTextWidth: Float
             let secure: Bool
+            let hiddenLines: [Range<Int>]
         }
         final class RenderCacheEntry {
             let key: RenderCacheKey
@@ -78,10 +79,18 @@ extension TextField {
             let width = textField.layout.axis == .vertical && textField.layout.wrapsLines ? max(1, availableTextWidth) : .infinity
             let geometry = TextLineGeometry(font: font, lineHeight: lineHeight, letterSpacing: letterSpacing,
                                             atlas: ObjectIdentifier(env.atlas), width: width, secure: textField.behavior.secure && !placeholder)
+            let session = node.firstResource(TextGutterSession.self)
+            session?.synchronizeSource()
+            if let state = node.attachments["__textfield_state"] as? FieldState, state.scroll.needsCaretReveal {
+                _ = session?.folds.reveal(buffer.lineIndex(forCharacterIndex: min(buffer.characterCount, state.selection.cursorIndex)))
+            }
+            let composing = (node.attachments["__textfield_state"] as? FieldState)?.composition.isActive == true
+            let hidden = placeholder || composing || !textField.codeEditing.showsLineNumbers ? [] : session?.folds.hiddenLines ?? []
             if let cached = node.attachments[Self.documentAttachmentKey] as? TextDocumentLayout {
-                cached.update(buffer: buffer, geometry: geometry); return cached
+                cached.update(buffer: buffer, geometry: geometry); cached.setHiddenLines(hidden); return cached
             }
             let result = TextDocumentLayout(buffer: buffer, geometry: geometry)
+            result.setHiddenLines(hidden)
             node.attachments[Self.documentAttachmentKey] = result; return result
         }
         func cachedRenderLayout(node: Node, state: FieldState, env: TextEnvironment, renderState: RenderState,
@@ -109,7 +118,8 @@ extension TextField {
             func key() -> RenderCacheKey {
                 RenderCacheKey(root: renderState.buffer.identity, version: renderState.buffer.version, visibleRows: first..<(first + count),
                                totalRows: document.index.rowCount, font: font, lineHeight: lineHeight, letterSpacing: letterSpacing,
-                               atlasID: ObjectIdentifier(env.atlas), availableTextWidth: availableTextWidth, secure: document.geometry.secure)
+                               atlasID: ObjectIdentifier(env.atlas), availableTextWidth: availableTextWidth, secure: document.geometry.secure,
+                               hiddenLines: node.firstResource(TextGutterSession.self)?.folds.hiddenLines ?? [])
             }
             func updateHorizontal(_ width: Float) {
                 if textField.layout.axis == .horizontal || !textField.layout.wrapsLines {
@@ -152,7 +162,7 @@ extension TextField {
         func interactiveDocument(in buffer: TextBuffer, node: Node, env: TextEnvironment) -> TextDocumentLayout {
             let font = textField.resolvedFont(node: node, env: env), lineHeight = textField.resolvedLineHeight(node: node, env: env)
             let width = Float(node.frame.width) - textField.horizontalInset(theme: node.theme) * 2
-                - textField.leadingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme)
+                - textField.leadingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme, node: node)
                 - textField.trailingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme)
                 - textField.trailingControlWidth(isFocused: FocusChainHolder.current?.focused === node,
                     env: env, font: font, lineHeight: lineHeight, theme: node.theme)
@@ -161,7 +171,7 @@ extension TextField {
         func characterIndex(atWindowPoint point: CGPoint, state: FieldState, node: Node) -> Int {
             guard let env = TextEnvironmentHolder.current else { return 0 }
             let font = textField.resolvedFont(node: node, env: env), lineHeight = textField.resolvedLineHeight(node: node, env: env)
-            let leading = textField.horizontalInset(theme: node.theme) + textField.leadingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme)
+            let leading = textField.horizontalInset(theme: node.theme) + textField.leadingAddonWidth(env: env, font: font, lineHeight: lineHeight, theme: node.theme, node: node)
             let x = Float(point.x - state.pointer.lastDrawOrigin.x) - leading + state.scroll.horizontal.offset
             let y = Float(point.y - state.pointer.lastDrawOrigin.y) - textField.textOriginYOffset(frameHeight: Float(node.frame.height), lineHeight: lineHeight) + state.scroll.offsetY
             let document = interactiveDocument(in: textField.text.wrappedValue, node: node, env: env)

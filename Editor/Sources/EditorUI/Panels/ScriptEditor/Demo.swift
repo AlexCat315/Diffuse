@@ -152,6 +152,10 @@ private struct ScriptEditorDemoView: View {
                 }.padding(12).flex(0, shrink: 0)
                 Divider()
                 ScriptCodeEditor(source: session.sourceBinding,
+                    annotations: Binding(get: { session.workspace.snapshot.selectedDocument?.annotations ?? .init() },
+                        set: { value in
+                            if let id = session.workspace.snapshot.selectedScriptID { session.workspace.setEditorAnnotations(value, for: id) }
+                        }),
                     hover: Binding(get: { session.hover }, set: { session.hover = $0 }),
                     caretLabel: Binding(get: { session.caretLabel }, set: { session.caretLabel = $0 }),
                     onChange: { _ in }, diagnostics: session.diagnostics, completionProvider: session.completionProvider(),

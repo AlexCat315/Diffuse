@@ -818,3 +818,19 @@
 "Pause game" = "暂停游戏";
 "Stop and return to editing" = "停止并返回编辑";
 "Return to Inspector" = "返回对象属性";
+
+"Source code" = "源代码";
+"Go to diagnostic" = "定位诊断";
+"Line %d actions" = "第 %d 行操作";
+"Add breakpoint at line %d" = "在第 %d 行添加断点";
+"Remove breakpoint at line %d" = "移除第 %d 行断点";
+"Enable breakpoint at line %d" = "启用第 %d 行断点";
+"Disable breakpoint at line %d" = "停用第 %d 行断点";
+"Execution paused at line %d" = "执行暂停于第 %d 行";
+"Enabled breakpoint" = "已启用断点";
+"Disabled breakpoint" = "已停用断点";
+"Unverified breakpoint" = "未验证断点";
+"Collapse code at line %d" = "折叠第 %d 行代码块";
+"Expand code at line %d" = "展开第 %d 行代码块";
+"%d folded lines" = "已折叠 %d 行";
+"%d breakpoints in folded code" = "折叠代码中有 %d 个断点";

@@ -587,6 +587,8 @@ JsonField 紧凑展开已补齐：Gallery 去除 520pt 固定宽度，展开入�
 
 文本/代码编辑器的阅读表面已完善：共享 `.textFieldStyle(.editor)`、同字体行号与至少三位宽度、至少 24pt 的正文间距、中性当前行、不叠加输入框边框；Gallery 与生产 ScriptCodeEditor 使用 15/24pt 字号/行距。缩进线移到前一级空白列，连接内部空行、使用连续 0.5pt 中性线并随正文横移，不穿过软换行单词。Gallery 操作栏与状态区可换行，compact 代码软换行、切换普通文本保留草稿。`TextEditorAppearanceTests` / `TextIndentGuidesTests` / `TextEditorLayoutTests` 验证几何及交互，生产脚本语法/LSP UI 测试通过；DevTools 在三档 Gallery 和真实 ScriptCodeEditor 中执行输入、读值、撤销、主题切换并检查镜像。视觉与验收边界见 [文本编辑器](textfield.md#编辑器视觉与交互验收)。共用 resize grip 已补齐独立 44pt 触摸/混合、28pt 指针命中区、键盘与命名 slider 辅助动作、Escape 拖动回退、禁用/密度/卸载捕获清理和调节后的滚动显露。`EditorHeightTests` 的 108 组表面组合保持同一文本节点、草稿与实际高度值；DevTools 在三档真实 Gallery 上验证拖动、回退、键盘上下限与镜像。
 
+统一 TextField 已补齐断点、行级图标和折叠区：指针分列，触摸/混合合并为 44pt 行菜单；同底色、固定 gutter、完整标签、单一 Tab 停靠与展开语义。折叠通过持久化视觉行索引隐藏源码行，保留原始 Rope 坐标，外部定位自动展开；文档会话保存断点/折叠状态并随编辑迁移，不污染源码或 dirty。生产 ScriptCodeEditor 使用后台 Tree-sitter 结构与真实 LSP 诊断；执行位置由调用方输入，脚本调试运行时后端仍未提供。API、交互及验证见 [编辑器 gutter](editor-gutter.md)。
+
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
 

@@ -3,6 +3,16 @@ internal import XCTest
 @testable private import RuntimeValidation
 
 final class InputSequenceTests: XCTestCase {
+  func testPointerButtonsNormalizeBeforeDeliveryAndRejectInvalidValues() throws {
+    let events = try InputUI.loadEvents("""
+      [{"kind":"pointerDown","x":10,"y":20,"button":"right"},
+       {"kind":"pointerUp","x":10,"y":20,"button":2}]
+      """)
+    XCTAssertEqual(events.compactMap { $0["button"] as? Int }, [2, 2])
+    for value in ["\"unknown\"", "5", "-1", "1.5", "true"] {
+      XCTAssertThrowsError(try InputUI.loadEvents("[{\"kind\":\"pointerDown\",\"button\":\(value)}]"))
+    }
+  }
   func testWaitPreservesGestureOrderAndKeyNormalization() throws {
     let events = try InputUI.loadEvents("""
       [{"kind":"pointerDown","x":10,"y":20},

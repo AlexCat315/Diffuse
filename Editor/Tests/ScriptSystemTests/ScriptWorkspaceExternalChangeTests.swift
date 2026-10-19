@@ -6,6 +6,32 @@ import GuavaUICompose
 
 @Suite("Script workspace external changes", .serialized)
 struct ScriptWorkspaceExternalChangeTests {
+    @Test("Editor annotations stay with their document, rebase once, and never dirty or serialize into source")
+    func editorAnnotations() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-annotations-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let manager = DynamicScriptManager(projectDirectory: root.path, scriptRuntime: ScriptRuntime(),
+            engineModulePaths: [], scriptTrustStorageURL: root.appendingPathComponent("trust.json"))
+        _ = try manager.createScript(name: "First", source: "func test() {\n  print(1)\n}\n")
+        _ = try manager.createScript(name: "Second", source: "let second = 2\n")
+        let model = try ScriptWorkspaceModel(manager: manager); defer { model.shutdown() }
+        let document = try #require(model.snapshot.selectedDocument)
+        let id = document.file.identifier
+        var annotations = TextEditorAnnotations(); annotations.breakpoints = [TextBreakpoint(line: 1)]; annotations.collapsedLines = [0]
+        model.setEditorAnnotations(annotations, for: id)
+        #expect(model.snapshot.selectedDocument?.isDirty == false && model.snapshot.selectedDocument?.editRevision == 0)
+        let next = document.source.insert("// header\n", atCharacterIndex: 0)
+        model.updateSelectedSource(next)
+        #expect(model.snapshot.selectedDocument?.annotations.breakpoints.first?.line == 2)
+        #expect(model.snapshot.selectedDocument?.annotations.collapsedLines == [1])
+        let other = try #require(model.snapshot.documents.first { $0.file.identifier != id })
+        #expect(model.select(scriptID: other.file.identifier))
+        #expect(model.snapshot.selectedDocument?.annotations == TextEditorAnnotations())
+        #expect(model.select(scriptID: id))
+        #expect(model.snapshot.selectedDocument?.annotations.breakpoints.first?.line == 2)
+        #expect(model.persistSelected())
+        #expect(try manager.readSource(at: document.file.url) == next.stringValue)
+    }
     @Test("Dismissing setup errors preserves health; retry and shutdown reset presentation")
     @MainActor
     func languageServiceHealthAndDismissal() async throws {

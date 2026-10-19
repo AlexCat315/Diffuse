@@ -84,6 +84,8 @@ macOS DevTools 镜像验收：Gallery 1280×820 指针、720×820 深色混合�
 
 ## 代码能力
 
+断点列、行级图标与折叠列使用统一的 [gutter 与折叠](editor-gutter.md) 契约。`codeEditing.gutter` 接收逐文档断点、标记动作和执行位置；`codeEditing.folding` 接收语言服务的逻辑行区间与可选折叠状态 binding。隐藏内容通过视觉行索引投影，源码、撤销和 LSP 坐标保持完整；生产编辑器已接入 Tree-sitter 区间和 LSP 诊断图标。调试运行时后端仍由应用提供。
+
 `TextDiagnostics` 是不可变区间索引；`TextDiagnostic` 记录 UTF-8 范围、级别与消息。波浪线仅覆盖可见行，空范围也有指示。颜色跟随主题的 error/warning/accent/muted。
 
 `codeEditing.onRequestCompletion` 收到 `TextCompletionRequest` 与主线程回复闭包。它在光标/输入停顿 300ms 后请求，也支持 Ctrl+Space；弹窗按前缀过滤，Up/Down 选择、Tab/Return 接受、Escape 关闭。替换范围和额外编辑作为单次撤销操作；旧缓冲区、失焦或销毁后的回复不会重新打开弹窗。

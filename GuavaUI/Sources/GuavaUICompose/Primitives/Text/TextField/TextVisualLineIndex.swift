@@ -18,6 +18,9 @@ struct TextVisualLineIndex {
         if firstRow(ofLine: line + 1) - firstRow(ofLine: line) == count { return }
         replace(lines: line..<(line + 1), withLineCount: 1, rowsPerLine: count)
     }
+    mutating func hide(lines range: Range<Int>) {
+        replace(lines: range, withLineCount: range.count, rowsPerLine: 0)
+    }
     mutating func replace(lines range: Range<Int>, withLineCount count: Int) {
         replace(lines: range, withLineCount: max(1, count), rowsPerLine: 1)
     }

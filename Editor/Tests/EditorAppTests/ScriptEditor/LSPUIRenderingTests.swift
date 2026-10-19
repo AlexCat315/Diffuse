@@ -14,10 +14,12 @@ struct LSPUIRenderingTests {
         context.addScopedAmbient(PortalStoreAmbient(portals))
         try context.withCurrent {
             var source: TextBuffer = "let message = \"Guava\"\nlet upper = message."
+            var annotations = TextEditorAnnotations()
             let original = source
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: LayerRoot {
                 ScriptCodeEditor(source: Binding(get: { source }, set: { source = $0 }),
+                    annotations: Binding(get: { annotations }, set: { annotations = $0 }),
                     hover: .constant(.hidden), caretLabel: .constant(""), onChange: { _ in },
                     onHover: { _ in }, onHoverEnd: {})
                     .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
@@ -32,6 +34,8 @@ struct LSPUIRenderingTests {
             let click = MouseButtonEvent(button: .left, x: 100, y: 100, clicks: 1)
             dispatcher.dispatch(.mouseButtonDown(click)); dispatcher.dispatch(.mouseButtonUp(click))
             #expect(context.focusChain.focused === hit.node)
+            dispatcher.dispatch(.keyDown(.init(scancode: Scancode.f9, keycode: 0, modifiers: [], isRepeat: false)))
+            #expect(annotations.breakpoints.first?.state == .unverified)
             dispatcher.dispatch(.textInput("z"))
             #expect(source.characterCount == original.characterCount + 1 && source.stringValue.contains("z"))
             context.focusChain.clear()

@@ -227,6 +227,9 @@ struct ScriptPanel: View {
                 Divider()
                 externalChangeBanner
                 ScriptCodeEditor(source: sourceText,
+                                 annotations: Binding(get: {
+                                     app.workstation.scripts.snapshot.documents.first { $0.file.identifier == selectedScript.identifier }?.annotations ?? .init()
+                                 }, set: { app.workstation.scripts.setEditorAnnotations($0, for: selectedScript.identifier) }),
                                  hover: $hoverPresentation,
                                  caretLabel: Binding(get: { app.store.scriptCaretLabel(for: selectedScript.identifier) },
                                                      set: { app.store.setScriptCaretLabel($0, for: selectedScript.identifier) }),

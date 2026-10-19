@@ -38,7 +38,8 @@ public enum ScriptLanguageServiceState: Sendable, Equatable {
 
 public struct ScriptWorkspaceDocument: Sendable, Equatable {
     public var file: DynamicScriptManager.ScriptFile
-    public var source: TextBuffer { didSet { refreshDirty() } }
+    public var source: TextBuffer { didSet { annotations.rebase(from: oldValue, to: source); refreshDirty() } }
+    public var annotations = TextEditorAnnotations()
     public var savedSource: TextBuffer { didSet { refreshDirty() } }
     public var editRevision: UInt64 = 0
     public var savedRevision: UInt64 = 0
@@ -205,6 +206,13 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         Task { [manager] in
             try? await manager.updateLanguageSource(scriptID: scriptID, text: source, revision: revision)
         }
+    }
+
+    /// Session presentation never dirties source or enters the authored file.
+    public func setEditorAnnotations(_ annotations: TextEditorAnnotations, for scriptID: String) {
+        guard let index = snapshot.documents.firstIndex(where: { $0.file.identifier == scriptID }),
+              snapshot.documents[index].annotations != annotations else { return }
+        snapshot.documents[index].annotations = annotations; publish()
     }
 
     @discardableResult

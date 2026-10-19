@@ -44,6 +44,7 @@ public enum Scancode {
     public static let keypadEnter: UInt32 = 88
     public static let f1: UInt32 = 58
     public static let f2: UInt32 = 59
+    public static let f9: UInt32 = 66
 }
 
 /// Unambiguous spelling for clients that also import an engine/runtime module

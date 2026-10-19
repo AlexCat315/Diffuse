@@ -20,6 +20,7 @@ final class TextDocumentLayout {
     private var clock: UInt64 = 0
     private(set) var shapedLineCount = 0
     private(set) var shapedUTF8Count = 0
+    private var hiddenLines: [Range<Int>] = []
 
     init(buffer: TextBuffer, geometry: TextLineGeometry) {
         self.buffer = buffer; self.geometry = geometry
@@ -29,7 +30,7 @@ final class TextDocumentLayout {
         if geometry != nextGeometry {
             geometry = nextGeometry; buffer = next
             index = TextVisualLineIndex(lineCount: next.lineCount)
-            lines.removeAll(); accessOrder.removeAll(); return
+            lines.removeAll(); accessOrder.removeAll(); hiddenLines = []; return
         }
         guard next != buffer else { return }
         if let delta = next.editDelta(from: buffer) {
@@ -48,6 +49,10 @@ final class TextDocumentLayout {
             lines = kept; accessOrder = order
         }
         buffer = next
+        if !hiddenLines.isEmpty {
+            hiddenLines = []; index = TextVisualLineIndex(lineCount: next.lineCount)
+            for (line, entry) in lines { index.measure(line: line, rows: entry.rows.count) }
+        }
     }
     func measuredLine(_ line: Int, environment env: TextEnvironment) -> MeasuredTextLine {
         let row = min(buffer.lineCount - 1, max(0, line))
@@ -65,6 +70,13 @@ final class TextDocumentLayout {
         }
         return entry
     }
+    func setHiddenLines(_ ranges: [Range<Int>]) {
+        guard hiddenLines != ranges else { return }
+        hiddenLines = ranges
+        index = TextVisualLineIndex(lineCount: buffer.lineCount)
+        for (line, entry) in lines { index.measure(line: line, rows: entry.rows.count) }
+        for range in ranges { index.hide(lines: range) }
+    }
     /// Only logical lines intersecting this row window are shaped. Learning a
     /// wrapped line's height can only reduce the remaining work in the window.
     func visibleLayout(firstRow: Int, rowCount: Int, environment env: TextEnvironment) -> TextLayoutResult {
@@ -72,6 +84,7 @@ final class TextDocumentLayout {
         var result: [TextLine] = [], line = first, width: Float = 0
         let endRow = max(0, firstRow) + max(1, rowCount)
         while line < buffer.lineCount, index.firstRow(ofLine: line) < endRow {
+            if let hidden = hiddenLines.first(where: { $0.contains(line) }) { line = hidden.upperBound; continue }
             let entry = measuredLine(line, environment: env)
             let firstVisualRow = index.firstRow(ofLine: line)
             let range = buffer.lineRange(forLine: line), byteStart = buffer.utf8Offset(forCharacterIndex: range.lowerBound)
@@ -100,6 +113,9 @@ final class TextDocumentLayout {
     }
     func caret(atCharacter cursor: Int, lineEndAffinity: Bool = false, environment env: TextEnvironment) -> (x: Float, row: Int) {
         let position = buffer.lineAndColumn(forCharacterIndex: cursor)
+        if let hidden = hiddenLines.first(where: { $0.contains(position.line) }) {
+            return caret(atCharacter: buffer.lineRange(forLine: hidden.lowerBound - 1).upperBound, environment: env)
+        }
         let line = measuredLine(position.line, environment: env)
         let local = line.caret(atCharacter: position.column, lineEndAffinity: lineEndAffinity)
         return (local.x, index.firstRow(ofLine: position.line) + local.row)

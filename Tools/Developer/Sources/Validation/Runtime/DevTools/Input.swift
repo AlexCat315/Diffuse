@@ -148,7 +148,22 @@ enum InputUI {
     else {
       throw ToolError.message("Input contains an unsupported kind, value or oversized string")
     }
-    return try input.map(normalizeKeyEvent)
+    return try input.map { try normalizeKeyEvent(normalizePointerEvent($0)) }
+  }
+
+  private static func normalizePointerEvent(_ event: [String: Any]) throws -> [String: Any] {
+    guard let kind = event["kind"] as? String, kind.hasPrefix("pointer"), let button = event["button"] else { return event }
+    var result = event
+    if let name = button as? String, let code = ["left": 0, "middle": 1, "right": 2, "back": 3, "forward": 4][name.lowercased()] {
+      result["button"] = code
+    } else if let number = button as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(), (0...4).contains(number.intValue),
+              number.doubleValue == Double(number.intValue) {
+      result["button"] = number.intValue
+    } else {
+      throw ToolError.message("Pointer button must be left, middle, right, back, forward or an integer from 0 to 4")
+    }
+    return result
   }
 
   private static func normalizeKeyEvent(_ event: [String: Any]) throws -> [String: Any] {

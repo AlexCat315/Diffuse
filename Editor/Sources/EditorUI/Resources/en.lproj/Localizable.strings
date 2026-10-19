@@ -763,3 +763,19 @@
 "Pause game" = "Pause game";
 "Stop and return to editing" = "Stop and return to editing";
 "Return to Inspector" = "Return to Inspector";
+
+"Source code" = "Source code";
+"Go to diagnostic" = "Go to diagnostic";
+"Line %d actions" = "Line %d actions";
+"Add breakpoint at line %d" = "Add breakpoint at line %d";
+"Remove breakpoint at line %d" = "Remove breakpoint at line %d";
+"Enable breakpoint at line %d" = "Enable breakpoint at line %d";
+"Disable breakpoint at line %d" = "Disable breakpoint at line %d";
+"Execution paused at line %d" = "Execution paused at line %d";
+"Enabled breakpoint" = "Enabled breakpoint";
+"Disabled breakpoint" = "Disabled breakpoint";
+"Unverified breakpoint" = "Unverified breakpoint";
+"Collapse code at line %d" = "Collapse code at line %d";
+"Expand code at line %d" = "Expand code at line %d";
+"%d folded lines" = "%d folded lines";
+"%d breakpoints in folded code" = "%d breakpoints in folded code";

@@ -8,6 +8,7 @@ import Testing
 import GuavaUICompose
 
 @Suite("Workbench productivity interactions", .serialized)
+@MainActor
 struct WorkbenchProductivityTests {
     @Test("the animation panel edits only animation fields and accepts a legacy primary selection")
     func animationPanel() throws { try WorkbenchUITestSupport.withEnvironment { registry, _ in
@@ -71,7 +72,7 @@ struct WorkbenchProductivityTests {
         let source = "let first = 1\nlet second = \"😀\"\nlet failure = missing"
         var label = "Ln 1, Col 1"
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: ScriptCodeEditor(source: .constant(TextBuffer(source)), hover: .constant(.hidden),
+        graph.install(root: ScriptCodeEditor(source: .constant(TextBuffer(source)), annotations: .constant(.init()), hover: .constant(.hidden),
             caretLabel: Binding(get: { label }, set: { label = $0 }), onChange: { _ in },
             navigation: .init(scriptID: "Test", line: 2, column: 4), onHover: { _ in }, onHoverEnd: {}))
         graph.computeLayout(width: 600, height: 400)

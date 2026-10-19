@@ -14,9 +14,11 @@ struct _StatefulTextField: View {
     let textField: TextField
 
     @State var interactionState = _TextFieldInteractionState()
+    @State private var gutterSession = TextGutterSession()
 
     var body: some View {
         _TextFieldStyleHost(textField: textField,
+                            gutterSession: gutterSession,
                             interactionState: interactionState,
                             onHoverChange: { hovered in
                                 if interactionState.isHovered != hovered { interactionState.isHovered = hovered }
@@ -39,6 +41,7 @@ struct _StatefulTextField: View {
 
 struct _TextFieldStyleHost: _PrimitiveView {
     let textField: TextField
+    let gutterSession: TextGutterSession
     let interactionState: _TextFieldInteractionState
     let onHoverChange: (Bool) -> Void
     let onFocusChange: (Bool) -> Void
@@ -71,12 +74,18 @@ struct _TextFieldStyleHost: _PrimitiveView {
         if resolvedField.decoration.size == .automatic {
             resolvedField.decoration.size = node.compositionValue(of: ControlSizeEnvironment.key).textFieldSize
         }
-        let configuration = TextFieldStyleConfiguration(
-            content: AnyView(_TextFieldSurface(textField: resolvedField,
+        let surface = _TextFieldSurface(textField: resolvedField,
+                                               gutterSession: gutterSession,
                                                interactionState: interactionState,
                                                onHoverChange: onHoverChange,
                                                onFocusChange: onFocusChange,
-                                               onEditingChange: onEditingChange)),
+                                               onEditingChange: onEditingChange)
+        // Single-line controls retain their small leaf hierarchy. Multiline
+        // editors keep a stable container when code presentation is toggled.
+        let content = resolvedField.layout.axis == .vertical
+            ? AnyView(TextFieldContent(surface: surface, gutterSession: gutterSession)) : AnyView(surface)
+        let configuration = TextFieldStyleConfiguration(
+            content: content,
             placeholder: textField.placeholder,
             isFocused: interactionState.isFocused && !textField.behavior.disabled,
             isEditing: interactionState.isEditing && !textField.behavior.disabled,
@@ -89,15 +98,34 @@ struct _TextFieldStyleHost: _PrimitiveView {
     }
 }
 
+/// Keep the measured leaf and positioned controls as siblings: Yoga measured
+/// nodes cannot own children, and custom overlay measurement must not shrink
+/// an explicitly sized editor down to the text's intrinsic width.
+private struct TextFieldContent: _PrimitiveView {
+    let surface: _TextFieldSurface
+    let gutterSession: TextGutterSession
+    func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
+    func _updateNode(_ node: Node) {}
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode(); layout.flexDirection = .column; layout.alignItems = .stretch
+        layout.flexGrow = 1; layout.flexShrink = 1; layout.minWidth = 0; layout.minHeight = 0
+        return layout
+    }
+    var _children: [any View] {
+        [surface, TextGutterControls(gutterSession).absolutePosition(left: 0, top: 0, right: 0, bottom: 0)]
+    }
+}
+
 struct _TextFieldSurface: _PrimitiveView {
     let textField: TextField
+    let gutterSession: TextGutterSession
     let interactionState: _TextFieldInteractionState
     let onHoverChange: (Bool) -> Void
     let onFocusChange: (Bool) -> Void
     let onEditingChange: (Bool) -> Void
 
     func _makeNode() -> Node {
-        textField._makeNode()
+        let node = textField._makeNode(); node.addResource(gutterSession); return node
     }
 
     func _updateNode(_ node: Node) {

@@ -66,7 +66,14 @@ public struct TextFieldDecoration: Equatable {
     }
 }
 
+final class TextFieldCodeStorage {
+    var value: TextFieldCodeEditing
+    init(_ value: TextFieldCodeEditing = .init()) { self.value = value }
+}
+
 public struct TextFieldCodeEditing {
+    public var gutter = TextEditorGutter()
+    public var folding = TextEditorFolding()
     public var diagnostics = TextDiagnostics.empty
     public var onRequestCompletion: TextCompletionProvider?
     public var onAcceptCompletion: ((TextCompletionItem) -> Void)?

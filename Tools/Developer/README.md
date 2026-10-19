@@ -65,6 +65,12 @@ launches a real artifact nor has a gate, it is a tool, not a validation.
 
 Run `guava-dev --help`, or `guava-dev <command> --help`, for the full flag list.
 
+DevTools `input-ui --input` accepts a JSON event array. Pointer `button` may be
+`left`, `middle`, `right`, `back`, `forward`, or the corresponding Web pointer
+integer 0–4; invalid values fail before delivery. This supports context-menu
+checks through the app's own input dispatcher. Query the resulting state and
+capture the rendered UI to verify the action; delivery alone is not a pass.
+
 ## Ownership and dependencies
 
 ```text

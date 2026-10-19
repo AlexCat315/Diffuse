@@ -36,7 +36,20 @@ public struct TextField: View {
     public var layout = TextFieldLayout()
     public var behavior = TextFieldBehavior()
     public var decoration = TextFieldDecoration()
-    public var codeEditing = TextFieldCodeEditing()
+    // Keep language-service configuration out of every composed view's inline
+    // size. Copies still have value semantics, including nested modifications.
+    private var codeStorage = TextFieldCodeStorage()
+    public var codeEditing: TextFieldCodeEditing {
+        get { codeStorage.value }
+        set {
+            if isKnownUniquelyReferenced(&codeStorage) { codeStorage.value = newValue }
+            else { codeStorage = TextFieldCodeStorage(newValue) }
+        }
+        _modify {
+            if !isKnownUniquelyReferenced(&codeStorage) { codeStorage = TextFieldCodeStorage(codeStorage.value) }
+            yield &codeStorage.value
+        }
+    }
     public var navigation = TextFieldNavigation()
     public var events = TextFieldEvents()
 
@@ -62,6 +75,9 @@ public struct TextField: View {
         let wrapsLines: Bool
         let maxVisibleLines: Int
         let showsLineNumbers: Bool
+        let hasGutter: Bool
+        let hasBreakpoints: Bool
+        let hasFolding: Bool
         let secure: Bool
     }
 
@@ -72,13 +88,24 @@ public struct TextField: View {
         let lineNumberGutterColor: Color?
         let syntaxColoringEnabled: Bool
         let syntaxRevision: AnyHashable?
-        init(_ code: TextFieldCodeEditing) {
+        let breakpoints: [TextBreakpoint]
+        let executionLine: Int?
+        let gutterEnabled: Bool
+        let markerLines: [Int]
+        let hasBreakpoints: Bool
+        let folds: [TextFoldRegion]
+        let hiddenLines: [Range<Int>]
+        init(_ code: TextFieldCodeEditing, hiddenLines: [Range<Int>]) {
             diagnostics = code.diagnostics
             showsLineNumbers = code.showsLineNumbers
             lineNumberColor = code.lineNumberColor
             lineNumberGutterColor = code.lineNumberGutterColor
             syntaxColoringEnabled = code.syntaxColorAtUTF8Offset != nil
             syntaxRevision = code.syntaxRevision
+            breakpoints = code.gutter.breakpoints?.wrappedValue ?? []
+            executionLine = code.gutter.executionLine; gutterEnabled = code.gutter.isEnabled
+            markerLines = code.gutter.markers.map(\.line); hasBreakpoints = code.gutter.breakpoints != nil
+            folds = code.folding.regions; self.hiddenLines = hiddenLines
         }
     }
 
@@ -148,6 +175,9 @@ public struct TextField: View {
             $0.label = placeholder
             $0.state.isEnabled = !behavior.disabled; $0.state.isReadOnly = behavior.readOnly
             $0.state.isSecure = behavior.secure
+            if let line = codeEditing.gutter.executionLine, codeEditing.showsLineNumbers {
+                $0.help = codeEditing.gutter.labels.execution(line)
+            }
         }
         updateAccessibilityValue(on: node, buffer: text.wrappedValue)
         node.accessibilityActions = AccessibilityActions()
@@ -185,6 +215,7 @@ public struct TextField: View {
             state = existing
         } else {
             state = FieldState()
+            state.buffer = text.wrappedValue
             state.selection.cursorIndex = text.wrappedValue.characterCount
             node.attachments["__textfield_state"] = state
         }
@@ -192,6 +223,7 @@ public struct TextField: View {
         node.firstResource(TextCompletionSession.self)?.configure(field: self, state: state)
         if let editHistory = codeEditing.editHistory { state.transaction.history = editHistory }
         normalizeIndices(state)
+        node.firstResource(TextGutterSession.self)?.configure(self, state: state)
         state.transaction.history.synchronize(text.wrappedValue)
         if !behavior.readOnly && !behavior.disabled {
             node.attachments[TextEditingCommands.undoKey] = { restoreHistory(state, redo: false) }
@@ -209,7 +241,7 @@ public struct TextField: View {
                                           layout: layout,
                                           behavior: behavior,
                                           decoration: decoration,
-                                          code: CodePaintIdentity(codeEditing),
+                                          code: CodePaintIdentity(codeEditing, hiddenLines: node.firstResource(TextGutterSession.self)?.folds.hiddenLines ?? []),
                                           isFocused: interactionState.isFocused)
 
         updateInteractionHandlers(for: node, state: state)
@@ -324,6 +356,9 @@ public struct TextField: View {
                                    wrapsLines: self.layout.wrapsLines,
                                    maxVisibleLines: self.layout.maxVisibleLines,
                                    showsLineNumbers: codeEditing.showsLineNumbers,
+                                   hasGutter: codeEditing.gutter.isEnabled,
+                                   hasBreakpoints: codeEditing.gutter.breakpoints != nil,
+                                   hasFolding: !codeEditing.folding.regions.isEmpty,
                                    secure: behavior.secure)
         layout.attachments[Self.measureInputsKey] = inputs
         if self.layout.axis == .vertical {
@@ -344,6 +379,9 @@ public struct TextField: View {
                                    wrapsLines: self.layout.wrapsLines,
                                  maxVisibleLines: self.layout.maxVisibleLines,
                                  showsLineNumbers: codeEditing.showsLineNumbers,
+                                 hasGutter: codeEditing.gutter.isEnabled,
+                                 hasBreakpoints: codeEditing.gutter.breakpoints != nil,
+                                 hasFolding: !codeEditing.folding.regions.isEmpty,
                                  secure: behavior.secure)
         let previous = layout.attachments[Self.measureInputsKey] as? MeasureInputs
         layout.attachments[Self.measureInputsKey] = next
@@ -374,6 +412,7 @@ public struct TextField: View {
             return true
         }
         if events.onKeyDown?(event) == true { return true }
+        if node.firstResource(TextGutterSession.self)?.handleKey(event) == true { return true }
         let mods = event.modifiers
         let shift = !mods.isDisjoint(with: .shift)
         let primaryModifier = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)
@@ -569,7 +608,7 @@ public struct TextField: View {
         // counter, and the editable text region all reference the same
         // leading / trailing reservations.
         let addonLeading = leadingAddonWidth(env: env, font: resolvedFont,
-                                             lineHeight: resolvedLineHeight, theme: theme)
+                                             lineHeight: resolvedLineHeight, theme: theme, node: node)
         let addonTrailing = trailingAddonWidth(env: env, font: resolvedFont,
                                                lineHeight: resolvedLineHeight, theme: theme)
         let controlWidth = trailingControlWidth(isFocused: isFocused, env: env, font: resolvedFont,
@@ -733,6 +772,9 @@ public struct TextField: View {
                                                  visibleHeight: state.scroll.visibleHeight,
                                                  lineHeight: resolvedLineHeight)
         let fixedTextOriginX = textOriginX + state.scroll.horizontal.offset
+        updateGutterControls(visibleLayout, source: current, textOriginX: fixedTextOriginX,
+                             textOriginY: textOriginY, origin: origin, lineHeight: resolvedLineHeight,
+                             node: node, env: env, font: resolvedFont, list: list)
         if codeEditing.showsLineNumbers && self.layout.axis == .vertical {
             drawLineNumbers(visibleLayout, source: current, origin: origin,
                             textOriginX: fixedTextOriginX, textOriginY: textOriginY,
@@ -870,7 +912,7 @@ public struct TextField: View {
         let addonLeading = leadingAddonWidth(env: env,
                                              font: resolvedFont,
                                              lineHeight: resolvedLineHeight,
-                                             theme: node.theme)
+                                             theme: node.theme, node: node)
         let addonTrailing = trailingAddonWidth(env: env,
                                                font: resolvedFont,
                                                lineHeight: resolvedLineHeight,
@@ -924,7 +966,7 @@ public struct TextField: View {
         let addonLeading = leadingAddonWidth(env: env,
                                              font: resolvedFont,
                                              lineHeight: resolvedLineHeight,
-                                             theme: node.theme)
+                                             theme: node.theme, node: node)
         let addonTrailing = trailingAddonWidth(env: env,
                                                font: resolvedFont,
                                                lineHeight: resolvedLineHeight,
@@ -1028,7 +1070,7 @@ public struct TextField: View {
     func leadingAddonWidth(env: TextEnvironment,
                            font: Font,
                            lineHeight: Float,
-                           theme: Theme) -> Float {
+                           theme: Theme, node: Node? = nil) -> Float {
         var width: Float = 0
         if let prepend = decoration.prepend, !prepend.isEmpty {
             let layout = env.cachedLayout(text: prepend, font: font, lineHeight: lineHeight,
@@ -1047,7 +1089,7 @@ public struct TextField: View {
         width += lineNumberGutterWidth(env: env,
                                        font: font,
                                        lineHeight: lineHeight,
-                                       theme: theme)
+                                       theme: theme, node: node)
         return width
     }
 
@@ -1058,7 +1100,7 @@ public struct TextField: View {
     private func lineNumberGutterWidth(env: TextEnvironment,
                                        font: Font,
                                        lineHeight: Float,
-                                       theme: Theme) -> Float {
+                                       theme: Theme, node: Node? = nil) -> Float {
         guard codeEditing.showsLineNumbers, self.layout.axis == .vertical else { return 0 }
         let lineCount = text.wrappedValue.lineCount
         let numberLayout = env.cachedLayout(text: String(repeating: "8", count: max(3, String(lineCount).count)),
@@ -1066,7 +1108,8 @@ public struct TextField: View {
                                             lineHeight: lineHeight,
                                             maxWidth: .infinity,
                                             alignment: .trailing)
-        return numberLayout.totalWidth + lineNumberTextGap(font: font, theme: theme) + theme.spacing.lg
+        return TextGutterGeometry(field: self, numberWidth: numberLayout.totalWidth, font: font, theme: theme,
+                                  touch: node?.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch) == true).width
     }
 
     private func lineNumberTextGap(font: Font, theme: Theme) -> Float {
@@ -1245,7 +1288,7 @@ public struct TextField: View {
         let gutterWidth = lineNumberGutterWidth(env: env,
                                                 font: font,
                                                 lineHeight: lineHeight,
-                                                theme: theme)
+                                                theme: theme, node: node)
         guard gutterWidth > 0 else { return }
         let gutterX = textOriginX - gutterWidth
         // Transparent by default: a full-height tinted slab reads as an empty
@@ -1274,7 +1317,7 @@ public struct TextField: View {
                 ? theme.colors.onSurface
                 : (codeEditing.lineNumberColor ?? theme.colors.onSurfaceMuted.multipliedAlpha(0.65))
             list.addText(numberLayout,
-                         origin: (gutterX + gutterWidth - lineNumberTextGap(font: font, theme: theme) - numberLayout.totalWidth,
+                         origin: (textOriginX - gutterWidth + gutterNumberRight(env: env, font: font, lineHeight: lineHeight, node: node) - numberLayout.totalWidth,
                                   textOriginY + line.baselineY - numberBaseline),
                          color: numberColor.multipliedAlpha(node.opacity),
                          textureID: env.atlasTextureID,
@@ -1454,10 +1497,12 @@ public struct TextField: View {
     }
 
     func resolvedLineHeight(node: Node, env: TextEnvironment) -> Float {
-        env.resolvedLineHeight(
+        let height = env.resolvedLineHeight(
             font: resolvedFont(node: node, env: env),
             override: node.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
         )
+        let interactiveGutter = codeEditing.showsLineNumbers && (codeEditing.gutter.isEnabled || !codeEditing.folding.regions.isEmpty)
+        return interactiveGutter && node.compositionValue(of: SurfaceEnvironment.key).input.contains(.touch) ? max(44, height) : height
     }
 
     /// Word navigation visits only the run surrounding the cursor, through

@@ -5,6 +5,44 @@ import Testing
 
 @Suite("Incremental Swift syntax trees")
 struct TreeSitterHighlighterTests {
+    @Test("Folding is derived from structural nodes and ignores braces inside strings and comments")
+    func foldingStructure() throws {
+        let buffer = TextBuffer("struct Example {\n  let brace = \"{ }\"\n  // {\n  func run() {\n    print(brace)\n  }\n}\n")
+        let highlighter = TreeSitterHighlighter()
+        #expect(highlighter.synchronize(buffer))
+        let tree = try #require(highlighter.tree)
+        let regions = scriptFoldRegions(in: tree, buffer: buffer)
+        #expect(regions.contains(TextFoldRegion(lines: 0...6)))
+        #expect(regions.contains(TextFoldRegion(lines: 3...5)))
+        #expect(!regions.contains { $0.lines.lowerBound == 1 || $0.lines.lowerBound == 2 })
+    }
+    @Test("Control flow, computed properties and collection literals expose nested fold regions")
+    func foldingControlFlow() throws {
+        let buffer = TextBuffer("""
+        struct Example {
+          var value: Int {
+            if ready {
+              for item in items {
+                print(item)
+              }
+            } else {
+              return 0
+            }
+            return 1
+          }
+          let values = [
+            1,
+            2
+          ]
+        }
+        """)
+        let highlighter = TreeSitterHighlighter()
+        #expect(highlighter.synchronize(buffer))
+        let regions = scriptFoldRegions(in: try #require(highlighter.tree), buffer: buffer)
+        for lines in [0...15, 1...10, 2...8, 3...5, 11...14] {
+            #expect(regions.contains(TextFoldRegion(lines: lines)))
+        }
+    }
     @Test("grammar classifies raw strings, interpolation, nested comments and function fields")
     func grammarTokens() throws {
         let text = ##"""

@@ -52,6 +52,28 @@ public final class SyntaxTree: @unchecked Sendable {
 
     public var hasErrors: Bool { ts_node_has_error(ts_tree_root_node(native)) }
 
+    /// Value-only structural query, intended for background folding/outline
+    /// snapshots. Token lookup should continue using indexed `path` descent.
+    public func nodes(ofTypes types: Set<String>) -> [SyntaxNodeInfo] {
+        var cursor = ts_tree_cursor_new(ts_tree_root_node(native))
+        defer { ts_tree_cursor_delete(&cursor) }
+        var result: [SyntaxNodeInfo] = []
+        while true {
+            let node = ts_tree_cursor_current_node(&cursor)
+            let type = String(cString: ts_node_type(node))
+            if types.contains(type) {
+                result.append(SyntaxNodeInfo(type: type,
+                    byteRange: Int(ts_node_start_byte(node))..<Int(ts_node_end_byte(node)),
+                    fieldName: ts_tree_cursor_current_field_name(&cursor).map { String(cString: $0) },
+                    isNamed: ts_node_is_named(node), identity: UInt(bitPattern: node.id)))
+            }
+            if ts_tree_cursor_goto_first_child(&cursor) { continue }
+            while !ts_tree_cursor_goto_next_sibling(&cursor) {
+                if !ts_tree_cursor_goto_parent(&cursor) { return result }
+            }
+        }
+    }
+
     /// Cursor descent uses Tree-sitter's subtree index; it never enumerates
     /// every top-level declaration to find a token in a large source file.
     public func path(atUTF8Offset offset: Int) -> [SyntaxNodeInfo] {

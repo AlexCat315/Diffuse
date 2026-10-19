@@ -10,12 +10,14 @@ import GuavaUIRuntime
 /// only the parser cache for its current immutable buffer revision.
 struct ScriptCodeEditor: View {
     let source: Binding<TextBuffer>
+    let annotations: Binding<TextEditorAnnotations>
     let hover: Binding<ScriptEditorHoverPresentation>
     let caretLabel: Binding<String>
     let onChange: (TextBuffer) -> Void
     @State private var syntaxSession = ScriptSyntaxSession()
     @State private var diagnosticCache = ScriptCodeEditorDiagnostics()
     @State private var diagnosticHover: ScriptDiagnosticHover?
+    @State private var gutterNavigation = ScriptGutterNavigation()
     var diagnostics: [ScriptLanguageDiagnostic] = []
     var completionProvider: TextCompletionProvider?
     var editHistory: TextEditHistory? = nil
@@ -38,6 +40,31 @@ struct ScriptCodeEditor: View {
                     input.layout.wrapsLines = false
                     input.layout.maxVisibleLines = 48
                     input.codeEditing.showsLineNumbers = true
+                    input.codeEditing.gutter.labels = scriptGutterLabels()
+                    input.codeEditing.folding.labels = scriptFoldingLabels()
+                    input.codeEditing.gutter.breakpoints = Binding(get: { annotations.wrappedValue.breakpoints },
+                        set: { annotations.wrappedValue.breakpoints = $0 })
+                    // Runtime verification is not available yet. Retain the
+                    // user's enabled intent without claiming a bound breakpoint.
+                    input.codeEditing.gutter.onBreakpointsChange = { points in
+                        annotations.wrappedValue.breakpoints = points.map {
+                            TextBreakpoint(line: $0.line, state: $0.state == .enabled ? .unverified : $0.state)
+                        }
+                    }
+                    input.codeEditing.folding.collapsedLines = Binding(get: { annotations.wrappedValue.collapsedLines },
+                        set: { annotations.wrappedValue.collapsedLines = $0 })
+                    input.codeEditing.gutter.markers = mappedDiagnostics.overlapping(0..<max(1, text.utf8Length)).enumerated().map { index, diagnostic in
+                        TextGutterMarker("diagnostic-\(index)-\(diagnostic.utf8Range.lowerBound)-\(diagnostic.utf8Range.upperBound)-\(diagnostic.severity)-\(diagnostic.message)",
+                            line: text.lineIndex(forCharacterIndex: text.characterIndex(forUTF8Offset: diagnostic.utf8Range.lowerBound)),
+                            label: L("Go to diagnostic") + ": " + diagnostic.message,
+                            icon: UIIcons.Status.alertTriangle,
+                            color: diagnostic.severity == .error ? theme.colors.error : theme.colors.warning) {
+                                gutterNavigation = ScriptGutterNavigation(externalID: navigation?.id,
+                                    characterIndex: text.characterIndex(forUTF8Offset: diagnostic.utf8Range.lowerBound))
+                            }
+                    }
+                    input.codeEditing.folding.regions = syntaxSession.foldRegions
+                    input.codeEditing.folding.isReady = syntaxSession.parsedBuffer == text
                     input.codeEditing.diagnostics = mappedDiagnostics
                     input.codeEditing.onRequestCompletion = completionProvider
                     input.codeEditing.onRequestHover = { anchor in handleHover(anchor) }
@@ -49,6 +76,10 @@ struct ScriptCodeEditor: View {
                     input.navigation.caretRequestIndex = navigation.map {
                         ScriptSourceCoordinates.characterIndex(in: text,
                             at: ScriptLanguagePosition(line: $0.line, character: $0.column))
+                    }
+                    if let index = gutterNavigation.characterIndex, gutterNavigation.externalID == navigation?.id {
+                        input.navigation.caretRequestID = gutterNavigation.id
+                        input.navigation.caretRequestIndex = index
                     }
                     input.events.onChange = onChange
                     input.events.onHoverChange = { anchor in handleHover(anchor) }

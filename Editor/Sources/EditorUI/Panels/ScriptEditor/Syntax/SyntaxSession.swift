@@ -14,6 +14,7 @@ final class ScriptSyntaxSession: _ObservableObject, @unchecked Sendable {
     private(set) var revision = 0
     private(set) var parsedBuffer: TextBuffer?
     private(set) var failure: Error?
+    private(set) var foldRegions: [TextFoldRegion] = []
 
     func request(_ buffer: TextBuffer) {
         guard requested != buffer else { return }
@@ -21,10 +22,11 @@ final class ScriptSyntaxSession: _ObservableObject, @unchecked Sendable {
             self.tree = tree.applying(syntaxEdit(delta, previous: previous, current: buffer))
         }
         requested = buffer; token = nil
-        worker.request(buffer) { [weak self] buffer, tree, failure in
+        worker.request(buffer) { [weak self] buffer, tree, regions, failure in
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.requested == buffer else { return }
                 self.tree = tree; self.parsedBuffer = buffer; self.failure = failure
+                self.foldRegions = regions
                 self.token = nil; self.revision &+= 1; self.publisher.send()
             }
         }
@@ -58,7 +60,7 @@ private final class ScriptSyntaxWorker: @unchecked Sendable {
     private let highlighter = TreeSitterHighlighter()
     private var pending: TextBuffer?
     private var scheduled = false
-    func request(_ buffer: TextBuffer, deliver: @escaping @Sendable (TextBuffer, SyntaxTree?, Error?) -> Void) {
+    func request(_ buffer: TextBuffer, deliver: @escaping @Sendable (TextBuffer, SyntaxTree?, [TextFoldRegion], Error?) -> Void) {
         lock.lock(); pending = buffer
         let start = !scheduled; scheduled = true; lock.unlock()
         guard start else { return }
@@ -69,10 +71,23 @@ private final class ScriptSyntaxWorker: @unchecked Sendable {
                 lock.unlock()
                 guard let next else { return }
                 let succeeded = highlighter.synchronize(next)
-                deliver(next, succeeded ? highlighter.tree?.copy() : nil, highlighter.failure)
+                let tree = succeeded ? highlighter.tree : nil
+                deliver(next, tree?.copy(), tree.map { scriptFoldRegions(in: $0, buffer: next) } ?? [], highlighter.failure)
             }
         }
     }
+}
+
+func scriptFoldRegions(in tree: SyntaxTree, buffer: TextBuffer) -> [TextFoldRegion] {
+    tree.nodes(ofTypes: ["class_body", "enum_class_body", "protocol_body", "function_body", "lambda_literal",
+        "if_statement", "for_statement", "while_statement", "repeat_while_statement", "guard_statement",
+        "do_statement", "catch_block", "switch_statement", "computed_property", "computed_getter", "computed_setter", "computed_modify",
+        "array_literal", "dictionary_literal", "multiline_comment", "multi_line_string_literal", "raw_string_literal"])
+        .compactMap { node in
+            let first = buffer.lineIndex(forCharacterIndex: buffer.characterIndex(forUTF8Offset: node.byteRange.lowerBound))
+            let last = buffer.lineIndex(forCharacterIndex: buffer.characterIndex(forUTF8Offset: max(node.byteRange.lowerBound, node.byteRange.upperBound - 1)))
+            return first < last ? TextFoldRegion(lines: first...last) : nil
+        }
 }
 
 func syntaxEdit(_ delta: TextEditDelta, previous: TextBuffer, current: TextBuffer) -> SyntaxEdit {
