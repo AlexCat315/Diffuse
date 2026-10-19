@@ -104,6 +104,7 @@ public enum UIIcons {
         public static let eyeOff = asset("eye-off")
         public static let flag = asset("flag")
         public static let heart = asset("heart")
+        public static let heartFill = asset("heart-fill")
         public static let help = asset("help")
         public static let info = asset("info")
         public static let loader = asset("loader")

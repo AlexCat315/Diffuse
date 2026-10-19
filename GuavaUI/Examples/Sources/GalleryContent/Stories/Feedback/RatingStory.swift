@@ -8,6 +8,8 @@ struct RatingStory: View {
     @State private var ten = 7.0
     @State private var custom = 3.0
     @State private var rtl = 3.0
+    @State private var tenth = 3.7
+    @State private var hearts = 2.75
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
@@ -24,6 +26,17 @@ struct RatingStory: View {
                 }
                 RatingSample(Rating("Ten-star rating", value: $ten) { $0.selection.maximum = 10; $0.selection.isEnabled = options.isEnabled; $0.appearance.size = .small }) {
                     Text("Score: \(ten) / 10").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+            }
+            StorySection("Fine precision & symbols", "Precision divides each symbol into up to twenty equal parts and snaps to exact fractions. Arrows move one part; Shift+arrows move a whole symbol. Any filled/outline icon pair can replace the star.") {
+                RatingSample(Rating("Tenth-star rating", value: $tenth) { $0.selection.precision = .tenth; $0.selection.isEnabled = options.isEnabled }) {
+                    Text("Score: \(tenth.formatted(.number.precision(.fractionLength(1)))) / 5").font(.bodyStrong)
+                }
+                RatingSample(Rating("Favorite level", value: $hearts) {
+                        $0.selection.precision = .quarter; $0.selection.isEnabled = options.isEnabled
+                        $0.appearance.symbol = .heart; $0.appearance.filled = .error
+                    }) {
+                    Text("Hearts: \(hearts.formatted(.number.precision(.fractionLength(2)))) / 5").font(.bodyStrong)
                 }
             }
             StorySection("Read-only & disabled", "Read-only scores retain their exact fraction. Disabled ratings show the score with muted colors; neither accepts input or joins the Tab order.") {

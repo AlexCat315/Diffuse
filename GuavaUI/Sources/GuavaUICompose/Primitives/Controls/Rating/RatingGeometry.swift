@@ -36,11 +36,9 @@ struct RatingGeometry: Equatable {
         let rtl = isRTL(node)
         let x = max(0, min(width, eventX - Float(node.absoluteOrigin.x) - 4))
         let visualIndex = min(maximum - 1, Int(x / stride))
-        let fraction = (x - Float(visualIndex) * stride) / cellWidth
+        let fraction = max(0, min(1, (x - Float(visualIndex) * stride - (cellWidth - starSize) / 2) / starSize))
         let index = rtl ? maximum - 1 - visualIndex : visualIndex
-        let isHalf = rtl ? fraction >= 0.5 : fraction <= 0.5
-        let part = precision == .half && isHalf ? 0.5 : 1.0
-        return Double(index) + part
+        return Double(index) + precision.part(rtl ? 1 - fraction : fraction)
     }
     func contains(_ x: Float, _ y: Float, node: Node) -> Bool {
         let origin = node.absoluteOrigin

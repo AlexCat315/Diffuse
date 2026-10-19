@@ -108,6 +108,38 @@ struct RatingTests: GuavaUIComposeSerializedSuite {
         #expect(geometry.candidate(at: .nan, node: node, precision: .half) == 0)
     } }
 
+    @Test("Fractional precision snaps exactly, follows the glyph under the pointer and Shift steps whole symbols")
+    func fractionalPrecision() { withScene { graph, _, focus, _, dispatcher in
+        #expect(RatingPrecision.divisions(0) == .whole && RatingPrecision.divisions(64).divisions == 20)
+        #expect(RatingPrecision.tenth.snapped(0.1 + 0.2) == 0.3 && RatingPrecision.quarter.snapped(2.13) == 2.25)
+        #expect(RatingPrecision.tenth.part(0.3) == 0.3 && RatingPrecision.tenth.part(0.31) == 0.4 && RatingPrecision.half.part(0) == 0.5)
+        var value = 0.0
+        graph.install(root: Rating(value: Binding(get: { value }, set: { value = $0 })) { $0.selection.precision = .tenth })
+        graph.computeLayout(width: 500, height: 100)
+        let node = host(graph)
+        let click = pointer(node, star: 1, fraction: 0.33)
+        dispatcher.dispatch(.mouseButtonDown(click)); dispatcher.dispatch(.mouseButtonUp(click))
+        #expect(value == 1.4)
+        focus.clear(); dispatcher.dispatch(.keyDown(key(Scancode.tab)))
+        dispatcher.dispatch(.keyDown(key(Scancode.arrowRight))); #expect(value == 1.5)
+        dispatcher.dispatch(.keyDown(key(Scancode.arrowRight, modifiers: .shift))); #expect(value == 2.5)
+        dispatcher.dispatch(.keyDown(key(Scancode.arrowLeft, modifiers: .shift))); #expect(value == 1.5)
+    } }
+
+    @Test("A custom symbol replaces the cached rasters and redraws")
+    func customSymbol() { withScene { graph, _, _, _, _ in
+        var symbol = RatingSymbol.star
+        let view = { Rating(value: .constant(2)) { $0.appearance.symbol = symbol } }
+        graph.install(root: view()); graph.computeLayout(width: 500, height: 100)
+        let first = host(graph).attachments["rating.paint"] as? RatingPaint
+        #expect(first?.symbol == .star)
+        symbol = .heart
+        graph.install(root: view()); graph.computeLayout(width: 500, height: 100)
+        let second = host(graph).attachments["rating.paint"] as? RatingPaint
+        #expect(second?.symbol == .heart && second !== first)
+    } }
+
+
     @Test("RTL mirrors star order, hit candidates and arrow-key direction")
     func rightToLeft() { withScene { graph, _, focus, _, dispatcher in
         var value = 3.0

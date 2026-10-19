@@ -2,7 +2,7 @@ import Foundation
 
 /// Bundle-backed image resource that keeps packaged asset lookup details out
 /// of view code.
-public struct BundleImageResource: @unchecked Sendable, CustomStringConvertible {
+public struct BundleImageResource: @unchecked Sendable, Hashable, CustomStringConvertible {
     public let name: String
     public let fileExtension: String
     public let bundle: Bundle

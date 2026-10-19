@@ -1,6 +1,6 @@
 # Rating
 
-`Rating` 是受控的星形评分组件，值来自 `Binding<Double>`。`RatingSelection` 管理选择规则；`RatingAppearance` 管理尺寸、间距和语义颜色。悬停和按下状态归挂载节点所有，不写入评分值。
+`Rating` 是受控的评分组件（默认星形，可换图形），值来自 `Binding<Double>`。`RatingSelection` 管理选择规则；`RatingAppearance` 管理尺寸、间距和语义颜色。悬停和按下状态归挂载节点所有，不写入评分值。
 
 ```swift
 @State private var score = 2.5
@@ -22,7 +22,7 @@ Rating("Customer score", value: $score) {
 | 拖动后释放 | 提交释放位置；不会触发重复点击清零 |
 | 在组件外释放 / Escape | 取消，不改评分，释放捕获 |
 | Tab | 整个评分只有一个停靠点 |
-| Left / Down、Right / Up | 按整星或半星步长减、加 |
+| Left / Down、Right / Up | 按一份精度减、加；加 Shift 按整图形 |
 | Home / End | 最小可选值、最大值 |
 | Delete / Backspace | 允许清空时置零 |
 | Ctrl / Command / Alt 组合键 | 留给宿主快捷键 |
@@ -44,7 +44,21 @@ Rating("Customer score", value: $score) {
 
 当前验收使用 `RatingTests` 与 Gallery 自有 DevTools 输入/查询/镜像，覆盖明暗主题、尺寸、部分填充、清空、焦点与捕获生命周期；未保存的旧坐标记录不作为当前通过依据。RTL 的直接触摸与方向键验收记录见 [自适应验收](adaptive-spec.md#5-规范完成清单按本文验收)。
 
-RTL 已镜像星位、半星裁剪、指针候选和左右方向键；上下方向键保持增减语义。当前边界：只提供星形与整星/半星精度；其他图形、更细精度、触摸专属手势和表单校验集成仍未提供。
+## 精度与图形
+
+`RatingPrecision` 把每个图形等分为 1–20 份：`.whole`、`.half`、`.quarter`、`.tenth`，或 `.divisions(n)`。提交值按精确分数取整（`0.1 + 0.2` 记为 `0.3`）。指针候选按图形本身（而非含留白的单元格）计算比例并向上取整，因此触到图形前缘至少选中一份；落在分界上的点不会因浮点误差跨入下一份。方向键移动一份，Shift + 方向键移动一个整图形，细精度下仍能快速遍历。
+
+`RatingAppearance.symbol` 接受任意单色“填充 / 轮廓”图标对，内置 `.star` 与 `.heart`。两者都作为着色遮罩绘制，颜色仍由 `filled` / `empty` 语义色决定；尺寸或图形变化时重建栅格缓存并重绘。
+
+```swift
+Rating("Favorite level", value: $level) {
+    $0.selection.precision = .quarter
+    $0.appearance.symbol = .heart
+    $0.appearance.filled = .error
+}
+```
+
+RTL 已镜像星位、部分填充裁剪、指针候选和左右方向键；上下方向键保持增减语义。当前边界：表单校验集成仍未提供。
 
 ## 响应式与输入密度
 
@@ -58,3 +72,5 @@ RTL 已镜像星位、半星裁剪、指针候选和左右方向键；上下方�
 
 - [RatingSample.swift](../../GuavaUI/Examples/Sources/GalleryContent/Stories/Feedback/RatingSample.swift)
 - [RatingLayoutTests.swift](../../GuavaUI/Examples/Tests/GalleryContentTests/RatingLayoutTests.swift)
+
+精度与图形验收：`RatingTests.fractionalPrecision` 覆盖等分夹紧、精确取整、十分之一指针命中与 Shift 整图形步进；`customSymbol` 覆盖图形切换重建栅格。DevTools 在 1280 Gallery `--component rating` 中点击十分星第三颗约 30% 处得到 2.4（分界浮点误差已加容差修正），Shift+→ 得到 3.4；镜像确认十分星与四分之一心形的部分填充贴合图形边缘。

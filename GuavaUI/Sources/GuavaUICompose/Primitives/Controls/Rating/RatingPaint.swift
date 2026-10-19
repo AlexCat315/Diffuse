@@ -17,12 +17,15 @@ struct RatingPalette: Equatable {
 final class RatingPaint {
     private var filled: VectorImageRaster?
     private var outline: VectorImageRaster?
-    init(size: Float) {
+    let size: Float
+    let symbol: RatingSymbol
+    init(size: Float, symbol: RatingSymbol) {
+        self.size = size; self.symbol = symbol
         func raster(_ resource: BundleImageResource) -> VectorImageRaster? {
             guard let url = resource.url else { return nil }
             return VectorImageRaster(url: url, initial: Image.resolve(path: url.path, width: size, height: size), width: size, height: size)
         }
-        filled = raster(UIIcons.Status.starFill); outline = raster(UIIcons.Status.star)
+        filled = raster(symbol.filled); outline = raster(symbol.empty)
     }
     func draw(value: Double, geometry: RatingGeometry, palette: RatingPalette, node: Node, origin: CGPoint, list: DrawList) {
         let alpha = node.opacity

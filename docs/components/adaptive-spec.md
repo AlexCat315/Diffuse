@@ -175,10 +175,10 @@
 
 **Rating**
 
-- 外观：星 12/16/20/28（mini/small/regular/large），可交互高度 ≥ 32；半星预览；只读用 image 语义。`[已实现]`
+- 外观：星 12/16/20/28（mini/small/regular/large），可交互高度 ≥ 32；1–20 等分精度预览；`RatingSymbol` 可换任意单色填充/轮廓图标对（内置星、心）；只读用 image 语义。`[已实现]`
 - 手机：每星命中 lane ≥ 44pt、组件高 ≥ 44pt；触摸面无被动 hover 预览，按下拖动仍预览；原语按显式边界裁剪绘制与命中，不允许负值布局；多星组合使用横向滚动保留完整星带，Gallery 的评分说明和操作移到下行并换行。`[已实现]`
 - 平板 / 桌面：hover 预览、键盘焦点环 2pt；恢复紧凑展示尺寸。`[已实现]`
-- 交互与验收：方向键步进、Home/End、Delete 清空、Escape 取消；辅助功能 slider 语义 + setValue/increment/decrement。验收：Rating 测试族 + Gallery `--component rating` 的 narrow/wide/touch。
+- 交互与验收：方向键按一份精度步进、Shift + 方向键按整图形、Home/End、Delete 清空、Escape 取消；辅助功能 slider 语义 + setValue/increment/decrement。验收：Rating 测试族 + Gallery `--component rating` 的 narrow/wide/touch。
 
 **Stepper**
 

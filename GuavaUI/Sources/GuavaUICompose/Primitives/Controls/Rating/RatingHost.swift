@@ -42,9 +42,11 @@ extension Rating {
             node.accessibilityActions.decrement = { write(selection.clamped(session.binding.wrappedValue) - selection.precision.increment) }
         }
         let palette = RatingPalette(appearance: appearance, selection: selection, theme: node.theme)
-        let paint = (node.attachments["rating.paint"] as? RatingPaint) ?? RatingPaint(size: geometry.starSize)
+        let cached = node.attachments["rating.paint"] as? RatingPaint
+        let paint = cached.flatMap { $0.size == geometry.starSize && $0.symbol == appearance.symbol ? $0 : nil }
+            ?? RatingPaint(size: geometry.starSize, symbol: appearance.symbol)
         node.attachments["rating.paint"] = paint
-        node.updateDraw(identity: RatingDrawIdentity(configuration: configuration, palette: palette)) { [weak node] list, origin in
+        node.updateDraw(identity: RatingDrawIdentity(configuration: configuration, palette: palette, symbol: appearance.symbol)) { [weak node] list, origin in
             guard let node else { return }
             paint.draw(value: session.preview ?? selection.clamped(session.binding.wrappedValue), geometry: geometry,
                        palette: palette, node: node, origin: origin, list: list)
@@ -84,11 +86,13 @@ extension Rating {
             guard phase == .target, event.modifiers.isDisjoint(with: [.ctrl, .gui, .alt]) else { return .ignored }
             let current = selection.clamped(session.binding.wrappedValue)
             let rtl = session.configuration?.geometry.isRTL(node) == true
+            // Shift moves a whole symbol, so fine precision stays quick to traverse.
+            let step = event.modifiers.contains(.shift) ? 1 : selection.precision.increment
             switch event.scancode {
-            case Scancode.arrowLeft: write(current + (rtl ? selection.precision.increment : -selection.precision.increment))
-            case Scancode.arrowRight: write(current + (rtl ? -selection.precision.increment : selection.precision.increment))
-            case Scancode.arrowDown: write(current - selection.precision.increment)
-            case Scancode.arrowUp: write(current + selection.precision.increment)
+            case Scancode.arrowLeft: write(current + (rtl ? step : -step))
+            case Scancode.arrowRight: write(current + (rtl ? -step : step))
+            case Scancode.arrowDown: write(current - step)
+            case Scancode.arrowUp: write(current + step)
             case Scancode.home: write(0)
             case Scancode.end: write(Double(selection.maximum))
             case Scancode.backspace, Scancode.delete:
@@ -104,4 +108,5 @@ extension Rating {
 private struct RatingDrawIdentity: Equatable {
     let configuration: RatingSession.Configuration
     let palette: RatingPalette
+    let symbol: RatingSymbol
 }
