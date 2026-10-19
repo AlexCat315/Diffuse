@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Port of `scripts/input-ui-devtools.swift`: drive the host's input dispatcher
 /// through DevTools, without OS automation.
 enum InputUI {
-  static let usage = "guava-dev devtools input-ui PORT|@SESSION_FILE --click-node NODE_ID | --input JSON_OR_@FILE [--capture OUTPUT.jpg] (events may include {\"kind\":\"wait\",\"milliseconds\":100}; --capture mirrors the window right after delivery, for transient states)"
+  static let usage = "guava-dev devtools input-ui PORT|@SESSION_FILE --click-node NODE_ID | --input JSON_OR_@FILE [--capture OUTPUT.jpg] (events may include {\"kind\":\"wait\",\"milliseconds\":100}; --capture mirrors the window about 120 ms after delivery, once the host has rendered the input, so transient states are still visible)"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -73,6 +73,9 @@ enum InputUI {
         // input deliveries have reached the host.
         _ = try await request(
           "diagnostics.call", ["name": "get_diagnostics", "arguments": ["limit": 1]])
+        // The open mirror keeps an idle host rendering; hold it briefly so the
+        // capture shows the input applied rather than the previous frame.
+        if capture != nil { try await Task.sleep(for: .milliseconds(120)) }
         _ = try await request("mirror.stop")
         Terminal.info(
           "Delivered \(events.count) input events through DevTools; query or capture the resulting UI to verify behavior."
