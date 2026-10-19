@@ -150,7 +150,7 @@ enum InputUI {
     else {
       throw ToolError.message("Input contains an unsupported kind, value or oversized string")
     }
-    return try input.map { try normalizeKeyEvent(normalizePointerEvent($0)) }
+    return try input.map { try normalizeModifiers(normalizeKeyEvent(normalizePointerEvent($0))) }
   }
 
   private static func normalizePointerEvent(_ event: [String: Any]) throws -> [String: Any] {
@@ -177,19 +177,24 @@ enum InputUI {
     guard let key = result["key"] as? String, (4...99).contains(where: { keyName(for: $0) == key }) else {
       throw ToolError.message("Keyboard input requires a supported KeyboardEvent.code (for example KeyA, Enter or ArrowUp) or USB-HID scancode")
     }
-    if let modifiers = result["modifiers"] as? [String] {
-      var mask = 0
-      for modifier in modifiers.map({ $0.lowercased() }) {
-        switch modifier {
-        case "shift": mask |= 1
-        case "ctrl", "control": mask |= 2
-        case "alt", "option": mask |= 4
-        case "gui", "cmd", "command", "meta": mask |= 8
-        default: break
-        }
+    return result
+  }
+
+  /// Pointer and key events accept modifier names (shift, ctrl, alt, cmd);
+  /// unknown names fail instead of silently sending an unmodified event.
+  private static func normalizeModifiers(_ event: [String: Any]) throws -> [String: Any] {
+    guard let modifiers = event["modifiers"] as? [String] else { return event }
+    var result = event, mask = 0
+    for modifier in modifiers.map({ $0.lowercased() }) {
+      switch modifier {
+      case "shift": mask |= 1
+      case "ctrl", "control": mask |= 2
+      case "alt", "option": mask |= 4
+      case "gui", "cmd", "command", "meta": mask |= 8
+      default: throw ToolError.message("Unknown modifier '\(modifier)'; use shift, ctrl, alt or cmd")
       }
-      result["modifiers"] = mask
     }
+    result["modifiers"] = mask
     return result
   }
 

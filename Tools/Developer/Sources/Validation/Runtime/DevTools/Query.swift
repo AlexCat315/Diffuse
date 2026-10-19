@@ -53,10 +53,25 @@ enum QueryUI {
           guard response["type"] as? String == type + ".ok", let value = response["payload"] else {
             throw ToolError.message("Unexpected diagnostic response")
           }
-          Terminal.info(JSON.pretty(value))
+          Terminal.info(render(value, compact: (payload["arguments"] as? [String: Any])?["compact"] as? Bool == true))
           break
         }
       }
     #endif
+  }
+}
+
+extension QueryUI {
+  /// Compact node queries print one JSON object per line, then a paging
+  /// summary, so an agent reads a result in a few lines; everything else is
+  /// pretty-printed.
+  static func render(_ value: Any, compact: Bool) -> String {
+    guard compact, let data = (value as? [String: Any])?["data"] as? [String: Any],
+          let items = data["items"] as? [Any] else { return JSON.pretty(value) }
+    var lines = items.map { JSON.text($0) }
+    let total = data["total"].map { JSON.text($0) } ?? String(items.count)
+    let next = data["nextOffset"].flatMap { $0 is NSNull ? nil : ", next offset \(JSON.text($0))" } ?? ""
+    lines.append("\(items.count) of \(total) nodes\(next)")
+    return lines.joined(separator: "\n")
   }
 }

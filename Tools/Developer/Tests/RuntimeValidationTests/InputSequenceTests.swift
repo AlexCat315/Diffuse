@@ -27,6 +27,16 @@ final class InputSequenceTests: XCTestCase {
     XCTAssertEqual(events[4]["modifiers"] as? Int, 1)
   }
 
+  func testPointerModifiersUseNamesAndRejectUnknownNames() throws {
+    let events = try InputUI.loadEvents("""
+      [{"kind":"pointerDown","x":10,"y":20,"button":"left","modifiers":["shift","cmd"]},
+       {"kind":"pointerUp","x":10,"y":20,"button":0,"modifiers":["ctrl"]}]
+      """)
+    XCTAssertEqual(events.compactMap { $0["modifiers"] as? Int }, [9, 2])
+    XCTAssertThrowsError(try InputUI.loadEvents("[{\"kind\":\"pointerDown\",\"button\":0,\"modifiers\":[\"hyper\"]}]"))
+    XCTAssertThrowsError(try InputUI.loadEvents("[{\"kind\":\"keyDown\",\"key\":\"KeyA\",\"modifiers\":[\"super\"]}]"))
+  }
+
   func testWaitIsBoundedAndRequiresAnExactShape() {
     for raw in [
       "[{\"kind\":\"wait\",\"milliseconds\":0}]",
