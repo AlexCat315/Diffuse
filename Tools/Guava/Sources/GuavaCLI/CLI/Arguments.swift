@@ -67,7 +67,7 @@ struct Arguments {
                 guard platform == nil else { throw ToolError.invalid("Select exactly one platform") }
                 platform = candidate
             } else if token.hasPrefix("--"), let flag = Flag(rawValue: String(token.dropFirst(2))) {
-                guard (operation == .run || (operation == .devtools && flag == .noOpen)), flags.insert(flag).inserted else {
+                guard Self.allowedFlags(operation).contains(flag), flags.insert(flag).inserted else {
                     throw ToolError.invalid("Unexpected or duplicate flag: \(token)")
                 }
             } else if token == "--debug" || token == "--release" || token == "--profile" {
@@ -138,6 +138,15 @@ struct Arguments {
     func url(_ option: Option) -> URL? { values[option].map { URL(fileURLWithPath: $0).standardizedFileURL } }
     var directory: URL { URL(fileURLWithPath: subject ?? FileManager.default.currentDirectoryPath).standardizedFileURL }
 
+    private static func allowedFlags(_ operation: Operation) -> Set<Flag> {
+        switch operation {
+        case .run: [.devtools, .noOpen]
+        case .devtools: [.noOpen]
+        case .test: [.noParallel]
+        default: []
+        }
+    }
+
     private static func allowed(_ operation: Operation) -> Set<Option> {
         let common: Set<Option> = [.engineRoot]
         let android: Set<Option> = [.androidSDK, .ndk, .keystore, .keyAlias, .storePassword, .keyPassword]
@@ -160,4 +169,4 @@ struct Arguments {
     }
 }
 
-enum Flag: String { case devtools, noOpen = "no-open" }
+enum Flag: String { case devtools, noOpen = "no-open", noParallel = "no-parallel" }

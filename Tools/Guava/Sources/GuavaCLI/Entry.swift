@@ -33,10 +33,10 @@ enum GuavaCLI {
             let project = try AppProject(at: arguments.directory)
             try project.clean()
             print("Cleaned \(project.buildDirectory.path)")
-        case .build, .run, .test:
+        case .test: try PackageTests(arguments).run()
+        case .build, .run:
             let project = try AppProject(at: arguments.directory)
             let root = try GuavaSDK.locate(arguments, project: project)
-            if arguments.operation == .test { try SwiftPackage.test(project: project, root: root, arguments: arguments); return }
             try project.require(arguments.platform)
             if arguments.platform == .android { try BuildAndroidApplication.run(arguments, root: root, project: project) }
             else if arguments.platform == .ios { try IOSBuild(project: project, root: root, arguments: arguments).run() }
@@ -79,7 +79,7 @@ enum GuavaCLI {
           guava create app <directory> [--id com.example.app] [--name 'My App']
           guava build [directory] [--mac|--win|--linux|--android|--ios|--web] [--debug|--profile|--release]
           guava run   [directory] [--mac|--win|--linux|--android|--ios|--web] [--debug|--profile|--release]
-          guava test  [directory] [--debug|--profile|--release] [--filter TEST]
+          guava test  [directory] [--debug|--profile|--release] [--filter TEST] [--no-parallel]
           guava clean [directory]
           guava sdk install <repository> --revision COMMIT_OR_TAG
           guava sdk use <checkout> | guava sdk list
@@ -90,6 +90,7 @@ enum GuavaCLI {
 
         Directory defaults to the current project; platform defaults to the host; configuration defaults to debug.
         One guava.json owns application identity, SDK location and targets; UI lives in Sources/AppContent.
+        Test accepts application projects and plain Swift packages; plain packages keep their native .build cache.
         Desktop builds run on their matching host. Android uses Swift 6.4.1 + Android SDK, NDK r30 and JDK 21.
         iOS uses Xcode, SDL/UIKit and Metal; Web has a portable rendering prototype.
 

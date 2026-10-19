@@ -13,6 +13,7 @@
 ./guava setup --mac
 ./guava run GuavaUI/Examples --mac   # 组件 Gallery
 ./guava run Editor --mac             # GuavaStudio 工作站
+./guava test GuavaUI --no-parallel --filter RowDensityTests
 ./guava create app /path/to/MyApp
 ./guava run /path/to/MyApp --mac
 ```
@@ -43,6 +44,8 @@ guava clean
 ```
 
 也可以从其他目录执行 `guava run /path/to/MyApp --mac --devtools`。平台选项互斥，默认当前主机；Debug / Profile / Release 互斥，默认 Debug。桌面需要对应主机，Android 交叉构建支持 macOS / Linux。Web 完整应用宿主尚未接入，CLI 会明确报错。
+
+`guava test` 也接受只有 `Package.swift` 的普通 Swift 包，例如 `GuavaUI`、`Editor`、`Tools/Developer`。框架包沿用 SwiftPM 的 `.build` 缓存，不生成 `guava.json`；应用项目继续使用 `.guava/build/swift` 及配置中的 SDK。`--filter` 选择测试，`--no-parallel` 串行执行共享 UI 环境的测试；失败会返回非零退出码。
 
 ## 应用所有权
 

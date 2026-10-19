@@ -18,7 +18,8 @@ struct DesktopBuild {
 
     private func compile() throws -> URL {
         let package = try DesktopLauncher(project: project, root: root).prepare()
-        let command = SwiftPackage.command(project: project, configuration: arguments.configuration, package: package)
+        let command = SwiftPackage.command(directory: package, configuration: arguments.configuration,
+            scratchPath: project.buildDirectory.appendingPathComponent("swift"))
         try Shell.run(command + ["--product", project.desktopProduct], environment: SwiftPackage.environment(root: root))
         return URL(fileURLWithPath: try Shell.run(command + ["--show-bin-path"], environment: SwiftPackage.environment(root: root), capture: true))
     }
@@ -31,15 +32,10 @@ enum SwiftPackage {
         return environment
     }
 
-    static func command(project: AppProject, configuration: BuildConfiguration, verb: String = "build", package: URL? = nil) -> [String] {
-        [GuavaSDK.swift, verb, "--package-path", (package ?? project.directory).path,
-         "--scratch-path", project.buildDirectory.appendingPathComponent("swift").path,
-         "--configuration", configuration.swiftConfiguration, "--jobs", "4"] + configuration.swiftFlags
-    }
-
-    static func test(project: AppProject, root: URL, arguments: Arguments) throws {
-        var command = command(project: project, configuration: arguments.configuration, verb: "test")
-        if let filter = arguments.value(.filter) { command += ["--filter", filter] }
-        try Shell.run(command, environment: environment(root: root))
+    static func command(directory: URL, configuration: BuildConfiguration, verb: String = "build", scratchPath: URL? = nil) -> [String] {
+        var command = [GuavaSDK.swift, verb, "--package-path", directory.path,
+                       "--configuration", configuration.swiftConfiguration, "--jobs", "4"] + configuration.swiftFlags
+        if let scratchPath { command += ["--scratch-path", scratchPath.path] }
+        return command
     }
 }
