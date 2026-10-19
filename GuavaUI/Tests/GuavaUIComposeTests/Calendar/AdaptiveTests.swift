@@ -7,7 +7,7 @@ import GuavaUIRuntime
 struct CalendarAdaptiveTests: GuavaUIComposeSerializedSuite {
     private func nodes(_ node: Node) -> [Node] { [node] + node.children.flatMap(nodes) }
 
-    @Test("Narrow calendars scroll whole months while keeping 44pt cells and a clear scrollbar lane")
+    @Test("Narrow calendars scroll whole months with 44pt cells under a non-reserving touch indicator")
     func narrow() throws {
         try GlobalTestLock.locked {
             let previous = TextEnvironmentHolder.current
@@ -32,7 +32,8 @@ struct CalendarAdaptiveTests: GuavaUIComposeSerializedSuite {
                             #expect(days.count == 42)
                             #expect(days.allSatisfy { $0.frame.width >= 44 && $0.frame.height >= 44 })
                             #expect(scroll.frame.width == CGFloat(width))
-                            #expect((days.map { $0.absoluteFrame.maxY }.max() ?? 0) <= scroll.absoluteFrame.maxY - 12)
+                            // Touch-only surfaces overlay a thin indicator and reserve no lane.
+                            #expect((days.map { $0.absoluteFrame.maxY }.max() ?? 0) <= scroll.absoluteFrame.maxY + 0.5)
                             if width < 340 {
                                 let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
                                     capture: context.pointerCapture, focusChain: context.focusChain)

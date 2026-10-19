@@ -87,7 +87,9 @@ ScrollView(.vertical, scrollOffset: $offset) {
 
 ## 嵌套与滚动条
 
-`.overlay` 将滚动条置于内容上方；`.stable` 在纵向 trailing 预留 12pt 槽，避免盖住尾部控件。只有内容溢出才绘制条；hover/拖动显示，离开淡出。软件自定义手势若产生越界位移，thumb 缩短且仍位于轨道内。
+`.overlay` 将滚动条置于内容上方；`.stable` 在纵向 trailing 预留 12pt 槽，避免盖住尾部控件。只有内容溢出才绘制条；hover/拖动显示，离开淡出。
+
+仅触摸（无指针）的表面没有 hover 与可抓取的 thumb，滚动条按平台习惯改为 3pt 细指示条：不绘制轨道、不预留 gutter（`.stable` 在该表面同样为零），内容移动时立即出现，静止 0.7s 后 0.3s 淡出；减少动画时保持可见而不做淡出动画。触摸 + 指针的混合表面保留 12pt gutter 与可拖动滚动条。验收：`ScrollIndicatorTests`（三种输入的 gutter、触摸滚动显示指示条且不抓取 thumb、指针拖动 thumb），DevTools 390pt 触摸 `input @drag.json --capture` 取样滚动中与静止 1.5s 后的镜像。软件自定义手势若产生越界位移，thumb 缩短且仍位于轨道内。
 
 内建 chrome 的扩大命中区限制在视口与祖先裁剪的交集内，不能抢占相邻按钮或 Sidebar 调宽分隔柄；捕获成功后，移出视口仍可继续拖拽和释放。`ScrollViewInputTests` 覆盖普通边界和祖先裁剪边界。祖先应用 `.allowsHitTesting(false)` 时立即取消该子树的指针捕获与焦点，恢复输入后仍可正常开始新操作；Sidebar 的调宽生命周期测试覆盖此路径。
 

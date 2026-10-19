@@ -164,6 +164,20 @@ struct ListRowTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    @Test("A row mounted by scrolling has its full title width in the first layout pass")
+    func firstFrameWidth() throws {
+        try scene(.single) { h, graph, _, _ in
+            // End navigation mounts rows that were never laid out; one pass only.
+            h.selected = h.count - 1
+            graph.recomposer.commitAll(); graph.computeLayout(width: h.width, height: 240)
+            let first = try text(Self.title(h.count - 1), graph).frame.width
+            settle(graph, h)
+            let settled = try text(Self.title(h.count - 1), graph).frame.width
+            #expect(settled > 100)
+            #expect(abs(first - settled) < 1)
+        }
+    }
+
     @Test("A 200K-row collection still mounts only a viewport after end navigation")
     func windowing() throws {
         for kind in [Kind.single, .multiple] { try scene(kind) { h, graph, context, input in

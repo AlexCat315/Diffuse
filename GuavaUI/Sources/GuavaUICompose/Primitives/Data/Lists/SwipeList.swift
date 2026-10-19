@@ -92,7 +92,7 @@ public struct SwipeList<Data: RandomAccessCollection, ID: Hashable, RowContent: 
                                    onViewportChange: { viewport in
                             // The reported viewport includes the reserved
                             // scrollbar lane; row chrome must fit beside it.
-                            let next = max(1, Float(viewport.size.width) - ScrollView<EmptyView>.scrollbarGutterWidth)
+                            let next = max(1, Float(viewport.size.width) - ScrollView<EmptyView>.stableGutterWidth(on: surface))
                             if abs(next - viewportWidth) > 0.5 { viewportWidth = next }
                         }) {
                             Box(direction: .column, alignItems: .stretch, spacing: spacing) {

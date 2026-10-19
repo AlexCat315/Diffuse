@@ -101,7 +101,7 @@ public struct SectionedList<SectionID: Hashable, Item: Identifiable, RowContent:
                         .overlay(alignment: .top) {
                             if let sticky {
                                 stickyHeaderView(sticky, height: effectiveHeight,
-                                                 width: Float(size.width))
+                                                 width: Float(size.width), lane: ScrollView<EmptyView>.stableGutterWidth(on: surface))
                             }
                         }
                         // The pushed-up header must not paint over the content
@@ -143,7 +143,7 @@ public struct SectionedList<SectionID: Hashable, Item: Identifiable, RowContent:
         }
     }
 
-    private func stickyHeaderView(_ header: StickyHeader, height: Float, width: Float) -> some View {
+    private func stickyHeaderView(_ header: StickyHeader, height: Float, width: Float, lane: Float) -> some View {
         // The overlay is measured at its intrinsic width, so a percentage frame
         // would only cover the label. Use the container query width and anchor
         // the opaque band physically at the leading edge, leaving the stable
@@ -158,7 +158,7 @@ public struct SectionedList<SectionID: Hashable, Item: Identifiable, RowContent:
                     .accessibility { $0.role = .staticText; $0.label = header.title }
                 Spacer(minLength: 0)
             }
-            .frame(width: .points(max(1, width - ScrollView<EmptyView>.scrollbarGutterWidth)),
+            .frame(width: .points(max(1, width - lane)),
                    height: .points(height))
             .background(stickyHeaderBackground)
             // A hairline separates the pinned title from the partially

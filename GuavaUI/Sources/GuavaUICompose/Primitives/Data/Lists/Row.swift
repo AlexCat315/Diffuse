@@ -14,18 +14,18 @@ public struct ListRow<Leading: View, Trailing: View>: View {
     }
 
     public var body: some View {
-        ContainerSizeReader { size in
-            TextScalerReader { scaler in
-                var scroll = ScrollView(.horizontal) {
-                    ListRowLayout(width: size.width, minimumTitleWidth: CGFloat(scaler.scale(24))) {
-                        Box(direction: .row, alignItems: .center, spacing: 0) { leading }
-                        Text(title).truncated()
-                        Box(direction: .row, alignItems: .center, spacing: 0) { trailing }
-                    }
+        // The horizontal viewport proposes its own width to the row, so a row
+        // mounted mid-scroll is laid out at full width in its first frame.
+        TextScalerReader { scaler in
+            var scroll = ScrollView(.horizontal) {
+                ListRowLayout(minimumTitleWidth: CGFloat(scaler.scale(24))) {
+                    Box(direction: .row, alignItems: .center, spacing: 0) { leading }
+                    Text(title).truncated()
+                    Box(direction: .row, alignItems: .center, spacing: 0) { trailing }
                 }
-                scroll.combinesAccessibility = true
-                return scroll
             }
+            scroll.combinesAccessibility = true
+            return scroll
         }.frame(minWidth: 0)
     }
 }
@@ -41,16 +41,15 @@ public extension ListRow where Leading == EmptyView, Trailing == EmptyView {
 }
 
 private struct ListRowLayout: Layout {
-    let width: CGFloat
     let minimumTitleWidth: CGFloat
     private let spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: [LayoutSubview]) -> CGSize {
-        plan(subviews).size
+        plan(subviews, width: proposal.width).size
     }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: [LayoutSubview]) {
         guard subviews.count == 3 else { return }
-        let plan = plan(subviews), rtl = subviews[0].layoutDirection == .rtl
+        let plan = plan(subviews, width: bounds.width), rtl = subviews[0].layoutDirection == .rtl
         var x = rtl ? bounds.maxX : bounds.minX
         for index in subviews.indices {
             let size = plan.slots[index]
@@ -64,11 +63,13 @@ private struct ListRowLayout: Layout {
             x += (rtl ? -1 : 1) * (size.width + gap)
         }
     }
-    private func plan(_ subviews: [LayoutSubview]) -> Plan {
+    /// `width` is the viewport; nil (unbounded) gives the title its natural width.
+    private func plan(_ subviews: [LayoutSubview], width: CGFloat?) -> Plan {
         guard subviews.count == 3 else { return Plan(slots: [], size: .zero) }
         let leading = subviews[0].sizeThatFits(.unspecified), trailing = subviews[2].sizeThatFits(.unspecified)
         let minimum = leading.width + trailing.width + (leading.width > 0 ? spacing : 0) + (trailing.width > 0 ? spacing : 0)
-        let rowWidth = max(width, minimum + minimumTitleWidth)
+        let natural = minimum + subviews[1].sizeThatFits(.unspecified).width
+        let rowWidth = max(width.map { $0.isFinite ? $0 : natural } ?? natural, minimum + minimumTitleWidth)
         let titleWidth = rowWidth - minimum
         let title = subviews[1].sizeThatFits(.init(width: titleWidth))
         return Plan(slots: [leading, CGSize(width: titleWidth, height: title.height), trailing],

@@ -1,4 +1,4 @@
-# GuavaUI 跨平台控件规范（手机 / 平板 / 桌面）
+滚动条用 `.stable` gutter 预留 12pt 不压尾部控件；仅触摸表面改为不占位的 3pt 细指示条，滚动时出现、静止后淡出 |# GuavaUI 跨平台控件规范（手机 / 平板 / 桌面）
 
 本文把 [组件标准](standard.md) 的交付要求展开为可实现、可验收的逐项规范：先定义布局容器在空间不足时的统一处理阶梯，再逐项规定控件的默认外观、手机与平板上的重排方式，以及触摸、键盘和辅助功能交互；随后给出动效与动画（曲线、弹簧、进入/退出）的选型与实现；最后给出与 Gallery、单元测试和真机对应的验收方法。
 
@@ -197,7 +197,7 @@
 **Calendar**
 
 - 外观：月视图、日期格由 `controlSize` 决定；前后月箭头为独立按钮。`[已实现]`
-- 手机：日期格 ≥44pt；放不下时整板横向滚动，不缩格，底部保留 12pt scrollbar lane。启用日期上的待完成点击可让位于滚动，不误提交；明确的 Slider 拖动仍独占捕获。`[已实现]`，`CalendarAdaptiveTests` 与 DevTools 286pt 月历视口验证
+- 手机：日期格 ≥44pt；放不下时整板横向滚动，不缩格；指针/混合输入底部保留 12pt scrollbar lane，仅触摸表面使用不占位的细指示条。启用日期上的待完成点击可让位于滚动，不误提交；明确的 Slider 拖动仍独占捕获。`[已实现]`，`CalendarAdaptiveTests` 与 DevTools 286pt 月历视口验证
 - 平板 / 桌面：可多月份并排（`numberOfMonths`）；hover 日期反馈。`[已实现]`
 - 交互与验收：方向键移动（±1/±7）；Home/End 定位焦点所属月份的首个/最后一个可用日期，PageUp/PageDown 按日号翻月并夹到月末。不可用目标在目标月内查找，空月不改变焦点；导航不提交选择，Return/Space 才激活。多月份窗口仅在目标超出已显示范围时移动；禁用日期释放焦点。辅助功能每格 role=button + 完整日期/选中态，月份箭头有名称。`[已实现]`。验收：`CalendarKeyboardNavigationTests`、`TouchDensityTests` calendar、`NavigationStateTests.calendarKeyboard`、`--component calendar` 三预览；完整契约见 [Calendar / DatePicker](calendar.md)。
 

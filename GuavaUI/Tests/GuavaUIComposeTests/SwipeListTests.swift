@@ -122,9 +122,10 @@ struct SwipeListTests: GuavaUIComposeSerializedSuite {
             let first = try row("Item 1", graph)
             let bounds = first.absoluteFrame
             let scroll = try #require(nodes(graph.tree.root!).first { $0.accessibility?.role == .scrollArea })
-            #expect(abs(first.frame.width - (scroll.frame.width - 12)) < 0.5)
-            #expect(bounds.minX >= scroll.absoluteFrame.minX)
-            #expect(bounds.maxX <= scroll.absoluteFrame.maxX - 12)
+            // Touch-only rows span the viewport; the indicator overlays them.
+            #expect(abs(first.frame.width - scroll.frame.width) < 0.5)
+            #expect(bounds.minX >= scroll.absoluteFrame.minX - 0.5)
+            #expect(bounds.maxX <= scroll.absoluteFrame.maxX + 0.5)
             let delta: Float = direction == .rtl ? 140 : -140
             swipe(first, dispatcher, by: -delta)
             settle(graph)

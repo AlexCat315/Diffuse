@@ -37,7 +37,8 @@ struct RatingLayoutTests {
                             let rating = try #require(all.first { $0.accessibility?.role == .slider })
                             let score = try #require(all.first { $0.layoutNode?.textInputs?.text == "Score: 7 / 10" })
                             #expect(strip.clipsToBounds && strip.frame.width == CGFloat(available))
-                            #expect(strip.frame.height >= rating.frame.height + 12)
+                            // Pointer surfaces reserve the 12pt lane; touch overlays a thin indicator.
+                            #expect(strip.frame.height >= rating.frame.height + (surface.supportsHover ? 12 : 0))
                             #expect(score.absoluteFrame.minX >= 0 && score.absoluteFrame.maxX <= CGFloat(available))
                             #expect(score.absoluteFrame.minY >= strip.absoluteFrame.maxY)
                             // The scroll coordinate system starts at x=0 even in

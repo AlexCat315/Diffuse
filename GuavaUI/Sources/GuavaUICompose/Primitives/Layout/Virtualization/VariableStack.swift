@@ -38,12 +38,14 @@ public struct VariableVirtualStack<Data: RandomAccessCollection, ID: Hashable, C
     }
 
     public var body: some View {
-        TextScalerReader { scaler in scrollView(scaler: scaler) }
+        SurfaceReader { surface in
+            TextScalerReader { scaler in scrollView(scaler: scaler, gutter: ScrollView<EmptyView>.stableGutterWidth(on: surface)) }
+        }
     }
 
-    private func scrollView(scaler: TextScaler) -> some View {
+    private func scrollView(scaler: TextScaler, gutter: Float) -> some View {
         let height = Double(viewport.size.height)
-        let width = max(0, Float(viewport.size.width) - ScrollView<EmptyView>.scrollbarGutterWidth)
+        let width = max(0, Float(viewport.size.width) - gutter)
         var nextOffset = Double(offset.y)
         // Wait for a real width rather than measuring the entire collection
         // twice during initial mount (first at zero, then at the viewport).

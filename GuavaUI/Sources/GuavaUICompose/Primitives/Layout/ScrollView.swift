@@ -30,6 +30,7 @@ private enum _ScrollViewAttachmentKeys {
     static let contentDragState = "__scrollview_content_drag_state"
     static let isHovered = "__scrollview_scrollbar_is_hovered"
     static let chromeOpacity = "__scrollview_scrollbar_chrome_opacity"
+    static let touchIndicator = "__scrollview_touch_indicator"
     static let contentSize = "__scrollview_content_size"
     static let motion = "__scrollview_motion"
     static let report = "__scrollview_report"
@@ -47,12 +48,32 @@ private enum _ScrollViewAttachmentKeys {
         }
         let animator = ScrollAnimator(physics: physics) { [weak node] offset in
             guard let node else { return }
+            if node.contentOffset != offset, node.attachments[touchIndicator] as? Bool == true {
+                flashTouchIndicator(on: node)
+            }
             node.contentOffset = offset
             (node.attachments[report] as? (Node) -> Void)?(node)
         }
         node.attachments[motion] = animator
         node.addResource(_ScrollMotionLifetime(animator))
         return animator
+    }
+
+    /// Touch surfaces have no hover to reveal chrome. Like platform scroll
+    /// indicators, the thin thumb appears while content moves and fades once
+    /// it rests. Reduced motion keeps it visible instead of animating it out.
+    static func flashTouchIndicator(on node: Node) {
+        let apply: (Float) -> Void = { [weak node] opacity in
+            guard let node else { return }
+            node.attachments[chromeOpacity] = opacity
+            node.markRenderDirty(reason: .styleSet(field: "scrollbarChromeOpacity"))
+        }
+        node.animatableSet(propertyKey: chromeOpacity, current: node.attachments[chromeOpacity] as? Float ?? 0,
+                           to: Float(1), apply: apply)
+        guard !node.prefersReducedMotion else { return }
+        withAnimation(Animation(duration: 0.3, curve: .easeOut, delay: 0.7)) {
+            node.animatableSet(propertyKey: chromeOpacity, current: Float(1), to: Float(0), apply: apply)
+        }
     }
 }
 
@@ -122,6 +143,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let axes: ScrollAxis
         let trackColor: Color
         let thumbColor: Color
+        let touchIndicator: Bool
     }
 
     public let axes: ScrollAxis
@@ -142,6 +164,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
     /// Width of the reserved lane under `.stable`: track + inset each side.
     static var scrollbarGutterWidth: Float { 12 }
+
+    /// The lane `.stable` actually reserves on `surface`. Touch-only surfaces
+    /// overlay a thin indicator instead, so containers sizing rows beside the
+    /// lane must ask for the surface rather than assume the constant.
+    static func stableGutterWidth(on surface: UIEnvironment) -> Float {
+        surface.supportsHover ? scrollbarGutterWidth : 0
+    }
 
     public init(_ axes: ScrollAxis = .vertical,
                 consumePolicy: ScrollConsumePolicy = .whenScrollable,
@@ -239,8 +268,15 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let axes = self.axes
         let step = self.wheelStep
         let consumePolicy = self.consumePolicy
-        let trackThickness: Float = 8
-        let trackInset: Float = 2
+        // Touch-only surfaces have no hover and no pointer to grab a thumb, so
+        // they get a thin overlay indicator and never reserve a gutter.
+        let touchIndicator = !node.supportsControlHover
+        node.attachments[_ScrollViewAttachmentKeys.touchIndicator] = touchIndicator
+        let gutter: Float = scrollbarGutter == .stable && !touchIndicator ? Self.scrollbarGutterWidth : 0
+        node.layoutNode?.setPadding(axes != .horizontal ? gutter : 0, edge: .right)
+        node.layoutNode?.setPadding(axes != .vertical ? gutter : 0, edge: .bottom)
+        let trackThickness: Float = touchIndicator ? 3 : 8
+        let trackInset: Float = touchIndicator ? 3 : 2
         let trackHitSlop: Float = 6
 
         // Owns this container's motion — inertia, rubber band, return spring.
@@ -334,6 +370,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 switch phase {
                 case .enter:
                     node.attachments[_ScrollViewAttachmentKeys.isHovered] = true
+                    guard !touchIndicator else { return }
                     Self.setScrollbarChromeVisible(true, on: node)
                 case .leave:
                     node.attachments[_ScrollViewAttachmentKeys.isHovered] = false
@@ -445,7 +482,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                           axes: axes,
                                                           trackThickness: trackThickness,
                                                           trackInset: trackInset)
-                    if let state = Self.beginScrollbarDrag(axis: .vertical,
+                    if !touchIndicator, let state = Self.beginScrollbarDrag(axis: .vertical,
                                                            local: local,
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
@@ -456,7 +493,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                         Self.setScrollbarChromeVisible(true, on: node)
                         return .handled
                     }
-                    if let state = Self.beginScrollbarDrag(axis: .horizontal,
+                    if !touchIndicator, let state = Self.beginScrollbarDrag(axis: .horizontal,
                                                            local: local,
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
@@ -550,11 +587,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // children), so we paint the bar onto the ScrollView's own background
         // pass. To keep it visible above scrolled content, we add a sibling
         // overlay node on first update.
-        let trackColor = theme.colors.surfaceVariant
-        let thumbColor = theme.colors.onSurfaceMuted
+        // A touch indicator is a thumb only; it has no track to aim at.
+        let trackColor = touchIndicator ? Color.clear : theme.colors.surfaceVariant
+        let thumbColor = touchIndicator ? theme.colors.onSurfaceMuted.multipliedAlpha(0.6) : theme.colors.onSurfaceMuted
         node.updateOverlayDraw(identity: PaintIdentity(axes: axes,
                                                        trackColor: trackColor,
-                                                       thumbColor: thumbColor)) { [weak node] list, origin in
+                                                       thumbColor: thumbColor,
+                                                       touchIndicator: touchIndicator)) { [weak node] list, origin in
             guard let node else { return }
             let viewport = Self.visibleViewportRect(for: node)
             let viewW = Float(viewport.width)
@@ -646,13 +685,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         layout.overflow = .hidden
         layout.minWidth = 0
         layout.minHeight = 0
-        if scrollbarGutter == .stable, axes != .horizontal {
-            layout.setPadding(Self.scrollbarGutterWidth, edge: .right)
-        } else {
-            layout.setPadding(0, edge: .right)
-        }
-        layout.setPadding(scrollbarGutter == .stable && axes != .vertical ? Self.scrollbarGutterWidth : 0,
-                          edge: .bottom)
+        // Gutter padding depends on the surface input and is set in `_updateNode`.
     }
 
     public var _children: [any View] {
