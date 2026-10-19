@@ -194,7 +194,7 @@ public struct DateRangeCalendar: View {
                    isSelected: isStart || isEnd) {
                 choose(day)
             }
-            .buttonStyle(CalendarDayStyle(cellSize: cellSize,
+            .buttonStyle(CalendarCellStyle(width: cellSize, height: cellSize,
                                           isCurrentMonth: inMonth,
                                           isToday: calendar.isDate(day, inSameDayAs: options.today)))
             .frame(width: cellSize, height: cellSize)
@@ -238,8 +238,8 @@ public struct DateRangeCalendar: View {
 
     private func navigate(_ date: Date, _ code: UInt32) -> Bool {
         guard options.presentation.isEnabled,
-              let navigation = CalendarNavigation(scancode: code),
-              let next = navigation.destination(from: date, calendar: options.calendar,
+              let navigation = CalendarNavigation(scancode: code, columns: 7),
+              let next = navigation.destination(from: date, cells: CalendarCells(panel: .days, granularity: .day), calendar: options.calendar,
                                                availability: options.availability) else { return false }
         session.focusedDay = next
         session.focusRequest += 1

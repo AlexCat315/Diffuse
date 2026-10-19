@@ -22,13 +22,14 @@ public struct DatePicker: View {
         options.calendar.presentation.validate()
     }
     public var body: some View {
-        let formatter = DateFormatter(); formatter.dateStyle = .medium; formatter.locale = options.calendar.locale
-        formatter.calendar = options.calendar.calendar; formatter.timeZone = options.calendar.calendar.timeZone
-        let dateLabel = selection.wrappedValue.map(formatter.string) ?? options.presentation.placeholder
+        let periodLabel = selection.wrappedValue.map {
+            options.calendar.granularity.label(for: $0, calendar: options.calendar.calendar, locale: options.calendar.locale)
+        }
+        let dateLabel = periodLabel ?? options.presentation.placeholder
         return SurfaceReader { surface in
         let cellSize = max(options.calendar.presentation.cellSize, surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
         return Popover(isPresented: $isPresented, isEnabled: options.presentation.isEnabled,
-                       width: Float(options.calendar.presentation.numberOfMonths) * (cellSize * 7 + 36), surface: .content, overflow: .flip, label: {
+                       width: CalendarView.width(cellSize: cellSize, options: options.calendar), surface: .content, overflow: .flip, label: {
             Row(alignment: .center, spacing: 8) {
                 Text(dateLabel).truncatingTail().font(.label).tooltip(dateLabel)
                     .flex(1, shrink: 1).frame(minWidth: 0)
@@ -44,7 +45,7 @@ public struct DatePicker: View {
             }
         }).frame(width: options.presentation.width).accessibility {
             $0.label = options.presentation.placeholder
-            $0.value = selection.wrappedValue.map(formatter.string) ?? ""
+            $0.value = periodLabel ?? ""
             $0.state.isExpanded = isPresented
         }
         }

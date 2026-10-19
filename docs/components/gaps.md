@@ -14,7 +14,7 @@
 | 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、Masonry、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader/HeightClassReader/OrientationReader、VirtualStack/VirtualStack（闭包行高）、Workspace、Form/PropertyGrid | Grid/LazyGrid span P2 |
 | 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed、label 槽）/RadioGroup、Slider（刻度/Page）、RangeSlider（双 thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | 无通用缺失；FAB 按规范视觉基线不纳入 |
 | 文本与数值输入 | TextField（含 Text Editor / 代码编辑）、TextArea、SearchField、NumberField（步进/locale）、Vec3Field（locale/缩放）、Select/Combobox、ColorField、AssetRefField、JsonField、FieldLabel/Link/KeyCap | OTP/PIN P3、masked input P3 |
-| 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 周/月/年选择 P2、时区选择入口 P2、区间预设 P2 |
+| 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 时区选择入口 P2、区间预设 P2 |
 | 集合与数据 | List（单选/多选按 binding 类型、虚拟化/键盘）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualStack（固定/可变行高）、Chart（line/area/分组或堆叠 bar/scatter/pie·donut、可切换图例、数据点选择）、Timeline、Tag | TreeTable P2、DataTable 高级能力 P2 |
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | 菜单富内容 P2 |
@@ -137,7 +137,7 @@
 | NumberField / Vec3Field | locale 小数、触摸/大字号轴单元；`NumberField(prefix:resetValue:)` 前缀芯片拖拽 scrub（每 4pt 一步，Shift ×10 / Option ×0.1）、双击单轴重置，Vec3Field 复用同一芯片并提供复制/粘贴/重置向量菜单（`Vec3FieldTests`，DevTools 720 拖拽 X 1→2、右键菜单） | 已完成 |
 | Select / Combobox | 触发器宽度下限与窗口夹紧已实现；Combobox 远程结果契约（`ComboboxSearch`：防抖、取消、加载/失败/重试/最小长度状态）已实现，见 [Combobox](combobox.md) | 完成 |
 | DatePicker / TimeField | Calendar 配置可指定 timeZone，时区选择入口仍缺；TimeOfDay 是不含时区的墙钟值，转换由调用方负责；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
-| Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动与触摸弹层预算已完成，见 [日历导航](calendar.md)；周/月/年模式仍为 P2 | P1 已完成 |
+| Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动、触摸弹层预算，以及日/周/月/年粒度与标题上钻的月份/年份网格已完成，见 [日历导航](calendar.md) | 完成 |
 | List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动仍待补 | P1 已完成；边缘自动滚动 P2 |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |

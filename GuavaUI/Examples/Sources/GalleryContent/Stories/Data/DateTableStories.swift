@@ -40,24 +40,62 @@ struct TableStory: View {
 struct CalendarStory: View {
     let options: GalleryOptions
     @State private var date: Date?
+    @State private var week: Date?
+    @State private var month: Date?
+    @State private var year: Date?
     var body: some View {
-        StorySection("Choose a day", "Move with arrows; Home/End focus the first/last available day of the month. PageUp/PageDown change months. Return selects the focused day. Weekend dates are unavailable.") {
-            CalendarView(selection: $date) {
-                $0.presentation.isEnabled = options.isEnabled; $0.calendar.firstWeekday = 2
-                let calendar = $0.calendar
-                $0.availability.isEnabled = { !calendar.isDateInWeekend($0) }
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
+            StorySection("Choose a day", "Move with arrows; Home/End focus the first/last available day of the month. PageUp/PageDown change months. Return selects the focused day. Weekend dates are unavailable. Click the month title to jump by month or year.") {
+                CalendarView(selection: $date) {
+                    $0.presentation.isEnabled = options.isEnabled; $0.calendar.firstWeekday = 2
+                    let calendar = $0.calendar
+                    $0.availability.isEnabled = { !calendar.isDateInWeekend($0) }
+                }
+                Text(date?.formatted(date: .long, time: .omitted) ?? "No date selected").font(.caption).foregroundColor(.onSurfaceMuted)
             }
-            Text(date?.formatted(date: .long, time: .omitted) ?? "No date selected").font(.caption).foregroundColor(.onSurfaceMuted)
+            StorySection("Week, month and year", "Granularity sets what one selection covers; the bound date is the period's first day. Week rows select as a whole and show week numbers. Month and year grids use arrows by cell and row, PageUp/PageDown by page.") {
+                Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 16) {
+                    granularity("Week", .week, $week).debugName("calendar-week")
+                    granularity("Month", .month, $month).debugName("calendar-month")
+                    granularity("Year", .year, $year).debugName("calendar-year")
+                }
+            }
+        }
+    }
+
+    private func granularity(_ title: String, _ granularity: CalendarGranularity, _ value: Binding<Date?>) -> some View {
+        Column(alignment: .leading, spacing: 6) {
+            CalendarView(selection: value) {
+                $0.presentation.isEnabled = options.isEnabled; $0.calendar.firstWeekday = 2; $0.granularity = granularity
+            }
+            Text("\(title): \(value.wrappedValue.map { granularity.galleryLabel($0) } ?? "None")")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+    }
+}
+
+private extension CalendarGranularity {
+    func galleryLabel(_ date: Date) -> String {
+        switch self {
+        case .week: "week of " + date.formatted(date: .abbreviated, time: .omitted)
+        case .month: date.formatted(.dateTime.month(.wide).year())
+        case .year: date.formatted(.dateTime.year())
+        case .day: date.formatted(date: .long, time: .omitted)
         }
     }
 }
 struct DatePickerStory: View {
     let options: GalleryOptions
     @State private var date: Date?
+    @State private var month: Date?
     var body: some View {
-        StorySection("Date input", "The calendar opens in an anchored popover. Choosing a day commits and closes; the clear action resets the optional value.") {
+        StorySection("Date input", "The calendar opens in an anchored popover. Choosing a day commits and closes; the clear action resets the optional value. A month picker opens on a year of months.") {
             DatePicker(selection: $date) { $0.presentation.isEnabled = options.isEnabled }
             Text(date?.formatted(date: .long, time: .omitted) ?? "No date selected").font(.caption).foregroundColor(.onSurfaceMuted)
+            DatePicker(selection: $month) {
+                $0.presentation.isEnabled = options.isEnabled; $0.presentation.placeholder = "Choose a month"
+                $0.calendar.granularity = .month
+            }.debugName("datepicker-month")
             DatePicker(selection: .constant(nil)) { $0.presentation.isEnabled = false; $0.presentation.placeholder = "Unavailable" }
         }
     }

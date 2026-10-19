@@ -86,13 +86,13 @@ struct CalendarKeyboardNavigationTests: GuavaUIComposeSerializedSuite {
             ((2024, 3, 15), Scancode.end, (2024, 3, 31)),
             ((2024, 2, 15), Scancode.pageDown, (2024, 3, 15))
         ] {
-            let command = try #require(CalendarNavigation(scancode: code))
+            let command = try #require(CalendarNavigation(scancode: code, columns: 7))
             #expect(command.destination(from: date(start.0, start.1, start.2, in: calendar),
-                calendar: calendar, availability: DateAvailability()) == date(expected.0, expected.1, expected.2, in: calendar))
+                cells: CalendarCells(panel: .days, granularity: .day), calendar: calendar, availability: DateAvailability()) == date(expected.0, expected.1, expected.2, in: calendar))
         }
         let february = date(2024, 2, 15, in: calendar), march = date(2024, 3, 15, in: calendar)
         #expect(march.timeIntervalSince(february) == 29 * 24 * 3_600 - 3_600)
-        #expect(CalendarNavigation(scancode: Scancode.a) == nil)
+        #expect(CalendarNavigation(scancode: Scancode.a, columns: 7) == nil)
     }
 
     @Test("Month boundaries and jumps skip unavailable days within the destination month")
@@ -103,23 +103,23 @@ struct CalendarKeyboardNavigationTests: GuavaUIComposeSerializedSuite {
         availability.maximum = date(2024, 2, 20, in: calendar)
         availability.isEnabled = { ![8, 9, 20].contains(calendar.component(.day, from: $0)) }
         for (start, command, expected): ((Int, Int, Int), CalendarNavigation, Int) in [
-            ((2024, 2, 15), .firstDay, 10), ((2024, 2, 15), .lastDay, 19),
-            ((2024, 1, 31), .month(1), 19), ((2024, 3, 1), .month(-1), 10)
+            ((2024, 2, 15), .first, 10), ((2024, 2, 15), .last, 19),
+            ((2024, 1, 31), .page(1), 19), ((2024, 3, 1), .page(-1), 10)
         ] {
             #expect(command.destination(from: date(start.0, start.1, start.2, in: calendar),
-                calendar: calendar, availability: availability) == date(2024, 2, expected, in: calendar))
+                cells: CalendarCells(panel: .days, granularity: .day), calendar: calendar, availability: availability) == date(2024, 2, expected, in: calendar))
         }
         availability.minimum = nil; availability.maximum = nil
         availability.isEnabled = { [10, 16].contains(calendar.component(.day, from: $0)) }
-        #expect(CalendarNavigation.month(1).destination(from: date(2024, 1, 15, in: calendar),
-            calendar: calendar, availability: availability) == date(2024, 2, 16, in: calendar))
-        #expect(CalendarNavigation.month(-1).destination(from: date(2024, 3, 15, in: calendar),
-            calendar: calendar, availability: availability) == date(2024, 2, 10, in: calendar))
+        #expect(CalendarNavigation.page(1).destination(from: date(2024, 1, 15, in: calendar),
+            cells: CalendarCells(panel: .days, granularity: .day), calendar: calendar, availability: availability) == date(2024, 2, 16, in: calendar))
+        #expect(CalendarNavigation.page(-1).destination(from: date(2024, 3, 15, in: calendar),
+            cells: CalendarCells(panel: .days, granularity: .day), calendar: calendar, availability: availability) == date(2024, 2, 10, in: calendar))
         availability.isEnabled = { _ in false }
-        #expect(CalendarNavigation.month(1).destination(from: date(2024, 1, 15, in: calendar),
-            calendar: calendar, availability: availability) == nil)
-        #expect(CalendarNavigation.firstDay.destination(from: date(2024, 1, 15, in: calendar),
-            calendar: calendar, availability: availability) == nil)
+        #expect(CalendarNavigation.page(1).destination(from: date(2024, 1, 15, in: calendar),
+            cells: CalendarCells(panel: .days, granularity: .day), calendar: calendar, availability: availability) == nil)
+        #expect(CalendarNavigation.first.destination(from: date(2024, 1, 15, in: calendar),
+            cells: CalendarCells(panel: .days, granularity: .day), calendar: calendar, availability: availability) == nil)
     }
 
     @Test("Actual focus follows month commands while selection waits for Enter", arguments: [Float(390), 720, 1280])
