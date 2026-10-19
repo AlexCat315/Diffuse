@@ -15,8 +15,8 @@ struct Vec3FieldTests: GuavaUIComposeSerializedSuite {
         var z: Float = 3
     }
 
-    @Test("A narrow inspector row wraps axes inside its width instead of squeezing them")
-    func compactLayoutStaysInsideRow() { GlobalTestLock.locked {
+    @Test("Axes share one row when each keeps its minimum, and otherwise stack at full width, never two and one", arguments: [180, 400])
+    func axisRows(width: Float) { GlobalTestLock.locked {
         let store = Store()
         let old = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
         defer { TextEnvironmentHolder.current = old }
@@ -27,14 +27,15 @@ struct Vec3FieldTests: GuavaUIComposeSerializedSuite {
                 y: Binding(get: { store.y }, set: { store.y = $0 }),
                 z: Binding(get: { store.z }, set: { store.z = $0 })
             )
-            .frame(width: 180)
+            .frame(width: width)
         )
-        graph.computeLayout(width: 180, height: 200)
+        graph.computeLayout(width: width, height: 200)
         let fields = nodes(graph.tree.root!).filter { $0.accessibility?.role == .textField }
         #expect(fields.count == 3)
         // The text field sits 1pt inside its clipped, rounded axis container.
-        #expect(fields.allSatisfy { $0.absoluteFrame.minX >= -0.5 && $0.absoluteFrame.maxX <= 181.5 && $0.frame.width >= 40 })
-        #expect(Set(fields.map { $0.absoluteFrame.minY.rounded() }).count > 1)
+        #expect(fields.allSatisfy { $0.absoluteFrame.minX >= -0.5 && $0.absoluteFrame.maxX <= CGFloat(width) + 1.5 && $0.frame.width >= 40 })
+        #expect(Set(fields.map { $0.frame.width.rounded() }).count == 1, "axes are equal width")
+        #expect(Set(fields.map { $0.absoluteFrame.minY.rounded() }).count == (width < 280 ? 3 : 1))
         graph.install(root: EmptyView())
     } }
 

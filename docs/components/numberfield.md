@@ -64,7 +64,7 @@ NumberField(value: $amount, locale: Locale(identifier: "de_DE")) // 12,5
 
 ## Vec3Field
 
-三个轴共享同一 `locale`、精度、步长和边界；轴 chrome 最小高度为 small 28 / regular 32 / large 40 乘文本缩放，触摸时再取 44pt 下限。内部实际输入面填满轴单元，轴标签同步缩放。每轴基准 96pt、最小 88pt，窄宽按 X/Y → Z 换行并保留草稿与焦点。
+三个轴共享同一 `locale`、精度、步长和边界；轴 chrome 最小高度为 small 28 / regular 32 / large 40 乘文本缩放，触摸时再取 44pt 下限。内部实际输入面填满轴单元，轴标签同步缩放。每轴最小 88pt：容得下三格时等宽同排（无宽度提议时各 96pt），否则三轴各占一整行，不出现 X/Y 一行、Z 单独一行的残缺网格；重排保留草稿与焦点。
 
 ```swift
 Vec3Field(x: $x, y: $y, z: $z, locale: Locale(identifier: "de_DE"))

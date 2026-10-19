@@ -16,15 +16,16 @@ Vec3Field(x: $positionX, y: $positionY, z: $positionZ)
 
 ## Narrow Layout
 
-Each axis keeps a 96pt flex basis and an 88pt minimum width. A wide row keeps
-X/Y/Z on one line; when the row cannot hold all three cells, the flex line wraps
-X/Y first and puts Z on the next line. Very narrow containers wrap one axis per
-line. Fields are never clipped below their editing width, and the same bound
-inputs survive the reflow.
+Axes are laid out by `AxisLayout`: when the row holds three cells of at least
+88pt, X/Y/Z share it at equal widths (96pt each when nothing proposes a width).
+Otherwise every axis takes its own full-width row. It never splits X/Y over a
+lone Z, which read as a broken grid. Fields are never clipped below their
+editing width, and the same bound inputs survive the reflow.
 
-`NarrowReflowTests.vec3Reflow` checks 220pt (X/Y then Z) and 420pt (one row)
-geometry. Gallery `--component vec3Field` includes a 240pt mixed-value example
-and a full-width example for the same comparison.
+`NarrowReflowTests.vec3Reflow` checks 220pt (three stacked rows) and 420pt (one
+row) geometry; `Vec3FieldTests.axisRows` checks equal widths at 180pt and 400pt.
+Gallery `--component vec3Field` includes a 240pt mixed-value example and a
+full-width example for the same comparison.
 
 ## Scrub, Reset And Copy/Paste
 

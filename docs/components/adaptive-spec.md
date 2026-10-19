@@ -220,7 +220,7 @@
 **NumberField / Vec3Field**
 
 - 外观：NumberField 为 TextField + 可选步进列（最小 22pt）；Vec3Field 为三个可收缩轴单元 + 随字号缩放的轴字母。`[已实现]`
-- 手机：步进按钮触摸 ≥ 44pt；Vec3Field 在宽度不足时按 96pt 基准换行，X/Y 一行、Z 下一行（极窄时逐行），轴单元最小 88pt 保持可编辑，不靠 clip 隐藏输入；高度按字号与 44pt 触摸下限增长，内部输入面填满 chrome。`[已实现]`
+- 手机：步进按钮触摸 ≥ 44pt；Vec3Field 容得下三个 88pt 轴单元时等宽同排，否则三轴逐行全宽堆叠（不再 X/Y 一行、Z 单独一行），轴单元最小 88pt 保持可编辑，不靠 clip 隐藏输入；高度按字号与 44pt 触摸下限增长，内部输入面填满 chrome。`[已实现]`
 - 平板 / 桌面：单行三联编辑；Shift/Alt 步进语义保持。`[已实现]`
 - 交互与验收：按 `locale` 提交/失焦完整解析、非法输入恢复、min/max 夹紧、辅助功能输入值；格式化不插入分组，绑定保持 Float。换行前后轴输入身份与草稿保留。验收：`NumericLocaleTests`、`NarrowReflowTests.vec3Reflow`、`--component numberField|vec3Field`。
 

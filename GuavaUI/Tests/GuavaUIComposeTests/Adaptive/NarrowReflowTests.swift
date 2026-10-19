@@ -106,7 +106,7 @@ struct NarrowReflowTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    @Test("Vec3Field wraps X/Y before Z and never shrinks a cell below its editing width")
+    @Test("Vec3Field stacks every axis when a row cannot keep their editing width, never X/Y over Z")
     func vec3Reflow() throws {
         var x: Float = 1, y: Float = 2, z: Float = 3
         let field = AnyView(Vec3Field(
@@ -120,8 +120,8 @@ struct NarrowReflowTests: GuavaUIComposeSerializedSuite {
             }
             #expect(labels.count == 3)
             guard labels.count == 3 else { return }
-            #expect(abs(labels[0].absoluteFrame.minY - labels[1].absoluteFrame.minY) < 0.5)
-            #expect(labels[2].absoluteFrame.minY >= labels[0].absoluteFrame.maxY)
+            #expect(labels[1].absoluteFrame.minY >= labels[0].absoluteFrame.maxY)
+            #expect(labels[2].absoluteFrame.minY >= labels[1].absoluteFrame.maxY)
         }
 
         withLayout(width: 420, height: 200, root: field) { graph, _, _ in

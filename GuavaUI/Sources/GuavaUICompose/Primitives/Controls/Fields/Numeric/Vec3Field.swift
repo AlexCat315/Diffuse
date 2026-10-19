@@ -35,7 +35,7 @@ public struct Vec3Field: View {
     }
 
     public var body: some View {
-        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 4) {
+        AxisLayout(minimumWidth: CGFloat(Self.axisMinimumWidth), idealWidth: CGFloat(Self.axisBasis)) {
             axis("X", tint: Self.xTint, value: x, reset: resetValue?.x)
             axis("Y", tint: Self.yTint, value: y, reset: resetValue?.y)
             axis("Z", tint: Self.zTint, value: z, reset: resetValue?.z)
@@ -48,7 +48,7 @@ public struct Vec3Field: View {
                     isEnabled: isEnabled, minValue: minValue, maxValue: maxValue, step: step,
                     mixedValueLabel: mixedAxes.contains(label.lowercased()) ? mixedValueLabel : nil,
                     prefix: NumberField.Prefix(label, tint: tint), resetValue: reset, locale: locale)
-            .flex(1, shrink: 1, basis: Self.axisBasis).frame(minWidth: Self.axisMinimumWidth)
+            .frame(width: .percent(100))
     }
 
     private var menu: [MenuEntry] {

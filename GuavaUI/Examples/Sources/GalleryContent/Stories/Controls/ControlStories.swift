@@ -203,7 +203,7 @@ struct Vec3Story: View {
     @State private var y: Float = 2
     @State private var z: Float = 3
     var body: some View {
-        StorySection("Transform", "Drag an axis chip to scrub it (hold Shift for coarse, Option for fine); double-click a chip to reset that axis. Right-click the row to copy, paste or reset the vector. Wide rows keep X/Y/Z on one line; narrow rows wrap.") {
+        StorySection("Transform", "Drag an axis chip to scrub it (hold Shift for coarse, Option for fine); double-click a chip to reset that axis. Right-click the row to copy, paste or reset the vector. Wide rows keep X/Y/Z on one line; narrow rows stack all three.") {
             Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, step: 0.1, resetValue: SIMD3(0, 0, 0))
                 .frame(width: .percent(100)).debugName("vec3-transform")
             Vec3Field(x: $x, y: $y, z: $z, isEnabled: options.isEnabled, mixedAxes: ["x", "z"]).frame(width: 240)

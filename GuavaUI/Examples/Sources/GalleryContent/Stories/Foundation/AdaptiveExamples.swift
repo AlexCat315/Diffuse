@@ -22,13 +22,33 @@ struct AdaptiveControlExamples: View {
             }
         }
     }
+    /// Samples that scroll, fill or overlay need a definite height; every
+    /// other control hugs its content (`nil`).
+    private var sampleHeight: Float? {
+        switch page {
+        case .calendar: 440
+        case .layout: 280
+        case .table, .dataTable: 260
+        case .navigationRail, .splitView, .sidebar, .workspace, .navigationStack: 220
+        case .propertyGrid, .swipeList, .refreshableList: 200
+        case .masonry, .wheelPicker, .timePicker: 190
+        case .form, .reorderableList, .jsonField: 180
+        case .dragAndDrop: 170
+        case .tabs, .sectionedList, .accordion, .timeline, .tree, .boundedScroll, .textArea: 160
+        case .panel, .textEditor, .popconfirm: 150
+        case .list: 144
+        case .carousel: 140
+        case .virtualStack, .chart: 130
+        case .zStack, .scrollbar, .scrollView, .disclosure: 120
+        default: nil
+        }
+    }
+
     /// A labeled device frame: the sample sits top-leading at the frame's exact
     /// width, and scrolls horizontally when the page is narrower.
     private func preview(_ title: String, width: Float, input: UIEnvironment.Input) -> some View {
         var surface = UIEnvironment(); surface.viewport.width = width; surface.input = input
-        let height: Float = page == .calendar ? 440 : page == .layout ? 280 : page == .masonry ? 190 : page == .zStack ? 120 : page == .table || page == .dataTable ? 260 : page == .navigationRail || page == .splitView || page == .sidebar ? 220 : page == .propertyGrid ? 200 : page == .form ? 180 : page == .tabs ? 160 : page == .list ? 144 : page == .sectionedList ? 160 : page == .reorderableList ? 180 : page == .swipeList ? 200 : page == .refreshableList ? 200 : page == .scrollbar ? 120 : page == .dragAndDrop ? 170 : page == .accordion ? 160 : page == .empty ? 140 : page == .skeleton ? 80 : page == .icon ? 80 : page == .avatar ? 100 : page == .panel ? 150 : page == .scrollView ? 120 : page == .statusBar ? 60 : page == .carousel ? 140 : page == .breadcrumb ? 80 : page == .pagination ? 80 : page == .radio ? 110 : page == .timeline ? 160 : page == .tree ? 160 : page == .virtualStack ? 130 : page == .chart ? 130 : page == .boundedScroll ? 160 : page == .label ? 140 : page == .disclosure ? 120 : page == .alert ? 140 : page == .textArea ? 160 : page == .colorField ? 150 : page == .jsonField ? 180 : page == .assetRef ? 120 : page == .theme ? 120 : page == .textEditor ? 150 : page == .wheelPicker ? 190 : page == .timePicker ? 190 : page == .popconfirm ? 150 : page == .workspace ? 220 : page == .image ? 120 : page == .introduction || page == .notification ? 100 : page == .animation ? 100 : page == .vec3Field ? 130 : page == .navigationStack ? 220 : 0
-        // Zero lets a single control hug its content; scrolling samples keep a height.
-        let frameHeight: Float? = height > 0 ? height + 32 : nil
+        let frameHeight = sampleHeight.map { $0 + 32 }
         return Column(alignment: .leading, spacing: 6) {
             Text(title).font(.caption).foregroundColor(.onSurfaceMuted)
             ScrollView(.horizontal) {
@@ -121,7 +141,7 @@ private struct AdaptiveControlSample: View {
             x: Binding(get: { vecX }, set: { vecX = $0 }),
             y: Binding(get: { vecY }, set: { vecY = $0 }),
             z: Binding(get: { vecZ }, set: { vecZ = $0 }),
-            isEnabled: options.isEnabled, step: 0.1).frame(width: .points(220)))
+            isEnabled: options.isEnabled, step: 0.1).frame(width: .percent(100), maxWidth: 360))
         case .select: AnyView(Select(selection: Binding(get: { selected ?? -1 }, set: { selected = $0 }), options: selectionOptions,
             isEnabled: options.isEnabled).frame(width: .percent(100)))
         case .combobox: AnyView(Combobox(selection: $selected, options: selectionOptions) {
