@@ -31,7 +31,7 @@ private struct GamePreviewPanel: View {
                 Text(store.playbackState == .stopped ? L("Preview stopped")
                     : (store.gamePreviewFocused ? L("Game has input focus · Esc to release") : L("Click the game image to focus input")))
                     .font(.caption).foregroundColor(store.gamePreviewFocused ? .accent : .onSurfaceVariant).flex()
-                EnumField(value: Binding(get: { store.gamePreviewResolution }, set: app.setGamePreviewResolution),
+                Select(selection: Binding(get: { store.gamePreviewResolution }, set: app.setGamePreviewResolution),
                           width: 180, label: { L($0.title) })
                 Checkbox(isOn: Binding(get: { store.gamePreviewHUDEnabled }, set: app.setGamePreviewHUDEnabled))
                 Text(L("HUD")).font(.caption)

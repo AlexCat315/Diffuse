@@ -106,6 +106,17 @@ struct AsyncImageTests {
         #expect(image.width == 32 && image.height == 32)
         #expect(image.policy.timeout == 15 && image.policy.maximumDownloadBytes == 1 && image.policy.maximumSourcePixels == 1)
     }
+    @Test("The placeholder initializer shows same-size placeholder content until an image loads")
+    func placeholderInitializer() {
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: AsyncImage(url: nil, width: 40, height: 30) { Box {}.debugName("thumbnail-placeholder") })
+        graph.computeLayout(width: 200, height: 200)
+        func nodes(_ node: Node) -> [Node] { [node] + node.children.flatMap(nodes) }
+        let placeholder = nodes(graph.tree.root!).first { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "thumbnail-placeholder" }
+        #expect(placeholder?.frame.size == CGSize(width: 40, height: 30))
+        graph.install(root: EmptyView())
+    }
+
     @Test("HTTP status, streamed size limits and cancellation use the real transport")
     func httpTransport() async throws {
         let server = try ImageHTTPFixture()

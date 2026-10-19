@@ -374,7 +374,7 @@ extension InspectorPanel {
 
                 Row(alignment: .center, spacing: 8) {
                     labeledCompactField(L("Trigger")) {
-                        EnumField(value: triggerBinding, width: 112) { trigger in
+                        Select(selection: triggerBinding, width: 112) { trigger in
                             switch trigger {
                             case .none: return L("None")
                             case .death: return L("Death")

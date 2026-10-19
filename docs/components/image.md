@@ -1,6 +1,6 @@
 # Image / AsyncImage
 
-`Image` 绘制已就绪纹理或同步文件/资源；`AsyncImage` 负责有边界的文件或 HTTP 图片请求，并把阶段交给调用方提供内容。`AsyncImageThumbnail` 保留缩略图入口，内部复用同一加载器与节点生命周期。
+`Image` 绘制已就绪纹理或同步文件/资源；`AsyncImage` 负责有边界的文件或 HTTP 图片请求，并把阶段交给调用方提供内容。只需要占位内容时用 `AsyncImage(url:width:height:) { placeholder }`：加载完成显示图片，空/加载/失败时显示同尺寸占位（原 `AsyncImageThumbnail` 已合并进来）。
 
 ```swift
 AsyncImage(url: photoURL, width: 160, height: 100,

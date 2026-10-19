@@ -43,7 +43,7 @@ public enum GalleryCatalog {
         .init(.numberField, "NumberField", "Inputs", "Commit on submit or blur, bounded values and keyboard stepping."),
         .init(.vec3Field, "Vec3Field", "Inputs", "Three-axis editing, numeric constraints and mixed values."),
         .init(.colorField, "ColorField", "Inputs", "RGBA channels and hexadecimal color input in a popover."),
-        .init(.select, "Select / EnumField", "Inputs", "Typed selection, disabled options and keyboard navigation."),
+        .init(.select, "Select", "Inputs", "Typed selection, disabled options and keyboard navigation."),
         .init(.jsonField, "JsonField", "Inputs", "Multiline JSON validation, formatting and revert."),
         .init(.assetRef, "AssetRef / DropTarget", "Inputs", "Typed asset references, picker, clear action and accepted kinds."),
         .init(.list, "List", "Data", "Single selection, arrow-key navigation and activation."),

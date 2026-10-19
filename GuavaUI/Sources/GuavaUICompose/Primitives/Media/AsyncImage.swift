@@ -191,3 +191,15 @@ final class AsyncImageResource: NodeResource, @unchecked Sendable {
         }
     }
 }
+
+public extension AsyncImage where Content == AnyView {
+    /// Shows the loaded image, or `placeholder` at the same size while it is
+    /// empty, loading or failed.
+    init<Placeholder: View>(url: URL?, width: Float, height: Float, contentMode: Image.ContentMode = .fit,
+                            @ViewBuilder placeholder: @escaping () -> Placeholder) {
+        self.init(url: url, width: width, height: height, contentMode: contentMode) { phase in
+            if case .success(let image) = phase { return AnyView(image) }
+            return AnyView(placeholder().frame(width: width, height: height))
+        }
+    }
+}

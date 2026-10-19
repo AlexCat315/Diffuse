@@ -947,7 +947,7 @@ private struct TextureThumbnailView: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .center, justifyContent: .center) {
-            AsyncImageThumbnail(path: path, width: width, height: height) {
+            AsyncImage(url: URL(fileURLWithPath: path), width: width, height: height) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
                     Icon(.svg(named: "squares-2x2",
                               in: EditorAppResourceBundle.bundle,

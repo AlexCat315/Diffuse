@@ -148,7 +148,7 @@ extension InspectorPanel {
         private var expandedEditor: some View {
             Box(direction: .column, alignItems: .stretch, spacing: 4) {
                 labeledWideField(L("Shape")) {
-                    EnumField(value: shapeKindBinding, width: 120) { shapeKindLabel($0) }
+                    Select(selection: shapeKindBinding, width: 120) { shapeKindLabel($0) }
                 }
                 geometryFields
                 labeledWideField(L("Center")) {

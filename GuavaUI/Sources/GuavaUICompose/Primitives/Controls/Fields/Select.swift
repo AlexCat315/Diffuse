@@ -235,49 +235,16 @@ private struct _StatefulSelect<Value: Hashable>: View {
     }
 }
 
-public struct EnumField<Value: Hashable & CaseIterable>: View where Value.AllCases: Collection {
-    public let value: Binding<Value>
-    public let isEnabled: Bool
-    public let width: Float?
-    public let maxVisibleRows: Int
-    public let label: (Value) -> String
-
-    public init(value: Binding<Value>,
-                isEnabled: Bool = true,
-                width: Float? = nil,
-                maxVisibleRows: Int = 8,
-                label: @escaping (Value) -> String = { String(describing: $0) }) {
-        self.value = value
-        self.isEnabled = isEnabled
-        self.width = width
-        self.maxVisibleRows = max(1, maxVisibleRows)
-        self.label = label
-    }
-
-    public var body: some View {
-        Select(selection: value,
-               options: options,
-               isEnabled: isEnabled,
-               width: width,
-               maxVisibleRows: maxVisibleRows,
-               placeholder: "Select")
-    }
-
-    private var options: [SelectOption<Value>] {
-        Array(Value.allCases).map { option in
-            SelectOption(value: option, label: label(option), isEnabled: true)
-        }
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func ifLet<T>(_ value: T?,
-                  transform: (Self, T) -> some View) -> some View {
-        if let value {
-            transform(self, value)
-        } else {
-            self
-        }
+public extension Select where Value: CaseIterable, Value.AllCases: Collection {
+    /// Every case of an enumeration, in declaration order.
+    init(selection: Binding<Value>,
+         isEnabled: Bool = true,
+         width: Float? = nil,
+         maxVisibleRows: Int = 8,
+         placeholder: String = "Select",
+         label: @escaping (Value) -> String = { String(describing: $0) }) {
+        self.init(selection: selection,
+                  options: Value.allCases.map { SelectOption(value: $0, label: label($0), isEnabled: true) },
+                  isEnabled: isEnabled, width: width, maxVisibleRows: maxVisibleRows, placeholder: placeholder)
     }
 }

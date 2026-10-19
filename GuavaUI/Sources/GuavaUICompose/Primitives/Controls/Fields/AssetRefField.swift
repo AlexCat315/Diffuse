@@ -142,12 +142,11 @@ private struct AssetRefPreview: View {
 
     var body: some View {
         if let previewPath = ref?.previewPath, !previewPath.isEmpty {
-            AsyncImageThumbnail(path: previewPath,
-                                width: 34,
-                                height: 24,
-                                isEnabled: isEnabled) {
+            AsyncImage(url: URL(fileURLWithPath: previewPath), width: 34, height: 24) {
                 AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
             }
+            .opacity(isEnabled ? 1 : 0.55)
+            .clipped()
             .background(.surfaceOverlay)
             .cornerRadius(.rowRadius)
         } else {
