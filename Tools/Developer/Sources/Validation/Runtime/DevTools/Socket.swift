@@ -24,21 +24,6 @@ internal import ToolSupport
       if let timeout { armTimeout(timeout) }
     }
 
-    /// `ws://127.0.0.1:PORT/` with this process's optional DevTools token.
-    static func loopback(port: UInt16, token: Bool) -> URL? {
-      var components = URLComponents()
-      components.scheme = "ws"
-      components.host = "127.0.0.1"
-      components.port = Int(port)
-      components.path = "/"
-      if token, let value = ProcessInfo.processInfo.environment["GUAVA_DEVTOOLS_TOKEN"],
-        !value.isEmpty
-      {
-        components.queryItems = [URLQueryItem(name: "token", value: value)]
-      }
-      return components.url
-    }
-
     var hasExpired: Bool { expired.get() == true }
 
     /// Cancels the connection if it is still alive after `interval`.

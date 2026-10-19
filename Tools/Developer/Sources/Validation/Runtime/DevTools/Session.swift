@@ -46,19 +46,10 @@ enum DevelopmentSession {
     }
     let session = matching[0]
     let runtime = try JSON.object(session["runtime"], "runtime")
-    guard let endpointText = runtime["endpoint"] as? String,
-      var endpoint = URLComponents(string: endpointText)
-    else {
-      throw ToolError.message("Session has no runtime endpoint")
-    }
-    if let device = session["device"] as? [String: Any] {
-      guard let forwarded = JSON.int(device["forwardedPort"]) else {
-        throw ToolError.message("Session device has no forwarded port")
-      }
-      endpoint.port = forwarded
-    }
-    guard let authenticated = endpoint.url else {
-      throw ToolError.message("Session endpoint is invalid")
+    let authenticated = try DevToolsEndpoint.session(session)
+    let endpoint = URLComponents(url: authenticated, resolvingAgainstBaseURL: false)!
+    guard let pid = JSON.int(runtime["pid"]), pid > 0, let id = JSON.string(runtime["id"]), !id.isEmpty else {
+      throw ToolError.message("Session must identify its runtime process and session")
     }
 
     #if !canImport(Darwin)
@@ -66,7 +57,7 @@ enum DevelopmentSession {
     #else
       try AsyncBridge.wait {
         try await check(
-          authenticated: authenticated, endpoint: endpoint, runtime: runtime, platform: platform)
+          authenticated: authenticated, endpoint: endpoint, runtimePID: pid, sessionID: id, platform: platform)
       }
     #endif
   }
@@ -74,7 +65,7 @@ enum DevelopmentSession {
   #if canImport(Darwin)
     private static func check(
       authenticated: URL, endpoint: URLComponents,
-      runtime: [String: Any], platform: String
+      runtimePID: Int, sessionID: String, platform: String
     ) async throws {
       var anonymous = endpoint
       anonymous.query = nil
@@ -91,7 +82,7 @@ enum DevelopmentSession {
       try await expectRejection(wrongURL)
 
       let connection = DevToolsSocket(
-        url: authenticated, timeout: nil, maximumMessageSize: 1_048_576)
+        url: authenticated, timeout: nil, maximumMessageSize: 32 * 1024 * 1024)
       defer { connection.close() }
       let hello = try await connection.receive(timeout: 5)
       guard hello["type"] as? String == "hello",
@@ -101,7 +92,7 @@ enum DevelopmentSession {
       }
       let host = try JSON.object(helloPayload["host"], "host")
       try Check.require(
-        JSON.int(host["pid"]) == JSON.int(runtime["pid"]),
+        JSON.int(host["pid"]) == runtimePID,
         "The session belongs to another process")
       let capabilities = JSON.strings(helloPayload["capabilities"]) ?? []
       for capability in [
@@ -116,9 +107,15 @@ enum DevelopmentSession {
         identifier += 1
         let current = identifier
         try await connection.send(["type": type, "id": current, "payload": payload])
-        while true {
-          let message = try await connection.receive(timeout: 5)
-          if JSON.int(message["id"]) == current { return message }
+        connection.armTimeout(5)
+        do {
+          while true {
+            let message = try await connection.receive()
+            if JSON.int(message["id"]) == current { return message }
+          }
+        } catch {
+          if connection.hasExpired { throw ToolError.message("Timed out waiting for \(type) response") }
+          throw error
         }
       }
 
@@ -202,7 +199,7 @@ enum DevelopmentSession {
         "tree.unsubscribe failed")
 
       let summary: [String: Any] = [
-        "platform": platform, "session": runtime["id"] ?? NSNull(),
+        "platform": platform, "session": sessionID,
         "nodes": identifiers.count, "replayedLogs": records.count,
         "runID": (records[0]["process"] as? [String: Any])?["runID"] ?? NSNull(),
         "authenticated": true, "capabilities": capabilities,

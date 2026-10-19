@@ -219,25 +219,30 @@ including GPU command submission/waiting; it is not GPU execution duration.
 Run against an existing CLI-managed session:
 
 ```sh
-swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyApp mac
-swift run --package-path Tools/Developer guava-dev devtools session /path/to/MyApp android
+guava-dev devtools session /path/to/MyApp mac
+guava-dev devtools session /path/to/MyApp android
 ```
 
 ## AI-driven component acceptance
 
-No OS automation is needed. Build the Gallery, start a deterministic surface,
-query its live AI diagnostics, inject input through DevTools and inspect the
-renderer mirror:
+No OS automation is needed. Start the Gallery through the Guava CLI, query its
+live AI diagnostics, inject input through DevTools and inspect the renderer mirror.
+Use the actual session directory published under `.guava/build/devtools`:
 
 ```sh
-swift build --package-path GuavaUI/Examples --product GuavaUIDemo
-GUAVA_DEVTOOLS=1 GUAVA_DEVTOOLS_PORT=9231 GuavaUI/Examples/.build/debug/GuavaUIDemo \
-  --component refreshableList --width 390 --height 820 --input touch
-swift run --package-path Tools/Developer guava-dev devtools query-ui 9231 --list
-swift run --package-path Tools/Developer guava-dev devtools query-ui 9231 query_ui_nodes \
-  '{"text":"refresh-count","visible_only":true}'
-swift run --package-path Tools/Developer guava-dev devtools capture-ui 9231 /tmp/refresh.jpg
+./guava run GuavaUI/Examples --mac --devtools --no-open
+guava-dev devtools query-ui @GuavaUI/Examples/.guava/build/devtools/SESSION/session.json --list
+guava-dev devtools query-ui @GuavaUI/Examples/.guava/build/devtools/SESSION/session.json query_ui_nodes \
+  '{"text":"Search components","visible_only":true}'
+guava-dev devtools capture-ui @GuavaUI/Examples/.guava/build/devtools/SESSION/session.json /tmp/gallery.jpg
 ```
+
+`query-ui`, `input-ui`, `capture-ui` and `record-timings` accept a port or an
+`@session.json` / `@runtime.json` file. Managed sessions retain their authentication
+token and device-forwarded port inside the connection; copying a token into shell
+commands is unnecessary. Select a component through the Gallery search, then
+inspect the narrow/wide/touch previews and change scale or appearance in the UI.
+Build/test changes with `./guava test GuavaUI --no-parallel --filter TEST`.
 
 Gallery flags: `--input touch|mixed|pointer`, `--dark`, `--text-scale 2`,
 `--rtl`, `--reduce-motion`. Width and height still follow the real window after

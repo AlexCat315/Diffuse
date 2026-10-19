@@ -161,7 +161,7 @@ enum EditorNativeLoop {
     let startup = try readText(log)
     try Check.contains(startup, "NativeRenderer ready", tail(startup))
     try CaptureUI.capture(
-      port: devtoolsPort, destination: directory.appendingPathComponent("startup-editor.jpg"))
+      endpoint: DevToolsEndpoint.resolve(String(devtoolsPort)), destination: directory.appendingPathComponent("startup-editor.jpg"))
     try EditorBridge.validateConnections(port: port)
 
     let mcp = try MCPClient(executable: server, environment: environment)
@@ -214,7 +214,7 @@ enum EditorNativeLoop {
 
     if timingFrames > 0 {
       try RecordTimings.record(
-        port: devtoolsPort, destination: directory.appendingPathComponent("playing-timings.json"),
+        endpoint: DevToolsEndpoint.resolve(String(devtoolsPort)), destination: directory.appendingPathComponent("playing-timings.json"),
         frames: timingFrames, warmup: 60)
     }
     try mcp.tool("set_playback_state", ["state": "paused"])
@@ -222,10 +222,10 @@ enum EditorNativeLoop {
       try JSON.string(try mcp.tool("get_project_info")["playback_state"], "playback_state"),
       "paused", "Paused playback state")
     try CaptureUI.capture(
-      port: devtoolsPort, destination: directory.appendingPathComponent("paused-editor.jpg"))
+      endpoint: DevToolsEndpoint.resolve(String(devtoolsPort)), destination: directory.appendingPathComponent("paused-editor.jpg"))
     if timingFrames > 0 {
       try RecordTimings.record(
-        port: devtoolsPort, destination: directory.appendingPathComponent("paused-timings.json"),
+        endpoint: DevToolsEndpoint.resolve(String(devtoolsPort)), destination: directory.appendingPathComponent("paused-timings.json"),
         frames: timingFrames, warmup: 60)
     }
     try mcp.tool("set_playback_state", ["state": "stopped"])

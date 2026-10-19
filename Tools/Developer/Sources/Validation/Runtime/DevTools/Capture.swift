@@ -10,7 +10,7 @@ internal import ToolSupport
 /// list through its renderer's DevTools mirror. Also called in-process by the
 /// editor loop.
 enum CaptureUI {
-  static let usage = "guava-dev devtools capture-ui PORT OUTPUT.jpg [--settle-ms 0...2000]"
+  static let usage = "guava-dev devtools capture-ui PORT|@SESSION_FILE OUTPUT.jpg [--settle-ms 0...2000]"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -18,10 +18,7 @@ enum CaptureUI {
       return
     }
     let settle = try settleMilliseconds(arguments)
-    guard let port = UInt16(arguments[0]), port > 0 else {
-      throw ToolError.message("Usage: \(usage)")
-    }
-    try capture(port: port, destination: URL(fileURLWithPath: arguments[1]), settleMilliseconds: settle)
+    try capture(endpoint: DevToolsEndpoint.resolve(arguments[0]), destination: URL(fileURLWithPath: arguments[1]), settleMilliseconds: settle)
   }
 
   static func settleMilliseconds(_ arguments: [String]) throws -> Int {
@@ -33,19 +30,16 @@ enum CaptureUI {
     return delay
   }
 
-  static func capture(port: UInt16, destination: URL, settleMilliseconds: Int = 0) throws {
+  static func capture(endpoint: URL, destination: URL, settleMilliseconds: Int = 0) throws {
     #if !canImport(Darwin)
       throw ToolError.message("DevTools capture requires macOS")
     #else
-      try AsyncBridge.wait { try await perform(port: port, destination: destination, settleMilliseconds: settleMilliseconds) }
+      try AsyncBridge.wait { try await perform(endpoint: endpoint, destination: destination, settleMilliseconds: settleMilliseconds) }
     #endif
   }
 
   #if canImport(Darwin)
-    private static func perform(port: UInt16, destination: URL, settleMilliseconds: Int) async throws {
-      guard let endpoint = DevToolsSocket.loopback(port: port, token: true) else {
-        throw ToolError.message("Invalid DevTools endpoint")
-      }
+    private static func perform(endpoint: URL, destination: URL, settleMilliseconds: Int) async throws {
       let connection = DevToolsSocket(
         url: endpoint, timeout: 15, maximumMessageSize: 32 * 1024 * 1024)
       defer { connection.close() }

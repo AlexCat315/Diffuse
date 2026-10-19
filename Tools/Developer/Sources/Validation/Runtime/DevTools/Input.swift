@@ -4,18 +4,19 @@ internal import ToolSupport
 /// Port of `scripts/input-ui-devtools.swift`: drive the host's input dispatcher
 /// through DevTools, without OS automation.
 enum InputUI {
-  static let usage = "guava-dev devtools input-ui PORT --click-node NODE_ID | --input JSON_OR_@FILE (events may include {\"kind\":\"wait\",\"milliseconds\":100})"
+  static let usage = "guava-dev devtools input-ui PORT|@SESSION_FILE --click-node NODE_ID | --input JSON_OR_@FILE (events may include {\"kind\":\"wait\",\"milliseconds\":100})"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
       Terminal.info(usage)
       return
     }
-    guard arguments.count == 3, let port = UInt16(arguments[0]), port > 0,
+    guard arguments.count == 3,
       ["--click-node", "--input"].contains(arguments[1])
     else {
       throw ToolError.message("Usage: \(usage)")
     }
+    let endpoint = try DevToolsEndpoint.resolve(arguments[0])
     let target = arguments[1]
     let raw = arguments[2]
 
@@ -23,9 +24,6 @@ enum InputUI {
       throw ToolError.message("DevTools input requires macOS")
     #else
       try AsyncBridge.wait {
-        guard let endpoint = DevToolsSocket.loopback(port: port, token: true) else {
-          throw ToolError.message("Invalid DevTools endpoint")
-        }
         let connection = DevToolsSocket(
           url: endpoint, timeout: 30, maximumMessageSize: 32 * 1024 * 1024)
         defer { connection.close() }

@@ -5,13 +5,11 @@ internal import ToolSupport
 /// entry point. The calling thread blocks; the body runs on the concurrency
 /// pool, which is where the `URLSessionWebSocketTask` awaits live.
 enum AsyncBridge {
-  static func wait<T>(_ body: @escaping () async throws -> T) throws -> T {
+  static func wait<T>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
     let semaphore = DispatchSemaphore(value: 0)
     let result = Box<Result<T, any Error>>()
-    let work = Box(body)
-    Task {
+    Task.detached {
       defer { semaphore.signal() }
-      guard let body = work.get() else { return }
       do { result.set(.success(try await body())) } catch { result.set(.failure(error)) }
     }
     semaphore.wait()
