@@ -23,8 +23,7 @@ public struct DefaultListRowStyle: ListRowStyle {
                                    isPressed: false)
         let alpha: Float = configuration.isEnabled ? 1 : 0.55
         return Row(alignment: .center, spacing: t.spacing.sm) {
-            configuration.content
-            Spacer(minLength: 0)
+            configuration.content.frame(minWidth: 0).flex(1, shrink: 1, basis: 0)
         }
         .frame(height: max(0, configuration.rowHeight - 2 * appearance.verticalInset))
         .selectionHighlight(.navigation,

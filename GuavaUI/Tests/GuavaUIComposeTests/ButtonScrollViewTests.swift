@@ -434,8 +434,8 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(scrollView.contentOffset.y > 0)
     } }
 
-    @Test("ScrollView chrome can capture scrollbar drag even when an overlay is hit-tested first")
-    func scrollViewScrollbarDragUsesGlobalChromeFallback() { GlobalTestLock.locked {
+    @Test("A hit-testable overlay above a viewport owns presses on its scrollbar lane")
+    func coveredScrollbarDoesNotArmFromAnOverlay() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         let capture = PointerCapture()
         let focus = FocusChain()
@@ -472,12 +472,14 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
                                                               x: scrollbarX,
                                                               y: thumbY,
                                                               clicks: 1)))
-        #expect(capture.target === scrollView)
+        // Scroll chrome belongs to the actual hit path (see the portal input
+        // contract): the covered viewport neither captures nor scrolls.
+        #expect(capture.target == nil)
         dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: scrollbarX,
                                                           y: thumbY + 40,
                                                           deltaX: 0,
                                                           deltaY: 40)))
-        #expect(scrollView.contentOffset.y > 0)
+        #expect(scrollView.contentOffset.y == 0)
     } }
 
     @Test("ScrollView wheel can route through global fallback when an overlay is hit-tested first")

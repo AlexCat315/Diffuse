@@ -106,17 +106,22 @@ public struct CommandPalette: View {
                 let itemHeight = touch ? max(Self.rowHeight, surface.minimumControlExtent) : Self.rowHeight
                 let headerHeight = touch ? max(Self.headerHeight, 36) : Self.headerHeight
                 Modal(isPresented: isPresented) {
+                    // The host owns IME geometry: when the soft keyboard appears it
+                    // increases `surface.safeArea.bottom`, and the palette must
+                    // contract its result viewport instead of being clipped by the
+                    // keyboard. Width is unaffected.
+                    let availableHeight = max(0, surface.viewport.height - surface.safeArea.bottom)
                     if compact {
                         // A phone loses too much width and height to the desktop
                         // 72pt inset. Use a 16pt window inset and the measured
                         // surface height so the result viewport stays visible.
                         $0.geometry.width = max(240, surface.viewport.width - 16)
-                        $0.geometry.height = min(560, max(240, surface.viewport.height - 16))
+                        $0.geometry.height = min(560, max(240, availableHeight - 16))
                         $0.geometry.inset = 8
                         $0.geometry.placement = .center
                     } else {
                         $0.geometry.width = 640
-                        $0.geometry.height = 560
+                        $0.geometry.height = min(560, max(240, availableHeight - 144))
                         $0.geometry.inset = 72
                         $0.geometry.placement = .top
                     }

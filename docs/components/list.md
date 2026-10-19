@@ -22,7 +22,9 @@
 
 ```swift
 List(items, id: \.id, selection: $selectedID, rowHeight: 30, rowSpacing: 0) { item, isSelected in
-    Text(item.title)
+    ListRow(item.title) {
+        if isSelected { Badge("Selected", tone: .info) }
+    }
 }
 ```
 
@@ -32,6 +34,26 @@ List(items, id: \.id, selection: $selectedID, rowHeight: 30, rowSpacing: 0) { it
 | `rowHeight` | 30 | 未缩放逻辑行高，组件自动应用 `TextScaler` 与触摸下限 |
 | `rowSpacing` | 0 | 未缩放行间隙，组件自动应用 `TextScaler` |
 
+## ListRow：标题与前后槽位
+
+`ListRow` 是可选的通用单行内容，供 `List`、`MultiSelectList` 与 `SectionedList` 共用；列表仍接受任意自定义 View。它继承外层字体与颜色，不决定选择状态或行高。
+
+```swift
+ListRow(item.title, leading: {
+    Icon(UIIcons.File.fileText, size: .medium, color: .onSurfaceMuted).accessibilityHidden()
+}, trailing: {
+    Badge(item.status, tone: .info)
+})
+// 仅标题：ListRow(item.title)
+// 仅尾槽：ListRow(item.title) { Badge(item.status, tone: .info) }
+```
+
+- 前后槽保留其自然宽度；标题取得剩余宽度、单行尾部省略。非空槽与标题间距 8pt，空槽不占间距。条件徽标出现/消失不会让标题消失或替换其节点。
+- 默认行样式把内容约束在可用宽度内；RTL 按逻辑 leading/title/trailing 反向排列。前后槽不随标题一起裁切。
+- 极窄宽度或 200% 字号下，固定槽已占满整行时保留一个随字号缩放的 24pt 标题窗口，并允许横向滚动。嵌套滚动不增加静止行的 Tab 停靠；溢出时提供辅助功能滚动操作，LTR/RTL 都可到达全部内容。
+- 标题的完整值保留在辅助功能名称及截断 tooltip。触摸面应同时在详情或选中状态区展示完整值；Gallery 通过选中行下方的状态文本提供此入口。
+- 尾槽可放独立按钮；其点击优先于行选择，不把操作误判为选行。复杂多行内容仍由调用方自行布局和预算行高。
+
 ## MultiSelectList
 
 ```swift
@@ -39,7 +61,7 @@ List(items, id: \.id, selection: $selectedID, rowHeight: 30, rowSpacing: 0) { it
 
 MultiSelectList(items, id: \.id, selection: $selection,
                 onActivate: { open($0) }) { item, isSelected in
-    Text(item.title)
+    ListRow(item.title)
 }
 ```
 
@@ -67,7 +89,7 @@ SectionedList([
     ListSection("scene", title: "Scene", footer: "3 objects", items: scene),
 ], selection: $selectedID, stickyHeaders: true,
    onActivate: { open($0) }) { item, isSelected in
-    Text(item.title)
+    ListRow(item.title)
 }
 ```
 
@@ -159,7 +181,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - 行内容高于 `rowHeight` 会被居中并裁切；把 Badge 之类的小控件算进行高预算里
 
 ❌ 不应：
-- 在 row content 里再嵌一个 ScrollView
+- 在 row content 里另嵌垂直 ScrollView；通用单行的极窄横向回退由 `ListRow` 自身处理
 - 给 row content 写自己的选中高亮 —— style 已经处理；冲突会双高亮
 - 为新的可选行 surface 重新发明选中样式 —— 加一个 role，或复用现有 role
 
@@ -172,6 +194,10 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 | SwiftUI | `List(items, id:, selection:)` 调用形态 + ListStyle |
 
 ## Verification
+
+- `ListRowTests`：三种列表 × 240/390/720/1280pt × 100%/200% × pointer/touch/mixed × light/dark × LTR/RTL；标题单行、尾槽无重叠、完整语义、节点/选择状态稳定。另测空槽、条件徽标、独立操作按钮、键盘激活、极窄横滚和 200K 数据窗口化。
+- Gallery `ListRowLayoutTests`：真实字体和三种页面在 330/600/970pt、100%/200%、light/dark 下，验证未选行可见、选中徽标和实际点击后的几何。
+- 命令：`./guava test GuavaUI --no-parallel --filter ListRowTests`；`./guava test GuavaUI/Examples --no-parallel --filter ListRowLayoutTests`。
 
 - `SectionedListTests`：header/footer 文本、2 个 item 行、点击与键盘选择/激活。
 - `SectionedListTests.stickyHeaders`：通过真实 `ScrollView` offset 验证首区段标题固定、下一标题上推 15pt、标题交接，以及 End 程序化显露后固定标题跟随到末区段；固定副本隐藏语义、关闭命中。
@@ -193,8 +219,9 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 
 ## File map
 
+- 通用行: [Row.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Row.swift)
 - 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [MultiSelectList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/MultiSelectList.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [ReorderableList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/ReorderableList.swift) · [SwipeList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SwipeList.swift) · [Refresh.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Refresh.swift)
-- Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/DefaultListRowStyle.swift)
+- Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/Styles/Components/DefaultListRowStyle.swift)
 
 ## 响应式与输入密度
 

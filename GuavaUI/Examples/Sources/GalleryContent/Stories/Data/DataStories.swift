@@ -14,19 +14,24 @@ let galleryTree: [GalleryTreeNode] = [
         .init(id: "objects", title: "Objects", children: [.init(id: "cube", title: "Cube"), .init(id: "sphere", title: "Sphere")])])
 ]
 
+private func galleryDocumentTitle(_ index: Int) -> String {
+    index < 3 ? "Document \(index + 1) — shared workspace settings and collaboration permissions" : "Document \(index + 1)"
+}
+
 struct ListStory: View {
     @State private var selected: Int? = 2
     @State private var activated = "No activation yet"
     var body: some View {
         StorySection("Selectable list", "Click a row or focus the list and use arrows, Home and End. Return activates the selected row.") {
             List(Array(0..<30), id: \.self, selection: $selected, onActivate: { activated = "Activated row \($0)" }) { row, isSelected in
-                Row(alignment: .center, spacing: 10) {
-                    Text("Document \(row + 1)").font(.body)
-                    Spacer()
+                ListRow(galleryDocumentTitle(row), leading: {
+                    Icon(UIIcons.File.fileText, size: .medium, color: .onSurfaceMuted).accessibilityHidden()
+                }, trailing: {
                     if isSelected { Badge("Selected", tone: .info) }
-                }
+                }).font(.body)
             }.frame(height: 260)
             Text("Selection: \(selected.map(String.init) ?? "None")  ·  \(activated)").font(.caption).foregroundColor(.onSurfaceMuted)
+            if let selected { Text(galleryDocumentTitle(selected)).font(.caption).foregroundColor(.onSurfaceMuted) }
         }
     }
 }
@@ -281,15 +286,18 @@ struct MultiSelectListStory: View {
     var body: some View {
         StorySection("Multi-select list", "Click selects one row; Shift-click selects a range; Cmd/Ctrl-click toggles. Focus the list and use Shift+Arrow to extend, Cmd/Ctrl+A to select all.") {
             MultiSelectList(Array(0..<12), id: \.self, selection: $selection,
-                            onActivate: { activated = "Activated row \($0 + 1)" }) { row, isSelected in
-                Row(alignment: .center, spacing: 10) {
-                    Text("Document \(row + 1)").font(.body)
-                    Spacer()
+                            onActivate: { activated = "Activated \(galleryDocumentTitle($0))" }) { row, isSelected in
+                ListRow(galleryDocumentTitle(row), leading: {
+                    Icon(UIIcons.File.fileText, size: .medium, color: .onSurfaceMuted).accessibilityHidden()
+                }, trailing: {
                     if isSelected { Badge("Selected", tone: .info) }
-                }
+                }).font(.body)
             }.frame(height: 280)
             Text("Selected: \(selection.sorted().map { String($0 + 1) }.joined(separator: ", "))  ·  \(activated)")
                 .font(.caption).foregroundColor(.onSurfaceMuted)
+            if selection.count == 1, let first = selection.first {
+                Text(galleryDocumentTitle(first)).font(.caption).foregroundColor(.onSurfaceMuted)
+            }
         }
     }
 }
@@ -307,7 +315,7 @@ struct SectionedListStory: View {
     private var sections: [ListSection<String, Item>] {
         [
             ListSection("favorites", title: "Favorites", items: items([
-                "Main Camera", "Key Light", "Fill Light", "Backdrop", "Audio Source"
+                "Main Camera — shared scene capture and render settings", "Key Light", "Fill Light", "Backdrop", "Audio Source"
             ], from: 1)),
             ListSection("scene", title: "Scene", footer: "12 objects", items: items([
                 "Player", "Ground", "Trigger", "Door", "Crate", "Lantern",
@@ -328,14 +336,15 @@ struct SectionedListStory: View {
         StorySection("Sectioned list", "Scroll the list: the active section header stays pinned and is pushed out by the next one. Headers and footers stay outside the focus order; arrows move only through item rows, including across section boundaries.") {
             SectionedList(sections, selection: $selected, stickyHeaders: true,
                           onActivate: { activated = "Activated \($0.title)" }) { item, isSelected in
-                Row(alignment: .center, spacing: 10) {
-                    Text(item.title).font(.body)
-                    Spacer()
+                ListRow(item.title, trailing: {
                     if isSelected { Badge("Selected", tone: .info) }
-                }
+                }).font(.body)
             }.frame(height: 340)
             Text("Selected: \(selected.map(String.init) ?? "None")  ·  \(activated)")
                 .font(.caption).foregroundColor(.onSurfaceMuted)
+            if let item = sections.flatMap(\.items).first(where: { $0.id == selected }) {
+                Text(item.title).font(.caption).foregroundColor(.onSurfaceMuted)
+            }
         }
     }
 }

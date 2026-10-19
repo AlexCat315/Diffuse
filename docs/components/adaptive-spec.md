@@ -25,7 +25,7 @@
 | 设备类 | 典型宽度 | 典型输入 | hover | 安全区 | 验收取样 |
 | --- | --- | --- | --- | --- | --- |
 | 手机 | compact（< 600）；大屏手机横屏可能落 medium | touch-only 或 touch + keyboard | 无 | 顶部/底部非零，横屏侧边非零 | 390pt、触摸、无 hover |
-| 平板 | 竖屏 medium（600–999）；横屏多为 expanded | touch；接键盘/触控板时 touch + pointer + keyboard | 有（触控板/鼠标） | 非零 | 720pt 触摸；720pt 触摸 + 指针；≥1000pt |
+| 平板 | 竖屏 medium（600–999）；横屏多为 expanded | touch；接键盘/触控板时 touch + pointer + keyboard | 有（触控板/鼠标） | 非零 | 桌面 Gallery 可用 `--width 390|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口，配合|720|1280 --height 820 --input touch|mixed|pointer` 启动真实窗口并开启开发服务，配合 `--dark`、`--text-scale 2`、`--rtl`、`--reduce-motion` 取样。pt 触摸；720pt 触摸 + 指针；≥1000pt |
 | 桌面 | expanded（≥ 1000） | pointer + keyboard | 有 | 通常为零 | 1280pt 指针 + 键盘 |
 
 规则：
@@ -82,7 +82,7 @@
 | `ContainerSizeReader` | 发布自身内容盒（扣 padding/border）实测尺寸；首次收到 `.zero`，变化 < 0.5pt 不发布；父级必须有界宽。卡片内部自适应用它，不用窗口宽度 | `[已实现]` |
 | `WidthClassReader` | 读取 surface 级 width class（窗口级），用于壳层：导航收敛、栏位切换；不用于卡片内部 | `[已实现]` |
 | `HeightClassReader` / `OrientationReader` | 读取 surface 级 height class（<600 / 600–999 / ≥1000）与横竖屏（方形归 landscape）；与宽度类一样只用于壳层，不用于卡片内部 | `[已实现]` |
-| `SafeArea` | 只应用宿主提供的 logical insets，嵌套时只消费未使用边；桌面默认零；不推断刘海/软键盘/窗口 chrome。宿主要求：手机竖屏底部 inset 含 home indicator，横屏含侧边；IME 出现由宿主处理，组件不用占位 | `[已实现]`；IME 联动 `[部分]` |
+| `SafeArea` | 只应用宿主提供的 logical insets，嵌套时只消费未使用边；桌面默认零；不推断刘海/软键盘/窗口 chrome。宿主要求：手机竖屏底部 inset 含 home indicator，横屏含侧边；IME 出现由宿主处理，组件不用占位。宿主在软键盘出现时增加 `safeArea.bottom`，`SafeArea` 与所有消费该 inset 的容器/控件在同一帧重排，组件本身不预留占位 | `[已实现]`；IME 联动 `[已实现]`（宿主提供 bottom inset；组件按 inset 重排；真机 IME 仍按第 4 节验收） |
 | `Form` / `PropertyGrid` | 按字段实测宽度在 leading ↔ stacked 间切换；共享 `labelPlacement` 和 `minValueWidth` 语义。Form 最大列数随宽度减少，值槽保留节点与编辑状态；完整标签进 tooltip 与语义 | 重排 `[已实现]`；通用省略号见第 5-6 项，API 见 [Form](form.md) |
 | `TabView` 标签条 | 标题内部单行省略，全文进 tooltip/语义；整项按 `overflow` 换行、横向滚动或折叠菜单，menu 保留所选项与可达入口；compact 时按 `TabStripPlacement.adaptive` 移到内容下方，节点与状态保留 | 换边、滚动、溢出菜单与标题截断 `[已实现]`，见 [TabView](tab.md) |
 | `Toolbar` | `items:` 按命令自然宽度与优先级收进 overflow 菜单，`.always` 保留主操作；提供图标时使用图标与完整名称。触摸命中 ≥ 44pt，主命令自身超宽时保留尺寸并横向滚动；自定义内容闭包由应用安排重排 | 命令溢出 `[已实现]`，见 [Toolbar](toolbar.md) |
@@ -286,7 +286,7 @@
 
 - 外观：行高 30（触摸 44）、选中/ hover 走 `SelectionAppearance(.navigation)`；MultiSelectList 与 SectionedList 使用同一行 host；SectionedList 平面 header/footer 不进入焦点，可选 sticky 标题固定当前区段并由下一标题上推；ReorderableList 行尾 44pt handle；Tree 每级缩进 16、箭头列 18。`[已实现]`
 - Tree 指示线只保留低对比度竖线（1pt、`onSurfaceMuted` 的 24% alpha），移除横向连接；禁用、同步延迟子节点、Home / End 与 Option / Alt + Left / Right 全部折叠 / 展开已完成，具体边界见 [Tree](tree.md)。
-- 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；行内容单行截断，完整文本进辅助功能；不因窄而隐藏尾部语义（徽标/状态）。`[部分]`（行高与文本缩放已实现；截断未实现）
+- 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；`ListRow` 标题单行省略，完整文本保留辅助功能/tooltip；前后槽保留徽标/状态，极窄时横向滚动。RTL 与条件空槽共用同一布局；自定义 rowContent 由作者选择该行契约。`[已实现]`，见 [ListRow](list.md#listrow标题与前后槽位)。
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
 - 重排：`ReorderableList` 提供 44pt 拖拽 handle、2pt 放置线、Escape 取消与一次 `onMove`；聚焦 handle 后 Up/Down 和辅助功能 increment/decrement 移动同一行，行身份与焦点跟随原行。当前为全量挂载的非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
 - 滑动操作：`SwipeList` 只在触摸面启用向 leading 滑动（LTR 左滑 / RTL 右滑），横向阈值 8pt，纵向手势交给 `ScrollView`；最多露出两个 74pt 宽、行高 ≥44 的 trailing 操作。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。当前为全量挂载。`[已实现]`，API 见 [SwipeList](swipelist.md)。
@@ -387,7 +387,7 @@
 
 - 外观：搜索行 + 结果列表 + 快捷键提示；桌面几何 640×560；结果经 `VariableVirtualStack` 只挂载视口 + overscan；query 为空时最近执行命令在 "Recent" 分组置顶。`[已实现]`
 - Footer：默认快捷键提示；调用方可通过 `CommandPalette(..., footer:)` 的 `@ViewBuilder` 完全替换，保留面板上方 1pt 分隔线、搜索/排序/最近使用/执行路径。`[已实现]`
-- 手机：compact 下宽 `viewport − 16`、高 `min(560, viewport − 16)`，`inset 8` 居中；结果行触摸 ≥44pt、header 36pt，指针保持 40/24。`[部分]`（几何与行高已完成；软键盘出现后的结果区收缩仍由宿主 IME/安全区处理）
+- 手机：compact 下宽 `viewport − 16`、高 `min(560, max(240, viewport − safeArea.bottom − 16))`，`inset 8` 居中；结果行触摸 ≥44pt、header 36pt，指针保持 40/24。`[已实现]`（几何与行高已完成；软键盘出现时宿主增加 `safeArea.bottom`，面板高度与结果区在同一帧收缩；真机 IME 仍按第 4 节验收）
 - 平板 / 桌面：640×560、顶部放置、键盘上下移动。`[已实现]`
 - 交互与验收：Up/Down/Enter/Escape、前缀过滤、辅助功能 button 行 + 快捷键组；执行后记录最近命令（最多 3 条，session 级），再次打开时置于 Recent 并从原分组去重；1000 条结果只挂载 <60 行，`scrollToIndex` 跟随 highlight；自定义 footer 替换默认提示；验收：`CommandPaletteAdaptiveTests`（390 触摸 / 1280 指针几何与行高）、`CommandPaletteFooterTests`（默认/自定义 footer）、`FeedbackComponentTests`（Recent 投影）、`--component commandPalette`、`ProductInteractionRegressionTests.commandVirtualization` + 200% 行预算测试。
 
@@ -574,9 +574,9 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 
 | 范围 | 剩余工作 | 验收边界 |
 | --- | --- | --- |
-| SafeArea / TextField / CommandPalette | 宿主软键盘 inset、光标显露与结果区收缩联动 | 模拟器/真机的真实 IME；桌面 touch surface 不能替代 |
+| SafeArea / TextField / CommandPalette | 宿主软键盘 inset 通过 `safeArea.bottom` 传播；`SafeArea` 与消费该 inset 的容器/控件在同一帧重排；`CommandPalette` 面板高度与结果区随 inset 收缩；`TextField` 获得焦点时宿主滚动显露光标，组件内 caret 水平/垂直跟随滚动已实现，不预留占位 | 模拟器/真机的真实 IME；桌面 touch surface 不能替代 |
 | Workspace | 标签条完整键盘/辅助功能、RTL 与其余深化能力 | 见 [Workspace](workspace.md) 与 [功能缺口](gaps.md#3-既有组件功能缺口与完成边界) |
-| List / MultiSelectList / SectionedList | 通用行的标题收敛与尾部徽标/状态保留；重排边缘自动滚动另见 gaps | 自定义 rowContent 不能由容器静默截断整个行；需可组合的行布局契约 |
+| ReorderableList | 视口边缘自动滚动 | 通用行标题与尾槽布局已由 ListRow 提供；重排仍为非虚拟列表 |
 | Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
 
 新项关闭时须更新对应契约、组件文档和下方证据，并单独提交；物理设备限制保持明示，不把未执行的设备测试记为通过。

@@ -88,6 +88,7 @@
 
 按同一行契约（触摸 ≥ 44、单行截断、完整值可达）补齐：
 
+- **通用行标题与尾槽**：`ListRow` 为 List/MultiSelectList/SectionedList 提供可组合 leading/title/trailing；标题单行省略，徽标/状态保持自然宽度，极窄时横滚，完整值保留语义与 tooltip。条件空槽、RTL、字号切换与窗口化已覆盖，Gallery 通过选中状态文本提供无 hover 全文入口。`[已实现]`，见 [ListRow](list.md#listrow标题与前后槽位)。
 - **多选与区间选择**：Checkbox 列或 Cmd/Shift 点选；Shift 区间以锚点延伸；辅助功能 selected 态。`MultiSelectList` 已实现 Cmd/Ctrl 切换、Shift 区间、Shift+Arrow、Cmd/Ctrl+A；Checkbox 列仍由调用方组合。`[已实现]`，见 [List](list.md#multiselectlist)。
 - **区段（sections）**：区段头/尾、可选 sticky；DataTable 之外的表状列表先支持平面区段。`SectionedList` 已实现平面 header/footer、sticky 固定标题（下一标题上推）与跨区段键盘选择；`stickyHeaders` 默认关闭，固定副本不进入焦点/命中/语义。`[已实现]`，见 [List](list.md#sectionedlist)。
 - **重排（reorder）**：`ReorderableList` 已实现 44pt 拖拽把手、2pt 放置线、Escape 取消、Up/Down 与辅助功能 increment/decrement；行身份与焦点跟随原行。当前为非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
@@ -137,7 +138,7 @@
 | Select / Combobox | 触发器宽度下限与窗口夹紧已实现；异步请求、取消与加载状态由调用方数据层负责，组件级远程结果契约尚未提供 | P2（按需） |
 | DatePicker / TimeField | Calendar 配置可指定 timeZone，时区选择入口仍缺；TimeOfDay 是不含时区的墙钟值，转换由调用方负责；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动与触摸弹层预算已完成，见 [日历导航](calendar.md)；周/月/年模式仍为 P2 | P1 已完成 |
-| List | 多选、平面区段、sticky 区段、重排、SwipeList 与下拉刷新已实现（见 2.9） | P1（多选/区段/sticky/重排/swipe/refresh 已完成） |
+| List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动仍待补 | P1 已完成；边缘自动滚动 P2 |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |
 | Chart | pie/area/scatter/stacked、图例选择、数据点选择；多序列标题、折行图例与系列开关已实现，见 [Chart](chart.md) | P2 |
@@ -163,7 +164,7 @@
 
 ## 4. 优先级与建议顺序
 
-**P0（手机/平板可用性阻塞）**：本清单的组件级项目已实现；宿主 IME 联动与真实设备/读屏验收仍按规范第 3、4 节跟踪。BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
+**P0（手机/平板可用性阻塞）**：本清单的组件级项目已实现；宿主 IME 联动已改为由宿主增加 `safeArea.bottom`，`SafeArea` 与消费该 inset 的容器/控件在同一帧重排，`CommandPalette` 面板高度与结果区随 inset 收缩，`TextField` 获得焦点时宿主滚动显露光标且组件内 caret 跟随滚动；真实设备/读屏验收仍按规范第 3、4 节跟踪。BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
 **P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 

@@ -131,6 +131,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public let onGeometryChange: ((ScrollGeometry) -> Void)?
     public let accessibilityLabel: String?
     public let scrollRequest: ScrollRequest?
+    /// Embedded one-line controls merge text into their owning row. An idle
+    /// viewport stays transparent to accessibility; overflow exposes scrolling.
+    var combinesAccessibility = false
 
     /// Logical points per line increment. Precise point input bypasses this.
     public var wheelStep: Float = 30
@@ -160,11 +163,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         self.scrollRequest = scrollRequest
     }
 
-    private static func updateAccessibility(node: Node, label: String?, axes: ScrollAxis) {
+    private static func updateAccessibility(node: Node, label: String?, axes: ScrollAxis, combines: Bool) {
         let size = visibleViewportRect(for: node).size
         let content = cachedScrollableContentSize(for: node)
         let maxX = max(0, content.width - size.width)
         let maxY = max(0, content.height - size.height)
+        if combines && maxX <= 0 && maxY <= 0 { node.accessibility = nil; return }
         let x = maxX > 0 ? min(100, max(0, Int((node.contentOffset.x / maxX * 100).rounded()))) : 0
         let y = maxY > 0 ? min(100, max(0, Int((node.contentOffset.y / maxY * 100).rounded()))) : 0
         let value: String
@@ -174,7 +178,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         case .both: value = "Horizontal \(x)%, vertical \(y)%"
         }
         node.accessibility = AccessibilitySemantics(.scrollArea) {
-            $0.label = label ?? "Scrollable content"
+            $0.label = label ?? (combines ? "" : "Scrollable content")
+            $0.combinesChildren = combines
             $0.value = value
             $0.help = "Use arrow keys, Page Up/Down, Home and End to scroll"
         }
@@ -204,13 +209,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             onViewportChange?(snapshot)
             onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: size,
                                             contentSize: Self.cachedScrollableContentSize(for: node)))
-            Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes)
+            Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes, combines: combinesAccessibility)
             if let motion = node.attachments[_ScrollViewAttachmentKeys.motion] as? ScrollAnimator {
                 Self.updateAnchor(on: node, motion: motion, axes: axes)
             }
         }
         node.attachments[_ScrollViewAttachmentKeys.report] = report
-        Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes)
+        Self.updateAccessibility(node: node, label: accessibilityLabel, axes: axes, combines: combinesAccessibility)
         node.accessibilityActions.increment = { [weak node] in
             guard let node else { return }
             Self.pageScroll(node, axes: axes, forward: true)
@@ -650,7 +655,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                           edge: .bottom)
     }
 
-    public var _children: [any View] { [content] }
+    public var _children: [any View] {
+        if axes == .vertical { return [content] }
+        // Yoga right-aligns an oversized RTL child at a negative x. Scrolling
+        // uses physical offsets starting at zero, so normalize that origin
+        // while retaining the content's inherited logical direction.
+        return [HorizontalScrollOrigin { content }.frame(width: .percent(100))]
+    }
 
     /// Push the scrollable range measured right now into `animator`.
     ///

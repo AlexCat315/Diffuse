@@ -172,7 +172,7 @@ public enum AccessibilityTree {
             if let semantics = child.accessibility {
                 if semantics.isHidden { return [] }
                 if semantics.role == .staticText { return [semantics.label] }
-                if semantics.role != .group { return [] }
+                if semantics.role != .group && !(semantics.role == .scrollArea && semantics.combinesChildren) { return [] }
             }
             return labelText(in: child)
         }

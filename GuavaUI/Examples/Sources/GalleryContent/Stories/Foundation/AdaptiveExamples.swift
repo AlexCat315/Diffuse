@@ -116,14 +116,20 @@ private struct AdaptiveControlSample: View {
             $0.isEnabled = options.isEnabled
         }.frame(width: .percent(100)))
         case .rating: AnyView(Rating("Preview score", value: $value) { $0.selection.isEnabled = options.isEnabled; $0.selection.precision = .half })
-        case .list: AnyView(List(0..<20, id: \.self, selection: $selected) { index, _ in Text("Item \(index + 1)") }.frame(width: .percent(100), height: .points(132)))
+        case .list: AnyView(List(0..<20, id: \.self, selection: $selected) { index, _ in
+            ListRow("Item \(index + 1) — shared workspace settings and collaboration permissions") {
+                Badge("Ready", tone: .success)
+            }
+        }.frame(width: .percent(100), height: .points(132)))
         case .sectionedList: AnyView(SectionedList([
             ListSection("preview-favorites", title: "Favorites",
                         items: Array(0..<4).map(AdaptiveSectionItem.init(id:))),
             ListSection("preview-scene", title: "Scene",
                         items: Array(4..<8).map(AdaptiveSectionItem.init(id:)))
         ], selection: $selected, stickyHeaders: true) { item, _ in
-            Text(item.title)
+            ListRow(item.title + " — shared workspace settings and collaboration permissions") {
+                Badge("Ready", tone: .success)
+            }
         }.frame(width: .percent(100), height: .points(132)))
         case .reorderableList: AnyView(ReorderableList(
             reorderItems, id: \.self, rowHeight: 36, isEnabled: options.isEnabled,
@@ -236,7 +242,9 @@ private struct AdaptiveControlSample: View {
                 TextField("Retained draft", text: $text) { $0.behavior.disabled = !options.isEnabled }.padding(12)
             }.frame(width: .percent(100), height: .points(210)))
         case .multiSelectList: AnyView(MultiSelectList(0..<12, id: \.self, selection: $multiSelection) { index, _ in
-            Text("Item \(index + 1)")
+            ListRow("Item \(index + 1) — shared workspace settings and collaboration permissions") {
+                Badge("Ready", tone: .success)
+            }
         }.frame(width: .percent(100), height: .points(140)))
         case .scrollbar: AnyView(Row(alignment: .center, spacing: 12) {
             Scrollbar(offset: $scrollbarOffset, contentExtent: 800, viewportExtent: 100)
