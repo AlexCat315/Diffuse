@@ -19,7 +19,7 @@
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | BottomNavigationBar P3（TabView 底部栏已可覆盖） |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | 菜单富内容 P2 |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Alert 窄宽操作堆叠、关闭与大字号、Badge 长文本已补齐，Banner 由 Alert 覆盖 |
-| 展示与媒体 | Text/Typography、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | RichText/Markdown P2、视频播放组件（应用层按需）、GIF/WebP、EXIF/渐进、缓存淘汰 P2、其他平台 WebView 后端 |
+| 展示与媒体 | Text/Typography、RichText/Markdown（行内样式、链接、代码块、列表、表格、跨块选择复制）、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | 视频播放组件（应用层按需）、GIF/WebP、EXIF/渐进、缓存淘汰 P2、其他平台 WebView 后端 |
 | 拖放与交互 | AssetDropTarget、Tree DnD、Workspace 拖拽、PointerCapture、DragScope/Draggable/DropTarget | 通用 payload 协议已实现；自动滚动与键盘重排由调用方负责 |
 
 ## 2. 缺失组件规范
@@ -113,9 +113,10 @@
 | 组件 | 级别 | 外观 | 手机/平板 | 交互与验收 | 参考 |
 | --- | --- | --- | --- | --- | --- |
 | TreeTable | P2 | 树缩进在首列 + 可调列 | 触摸行 ≥ 44；窄宽隐藏低优先列 | 键盘树导航 + 列头排序；展开态 a11y | SwiftUI `Table` + OutlineGroup；Fluent TreeGrid |
-| RichText / Markdown | P2 | 行内样式、链接、代码块、列表 | 正文换行、代码块横向滚动 | 选择/复制、链接辅助功能与键盘激活 | SwiftUI `Text(markdown:)`；Flutter `flutter_markdown` |
 | OTP / PIN | P3 | N 个方格、自动前进 | 数字键盘、粘贴分发 | Backspace 退格、粘贴全填、a11y 整值读写 | 移动生态惯例 |
 | Menu 富内容 | P2 | 图标槽、任意行内容、链接语义 | 触摸行 ≥ 44 | 与现有键盘导航共用；富内容不破坏前缀查找 | Radix DropdownMenu；Fluent Menu |
+
+**RichText / Markdown 已实现（P2）**：`RichText` 把多样式 run（粗体、斜体、行内代码、删除线、链接）排成一个段落，按空格、表意文字（含禁则）与 URL 的 `/`、`-` 断行；`MarkdownView` 用 swift-markdown（`private import Markdown`，AST 不进入公开 API）解析 CommonMark + GFM，原生渲染标题、引用、嵌套/有序/任务列表、可复制且横向滚动的代码块、按内容定列宽并可横向滚动的表格与分隔线。手机端正文随容器换行，代码块与宽表格横向滚动；链接为可 Tab 聚焦的 link 元素，Return 与辅助功能激活；文档共享选区，支持拖动跨块、双击/三击、⌘/Ctrl+C/A、右键 Copy / Select All 与触摸长按。图片显示为链接的替代文字，HTML 原样显示为代码；行级 RTL 双向排版沿用 Typography 的未完成项。`RichTextTests`、`RichTextLinkTests`、`TextSelectionTests`、`MarkdownParsingTests`、`MarkdownRenderingTests` 与 Gallery `richText` / `markdown` 页及三预览覆盖，DevTools 验收记录见 [RichText](richtext.md) 与 [Markdown](markdown.md)。
 
 **Popconfirm 已实现（P2）**：复用 Popover 的卡片、箭头与十二向定位；指定方位保持不变，空间不足时限制该侧视口并滚动。触发器为 secondary（危险操作使用红色文字），只有确认按钮使用危险色实底；Cancel/Confirm 为真实 Button，不默认显示重复 tooltip。Escape/外部点击/再次点击关闭，确认回调仅执行一次。`PopconfirmTests` 覆盖布局/输入/主题/RTL 矩阵；Gallery 提供紧凑定位面板与窄屏单锚点预览。细节见 [Popconfirm](popconfirm.md) 与 [Popover](popover.md)。
 
@@ -168,7 +169,7 @@
 
 **P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
-**P2（长尾/体验）**：TreeTable、RichText/Markdown、DataTable 高级能力、文本编辑器 snippets、图片缓存与解码能力、Workspace 深化。
+**P2（长尾/体验）**：TreeTable、DataTable 高级能力、文本编辑器 snippets、图片缓存与解码能力、Workspace 深化。
 
 **P3（按需）**：OTP/PIN、masked input、外链确认等。
 
@@ -204,6 +205,6 @@ AssetRefField 的窄宽与触摸契约已补齐：名称/副标题省略保留�
 | 多选/区段/重排/swipe/下拉刷新（已实现） | `List(selection:)`、`Section`、`onMove`、`swipeActions`、`refreshable` | `CheckboxListTile`、`ReorderableListView`、`Dismissible`、`RefreshIndicator` |
 | ZStack | `ZStack`（已实现） | `Stack` |
 | BottomSheet | `.sheet` + `presentationDetents`（已实现） | `showModalBottomSheet` |
-| RichText / Markdown | `Text(markdown:)`、`AttributedString` | `flutter_markdown`（三方） |
+| RichText / Markdown（已实现） | `Text(markdown:)`、`AttributedString` | `flutter_markdown`（三方） |
 | TreeTable | `Table` + `OutlineGroup` 组合 | `TreeView` 套件（三方） |
 | Toast 操作 | 无系统等价（已实现） | 仅作行为对照，不采用 Snackbar 视觉 |

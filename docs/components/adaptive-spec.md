@@ -459,6 +459,13 @@
 - 平板 / 桌面：与 `TextScaler` 200% 组合验收。`[已实现]`
 - 交互与验收：截断文本的完整值进入 tooltip 与辅助功能；验收：`--component theme`（Typography 段）、`NavigationStateTests` 200%。
 
+**RichText / Markdown**
+
+- 外观：多样式 run 共享基线并整段换行（粗体、斜体、行内代码 chip、删除线、下划线链接）；Markdown 标题用主题 type 角色且 1–2 级带分隔线，引用前缘竖线，列表编号槽右对齐、圆点/圆环/方块按深度、任务项只读复选框，代码块带语言头与复制，表格按内容定列宽（56–320pt）并遵循列对齐。`[已实现]`，见 [RichText](richtext.md) 与 [Markdown](markdown.md)。
+- 手机：正文、标题、列表、引用随实际容器换行，CJK 按字断行并遵守行首/行尾禁则，长 URL 在 `/`、`-` 后可断；代码块与宽表格不压缩、不换行，横向滚动；字号随 `TextScaler` 缩放一次；触摸拖动交给滚动，长按选词并弹出 Copy / Select All。`[已实现]`
+- 平板 / 桌面：指针拖动跨块选择、Shift 扩展、双击选词、三击选段，⌘/Ctrl+C/A 与 Escape；右键菜单；文字 I 形光标、链接手形光标与悬停色。`[已实现]`
+- 交互与验收：每个链接是可 Tab 聚焦的 link 元素（全文名称、目标为 help），Return / 辅助功能激活调用 `onOpenLink`，键盘焦点环覆盖链接所有折行片段；标题暴露 heading 与级别。验收：`RichTextTests`、`RichTextLinkTests`、`TextSelectionTests`、`MarkdownParsingTests`、`MarkdownRenderingTests`，Gallery `--component richText|markdown` 与三预览。
+
 **Image / AsyncImage / Avatar**
 
 - 外观：fit/fill/stretch；加载/失败/空阶段由调用方呈现；Avatar 尺寸 mini–large 12–512、首字母回退。`[已实现]`
@@ -591,6 +598,8 @@ JsonField 紧凑展开已补齐：Gallery 去除 520pt 固定宽度，展开入�
 
 
 第 5 项 TabView 溢出菜单与标题截断已实现：`.menu` 使用实际测量保留所选项与能放下的标签，其余通过 ≥44pt 的 More tabs 菜单可达。隐藏标题保留节点但停止绘制、输入和语义；Roving focus 支持隐藏目标延后聚焦与同帧连续按键。三种 overflow 模式均采用单行省略、完整 tooltip/名称和独立的图标/徽标/关闭槽；必要的非文本空间不足时横向滚动。同类型面板按标签 ID 隔离，条件内容的 ID 在多层修饰下保留正确身份与局部状态。`TabOverflowTests` 验证三档宽度、100%/200%、三种输入、主题、RTL、三种外观、菜单生命周期与真实 AI wire 查询；`TabViewTests` / `StructuralModifierTests` 验证状态隔离、重排与卸载恢复。Gallery `tabs` 及三预览已采用。DevTools 的输入与渲染画面入口见 [AI 诊断闭环](../architecture/agent-framework.md#操作与画面闭环)，验证不依赖操作系统自动化。
+
+RichText / Markdown 已完成（gaps P2）：多字体 run 统一断行（CJK 禁则、URL 断点）、行内样式与链接；swift-markdown（`private import`）解析的 CommonMark/GFM 块；链接锚点提供 Tab 焦点、link 语义与 Return 激活；文档级跨块选择与复制、右键菜单与触摸长按。为此修正了 CJK 回退字体丢失粗细（PingFang Semibold）、指针在同一节点内移动时光标不更新，并为 DevTools 增加 `reveal NODE_ID`、`click` 自动显露屏幕外节点与 `capture --node/--region` 局部放大。DevTools 在 720pt 浅色、390pt 深色指针/触摸下完成截图、链接点击/激活、Tab 焦点环与 Return、跨块拖选后 ⌘C（剪贴板核对）、右键 Copy 与代码块复制按钮；细节见 [RichText](richtext.md) 与 [Markdown](markdown.md)。
 
 AppBar 新组件已完成：共享 Toolbar 命令树、优先级与更多菜单，按实际容器在 1 / 3 个平铺操作之间收敛；标题与文字主操作使用统一的单行省略能力，保留全文及 heading 语义，安全区由宿主消费。组件、菜单和原生角色测试及 Gallery 可交互页已经接入；第 6 项仍保留既有控件的逐项采用工作，不能由 AppBar 的完成代替。
 
