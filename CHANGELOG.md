@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 设置改为带分类导航、全局中英文搜索和窄屏分类菜单的独立工作台。重构外观预览、语言、选择、垂直同步、Agent 服务商与凭据、执行审阅、能力门控及插件管理，加入来自同一命令目录的快捷键参考和诊断信息复制。普通偏好即时保存，Agent 更改显式应用或放弃；窗口会话保留草稿，跨分类、搜索、主题与语言更新不丢失输入。支持 `./guava run Editor -- --settings --project-dir PATH` 直接打开设置主窗口。
+
 - 编辑器命令改为单一目录 `EditorCommandCatalog`：macOS 菜单栏、Windows/Linux 标题栏菜单、⌘/Ctrl+K 命令面板与窗口内快捷键都由它生成，移除原来平行维护的菜单模型、面板命令表和快捷键表。顶级菜单为文件、编辑、视图（Space 与布局子菜单）、Agent、运行、窗口、帮助；工作区不授权的命令不再显示为灰色项。新增 ⌘P 打开资源、⇧⌘P 命令、⌘↩ 试玩/暂停、⌘0 重置布局。Windows 不再没有菜单：沉浸式标题栏最左侧提供同一棵命令树。状态栏改为错误/警告计数、Space、未保存、后台活动与 Agent 状态，计数与控制台“问题”共用 `EditorProblemSummary`；窄窗口播放控制收成试玩/暂停与停止。`CommandCatalogTests`、`ShortcutHandlerTests`、`EditorNativeMenuTests` 与工作台标题栏宽度测试覆盖两种菜单呈现。见 [工作站边界](docs/architecture/workstation.md)。
 
 - `NativeMenuItem` 新增 `.submenu`，`NativeMenuBar` 新增 `applicationItems` 与可本地化的 `NativeApplicationMenuTitles`：macOS 应用菜单依次放入调用方的关于/设置项、隐藏、隐藏其他、全部显示与退出。`UIIcons.Navigation.menu` 新增菜单图标。

@@ -101,6 +101,9 @@ struct EditorAppLaunchOptions {
 }
 
 extension EditorAppLaunchOptions {
+    /// Opens preferences as the primary window for focused configuration.
+    static var settingsRequested: Bool { CommandLine.arguments.contains("--settings") }
+
     /// Opt-in developer watch for enabled plugin packages (`--watch-plugins`,
     /// `GUAVA_WATCH_PLUGINS=1`). Watching never authorizes changed packages:
     /// byte-identical builds are remounted, and anything else is surfaced for

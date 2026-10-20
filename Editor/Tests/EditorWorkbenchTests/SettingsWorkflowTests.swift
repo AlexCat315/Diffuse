@@ -1,0 +1,185 @@
+@testable import EditorUI
+import EditorCore
+import Foundation
+import GuavaUI
+import GuavaUICompose
+import GuavaUIRuntime
+import Testing
+
+@Suite("Settings workspace", .serialized)
+@MainActor
+struct SettingsWorkflowTests {
+    private final class ResizingPreferences: View {
+        let app: EditorApplication
+        let session: EditorSettingsSession
+        @State var width: Float = 1040
+        init(app: EditorApplication, session: EditorSettingsSession) { self.app = app; self.session = session }
+        var body: some View { SettingsPanel(app: app, session: session).frame(width: width, height: 740) }
+    }
+    private func withApp(_ work: (EditorApplication, InteractionRegistry) throws -> Void) throws {
+        try WorkbenchUITestSupport.withEnvironment { interactions, _ in
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("settings-test-\(UUID())")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let key = "GUAVA_EDITOR_STATE_DIRECTORY"
+            let previous = ProcessInfo.processInfo.environment[key]
+            #expect(WorkbenchUITestSupport.setEnvironmentValue(directory.path, for: key))
+            defer {
+                _ = WorkbenchUITestSupport.setEnvironmentValue(previous, for: key)
+                try? FileManager.default.removeItem(at: directory)
+            }
+            let app = try EditorApplication(projectDirectory: directory.path)
+            defer { app.shutdown() }
+            try work(app, interactions)
+        }
+    }
+
+    @Test("Search covers every category and supports Chinese, English and combined terms")
+    func search() {
+        #expect(SettingsSectionID.visible(category: .general, query: "密钥") == [.provider])
+        #expect(SettingsSectionID.visible(category: .editor, query: "openai model") == [.provider])
+        #expect(SettingsSectionID.visible(category: .agent, query: "vsync") == [.display])
+        #expect(SettingsSectionID.visible(category: .general, query: " ") == [.appearance, .language])
+        #expect(SettingsSectionID.visible(category: .general, query: "no-such-preference").isEmpty)
+        #expect(Set(SettingsSectionID.allCases.map(\.category)) == Set(SettingsCategory.allCases))
+    }
+
+    @Test("Settings navigation, inputs and actions remain inside narrow and desktop windows",
+          arguments: [Float(390), Float(720), Float(1040)], SettingsCategory.allCases)
+    func layout(width: Float, category: SettingsCategory) throws {
+        try withApp { app, _ in
+            let session = EditorSettingsSession(settings: app.store.aiSettings)
+            session.navigation.category = category
+            if category == .agent { session.agent.draft.select(.openai) }
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: true)))
+            for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 740) }
+            let frames = graph.layoutSnapshot()
+            let search = try #require(frames.first { $0.debugName == "settings-search" })
+            #expect(search.absoluteFrame.width >= 150)
+            let footer = try #require(frames.first { $0.debugName == "settings-footer" })
+            #expect(footer.absoluteFrame.maxY <= 740)
+            for item in frames where item.debugName?.hasPrefix("settings-") == true {
+                #expect(item.absoluteFrame.minX >= -1, "\(item.debugName ?? "") overflows at \(width)")
+                #expect(item.absoluteFrame.maxX <= CGFloat(width) + 1, "\(item.debugName ?? "") overflows at \(width)")
+            }
+            #expect(frames.contains { $0.debugName == "settings-sidebar" } == (width >= 760))
+        }
+    }
+
+    @Test("Provider edits stay local, validate before apply, reset, and never cross provider credentials")
+    func agentEditing() throws {
+        try withApp { app, _ in
+            let session = EditorSettingsSession(settings: app.store.aiSettings)
+            let editor = AgentSettingsEditor(app: app, state: Binding(get: { session.agent }, set: { session.agent = $0 }), onChange: {})
+            editor.select(.openai)
+            editor.update { $0.draft.apiKey = "uncommitted-test-secret"; $0.draft.model = "" }
+            #expect(app.store.aiSettings.provider == .none)
+            editor.apply()
+            #expect(session.agent.feedback?.isError == true)
+            #expect(app.store.aiSettings.provider == .none)
+            editor.select(.deepseek)
+            #expect(session.agent.draft.apiKey.isEmpty)
+            #expect(editor.isDirty)
+            editor.reset()
+            #expect(!editor.isDirty)
+            #expect(session.agent.feedback == nil)
+        }
+    }
+
+    @Test("Resizing providers preserves the editable field and does not introduce a nested scroll region")
+    func providerResize() throws {
+        try withApp { app, _ in
+            let session = EditorSettingsSession(settings: app.store.aiSettings)
+            session.navigation.category = .agent
+            session.agent.draft.select(.openai)
+            session.agent.draft.model = "retained-model"
+            let harness = ResizingPreferences(app: app, session: session)
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: harness)
+            var originalField: Node?
+            for width: Float in [1040, 390, 720, 1040] {
+                harness.width = width
+                for _ in 0..<6 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 740) }
+                let section = try WorkbenchUITestSupport.named("settings-section-provider", in: graph.tree.root)
+                #expect(WorkbenchUITestSupport.firstNode(section) { $0.accessibility?.role == .scrollArea } == nil)
+                let field = try #require(WorkbenchUITestSupport.firstNode(section) {
+                    $0.accessibility?.role == .textField && $0.accessibility?.label == L("Model")
+                })
+                if let originalField { #expect(field === originalField) } else { originalField = field }
+                #expect(session.agent.draft.model.stringValue == "retained-model")
+            }
+        }
+    }
+
+    @Test("Agent settings adapt to touch, mixed input, RTL and large text", arguments: [Float(390), 720, 1280])
+    func adaptiveAgent(width: Float) throws {
+        try withApp { app, _ in
+            let session = EditorSettingsSession(settings: app.store.aiSettings)
+            session.navigation.category = .agent
+            session.agent.draft.select(.openai)
+            var surface = UIEnvironment()
+            surface.viewport.width = width
+            surface.input = width == 390 ? [.touch] : width == 720 ? [.pointer, .touch, .keyboard] : [.pointer, .keyboard]
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: SettingsPanel(app: app, session: session)
+                .surfaceEnvironment(surface).textScaler(.init(width == 720 ? 1 : 2))
+                .layoutDirection(width == 1280 ? .rtl : .ltr)
+                .theme(EditorVisualTheme.make(dark: width != 390)))
+            for _ in 0..<6 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 740) }
+            let frames = graph.layoutSnapshot()
+            let footer = try #require(frames.first { $0.debugName == "settings-footer" })
+            #expect(footer.absoluteFrame.maxY <= 740)
+            for item in frames where item.debugName?.hasPrefix("settings-") == true {
+                #expect(item.absoluteFrame.minX >= -1)
+                #expect(item.absoluteFrame.maxX <= CGFloat(width) + 1, "\(item.debugName ?? "") at \(width)")
+            }
+        }
+    }
+
+    @Test("Navigation and presentation remounts preserve the Agent draft and search state")
+    func retainedSession() throws {
+        try withApp { app, interactions in
+            let session = EditorSettingsSession(settings: app.store.aiSettings)
+            session.navigation.category = .agent
+            session.agent.draft.select(.openai)
+            session.agent.draft.model = "my-model"
+            session.agent.draft.apiKey = "uncommitted-test-secret"
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            func settle() {
+                for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) }
+            }
+            graph.install(root: SettingsPanel(app: app, session: session)); settle()
+            try WorkbenchUITestSupport.activate("settings-category-general", in: graph.tree.root, registry: interactions); settle()
+            #expect(session.navigation.category == .general)
+            #expect(session.agent.draft.model.stringValue == "my-model")
+            graph.install(root: EmptyView())
+            session.navigation.query = "模型"
+            graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: false))); settle()
+            #expect(graph.layoutSnapshot().contains { $0.debugName == "settings-agent-model" })
+            #expect(session.agent.draft.apiKey.stringValue == "uncommitted-test-secret")
+            #expect(session.navigation.query.stringValue == "模型")
+        }
+    }
+
+    @Test("The search shortcut moves focus from a settings action to the global search field")
+    func keyboardSearch() throws {
+        try withApp { app, interactions in
+            let session = EditorSettingsSession(settings: app.store.aiSettings)
+            session.navigation.category = .agent
+            session.agent.draft.select(.openai)
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: SettingsPanel(app: app, session: session))
+            func settle() { for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) } }
+            settle()
+            let focus = try #require(FocusChainHolder.current)
+            let action = try WorkbenchUITestSupport.named("settings-agent-reset", in: graph.tree.root)
+            focus.focus(try #require(WorkbenchUITestSupport.firstNode(action) { $0.isFocusable }))
+            let input = EventDispatcher(tree: graph.tree, interactions: interactions, capture: PointerCapture(), focusChain: focus)
+            input.dispatch(.keyDown(.init(scancode: Scancode.f, keycode: 0, modifiers: .lgui, isRepeat: false)))
+            settle()
+            input.dispatch(.textInput("vsync")); settle()
+            #expect(session.navigation.query.stringValue == "vsync")
+            #expect(graph.layoutSnapshot().contains { $0.debugName == "settings-vsync" })
+        }
+    }
+}
