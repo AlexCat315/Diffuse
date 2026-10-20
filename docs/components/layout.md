@@ -174,6 +174,14 @@ Grid(columns: [
 
 `GridColumnsTests` 覆盖 390/720/1280pt、100%/200% 字号、三种输入、明暗主题、RTL、源行对齐、首次隐藏几何、草稿、附属浮层、菜单、会话重置、横向揭示和经校验的 AI 查询。`CustomLayoutVisibilityTests` 验证直接与缓存绘制、焦点、命中和语义。Gallery `layout` 提供可编辑示例及窄/宽/触摸预览。
 
+### Grid 跨列/跨行
+
+子视图用 `.gridCellSpan(columns:rows:)` 声明覆盖的格数（经通用的 `LayoutValueKey` / `.layoutValue(key:value:)` 读到 `LayoutSubview`，子视图无需包装类型）。放置按行优先的稀疏流：放不下当前行剩余列的格子换到下一可用行，跨度夹紧到实际列数。行高先由单行格子决定，跨多行的格子若更高，把差额加到它覆盖的最后一行。格子宽度 = 覆盖轨道之和 + 间距，RTL 镜像。命名字段列（可隐藏）忽略跨度，避免隐藏一列时移动所有跨列格子。
+
+### LazyGrid 二维窗口与跨列
+
+`LazyGrid(columnWidth:)` 使用固定列宽，内容宽于视口时双向滚动，并且只构建可见列（含 overscan）与可见行的交集。`columnSpan: (Element) -> Int` 让元素覆盖多列，行按顺序打包，放不下的元素开启下一行；打包只读取整数跨度，不构建视图。使用跨列时 `.variable` 行高按打包后的行数提供。LazyGrid 不提供跨行 span；普通 Grid 的跨行能力不能直接推及 LazyGrid。`GridSpanTests` 覆盖放置、行高分配、RTL、打包与 5,000 格双向窗口。
+
 ### Masonry
 
 `Masonry` 是按最短列放置的瀑布流容器，适合高度不一的卡片墙。列数由 `floor((width + columnSpacing) / (minimumColumnWidth + columnSpacing))` 决定并夹在 1…`maximumColumns` 之间，默认最多 2 列；窄宽自动单列，宽屏也不会超过上限。列宽均分可用宽度；`columnSpacing` 只出现在列间，`itemSpacing` 只出现在同列卡片间。卡片以列宽测量，高度自然增长；文本缩放由卡片自身处理。RTL 下第 0 列位于 trailing，源顺序不变。

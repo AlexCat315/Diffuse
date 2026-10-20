@@ -57,7 +57,7 @@ WorkspacePanel(id: "inspector", title: "Inspector", sizing: .init(
 - **浮动**：WorkspaceFloatingWindow 是当前应用窗口中的浮动面板层，不能宣称具有独立 OS 窗口、跨窗口拖拽或多屏恢复。
 - **持久化边界**：比例/分组 round trip 已测试；整个 document 的外部不可信解码校验、重复引用/缺失 panel、屏幕变更后的位置修复及可版本化应用格式仍需成套实现。
 - **维护性与性能**：View/controller 仍有大型文件，需要继续按 shell、tabs、drag、floating 分域拆分；大型面板数、复杂内容、快速跨组拖动和长期运行需单独原生测量。
-- **可访问性/本地化**：完整 tab/区域语义、RTL、平台读屏桥接与系统尺寸偏好仍有缺口。
+- **可访问性/本地化**：标签条已具备完整语义——标签容器为 `tabList`（值为当前标签标题），每个标签为 `tab`，帮助文本给出“Tab N of M”，固定标签的值为 Pinned，标识符为面板 ID；面板内容区为以标题命名的 `tabPanel`（macOS 映射为 tabGroup 与 group）。RTL 下标签条随布局镜像，Left 移到视觉上的下一个标签。标签标题经 Text 使用双向段落排版。平台读屏的进一步桥接与系统尺寸偏好仍有缺口。`WorkspaceViewTests.testTabStripExposesTabListPanelAndPositionAndMirrorsArrowsInRTL` 覆盖 LTR/RTL。
 
 原生检查另确认外层固定 frame 曾在组件局部重组后被内部布局覆盖，本轮在 ComposeCore 修复调用方修饰器的重放规则，避免调整分隔符时工作区高度自行变化。
 

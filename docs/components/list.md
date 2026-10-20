@@ -145,7 +145,8 @@ ReorderableList(items, id: \.id, rowLabel: { $0.title }, onMove: { from, to in
 - 行身份由 `id` 保留，移动后焦点、草稿与行内容节点跟随原行。
 - 拖动时被拖行浮起为一份副本（同一 rowContent，`dragging = true`，surface 底、accent 细边与中等阴影、带把手），跟随指针移动并限制在视口内，自动滚动时停在边缘，内容在其下方滚动；原位置保留为 35% 不透明度的占位，滚出视口后仍能看到正在移动的项。预览不参与布局与命中，移动只改宿主的绘制偏移，不重组列表或重新布局。
 - 拖动时指针进入视口上下边缘 48pt（视口高度的 1/4 以内）区域，列表按深度平方加速自动滚动，最高 1200pt/s；指针停在边缘或移出视口也会持续滚动。放置位置按“指针位移 + 自动滚动距离”在内容坐标中计算，放置线随内容移动；松开、Escape 或卸载立即停止。滚动通过内部 `EnclosingScroll` 直接调整最近的外层 ScrollView 偏移，不重组列表；同一 `EdgeAutoScroll` 可供其他拖动源复用。
-- 当前为全量挂载的非虚拟列表（适合设置、图层、播放列表等中等规模顺序）；大集合应等待后续虚拟化重排。
+- 只挂载视口及上下各 4 行余量（行绝对定位于 `index × (行高 + 间距)`）；正在拖拽的行与最近一次键盘移动的行即使滚出视口也保持挂载，保证指针捕获与焦点不丢失。`VirtualizationEstimateTests.reorderWindow` 验证 1,000 行只构建窗口内的行，键盘移动照常回调。
+- 为列表本身提供有界高度，无需再套一层同向 ScrollView；当前重排行仍使用固定行高，不会自动使用 VirtualStack 的未知行高估测。离开挂载窗口的普通行会卸载，需长期保留的草稿由调用方模型持有。
 
 ## Tokens (DefaultListRowStyle)
 
@@ -169,7 +170,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - **指针**：down + up 在同一行内 → 写 `selection.wrappedValue = id`
 - **键盘**：↑ / ↓ 移动选择，Home / End 到首尾，Return / keypad Enter 选择当前行
 - **滚动**：外层 `ScrollView(.vertical)`，wheel 自动支持；只挂载视口附近的行，用占位高度保留完整滚动范围。
-- **虚拟化**：`List` 内部使用 `VirtualStack`；`VirtualStack(data, id: \.id, rowHeight: 30, scrollToIndex: target)` 可单独使用（闭包 `rowHeight` 为可变行高形态），默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。
+- **虚拟化**：`List` 内部使用 `VirtualStack`；`VirtualStack(data, id: \.id, rowHeight: 30, scrollToIndex: target)` 可单独使用（闭包 `rowHeight` 为可变行高形态），默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。行高只有渲染后才知道时用 `VirtualStack(data, id:, estimatedRowHeight: 32)`：未测量的行按估计值（随文本缩放）占位，挂载的行回报实际布局高度并按 ID 缓存（宽度或文本缩放变化时作废）；视口上方的行高度修正时保持第一可见行不跳动。`VirtualizationEstimateTests` 覆盖估计、测量收敛与缓存作废。
 - **调用方的尺寸约束生效**：`List` 最外层是键盘 host，所以 `.frame`/`.flex` 落在它上面，内部滚动容器取剩余高度并裁切。缺少这条时滚动容器会按自身内容撑高，行会画到容器外面去。
 - **`scrollToIndex` 首次布局不生效**：第一帧还没有视口高度，此时做 reveal 会多滚一行并把这次请求消费掉，所以本来可见的目标也会把列表滚过头。可变行高形态用同一条规则。
 - **多选**：`List(selection: Binding<Set<ID>>)`；单选与多选共用同一实现、行 host 与键盘路径。多选行仍由同一个 `_ListRowHost` 处理点击，modifier 由指针事件传入。
@@ -224,8 +225,8 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 ## File map
 
 - 通用行: [Row.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Row.swift)
-- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [Selection.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Selection.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [ReorderableList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/ReorderableList.swift) · [SwipeList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SwipeList.swift) · [Refresh.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Refresh.swift)
-- Style + 默认: [GuavaUICompose/Theme/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/Styles/Components/DefaultListRowStyle.swift)
+- 主体: [List.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/List.swift) · [Selection.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Selection.swift) · [SectionedList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SectionedList.swift) · [Reorderable.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Reorder/Reorderable.swift) · [SwipeList.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/SwipeList.swift) · [Refresh.swift](../../GuavaUI/Sources/GuavaUICompose/Primitives/Data/Lists/Refresh.swift)
+- Style + 默认: [GuavaUICompose/Theme/Styles/Components/ListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/Styles/Components/ListRowStyle.swift) · [DefaultListRowStyle.swift](../../GuavaUI/Sources/GuavaUICompose/Theme/Styles/Components/DefaultListRowStyle.swift)
 
 ## 响应式与输入密度
 
@@ -233,6 +234,6 @@ List 先用 `TextScaler` 缩放 authored `rowHeight` 与 `rowSpacing`，再在 t
 
 `TextScaleRowTests.collectionGeometry` 覆盖 390/720/1280pt、light/dark、100%/125%/200% 字号与输入切换，验证缩放一次、行间距、窗口化及状态保留。
 
-`ReorderableList` 使用同一条缩放与触摸下限规则；指针/键盘 handle 高度为 `max(scaledRowHeight, touch ? 44 : 0)`，触摸面行高与 handle 均为 44pt。当前非虚拟化，行数与滚动由外层固定高度的 `ScrollView` 管理。
+`ReorderableList` 使用同一条缩放与触摸下限规则；指针/键盘 handle 高度为 `max(scaledRowHeight, touch ? 44 : 0)`，触摸面行高与 handle 均为 44pt。行按视口窗口化，滚动由内部 `ScrollView` 管理。
 
 SectionedList 的 sticky 标题使用与虚拟化相同的已缩放行高与触摸下限：sticky 容器的标题高度取 `effectiveHeight`，下一标题位置取 `entryIndex × (effectiveHeight + scaledSpacing)`。因此字号或输入集合变化后，固定标题与行几何不会错位。

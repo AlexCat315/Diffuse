@@ -22,7 +22,7 @@
 | 组件覆盖与缺失清单 | 缺失组件规范、功能缺口、优先级 | [gaps.md](gaps.md) |
 | Button | 文档已写 | [button.md](button.md) |
 | IconButton | 文档已写 | [iconbutton.md](iconbutton.md) |
-| Toolbar | 优先级溢出、保留节点与菜单焦点 | [toolbar.md](toolbar.md) |
+| Toolbar | 水平/垂直、优先级溢出与菜单焦点 | [toolbar.md](toolbar.md) |
 | Form / PropertyGrid | 容器标签重排、值槽与状态保留 | [form.md](form.md) |
 | Toggle | 文档已写 | [toggle.md](toggle.md) |
 | Checkbox | 文档已写 | [checkbox.md](checkbox.md) |
@@ -31,10 +31,10 @@
 | SearchField | 搜索输入、联想与键盘选择 | [searchfield.md](searchfield.md) |
 | Combobox | 可搜索单选、本地过滤与远程结果契约 | [combobox.md](combobox.md) |
 | Text / Typography / Color glyphs | 实现与验证边界 | [typography.md](typography.md) |
-| RichText | 多样式段落、CJK 断行、链接 | [richtext.md](richtext.md) |
+| RichText | 多样式段落、CJK/双向显示、链接与选区边界 | [richtext.md](richtext.md) |
 | Markdown | CommonMark/GFM 渲染、代码块、表格、任务列表 | [markdown.md](markdown.md) |
 | Viewport Traits | width/height class、orientation reader 与 600/1000 阈值 | [viewport-traits.md](viewport-traits.md) |
-| Accessibility | 语义树、describedBy、scrollArea 与 comboBox | [accessibility.md](accessibility.md) |
+| Accessibility | 语义树、describedBy、滚动/选择与 Workspace 标签角色 | [accessibility.md](accessibility.md) |
 | Scrollbar | 可聚焦 thumb、拖动/键盘/辅助功能与 ScrollView offset 绑定 | [scrollbar.md](scrollbar.md) |
 | Chart | line/area/bar（分组、堆叠）/scatter/pie·donut、可切换图例与数据点选择 | [chart.md](chart.md) |
 | NumberField | 文档已写 | [numberfield.md](numberfield.md) |
@@ -63,29 +63,30 @@
 | RangeSlider | 双 thumb、active thumb 与 minSpan | [rangeslider.md](rangeslider.md) |
 | Rating | 实现与验证边界 | [rating.md](rating.md) |
 | Calendar / DatePicker | 月份键盘导航、日期限制与焦点 | [calendar.md](calendar.md) |
-| DateRangePicker | 真实日历、两击区间与高亮 | [daterangepicker.md](daterangepicker.md) |
+| DateRangePicker | 真实日历、区间预设、最大长度与高亮 | [daterangepicker.md](daterangepicker.md) |
 | TimePicker | 内联时/分/秒/AM-PM 滚轮与范围夹紧 | [timepicker.md](timepicker.md) |
 | WheelPicker | 五行滚轮、拖拽/滚轮/键盘与 disabled 跳过 | [wheelpicker.md](wheelpicker.md) |
 | List / SectionedList / ReorderableList | 单选、多选、区段/sticky、重排、虚拟化与行样式 | [list.md](list.md) |
 | SwipeList | 触摸滑动操作、Actions 按钮、上下文菜单与键盘选择 | [swipelist.md](swipelist.md) |
 | RefreshableList | 下拉刷新阈值、顶部 inset、Cmd+R 与 reducedMotion | [refresh.md](refresh.md) |
 | Drag & Drop | 类型化 payload、Portal 预览、目标高亮与取消 | [drag-and-drop.md](drag-and-drop.md) |
-| DataTable / DataTableModel | 实现与验证边界 | [data-table.md](data-table.md) |
-| Avatar / AvatarGroup | 实现与验证边界 | [avatar.md](avatar.md) |
-| Image / AsyncImage | 实现与验证边界 | [image.md](image.md) |
+| Timeline | 分组、折叠与时间比例缩放 | [timeline.md](timeline.md) |
+| DataTable / DataTableModel / TreeTable | 列重排、可变行高与层级投影 | [data-table.md](data-table.md) |
+| Avatar / AvatarGroup | 状态角标、成员弹层与图片会话 | [avatar.md](avatar.md) |
+| Image / AsyncImage | LRU/合并、动画/EXIF、渐进预览的平台边界 | [image.md](image.md) |
 | WebView | 宿主注入的原生网页视图、裁剪与生命周期；macOS WKWebView | [webview.md](webview.md) |
 | Tree / TreeRow | 文档已写 | [tree.md](tree.md) |
 | Panel | 文档已写 | [panel.md](panel.md) |
 | SplitView | 比例/最小尺寸、compact 单面板与交互 | [splitview.md](splitview.md) |
-| Workspace（Docking） | 布局模型/拖拽/内部拆分与缺口 | [workspace.md](workspace.md) |
+| Workspace（Docking） | 布局/拖拽、标签语义/RTL 与其余缺口 | [workspace.md](workspace.md) |
 | ScrollView | 文档已写 | [scrollview.md](scrollview.md) |
 | Tab | 文档已写 | [tab.md](tab.md) |
 | AppBar / NavigationBar | 自适应标题、返回、主操作与更多菜单 | [appbar.md](appbar.md) |
-| Sidebar / AdaptiveSidebar | 实现与验证边界 | [sidebar.md](sidebar.md) |
+| Sidebar / AdaptiveSidebar | 自适应壳层、行内 View 插槽与项级操作 | [sidebar.md](sidebar.md) |
 | NavigationDrawer | 模态导航、窗口拟合、关闭策略与手势 | [navigation-drawer.md](navigation-drawer.md) |
 | NavigationRail | 72/56pt 导航轨、完整名称与呈现保留 | [navigation-rail.md](navigation-rail.md) |
 | NavigationStack | 路径栈、页面保留、push/pop 过渡与深链 | [navigationstack.md](navigationstack.md) |
-| Box / Row / Column | 文档已写 | [layout.md](layout.md) |
+| Box / Row / Column / Grid / LazyGrid | 布局、Grid 跨行/列与 LazyGrid 二维窗口 | [layout.md](layout.md) |
 | Masonry | 1–2 列平衡瀑布流、最短列放置与 RTL | [masonry.md](masonry.md) |
 | ViewThatFits | 阈值、intrinsic 宽高拟合与分支状态保留 | [layout.md](layout.md#自定义测量与放置2026-10-12) |
 | ZStack / Overlay | 层叠、对齐、命中顺序与溢出边界 | [zstack.md](zstack.md) |

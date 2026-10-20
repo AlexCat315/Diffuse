@@ -31,7 +31,21 @@ Popover 与右键菜单的入场组合透明度、4pt 位移和 `0.96 → 1` 缩
 
 自动化覆盖多级键盘和实际焦点、分隔线/禁用项、100 行滚动、前缀查找、hover 取消、叶子点击、窗口翻转、锚点滚出、禁用和父层销毁。画廊 Menu 页展示四级菜单、内联菜单及 100 条目滚动菜单；ContextMenu 页展示嵌套右键命令。
 
-仍缺自定义富内容行、命令图标槽、链接语义，以及基于指针运动三角区域的更精细 submenu intent。当前短延迟是稳定切换基础，不声称与 GPUI 所有行为等价。
+## 富内容、图标与链接
+
+```swift
+.item(MenuItem(id: "docs", title: "Documentation",
+               content: MenuItemContent(icon: UIIcons.Action.externalLink,
+                                        richTitle: [RichTextRun("Read the "), RichTextRun("guide", traits: .bold)],
+                                        detail: "Opens in the browser",
+                                        link: "https://example.com/docs")) { open(docs) })
+```
+
+- **图标槽**：同一层任一行（含 `MenuSubmenu.icon`）带图标时，整层保留一条小图标列，标题左缘对齐。
+- **富内容**：`richTitle` 用 RichText 绘制，只作展示——不进入文本选区、不抢焦点，整行仍是唯一目标；run 上的 link 会被去掉。`title` 始终是辅助功能名称与前缀查找键，所以富内容不影响查找与朗读。`detail` 为第二行说明，读屏作为值。
+- **链接语义**：设置 `link` 的行以 link 角色暴露，帮助文本为目标地址，行尾显示外链图标；激活仍执行 action（由调用方打开目标）。
+- **子菜单指针意图**：菜单层记录指针轨迹，子菜单层回报自己的面板矩形。指针从当前行斜向移向已打开的子菜单、途经兄弟行时，若当前位置落在“上一采样点 → 子菜单近侧边”的三角区内，切换延迟由 180ms 延长到 450ms，避免斜移时子菜单被换掉；离开三角区仍按短延迟切换。
+- `MenuContentTests` 覆盖图标列对齐、富标题不抢焦点、link 角色与激活、前缀查找、三角区判定（含左翻）和子菜单图标。
 
 原生画廊已验证四层 Workspace → Settings → Appearance → Accent color 菜单，文字、选择列、快捷键、分隔线和箭头对齐；选择 Green 后所有浮层关闭且示例反馈更新。标题采用换行布局；尚未提供省略号或根据全部标题自动选择菜单宽度。
 

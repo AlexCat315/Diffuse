@@ -42,3 +42,21 @@ swift test --package-path GuavaUI/Examples --no-parallel
 - `GuavaUI/Sources/GuavaUICompose/Primitives/Data/Timeline.swift`：事件模型、轨道和语义。
 - `GuavaUI/Sources/GuavaUICompose/Primitives/Data/Timeline/HeadingLayout.swift`：同一标题与元信息节点的测量和重排。
 - `GuavaUI/Tests/GuavaUIComposeTests/Adaptive/TimelineTests.swift`：布局、状态和 AI 查询断言。
+
+## 分组、折叠与缩放
+
+```swift
+@State var zoom: Float = 1
+Timeline(groups: [
+    TimelineGroup("Today", events: todayEvents),
+    TimelineGroup("Yesterday", events: earlier) { $0.isCollapsible = true },
+]) {
+    $0.spacing = .proportional(pointsPerHour: 24, minimum: 0, maximum: 160)
+    $0.zoom = TimelineZoom($zoom)          // 提供后显示缩小 / 百分比 / 放大
+    $0.collapsedGroups = $collapsed        // 省略时为会话状态
+}
+```
+
+- 有标题的组带披露按钮：名称为组标题，值为“N events”，暴露展开态；折叠后只保留组头。不可折叠的组头是 heading。`Timeline(events:)` 仍是单个无标题组，`events` 为所有组事件的只读视图。
+- `TimelineEvent.date` 配合 `.proportional` 时，相邻两个带日期事件之间在主题间距之外再加 `小时数 × pointsPerHour`（夹紧到 minimum…maximum）再乘缩放倍数；缺少日期时保持统一间距。缩放倍数夹紧在 `range`（默认 0.25…8），按钮每次翻倍或减半。
+- `TimelineGroupTests` 覆盖间距计算、折叠语义与缩放按钮；Gallery `timeline` 页提供分组与缩放示例。

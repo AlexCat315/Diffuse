@@ -11,15 +11,15 @@
 
 | 家族 | 已有 | 缺失 |
 | --- | --- | --- |
-| 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、Masonry、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader/HeightClassReader/OrientationReader、VirtualStack/VirtualStack（闭包行高）、Workspace、Form/PropertyGrid | Grid/LazyGrid span、显式 intrinsic 轨道与 LazyGrid 二维窗口化 P2；VirtualStack 未知行高估测 P2 |
+| 布局与容器 | Box/Row/Column/Spacer/Divider、ZStack/Overlay、ScrollView/BoundedScrollView、Panel、SplitView（compact 单面板）、Grid（含命名字段列显隐）/LazyGrid、Masonry、SafeArea、ViewThatFits/LayoutThatFits/ContainerSizeReader/WidthClassReader/HeightClassReader/OrientationReader、VirtualStack（固定/闭包/估计行高）、Workspace、Form/PropertyGrid | 显式 intrinsic 轨道、LazyGrid 跨行 span P2（Grid 跨行/跨列、LazyGrid 跨列与二维窗口化、VirtualStack 未知行高估测已实现） |
 | 命令与选择 | Button/IconButton、ButtonGroup、SplitButton（主/备）、MenuButton、Toggle/Checkbox（含 mixed、label 槽）/RadioGroup、Slider（刻度/Page）、RangeSlider（双 thumb）、Rating、Stepper（流程）、ToolbarToggle、Toolbar 命令优先级与溢出 | 无通用缺失；FAB 按规范视觉基线不纳入 |
 | 文本与数值输入 | TextField（含 Text Editor / 代码编辑）、TextArea、SearchField、NumberField（步进/locale）、Vec3Field（locale/缩放）、Select/Combobox、ColorField、AssetRefField、JsonField、FieldLabel/Link/KeyCap | OTP/PIN P3、masked input P3 |
-| 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 时区选择入口 P2、DateRangePicker 区间预设与最大长度 P2 |
-| 集合与数据 | List（单选/多选按 binding 类型、虚拟化/键盘）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualStack（固定/可变行高）、Chart（line/area/分组或堆叠 bar/scatter/pie·donut、可切换图例、数据点选择）、Timeline、Tag | TreeTable P2、DataTable 高级能力 P2（见第 3 节）、ReorderableList 虚拟化 P2、Chart 轴标签/缩放 P3、Timeline 分组/折叠/缩放 P2 |
-| 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | Sidebar 行内 View 插槽 P2、垂直 Toolbar P2、Workspace 深化 P2（见第 3 节）、BottomNavigationBar P3（TabView 底部栏已可覆盖） |
-| 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | Menu 富内容行、图标槽、链接语义与 submenu 指针意图 P2 |
+| 日期时间 | Calendar、DatePicker、DateRangePicker、TimeField（文本 HH:MM）、WheelPicker（五行滚轮）、TimePicker（内联时/分/秒/AM-PM） | 时区选择入口 P2（DateRangePicker 区间预设与最大长度已实现） |
+| 集合与数据 | List（单选/多选按 binding 类型、虚拟化/键盘）、SectionedList（区段/sticky 标题）、ReorderableList（拖拽重排）、SwipeList（触摸滑动/操作按钮/上下文菜单）、Tree（多选/搜索/DnD/键盘/同步延迟子节点）、Table、DataTable（200K/冻结列/编辑）、VirtualStack（固定/可变行高）、Chart（line/area/分组或堆叠 bar/scatter/pie·donut、可切换图例、数据点选择）、Timeline、Tag | DataTable 其余高级能力（分组表头、分页、区间选择、CSV、表级撤销）按需、Chart 轴标签/缩放 P3（TreeTable、DataTable 列重排与可变行高、ReorderableList 虚拟化、Timeline 分组/折叠/缩放已实现） |
+| 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | Workspace 其余深化按需（见第 3 节）、BottomNavigationBar P3（TabView 底部栏已可覆盖）；Sidebar 行内 View 插槽、垂直 Toolbar 与 Workspace 标签条 a11y/RTL 已实现 |
+| 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | 按标题自动定宽或省略 P2（Menu 富内容行、图标槽、链接语义与 submenu 指针三角区意图已实现） |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Alert 窄宽操作堆叠、关闭与大字号、Badge 长文本已补齐，Banner 由 Alert 覆盖 |
-| 展示与媒体 | Text/Typography、RichText/Markdown（行内样式、链接、代码块、列表、表格、跨块选择复制）、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | Image 缓存淘汰/在途合并/GIF·WebP 动画/EXIF/渐进解码 P2、Avatar 状态角标与成员弹层 P2、非 macOS 彩色字形与 RTL 双向段落 P2、其他平台 WebView 后端、视频播放组件（应用层按需） |
+| 展示与媒体 | Text/Typography、RichText/Markdown（行内样式、链接、代码块、列表、表格、跨块选择复制）、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | Wasm RGBA 字形与 PNG 位图彩色字体、iOS/非 Apple 平台渐进解码、其他平台 WebView 后端、视频播放组件（应用层按需）；Image 缓存淘汰/在途合并/GIF·WebP 动画/EXIF/macOS 渐进解码、Avatar 状态角标与成员弹层、Linux/Windows COLR 彩色字形与 RTL 双向段落已实现 |
 | 拖放与交互 | AssetDropTarget、Tree DnD、Workspace 拖拽、PointerCapture、DragScope/Draggable/DropTarget | 通用 payload 协议已实现；`Draggable` 无自动滚动与键盘等价路径（集合重排用 ReorderableList，已具备二者） |
 
 ## 2. 缺失组件规范
@@ -82,14 +82,14 @@
 - 用途：日期区间（起点/终点）选择。
 - 实现：复用 Calendar 月视图/导航/可用日期；起点/终点 accent 填充、区间段 `stateLayerSelected`；触发器显示两端日期与 clear。`[已实现]`
 - 手机/平板：日期格沿用 Calendar 的 44pt 触摸下限；单月一屏，宽屏可配 `numberOfMonths=2`；弹层宽度由 Popover 夹紧。
-- 交互与验收：第一次点击设起点、第二次设终点，反向点击自动交换；Escape/外部点击关闭；键盘方向键、Home/End、PageUp/Down 复用 Calendar；a11y 触发器读完整区间。`DateRangePickerTests` 覆盖两击与交换；Gallery `dateRangePicker` 页提供真实日历与高亮。区间预设（今天/最近 7 天等）与最大长度尚未内置（P2），当前由调用方在弹层外提供并写回 binding。细节见 [DateRangePicker](daterangepicker.md)。
+- 交互与验收：第一次点击设起点、第二次设终点，反向点击自动交换；Escape/外部点击关闭；键盘方向键、Home/End、PageUp/Down 复用 Calendar；a11y 触发器读完整区间。`DateRangePickerTests` 覆盖两击与交换；Gallery `dateRangePicker` 页提供真实日历与高亮。`rules.presets`（今天、昨天、最近 N 天、本月、上月或自定义解析器）在日历上方成排显示，超长或含不可用端点的预设禁用；`rules.maximumDays` 按含两端的天数限制区间，选定起点后超出范围的日期禁用且不能完成区间。`DateRangeRulesTests` 覆盖预设解析、长度计数与真实点击。细节见 [DateRangePicker](daterangepicker.md)。
 
 ### 2.9 列表能力包（P1）
 
 按同一行契约（触摸 ≥ 44、单行截断、完整值可达）补齐：
 
 - **通用行标题与尾槽**：`ListRow` 为 List/SectionedList 提供可组合 leading/title/trailing；标题单行省略，徽标/状态保持自然宽度，极窄时横滚，完整值保留语义与 tooltip。条件空槽、RTL、字号切换与窗口化已覆盖，Gallery 通过选中状态文本提供无 hover 全文入口。`[已实现]`，见 [ListRow](list.md#listrow标题与前后槽位)。
-- **多选与区间选择**：Checkbox 列或 Cmd/Shift 点选；Shift 区间以锚点延伸；辅助功能 selected 态。`List(selection: Set)` 已实现 Cmd/Ctrl 切换、Shift 区间、Shift+Arrow、Cmd/Ctrl+A；Checkbox 列仍由调用方组合。`[已实现]`，见 [List](list.md#multiselectlist)。
+- **多选与区间选择**：Checkbox 列或 Cmd/Shift 点选；Shift 区间以锚点延伸；辅助功能 selected 态。`List(selection: Set)` 已实现 Cmd/Ctrl 切换、Shift 区间、Shift+Arrow、Cmd/Ctrl+A；Checkbox 列仍由调用方组合。`[已实现]`，见 [List](list.md#多选)。
 - **区段（sections）**：区段头/尾、可选 sticky；DataTable 之外的表状列表先支持平面区段。`SectionedList` 已实现平面 header/footer、sticky 固定标题（下一标题上推）与跨区段键盘选择；`stickyHeaders` 默认关闭，固定副本不进入焦点/命中/语义。`[已实现]`，见 [List](list.md#sectionedlist)。
 - **重排（reorder）**：`ReorderableList` 已实现 44pt 拖拽把手、2pt 放置线、Escape 取消、Up/Down 与辅助功能 increment/decrement；行身份与焦点跟随原行；拖到视口边缘自动滚动，放置线随内容移动（见 [List](list.md#reorderablelist)）。当前为非虚拟列表。`[已实现]`
 - **滑动操作（swipe actions）**：`SwipeList` 仅在触摸面启用向 leading 滑动（LTR 左滑 / RTL 右滑），露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；指针、键盘与读屏通过行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。全量挂载。`[已实现]`
@@ -112,11 +112,11 @@
 
 | 组件 | 级别 | 外观 | 手机/平板 | 交互与验收 | 参考 |
 | --- | --- | --- | --- | --- | --- |
-| TreeTable | P2 | 树缩进在首列 + 可调列 | 触摸行 ≥ 44；窄宽隐藏低优先列 | 键盘树导航 + 列头排序；展开态 a11y | SwiftUI `Table` + OutlineGroup；Fluent TreeGrid |
+| TreeTable | 已实现 | 树缩进在首列 + 可调列（复用 DataTable 列宽、优先级、重排与虚拟化） | 触摸行 ≥ 44；窄宽隐藏低优先列 | 首列聚焦时 Right 展开/进入子项、Left 折叠/回到父项；披露按钮暴露展开态；不提供排序与单元格编辑（兄弟项保持原序） | SwiftUI `Table` + OutlineGroup；Fluent TreeGrid |
 | OTP / PIN | P3 | N 个方格、自动前进 | 数字键盘、粘贴分发 | Backspace 退格、粘贴全填、a11y 整值读写 | 移动生态惯例 |
-| Menu 富内容 | P2 | 图标槽、任意行内容（可承载 RichText）、链接语义 | 触摸行 ≥ 44 | 与现有键盘导航共用；富内容不破坏前缀查找；submenu 指针三角区意图 | Radix DropdownMenu；Fluent Menu |
+| Menu 富内容 | 已实现 | `MenuItemContent`：图标槽（同级共享一条图标列）、RichText 标题（仅展示，不抢焦点/选区）、副标题与链接语义 | 触摸行 ≥ 44 | 与现有键盘导航共用；前缀查找仍按纯文本标题；链接行为 link 角色并带外链图标；指针朝已开子菜单移动时三角区内延长切换延迟 | Radix DropdownMenu；Fluent Menu |
 
-**RichText / Markdown 已实现（P2）**：`RichText` 把多样式 run（粗体、斜体、行内代码、删除线、链接）排成一个段落，按空格、表意文字（含禁则）与 URL 的 `/`、`-` 断行；`MarkdownView` 用 swift-markdown（`private import Markdown`，AST 不进入公开 API）解析 CommonMark + GFM，原生渲染标题、引用、嵌套/有序/任务列表、可复制且横向滚动的代码块、按内容定列宽并可横向滚动的表格与分隔线。手机端正文随容器换行，代码块与宽表格横向滚动；链接为可 Tab 聚焦的 link 元素，Return 与辅助功能激活；文档共享选区，支持拖动跨块、双击/三击、⌘/Ctrl+C/A、右键 Copy / Select All 与触摸长按。图片显示为链接的替代文字，HTML 原样显示为代码；行级 RTL 双向排版沿用 Typography 的未完成项。`RichTextTests`、`RichTextLinkTests`、`TextSelectionTests`、`MarkdownParsingTests`、`MarkdownRenderingTests` 与 Gallery `richText` / `markdown` 页及三预览覆盖，DevTools 验收记录见 [RichText](richtext.md) 与 [Markdown](markdown.md)。
+**RichText / Markdown 已实现（P2）**：`RichText` 把多样式 run（粗体、斜体、行内代码、删除线、链接）排成一个段落，按空格、表意文字（含禁则）与 URL 的 `/`、`-` 断行；`MarkdownView` 用 swift-markdown（`private import Markdown`，AST 不进入公开 API）解析 CommonMark + GFM，原生渲染标题、引用、嵌套/有序/任务列表、可复制且横向滚动的代码块、按内容定列宽并可横向滚动的表格与分隔线。手机端正文随容器换行，代码块与宽表格横向滚动；链接为可 Tab 聚焦的 link 元素，Return 与辅助功能激活；文档共享选区，支持拖动跨块、双击/三击、⌘/Ctrl+C/A、右键 Copy / Select All 与触摸长按。图片显示为链接的替代文字，HTML 原样显示为代码；每个段落按首个强方向字符决定方向，RTL 段落行尾对齐并按部分 UAX #9 行级规则重排（见 [Typography](typography.md#双向段落)）。`RichTextTests`、`RichTextLinkTests`、`TextSelectionTests`、`MarkdownParsingTests`、`MarkdownRenderingTests` 与 Gallery `richText` / `markdown` 页及三预览覆盖，DevTools 验收记录见 [RichText](richtext.md) 与 [Markdown](markdown.md)。
 
 **Popconfirm 已实现（P2）**：复用 Popover 的卡片、箭头与十二向定位；指定方位保持不变，空间不足时限制该侧视口并滚动。触发器为 secondary（危险操作使用红色文字），只有确认按钮使用危险色实底；Cancel/Confirm 为真实 Button，不默认显示重复 tooltip。Escape/外部点击/再次点击关闭，确认回调仅执行一次。`PopconfirmTests` 覆盖布局/输入/主题/RTL 矩阵；Gallery 提供紧凑定位面板与窄屏单锚点预览。细节见 [Popconfirm](popconfirm.md) 与 [Popover](popover.md)。
 
@@ -139,26 +139,26 @@
 | Select / Combobox | 触发器宽度下限与窗口夹紧已实现；Combobox 远程结果契约（`ComboboxSearch`：防抖、取消、加载/失败/重试/最小长度状态）已实现，见 [Combobox](combobox.md) | 完成 |
 | DatePicker / TimeField | Calendar 配置可指定 timeZone，时区选择入口仍缺；TimeOfDay 是不含时区的墙钟值，转换由调用方负责；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动、触摸弹层预算，以及日/周/月/年粒度与标题上钻的月份/年份网格已完成，见 [日历导航](calendar.md) | 完成 |
-| List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动已实现（见 [List](list.md#reorderablelist)） | 已完成；ReorderableList 虚拟化（基于 VirtualStack）P2 |
+| List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动已实现（见 [List](list.md#reorderablelist)） | 已完成；ReorderableList 已按视口窗口化，拖拽/键盘目标保留挂载 |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
-| Table / DataTable | 仍缺：列拖拽重排、分组表头、分页/远端加载、列/矩形单元格选择、可变行高、CSV 导出、表级撤销。已实现：200K 行后台排序、冻结列、编辑、列优先级、显隐菜单与文本缩放行高，见 [数据表](data-table.md) | P2 |
+| Table / DataTable | 仍缺：分组表头、分页/远端加载、列/矩形单元格选择、CSV 导出、表级撤销（按需）。已实现：200K 行后台排序、冻结列、编辑、列优先级、显隐菜单、文本缩放行高、列拖拽/键盘重排（`columnOrder`）、按记录可变行高（`rowHeight`）与 TreeTable，见 [数据表](data-table.md) | 按需 |
 | Chart | pie/donut、area、scatter、分组与堆叠 bar、图例切换与数据点选择（指针/触摸/键盘/辅助功能）已在单一 `Chart` 中实现，见 [Chart](chart.md)；坐标轴刻度标签、时间轴、缩放平移与动画过渡仍缺 | 轴标签/时间轴/缩放 P3 |
-| Timeline | 仍缺分组/折叠与时间轴缩放；容器窄宽重排、完整时间语义与 200% 字号已完成，见 [Timeline](timeline.md) | P2 |
-| Menu / ContextMenu | 富内容（见 2.12）、图标槽、链接语义、submenu 指针三角区意图、按标题自动定宽或省略；触摸展开验收见规范 5-10，触摸行高与水平翻转已有（[Menu](menu.md)） | P2 |
+| Timeline | 分组/折叠（`TimelineGroup`）、按时间比例间距（`TimelineSpacing.proportional`）与缩放（`TimelineZoom`）、容器窄宽重排、完整时间语义与 200% 字号已完成，见 [Timeline](timeline.md) | 已完成 |
+| Menu / ContextMenu | 富内容、图标槽、链接语义与 submenu 指针三角区意图已实现（见 2.12）；仍缺按标题自动定宽或省略；触摸展开验收见规范 5-10，触摸行高与水平翻转已有（[Menu](menu.md)） | 自动定宽 P2 |
 | CommandPalette | 结果列表已虚拟化（视口 + overscan）；compact 几何、触摸行高、模糊匹配、分组、session 级最近使用与自定义 footer 已完成 | 已完成 |
 | Accordion / DisclosureGroup | 字符串标题单行省略、全文 tooltip/语义、触摸与缩放行高、键盘展开和退出生命周期已完成，见 [Disclosure](disclosure.md) | 已完成 |
 | Sheet / Modal / Dialog | BottomSheet 拖拽与自适应（见 2.11）、居中模态 compact 宽度、Dialog 操作堆叠与 AlertDialog 字号高度已完成，见 [Dialog](dialog.md) | 已完成 |
-| Sidebar | 嵌套导航、项级操作/上下文菜单、展开会话、键盘/辅助功能与可调整栏宽已实现；行内前后任意 View 插槽未实现，见 [Sidebar](sidebar.md#项级操作) | P2 |
-| Toolbar | 仍缺垂直工具栏；命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | P2 |
-| Workspace | 标签条与区域的完整 tab/区域语义、RTL、读屏桥接；N 面板联动、折叠阈值/吸附、pin 专属视觉与关闭其他/右侧可见操作、浮动仅为应用内层、文档不可信解码校验与可版本化格式、chrome/图标/高度硬编码清理、大文件按 shell/tabs/drag/floating 拆分（见 [workspace.md](workspace.md#仍需完善)） | 标签条 a11y/RTL P2（先做）；其余 P2 按需 |
+| Sidebar | 嵌套导航、项级操作/上下文菜单、展开会话、键盘/辅助功能、可调整栏宽与行内 View 插槽（`slots.leading`/`trailing` 装饰、`accessory` 可交互）已实现，见 [Sidebar](sidebar.md#项级操作) | 已完成 |
+| Toolbar | 垂直工具栏（`axis = .vertical`：Up/Down 导航、侧边分隔线、按高度溢出并在侧边打开菜单）、命令优先级、更多菜单、图标名称与焦点交接已实现，见 [toolbar.md](toolbar.md) | 已完成 |
+| Workspace | 标签条 tabList/tab/tabPanel 语义、RTL 方向键与 macOS 容器角色映射已实现；仍需平台读屏取样、系统尺寸偏好、N 面板联动、折叠阈值/吸附、pin 专属视觉与关闭其他/右侧可见操作、浮动仅为应用内层、文档不可信解码校验与可版本化格式、chrome/图标/高度硬编码清理、大文件按 shell/tabs/drag/floating 拆分（见 [workspace.md](workspace.md#仍需完善)） | 标签条 a11y/RTL 已完成（tabList/tab/tabPanel 语义、位置与固定状态、RTL 方向键镜像）；其余按需 |
 | ScrollView | 触摸拖动/惯性、键盘滚动、滚动条 a11y、横向 gutter、边界渐变、带时长程序滚动（`ScrollRequest`）、`.scrollAnchor()` 锚定、残余增量交接（规范 5-9 + [scrollview.md](scrollview.md)） | 已实现 |
 | Form / PropertyGrid | 自适应标签、共享值槽阈值、列数重排、标签关联与 Form 校验摘要已实现，见 [form.md](form.md)；PropertyGrid 跨字段业务校验由应用管理 | 已实现 |
 | Carousel | 自动轮播（悬停/聚焦暂停、播放/暂停、减少动态效果）、圆点/计数指示器与进度、全宽视口已实现，见 [Carousel](carousel.md) | 完成 |
 | StatusBar / Panel | 状态格单行截断、完整 a11y 值、多个前后状态格的有限几何与 `DefaultPanelStyle` 标题截断已实现，见 [Panel](panel.md)；等宽策略仍由调用方声明 | 已完成 |
-| TextField（Text Editor） | 平面编辑样式、稳定行号留白、中性当前行及共用 resize grip 已完善；断点/行级图标/折叠、44pt 触摸菜单、文档会话和 AST/LSP 集成已补齐，见 [gutter](editor-gutter.md) 与 [视觉验收](textfield.md#编辑器视觉与交互验收)。脚本调试运行时后端由应用提供；snippet tab-stop、超长单行的水平字形分段布局仍缺（与 Typography 同一项，在此跟踪） | P2 |
-| Image / AsyncImage | CPU 缓存自动淘汰、同键在途合并、GIF/WebP 动画、EXIF 方向、渐进解码、无扩展名远程 SVG 按 MIME 识别（[image.md](image.md) 边界） | P2 |
-| Avatar | 状态角标、可交互成员弹层（[avatar.md](avatar.md) 边界） | P2 |
-| Icon / Typography | 彩色字形仅 macOS（Linux/Windows COLR/bitmap、Wasm RGBA 未接入）；RTL 双向段落完整语义（RichText/Markdown 行级 RTL 依赖此项）；字体图集自动淘汰；超长单行分段见 TextField 行（[typography.md](typography.md#边界)） | P2 |
+| TextField（Text Editor） | 平面编辑样式、稳定行号留白、中性当前行及共用 resize grip 已完善；断点/行级图标/折叠、44pt 触摸菜单、文档会话和 AST/LSP 集成已补齐，见 [gutter](editor-gutter.md) 与 [视觉验收](textfield.md#编辑器视觉与交互验收)。脚本调试运行时后端由应用提供；snippet tab-stop（LSP 片段语法、Tab/Shift+Tab 访问、编辑随 tab stop 平移）与超长单行分段塑形/水平裁剪已补齐 | 已完成 |
+| Image / AsyncImage | CPU 缓存 LRU 字节/数量淘汰、同键在途合并、GIF/WebP 动画播放（减少动态效果停在首帧）、JPEG EXIF 方向、macOS 渐进预览已实现；仍缺：非 macOS 渐进解码、无扩展名远程 SVG 按 MIME 识别（[image.md](image.md) 边界） | P2 |
+| Avatar | 状态角标（四态独立形状、读屏值、RTL 镜像）与可交互成员弹层（`AvatarMemberList`）已实现，见 [avatar.md](avatar.md) | 已完成 |
+| Icon / Typography | Linux/Windows 经 FreeType 渲染 COLRv0 与未压缩 BGRA 位图彩色字形；Text/RichText/Markdown 按段落实现部分 UAX #9 显示规则的双向排版（行级 RTL 对齐、显式方向塑形、L1/L2 视觉重排）已实现；仍缺：显式嵌入/隔离方向控制、PNG 压缩位图字体（需带 libpng 的 FreeType）、Wasm RGBA 字形、RTL 编辑语义（光标/选区）、字体图集自动淘汰（[typography.md](typography.md#边界)） | P2 |
 | Link | 访问态、外链确认（按需） | P3 |
 | 拖放 | 通用 payload 协议已实现，见 [Drag & Drop](drag-and-drop.md)；列表重排见 ReorderableList | 已实现 |
 | Toast / Notification | 操作、位置、主题进出动画、减少动画与退出生命周期已完成，见 [Toast](toast.md) | 已完成 |
@@ -167,19 +167,28 @@
 
 **P0（手机/平板可用性阻塞）**：本清单的组件级项目已实现；宿主 IME 联动已改为由宿主增加 `safeArea.bottom`，`SafeArea` 与消费该 inset 的容器/控件在同一帧重排，`CommandPalette` 面板高度与结果区随 inset 收缩，`TextField` 获得焦点时宿主滚动显露光标且组件内 caret 跟随滚动；真实设备/读屏验收仍按规范第 3、4 节跟踪。BottomSheet 拖拽与自适应已实现，见 [BottomSheet](bottom-sheet.md)。Grid / DataTable / Table 列优先级、显隐菜单与 minimum 横向滚动兜底、AppBar、Toolbar 命令溢出、Form 标签重排、SplitView 单面板、NavigationDrawer 覆盖层与 AdaptiveSidebar 统一壳层已实现，验收与边界见 [layout.md](layout.md#grid-字段列)、[data-table.md](data-table.md)、[appbar.md](appbar.md)、[toolbar.md](toolbar.md)、[form.md](form.md)、[splitview.md](splitview.md)、[navigation-drawer.md](navigation-drawer.md)。
 
-**P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#multiselectlist) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
+**P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#多选) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
-**P2（长尾/体验）**：Avatar 状态角标与成员弹层、DateRangePicker 区间预设与最大长度、时区选择入口、Sidebar 行内 View 插槽、垂直 Toolbar、Workspace 标签条 a11y/RTL 与其余深化、Menu 富内容/图标槽/链接语义、非 macOS 彩色字形与 RTL 双向段落、Grid/LazyGrid span 与二维窗口化、VirtualStack 未知行高估测、ReorderableList 虚拟化、DataTable 高级能力、TreeTable、Timeline 分组/折叠/缩放、图片缓存与解码能力、文本编辑器 snippet tab-stop 与超长单行分段。
+**P2（长尾/体验，保留未完成项）**：时区选择入口、Workspace 其余深化、DataTable 其余能力（分组表头、分页/远端、区间选择、CSV、表级撤销）、Grid 显式 intrinsic 轨道与 LazyGrid 跨行 span、Menu 按标题自动定宽/省略、PNG 压缩位图彩色字体与 Wasm RGBA、iOS/非 Apple 渐进解码、完整双向方向控制/编辑语义、字体图集自动淘汰。Workspace 与 DataTable 的后续功能按产品需求启动。
 
 **P3（按需）**：Chart 轴标签/时间轴/缩放、OTP/PIN、masked input、BottomNavigationBar、Link 访问态/外链确认。
 
-**P2/P3 建议顺序**（2026-10-20 按代码复核；RichText/Markdown 与滚动条 a11y 已完成，不再排期）：
+### 4.1 本轮批次记录（2026-10-20）
 
-1. **小而独立**：Avatar 状态角标 + 成员弹层 → DateRangePicker 区间预设与最大长度 → Sidebar 行内 View 插槽 → 垂直 Toolbar（复用 Toolbar 命令树）→ Workspace 标签条 a11y/RTL。
-2. **共享底座**：Menu 富内容/图标槽/链接语义（行内容可直接复用 RichText；Select/Combobox/ContextMenu/CommandPalette 共用 Menu 原语）→ RTL 双向段落（RichText/Markdown 行级 RTL、Workspace 标签标题共同依赖）→ 非 macOS 彩色字形（平台渲染，独立推进）。
-3. **数据密度**：Grid/LazyGrid span 与二维窗口化（独立）；VirtualStack 未知行高估测 → ReorderableList 虚拟化；DataTable 中 TreeTable 需要的列重排与可变行高 → TreeTable → DataTable 其余能力（分组表头、分页/远端、区间选择、CSV、表级撤销）按需；Timeline 分组/折叠/缩放。
-4. **媒体与编辑器长尾**：Image 缓存淘汰与在途合并 → GIF/WebP/EXIF/渐进解码；编辑器 snippet tab-stop → 超长单行水平分段（同时关闭 Typography 对应边界）。
-5. **按需**：时区选择入口、Chart 轴标签/缩放、P3 输入与导航项、Workspace 其余深化（N 面板联动、折叠吸附、pin 视觉、浮动层、解码校验、chrome 清理、文件拆分）在产品需要浮动面板时再做。
+下表记录本轮代码与自动化覆盖；“实现”不等同于所有平台已完成原生视觉/读屏验收。既有组件文档中的历史截图记录也不替代本轮新增行为的验收。
+
+| 批次 | 实现与文档 | 新增/更新测试 | 剩余边界 |
+| --- | --- | --- | --- |
+| 1：小而独立 | [Avatar 状态/成员弹层](avatar.md#状态角标与成员列表)、[日期预设/最大长度](daterangepicker.md)、[Sidebar 行内槽](sidebar.md)、[垂直 Toolbar](toolbar.md#垂直工具栏)、[Workspace 标签语义/RTL](workspace.md) | AvatarPresenceTests、DateRangeRulesTests、SidebarSlotTests、VerticalToolbarTests、WorkspaceViewTests | Workspace 其余深化与实际读屏取样仍保留 |
+| 2：共享底座 | [Menu 富内容/图标/链接/指针意图](menu.md#富内容图标与链接)、[RichText/Markdown 行级双向显示](typography.md#双向段落)、[Linux/Windows FreeType 彩色来源](typography.md#linux-与-windows-彩色字形) | MenuContentTests、BidiTests、ColorGlyphResampleTests | 显式嵌入/隔离控制、RTL 光标/选区、PNG 位图字体与 Wasm RGBA；Linux/Windows 字体原生验证尚待补齐 |
+| 3：数据密度 | [Grid span/LazyGrid 二维窗口](layout.md#grid-跨列跨行)、[VirtualStack 估测/ReorderableList 窗口化](list.md)、[DataTable 列重排/可变行高/TreeTable](data-table.md)、[Timeline 分组/折叠/缩放](timeline.md#分组折叠与缩放) | GridSpanTests、VirtualizationEstimateTests、DataTableLayoutTests、TimelineGroupTests | LazyGrid 仅跨列；TreeTable 保持兄弟原序，不提供排序/编辑；ReorderableList 仍为固定行高 |
+| 4：媒体与编辑器 | [图片 LRU/合并/GIF/WebP/EXIF/macOS 渐进预览](image.md)、[snippet tab-stop/超长单行分段](textfield.md) | ImagePipelineTests、AsyncImageTests、SnippetTests | 渐进预览仅 macOS；WebP 动画合成/渐进预览需独立像素验收；snippet 同号占位无镜像同步；超长行仍需首次塑形整行各段 |
+
+### 4.2 后续按需队列
+
+1. **产品入口**：时区选择器；Chart 轴标签/时间轴/缩放（P3）；OTP/PIN、masked input、BottomNavigationBar、Link 访问态/外链确认（P3）。
+2. **数据与工作区**：按调用方需求选择 DataTable 分组表头/分页/区间选择/CSV/撤销；Workspace 的 N 面板联动、折叠吸附、pin 视觉、浮动层、解码校验、chrome 清理与文件拆分。
+3. **现有实现深化**：按上表保留跨平台渲染、完整双向语义、LazyGrid 跨行、intrinsic 轨道与 Menu 自动宽度等缺口；不因本轮主体代码合入而关闭这些边界。
 
 FAB 不作为待补组件：按[视觉基线](adaptive-spec.md#2-视觉与密度基线)，主操作使用 Button/AppBar/Toolbar。P2/P3 表仍是未完成功能清单，不能由 P0/P1 的完成推断全部组件已完成。
 

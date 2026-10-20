@@ -96,6 +96,23 @@ SidebarItem("audit", "Audit log") {
 
 `presentation` 默认 `.expanded`，也可使用 `.rail(showsLabels: true/false)` 收为 72/56pt 导航轨，同一组目的地按钮、选择、焦点及头尾槽位状态保留；标签和徽标在图标模式下保留完整 tooltip 与辅助功能信息。呈现与内容几何变化后会显露选中项，普通滚动不被持续拉回。独立 Rail API 与边界见 [NavigationRail](navigation-rail.md)。
 
+## 行内插槽
+
+`SidebarItem.slots` 为展开形态的行提供三个位置，Rail 形态只保留图标：
+
+```swift
+SidebarItem("layer", "Background") {
+    $0.slots.leading = AnyView(ColorDot(.accent))     // 替换图标，占用同一条图标列
+    $0.slots.trailing = AnyView(Text("12"))           // 徽标之后，属于行的命中区
+    $0.slots.accessory = AnyView(Button(icon: .resource(eye)) { toggle() })
+    $0.slots.accessoryWidth = 36                      // 为配件预留宽度，标题不会压到下面
+}
+```
+
+- `leading`、`trailing` 位于目的地按钮内部，是装饰：读屏隐藏，行名称仍是标题。同一 section 只要有一个 leading 插槽就打开共享图标列，其余行对齐。
+- `accessory` 位于目的地按钮之外、操作菜单之前，可以放真实控件（可见性开关、固定按钮），拥有独立焦点与点击，不会改变选择。标题右侧内边距 = 操作菜单宽度 + `accessoryWidth`（0–240，默认 44）。
+- `SidebarSlotTests` 覆盖插槽位置、图标列对齐、读屏名称与配件独立点击；Gallery `sidebar` 页的 “Recent activity” 行演示三个插槽。
+
 ## 自适应壳层
 
 `AdaptiveSidebar` 按**容器实际宽度**呈现同一份导航与页面。宿主提供有界宽高，安全区由宿主处理。
@@ -141,7 +158,7 @@ AdaptiveSidebar("Workspace", isPresented: $navigationOpen, selection: $selection
 - 拖拽捕获指针，离开分隔柄仍跟随；Escape 恢复本次拖拽起始宽度。Left/Right 移动 16pt，Shift 移动 32pt，Home/End 到当前可用范围两端。RTL 的方向键和拖动遵循物理方向，增减辅助功能动作仍表示逻辑栏宽增减。
 - slider 语义提供完整名称、当前点数、说明，以及 increment/decrement/setValue。切到 Rail 或抽屉时不保留隐藏分隔柄的输入或捕获，焦点交给选中目的地或打开按钮；禁用交互、形态/输入变化和卸载都会结束捕获。
 
-`SidebarResizeTests` 覆盖容器三档与阈值往返、100%/200%、明暗主题、三种输入、RTL、草稿/焦点/滚动/节点保留、拖拽/取消/键盘/辅助功能、约束与非法请求及真实 AI 查询。`SidebarHierarchyTests` 8/8 覆盖嵌套展开/收起、项级 ellipsis/右键菜单与 390 touch 的 44pt 触发器、可见项遍历、程序化选择展开祖先、数据删除/禁用回退、本地展开 + Rail/RTL、AdaptiveSidebar 390/720/1280 × 100%/200% × 主题/输入矩阵，以及真实 AI `query_ui_nodes` 对折叠子项的隐藏。Gallery 主壳层已采用；Sidebar 页另有独立预览、宽度重置按钮与 “Nested navigation” 示例（Audit log 带 Archive/Duplicate）。项级操作/上下文菜单已实现；行内可自定义的前后任意 View 插槽仍未实现。
+`SidebarResizeTests` 覆盖容器三档与阈值往返、100%/200%、明暗主题、三种输入、RTL、草稿/焦点/滚动/节点保留、拖拽/取消/键盘/辅助功能、约束与非法请求及真实 AI 查询。`SidebarHierarchyTests` 8/8 覆盖嵌套展开/收起、项级 ellipsis/右键菜单与 390 touch 的 44pt 触发器、可见项遍历、程序化选择展开祖先、数据删除/禁用回退、本地展开 + Rail/RTL、AdaptiveSidebar 390/720/1280 × 100%/200% × 主题/输入矩阵，以及真实 AI `query_ui_nodes` 对折叠子项的隐藏。Gallery 主壳层已采用；Sidebar 页另有独立预览、宽度重置按钮与 “Nested navigation” 示例（Audit log 带 Archive/Duplicate）。项级操作/上下文菜单与行内 View 插槽均已实现（见下节）。
 
 本轮 macOS DevTools 验收通过自身 AI `query_ui_nodes`、输入桥和 Metal 渲染捕获完成：1280pt 主壳层拖拽 96pt 后从 240 变为 336pt，Right 后语义为 352pt，Home/End 分别到 180/480pt；Left 后 464pt，主内容从 471pt 开始。720/390pt 的可见调宽 slider 查询均为零。三档窗口的明暗主题、100%/200% 字体取样中，布局诊断均为零；200% 的嵌入式预览保持指定的 220pt 高度，目的地与后续内容不重叠。跨形态节点、草稿、焦点和滚动保留由同一实例的测试矩阵验证，三档原生窗口分别启动取样，不作为跨窗口节点保留证据。
 

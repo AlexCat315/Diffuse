@@ -42,8 +42,10 @@ DateRangePicker(selection: $range) {
 | `presentation.isEnabled` | `true` | 禁用后不打开 |
 | `presentation.width` | `260` | 触发器宽度 |
 | `calendar` | `CalendarOptions()` | 日历/区域/可用日期/月份数 |
+| `rules.presets` | `[]` | 快捷区间（今天、最近 N 天、本月…） |
+| `rules.maximumDays` | `nil` | 含两端的最长天数 |
 
-`DateRangeCalendar` 也可单独使用，参数为 `selection` 与 `CalendarOptions`。
+`DateRangeCalendar` 也可单独使用，参数为 `selection`、`rules` 与 `CalendarOptions`。
 
 ## Sizing
 
@@ -80,7 +82,8 @@ DateRangePicker(selection: $range) {
 - **键盘**：方向键、Home/End、PageUp/PageDown 复用 Calendar 导航；Enter 激活当前焦点日期，走同一 `choose` 路径。
 - **辅助功能**：触发器 label + `"start – end"` value + expanded 状态；日期格 role=button、完整日期 label、端点 selected；区间内日期不单独宣称 selected。
 - **焦点**：弹层内 Calendar 保留一个 Tab 停靠；关闭后 Popover 还原触发器焦点。
-- **限制**：没有内置“快捷预设”（今天/最近 7 天）；需要时由调用方在弹层外提供按钮并写回 binding。没有区间最大长度限制；需要时在 `onChange` 侧夹紧。
+- **预设**：`rules.presets` 在月份上方显示一排切换按钮；内置 `.today()`、`.yesterday()`、`.lastDays(n)`、`.thisMonth()`、`.lastMonth()`，也可用 `DateRangePreset(id:title:resolve:)` 自定义。当前区间等于某预设时该按钮为选中态；超出最大长度或端点不可用的预设禁用。
+- **最大长度**：`rules.maximumDays` 按含两端的天数计算。选定起点后，距离超出上限的日期禁用，点击也不会完成区间；外部写入 binding 的区间不被改写。
 
 ## Authoring rules
 
@@ -95,6 +98,7 @@ DateRangePicker(selection: $range) {
 单元测试（`GuavaUI/Tests/GuavaUIComposeTests/DateRangePickerTests.swift`）：
 
 - 两次点击选择 10–15；再点击 20 后点击 12，自动交换为 12–20。
+- `DateRangeRulesTests`：预设解析、含两端计数与校验；起点后禁用超长日期、预设按钮写回选择与选中态。
 
 Gallery `dateRangePicker` 页提供真实日历、端点/区间高亮、clear 与状态文本。
 

@@ -32,10 +32,22 @@ macOS 上由 `FontProvider` 识别 FreeType color face，交给 `NativeColorGlyp
 
 ## 示例与验证
 
-画廊 `Theme / Typography` 展示语义层级、英文字距/连字样例、中文、带重音姓名和彩色 emoji，以及红色文字/半透明示例；上半部分可修改局部主题并编辑/保存。`TextField` 有可编辑的 `A👩🏽‍💻中🙂B` 和实时 grapheme/字节计数；`Avatar` 保留 `👩🏽‍💻 coder`。此前 macOS Retina 已在明暗主题实际检查 14/24/40 点混排的方向、颜色、基线和显示，输入框实际验证删除一次、完整撤销、按字符选区替换及再撤销；这份历史原生检查记录见 [color-glyph-native.json](../guava-ui/evidence/color-glyph-native.json)，不代表所有新页面的完整回归。
+画廊 `Theme / Typography` 展示语义层级、英文字距/连字样例、中文、带重音姓名和彩色 emoji，以及红色文字/半透明示例；上半部分可修改局部主题并编辑/保存。`TextField` 有可编辑的 `A👩🏽‍💻中🙂B` 和实时 grapheme/字节计数；`Avatar` 保留 `👩🏽‍💻 coder`。此前 macOS Retina 已在明暗主题实际检查 14/24/40 点混排的方向、颜色、基线和显示，输入框实际验证删除一次、完整撤销、按字符选区替换及再撤销。这些历史取样不代表本轮新增双向排版与非 macOS 彩色字体的原生回归。
 
 `ColorGlyphTests` 使用真实系统字体验证上述五种 emoji、metrics/raster 分离、全局 UTF-8 cluster、alpha/RGBA batch、缓存/reset 和 1×/2× 稳定 advance。`ColorGlyphAtlasTests` 使用独立数据验证 RGBA 行/间距/脏区域、非法数据、图集耗尽/reset。`InGameDrawListSourceTests` 与 `ScriptCanvasTests` 验证双图集和跳帧传输；`TextFieldNavigationTests` 验证实际布局下的 emoji 光标/删除/撤销。
 
+## Linux 与 Windows 彩色字形
+
+非 Apple 平台的 `FontProvider` 发现带 color 标志的字体时，创建 `FreeTypeColorGlyphFace` 作为同一个 `ColorGlyphSource`：COLRv0 分层字形由 FreeType（`FT_LOAD_COLOR`）合成为 BGRA，未压缩的 BGRA 位图 strike 选取不小于目标的最近尺寸并按面积加权缩放；预乘像素转为直通 alpha 后进入 RGBA 平面。位图 strike 的 HarfBuzz advance 以 strike 像素为单位，因此彩色字体的逻辑 advance 统一取自颜色源。Windows 的 Segoe UI Emoji（COLR）已在回退链中；Linux 回退链加入 Twemoji（COLRv0）。随项目分发的 FreeType 2.14.3 未启用 libpng，PNG 压缩的 CBDT/sbix（如 Noto Color Emoji 的 CBDT 版）仍无位图。`ColorGlyphResampleTests` 覆盖重采样与单色字体拒绝。
+
+## 双向段落
+
+`BidiParagraphs`（GuavaUICore，纯 Swift）实现 UAX #9 的部分段落与行级规则：按硬换行分段、以首个强方向字符定基准方向（P2/P3），解析 W1–W7、N1–N2、I1–I2，并在行级应用 L1（行尾空白回到基准）与 L2（从最高层到最低奇数层反转）。显式嵌入/隔离控制按边界中性处理，LRM/RLM/ALM 保留强方向；这不是完整 UAX #9 一致性实现。
+
+- **塑形**：文本含 RTL 字符时，`TextFontResolver` 先按方向层切分，再对每个层级 run 显式设置 HarfBuzz 方向，避免阿拉伯文中的数字或脚本间的中性字符继承相邻脚本猜测的方向。纯 LTR 文本完全走原路径。
+- **布局**：`TextLayout` 与 RichText 的 Flow 先把字形恢复为逻辑顺序再断行，然后按行做视觉重排；`.leading`/`.trailing` 对齐跟随该行所在段落的方向，所以 Markdown/RichText 的 RTL 段落行尾对齐，混排的英文与数字保持自身顺序。Workspace 标签标题等普通 Text 自动获得同样行为。
+- `BidiTests` 覆盖字符类别、层级、分段、L2 与 Text/RichText 的视觉顺序和对齐。`ColorGlyphResampleTests` 验证重采样与单色字体拒绝；当前 macOS 测试不替代 Linux/Windows 实际彩色字体的原生验收。
+
 ## 边界
 
-此次新增的原生彩色字体来源仅为 macOS。Linux/Windows 彩色 bitmap/COLR 字体尚未接入 `ColorGlyphSource`；Wasm 仍使用现有字体集合与单通道传输，未宣称支持 RGBA 字形。通用 atlas 能容纳 RGBA，但这不等于所有字体格式/所有平台已完成。没有新增字体图集自动淘汰/分页；极端 glyph 多样性下仍会报告耗尽。RTL/双向段落的完整编辑语义和超长单行分段布局仍需补齐。
+Apple 平台使用 CoreText 彩色字体来源，Linux/Windows 使用上节的 FreeType 来源；Wasm 仍使用现有字体集合与单通道传输，未宣称支持 RGBA 字形。PNG 压缩的位图彩色字体需要带 libpng 的 FreeType。没有新增字体图集自动淘汰/分页；极端 glyph 多样性下仍会报告耗尽。双向段落覆盖显示与对齐；RTL 文本的光标移动、选区几何与编辑语义仍按逻辑顺序近似处理。超长单行的分段塑形见 [TextField](textfield.md#超长单行)。

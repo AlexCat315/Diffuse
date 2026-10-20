@@ -29,6 +29,10 @@ Toolbar(items: [
 
 布局读取工具栏自身的内容盒宽度，不依赖窗口断点。测量使用实际按钮树，自动包含字体、TextScaler、controlSize、样式和触摸下限；每次先为更多入口预留空间，再选择可见命令。保留的节点在尺寸变化和溢出切换中不重建。隐藏项不参与焦点和辅助功能，命令的业务状态由调用方持有。
 
+## 垂直工具栏
+
+`ToolbarOptions.axis = .vertical` 让同一 Toolbar 竖向排列：Up/Down 与 Home/End 移动焦点（Left/Right 不再导航），`ToolbarGroup` 与 `ToolbarSeparator` 随轴向改为竖排和横线，`divider` 可取 `.leading`/`.trailing` 贴在内容一侧。`Toolbar(items:)` 竖向时按高度测量并溢出，“更多”使用竖向省略图标，菜单在工具栏侧边（trailingBottom）打开。辅助功能仍为 toolbar 角色，节点带 `toolbar.axis` 附件供查询。`VerticalToolbarTests` 覆盖竖排几何、方向键与按高度溢出；Gallery `toolbar` 页提供竖向工具栏与竖向命令溢出示例。
+
 ## 自定义内容
 
 ```swift

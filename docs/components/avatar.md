@@ -34,6 +34,25 @@ AvatarGroup(members) {
 
 macOS Retina 原生画廊已检查：中文首字母、姓名色板、匿名图标、远程 GitHub 图片、缺图回退、四档尺寸、100 点圆角图片、方形头像、0/3 可见数量与 0.7 重叠、明暗主题。检查过程中发现的 Slider 固有高度已修正并加入回归测试。
 
-macOS 的 Apple 彩色 emoji 已接入共享文字渲染，原生检查确认 `👩🏽‍💻 coder` 的头像首字母与下方姓名都可显示完整彩色字形。连字/肤色/旗帜/variation 序列、UTF-8 cluster、逻辑宽度与 1×/2× 栅格、选区/删除/撤销均有回归测试，详见 [文字与彩色字形](typography.md)。其他平台的彩色字体尚未接入；不能据此宣称完整跨平台 Unicode 视觉覆盖。
+macOS 的 Apple 彩色 emoji 已接入共享文字渲染，原生检查确认 `👩🏽‍💻 coder` 的头像首字母与下方姓名都可显示完整彩色字形。连字/肤色/旗帜/variation 序列、UTF-8 cluster、逻辑宽度与 1×/2× 栅格、选区/删除/撤销均有回归测试。Linux/Windows 已接入 FreeType COLRv0 与未压缩 BGRA 位图来源；PNG 压缩位图与 Wasm RGBA 尚未接入，具体范围与验证见 [文字与彩色字形](typography.md)。
 
-头像尚无状态角标或可交互成员弹层；通用图片缓存的淘汰/在途合并也待补齐。
+## 状态角标与成员列表
+
+```swift
+Avatar("Jason Lee") { $0.status = .busy; $0.statusLabel = "In a meeting" }
+
+AvatarGroup(members) {
+    $0.limit = 3
+    var list = AvatarMemberList()
+    list.scope = .remaining          // 或 .all：完整名单
+    list.onSelect = { open($0.id) }  // 省略时行只展示、不可点
+    $0.memberList = list
+}
+```
+
+- `AvatarStatus` 为 online / away / busy / offline，分别用实心、内缺口、横条与空心环区分，色盲与单色主题也能辨认；角标直径为头像的 28%（6–24 点），圆形头像的圆心落在 45° 轮廓上，方形贴角内收。外圈用 surface 色分隔。
+- 角标按逻辑 `.end` 边定位，RTL 自动镜像到左下。读屏值为状态名（可用 `statusLabel` 覆盖），与姓名组合朗读；角标本身不可命中、不进焦点链。
+- 设置 `memberList` 后溢出项变为按钮：辅助功能名称为“N more members”，展开态随弹层同步，悬停提示保留剩余姓名。弹层列出头像、姓名与状态，行高 ≥44；提供 `onSelect` 时行为按钮，选择后关闭。弹层呈现状态属节点会话，不进入持久化。
+- `AvatarPresenceTests` 覆盖角标几何（LTR/RTL）、读屏值、自定义状态名、成员弹层的真实点击与静态溢出项；Gallery `avatar` 页提供四种状态与可选择的成员列表。
+
+通用图片缓存的 LRU 淘汰与在途合并见 [Image](image.md)。

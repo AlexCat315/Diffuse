@@ -6,7 +6,7 @@
 
 | 字段 | 说明 |
 | --- | --- |
-| `role` | 标准角色；新增 `scrollArea` / `comboBox` |
+| `role` | 标准角色，包括 `scrollArea` / `comboBox` 与 Workspace 使用的 `tabList` / `tab` / `tabPanel` |
 | `label` / `value` / `help` | 名称、值、hint；help 同时用于 tooltip 描述 |
 | `identifier` | 供 `describedBy` 引用的稳定标识 |
 | `describedBy` | 另一个元素的 identifier；其 label（空时用 value）追加到当前 help |
@@ -32,6 +32,7 @@ Button("Apply to workspace") { apply() }
 - `ScrollView`：`.scrollArea` 角色、可命名 `accessibilityLabel`、百分比 value、键盘滚动 help、按页 increment/decrement。滚动条 thumb 仍不是独立可聚焦节点。
 - `Select` / `Combobox`：触发器为 `.comboBox`，label/value 为当前选项，`isExpanded` 反映弹层。
 - macOS 原生桥映射 `scrollArea` 与 `comboBox`；Android 桥暂无对应映射。
+- Workspace 标签容器为 `tabList`，标签为 `tab`，内容区为 `tabPanel`；标签携带名称、选中态、位置帮助文本、固定状态值与面板 ID。macOS 将两个新容器角色映射到 `tabGroup` / `group`，现有 tab 映射保持使用；RTL 镜像方向键。详见 [Workspace](workspace.md#仍需完善) 与 `WorkspaceViewTests.testTabStripExposesTabListPanelAndPositionAndMirrorsArrowsInRTL`。
 
 ## 边界
 
