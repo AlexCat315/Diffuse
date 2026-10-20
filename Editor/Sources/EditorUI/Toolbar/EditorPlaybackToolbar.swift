@@ -8,14 +8,16 @@ struct EditorPlaybackToolbar: View {
     let onCommand: (EditorMenuCommand) -> Void
 
     var body: some View {
-        Row(alignment: .center, spacing: 3) {
+        Row(alignment: .center, spacing: 2) {
+            Icon(UIIcons.Media.monitor, size: 12, color: .onSurfaceVariant)
+                .padding(horizontal: 5)
             control("play", title: L("Play in current viewport"), target: .playing)
             control("pause", title: L("Pause game"), target: .paused)
             control("stop", title: L("Stop and return to editing"), target: .stopped)
         }
-        .padding(horizontal: 4, vertical: 2)
-        .background(.surfaceSunken)
-        .cornerRadius(4)
+        .padding(2)
+        .background(.surfaceVariant)
+        .cornerRadius(7)
         .border(.divider, width: 1)
         .debugName("editor-playback-toolbar")
     }
@@ -29,6 +31,6 @@ struct EditorPlaybackToolbar: View {
                tooltip: title) {
             onCommand(.setPlaybackState(target))
         }
-        .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
+        .buttonStyle(EditorChromeButtonStyle(height: 22))
     }
 }

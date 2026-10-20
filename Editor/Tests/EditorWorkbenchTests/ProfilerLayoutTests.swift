@@ -6,6 +6,7 @@ import Testing
 @testable import EditorUI
 
 @Suite("Profiler dock layout", .serialized)
+@MainActor
 struct ProfilerLayoutTests {
     @Test("work budget does not count event-driven idle time as CPU work")
     func workBudgetExcludesIdleTime() {

@@ -1,6 +1,12 @@
 import GuavaUICompose
 import GuavaUIRuntime
 
+/// Card surfaces suit dashboards; continuous panes suit dense workbenches.
+public enum WorkspacePanelStyle: Sendable {
+    case card
+    case continuous
+}
+
 /// Workspace metrics. Panels are cards, so the geometry stays compact: two
 /// cards sit *adjacent* across a hairline, and the grab area around that
 /// hairline is drawn on top of the cards instead of reserving canvas between
@@ -15,19 +21,22 @@ public struct WorkspaceTheme: Sendable {
     /// therefore reserves no layout space.
     public var splitDividerHitSlop: Float
     public var animatesLayout: Bool
+    public var panelStyle: WorkspacePanelStyle
 
     public init(sideRailWidth: Float = 40,
                 bottomRailHeight: Float = 40,
                 tabBarHeight: Float = 34,
                 splitDividerThickness: Float = 1,
                 splitDividerHitSlop: Float = 6,
-                animatesLayout: Bool = false) {
+                animatesLayout: Bool = false,
+                panelStyle: WorkspacePanelStyle = .card) {
         self.sideRailWidth = sideRailWidth
         self.bottomRailHeight = bottomRailHeight
         self.tabBarHeight = tabBarHeight
         self.splitDividerThickness = splitDividerThickness
         self.splitDividerHitSlop = splitDividerHitSlop
         self.animatesLayout = animatesLayout
+        self.panelStyle = panelStyle
     }
 }
 

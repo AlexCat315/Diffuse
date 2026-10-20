@@ -7,11 +7,11 @@ enum EditorVisualTheme {
     static func make(dark: Bool) -> Theme {
         var theme = dark ? Theme.defaultDark : Theme.defaultLight
         if dark {
-            theme.colors.background = Color(red: 0x11, green: 0x15, blue: 0x15)
-            theme.colors.surface = EditorCodePalette.background
+            theme.colors.background = Color(red: 0x0F, green: 0x13, blue: 0x12)
+            theme.colors.surface = Color(red: 0x13, green: 0x18, blue: 0x17)
             theme.colors.surfaceVariant = EditorCodePalette.selectedTab
-            theme.colors.surfaceSunken = EditorCodePalette.gutter
-            theme.colors.surfaceRaised = EditorCodePalette.header
+            theme.colors.surfaceSunken = theme.colors.background
+            theme.colors.surfaceRaised = Color(red: 0x17, green: 0x1C, blue: 0x1B)
             theme.colors.onSurface = EditorCodePalette.foreground
             theme.colors.onSurfaceVariant = Color(red: 0xA6, green: 0xAE, blue: 0xAA)
             theme.colors.onSurfaceMuted = EditorCodePalette.muted
@@ -19,7 +19,7 @@ enum EditorVisualTheme {
             theme.colors.divider = Color.white.multipliedAlpha(0.06)
             theme.colors.accent = EditorCodePalette.accent
             theme.colors.accentMuted = EditorCodePalette.accent.multipliedAlpha(0.12)
-            theme.colors.selection = EditorCodePalette.selectedTab
+            theme.colors.selection = EditorCodePalette.accent.multipliedAlpha(0.16)
         } else {
             theme.colors.background = Color(red: 0xE9, green: 0xED, blue: 0xEA)
             theme.colors.surface = Color(red: 0xF3, green: 0xF5, blue: 0xF3)
@@ -37,6 +37,17 @@ enum EditorVisualTheme {
         }
         theme.colors.surfaceFloating = dark ? Color(red: 24, green: 29, blue: 28, alpha: 240) : .white
         theme.colors.surfaceOverlay = theme.colors.surfaceRaised
+        theme.extensions[EditorChromeTokens.self].agent = dark
+            ? Color(red: 0xF0, green: 0x7D, blue: 0x96)
+            : Color(red: 0xC8, green: 0x43, blue: 0x5F)
+        theme.typography.body = .init(font: .system(size: 12), lineHeight: 18)
+        theme.typography.bodyStrong = .init(font: .system(size: 12, weight: .semibold), lineHeight: 18)
+        theme.typography.label = .init(font: .system(size: 12, weight: .medium), lineHeight: 16)
+        theme.typography.caption = .init(font: .system(size: 11), lineHeight: 16)
+        theme.typography.mono = .init(font: .monospaced(size: 11), lineHeight: 17)
+        theme.radius.sm = 5
+        theme.radius.md = 7
+        theme.radius.lg = 9
         theme.colors.onBackground = theme.colors.onSurface
         theme.colors.borderStrong = dark ? Color.white.multipliedAlpha(0.10) : theme.colors.border
         theme.colors.accentHover = dark ? Color(red: 0x69, green: 0xB9, blue: 0x8B) : Color(red: 0x20, green: 0x6A, blue: 0x44)
@@ -59,6 +70,7 @@ enum EditorVisualTheme {
         theme.motion.slow = .milliseconds(280)
         theme.motion.standardEasing = .emphasized
         theme.inputs.background = theme.colors.surfaceSunken
+        theme.inputs.radius = theme.radius.sm
         theme.inputs.backgroundDisabled = theme.colors.surface
         theme.inputs.borderColor = theme.colors.border
         theme.inputs.borderHover = dark ? Color.white.multipliedAlpha(0.14) : theme.colors.borderStrong

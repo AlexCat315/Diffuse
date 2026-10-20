@@ -35,7 +35,7 @@ struct ConfirmationHostPanel: View {
             }
             .padding(horizontal: 10, vertical: 10)
         }
-        .frame(minWidth: 320)
+        .frame(minWidth: 0, minHeight: 0)
     }
 }
 

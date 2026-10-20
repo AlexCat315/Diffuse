@@ -18,13 +18,19 @@ private enum _WorkspaceMetrics {
 /// and win.
 private extension View {
     func workspaceCardSurface(_ fill: SemanticColorRef) -> some View {
-        ThemeReader { theme in
-            self
-                .background(fill)
-                .cornerRadius(theme.radius.xl)
-                .border(theme.colors.border.multipliedAlpha(0.55), width: 1)
-                .shadow(color: theme.elevation.low.color ?? .clear, offsetY: 2, blur: 8)
-                .clipped()
+        WorkspacePanelStyleReader { style in
+            ThemeReader { theme in
+                if style == .continuous {
+                    self.background(fill).clipped()
+                } else {
+                    self
+                        .background(fill)
+                        .cornerRadius(theme.radius.xl)
+                        .border(theme.colors.border.multipliedAlpha(0.55), width: 1)
+                        .shadow(color: theme.elevation.low.color ?? .clear, offsetY: 2, blur: 8)
+                        .clipped()
+                }
+            }
         }
     }
 }
@@ -1111,8 +1117,11 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
-        let style = AnyButtonStyle(TabButtonStyle(height: max(26,
-            node.compositionValue(of: TextScalerEnvironment.key).scale(resolveWorkspaceTheme(on: node).tabBarHeight))))
+        let workspace = resolveWorkspaceTheme(on: node)
+        let height = max(26, node.compositionValue(of: TextScalerEnvironment.key).scale(workspace.tabBarHeight))
+        let style = workspace.panelStyle == .continuous
+            ? AnyButtonStyle(WorkspaceContinuousTabStyle(height: height))
+            : AnyButtonStyle(TabButtonStyle(height: height))
         // Resolve the title color eagerly from this (parented) host node's theme
         // and pass it to `Text` directly. The button style's deferred
         // `.foregroundColor(.onSurface)` resolves against the *label* node's
@@ -1120,7 +1129,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         // primitive's `_children` — isn't parented under the theme provider yet,
         // so it falls back to `.defaultDark` and bakes near-white tab titles in
         // light mode. `node.theme` here is correct (it already drives the tab bg).
-        let titleColor = node.theme.colors.onSurface
+        let titleColor = isActive ? node.theme.colors.onSurface : node.theme.colors.onSurfaceMuted
         let config = ButtonStyleConfiguration(label: AnyView(Row(alignment: .center, spacing: 4) {
                                                   if let key = document.panels[panelID]?.iconAssetKey,
                                                      let resource = WorkspacePanelIconCatalog.resolve(key) {

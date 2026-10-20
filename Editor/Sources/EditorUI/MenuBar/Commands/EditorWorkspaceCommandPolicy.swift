@@ -13,11 +13,4 @@ enum EditorWorkspaceCommandPolicy {
         }
     }
 
-    static func requiresManualSurface(_ command: EditorMenuCommand) -> Bool {
-        switch command {
-        case .showPanel, .showScripts, .showAssets, .showProblems, .showSceneSettings, .maximizePanel:
-            return true
-        default: return false
-        }
-    }
 }

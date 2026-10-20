@@ -90,16 +90,19 @@ enum EditorShortcutHandler {
             reopenClosedPanel()
             return true
         case Scancode.digit1:
-            setWorkspaceMode(.level)
+            setWorkspaceMode(.documents)
             return true
         case Scancode.digit2:
-            setWorkspaceMode(.modeling)
+            setWorkspaceMode(.level)
             return true
         case Scancode.digit3:
             setWorkspaceMode(.animation)
             return true
         case Scancode.digit4:
-            setWorkspaceMode(.scripting)
+            setWorkspaceMode(.video)
+            return true
+        case Scancode.digit5:
+            setWorkspaceMode(.modeling)
             return true
         case Scancode.return, Scancode.keypadEnter:
             // Enter belongs to the palette's text field while it is open.

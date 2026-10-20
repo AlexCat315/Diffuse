@@ -46,8 +46,10 @@ enum InspectorScriptSectionLayout {
                 if field.id.hasSuffix("-issues") || field.id.hasSuffix("-interface"),
                    case .readOnly(let message) = field.value {
                     rows.append(PropertyGridRow(id: field.id, label: "", layout: .fullWidth, sizing: .intrinsic) {
-                        Text(message, lineLimit: 3).font(.caption)
-                            .foregroundColor(field.id.hasSuffix("-issues") ? .warning : .onSurfaceMuted)
+                        Box(direction: .column, alignItems: .stretch) {
+                            Text(message, lineLimit: 3).font(.caption)
+                                .foregroundColor(field.id.hasSuffix("-issues") ? .warning : .onSurfaceMuted)
+                        }.frame(minWidth: 0)
                             .debugName("inspector-script-message-\(group.id)/\(field.id)")
                     })
                 } else {

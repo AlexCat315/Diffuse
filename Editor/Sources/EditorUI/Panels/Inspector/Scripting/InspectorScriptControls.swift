@@ -17,6 +17,7 @@ struct InspectorScriptHeaderActions: View {
     var body: some View {
         Row(alignment: .center, spacing: 4) {
             Text(status.label).lineLimit(1).font(.caption).foregroundColor(status.color)
+                .frame(maxWidth: 64).clipped()
                 .debugName("inspector-script-status-\(group.id)")
             if let identifier = group.sourceIdentifier, let onOpenScript {
                 Button(icon: .resource(.svg(named: "script", in: EditorAppResourceBundle.bundle, subdirectory: "PanelIcons")),

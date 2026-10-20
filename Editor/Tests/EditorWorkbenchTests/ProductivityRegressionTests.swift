@@ -9,6 +9,7 @@ import RenderBackend
 import Testing
 
 @Suite("Productivity regressions", .serialized)
+@MainActor
 struct ProductivityRegressionTests {
     @Test("the command palette is centered and its search and results fill the card",
           arguments: [Float(600), 1280], [Float(360), 600])
@@ -42,7 +43,8 @@ struct ProductivityRegressionTests {
             #expect(card.maxY <= CGFloat(height))
             #expect(abs(card.midY - CGFloat(height) / 2) < 1)
             #expect(card.width >= 540)
-            #expect(search.width == card.width)
+            #expect(search.width >= card.width - 110)
+            #expect(search.minX > card.minX && search.maxX < card.maxX)
             #expect(results.width == card.width)
         }
     }

@@ -72,7 +72,11 @@ public final class DocumentWorkspace: @unchecked Sendable {
             while let url = enumerator.nextObject() as? URL, paths.count < 10000 {
                 let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 if values?.isSymbolicLink == true || excluded.contains(url.lastPathComponent) { enumerator.skipDescendants(); continue }
-                if values?.isDirectory == false { paths.append(String(url.path.dropFirst(root.path.count + 1))) }
+                if values?.isDirectory == false {
+                    let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+                    let prefix = root.path + "/"
+                    if path.hasPrefix(prefix) { paths.append(String(path.dropFirst(prefix.count))) }
+                }
             }
             return paths.sorted()
         }

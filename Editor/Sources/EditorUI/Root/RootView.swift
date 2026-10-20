@@ -11,7 +11,6 @@ struct EditorRootView: View {
     let registry: WorkspacePanelRegistry
     @State private var windowWidth: Float = 1280
     @State private var windowHeight: Float = 720
-    @State private var agentController = EditorAgentWorkspaceDefaults.makeController()
 
     var body: some View {
         StoreScope(app.store) { store in
@@ -22,42 +21,33 @@ struct EditorRootView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                        ImmersiveWindowTitleBar {
-                            Row(alignment: .center, spacing: 8) {
-                                EditorApplicationMenuBar(
+                        #if os(Linux)
+                        EditorApplicationMenuBar(
                                     workspaceMode: store.workspaceMode,
                                     activeLayoutPreset: store.activeLayoutPreset,
                                     playbackState: store.playbackState,
-                                    interactionMode: store.interactionMode,
                                     canUndo: TextEditingCommands.canUndo ?? app.canUndo,
                                     canRedo: TextEditingCommands.canRedo ?? app.canRedo,
                                     hasSelection: !store.selectedEntityIDs.isEmpty,
                                     onCommand: cb.handleMenuCommand
-                                )
-
-                                Spacer(minLength: 0)
-                            }
-                        }
-
-                        EditorWorkflowBar(workspace: store.workspace,
-                                          playbackState: store.playbackState,
-                                          onCommand: cb.handleMenuCommand)
-
-                        if store.interactionMode == .agent {
-                            AgentWorkbenchView(app: app, controller: agentController)
-                                .flex().frame(minWidth: 0, minHeight: 0)
-                                .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
-                        } else {
+                        ).padding(horizontal: 8).background(.surfaceRaised)
+                        #endif
+                        EditorTitleBar(app: app, width: windowWidth, onCommand: cb.handleMenuCommand)
+                        Divider()
+                        Box(direction: .row, alignItems: .stretch, spacing: 0) {
+                            EditorActivityRail(app: app, controller: controller, onCommand: cb.handleMenuCommand)
+                            Divider(axis: .vertical)
                             WorkspaceView(controller: controller,
                                            registry: registry, compact: windowWidth < 1000)
                                 .flex()
                                 .frame(minWidth: 0, minHeight: 0)
-                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 5, animatesLayout: true))
-                                .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
+                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 1,
+                                                              animatesLayout: true, panelStyle: .continuous))
                                 .layoutRole("editor-workspace")
                                 .debugName("editor-workspace")
-                        }
+                        }.flex().frame(minWidth: 0, minHeight: 0)
 
+                        Divider()
                         EditorStatusBar(store: store, scriptWorkspace: app.workstation.scripts,
                                         showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed },
                                         onShowProblems: {
@@ -173,7 +163,7 @@ private struct EditorCallbacks {
                                                    registry: registry)
                 },
                 openCommandPalette: {
-                    s.dispatch(.setCommandPaletteQuery(">"))
+                    s.dispatch(.setCommandPaletteQuery(""))
                     s.dispatch(.setCommandPaletteVisible(true))
                 },
                 closeCommandPalette: { s.dispatch(.setCommandPaletteVisible(false)) },

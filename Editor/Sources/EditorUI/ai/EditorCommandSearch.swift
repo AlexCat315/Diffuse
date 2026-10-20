@@ -39,7 +39,7 @@ enum EditorCommandSearch {
             entry("edit.delete", "Delete Selection", "", "delete 删除", .deleteSelection, enabled: canSelect),
             entry("assets.import", "Import Assets", "", "import 导入资源", .importAssets, enabled: canEdit),
             entry("assets.show", "Content Browser", "", "assets 资源浏览器", .showAssets),
-            entry("scripts.show", "Scripts", "5", "code script 编程脚本", .showScripts),
+            entry("scripts.show", "Scripts", "", "code script 编程脚本", .showScripts),
             entry("problems.show", "Problems", "", "errors diagnostics 问题诊断错误", .showProblems),
             entry("project.build", "Build Project", "B", "export build 导出构建", .buildProject, enabled: state.workspace.mode.isGameWorkspace),
             entry("project.run", "Build and Run", "R", "export run 构建运行", .buildAndRun, enabled: state.workspace.mode.isGameWorkspace),
@@ -50,9 +50,12 @@ enum EditorCommandSearch {
             entry("layout.scripts", "Maximize Scripts", "", "maximize 最大化脚本", .maximizePanel("scripts")),
             entry("layout.reopen", "Reopen Closed Panel", "Shift+T", "reopen 恢复关闭面板", .reopenClosedPanel),
             entry("preferences", "Settings", ",", "preferences 设置", .openSettings),
+            entry("agent.show", "Agent", "", "agent assistant conversation 智能体 对话", .showPanel("intent-input")),
+            entry("agent.review", "Review", "", "agent review approval 审阅", .showPanel("confirmation-host")),
+            entry("journal.show", "Session Journal", "", "history activity journal 历史 日志", .showPanel("journal")),
             entry("theme.toggle", "Toggle Theme", "", "dark light 主题", .toggleTheme)
         ]
-        for (mode, key) in [(EditorWorkspaceMode.level, "1"), (.scripting, "4"), (.modeling, "2"), (.animation, "3")] {
+        for (mode, key) in [(EditorWorkspaceMode.documents, "1"), (.level, "2"), (.animation, "3"), (.video, "4"), (.modeling, "5"), (.scripting, "")] {
             commands.append(entry("workspace." + mode.rawValue, mode.title, key, "workspace 工作空间",
                                   .setWorkspaceMode(mode)))
         }
@@ -64,10 +67,6 @@ enum EditorCommandSearch {
         for preset in EditorLayoutPreset.presets(for: state.workspace.mode) {
             commands.append(entry("layout." + preset.rawValue, preset.title, "", "layout 布局",
                                   .setLayoutPreset(preset)))
-        }
-        for mode in EditorInteractionMode.allCases {
-            commands.append(entry("interaction." + mode.rawValue, mode.title, "", "agent manual AI 交互方式 手动 智能体",
-                                  .setInteractionMode(mode)))
         }
         return commands.filter { EditorWorkspaceCommandPolicy.allows($0.command, in: state.workspace.mode) }
     }

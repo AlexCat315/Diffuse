@@ -9,6 +9,7 @@ import Testing
 @testable import EditorUI
 
 @Suite("Script behavior inspector", .serialized)
+@MainActor
 struct ScriptBehaviorInspectorTests {
     @Test("behavior headers fit narrow panels, open their source and toggle without collapsing",
           arguments: [Float(260), Float(320)])
@@ -85,7 +86,7 @@ struct ScriptBehaviorInspectorTests {
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: InspectorPanel(store: store, scene: adapter, sectionFilter: ["scripts"])
             .theme(EditorVisualTheme.make(dark: false)))
-        graph.computeLayout(width: width, height: 560)
+        for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 560) }
         let frames = graph.layoutSnapshot()
         let message = try #require(frames.first { $0.debugName?.hasPrefix("inspector-script-message-\(group.id)/") == true }?.absoluteFrame)
         #expect(message.width > 150)

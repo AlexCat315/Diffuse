@@ -14,7 +14,6 @@ import Testing
     #expect(!media.allowsPanel("viewport"))
     #expect(media.projectToolNames.contains("export_media"))
     #expect(EditorLayoutPreset.default(for: .video) == .videoDefault)
-    #expect(EditorWorkspaceState().interactionMode == .agent)
 }
 
 @Test @MainActor func ordinaryDocumentToolsProtectUnsavedBuffers() async throws {

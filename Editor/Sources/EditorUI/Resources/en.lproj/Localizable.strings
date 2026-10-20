@@ -781,3 +781,47 @@
 "%d breakpoints in folded code" = "%d breakpoints in folded code";
 "Files" = "Files";
 "Document" = "Document";
+
+"Write" = "Write";
+"Gameplay" = "Gameplay";
+"Animate" = "Animate";
+"Video" = "Video";
+"Outline" = "Outline";
+"Properties" = "Properties";
+"Agent" = "Agent";
+"Review" = "Review";
+"Journal" = "Journal";
+"Session Journal" = "Session Journal";
+"This Session" = "This Session";
+"Project commands" = "Project commands";
+"Tell Guava what you want to do…" = "Tell Guava what you want to do…";
+"Tell Guava what you want to do… (> commands, @ files, # entities)" = "Tell Guava what you want to do… (> commands, @ files, # entities)";
+"A fresh start" = "A fresh start";
+"Tasks and activity appear here as you work." = "Tasks and activity appear here as you work.";
+"New Task" = "New Task";
+"Clear conversation" = "Clear conversation";
+"What shall we make?" = "What shall we make?";
+"One workspace. A shared scene. Tell Guava what you want to create, change, or understand." = "One workspace. A shared scene. Tell Guava what you want to create, change, or understand.";
+"Connect an AI provider to start working together." = "Connect an AI provider to start working together.";
+"Set up Agent" = "Set up Agent";
+"TRY A STARTING POINT" = "TRY A STARTING POINT";
+"Explain the current selection" = "Explain the current selection";
+"Help me plan the next step" = "Help me plan the next step";
+"Find issues in this project" = "Find issues in this project";
+"Review before applying" = "Review before applying";
+"Context" = "Context";
+"Ask Guava" = "Ask Guava";
+"Open Agent" = "Open Agent";
+"Work with Agent in this context" = "Work with Agent in this context";
+
+"Import Assets" = "Import Assets";
+"Content Browser" = "Content Browser";
+"Text and Code" = "Text and Code";
+"Video Editing" = "Video Editing";
+
+"Project-relative file path" = "Project-relative file path";
+"Filter files" = "Filter files";
+"Open" = "Open";
+"Save" = "Save";
+"Discard and Reload" = "Discard and Reload";
+"Open a text or code file to begin." = "Open a text or code file to begin.";

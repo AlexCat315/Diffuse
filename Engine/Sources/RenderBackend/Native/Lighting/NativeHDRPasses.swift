@@ -20,9 +20,12 @@ final class NativeHDRPasses {
     deinit { device.destroy(sampler) }
     func encodeSky(packet: RenderPacket, matrices: RenderCameraMatrices, hdr: Texture, depth: Texture,
                    into commands: CommandBuffer) throws {
+        let studio = packet.renderSettings.viewport.backdrop == .studio
+        let flat = studio || packet.scene.camera.projection == .orthographic
         let uniforms = SkyboxUniforms(invViewProj: simd_inverse(matrices.viewProjection),
-            skyTint: SIMD4(0.10,0.20,0.42,packet.scene.camera.projection == .orthographic ? 1 : 0),
-            horizonTint: SIMD4(0.95,0.48,0.18,1), groundTint: SIMD4(0.03,0.04,0.05,1))
+            skyTint: SIMD4(0.10,0.20,0.42,flat ? 1 : 0),
+            horizonTint: SIMD4(0.95,0.48,0.18,1),
+            groundTint: studio ? SIMD4(0.012,0.019,0.016,1) : SIMD4(0.03,0.04,0.05,1))
         try sky.encode(size: packet.drawableSize, color: RenderColorTarget(texture: hdr, loadAction: .clear(SIMD4(0.01,0.01,0.02,1))),
             depth: RenderDepthTarget(texture: depth, loadAction: .load),
             entries: [BindingSetEntry(slot: 0, resource: NativeUniformUpload.binding(uniforms, device: device))], into: commands)

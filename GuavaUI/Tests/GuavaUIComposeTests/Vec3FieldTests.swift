@@ -41,6 +41,24 @@ struct Vec3FieldTests: GuavaUIComposeSerializedSuite {
 
     private func nodes(_ node: Node) -> [Node] { [node] + node.children.flatMap(nodes) }
 
+    @Test("Dense axes fit a property cell while a narrower cell still measures all three rows",
+          arguments: [Float(140), Float(200)])
+    func denseAxes(width: Float) { GlobalTestLock.locked {
+        let previous = TextEnvironmentHolder.current
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = previous }
+        var field = Vec3Field(x: .constant(1), y: .constant(2), z: .constant(3))
+        field.minimumAxisWidth = 56
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: field.frame(width: width))
+        graph.computeLayout(width: width, height: 220)
+        let axes = nodes(graph.tree.root!).filter { $0.accessibility?.role == .textField }
+        #expect(axes.count == 3)
+        #expect(Set(axes.map { $0.absoluteFrame.minY.rounded() }).count == (width < 176 ? 3 : 1))
+        #expect(axes.allSatisfy { $0.absoluteFrame.maxX <= CGFloat(width) + 1.5 && $0.frame.width >= 32 })
+        graph.install(root: EmptyView())
+    } }
+
     @Test("Scrubbing scales the drag by the step, Shift and Option, and clamps")
     func scrubMath() {
         let scrub = NumericScrub(perPoint: 0.25, clamp: { min(max($0, -10), 10) }, reset: 0)

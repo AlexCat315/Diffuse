@@ -54,8 +54,7 @@ public struct EditorAgentTask: Identifiable, Sendable, Equatable {
     }
 }
 
-/// A UI-independent task lifecycle. The two shells consume its snapshots and
-/// share the existing transaction/confirmation pipeline.
+/// A UI-independent task lifecycle shared by the thread, review and journal.
 public final class EditorAgentTaskService {
     public private(set) var tasks: [EditorAgentTask] = []
     public private(set) var activeTaskID: UUID?

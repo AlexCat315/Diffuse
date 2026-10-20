@@ -32,51 +32,6 @@ struct ConsolePanel: View {
         let entriesToCopy = selectedEntry.map { [$0] } ?? visibleEntries
 
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            EditorPanelToolbar {
-                Box { EmptyView() }
-                    .frame(width: 6, height: 6)
-                    .background(store.connected ? SemanticColorRef.success : .warning)
-                    .cornerRadius(3)
-
-                Text(store.connected ? L("Connected") : L("Offline"))
-                    .font(.caption)
-                    .foregroundColor(store.connected ? .success : .warning)
-
-                Spacer(minLength: 0)
-
-                Text("\(L("Revision")) \(store.sceneRevision)")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-
-                Button(isSelected: followsLatest,
-                       tooltip: followsLatest ? L("Pause following new messages") : L("Follow newest message"),
-                       action: { followsLatest.toggle() }) {
-                    Text(followsLatest ? L("Following") : L("Follow Latest"), lineLimit: 1)
-                }
-                .buttonStyle(ToggleButtonStyle(height: 22))
-
-                Button(isEnabled: !entriesToCopy.isEmpty,
-                       tooltip: selectedEntry == nil
-                           ? L("Copy visible messages")
-                           : L("Copy selected message"),
-                       action: { copy(entriesToCopy) }) {
-                    Text(L("Copy"))
-                }
-                .buttonStyle(GhostButtonStyle())
-
-                Button(isEnabled: !entries.isEmpty,
-                       action: {
-                           store.dispatch(.clearConsole)
-                           selectedEntryID = nil
-                           copyStatus = nil
-                       }) {
-                    Text(L("Clear"))
-                }
-                .buttonStyle(GhostButtonStyle())
-            }
-
-            Divider()
-
             EditorPanelSearchBar(
                 L("Search Console"),
                 text: $searchText,
@@ -100,6 +55,21 @@ struct ConsolePanel: View {
                     isEnabled: enabledSeverities.contains(.error),
                     action: { toggle(.error) }
                 )
+                Button(icon: .resource(UIIcons.Navigation.arrowDown), size: 12,
+                       isSelected: followsLatest,
+                       tooltip: followsLatest ? L("Pause following new messages") : L("Follow newest message")) {
+                    followsLatest.toggle()
+                }.buttonStyle(EditorChromeButtonStyle(height: 22))
+                Button(icon: .resource(UIIcons.Action.copy), size: 12,
+                       isEnabled: !entriesToCopy.isEmpty, tooltip: L("Copy visible messages")) {
+                    copy(entriesToCopy)
+                }.buttonStyle(EditorChromeButtonStyle(height: 22))
+                Button(icon: .resource(UIIcons.Action.trash), size: 12,
+                       isEnabled: !entries.isEmpty, tooltip: L("Clear")) {
+                    store.dispatch(.clearConsole)
+                    selectedEntryID = nil
+                    copyStatus = nil
+                }.buttonStyle(EditorChromeButtonStyle(height: 22))
             }
 
             if let copyStatus {
@@ -232,7 +202,7 @@ private struct ConsoleSeverityFilterButton: View {
                     .font(.caption)
             }
         }
-        .buttonStyle(ToggleButtonStyle(height: 22))
+        .buttonStyle(EditorChromeButtonStyle(height: 22))
     }
 
     private var label: String {
@@ -274,7 +244,7 @@ private struct ConsoleEntryRow: View {
                         .lineLimit(isSelected ? nil : 1)
                         .font(.caption)
                         .foregroundColor(messageColor)
-                    if let detail = entry.detail, !detail.isEmpty {
+                    if let detail = entry.detail, !detail.isEmpty, isSelected {
                         Text(detail)
                             .lineLimit(isSelected ? nil : 2)
                             .font(.caption)

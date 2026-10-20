@@ -60,7 +60,6 @@ final class EditorLaunchContext: @unchecked Sendable {
         }
 
         if let s = shellState {
-            app.store.dispatch(.setInteractionMode(s.workspace.interactionMode))
             app.store.dispatch(.setWorkspaceMode(s.workspace.mode))
             app.store.dispatch(.setActiveLayoutPreset(s.workspace.layoutPreset))
             app.store.dispatch(.setThemeMode(s.themeMode))
@@ -247,7 +246,6 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     private struct NativeMenuState: Equatable {
         var workspaceMode: EditorWorkspaceMode
-        var interactionMode: EditorInteractionMode
         var layoutPreset: EditorLayoutPreset
         var playbackState: PlaybackState
         var canUndo: Bool
@@ -280,7 +278,6 @@ final class EditorLaunchContext: @unchecked Sendable {
                                    force: Bool = false) {
         let store = app.store.state
         let next = NativeMenuState(workspaceMode: store.workspace.mode,
-                                   interactionMode: store.workspace.interactionMode,
                                    layoutPreset: store.workspace.layoutPreset,
                                    playbackState: store.timing.playbackState,
                                    canUndo: app.canUndo,
@@ -296,7 +293,6 @@ final class EditorLaunchContext: @unchecked Sendable {
             workspaceMode: next.workspaceMode,
             activeLayoutPreset: next.layoutPreset,
             playbackState: next.playbackState,
-            interactionMode: next.interactionMode,
             canUndo: next.canUndo,
             canRedo: next.canRedo,
             hasSelection: next.hasSelection,

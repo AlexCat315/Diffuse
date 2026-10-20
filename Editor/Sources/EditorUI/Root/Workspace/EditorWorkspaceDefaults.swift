@@ -16,9 +16,6 @@ enum EditorWorkspaceDefaults {
         var center: WorkspaceLayoutNode = .group("center")
         var bottom: WorkspaceLayoutNode = .group("bottom")
 
-        if mode == .scripting || mode == .modeling {
-            move("assets", to: "leading", groups: &groups, panels: panels)
-        }
         if mode == .documents { move("documents", to: "center", groups: &groups, panels: panels) }
         if mode == .video { move("media", to: "center", groups: &groups, panels: panels) }
         if mode == .scripting { move("scripts", to: "center", groups: &groups, panels: panels) }
@@ -48,7 +45,7 @@ enum EditorWorkspaceDefaults {
                 bottom: groups["bottom"]?.panels.isEmpty == false ? bottom : nil),
             splitFractions: defaultFractions(for: preset))
         let controller = WorkspaceController(document: document)
-        if preset == .levelDefault || preset == .modelingDefault {
+        if preset == .modelingDefault {
             _ = controller.dispatch(.collapse("bottom"))
         } else if preset == .modelingSculpt {
             for group: WorkspaceTabGroupID in ["leading", "trailing", "bottom"] {
@@ -65,10 +62,10 @@ enum EditorWorkspaceDefaults {
         let available = Set(registry.ids)
         var groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [:]
         let definitions: [(WorkspaceTabGroupID, [WorkspacePanelID], WorkspacePanelID)] = [
-            ("leading", ["hierarchy"], "hierarchy"),
-            ("center", ["viewport"], "viewport"),
-            ("trailing", ["inspector"], "inspector"),
-            ("bottom", ["assets", "console", "animation", "render-pipeline", "developer-tools", "confirmation-host", "scripts", "intent-input"],
+            ("leading", ["hierarchy", "assets"], preset.mode == .scripting || preset.mode == .modeling ? "assets" : "hierarchy"),
+            ("center", ["viewport", "scripts"], "viewport"),
+            ("trailing", ["inspector", "intent-input", "confirmation-host", "journal"], "inspector"),
+            ("bottom", ["console", "animation", "render-pipeline", "developer-tools"],
              defaultBottomPanelID(for: preset)),
         ]
         for (id, panelIDs, active) in definitions {
@@ -111,7 +108,7 @@ enum EditorWorkspaceDefaults {
         case .documentsDefault, .videoDefault: return .init(leading: 0.20, centerTrailing: 0.78, topBottom: 0.78)
         case .scriptingDefault: return .init(leading: 0.22, centerTrailing: 0.74, topBottom: 0.72)
         case .levelWorkbench: return .init(leading: 0.16, centerTrailing: 0.75, topBottom: 0.68)
-        case .levelDefault: return .init(leading: 0.17, centerTrailing: 0.75, topBottom: 0.66)
+        case .levelDefault: return .init(leading: 0.185, centerTrailing: 0.69, topBottom: 0.74)
         case .levelCinematics: return .init(leading: 0.18, centerTrailing: 0.76, topBottom: 0.60)
         case .modelingDefault: return .init(leading: 0.22, centerTrailing: 0.76, topBottom: 0.66)
         case .modelingSculpt: return .init(leading: 0.19, centerTrailing: 0.78, topBottom: 0.72)
@@ -122,10 +119,10 @@ enum EditorWorkspaceDefaults {
 
     private static func defaultBottomPanelID(for preset: EditorLayoutPreset) -> WorkspacePanelID {
         switch preset {
-        case .documentsDefault, .videoDefault: return "intent-input"
+        case .documentsDefault, .videoDefault: return "console"
         case .scriptingDefault: return "console"
         case .levelWorkbench: return "developer-tools"
-        case .levelDefault: return "assets"
+        case .levelDefault: return "console"
         case .levelCinematics, .animationDefault, .animationSequencer: return "animation"
         case .modelingDefault, .modelingSculpt: return "render-pipeline"
         }

@@ -12,9 +12,11 @@ public struct EditorGridUniforms {
     var planeV: SIMD4<Float>
 
     public static func make(packet: RenderPacket) -> EditorGridUniforms {
-        make(camera: packet.scene.camera,
+        var uniforms = make(camera: packet.scene.camera,
              matrices: RenderCameraMatrices.make(scene: packet.scene, drawableSize: packet.drawableSize),
              size: packet.drawableSize, spacing: packet.renderSettings.viewport.gridSpacing)
+        uniforms.viewport.w = packet.renderSettings.viewport.backdrop == .studio ? 0.28 : 1
+        return uniforms
     }
 
     static func make(camera: RenderCamera, matrices: RenderCameraMatrices,
@@ -29,7 +31,7 @@ public struct EditorGridUniforms {
             relativeViewProjection: relative,
             cameraPosition: SIMD4<Float>(camera.eye, 1),
             viewport: SIMD4<Float>(Float(max(size.width, 1)), Float(max(size.height, 1)),
-                                   max(0.001, spacing), 0),
+                                   max(0.001, spacing), 1),
             planeU: SIMD4<Float>(plane.u, plane.uAxis),
             planeV: SIMD4<Float>(plane.v, plane.vAxis))
     }

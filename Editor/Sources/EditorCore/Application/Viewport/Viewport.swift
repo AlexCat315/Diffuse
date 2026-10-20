@@ -249,7 +249,14 @@ extension EditorApplication {
         shadowsEnabled: Bool,
         shadingMode: EditorViewportShadingMode
     ) -> RenderSettings {
-        RenderSettings { $0.shading.debugViewMode = RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded; $0.shadows = RenderShadowSettings(enabled: shadowsEnabled); $0.viewport.offscreen = true; $0.viewport.gridEnabled = store.state.viewport.gridEnabled && store.state.viewport.mode == .scene; $0.viewport.gridSpacing = viewportGridSpacing }
+        RenderSettings {
+            $0.shading.debugViewMode = RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded
+            $0.shadows = RenderShadowSettings(enabled: shadowsEnabled)
+            $0.viewport.offscreen = true
+            $0.viewport.backdrop = store.viewportMode == .scene ? .studio : .sky
+            $0.viewport.gridEnabled = store.state.viewport.gridEnabled && store.state.viewport.mode == .scene
+            $0.viewport.gridSpacing = viewportGridSpacing
+        }
     }
 
     public func currentSelectedEntityTranslation() -> SIMD3<Float>? {

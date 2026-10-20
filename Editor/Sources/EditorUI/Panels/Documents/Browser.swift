@@ -19,7 +19,7 @@ struct DocumentsPanel: View {
         let documents = observed.wrappedValue
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
             Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 6) {
-                TextField("Project-relative file path", text: $path).flex(1, shrink: 1).frame(minWidth: 160)
+                TextField(L("Project-relative file path"), text: $path).flex(1, shrink: 1).frame(minWidth: 160)
                 Button(L("Open")) { open(path.stringValue) }
                 Button(L("Discard and Reload"), isEnabled: model.selectedPath != nil) { if let path = model.selectedPath { model.reload(path, discard: true) } }.buttonStyle(.ghost)
                 Button(L("Save"), isEnabled: model.selectedPath != nil) { if let path = model.selectedPath { model.save(path) } }
@@ -29,11 +29,12 @@ struct DocumentsPanel: View {
                       constraints: .init(minimumFirst: 160, minimumSecond: 240),
                       compact: .init(firstTitle: L("Files"), secondTitle: L("Document")) { $0.selection = $pane }) {
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    TextField("Filter files", text: $filter)
+                    TextField(L("Filter files"), text: $filter)
                     ScrollView {
                         Column(alignment: .leading, spacing: 2) {
                             for file in model.files().filter({ filter.stringValue.isEmpty || $0.localizedCaseInsensitiveContains(filter.stringValue) }).prefix(200) {
-                                AnyView(Button(file, isSelected: file == model.selectedPath) { open(file); path = TextBuffer(file) }.buttonStyle(.ghost))
+                                AnyView(Button(file, isSelected: file == model.selectedPath) { open(file); path = TextBuffer(file) }
+                                    .buttonStyle(.ghost).accessibility { $0.label = file })
                             }
                         }
                     }.flex()

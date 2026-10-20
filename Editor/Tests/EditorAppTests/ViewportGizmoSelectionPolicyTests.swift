@@ -120,7 +120,7 @@ struct ViewportKeyRoutingPolicyTests {
 @Suite("Viewport chrome layout")
 @MainActor
 struct ViewportChromeLayoutTests {
-    @Test("narrow viewport reserves a non-overlapping view-cube region")
+    @Test("viewport toolbar spans the pane and reserves a non-overlapping view-cube region below")
     func narrowToolbarDoesNotOverlapCube() {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
@@ -152,9 +152,10 @@ struct ViewportChromeLayoutTests {
         #expect(toolbar != nil)
         #expect(cube != nil)
         if let toolbar, let cube {
-            #expect(toolbar.maxX <= cube.minX)
+            #expect(toolbar.maxY < cube.minY)
             #expect(cube.maxX <= 636)
-            #expect(toolbar.height > 26) // the control clusters wrapped instead of overflowing
+            #expect(toolbar.height >= 26)
+            #expect(cube.width == 64)
         }
     }
 }

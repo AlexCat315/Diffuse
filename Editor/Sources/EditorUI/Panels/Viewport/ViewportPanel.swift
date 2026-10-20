@@ -1139,13 +1139,14 @@ struct ViewportChromeLayout<Toolbar: View, Cube: View>: View {
     }
 
     var body: some View {
-        Row(alignment: .top, spacing: 8) {
-            toolbar
-                .flex(1, shrink: 1, basis: 0)
-            cube
-                .frame(width: 92, height: 92)
-        }
-        .absolutePosition(left: 10, top: 10, right: 10)
+        Column(alignment: .leading, spacing: 8) {
+            toolbar.frame(width: .percent(100), minWidth: 0)
+            Row(alignment: .top, spacing: 0) {
+                Spacer(minLength: 0)
+                cube.frame(width: 64, height: 64)
+            }.padding(horizontal: 10).frame(width: .percent(100))
+        }.absolutePosition(left: 0, top: 0, right: 0)
+
     }
 }
 
@@ -1409,8 +1410,8 @@ private struct ViewCubeControl: _PrimitiveView {
 
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
-        layout.width = 92
-        layout.height = 92
+        layout.width = 64
+        layout.height = 64
         return layout
     }
 
@@ -1648,11 +1649,7 @@ private struct ViewportInfoBar: View {
                     .buttonStyle(.plain)
                 ViewportSnapSelector(store: snapStore, isEnabled: isAuthoringEnabled)
             }
-            .padding(3)
-            .background(.surfaceFloating)
-            .surfaceFinish()
-            .cornerRadius(6)
-            .border(.divider, width: 1)
+            .padding(horizontal: 2)
 
             Row(alignment: .center, spacing: 5) {
                 ViewportProjectionSelector(camera: camera,
@@ -1692,13 +1689,11 @@ private struct ViewportInfoBar: View {
                 )
                 }
             }
-            .padding(3)
-            .background(.surfaceFloating)
-            .surfaceFinish()
-            .cornerRadius(6)
-            .border(.divider, width: 1)
+            .padding(horizontal: 2)
         }
-        .theme(EditorVisualTheme.make(dark: true))
+        .padding(horizontal: 6, vertical: 3)
+        .background(.surface)
+        .border(.divider, width: 1)
     }
 
     private var isAuthoringEnabled: Bool {

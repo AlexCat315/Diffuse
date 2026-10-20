@@ -2,9 +2,7 @@ import EditorCore
 import GuavaUI
 import Foundation
 
-/// 24px editor footer in the floating-island language: muted captions on the
-/// bare canvas, no divider. Left: connection + scene revision + selection.
-/// Right: latest status/console message.
+/// Live, compact status on the same surface as the title bar.
 struct EditorStatusBar: View {
     let store: EditorStore
     let showsScriptInfo: Bool
@@ -43,6 +41,10 @@ struct EditorStatusBar: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
+            Divider(axis: .vertical).frame(height: 12)
+            Text(L(EditorSpace(mode: store.workspaceMode).title) + " Space")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+
             Spacer(minLength: 0)
 
             if showsScriptInfo, let document = workspace.wrappedValue.selectedDocument {
@@ -68,6 +70,7 @@ struct EditorStatusBar: View {
         }
         .padding(horizontal: 12, vertical: 0)
         .frame(height: 24)
+        .background(.surfaceRaised)
     }
 
     // Info-level console traffic stays in the console panel; the footer only

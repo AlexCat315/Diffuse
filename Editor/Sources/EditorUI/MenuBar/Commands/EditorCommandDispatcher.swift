@@ -32,14 +32,7 @@ enum EditorCommandDispatcher {
         guard fromCommandPalette || focus?.modalRoot == nil else { return }
         let store = app.store
         guard EditorWorkspaceCommandPolicy.allows(command, in: store.workspaceMode) else { return }
-        if store.interactionMode == .agent, EditorWorkspaceCommandPolicy.requiresManualSurface(command) {
-            store.dispatch(.setInteractionMode(.manual))
-        }
-
         switch command {
-        case let .setInteractionMode(mode):
-            store.dispatch(.setInteractionMode(mode))
-            saveShellState(app)
         case .showCommandPalette:
             store.dispatch(.setCommandPaletteVisible(true))
         case .showSceneSettings:

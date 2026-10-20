@@ -21,6 +21,9 @@ public struct Vec3Field: View {
     public let mixedValueLabel: String
     public let resetValue: SIMD3<Float>?
     public let locale: Locale
+    /// Dense pointer workbenches can use narrower axes; stacking still keeps
+    /// all three values visible when the available width is insufficient.
+    public var minimumAxisWidth: Float = 88
 
     public init(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>,
                 decimals: Int = 2, size: TextField.Size = .small, isEnabled: Bool = true,
@@ -35,12 +38,15 @@ public struct Vec3Field: View {
     }
 
     public var body: some View {
-        AxisLayout(minimumWidth: CGFloat(Self.axisMinimumWidth), idealWidth: CGFloat(Self.axisBasis)) {
-            axis("X", tint: Self.xTint, value: x, reset: resetValue?.x)
-            axis("Y", tint: Self.yTint, value: y, reset: resetValue?.y)
-            axis("Z", tint: Self.zTint, value: z, reset: resetValue?.z)
+        TextScalerReader { scaler in
+            AxisLayout(minimumWidth: CGFloat(scaler.scale(max(44, minimumAxisWidth))),
+                       idealWidth: CGFloat(scaler.scale(Self.axisBasis))) {
+                axis("X", tint: Self.xTint, value: x, reset: resetValue?.x)
+                axis("Y", tint: Self.yTint, value: y, reset: resetValue?.y)
+                axis("Z", tint: Self.zTint, value: z, reset: resetValue?.z)
+            }
+            .contextMenu(onOpen: {}) { menu }
         }
-        .contextMenu(onOpen: {}) { menu }
     }
 
     private func axis(_ label: String, tint: SemanticColorRef, value: Binding<Float>, reset: Float?) -> some View {
@@ -101,7 +107,6 @@ public struct Vec3Field: View {
     }
 
     static let axisBasis: Float = 96
-    static let axisMinimumWidth: Float = 88
     static let xTint = SemanticColorRef { _ in Color(red: 211, green: 67, blue: 67) }
     static let yTint = SemanticColorRef { _ in Color(red: 95, green: 173, blue: 86) }
     static let zTint = SemanticColorRef { _ in Color(red: 78, green: 128, blue: 220) }

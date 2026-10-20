@@ -1,4 +1,3 @@
-import GuavaUIWorkspace
 import CapabilityRuntime
 import GuavaUIAgent
 import Foundation
@@ -14,14 +13,6 @@ public enum EditorAuthoringDomain: String, Codable, Sendable {
     }
 }
 
-/// How the user works, independent of the production domain and dock layout.
-public enum EditorInteractionMode: String, Codable, Sendable, CaseIterable {
-    case manual
-    case agent
-
-    public var title: String { self == .manual ? "Manual Editing" : "Agent Workbench" }
-}
-
 public enum EditorWorkflowFeature: String, Sendable, Hashable {
     case documents, media, scene, rendering, animation, simulation, gameplay, scripting, gameBuild
 }
@@ -35,17 +26,17 @@ public struct EditorWorkspaceProfile: Sendable {
 
     public static let builtInPanelIDs: Set<String> = [
         "viewport", "hierarchy", "inspector", "assets", "console", "intent-input",
-        "confirmation-host", "documents", "media", "scripts", "developer-tools", "animation", "render-pipeline",
+        "confirmation-host", "journal", "documents", "media", "scripts", "developer-tools", "animation", "render-pipeline",
     ]
 
     public static func profile(for mode: EditorWorkspaceMode) -> Self {
         let shared: Set<String> = ["viewport", "hierarchy", "inspector", "assets", "console",
-                                   "intent-input", "confirmation-host", "render-pipeline"]
+                                   "intent-input", "confirmation-host", "journal", "render-pipeline"]
         switch mode {
         case .documents:
-            return Self(domain: .documents, features: [.documents], panelIDs: ["documents", "console", "intent-input", "confirmation-host"])
+            return Self(domain: .documents, features: [.documents], panelIDs: ["documents", "console", "intent-input", "confirmation-host", "journal"])
         case .video:
-            return Self(domain: .media, features: [.media, .documents], panelIDs: ["media", "documents", "console", "intent-input", "confirmation-host"])
+            return Self(domain: .media, features: [.media, .documents], panelIDs: ["media", "documents", "console", "intent-input", "confirmation-host", "journal"])
         case .level, .scripting:
             return Self(domain: .game,
                         features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],

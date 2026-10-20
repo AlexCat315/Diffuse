@@ -76,6 +76,7 @@ GridFragment gridFragment(float4 pixel : SV_Position) {
     color = lerp(color, axisColor(grid.planeV.w), vAxis);
     alpha = max(alpha, axisOutline * 0.95);
     alpha *= smoothstep(0.001, 0.01, abs(dot(normalize(ray), normal)));
+    alpha *= grid.viewport.w;
     if (abs(denominator) < 0.00001 || t <= 0 || clip.w <= 0 || depth < 0 || alpha < 0.001) discard;
     GridFragment output;
     output.color = float4(color, alpha);

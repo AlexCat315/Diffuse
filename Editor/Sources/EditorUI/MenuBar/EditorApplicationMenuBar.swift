@@ -5,7 +5,6 @@ import GuavaUIRuntime
 struct EditorApplicationMenuBar: View {
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
-    let interactionMode: EditorInteractionMode
     let playbackState: PlaybackState
     let canUndo: Bool
     let canRedo: Bool
@@ -16,7 +15,6 @@ struct EditorApplicationMenuBar: View {
     init(workspaceMode: EditorWorkspaceMode,
          activeLayoutPreset: EditorLayoutPreset,
          playbackState: PlaybackState,
-         interactionMode: EditorInteractionMode = .manual,
          canUndo: Bool,
          canRedo: Bool,
          hasSelection: Bool,
@@ -24,7 +22,6 @@ struct EditorApplicationMenuBar: View {
         self.workspaceMode = workspaceMode
         self.activeLayoutPreset = activeLayoutPreset
         self.playbackState = playbackState
-        self.interactionMode = interactionMode
         self.canUndo = canUndo
         self.canRedo = canRedo
         self.hasSelection = hasSelection
@@ -129,7 +126,6 @@ struct EditorApplicationMenuBar: View {
         EditorMenuModel.make(workspaceMode: workspaceMode,
                              activeLayoutPreset: activeLayoutPreset,
                              playbackState: playbackState,
-                             interactionMode: interactionMode,
                              canUndo: canUndo,
                              canRedo: canRedo,
                              hasSelection: hasSelection).menus

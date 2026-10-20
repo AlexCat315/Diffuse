@@ -19,7 +19,7 @@ struct EditorPanelToolbar<Content: View>: View {
         }
         .padding(horizontal: 8, vertical: 2)
         .frame(height: 32)
-        .background(.surfaceRaised)
+        .background(.surface)
     }
 }
 
@@ -65,7 +65,7 @@ struct EditorPanelSearchBar: View {
     var body: some View {
         Row(alignment: .center, spacing: 6) {
             TextField(placeholder, text: text) { input in
-                input.decoration.size = .regular
+                input.decoration.size = .small
                 input.behavior.clearable = true
                 input.events.onSubmit = onSubmit
                 input.events.onCancel = onCancel
@@ -81,7 +81,7 @@ struct EditorPanelSearchBar: View {
         }
         .padding(horizontal: 8, vertical: 2)
         .frame(height: 32)
-        .background(.surfaceRaised)
+        .background(.surface)
     }
 }
 

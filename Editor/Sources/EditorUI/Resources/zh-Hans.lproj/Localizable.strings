@@ -836,3 +836,47 @@
 "%d breakpoints in folded code" = "折叠代码中有 %d 个断点";
 "Files" = "文件列表";
 "Document" = "文档";
+
+"Write" = "写作";
+"Gameplay" = "玩法";
+"Animate" = "动画";
+"Video" = "剪辑";
+"Outline" = "大纲";
+"Properties" = "属性";
+"Agent" = "Agent";
+"Review" = "审阅";
+"Journal" = "日志";
+"Session Journal" = "会话日志";
+"This Session" = "本次会话";
+"Project commands" = "项目命令";
+"Tell Guava what you want to do…" = "告诉 Guava 你想做什么…";
+"Tell Guava what you want to do… (> commands, @ files, # entities)" = "告诉 Guava 你想做什么…（> 命令，@ 文件，# 实体）";
+"A fresh start" = "新的开始";
+"Tasks and activity appear here as you work." = "任务和操作记录会显示在这里。";
+"New Task" = "新任务";
+"Clear conversation" = "清空对话";
+"What shall we make?" = "一起创造点什么？";
+"One workspace. A shared scene. Tell Guava what you want to create, change, or understand." = "同一个工作台，共同的场景。告诉 Guava，你想创造、修改，或了解什么。";
+"Connect an AI provider to start working together." = "连接 AI 服务，开始一起工作。";
+"Set up Agent" = "配置 Agent";
+"TRY A STARTING POINT" = "从这里开始";
+"Explain the current selection" = "解释当前选中的对象";
+"Help me plan the next step" = "帮我规划下一步";
+"Find issues in this project" = "检查项目中的问题";
+"Review before applying" = "审阅后应用";
+"Context" = "上下文";
+"Ask Guava" = "交给 Guava";
+"Open Agent" = "打开 Agent";
+"Work with Agent in this context" = "在当前上下文中与 Agent 协作";
+
+"Import Assets" = "导入资源";
+"Content Browser" = "资源浏览器";
+"Text and Code" = "文本与代码";
+"Video Editing" = "视频剪辑";
+
+"Project-relative file path" = "工程内的文件路径";
+"Filter files" = "筛选文件";
+"Open" = "打开";
+"Save" = "保存";
+"Discard and Reload" = "放弃修改并重新加载";
+"Open a text or code file to begin." = "打开一个文本或代码文件，开始编辑。";

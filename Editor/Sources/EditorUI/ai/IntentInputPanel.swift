@@ -1,144 +1,143 @@
-import EditorCore
-import Foundation
-import GuavaUI
-import GuavaUIRuntime
+internal import EditorCore
+private import Foundation
+internal import GuavaUI
+internal import GuavaUIRuntime
 
-/// AI intent / chat panel in the floating-island language. Chat history on a
-/// sunken well, primary Send action, AI-setup placeholder when no provider.
+/// Owned by the registry for this project; switching context tabs keeps a draft.
+final class AgentDraft {
+    var text: TextBuffer = ""
+}
+
 struct IntentInputPanel: View {
     let app: EditorApplication
-    let store: EditorStore
-    @State private var inputText: TextBuffer = ""
+    private let draft: AgentDraft
+    @State private var inputText: TextBuffer
 
-    init(app: EditorApplication) {
+    init(app: EditorApplication, draft: AgentDraft) {
         self.app = app
-        self.store = app.store
+        self.draft = draft
+        _inputText = State(wrappedValue: draft.text)
     }
 
     var body: some View {
-        let aiIsBusy = store.pendingConfirmationRequest != nil
-            || store.chatMessages.contains(where: isActiveAssistantMessage)
-        Column(alignment: .leading, spacing: 0) {
-            if store.aiSettings.provider == .none {
-                Column(alignment: .leading, spacing: 8) {
-                    Text(L("AI Assistant"))
-                        .font(.bodyStrong)
-                    Text(L("Edit the scene with natural language."))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Text(L("Set an AI provider in Settings to enable."))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Button(L("Open Settings")) {
-                        app.openSettingsWindow()
+        StoreScope(app.store) { store in
+            let busy = store.pendingConfirmationRequest != nil
+                || store.chatMessages.contains(where: isActiveAssistantMessage)
+            Column(alignment: .leading, spacing: 0) {
+                EditorPanelToolbar {
+                    Icon(UIIcons.Status.sparkles, size: 12, color: EditorChromeTokens.agentColor)
+                    Text(store.agentTasks.first.map { L($0.phase.title) } ?? L("New Task"))
+                        .font(.label).flex()
+                    if store.agentTasks.first?.phase == .planning {
+                        Button(L("Cancel")) { app.cancelAgentTask() }
+                            .buttonStyle(EditorChromeButtonStyle(height: 22))
                     }
+                    Button(icon: .resource(UIIcons.Action.moreHorizontal), size: 13,
+                           isEnabled: !busy && !store.chatMessages.isEmpty,
+                           tooltip: L("Clear conversation"),
+                           action: { store.dispatch(.clearChatHistory) })
+                        .buttonStyle(EditorChromeButtonStyle(height: 22))
                 }
-                .padding(horizontal: 12, vertical: 12)
-                .flex(1, shrink: 1)
-            } else {
-                Column(alignment: .leading, spacing: 8) {
-                    Row(alignment: .center, spacing: 8) {
-                        Column(alignment: .leading, spacing: 2) {
-                            Text(L("AI Assistant"))
-                                .font(.bodyStrong)
-                            Text(store.aiSettings.provider.displayName)
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
+                Divider()
+                ScrollView(.vertical, scrollbarGutter: .stable) {
+                    Column(alignment: .leading, spacing: 12) {
+                        if store.chatMessages.isEmpty { introduction }
+                        for message in store.chatMessages { ChatBubble(msg: message) }
+                        if store.aiStatusMessage != nil || !store.aiWarnings.isEmpty {
+                            AIStatusFeedback(status: store.aiStatusMessage, warnings: store.aiWarnings)
                         }
-                        .flex(1, shrink: 1)
-
-                        Button(L("Settings")) {
-                            app.openSettingsWindow()
-                        }
-                        Button(L("Clear"),
-                               isEnabled: !store.chatMessages.isEmpty && !aiIsBusy) {
-                            store.dispatch(.clearChatHistory)
-                        }
-                    }
-                    .padding(horizontal: 8, vertical: 6)
-
-                    if !app.isAIAvailable {
-                        Column(alignment: .leading, spacing: 6) {
-                            Text(L("AI credential unavailable"))
-                                .font(.bodyStrong)
-                                .foregroundColor(.warning)
-                            Text(L("The selected provider has no usable credential. Open Settings to add or replace its API key."))
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
-                            Button(L("Open Settings")) {
-                                app.openSettingsWindow()
-                            }
-                        }
-                        .padding(horizontal: 10, vertical: 8)
-                        .background(.surfaceVariant)
-                        .cornerRadius(7)
-                        .border(.warning, width: 1)
-                    }
-
-                    ScrollView(.vertical, scrollbarGutter: .stable) {
-                        Column(alignment: .leading, spacing: 4) {
-                            if store.chatMessages.isEmpty {
-                                Text(L("Type a message to start."))
-                                    .font(.caption)
-                                    .foregroundColor(.onSurfaceMuted)
-                                    .padding(horizontal: 12, vertical: 12)
-                            } else {
-                                for msg in store.chatMessages {
-                                    ChatBubble(msg: msg)
-                                }
-                            }
-                        }
-                        .padding(horizontal: 8, vertical: 8)
-                    }
-                    .flex(1, shrink: 1)
-                    .background(.surfaceSunken)
-                    .cornerRadius(7)
-
-                    if store.aiStatusMessage != nil || !store.aiWarnings.isEmpty {
-                        AIStatusFeedback(status: store.aiStatusMessage,
-                                         warnings: store.aiWarnings)
-                    }
-
-                    Row(alignment: .center, spacing: 8) {
-                        TextField(L("Describe what you want to do…"), text: $inputText) { input in
-                            input.events.onSubmit = { submitInput() }
-                        }
-                            .flex(1, shrink: 1)
-
-                        Button(isEnabled: app.isAIAvailable
-                                && app.isSceneAuthoringEnabled
-                                && !aiIsBusy,
-                               tooltip: app.isSceneAuthoringEnabled
-                                   ? nil
-                                   : L("Stop simulation to edit the scene"),
-                               action: { submitInput() }) {
-                            Text(L("Send"))
-                        }
-                    }
-                    .padding(horizontal: 8, vertical: 6)
-                }
-                .flex(1, shrink: 1)
-            }
+                }.padding(12).frame(width: .percent(100), minWidth: 0)
+                }.flex().frame(minWidth: 0, minHeight: 0)
+                Divider()
+                composer(busy: busy)
+            }.flex().frame(minWidth: 0, minHeight: 0).background(.surface)
+                .debugName("editor-agent-thread")
         }
-        .frame(minWidth: 280)
     }
+
+    private var introduction: some View {
+        Column(alignment: .leading, spacing: 12) {
+            Icon(UIIcons.Status.sparkles, size: 22, color: EditorChromeTokens.agentColor)
+                .frame(width: 42, height: 42)
+                .background(EditorChromeTokens.agentColor.opacity(0.10)).cornerRadius(12)
+            Text(L("What shall we make?")).font(.headline).foregroundColor(.onSurface)
+            Text(L("One workspace. A shared scene. Tell Guava what you want to create, change, or understand."))
+                .font(.body).foregroundColor(.onSurfaceVariant)
+            if !app.isAIAvailable {
+                Column(alignment: .leading, spacing: 8) {
+                    Text(L("Connect an AI provider to start working together."))
+                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                    Button(L("Set up Agent")) { app.openSettingsWindow() }
+                        .buttonStyle(EditorChromeButtonStyle(agent: true))
+                        .background(EditorChromeTokens.agentColor.opacity(0.10)).cornerRadius(6)
+                }.padding(vertical: 4)
+            }
+            Text(L("TRY A STARTING POINT")).font(.caption).foregroundColor(.onSurfaceMuted).padding(EdgeInsets(top: 12))
+            suggestion(L("Explain the current selection"))
+            suggestion(L("Help me plan the next step"))
+            suggestion(L("Find issues in this project"))
+        }.padding(vertical: 16).frame(width: .percent(100), minWidth: 0)
+    }
+
+    private func suggestion(_ text: String) -> some View {
+        Button { updateDraft(TextBuffer(text)) } label: {
+            Row(alignment: .center, spacing: 8) {
+                Icon(UIIcons.Status.sparkles, size: 12, color: EditorChromeTokens.agentColor)
+                Text(text, lineLimit: 2).font(.body).foregroundColor(.onSurfaceVariant).flex()
+                Icon(UIIcons.Navigation.arrowUpRight, size: 12, color: .onSurfaceMuted)
+            }.padding(horizontal: 10, vertical: 10).frame(width: .percent(100), minWidth: 0)
+                .background(.surfaceRaised).cornerRadius(7).border(.divider, width: 1)
+        }.buttonStyle(.plain).frame(width: .percent(100))
+    }
+
+    private func composer(busy: Bool) -> some View {
+        Column(alignment: .leading, spacing: 8) {
+            if let entity = app.scene.entitySummary(id: app.store.selectedEntityID) {
+                Row(alignment: .center, spacing: 5) {
+                    Icon(UIIcons.Editor.box, size: 11, color: .accent)
+                    Text(entity.name, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceVariant)
+                }.padding(horizontal: 6, vertical: 3).background(.surfaceVariant).cornerRadius(4)
+            }
+            TextField(L("Describe what you want to do…"), text: Binding(get: { inputText }, set: updateDraft)) { input in
+                input.layout.axis = .vertical
+                input.layout.maxVisibleLines = 5
+                input.events.onSubmit = submitInput
+            }.font(.body).textFieldStyle(AgentComposerFieldStyle())
+                .frame(width: .percent(100), minHeight: 48).debugName("editor-agent-composer")
+            Row(alignment: .center, spacing: 5) {
+                Icon(UIIcons.Status.shieldCheck, size: 11, color: .onSurfaceMuted)
+                Text(L("Review before applying")).font(.caption).foregroundColor(.onSurfaceMuted)
+                Spacer(minLength: 0)
+                Button(icon: .resource(UIIcons.Navigation.arrowUp), size: 13,
+                       isEnabled: app.isAIAvailable && app.isSceneAuthoringEnabled && !busy
+                           && !inputText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       tooltip: L("Send"), action: submitInput)
+                    .buttonStyle(EditorChromeButtonStyle(height: 26, agent: true))
+                    .background(EditorChromeTokens.agentColor.opacity(0.14)).cornerRadius(6)
+                    .debugName("editor-agent-send")
+            }.frame(width: .percent(100), minWidth: 0)
+        }.padding(10).background(.surfaceSunken).cornerRadius(9).border(.borderStrong, width: 1)
+            .padding(8).frame(width: .percent(100), minWidth: 0)
+    }
+
+    private func updateDraft(_ text: TextBuffer) { draft.text = text; inputText = text }
 
     private func submitInput() {
         let trimmed = inputText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if app.submitNaturalLanguageIntent(trimmed) {
-            inputText = ""
-        }
+        if app.submitNaturalLanguageIntent(trimmed) { updateDraft("") }
     }
 
     private func isActiveAssistantMessage(_ message: AIChatMessage) -> Bool {
         switch message.assistantState {
-        case .thinking, .streaming, .pendingConfirmation:
-            return true
-        case .replied, .applied, .discarded, .failed, .none:
-            return false
+        case .thinking, .streaming, .pendingConfirmation: true
+        case .replied, .applied, .discarded, .failed, .none: false
         }
     }
+}
+
+private struct AgentComposerFieldStyle: TextFieldStyle {
+    func makeBody(configuration: TextFieldStyleConfiguration) -> some View { configuration.content }
 }
 
 struct AIStatusFeedback: View {

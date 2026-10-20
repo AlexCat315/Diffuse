@@ -28,8 +28,6 @@ struct CommandPaletteOverlay: View {
     let controller: WorkspaceController
     let registry: WorkspacePanelRegistry
     var availableHeight: Float = 720
-    @State private var aiMode = false
-    @State private var aiInput: TextBuffer = ""
     @State private var selectedIndex = 0
     @State private var resultsOffset = CGPoint.zero
     private var resultsHeight: Float { max(80, min(320, availableHeight - 168)) }
@@ -48,27 +46,9 @@ struct CommandPaletteOverlay: View {
         let matches = results()
         ModalBarrier(onBackgroundTap: dismiss) {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                Row(alignment: .center, spacing: 6) {
-                    Button(L("Commands and Resources"), isSelected: !aiMode) { aiMode = false }.buttonStyle(.tab)
-                    Button(L("AI Intent"), isSelected: aiMode) { aiMode = true }.buttonStyle(.tab)
-                    Spacer(minLength: 0)
-                    Button(icon: .resource(UIIcons.Action.x), size: 12, action: dismiss).buttonStyle(.ghost)
-                }.padding(horizontal: 10, vertical: 8)
-                Divider()
-                if aiMode {
-                    TextField(L("Describe what you want to do…"), text: $aiInput) { input in
-                        input.events.onSubmit = submitAI
-                        input.events.onCancel = dismiss
-                    }.padding(12)
-                    if !app.isAIAvailable {
-                        Text(L("Set an AI provider in Settings to enable.")).font(.caption).foregroundColor(.warning).padding(12)
-                        Button(L("Open Settings")) { dismiss(); app.openSettingsWindow() }.padding(12)
-                    }
-                    if app.store.aiStatusMessage != nil || !app.store.aiWarnings.isEmpty {
-                        AIStatusFeedback(status: app.store.aiStatusMessage, warnings: app.store.aiWarnings).padding(12)
-                    }
-                } else {
-                    TextField(L("Search commands or resources (> commands, @ resources)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
+                Row(alignment: .center, spacing: 8) {
+                    Icon(UIIcons.Status.sparkles, size: 16, color: EditorChromeTokens.agentColor)
+                    TextField(L("Tell Guava what you want to do… (> commands, @ files, # entities)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
                             selectedIndex = 0
                             resultsOffset = .zero
                             app.store.dispatch(.setCommandPaletteQuery($0))
@@ -87,35 +67,45 @@ struct CommandPaletteOverlay: View {
                             return false
                         }
                         input.events.onCancel = dismiss
-                    }.padding(12).debugName("command-palette-search")
-                    Divider()
-                    ScrollView(.vertical, scrollbarGutter: .stable, scrollOffset: $resultsOffset) {
-                        Column(alignment: .leading, spacing: 2) {
-                            if matches.isEmpty {
-                                EditorPanelEmptyState(L("No matching commands or resources"))
-                            }
-                            matches.indices.map { index in
-                                let item = matches[index]
-                                return AnyView(Button(isEnabled: item.enabled, isSelected: index == selectedIndex,
-                                       action: { execute(item) }) {
-                                    Row(alignment: .center, spacing: 8) {
-                                        Column(alignment: .leading, spacing: 2) {
-                                            Text(item.title, lineLimit: 1).font(.label)
-                                            Text(item.detail, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted)
-                                        }.flex()
-                                        Text(item.shortcut).font(.mono).foregroundColor(.onSurfaceVariant)
-                                    }.padding(horizontal: 10, vertical: 6)
-                                }.buttonStyle(.ghost).frame(width: .percent(100)).frame(height: 56))
-                            }
-                        }.padding(4).frame(width: .percent(100))
-                    }.frame(height: resultsHeight).debugName("command-palette-results")
+                    }.flex().debugName("command-palette-search")
+                    Button(icon: .resource(UIIcons.Action.x), size: 12, tooltip: L("Close"), action: dismiss)
+                        .buttonStyle(EditorChromeButtonStyle(height: 24))
+                }.padding(12)
+                if let entity = app.scene.entitySummary(id: app.store.selectedEntityID) {
+                    Row(alignment: .center, spacing: 6) {
+                        Text(L("Context")).font(.caption).foregroundColor(.onSurfaceMuted)
+                        Icon(UIIcons.Editor.box, size: 11, color: .accent)
+                        Text(entity.name, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceVariant)
+                    }.padding(horizontal: 14, vertical: 7)
                 }
+                Divider()
+                ScrollView(.vertical, scrollbarGutter: .stable, scrollOffset: $resultsOffset) {
+                    Column(alignment: .leading, spacing: 2) {
+                        if matches.isEmpty {
+                            EditorPanelEmptyState(L("No matching commands or resources"))
+                        }
+                        matches.indices.map { index in
+                            let item = matches[index]
+                            return AnyView(Button(isEnabled: item.enabled, isSelected: index == selectedIndex,
+                                   action: { execute(item) }) {
+                                Row(alignment: .center, spacing: 8) {
+                                    Column(alignment: .leading, spacing: 2) {
+                                        Text(item.title, lineLimit: 1).font(.label)
+                                        Text(item.detail, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted)
+                                    }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
+                                    Text(item.shortcut).font(.mono).foregroundColor(.onSurfaceVariant)
+                                }.padding(horizontal: 10, vertical: 6).frame(width: .percent(100), minWidth: 0)
+                            }.buttonStyle(.ghost).frame(width: .percent(100)).frame(height: 56))
+                        }
+                    }.padding(4).frame(width: .percent(100))
+                }.frame(height: resultsHeight).debugName("command-palette-results")
                 Divider()
                 Text(L("↑ ↓ to select · Enter to run · Escape to close"))
                     .font(.caption).foregroundColor(.onSurfaceMuted).padding(10)
             }
-            .frame(width: .percent(92), maxWidth: 580)
-            .floatingSurface(10)
+            .frame(width: .percent(92), maxWidth: 620)
+            .background(.surfaceRaised).cornerRadius(12).border(.borderStrong, width: 1)
+            .shadow(color: Color.black.multipliedAlpha(0.45), offsetY: 20, blur: 50).clipped()
             .debugName("command-palette-card")
         }
     }
@@ -124,9 +114,10 @@ struct CommandPaletteOverlay: View {
         let raw = app.store.commandPaletteQuery.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let commandsOnly = raw.hasPrefix(">")
         let resourcesOnly = raw.hasPrefix("@")
-        let query = commandsOnly || resourcesOnly ? String(raw.dropFirst()).trimmingCharacters(in: .whitespaces) : raw
+        let entitiesOnly = raw.hasPrefix("#")
+        let query = commandsOnly || resourcesOnly || entitiesOnly ? String(raw.dropFirst()).trimmingCharacters(in: .whitespaces) : raw
         var entries: [ResultItem] = []
-        if !resourcesOnly {
+        if !resourcesOnly && !entitiesOnly {
             entries = EditorCommandSearch.commands(app: app).map { command in
                 ResultItem(id: command.id, title: command.title, detail: L("Command"), shortcut: command.shortcut,
                            enabled: command.enabled, searchText: command.title + " " + command.keywords + " " + command.id,
@@ -136,7 +127,7 @@ struct CommandPaletteOverlay: View {
                 })
             }
         }
-        if !commandsOnly {
+        if !commandsOnly && !entitiesOnly {
             entries += app.workstation.scripts.snapshot.documents.map { document in
                 ResultItem(id: "script/" + document.file.identifier, title: document.file.displayName + ".swift",
                     detail: "Scripts/", shortcut: "", enabled: true,
@@ -149,11 +140,34 @@ struct CommandPaletteOverlay: View {
                     perform: { app.navigateToIssue(.asset(id: asset.id)) })
             }
         }
-        return entries.compactMap { entry -> (ResultItem, Int)? in
+        if entitiesOnly && app.store.workspaceMode.profile.features.contains(.scene) {
+            entries += HierarchyPanelModel.allEntityIDs(in: app.scene.roots).compactMap { id in
+                guard let entity = app.scene.entitySummary(id: id) else { return nil }
+                return ResultItem(id: "entity/" + String(id), title: entity.name,
+                    detail: entity.kind, shortcut: "", enabled: true, searchText: entity.name + " " + entity.kind,
+                    perform: { app.store.dispatch(.setSelectedEntity(id)) })
+            }
+        }
+        var matches = entries.compactMap { entry -> (ResultItem, Int)? in
             EditorCommandSearch.score(query, in: entry.searchText).map { (entry, $0) }
         }.sorted { lhs, rhs in
             lhs.1 == rhs.1 ? lhs.0.id < rhs.0.id : lhs.1 > rhs.1
         }.prefix(60).map { $0.0 }
+        if !commandsOnly && !resourcesOnly && !entitiesOnly {
+            let text = raw
+            let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Agent") : L("Ask Guava") + ": " + text,
+                detail: app.isAIAvailable ? L("Work with Agent in this context") : L("Set an AI provider in Settings to enable."),
+                shortcut: "↵", enabled: true, searchText: "", perform: {
+                    EditorCommandDispatcher.handle(.showPanel("intent-input"), app: app, controller: controller,
+                                                   registry: registry, fromCommandPalette: true)
+                    if !text.isEmpty {
+                        if app.isAIAvailable { _ = app.submitNaturalLanguageIntent(text) }
+                        else { app.openSettingsWindow() }
+                    }
+                })
+            matches.insert(intent, at: 0)
+        }
+        return matches
     }
 
     private func execute(_ item: ResultItem) {
@@ -169,11 +183,6 @@ struct CommandPaletteOverlay: View {
         else if top + 56 > resultsOffset.y + CGFloat(resultsHeight) {
             resultsOffset.y = top + 56 - CGFloat(resultsHeight)
         }
-    }
-
-    private func submitAI() {
-        let trimmed = aiInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty, app.submitNaturalLanguageIntent(trimmed) { dismiss() }
     }
 
     private func dismiss() { app.store.dispatch(.setCommandPaletteVisible(false)) }

@@ -54,7 +54,6 @@ struct EditorAgentTaskTests {
         #expect(service.begin(prompt: "Another task", target: target) == nil)
         store.dispatch(.setSelectedEntity(99))
         store.dispatch(.setWorkspaceMode(.scripting))
-        store.dispatch(.setInteractionMode(.agent))
         #expect(service.activeTask?.target == target)
         service.transition(to: .awaitingReview, summary: "Change material")
         #expect(service.activeTaskID == task.id)
@@ -67,22 +66,19 @@ struct EditorAgentTaskTests {
         #expect(service.begin(prompt: "New task", target: target) != nil)
     }
 
-    @Test("Interaction preferences persist; task sessions and document identity do not")
+    @Test("Workspace preferences persist; task sessions and document identity do not")
     func sessionPersistenceBoundary() throws {
         var state = EditorState {
             $0.workspace.mode = .animation
             $0.workspace.layoutPreset = .animationDefault
-            $0.workspace.interactionMode = .agent
         }
         let target = EditorAgentTaskTarget(documentID: state.document.identity, sceneRevision: 0,
             workspace: .animation, selectedEntityIDs: [], primaryEntityID: nil)
         state.assistant.agentTasks = [EditorAgentTask(prompt: "Animate", target: target)]
         let restored = try JSONDecoder().decode(EditorState.self, from: JSONEncoder().encode(state))
-        #expect(restored.workspace.interactionMode == .agent)
         #expect(restored.workspace.mode == .animation)
         #expect(restored.assistant.agentTasks.isEmpty)
         #expect(restored.document.identity != state.document.identity)
-        #expect(try JSONDecoder().decode(EditorWorkspaceState.self, from: Data("{}".utf8)).interactionMode == .agent)
     }
 
     @Test("Task cancellation and terminal results release the active slot")

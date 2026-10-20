@@ -8,6 +8,7 @@ import Testing
 @testable import EditorUI
 
 @Suite("Inspector compact authoring", .serialized)
+@MainActor
 struct InspectorLayoutTests {
     private final class Shapes {
         var value: [ColliderShapeInstance] = [

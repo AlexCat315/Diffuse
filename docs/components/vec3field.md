@@ -22,6 +22,11 @@ Otherwise every axis takes its own full-width row. It never splits X/Y over a
 lone Z, which read as a broken grid. Fields are never clipped below their
 editing width, and the same bound inputs survive the reflow.
 
+Dense pointer workbenches may set `minimumAxisWidth` (default 88pt, clamped to
+at least 44pt). Editor uses 56pt in its compact property cells. Containers must
+measure the field's intrinsic height so a stacked vector keeps X, Y and Z
+visible; Inspector vector rows do this rather than fixing them to 30pt.
+
 `NarrowReflowTests.vec3Reflow` checks 220pt (three stacked rows) and 420pt (one
 row) geometry; `Vec3FieldTests.axisRows` checks equal widths at 180pt and 400pt.
 Gallery `--component vec3Field` includes a 240pt mixed-value example and a

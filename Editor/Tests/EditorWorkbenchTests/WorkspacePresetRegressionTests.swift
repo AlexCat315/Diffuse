@@ -44,7 +44,7 @@ struct WorkspacePresetRegressionTests {
     func presetFrames() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let registry = registry()
         let expected: [(EditorLayoutPreset, Set<String>)] = [
-            (.levelDefault, ["viewport", "hierarchy", "inspector"]),
+            (.levelDefault, ["viewport", "hierarchy", "inspector", "console"]),
             (.levelWorkbench, ["viewport", "scripts", "hierarchy", "inspector", "developer-tools"]),
             (.levelCinematics, ["viewport", "hierarchy", "inspector", "animation", "render-pipeline"]),
             (.scriptingDefault, ["scripts", "assets", "inspector", "console"]),

@@ -118,7 +118,8 @@ let package = Package(
             ],
             resources: [
                 .process("Resources")
-            ]
+            ],
+            swiftSettings: [.enableUpcomingFeature("InternalImportsByDefault")]
         ),
         .executableTarget(name: "EditorApp", dependencies: ["EditorUI"], linkerSettings: guavaScriptExportLinkerSettings),
         // MARK: - Game Runtime (simulation host, no Editor UI)

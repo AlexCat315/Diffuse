@@ -2,6 +2,17 @@ import Foundation
 import Testing
 import StudioDocuments
 
+@Test func fileListingUsesCanonicalProjectRelativePaths() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory.appendingPathComponent("Notes"), withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try Data("Read me".utf8).write(to: directory.appendingPathComponent("README.md"))
+    try Data("中文".utf8).write(to: directory.appendingPathComponent("Notes/设计.md"))
+    let workspace = DocumentWorkspace(root: directory)
+    #expect(workspace.files() == ["Notes/设计.md", "README.md"])
+    for path in workspace.files() { #expect(try workspace.open(path).path == path) }
+}
+
 @Test func plainDocumentsSaveUnicodeAndProtectExternalChanges() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

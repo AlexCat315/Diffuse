@@ -152,6 +152,8 @@ public final class Application {
             }
             dev.server.host.window.resize = { [weak self] size in
                 guard let host = self?.host, let window = host.mainWindow else { return "No main window" }
+                // A maximized native window can ignore explicit size requests.
+                host.restoreWindow(window)
                 host.setWindowSize(window, width: Float(size.width), height: Float(size.height))
                 host.requestDisplay()
                 return nil

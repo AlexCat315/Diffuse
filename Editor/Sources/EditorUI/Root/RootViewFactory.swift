@@ -144,6 +144,7 @@ enum EditorRootViewFactory {
 
     static func makeRegistry(app: EditorApplication) -> WorkspacePanelRegistry {
         registerPanelIcons()
+        let agentDraft = AgentDraft()
         return WorkspacePanelRegistry([
             WorkspacePanelDescriptor(id: "hierarchy", title: localizedPanelTitle(for: "hierarchy"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.hierarchy" }) {
                 HierarchyPanel(store: app.store, scene: app.scene)
@@ -166,10 +167,14 @@ enum EditorRootViewFactory {
                 AssetBrowserPanel(app: app)
             },
             WorkspacePanelDescriptor(id: "intent-input", title: localizedPanelTitle(for: "intent-input"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.intent-input" }) {
-                IntentInputPanel(app: app)
+                IntentInputPanel(app: app, draft: agentDraft)
             },
             WorkspacePanelDescriptor(id: "confirmation-host", title: localizedPanelTitle(for: "confirmation-host"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.confirmation-host" }) {
                 ConfirmationHostPanel(app: app)
+            },
+            WorkspacePanelDescriptor(id: "journal", title: localizedPanelTitle(for: "journal"), defaultSlot: .trailing,
+                                     configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.journal" }) {
+                SessionJournal(app: app)
             },
             WorkspacePanelDescriptor(id: "render-pipeline", title: localizedPanelTitle(for: "render-pipeline"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.render-pipeline" }) {
                 RenderPipelinePanel(app: app)
@@ -211,6 +216,7 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
         WorkspacePanelIconCatalog.register("panel.profiler", panelIcon("profiler"))
         WorkspacePanelIconCatalog.register("panel.scripts", panelIcon("script"))
+        WorkspacePanelIconCatalog.register("panel.journal", UIIcons.Editor.gitCommit)
     }
 
     static func saveWorkspaceLayout(_ controller: WorkspaceController,
@@ -279,19 +285,21 @@ enum EditorRootViewFactory {
     private static func localizedPanelTitle(for id: String) -> String {
         switch id {
         case "hierarchy":
-            return L("Hierarchy")
+            return L("Outline")
         case "inspector":
-            return L("Inspector")
+            return L("Properties")
         case "viewport":
-            return L("Viewport")
+            return L("Scene")
         case "console":
             return L("Console")
         case "assets":
             return L("Assets")
         case "intent-input":
-            return L("AI")
+            return L("Agent")
         case "confirmation-host":
-            return L("Confirmations")
+            return L("Review")
+        case "journal":
+            return L("Journal")
         case "render-pipeline":
             return L("Render Pipeline")
         case "developer-tools":

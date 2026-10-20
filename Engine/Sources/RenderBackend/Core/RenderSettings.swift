@@ -113,7 +113,9 @@ public struct RenderSettings: Sendable, Equatable {
     }
 
     public struct Viewport: Sendable, Equatable {
+        public enum Backdrop: Sendable, Equatable { case sky, studio }
         public var offscreen = false
+        public var backdrop: Backdrop = .sky
         public var gridEnabled = false
         public var gridSpacing: Float = 1
         public init() {}

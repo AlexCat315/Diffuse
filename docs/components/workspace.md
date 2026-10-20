@@ -4,6 +4,8 @@ GuavaUI 的 docking 系统公开名称是 `GuavaUIWorkspace` 模块和 `Workspac
 
 ## 模型与操作
 
+`WorkspaceTheme.panelStyle` 默认为 `.card`。密集桌面工作台可选择 `.continuous`，去掉面板外层圆角、阴影和边框，使用铺满高度的标签与顶部选中线；分屏、拖拽命中区域和文档状态保持相同。Editor 使用 32pt 标签栏与 1pt 分隔线。
+
 - `WorkspacePanel`：软件定义的稳定面板 ID、标题、图标键、关闭/拖拽/折叠能力与 `WorkspacePanelSizing` 内容尺寸契约。
 - `WorkspaceTabGroup`：面板顺序、activePanelID、折叠状态与 pinnedPanelIDs。
 - `WorkspaceSlot`：开放的槽 ID、kind、尺寸策略和该槽的布局树。软件可以新增区域或 chrome 槽。

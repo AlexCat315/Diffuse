@@ -1,6 +1,6 @@
 import Foundation
-import GuavaUIRuntime
-import CardBattleRuntime
+public import GuavaUIRuntime
+public import CardBattleRuntime
 
 /// Main-thread observable model that bridges `BattleHUDSnapshot` to the
 /// GuavaUI reactive system. Observers are notified synchronously on `update`.

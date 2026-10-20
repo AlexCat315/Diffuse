@@ -370,8 +370,10 @@ struct InspectorPanel: View {
         var mixedAxes: Set<String> = []
 
         var body: some View {
-            Vec3Field(x: x, y: y, z: z, decimals: 2, size: .small,
-                      mixedAxes: mixedAxes, mixedValueLabel: L("Mixed value"))
+            var field = Vec3Field(x: x, y: y, z: z, decimals: 2, size: .small,
+                                  mixedAxes: mixedAxes, mixedValueLabel: L("Mixed value"))
+            field.minimumAxisWidth = 56
+            return field
                 .flex(1, shrink: 1, basis: 0)
                 .clipped()
         }
@@ -822,7 +824,7 @@ private extension EditorInspectorFieldValue {
             return metrics.sizing
         }
         switch self {
-        case .json: return .intrinsic
+        case .json, .vector3: return .intrinsic
         default: return .fixed
         }
     }

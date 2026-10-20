@@ -34,7 +34,6 @@ struct EditorAgentTransactionTests {
         try begin(app, entityID: entityID, plan: plan)
         app.store.dispatch(.setSelectedEntity(nil))
         app.store.dispatch(.setWorkspaceMode(.scripting))
-        app.store.dispatch(.setInteractionMode(.agent))
         let context = app.makeCapabilityInvocationContext(defaultSource: .ai)
         #expect(context.selectedEntityID == entityID)
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: app.scene.scene,

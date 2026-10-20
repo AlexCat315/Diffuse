@@ -11,6 +11,7 @@ import Testing
 /// Yoga. That is the flash. These tests pin the cheaper contract: the tokens
 /// reach the nodes through `ThemeEnvironment`, the nodes themselves survive.
 @Suite("Editor theme repaint", .serialized)
+@MainActor
 struct EditorThemeRepaintTests {
     private final class Harness: View {
         @State private var presentation = EditorPresentationState(themeMode: .dark)

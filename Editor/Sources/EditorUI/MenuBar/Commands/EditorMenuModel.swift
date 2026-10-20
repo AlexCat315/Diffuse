@@ -19,7 +19,6 @@ struct EditorMenuModel {
     static func make(workspaceMode: EditorWorkspaceMode,
                      activeLayoutPreset: EditorLayoutPreset,
                      playbackState: PlaybackState,
-                     interactionMode: EditorInteractionMode = .manual,
                      canUndo: Bool = false,
                      canRedo: Bool = false,
                      hasSelection: Bool = false) -> EditorMenuModel {
@@ -45,18 +44,19 @@ struct EditorMenuModel {
                 action(L("Settings"), key: ",", command: .openSettings),
             ]),
             EditorApplicationMenu(title: L("Workspace"), items: [
-                action(L(EditorWorkspaceMode.level.title), key: "1", selected: workspaceMode == .level,
+                action(L("Write"), key: "1", selected: workspaceMode == .documents,
+                       command: .setWorkspaceMode(.documents)),
+                action(L("Gameplay"), key: "2", selected: workspaceMode == .level,
                        command: .setWorkspaceMode(.level)),
-                action(L(EditorWorkspaceMode.scripting.title), key: "4", selected: workspaceMode == .scripting,
-                       command: .setWorkspaceMode(.scripting)),
-                .separator,
-                action(L(EditorWorkspaceMode.modeling.title), key: "2", selected: workspaceMode == .modeling,
-                       command: .setWorkspaceMode(.modeling)),
-                action(L(EditorWorkspaceMode.animation.title), key: "3", selected: workspaceMode == .animation,
+                action(L("Animate"), key: "3", selected: workspaceMode == .animation,
                        command: .setWorkspaceMode(.animation)),
+                action(L("Video"), key: "4", selected: workspaceMode == .video,
+                       command: .setWorkspaceMode(.video)),
+                action(L("Render"), key: "5", selected: workspaceMode == .modeling,
+                       command: .setWorkspaceMode(.modeling)),
                 .separator,
-                action(L("Manual Editing"), key: "", selected: interactionMode == .manual, command: .setInteractionMode(.manual)),
-                action(L("Agent Workbench"), key: "", selected: interactionMode == .agent, command: .setInteractionMode(.agent)),
+                action(L(EditorWorkspaceMode.scripting.title), key: "", selected: workspaceMode == .scripting,
+                       command: .setWorkspaceMode(.scripting)),
             ]),
             EditorApplicationMenu(title: L("Layout"), items:
                 EditorLayoutPreset.presets(for: workspaceMode).map { preset in
@@ -78,7 +78,7 @@ struct EditorMenuModel {
                 action(L("Inspector"), key: "", command: .showPanel("inspector")),
                 action(L("Scene Settings"), key: "", command: .showSceneSettings),
                 action(L("Assets"), key: "", command: .showAssets),
-                action(L("Scripts"), key: "5", command: .showScripts),
+                action(L("Scripts"), key: "", command: .showScripts),
                 action(L("Console"), key: "", command: .showPanel("console")),
                 action(L("Animation"), key: "", command: .showPanel("animation")),
                 action(L("Render Pipeline"), key: "", command: .showPanel("render-pipeline")),
@@ -118,7 +118,6 @@ struct EditorMenuModel {
             ]),
         ]
         return EditorMenuModel(menus: menus.compactMap { menu in
-            if interactionMode == .agent && menu.title == L("Layout") { return nil }
             var items: [EditorApplicationMenuItem] = []
             for item in menu.items {
                 if case .action(let action) = item,
