@@ -25,7 +25,7 @@ struct WorkspacePresetRegressionTests {
 
     private func registry() -> WorkspacePanelRegistry {
         let ids: [WorkspacePanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console",
-                              "animation", "render-pipeline", "developer-tools", "intent-input", "confirmation-host"]
+                              "animation", "render-pipeline", "developer-tools", "intent-input"]
         return WorkspacePanelRegistry(ids.map { id in
             let slot: WorkspaceSlotID
             switch id.rawValue {

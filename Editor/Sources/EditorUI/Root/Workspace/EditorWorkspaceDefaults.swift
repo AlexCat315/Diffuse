@@ -64,7 +64,7 @@ enum EditorWorkspaceDefaults {
         let definitions: [(WorkspaceTabGroupID, [WorkspacePanelID], WorkspacePanelID)] = [
             ("leading", ["hierarchy", "assets"], preset.mode == .scripting || preset.mode == .modeling ? "assets" : "hierarchy"),
             ("center", ["viewport", "scripts"], "viewport"),
-            ("trailing", ["inspector", "intent-input", "confirmation-host", "journal"], "inspector"),
+            ("trailing", ["inspector", "intent-input", "journal"], "inspector"),
             ("bottom", ["console", "animation", "render-pipeline", "developer-tools"],
              defaultBottomPanelID(for: preset)),
         ]
@@ -108,7 +108,7 @@ enum EditorWorkspaceDefaults {
         case .documentsDefault, .videoDefault: return .init(leading: 0.20, centerTrailing: 0.78, topBottom: 0.78)
         case .scriptingDefault: return .init(leading: 0.22, centerTrailing: 0.74, topBottom: 0.72)
         case .levelWorkbench: return .init(leading: 0.16, centerTrailing: 0.75, topBottom: 0.68)
-        case .levelDefault: return .init(leading: 0.185, centerTrailing: 0.69, topBottom: 0.74)
+        case .levelDefault: return .init(leading: 0.185, centerTrailing: 0.678, topBottom: 0.74)
         case .levelCinematics: return .init(leading: 0.18, centerTrailing: 0.76, topBottom: 0.60)
         case .modelingDefault: return .init(leading: 0.22, centerTrailing: 0.76, topBottom: 0.66)
         case .modelingSculpt: return .init(leading: 0.19, centerTrailing: 0.78, topBottom: 0.72)

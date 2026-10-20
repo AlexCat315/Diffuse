@@ -33,12 +33,14 @@ struct EditorPanelSearchBar: View {
     let onSubmit: (() -> Void)?
     let onCancel: (() -> Void)?
     let actions: AnyView
+    var leading: AnyView?
 
     init<ActionContent: View>(_ placeholder: String,
                               text: Binding<TextBuffer>,
                               summary: String? = nil,
                               onSubmit: (() -> Void)? = nil,
                               onCancel: (() -> Void)? = nil,
+                              leading: AnyView? = nil,
                               @ViewBuilder actions: () -> ActionContent) {
         self.placeholder = placeholder
         self.text = text
@@ -46,6 +48,7 @@ struct EditorPanelSearchBar: View {
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         self.actions = AnyView(actions())
+        self.leading = leading
     }
 
     init(_ placeholder: String,
@@ -64,6 +67,7 @@ struct EditorPanelSearchBar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 6) {
+            if let leading { leading }
             TextField(placeholder, text: text) { input in
                 input.decoration.size = .small
                 input.behavior.clearable = true

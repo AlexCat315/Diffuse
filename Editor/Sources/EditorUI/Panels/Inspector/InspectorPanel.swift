@@ -124,12 +124,13 @@ struct InspectorPanel: View {
                                                   isEditable: canEditSelection),
                                  labelWidth: 84,
                                  minValueWidth: 132,
-                                 rowHeight: 28,
-                                 rowSpacing: 6,
-                                 sectionSpacing: 6,
-                                 contentPadding: 6,
+                                 rowHeight: 24,
+                                 rowSpacing: 3,
+                                 sectionSpacing: 0,
+                                 contentPadding: 0,
                                  scrollAxes: .vertical,
                                  emptyText: L("No properties"),
+                                 sectionStyle: .plain,
                                  collapsedSectionIDs: trimmedSearchText.isEmpty ? collapsedIDs : [],
                                  onSectionCollapseChanged: { id, isCollapsed in
                         store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
@@ -197,13 +198,16 @@ struct InspectorPanel: View {
         var body: some View {
             Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 Row(alignment: .center, spacing: 8) {
+                    Icon(UIIcons.Editor.box, size: 18, color: .accent)
+                        .frame(width: 30, height: 30)
+                        .background(.accentMuted).cornerRadius(7)
                     Box(direction: .column, alignItems: .stretch, spacing: 2) {
                         Text(entity.name)
                             .lineLimit(1)
                             .font(.bodyStrong)
                             .foregroundColor(.onSurface)
 
-                        Text(entity.kind)
+                        Text("\(entity.kind) · \(componentCount) \(L("Components"))")
                             .lineLimit(1)
                             .font(.caption)
                             .foregroundColor(.onSurfaceVariant)
@@ -212,16 +216,8 @@ struct InspectorPanel: View {
                     EditorPanelBadge("ID \(entity.id)")
                 }
 
-                Row(alignment: .center, spacing: 6) {
-                    Text(L("Components"))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceVariant)
-                    Text("\(componentCount)")
-                        .font(.mono)
-                        .foregroundColor(.onSurface)
-                        .padding(horizontal: 6, vertical: 1)
-                        .background(.surfaceVariant)
-                        .cornerRadius(3)
+                if selectionCount > 1 || isLocked || !isAuthoringEnabled {
+                    Row(alignment: .center, spacing: 6) {
                     if selectionCount > 1 {
                         EditorPanelBadge("\(selectionCount) \(L("selected"))",
                                          foreground: .accent)
@@ -232,6 +228,7 @@ struct InspectorPanel: View {
                         EditorPanelBadge(L("Read Only"), foreground: .warning)
                     }
                     Spacer(minLength: 0)
+                    }
                 }
 
                 if selectionCount > 1 {
@@ -240,7 +237,7 @@ struct InspectorPanel: View {
                         .foregroundColor(.onSurfaceMuted)
                 }
             }
-            .padding(horizontal: 9, vertical: 6)
+            .padding(horizontal: 10, vertical: 10)
             .background(.surface)
         }
     }

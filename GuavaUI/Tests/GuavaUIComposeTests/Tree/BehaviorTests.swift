@@ -6,6 +6,12 @@ import GuavaUIRuntime
 
 @Suite("Tree branching and navigation", .serialized)
 struct TreeBehaviorTests: GuavaUIComposeSerializedSuite {
+    private struct FullRowStyle: TreeRowStyle {
+        func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
+            configuration.content.background(configuration.isSelected ? .accentMuted : .clear)
+                .debugName("full-tree-row")
+        }
+    }
     private struct Item: Identifiable {
         let id: Int
         var isBranch: Bool { id == 0 || id == 1 }
@@ -64,6 +70,29 @@ struct TreeBehaviorTests: GuavaUIComposeSerializedSuite {
     private func key(_ code: UInt32, modifiers: KeyModifiers = [], input: EventDispatcher, graph: ViewGraph) {
         input.dispatch(.keyDown(KeyEvent(scancode: code, keycode: 0, modifiers: modifiers, isRepeat: false)))
         settle(graph)
+    }
+
+    @Test("Whole-row styling includes the disclosure gutter and preserves branch navigation")
+    func fullRowStyle() throws {
+        try scene { harness, graph, context, input in
+            graph.install(root: harness.treeRowStyle(FullRowStyle(), scope: .row))
+            settle(graph)
+            let nodes = all(graph.tree.root!)
+            let surface = try #require(nodes.first { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "full-tree-row" })
+            let row = try #require(nodes.first { $0.accessibility?.role == .treeItem })
+            #expect(surface.absoluteFrame.minX < row.absoluteFrame.minX)
+            #expect(surface.absoluteFrame.maxX >= row.absoluteFrame.maxX)
+            let disclosure = try #require(all(surface).first { $0.accessibility?.role == .button })
+            let point = disclosure.absoluteFrame.center
+            input.dispatch(.mouseButtonDown(.init(button: .left, x: Float(point.x), y: Float(point.y), clicks: 1)))
+            input.dispatch(.mouseButtonUp(.init(button: .left, x: Float(point.x), y: Float(point.y), clicks: 1)))
+            settle(graph)
+            #expect(harness.expanded == [0])
+            let tree = try #require(all(graph.tree.root!).first { $0.accessibility?.role == .tree })
+            context.focusChain.focus(tree)
+            key(Scancode.arrowDown, input: input, graph: graph)
+            #expect(harness.selection == 1)
+        }
     }
 
     @Test("Lazy branches resolve only when expanded; shortcuts, Home/End and search preserve selection")

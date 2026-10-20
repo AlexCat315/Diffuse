@@ -9,15 +9,18 @@ import GuavaUIRuntime
 struct ConsolePanel: View {
     let store: EditorStore
     var onNavigate: ((EditorIssueTarget) -> Void)? = nil
+    let outputSelector: AnyView?
     @State private var searchText: TextBuffer = ""
     @State private var enabledSeverities: Set<EditorConsoleSeverity> = Set(EditorConsoleSeverity.allCases)
     @State private var selectedEntryID: UInt64? = nil
     @State private var followsLatest: Bool = true
     @State private var copyStatus: String? = nil
+    @State private var actionsPresented = false
 
-    init(store: EditorStore, onNavigate: ((EditorIssueTarget) -> Void)? = nil) {
+    init(store: EditorStore, onNavigate: ((EditorIssueTarget) -> Void)? = nil, outputSelector: AnyView? = nil) {
         self.store = store
         self.onNavigate = onNavigate
+        self.outputSelector = outputSelector
         _searchText = State(wrappedValue: "")
         _enabledSeverities = State(wrappedValue: Set(EditorConsoleSeverity.allCases))
     }
@@ -32,11 +35,16 @@ struct ConsolePanel: View {
         let entriesToCopy = selectedEntry.map { [$0] } ?? visibleEntries
 
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
+          ContainerSizeReader { size in
             EditorPanelSearchBar(
                 L("Search Console"),
                 text: $searchText,
-                summary: "\(visibleEntries.count) / \(entries.count)"
+                summary: size.width < 600 ? nil : "\(visibleEntries.count) / \(entries.count)",
+                leading: outputSelector
             ) {
+              if size.width < 600 {
+                compactActions(entries: entries, entriesToCopy: entriesToCopy, counts: counts)
+              } else {
                 ConsoleSeverityFilterButton(
                     severity: .info,
                     count: counts[.info, default: 0],
@@ -70,7 +78,9 @@ struct ConsolePanel: View {
                     selectedEntryID = nil
                     copyStatus = nil
                 }.buttonStyle(EditorChromeButtonStyle(height: 22))
+              }
             }
+          }.frame(height: 32)
 
             if let copyStatus {
                 Text(copyStatus)
@@ -135,6 +145,30 @@ struct ConsolePanel: View {
             enabledSeverities.insert(severity)
         }
         selectedEntryID = nil
+    }
+
+    private func compactActions(entries: [EditorConsoleEntry], entriesToCopy: [EditorConsoleEntry],
+                                counts: [EditorConsoleSeverity: Int]) -> some View {
+        Popover(isPresented: $actionsPresented, width: 220, placement: .bottomTrailing, surface: .content, overflow: .flip) {
+            Icon(UIIcons.Action.moreHorizontal, size: 14, color: .onSurfaceVariant)
+                .frame(width: 26, height: 26).accessibility { $0.label = L("Console") }
+        } content: {
+            Menu(EditorConsoleSeverity.allCases.map { severity in
+                .item(MenuItem(id: severity.rawValue, title: "\(severity.title) \(counts[severity, default: 0])",
+                    isSelected: enabledSeverities.contains(severity), action: { toggle(severity) }))
+            } + [
+                .separator("actions"),
+                .item(MenuItem(id: "follow", title: followsLatest ? L("Pause following new messages") : L("Follow newest message"),
+                               isSelected: followsLatest, action: { followsLatest.toggle() })),
+                .item(MenuItem(id: "copy", title: L("Copy visible messages"), isEnabled: !entriesToCopy.isEmpty,
+                               action: { copy(entriesToCopy) })),
+                .item(MenuItem(id: "clear", title: L("Clear"), isEnabled: !entries.isEmpty, action: {
+                    store.dispatch(.clearConsole)
+                    selectedEntryID = nil
+                    copyStatus = nil
+                })),
+            ], width: 220, onDismiss: { actionsPresented = false })
+        }.debugName("editor-console-actions")
     }
 
     private func copy(_ entries: [EditorConsoleEntry]) {
@@ -206,11 +240,7 @@ private struct ConsoleSeverityFilterButton: View {
     }
 
     private var label: String {
-        switch severity {
-        case .info: return L("Info")
-        case .warning: return L("Warnings")
-        case .error: return L("Errors")
-        }
+        severity.title
     }
 
     private var tooltip: String {
@@ -222,6 +252,16 @@ private struct ConsoleSeverityFilterButton: View {
         case .info: return .onSurfaceMuted
         case .warning: return .warning
         case .error: return .error
+        }
+    }
+}
+
+private extension EditorConsoleSeverity {
+    var title: String {
+        switch self {
+        case .info: L("Info")
+        case .warning: L("Warnings")
+        case .error: L("Errors")
         }
     }
 }

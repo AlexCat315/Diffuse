@@ -16,7 +16,7 @@ struct EditorPlaybackToolbar: View {
             control("stop", title: L("Stop and return to editing"), target: .stopped)
         }
         .padding(2)
-        .background(.surfaceVariant)
+        .background(.surfaceSunken)
         .cornerRadius(7)
         .border(.divider, width: 1)
         .debugName("editor-playback-toolbar")
@@ -31,6 +31,24 @@ struct EditorPlaybackToolbar: View {
                tooltip: title) {
             onCommand(.setPlaybackState(target))
         }
-        .buttonStyle(EditorChromeButtonStyle(height: 22))
+        .buttonStyle(PlaybackButtonStyle(primary: target == .playing))
+    }
+}
+
+private struct PlaybackButtonStyle: ButtonStyle {
+    let primary: Bool
+
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        let colors = configuration.theme.colors
+        let emphasized = configuration.isEnabled && (primary || configuration.isSelected)
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label).foregroundColor(emphasized ? colors.onAccent
+                : configuration.isEnabled ? colors.onSurfaceVariant : colors.onSurfaceMuted)
+        }.frame(width: primary ? 30 : 24, height: 24)
+            .background(emphasized ? colors.accent
+                : configuration.isPressed ? colors.stateLayerPressed
+                : configuration.isHovered ? colors.stateLayerHover : .clear)
+            .cornerRadius(5)
+            .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
     }
 }

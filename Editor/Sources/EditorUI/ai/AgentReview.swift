@@ -3,43 +3,8 @@ import GuavaUI
 import GuavaUIRuntime
 import IntentRuntime
 
-/// Pending-AI-action confirmation panel: question cards on sunken wells with
-/// severity badges and secondary option buttons.
-struct ConfirmationHostPanel: View {
-    let store: EditorStore
-    let app: EditorApplication
-
-    init(app: EditorApplication) {
-        self.app = app
-        self.store = app.store
-    }
-
-    var body: some View {
-        ScrollView(.vertical, scrollbarGutter: .stable) {
-            Column(alignment: .leading, spacing: 10) {
-                if let request = store.pendingConfirmationRequest {
-                    ConfirmationBatchView(app: app, request: request)
-                        .id(request.batchID)
-                } else {
-                    Column(alignment: .leading, spacing: 6) {
-                        Text(L("No pending confirmation"))
-                            .font(.bodyStrong)
-                        Text(L("Warn, required, and destructive AI actions will appear here before they mutate the scene."))
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                    }
-                    .padding(horizontal: 10, vertical: 10)
-                    .background(.surfaceSunken)
-                    .cornerRadius(7)
-                }
-            }
-            .padding(horizontal: 10, vertical: 10)
-        }
-        .frame(minWidth: 0, minHeight: 0)
-    }
-}
-
-private struct ConfirmationBatchView: View {
+/// Review belongs to the conversation that requested the change.
+struct AgentReview: View {
     let app: EditorApplication
     let request: ConfirmationRequestBatch
     @State private var selectedOptionIDs: [String: String]
@@ -93,8 +58,10 @@ private struct ConfirmationBatchView: View {
                     app.skipPendingConfirmation()
                 }
                 .buttonStyle(.secondary)
+                .debugName("editor-agent-discard-review")
             }
         }
+        .debugName("editor-agent-review")
     }
 }
 

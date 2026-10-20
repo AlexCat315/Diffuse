@@ -187,7 +187,7 @@ struct HierarchyPanel: View {
                         tree.selection.primaryKey = selectionKey
                         tree.selection.multipleKeys = multiSelectionKeys
                         tree.selection.expandedKeys = expandedKeysBinding
-                        tree.layout.rowHeight = 26
+                        tree.layout.rowHeight = 24
                         tree.layout.rowSpacing = 0
                         tree.layout.indentation = 16
                         tree.layout.disclosureWidth = 18
@@ -255,9 +255,9 @@ struct HierarchyPanel: View {
                                 } else { store.dispatch(.setSelectedEntity(entity.id)) }
                             }, entries: { contextEntries(for: entity.id, roots: hierarchyRoots, enabled: isAuthoringEnabled) })
                     }
-                    .padding(horizontal: 4, vertical: 4)
+                    .padding(vertical: 4)
                     .flex()
-                    .treeRowStyle(HierarchyTreeRowStyle())
+                    .treeRowStyle(HierarchyTreeRowStyle(), scope: .row)
                 }
             }
             .frame(minWidth: 0, minHeight: 0)
@@ -709,14 +709,15 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
         }()
 
         return Row(alignment: .center, spacing: 0) {
+            Box {}.frame(width: .points(2), height: .percent(100))
+                .background(configuration.isSelected ? t.colors.accent : .clear)
             configuration.content
                 .flex(1, shrink: 1, basis: 0)
+                .padding(horizontal: 6)
         }
-        .padding(horizontal: 6, vertical: 0)
-        .frame(height: 26)
+        .frame(height: 24)
         .clipped()
         .background(bg)
-        .cornerRadius(t.radius.sm)
         .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }

@@ -41,7 +41,10 @@ struct IntentInputPanel: View {
                 Divider()
                 ScrollView(.vertical, scrollbarGutter: .stable) {
                     Column(alignment: .leading, spacing: 12) {
-                        if store.chatMessages.isEmpty { introduction }
+                        if let request = store.pendingConfirmationRequest {
+                            AgentReview(app: app, request: request).id(request.batchID)
+                        }
+                        if store.chatMessages.isEmpty && store.pendingConfirmationRequest == nil { introduction }
                         for message in store.chatMessages { ChatBubble(msg: message) }
                         if store.aiStatusMessage != nil || !store.aiWarnings.isEmpty {
                             AIStatusFeedback(status: store.aiStatusMessage, warnings: store.aiWarnings)

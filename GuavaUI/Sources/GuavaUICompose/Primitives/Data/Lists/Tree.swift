@@ -910,7 +910,7 @@ private struct _TreeRowComposite: View {
         let trailingWidth = slots.trailingSlotWidth ?? 0
         let trailing = slots.trailingContent ?? AnyView(EmptyView())
 
-        Row(alignment: .center, spacing: 0) {
+        _TreeRowSurface(appearance: appearance, geometry: geometry, content: AnyView(Row(alignment: .center, spacing: 0) {
             Box { EmptyView() }
                 .frame(width: indentWidth, height: geometry.rowHeight)
 
@@ -929,7 +929,31 @@ private struct _TreeRowComposite: View {
                                   rowHeight: geometry.rowHeight,
                                   content: trailing)
         }
-        .frame(height: geometry.rowHeight)
+        .frame(height: geometry.rowHeight)))
+    }
+}
+
+private struct _TreeRowSurface: _PrimitiveView {
+    let appearance: TreeRowAppearance
+    let geometry: TreeRowGeometry
+    let content: AnyView
+
+    func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
+    func _makeLayoutNode() -> LayoutNode? { nil }
+    func _updateNode(_ node: Node) {}
+    func _children(for node: Node) -> [any View] {
+        let style = node.compositionValue(of: TreeRowStyleEnvironment.key)
+        guard style.scope == .row else { return [content] }
+        return [style.makeBody(appearance.styleConfiguration(content: content, geometry: geometry, theme: node.theme))]
+    }
+}
+
+private extension TreeRowAppearance {
+    func styleConfiguration(content: AnyView, geometry: TreeRowGeometry, theme: Theme) -> TreeRowStyleConfiguration {
+        TreeRowStyleConfiguration(content: content, depth: geometry.depth,
+            indentation: geometry.indentation, disclosureWidth: geometry.disclosureWidth,
+            hasChildren: hasChildren, isExpanded: isExpanded, isSearchHit: isSearchHit,
+            isSelected: isSelected, isHovered: isHovered, isEnabled: isEnabled, theme: theme)
     }
 }
 
@@ -1170,25 +1194,9 @@ private struct _TreeRowHost: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
-        // The chevron + indent gutter are drawn by `_TreeRowComposite`, so
-        // the configuration we hand the style describes only the row body.
-        // Style implementations that want to paint their own indent/chevron
-        // can ignore the dedicated slots above and use these fields.
         let style = node.compositionValue(of: TreeRowStyleEnvironment.key)
-        let cfg = TreeRowStyleConfiguration(
-            content: content,
-            depth: geometry.depth,
-            indentation: geometry.indentation,
-            disclosureWidth: geometry.disclosureWidth,
-            hasChildren: appearance.hasChildren,
-            isExpanded: appearance.isExpanded,
-            isSearchHit: appearance.isSearchHit,
-            isSelected: appearance.isSelected,
-            isHovered: appearance.isHovered,
-            isEnabled: appearance.isEnabled,
-            theme: node.theme
-        )
-        return [style.makeBody(cfg)]
+        guard style.scope == .content else { return [content] }
+        return [style.makeBody(appearance.styleConfiguration(content: content, geometry: geometry, theme: node.theme))]
     }
 
     static let pressedKey = "__tree_row_pressed"

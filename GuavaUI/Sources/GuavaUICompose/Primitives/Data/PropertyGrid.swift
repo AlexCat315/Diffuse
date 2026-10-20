@@ -94,6 +94,12 @@ public enum PropertyGridScrollAxes {
     case both
 }
 
+/// Flat sections keep a dense inspector continuous with its surrounding pane.
+public enum PropertyGridSectionStyle: Sendable {
+    case card
+    case plain
+}
+
 /// Two-column inspector grid with collapsible section headers.
 /// The call site owns the value controls; the primitive only handles layout.
 public struct PropertyGrid: View {
@@ -107,6 +113,7 @@ public struct PropertyGrid: View {
     public let contentPadding: Float
     public let scrollAxes: PropertyGridScrollAxes
     public let emptyText: String
+    public let sectionStyle: PropertyGridSectionStyle
     /// When provided, expansion is controlled by the caller rather than the
     /// grid's local state (useful for search and Expand/Collapse All commands).
     public let collapsedSectionIDs: Set<String>?
@@ -122,6 +129,7 @@ public struct PropertyGrid: View {
                 contentPadding: Float = 8,
                 scrollAxes: PropertyGridScrollAxes = .both,
                 emptyText: String = "No properties",
+                sectionStyle: PropertyGridSectionStyle = .card,
                 collapsedSectionIDs: Set<String>? = nil,
                 onSectionCollapseChanged: ((String, Bool) -> Void)? = nil) {
         self.sections = sections
@@ -134,6 +142,7 @@ public struct PropertyGrid: View {
         self.contentPadding = contentPadding
         self.scrollAxes = scrollAxes
         self.emptyText = emptyText
+        self.sectionStyle = sectionStyle
         self.collapsedSectionIDs = collapsedSectionIDs
         self.onSectionCollapseChanged = onSectionCollapseChanged
     }
@@ -216,6 +225,7 @@ private struct _StatefulPropertyGrid: View {
     private func sectionView(_ section: PropertyGridSection,
                               isCollapsed: Bool) -> AnyView {
         AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            if grid.sectionStyle == .plain { Divider() }
             Row(alignment: .center, spacing: 4) {
                 if let leading = section.headerLeading { leading }
                 Button(role: .normal, isEnabled: section.isCollapsible, action: {
@@ -247,7 +257,7 @@ private struct _StatefulPropertyGrid: View {
             }
             .padding(horizontal: 8, vertical: 3)
             .frame(minWidth: 0, minHeight: section.headerLeading == nil && section.headerTrailing == nil ? 26 : 32)
-            .background(.surfaceRaised)
+            .background(grid.sectionStyle == .plain ? .clear : .surfaceRaised)
 
             AnimatedVisibility(isVisible: !isCollapsed) {
                 Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
@@ -262,12 +272,13 @@ private struct _StatefulPropertyGrid: View {
                     childViews(section.children)
                     if let footer = section.footer { footer.padding(horizontal: 6, vertical: 4) }
                 }
-                .padding(horizontal: 2, vertical: 3)
-                .background(.surface)
+                .padding(horizontal: grid.sectionStyle == .plain ? 8 : 2,
+                         vertical: grid.sectionStyle == .plain ? 6 : 3)
+                .background(grid.sectionStyle == .plain ? .clear : .surface)
             }
         }
         .background(.surface)
-        .cornerRadius(.controlRadius))
+        .cornerRadius(grid.sectionStyle == .plain ? ThemeMetric { _ in 0 } : .controlRadius))
     }
 
     private func childViews(_ sections: [PropertyGridSection]) -> [AnyView] {
@@ -312,7 +323,7 @@ private struct _StatefulPropertyGrid: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         _PropertyGridRowHost(
-            baseBackground: .surfaceSunken,
+            baseBackground: grid.sectionStyle == .plain ? .clear : .surfaceSunken,
             hoverBackground: .stateLayerHover,
             content: AnyView(content()))
     }

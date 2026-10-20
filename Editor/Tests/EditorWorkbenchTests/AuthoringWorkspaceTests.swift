@@ -99,10 +99,17 @@ struct AuthoringWorkspaceTests {
         graph.install(root: EditorRootView(app: app, controller: controller, registry: registry))
         func settle() {
             for _ in 0..<3 { graph.recomposer.commitAll() }
-            graph.computeLayout(width: 1440, height: 900)
+            graph.computeLayout(width: 1280, height: 800)
         }
         settle()
         let frames = graph.layoutSnapshot()
+        #expect(controller.document.groups["trailing"]?.panels == ["inspector", "intent-input", "journal"])
+        let tabs = try #require(frames.first { $0.debugName == "workspace-tabs-scroll-trailing" })
+        for id in ["inspector", "intent-input", "journal"] {
+            let tab = try #require(frames.first { $0.debugName == "workspace-tab-\(id)" })
+            #expect(tab.absoluteFrame.minX >= tabs.absoluteFrame.minX)
+            #expect(tab.absoluteFrame.maxX <= tabs.absoluteFrame.maxX)
+        }
         #if !os(Linux)
         #expect(!frames.contains { $0.debugName == "editor-application-menu-bar" })
         #endif
@@ -173,5 +180,29 @@ struct AuthoringWorkspaceTests {
         #expect(draft.text.stringValue == "Keep this thought")
         #expect(!app.submitNaturalLanguageIntent(draft.text.stringValue))
         #expect(draft.text.stringValue == "Keep this thought")
+    } }
+
+    @Test("Pending review stays inside Agent and can be discarded without losing the draft")
+    func inlineReview() throws { try WorkbenchUITestSupport.withEnvironment { interactions, _ in
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: true)
+        defer { app.shutdown() }
+        let entityID = try #require(app.store.selectedEntityID)
+        app.submitDeleteSelectedEntityIntent()
+        #expect(app.store.pendingConfirmationRequest != nil)
+        let draft = AgentDraft()
+        draft.text = "Next thought"
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: IntentInputPanel(app: app, draft: draft))
+        graph.computeLayout(width: 324, height: 720)
+        #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-agent-review" })
+        try WorkbenchUITestSupport.activate("editor-agent-discard-review", in: graph.tree.root, registry: interactions)
+        for _ in 0..<3 { graph.recomposer.commitAll() }
+        #expect(app.store.pendingConfirmationRequest == nil)
+        #expect(app.scene.entitySummary(id: entityID) != nil)
+        #expect(draft.text.stringValue == "Next thought")
+        #expect(!graph.layoutSnapshot().contains { $0.debugName == "editor-agent-review" })
     } }
 }

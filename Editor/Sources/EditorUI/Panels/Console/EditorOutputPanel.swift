@@ -17,17 +17,22 @@ struct EditorOutputPanel: View {
         let snapshot = workspace.wrappedValue
         let failures = app.store.consoleEntries.filter { $0.severity == .error || $0.severity == .warning }
         let count = snapshot.documents.reduce(0) { $0 + $1.diagnostics.count } + failures.count
-        TabView(selection: Binding(get: { app.store.outputTab }, set: { app.store.dispatch(.setOutputTab($0)) }), tabs: [
-            TabItem(L("Logs"), id: EditorOutputTab.logs) {
-                ConsolePanel(store: app.store, onNavigate: app.navigateToIssue)
-            },
-            TabItem("\(L("Problems")) \(count)", id: EditorOutputTab.problems) {
-                problems(snapshot.documents, failures: failures)
-            },
-            TabItem(L("Build Output"), id: EditorOutputTab.build) {
-                buildOutput(snapshot.selectedDocument)
-            },
-        ])
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            switch app.store.outputTab {
+            case .logs:
+                ConsolePanel(store: app.store, onNavigate: app.navigateToIssue,
+                             outputSelector: AnyView(OutputModeSelector(store: app.store, problemCount: count)))
+            case .problems:
+                EditorPanelToolbar {
+                    OutputModeSelector(store: app.store, problemCount: count)
+                    Spacer(minLength: 0)
+                }
+                Divider()
+                problems(snapshot.documents, failures: failures).flex()
+            case .build:
+                buildOutput(snapshot.selectedDocument, problemCount: count)
+            }
+        }
         .frame(minWidth: 0, minHeight: 0)
     }
 
@@ -72,10 +77,11 @@ struct EditorOutputPanel: View {
         })
     }
 
-    private func buildOutput(_ document: ScriptWorkspaceDocument?) -> some View {
+    private func buildOutput(_ document: ScriptWorkspaceDocument?, problemCount: Int) -> some View {
         let output = document?.output ?? ""
         return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             EditorPanelToolbar {
+                OutputModeSelector(store: app.store, problemCount: problemCount)
                 Text(document.map { "\($0.file.displayName).swift" } ?? L("Select a script"))
                     .font(.caption).foregroundColor(.onSurfaceVariant)
                 Spacer(minLength: 0)
@@ -98,6 +104,37 @@ struct EditorOutputPanel: View {
             }
         }
         .background(.surfaceSunken)
+    }
+}
+
+private struct OutputModeSelector: View {
+    let store: EditorStore
+    let problemCount: Int
+    @State private var isPresented = false
+
+    var body: some View {
+        Popover(isPresented: $isPresented, width: 190, placement: .bottomLeading, surface: .content, overflow: .flip) {
+            Row(alignment: .center, spacing: 6) {
+                Text(title(store.outputTab), lineLimit: 1).font(.caption).foregroundColor(.onSurfaceVariant)
+                Icon(UIIcons.Navigation.chevronDown, size: 10, color: .onSurfaceMuted)
+            }.padding(horizontal: 7).frame(height: 22).background(.surfaceVariant).cornerRadius(5)
+                .accessibility { $0.label = L("Console"); $0.value = title(store.outputTab) }
+        } content: {
+            Menu([EditorOutputTab.logs, .problems, .build].map { tab in
+                .item(MenuItem(id: String(describing: tab), title: title(tab), isSelected: store.outputTab == tab, action: {
+                    store.dispatch(.setOutputTab(tab))
+                    isPresented = false
+                }))
+            }, width: 190, onDismiss: { isPresented = false })
+        }.debugName("editor-output-mode")
+    }
+
+    private func title(_ tab: EditorOutputTab) -> String {
+        switch tab {
+        case .logs: L("Logs")
+        case .problems: "\(L("Problems")) \(problemCount)"
+        case .build: L("Build Output")
+        }
     }
 }
 

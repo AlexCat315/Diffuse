@@ -783,11 +783,14 @@ private struct _WorkspaceTabBar: View {
     @State private var overflowPresented = false
 
     var body: some View {
-        TextScalerReader { scaler in tabBar(scaler: scaler) }
+        WorkspacePanelStyleReader { style in
+            TextScalerReader { scaler in tabBar(scaler: scaler, style: style) }
+        }
     }
 
-    private func tabBar(scaler: TextScaler) -> some View {
+    private func tabBar(scaler: TextScaler, style: WorkspacePanelStyle) -> some View {
         let slotID = document.slotContaining(groupID: group.id)
+        let compactControls = style == .continuous
         let canCollapse = slotID != nil && slotID != .center && group.panels.contains {
             document.panels[$0]?.isCollapsible == true
         }
@@ -804,13 +807,14 @@ private struct _WorkspaceTabBar: View {
         return Row(alignment: .center, spacing: 0) {
             ScrollView(.horizontal) {
                 Row(alignment: .center, spacing: 0) { tabButtons }
+                    .padding(vertical: compactControls && slotID != .center ? 4 : 0)
                     .flex(0, shrink: 0)
                     .accessibility { $0.role = .tabList; $0.label = "Panel tabs"; $0.value = activeTitle }
             }
             .flex(1, shrink: 1, basis: 0)
             .frame(height: .percent(100), minWidth: 0)
             .debugName("workspace-tabs-scroll-\(group.id.rawValue)")
-            if group.panels.count > 1 {
+            if group.panels.count > 1 || compactControls {
                 Popover(isPresented: $overflowPresented, width: max(240, scaler.scale(200)), placement: .bottomTrailing, surface: .content, overflow: .flip) {
                     Icon(UIIcons.Action.moreHorizontal, size: 12)
                         .frame(width: control, height: control)
@@ -823,20 +827,21 @@ private struct _WorkspaceTabBar: View {
                                 _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: panelID))
                                 overflowPresented = false
                             }))
-                    }, width: max(240, scaler.scale(200)), onDismiss: { overflowPresented = false })
+                    } + (compactControls ? groupActions(canCollapse: canCollapse) : []),
+                    width: max(240, scaler.scale(200)), onDismiss: { overflowPresented = false })
                 }
                 .flex(0, shrink: 0)
                 .semanticRole("workspace.tabs.overflow")
                 .debugName("workspace-tabs-overflow-\(group.id.rawValue)")
             }
-            if let panelID = group.activePanelID {
+            if !compactControls, let panelID = group.activePanelID {
                 Button(icon: .resource(UIIcons.Navigation.expand), size: 12, tooltip: "Maximize") {
                     _ = controller.dispatch(.toggleMaximize(panelID))
                 }
                 .buttonStyle(.ghost).frame(width: control, height: control).flex(0, shrink: 0)
                 .debugName("workspace-maximize-\(group.id.rawValue)")
             }
-            if canCollapse {
+            if canCollapse && !compactControls {
                 Button(icon: .resource(WorkspaceIcons.collapse(for: slotID)), size: 12, tooltip: "Collapse") {
                     _ = controller.dispatch(.collapse(group.id))
                 }
@@ -854,6 +859,23 @@ private struct _WorkspaceTabBar: View {
 
     private var activeTitle: String {
         (group.activePanelID ?? group.panels.first).flatMap { document.panels[$0]?.title } ?? ""
+    }
+
+    private func groupActions(canCollapse: Bool) -> [MenuEntry] {
+        var entries: [MenuEntry] = [.separator("group-actions")]
+        if let panelID = group.activePanelID {
+            entries.append(.item(MenuItem(id: "maximize", title: "Maximize", action: {
+                _ = controller.dispatch(.toggleMaximize(panelID))
+                overflowPresented = false
+            })))
+        }
+        if canCollapse {
+            entries.append(.item(MenuItem(id: "collapse", title: "Collapse", action: {
+                _ = controller.dispatch(.collapse(group.id))
+                overflowPresented = false
+            })))
+        }
+        return entries
     }
 }
 
@@ -1120,7 +1142,8 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         let workspace = resolveWorkspaceTheme(on: node)
         let height = max(26, node.compositionValue(of: TextScalerEnvironment.key).scale(workspace.tabBarHeight))
         let style = workspace.panelStyle == .continuous
-            ? AnyButtonStyle(WorkspaceContinuousTabStyle(height: height))
+            ? AnyButtonStyle(WorkspaceContinuousTabStyle(height: height,
+                isStage: document.slotContaining(groupID: groupID) == .center))
             : AnyButtonStyle(TabButtonStyle(height: height))
         // Resolve the title color eagerly from this (parented) host node's theme
         // and pass it to `Text` directly. The button style's deferred

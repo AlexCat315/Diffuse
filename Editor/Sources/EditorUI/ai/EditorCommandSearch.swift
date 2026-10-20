@@ -51,7 +51,7 @@ enum EditorCommandSearch {
             entry("layout.reopen", "Reopen Closed Panel", "Shift+T", "reopen 恢复关闭面板", .reopenClosedPanel),
             entry("preferences", "Settings", ",", "preferences 设置", .openSettings),
             entry("agent.show", "Agent", "", "agent assistant conversation 智能体 对话", .showPanel("intent-input")),
-            entry("agent.review", "Review", "", "agent review approval 审阅", .showPanel("confirmation-host")),
+            entry("agent.review", "Review", "", "agent review approval 审阅", .showPanel("intent-input")),
             entry("journal.show", "Session Journal", "", "history activity journal 历史 日志", .showPanel("journal")),
             entry("theme.toggle", "Toggle Theme", "", "dark light 主题", .toggleTheme)
         ]

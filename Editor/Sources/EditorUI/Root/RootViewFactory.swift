@@ -169,9 +169,6 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "intent-input", title: localizedPanelTitle(for: "intent-input"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.intent-input" }) {
                 IntentInputPanel(app: app, draft: agentDraft)
             },
-            WorkspacePanelDescriptor(id: "confirmation-host", title: localizedPanelTitle(for: "confirmation-host"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.confirmation-host" }) {
-                ConfirmationHostPanel(app: app)
-            },
             WorkspacePanelDescriptor(id: "journal", title: localizedPanelTitle(for: "journal"), defaultSlot: .trailing,
                                      configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.journal" }) {
                 SessionJournal(app: app)
@@ -210,7 +207,6 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.console", panelIcon("console"))
         WorkspacePanelIconCatalog.register("panel.assets", panelIcon("folder", subdirectory: "ToolbarIcons"))
         WorkspacePanelIconCatalog.register("panel.intent-input", panelIcon("ai-intent"))
-        WorkspacePanelIconCatalog.register("panel.confirmation-host", panelIcon("confirmations"))
         WorkspacePanelIconCatalog.register("panel.render-pipeline", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.animation", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
@@ -296,8 +292,6 @@ enum EditorRootViewFactory {
             return L("Assets")
         case "intent-input":
             return L("Agent")
-        case "confirmation-host":
-            return L("Review")
         case "journal":
             return L("Journal")
         case "render-pipeline":

@@ -49,7 +49,7 @@ struct EditorProductivityWorkflowTests {
 
     @Test("script and film workspaces have distinct defaults")
     func workspaceDefaults() {
-        let ids: [WorkspacePanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console", "render-pipeline", "animation", "developer-tools", "intent-input", "confirmation-host"]
+        let ids: [WorkspacePanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console", "render-pipeline", "animation", "developer-tools", "intent-input"]
         let registry = WorkspacePanelRegistry(ids.map { id in WorkspacePanelDescriptor(id: id, title: id.rawValue, defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() } })
         let level = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelDefault, registry: registry)
         let script = EditorWorkspaceDefaults.makeDocument(mode: .scripting, preset: .scriptingDefault, registry: registry)

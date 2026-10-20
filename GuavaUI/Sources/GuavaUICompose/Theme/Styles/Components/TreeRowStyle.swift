@@ -40,13 +40,22 @@ public protocol TreeRowStyle {
     func makeBody(configuration: TreeRowStyleConfiguration) -> Body
 }
 
+public enum TreeRowStyleScope: Sendable {
+    /// Leave the disclosure, indentation and trailing controls outside the style.
+    case content
+    /// Style the whole row while preserving the slots' own input handling.
+    case row
+}
+
 public struct AnyTreeRowStyle: @unchecked Sendable {
     public let makeBody: (TreeRowStyleConfiguration) -> any View
     public let requiresHoverRecompose: Bool
+    public let scope: TreeRowStyleScope
 
-    public init<S: TreeRowStyle>(_ style: S) {
+    public init<S: TreeRowStyle>(_ style: S, scope: TreeRowStyleScope = .content) {
         self.makeBody = { config in style.makeBody(configuration: config) }
         self.requiresHoverRecompose = !(style is DefaultTreeRowStyle)
+        self.scope = scope
     }
 }
 
@@ -57,8 +66,8 @@ public enum TreeRowStyleEnvironment {
 }
 
 public extension View {
-    func treeRowStyle<S: TreeRowStyle>(_ style: S) -> some View {
-        compositionLocal(TreeRowStyleEnvironment.key, AnyTreeRowStyle(style))
+    func treeRowStyle<S: TreeRowStyle>(_ style: S, scope: TreeRowStyleScope = .content) -> some View {
+        compositionLocal(TreeRowStyleEnvironment.key, AnyTreeRowStyle(style, scope: scope))
     }
 }
 

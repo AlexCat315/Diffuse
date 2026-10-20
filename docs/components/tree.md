@@ -58,7 +58,7 @@ Tree(roots, id: \.id,
 
 Tree 自带垂直 ScrollView 和 VirtualStack，放在有高度约束的容器中；不需要再包一层垂直滚动。先按 TextScaler 解析行高与行距、按字体和图标倍率解析缩进，再在 touch surface 上把行高与非零展开槽提升到至少 44pt。切回 pointer 移除触摸下限，保留文字缩放、节点、选择与展开状态。
 
-rowContent 只负责内容；展开标记、缩进和选中底色由 Tree 及 TreeRowStyle 管理。自定义样式可用 `.treeRowStyle(_:)`。
+rowContent 只负责内容；展开标记、缩进和选中底色由 Tree 及 TreeRowStyle 管理。自定义样式可用 `.treeRowStyle(_:)`，默认只包裹内容区。使用 `.treeRowStyle(style, scope: .row)` 可将同一背景和选中标记延伸到缩进、展开槽及尾部控件；各槽仍保留自己的点击、展开和输入行为。
 
 ## 验证与文件
 
