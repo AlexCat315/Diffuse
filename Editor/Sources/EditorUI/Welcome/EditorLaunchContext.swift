@@ -94,7 +94,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         subscribeWorkspacePersistence(app: app, controller: controller)
         subscribeNativeMenu(app: app, controller: controller, registry: registry)
         bundle = EditorLaunchBundle(app: app, controller: controller, registry: registry)
-        shouldExpandEditorWindow = true
+        shouldExpandEditorWindow = !EditorAppLaunchOptions.settingsRequested
 
         if let display {
             expandEditorWindowIfReady()
@@ -240,7 +240,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         app.setOpenSettingsWindowHandler { [weak self] in
             guard let self else { return }
             if let id = settingsWindowID, display.isWindowOpen(id) { return }
-            settingsWindowID = display.openWindow(title: L("Settings"), width: 520, height: 680) {
+            settingsWindowID = display.openWindow(title: L("Settings"), width: 1040, height: 780) {
                 EditorSettingsWindowRoot(app: app)
             }
         }

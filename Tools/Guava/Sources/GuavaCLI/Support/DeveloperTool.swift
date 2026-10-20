@@ -16,7 +16,17 @@ enum DeveloperTool {
         let swift = environment["GUAVA_SWIFT_EXECUTABLE"] ?? "swift"
         var environment = environment
         environment["GUAVA_ROOT"] = root.path
-        try Shell.run([swift, "run", "--package-path", package.path, "guava-dev"] + arguments,
-                      at: root, environment: environment, quiet: quiet)
+        // SwiftPM expands @file response arguments even after the product name.
+        // Build first, then pass session/event files literally to the executable.
+        let build = [swift, "build", "--package-path", package.path, "--jobs", "4"]
+        try Shell.run(build + ["--product", "guava-dev"], at: root, environment: environment, quiet: quiet)
+        let products = try Shell.run(build + ["--show-bin-path"], at: root, environment: environment, capture: true, quiet: true)
+        #if os(Windows)
+        let name = "guava-dev.exe"
+        #else
+        let name = "guava-dev"
+        #endif
+        let executable = URL(fileURLWithPath: products).appendingPathComponent(name)
+        try Shell.run([executable.path] + arguments, at: root, environment: environment, quiet: quiet)
     }
 }

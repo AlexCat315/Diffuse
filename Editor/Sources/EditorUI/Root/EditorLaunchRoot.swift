@@ -17,9 +17,13 @@ struct EditorLaunchRoot: View {
 
     var body: some View {
         if isLoaded, let bundle = context.bundle {
-            EditorRootView(app: bundle.app,
-                           controller: bundle.controller,
-                           registry: bundle.registry)
+            if EditorAppLaunchOptions.settingsRequested {
+                EditorSettingsWindowRoot(app: bundle.app)
+            } else {
+                EditorRootView(app: bundle.app,
+                               controller: bundle.controller,
+                               registry: bundle.registry)
+            }
         } else {
             WelcomeView(context: context)
                 .theme(EditorVisualTheme.make(dark: context.shellState?.themeMode != .light))

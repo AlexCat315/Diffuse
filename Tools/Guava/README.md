@@ -120,6 +120,8 @@ guava devtools [directory] timings out.json FRAMES WARMUP
 
 裸 JSON 对象执行 `query_ui_nodes`；`"compact":true` 返回每节点一行的精简记录（id、角色、名称、值、非默认状态、可见几何与 `File.swift:line`）。`run` 中 `--` 之后的参数原样传给桌面应用，例如 `guava run GuavaUI/Examples --devtools --no-open -- --component list --width 390 --input touch`。状态和会话记录都在 `.guava/build/devtools`，不会写回 guava.json 或场景 checkpoint。
 
+CLI 先构建开发工具，再直接执行生成的程序，确保 `@session.json`、`@events.json` 等参数按字面传递，避免 SwiftPM 将其作为响应文件展开。
+
 Profile 使用 Swift Release 优化并定义 GUAVA_PROFILE，保留诊断服务；Android Profile 允许 ADB 调试访问，普通 Release 不启用此入口。树、时间线和镜像仍按订阅采集。当前时间线是 CPU spans，帧 timing 包括主机渲染提交与等待，不代表 GPU 执行或实际显示 FPS。Android 暂无画面镜像，按 capabilities 隐藏该功能。
 
 Inspector 的源码断点接入现有 VS Code/LLDB 工作流；CLI 尚未提供完整 LLDB 启动/附加编排，也不提供保留状态的代码热重载。
