@@ -54,6 +54,7 @@ struct RichTextPalette: Equatable {
     var linkHover: Color
     var codeBackground: Color
     var selection: Color
+    var focusRing: Color
 }
 
 /// Hands the flow layout and the surface one source of truth for styling.
@@ -118,11 +119,17 @@ final class RichTextStyleSource {
             linkHover: theme.colors.accentHover,
             // A tint of the text colour reads on any surface in either theme.
             codeBackground: theme.colors.onSurface.multipliedAlpha(0.08),
-            selection: theme.colors.selection
+            selection: theme.colors.selection,
+            focusRing: theme.colors.focusRing
         )
     }
 
     var plainText: String { runs.map(\.text).joined() }
+
+    /// The visible text of one link, across every run it spans.
+    func linkText(_ index: Int) -> String {
+        zip(runs, linkIndices).filter { $1 == index }.map(\.0.text).joined()
+    }
 }
 
 private struct RichTextReader: _PrimitiveView {
@@ -139,6 +146,9 @@ private struct RichTextReader: _PrimitiveView {
         let source = RichTextStyleSource(runs: runs, alignment: alignment, role: role)
         return [LayoutContainer(RichTextFlowLayout(source: source)) {
             RichTextSurface(source: source, onOpenLink: onOpenLink)
+            for index in source.destinations.indices {
+                RichTextLinkAnchor(source: source, index: index, onOpenLink: onOpenLink)
+            }
         }]
     }
 }
@@ -157,9 +167,21 @@ struct RichTextFlowLayout: Layout {
         return CGSize(width: width, height: CGFloat(flow.height.rounded(.up)))
     }
 
+    /// Subviews: the surface, then one anchor per link over its first fragment.
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: [LayoutSubview]) {
-        for subview in subviews {
-            subview.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+        guard let surface = subviews.first else { return }
+        surface.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+        guard subviews.count > 1, let env = TextEnvironmentHolder.current else { return }
+        let paragraph = source.paragraph
+        let flow = RichTextFlow.layout(paragraph, maxWidth: Float(bounds.width), env: env)
+        for (index, anchor) in subviews.dropFirst().enumerated() {
+            guard let fragment = flow.fragments.first(where: { paragraph.spans[$0.span].link == index }) else {
+                anchor.place(at: bounds.origin, isVisible: false)
+                continue
+            }
+            let line = flow.lines[fragment.line]
+            anchor.place(at: CGPoint(x: bounds.minX + CGFloat(fragment.minX), y: bounds.minY + CGFloat(line.top)),
+                         proposal: ProposedViewSize(width: CGFloat(fragment.maxX - fragment.minX), height: CGFloat(line.height)))
         }
     }
 }

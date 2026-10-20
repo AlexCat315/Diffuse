@@ -31,7 +31,10 @@ RichText([
 
 - 链接始终带下划线（正文链接需在指针到达前可辨认）；悬停时变为 `accentHover`，指针变为手形，链接的每个折行片段都可点击；按下后移出链接再松开会取消。
 - 指针在同一节点内移动时，事件分发器会重新解析光标，因此段落内的链接与普通文字可以显示不同光标。
+- 每个链接有一个不可见的锚点节点，位于该链接第一行片段之上：可 Tab 聚焦（按段落内顺序），辅助功能角色为 link，名称为链接全文、help 为目标，激活动作与 Return/小键盘 Enter 都会调用 `onOpenLink`。键盘焦点可见时，链接的所有折行片段都绘制焦点环。指针输入穿过锚点交给段落，因此任意片段都可点击。
+- 没有 `onOpenLink` 时链接仍按链接样式显示，但锚点不可聚焦、辅助功能状态为禁用、不注册按键。
+- DevTools 可以按 `role: link` 查询到每个链接及其帧，`click` 或 `activate` 直接打开。
 
 ## 验收
 
-`RichTextTests` 覆盖跨 run 空格断行与行宽约束、无约束宽度单行、CJK 禁则与 URL 断点、硬换行与空行高度、行内代码内边距、点与插入点/选区矩形映射、链接任意片段点击与取消、悬停光标，以及 `.font` 修饰符作用于测量与绘制。DevTools 在 Gallery `--component richText` 720pt 浅色与 390pt 深色触摸下截图确认粗体/斜体/粗斜体/代码 chip/删除线/链接下划线同基线排列、长 URL 在 `/` 后换行、中文按字断行；通过 `guava devtools input` 点击 “layout guide” 后 “Last opened” 变为 `guide://layout`。
+`RichTextTests` 覆盖跨 run 空格断行与行宽约束、无约束宽度单行、CJK 禁则与 URL 断点、硬换行与空行高度、行内代码内边距、点与插入点/选区矩形映射、链接任意片段点击与取消、悬停光标，以及 `.font` 修饰符作用于测量与绘制。`RichTextLinkTests` 覆盖链接锚点的角色、名称、目标、位置、Return 与辅助功能激活、焦点记录与无处理器时的惰性链接。DevTools 在 Gallery `--component richText` 720pt 浅色与 390pt 深色触摸下截图确认粗体/斜体/粗斜体/代码 chip/删除线/链接下划线同基线排列、长 URL 在 `/` 后换行、中文按字断行；通过 `guava devtools input` 点击 “layout guide” 后 “Last opened” 变为 `guide://layout`。按 `role: link` 查询到三个链接；`click` 长 URL 与 `activate` 中文链接分别更新 “Last opened”；从 Reset example 按 Tab 聚焦 “layout guide” 出现焦点环、Return 打开；390pt 下再按 Tab，折成两行的 URL 两段都绘制焦点环（`capture --node --scale 2` 取样）。

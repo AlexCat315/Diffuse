@@ -183,3 +183,71 @@ struct RichTextStylingTests: GuavaUIComposeSerializedSuite {
         }
     }
 }
+
+@Suite("RichText links", .serialized)
+struct RichTextLinkTests: GuavaUIComposeSerializedSuite {
+    private func nodes(_ root: Node) -> [Node] { [root] + root.children.flatMap(nodes) }
+    private func key(_ code: UInt32) -> KeyEvent { KeyEvent(scancode: code, keycode: 0, modifiers: [], isRepeat: false) }
+
+    private func withScene(_ test: (ViewGraph, InteractionRegistry, FocusChain) -> Void) {
+        GlobalTestLock.locked {
+            let previousText = TextEnvironmentHolder.current, previousRegistry = InteractionRegistryHolder.current
+            let previousFocus = FocusChainHolder.current
+            let registry = InteractionRegistry(), focus = FocusChain()
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+            InteractionRegistryHolder.current = registry
+            FocusChainHolder.current = focus
+            defer {
+                TextEnvironmentHolder.current = previousText
+                InteractionRegistryHolder.current = previousRegistry
+                FocusChainHolder.current = previousFocus
+            }
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            test(graph, registry, focus)
+            graph.install(root: EmptyView())
+        }
+    }
+
+    @Test("Each link is a focusable link element over its first fragment that opens on Return")
+    func anchors() {
+        withScene { graph, registry, focus in
+            var opened: [String] = []
+            graph.install(root: RichText([
+                RichTextRun("Read the "), RichTextRun("style ", link: "guide://style"),
+                RichTextRun("guide", traits: .bold, link: "guide://style"),
+                RichTextRun(" or the "), RichTextRun("faq", link: "guide://faq"), RichTextRun("."),
+            ]) { opened.append($0) })
+            graph.computeLayout(width: 400, height: 200)
+            let links = nodes(graph.tree.root!).filter { $0.accessibility?.role == .link }
+            #expect(links.map { $0.accessibility?.label } == ["style guide", "faq"])
+            #expect(links.map { $0.accessibility?.help } == ["guide://style", "guide://faq"])
+            #expect(links.allSatisfy { $0.isFocusable && !$0.isHitTestable })
+            let paragraph = nodes(graph.tree.root!).first { $0.accessibility?.role == .staticText }!.absoluteFrame
+            for link in links { #expect(paragraph.contains(link.absoluteFrame) && link.absoluteFrame.width > 10) }
+            #expect(links[0].absoluteFrame.maxX <= links[1].absoluteFrame.minX)
+
+            _ = registry.handlers(for: links[1]).key?(key(Scancode.return), .target)
+            links[0].accessibilityActions.activate?()
+            #expect(opened == ["guide://faq", "guide://style"])
+
+            // Focus is remembered on the paragraph so every fragment can be ringed.
+            focus.focus(links[1])
+            let surface = nodes(graph.tree.root!).first { $0.accessibility?.role == .staticText }!
+            #expect(surface.attachments[RichTextSurface.focusedLinkKey] as? Int == 1)
+            focus.focus(nil)
+            #expect(surface.attachments[RichTextSurface.focusedLinkKey] == nil)
+        }
+    }
+
+    @Test("Without a link handler links are shown but not focusable")
+    func inertLinks() {
+        withScene { graph, registry, _ in
+            graph.install(root: RichText([RichTextRun("see "), RichTextRun("docs", link: "guide://docs")]))
+            graph.computeLayout(width: 400, height: 200)
+            let link = nodes(graph.tree.root!).first { $0.accessibility?.role == .link }
+            #expect(link?.isFocusable == false)
+            #expect(link?.accessibility?.state.isEnabled == false)
+            #expect(link.flatMap { registry.handlers(for: $0).key } == nil)
+        }
+    }
+}

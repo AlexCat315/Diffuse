@@ -39,6 +39,8 @@ struct RichTextSurface: _PrimitiveView {
             let flow = RichTextFlow.layout(paragraph, maxWidth: Float(node.frame.width), env: env)
             RichTextPainter(flow: flow, paragraph: paragraph, palette: palette,
                             hoveredLink: node.attachments[Self.hoveredLinkKey] as? Int,
+                            focusedLink: FocusChainHolder.current?.isFocusVisible == true
+                                ? node.attachments[Self.focusedLinkKey] as? Int : nil,
                             opacity: node.opacity)
                 .paint(into: list, x: Float(origin.x), y: Float(origin.y), env: env)
         }
@@ -87,6 +89,7 @@ struct RichTextSurface: _PrimitiveView {
 
     static let hoveredLinkKey = "__rich_text_hovered_link"
     static let pressedLinkKey = "__rich_text_pressed_link"
+    static let focusedLinkKey = "__rich_text_focused_link"
 }
 
 private extension RichTextRole {
@@ -103,6 +106,7 @@ struct RichTextPainter {
     let paragraph: RichParagraph
     let palette: RichTextPalette
     let hoveredLink: Int?
+    let focusedLink: Int?
     let opacity: Float
 
     func paint(into list: DrawList, x: Float, y: Float, env: TextEnvironment) {
@@ -131,6 +135,11 @@ struct RichTextPainter {
                 let middle = (fragment.ascent * 0.32).rounded()
                 list.addRect(UIRect(x: x + fragment.minX, y: y + line.baseline - middle, width: width, height: 1),
                              color: color(for: span))
+            }
+            // Keyboard focus rings every wrapped fragment of the link.
+            if let focusedLink, span.link == focusedLink {
+                let rect = UIRect(x: x + fragment.minX - 4, y: y + line.top - 1, width: width + 8, height: line.height + 2)
+                list.addRoundedRectStroke(rect, radius: 4, width: 2, color: palette.focusRing.multipliedAlpha(opacity))
             }
         }
     }
