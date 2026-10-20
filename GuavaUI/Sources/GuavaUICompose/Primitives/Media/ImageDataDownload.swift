@@ -3,24 +3,52 @@ import Foundation
 import FoundationNetworking
 #endif
 
+/// Transport metadata stays with the bytes until the decoder is selected.
+struct DownloadedImage: Sendable {
+    let data: Data
+    let formatHint: String
+
+    init(data: Data, url: URL, mimeType: String? = nil) {
+        self.data = data
+        let mime = mimeType?.split(separator: ";", maxSplits: 1).first?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch mime {
+        case "image/svg+xml": formatHint = "svg"
+        case "image/png": formatHint = "png"
+        case "image/jpeg": formatHint = "jpg"
+        case "image/gif": formatHint = "gif"
+        case "image/webp": formatHint = "webp"
+        case "image/bmp": formatHint = "bmp"
+        case "image/tiff": formatHint = "tiff"
+        case "image/heic": formatHint = "heic"
+        case "image/heif": formatHint = "heif"
+        case "application/pdf": formatHint = "pdf"
+        default: formatHint = url.pathExtension.lowercased()
+        }
+    }
+}
+
 /// A single bounded streaming request. Cancellation also covers the interval
 /// before Foundation creates its data task.
 final class ImageDataDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let lock = NSLock()
+    private let url: URL
     private let limit: Int
     private var data = Data()
-    private var continuation: CheckedContinuation<Data, Error>?
+    private var continuation: CheckedContinuation<DownloadedImage, Error>?
     private var session: URLSession?
     private var task: URLSessionDataTask?
     private var isCancelled = false
     private let progress: (@Sendable (Data) -> Void)?
     private var reported = 0
-    init(limit: Int, progress: (@Sendable (Data) -> Void)? = nil) { self.limit = limit; self.progress = progress }
+    private init(url: URL, limit: Int, progress: (@Sendable (Data) -> Void)?) {
+        self.url = url; self.limit = limit; self.progress = progress
+    }
 
     /// `progress` receives the bytes received so far, at most once per 64 KiB,
     /// so progressive formats can show a preview before the download ends.
     static func load(url: URL, policy: ImageLoadingPolicy,
-                     progress: (@Sendable (Data) -> Void)? = nil) async throws -> Data {
+                     progress: (@Sendable (Data) -> Void)? = nil) async throws -> DownloadedImage {
         if url.isFileURL {
             do {
                 let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
@@ -28,20 +56,20 @@ final class ImageDataDownload: NSObject, URLSessionDataDelegate, @unchecked Send
                 try Task.checkCancellation()
                 let data = try Data(contentsOf: url, options: .mappedIfSafe)
                 guard data.count <= policy.maximumDownloadBytes else { throw AsyncImageError.downloadTooLarge }
-                return data
+                return DownloadedImage(data: data, url: url)
             } catch let error as AsyncImageError { throw error }
             catch is CancellationError { throw CancellationError() }
             catch let error as CocoaError where error.code == .fileReadNoSuchFile { throw AsyncImageError.fileNotFound }
             catch { throw AsyncImageError.fileReadFailed }
         }
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { throw AsyncImageError.unsupportedURL }
-        let download = ImageDataDownload(limit: policy.maximumDownloadBytes, progress: progress)
+        let download = ImageDataDownload(url: url, limit: policy.maximumDownloadBytes, progress: progress)
         return try await withTaskCancellationHandler(operation: {
-            try await withCheckedThrowingContinuation { download.begin(url: url, timeout: policy.timeout, continuation: $0) }
+            try await withCheckedThrowingContinuation { download.begin(timeout: policy.timeout, continuation: $0) }
         }, onCancel: { download.cancel() })
     }
 
-    private func begin(url: URL, timeout: Double, continuation: CheckedContinuation<Data, Error>) {
+    private func begin(timeout: Double, continuation: CheckedContinuation<DownloadedImage, Error>) {
         lock.lock()
         if isCancelled { lock.unlock(); continuation.resume(throwing: CancellationError()); return }
         self.continuation = continuation
@@ -58,7 +86,7 @@ final class ImageDataDownload: NSObject, URLSessionDataDelegate, @unchecked Send
         lock.withLock { isCancelled = true }
         finish(.failure(CancellationError()))
     }
-    private func finish(_ result: Result<Data, Error>) {
+    private func finish(_ result: Result<DownloadedImage, Error>) {
         lock.lock()
         let continuation = continuation, session = session
         self.continuation = nil; self.session = nil; task = nil
@@ -94,6 +122,9 @@ final class ImageDataDownload: NSObject, URLSessionDataDelegate, @unchecked Send
     }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error { finish(.failure(AsyncImageError.networkFailed(error.localizedDescription))) }
-        else { finish(.success(lock.withLock { data })) }
+        else {
+            finish(.success(DownloadedImage(data: lock.withLock { data }, url: task.response?.url ?? url,
+                                           mimeType: task.response?.mimeType)))
+        }
     }
 }

@@ -28,16 +28,16 @@ final class ImageLoadServices: @unchecked Sendable {
         return ImageLoadServices(id: ObjectIdentifier(registry), cached: registry.cached, decode: { request, preview in
             guard let url = request.url else { throw AsyncImageError.unsupportedURL }
             let bounds = (request.pixelWidth, request.pixelHeight)
-            let data = try await ImageDataDownload.load(url: url, policy: request.policy) { partial in
-                if let image = ImageDecoder.decodePartial(data: partial, boundingSize: bounds) { preview(image) }
+            let download = try await ImageDataDownload.load(url: url, policy: request.policy) { partial in
+                if let image = ImageDecoder.decodePartial(data: partial, boundingSize: bounds,
+                                                         maximumSourcePixels: request.policy.maximumSourcePixels) { preview(image) }
             }
             try Task.checkCancellation()
-            let hint = url.pathExtension.lowercased()
-            if let animation = try ImageDecoder.decodeAnimation(data: data, formatHint: hint, boundingSize: bounds,
+            if let animation = try ImageDecoder.decodeAnimation(data: download.data, formatHint: download.formatHint, boundingSize: bounds,
                                                                 maximumSourcePixels: request.policy.maximumSourcePixels) {
                 return .animation(animation)
             }
-            return .still(try ImageDecoder.decodeThumbnail(data: data, formatHint: hint,
+            return .still(try ImageDecoder.decodeThumbnail(data: download.data, formatHint: download.formatHint,
                 boundingSize: bounds, maximumSourcePixels: request.policy.maximumSourcePixels))
         }, register: { try registry.register(key: $0, decoded: $1) }, enqueue: { work in
             ImagePublicationQueue.shared.enqueue(work, scheduler: enqueue)

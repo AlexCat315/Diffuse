@@ -19,7 +19,7 @@
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | Workspace 其余深化按需（见第 3 节）、BottomNavigationBar P3（TabView 底部栏已可覆盖）；Sidebar 行内 View 插槽、垂直 Toolbar 与 Workspace 标签条 a11y/RTL 已实现 |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | 按标题自动定宽或省略 P2（Menu 富内容行、图标槽、链接语义与 submenu 指针三角区意图已实现） |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Alert 窄宽操作堆叠、关闭与大字号、Badge 长文本已补齐，Banner 由 Alert 覆盖 |
-| 展示与媒体 | Text/Typography、RichText/Markdown（行内样式、链接、代码块、列表、表格、跨块选择复制）、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | Wasm RGBA 字形与 PNG 位图彩色字体、iOS/非 Apple 平台渐进解码、其他平台 WebView 后端、视频播放组件（应用层按需）；Image 缓存淘汰/在途合并/GIF·WebP 动画/EXIF/macOS 渐进解码、Avatar 状态角标与成员弹层、Linux/Windows COLR 彩色字形与 RTL 双向段落已实现 |
+| 展示与媒体 | Text/Typography、RichText/Markdown（行内样式、链接、代码块、列表、表格、跨块选择复制）、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | Wasm RGBA 字形与 PNG 位图彩色字体、非 Apple 平台渐进解码、其他平台 WebView 后端、视频播放组件（应用层按需）；Image 缓存淘汰/在途合并/GIF·WebP 动画/EXIF/macOS 渐进解码、Avatar 状态角标与成员弹层、Linux/Windows COLR 彩色字形与 RTL 双向段落已实现 |
 | 拖放与交互 | AssetDropTarget、Tree DnD、Workspace 拖拽、PointerCapture、DragScope/Draggable/DropTarget | 通用 payload 协议已实现；`Draggable` 无自动滚动与键盘等价路径（集合重排用 ReorderableList，已具备二者） |
 
 ## 2. 缺失组件规范
@@ -156,7 +156,7 @@
 | Carousel | 自动轮播（悬停/聚焦暂停、播放/暂停、减少动态效果）、圆点/计数指示器与进度、全宽视口已实现，见 [Carousel](carousel.md) | 完成 |
 | StatusBar / Panel | 状态格单行截断、完整 a11y 值、多个前后状态格的有限几何与 `DefaultPanelStyle` 标题截断已实现，见 [Panel](panel.md)；等宽策略仍由调用方声明 | 已完成 |
 | TextField（Text Editor） | 平面编辑样式、稳定行号留白、中性当前行及共用 resize grip 已完善；断点/行级图标/折叠、44pt 触摸菜单、文档会话和 AST/LSP 集成已补齐，见 [gutter](editor-gutter.md) 与 [视觉验收](textfield.md#编辑器视觉与交互验收)。脚本调试运行时后端由应用提供；snippet tab-stop（LSP 片段语法、Tab/Shift+Tab 访问、编辑随 tab stop 平移）与超长单行分段塑形/水平裁剪已补齐 | 已完成 |
-| Image / AsyncImage | CPU 缓存 LRU 字节/数量淘汰、同键在途合并、GIF/WebP 动画播放（减少动态效果停在首帧）、JPEG EXIF 方向、macOS 渐进预览已实现；仍缺：非 macOS 渐进解码、无扩展名远程 SVG 按 MIME 识别（[image.md](image.md) 边界） | P2 |
+| Image / AsyncImage | CPU 缓存 LRU 字节/数量淘汰、同键在途合并、GIF/WebP 动画播放（减少动态效果停在首帧）、JPEG EXIF 方向、macOS/iOS 有界渐进预览与远程 SVG 按 MIME 识别已实现；仍缺：非 Apple 渐进解码（[image.md](image.md) 边界） | P2 |
 | Avatar | 状态角标（四态独立形状、读屏值、RTL 镜像）与可交互成员弹层（`AvatarMemberList`）已实现，见 [avatar.md](avatar.md) | 已完成 |
 | Icon / Typography | Linux/Windows 经 FreeType 渲染 COLRv0 与未压缩 BGRA 位图彩色字形；Text/RichText/Markdown 按段落实现部分 UAX #9 显示规则的双向排版（行级 RTL 对齐、显式方向塑形、L1/L2 视觉重排）已实现；仍缺：显式嵌入/隔离方向控制、PNG 压缩位图字体（需带 libpng 的 FreeType）、Wasm RGBA 字形、RTL 编辑语义（光标/选区）、字体图集自动淘汰（[typography.md](typography.md#边界)） | P2 |
 | Link | 访问态、外链确认（按需） | P3 |
@@ -169,7 +169,7 @@
 
 **P1（常用能力）**：全部已实现；Sidebar 嵌套/项级操作、ScrollView 带时长程序滚动与滚动锚定均已补齐。通用拖放（`DragScope`/`Draggable`/`DropTarget`）、NavigationRail、AdaptiveSidebar 统一壳层、Toast 操作/位置、ZStack、SearchField、MenuButton、RangeSlider（双 thumb 独立 Tab/语义）、SplitButton（单一 Tab + 左右分区 + 1px 分隔）、DateRangePicker、ScrollView 输入（触摸拖动/键盘）、CommandPalette 虚拟化与 compact 几何、列表多选、平面区段、sticky 区段、ReorderableList 重排、SwipeList 滑动操作、列表下拉刷新与 NavigationStack（标题焦点/过渡去重；平台返回由宿主）均已实现，边界及验收见 [Sidebar](sidebar.md#自适应壳层)、[Toast](toast.md)、[ZStack](zstack.md)、[SearchField](searchfield.md)、[MenuButton](menubutton.md)、[RangeSlider](rangeslider.md)、[SplitButton](splitbutton.md)、[DateRangePicker](daterangepicker.md)、[ScrollView](scrollview.md)、[CommandPalette](commandpalette.md) 、[List 多选](list.md#多选) 、[SectionedList](list.md#sectionedlist) 、[SwipeList](swipelist.md) 、[RefreshableList](refresh.md) 、[NavigationStack](navigationstack.md) 与 [Drag & Drop](drag-and-drop.md)。
 
-**P2（长尾/体验，保留未完成项）**：时区选择入口、Workspace 其余深化、DataTable 其余能力（分组表头、分页/远端、区间选择、CSV、表级撤销）、Grid 显式 intrinsic 轨道与 LazyGrid 跨行 span、Menu 按标题自动定宽/省略、PNG 压缩位图彩色字体与 Wasm RGBA、iOS/非 Apple 渐进解码、完整双向方向控制/编辑语义、字体图集自动淘汰。Workspace 与 DataTable 的后续功能按产品需求启动。
+**P2（长尾/体验，保留未完成项）**：时区选择入口、Workspace 其余深化、DataTable 其余能力（分组表头、分页/远端、区间选择、CSV、表级撤销）、Grid 显式 intrinsic 轨道与 LazyGrid 跨行 span、Menu 按标题自动定宽/省略、PNG 压缩位图彩色字体与 Wasm RGBA、非 Apple 渐进解码、完整双向方向控制/编辑语义、字体图集自动淘汰。Workspace 与 DataTable 的后续功能按产品需求启动。
 
 **P3（按需）**：Chart 轴标签/时间轴/缩放、OTP/PIN、masked input、BottomNavigationBar、Link 访问态/外链确认。
 
@@ -189,6 +189,10 @@
 1. **产品入口**：时区选择器；Chart 轴标签/时间轴/缩放（P3）；OTP/PIN、masked input、BottomNavigationBar、Link 访问态/外链确认（P3）。
 2. **数据与工作区**：按调用方需求选择 DataTable 分组表头/分页/区间选择/CSV/撤销；Workspace 的 N 面板联动、折叠吸附、pin 视觉、浮动层、解码校验、chrome 清理与文件拆分。
 3. **现有实现深化**：按上表保留跨平台渲染、完整双向语义、LazyGrid 跨行、intrinsic 轨道与 Menu 自动宽度等缺口；不因本轮主体代码合入而关闭这些边界。
+
+### 4.3 图片加载后续补齐（2026-10-20）
+
+远程下载已将 MIME 与最终 URL 格式信息交给生产解码服务，无扩展名 SVG、误导扩展名、通用 MIME 与重定向均有真实 HTTP 回归。macOS/iOS 共用 ImageIO 渐进缩略图路径，预览遵守源像素预算、目标上限与 EXIF 方向；`ProgressiveImageTests` 验证不完整 JPEG 的实际预览像素。代码、测试与平台边界见 [Image](image.md)。非 Apple 渐进解码、交错 PNG/iOS 设备取样及 WebP 动画像素验收继续保留。
 
 FAB 不作为待补组件：按[视觉基线](adaptive-spec.md#2-视觉与密度基线)，主操作使用 Button/AppBar/Toolbar。P2/P3 表仍是未完成功能清单，不能由 P0/P1 的完成推断全部组件已完成。
 

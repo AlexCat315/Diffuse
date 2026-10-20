@@ -124,7 +124,7 @@ struct AsyncImageTests {
         let server = try ImageHTTPFixture()
         defer { server.stop() }
         let data = try await ImageDataDownload.load(url: server.url("ok"), policy: .init())
-        #expect(data == Data("image data".utf8))
+        #expect(data.data == Data("image data".utf8))
         await #expect(throws: AsyncImageError.httpStatus(404)) {
             try await ImageDataDownload.load(url: server.url("missing"), policy: .init())
         }
@@ -136,7 +136,7 @@ struct AsyncImageTests {
         let task = Task.detached { try await ImageDataDownload.load(url: slowURL, policy: .init()) }
         try await wait {
             let status = try? await ImageDataDownload.load(url: server.url("slow-started"), policy: .init())
-            return status == Data("started".utf8)
+            return status?.data == Data("started".utf8)
         }
         // Main-actor layout suites may delay this test's continuation. Measure
         // transport cancellation on the worker that awaits the held request.
@@ -157,6 +157,36 @@ struct AsyncImageTests {
         await #expect(throws: AsyncImageError.fileNotFound) {
             try await ImageDataDownload.load(url: URL(fileURLWithPath: "/guava-image-test-\(UUID()).png"), policy: .init())
         }
+    }
+    @Test("Response MIME and redirected URLs select the SVG decoder through the production image service",
+          arguments: ["vector", "vector.jpg", "fallback.svg", "redirect"])
+    func remoteVector(path: String) async throws {
+        let server = try ImageHTTPFixture()
+        defer { server.stop() }
+        let (services, request) = try GlobalTestLock.locked {
+            let registry = ImageAssetRegistryHolder.current, enqueue = UIWorkSchedulerHolder.enqueue
+            let density = ContentScaleHolder.current
+            defer {
+                ImageAssetRegistryHolder.current = registry; UIWorkSchedulerHolder.enqueue = enqueue
+                ContentScaleHolder.current = density
+            }
+            ImageAssetRegistryHolder.current = ImageAssetRegistry()
+            UIWorkSchedulerHolder.enqueue = { _ in }
+            ContentScaleHolder.current = 1
+            return (try #require(ImageLoadServices.current), AsyncImageRequest(url: server.url(path),
+                width: 80, height: 80, mode: .fit, retryID: 0, policy: .init()))
+        }
+        let payload = try await services.decode(request, { _ in })
+        guard case .still(let image) = payload else { Issue.record("Expected a still SVG thumbnail"); return }
+        #expect(image.width == 80 && image.height == 40)
+        #expect(image.pixels[0..<4].elementsEqual([255, 0, 0, 255]))
+    }
+    @Test("Missing or generic MIME keeps local and remote extension hints")
+    func formatFallbacks() {
+        let url = URL(string: "https://image.test/vector.SVG?download=1")!
+        #expect(DownloadedImage(data: Data(), url: url).formatHint == "svg")
+        #expect(DownloadedImage(data: Data(), url: url, mimeType: "application/octet-stream").formatHint == "svg")
+        #expect(DownloadedImage(data: Data(), url: url, mimeType: " Image/PNG ; charset=binary").formatHint == "png")
     }
     private func request(_ path: String, retryID: Int = 0) -> AsyncImageRequest {
         .init(url: URL(string: "https://image.test/\(path).png"), width: 48, height: 48, mode: .fill, retryID: retryID, policy: .init())
@@ -263,14 +293,22 @@ private final class ImageHTTPServer: @unchecked Sendable {
                 self.respond(connection, status: 404, body: Data())
             case "/large":
                 self.respond(connection, status: 200, body: Data(repeating: UInt8(ascii: "x"), count: 2048))
+            case "/vector", "/vector.jpg", "/fallback.svg":
+                let svg = Data("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"160\" height=\"80\"><rect width=\"160\" height=\"80\" fill=\"red\"/></svg>".utf8)
+                self.respond(connection, status: 200, body: svg, headers: [
+                    "Content-Type": path == "/fallback.svg" ? "application/octet-stream" : "image/svg+xml; charset=utf-8"
+                ])
+            case "/redirect":
+                self.respond(connection, status: 302, body: Data(), headers: ["Location": self.url("fallback.svg").absoluteString])
             default:
                 self.respond(connection, status: 200, body: Data("image data".utf8))
             }
         }
     }
 
-    private func respond(_ connection: NWConnection, status: Int, body: Data) {
+    private func respond(_ connection: NWConnection, status: Int, body: Data, headers: [String: String] = [:]) {
         let head = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Not Found")\r\n"
+            + headers.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)\r\n" }.joined()
             + "Content-Length: \(body.count)\r\nConnection: close\r\n\r\n"
         var payload = Data(head.utf8)
         payload.append(body)
