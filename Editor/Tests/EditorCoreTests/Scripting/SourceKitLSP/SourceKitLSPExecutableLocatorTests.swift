@@ -1,3 +1,4 @@
+import LanguageServerRuntime
 import Foundation
 import Testing
 @testable import EditorCore
@@ -17,7 +18,7 @@ struct SourceKitLSPExecutableLocatorTests {
 
     @Test("reports the override path when it is not executable")
     func rejectsNonExecutableOverride() {
-        #expect(throws: SourceKitLSPClientError.executableNotFound("/nonexistent/sourcekit-lsp")) {
+        #expect(throws: LSPClientError.executableNotFound("/nonexistent/sourcekit-lsp")) {
             _ = try SourceKitLSPExecutableLocator.resolveExecutableURL(environment: [
                 SourceKitLSPExecutableLocator.overrideEnvironmentKey: "/nonexistent/sourcekit-lsp",
             ])
@@ -48,7 +49,7 @@ struct SourceKitLSPExecutableLocatorTests {
     func failsWhenAbsent() {
         // A PATH with no Swift toolchain defeats both the direct lookup and the
         // `xcrun --find` fallback.
-        #expect(throws: SourceKitLSPClientError.executableNotFound("sourcekit-lsp")) {
+        #expect(throws: LSPClientError.executableNotFound("sourcekit-lsp")) {
             _ = try SourceKitLSPExecutableLocator.resolveExecutableURL(
                 environment: ["PATH": "/nonexistent/bin"]
             )

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Kept free of UI wording so both the editor surface and headless tooling
 /// can present the same diagnostics.
-public enum SourceKitLSPClientError: Error, LocalizedError, Sendable, Equatable {
+public enum LSPClientError: Error, LocalizedError, Sendable, Equatable {
     case executableNotFound(String)
     case launchFailed(String)
     case protocolViolation(String)

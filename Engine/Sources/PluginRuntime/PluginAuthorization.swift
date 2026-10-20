@@ -100,6 +100,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
     public var requires: [PluginRequirement]
     public var capabilitySchemaHashes: [String: String]
     public var authorisedAt: Date
+    public var host: PluginHostPermissions
 
     public init(inspection: PluginInspection,
                 authorisedAt: Date = Date()) throws {
@@ -112,6 +113,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         access = inspection.manifest.access
         composableHostCapabilities = inspection.manifest.composableHostCapabilities
         requires = inspection.manifest.requires
+        host = inspection.manifest.host
         capabilitySchemaHashes = hashes
         self.authorisedAt = authorisedAt
     }
@@ -134,6 +136,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
             && access == inspection.manifest.access
             && composableHostCapabilities == inspection.manifest.composableHostCapabilities
             && requires == inspection.manifest.requires
+            && host == inspection.manifest.host
             && capabilitySchemaHashes == hashes
     }
 
@@ -153,6 +156,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
             "wit_hash": witHash,
             "imports": imports.map(\.rawValue).sorted(),
             "access": access.rawValue,
+            "host": try! JSONSerialization.jsonObject(with: JSONEncoder().encode(host)),
             "composable_host_capabilities": composableHostCapabilities.sorted(),
             "requires": requires.map { requirement -> [String: Any] in
                 var entry: [String: Any] = [
@@ -273,7 +277,7 @@ public enum PluginCapabilityRegistryBuilder {
                     access: contract.access,
                     inputSchema: contract.inputSchema,
                     source: contract.source,
-                    isAIExposed: true
+                    isAIExposed: !manifest.host.entryPoints.contains(String(contract.id.dropFirst(prefix.count)))
                 ))
             }
         }

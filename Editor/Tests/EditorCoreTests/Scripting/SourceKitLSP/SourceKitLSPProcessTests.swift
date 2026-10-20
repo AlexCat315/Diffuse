@@ -1,3 +1,5 @@
+import LanguageServerRuntime
+import ProcessRuntime
 import Foundation
 import GuavaUICompose
 import Testing
@@ -9,8 +11,8 @@ struct SourceKitLSPProcessTests {
     func orderedMessagesAndRestart() async throws {
         let fixture = try LSPProcessFixture()
         defer { fixture.remove() }
-        let failures = LSPEventLog<SourceKitLSPFailure>()
-        let notifications = LSPEventLog<SourceKitLSPNotification>()
+        let failures = LSPEventLog<LSPFailure>()
+        let notifications = LSPEventLog<LSPNotification>()
         let client = fixture.client()
         for _ in 0..<4 {
             try await client.start(notificationHandler: { notifications.append($0) }, onFailure: { failures.append($0) })
@@ -33,7 +35,7 @@ struct SourceKitLSPProcessTests {
     func unsolicitedExit() async throws {
         let fixture = try LSPProcessFixture()
         defer { fixture.remove() }
-        let failures = LSPEventLog<SourceKitLSPFailure>()
+        let failures = LSPEventLog<LSPFailure>()
         let client = fixture.client()
         try await client.start(onFailure: { failures.append($0) })
         try await client.initialize()
@@ -44,7 +46,7 @@ struct SourceKitLSPProcessTests {
         try await Task.sleep(for: .milliseconds(100))
         #expect(failures.values.count == 1)
         #expect(!failures.values[0].message.isEmpty)
-        await #expect(throws: SourceKitLSPClientError.notRunning) {
+        await #expect(throws: LSPClientError.notRunning) {
             try await client.request("textDocument/hover")
         }
     }
@@ -170,8 +172,10 @@ private struct LSPProcessFixture {
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
     var environment: [String: String] { ["GUAVA_TEST_LSP_ROOT": root.path, "GUAVA_TEST_LSP_MODE": mode] }
-    func client() -> SourceKitLSPClient {
-        .init(executableURL: executable, workspaceURL: root, scratchURL: root.appendingPathComponent(".build"), environment: environment)
+    func client() -> LSPClient {
+        var command = ProcessCommand(executable: executable, directory: root)
+        command.environment = ProcessInfo.processInfo.environment.merging(environment) { _, value in value }
+        return .init(configuration: LanguageServerConfiguration(command: command, workspace: root))
     }
     func support() -> ScriptLanguageSupport {
         .init(scriptsDirectoryURL: root.appendingPathComponent("Scripts"), engineModulePaths: [], executableURL: executable, environment: environment)

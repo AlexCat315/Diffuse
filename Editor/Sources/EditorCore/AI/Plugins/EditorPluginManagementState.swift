@@ -39,6 +39,7 @@ public struct EditorPluginInspectionSummary: Codable, Sendable, Equatable, Ident
     public var description: String
     public var access: String
     public var imports: [String]
+    public var processPermissions: [String]
     public var composableHostCapabilities: [String]
     public var capabilities: [EditorPluginCapabilitySummary]
     public var componentHash: String
@@ -54,6 +55,10 @@ public struct EditorPluginInspectionSummary: Codable, Sendable, Equatable, Ident
         description = manifest.description
         access = manifest.access.rawValue
         imports = manifest.imports.map(\.rawValue).sorted()
+        processPermissions = manifest.host.processes.map { rule in
+            let suffix = rule.allowsAdditionalArguments ? " …" : ""
+            return ([rule.command] + rule.argumentPrefix).joined(separator: " ") + suffix
+        }
         composableHostCapabilities = manifest.composableHostCapabilities.sorted()
         capabilities = inspection.contracts.map {
             EditorPluginCapabilitySummary(id: $0.id,

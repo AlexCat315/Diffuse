@@ -29,8 +29,10 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
 
     private let runtime: OpaquePointer
     private let invocationLock = NSLock()
+    private let processes: PluginProcessService?
 
-    public init(useInterpreter: Bool = false) throws {
+    public init(useInterpreter: Bool = false, processes: PluginProcessService? = nil) throws {
+        self.processes = processes
         var error = guava_wasmtime_buffer_t(data: nil, size: 0)
         guard let runtime = guava_wasmtime_runtime_new(useInterpreter ? GUAVA_WASMTIME_INTERPRETER : GUAVA_WASMTIME_AUTOMATIC, &error) else {
             let message = Self.consume(&error)
@@ -107,10 +109,10 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             as: capability.inputType,
             maximumBytes: limits.maximumOutputBytes
         )
-        let grantedImports = Set(package.manifest.imports)
+        let grantedImports = Set(package.manifest.imports.filter(\.isSnapshot))
         if !grantedImports.isEmpty {
             guard let querySnapshot else {
-                throw PluginQuerySnapshotError.missingPayload(package.manifest.imports[0])
+                throw PluginQuerySnapshotError.missingPayload(grantedImports.first!)
             }
             try querySnapshot.validate(for: grantedImports)
         }
@@ -138,7 +140,10 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                         limits: PluginResourceLimits) throws -> Data {
         let environment = QueryEnvironment(
             snapshot: querySnapshot,
-            grantedImports: Set(package.manifest.imports)
+            grantedImports: Set(package.manifest.imports),
+            processes: processes,
+            pluginID: package.manifest.id,
+            entryPoint: capabilityName
         )
         return try withDeadline(milliseconds: timeoutMilliseconds) { deadline in
             var output = guava_wasmtime_buffer_t(data: nil, size: 0)
@@ -323,14 +328,27 @@ private final class InvocationDeadline: @unchecked Sendable {
 private final class QueryEnvironment: @unchecked Sendable {
     let snapshot: PluginQuerySnapshot?
     let grantedImports: Set<PluginImportPermission>
+    let processes: PluginProcessService?
+    let pluginID: String
+    let entryPoint: String
 
     init(snapshot: PluginQuerySnapshot?,
-         grantedImports: Set<PluginImportPermission>) {
+         grantedImports: Set<PluginImportPermission>,
+         processes: PluginProcessService?, pluginID: String, entryPoint: String) {
         self.snapshot = snapshot
         self.grantedImports = grantedImports
+        self.processes = processes
+        self.pluginID = pluginID
+        self.entryPoint = entryPoint
     }
 
     func response(importName: String, request: Data) throws -> Data {
+        if importName == PluginImportPermission.process.rawValue {
+            guard grantedImports.contains(.process), let processes else {
+                throw PluginProcessError.notAuthorized
+            }
+            return try processes.response(pluginID: pluginID, entryPoint: entryPoint, request: request)
+        }
         guard let snapshot else {
             throw PluginQuerySnapshotError.importNotGranted(importName)
         }

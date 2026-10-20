@@ -1,9 +1,10 @@
+import LanguageServerRuntime
 import Foundation
 import GuavaUICompose
 
 /// Builds request payloads understood by SourceKit-LSP.
 ///
-/// Kept separate from ``SourceKitLSPClient`` so adding a capability never means
+/// Kept separate from ``LSPClient`` so adding a capability never means
 /// touching process management — and so the payload shape can be asserted in
 /// tests without a live server.
 public enum ScriptLanguageQueries {
@@ -78,7 +79,7 @@ public enum ScriptLanguageReplies {
     // MARK: Diagnostics
 
     public static func parseDiagnostics(
-        _ notification: SourceKitLSPNotification
+        _ notification: LSPNotification
     ) -> (uri: String, version: Int?, diagnostics: [ScriptLanguageDiagnostic])? {
         guard notification.method == "textDocument/publishDiagnostics",
               let params = try? JSONSerialization.jsonObject(with: notification.params) as? [String: Any],

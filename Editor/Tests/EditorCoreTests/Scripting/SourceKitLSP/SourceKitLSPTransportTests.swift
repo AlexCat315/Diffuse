@@ -1,3 +1,4 @@
+@testable import LanguageServerRuntime
 import Foundation
 import Testing
 @testable import EditorCore
@@ -21,7 +22,7 @@ struct SourceKitLSPTransportTests {
     @Test("rejects frames without Content-Length")
     func rejectsMissingContentLength() {
         var decoder = LSPMessageFramer.Decoder()
-        #expect(throws: SourceKitLSPClientError.protocolViolation("missing Content-Length header")) {
+        #expect(throws: LSPClientError.protocolViolation("missing Content-Length header")) {
             try decoder.append(Data("Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n\r\n{}".utf8))
         }
     }

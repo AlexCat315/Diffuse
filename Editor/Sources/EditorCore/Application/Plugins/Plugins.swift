@@ -74,8 +74,9 @@ extension EditorApplication {
             throw UnmetPluginRequirements(pluginID: authorization.pluginID, violations: unmet)
         }
         let client = try resolvedPluginHostClient()
+        let processContext = try pluginProcessContext(for: authorization.host)
         let binding = try await Task.detached(priority: .userInitiated) {
-            try client.loadPlugin(at: pluginURL, authorization: authorization)
+            try client.loadPlugin(at: pluginURL, authorization: authorization, processContext: processContext)
         }.value
         // Component declarations are data-only. A plugin that declares them badly
         // keeps its AI capabilities but contributes no components.
@@ -484,7 +485,7 @@ extension EditorApplication {
         guard let executor = pluginCapabilityExecutor else {
             throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
         }
-        let imports = try executor.requiredImports(forPluginID: pluginID)
+        let imports = Set(try executor.requiredImports(forPluginID: pluginID).filter(\.isSnapshot))
         guard !imports.isEmpty else { return nil }
         guard scene.revision == sceneRevision else {
             throw EditorPluginCapabilityError.sceneRevisionChanged(

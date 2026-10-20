@@ -86,6 +86,8 @@ let package = Package(
         .library(name: "AudioRuntime", targets: ["AudioRuntime"]),
         .library(name: "CapabilityRuntime", targets: ["CapabilityRuntime"]),
         .library(name: "PluginRuntime", targets: ["PluginRuntime"]),
+        .library(name: "ProcessRuntime", targets: ["ProcessRuntime"]),
+        .library(name: "LanguageServerRuntime", targets: ["LanguageServerRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "PerceptionRuntime", targets: ["PerceptionRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
@@ -347,8 +349,11 @@ let package = Package(
         ),
         .target(
             name: "PluginRuntime",
-            dependencies: ["CapabilityRuntime", .product(name: "GuavaLogging", package: "Logging")]
+            dependencies: ["CapabilityRuntime", "ProcessRuntime", .product(name: "GuavaLogging", package: "Logging")]
         ),
+        .target(name: "ProcessRuntime"),
+        .target(name: "LanguageServerRuntime", dependencies: ["ProcessRuntime", .product(name: "GuavaLogging", package: "Logging")]),
+        .testTarget(name: "ProcessRuntimeTests", dependencies: ["ProcessRuntime"]),
         .target(
             name: "IntentRuntime",
             dependencies: [

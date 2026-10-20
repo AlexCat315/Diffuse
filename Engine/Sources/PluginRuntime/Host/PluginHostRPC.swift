@@ -17,6 +17,7 @@ public struct PluginHostRequest: Codable, Sendable, Equatable {
     public var input: Data?
     public var querySnapshot: PluginQuerySnapshot?
     public var authorization: PluginAuthorizationRecord?
+    public var processContext: PluginProcessContext?
 
     public init(id: UUID = UUID(),
                 method: PluginHostMethod,
@@ -24,7 +25,8 @@ public struct PluginHostRequest: Codable, Sendable, Equatable {
                 capabilityID: String? = nil,
                 input: Data? = nil,
                 querySnapshot: PluginQuerySnapshot? = nil,
-                authorization: PluginAuthorizationRecord? = nil) {
+                authorization: PluginAuthorizationRecord? = nil,
+                processContext: PluginProcessContext? = nil) {
         self.id = id
         self.method = method
         self.pluginPath = pluginPath
@@ -32,6 +34,7 @@ public struct PluginHostRequest: Codable, Sendable, Equatable {
         self.input = input
         self.querySnapshot = querySnapshot
         self.authorization = authorization
+        self.processContext = processContext
     }
 }
 
@@ -93,7 +96,7 @@ public struct PluginQuerySnapshot: Codable, Sendable, Equatable {
         guard total <= Self.maximumTotalPayloadBytes else {
             throw PluginQuerySnapshotError.totalPayloadTooLarge
         }
-        for permission in grantedImports {
+        for permission in grantedImports where permission.isSnapshot {
             guard let payload = payload(for: permission) else {
                 throw PluginQuerySnapshotError.missingPayload(permission)
             }
@@ -128,6 +131,7 @@ public struct PluginQuerySnapshot: Codable, Sendable, Equatable {
         case .sceneQuery: return scene
         case .selectionQuery: return selection
         case .assetMetadataQuery: return assetMetadata
+        case .process: return nil
         }
     }
 }

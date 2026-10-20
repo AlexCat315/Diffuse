@@ -1,3 +1,4 @@
+import ProcessRuntime
 import Foundation
 
 /// Optional command-line flags supported by a particular `sourcekit-lsp` build.
@@ -54,29 +55,13 @@ extension SourceKitLSPExecutableLocator {
     /// unchanged when the probe itself cannot run (sandboxed launch, sandboxed
     /// output, etc.), which is the safer failure mode.
     public static func probeCapabilities(executableURL: URL) -> SourceKitLSPCapabilities {
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = executableURL
-        process.arguments = ["--help"]
-        process.standardOutput = output
-        process.standardError = output
-
-        do { try process.run() } catch { return .optimistic }
-
-        // `--help` normally finishes instantly, but a toolchain wrapped in a
-        // shim can block indefinitely — the failure mode of "help is slow"
-        // must never hang the editor.
-        let deadline = Date().addingTimeInterval(5)
-        while process.isRunning, Date() < deadline {
-            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
-        }
-        if process.isRunning {
-            process.terminate()
-            return .optimistic
-        }
-
-        let help = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        return capabilities(fromHelpOutput: help)
+        var command = ProcessCommand(executable: executableURL, directory: FileManager.default.temporaryDirectory)
+        command.arguments = ["--help"]
+        var budget = ProcessBudget()
+        budget.lifetimeMilliseconds = 5000
+        budget.outputBytes = 262_144
+        guard let result = try? ProcessRunner.runSynchronously(command, budget: budget), result.status == 0 else { return .optimistic }
+        return capabilities(fromHelpOutput: String(decoding: result.stdout + result.stderr, as: UTF8.self))
     }
 
     static func capabilities(fromHelpOutput help: String) -> SourceKitLSPCapabilities {

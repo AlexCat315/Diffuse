@@ -77,6 +77,9 @@ public struct PluginPackageLoader: Sendable {
         let witData = try Data(contentsOf: witURL)
         let wit = try WITContractParser.parse(witData,
                                               grantedImports: Set(manifest.imports))
+        guard manifest.host.entryPoints.isSubset(of: Set(wit.capabilityInputs.map(\.name))) else {
+            throw PluginManifestValidationError.invalidHostPermissions
+        }
         for input in wit.capabilityInputs {
             let capabilityID = manifest.id + "." + input.name
             guard let range = capabilityID.range(

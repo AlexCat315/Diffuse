@@ -310,11 +310,13 @@ extension PluginHostProcessClient: PluginCapabilityInvoking {
     /// Loads only an already-authorised inspection and returns a binding to the
     /// exact host generation that accepted it.
     public func loadPlugin(at pluginURL: URL,
-                           authorization: PluginAuthorizationRecord) throws
+                           authorization: PluginAuthorizationRecord,
+                           processContext: PluginProcessContext? = nil) throws
         -> PluginExecutionBinding {
         let response = try call(PluginHostRequest(method: .load,
                                                   pluginPath: pluginURL.path,
-                                                  authorization: authorization))
+                                                  authorization: authorization,
+                                                  processContext: processContext))
         let payload = try acceptedPayload(response)
         let inspection = try JSONDecoder().decode(PluginInspection.self, from: payload)
         return try PluginExecutionBinding(pluginPath: pluginURL.path,
