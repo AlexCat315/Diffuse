@@ -34,21 +34,21 @@ enum JSON {
   static func string(_ value: Any?) -> String? { value as? String }
 
   static func int(_ value: Any?) -> Int? {
-    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
+    guard let number = value as? NSNumber, !number.isBoolean else {
       return nil
     }
     return number.intValue
   }
 
   static func number(_ value: Any?) -> Double? {
-    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
+    guard let number = value as? NSNumber, !number.isBoolean else {
       return nil
     }
     return number.doubleValue
   }
 
   static func boolean(_ value: Any?) -> Bool? {
-    guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
+    guard let number = value as? NSNumber, number.isBoolean else {
       return nil
     }
     return number.boolValue

@@ -1,4 +1,3 @@
-internal import CoreFoundation
 internal import Foundation
 private import ToolSupport
 
@@ -30,7 +29,7 @@ extension JSON {
     case is NSNull:
       self = .null
     case let number as NSNumber:
-      if CFGetTypeID(number) == CFBooleanGetTypeID() {
+      if number.isBoolean {
         self = .bool(number.boolValue)
       } else {
         self = .number(number.doubleValue)

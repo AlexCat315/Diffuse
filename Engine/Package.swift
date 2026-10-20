@@ -216,7 +216,7 @@ let package = Package(
         ),
         .binaryTarget(
             name: "ocio_openexr",
-            path: "vendor/ocio_openexr.artifactbundle"
+            path: "\(nativeArtifactRoot)/ocio_openexr.artifactbundle"
         ),
         .binaryTarget(
             name: "lunasvg",

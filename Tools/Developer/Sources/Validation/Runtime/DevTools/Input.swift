@@ -176,7 +176,7 @@ enum InputUI {
     if let name = button as? String, let code = ["left": 0, "middle": 1, "right": 2, "back": 3, "forward": 4][name.lowercased()] {
       result["button"] = code
     } else if let number = button as? NSNumber,
-              CFGetTypeID(number) != CFBooleanGetTypeID(), (0...4).contains(number.intValue),
+              !number.isBoolean, (0...4).contains(number.intValue),
               number.doubleValue == Double(number.intValue) {
       result["button"] = number.intValue
     } else {

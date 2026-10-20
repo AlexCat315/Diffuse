@@ -75,9 +75,12 @@ package enum IOSStaging {
         var targets: [String]
         if package == "Engine" {
           command += [
-            "-DGUAVA_BUILD_OPENEXR=OFF", "-DGUAVA_STAGE_WASMTIME=" + (plugins ? "ON" : "OFF"),
+            "-DGUAVA_STAGE_WASMTIME=" + (plugins ? "ON" : "OFF"),
           ]
-          targets = ["stage_sdl3", "stage_jolt", "stage_image_decode"]
+          // The Engine package resolves ocio_openexr from the staged artifact
+          // root, so iOS must build and stage the EXR stack like every other
+          // native dependency; a missing bundle breaks package resolution.
+          targets = ["stage_sdl3", "stage_jolt", "stage_image_decode", "stage_ocio_openexr"]
           if plugins { targets.append("stage_wasmtime") }
         } else {
           targets = ["stage_freetype", "stage_harfbuzz"]
