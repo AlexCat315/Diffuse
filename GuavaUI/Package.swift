@@ -20,6 +20,9 @@ let package = Package(
         .package(path: "Portable"),
         .package(path: "Text"),
         .package(path: "../Engine/Logging"),
+        // CommonMark + GFM parsing for `MarkdownView`; imported `internal` so
+        // its AST never appears in GuavaUICompose's public API.
+        .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.9.0"),
     ],
     targets: [
         .target(name: "GuavaUIAgent", dependencies: [
@@ -62,6 +65,7 @@ let package = Package(
         .target(
             name: "GuavaUICompose",
             dependencies: ["GuavaUIRuntime", .product(name: "GuavaLogging", package: "Logging"),
+                           .product(name: "Markdown", package: "swift-markdown"),
                            .product(name: "GuavaUIScene", package: "Portable"),
                            .product(name: "GuavaUIComposeCore", package: "Portable"),
                            .product(name: "EngineKernel", package: "Engine"),

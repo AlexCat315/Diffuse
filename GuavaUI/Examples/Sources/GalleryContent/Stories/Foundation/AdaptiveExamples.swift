@@ -9,7 +9,7 @@ struct AdaptiveControlExamples: View {
     let options: GalleryOptions
     static func supports(_ page: GalleryPage) -> Bool {
         switch page {
-        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .masonry, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .timePicker, .wheelPicker, .theme, .textEditor, .menu, .contextMenu, .popover, .popconfirm, .actionSheet, .modal, .dialog, .alertDialog, .sheet, .bottomSheet, .commandPalette, .hoverCard, .animation, .introduction, .image, .workspace, .notification, .richText: true
+        case .button, .buttonGroup, .splitButton, .checkbox, .toggle, .slider, .rangeSlider, .textField, .searchField, .numberField, .vec3Field, .select, .combobox, .rating, .list, .sectionedList, .reorderableList, .swipeList, .refreshableList, .scrollbar, .calendar, .datePicker, .tabs, .stepper, .toolbar, .appBar, .navigationStack, .form, .propertyGrid, .splitView, .sidebar, .navigationDrawer, .navigationRail, .table, .dataTable, .layout, .masonry, .zStack, .viewportTraits, .viewThatFits, .dragAndDrop, .menuButton, .tooltip, .link, .badge, .tag, .keyCap, .progress, .empty, .skeleton, .accordion, .icon, .avatar, .panel, .scrollView, .statusBar, .carousel, .breadcrumb, .pagination, .radio, .timeline, .tree, .virtualStack, .chart, .boundedScroll, .label, .disclosure, .alert, .textArea, .colorField, .jsonField, .assetRef, .dateRangePicker, .timeField, .timePicker, .wheelPicker, .theme, .textEditor, .menu, .contextMenu, .popover, .popconfirm, .actionSheet, .modal, .dialog, .alertDialog, .sheet, .bottomSheet, .commandPalette, .hoverCard, .animation, .introduction, .image, .workspace, .notification, .richText, .markdown: true
         default: false
         }
     }
@@ -523,6 +523,7 @@ private struct AdaptiveControlSample: View {
             AnyView(Text(id.rawValue.capitalized).padding(8))
         }.frame(width: .percent(100), height: .points(190)))
         case .richText: AnyView(RichText(RichTextStory.sample).frame(width: .percent(100)))
+        case .markdown: AnyView(MarkdownView(MarkdownStory.compact).frame(width: .percent(100)))
         default: AnyView(EmptyView())
         }
     }

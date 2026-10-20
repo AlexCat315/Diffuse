@@ -182,6 +182,7 @@ public extension GalleryPage {
         case .image: AnyView(ImageStory(options: options))
         case .web: AnyView(WebStory())
         case .richText: AnyView(RichTextStory())
+        case .markdown: AnyView(MarkdownStory())
         case .menu: AnyView(MenuStory(options: options))
         case .menuButton: AnyView(MenuButtonStory(options: options))
         case .contextMenu: AnyView(ContextMenuStory(options: options))
