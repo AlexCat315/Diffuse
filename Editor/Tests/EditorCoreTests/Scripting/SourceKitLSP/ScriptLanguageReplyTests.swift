@@ -1,3 +1,4 @@
+import LanguageServerRuntime
 import Foundation
 import Testing
 @testable import EditorCore
@@ -115,7 +116,7 @@ struct ScriptLanguageReplyTests {
                  "message": "cannot find type 'Foo' in scope"],
             ],
         ])
-        let notification = SourceKitLSPNotification(method: "textDocument/publishDiagnostics",
+        let notification = LSPNotification(method: "textDocument/publishDiagnostics",
                                                     params: params)
 
         let published = try #require(ScriptLanguageReplies.parseDiagnostics(notification))
@@ -130,7 +131,7 @@ struct ScriptLanguageReplyTests {
 
     @Test("ignores notifications for other methods")
     func ignoresOtherNotifications() throws {
-        let notification = SourceKitLSPNotification(method: "window/logMessage",
+        let notification = LSPNotification(method: "window/logMessage",
                                                     params: try LSPJSON.data(["message": "hi"]))
 
         #expect(ScriptLanguageReplies.parseDiagnostics(notification) == nil)

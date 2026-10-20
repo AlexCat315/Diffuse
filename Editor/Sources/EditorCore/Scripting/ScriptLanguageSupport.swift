@@ -1,3 +1,6 @@
+import LanguageServerRuntime
+import ProcessRuntime
+import GuavaLogging
 import Foundation
 import GuavaUICompose
 
@@ -26,7 +29,7 @@ public actor ScriptLanguageSupport {
     private let executableURL: URL
     private let environment: [String: String]
 
-    private var client: SourceKitLSPClient?
+    private var client: LSPClient?
     private struct DocumentSession {
         let document: ScriptLanguageWorkspace.Document
         var current: TextBuffer
@@ -111,10 +114,14 @@ public actor ScriptLanguageSupport {
     private func connect(generation: UUID) async throws {
         guard lifecycle.generation == generation else { throw CancellationError() }
         setState(.starting)
-        let client = SourceKitLSPClient(executableURL: executableURL,
-                                       workspaceURL: workspace.rootURL,
-                                       scratchURL: workspace.rootURL.appendingPathComponent(".build", isDirectory: true),
-                                       environment: environment)
+        let scratch = workspace.rootURL.appendingPathComponent(".build", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        var command = ProcessCommand(executable: executableURL, directory: workspace.rootURL)
+        command.arguments = SourceKitLSPCommandLine.arguments(for: workspace.rootURL, scratchURL: scratch,
+            capabilities: SourceKitLSPExecutableLocator.probeCapabilities(executableURL: executableURL))
+        command.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+        command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
+        let client = LSPClient(configuration: LanguageServerConfiguration(command: command, workspace: workspace.rootURL))
         let connectionID = UUID()
         self.client = client
         lifecycle.connectionID = connectionID
@@ -136,7 +143,7 @@ public actor ScriptLanguageSupport {
             try await open(session.sent.stringValue, document: session.document, version: 1)
         }
         guard lifecycle.generation == generation, lifecycle.connectionID == connectionID,
-              await client.isRunning else { throw SourceKitLSPClientError.notRunning }
+              await client.isRunning else { throw LSPClientError.notRunning }
         lifecycle.readySince = ContinuousClock.now
         setState(.ready)
         for (id, session) in sessions where session.current != session.sent {
@@ -151,7 +158,7 @@ public actor ScriptLanguageSupport {
         lifecycle.onStateChange?(ScriptLanguageServiceUpdate(revision: stateRevision, state: state))
     }
 
-    private func handleFailure(_ failure: SourceKitLSPFailure, connectionID: UUID) {
+    private func handleFailure(_ failure: LSPFailure, connectionID: UUID) {
         guard lifecycle.connectionID == connectionID else { return }
         lifecycle.connectionID = nil
         for session in sessions.values { session.changeTask?.cancel() }
@@ -251,7 +258,7 @@ public actor ScriptLanguageSupport {
     private func query(_ query: Query,
                        scriptID: String,
                        position: ScriptLanguagePosition) async throws -> Data? {
-        guard isReady, let client else { throw SourceKitLSPClientError.notRunning }
+        guard isReady, let client else { throw LSPClientError.notRunning }
         guard let session = sessions[scriptID] else { return nil }
         await sendChange(scriptID: scriptID, revision: session.revision)
         let document = session.document
@@ -272,7 +279,7 @@ public actor ScriptLanguageSupport {
         }
         do {
             return try await client.request(method, params: params, timeout: Self.queryTimeout)
-        } catch SourceKitLSPClientError.requestTimedOut {
+        } catch LSPClientError.requestTimedOut {
             // A competing index build made the answer late, not wrong. Let the
             // popup dismiss itself; the next hover will likely succeed.
             return nil
@@ -282,7 +289,7 @@ public actor ScriptLanguageSupport {
     private func open(_ text: String,
                       document: ScriptLanguageWorkspace.Document,
                       version: Int) async throws {
-        guard let client else { throw SourceKitLSPClientError.notRunning }
+        guard let client else { throw LSPClientError.notRunning }
         try await client.notify(
             "textDocument/didOpen",
             params: try ScriptLanguageQueries.didOpen(
@@ -307,13 +314,13 @@ public actor ScriptLanguageSupport {
             // The session cannot safely guess which revision reached the
             // server after a transport failure. A restart opens fresh roots.
             if let connectionID = lifecycle.connectionID {
-                handleFailure(SourceKitLSPFailure(error: error as? SourceKitLSPClientError ?? .protocolViolation(error.localizedDescription)),
+                handleFailure(LSPFailure(error: error as? LSPClientError ?? .protocolViolation(error.localizedDescription)),
                               connectionID: connectionID)
             }
         }
     }
 
-    private func handle(_ notification: SourceKitLSPNotification, connectionID: UUID) {
+    private func handle(_ notification: LSPNotification, connectionID: UUID) {
         guard lifecycle.connectionID == connectionID, let published = ScriptLanguageReplies.parseDiagnostics(notification),
               let entry = sessions.first(where: {
                   $0.value.document.analysisURL.standardizedFileURL.absoluteString == published.uri

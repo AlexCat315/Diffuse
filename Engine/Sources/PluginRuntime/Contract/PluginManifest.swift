@@ -5,10 +5,12 @@ public enum PluginImportPermission: String, Codable, Sendable, CaseIterable, Has
     case sceneQuery = "guava:scene/query"
     case selectionQuery = "guava:selection/query"
     case assetMetadataQuery = "guava:asset/metadata-query"
+    case process = "guava:process/host"
 
-    /// Every Guava import is intentionally one narrow synchronous function.
-    /// The request must be `{\"operation\":\"snapshot\"}` and the result is
-    /// the revision-bound JSON value supplied by the Editor for this call.
+    public var isSnapshot: Bool { self != .process }
+
+    /// Bounded host requests. Snapshot imports expose immutable revision data;
+    /// process imports expose nonblocking operations on host-owned resources.
     public var witInterface: String {
         "interface query { query: func(request: string) -> string; }"
     }
@@ -52,6 +54,7 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
     /// Declared dependencies, `[]` when the manifest omits them. Sorted by
     /// kind then id so the value is deterministic for digests and comparisons.
     public var requires: [PluginRequirement]
+    public var host: PluginHostPermissions
 
     public init(id: String,
                 version: Int,
@@ -60,12 +63,14 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
                 access: CapabilityAccess,
                 imports: [PluginImportPermission] = [],
                 composableHostCapabilities: [String] = [],
-                requires: [PluginRequirement] = []) {
+                requires: [PluginRequirement] = [],
+                host: PluginHostPermissions = .init()) {
         self.id = id
         self.version = version
         self.name = CapabilityContract.sanitiseMetadata(name, maximumLength: 80)
         self.description = CapabilityContract.sanitiseMetadata(description, maximumLength: 1_024)
         self.access = access
+        self.host = host
         self.imports = Array(Set(imports.map(\.rawValue))).compactMap(PluginImportPermission.init(rawValue:)).sorted {
             $0.rawValue < $1.rawValue
         }
@@ -86,13 +91,14 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
                   composableHostCapabilities: try container.decode([String].self,
                                                                     forKey: .composableHostCapabilities),
                   requires: try container.decodeIfPresent([PluginRequirement].self,
-                                                          forKey: .requires) ?? [])
+                                                          forKey: .requires) ?? [],
+                  host: try container.decodeIfPresent(PluginHostPermissions.self, forKey: .host) ?? .init())
     }
 
     enum CodingKeys: String, CodingKey {
         case id, version, name, description, access, imports
         case composableHostCapabilities = "composable_host_capabilities"
-        case requires
+        case requires, host
     }
 }
 
@@ -109,9 +115,11 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
     case invalidRequirement(String)
     case duplicateRequirement(String)
     case requirementOnSelf(String)
+    case invalidHostPermissions
 
     public var description: String {
         switch self {
+        case .invalidHostPermissions: return "invalid plugin process permissions"
         case .invalidIdentifier: return "plugin id must match [a-z][a-z0-9.-]{2,63}"
         case .invalidVersion: return "plugin version must be positive"
         case .emptyName: return "plugin name must not be empty"
@@ -139,7 +147,7 @@ public enum PluginManifestValidator {
     ]
     private static let allowedFields: Set<String> = [
         "id", "version", "name", "description", "access", "imports",
-        "composable_host_capabilities", "requires",
+        "composable_host_capabilities", "requires", "host",
     ]
 
     public static func decodeAndValidate(_ data: Data,
@@ -162,13 +170,15 @@ public enum PluginManifestValidator {
                                            access: decoded.access,
                                            imports: decoded.imports,
                                            composableHostCapabilities: decoded.composableHostCapabilities,
-                                           requires: decoded.requires)
+                                           requires: decoded.requires,
+                                           host: decoded.host)
         try validate(manifest, registry: registry)
         return manifest
     }
 
     public static func validate(_ manifest: GuavaPluginManifest,
                                 registry: CapabilityRegistry = .default) throws {
+        try manifest.host.validate(imports: manifest.imports)
         let pattern = "^[a-z][a-z0-9.-]{2,63}$"
         guard manifest.id.range(of: pattern, options: .regularExpression) != nil else {
             throw PluginManifestValidationError.invalidIdentifier

@@ -76,6 +76,8 @@ let package = Package(
                 .product(name: "ObservationBus", package: "Engine"),
                 .product(name: "PerceptionRuntime", package: "Engine"),
                 .product(name: "PluginRuntime", package: "Engine"),
+                .product(name: "ProcessRuntime", package: "Engine"),
+                .product(name: "LanguageServerRuntime", package: "Engine"),
                 .product(name: "SemanticPipeline", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),

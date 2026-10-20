@@ -37,6 +37,9 @@ struct PluginInspectionCard: View {
             )
             PluginInspectionField(label: L("Component SHA-256"),
                                   value: summary.componentHash)
+            if !summary.processPermissions.isEmpty {
+                PluginInspectionField(label: L("Allowed commands"), value: summary.processPermissions.joined(separator: "\n"))
+            }
             PluginInspectionField(label: L("WIT SHA-256"),
                                   value: summary.witHash)
 

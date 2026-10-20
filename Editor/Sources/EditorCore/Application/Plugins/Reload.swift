@@ -27,12 +27,13 @@ extension EditorApplication {
             throw EditorPluginCapabilityError.pluginAuthorizationStale(pluginID)
         }
         let reloaded: PluginExecutionBinding
+        let processContext = try pluginProcessContext(for: binding.authorization.host)
         do {
             try await Task.detached(priority: .userInitiated) {
                 try client.unloadPlugin(at: pluginURL)
             }.value
             reloaded = try await Task.detached(priority: .userInitiated) {
-                try client.loadPlugin(at: pluginURL, authorization: binding.authorization)
+                try client.loadPlugin(at: pluginURL, authorization: binding.authorization, processContext: processContext)
             }.value
         } catch {
             await discardAfterFailedReload(pluginID: pluginID)

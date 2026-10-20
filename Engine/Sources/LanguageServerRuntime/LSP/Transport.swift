@@ -29,7 +29,7 @@ public enum LSPMessageFramer {
             while true {
                 guard let separator = buffer.range(of: LSPMessageFramer.headerTerminator) else {
                     guard buffer.count <= maximumHeaderBytes else {
-                        throw SourceKitLSPClientError.protocolViolation("header exceeds size limit")
+                        throw LSPClientError.protocolViolation("header exceeds size limit")
                     }
                     break
                 }
@@ -37,13 +37,13 @@ public enum LSPMessageFramer {
                 let headerData = buffer[..<separator.lowerBound]
                 guard headerData.count <= maximumHeaderBytes,
                       let header = String(data: headerData, encoding: .ascii) else {
-                    throw SourceKitLSPClientError.protocolViolation("invalid header encoding")
+                    throw LSPClientError.protocolViolation("invalid header encoding")
                 }
                 guard let contentLength = Self.contentLength(in: header) else {
-                    throw SourceKitLSPClientError.protocolViolation("missing Content-Length header")
+                    throw LSPClientError.protocolViolation("missing Content-Length header")
                 }
                 guard contentLength <= maximumBodyBytes else {
-                    throw SourceKitLSPClientError.protocolViolation("message exceeds size limit")
+                    throw LSPClientError.protocolViolation("message exceeds size limit")
                 }
 
                 let bodyStart = separator.upperBound
@@ -95,7 +95,7 @@ public enum LSPJSON {
 }
 
 /// A server-initiated message that has no matching outstanding request.
-public struct SourceKitLSPNotification: Sendable {
+public struct LSPNotification: Sendable {
     public let method: String
     public let params: Data
 

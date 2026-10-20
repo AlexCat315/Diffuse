@@ -1,3 +1,5 @@
+import ProcessRuntime
+import LanguageServerRuntime
 import Foundation
 import ScriptRuntime
 
@@ -5,7 +7,7 @@ import ScriptRuntime
 ///
 /// Resolution order mirrors what an editor extension does: an explicit
 /// operator override first, then `PATH`, then whatever toolchain `xcrun`
-/// currently points at. Keeping this outside ``SourceKitLSPClient`` lets the
+/// currently points at. Keeping this outside ``LSPClient`` lets the
 /// lookup be exercised without spawning a process.
 public enum SourceKitLSPExecutableLocator {
     public static let overrideEnvironmentKey = "GUAVA_SOURCEKIT_LSP_PATH"
@@ -15,7 +17,7 @@ public enum SourceKitLSPExecutableLocator {
     ) throws -> URL {
         if let override = environment[overrideEnvironmentKey], !override.isEmpty {
             guard let url = try? SwiftScriptCompiler.resolveExecutableURL(for: override, environment: environment) else {
-                throw SourceKitLSPClientError.executableNotFound(override)
+                throw LSPClientError.executableNotFound(override)
             }
             return url
         }
@@ -32,25 +34,18 @@ public enum SourceKitLSPExecutableLocator {
         }
         #endif
 
-        throw SourceKitLSPClientError.executableNotFound("sourcekit-lsp")
+        throw LSPClientError.executableNotFound("sourcekit-lsp")
     }
 
     private static func resolveViaXcrun(_ xcrunURL: URL) throws -> URL {
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = xcrunURL
-        process.arguments = ["--find", "sourcekit-lsp"]
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch {
-            throw SourceKitLSPClientError.executableNotFound("sourcekit-lsp")
+        var command = ProcessCommand(executable: xcrunURL, directory: FileManager.default.temporaryDirectory)
+        command.arguments = ["--find", "sourcekit-lsp"]
+        var budget = ProcessBudget(); budget.lifetimeMilliseconds = 5000; budget.outputBytes = 16_384
+        guard let result = try? ProcessRunner.runSynchronously(command, budget: budget), result.status == 0 else {
+            throw LSPClientError.executableNotFound("sourcekit-lsp")
         }
-        process.waitUntilExit()
-        let path = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard process.terminationStatus == 0, !path.isEmpty else {
-            throw SourceKitLSPClientError.executableNotFound("sourcekit-lsp")
-        }
+        let path = String(decoding: result.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty else { throw LSPClientError.executableNotFound("sourcekit-lsp") }
         return URL(fileURLWithPath: path)
     }
 

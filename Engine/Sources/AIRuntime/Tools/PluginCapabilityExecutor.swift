@@ -338,7 +338,8 @@ public struct PluginCapabilityExecutor: Sendable {
         guard let binding = bindings[pluginID] else {
             throw PluginCapabilityExecutorError.unknownPlugin(pluginID)
         }
-        guard let current = registry.descriptor(for: contract.id)?.contract,
+        guard registry.descriptor(for: contract.id)?.isAIExposed == true,
+              let current = registry.descriptor(for: contract.id)?.contract,
               current == contract,
               binding.inspection.contracts.contains(contract),
               snapshot.authority(forPluginID: pluginID) == binding.authority,
@@ -379,7 +380,7 @@ public struct PluginCapabilityExecutor: Sendable {
     private func validateQuerySnapshot(_ querySnapshot: PluginQuerySnapshot?,
                                        binding: PluginExecutionBinding,
                                        sceneRevision: UInt64) throws {
-        let imports = Set(binding.inspection.manifest.imports)
+        let imports = Set(binding.inspection.manifest.imports.filter(\.isSnapshot))
         if let querySnapshot {
             guard querySnapshot.sceneRevision == sceneRevision else {
                 throw PluginCapabilityExecutorError.staleSceneRevision(
