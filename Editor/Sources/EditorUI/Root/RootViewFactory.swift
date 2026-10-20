@@ -176,17 +176,17 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "render-pipeline", title: localizedPanelTitle(for: "render-pipeline"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.render-pipeline" }) {
                 RenderPipelinePanel(app: app)
             },
-            WorkspacePanelDescriptor(id: "animation", title: L("Animation"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.animation" }) {
+            WorkspacePanelDescriptor(id: "animation", title: localizedPanelTitle(for: "animation"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.animation" }) {
                 InspectorPanel(store: app.store, scene: app.scene,
                                sectionFilter: ["animation-player", "animation-graph-player"])
             },
             WorkspacePanelDescriptor(id: "developer-tools", title: localizedPanelTitle(for: "developer-tools"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.developer-tools" }) {
                 DeveloperToolsPanel(app: app)
             },
-            WorkspacePanelDescriptor(id: "documents", title: L("Text and Code"), defaultSlot: .center) {
+            WorkspacePanelDescriptor(id: "documents", title: localizedPanelTitle(for: "documents"), defaultSlot: .center) {
                 DocumentsPanel(model: app.workstation.documents)
             },
-            WorkspacePanelDescriptor(id: "media", title: L("Video Editing"), defaultSlot: .center) {
+            WorkspacePanelDescriptor(id: "media", title: localizedPanelTitle(for: "media"), defaultSlot: .center) {
                 MediaTimelinePanel(model: app.workstation.media, projectRoot: URL(fileURLWithPath: app.projectDirectory))
             },
             WorkspacePanelDescriptor(id: "scripts", title: localizedPanelTitle(for: "scripts"), defaultSlot: .center, configure: { $0.isCollapsible = false; $0.iconAssetKey = "panel.scripts" }) {
@@ -278,7 +278,7 @@ enum EditorRootViewFactory {
     ]
     private static let shellStatePersistenceKey = "editor_shell_state"
 
-    private static func localizedPanelTitle(for id: String) -> String {
+    static func localizedPanelTitle(for id: String) -> String {
         switch id {
         case "hierarchy":
             return L("Outline")
@@ -304,6 +304,10 @@ enum EditorRootViewFactory {
             return L("Scripts")
         case "animation":
             return L("Animation")
+        case "documents":
+            return L("Text and Code")
+        case "media":
+            return L("Video Editing")
         default:
             return id
         }

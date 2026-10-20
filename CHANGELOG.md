@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 编辑器命令改为单一目录 `EditorCommandCatalog`：macOS 菜单栏、Windows/Linux 标题栏菜单、⌘/Ctrl+K 命令面板与窗口内快捷键都由它生成，移除原来平行维护的菜单模型、面板命令表和快捷键表。顶级菜单为文件、编辑、视图（Space 与布局子菜单）、Agent、运行、窗口、帮助；工作区不授权的命令不再显示为灰色项。新增 ⌘P 打开资源、⇧⌘P 命令、⌘↩ 试玩/暂停、⌘0 重置布局。Windows 不再没有菜单：沉浸式标题栏最左侧提供同一棵命令树。状态栏改为错误/警告计数、Space、未保存、后台活动与 Agent 状态，计数与控制台“问题”共用 `EditorProblemSummary`；窄窗口播放控制收成试玩/暂停与停止。`CommandCatalogTests`、`ShortcutHandlerTests`、`EditorNativeMenuTests` 与工作台标题栏宽度测试覆盖两种菜单呈现。见 [工作站边界](docs/architecture/workstation.md)。
+
+- `NativeMenuItem` 新增 `.submenu`，`NativeMenuBar` 新增 `applicationItems` 与可本地化的 `NativeApplicationMenuTitles`：macOS 应用菜单依次放入调用方的关于/设置项、隐藏、隐藏其他、全部显示与退出。`UIIcons.Navigation.menu` 新增菜单图标。
+
 - `Toggle` / `Checkbox` 新增 label 槽：`Toggle("Notifications", isOn:)` / `Checkbox("Accept the terms", isOn:)` 将文本放在控件 trailing，控件辅助功能 label 使用该文本且不新增可聚焦节点。`BoolControlLabelTests` 覆盖 label、单一 toggle/checkbox 语义与激活；Gallery Toggle/Checkbox 页改为带标签设置行。补齐 `adaptive-spec.md`、`gaps.md`、[Toggle](docs/components/toggle.md) 与 [Checkbox](docs/components/checkbox.md)。
 
 - `CommandPalette` 新增 `footer` `@ViewBuilder` 初始化器：自定义 footer 替换默认快捷键提示，保留顶部 1pt 分隔线、搜索/排序/最近使用/执行路径与面板几何。`CommandPaletteFooterTests` 覆盖自定义/默认 footer；Gallery Command Palette 页新增 “Open with project footer” 与 Aurora workspace footer。补齐 [CommandPalette](docs/components/commandpalette.md)、`adaptive-spec.md` 与 `gaps.md`。

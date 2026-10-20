@@ -1,16 +1,34 @@
-import EditorCore
+internal import EditorCore
 
-/// One command policy for menus, search, keyboard dispatch and native menus.
+/// One command policy for menus, the palette, keyboard dispatch and native menus.
 enum EditorWorkspaceCommandPolicy {
-    static func allows(_ command: EditorMenuCommand, in mode: EditorWorkspaceMode) -> Bool {
+    static func allows(_ command: EditorCommand, in mode: EditorWorkspaceMode) -> Bool {
         let profile = mode.profile
         switch command {
         case .showScripts: return profile.allowsPanel("scripts")
         case .showPanel(let id), .maximizePanel(let id): return profile.allowsPanel(id)
+        case .showSceneSettings: return profile.features.contains(.scene)
+        case .showAssets, .importAssets: return profile.allowsPanel("assets")
         case .buildProject, .buildAndRun: return profile.features.contains(.gameBuild)
-        case .setPlaybackState: return profile.features.contains(.gameplay)
+        case .setPlaybackState, .togglePlayback: return profile.features.contains(.gameplay)
         default: return true
         }
     }
+}
 
+enum EditorPlaybackCommandPolicy {
+    static func canTransition(from current: PlaybackState, to next: PlaybackState) -> Bool {
+        current.canTransition(to: next)
+    }
+
+    /// Play from stopped or paused; pause while playing.
+    static func toggleTarget(from current: PlaybackState) -> PlaybackState {
+        current == .playing ? .paused : .playing
+    }
+}
+
+enum EditorSceneAuthoringPolicy {
+    static func canEditScene(during playbackState: PlaybackState) -> Bool {
+        playbackState == .stopped
+    }
 }

@@ -1,61 +1,52 @@
-import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+private import Foundation
+internal import GuavaUI
+internal import GuavaUIRuntime
 
+/// Projects the command catalog onto the platform menu bar.
 enum EditorNativeMenuBuilder {
     static func make(appName: String = "GuavaStudio",
-                     workspaceMode: EditorWorkspaceMode,
-                     activeLayoutPreset: EditorLayoutPreset,
-                     playbackState: PlaybackState,
-                     canUndo: Bool = false,
-                     canRedo: Bool = false,
-                     hasSelection: Bool = false,
+                     catalog: EditorCommandCatalog,
                      focusChain: @escaping @MainActor () -> FocusChain? = { FocusChainHolder.current },
-                     onCommand: @escaping @MainActor (EditorMenuCommand) -> Void) -> NativeMenuBar {
-        let model = EditorMenuModel.make(workspaceMode: workspaceMode,
-                                         activeLayoutPreset: activeLayoutPreset,
-                                         playbackState: playbackState,
-                                         canUndo: canUndo,
-                                         canRedo: canRedo,
-                                         hasSelection: hasSelection)
-        let menus = model.menus.map { menu in
-            NativeMenu(title: menu.title,
-                       items: menu.items.map { nativeItem($0, focusChain: focusChain, onCommand: onCommand) })
+                     onCommand: @escaping @MainActor (EditorCommand) -> Void) -> NativeMenuBar {
+        func nativeItems(_ items: [EditorCommandItem]) -> [NativeMenuItem] {
+            items.map { item in
+                switch item {
+                case .separator:
+                    return .separator
+                case let .submenu(menu):
+                    return .submenu(NativeMenu(title: menu.title, items: nativeItems(menu.items)))
+                case let .entry(entry):
+                    return .action(NativeMenuAction(
+                        title: entry.title,
+                        keyEquivalent: entry.shortcut?.key.equivalent ?? "",
+                        keyModifiers: entry.shortcut?.modifiers.native ?? [],
+                        isEnabled: entry.isEnabled,
+                        isSelected: entry.isSelected,
+                        isEnabledProvider: {
+                            EditorCommandDispatcher.isEnabled(entry.command,
+                                                              sceneCommandEnabled: entry.isEnabled,
+                                                              focusChain: focusChain())
+                        },
+                        action: { onCommand(entry.command) }))
+                }
+            }
         }
-        return NativeMenuBar(appName: appName, menus: menus)
+        return NativeMenuBar(
+            appName: appName,
+            applicationItems: nativeItems(catalog.applicationItems),
+            applicationTitles: applicationTitles(appName: appName),
+            menus: catalog.menus.map { NativeMenu(title: $0.title, items: nativeItems($0.items)) })
     }
 
-    private static func nativeItem(_ item: EditorApplicationMenuItem,
-                                   focusChain: @escaping @MainActor () -> FocusChain?,
-                                   onCommand: @escaping @MainActor (EditorMenuCommand) -> Void) -> NativeMenuItem {
-        switch item {
-        case .separator:
-            return .separator
-        case .action(let action):
-            return .action(NativeMenuAction(title: action.title,
-                                            keyEquivalent: action.keyEquivalent,
-                                            keyModifiers: action.keyModifiers.nativeModifiers,
-                                            isEnabled: action.isEnabled,
-                                            isSelected: action.isSelected,
-                                            isEnabledProvider: {
-                                                EditorCommandDispatcher.isEnabled(action.command,
-                                                                                  sceneCommandEnabled: action.isEnabled,
-                                                                                  focusChain: focusChain())
-                                            },
-                                            action: {
-                                                onCommand(action.command)
-                                            }))
-        }
+    /// The menu bar while no project is open: only the platform entries.
+    static func welcome(appName: String = "GuavaStudio") -> NativeMenuBar {
+        NativeMenuBar(appName: appName, applicationTitles: applicationTitles(appName: appName), menus: [])
     }
-}
 
-private extension EditorMenuKeyModifiers {
-    var nativeModifiers: NativeMenuKeyModifiers {
-        var out: NativeMenuKeyModifiers = []
-        if contains(.command) { out.insert(.command) }
-        if contains(.shift) { out.insert(.shift) }
-        if contains(.option) { out.insert(.option) }
-        if contains(.control) { out.insert(.control) }
-        return out
+    private static func applicationTitles(appName: String) -> NativeApplicationMenuTitles {
+        NativeApplicationMenuTitles(hide: String(format: L("Hide %@"), appName),
+                                    hideOthers: L("Hide Others"),
+                                    showAll: L("Show All"),
+                                    quit: String(format: L("Quit %@"), appName))
     }
 }

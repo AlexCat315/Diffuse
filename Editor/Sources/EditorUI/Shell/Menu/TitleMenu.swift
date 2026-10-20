@@ -1,133 +1,63 @@
-import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+internal import GuavaUI
+internal import GuavaUIRuntime
 
-struct EditorApplicationMenuBar: View {
-    let workspaceMode: EditorWorkspaceMode
-    let activeLayoutPreset: EditorLayoutPreset
-    let playbackState: PlaybackState
-    let canUndo: Bool
-    let canRedo: Bool
-    let hasSelection: Bool
-    let onCommand: (EditorMenuCommand) -> Void
-    @State private var openMenuIndex: Int? = nil
+/// Where the command tree appears. macOS owns a native menu bar. Windows and
+/// Linux windows draw an immersive title bar in the client area, where a
+/// platform menu strip would sit below it, so they show the same tree from a
+/// title-bar button instead.
+enum EditorMenuPresentation {
+    case native
+    case titleBar
 
-    init(workspaceMode: EditorWorkspaceMode,
-         activeLayoutPreset: EditorLayoutPreset,
-         playbackState: PlaybackState,
-         canUndo: Bool,
-         canRedo: Bool,
-         hasSelection: Bool,
-         onCommand: @escaping (EditorMenuCommand) -> Void) {
-        self.workspaceMode = workspaceMode
-        self.activeLayoutPreset = activeLayoutPreset
-        self.playbackState = playbackState
-        self.canUndo = canUndo
-        self.canRedo = canRedo
-        self.hasSelection = hasSelection
-        self.onCommand = onCommand
-        _openMenuIndex = State(wrappedValue: nil)
+    static var current: Self {
+        #if os(macOS)
+        .native
+        #else
+        .titleBar
+        #endif
     }
+}
+
+/// The command catalog as one compact title-bar menu; each top-level menu is a
+/// submenu, so the title bar keeps its width at every window size.
+struct EditorTitleMenu: View {
+    let catalog: EditorCommandCatalog
+    let onCommand: (EditorCommand) -> Void
+    @State private var isPresented = false
 
     var body: some View {
-        Row(alignment: .center, spacing: 2) {
-            for (index, menu) in Array(menus.enumerated()) {
-                menuButton(menu, index: index)
-            }
-        }
-        .frame(height: 28, minWidth: menuBarMinimumWidth)
-        .flex(0, shrink: 0)
-        .zIndex(20_000)
-        .layoutRole("editor-application-menu-bar")
-        .debugName("editor-application-menu-bar")
-    }
-
-    private func menuButton(_ menu: EditorApplicationMenu, index: Int) -> AnyView {
-        let isPresented = Binding<Bool>(
-            get: { openMenuIndex == index },
-            set: { presented in
-                if presented {
-                    openMenuIndex = index
-                } else if openMenuIndex == index {
-                    openMenuIndex = nil
-                }
-            }
-        )
-
-        return AnyView(Popover(isPresented: isPresented,
-                               width: 240, surface: .content, overflow: .flip) {
+        Popover(isPresented: $isPresented, width: 236, surface: .content, overflow: .flip) {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Text(menu.title)
-                    .font(.body)
-                    .foregroundColor(openMenuIndex == index ? .onSurface : .onSurfaceVariant)
+                Icon(UIIcons.Navigation.menu, size: 14, color: isPresented ? .onSurface : .onSurfaceVariant)
             }
-                .padding(horizontal: 10, vertical: 0)
-                .frame(height: 28)
-                .background(openMenuIndex == index ? .surfaceVariant : .surface)
-                .cornerRadius(4)
+            .frame(width: 28, height: 26)
+            .background(isPresented ? .surfaceVariant : .clear)
+            .cornerRadius(6)
+            .accessibility { $0.label = L("Application Menu"); $0.state.isExpanded = isPresented }
         } content: {
-            Menu(entries(for: menu),
-                 width: 240,
-                 maxVisibleRows: 16,
-                 onItemActivated: {
-                openMenuIndex = nil
-            })
-        })
+            Menu(catalog.menusWithApplicationItems.map { menu in
+                .submenu(MenuSubmenu(id: menu.id, title: menu.title, entries: entries(menu.items)) { $0.width = 260 })
+            }, width: 200, maxVisibleRows: 12, onItemActivated: { isPresented = false })
+        }
+        .debugName("editor-title-menu")
     }
 
-    private var menuBarMinimumWidth: Float {
-        menus.reduce(Float(0)) { width, menu in
-            width + max(44, Float(menu.title.count * 9 + 24))
-        } + Float(max(0, menus.count - 1) * 2)
-    }
-
-    private func entries(for menu: EditorApplicationMenu) -> [MenuEntry] {
-        menu.items.enumerated().map { index, item in
+    private func entries(_ items: [EditorCommandItem]) -> [MenuEntry] {
+        items.enumerated().map { index, item in
             switch item {
             case .separator:
                 return .separator("separator-\(index)")
-            case .action(let action):
-                return .item(MenuItem(
-                    id: "action-\(index)",
-                    title: action.title,
-                    shortcut: shortcutLabel(key: action.keyEquivalent,
-                                            modifiers: action.keyModifiers),
-                    isEnabled: EditorCommandDispatcher.isEnabled(action.command,
-                                                                  sceneCommandEnabled: action.isEnabled),
-                    isSelected: action.isSelected,
-                    action: {
-                        onCommand(action.command)
-                    }
-                ))
+            case let .submenu(menu):
+                return .submenu(MenuSubmenu(id: menu.id, title: menu.title, entries: entries(menu.items)))
+            case let .entry(entry):
+                return .item(MenuItem(id: entry.id,
+                                      title: entry.title,
+                                      shortcut: entry.shortcut?.label,
+                                      isEnabled: EditorCommandDispatcher.isEnabled(entry.command,
+                                                                                   sceneCommandEnabled: entry.isEnabled),
+                                      isSelected: entry.isSelected,
+                                      action: { onCommand(entry.command) }))
             }
         }
-    }
-
-    private func shortcutLabel(key: String, modifiers: EditorMenuKeyModifiers) -> String? {
-        guard !key.isEmpty else { return nil }
-        var parts: [String] = []
-        if modifiers.contains(.control) { parts.append("Ctrl") }
-        if modifiers.contains(.shift) { parts.append("Shift") }
-        if modifiers.contains(.option) { parts.append("Alt") }
-        if modifiers.contains(.command) { parts.append(commandModifierLabel) }
-        parts.append(key == "\u{8}" || key == "\u{7F}" ? L("Delete") : key.uppercased())
-        return parts.joined(separator: "+")
-    }
-
-    private var commandModifierLabel: String {
-        #if os(macOS)
-        "Cmd"
-        #else
-        "Meta"
-        #endif
-    }
-
-    private var menus: [EditorApplicationMenu] {
-        EditorMenuModel.make(workspaceMode: workspaceMode,
-                             activeLayoutPreset: activeLayoutPreset,
-                             playbackState: playbackState,
-                             canUndo: canUndo,
-                             canRedo: canRedo,
-                             hasSelection: hasSelection).menus
     }
 }

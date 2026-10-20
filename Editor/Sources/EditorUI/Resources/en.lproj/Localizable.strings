@@ -825,3 +825,20 @@
 "Save" = "Save";
 "Discard and Reload" = "Discard and Reload";
 "Open a text or code file to begin." = "Open a text or code file to begin.";
+
+/* Command catalog and shell */
+"View" = "View";
+"Run" = "Run";
+"Space" = "Space";
+"Open Resource..." = "Open Resource...";
+"Ask Guava..." = "Ask Guava...";
+"Play / Pause" = "Play / Pause";
+"Settings..." = "Settings...";
+"Scene Settings" = "Scene Settings";
+"Application Menu" = "Application Menu";
+"Hide %@" = "Hide %@";
+"Hide Others" = "Hide Others";
+"Quit %@" = "Quit %@";
+"Guava is working" = "Guava is working";
+"Agent ready" = "Agent ready";
+"Agent offline" = "Agent offline";

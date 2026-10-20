@@ -6,13 +6,17 @@ internal import GuavaUIRuntime
 struct EditorTitleBar: View {
     let app: EditorApplication
     let width: Float
-    let onCommand: (EditorMenuCommand) -> Void
+    var menuPresentation: EditorMenuPresentation = .current
+    let onCommand: (EditorCommand) -> Void
 
     var body: some View {
         let store = app.store
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             ImmersiveWindowTitleBar(height: 40) {
                 Row(alignment: .center, spacing: 10) {
+                    if menuPresentation == .titleBar {
+                        EditorTitleMenu(catalog: catalog, onCommand: onCommand).id("title-menu")
+                    }
                     project.id("title-project")
                     if width >= 1180 { selection.flex().frame(minWidth: 0).clipped().id("title-selection") }
                     WindowDragRegion().frame(minWidth: 12).id("title-drag")
@@ -26,7 +30,8 @@ struct EditorTitleBar: View {
                             .background(EditorChromeTokens.agentColor.opacity(0.12)).cornerRadius(12).id("title-presence")
                     }
                     if store.workspaceMode.isGameWorkspace {
-                        EditorPlaybackToolbar(state: store.playbackState, onCommand: onCommand).id("title-playback")
+                        EditorPlaybackToolbar(state: store.playbackState, compact: width < 520, onCommand: onCommand)
+                            .id("title-playback")
                     }
                 }.flex().frame(minWidth: 0)
             }
@@ -34,10 +39,26 @@ struct EditorTitleBar: View {
         .frame(height: 40).debugName("editor-title-bar")
     }
 
+    /// Reads the observed store values the catalog depends on, so the title-bar
+    /// menu refreshes with selection, history and playback.
+    private var catalog: EditorCommandCatalog {
+        let store = app.store
+        let _ = store.sceneRevision
+        return .make(EditorCommandContext(workspaceMode: store.workspaceMode,
+                                          layoutPreset: store.activeLayoutPreset,
+                                          playbackState: store.playbackState,
+                                          canUndo: app.canUndo,
+                                          canRedo: app.canRedo,
+                                          hasSelection: !store.selectedEntityIDs.isEmpty))
+    }
+
+    private var intentShortcut: String {
+        catalog.entries.first { $0.id == "agent.intent" }?.shortcut?.label ?? ""
+    }
+
     private var project: some View {
         Button(tooltip: L("Project commands")) {
-            app.store.dispatch(.setCommandPaletteQuery(">"))
-            onCommand(.showCommandPalette)
+            onCommand(.showCommandPalette(.commands))
         } label: {
             Row(alignment: .center, spacing: 7) {
                 Text("G").font(.bodyStrong).foregroundColor(.onAccent)
@@ -64,15 +85,14 @@ struct EditorTitleBar: View {
 
     private var intent: some View {
         Button(tooltip: L("Tell Guava what you want to do…")) {
-            app.store.dispatch(.setCommandPaletteQuery(""))
-            onCommand(.showCommandPalette)
+            onCommand(.showCommandPalette(.intent))
         } label: {
             Row(alignment: .center, spacing: 7) {
                 Icon(UIIcons.Status.sparkles, size: 13, color: EditorChromeTokens.agentColor)
                 if width >= 1100 {
                     Text(L("Tell Guava what you want to do…"), lineLimit: 1)
                         .font(.caption).foregroundColor(.onSurfaceMuted).flex()
-                    Text(EditorCommandSearch.primaryKey + "K").font(.caption)
+                    Text(intentShortcut).font(.caption)
                         .foregroundColor(.onSurfaceMuted).padding(horizontal: 4)
                         .border(.borderStrong, width: 1).cornerRadius(3)
                 }

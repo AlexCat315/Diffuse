@@ -1,184 +1,316 @@
-import EditorCore
+internal import EditorCore
+internal import EngineKernel
+internal import GuavaUI
 
-enum EditorPlaybackCommandPolicy {
-    static func canTransition(from current: PlaybackState,
-                              to next: PlaybackState) -> Bool {
-        current.canTransition(to: next)
+/// Everything a command's availability depends on. The native menu rebuilds
+/// only when this value changes.
+struct EditorCommandContext: Equatable {
+    var workspaceMode: EditorWorkspaceMode
+    var layoutPreset: EditorLayoutPreset
+    var playbackState: PlaybackState = .stopped
+    var canUndo = false
+    var canRedo = false
+    var hasSelection = false
+
+    init(workspaceMode: EditorWorkspaceMode,
+         layoutPreset: EditorLayoutPreset? = nil,
+         playbackState: PlaybackState = .stopped,
+         canUndo: Bool = false,
+         canRedo: Bool = false,
+         hasSelection: Bool = false) {
+        self.workspaceMode = workspaceMode
+        self.layoutPreset = layoutPreset ?? .default(for: workspaceMode)
+        self.playbackState = playbackState
+        self.canUndo = canUndo
+        self.canRedo = canRedo
+        self.hasSelection = hasSelection
+    }
+
+    init(app: EditorApplication) {
+        let state = app.store.state
+        self.init(workspaceMode: state.workspace.mode,
+                  layoutPreset: state.workspace.layoutPreset,
+                  playbackState: state.timing.playbackState,
+                  canUndo: app.canUndo,
+                  canRedo: app.canRedo,
+                  hasSelection: !state.selection.selectedEntityIDs.isEmpty)
     }
 }
 
-enum EditorSceneAuthoringPolicy {
-    static func canEditScene(during playbackState: PlaybackState) -> Bool {
-        playbackState == .stopped
-    }
-}
-
-struct EditorMenuModel {
-    let menus: [EditorApplicationMenu]
-
-    static func make(workspaceMode: EditorWorkspaceMode,
-                     activeLayoutPreset: EditorLayoutPreset,
-                     playbackState: PlaybackState,
-                     canUndo: Bool = false,
-                     canRedo: Bool = false,
-                     hasSelection: Bool = false) -> EditorMenuModel {
-        let canAuthorScene = EditorSceneAuthoringPolicy.canEditScene(during: playbackState)
-        let menus = [
-            EditorApplicationMenu(title: L("File"), items: [
-                action(L("New Scene"), key: "n", enabled: canAuthorScene, command: .newScene),
-                action(L("Open Scene..."), key: "o", enabled: canAuthorScene, command: .openScene),
-                action(L("Save Scene"), key: "s", command: .saveScene),
-                .separator,
-                action(L("Import Assets..."), key: "", command: .importAssets),
-                .separator,
-                action(L("Close Project / Welcome"), key: "", command: .closeProject),
-            ]),
-            EditorApplicationMenu(title: L("Edit"), items: [
-                action(L("Undo"), key: "z", enabled: canAuthorScene && canUndo, command: .undo),
-                action(L("Redo"), key: "z", modifiers: [.primary, .shift], enabled: canAuthorScene && canRedo, command: .redo),
-                .separator,
-                action(L("Duplicate Selection"), key: "d", enabled: canAuthorScene && hasSelection, command: .duplicateSelection),
-                action(L("Delete Selection"), key: "\u{8}", modifiers: [],
-                       enabled: canAuthorScene && hasSelection, command: .deleteSelection),
-                .separator,
-                action(L("Settings"), key: ",", command: .openSettings),
-            ]),
-            EditorApplicationMenu(title: L("Workspace"), items: [
-                action(L("Write"), key: "1", selected: workspaceMode == .documents,
-                       command: .setWorkspaceMode(.documents)),
-                action(L("Gameplay"), key: "2", selected: workspaceMode == .level,
-                       command: .setWorkspaceMode(.level)),
-                action(L("Animate"), key: "3", selected: workspaceMode == .animation,
-                       command: .setWorkspaceMode(.animation)),
-                action(L("Video"), key: "4", selected: workspaceMode == .video,
-                       command: .setWorkspaceMode(.video)),
-                action(L("Render"), key: "5", selected: workspaceMode == .modeling,
-                       command: .setWorkspaceMode(.modeling)),
-                .separator,
-                action(L(EditorWorkspaceMode.scripting.title), key: "", selected: workspaceMode == .scripting,
-                       command: .setWorkspaceMode(.scripting)),
-            ]),
-            EditorApplicationMenu(title: L("Layout"), items:
-                EditorLayoutPreset.presets(for: workspaceMode).map { preset in
-                    action(L(preset.title), key: "", selected: activeLayoutPreset == preset,
-                           command: .setLayoutPreset(preset))
-                } + [
-                    .separator,
-                    action(L("Save Layout"), key: "", command: .saveLayout),
-                    action(L("Reset Layout"), key: "", command: .resetLayout),
-                    .separator,
-                    action(L("Maximize Viewport"), key: "", command: .maximizePanel("viewport")),
-                    action(L("Restore Panels"), key: "", command: .restorePanels),
-                ]),
-            EditorApplicationMenu(title: L("Window"), items: [
-                action(L("Command Palette"), key: "p", modifiers: [.primary, .shift], command: .showCommandPalette),
-                .separator,
-                action(L("Viewport"), key: "", command: .showPanel("viewport")),
-                action(L("Hierarchy"), key: "", command: .showPanel("hierarchy")),
-                action(L("Inspector"), key: "", command: .showPanel("inspector")),
-                action(L("Scene Settings"), key: "", command: .showSceneSettings),
-                action(L("Assets"), key: "", command: .showAssets),
-                action(L("Scripts"), key: "", command: .showScripts),
-                action(L("Console"), key: "", command: .showPanel("console")),
-                action(L("Animation"), key: "", command: .showPanel("animation")),
-                action(L("Render Pipeline"), key: "", command: .showPanel("render-pipeline")),
-                action(L("Developer Tools"), key: "", command: .showPanel("developer-tools")),
-                action(L("AI"), key: "", command: .showPanel("intent-input")),
-                .separator,
-                action(L("Reopen Closed Panel"), key: "t", modifiers: [.primary, .shift],
-                       command: .reopenClosedPanel),
-            ]),
-            EditorApplicationMenu(title: L("Tools"), items: [
-                action(L("Play"), key: "",
-                       enabled: workspaceMode.isGameWorkspace && EditorPlaybackCommandPolicy.canTransition(from: playbackState,
-                                                                          to: .playing),
-                       selected: playbackState == .playing,
-                       command: .setPlaybackState(.playing)),
-                action(L("Pause"), key: "",
-                       enabled: workspaceMode.isGameWorkspace && EditorPlaybackCommandPolicy.canTransition(from: playbackState,
-                                                                          to: .paused),
-                       selected: playbackState == .paused,
-                       command: .setPlaybackState(.paused)),
-                action(L("Stop"), key: "",
-                       enabled: workspaceMode.isGameWorkspace && EditorPlaybackCommandPolicy.canTransition(from: playbackState,
-                                                                          to: .stopped),
-                       selected: playbackState == .stopped,
-                       command: .setPlaybackState(.stopped)),
-                .separator,
-                action(L("Toggle Theme"), key: "", command: .toggleTheme),
-            ]),
-            EditorApplicationMenu(title: L("Build"), items: [
-                action(L("Build Project"), key: "b", enabled: workspaceMode.isGameWorkspace, command: .buildProject),
-                action(L("Build and Run"), key: "r", enabled: workspaceMode.isGameWorkspace, command: .buildAndRun),
-            ]),
-            EditorApplicationMenu(title: L("Help"), items: [
-                action(L("Documentation"), key: "", command: .openDocumentation),
-                .separator,
-                action(L("About Guava"), key: "", command: .about),
-            ]),
-        ]
-        return EditorMenuModel(menus: menus.compactMap { menu in
-            var items: [EditorApplicationMenuItem] = []
-            for item in menu.items {
-                if case .action(let action) = item,
-                   !EditorWorkspaceCommandPolicy.allows(action.command, in: workspaceMode) { continue }
-                if case .separator = item {
-                    guard !items.isEmpty else { continue }
-                    if case .separator = items.last { continue }
-                }
-                items.append(item)
-            }
-            if case .separator = items.last { items.removeLast() }
-            return items.isEmpty ? nil : EditorApplicationMenu(title: menu.title, items: items)
-        })
-    }
-
-    private static func action(_ title: String,
-                               key: String,
-                               modifiers: EditorMenuKeyModifiers = [.primary],
-                               enabled: Bool = true,
-                               selected: Bool = false,
-                               command: EditorMenuCommand) -> EditorApplicationMenuItem {
-        .action(EditorApplicationMenuAction(title: title,
-                                            keyEquivalent: key,
-                                            keyModifiers: modifiers,
-                                            isEnabled: enabled,
-                                            isSelected: selected,
-                                            command: command))
-    }
-
-}
-
-struct EditorApplicationMenu {
+struct EditorCommandEntry {
+    /// Stable identifier used by the palette and tests.
+    let id: String
     let title: String
-    let items: [EditorApplicationMenuItem]
+    var keywords = ""
+    var shortcut: EditorShortcut?
+    let command: EditorCommand
+    var isEnabled = true
+    var isSelected = false
+    /// Entries that only open the palette itself stay out of its results.
+    var inPalette = true
 }
 
-enum EditorApplicationMenuItem {
-    case action(EditorApplicationMenuAction)
+enum EditorCommandItem {
+    case entry(EditorCommandEntry)
+    case submenu(EditorCommandMenu)
     case separator
 }
 
-struct EditorApplicationMenuAction {
+struct EditorCommandMenu {
+    let id: String
     let title: String
-    let keyEquivalent: String
-    let keyModifiers: EditorMenuKeyModifiers
-    var isEnabled: Bool = true
-    var isSelected: Bool = false
-    let command: EditorMenuCommand
+    var items: [EditorCommandItem]
 }
 
-struct EditorMenuKeyModifiers: OptionSet {
-    let rawValue: UInt8
+/// The one command tree. The macOS menu bar, the Windows/Linux title-bar menu,
+/// the command palette and keyboard shortcuts are all projections of it.
+struct EditorCommandCatalog {
+    /// About and Settings. macOS places them in the application menu; other
+    /// presentations fold them into Help and Edit.
+    let applicationItems: [EditorCommandItem]
+    let menus: [EditorCommandMenu]
 
-    static let command = EditorMenuKeyModifiers(rawValue: 1 << 0)
-    static let shift = EditorMenuKeyModifiers(rawValue: 1 << 1)
-    static let option = EditorMenuKeyModifiers(rawValue: 1 << 2)
-    static let control = EditorMenuKeyModifiers(rawValue: 1 << 3)
+    static func make(_ context: EditorCommandContext) -> Self {
+        let builder = Builder(context: context)
+        return Self(applicationItems: builder.applicationItems,
+                    menus: builder.menus.compactMap { $0.filtered(for: context.workspaceMode) })
+    }
 
-    #if os(macOS)
-    static let primary: EditorMenuKeyModifiers = .command
-    #else
-    static let primary: EditorMenuKeyModifiers = .control
-    #endif
+    /// Menus for a presentation without an application menu.
+    var menusWithApplicationItems: [EditorCommandMenu] {
+        let about = applicationItems.filter { $0.entry?.command.isAbout == true }
+        let settings = applicationItems.filter { $0.entry?.command.isAbout == false }
+        return menus.map { menu in
+            var menu = menu
+            switch menu.id {
+            case "edit" where !settings.isEmpty: menu.items += [.separator] + settings
+            case "help" where !about.isEmpty: menu.items += [.separator] + about
+            default: break
+            }
+            return menu
+        }
+    }
+
+    /// Every entry in menu order, including nested submenus.
+    var entries: [EditorCommandEntry] {
+        (applicationItems + menus.map { .submenu($0) }).flatMap(\.entries)
+    }
+
+    func entry(matching event: KeyEvent) -> EditorCommandEntry? {
+        entries.first { $0.shortcut?.matches(event) == true }
+    }
+}
+
+private extension EditorCommandItem {
+    var entry: EditorCommandEntry? {
+        if case let .entry(entry) = self { return entry }
+        return nil
+    }
+
+    var entries: [EditorCommandEntry] {
+        switch self {
+        case let .entry(entry): [entry]
+        case let .submenu(menu): menu.items.flatMap(\.entries)
+        case .separator: []
+        }
+    }
+}
+
+private extension EditorCommand {
+    var isAbout: Bool {
+        if case .about = self { return true }
+        return false
+    }
+}
+
+private extension EditorCommandMenu {
+    /// Drops commands the workspace does not authorize, then collapses empty
+    /// submenus and redundant separators so no menu shows dead structure.
+    func filtered(for mode: EditorWorkspaceMode) -> Self? {
+        var kept: [EditorCommandItem] = []
+        for item in items {
+            switch item {
+            case let .entry(entry):
+                guard EditorWorkspaceCommandPolicy.allows(entry.command, in: mode) else { continue }
+                kept.append(item)
+            case let .submenu(menu):
+                guard let menu = menu.filtered(for: mode) else { continue }
+                kept.append(.submenu(menu))
+            case .separator:
+                guard !kept.isEmpty else { continue }
+                if case .separator = kept.last { continue }
+                kept.append(item)
+            }
+        }
+        if case .separator = kept.last { kept.removeLast() }
+        return kept.isEmpty ? nil : Self(id: id, title: title, items: kept)
+    }
+}
+
+private struct Builder {
+    let context: EditorCommandContext
+
+    private var canAuthorScene: Bool {
+        EditorSceneAuthoringPolicy.canEditScene(during: context.playbackState)
+    }
+
+    private var isGame: Bool { context.workspaceMode.isGameWorkspace }
+
+    var applicationItems: [EditorCommandItem] {
+        [
+            entry("app.about", "About Guava", command: .about),
+            entry("preferences", "Settings...", "preferences settings 设置 偏好", .init(.comma), command: .openSettings),
+        ]
+    }
+
+    var menus: [EditorCommandMenu] {
+        [file, edit, view, agent, run, window, help]
+    }
+
+    private var file: EditorCommandMenu {
+        menu("file", "File", [
+            entry("scene.new", "New Scene", "new scene 新建场景", .init(.letter("n")), command: .newScene,
+                  enabled: canAuthorScene),
+            entry("scene.open", "Open Scene...", "open scene 打开场景", .init(.letter("o")), command: .openScene,
+                  enabled: canAuthorScene),
+            entry("search.resources", "Open Resource...", "", .init(.letter("p")),
+                  command: .showCommandPalette(.resources), inPalette: false),
+            entry("scene.save", "Save Scene", "save scene 保存场景", .init(.letter("s")), command: .saveScene),
+            .separator,
+            entry("assets.import", "Import Assets...", "import assets 导入资源", command: .importAssets,
+                  enabled: canAuthorScene),
+            .separator,
+            entry("project.close", "Close Project / Welcome", "close project welcome 关闭项目", command: .closeProject),
+        ])
+    }
+
+    private var edit: EditorCommandMenu {
+        menu("edit", "Edit", [
+            entry("edit.undo", "Undo", "undo 撤销", .init(.letter("z")), command: .undo,
+                  enabled: canAuthorScene && context.canUndo),
+            entry("edit.redo", "Redo", "redo 重做", .init(.letter("z"), [.primary, .shift]), command: .redo,
+                  enabled: canAuthorScene && context.canRedo),
+            .separator,
+            entry("edit.duplicate", "Duplicate Selection", "duplicate 复制", .init(.letter("d")),
+                  command: .duplicateSelection, enabled: canAuthorScene && context.hasSelection),
+            entry("edit.delete", "Delete Selection", "delete 删除", .init(.delete, []), command: .deleteSelection,
+                  enabled: canAuthorScene && context.hasSelection),
+        ])
+    }
+
+    private var view: EditorCommandMenu {
+        let spaces: [EditorCommandItem] = EditorSpace.allCases.enumerated().map { index, space in
+            entry("workspace." + space.mode.rawValue, space.title, "space workspace 工作空间",
+                  .init(.digit(index + 1)), command: .setWorkspaceMode(space.mode),
+                  selected: context.workspaceMode == space.mode)
+        } + [
+            .separator,
+            entry("workspace." + EditorWorkspaceMode.scripting.rawValue, EditorWorkspaceMode.scripting.title,
+                  "space workspace script 工作空间 脚本", command: .setWorkspaceMode(.scripting),
+                  selected: context.workspaceMode == .scripting),
+        ]
+        let presets: [EditorCommandItem] = EditorLayoutPreset.presets(for: context.workspaceMode).map { preset in
+            entry("layout." + preset.rawValue, preset.title, "layout 布局", command: .setLayoutPreset(preset),
+                  selected: context.layoutPreset == preset)
+        }
+        return menu("view", "View", [
+            .submenu(menu("space", "Space", spaces)),
+            .submenu(menu("layout", "Layout", presets + [
+                .separator,
+                entry("layout.save", "Save Layout", "layout workspace 保存布局", command: .saveLayout),
+                entry("layout.reset", "Reset Layout", "layout workspace 重置布局", .init(.digit(0)),
+                      command: .resetLayout),
+            ])),
+            .separator,
+            entry("layout.viewport", "Maximize Viewport", "maximize 最大化视口", command: .maximizePanel("viewport")),
+            entry("layout.scripts", "Maximize Scripts", "maximize 最大化脚本", command: .maximizePanel("scripts")),
+            entry("layout.restore", "Restore Panels", "maximize restore 恢复面板", command: .restorePanels),
+            .separator,
+            entry("palette.commands", "Command Palette", "", .init(.letter("p"), [.primary, .shift]),
+                  command: .showCommandPalette(.commands), inPalette: false),
+            entry("theme.toggle", "Toggle Theme", "dark light theme 主题", command: .toggleTheme),
+        ])
+    }
+
+    private var agent: EditorCommandMenu {
+        menu("agent", "Agent", [
+            entry("agent.intent", "Ask Guava...", "", .init(.letter("k")), command: .showCommandPalette(.intent),
+                  inPalette: false),
+            .separator,
+            entry("agent.show", "Agent", "agent assistant conversation 智能体 对话", command: .showPanel("intent-input")),
+            entry("agent.review", "Review", "agent review approval 审阅", command: .showPanel("intent-input")),
+            entry("journal.show", "Session Journal", "history activity journal 历史 日志", command: .showPanel("journal")),
+        ])
+    }
+
+    private var run: EditorCommandMenu {
+        let state = context.playbackState
+        func transport(_ target: PlaybackState, _ title: String) -> EditorCommandItem {
+            entry("playback." + target.rawValue, title, "game preview 游戏试玩", command: .setPlaybackState(target),
+                  enabled: isGame && EditorPlaybackCommandPolicy.canTransition(from: state, to: target),
+                  selected: state == target)
+        }
+        return menu("run", "Run", [
+            entry("playback.toggle", "Play / Pause", "play pause game 试玩 暂停", .init(.enter),
+                  command: .togglePlayback, enabled: isGame),
+            transport(.playing, "Play"),
+            transport(.paused, "Pause"),
+            transport(.stopped, "Stop"),
+            .separator,
+            entry("project.build", "Build Project", "export build 导出构建", .init(.letter("b")),
+                  command: .buildProject, enabled: isGame),
+            entry("project.run", "Build and Run", "export run 构建运行", .init(.letter("r")),
+                  command: .buildAndRun, enabled: isGame),
+        ])
+    }
+
+    private var window: EditorCommandMenu {
+        func panel(_ id: String, keywords: String = "") -> EditorCommandItem {
+            panelEntry("panel." + id, panel: id, keywords: "panel 面板 " + keywords, command: .showPanel(id))
+        }
+        return menu("window", "Window", [
+            panel("hierarchy", keywords: "hierarchy outline 大纲 层级"),
+            panelEntry("inspector.show", panel: "inspector", keywords: "inspector properties 属性",
+                       command: .showPanel("inspector")),
+            entry("scene.settings", "Scene Settings", "physics scene 场景物理设置", command: .showSceneSettings),
+            panel("viewport", keywords: "viewport scene 场景 视口"),
+            panel("documents", keywords: "documents text 文档"),
+            panel("media", keywords: "video timeline 视频 时间线"),
+            panelEntry("scripts.show", panel: "scripts", keywords: "code script 编程脚本", command: .showScripts),
+            entry("assets.show", "Content Browser", "assets 资源浏览器", command: .showAssets),
+            .separator,
+            panel("console", keywords: "console log 控制台 日志"),
+            entry("problems.show", "Problems", "errors diagnostics 问题诊断错误", command: .showProblems),
+            panel("animation", keywords: "animation 动画"),
+            panel("render-pipeline", keywords: "render 渲染"),
+            panel("developer-tools", keywords: "profiler debugger 开发者工具"),
+            .separator,
+            entry("layout.reopen", "Reopen Closed Panel", "reopen 恢复关闭面板", .init(.letter("t"), [.primary, .shift]),
+                  command: .reopenClosedPanel),
+        ])
+    }
+
+    private var help: EditorCommandMenu {
+        menu("help", "Help", [
+            entry("help.documentation", "Documentation", "docs help 文档 帮助", command: .openDocumentation),
+        ])
+    }
+
+    private func menu(_ id: String, _ title: String, _ items: [EditorCommandItem]) -> EditorCommandMenu {
+        EditorCommandMenu(id: id, title: L(title), items: items)
+    }
+
+    /// Panel commands reuse the tab title so menus and tabs never disagree.
+    private func panelEntry(_ id: String, panel: String, keywords: String, command: EditorCommand) -> EditorCommandItem {
+        .entry(EditorCommandEntry(id: id, title: EditorRootViewFactory.localizedPanelTitle(for: panel),
+                                  keywords: keywords, command: command))
+    }
+
+    private func entry(_ id: String, _ title: String, _ keywords: String = "", _ shortcut: EditorShortcut? = nil,
+                       command: EditorCommand, enabled: Bool = true, selected: Bool = false,
+                       inPalette: Bool = true) -> EditorCommandItem {
+        .entry(EditorCommandEntry(id: id, title: L(title), keywords: keywords, shortcut: shortcut,
+                                  command: command, isEnabled: enabled, isSelected: selected,
+                                  inPalette: inPalette))
+    }
 }

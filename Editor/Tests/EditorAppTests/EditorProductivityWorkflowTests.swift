@@ -101,7 +101,7 @@ struct EditorProductivityWorkflowTests {
         settings.provider = .none
         app.store.dispatch(.setAISettings(settings))
         #expect(!app.isAIAvailable)
-        #expect(EditorCommandSearch.commands(app: app).contains { $0.id == "scene.settings" && $0.enabled })
+        #expect(EditorCommandSearch.commands(app: app).contains { $0.id == "scene.settings" && $0.isEnabled })
         var layout = document()
         layout.panels["inspector"] = WorkspacePanel(id: "inspector", title: "Inspector")
         layout.groups["trailing"] = WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector", isCollapsed: true)

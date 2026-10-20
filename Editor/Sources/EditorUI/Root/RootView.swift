@@ -21,17 +21,6 @@ struct EditorRootView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                        #if os(Linux)
-                        EditorApplicationMenuBar(
-                                    workspaceMode: store.workspaceMode,
-                                    activeLayoutPreset: store.activeLayoutPreset,
-                                    playbackState: store.playbackState,
-                                    canUndo: TextEditingCommands.canUndo ?? app.canUndo,
-                                    canRedo: TextEditingCommands.canRedo ?? app.canRedo,
-                                    hasSelection: !store.selectedEntityIDs.isEmpty,
-                                    onCommand: cb.handleMenuCommand
-                        ).padding(horizontal: 8).background(.surfaceRaised)
-                        #endif
                         EditorTitleBar(app: app, width: windowWidth, onCommand: cb.handleMenuCommand)
                         Divider()
                         Box(direction: .row, alignItems: .stretch, spacing: 0) {
@@ -48,12 +37,9 @@ struct EditorRootView: View {
                         }.flex().frame(minWidth: 0, minHeight: 0)
 
                         Divider()
-                        EditorStatusBar(store: store, scriptWorkspace: app.workstation.scripts,
+                        EditorStatusBar(app: app,
                                         showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed },
-                                        onShowProblems: {
-                                            store.dispatch(.setOutputTab(.problems))
-                                            EditorRootViewFactory.activatePanel("console", in: controller)
-                                        })
+                                        onCommand: cb.handleMenuCommand)
                     }
                     .background(.background)
                     .flex()
@@ -90,94 +76,22 @@ private struct EditorWindowSizeObserver: ViewModifier {
 
 private struct EditorCallbacks {
     let handleShortcut: (KeyEvent) -> Bool
-    let handleMenuCommand: (EditorMenuCommand) -> Void
+    let handleMenuCommand: (EditorCommand) -> Void
 
     init(app: EditorApplication,
          controller: WorkspaceController,
          registry: WorkspacePanelRegistry,
          commandPaletteVisible: Bool) {
-        self.handleMenuCommand = { command in
+        let perform: (EditorCommand) -> Void = { command in
             EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry)
         }
-        self.handleShortcut = { key in
-            let s = app.store
-            return EditorShortcutHandler.handle(
-                key,
-                playbackState: s.state.timing.playbackState,
-                commandPaletteVisible: commandPaletteVisible,
-                setPlaybackState: { next in
-                    EditorCommandDispatcher.handle(.setPlaybackState(next),
-                                                   app: app,
-                                                   controller: controller,
-                                                   registry: registry)
-                },
-                setWorkspaceMode: { next in
-                    EditorCommandDispatcher.handle(.setWorkspaceMode(next),
-                                                   app: app,
-                                                   controller: controller,
-                                                   registry: registry)
-                },
-                resetLayout: {
-                    EditorCommandDispatcher.handle(.resetLayout,
-                                                   app: app,
-                                                   controller: controller,
-                                                   registry: registry)
-                },
-                reopenClosedPanel: {
-                    EditorCommandDispatcher.handle(.reopenClosedPanel,
-                                                   app: app,
-                                                   controller: controller,
-                                                   registry: registry)
-                },
-                newScene: {
-                    EditorCommandDispatcher.handle(.newScene, app: app, controller: controller, registry: registry)
-                },
-                openScene: {
-                    EditorCommandDispatcher.handle(.openScene, app: app, controller: controller, registry: registry)
-                },
-                saveScene: {
-                    EditorCommandDispatcher.handle(.saveScene, app: app, controller: controller, registry: registry)
-                },
-                duplicateSelection: {
-                    EditorCommandDispatcher.handle(.duplicateSelection,
-                                                   app: app,
-                                                   controller: controller,
-                                                   registry: registry)
-                },
-                deleteSelection: {
-                    EditorCommandDispatcher.handle(.deleteSelection,
-                                                   app: app,
-                                                   controller: controller,
-                                                   registry: registry)
-                },
-                buildProject: {
-                    EditorCommandDispatcher.handle(.buildProject, app: app, controller: controller, registry: registry)
-                },
-                buildAndRun: {
-                    EditorCommandDispatcher.handle(.buildAndRun, app: app, controller: controller, registry: registry)
-                },
-                openSettings: {
-                    EditorCommandDispatcher.handle(.openSettings,
-                                                   app: app,
-                                                   controller: controller,
-                                                   registry: registry)
-                },
-                openCommandPalette: {
-                    s.dispatch(.setCommandPaletteQuery(""))
-                    s.dispatch(.setCommandPaletteVisible(true))
-                },
-                closeCommandPalette: { s.dispatch(.setCommandPaletteVisible(false)) },
-                undo: {
-                    EditorCommandDispatcher.handle(.undo, app: app, controller: controller, registry: registry)
-                },
-                redo: {
-                    EditorCommandDispatcher.handle(.redo, app: app, controller: controller, registry: registry)
-                },
-                openResourceSearch: {
-                    s.dispatch(.setCommandPaletteQuery("@"))
-                    s.dispatch(.setCommandPaletteVisible(true))
-                }
-            )
+        handleMenuCommand = perform
+        handleShortcut = { key in
+            EditorShortcutHandler.handle(key,
+                                         catalog: .make(EditorCommandContext(app: app)),
+                                         commandPaletteVisible: commandPaletteVisible,
+                                         closeCommandPalette: { app.store.dispatch(.setCommandPaletteVisible(false)) },
+                                         perform: perform)
         }
     }
 }

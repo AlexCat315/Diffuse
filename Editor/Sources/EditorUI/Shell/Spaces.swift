@@ -52,7 +52,7 @@ struct EditorSpaceSwitcher: View {
     enum Presentation { case labels, icons, menu }
     let mode: EditorWorkspaceMode
     let presentation: Presentation
-    let onCommand: (EditorMenuCommand) -> Void
+    let onCommand: (EditorCommand) -> Void
     @State private var isPresented = false
 
     @ViewBuilder

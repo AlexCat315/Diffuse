@@ -15,9 +15,15 @@ struct WorkspacePresetRegressionTests {
         let previous = EditorLocalizationPreferences.language
         EditorLocalizationPreferences.language = .simplifiedChinese
         defer { EditorLocalizationPreferences.language = previous }
-        let model = EditorMenuModel.make(workspaceMode: .level, activeLayoutPreset: .levelDefault, playbackState: .stopped)
-        #expect(model.menus.contains { $0.title == "工作区" })
-        #expect(model.menus.contains { $0.title == "布局" })
+        let catalog = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .level))
+        #expect(catalog.menus.map(\.title) == ["文件", "编辑", "视图", "Agent", "运行", "窗口", "帮助"])
+        let view = try #require(catalog.menus.first { $0.id == "view" })
+        let nested = view.items.compactMap { item -> String? in
+            if case let .submenu(menu) = item { return menu.title }
+            return nil
+        }
+        #expect(nested == ["Space", "布局"])
+        #expect(catalog.entries.first { $0.id == "workspace.level" }?.title == "玩法")
         #expect(L(EditorLayoutPreset.levelWorkbench.title) == "场景与脚本")
         #expect(L(EditorLayoutPreset.modelingSculpt.title) == "视口优先")
         #expect(L(EditorLayoutPreset.animationSequencer.title) == "动画属性")

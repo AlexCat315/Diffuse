@@ -1,14 +1,14 @@
-import EditorCore
-import Foundation
-import GuavaUI
-import GuavaUIRuntime
-import GuavaUIWorkspace
+internal import EditorCore
+private import Foundation
+internal import GuavaUI
+internal import GuavaUIRuntime
+internal import GuavaUIWorkspace
 #if canImport(AppKit)
-import AppKit
+private import AppKit
 #endif
 
 enum EditorCommandDispatcher {
-    static func isEnabled(_ command: EditorMenuCommand,
+    static func isEnabled(_ command: EditorCommand,
                           sceneCommandEnabled: Bool,
                           focusChain: FocusChain? = FocusChainHolder.current) -> Bool {
         switch command {
@@ -22,7 +22,7 @@ enum EditorCommandDispatcher {
         return sceneCommandEnabled
     }
 
-    static func handle(_ command: EditorMenuCommand,
+    static func handle(_ command: EditorCommand,
                        app: EditorApplication,
                        controller: WorkspaceController,
                        registry: WorkspacePanelRegistry, fromCommandPalette: Bool = false) {
@@ -33,7 +33,8 @@ enum EditorCommandDispatcher {
         let store = app.store
         guard EditorWorkspaceCommandPolicy.allows(command, in: store.workspaceMode) else { return }
         switch command {
-        case .showCommandPalette:
+        case let .showCommandPalette(scope):
+            store.dispatch(.setCommandPaletteQuery(TextBuffer(scope.prefix)))
             store.dispatch(.setCommandPaletteVisible(true))
         case .showSceneSettings:
             store.dispatch(.setInspectorSceneSettingsVisible(true))
@@ -161,6 +162,11 @@ enum EditorCommandDispatcher {
         case .showScripts:
             EditorRootViewFactory.activatePanel("scripts", in: controller)
         case let .setPlaybackState(next):
+            guard EditorPlaybackCommandPolicy.canTransition(from: store.state.timing.playbackState,
+                                                            to: next) else { return }
+            app.applyPlaybackState(next)
+        case .togglePlayback:
+            let next = EditorPlaybackCommandPolicy.toggleTarget(from: store.state.timing.playbackState)
             guard EditorPlaybackCommandPolicy.canTransition(from: store.state.timing.playbackState,
                                                             to: next) else { return }
             app.applyPlaybackState(next)

@@ -1,29 +1,31 @@
 @testable import EditorUI
 import EditorCore
+import EngineKernel
+import GuavaUICompose
 import Testing
 
-@Suite("EditorMenuModel")
-struct EditorMenuModelTests {
-    @Test("workspace, layout and panel commands are separated and layouts belong to the active workspace")
+@Suite("EditorCommandCatalog")
+struct CommandCatalogTests {
+    @Test("Space and Layout submenus belong to View and layouts belong to the active workspace")
     func menuOrganization() throws {
         for mode in [EditorWorkspaceMode.level, .modeling, .animation, .scripting] {
             let preset = EditorLayoutPreset.default(for: mode)
-            let model = make(workspace: mode, preset: preset)
-            let workspace = try #require(model.menus.first { $0.title == L("Workspace") })
-            let layout = try #require(model.menus.first { $0.title == L("Layout") })
-            let window = try #require(model.menus.first { $0.title == L("Window") })
-            let workspaceActions = actions(EditorMenuModel(menus: [workspace]))
-            #expect(workspaceActions.filter { !$0.keyEquivalent.isEmpty }.map(\.keyEquivalent) == ["1", "2", "3", "4", "5"])
-            #expect(workspaceActions.filter(\.isSelected).count == 1)
-            let layoutActions = actions(EditorMenuModel(menus: [layout]))
-            let presets = layoutActions.compactMap { action -> EditorLayoutPreset? in
-                if case let .setLayoutPreset(preset) = action.command { return preset }
+            let catalog = make(workspace: mode, preset: preset)
+            let view = try #require(catalog.menus.first { $0.id == "view" })
+            let space = try #require(submenu("space", in: view))
+            let layout = try #require(submenu("layout", in: view))
+            let spaceEntries = entries(space.items)
+            #expect(spaceEntries.compactMap(\.shortcut?.key.equivalent) == ["1", "2", "3", "4", "5"])
+            #expect(spaceEntries.filter(\.isSelected).count == 1)
+            let presets = entries(layout.items).compactMap { entry -> EditorLayoutPreset? in
+                if case let .setLayoutPreset(preset) = entry.command { return preset }
                 return nil
             }
             #expect(presets == EditorLayoutPreset.presets(for: mode))
-            #expect(layoutActions.filter(\.isSelected).count == 1)
-            for action in actions(EditorMenuModel(menus: [window])) {
-                switch action.command {
+            #expect(entries(layout.items).filter(\.isSelected).count == 1)
+            let window = try #require(catalog.menus.first { $0.id == "window" })
+            for entry in entries(window.items) {
+                switch entry.command {
                 case .setWorkspaceMode, .setLayoutPreset: Issue.record("Window mixes workspace and panel commands")
                 default: break
                 }
@@ -31,96 +33,60 @@ struct EditorMenuModelTests {
         }
     }
 
-    @Test("film workspaces expose rendering tools without enabling game playback or game builds")
+    @Test("film workspaces omit game playback and builds instead of showing dead commands")
     func filmTransport() {
         for mode in [EditorWorkspaceMode.modeling, .animation] {
-            for action in actions(make(workspace: mode)) {
-                switch action.command {
-                case .setPlaybackState, .buildProject, .buildAndRun: #expect(!action.isEnabled)
+            let catalog = make(workspace: mode)
+            #expect(!catalog.menus.contains { $0.id == "run" })
+            for entry in catalog.entries {
+                switch entry.command {
+                case .setPlaybackState, .togglePlayback, .buildProject, .buildAndRun:
+                    Issue.record("\(mode) exposes \(entry.id)")
                 default: break
                 }
             }
         }
     }
 
-    private func actions(_ model: EditorMenuModel) -> [EditorApplicationMenuAction] {
-        model.menus.flatMap { menu in
-            menu.items.compactMap { item -> EditorApplicationMenuAction? in
-                if case let .action(a) = item { return a }
-                return nil
-            }
-        }
-    }
-
-    private func make(_ playback: PlaybackState = .stopped,
-                      workspace: EditorWorkspaceMode = .level,
-                      preset: EditorLayoutPreset = .levelDefault) -> EditorMenuModel {
-        EditorMenuModel.make(workspaceMode: workspace, activeLayoutPreset: preset, playbackState: playback)
+    @Test("text workspaces hide scene-only panels and asset commands")
+    func documentsScope() {
+        let ids = Set(make(workspace: .documents).entries.map(\.id))
+        #expect(!ids.contains("scene.settings"))
+        #expect(!ids.contains("assets.import"))
+        #expect(!ids.contains("assets.show"))
+        #expect(ids.contains("panel.documents"))
+        #expect(ids.contains("agent.show"))
     }
 
     @Test("exposes the core file / edit / build commands")
     func coreCommands() {
-        let cmds = actions(EditorMenuModel.make(workspaceMode: .level,
-                                                activeLayoutPreset: .levelDefault,
-                                                playbackState: .stopped,
-                                                canUndo: true,
-                                                canRedo: true,
-                                                hasSelection: true)).map(\.command)
-        func has(_ predicate: (EditorMenuCommand) -> Bool) -> Bool { cmds.contains(where: predicate) }
-
-        #expect(has { if case .closeProject = $0 { return true }; return false })
-        #expect(has { if case .newScene = $0 { return true }; return false })
-        #expect(has { if case .openScene = $0 { return true }; return false })
-        #expect(has { if case .saveScene = $0 { return true }; return false })
-        #expect(has { if case .importAssets = $0 { return true }; return false })
-        #expect(has { if case .undo = $0 { return true }; return false })
-        #expect(has { if case .redo = $0 { return true }; return false })
-        #expect(has { if case .duplicateSelection = $0 { return true }; return false })
-        #expect(has { if case .deleteSelection = $0 { return true }; return false })
-        #expect(has { if case .buildProject = $0 { return true }; return false })
-        #expect(has { if case .buildAndRun = $0 { return true }; return false })
-        #expect(has { if case .reopenClosedPanel = $0 { return true }; return false })
+        let ids = Set(full().entries.map(\.id))
+        for id in ["project.close", "scene.new", "scene.open", "scene.save", "assets.import", "edit.undo", "edit.redo",
+                   "edit.duplicate", "edit.delete", "project.build", "project.run", "layout.reopen",
+                   "agent.intent", "search.resources", "palette.commands", "playback.toggle", "preferences", "app.about"] {
+            #expect(ids.contains(id), "missing \(id)")
+        }
     }
 
     @Test("edit commands reflect actual history and selection availability")
     func editCommandAvailability() {
-        let unavailable = actions(make())
-        for action in unavailable {
-            switch action.command {
-            case .undo, .redo, .duplicateSelection, .deleteSelection:
-                #expect(!action.isEnabled)
-            default: break
-            }
+        for entry in make().entries where ["edit.undo", "edit.redo", "edit.duplicate", "edit.delete"].contains(entry.id) {
+            #expect(!entry.isEnabled)
         }
-
-        let available = actions(EditorMenuModel.make(workspaceMode: .level,
-                                                     activeLayoutPreset: .levelDefault,
-                                                     playbackState: .stopped,
-                                                     canUndo: true,
-                                                     canRedo: true,
-                                                     hasSelection: true))
-        for action in available {
-            switch action.command {
-            case .undo, .redo, .duplicateSelection, .deleteSelection:
-                #expect(action.isEnabled)
-            default: break
-            }
+        for entry in full().entries where ["edit.undo", "edit.redo", "edit.duplicate", "edit.delete"].contains(entry.id) {
+            #expect(entry.isEnabled)
         }
     }
 
     @Test("scene authoring commands are disabled while playing or paused")
     func playbackDisablesSceneAuthoringCommands() {
         for playbackState in [PlaybackState.playing, .paused] {
-            let model = EditorMenuModel.make(workspaceMode: .level,
-                                             activeLayoutPreset: .levelDefault,
-                                             playbackState: playbackState,
-                                             canUndo: true,
-                                             canRedo: true,
-                                             hasSelection: true)
-            for action in actions(model) {
-                switch action.command {
-                case .newScene, .openScene, .undo, .redo, .duplicateSelection, .deleteSelection:
-                    #expect(!action.isEnabled)
+            let catalog = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .level, playbackState: playbackState,
+                                                                         canUndo: true, canRedo: true, hasSelection: true))
+            for entry in catalog.entries {
+                switch entry.command {
+                case .newScene, .openScene, .undo, .redo, .duplicateSelection, .deleteSelection, .importAssets:
+                    #expect(!entry.isEnabled)
                 default:
                     break
                 }
@@ -133,42 +99,41 @@ struct EditorMenuModelTests {
 
     @Test("playback state selects exactly the matching transport command")
     func playbackSelection() {
-        let model = make(.playing)
-        for action in actions(model) {
-            switch action.command {
+        for entry in make(.playing).entries {
+            switch entry.command {
             case .setPlaybackState(.playing):
-                #expect(action.isSelected)
-                #expect(!action.isEnabled)
+                #expect(entry.isSelected)
+                #expect(!entry.isEnabled)
             case .setPlaybackState(.paused), .setPlaybackState(.stopped):
-                #expect(!action.isSelected)
-                #expect(action.isEnabled)
+                #expect(!entry.isSelected)
+                #expect(entry.isEnabled)
             default: break
             }
         }
     }
 
-    @Test("playback policy rejects no-op and stopped-to-paused transitions")
+    @Test("playback policy rejects no-op and stopped-to-paused transitions; toggle plays or pauses")
     func playbackTransitionPolicy() {
         #expect(EditorPlaybackCommandPolicy.canTransition(from: .stopped, to: .playing))
         #expect(!EditorPlaybackCommandPolicy.canTransition(from: .stopped, to: .paused))
         #expect(!EditorPlaybackCommandPolicy.canTransition(from: .stopped, to: .stopped))
-
         #expect(EditorPlaybackCommandPolicy.canTransition(from: .playing, to: .paused))
         #expect(EditorPlaybackCommandPolicy.canTransition(from: .playing, to: .stopped))
         #expect(!EditorPlaybackCommandPolicy.canTransition(from: .playing, to: .playing))
-
         #expect(EditorPlaybackCommandPolicy.canTransition(from: .paused, to: .playing))
         #expect(EditorPlaybackCommandPolicy.canTransition(from: .paused, to: .stopped))
         #expect(!EditorPlaybackCommandPolicy.canTransition(from: .paused, to: .paused))
+        #expect(EditorPlaybackCommandPolicy.toggleTarget(from: .stopped) == .playing)
+        #expect(EditorPlaybackCommandPolicy.toggleTarget(from: .playing) == .paused)
+        #expect(EditorPlaybackCommandPolicy.toggleTarget(from: .paused) == .playing)
     }
 
-    @Test("stopped tools menu disables pause and the already-active stop command")
+    @Test("stopped transport disables pause and the already-active stop command")
     func stoppedPlaybackMenuAvailability() {
-        for action in actions(make(.stopped)) {
-            switch action.command {
-            case .setPlaybackState(.playing): #expect(action.isEnabled)
-            case .setPlaybackState(.paused), .setPlaybackState(.stopped):
-                #expect(!action.isEnabled)
+        for entry in make(.stopped).entries {
+            switch entry.command {
+            case .setPlaybackState(.playing): #expect(entry.isEnabled)
+            case .setPlaybackState(.paused), .setPlaybackState(.stopped): #expect(!entry.isEnabled)
             default: break
             }
         }
@@ -176,52 +141,137 @@ struct EditorMenuModelTests {
 
     @Test("active workspace mode is marked selected")
     func workspaceSelection() {
-        let model = make(workspace: .modeling)
-        let selected = actions(model).first { action in
-            if case .setWorkspaceMode(.modeling) = action.command { return true }
-            return false
-        }
-        #expect(selected?.isSelected == true)
-
-        let other = actions(model).first { action in
-            if case .setWorkspaceMode(.level) = action.command { return true }
-            return false
-        }
-        #expect(other?.isSelected == false)
+        let entries = make(workspace: .modeling).entries
+        #expect(entries.first { $0.id == "workspace.modeling" }?.isSelected == true)
+        #expect(entries.first { $0.id == "workspace.level" }?.isSelected == false)
     }
 
-    @Test("undo binds to the primary+Z shortcut")
-    func undoShortcut() {
-        let undo = actions(make()).first { action in
-            if case .undo = action.command { return true }
-            return false
-        }
-        #expect(undo?.keyEquivalent == "z")
-        // `.primary` is Cmd on macOS, Ctrl elsewhere — assert against it rather
-        // than hardcoding `.command`, which is wrong on Windows/Linux.
-        #expect(undo?.keyModifiers.contains(.primary) == true)
-    }
-
-    @Test("delete binds to an unmodified native Delete key")
-    func deleteShortcut() {
-        let model = EditorMenuModel.make(workspaceMode: .level,
-                                         activeLayoutPreset: .levelDefault,
-                                         playbackState: .stopped,
-                                         hasSelection: true)
-        let deletion = actions(model).first { action in
-            if case .deleteSelection = action.command { return true }
-            return false
-        }
-        #expect(deletion?.keyEquivalent == "\u{8}")
-        #expect(deletion?.keyModifiers.isEmpty == true)
+    @Test("undo binds to primary+Z and delete to an unmodified Delete key")
+    func editShortcuts() {
+        let entries = full().entries
+        let undo = entries.first { $0.id == "edit.undo" }
+        #expect(undo?.shortcut?.key.equivalent == "z")
+        // `.primary` is Cmd on macOS and Ctrl elsewhere.
+        #expect(undo?.shortcut?.modifiers.contains(.primary) == true)
+        let deletion = entries.first { $0.id == "edit.delete" }
+        #expect(deletion?.shortcut?.key.equivalent == "\u{8}")
+        #expect(deletion?.shortcut?.modifiers.isEmpty == true)
         #expect(deletion?.isEnabled == true)
     }
 
-    @Test("model is non-empty across every playback state")
-    func nonEmptyMenus() {
-        for state in [PlaybackState.stopped, .playing, .paused] {
-            #expect(!make(state).menus.isEmpty)
-            #expect(!actions(make(state)).isEmpty)
+    @Test("ids and key chords are unique across the whole tree")
+    func uniqueness() {
+        for mode in [EditorWorkspaceMode.documents, .video, .level, .scripting, .modeling, .animation] {
+            let entries = make(workspace: mode).entries
+            let ids = entries.map(\.id)
+            #expect(Set(ids).count == ids.count, "duplicate ids in \(mode)")
+            let chords = entries.compactMap(\.shortcut).map { "\($0.key.equivalent)-\($0.modifiers.rawValue)" }
+            #expect(Set(chords).count == chords.count, "duplicate chords in \(mode)")
         }
+    }
+
+    @Test("menus never start, end or double up on separators, and never show empty submenus")
+    func structureHygiene() {
+        func check(_ items: [EditorCommandItem], path: String) {
+            #expect(!items.isEmpty, "\(path) is empty")
+            if case .separator = items.first { Issue.record("\(path) starts with a separator") }
+            if case .separator = items.last { Issue.record("\(path) ends with a separator") }
+            for (index, item) in items.enumerated() {
+                if case .separator = item, index > 0, case .separator = items[index - 1] {
+                    Issue.record("\(path) repeats a separator")
+                }
+                if case let .submenu(menu) = item { check(menu.items, path: path + "/" + menu.id) }
+            }
+        }
+        for mode in [EditorWorkspaceMode.documents, .video, .level, .scripting, .modeling, .animation] {
+            for playback in [PlaybackState.stopped, .playing, .paused] {
+                for menu in make(playback, workspace: mode).menusWithApplicationItems {
+                    check(menu.items, path: "\(mode)/\(menu.id)")
+                }
+            }
+        }
+    }
+
+    @Test("without an application menu, Settings joins Edit and About joins Help")
+    func applicationItemPlacement() throws {
+        let catalog = full()
+        #expect(!catalog.menus.flatMap { entries($0.items) }.contains { $0.id == "preferences" || $0.id == "app.about" })
+        let menus = catalog.menusWithApplicationItems
+        let edit = try #require(menus.first { $0.id == "edit" })
+        let help = try #require(menus.first { $0.id == "help" })
+        #expect(entries(edit.items).last?.id == "preferences")
+        #expect(entries(help.items).last?.id == "app.about")
+        #expect(catalog.entries.filter { $0.id == "preferences" }.count == 1)
+    }
+
+    @Test("palette search lists catalog entries except the palette openers")
+    func paletteEntries() {
+        let palette = full().entries.filter(\.inPalette).map(\.id)
+        #expect(!palette.contains("agent.intent"))
+        #expect(!palette.contains("palette.commands"))
+        #expect(!palette.contains("search.resources"))
+        #expect(palette.contains("scene.save"))
+        #expect(palette.contains("layout.levelDefault"))
+    }
+
+    @Test("shortcut labels follow the platform convention")
+    func shortcutLabels() {
+        let redo = EditorShortcut(.letter("z"), [.primary, .shift])
+        #if os(macOS)
+        #expect(redo.label == "⇧⌘Z")
+        #expect(EditorShortcut(.delete, []).label == "⌫")
+        #else
+        #expect(redo.label == "Ctrl+Shift+Z")
+        #expect(EditorShortcut(.delete, []).label == "Delete")
+        #endif
+    }
+
+    @Test("every chord resolves its physical key")
+    func keyMatching() {
+        let catalog = full()
+        func key(_ scancode: UInt32, _ modifiers: KeyModifiers) -> KeyEvent {
+            KeyEvent(scancode: scancode, keycode: 0, modifiers: modifiers, isRepeat: false)
+        }
+        #expect(catalog.entry(matching: key(Scancode.s, [.lgui]))?.id == "scene.save")
+        #expect(catalog.entry(matching: key(Scancode.s, [.rctrl]))?.id == "scene.save")
+        #expect(catalog.entry(matching: key(Scancode.z, [.lgui]))?.id == "edit.undo")
+        #expect(catalog.entry(matching: key(Scancode.z, [.lgui, .rshift]))?.id == "edit.redo")
+        #expect(catalog.entry(matching: key(Scancode.p, [.lgui]))?.id == "search.resources")
+        #expect(catalog.entry(matching: key(Scancode.p, [.lgui, .lshift]))?.id == "palette.commands")
+        #expect(catalog.entry(matching: key(Scancode.digit3, [.lgui]))?.id == "workspace.animation")
+        #expect(catalog.entry(matching: key(Scancode.digit0, [.lgui]))?.id == "layout.reset")
+        #expect(catalog.entry(matching: key(Scancode.keypadEnter, [.lgui]))?.id == "playback.toggle")
+        #expect(catalog.entry(matching: key(Scancode.delete, []))?.id == "edit.delete")
+        #expect(catalog.entry(matching: key(Scancode.backspace, []))?.id == "edit.delete")
+        // An unmodified letter or a chord with an extra Option never fires a command.
+        #expect(catalog.entry(matching: key(Scancode.s, [])) == nil)
+        #expect(catalog.entry(matching: key(Scancode.s, [.lgui, .lalt])) == nil)
+    }
+
+    private func entries(_ items: [EditorCommandItem]) -> [EditorCommandEntry] {
+        items.flatMap { item -> [EditorCommandEntry] in
+            switch item {
+            case let .entry(entry): [entry]
+            case let .submenu(menu): entries(menu.items)
+            case .separator: []
+            }
+        }
+    }
+
+    private func submenu(_ id: String, in menu: EditorCommandMenu) -> EditorCommandMenu? {
+        for item in menu.items {
+            if case let .submenu(nested) = item, nested.id == id { return nested }
+        }
+        return nil
+    }
+
+    private func make(_ playback: PlaybackState = .stopped,
+                      workspace: EditorWorkspaceMode = .level,
+                      preset: EditorLayoutPreset? = nil) -> EditorCommandCatalog {
+        .make(EditorCommandContext(workspaceMode: workspace, layoutPreset: preset, playbackState: playback))
+    }
+
+    private func full() -> EditorCommandCatalog {
+        .make(EditorCommandContext(workspaceMode: .level, canUndo: true, canRedo: true, hasSelection: true))
     }
 }

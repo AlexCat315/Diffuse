@@ -3,11 +3,42 @@ import GuavaUIRuntime
 
 public struct NativeMenuBar {
     public var appName: String
+    /// Leading entries of the application menu, such as About and Settings.
+    /// The platform appends its own window-management and quit entries.
+    public var applicationItems: [NativeMenuItem]
+    public var applicationTitles: NativeApplicationMenuTitles
     public var menus: [NativeMenu]
 
-    public init(appName: String, menus: [NativeMenu]) {
+    public init(appName: String,
+                applicationItems: [NativeMenuItem] = [],
+                applicationTitles: NativeApplicationMenuTitles? = nil,
+                menus: [NativeMenu]) {
         self.appName = appName
+        self.applicationItems = applicationItems
+        self.applicationTitles = applicationTitles ?? NativeApplicationMenuTitles(appName: appName)
         self.menus = menus
+    }
+}
+
+/// Labels for the entries the platform owns in the application menu.
+public struct NativeApplicationMenuTitles: Sendable, Equatable {
+    public var hide: String
+    public var hideOthers: String
+    public var showAll: String
+    public var quit: String
+
+    public init(appName: String) {
+        hide = "Hide \(appName)"
+        hideOthers = "Hide Others"
+        showAll = "Show All"
+        quit = "Quit \(appName)"
+    }
+
+    public init(hide: String, hideOthers: String, showAll: String, quit: String) {
+        self.hide = hide
+        self.hideOthers = hideOthers
+        self.showAll = showAll
+        self.quit = quit
     }
 }
 
@@ -23,6 +54,7 @@ public struct NativeMenu {
 
 public enum NativeMenuItem {
     case action(NativeMenuAction)
+    case submenu(NativeMenu)
     case separator
 }
 
@@ -85,40 +117,64 @@ enum NativeMenuInstaller {
         targets.removeAll(keepingCapacity: true)
 
         let root = NSMenu(title: menuBar.appName)
-        root.addItem(appMenuItem(appName: menuBar.appName))
-
+        root.addItem(appMenuItem(menuBar))
         for menu in menuBar.menus {
-            let item = NSMenuItem()
-            item.title = menu.title
-            let submenu = NSMenu(title: menu.title)
-            for menuItem in menu.items {
-                switch menuItem {
-                case .separator:
-                    submenu.addItem(.separator())
-                case .action(let action):
-                    let target = NativeMenuActionTarget(action: action)
-                    targets.append(target)
-                    let item = NSMenuItem(title: action.title,
-                                          action: #selector(NativeMenuActionTarget.invoke),
-                                          keyEquivalent: action.keyEquivalent)
-                    item.target = target
-                    item.isEnabled = action.resolvedIsEnabled
-                    item.state = action.isSelected ? .on : .off
-                    item.keyEquivalentModifierMask = action.keyModifiers.eventModifiers
-                    submenu.addItem(item)
-                }
-            }
-            item.submenu = submenu
-            root.addItem(item)
+            root.addItem(menuItem(for: menu))
         }
 
         NSApplication.shared.mainMenu = root
     }
 
-    private static func appMenuItem(appName: String) -> NSMenuItem {
+    private static func menuItem(for menu: NativeMenu) -> NSMenuItem {
         let item = NSMenuItem()
-        let menu = NSMenu(title: appName)
-        menu.addItem(NSMenuItem(title: "Quit \(appName)",
+        item.title = menu.title
+        let submenu = NSMenu(title: menu.title)
+        append(menu.items, to: submenu)
+        item.submenu = submenu
+        return item
+    }
+
+    private static func append(_ items: [NativeMenuItem], to menu: NSMenu) {
+        for entry in items {
+            switch entry {
+            case .separator:
+                menu.addItem(.separator())
+            case .submenu(let nested):
+                menu.addItem(menuItem(for: nested))
+            case .action(let action):
+                let target = NativeMenuActionTarget(action: action)
+                targets.append(target)
+                let item = NSMenuItem(title: action.title,
+                                      action: #selector(NativeMenuActionTarget.invoke),
+                                      keyEquivalent: action.keyEquivalent)
+                item.target = target
+                item.isEnabled = action.resolvedIsEnabled
+                item.state = action.isSelected ? .on : .off
+                item.keyEquivalentModifierMask = action.keyModifiers.eventModifiers
+                menu.addItem(item)
+            }
+        }
+    }
+
+    private static func appMenuItem(_ menuBar: NativeMenuBar) -> NSMenuItem {
+        let item = NSMenuItem()
+        let menu = NSMenu(title: menuBar.appName)
+        append(menuBar.applicationItems, to: menu)
+        if !menuBar.applicationItems.isEmpty { menu.addItem(.separator()) }
+        let titles = menuBar.applicationTitles
+        menu.addItem(NSMenuItem(title: titles.hide,
+                                action: #selector(NSApplication.hide(_:)),
+                                keyEquivalent: "h"))
+        let hideOthers = NSMenuItem(title: titles.hideOthers,
+                                    action: #selector(NSApplication.hideOtherApplications(_:)),
+                                    keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(hideOthers)
+        menu.addItem(NSMenuItem(title: titles.showAll,
+                                action: #selector(NSApplication.unhideAllApplications(_:)),
+                                keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: titles.quit,
                                 action: #selector(NSApplication.terminate(_:)),
                                 keyEquivalent: "q"))
         item.submenu = menu
@@ -158,8 +214,9 @@ private extension NativeMenuKeyModifiers {
 @MainActor
 enum NativeMenuInstaller {
     static func install(_ menuBar: NativeMenuBar) {
-        // Windows uses the in-client EditorApplicationMenuBar to avoid the
-        // extra light Win32 menu strip below the native title bar.
+        // Immersive windows draw their own title bar in the client area, so a
+        // Win32 menu strip would sit below it. Apps present the same menu tree
+        // inside that title bar instead.
     }
 }
 

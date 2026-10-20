@@ -72,10 +72,9 @@ struct AuthoringWorkspaceTests {
         #expect(!commands.contains { $0.id == "scripts.show" || $0.id == "project.build" || $0.id.hasPrefix("playback.") })
         #expect(commands.contains { $0.id == "agent.show" })
         #expect(commands.contains { $0.id == "agent.review" })
-        let model = EditorMenuModel.make(workspaceMode: .modeling, activeLayoutPreset: .modelingDefault,
-                                        playbackState: .stopped)
-        #expect(!model.menus.contains { $0.title == L("Build") })
-        #expect(model.menus.contains { $0.title == L("Layout") })
+        let catalog = EditorCommandCatalog.make(EditorCommandContext(app: app))
+        #expect(!catalog.menus.contains { $0.id == "run" })
+        #expect(catalog.entries.contains { $0.id == "layout.modelingSculpt" })
         var registry = ComponentRegistry.builtIn
         registry.registerScriptCodec()
         #expect(!InspectorWorkspacePolicy.allows(registry["script"]!, in: .modeling))
@@ -110,16 +109,14 @@ struct AuthoringWorkspaceTests {
             #expect(tab.absoluteFrame.minX >= tabs.absoluteFrame.minX)
             #expect(tab.absoluteFrame.maxX <= tabs.absoluteFrame.maxX)
         }
-        #if !os(Linux)
-        #expect(!frames.contains { $0.debugName == "editor-application-menu-bar" })
-        #endif
+        #expect(frames.contains { $0.debugName == "editor-title-menu" } == (EditorMenuPresentation.current == .titleBar))
+        #expect(frames.contains { $0.debugName == "editor-status-problems" })
+        #expect(frames.contains { $0.debugName == "editor-status-agent" })
         let title = try #require(frames.first { $0.debugName == "editor-title-bar" })
         #expect(title.absoluteFrame.height == 40)
         let rail = try #require(frames.first { $0.debugName == "editor-activity-rail" })
         #expect(rail.absoluteFrame.width == 44)
-        #if !os(Linux)
         #expect(rail.absoluteFrame.minY == 41)
-        #endif
         for name in ["workspace-panel-hierarchy", "workspace-panel-viewport", "workspace-panel-inspector", "workspace-panel-console"] {
             let frame = try #require(frames.first { $0.debugName == name })
             #expect(frame.absoluteFrame.width >= 220)
@@ -140,26 +137,65 @@ struct AuthoringWorkspaceTests {
         #expect(app.scene.revision == revision)
     } }
 
-    @Test("Title controls stay inside narrow and wide windows", arguments: [Float(390), Float(720), Float(1280), Float(1600)])
-    func titleWidths(width: Float) throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
+    @Test("Title controls stay inside narrow and wide windows with either menu presentation",
+          arguments: [Float(390), Float(720), Float(1280), Float(1600)], [EditorMenuPresentation.native, .titleBar])
+    func titleWidths(width: Float, menu: EditorMenuPresentation) throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path)
         defer { app.shutdown() }
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: EditorTitleBar(app: app, width: width, onCommand: { _ in })
+        graph.install(root: EditorTitleBar(app: app, width: width, menuPresentation: menu, onCommand: { _ in })
             .theme(EditorVisualTheme.make(dark: true)))
         for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 40) }
         let frames = graph.layoutSnapshot()
-        for name in ["editor-project", "editor-intent-bar", "editor-spaces", "editor-spaces-menu", "editor-playback-toolbar"] {
+        for name in ["editor-title-menu", "editor-project", "editor-intent-bar", "editor-spaces", "editor-spaces-menu",
+                     "editor-playback-toolbar"] {
             if let frame = frames.first(where: { $0.debugName == name })?.absoluteFrame {
                 #expect(frame.minX >= 0 && frame.maxX <= CGFloat(width) + 1, "\(name) overflow at \(width)")
                 #expect(frame.minY >= 0 && frame.maxY <= 40)
             }
         }
+        let titleMenu = frames.first { $0.debugName == "editor-title-menu" }
+        if menu == .titleBar {
+            // The command tree leads the title bar, before the project switcher.
+            let project = try #require(frames.first { $0.debugName == "editor-project" })
+            #expect(try #require(titleMenu).absoluteFrame.maxX <= project.absoluteFrame.minX)
+        } else {
+            #expect(titleMenu == nil)
+        }
         let title = try #require(frames.first { $0.debugName == "editor-title-bar" })
         #expect(title.absoluteFrame.height == 40)
+    } }
+
+    @Test("Scoped palette opens with its prefix, and closing removes the card and its modal scope")
+    func paletteScopeAndClose() throws { try WorkbenchUITestSupport.withEnvironment { _, focus in
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let app = try EditorApplication(projectDirectory: directory.path)
+        defer { app.shutdown() }
+        let registry = EditorRootViewFactory.makeRegistry(app: app)
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
+            mode: .level, preset: .levelDefault, registry: registry))
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: EditorRootView(app: app, controller: controller, registry: registry))
+        func settle() {
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: 1280, height: 800)
+        }
+        settle()
+        EditorCommandDispatcher.handle(.showCommandPalette(.commands), app: app, controller: controller, registry: registry)
+        for _ in 0..<3 { settle() }
+        #expect(app.store.commandPaletteQuery.stringValue == ">")
+        #expect(graph.layoutSnapshot().contains { $0.debugName == "command-palette-card" })
+        #expect(focus.hasModalScope)
+
+        app.store.dispatch(.setCommandPaletteVisible(false))
+        settle()
+        #expect(!graph.layoutSnapshot().contains { $0.debugName == "command-palette-card" })
+        #expect(!focus.hasModalScope)
     } }
 
     @Test("Agent draft survives context tab unmount and failed submission")

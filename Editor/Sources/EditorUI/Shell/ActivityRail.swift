@@ -6,7 +6,7 @@ internal import GuavaUIWorkspace
 struct EditorActivityRail: View {
     let app: EditorApplication
     let controller: WorkspaceController
-    let onCommand: (EditorMenuCommand) -> Void
+    let onCommand: (EditorCommand) -> Void
     @State private var revision: UInt64 = 0
     @State private var observation = DockObservation()
 
@@ -18,8 +18,7 @@ struct EditorActivityRail: View {
                 panel(UIIcons.Text.list, title: L("Outline"), id: "hierarchy")
             }
             action(UIIcons.Action.search, title: L("Search")) {
-                app.store.dispatch(.setCommandPaletteQuery("@"))
-                onCommand(.showCommandPalette)
+                onCommand(.showCommandPalette(.resources))
             }.debugName("editor-rail-search")
             panel(UIIcons.Status.sparkles, title: L("Agent"), id: "intent-input", agent: true)
             panel(UIIcons.Editor.gitCommit, title: L("Session Journal"), id: "journal")

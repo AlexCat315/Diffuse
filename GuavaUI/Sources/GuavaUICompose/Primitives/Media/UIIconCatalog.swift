@@ -42,6 +42,7 @@ public enum UIIcons {
         public static let expand = asset("expand")
         public static let fullscreen = asset("fullscreen")
         public static let maximize = asset("maximize")
+        public static let menu = asset("menu")
         public static let minimize = asset("minimize")
         public static let moveRight = asset("move-right")
         public static let refresh = asset("refresh")

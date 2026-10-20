@@ -16,7 +16,7 @@ struct EditorOutputPanel: View {
     var body: some View {
         let snapshot = workspace.wrappedValue
         let failures = app.store.consoleEntries.filter { $0.severity == .error || $0.severity == .warning }
-        let count = snapshot.documents.reduce(0) { $0 + $1.diagnostics.count } + failures.count
+        let count = EditorProblemSummary(documents: snapshot.documents, consoleEntries: failures).total
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             switch app.store.outputTab {
             case .logs:

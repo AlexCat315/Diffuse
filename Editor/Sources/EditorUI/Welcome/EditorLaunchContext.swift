@@ -189,7 +189,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         shutdown()
         display?.restoreWindow()
         display?.setWindowCloseInterceptor { _ in true }
-        display?.installNativeMenuBar(NativeMenuBar(appName: "GuavaStudio", menus: []))
+        display?.installNativeMenuBar(EditorNativeMenuBuilder.welcome())
         publisher.send()
         display?.requestDisplay()
     }
@@ -245,12 +245,7 @@ final class EditorLaunchContext: @unchecked Sendable {
     }
 
     private struct NativeMenuState: Equatable {
-        var workspaceMode: EditorWorkspaceMode
-        var layoutPreset: EditorLayoutPreset
-        var playbackState: PlaybackState
-        var canUndo: Bool
-        var canRedo: Bool
-        var hasSelection: Bool
+        var commands: EditorCommandContext
         var language: EditorLanguage
     }
 
@@ -276,26 +271,14 @@ final class EditorLaunchContext: @unchecked Sendable {
                                    registry: WorkspacePanelRegistry,
                                    display: AppDisplayHandle,
                                    force: Bool = false) {
-        let store = app.store.state
-        let next = NativeMenuState(workspaceMode: store.workspace.mode,
-                                   layoutPreset: store.workspace.layoutPreset,
-                                   playbackState: store.timing.playbackState,
-                                   canUndo: app.canUndo,
-                                   canRedo: app.canRedo,
-                                   hasSelection: !store.selection.selectedEntityIDs.isEmpty,
-                                   language: store.language)
+        let next = NativeMenuState(commands: EditorCommandContext(app: app), language: app.store.state.language)
         guard force || next != nativeMenuState else { return }
         nativeMenuState = next
         // Menu labels are built outside the Compose presentation boundary, so
         // explicitly align the localization preference before regenerating.
         EditorLocalizationPreferences.language = next.language
         display.installNativeMenuBar(EditorNativeMenuBuilder.make(
-            workspaceMode: next.workspaceMode,
-            activeLayoutPreset: next.layoutPreset,
-            playbackState: next.playbackState,
-            canUndo: next.canUndo,
-            canRedo: next.canRedo,
-            hasSelection: next.hasSelection,
+            catalog: .make(next.commands),
             onCommand: { [weak app, weak controller, weak registry] command in
                 guard let app, let controller, let registry else { return }
                 EditorCommandDispatcher.handle(command,

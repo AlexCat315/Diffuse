@@ -7,6 +7,9 @@ import GuavaUIWorkspace
 
 /// Owns the window-sized animation layer; the centered barrier is absolute
 /// and cannot give an intrinsically sized animation host its height.
+/// Only opening animates. Closing removes the modal subtree at once, because
+/// retained exit content would keep its focus scope and swallow the next
+/// shortcut until the fade finished.
 struct CommandPalettePresentation: View {
     let app: EditorApplication
     let controller: WorkspaceController
@@ -14,10 +17,15 @@ struct CommandPalettePresentation: View {
     let availableHeight: Float
 
     var body: some View {
-        AnimatedVisibility(isVisible: app.store.commandPaletteVisible,
-                           transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
-            CommandPaletteOverlay(app: app, controller: controller, registry: registry,
-                                  availableHeight: availableHeight)
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            if app.store.commandPaletteVisible {
+                AnimatedVisibility(isVisible: true,
+                                   transition: .opacity.combined(with: .move(edge: .top, distance: 12)),
+                                   animateOnMount: true) {
+                    CommandPaletteOverlay(app: app, controller: controller, registry: registry,
+                                          availableHeight: availableHeight)
+                }.frame(width: .percent(100), height: .percent(100))
+            }
         }.frame(width: .percent(100), height: .percent(100))
     }
 }
@@ -54,6 +62,13 @@ struct CommandPaletteOverlay: View {
                             app.store.dispatch(.setCommandPaletteQuery($0))
                         })) { input in
                         input.navigation.focusRequestID = "editor-command-search"
+                        // Focus selects the field; a scope prefix (> @ #) must survive the
+                        // first keystroke, so the caret starts after it instead.
+                        let opening = app.store.commandPaletteQuery
+                        if opening.characterCount > 0 {
+                            input.navigation.caretRequestID = "editor-command-search-scope"
+                            input.navigation.caretRequestIndex = opening.characterCount
+                        }
                         input.events.onSubmit = {
                             if !matches.isEmpty { execute(matches[min(selectedIndex, matches.count - 1)]) }
                         }
@@ -119,8 +134,8 @@ struct CommandPaletteOverlay: View {
         var entries: [ResultItem] = []
         if !resourcesOnly && !entitiesOnly {
             entries = EditorCommandSearch.commands(app: app).map { command in
-                ResultItem(id: command.id, title: command.title, detail: L("Command"), shortcut: command.shortcut,
-                           enabled: command.enabled, searchText: command.title + " " + command.keywords + " " + command.id,
+                ResultItem(id: command.id, title: command.title, detail: L("Command"), shortcut: command.shortcut?.label ?? "",
+                           enabled: command.isEnabled, searchText: command.title + " " + command.keywords + " " + command.id,
                            perform: {
                     EditorCommandDispatcher.handle(command.command, app: app, controller: controller,
                         registry: registry, fromCommandPalette: true)

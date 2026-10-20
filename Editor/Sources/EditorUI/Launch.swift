@@ -178,7 +178,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
             }
         },
         onDisplayReady: { display in
-            display.installNativeMenuBar(NativeMenuBar(appName: "GuavaStudio", menus: []))
+            display.installNativeMenuBar(EditorNativeMenuBuilder.welcome())
             context.wireDisplay(display)
         },
         onDiagnosticsReady: { context.wireDiagnostics($0) }

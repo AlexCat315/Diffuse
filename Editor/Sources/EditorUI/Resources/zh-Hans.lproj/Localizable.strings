@@ -880,3 +880,19 @@
 "Save" = "保存";
 "Discard and Reload" = "放弃修改并重新加载";
 "Open a text or code file to begin." = "打开一个文本或代码文件，开始编辑。";
+
+/* Command catalog and shell */
+"View" = "视图";
+"Run" = "运行";
+"Space" = "Space";
+"Open Resource..." = "打开资源…";
+"Ask Guava..." = "交给 Guava…";
+"Play / Pause" = "试玩 / 暂停";
+"Settings..." = "设置…";
+"Application Menu" = "应用菜单";
+"Hide %@" = "隐藏 %@";
+"Hide Others" = "隐藏其他";
+"Quit %@" = "退出 %@";
+"Guava is working" = "Guava 正在执行";
+"Agent ready" = "Agent 就绪";
+"Agent offline" = "Agent 未连接";

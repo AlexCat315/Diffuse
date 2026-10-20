@@ -1,6 +1,6 @@
-import EditorCore
-import Foundation
-import GuavaUI
+internal import EditorCore
+private import Foundation
+internal import GuavaUI
 
 enum EditorSceneFileCoordinator {
     static func requestOpen(app: EditorApplication) {
