@@ -143,6 +143,7 @@ ReorderableList(items, id: \.id, rowLabel: { $0.title }, onMove: { from, to in
 - 每行尾部有 44pt 宽拖拽 handle（`UIIcons.Action.grip`）。指针拖动期间在目标边界绘制 2pt accent 放置线；释放才调用一次 `onMove`，Escape 取消且不改顺序。
 - 键盘聚焦 handle 后 Up/Down 立即上移/下移；辅助功能为 slider 语义，value 为 `"Position x of n"`，increment/decrement 映射同一操作。
 - 行身份由 `id` 保留，移动后焦点、草稿与行内容节点跟随原行。
+- 拖动时被拖行浮起为一份副本（同一 rowContent，`dragging = true`，surface 底、accent 细边与中等阴影、带把手），跟随指针移动并限制在视口内，自动滚动时停在边缘，内容在其下方滚动；原位置保留为 35% 不透明度的占位，滚出视口后仍能看到正在移动的项。预览不参与布局与命中，移动只改宿主的绘制偏移，不重组列表或重新布局。
 - 拖动时指针进入视口上下边缘 48pt（视口高度的 1/4 以内）区域，列表按深度平方加速自动滚动，最高 1200pt/s；指针停在边缘或移出视口也会持续滚动。放置位置按“指针位移 + 自动滚动距离”在内容坐标中计算，放置线随内容移动；松开、Escape 或卸载立即停止。滚动通过内部 `EnclosingScroll` 直接调整最近的外层 ScrollView 偏移，不重组列表；同一 `EdgeAutoScroll` 可供其他拖动源复用。
 - 当前为全量挂载的非虚拟列表（适合设置、图层、播放列表等中等规模顺序）；大集合应等待后续虚拟化重排。
 
@@ -207,7 +208,7 @@ hover 由行 host 直接绘制（不触发重组），圆角取同一个 appeara
 - `SectionedListTests.stickyHeadersDisabled`：默认关闭时滚动不生成固定标题，普通 header 仍在行内。
 - `ListMultipleSelectionTests.pointerSelection`：点击 20、Shift-click 40、Cmd-click 30 的集合变化。
 - `ListMultipleSelectionTests.keyboardSelection`：Shift+Arrow 扩展、普通 Arrow 收拢、Cmd+A 全选。
-- `ReorderableListTests`：指针拖动显示放置线并只移动一次、键盘与辅助功能 increment/decrement、Escape 取消且不改顺序、触摸 handle ≥44pt；`edgeAutoScroll` 在 30 行 200pt 视口中验证视口中部不滚动、停在底边持续滚动、松开后落点与内容坐标一致且停止滚动，`edgeVelocity` 验证速度曲线。DevTools 在 Gallery `--component reorderableList` 的 Long list（40 行、220pt）中按住第一行 handle 停在底边 0.8s，列表滚到 Layer 30 以后，松开后 Layer 1 位于第 39 位；按住时镜像显示放置线紧贴指针。
+- `ReorderableListTests`：指针拖动显示放置线并只移动一次、键盘与辅助功能 increment/decrement、Escape 取消且不改顺序、触摸 handle ≥44pt；`edgeAutoScroll` 在 30 行 200pt 视口中验证视口中部不滚动、停在底边持续滚动、松开后落点与内容坐标一致且停止滚动，`edgeVelocity` 验证速度曲线，`floatingPreview` 验证预览起于原行、跟随指针、自动滚动时贴住视口底边、原行变为占位且松开后消失。DevTools 在 1280 Gallery 中按住 Main Camera 下拖 60pt 后，以独立连接截图仍保持拖动状态：浮起行位于 y=334、放置线 y=345，松开后顺序为 Key Light → Main Camera → …。DevTools 在 Gallery `--component reorderableList` 的 Long list（40 行、220pt）中按住第一行 handle 停在底边 0.8s，列表滚到 Layer 30 以后，松开后 Layer 1 位于第 39 位；按住时镜像显示放置线紧贴指针。
 - `SwipeListTests`：触摸左滑与 44pt 操作、Actions 按钮/上下文菜单的非滑动路径、纵向滚动让路、禁用态与指针面不响应滑动。
 - `RefreshTests`：触摸下拉只触发一次且指示器保持到 binding 清除；Cmd+R 触发一次并忽略刷新中的重复按键。
 - Gallery `multiSelectList` 页提供 12 行、初始选中与状态文本；`sectionedList` 页提供可滚动的三段列表并默认开启 sticky；`reorderableList` 页提供 6 行真实拖动与顺序文本。

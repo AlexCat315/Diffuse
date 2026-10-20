@@ -218,4 +218,46 @@ struct ReorderableListTests: GuavaUIComposeSerializedSuite {
         let deep = EdgeAutoScroll.velocity(pointerY: 490, viewport: viewport)
         #expect(shallow > 0 && deep > shallow)
     }
+    private func preview(_ graph: ViewGraph) -> Node? {
+        nodes(graph.tree.root!).first {
+            $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "reorder-preview"
+        }
+    }
+
+    @Test("A lifted copy follows the pointer, rests at the viewport edge while scrolling, and leaves a placeholder")
+    func floatingPreview() throws {
+        try withScene(count: 30, height: 200) { graph, _, dispatcher, _ in
+            let source = try handle(1, graph)
+            let start = source.absoluteFrame
+            let scroll = try #require(EnclosingScroll.container(of: source))
+            let viewport = EnclosingScroll.viewport(of: scroll)
+            #expect(preview(graph) == nil)
+            dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left, x: Float(start.midX),
+                                                                  y: Float(start.midY), clicks: 1)))
+            settle(graph)
+            let lifted = try #require(preview(graph))
+            #expect(abs(lifted.absoluteFrame.minY - start.minY) < 1, "starts over its row")
+            #expect(lifted.absoluteFrame.height == start.height)
+
+            dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(start.midX), y: Float(start.midY) + 50, deltaX: 0, deltaY: 50)))
+            settle(graph)
+            #expect(abs(try #require(preview(graph)).absoluteFrame.minY - (start.minY + 50)) < 1, "follows the pointer")
+            // The row itself stays in place as a dimmed placeholder.
+            let row = try #require(nodes(graph.tree.root!).first { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "reorder-row-1" })
+            var placeholder: Node? = row
+            while let node = placeholder, node.opacity == 1 { placeholder = node.parent }
+            #expect(placeholder?.opacity == 0.35)
+
+            let edge = Float(viewport.maxY) + 30
+            dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(start.midX), y: edge, deltaX: 0, deltaY: 0)))
+            for _ in 0..<4 { AnimatorScheduler.current.tick(deltaTime: 0.1); settle(graph) }
+            #expect(scroll.contentOffset.y > 0)
+            let resting = try #require(preview(graph)).absoluteFrame
+            #expect(abs(resting.maxY - viewport.maxY) < 1, "rests at the bottom edge: \(resting) in \(viewport)")
+
+            dispatcher.dispatch(.mouseButtonUp(MouseButtonEvent(button: .left, x: Float(start.midX), y: edge, clicks: 1)))
+            settle(graph)
+            #expect(preview(graph) == nil)
+        }
+    }
 }

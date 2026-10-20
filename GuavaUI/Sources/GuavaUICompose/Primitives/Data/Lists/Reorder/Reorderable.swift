@@ -27,6 +27,7 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
     @State private var draggingID: ID?
     @State private var dropBoundary: Int?
     @State private var viewportWidth: Float = 0
+    @State private var drag = ReorderDragSession()
 
     public init(_ data: Data,
                 id: KeyPath<Data.Element, ID>,
@@ -63,6 +64,7 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
         return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             ScrollView(.vertical, scrollbarGutter: .stable,
                        onViewportChange: { viewport in
+                drag.scrollY = Float(viewport.offset.y); drag.viewportHeight = Float(viewport.size.height)
                 let next = Float(viewport.size.width)
                 if abs(next - viewportWidth) > 0.5 { viewportWidth = next }
             }) {
@@ -84,6 +86,12 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
                 }
             }
             .flex(1, shrink: 1, basis: 0)
+            if let draggingID, let element = elements.first(where: { $0[keyPath: id] == draggingID }) {
+                // An absolute sibling covering the viewport: outside the flow, never hit.
+                ReorderPreviewHost(session: drag, content: preview(element, width: width, height: height))
+                    .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+                    .allowsHitTesting(false)
+            }
         }
         .flex(1, shrink: 1, basis: 0)
     }
@@ -104,17 +112,41 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
                            label: handleLabel(element, index: index),
                            isEnabled: isEnabled, isDragging: dragging,
                            rowHeight: height,
-                           onStart: { beginDrag(element, index: index) },
-                           onDelta: { delta in updateDrag(delta: delta, elements: elements, contentStride: rowStride) },
+                           onStart: { beginDrag(element, index: index, rowStride: rowStride, height: height) },
+                           onDelta: { travel, scrolled in
+                               updateDrag(travel: travel, scrolled: scrolled, elements: elements, contentStride: rowStride)
+                           },
                            onEnd: { finishDrag(elements: elements) },
                            onCancel: cancelDrag,
                            onStep: { step in move(index: index, by: step, elements: elements) })
         }
         .frame(height: height)
-        .background(dragging ? SemanticColorRef.stateLayerPressed : .clear)
+        // The lifted copy follows the pointer; the row stays as a placeholder.
+        .opacity(dragging ? 0.35 : 1)
         .cornerRadius(6)
         .clipped()
         .id(elementID)
+    }
+
+    /// The lifted row: the same content on a raised surface with its grip,
+    /// so the dragged item stays visible even after it scrolls out of view.
+    private func preview(_ element: Data.Element, width: Float, height: Float) -> some View {
+        ThemeReader { theme in
+            Row(alignment: .center, spacing: 4) {
+                Box(direction: .column, alignItems: .stretch) { rowContent(element, true) }
+                    .flex(1, shrink: 1, basis: 0).frame(minWidth: 0).clipped()
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    Icon(UIIcons.Action.grip, size: .small, color: .onSurfaceMuted).iconScaling(.fixed)
+                }.frame(width: 44, height: height)
+            }
+            .frame(width: .points(width), height: .points(height))
+            .background(.surface)
+            .cornerRadius(6)
+            .border(theme.colors.accent.multipliedAlpha(0.35), width: 1)
+            .shadow(color: theme.elevation.medium.color ?? .clear, offsetY: 4, blur: 12)
+            .accessibilityHidden()
+            .debugName("reorder-preview")
+        }
     }
 
     private func dropIndicator(boundary: Int, count: Int,
@@ -128,13 +160,18 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
             .debugName("reorder-drop-indicator")
     }
 
-    private func beginDrag(_ element: Data.Element, index: Int) {
+    private func beginDrag(_ element: Data.Element, index: Int, rowStride: Float, height: Float) {
         guard isEnabled else { return }
+        drag.begin(rowTopInContent: Float(index) * rowStride, rowHeight: height)
         draggingID = element[keyPath: id]
         dropBoundary = index
     }
 
-    private func updateDrag(delta: CGFloat, elements: [Data.Element], contentStride: Float) {
+    /// `travel` is pointer movement; `scrolled` is automatic scrolling since
+    /// the drag began. Their sum is the position in content coordinates.
+    private func updateDrag(travel: CGFloat, scrolled: CGFloat, elements: [Data.Element], contentStride: Float) {
+        drag.move(travel: Float(travel))
+        let delta = travel + scrolled
         guard let draggingID,
               let source = elements.firstIndex(where: { $0[keyPath: id] == draggingID }) else { return }
         let rowStride = max(1, contentStride)
@@ -175,153 +212,6 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
         let title = rowLabel(element)
         return title.isEmpty ? "Reorder item \(index + 1) of \(data.count)"
             : "Reorder \(title), position \(index + 1) of \(data.count)"
-    }
-}
-
-// MARK: - _ReorderHandle
-
-private enum _ReorderHandleKeys {
-    static let active = "__reorder.active"
-    static let startY = "__reorder.startY"
-    static let hovered = "__reorder.hovered"
-    static let lastY = "__reorder.lastY"
-    static let report = "__reorder.report"
-}
-
-/// Drag/focus handle behind one reorderable row. Interaction state lives on
-/// the node so a parent recompose mid-drag keeps the pointer transaction.
-private struct _ReorderHandle: _PrimitiveView {
-    let index: Int
-    let count: Int
-    let label: String
-    let isEnabled: Bool
-    let isDragging: Bool
-    let rowHeight: Float
-    let onStart: () -> Void
-    let onDelta: (CGFloat) -> Void
-    let onEnd: () -> Void
-    let onCancel: () -> Void
-    let onStep: (Int) -> Void
-
-    func _makeNode() -> Node {
-        let node = Node()
-        node.isHitTestable = true
-        node.addResource(EdgeAutoScroll())
-        return node
-    }
-
-    func _makeLayoutNode() -> LayoutNode? {
-        let layout = LayoutNode()
-        layout.width = 44
-        layout.height = rowHeight
-        layout.flexShrink = 0
-        layout.alignItems = .center
-        layout.justifyContent = .center
-        return layout
-    }
-
-    func _updateNode(_ node: Node) {
-        node.applyTouchControlExtent()
-        node.isFocusable = isEnabled
-        node.attachments[LayoutDebugAttachmentKey.debugName] = "reorder-handle-\(index)"
-        node.cornerRadius = 6
-        node.cursor = isEnabled ? .pointer : nil
-        node.accessibility = AccessibilitySemantics(.slider) {
-            $0.label = label
-            $0.value = "Position \(index + 1) of \(count)"
-            $0.help = "Drag the handle, or use Up and Down to move this row."
-            $0.state.isEnabled = isEnabled
-            $0.state.isSelected = isDragging
-        }
-        node.accessibilityActions.increment = isEnabled ? { onStep(1) } : nil
-        node.accessibilityActions.decrement = isEnabled ? { onStep(-1) } : nil
-
-        let applyBackground: (Bool) -> Void = { hovered in
-            let active = node.attachments[_ReorderHandleKeys.active] as? Bool == true
-            node.backgroundColor = active ? node.theme.colors.stateLayerPressed
-                : (hovered && isEnabled ? node.theme.colors.stateLayerHover : .clear)
-        }
-        // The drag position is pointer travel plus any automatic scroll, so the
-        // drop boundary stays in content coordinates while the list scrolls.
-        let autoScroll = node.firstResource(EdgeAutoScroll.self)
-        node.attachments[_ReorderHandleKeys.report] = { [weak node] in
-            guard let node, let start = node.attachments[_ReorderHandleKeys.startY] as? Float,
-                  let last = node.attachments[_ReorderHandleKeys.lastY] as? Float else { return }
-            onDelta(CGFloat(last - start) + (autoScroll?.scrolledDistance ?? 0))
-        }
-        let report: () -> Void = { [weak node] in (node?.attachments[_ReorderHandleKeys.report] as? () -> Void)?() }
-        applyBackground(node.attachments[_ReorderHandleKeys.hovered] as? Bool == true)
-        guard let registry = InteractionRegistryHolder.current else { return }
-        registry.setHover(node) { phase in
-            let hovered = phase == .enter && node.supportsControlHover
-            node.attachments[_ReorderHandleKeys.hovered] = hovered
-            applyBackground(hovered)
-        }
-        registry.setPointer(node) { event, phase, _ in
-            guard isEnabled, event.button == .left else { return .ignored }
-            switch phase {
-            case .down:
-                node.attachments[_ReorderHandleKeys.active] = true
-                node.attachments[_ReorderHandleKeys.startY] = event.y
-                node.attachments[_ReorderHandleKeys.lastY] = event.y
-                autoScroll?.begin(pointerY: event.y, onScroll: report)
-                PointerCaptureHolder.current?.acquire(node)
-                applyBackground(true)
-                onStart()
-                return .handled
-            case .up:
-                guard node.attachments[_ReorderHandleKeys.active] as? Bool == true else {
-                    return .ignored
-                }
-                node.attachments[_ReorderHandleKeys.active] = false
-                node.attachments.removeValue(forKey: _ReorderHandleKeys.startY)
-                autoScroll?.end()
-                if PointerCaptureHolder.current?.target === node {
-                    PointerCaptureHolder.current?.release()
-                }
-                applyBackground(node.attachments[_ReorderHandleKeys.hovered] as? Bool == true)
-                onEnd()
-                return .handled
-            }
-        }
-        registry.setMotion(node) { event, _ in
-            guard node.attachments[_ReorderHandleKeys.active] as? Bool == true else { return .ignored }
-            node.attachments[_ReorderHandleKeys.lastY] = event.y
-            autoScroll?.update(pointerY: event.y)
-            report()
-            return .handled
-        }
-        registry.setKey(node) { event, phase in
-            guard phase != .capture, isEnabled else { return .ignored }
-            switch event.scancode {
-            case Scancode.arrowUp:
-                onStep(-1)
-                return .handled
-            case Scancode.arrowDown:
-                onStep(1)
-                return .handled
-            case Scancode.escape:
-                guard node.attachments[_ReorderHandleKeys.active] as? Bool == true else {
-                    return .ignored
-                }
-                node.attachments[_ReorderHandleKeys.active] = false
-                node.attachments.removeValue(forKey: _ReorderHandleKeys.startY)
-                autoScroll?.end()
-                if PointerCaptureHolder.current?.target === node {
-                    PointerCaptureHolder.current?.release()
-                }
-                onCancel()
-                return .handled
-            default:
-                return .ignored
-            }
-        }
-    }
-
-    var _children: [any View] {
-        [Icon(UIIcons.Action.grip, size: .small, color: .onSurfaceMuted)
-            .iconScaling(.fixed)
-            .accessibilityHidden()]
     }
 }
 
