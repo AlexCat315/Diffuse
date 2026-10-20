@@ -67,7 +67,7 @@ public struct MenuButton<Label: View>: View {
 | 槽位 | 来源 |
 | ---- | ---- |
 | 触发器背景/边框/焦点环 | `SecondaryButtonStyle` |
-| 菜单材质/圆角 | `Menu` 的 `glassSurface(.controlRadius)` |
+| 菜单材质/圆角 | `Menu` 的 `floatingSurface(.controlRadius)` |
 | 行 hover/选中/禁用 | `Menu` 行 token |
 | 展开态语义 | `ActionControlAccessibility.isExpanded` |
 

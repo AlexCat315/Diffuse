@@ -55,7 +55,7 @@ public struct CompletionPopover: View {
                 Text("\(selectedIndex + 1) / \(items.count)").font(.caption).foregroundColor(.onSurfaceMuted)
                     .padding(horizontal: 10, vertical: 4)
             }
-        }.padding(3).glassSurface(.controlRadius)
+        }.padding(3).floatingSurface(.controlRadius)
             .accessibility { $0.role = .list; $0.label = "Completions" }
     }
 }

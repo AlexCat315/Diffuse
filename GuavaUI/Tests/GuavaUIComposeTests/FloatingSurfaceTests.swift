@@ -8,9 +8,9 @@ import EngineKernel
 import GuavaUIRuntime
 @testable import GuavaUICompose
 
-/// Floating panels have to *look* lifted and read as glass. These tests pin
-/// the token, the one modifier that assembles the material, and a real menu.
-@Suite("Glass surfaces", .serialized)
+/// Floating panels have to *look* lifted. These tests pin the token, the one
+/// modifier that assembles the material, and a real menu.
+@Suite("Floating surfaces", .serialized)
 struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
 
     @Test("The floating token is two different layers, not one twice")
@@ -30,7 +30,7 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
         node.cornerRadius = 6
         node.backgroundColor = Node().theme.colors.surfaceFloating
-        GlassSurfaceModifier(cornerRadius: 6).apply(node: node)
+        FloatingSurfaceModifier(cornerRadius: 6).apply(node: node)
 
         let list = DrawList()
         NodeRenderer().render(root: node, into: list)
@@ -44,48 +44,36 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
         #expect(haloList.vertices.count < shadowVertices)
     }
 
-    /// Glass is five properties that only work together, and the order is not
-    /// obvious from any one of them: the fill buries the frost unless it is
-    /// translucent, and without `backdropBlur` there is no frost to bury. A
-    /// menu once assembled the chain by hand and missed the blur, rendering as
-    /// a plain card that looked finished in review. The modifier exists so that
-    /// cannot be done by accident, and this pins every part of it.
-    @Test("glassSurface() asks for the whole material, not part of it")
-    @MainActor func glassSurfaceWiring() {
+    /// The material is several properties that only work together. A menu once
+    /// assembled the chain by hand and missed part of it, rendering as a plain
+    /// card that looked finished in review; this pins every part.
+    @Test("floatingSurface() asks for the whole material, not part of it")
+    @MainActor func floatingSurfaceWiring() {
         let node = Node()
         node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
-        GlassSurfaceModifier(cornerRadius: 7).apply(node: node)
-
+        FloatingSurfaceModifier(cornerRadius: 7).apply(node: node)
         let theme = node.theme
-        #expect(node.backdropBlur == 12)
-        #expect(node.backgroundColor == theme.colors.surfaceMaterial)
+        #expect(node.backgroundColor == theme.colors.surfaceFloating)
+        // Solid: labels stay legible over anything, and no live sample of
+        // what is behind the panel can show through as noise.
+        #expect(node.backgroundColor?.a == 1)
+        #expect(node.backdropBlur == 0)
         #expect(node.cornerRadius == 7)
-        #expect(node.borderColor == theme.colors.border)
+        #expect(node.borderColor == theme.colors.floatingOutline)
         #expect(node.borderWidth == 1)
         #expect(node.ambientShadow == theme.elevation.floating.ambient)
         #expect(node.shadow == theme.elevation.floating.key)
-        // The fill has to let the backdrop through, or the frost the pass just
-        // drew underneath it is simply covered.
-        #expect(node.backgroundColor?.a ?? 1 < 1)
     }
 
-    @Test("The frost strength is the caller's, and zero is honoured")
-    @MainActor func glassBlurIsConfigurable() {
-        let node = Node()
-        node.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
-        GlassSurfaceModifier(cornerRadius: 6, blurRadius: 24).apply(node: node)
-        #expect(node.backdropBlur == 24)
-
-        // A negative radius has to clamp rather than reach the pass as one:
-        // it would size the capture backwards.
-        let clamped = Node()
-        clamped.frame = CGRect(x: 0, y: 0, width: 120, height: 60)
-        GlassSurfaceModifier(cornerRadius: 6, blurRadius: -5).apply(node: clamped)
-        #expect(clamped.backdropBlur == 0)
+    @Test("Light panels keep a neutral hairline; dark ones use the palette border")
+    func edgeTokens() {
+        let light = Theme.defaultLight.colors, dark = Theme.defaultDark.colors
+        #expect(light.floatingOutline != light.border && light.floatingOutline.a < 0.2)
+        #expect(dark.floatingOutline == dark.border)
     }
 
-    @Test("A menu panel is glass, like every other floating panel")
-    @MainActor func menuPanelFrosts() throws {
+    @Test("A menu panel is the floating material, like every other floating panel")
+    @MainActor func menuPanelFloats() throws {
         try GlobalTestLock.locked {
             PortalStoreHolder.current.clear()
             defer { PortalStoreHolder.current.clear() }
@@ -112,16 +100,21 @@ struct FloatingSurfaceTests: GuavaUIComposeSerializedSuite {
                 let panel = try #require(flatten(tree.root).first {
                     $0.backgroundColor != nil && $0.frame.width > 100
                 })
-                // Every floating panel is the same material. A menu that quietly skipped the
-                // frost used to render as a plain card among glass ones, which
-                // is the one outcome this modifier exists to prevent.
+                // Every floating panel is the same material; a menu that skipped
+                // part of it would render as a plain card among floating ones.
                 let theme = panel.theme
-                #expect(panel.backdropBlur > 0)
-                #expect(panel.backgroundColor == theme.colors.surfaceMaterial)
+                #expect(panel.backgroundColor == theme.colors.surfaceFloating)
                 #expect(panel.cornerRadius == theme.radius.md)
-                #expect(panel.borderColor == theme.colors.border)
+                #expect(panel.borderColor == theme.colors.floatingOutline)
                 #expect(panel.ambientShadow == theme.elevation.floating.ambient)
                 #expect(panel.shadow == theme.elevation.floating.key)
+                // Nothing above the panel clips it: a portal clip cut the shadow
+                // to the panel's box and left square shadow corners.
+                var ancestor = panel.parent
+                while let node = ancestor {
+                    #expect(!node.clipsToBounds)
+                    ancestor = node.parent
+                }
             }
         }
     }
@@ -140,6 +133,28 @@ private struct MenuHarness: View {
                 Menu([.item(MenuItem(id: "one", title: "One") {}),
                       .item(MenuItem(id: "two", title: "Two") {})],
                      width: 180, maxVisibleRows: 4, onItemActivated: { shown = false })
+            }
+        }
+    }
+}
+
+
+@Suite("Overflow-only clipping", .serialized)
+struct OverflowClippingTests: GuavaUIComposeSerializedSuite {
+    private func nodes(_ root: Node) -> [Node] { [root] + root.children.flatMap(nodes) }
+
+    @Test("A fallback scroller clips only while its content overflows")
+    func clipsOnlyOverflow() {
+        GlobalTestLock.locked {
+            for (height, clips) in [(Float(40), false), (Float(400), true)] {
+                var scroller = ScrollView(.vertical) { Box(direction: .column) {}.frame(height: height) }
+                scroller.clipsOnlyOverflow = true
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+                graph.install(root: scroller.frame(height: 100))
+                graph.computeLayout(width: 200, height: 300)
+                let scroll = nodes(graph.tree.root!).first { $0.scrollReveal != nil }
+                #expect(scroll?.clipsToBounds == clips)
+                graph.install(root: EmptyView())
             }
         }
     }

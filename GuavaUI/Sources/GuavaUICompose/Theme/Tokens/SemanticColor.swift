@@ -33,11 +33,6 @@ public extension SemanticColorRef {
     static let surfaceFloating  = SemanticColorRef { $0.colors.surfaceFloating }
     static let surfaceOverlay   = SemanticColorRef { $0.colors.surfaceOverlay }
 
-    /// Fill for panels that float over content: menus, popovers, popup editors.
-    /// Resolved from `ColorScheme.surfaceMaterial`, which owns the alpha and
-    /// the reasoning behind it.
-    static let materialFloating = SemanticColorRef { $0.colors.surfaceMaterial }
-
     static let onBackground     = SemanticColorRef { $0.colors.onBackground }
     static let onSurface        = SemanticColorRef { $0.colors.onSurface }
     static let onSurfaceVariant = SemanticColorRef { $0.colors.onSurfaceVariant }

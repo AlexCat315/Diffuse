@@ -121,11 +121,9 @@ struct MenuLevel: View {
                 .modifier(MenuWindowBounds(maxVisibleRows: configuration.maxVisibleRows))
                 .modifier(MenuScrollMarker())
             }
-            // Every panel that floats over content gets the same material: a frosted,
-            // translucent body with the chrome's shadow under it. The menu is
-            // no longer the odd one out, and `glassSurface` is the only way to
-            // say so — the parts have to agree and none of them implies the rest.
-.glassSurface(.controlRadius)
+            // Every panel that floats over content gets the same material: a solid
+            // body, a crisp edge and the chrome's shadow under it.
+            .floatingSurface(.controlRadius)
             .frame(width: configuration.width)
         }
     }

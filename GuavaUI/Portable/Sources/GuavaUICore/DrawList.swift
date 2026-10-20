@@ -25,7 +25,7 @@ public extension TextureID {
 ///
 /// This is a *request*, not a guarantee. A renderer without an offscreen pass
 /// (without a backdrop program) ignores it, so the fill above it must stay legible on its
-/// own — see `SemanticColorRef.materialFloating`.
+/// own.
 public struct UIBackdrop: Equatable, Sendable {
     /// Region to blur, in logical points. Usually the panel's own box.
     public var rect: UIRect

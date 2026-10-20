@@ -153,7 +153,9 @@ private struct _PortalEntrySlot: _PrimitiveView {
         store.attachSlotNode(entry.id, node: node)
         node.allowsHitTesting = !entry.isExiting
         node.isInteractionEnabled = !entry.isExiting
-        node.clipsToBounds = !entry.fillsWindow
+        // The entry never clips: its fallback scroller clips only on overflow,
+        // so floating panels keep the shadow that lifts them.
+        node.clipsToBounds = false
         if !entry.fillsWindow {
             let window = portalWindowBounds(node)
             let range = entry.fit.widthRange(in: window)
@@ -205,7 +207,9 @@ private struct _PortalEntrySlot: _PrimitiveView {
         if entry.fillsWindow { return [entry.content] }
         let window = portalWindowBounds(node)
         let range = entry.fit.widthRange(in: window)
-        return [ScrollView(.vertical, scrollbarGutter: .overlay) { entry.content }
+        var scroller = ScrollView(.vertical, scrollbarGutter: .overlay) { entry.content }
+        scroller.clipsOnlyOverflow = true
+        return [scroller
             .frame(minWidth: range.minimum, maxWidth: range.maximum,
                    maxHeight: entry.fit.heightLimit(in: window))]
     }

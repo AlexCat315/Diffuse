@@ -1,6 +1,6 @@
 # 应用设计系统与缩放契约
 
-GuavaUI 的默认外观是一套可替换的预设，视觉基线是 **iOS / macOS**：系统字体层级、44pt 触摸目标、克制的圆角与阴影、半透明浮层材质；不引入 48dp 密度、FAB、elevation tint、全大写分组标题或 ripple 作为默认规范。应用决定字号、字体族、图标、间距、圆角、颜色和动效；框架负责在组件、布局、编辑与浮层之间传递这些设置。数值均为逻辑点，DPI 栅格密度独立处理。
+GuavaUI 的默认外观是一套可替换的预设，视觉基线是 **iOS / macOS**：系统字体层级、44pt 触摸目标、克制的圆角与阴影、不透明浮层材质；不引入 48dp 密度、FAB、elevation tint、全大写分组标题或 ripple 作为默认规范。应用决定字号、字体族、图标、间距、圆角、颜色和动效；框架负责在组件、布局、编辑与浮层之间传递这些设置。数值均为逻辑点，DPI 栅格密度独立处理。
 
 ## 全局与局部主题
 
@@ -69,6 +69,8 @@ Page().textScaler(TextScaler(1.25))
 ```
 
 TextScaler 的最近作用域覆盖外层，不把倍率连乘。字体、显式行高和字距只缩放一次，测量与绘制使用同一结果；TextField 光标/选区与渲染缓存消费相同字体。Button（含状态色、Tab 和分段样式）、TextField、Select、Menu、Toolbar、ButtonGroup、DisclosureGroup、Accordion 和 Panel 标题允许按内容增长；Combobox 与 Tree 同步虚拟列表的行高。Menu 默认使用不透明浮层表面，行预算和高亮跟随实际文字高度。明确指定的 `.frame(height:)` 仍是应用约束，可能限制内容。
+
+浮层（Menu、Tooltip、HoverCard、Combobox、ColorField、补全与编辑器悬浮面板）统一使用 `floatingSurface(_:)`：不透明 `surfaceFloating` 填充；外缘 1pt 细线在浅色下为 10% 中性黑（`floatingOutline`，浅色浮层与浅色页面之间没有更深的面体可分隔），深色下为主题 `border`；`elevation.floating` 两层阴影提供抬升。浮层不再实时模糊背后画面：细字背后的实时采样会呈现颗粒噪点，并且标签在任意背景上都必须清晰；`Node.backdropBlur` 仍作为渲染能力保留。Portal 入口本身不裁剪，兜底滚动容器只在内容确实溢出时裁剪，因此浮层阴影完整落在面板之外，不会被切成方角；不透明圆角面的阴影只跳过圆弧内必然被覆盖的区域。
 
 图标默认使用 `theme.icons.scaling = .text`：语义尺寸、自定义角色和直接传入的数值都会跟随 TextScaler，资源包、文件和纹理来源一致，且只缩放一次。图标按钮使用对称留白和正方形最小点击区；loading 时用同尺寸 Spinner 替换图标，并保留 tooltip 提供的辅助功能名称。普通文字按钮仍在文字旁显示 Spinner。
 

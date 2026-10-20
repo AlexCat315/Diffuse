@@ -156,6 +156,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     /// Embedded one-line controls merge text into their owning row. An idle
     /// viewport stays transparent to accessibility; overflow exposes scrolling.
     var combinesAccessibility = false
+    /// A fallback scroller around content that usually fits (a portal entry)
+    /// clips only while it actually overflows, so a floating panel inside
+    /// keeps its shadow.
+    var clipsOnlyOverflow = false
 
     /// Logical points per line increment. Precise point input bypasses this.
     public var wheelStep: Float = 30
@@ -348,6 +352,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             Self.publishScrollRange(to: motion, on: node)
             Self.updateAnchor(on: node, motion: motion, axes: axes)
             ScrollKeyboardFocus.update(node, canScroll: motion.maximumOffset.x > 0.5 || motion.maximumOffset.y > 0.5)
+            if clipsOnlyOverflow {
+                let overflows = motion.maximumOffset.x > 0.5 || motion.maximumOffset.y > 0.5
+                node.clipsToBounds = overflows
+            }
             if let desired = node.attachments.removeValue(forKey: _ScrollViewAttachmentKeys.pendingOffset) as? CGPoint {
                 motion.adopt(desired)
             }

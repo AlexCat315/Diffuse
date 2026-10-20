@@ -53,7 +53,7 @@ SplitButton("Save", entries: [
 | 槽位 | 来源 |
 | ---- | ---- |
 | 主按钮与箭头 chrome | `SecondaryButtonStyle` |
-| 菜单材质/行高 | `Menu` + `glassSurface` |
+| 菜单材质/行高 | `Menu` + `floatingSurface` |
 | expanded 语义 | 箭头 Popover trigger |
 | 禁用 | 两区同步 `isEnabled` |
 

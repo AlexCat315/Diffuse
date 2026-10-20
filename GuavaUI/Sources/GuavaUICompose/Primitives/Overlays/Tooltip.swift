@@ -99,7 +99,7 @@ func tooltipDescription(_ description: String) -> AnyView {
         // Frosted, not opaque: a tooltip sits over whatever the pointer is
         // near, and the blur is what keeps a busy backdrop from reading as
         // noise behind the text. Menus and popovers float the same way.
-        .padding(9).glassSurface(.rowRadius))
+        .padding(9).floatingSurface(.rowRadius))
 }
 
 private struct TooltipHost<Target: View>: _PrimitiveView {
