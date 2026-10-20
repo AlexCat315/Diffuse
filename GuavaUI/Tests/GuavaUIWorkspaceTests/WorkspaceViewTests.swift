@@ -7,7 +7,7 @@ import XCTest
 import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime
-import GuavaUIWorkspace
+@testable import GuavaUIWorkspace
 
 final class WorkspaceViewTests: XCTestCase {
     func testInternalDockSplitResizesWithPointerAndKeyboardAndRestores() throws {
@@ -723,6 +723,45 @@ final class WorkspaceViewTests: XCTestCase {
         rig.pump()
 
         XCTAssertNil(rig.optionalFrame(named: "workspace-collapse-center"))
+    }
+
+    func testTabStripExposesTabListPanelAndPositionAndMirrorsArrowsInRTL() {
+        for rtl in [false, true] {
+            let controller = WorkspaceController(document: Self.makeMultiTabDocument())
+            let root = AnyView(WorkspaceView(controller: controller) { panelID in
+                AnyView(Box { Text(panelID.rawValue) }.debugName("content-\(panelID.rawValue)"))
+            }.layoutDirection(rtl ? .rtl : .ltr))
+            let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 640, root: root)
+            for _ in 0..<4 { rig.pump() }
+            let console = rig.node(named: "workspace-tab-console"), assets = rig.node(named: "workspace-tab-assets")
+            XCTAssertEqual(console.accessibility?.role, .tab)
+            XCTAssertEqual(console.accessibility?.help, "Tab 1 of 2")
+            XCTAssertEqual(assets.accessibility?.help, "Tab 2 of 2")
+            XCTAssertEqual(console.accessibility?.state.isSelected, true)
+            var ancestor = console.parent
+            while let node = ancestor, node.accessibility?.role != .tabList { ancestor = node.parent }
+            XCTAssertEqual(ancestor?.accessibility?.label, "Panel tabs")
+            XCTAssertEqual(ancestor?.accessibility?.value, "Console")
+            var panel = rig.node(named: "content-console").parent
+            while let node = panel, node.accessibility?.role != .tabPanel { panel = node.parent }
+            XCTAssertEqual(panel?.accessibility?.label, "Console")
+            if rtl { XCTAssertGreaterThan(console.absoluteFrame.minX, assets.absoluteFrame.minX) }
+            else { XCTAssertLessThan(console.absoluteFrame.minX, assets.absoluteFrame.minX) }
+            rig.focus.focus(console)
+            // The next tab is the visual neighbour: right in LTR, left in RTL.
+            rig.dispatcher.dispatch(.keyDown(KeyEvent(scancode: rtl ? Scancode.arrowLeft : Scancode.arrowRight,
+                                                      keycode: 0, modifiers: [], isRepeat: false)))
+            for _ in 0..<4 { rig.pump() }
+            XCTAssertEqual(controller.document.groups["bottom"]?.activePanelID, "assets", rtl ? "RTL" : "LTR")
+        }
+    }
+
+    func testTabArrowCommandMapping() {
+        XCTAssertEqual(workspaceTabCommand(for: Scancode.arrowLeft, rightToLeft: false), .previous)
+        XCTAssertEqual(workspaceTabCommand(for: Scancode.arrowLeft, rightToLeft: true), .next)
+        XCTAssertEqual(workspaceTabCommand(for: Scancode.arrowRight, rightToLeft: true), .previous)
+        XCTAssertEqual(workspaceTabCommand(for: Scancode.home, rightToLeft: true), .first)
+        XCTAssertNil(workspaceTabCommand(for: Scancode.arrowUp, rightToLeft: false))
     }
 
     private func makeRig(width: Float,

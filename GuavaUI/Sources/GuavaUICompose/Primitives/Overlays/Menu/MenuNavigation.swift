@@ -9,13 +9,16 @@ struct MenuRowPresentation {
     var isSelected = false
     var role: MenuItemRole = .normal
     var hasSubmenu = false
+    var content = MenuItemContent()
     init(item: MenuItem) {
         id = item.id; title = item.title; shortcut = item.shortcut
-        isEnabled = item.isEnabled; isSelected = item.isSelected; role = item.role
+        isEnabled = item.isEnabled; isSelected = item.isSelected; role = item.role; content = item.content
     }
     init(submenu: MenuSubmenu) {
         id = submenu.id; title = submenu.title; isEnabled = submenu.isEnabled; hasSubmenu = true
+        content = MenuItemContent(icon: submenu.icon)
     }
+    var isLink: Bool { content.link != nil && !hasSubmenu }
 }
 
 struct MenuRowEvents {
@@ -40,6 +43,8 @@ final class MenuSession {
     private let registrar = ObservableStateRegistrar()
     let hoverIntent = MenuHoverIntent()
     var typeahead = MenuTypeahead()
+    /// Plain session data: pointer samples must not recompose the menu.
+    var pointer = MenuPointerIntent()
     var navigation: MenuNavigationState {
         get { registrar.access("navigation"); return navigationValue }
         set {
@@ -60,10 +65,14 @@ struct MenuLevelHost<Content: View>: _PrimitiveView {
     let hoverIntent: MenuHoverIntent
     let onKey: (KeyEvent, Node) -> Bool
     let onText: (String, Node) -> Bool
+    var onPointer: ((CGPoint) -> Void)?
+    var onFrame: ((CGRect) -> Void)?
     let content: Content
     init(hoverIntent: MenuHoverIntent, onKey: @escaping (KeyEvent, Node) -> Bool,
-         onText: @escaping (String, Node) -> Bool, @ViewBuilder content: () -> Content) {
-        self.hoverIntent = hoverIntent; self.onKey = onKey; self.onText = onText; self.content = content()
+         onText: @escaping (String, Node) -> Bool, onPointer: ((CGPoint) -> Void)? = nil,
+         onFrame: ((CGRect) -> Void)? = nil, @ViewBuilder content: () -> Content) {
+        self.hoverIntent = hoverIntent; self.onKey = onKey; self.onText = onText
+        self.onPointer = onPointer; self.onFrame = onFrame; self.content = content()
     }
     func _makeNode() -> Node {
         let node = Node(); node.isHitTestable = false; node.addResource(hoverIntent)
@@ -79,6 +88,14 @@ struct MenuLevelHost<Content: View>: _PrimitiveView {
             guard phase != .capture, let node else { return .ignored }
             return onText(text, node) ? .handled : .ignored
         }
+        if let onPointer {
+            InteractionRegistryHolder.current?.setMotion(node) { event, phase in
+                if phase == .capture { onPointer(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))) }
+                return .ignored
+            }
+        }
+        // Layout-less host: the panel child carries the measured frame.
+        node.layoutDidUpdate = onFrame.map { report in { node in report(node.children.first?.absoluteFrame ?? .zero) } }
     }
     var _children: [any View] { [content] }
 }
@@ -100,8 +117,9 @@ final class MenuHoverIntent: NodeResource, AnyAnimationController {
     var isFinished = true
     func mount(node: Node) {}
     func unmount(node: Node) { cancel() }
-    func schedule(id: AnyHashable, action: @escaping () -> Void) {
-        self.id = id; self.action = action; elapsed = 0; isFinished = false
+    private var delay: Double = 0.18
+    func schedule(id: AnyHashable, delay: Double = 0.18, action: @escaping () -> Void) {
+        self.id = id; self.action = action; self.delay = delay; elapsed = 0; isFinished = false
         AnimatorScheduler.current.register(self)
     }
     func cancel() { cancel(id: nil) }
@@ -112,7 +130,7 @@ final class MenuHoverIntent: NodeResource, AnyAnimationController {
     func tick(deltaTime: Double) {
         guard !isFinished else { return }
         elapsed += max(0, deltaTime)
-        if elapsed >= 0.18 { let callback = action; cancel(); callback?() }
+        if elapsed >= delay { let callback = action; cancel(); callback?() }
     }
     func finishImmediately() { cancel() }
 }

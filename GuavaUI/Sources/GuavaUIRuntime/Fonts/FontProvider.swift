@@ -15,6 +15,9 @@ public final class ManagedFont {
     internal let hbFont: OpaquePointer  // hb_font_t*
     #if canImport(CoreText)
     var colorGlyphFont: NativeColorGlyphFont?
+    #else
+    /// COLR / bitmap-strike color glyphs rasterized by FreeType.
+    var freeTypeColorFont: FreeTypeColorGlyphFace?
     #endif
 
     public var rawFace: FT_Face { ftFace }
@@ -48,6 +51,8 @@ public struct FontRun {
     public let font: ManagedFont
     public let text: String
     public let utf8Offset: Int
+    /// Resolved bidi direction; `nil` lets HarfBuzz guess from the script.
+    public var isRightToLeft: Bool?
 }
 
 /// Resolves fonts and provides shaping for text runs.
@@ -103,6 +108,11 @@ public final class FontProvider {
         for font in fonts.values {
             #if canImport(CoreText)
             if let colorFont = font.colorGlyphFont {
+                atlas.registerColorSource(colorFont.source, fontID: font.id)
+                continue
+            }
+            #else
+            if let colorFont = font.freeTypeColorFont {
                 atlas.registerColorSource(colorFont.source, fontID: font.id)
                 continue
             }
@@ -234,6 +244,9 @@ public final class FontProvider {
         run.text.withCString(encodedAs: UTF8.self) { ptr in
             hb_buffer_add_utf8(buf, ptr, Int32(run.text.utf8.count), 0, Int32(run.text.utf8.count))
         }
+        if let rightToLeft = run.isRightToLeft {
+            hb_buffer_set_direction(buf, rightToLeft ? HB_DIRECTION_RTL : HB_DIRECTION_LTR)
+        }
 
         hb_buffer_guess_segment_properties(buf)
         hb_shape(run.font.hbFont, buf, nil, 0)
@@ -259,6 +272,17 @@ public final class FontProvider {
             ))
         }
 
+        #if !canImport(CoreText)
+        // Bitmap strikes report advances in strike pixels; the color source
+        // owns the logical metrics for every glyph of a color face.
+        if let colorFont = run.font.freeTypeColorFont {
+            result = result.map { glyph in
+                ShapedGlyph(glyphID: glyph.glyphID, xOffset: glyph.xOffset, yOffset: glyph.yOffset,
+                            xAdvance: colorFont.metrics(glyph.glyphID)?.advance ?? glyph.xAdvance,
+                            yAdvance: glyph.yAdvance, cluster: glyph.cluster, fontID: glyph.fontID)
+            }
+        }
+        #endif
         return result
     }
 
@@ -367,6 +391,9 @@ public final class FontProvider {
             ftFace: ftFace, hbFont: hbFont,
             buffer: buffer, bufferSize: data.count
         )
+        if FreeTypeColorGlyphFace.hasColorGlyphs(ftFace) {
+            managed.freeTypeColorFont = FreeTypeColorGlyphFace(face: ftFace, size: size, rasterScale: rasterScale)
+        }
         fonts[resolvedPSName] = managed
         fonts[psName] = managed
         if primaryPSName == nil { primaryPSName = resolvedPSName }
@@ -435,6 +462,9 @@ public final class FontProvider {
             "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
             "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
             "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            // COLRv0 emoji render in color through FreeType; PNG strikes need libpng.
+            "/usr/share/fonts/truetype/twemoji/TwemojiMozilla.ttf",
+            "/usr/share/fonts/twemoji/TwemojiMozilla.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         ]
 #else

@@ -62,8 +62,14 @@ struct ContextMenuStory: View {
         StorySection("Context actions", "The menu is positioned at the pointer and dismissed by Escape or clicking outside.") {
             Text("Right-click this surface").font(.body).padding(40).background(.surfaceVariant).cornerRadius(8)
                 .contextMenu([
-                    .item(MenuItem(title: "Open", isEnabled: options.isEnabled, action: { status = "Opened" })),
-                    .item(MenuItem(title: "Duplicate", isEnabled: options.isEnabled, action: { status = "Duplicated" })),
+                    .item(MenuItem(title: "Open", isEnabled: options.isEnabled, content: MenuItemContent(icon: UIIcons.File.folder),
+                                   action: { status = "Opened" })),
+                    .item(MenuItem(title: "Duplicate", isEnabled: options.isEnabled, content: MenuItemContent(icon: UIIcons.Action.copy,
+                                   detail: "Creates a copy next to the original"), action: { status = "Duplicated" })),
+                    .item(MenuItem(title: "Documentation", isEnabled: options.isEnabled,
+                                   content: MenuItemContent(richTitle: [RichTextRun("Read the "), RichTextRun("guide", traits: .bold)],
+                                                            link: "https://guava.example/docs"),
+                                   action: { status = "Opened documentation" })),
                     .separator("nested"),
                     .submenu(MenuSubmenu(id: "organize", title: "Organize", entries: [
                         .item(MenuItem(id: "move", title: "Move to folder", action: { status = "Moved to folder" })),

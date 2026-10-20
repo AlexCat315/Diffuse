@@ -4,8 +4,9 @@ import GuavaUIRuntime
 /// viewport. Row identity survives scrolling; keep persistent row data in the
 /// model, since fully offscreen rows are unmounted. IDs must be unique.
 ///
-/// Pass a constant `rowHeight` for uniform rows, or a closure for known
-/// variable heights. The closure receives the element, the available content
+/// Pass a constant `rowHeight` for uniform rows, a closure for known
+/// variable heights, or `estimatedRowHeight` when heights are only known
+/// after rendering. The closure receives the element, the available content
 /// width and the inherited text scaler, and returns the complete row height;
 /// heights are cached until data, width, spacing or text scale change, and
 /// scrolling locates rows in O(log n).
@@ -13,6 +14,7 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
     private enum Rows {
         case fixed(Float)
         case variable((Data.Element, Float, TextScaler) -> Float)
+        case estimated(Float)
     }
     private let data: Data
     private let id: KeyPath<Data.Element, ID>
@@ -37,6 +39,16 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
                   scrollToIndex: scrollToIndex, content: content)
     }
 
+    /// Rows of unknown height: unmeasured rows use `estimatedRowHeight`
+    /// (logical points, scaled with text), and each mounted row's laid-out
+    /// height replaces the estimate for the current width and text scale.
+    public init(_ data: Data, id: KeyPath<Data.Element, ID>, estimatedRowHeight: Float,
+                spacing: Float = 0, overscan: Int = 3, scrollToIndex: Int? = nil,
+                @ViewBuilder content: @escaping (Data.Element) -> Content) {
+        self.init(data, id: id, rows: .estimated(estimatedRowHeight), spacing: spacing, overscan: overscan,
+                  scrollToIndex: scrollToIndex, content: content)
+    }
+
     private init(_ data: Data, id: KeyPath<Data.Element, ID>, rows: Rows, spacing: Float, overscan: Int,
                  scrollToIndex: Int?, content: @escaping (Data.Element) -> Content) {
         self.data = data; self.id = id; self.rows = rows
@@ -52,6 +64,9 @@ public struct VirtualStack<Data: RandomAccessCollection, ID: Hashable, Content: 
         case .variable(let height):
             VariableVirtualStack(data, id: id, rowHeight: height, spacing: spacing, overscan: overscan,
                                  scrollToIndex: scrollToIndex, content: content)
+        case .estimated(let estimate):
+            EstimatedVirtualStack(data, id: id, estimatedRowHeight: estimate, spacing: spacing, overscan: overscan,
+                                  scrollToIndex: scrollToIndex, content: content)
         }
     }
 }

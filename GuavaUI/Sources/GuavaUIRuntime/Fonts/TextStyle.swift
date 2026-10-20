@@ -112,11 +112,29 @@ public final class TextFontResolver: @unchecked Sendable {
         guard !primaryFontName.isEmpty else { return [] }
         lock.lock()
         let provider = provider(for: font)
-        let runs = provider.resolveRuns(text: text)
+        let runs = BidiParagraphs.containsRightToLeft(text)
+            ? Self.directionalRuns(text, provider: provider) : provider.resolveRuns(text: text)
         provider.registerAllFonts(in: atlas)
         let glyphs = runs.flatMap(provider.shapeRun)
         lock.unlock()
         return glyphs
+    }
+
+    /// Shapes each bidi level run on its own with an explicit direction, so
+    /// digits inside Arabic or neutrals between scripts are not shaped with
+    /// the neighbouring script's guessed direction.
+    private static func directionalRuns(_ text: String, provider: FontProvider) -> [FontRun] {
+        let bidi = BidiParagraphs(text)
+        let utf8 = Array(text.utf8)
+        return bidi.paragraphs.flatMap { paragraph in
+            bidi.levelRuns(in: paragraph.range).flatMap { run in
+                let substring = String(decoding: utf8[run.range], as: UTF8.self)
+                return provider.resolveRuns(text: substring).map {
+                    FontRun(font: $0.font, text: $0.text, utf8Offset: $0.utf8Offset + run.range.lowerBound,
+                            isRightToLeft: run.level & 1 == 1)
+                }
+            }
+        }
     }
 
     public func preparePrimaryFont(_ font: Font) -> ManagedFont? {

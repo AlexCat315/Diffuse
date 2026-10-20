@@ -261,7 +261,10 @@ private struct IconCell: View {
 
 /// Ordered events on a shared rail, used for build logs, history and activity.
 struct TimelineStory: View {
+    @State private var zoom: Float = 1
+    private static let day = Calendar(identifier: .gregorian).startOfDay(for: Date(timeIntervalSince1970: 1_792_454_400))
     var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
         StorySection("Event sequence", "Metadata moves below the title in a narrow container. Long titles and details wrap at the current text scale; resizing keeps the same events.") {
             Timeline(events: [
                 TimelineEvent("Build started", detail: "Target: macOS · arm64", trailing: "09:12", tone: .info),
@@ -274,6 +277,23 @@ struct TimelineStory: View {
                 TimelineEvent("Deploy to staging", trailing: "Done", tone: .success, icon: UIIcons.File.package),
                 TimelineEvent("Smoke tests", trailing: "Running", tone: .info, icon: UIIcons.Status.loader)
             ])
+        }
+        StorySection("Groups, collapse and zoom", "Titled groups collapse to their header. Proportional spacing places dated events by elapsed time; the zoom buttons scale that spacing.") {
+            Timeline(groups: [
+                TimelineGroup("Today", events: [
+                    TimelineEvent("Build started", trailing: "09:00", tone: .info, date: Self.day.addingTimeInterval(9 * 3_600)),
+                    TimelineEvent("Tests passed", trailing: "09:20", tone: .success, date: Self.day.addingTimeInterval(9 * 3_600 + 1_200)),
+                    TimelineEvent("Release tagged", trailing: "11:30", tone: .success, date: Self.day.addingTimeInterval(11.5 * 3_600)),
+                ]),
+                TimelineGroup("Yesterday", events: [
+                    TimelineEvent("Review requested", trailing: "17:10", tone: .neutral),
+                    TimelineEvent("Changes approved", trailing: "18:05", tone: .success),
+                ]),
+            ]) {
+                $0.spacing = .proportional(pointsPerHour: 24, minimum: 0, maximum: 160)
+                $0.zoom = TimelineZoom($zoom)
+            }
+        }
         }
     }
 }

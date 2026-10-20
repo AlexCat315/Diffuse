@@ -38,6 +38,8 @@ struct RichTextFlow {
         var endOffset: Int
         /// Sorted by offset; the last entry is the visual end of the line.
         var carets: [Caret]
+        /// Base direction of the paragraph this line belongs to.
+        var isRightToLeft = false
     }
 
     /// One span's extent on one line.
@@ -165,16 +167,17 @@ private struct Builder {
 
     func build() -> RichTextFlow {
         let text = paragraph.text
+        let bidi: BidiParagraphs? = BidiParagraphs.containsRightToLeft(text) ? BidiParagraphs(text) : nil
         var starts: [Int] = []
         var offset = 0
         for span in paragraph.spans { starts.append(offset); offset += span.text.utf8.count }
-        let items = makeItems(text: text, starts: starts)
+        let items = makeItems(text: text, starts: starts, bidi: bidi)
         var lines: [RichTextFlow.Line] = []
         var fragments: [RichTextFlow.Fragment] = []
         var glyphLines: [TextLine] = []
         var top: Float = 0
         for range in wrap(items) {
-            let line = place(items, range: range, text: text, top: top, index: lines.count)
+            let line = place(items, range: range, text: text, top: top, index: lines.count, bidi: bidi)
             lines.append(line.line)
             fragments += line.fragments
             glyphLines.append(line.glyphs)
@@ -194,7 +197,7 @@ private struct Builder {
                             spanStarts: starts, width: width, height: top)
     }
 
-    private func makeItems(text: String, starts: [Int]) -> [Item] {
+    private func makeItems(text: String, starts: [Int], bidi: BidiParagraphs?) -> [Item] {
         let breaks = RichTextBreaks.opportunities(in: text)
         var items: [Item] = []
         for (index, span) in paragraph.spans.enumerated() {
@@ -208,14 +211,23 @@ private struct Builder {
                 }
                 let string = String(segment)
                 let utf8 = Array(string.utf8)
+                var segment: [Item] = []
                 for glyph in env.shape(text: string, font: span.font) {
                     let local = Int(glyph.cluster)
                     let byte = local < utf8.count ? utf8[local] : 0
                     var item = Item(glyph: glyph, span: index, cluster: segmentStart + local, advance: glyph.xAdvance)
                     item.isSpace = byte == 0x20 || byte == 0x09
                     item.breakBefore = breaks.contains(item.cluster)
-                    items.append(item)
+                    segment.append(item)
                 }
+                // Wrapping works in logical order; right-to-left runs arrive visual.
+                if let bidi {
+                    segment = segment.enumerated().sorted { lhs, rhs in
+                        if lhs.element.cluster != rhs.element.cluster { return lhs.element.cluster < rhs.element.cluster }
+                        return bidi.level(atByte: lhs.element.cluster) & 1 == 1 ? lhs.offset > rhs.offset : lhs.offset < rhs.offset
+                    }.map(\.element)
+                }
+                items += segment
                 segmentStart += utf8.count + 1
             }
             if pad > 0, items.count > firstItem {
@@ -272,8 +284,13 @@ private struct Builder {
         var glyphs: TextLine
     }
 
-    private func place(_ items: [Item], range: Range<Int>, text: String, top: Float, index: Int) -> PlacedLine {
-        let content = items[range]
+    private func place(_ items: [Item], range: Range<Int>, text: String, top: Float, index: Int,
+                       bidi: BidiParagraphs?) -> PlacedLine {
+        let logical = items[range]
+        let lineStart = logical.first?.cluster ?? (range.lowerBound > 0 ? items[range.lowerBound - 1].cluster + 1 : 0)
+        let rightToLeft = bidi?.paragraph(atByte: lineStart).isRightToLeft == true
+        let content = bidi.map { visualOrder(logical, bidi: $0) } ?? Array(logical)
+        let levels = content.map { bidi?.level(atByte: $0.cluster) ?? 0 }
         let fallbackSpan = content.first?.span ?? (range.lowerBound > 0 ? items[range.lowerBound - 1].span : 0)
         var ascent: Float = 0, descent: Float = 0, height: Float = 0
         var metricsBySpan: [Int: (Float, Float)] = [:]
@@ -300,10 +317,12 @@ private struct Builder {
         var carets: [RichTextFlow.Caret] = []
         var positioned: [PositionedGlyph] = []
         var fragments: [RichTextFlow.Fragment] = []
-        for item in content {
+        for (position, item) in content.enumerated() {
             guard let glyph = item.glyph else { continue }
             if carets.last?.offset != item.cluster {
-                carets.append(.init(offset: item.cluster, x: pen + item.padBefore))
+                // A right-to-left character starts at its right edge.
+                let odd = levels[position] & 1 == 1
+                carets.append(.init(offset: item.cluster, x: odd ? pen + item.extent - item.padAfter : pen + item.padBefore))
             }
             let (a, d) = metricsBySpan[item.span] ?? (ascent, descent)
             if fragments.last?.span == item.span {
@@ -319,27 +338,46 @@ private struct Builder {
             pen += item.extent
             if !item.isSpace { visibleWidth = pen }
         }
-        let startOffset = content.first?.cluster ?? (range.lowerBound > 0 ? items[range.lowerBound - 1].cluster + 1 : 0)
+        let startOffset = lineStart
         let endOffset = range.upperBound < items.count ? items[range.upperBound].cluster : text.utf8.count
-        carets.append(.init(offset: endOffset, x: pen))
-        if carets.first?.offset != startOffset { carets.insert(.init(offset: startOffset, x: 0), at: 0) }
+        carets.append(.init(offset: endOffset, x: rightToLeft ? 0 : pen))
+        if bidi != nil { carets.sort { $0.offset < $1.offset } }
+        if carets.first?.offset != startOffset { carets.insert(.init(offset: startOffset, x: rightToLeft ? pen : 0), at: 0) }
         let line = RichTextFlow.Line(top: top, height: height, baseline: baseline, width: visibleWidth,
-                                     startOffset: startOffset, endOffset: endOffset, carets: carets)
+                                     startOffset: startOffset, endOffset: endOffset, carets: carets,
+                                     isRightToLeft: rightToLeft)
         return PlacedLine(line: line, fragments: fragments,
                           glyphs: TextLine(glyphs: positioned, baselineY: baseline, topY: top, width: visibleWidth,
                                            startCluster: UInt32(startOffset), endCluster: UInt32(endOffset)))
     }
 
+    /// L1 returns trailing whitespace to the paragraph level; L2 then reverses
+    /// runs from the highest level down to the lowest odd one.
+    private func visualOrder(_ items: ArraySlice<Item>, bidi: BidiParagraphs) -> [Item] {
+        let line = Array(items)
+        guard let first = line.first else { return line }
+        let base = bidi.paragraph(atByte: first.cluster).baseLevel
+        var levels = line.map { bidi.level(atByte: $0.cluster) }
+        var index = line.count - 1
+        while index >= 0, line[index].isSpace || bidi.isTrailingWhitespace(atByte: line[index].cluster) {
+            levels[index] = base; index -= 1
+        }
+        return BidiParagraphs.visualOrder(levels).map { line[$0] }
+    }
+
     private func align(_ lines: [RichTextFlow.Line], glyphs: [TextLine], fragments: [RichTextFlow.Fragment],
                        width: Float) -> (lines: [RichTextFlow.Line], glyphs: [TextLine], fragments: [RichTextFlow.Fragment]) {
         let box = maxWidth.isFinite ? maxWidth : width
-        let factor: Float = switch paragraph.alignment {
-        case .leading: 0
-        case .center: 0.5
-        case .trailing: 1
+        // Leading and trailing follow each line's paragraph direction.
+        func factor(_ line: RichTextFlow.Line) -> Float {
+            switch paragraph.alignment {
+            case .leading: line.isRightToLeft ? 1 : 0
+            case .center: 0.5
+            case .trailing: line.isRightToLeft ? 0 : 1
+            }
         }
-        guard factor > 0 else { return (lines, glyphs, fragments) }
-        let shifts = lines.map { ((box - $0.width) * factor).rounded() }
+        guard lines.contains(where: { factor($0) > 0 }) else { return (lines, glyphs, fragments) }
+        let shifts = lines.map { ((box - $0.width) * factor($0)).rounded() }
         let shiftedLines = zip(lines, shifts).map { line, shift in
             var copy = line
             copy.carets = line.carets.map { .init(offset: $0.offset, x: $0.x + shift) }

@@ -60,7 +60,7 @@ public struct Sidebar<ID: Hashable, Header: View, Footer: View>: View {
                                 // destinations omit their icon or use another role.
                                 let entries: [SidebarHierarchy<ID>.Entry] = hierarchy.groups[index]
                                 let iconWidth = entries.compactMap { entry in
-                                    entry.item.icon.map { _ in metrics.size(entry.item.iconSize) }
+                                    (entry.item.icon != nil || entry.item.slots.occupiesLeadingLane) ? metrics.size(entry.item.iconSize) : nil
                                 }.max()
                                 Box(direction: .column, alignItems: .stretch, spacing: 3) {
                                     if !section.title.isEmpty && !presentation.isRail {

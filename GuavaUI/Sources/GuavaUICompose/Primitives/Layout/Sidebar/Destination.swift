@@ -22,6 +22,11 @@ struct SidebarDestination<ID: Hashable>: View {
     /// simultaneous selections.
     private var isSelected: Bool { selection.wrappedValue == item.id }
     @State private var showsActions = false
+    private var actionsWidth: Float { item.contextMenu.isEmpty ? 0 : 44 }
+    /// Title inset that keeps text clear of the absolutely placed accessory and actions.
+    private var trailingReservation: Float {
+        presentation.isRail ? 0 : actionsWidth + (item.slots.accessory == nil ? 0 : item.slots.accessoryWidth)
+    }
 
     @ViewBuilder
     var body: some View {
@@ -31,6 +36,13 @@ struct SidebarDestination<ID: Hashable>: View {
                 // intrinsic width. Otherwise short items get a shorter hover
                 // pill than long ones and the rail never looks like a list.
                 destinationButton.flex(1, shrink: 1, basis: 0)
+                if !presentation.isRail, let accessory = item.slots.accessory {
+                    Box(direction: .row, alignItems: .center, justifyContent: .center) { accessory }
+                        .frame(width: item.slots.accessoryWidth)
+                        .absolutePosition(top: 0, right: actionsWidth, bottom: 0)
+                        .zIndex(1)
+                        .debugName("sidebar-accessory-\(item.id)")
+                }
                 if !presentation.isRail && !item.contextMenu.isEmpty {
                     actionsMenu
                         .frame(width: 44)
@@ -73,7 +85,9 @@ struct SidebarDestination<ID: Hashable>: View {
                     }
                     if let iconWidth {
                         Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                            if let icon = item.icon {
+                            if let leading = item.slots.leading {
+                                leading.accessibilityHidden()
+                            } else if let icon = item.icon {
                                 Icon(icon, size: item.iconSize).accessibilityHidden()
                             }
                         }.frame(width: iconWidth).flex(0, shrink: 0)
@@ -85,8 +99,12 @@ struct SidebarDestination<ID: Hashable>: View {
                             .flex(0, shrink: 0).accessibilityHidden()
                             .debugName("sidebar-badge-\(item.id)")
                     }
+                    if let trailing = item.slots.trailing {
+                        trailing.flex(0, shrink: 0).accessibilityHidden()
+                            .debugName("sidebar-trailing-\(item.id)")
+                    }
                 }.padding(EdgeInsets(leading: Float(min(entry.ancestors.count, 5)) * 16,
-                                     trailing: item.contextMenu.isEmpty || presentation.isRail ? 0 : 44))
+                                     trailing: trailingReservation))
             }
         }.buttonStyle(SidebarItemStyle(minimumHeight: minimumRowHeight, presentation: presentation))
             .compositionLocal(ActionControlAccessibility.label, presentation.isRail ? contextLabel : item.title)

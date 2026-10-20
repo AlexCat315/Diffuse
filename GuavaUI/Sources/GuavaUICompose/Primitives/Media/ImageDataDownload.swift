@@ -13,9 +13,14 @@ final class ImageDataDownload: NSObject, URLSessionDataDelegate, @unchecked Send
     private var session: URLSession?
     private var task: URLSessionDataTask?
     private var isCancelled = false
-    init(limit: Int) { self.limit = limit }
+    private let progress: (@Sendable (Data) -> Void)?
+    private var reported = 0
+    init(limit: Int, progress: (@Sendable (Data) -> Void)? = nil) { self.limit = limit; self.progress = progress }
 
-    static func load(url: URL, policy: ImageLoadingPolicy) async throws -> Data {
+    /// `progress` receives the bytes received so far, at most once per 64 KiB,
+    /// so progressive formats can show a preview before the download ends.
+    static func load(url: URL, policy: ImageLoadingPolicy,
+                     progress: (@Sendable (Data) -> Void)? = nil) async throws -> Data {
         if url.isFileURL {
             do {
                 let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
@@ -30,7 +35,7 @@ final class ImageDataDownload: NSObject, URLSessionDataDelegate, @unchecked Send
             catch { throw AsyncImageError.fileReadFailed }
         }
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { throw AsyncImageError.unsupportedURL }
-        let download = ImageDataDownload(limit: policy.maximumDownloadBytes)
+        let download = ImageDataDownload(limit: policy.maximumDownloadBytes, progress: progress)
         return try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { download.begin(url: url, timeout: policy.timeout, continuation: $0) }
         }, onCancel: { download.cancel() })
@@ -76,12 +81,16 @@ final class ImageDataDownload: NSObject, URLSessionDataDelegate, @unchecked Send
         completionHandler(.allow)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        var snapshot: Data?
         let oversized = lock.withLock { () -> Bool in
             guard continuation != nil else { return false }
             guard data.count <= limit - self.data.count else { return true }
-            self.data.append(data); return false
+            self.data.append(data)
+            if progress != nil, self.data.count - reported >= 64 * 1_024 { reported = self.data.count; snapshot = self.data }
+            return false
         }
         if oversized { finish(.failure(AsyncImageError.downloadTooLarge)) }
+        else if let snapshot { progress?(snapshot) }
     }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error { finish(.failure(AsyncImageError.networkFailed(error.localizedDescription))) }

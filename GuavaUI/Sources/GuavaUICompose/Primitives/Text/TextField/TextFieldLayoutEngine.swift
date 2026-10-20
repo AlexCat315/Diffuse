@@ -155,8 +155,31 @@ extension TextField {
                                    availableTextWidth: renderCache.key.availableTextWidth,
                                    rawCaret: CaretLocation(x: caret.x, topY: Float(caret.row) * lineHeight))
         }
-        func visibleLayout(from layout: TextLayoutResult, scrollOffsetY: Float, visibleHeight: Float, lineHeight: Float) -> TextLayoutResult {
-            let lines = layout.lines.filter { $0.baselineY + lineHeight >= scrollOffsetY - lineHeight && $0.baselineY - lineHeight <= scrollOffsetY + visibleHeight + lineHeight }
+        /// Rows inside the vertical window. With `visibleX`, a long row keeps only
+        /// glyphs near the horizontal window, so a minified line draws in
+        /// proportion to the viewport rather than its length.
+        func visibleLayout(from layout: TextLayoutResult, scrollOffsetY: Float, visibleHeight: Float, lineHeight: Float,
+                           visibleX: Range<Float>? = nil) -> TextLayoutResult {
+            var lines = layout.lines.filter { $0.baselineY + lineHeight >= scrollOffsetY - lineHeight && $0.baselineY - lineHeight <= scrollOffsetY + visibleHeight + lineHeight }
+            if let visibleX {
+                lines = lines.map { line in
+                    // Bidi rows are not ordered by x; they keep every glyph.
+                    guard line.glyphs.count > 512,
+                          line.glyphs.indices.dropFirst().allSatisfy({ line.glyphs[$0 - 1].x <= line.glyphs[$0].x }) else { return line }
+                    let margin = max(64, visibleX.upperBound - visibleX.lowerBound)
+                    func first(atLeast x: Float) -> Int {
+                        var lower = 0, upper = line.glyphs.count
+                        while lower < upper {
+                            let middle = (lower + upper) / 2
+                            if line.glyphs[middle].x < x { lower = middle + 1 } else { upper = middle }
+                        }
+                        return lower
+                    }
+                    let lower = first(atLeast: visibleX.lowerBound - margin), upper = first(atLeast: visibleX.upperBound + margin)
+                    return TextLine(glyphs: Array(line.glyphs[lower..<max(lower, upper)]), baselineY: line.baselineY, topY: line.topY,
+                                    width: line.width, startCluster: line.startCluster, endCluster: line.endCluster)
+                }
+            }
             return TextLayoutResult(lines: lines, totalWidth: layout.totalWidth, totalHeight: layout.totalHeight)
         }
         func interactiveDocument(in buffer: TextBuffer, node: Node, env: TextEnvironment) -> TextDocumentLayout {

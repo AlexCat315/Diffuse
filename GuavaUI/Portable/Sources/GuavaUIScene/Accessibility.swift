@@ -4,7 +4,7 @@ import Foundation
 public enum AccessibilityRole: String, Sendable, Codable {
     case group, toolbar, button, staticText, heading, textField, checkbox, toggle, slider, radio, tab
     case list, listItem, tree, treeItem, table, row, cell, dialog, status, progress, image, link
-    case scrollArea, comboBox
+    case scrollArea, comboBox, tabList, tabPanel
 }
 
 public struct AccessibilityState: Sendable, Equatable, Codable {

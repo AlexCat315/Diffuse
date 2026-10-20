@@ -28,6 +28,11 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
     @State private var dropBoundary: Int?
     @State private var viewportWidth: Float = 0
     @State private var drag = ReorderDragSession()
+    /// Mounted rows: the viewport plus overscan. Long lists never build
+    /// offscreen rows; the dragged and last keyboard-moved rows stay mounted
+    /// so pointer capture and focus survive auto-scrolling.
+    @State private var window: Range<Int> = 0..<24
+    @State private var retainedID: ID?
 
     public init(_ data: Data,
                 id: KeyPath<Data.Element, ID>,
@@ -67,9 +72,13 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
                 drag.scrollY = Float(viewport.offset.y); drag.viewportHeight = Float(viewport.size.height)
                 let next = Float(viewport.size.width)
                 if abs(next - viewportWidth) > 0.5 { viewportWidth = next }
+                let visible = FixedVirtualStack<[Data.Element], ID, EmptyView>.visibleRange(
+                    count: elements.count, rowStride: rowStride, offset: Float(viewport.offset.y),
+                    height: Float(viewport.size.height), overscan: 4)
+                if visible != window { window = visible }
             }) {
-                Box(direction: .column, alignItems: .stretch, spacing: spacing) {
-                    for index in elements.indices {
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    for index in mountedIndices(elements: elements) {
                         AnyView(row(elements[index], index: index, elements: elements,
                                     height: height, spacing: spacing))
                     }
@@ -125,6 +134,7 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
         .opacity(dragging ? 0.35 : 1)
         .cornerRadius(6)
         .clipped()
+        .absolutePosition(left: 0, top: Float(index) * rowStride, right: 0)
         .id(elementID)
     }
 
@@ -197,7 +207,19 @@ public struct ReorderableList<Data: RandomAccessCollection, ID: Hashable, RowCon
         guard isEnabled, !elements.isEmpty else { return }
         let destination = min(elements.count - 1, max(0, index + delta))
         guard destination != index else { return }
+        retainedID = elements[index][keyPath: id]
         onMove(index, destination)
+    }
+
+    private func mountedIndices(elements: [Data.Element]) -> [Int] {
+        let visible = window.clamped(to: 0..<elements.count)
+        var indices = Array(visible)
+        for retained in [draggingID, retainedID].compactMap({ $0 }) {
+            if let index = elements.firstIndex(where: { $0[keyPath: id] == retained }), !visible.contains(index) {
+                indices.append(index)
+            }
+        }
+        return indices
     }
 
     private func visibleDropBoundary(elements: [Data.Element]) -> Int? {

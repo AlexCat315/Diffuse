@@ -18,14 +18,7 @@ struct RatingGeometry: Equatable {
     }
     /// Direction can be applied after the primitive's update pass, so draw and
     /// input resolve it lazily instead of snapshoting a stale value.
-    func isRTL(_ node: Node) -> Bool {
-        var layout = node.layoutNode
-        while let current = layout {
-            if current.direction != .inherit { return current.direction == .rtl }
-            layout = current.parent
-        }
-        return false
-    }
+    func isRTL(_ node: Node) -> Bool { node.resolvesRightToLeft }
     func starRect(_ index: Int, origin: CGPoint, height: Float, rtl: Bool) -> UIRect {
         let visualIndex = rtl ? maximum - 1 - index : index
         return UIRect(x: Float(origin.x) + 4 + (cellWidth - starSize) / 2 + Float(visualIndex) * stride,

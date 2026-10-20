@@ -112,6 +112,8 @@ public enum ImageDecoder {
         guard valid, width > 0, height > 0, Int64(width) * Int64(height) <= Int64(maximumSourcePixels) else {
             throw ImageDecodeError.decodeFailure("Invalid or oversized image dimensions")
         }
+        // Fit the upright (display) dimensions; the bridge path rotates after decoding.
+        if ImageOrientation.swapsAxes(ImageOrientation.read(data)) { swap(&width, &height) }
         let fit = min(Double(boundingSize.width) / Double(width), Double(boundingSize.height) / Double(height))
         // Vectors have no native bitmap resolution. Rasterize them at the
         // requested display density rather than upscaling a small bitmap.
@@ -131,12 +133,15 @@ public enum ImageDecoder {
                                         label: String,
                                         targetSize: (Int, Int)?) throws -> DecodedImage {
         guard !data.isEmpty else { throw ImageDecodeError.decodeFailure("\(label): empty image data") }
+        // `targetSize` is upright; EXIF-rotated JPEGs decode in storage order.
+        let orientation = ImageOrientation.read(data)
+        let storageTarget = targetSize.map { ImageOrientation.swapsAxes(orientation) ? ($0.1, $0.0) : $0 }
         var result = GuavaImageDecodeResult()
         let ok = data.withUnsafeBytes { rawBuffer -> Bool in
             guard let base = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return false }
             return ext.withCString { extCString in
                 guava_image_decode_memory(base, data.count, extCString,
-                                          Int32(targetSize?.0 ?? 0), Int32(targetSize?.1 ?? 0),
+                                          Int32(storageTarget?.0 ?? 0), Int32(storageTarget?.1 ?? 0),
                                           &result)
             }
         }
@@ -146,9 +151,9 @@ public enum ImageDecoder {
             throw ImageDecodeError.decodeFailure("\(label): \(message)")
         }
         let byteCount = Int(result.width) * Int(result.height) * 4
-        return DecodedImage(pixels: Array(UnsafeBufferPointer(start: pixels, count: byteCount)),
-                            width: Int(result.width),
-                            height: Int(result.height))
+        return ImageOrientation.apply(orientation, to: DecodedImage(pixels: Array(UnsafeBufferPointer(start: pixels, count: byteCount)),
+                                                                    width: Int(result.width),
+                                                                    height: Int(result.height)))
     }
 
     // MARK: - Apple-only formats (PDF / HEIC / TIFF)
@@ -187,7 +192,7 @@ public enum ImageDecoder {
     /// Draw a `CGImage` into a normalized RGBA8 buffer, then un-premultiply so
     /// the bytes match the renderer's straight-alpha blend convention (the
     /// native bridge already returns straight alpha).
-    private static func rasterize(_ cg: CGImage,
+    static func rasterize(_ cg: CGImage,
                                   targetSize: (Int, Int)?) -> DecodedImage {
         let w = targetSize?.0 ?? cg.width
         let h = targetSize?.1 ?? cg.height

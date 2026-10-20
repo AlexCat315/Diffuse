@@ -11,6 +11,7 @@ public struct DateRangePickerPresentation {
 
 public struct DateRangePickerOptions {
     public var calendar = CalendarOptions()
+    public var rules = DateRangeRules()
     public var presentation = DateRangePickerPresentation()
     public init() {}
 }
@@ -29,6 +30,7 @@ public struct DateRangePicker: View {
         configure(&options)
         options.presentation.width = max(160, options.presentation.width)
         options.calendar.presentation.validate()
+        options.rules.validate()
     }
 
     public var body: some View {
@@ -57,7 +59,7 @@ public struct DateRangePicker: View {
             .cornerRadius(.inputRadius)
             .border(.border, width: 1)
         }, content: {
-            DateRangeCalendar(selection: selection) {
+            DateRangeCalendar(selection: selection, rules: options.rules) {
                 $0 = options.calendar
                 $0.presentation.isEnabled = options.presentation.isEnabled
             }
@@ -96,13 +98,17 @@ private struct RangeCalendarSession {
 public struct DateRangeCalendar: View {
     public let selection: Binding<ClosedRange<Date>?>
     public var options = CalendarOptions()
+    public var rules = DateRangeRules()
 
     @State private var session: RangeCalendarSession
     @State private var pendingStart: Date?
 
     public init(selection: Binding<ClosedRange<Date>?>,
+                rules: DateRangeRules = DateRangeRules(),
                 configure: (inout CalendarOptions) -> Void = { _ in }) {
         self.selection = selection
+        self.rules = rules
+        self.rules.validate()
         configure(&options)
         options.presentation.validate()
         options.calendar.firstWeekday = min(7, max(1, options.calendar.firstWeekday))
@@ -118,10 +124,13 @@ public struct DateRangeCalendar: View {
                                surface.input.contains(.touch) ? surface.minimumControlExtent : 0)
             ScrollView(.horizontal, scrollbarGutter: .stable) {
             CalendarKeyHost(onNavigate: navigate) {
-                Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 16) {
-                    for index in 0..<options.presentation.numberOfMonths {
-                        AnyView(monthView(options.calendar.date(byAdding: .month, value: index, to: month) ?? month,
-                                          index: index, cellSize: cellSize))
+                Box(direction: .column, alignItems: .flexStart, spacing: 10) {
+                    if !rules.presets.isEmpty { presetBar }
+                    Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 16) {
+                        for index in 0..<options.presentation.numberOfMonths {
+                            AnyView(monthView(options.calendar.date(byAdding: .month, value: index, to: month) ?? month,
+                                              index: index, cellSize: cellSize))
+                        }
                     }
                 }
             }.accessibility { $0.role = .group; $0.label = "Date range" }
@@ -190,7 +199,7 @@ public struct DateRangeCalendar: View {
                     .background(.stateLayerSelected).cornerRadius(4)
             }
             Button(String(calendar.component(.day, from: day)),
-                   isEnabled: inMonth && isEnabled(day),
+                   isEnabled: inMonth && isSelectable(day),
                    isSelected: isStart || isEnd) {
                 choose(day)
             }
@@ -215,6 +224,7 @@ public struct DateRangeCalendar: View {
         let calendar = options.calendar
         let value = calendar.startOfDay(for: day)
         if let pendingStart {
+            guard rules.canComplete(from: pendingStart, to: value, calendar: calendar) else { return }
             let lower = min(pendingStart, value)
             let upper = max(pendingStart, value)
             selection.wrappedValue = calendar.startOfDay(for: lower)...calendar.startOfDay(for: upper)
@@ -229,6 +239,45 @@ public struct DateRangeCalendar: View {
     private func isEnabled(_ day: Date) -> Bool {
         options.presentation.isEnabled
             && options.availability.contains(day, calendar: options.calendar)
+    }
+
+    /// Availability plus the maximum length measured from a pending start.
+    private func isSelectable(_ day: Date) -> Bool {
+        guard isEnabled(day) else { return false }
+        guard let pendingStart else { return true }
+        return rules.canComplete(from: pendingStart, to: options.calendar.startOfDay(for: day), calendar: options.calendar)
+    }
+
+    private var presetBar: some View {
+        let calendar = options.calendar, today = calendar.startOfDay(for: options.today)
+        return Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 6) {
+            for preset in rules.presets {
+                AnyView(presetButton(preset, range: preset.range(today: today, calendar: calendar)).id(preset.id))
+            }
+        }.accessibility { $0.role = .group; $0.label = "Presets" }
+    }
+
+    private func presetButton(_ preset: DateRangePreset, range: ClosedRange<Date>?) -> some View {
+        let calendar = options.calendar
+        let allowed = range.map { range in
+            rules.allows(range, calendar: calendar)
+                && options.availability.contains(range.lowerBound, calendar: calendar)
+                && options.availability.contains(range.upperBound, calendar: calendar)
+        } ?? false
+        let isCurrent = range != nil && selection.wrappedValue == range && pendingStart == nil
+        return Button(preset.title, isEnabled: options.presentation.isEnabled && allowed, isSelected: isCurrent) {
+            guard let range else { return }
+            applyPreset(range)
+        }
+        .buttonStyle(ToggleButtonStyle()).controlSize(.small)
+        .compositionLocal(ActionControlAccessibility.label, preset.title)
+    }
+
+    private func applyPreset(_ range: ClosedRange<Date>) {
+        pendingStart = nil
+        selection.wrappedValue = range
+        session.focusedDay = range.lowerBound
+        reveal(range.lowerBound)
     }
 
     private func browse(_ value: Int) {

@@ -11,17 +11,20 @@ public struct MenuItem {
     public let isEnabled: Bool
     public let isSelected: Bool
     public let role: MenuItemRole
+    public let content: MenuItemContent
     public let action: () -> Void
     public init<ID: Hashable>(id: ID, title: String, shortcut: String? = nil,
         isEnabled: Bool = true, isSelected: Bool = false, role: MenuItemRole = .normal,
-        action: @escaping () -> Void) {
+        content: MenuItemContent = MenuItemContent(), action: @escaping () -> Void) {
         self.id = AnyHashable(id); self.title = title; self.shortcut = shortcut
-        self.isEnabled = isEnabled; self.isSelected = isSelected; self.role = role; self.action = action
+        self.isEnabled = isEnabled; self.isSelected = isSelected; self.role = role
+        self.content = content; self.action = action
     }
     public init(title: String, shortcut: String? = nil, isEnabled: Bool = true,
-        isSelected: Bool = false, role: MenuItemRole = .normal, action: @escaping () -> Void) {
+        isSelected: Bool = false, role: MenuItemRole = .normal,
+        content: MenuItemContent = MenuItemContent(), action: @escaping () -> Void) {
         self.init(id: title, title: title, shortcut: shortcut, isEnabled: isEnabled,
-                  isSelected: isSelected, role: role, action: action)
+                  isSelected: isSelected, role: role, content: content, action: action)
     }
 }
 
@@ -33,6 +36,7 @@ public struct MenuSubmenu {
     public var entries: [MenuEntry]
     public var isEnabled = true
     public var width: Float = 220
+    public var icon: BundleImageResource?
     public init<ID: Hashable>(id: ID, title: String, entries: [MenuEntry],
                              configure: (inout Self) -> Void = { _ in }) {
         self.id = AnyHashable(id); self.title = title; self.entries = entries
@@ -95,6 +99,8 @@ struct MenuLevelConfiguration {
     var onItemActivated: () -> Void = {}
     var onDismiss: () -> Void = {}
     var onCloseLevel: (() -> Void)?
+    /// Reports this level's panel frame to the parent's pointer intent.
+    var onFrame: ((CGRect) -> Void)?
 }
 
 struct MenuLevel: View {
@@ -108,7 +114,8 @@ struct MenuLevel: View {
         return configuration.entries.first { $0.row?.isEnabled == true && $0.row?.isSelected == true }?.id ?? enabled.first
     }
     var body: some View {
-        MenuLevelHost(hoverIntent: session.hoverIntent, onKey: handleKey, onText: handleText) {
+        MenuLevelHost(hoverIntent: session.hoverIntent, onKey: handleKey, onText: handleText,
+                      onPointer: { session.pointer.record($0) }, onFrame: configuration.onFrame) {
             Box(direction: .column, alignItems: .stretch) {
                 // Overlay, not `stable`: a reserved lane is a right-only inset, so
                 // every row highlight would sit 12pt closer to the left edge than
@@ -129,6 +136,7 @@ struct MenuLevel: View {
     }
     private func rows() -> [AnyView] {
         let selectionColumn = configuration.entries.contains { $0.row?.isSelected == true }
+        let iconColumn = configuration.entries.contains { $0.row?.content.icon != nil }
         return configuration.entries.map { entry in
             guard let row = entry.row else {
                 switch entry {
@@ -145,7 +153,8 @@ struct MenuLevel: View {
                     MenuLevel(configuration: MenuLevelConfiguration(entries: branch.entries, width: branch.width,
                         onItemActivated: { session.navigation.opened = nil; configuration.onItemActivated() },
                         onDismiss: { session.navigation.opened = nil; configuration.onDismiss() },
-                        onCloseLevel: { session.navigation.opened = nil }))
+                        onCloseLevel: { session.navigation.opened = nil },
+                        onFrame: { session.pointer.submenuFrame = $0 }))
                 })
             } else { submenu = nil }
             let events = MenuRowEvents(activate: { node in activate(entry, node: node) },
@@ -153,7 +162,7 @@ struct MenuLevel: View {
                 focus: { if effectiveHighlight != entry.id { session.navigation.highlighted = entry.id } },
                 reveal: reveal, closeSubmenu: { if session.navigation.opened == entry.id { session.navigation.opened = nil } })
             return AnyView(MenuItemRowHost(item: row, isHighlighted: effectiveHighlight == entry.id,
-                showsSelectionColumn: selectionColumn, submenu: submenu, events: events,
+                showsSelectionColumn: selectionColumn, showsIconColumn: iconColumn, submenu: submenu, events: events,
                 revealToken: session.navigation.revealToken).id(entry.id))
         }
     }
@@ -170,11 +179,17 @@ struct MenuLevel: View {
     }
     private func hovered(_ entry: MenuEntry, node: Node, inside: Bool) {
         guard inside else { session.hoverIntent.cancel(id: entry.id); return }
-        session.hoverIntent.schedule(id: entry.id) { [weak node] in
+        // Crossing a sibling on the way into the open submenu waits longer, so
+        // a diagonal path does not swap the branch out from under the pointer.
+        let opened = session.navigation.opened
+        let crossing = opened != nil && opened != entry.id && session.pointer.isHeadingToSubmenu
+        session.hoverIntent.schedule(id: entry.id, delay: crossing ? 0.45 : 0.18) { [weak node] in
             guard let node, node.acceptsSubtreeInput else { return }
             session.navigation.highlighted = entry.id
             FocusChainHolder.current?.focus(node, visible: false)
-            session.navigation.opened = entry.row?.hasSubmenu == true ? entry.id : nil
+            let next = entry.row?.hasSubmenu == true ? entry.id : nil
+            if next != session.navigation.opened { session.pointer.submenuFrame = nil }
+            session.navigation.opened = next
         }
     }
     private func handleKey(_ event: KeyEvent, root: Node) -> Bool {

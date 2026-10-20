@@ -40,6 +40,11 @@ struct RichTextStory: View {
             StorySection("Mixed scripts", "Ideographs break between characters with the usual punctuation rules; Latin words still break at spaces.") {
                 RichText(Self.mixedScript) { lastOpened = $0 }
             }
+            StorySection("Right-to-left paragraphs", "Each paragraph takes its direction from its first strong character: Hebrew and Arabic lines align to the trailing edge, embedded Latin words and numbers keep their own order.") {
+                RichText([RichTextRun("שלום "), RichTextRun("GuavaUI", traits: .bold), RichTextRun(" — גרסה 2.0 זמינה עכשיו.")])
+                RichText([RichTextRun("مرحبا بالعالم: "), RichTextRun("RichText", traits: .code), RichTextRun(" يدعم 123 رقمًا.")])
+                RichText([RichTextRun("An English line that mentions "), RichTextRun("עברית", traits: .italic), RichTextRun(" stays left aligned.")])
+            }
             StorySection("Type roles", "The paragraph takes the surrounding text style and foreground, scaled once by TextScaler.") {
                 RichText([RichTextRun("A "), RichTextRun("headline", traits: .italic), RichTextRun(" paragraph")])
                     .font(.headline)

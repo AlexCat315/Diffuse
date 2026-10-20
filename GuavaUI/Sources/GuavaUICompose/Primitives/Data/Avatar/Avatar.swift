@@ -27,6 +27,10 @@ public struct AvatarAppearance {
     public var colors: AvatarColors?
     public var placeholder = UIIcons.User.user
     public var retryID = 0
+    /// Presence corner indicator; `nil` draws none.
+    public var status: AvatarStatus?
+    /// Overrides the status name read by assistive technology and the member list.
+    public var statusLabel: String?
     public init() {}
     mutating func validate() {
         if let diameter { self.diameter = diameter.isFinite ? max(12, min(512, diameter)) : nil }
@@ -57,6 +61,8 @@ public struct Avatar: _PrimitiveView {
         configure(&appearance); appearance.validate()
     }
     public var initials: String { AvatarIdentity.initials(name) }
+    /// Resolved presence name, empty without a status.
+    public var statusText: String { appearance.status.map { appearance.statusLabel ?? $0.label } ?? "" }
     public func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
     public func _updateNode(_ node: Node) {
@@ -65,7 +71,7 @@ public struct Avatar: _PrimitiveView {
         node.backgroundColor = appearance.colors?.border ?? (imageURL == nil ? colors.border : node.theme.colors.border)
         node.cornerRadius = appearance.shape.radius(for: diameter)
         node.accessibility = AccessibilitySemantics(.image) {
-            $0.label = name.isEmpty ? "Anonymous user" : name; $0.combinesChildren = true
+            $0.label = name.isEmpty ? "Anonymous user" : name; $0.value = statusText; $0.combinesChildren = true
         }
         node.attachments["avatar.initials"] = initials
         node.layoutNode?.width = diameter; node.layoutNode?.height = diameter
@@ -79,13 +85,16 @@ public struct Avatar: _PrimitiveView {
         let radius = max(0, appearance.shape.radius(for: diameter) - border)
         let fallback = AnyView(AvatarFallback(initials: initials, diameter: inner, radius: radius,
                                                colors: resolvedColors(in: node), icon: appearance.placeholder))
-        guard let imageURL else { return [fallback.accessibilityHidden()] }
+        let status: [any View] = appearance.status.map {
+            [AvatarStatusIndicator(status: $0, geometry: AvatarStatusGeometry(diameter: diameter, shape: appearance.shape))]
+        } ?? []
+        guard let imageURL else { return [fallback.accessibilityHidden()] + status }
         return [AsyncImage(url: imageURL, width: inner, height: inner, contentMode: .fill, retryID: appearance.retryID) { phase in
             switch phase {
             case .success(let image): AnyView(image.cornerRadius(radius))
             case .empty, .loading, .failure: fallback
             }
-        }.accessibilityHidden()]
+        }.accessibilityHidden()] + status
     }
     private func resolvedColors(in node: Node) -> AvatarColors {
         if let colors = appearance.colors { return colors }

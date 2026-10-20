@@ -9,6 +9,8 @@ public struct AvatarGroupOptions {
     public var size: ControlSize?
     public var diameter: Float?
     public var label = "Members"
+    /// Makes the overflow marker open a member list; `nil` keeps it static.
+    public var memberList: AvatarMemberList?
     public init() {}
     mutating func validate() {
         limit = max(0, limit)
@@ -49,8 +51,15 @@ public struct AvatarGroup: _PrimitiveView {
             let marker = AvatarOverflowMarker(text: text, diameter: geometry.diameter, count: remaining,
                                               names: names, colors: AvatarColors(background: node.theme.colors.surfaceVariant,
                                                  foreground: node.theme.colors.onSurfaceVariant, border: node.theme.colors.border))
+            let content: AnyView
+            if let list = options.memberList {
+                let members = list.scope == .all ? avatars : Array(avatars.dropFirst(geometry.visibleCount))
+                content = AnyView(AvatarMemberListTrigger(marker: marker.interactive(), members: members, list: list))
+            } else {
+                content = AnyView(marker)
+            }
             children.append(AvatarGroupSlot(x: geometry.overflowX, diameter: geometry.diameter, zIndex: 0,
-                                            content: AnyView(marker)).id("avatar.overflow"))
+                                            content: content).id("avatar.overflow"))
         }
         return children
     }
@@ -98,19 +107,27 @@ private struct AvatarGroupSlot: _PrimitiveView {
     }
     var _children: [any View] { [content] }
 }
-private struct AvatarOverflowMarker: View {
+struct AvatarOverflowMarker: View {
     let text: String
     let diameter: Float
     let count: Int
     let names: String
     let colors: AvatarColors
+    /// Inside a trigger the button owns the semantics and tooltip.
+    var isInteractive = false
+    var accessibilityLabel: String { "\(count) more members" }
+    func interactive() -> Self { var copy = self; copy.isInteractive = true; return copy }
     var body: some View {
+        if isInteractive { return AnyView(face.accessibilityHidden()) }
+        return AnyView(face
+            .accessibility { $0.role = .image; $0.label = accessibilityLabel; $0.help = names; $0.combinesChildren = true }
+            .tooltip(names.isEmpty ? accessibilityLabel : names))
+    }
+    private var face: some View {
         Box(direction: .row, alignItems: .center, justifyContent: .center) {
             Text(text, lineLimit: 1).font(.system(size: min(diameter * 0.36, diameter / Float(max(2, text.count)) * 1.15)))
                 .foregroundColor(colors.foreground)
         }.frame(width: diameter, height: diameter).background(colors.background).cornerRadius(diameter / 2)
             .border(colors.border, width: 1)
-            .accessibility { $0.role = .image; $0.label = "\(count) more members"; $0.help = names; $0.combinesChildren = true }
-            .tooltip(names.isEmpty ? "\(count) more members" : names)
     }
 }

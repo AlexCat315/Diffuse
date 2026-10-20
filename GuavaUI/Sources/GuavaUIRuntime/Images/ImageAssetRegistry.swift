@@ -22,11 +22,37 @@ public final class ImageAssetRegistry: @unchecked Sendable {
         public static func == (lhs: Asset, rhs: Asset) -> Bool { lhs === rhs }
     }
 
+    /// Cache budget. Least recently used entries are released once either bound
+    /// is exceeded; retained nodes and in-flight frames keep their own assets.
+    public struct Limits: Sendable, Equatable {
+        public var maximumBytes: Int
+        public var maximumCount: Int
+        public init(maximumBytes: Int = 256 * 1_024 * 1_024, maximumCount: Int = 2_048) {
+            self.maximumBytes = max(0, maximumBytes); self.maximumCount = max(0, maximumCount)
+        }
+    }
+
+    private struct Entry {
+        let asset: Asset
+        var lastUse: UInt64
+        var bytes: Int { asset.image.pixels.count }
+    }
+
     private let lock = NSLock()
-    private var cache: [String: Asset] = [:]
+    private var cache: [String: Entry] = [:]
     private var generation: UInt64 = 0
-    public init() {}
+    private var clock: UInt64 = 0
+    private var totalBytes = 0
+    private var budget: Limits
+    public init(limits: Limits = Limits()) { budget = limits }
     public var revision: UInt64 { lock.withLock { generation } }
+    public var limits: Limits {
+        get { lock.withLock { budget } }
+        set { lock.withLock { budget = newValue; evictIfNeeded() } }
+    }
+    /// Bytes of CPU pixels currently owned by the cache.
+    public var cachedBytes: Int { lock.withLock { totalBytes } }
+    public var cachedCount: Int { lock.withLock { cache.count } }
 
     // MARK: - Lookup
 
@@ -34,7 +60,9 @@ public final class ImageAssetRegistry: @unchecked Sendable {
     /// registered yet. Cheap; safe to call every frame.
     public func cached(_ key: String) -> Asset? {
         lock.lock(); defer { lock.unlock() }
-        return cache[key]
+        guard var entry = cache[key] else { return nil }
+        clock &+= 1; entry.lastUse = clock; cache[key] = entry
+        return entry.asset
     }
 
     // MARK: - Register from disk
@@ -66,9 +94,12 @@ public final class ImageAssetRegistry: @unchecked Sendable {
     @discardableResult
     public func register(key: String, decoded: DecodedImage) throws -> Asset {
         try lock.withLock {
-            if let hit = cache[key] { return hit }
+            clock &+= 1
+            if var hit = cache[key] { hit.lastUse = clock; cache[key] = hit; return hit.asset }
             let asset = try Asset(image: decoded)
-            cache[key] = asset
+            cache[key] = Entry(asset: asset, lastUse: clock)
+            totalBytes += asset.image.pixels.count
+            evictIfNeeded(keeping: key)
             return asset
         }
     }
@@ -78,7 +109,19 @@ public final class ImageAssetRegistry: @unchecked Sendable {
     /// Release cache ownership. Geometry and snapshots retain their own assets;
     /// GPU residency is reclaimed when those references expire.
     public func clear() {
-        lock.withLock { cache.removeAll(); generation &+= 1 }
+        lock.withLock { cache.removeAll(); totalBytes = 0; generation &+= 1 }
+    }
+
+    /// Called under the lock. The newest entry survives even when it alone
+    /// exceeds the budget, so a request never evicts its own result.
+    private func evictIfNeeded(keeping key: String? = nil) {
+        guard totalBytes > budget.maximumBytes || cache.count > budget.maximumCount else { return }
+        let order = cache.filter { $0.key != key }.sorted { $0.value.lastUse < $1.value.lastUse }
+        for (candidate, entry) in order {
+            guard totalBytes > budget.maximumBytes || cache.count > budget.maximumCount else { break }
+            cache.removeValue(forKey: candidate)
+            totalBytes -= entry.bytes
+        }
     }
 
     // MARK: - Key composition

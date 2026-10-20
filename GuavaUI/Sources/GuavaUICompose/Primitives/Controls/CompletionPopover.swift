@@ -24,6 +24,8 @@ public struct TextCompletionItem: Sendable, Equatable, Identifiable {
     public var filterText: String?
     public var replacement: Range<Int>?
     public var additionalEdits: [TextCompletionEdit] = []
+    /// `.snippet` expands tab stops; Tab and Shift+Tab then visit them.
+    public var insertTextFormat: TextInsertFormat = .plainText
     public init(id: String, label: String, insertText: String) {
         self.id = id; self.label = label; self.insertText = insertText
     }
@@ -177,7 +179,9 @@ final class TextCompletionSession: NodeResource, AnyAnimationController, @unchec
         guard let field, let state, let request, field.text.wrappedValue == request.buffer else { dismiss(); return }
         let range = item.replacement ?? request.prefixRange
         guard range.lowerBound >= 0, range.upperBound <= request.buffer.characterCount else { dismiss(); return }
-        let edits = (item.additionalEdits + [TextCompletionEdit(range: range, text: item.insertText)])
+        let snippet = item.insertTextFormat == .snippet ? TextSnippet(item.insertText) : nil
+        let insertText = snippet?.text ?? item.insertText
+        let edits = (item.additionalEdits + [TextCompletionEdit(range: range, text: insertText)])
             .sorted { $0.range.lowerBound < $1.range.lowerBound }
         for index in edits.indices {
             let edit = edits[index]
@@ -190,7 +194,7 @@ final class TextCompletionSession: NodeResource, AnyAnimationController, @unchec
         let beforeCaret = item.additionalEdits.filter { $0.range.upperBound <= range.lowerBound }
             .reduce(0) { $0 + $1.text.utf8.count - (request.buffer.utf8Offset(forCharacterIndex: $1.range.upperBound)
                                                    - request.buffer.utf8Offset(forCharacterIndex: $1.range.lowerBound)) }
-        let caretByte = request.buffer.utf8Offset(forCharacterIndex: range.lowerBound) + item.insertText.utf8.count + beforeCaret
+        let caretByte = request.buffer.utf8Offset(forCharacterIndex: range.lowerBound) + insertText.utf8.count + beforeCaret
         for edit in edits.reversed() { next = next.replace(characterRange: edit.range, with: edit.text) }
         if let maximum = field.behavior.maxLength, next.characterCount > maximum { dismiss(); return }
         dismiss()
@@ -198,6 +202,11 @@ final class TextCompletionSession: NodeResource, AnyAnimationController, @unchec
         defer { field.endEdit(state) }
         field.text.wrappedValue = next; state.clearComposition()
         state.selection.anchor = nil; state.selection.cursorIndex = next.characterIndex(forUTF8Offset: caretByte)
+        if let snippet, let session = node?.firstResource(TextSnippetSession.self),
+           let stop = session.start(snippet, at: next.characterIndex(forUTF8Offset: caretByte - insertText.utf8.count), in: next) {
+            state.selection.anchor = stop.isEmpty ? nil : stop.lowerBound
+            state.selection.cursorIndex = stop.upperBound
+        }
         field.recordCaretActivity(state); field.events.onChange?(next)
         dismiss()
         field.codeEditing.onAcceptCompletion?(item)

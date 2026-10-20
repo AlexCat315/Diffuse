@@ -32,6 +32,20 @@ struct ToolbarStory: View {
                 Spacer()
                 Button("Apply") { appliedSearch = search.isEmpty ? "None" : search.stringValue }
             }
+            Row(alignment: .top, spacing: 16) {
+                Toolbar(configure: { $0.axis = .vertical; $0.divider = .trailing; $0.isEnabled = options.isEnabled; $0.label = "Tools" }) {
+                    Button(icon: .resource(UIIcons.Editor.play), isSelected: isPlaying, tooltip: "Play", action: { isPlaying = true })
+                    Button(icon: .resource(UIIcons.Editor.stop), isSelected: !isPlaying, tooltip: "Stop", action: { isPlaying = false })
+                    ToolbarSeparator()
+                    AnyView(formatting)
+                }.frame(height: 220)
+                Toolbar(items: (1...8).map { index in
+                    ToolbarItem(MenuItem(id: "tool\(index)", title: "Tool \(index)") { appliedSearch = "Tool \(index)" },
+                                icon: .resource(UIIcons.Action.plus), placement: index == 1 ? .always : .automatic(priority: -index))
+                }, configure: { $0.axis = .vertical; $0.isEnabled = options.isEnabled; $0.label = "Vertical commands" }).frame(height: 180)
+                Text("Vertical bars use Up/Down and Home/End; commands overflow by height into a menu beside the bar.")
+                    .font(.caption).foregroundColor(.onSurfaceMuted).flex(1, shrink: 1).frame(minWidth: 0)
+            }
             Text(isPlaying ? "Playback running" : "Playback stopped").font(.caption).foregroundColor(.onSurfaceMuted)
             Text("Zoom: \(zoomPercent)% · Applied filter: \(appliedSearch)").font(.caption).foregroundColor(.onSurfaceMuted)
         }

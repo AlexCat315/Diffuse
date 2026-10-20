@@ -177,6 +177,8 @@ private extension AccessibilityRole {
         case .slider: return .slider
         case .radio: return .radioButton
         case .tab: return .radioButton
+        case .tabList: return .tabGroup
+        case .tabPanel: return .group
         case .list: return .list
         case .tree: return .outline
         case .table: return .table

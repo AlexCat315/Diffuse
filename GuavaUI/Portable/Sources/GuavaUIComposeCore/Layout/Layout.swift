@@ -25,11 +25,18 @@ public struct LayoutSubview {
     /// The owning container's logical direction. A child may override its
     /// own content direction without changing the container's placement.
     public let layoutDirection: Direction
+    private let value: (String) -> Any?
 
     init(_ node: LayoutNode) {
         layoutDirection = node.parent?.customLayoutDirection ?? node.customLayoutDirection
+        value = { node.attachments[$0] }
         measure = { node.measureForCustomLayout(width: $0.width, height: $0.height) }
         place = { node.placeForCustomLayout(at: $0, width: $1.width, height: $1.height, isVisible: $2) }
+    }
+
+    /// The value the child declared with `.layoutValue(key:value:)`.
+    public subscript<K: LayoutValueKey>(key: K.Type) -> K.Value {
+        value(LayoutValueStorage.key(K.self)) as? K.Value ?? K.defaultValue
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize) -> CGSize { measure(proposal) }

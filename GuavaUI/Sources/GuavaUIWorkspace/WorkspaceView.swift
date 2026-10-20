@@ -755,6 +755,7 @@ struct _WorkspaceTabGroupView: View {
                     .frame(minWidth: 0, minHeight: 0)
                     .clipped()
                     .semanticRole("workspace.panel.content")
+                    .accessibility { $0.role = .tabPanel; $0.label = document.panels[activeID]?.title ?? activeID.rawValue }
                     .debugName("workspace-panel-\(activeID.rawValue)")
             } else {
                 EmptyView()
@@ -798,6 +799,7 @@ private struct _WorkspaceTabBar: View {
             ScrollView(.horizontal) {
                 Row(alignment: .center, spacing: 0) { tabButtons }
                     .flex(0, shrink: 0)
+                    .accessibility { $0.role = .tabList; $0.label = "Panel tabs"; $0.value = activeTitle }
             }
             .flex(1, shrink: 1, basis: 0)
             .frame(height: .percent(100), minWidth: 0)
@@ -841,7 +843,11 @@ private struct _WorkspaceTabBar: View {
         .background(.surface)
         .modifier(_WorkspaceTabBarHeight())
         .layoutRole("workspace-tab-bar")
-        .accessibility { $0.role = .group; $0.label = "Panel tabs" }
+        .accessibility { $0.role = .group; $0.label = "Panel tab bar" }
+    }
+
+    private var activeTitle: String {
+        (group.activePanelID ?? group.panels.first).flatMap { document.panels[$0]?.title } ?? ""
     }
 }
 
@@ -960,8 +966,13 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         node.cursor = .pointer
         node.isTabStop = isActive
         updateWorkspaceTabReveal(node, groupID: groupID, isActive: isActive)
+        let position = controller.document.groups[groupID].flatMap { $0.panels.firstIndex(of: panelID) }
+        let count = controller.document.groups[groupID]?.panels.count ?? 1
         node.accessibility = AccessibilitySemantics(.tab) {
             $0.label = title
+            $0.value = isPinned ? "Pinned" : ""
+            $0.help = position.map { "Tab \($0 + 1) of \(count)" } ?? ""
+            $0.identifier = panelID.rawValue
             $0.state.isSelected = isActive
             $0.combinesChildren = true
         }
@@ -985,7 +996,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
             guard phase == .target, event.modifiers.isDisjoint(with: [.ctrl, .gui, .alt]) else { return .ignored }
             if event.scancode == Scancode.return || event.scancode == Scancode.space { click(); return .handled }
             guard [Scancode.arrowLeft, Scancode.arrowRight, Scancode.home, Scancode.end].contains(event.scancode),
-                  let command = SelectionNavigation.command(for: event.scancode),
+                  let command = workspaceTabCommand(for: event.scancode, rightToLeft: node.resolvesRightToLeft),
                   let group = controller.document.groups[groupID],
                   let target = command.destination(in: group.panels, from: panelID) else { return .ignored }
             _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: target))
@@ -2127,4 +2138,16 @@ private enum WorkspaceIcons {
     static let pinDot = BundleImageResource.svg(named: "pin-dot",
                                                 in: GuavaUIWorkspaceResourceBundle.bundle,
                                                 subdirectory: "WorkspaceIcons")
+}
+
+/// Arrow keys follow the visual strip: in right-to-left layouts the tab after
+/// the active one sits to its left, so Left moves forward.
+func workspaceTabCommand(for scancode: UInt32, rightToLeft: Bool) -> SelectionNavigation? {
+    switch scancode {
+    case Scancode.arrowLeft: rightToLeft ? .next : .previous
+    case Scancode.arrowRight: rightToLeft ? .previous : .next
+    case Scancode.home: .first
+    case Scancode.end: .last
+    default: nil
+    }
 }

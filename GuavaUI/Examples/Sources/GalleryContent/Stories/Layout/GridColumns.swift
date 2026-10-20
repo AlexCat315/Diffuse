@@ -11,6 +11,9 @@ struct GridColumnExamples: View {
 
 struct GridColumnSample: View {
     let options: GalleryOptions
+    private func spanCell(_ title: String) -> some View {
+        Text(title).font(.caption).padding(10).frame(width: .percent(100)).background(.surfaceVariant).cornerRadius(6)
+    }
     @State private var choices: [String: Bool] = [:]
     @State private var status = "No asset opened"
     var body: some View {
@@ -30,6 +33,13 @@ struct GridColumnSample: View {
                 Text("Published").font(.body).foregroundColor(.onSurfaceMuted)
             }
             Text(status).font(.caption).foregroundColor(.onSurfaceMuted).debugName("grid-action-result")
+            Grid(columns: [.flexible(), .flexible(), .flexible()], columnSpacing: 8, rowSpacing: 8) {
+                spanCell("Header · 3 columns").gridCellSpan(columns: 3)
+                spanCell("Sidebar · 2 rows").gridCellSpan(rows: 2)
+                spanCell("Wide · 2 columns").gridCellSpan(columns: 2)
+                spanCell("A")
+                spanCell("B")
+            }.debugName("grid-span-sample")
         }
     }
 }

@@ -91,6 +91,10 @@ public struct TextLayout {
         }
 
         let utf8 = Array(text.utf8)
+        // Right-to-left text wraps in logical order, then each line is reordered
+        // visually (UAX #9 L1/L2). Left-to-right text skips this entirely.
+        let bidi: BidiParagraphs? = BidiParagraphs.containsRightToLeft(text) ? BidiParagraphs(text) : nil
+        let shapedGlyphs = bidi.map { logicalOrder(shapedGlyphs, bidi: $0) } ?? shapedGlyphs
         var lineBreaks: [UInt32: UInt32] = [:], sourceOffset: UInt32 = 0
         for character in text {
             let length = UInt32(character.utf8.count)
@@ -127,7 +131,8 @@ public struct TextLayout {
                     endCluster: glyph.cluster,
                     maxWidth: maxWidth,
                     alignment: alignment,
-                    letterSpacing: spacing
+                    letterSpacing: spacing,
+                    bidi: bidi
                 )
                 lines.append(line)
                 currentLineGlyphs = []
@@ -171,7 +176,7 @@ public struct TextLayout {
                         endCluster: nextLineStartCluster,
                         maxWidth: maxWidth,
                         alignment: alignment,
-                        letterSpacing: spacing
+                        letterSpacing: spacing, bidi: bidi
                     )
                     lines.append(line)
 
@@ -194,7 +199,7 @@ public struct TextLayout {
                         endCluster: nextLineStartCluster,
                         maxWidth: maxWidth,
                         alignment: alignment,
-                        letterSpacing: spacing
+                        letterSpacing: spacing, bidi: bidi
                     )
                     lines.append(line)
                     currentLineGlyphs = []
@@ -223,7 +228,7 @@ public struct TextLayout {
                 endCluster: UInt32(text.utf8.count),
                 maxWidth: maxWidth,
                 alignment: alignment,
-                letterSpacing: spacing
+                letterSpacing: spacing, bidi: bidi
             )
             lines.append(line)
         }
@@ -244,8 +249,11 @@ public struct TextLayout {
         endCluster: UInt32,
         maxWidth: Float,
         alignment: TextAlignment,
-        letterSpacing: Float
+        letterSpacing: Float,
+        bidi: BidiParagraphs? = nil
     ) -> TextLine {
+        let glyphs = bidi.map { visualOrder(glyphs, bidi: $0) } ?? glyphs
+        let rightToLeft = bidi?.paragraph(atByte: Int(startCluster)).isRightToLeft == true
         var positioned: [PositionedGlyph] = []
         positioned.reserveCapacity(glyphs.count)
 
@@ -271,9 +279,9 @@ public struct TextLayout {
         // Apply alignment offset
         let offset: Float
         switch alignment {
-        case .leading: offset = 0
+        case .leading: offset = rightToLeft ? maxWidth - lineWidth : 0
         case .center:  offset = (maxWidth - lineWidth) / 2
-        case .trailing: offset = maxWidth - lineWidth
+        case .trailing: offset = rightToLeft ? 0 : maxWidth - lineWidth
         }
 
         if offset != 0 && offset.isFinite {
@@ -295,6 +303,31 @@ public struct TextLayout {
                         width: lineWidth,
                         startCluster: startCluster,
                         endCluster: endCluster)
+    }
+
+    /// HarfBuzz emits right-to-left runs in visual order. Sorting by cluster
+    /// (reversing equal clusters inside odd levels) restores logical order so
+    /// wrapping sees the text as written; L2 later restores the run's order.
+    static func logicalOrder(_ glyphs: [ShapedGlyph], bidi: BidiParagraphs) -> [ShapedGlyph] {
+        glyphs.enumerated().sorted { lhs, rhs in
+            if lhs.element.cluster != rhs.element.cluster { return lhs.element.cluster < rhs.element.cluster }
+            let odd = bidi.level(atByte: Int(lhs.element.cluster)) & 1 == 1
+            return odd ? lhs.offset > rhs.offset : lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
+    /// L1 resets trailing whitespace to the paragraph level, then L2 reverses
+    /// runs from the highest level down to the lowest odd level.
+    static func visualOrder<Extra>(_ glyphs: [(ShapedGlyph, Extra)], bidi: BidiParagraphs) -> [(ShapedGlyph, Extra)] {
+        guard let first = glyphs.first else { return glyphs }
+        let base = bidi.paragraph(atByte: Int(first.0.cluster)).baseLevel
+        var levels = glyphs.map { bidi.level(atByte: Int($0.0.cluster)) }
+        var index = glyphs.count - 1
+        while index >= 0, bidi.isTrailingWhitespace(atByte: Int(glyphs[index].0.cluster)) {
+            levels[index] = base; index -= 1
+        }
+        guard levels.contains(where: { $0 != 0 }) else { return glyphs }
+        return BidiParagraphs.visualOrder(levels).map { glyphs[$0] }
     }
 
     private static func width(of glyphs: [(ShapedGlyph, GlyphMetrics?)], letterSpacing: Float) -> Float {

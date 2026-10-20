@@ -153,6 +153,7 @@ public struct TextField: View {
     func _makeNode() -> Node {
         let n = Node()
         n.addResource(TextCompletionSession())
+        n.addResource(TextSnippetSession())
         n.isHitTestable = true
         n.isFocusable = true
         n.clipsToBounds = true
@@ -406,6 +407,16 @@ public struct TextField: View {
         // re-anchor stale indices before any String.index arithmetic.
         normalizeIndices(state)
         if !behavior.readOnly, node.firstResource(TextCompletionSession.self)?.handleKey(event) == true { return true }
+        if !behavior.readOnly, let snippet = node.firstResource(TextSnippetSession.self),
+           let command = snippet.command(for: event, buffer: text.wrappedValue) {
+            if let stop = command {
+                state.selection.anchor = stop.isEmpty ? nil : stop.lowerBound
+                state.selection.cursorIndex = stop.upperBound
+                state.selection.preferredCaretX = nil
+                recordCaretActivity(state)
+            }
+            return true
+        }
         if event.scancode == Scancode.f1, event.modifiers.isEmpty, let request = codeEditing.onRequestHover,
            let area = committedTextInputArea(node: node, state: state, absoluteOrigin: node.absoluteFrame.origin, isFocused: true) {
             request(TextFieldHoverAnchor(characterIndex: state.selection.cursorIndex, windowX: area.x, windowY: area.y + area.height))
@@ -770,7 +781,8 @@ public struct TextField: View {
         let visibleLayout = engine.visibleLayout(from: renderCache.layout,
                                                  scrollOffsetY: state.scroll.offsetY,
                                                  visibleHeight: state.scroll.visibleHeight,
-                                                 lineHeight: resolvedLineHeight)
+                                                 lineHeight: resolvedLineHeight,
+                                                 visibleX: state.scroll.horizontal.offset..<(state.scroll.horizontal.offset + viewport.availableTextWidth))
         let fixedTextOriginX = textOriginX + state.scroll.horizontal.offset
         updateGutterControls(visibleLayout, source: current, textOriginX: fixedTextOriginX,
                              textOriginY: textOriginY, origin: origin, lineHeight: resolvedLineHeight,

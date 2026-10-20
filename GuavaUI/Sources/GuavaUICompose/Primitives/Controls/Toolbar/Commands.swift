@@ -31,7 +31,7 @@ public extension Toolbar where Content == AnyView {
         var options = ToolbarOptions()
         configure(&options)
         self.init(configure: { $0 = options }) {
-            AnyView(ToolbarCommands(items: items, isEnabled: options.isEnabled))
+            AnyView(ToolbarCommands(items: items, isEnabled: options.isEnabled, axis: options.axis))
         }
     }
 }
@@ -48,15 +48,17 @@ struct ToolbarCommands: View {
     var availableWidth: CGFloat?
     var presentation = ToolbarCommandPresentation()
     var onContentWidth: ((CGFloat) -> Void)?
+    var axis: ToolbarAxis = .horizontal
     @State private var overflow: Set<AnyHashable> = []
     @State private var isPresented = false
     @State private var overflowHovered = false
     @State private var focus = ToolbarOverflowFocus()
 
     init(items: [ToolbarItem], isEnabled: Bool, availableWidth: CGFloat? = nil,
-         presentation: ToolbarCommandPresentation = .init(), onContentWidth: ((CGFloat) -> Void)? = nil) {
+         presentation: ToolbarCommandPresentation = .init(), onContentWidth: ((CGFloat) -> Void)? = nil,
+         axis: ToolbarAxis = .horizontal) {
         self.items = items; self.isEnabled = isEnabled; self.availableWidth = availableWidth
-        self.presentation = presentation; self.onContentWidth = onContentWidth
+        self.presentation = presentation; self.onContentWidth = onContentWidth; self.axis = axis
     }
 
     var body: some View {
@@ -66,8 +68,9 @@ struct ToolbarCommands: View {
         }
         return ThemeReader { theme in
             ContainerSizeReader { size in
-                ScrollView(.horizontal, scrollbarGutter: .overlay) {
-                    ToolbarOverflowLayout(availableWidth: availableWidth ?? size.width,
+                let vertical = axis == .vertical
+                return ScrollView(vertical ? .vertical : .horizontal, scrollbarGutter: .overlay) {
+                    ToolbarOverflowLayout(availableExtent: availableWidth ?? (vertical ? size.height : size.width),
                         placements: items.map(\.placement), spacing: CGFloat(theme.spacing.xs),
                         onOverflow: { indices in
                             let next = Set(indices.map { items[$0].command.id })
@@ -78,17 +81,18 @@ struct ToolbarCommands: View {
                                 overflow = next
                                 isPresented = false
                             }
-                        }, onContentWidth: onContentWidth, fitsContent: availableWidth != nil) {
+                        }, onContentExtent: onContentWidth, fitsContent: availableWidth != nil, axis: axis) {
                         items.map { item in
                             ToolbarRetainedCommand(isVisible: !overflow.contains(item.command.id), focus: focus) {
                                 command(item).frame(minWidth: presentation.minimumExtent, minHeight: presentation.minimumExtent)
                             }.id(item.command.id)
                         }
                         ToolbarRetainedCommand(isVisible: !overflow.isEmpty, focus: focus, isOverflow: true) {
-                            Popover(isPresented: $isPresented, isEnabled: isEnabled, placement: .bottomTrailing, surface: .content, overflow: .flip) {
-                                if presentation.usesOverflowIcon {
+                            Popover(isPresented: $isPresented, isEnabled: isEnabled, placement: vertical ? .trailingBottom : .bottomTrailing,
+                                    surface: .content, overflow: .flip) {
+                                if presentation.usesOverflowIcon || vertical {
                                     Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                                        Icon(UIIcons.Action.moreHorizontal, size: 20).iconScaling(.fixed).flex(0, shrink: 0)
+                                        Icon(vertical ? UIIcons.Action.moreVertical : UIIcons.Action.moreHorizontal, size: 20).iconScaling(.fixed).flex(0, shrink: 0)
                                     }.frame(minWidth: presentation.minimumExtent, minHeight: presentation.minimumExtent)
                                         .background(!isEnabled ? .clear : isPresented ? theme.colors.stateLayerSelected : overflowHovered ? theme.colors.stateLayerHover : .clear)
                                         .cornerRadius(theme.inputs.radius)
@@ -108,6 +112,8 @@ struct ToolbarCommands: View {
                     }
                 }
             }
+            // The probe fills only the width by default; a vertical bar measures height.
+            .frame(height: axis == .vertical ? .percent(100) : nil, minHeight: axis == .vertical ? 0 : nil)
         }
     }
 

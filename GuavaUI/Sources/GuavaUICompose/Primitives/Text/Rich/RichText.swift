@@ -22,6 +22,9 @@ public struct RichText: View {
     private let alignment: TextAlignment
     private let onOpenLink: ((String) -> Void)?
     var role = RichTextRole.paragraph
+    /// Display-only paragraphs (menu rows) neither select nor take focus, so
+    /// the enclosing control keeps every click.
+    var isSelectable = true
 
     public init(_ runs: [RichTextRun],
                 alignment: TextAlignment = .leading,
@@ -35,8 +38,10 @@ public struct RichText: View {
         self.init([RichTextRun(text)], alignment: alignment)
     }
 
+    func displayOnly() -> Self { var copy = self; copy.isSelectable = false; return copy }
+
     public var body: some View {
-        RichTextReader(runs: runs, alignment: alignment, role: role, onOpenLink: onOpenLink)
+        RichTextReader(runs: runs, alignment: alignment, role: role, onOpenLink: onOpenLink, isSelectable: isSelectable)
     }
 }
 
@@ -137,6 +142,7 @@ private struct RichTextReader: _PrimitiveView {
     let alignment: TextAlignment
     let role: RichTextRole
     let onOpenLink: ((String) -> Void)?
+    let isSelectable: Bool
 
     func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
     func _updateNode(_ node: Node) {}
@@ -150,6 +156,7 @@ private struct RichTextReader: _PrimitiveView {
                 RichTextLinkAnchor(source: source, index: index, onOpenLink: onOpenLink)
             }
         }
+        guard isSelectable else { return [paragraph.compositionLocal(TextSelectionScope.key, nil)] }
         // Inside a document the paragraph joins its selection; alone it owns one.
         if node.compositionValue(of: TextSelectionScope.key) != nil { return [paragraph] }
         return [TextSelectionRoot { paragraph }]

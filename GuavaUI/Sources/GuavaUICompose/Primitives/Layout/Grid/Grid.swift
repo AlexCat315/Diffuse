@@ -2,7 +2,7 @@ import Foundation
 
 /// A general row-major grid built on the public measurement and placement
 /// contract. Row heights come from the tallest measured child in each row.
-/// Cells do not span rows or columns.
+/// Children may cover several cells with `.gridCellSpan(columns:rows:)`.
 public struct GridLayout: Layout {
     public var columns: [GridColumn]
     public var columnSpacing: CGFloat = 0
@@ -21,10 +21,12 @@ public struct GridLayout: Layout {
     }
 
     public func sizeThatFits(proposal: ProposedViewSize, subviews: [LayoutSubview]) -> CGSize {
-        arrangement(proposal: proposal, subviews: subviews).size
+        if let spans = spans(subviews) { return spanArrangement(proposal: proposal, subviews: subviews, spans: spans).size }
+        return arrangement(proposal: proposal, subviews: subviews).size
     }
 
     public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: [LayoutSubview]) {
+        if let spans = spans(subviews) { return placeSpanning(in: bounds, subviews: subviews, spans: spans) }
         let arrangement = arrangement(proposal: .init(width: bounds.width), subviews: subviews)
         guard !arrangement.widths.isEmpty else {
             for child in subviews { child.place(at: .zero, proposal: .zero, isVisible: false) }
@@ -98,6 +100,81 @@ public struct GridLayout: Layout {
                                sourceColumnCount: sourceColumnCount, mapping: mapping, activeRows: activeRows,
                                size: CGSize(width: widths.totalWidth,
                                             height: heights.reduce(0, +) + GridTrackResolver.finiteNonnegative(rowSpacing) * CGFloat(max(0, activeRows.filter { $0 }.count - 1))))
+    }
+
+    // MARK: - Spanning cells
+
+    /// Spans apply to anonymous columns only; `nil` keeps the one-cell path.
+    private func spans(_ subviews: [LayoutSubview]) -> [GridSpan]? {
+        guard !columns.isEmpty, GridNamedColumns.tracks(columns) == nil else { return nil }
+        let spans = subviews.map { $0[GridSpanKey.self] }
+        return spans.contains { $0 != .single } ? spans : nil
+    }
+
+    private struct SpanArrangement {
+        let widths: GridTracks
+        let placement: GridSpanPlacement
+        let heights: [CGFloat]
+        let itemSizes: [CGSize]
+        let size: CGSize
+        func x(ofColumn column: Int, gap: CGFloat) -> CGFloat {
+            (0..<column).reduce(0) { $0 + widths[$1] + gap }
+        }
+        func width(of cell: GridSpanPlacement.Cell, gap: CGFloat) -> CGFloat {
+            (cell.column..<(cell.column + cell.span.columns)).reduce(0) { $0 + widths[$1] }
+                + gap * CGFloat(cell.span.columns - 1)
+        }
+    }
+
+    private func spanArrangement(proposal: ProposedViewSize, subviews: [LayoutSubview], spans: [GridSpan]) -> SpanArrangement {
+        let gap = GridTrackResolver.finiteNonnegative(columnSpacing)
+        let rowGap = GridTrackResolver.finiteNonnegative(rowSpacing)
+        var intrinsic: [CGFloat] = []
+        if proposal.width?.isFinite != true {
+            // Unbounded: single-column cells size their own column.
+            let draft = GridSpanPlacement(spans: spans, columnCount: columns.count)
+            intrinsic = Array(repeating: 0, count: columns.count)
+            for (index, cell) in draft.cells.enumerated() where cell.span.columns == 1 {
+                intrinsic[cell.column] = max(intrinsic[cell.column], subviews[index].sizeThatFits(.unspecified).width)
+            }
+        }
+        let widths = GridTrackResolver.widths(columns: columns, availableWidth: proposal.width,
+                                             spacing: gap, intrinsicWidths: intrinsic)
+        let placement = GridSpanPlacement(spans: spans, columnCount: widths.count)
+        var sizes: [CGSize] = []
+        sizes.reserveCapacity(subviews.count)
+        for (index, cell) in placement.cells.enumerated() {
+            let width = (cell.column..<(cell.column + cell.span.columns)).reduce(0) { $0 + widths[$1] }
+                + gap * CGFloat(cell.span.columns - 1)
+            sizes.append(subviews[index].sizeThatFits(.init(width: width)))
+        }
+        let heights = placement.rowHeights(itemHeights: sizes.map(\.height), rowSpacing: rowGap)
+        let height = heights.reduce(0, +) + rowGap * CGFloat(max(0, heights.count - 1))
+        return SpanArrangement(widths: widths, placement: placement, heights: heights, itemSizes: sizes,
+                               size: CGSize(width: widths.totalWidth, height: height))
+    }
+
+    private func placeSpanning(in bounds: CGRect, subviews: [LayoutSubview], spans: [GridSpan]) {
+        let plan = spanArrangement(proposal: .init(width: bounds.width), subviews: subviews, spans: spans)
+        let gap = GridTrackResolver.finiteNonnegative(columnSpacing)
+        let rowGap = GridTrackResolver.finiteNonnegative(rowSpacing)
+        let rtl = subviews.first?.layoutDirection == .rtl
+        let components = alignmentComponents
+        var rowTops: [CGFloat] = []
+        var y = bounds.minY
+        for height in plan.heights { rowTops.append(y); y += height + rowGap }
+        for (index, cell) in plan.placement.cells.enumerated() {
+            let cellWidth = plan.width(of: cell, gap: gap)
+            let cellHeight = (cell.row..<(cell.row + cell.span.rows)).reduce(0) { $0 + plan.heights[$1] }
+                + rowGap * CGFloat(cell.span.rows - 1)
+            let offset = plan.x(ofColumn: cell.column, gap: gap)
+            let item = plan.itemSizes[index]
+            let cellX = rtl ? bounds.maxX - offset - cellWidth : bounds.minX + offset
+            subviews[index].place(at: CGPoint(
+                x: cellX + horizontalOffset(components.horizontal, available: cellWidth - item.width, rtl: rtl),
+                y: rowTops[cell.row] + verticalOffset(components.vertical, available: cellHeight - item.height)),
+                proposal: .init(width: cellWidth, height: item.height))
+        }
     }
 
     private var alignmentComponents: (horizontal: HorizontalAlignment, vertical: VerticalAlignment) {

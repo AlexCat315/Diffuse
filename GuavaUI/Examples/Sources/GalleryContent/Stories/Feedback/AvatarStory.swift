@@ -8,6 +8,7 @@ struct AvatarStory: View {
     @State private var limit: Float = 3
     @State private var overflow: AvatarOverflow = .count
     @State private var overlap = 0.3
+    @State private var selectedMember = "None"
     static var portrait: URL? { BundleImageResource.svg(named: "avatar-portrait", in: .module).url }
     private var imageURL: URL? {
         switch source {
@@ -50,6 +51,24 @@ struct AvatarStory: View {
                 }
                 AvatarGroup(members) { $0.limit = Int(limit); $0.overflow = overflow; $0.overlap = Float(overlap) }
                 Text("6 members · zero limit shows only the overflow indicator").font(.caption).foregroundColor(.onSurfaceMuted)
+            }
+            StorySection("Presence & members", "Status sits on the outline at the logical bottom-trailing corner, uses a distinct shape per state and is read with the name. The overflow marker opens the member list.") {
+                Row(alignment: .center, spacing: 20) {
+                    for status in AvatarStatus.allCases {
+                        AnyView(Column(alignment: .center, spacing: 6) {
+                            Avatar("Jason Lee") { $0.status = status }
+                            Text(status.label).font(.caption).foregroundColor(.onSurfaceMuted)
+                        })
+                    }
+                }
+                AvatarGroup(members.enumerated().map { index, member in
+                    var copy = member; copy.appearance.status = AvatarStatus.allCases[index % 4]; return copy
+                }) {
+                    $0.limit = 3
+                    var list = AvatarMemberList(); list.onSelect = { selectedMember = $0.name }
+                    $0.memberList = list
+                }
+                Text("Selected member: \(selectedMember)").font(.caption).foregroundColor(.onSurfaceMuted)
             }
             StorySection("Sizes & shapes", "Shared density sets the default diameter; an explicit size overrides it. Images crop inside the same outline as initials.") {
                 Row(alignment: .center, spacing: 24) {

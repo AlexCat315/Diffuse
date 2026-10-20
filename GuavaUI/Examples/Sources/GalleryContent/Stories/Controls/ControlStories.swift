@@ -368,7 +368,11 @@ struct DateRangePickerStory: View {
             DateRangePicker(selection: $selection) {
                 $0.presentation.isEnabled = options.isEnabled
                 $0.presentation.width = 280
+                $0.rules.presets = [.today(), .yesterday(), .lastDays(7), .lastDays(30), .thisMonth(), .lastMonth()]
+                $0.rules.maximumDays = 31
             }
+            Text("Presets fill the range in one click; after a start day, days more than 31 days away are disabled.")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
             Text(selection.map { "\(formatter.string(from: $0.lowerBound)) – \(formatter.string(from: $0.upperBound))" } ?? "No range selected")
                 .font(.caption).foregroundColor(.onSurfaceMuted)
         }

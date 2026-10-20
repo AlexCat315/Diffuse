@@ -6,6 +6,7 @@ struct MenuItemRowHost: _PrimitiveView {
     let item: MenuRowPresentation
     let isHighlighted: Bool
     let showsSelectionColumn: Bool
+    var showsIconColumn = false
     let submenu: AnyView?
     let events: MenuRowEvents
     let revealToken: Int
@@ -41,7 +42,7 @@ struct MenuItemRowHost: _PrimitiveView {
             if submenu != nil && !Self.anchorIsVisible(node) { events.closeSubmenu() }
             node.firstResource(PortalResource.self)?.updatePosition(CGPoint(x: node.absoluteFrame.maxX, y: node.absoluteFrame.minY))
         }
-        node.accessibility = AccessibilitySemantics(.button) { $0.label = item.title; $0.help = item.shortcut ?? ""; $0.state.isEnabled = item.isEnabled; $0.state.isSelected = item.isSelected; $0.combinesChildren = true; $0.state.isExpanded = item.hasSubmenu ? submenu != nil : nil }
+        node.accessibility = AccessibilitySemantics(item.isLink ? .link : .button) { $0.label = item.title; $0.value = item.content.detail ?? ""; $0.help = item.content.link ?? item.shortcut ?? ""; $0.state.isEnabled = item.isEnabled; $0.state.isSelected = item.isSelected; $0.combinesChildren = true; $0.state.isExpanded = item.hasSubmenu ? submenu != nil : nil }
         node.accessibilityActions = AccessibilityActions()
         if item.isEnabled { node.accessibilityActions.activate = { events.activate(node) } }
 
@@ -175,11 +176,26 @@ struct MenuItemRowHost: _PrimitiveView {
                 }
                 .frame(width: checkmarkSize)
             }
-            Text(item.title)
-                .font(.body)
-                .foregroundColor(titleColor)
-                .opacity(textOpacity)
-                .flex()
+            if showsIconColumn {
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    if let icon = item.content.icon {
+                        Icon(icon, size: .small, color: titleColor).accessibilityHidden()
+                    }
+                }
+                .frame(width: node.iconMetrics.size(.small)).flex(0, shrink: 0)
+            }
+            Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                if item.content.richTitle.isEmpty {
+                    Text(item.title).font(.body).foregroundColor(titleColor).opacity(textOpacity)
+                } else {
+                    RichText(item.content.richTitle).displayOnly().font(.body).foregroundColor(titleColor).opacity(textOpacity)
+                        .accessibilityHidden()
+                }
+                if let detail = item.content.detail {
+                    Text(detail, lineLimit: 2).font(.caption).foregroundColor(theme.colors.onSurfaceMuted)
+                }
+            }
+            .flex(1, shrink: 1).frame(minWidth: 0)
             if item.hasSubmenu {
                 Icon(UIIcons.Navigation.chevronRight, size: .small, color: titleColor)
             } else if let shortcut = item.shortcut {
@@ -189,6 +205,9 @@ struct MenuItemRowHost: _PrimitiveView {
                     .foregroundColor(theme.colors.onSurfaceMuted)
                     .opacity(textOpacity)
                     .clipped()
+            }
+            if item.isLink {
+                Icon(UIIcons.Action.externalLink, size: .small, color: theme.colors.onSurfaceMuted).accessibilityHidden()
             }
         }
         .padding(horizontal: 16, vertical: 6)

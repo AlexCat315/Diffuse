@@ -162,7 +162,7 @@ struct AsyncImageTests {
         .init(url: URL(string: "https://image.test/\(path).png"), width: 48, height: 48, mode: .fill, retryID: retryID, policy: .init())
     }
     private func makeServices(gate: ImageDecodeGate, ui: ImageTestUIQueue) -> ImageLoadServices {
-        .init(id: "test-images", cached: { _ in nil }, decode: { try await gate.decode($0) },
+        .init(id: "test-images", cached: { _ in nil }, decode: { request, _ in .still(try await gate.decode(request)) },
               register: { _, decoded in
                   #expect(Thread.isMainThread)
                   ui.registrations += 1

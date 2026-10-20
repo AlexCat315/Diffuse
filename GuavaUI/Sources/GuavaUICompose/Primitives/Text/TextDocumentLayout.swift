@@ -60,8 +60,10 @@ final class TextDocumentLayout {
         if let entry = lines[row] { return entry }
         let source = buffer.substring(characterRange: buffer.lineRange(forLine: row))
         let text = geometry.secure ? String(repeating: "•", count: source.count) : source
-        let result = env.cachedLayout(text: text, font: geometry.font, lineHeight: geometry.lineHeight,
-                                      maxWidth: geometry.width, alignment: .leading, letterSpacing: geometry.letterSpacing)
+        let result = !geometry.width.isFinite && text.utf8.count > Self.segmentBytes
+            ? segmentedLayout(text, environment: env)
+            : env.cachedLayout(text: text, font: geometry.font, lineHeight: geometry.lineHeight,
+                               maxWidth: geometry.width, alignment: .leading, letterSpacing: geometry.letterSpacing)
         let entry = MeasuredTextLine(source: source, display: text, layout: result, lineHeight: geometry.lineHeight)
         lines[row] = entry; index.measure(line: row, rows: entry.rows.count)
         shapedLineCount += 1; shapedUTF8Count += text.utf8.count
@@ -70,6 +72,50 @@ final class TextDocumentLayout {
         }
         return entry
     }
+    /// Unwrapped lines longer than this are shaped in segments.
+    static let segmentBytes = 8_192
+
+    /// Shapes a very long unwrapped line in bounded segments placed end to end,
+    /// preferring to cut after a space so shaping context rarely spans a cut.
+    /// Each segment hits the shared layout cache on its own, so an edit near
+    /// the end of a minified file reshapes only the segments it touches.
+    private func segmentedLayout(_ text: String, environment env: TextEnvironment) -> TextLayoutResult {
+        var glyphs: [PositionedGlyph] = []
+        var x: Float = 0, byte = 0, baseline: Float?, top: Float = 0
+        var start = text.startIndex, cursor = text.startIndex, lastSpace: String.Index?, pending = 0
+        func flush(_ piece: String) {
+            let layout = env.cachedLayout(text: piece, font: geometry.font, lineHeight: geometry.lineHeight,
+                                          maxWidth: .infinity, alignment: .leading, letterSpacing: geometry.letterSpacing)
+            if let line = layout.lines.first {
+                if baseline == nil { baseline = line.baselineY; top = line.topY }
+                if !glyphs.isEmpty { x += geometry.letterSpacing }
+                for glyph in line.glyphs {
+                    glyphs.append(PositionedGlyph(glyphID: glyph.glyphID, fontID: glyph.fontID,
+                                                  cluster: glyph.cluster + UInt32(byte), x: glyph.x + x,
+                                                  y: glyph.y, atlasInfo: glyph.atlasInfo))
+                }
+                x += line.width
+            }
+            byte += piece.utf8.count
+        }
+        while cursor < text.endIndex {
+            let character = text[cursor], next = text.index(after: cursor)
+            pending += character.utf8.count
+            if character == " " { lastSpace = next }
+            if pending >= Self.segmentBytes / 2 {
+                let cut = lastSpace ?? next
+                flush(String(text[start..<cut]))
+                start = cut; lastSpace = nil
+                pending = text.utf8.distance(from: cut, to: next)
+            }
+            cursor = next
+        }
+        if start < text.endIndex { flush(String(text[start...])) }
+        let line = TextLine(glyphs: glyphs, baselineY: baseline ?? geometry.lineHeight * 0.8, topY: top, width: x,
+                            startCluster: 0, endCluster: UInt32(byte))
+        return TextLayoutResult(lines: [line], totalWidth: x, totalHeight: geometry.lineHeight)
+    }
+
     func setHiddenLines(_ ranges: [Range<Int>]) {
         guard hiddenLines != ranges else { return }
         hiddenLines = ranges
@@ -157,9 +203,12 @@ struct MeasuredTextLine {
                 let current = clusters[cluster]
                 var x = current.x
                 if cluster + 1 < clusters.count, byte > current.byte {
+                    // Boundaries are sorted and indexed by character, so the
+                    // ligature span is found by binary search, not a scan.
                     let next = clusters[cluster + 1]
-                    let covered = boundaries.filter { $0 >= current.byte && $0 <= next.byte }
-                    let fraction = Float(covered.firstIndex(of: byte) ?? 0) / Float(max(1, covered.count - 1))
+                    let lower = Self.firstIndex(in: boundaries, atLeast: current.byte)
+                    let upper = Self.firstIndex(in: boundaries, atLeast: next.byte + 1)
+                    let fraction = Float(character - lower) / Float(max(1, upper - lower - 1))
                     x += (next.x - x) * fraction
                 }
                 positions.append(TextCharacterCaret(character: character, x: x))
@@ -167,6 +216,15 @@ struct MeasuredTextLine {
             return positions.isEmpty ? [TextCharacterCaret(character: 0, x: 0)] : positions
         }
     }
+    static func firstIndex(in boundaries: [Int], atLeast value: Int) -> Int {
+        var lower = 0, upper = boundaries.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if boundaries[middle] < value { lower = middle + 1 } else { upper = middle }
+        }
+        return lower
+    }
+
     func displayCharacterIndex(forByte byte: Int) -> Int {
         var lower = 0, upper = boundaries.count - 1
         while lower < upper {

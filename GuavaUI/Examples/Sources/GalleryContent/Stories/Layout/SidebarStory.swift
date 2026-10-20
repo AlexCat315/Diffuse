@@ -7,6 +7,7 @@ struct SidebarStory: View {
     @State private var showsIcons = true
     @State private var showsBadges = true
     @State private var drawerOpen = false
+    @State private var pinned = false
 
     private func item(_ id: String, _ title: String, icon: BundleImageResource?, badge: String? = nil, enabled: Bool = true) -> SidebarItem<String> {
         SidebarItem(id, title) {
@@ -70,7 +71,7 @@ struct SidebarStory: View {
                 item("overview", "Overview", icon: UIIcons.Layout.dashboard),
                 item("downloads", "Downloads", icon: UIIcons.Action.download, badge: "8"),
                 item("projects", "Projects", icon: UIIcons.File.folder),
-                item("recent", "Recent activity", icon: nil)
+                slotted(item("recent", "Recent activity", icon: nil))
             ]),
             SidebarSection("preferences", title: "Preferences", items: [
                 item("notifications", "Notifications", icon: UIIcons.Status.bell, badge: "3"),
@@ -78,6 +79,19 @@ struct SidebarStory: View {
                 item("permissions", "Team permissions unavailable", icon: UIIcons.Status.lock, enabled: false)
             ])
         ]
+    }
+
+    /// Inline slots: a presence dot in the leading lane, a muted count after the
+    /// title and an interactive pin accessory outside the destination button.
+    private func slotted(_ base: SidebarItem<String>) -> SidebarItem<String> {
+        var item = base
+        item.slots.leading = AnyView(Box {}.frame(width: 8, height: 8).background(.success).cornerRadius(4))
+        item.slots.trailing = AnyView(Text("12").font(.caption).foregroundColor(.onSurfaceMuted))
+        item.slots.accessory = AnyView(Button(icon: .resource(pinned ? UIIcons.Status.checkCircle : UIIcons.Shape.circle), size: 12,
+                                              isEnabled: options.isEnabled, tooltip: pinned ? "Unpin" : "Pin") { pinned.toggle() }
+            .buttonStyle(.ghost))
+        item.slots.accessoryWidth = 36
+        return item
     }
 
     private var destinationTitle: String {

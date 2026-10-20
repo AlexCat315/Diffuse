@@ -95,6 +95,18 @@ struct LayoutFoundationExamples: View {
                         .padding(8).frame(width: .percent(100)).background(.surfaceVariant).cornerRadius(6)
                 }.frame(height: 240).debugName("layout-lazy-grid")
             }
+            StorySection("Wide lazy grid · 200 × 200", "Fixed-width columns scroll on both axes and only the visible rows and columns are built. Every seventh item spans two columns.") {
+                LazyGrid(0..<40_000, id: \.self, columns: 200, rowHeights: .fixed(40), columnSpacing: 6, rowSpacing: 6,
+                         columnWidth: 90, columnSpan: { $0 % 7 == 0 ? 2 : 1 }) { index in
+                    Text("#\(index)").font(.caption).padding(6).frame(width: .percent(100)).background(.surfaceVariant).cornerRadius(6)
+                }.frame(height: 220).debugName("layout-wide-lazy-grid")
+            }
+            StorySection("Estimated rows · 10,000 items", "Row heights are unknown until rendered: rows start from a 32 point estimate and keep their measured height; the first visible row stays put while the index converges.") {
+                VirtualStack(0..<10_000, id: \.self, estimatedRowHeight: 32, spacing: 6) { index in
+                    Text(String(repeating: "Wrapped words \(index) ", count: index % 4 + 1))
+                        .font(.caption).padding(8).frame(width: .percent(100)).background(.surfaceVariant).cornerRadius(6)
+                }.frame(height: 240).debugName("layout-estimated-stack")
+            }
             StorySection("Variable rows · 100,000 items", "Known row heights alternate between one and three lines. A cached cumulative index locates the viewport without scanning all rows during scrolling.") {
                 Button("Reveal item 50,001") { target = target == nil ? 50_000 : nil }.buttonStyle(.secondary)
                 VirtualStack(0..<100_000, id: \.self, rowHeight: { index, _, scaler in

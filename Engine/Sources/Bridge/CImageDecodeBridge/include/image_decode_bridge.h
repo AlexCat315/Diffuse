@@ -29,6 +29,31 @@ bool guava_image_dimensions_memory(const uint8_t* data, size_t data_size,
 
 void guava_image_decode_free(GuavaImageDecodeResult* result);
 
+/// Every frame of an animated GIF or WebP, composited onto the full canvas
+/// and resampled to the target size. `pixels` holds `frame_count` RGBA frames
+/// back to back; `durations_ms` one display time per frame. A still image
+/// decodes as a single frame.
+typedef struct GuavaImageAnimationResult {
+    uint8_t* pixels;
+    int32_t* durations_ms;
+    int32_t width;
+    int32_t height;
+    int32_t frame_count;
+    /// 0 repeats forever.
+    int32_t loop_count;
+    char* error_message;
+} GuavaImageAnimationResult;
+
+bool guava_image_decode_animation_memory(const uint8_t* data,
+                                         size_t data_size,
+                                         const char* extension,
+                                         int32_t target_width,
+                                         int32_t target_height,
+                                         int32_t max_frames,
+                                         GuavaImageAnimationResult* out_result);
+
+void guava_image_animation_free(GuavaImageAnimationResult* result);
+
 #ifdef __cplusplus
 }
 #endif
