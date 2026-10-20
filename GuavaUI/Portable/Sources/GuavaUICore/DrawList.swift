@@ -203,6 +203,16 @@ public final class DrawList {
         }
     }
 
+    /// Replace the color of vertices appended since `start`. The closure receives
+    /// each position and its existing coverage (alpha), so anti-aliased fringes
+    /// keep fading out under the new color.
+    func recolor(from start: Int, _ color: (_ x: Float, _ y: Float, _ coverage: Float) -> Color) {
+        for index in start..<vertices.count {
+            let vertex = vertices[index]
+            vertices[index].color = color(vertex.posX, vertex.posY, Float(vertex.color >> 24) / 255).rgba8
+        }
+    }
+
     /// Keep ownership with this geometry, including cached layer composites.
     public func retainResource(_ resource: any AnyObject & Sendable) { resources.retain(resource) }
 

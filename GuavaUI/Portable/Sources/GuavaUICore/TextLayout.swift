@@ -64,7 +64,7 @@ public struct TextLayoutResult {
 
 /// Performs multi-line text layout by combining shaping results with font atlas metrics.
 ///
-/// Word-wraps at whitespace boundaries when `maxWidth` is exceeded.
+/// Wraps at `LineBreaks` opportunities when `maxWidth` is exceeded.
 public struct TextLayout {
 
     /// Lays out shaped glyphs into lines.
@@ -102,6 +102,9 @@ public struct TextLayout {
             sourceOffset += length
         }
         let spacing = letterSpacing.isFinite ? letterSpacing : 0
+        // Ideographs and long tokens also wrap between characters; closing
+        // punctuation such as "。" never starts a line.
+        let softBreaks = maxWidth.isFinite ? LineBreaks.opportunities(in: text) : []
         // All lines in a text block share the same font metrics, including empty lines.
         let baselineOffset = centeredBaselineY(glyphs: shapedGlyphs.map { ($0, atlas.glyphMetrics(glyphIndex: $0.glyphID, fontID: $0.fontID)) }, atlas: atlas, lineTop: 0, lineHeight: lineHeight)
         var lastWasNewline = false
@@ -150,6 +153,10 @@ public struct TextLayout {
             let isSpace = clusterByte == UInt8(ascii: " ") || clusterByte == UInt8(ascii: "\t")
 
             if isSpace {
+                lastBreakIndex = currentLineGlyphs.count
+            } else if softBreaks.contains(Int(glyph.cluster)),
+                      currentLineGlyphs.last?.0.cluster != glyph.cluster,
+                      glyph.cluster > 0, utf8[Int(glyph.cluster) - 1] != UInt8(ascii: " "), utf8[Int(glyph.cluster) - 1] != UInt8(ascii: "\t") {
                 lastBreakIndex = currentLineGlyphs.count
             }
 

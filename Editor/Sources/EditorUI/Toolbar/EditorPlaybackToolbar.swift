@@ -2,34 +2,57 @@ import EditorCore
 import GuavaUI
 import GuavaUIRuntime
 
-/// Application-level playback stays reachable from every docked editor.
+/// The run box: where the game runs, Build, then only the transport that
+/// applies: Play while stopped, Pause and Stop while playing, Play and Stop
+/// while paused.
 struct EditorPlaybackToolbar: View {
     let state: PlaybackState
-    /// Narrow windows keep one play/pause toggle and Stop.
+    /// Narrow windows drop the target and Build.
     var compact = false
+    /// The run target label needs the widest windows.
+    var showsTarget = true
     let onCommand: (EditorCommand) -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 2) {
-            if compact {
-                if state == .playing {
-                    control("pause", title: L("Pause game"), target: .paused, primary: true)
-                } else {
-                    control("play", title: L("Play in current viewport"), target: .playing)
-                }
-            } else {
-                Icon(UIIcons.Media.monitor, size: 12, color: .onSurfaceVariant)
-                    .padding(horizontal: 5)
-                control("play", title: L("Play in current viewport"), target: .playing)
-                control("pause", title: L("Pause game"), target: .paused)
+            if !compact && showsTarget {
+                Row(alignment: .center, spacing: 5) {
+                    Icon(UIIcons.Media.monitor, size: 11, color: .onSurfaceVariant)
+                    Text(Self.hostTarget).font(.caption).foregroundColor(.onSurfaceVariant)
+                }.padding(horizontal: 7).frame(height: 22)
+                    .accessibility { $0.label = L("Run Target") + " " + Self.hostTarget }
+                    .debugName("editor-run-target")
             }
-            control("stop", title: L("Stop and return to editing"), target: .stopped)
+            if !compact {
+                Button(icon: .resource(.svg(named: "build", in: EditorAppResourceBundle.bundle, subdirectory: "ToolbarIcons")), size: 13,
+                       tooltip: L("Build Project") + " " + EditorShortcut(.letter("b")).label) {
+                    onCommand(.buildProject)
+                }.buttonStyle(PlaybackButtonStyle(primary: false)).debugName("editor-build")
+            }
+            if state == .playing {
+                control("pause", title: L("Pause game"), target: .paused, primary: true)
+            } else {
+                control("play", title: L("Play in current viewport"), target: .playing)
+            }
+            if state != .stopped {
+                control("stop", title: L("Stop and return to editing"), target: .stopped)
+            }
         }
         .padding(2)
-        .background(.surfaceSunken)
+        .background(.surfaceVariant)
         .cornerRadius(7)
-        .border(.divider, width: 1)
         .debugName("editor-playback-toolbar")
+    }
+
+    /// Play runs in this editor on the machine it runs on.
+    static var hostTarget: String {
+        #if os(macOS)
+        "macOS"
+        #elseif os(Windows)
+        "Windows"
+        #else
+        "Linux"
+        #endif
     }
 
     private func control(_ icon: String, title: String, target: PlaybackState, primary: Bool? = nil) -> some View {

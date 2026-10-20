@@ -37,9 +37,7 @@ struct EditorRootView: View {
                         }.flex().frame(minWidth: 0, minHeight: 0)
 
                         Divider()
-                        EditorStatusBar(app: app,
-                                        showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed },
-                                        onCommand: cb.handleMenuCommand)
+                        EditorStatusBar(app: app, controller: controller, onCommand: cb.handleMenuCommand)
                     }
                     .background(.background)
                     .flex()

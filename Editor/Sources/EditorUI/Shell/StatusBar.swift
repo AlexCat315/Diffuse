@@ -1,26 +1,36 @@
 internal import EditorCore
+internal import StudioDocuments
 internal import GuavaUI
 internal import GuavaUIRuntime
+internal import GuavaUIWorkspace
 
 /// Live, compact status on the same surface as the title bar: problems and
 /// document state on the left; background work and the Agent on the right.
 /// Every segment that reports something actionable opens the place to act.
 struct EditorStatusBar: View {
     let app: EditorApplication
-    let showsScriptInfo: Bool
+    let controller: WorkspaceController
     let onCommand: (EditorCommand) -> Void
     private var workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
+    private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
+    private var layout: Observed<WorkspaceController, UInt64>
 
-    init(app: EditorApplication, showsScriptInfo: Bool, onCommand: @escaping (EditorCommand) -> Void) {
+    init(app: EditorApplication, controller: WorkspaceController, onCommand: @escaping (EditorCommand) -> Void) {
         self.app = app
-        self.showsScriptInfo = showsScriptInfo
+        self.controller = controller
+        layout = Observed(\.version, on: controller)
         self.onCommand = onCommand
         workspace = Observed(\.snapshot, on: app.workstation.scripts)
+        documents = Observed(\.snapshot, on: app.workstation.documents)
     }
 
     var body: some View {
         let store = app.store
         let snapshot = workspace.wrappedValue
+        let hasScene = store.workspaceMode.profile.features.contains(.scene)
+        let _ = layout.wrappedValue
+        let showsScriptInfo = controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed }
+        let document = documents.wrappedValue.selected
         Row(alignment: .center, spacing: 10) {
             Box { EmptyView() }
                 .frame(width: 6, height: 6)
@@ -31,20 +41,24 @@ struct EditorStatusBar: View {
             problems(EditorProblemSummary(documents: snapshot.documents, consoleEntries: store.consoleEntries))
             Divider(axis: .vertical).frame(height: 12)
             space(EditorSpace(mode: store.workspaceMode))
-            if store.sceneDirty {
-                Row(alignment: .center, spacing: 4) {
-                    Box { EmptyView() }.frame(width: 5, height: 5).background(.warning).cornerRadius(3)
-                    Text(L("Unsaved")).font(.caption).foregroundColor(.warning)
-                }.debugName("editor-status-unsaved")
-            }
-            Text("r\(store.sceneRevision)").font(.caption).foregroundColor(.onSurfaceMuted)
-                .accessibility { $0.label = L("Revision") }
-            if store.selectedEntityIDsCount > 0 {
-                Text("\(L("Selection")) \(store.selectedEntityIDsCount)").font(.caption).foregroundColor(.onSurfaceMuted)
+            if hasScene {
+                if store.sceneDirty { unsaved }
+                Text("r\(store.sceneRevision)").font(.caption).foregroundColor(.onSurfaceMuted)
+                    .accessibility { $0.label = L("Revision") }
+                if store.selectedEntityIDsCount > 0 {
+                    Text("\(L("Selection")) \(store.selectedEntityIDsCount)").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+            } else if let document {
+                if document.isDirty { unsaved }
             }
 
             Spacer(minLength: 0)
 
+            if !hasScene, let document {
+                Text(DocumentKind(path: document.path).name + " · UTF-8 · " + (document.text.contains("\r\n") ? "CRLF" : "LF"))
+                    .font(.caption).foregroundColor(.onSurfaceMuted)
+                Divider(axis: .vertical).frame(height: 12)
+            }
             if showsScriptInfo, let document = snapshot.selectedDocument {
                 Text("Swift · UTF-8").font(.caption).foregroundColor(.onSurfaceMuted)
                 Text(store.scriptCaretLabel(for: document.file.identifier))
@@ -58,6 +72,13 @@ struct EditorStatusBar: View {
         .frame(height: 24)
         .background(.surfaceRaised)
         .debugName("editor-status-bar")
+    }
+
+    private var unsaved: some View {
+        Row(alignment: .center, spacing: 4) {
+            Box { EmptyView() }.frame(width: 5, height: 5).background(.warning).cornerRadius(3)
+            Text(L("Unsaved")).font(.caption).foregroundColor(.warning)
+        }.debugName("editor-status-unsaved")
     }
 
     private func problems(_ summary: EditorProblemSummary) -> some View {

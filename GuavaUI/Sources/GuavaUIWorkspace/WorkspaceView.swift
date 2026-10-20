@@ -748,9 +748,11 @@ struct _WorkspaceTabGroupView: View {
     var body: some View {
         let activeID = group.activePanelID ?? group.panels.first
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            _WorkspaceTabBar(group: group,
-                             document: document,
-                             controller: controller)
+            if !hidesTabBar {
+                _WorkspaceTabBar(group: group,
+                                 document: document,
+                                 controller: controller)
+            }
             if let activeID {
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     content(activeID)
@@ -773,6 +775,10 @@ struct _WorkspaceTabGroupView: View {
         .layoutRole("workspace-tab-group")
         .semanticRole("workspace.group")
         .debugName("workspace-group-\(group.id.rawValue)")
+    }
+
+    private var hidesTabBar: Bool {
+        group.panels.count == 1 && group.panels.first.flatMap { document.panels[$0] }?.hidesTabBarWhenAlone == true
     }
 }
 

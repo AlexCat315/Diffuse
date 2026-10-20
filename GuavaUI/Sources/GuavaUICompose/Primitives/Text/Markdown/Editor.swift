@@ -8,16 +8,22 @@ public struct MarkdownEditor: View {
     private let text: Binding<TextBuffer>
     private let sourceTitle: String
     private let previewTitle: String
+    private let sourceFont: Font
+    private let sourceLineHeight: Float
     private let onOpenLink: ((String) -> Void)?
     @State private var fraction: Float = 0.5
     @State private var preview = MarkdownPreviewSource()
 
     /// Titles also name the source field and preview region for accessibility.
+    /// The source font lets a host match its other code editors.
     public init(text: Binding<TextBuffer>, sourceTitle: String, previewTitle: String,
+                sourceFont: Font = .monospaced(size: 15), sourceLineHeight: Float = 24,
                 onOpenLink: ((String) -> Void)? = nil) {
         self.text = text
         self.sourceTitle = sourceTitle
         self.previewTitle = previewTitle
+        self.sourceFont = sourceFont
+        self.sourceLineHeight = sourceLineHeight
         self.onOpenLink = onOpenLink
     }
 
@@ -33,7 +39,7 @@ public struct MarkdownEditor: View {
                 $0.codeEditing.indentationWidth = 2
             }
             .textFieldStyle(.editor)
-            .font(.monospaced(size: 15)).lineHeight(24)
+            .font(sourceFont).lineHeight(sourceLineHeight)
             .frame(minWidth: 0, minHeight: 0)
         } second: {
             ScrollView(.vertical, scrollbarGutter: .stable) {

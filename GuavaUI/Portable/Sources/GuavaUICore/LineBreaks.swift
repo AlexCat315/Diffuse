@@ -1,9 +1,9 @@
 /// Line-break opportunities for mixed Latin and CJK prose: after spaces,
 /// around ideographs (with the common kinsoku exceptions) and after hyphens
 /// or slashes inside long words such as URLs.
-enum RichTextBreaks {
+public enum LineBreaks {
     /// UTF-8 offsets before which a soft line break is allowed.
-    static func opportunities(in text: String) -> Set<Int> {
+    public static func opportunities(in text: String) -> Set<Int> {
         var result: Set<Int> = []
         var offset = 0
         var previous: Character?
@@ -23,7 +23,7 @@ enum RichTextBreaks {
         return result
     }
 
-    static func isSpace(_ character: Character) -> Bool { character == " " || character == "\t" }
+    private static func isSpace(_ character: Character) -> Bool { character == " " || character == "\t" }
 
     private static func isIdeographic(_ character: Character) -> Bool {
         guard let scalar = character.unicodeScalars.first?.value else { return false }

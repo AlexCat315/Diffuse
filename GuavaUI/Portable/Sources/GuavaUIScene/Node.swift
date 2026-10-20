@@ -167,6 +167,13 @@ public final class Node: @unchecked Sendable {
         }
     }
 
+    /// Gradient fill, drawn in place of `backgroundColor` when set.
+    public var backgroundGradient: UILinearGradient? {
+        didSet {
+            if oldValue != backgroundGradient { markRenderDirty(reason: .styleSet(field: "backgroundGradient")) }
+        }
+    }
+
     /// Corner radius (in pixels) applied to the background fill. The clip
     /// rectangle from `clipsToBounds` remains axis-aligned — child content
     /// is not rounded yet (Phase 7).

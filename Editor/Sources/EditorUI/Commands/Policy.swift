@@ -7,7 +7,11 @@ enum EditorWorkspaceCommandPolicy {
         switch command {
         case .showScripts: return profile.allowsPanel("scripts")
         case .showPanel(let id), .maximizePanel(let id): return profile.allowsPanel(id)
-        case .showSceneSettings: return profile.features.contains(.scene)
+        case .showSceneSettings, .newScene, .openScene, .saveScene, .duplicateSelection, .deleteSelection,
+             .selectAll, .clearSelection, .invertSelection, .selectDescendants, .spawnEntity, .frameSelection,
+             .toggleSelectionVisibility, .toggleSelectionLock:
+            return profile.features.contains(.scene)
+        case .saveDocument, .revertDocument, .closeDocument: return profile.features.contains(.documents)
         case .showAssets, .importAssets: return profile.allowsPanel("assets")
         case .buildProject, .buildAndRun: return profile.features.contains(.gameBuild)
         case .setPlaybackState, .togglePlayback: return profile.features.contains(.gameplay)

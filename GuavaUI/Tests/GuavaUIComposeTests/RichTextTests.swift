@@ -60,13 +60,13 @@ struct RichTextTests: GuavaUIComposeSerializedSuite {
 
     @Test("Ideographs break between characters but closing punctuation never starts a line")
     func ideographicBreaks() {
-        let breaks = RichTextBreaks.opportunities(in: "中文，段落")
+        let breaks = LineBreaks.opportunities(in: "中文，段落")
         let comma = "中文".utf8.count
         #expect(breaks.contains("中".utf8.count))
         #expect(!breaks.contains(comma))
         #expect(breaks.contains(comma + "，".utf8.count))
         // Hyphens and slashes inside long tokens are break points, plain words are not.
-        let url = RichTextBreaks.opportunities(in: "a/b-c word")
+        let url = LineBreaks.opportunities(in: "a/b-c word")
         #expect(url.contains(2) && url.contains(4) && url.contains(6))
         #expect(!url.contains(1))
     }

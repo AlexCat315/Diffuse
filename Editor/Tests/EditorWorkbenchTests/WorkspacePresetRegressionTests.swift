@@ -16,7 +16,7 @@ struct WorkspacePresetRegressionTests {
         EditorLocalizationPreferences.language = .simplifiedChinese
         defer { EditorLocalizationPreferences.language = previous }
         let catalog = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .level))
-        #expect(catalog.menus.map(\.title) == ["文件", "编辑", "视图", "Agent", "运行", "窗口", "帮助"])
+        #expect(catalog.menus.map(\.title) == ["文件", "编辑", "选择", "世界", "视图", "Agent", "运行", "窗口", "帮助"])
         let view = try #require(catalog.menus.first { $0.id == "view" })
         let nested = view.items.compactMap { item -> String? in
             if case let .submenu(menu) = item { return menu.title }

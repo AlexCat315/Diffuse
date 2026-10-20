@@ -167,3 +167,29 @@ struct EditorPanelIconButton: View {
             .buttonStyle(ToggleButtonStyle(height: 22))
     }
 }
+
+/// Row chrome shared by the outline and file trees: a 2pt accent edge marks
+/// the selection, with selection, search-hit and hover fills.
+struct EditorTreeRowStyle: TreeRowStyle {
+    func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
+        let t = configuration.theme
+        let bg: Color = {
+            if configuration.isSelected { return t.colors.selection }
+            if configuration.isSearchHit { return t.colors.stateLayerSelected }
+            if configuration.isHovered { return t.colors.stateLayerHover }
+            return Color(r: 0, g: 0, b: 0, a: 0)
+        }()
+
+        return Row(alignment: .center, spacing: 0) {
+            Box {}.frame(width: .points(2), height: .percent(100))
+                .background(configuration.isSelected ? t.colors.accent : .clear)
+            configuration.content
+                .flex(1, shrink: 1, basis: 0)
+                .padding(horizontal: 6)
+        }
+        .frame(height: 24)
+        .clipped()
+        .background(bg)
+        .opacity(configuration.isEnabled ? 1 : 0.55)
+    }
+}

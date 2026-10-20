@@ -10,9 +10,25 @@ public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendab
     public private(set) var error: String?
     public init(root: URL) { workspace = DocumentWorkspace(root: root) }
     public var hasUnsavedChanges: Bool { documents.contains(where: \.isDirty) }
+    /// Everything a view shows about the workspace, compared as one value so a
+    /// selection change re-renders views even when the document list is unchanged.
+    public var snapshot: EditorDocumentSnapshot {
+        EditorDocumentSnapshot(documents: documents, selectedPath: selectedPath, error: error)
+    }
     public func files() -> [String] { workspace.files() }
     public func open(_ path: String) {
         perform { _ = try workspace.open(path); selectedPath = path }
+    }
+    /// Closing the selected document selects its neighbour in tab order, so
+    /// the editor never shows an empty pane while other documents stay open.
+    public func close(_ path: String, discard: Bool = false) {
+        let order = documents.map(\.path)
+        perform {
+            try workspace.close(path, discard: discard)
+            guard selectedPath == path, let index = order.firstIndex(of: path) else { return }
+            let remaining = order.filter { $0 != path }
+            selectedPath = remaining.isEmpty ? nil : remaining[min(index, remaining.count - 1)]
+        }
     }
     public func reload(_ path: String, discard: Bool = false) { perform { try workspace.close(path, discard: discard); _ = try workspace.open(path) } }
     public func edit(_ path: String, text: String) { perform { try workspace.edit(path, text: text) } }
@@ -37,4 +53,12 @@ public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendab
     private func refresh() { documents = workspace.documents; publisher.send() }
     public func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable { publisher.register(on: self, handler: handler) }
     public func _unregisterObserver(_ token: AnyHashable) { publisher.unregister(token) }
+}
+
+public struct EditorDocumentSnapshot: Equatable, Sendable {
+    public let documents: [TextDocument]
+    public let selectedPath: String?
+    public let error: String?
+
+    public var selected: TextDocument? { documents.first { $0.path == selectedPath } }
 }

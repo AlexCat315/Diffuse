@@ -257,7 +257,7 @@ struct HierarchyPanel: View {
                     }
                     .padding(vertical: 4)
                     .flex()
-                    .treeRowStyle(HierarchyTreeRowStyle(), scope: .row)
+                    .treeRowStyle(EditorTreeRowStyle(), scope: .row)
                 }
             }
             .frame(minWidth: 0, minHeight: 0)
@@ -695,30 +695,6 @@ private extension TreeDropPosition {
         case .inside: return .inside
         case .after: return .after
         }
-    }
-}
-
-private struct HierarchyTreeRowStyle: TreeRowStyle {
-    func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
-        let t = configuration.theme
-        let bg: Color = {
-            if configuration.isSelected { return t.colors.selection }
-            if configuration.isSearchHit { return t.colors.stateLayerSelected }
-            if configuration.isHovered { return t.colors.stateLayerHover }
-            return Color(r: 0, g: 0, b: 0, a: 0)
-        }()
-
-        return Row(alignment: .center, spacing: 0) {
-            Box {}.frame(width: .points(2), height: .percent(100))
-                .background(configuration.isSelected ? t.colors.accent : .clear)
-            configuration.content
-                .flex(1, shrink: 1, basis: 0)
-                .padding(horizontal: 6)
-        }
-        .frame(height: 24)
-        .clipped()
-        .background(bg)
-        .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }
 

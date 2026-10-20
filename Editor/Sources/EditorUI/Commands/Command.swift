@@ -15,11 +15,22 @@ enum EditorCommand {
     case newScene
     case openScene
     case saveScene
+    case saveDocument
+    case revertDocument
+    case closeDocument
     case importAssets
     case undo
     case redo
     case duplicateSelection
     case deleteSelection
+    case selectAll
+    case clearSelection
+    case invertSelection
+    case selectDescendants
+    case spawnEntity(EditorEntityTemplate)
+    case frameSelection
+    case toggleSelectionVisibility
+    case toggleSelectionLock
     case setWorkspaceMode(EditorWorkspaceMode)
     case setLayoutPreset(EditorLayoutPreset)
     case resetLayout

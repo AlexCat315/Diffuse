@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- 写作 Space 细节对照原型修正：`WorkspacePanel.hidesTabBarWhenAlone` 让自带标签的面板（编辑器的文件标签）在独占分组时不再叠一行“编辑器”面板标签，与其他面板合组时标签条恢复；`WorkspaceViewTests` 覆盖两种情况。`MarkdownEditor` 新增 `sourceFont` / `sourceLineHeight`，编辑器的 Markdown 源码与 Swift 一致使用 13/20 等宽字体。标题栏意图框的上下文芯片改为末尾省略号截断并显示完整提示。GuavaUICore 新增 `LineBreaks`（由富文本的 `RichTextBreaks` 移入），`TextLayout` 也按它在汉字之间换行，并遵守避头尾规则，“。”“，”等不再单独落到行首；`TextLayoutRegressionTests` 覆盖。SourceKit-LSP 生命周期测试的假服务器改用 `read(2)` 读取标准输入：`FileHandle.read(upToCount:)` 会等满整个缓冲区或 EOF，导致 initialize 一直无回复。
+
+- 写作 Space 重做：左侧新增“文件”面板（文件夹树、打开与未保存标记、右键操作），中间“编辑器”改为文件标签、路径栏和编辑区，关闭未保存的标签先询问是否保存，Swift 文件使用脚本编辑器的着色与折叠，空状态居中并提供“打开文件 ⌘P”；去掉原来的路径输入框与按钮行。文本 Space 中 ⌘S 保存当前文件，新增“放弃修改”和 ⌘W“关闭文件”，场景命令不再出现；⌘P 可搜索项目文件。系统菜单新增“选择”“世界”。标题栏按原型重做：项目首字母（真实的叶绿到番石榴粉渐变）、git 分支、随 Space 变化的面包屑（文件路径或场景 › 实体）、带上下文芯片的意图框、你与 Guava 的在线头像，以及运行目标、实心构建图标和按状态显示的试玩控制组成的运行区。修复活动栏和状态栏在切换 Space、切换面板后不刷新，以及切换到已打开文件时编辑器和标题栏停在旧文件的问题。`DocumentEditingTests`、`CommandCatalogTests` 与工作台测试覆盖文件树、标签关闭、文本 Space 命令和活动栏刷新。
+
+- 新增两色线性渐变 `UILinearGradient` 与 `.background(_:)` 渐变重载：`DrawList.addLinearGradient` 复用圆角矩形几何及其一像素覆盖边缘，按位置给每个顶点着色（两色线性渐变在三角形内插值是精确的），`Node.backgroundGradient` 由两种渲染器在实心背景的位置绘制，并随节点透明度变化。`LinearGradientTests` 覆盖 CSS 角度、圆角边缘与顶点颜色。修复 `UIIcons.Editor.hammer` 缺少锤头路径的问题（原来看起来像一支笔），恢复完整的 Lucide 锤子。
+
+- `WorkspaceController` 遵循 `_ObservableObject`，工作区外的视图可用 `Observed(\.version, on: controller)` 观察布局变化。
+
 - 编辑器命令改为单一目录 `EditorCommandCatalog`：macOS 菜单栏、Windows/Linux 标题栏菜单、⌘/Ctrl+K 命令面板与窗口内快捷键都由它生成，移除原来平行维护的菜单模型、面板命令表和快捷键表。顶级菜单为文件、编辑、视图（Space 与布局子菜单）、Agent、运行、窗口、帮助；工作区不授权的命令不再显示为灰色项。新增 ⌘P 打开资源、⇧⌘P 命令、⌘↩ 试玩/暂停、⌘0 重置布局。Windows 不再没有菜单：沉浸式标题栏最左侧提供同一棵命令树。状态栏改为错误/警告计数、Space、未保存、后台活动与 Agent 状态，计数与控制台“问题”共用 `EditorProblemSummary`；窄窗口播放控制收成试玩/暂停与停止。`CommandCatalogTests`、`ShortcutHandlerTests`、`EditorNativeMenuTests` 与工作台标题栏宽度测试覆盖两种菜单呈现。见 [工作站边界](docs/architecture/workstation.md)。
 
 - `NativeMenuItem` 新增 `.submenu`，`NativeMenuBar` 新增 `applicationItems` 与可本地化的 `NativeApplicationMenuTitles`：macOS 应用菜单依次放入调用方的关于/设置项、隐藏、隐藏其他、全部显示与退出。`UIIcons.Navigation.menu` 新增菜单图标。

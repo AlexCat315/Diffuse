@@ -198,7 +198,7 @@ private struct Builder {
     }
 
     private func makeItems(text: String, starts: [Int], bidi: BidiParagraphs?) -> [Item] {
-        let breaks = RichTextBreaks.opportunities(in: text)
+        let breaks = LineBreaks.opportunities(in: text)
         var items: [Item] = []
         for (index, span) in paragraph.spans.enumerated() {
             let pad: Float = span.traits.contains(.code) ? (span.font.size * 0.32).rounded() : 0

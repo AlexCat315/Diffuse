@@ -306,14 +306,13 @@ public final class LayerAwareNodeRenderer {
     private func emitBackground(_ node: Node, into list: DrawList,
                                 x: Float, y: Float, w: Float, h: Float,
                                 radius: Float, borderWidth: Float) {
-        guard let bg = node.backgroundColor, w > 0, h > 0 else { return }
+        guard node.backgroundColor != nil || node.backgroundGradient != nil, w > 0, h > 0 else { return }
         let inset: Float = (node.borderColor != nil && node.borderWidth > 0) ? borderWidth : 0
         let bgWidth = max(0, w - 2 * inset)
         let bgHeight = max(0, h - 2 * inset)
         guard bgWidth > 0 && bgHeight > 0 else { return }
         let rect = UIRect(x: x + inset, y: y + inset,
                           width: bgWidth, height: bgHeight)
-        let color = applyOpacity(bg, node.opacity)
         let bgRadius = max(0, radius - inset)
         // The backdrop covers the whole node, not just the fill: the border
         // ring is drawn on top of it and must stay crisp.
@@ -322,10 +321,15 @@ public final class LayerAwareNodeRenderer {
                                           cornerRadius: radius,
                                           blurRadius: node.backdropBlur, opacity: node.opacity))
         }
-        if bgRadius > 0 {
-            list.addRoundedRect(rect, radius: bgRadius, color: color)
-        } else {
-            list.addRect(rect, color: color)
+        if let gradient = node.backgroundGradient {
+            list.addLinearGradient(rect, radius: bgRadius, gradient: gradient.multipliedAlpha(node.opacity))
+        } else if let bg = node.backgroundColor {
+            let color = applyOpacity(bg, node.opacity)
+            if bgRadius > 0 {
+                list.addRoundedRect(rect, radius: bgRadius, color: color)
+            } else {
+                list.addRect(rect, color: color)
+            }
         }
     }
 

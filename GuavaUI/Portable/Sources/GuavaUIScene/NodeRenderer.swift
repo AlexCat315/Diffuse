@@ -84,14 +84,13 @@ public struct NodeRenderer {
 
         // 4. Background fill (inset by border width so it does not overdraw
         //    the border ring).
-        if let bg = node.backgroundColor, width > 0, height > 0 {
+        if node.backgroundColor != nil || node.backgroundGradient != nil, width > 0, height > 0 {
             let inset = (node.borderColor != nil && node.borderWidth > 0) ? borderWidth : 0
             let bgWidth  = max(0, width  - 2 * inset)
             let bgHeight = max(0, height - 2 * inset)
             if bgWidth > 0 && bgHeight > 0 {
                 let rect = UIRect(x: absX + inset, y: absY + inset,
                                   width: bgWidth, height: bgHeight)
-                let color = applyOpacity(bg, node.opacity)
                 let bgRadius = max(0, radius - inset)
                 // The backdrop covers the whole node, not just the fill: the
                 // border ring is drawn on top of it and must stay crisp.
@@ -101,10 +100,15 @@ public struct NodeRenderer {
                         cornerRadius: radius,
                         blurRadius: node.backdropBlur, opacity: node.opacity))
                 }
-                if bgRadius > 0 {
-                    list.addRoundedRect(rect, radius: bgRadius, color: color)
-                } else {
-                    list.addRect(rect, color: color)
+                if let gradient = node.backgroundGradient {
+                    list.addLinearGradient(rect, radius: bgRadius, gradient: gradient.multipliedAlpha(node.opacity))
+                } else if let bg = node.backgroundColor {
+                    let color = applyOpacity(bg, node.opacity)
+                    if bgRadius > 0 {
+                        list.addRoundedRect(rect, radius: bgRadius, color: color)
+                    } else {
+                        list.addRect(rect, color: color)
+                    }
                 }
             }
         }

@@ -49,4 +49,15 @@ struct TextLayoutRegressionTests {
         let trackedWrap = TextLayout.layout(shapedGlyphs: [glyph(0), glyph(1)], text: "AB", atlas: Metrics(), maxWidth: 10, lineHeight: 20, letterSpacing: 1)
         #expect(trackedWrap.lines.map(\.width) == [5, 5])
     }
+
+    @Test("Ideographs wrap between characters and carry the previous one with closing punctuation")
+    func ideographicKinsoku() {
+        let text = "了解什么。"
+        let clusters = text.indices.map { UInt32(text.utf8.distance(from: text.utf8.startIndex, to: $0)) }
+        let result = TextLayout.layout(shapedGlyphs: clusters.map { glyph($0, advance: 10) }, text: text,
+                                       atlas: Metrics(), maxWidth: 40, lineHeight: 20)
+        // "。" would overflow the four-character line; "么" moves down with it.
+        #expect(result.lines.map { $0.glyphs.count } == [3, 2])
+        #expect(result.lines[1].startCluster == clusters[3])
+    }
 }

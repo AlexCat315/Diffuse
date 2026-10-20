@@ -7,15 +7,23 @@ struct EditorActivityRail: View {
     let app: EditorApplication
     let controller: WorkspaceController
     let onCommand: (EditorCommand) -> Void
-    @State private var revision: UInt64 = 0
-    @State private var observation = DockObservation()
+    private var layout: Observed<WorkspaceController, UInt64>
+
+    init(app: EditorApplication, controller: WorkspaceController, onCommand: @escaping (EditorCommand) -> Void) {
+        self.app = app
+        self.controller = controller
+        self.onCommand = onCommand
+        layout = Observed(\.version, on: controller)
+    }
 
     var body: some View {
-        let _ = revision
-        let _ = observation.bind(controller, to: $revision)
+        let _ = layout.wrappedValue
         Column(alignment: .center, spacing: 0) {
             if controller.document.panels["hierarchy"] != nil {
                 panel(UIIcons.Text.list, title: L("Outline"), id: "hierarchy")
+            }
+            if controller.document.panels["files"] != nil {
+                panel(UIIcons.File.folder, title: L("Files"), id: "files")
             }
             action(UIIcons.Action.search, title: L("Search")) {
                 onCommand(.showCommandPalette(.resources))
@@ -72,16 +80,3 @@ private struct ActivityButtonStyle: ButtonStyle {
     }
 }
 
-private final class DockObservation {
-    private weak var controller: WorkspaceController?
-    private var token: WorkspaceController.SubscriptionToken?
-
-    func bind(_ next: WorkspaceController, to revision: Binding<UInt64>) {
-        if controller === next { return }
-        if let token { controller?.unsubscribe(token) }
-        controller = next
-        token = next.subscribe { revision.wrappedValue = $0.version }
-    }
-
-    deinit { if let token { controller?.unsubscribe(token) } }
-}

@@ -60,6 +60,15 @@ public struct BackgroundModifier: ViewModifier {
     }
 }
 
+public struct BackgroundGradientModifier: ViewModifier {
+    public let gradient: UILinearGradient
+    public init(_ gradient: UILinearGradient) { self.gradient = gradient }
+
+    public func apply(node: Node) {
+        node.backgroundGradient = gradient
+    }
+}
+
 public struct ForegroundColorModifier: ViewModifier {
     public let color: Color
     public init(_ color: Color) { self.color = color }
@@ -181,6 +190,11 @@ public struct LineHeightModifier: ViewModifier {
 public extension View {
     func background(_ color: Color) -> some View {
         modifier(BackgroundModifier(color))
+    }
+
+    /// A two-stop linear gradient fill that follows `cornerRadius` like a color.
+    func background(_ gradient: UILinearGradient) -> some View {
+        modifier(BackgroundGradientModifier(gradient))
     }
 
     func foregroundColor(_ color: Color) -> some View {

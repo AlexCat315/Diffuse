@@ -11,19 +11,23 @@ struct EditorCommandContext: Equatable {
     var canUndo = false
     var canRedo = false
     var hasSelection = false
+    /// The editor's selected text document, when one is open.
+    var document: EditorCommandDocument?
 
     init(workspaceMode: EditorWorkspaceMode,
          layoutPreset: EditorLayoutPreset? = nil,
          playbackState: PlaybackState = .stopped,
          canUndo: Bool = false,
          canRedo: Bool = false,
-         hasSelection: Bool = false) {
+         hasSelection: Bool = false,
+         document: EditorCommandDocument? = nil) {
         self.workspaceMode = workspaceMode
         self.layoutPreset = layoutPreset ?? .default(for: workspaceMode)
         self.playbackState = playbackState
         self.canUndo = canUndo
         self.canRedo = canRedo
         self.hasSelection = hasSelection
+        self.document = document
     }
 
     init(app: EditorApplication) {
@@ -33,7 +37,19 @@ struct EditorCommandContext: Equatable {
                   playbackState: state.timing.playbackState,
                   canUndo: app.canUndo,
                   canRedo: app.canRedo,
-                  hasSelection: !state.selection.selectedEntityIDs.isEmpty)
+                  hasSelection: !state.selection.selectedEntityIDs.isEmpty,
+                  document: EditorCommandDocument(app.workstation.documents))
+    }
+}
+
+struct EditorCommandDocument: Equatable {
+    var isDirty: Bool
+
+    init(isDirty: Bool) { self.isDirty = isDirty }
+
+    init?(_ model: EditorDocumentWorkspace) {
+        guard let path = model.selectedPath, let document = model.documents.first(where: { $0.path == path }) else { return nil }
+        isDirty = document.isDirty
     }
 }
 
@@ -164,7 +180,7 @@ private struct Builder {
     }
 
     var menus: [EditorCommandMenu] {
-        [file, edit, view, agent, run, window, help]
+        [file, edit, select, world, view, agent, run, window, help]
     }
 
     private var file: EditorCommandMenu {
@@ -176,6 +192,12 @@ private struct Builder {
             entry("search.resources", "Open Resource...", "", .init(.letter("p")),
                   command: .showCommandPalette(.resources), inPalette: false),
             entry("scene.save", "Save Scene", "save scene 保存场景", .init(.letter("s")), command: .saveScene),
+            entry("document.save", "Save", "save file document 保存 文件", .init(.letter("s")), command: .saveDocument,
+                  enabled: context.document?.isDirty == true),
+            entry("document.revert", "Discard Changes", "revert discard reload 放弃修改 还原", command: .revertDocument,
+                  enabled: context.document?.isDirty == true),
+            entry("document.close", "Close File", "close file 关闭文件", .init(.letter("w")), command: .closeDocument,
+                  enabled: context.document.map { !$0.isDirty } ?? false),
             .separator,
             entry("assets.import", "Import Assets...", "import assets 导入资源", command: .importAssets,
                   enabled: canAuthorScene),
@@ -195,6 +217,40 @@ private struct Builder {
                   command: .duplicateSelection, enabled: canAuthorScene && context.hasSelection),
             entry("edit.delete", "Delete Selection", "delete 删除", .init(.delete, []), command: .deleteSelection,
                   enabled: canAuthorScene && context.hasSelection),
+        ])
+    }
+
+    private var select: EditorCommandMenu {
+        let canSelect = canAuthorScene
+        return menu("select", "Select", [
+            entry("select.all", "Select All", "select all entities 全选", command: .selectAll, enabled: canSelect),
+            entry("select.none", "Deselect", "clear selection 取消选择", command: .clearSelection,
+                  enabled: context.hasSelection),
+            entry("select.invert", "Invert Selection", "invert selection 反选", command: .invertSelection,
+                  enabled: canSelect),
+            .separator,
+            entry("select.descendants", "Select Descendants", "children descendants 子级", command: .selectDescendants,
+                  enabled: context.hasSelection),
+        ])
+    }
+
+    private var world: EditorCommandMenu {
+        let canEdit = canAuthorScene && context.hasSelection
+        let templates: [EditorCommandItem] = EditorEntityTemplate.allCases.map { template in
+            entry("world.add." + template.rawValue, template.displayName, "add create entity 添加 创建 实体",
+                  command: .spawnEntity(template), enabled: canAuthorScene)
+        }
+        return menu("world", "World", [
+            .submenu(menu("add-entity", "Add Entity", templates)),
+            .separator,
+            entry("world.frame", "Frame Selected", "frame focus 聚焦", command: .frameSelection,
+                  enabled: context.hasSelection),
+            entry("world.visibility", "Toggle Visibility", "hide show 隐藏 显示", command: .toggleSelectionVisibility,
+                  enabled: canEdit),
+            entry("world.lock", "Toggle Lock", "lock unlock 锁定 解锁", command: .toggleSelectionLock,
+                  enabled: canEdit),
+            .separator,
+            entry("scene.settings", "Scene Settings", "physics scene 场景物理设置", command: .showSceneSettings),
         ])
     }
 
@@ -270,9 +326,9 @@ private struct Builder {
         }
         return menu("window", "Window", [
             panel("hierarchy", keywords: "hierarchy outline 大纲 层级"),
+            panel("files", keywords: "files explorer 文件"),
             panelEntry("inspector.show", panel: "inspector", keywords: "inspector properties 属性",
                        command: .showPanel("inspector")),
-            entry("scene.settings", "Scene Settings", "physics scene 场景物理设置", command: .showSceneSettings),
             panel("viewport", keywords: "viewport scene 场景 视口"),
             panel("documents", keywords: "documents text 文档"),
             panel("media", keywords: "video timeline 视频 时间线"),

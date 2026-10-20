@@ -169,6 +169,44 @@ struct AuthoringWorkspaceTests {
         #expect(title.absoluteFrame.height == 40)
     } }
 
+    @Test("The activity rail follows Space switches and panel activation")
+    func railFollowsLayout() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let app = try EditorApplication(projectDirectory: directory.path)
+        defer { app.shutdown() }
+        let registry = EditorRootViewFactory.makeRegistry(app: app)
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
+            mode: .documents, preset: .documentsDefault, registry: registry))
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: EditorActivityRail(app: app, controller: controller, onCommand: { _ in }))
+        func rail() -> [String: Bool] {
+            for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: 44, height: 600) }
+            var result: [String: Bool] = [:]
+            func visit(_ node: Node) {
+                if let name = node.attachments[LayoutDebugAttachmentKey.debugName] as? String, name.hasPrefix("editor-rail-") {
+                    result[name] = node.accessibility?.state.isSelected ?? false
+                }
+                node.children.forEach(visit)
+            }
+            if let root = graph.tree.root { visit(root) }
+            return result
+        }
+        #expect(rail()["editor-rail-files"] != nil)
+        #expect(rail()["editor-rail-hierarchy"] == nil)
+
+        app.store.dispatch(.setWorkspaceMode(.level))
+        EditorRootViewFactory.resetLayout(into: controller, for: .level, preset: .levelDefault, registry: registry)
+        let level = rail()
+        #expect(level["editor-rail-files"] == nil)
+        #expect(level["editor-rail-hierarchy"] != nil)
+
+        EditorRootViewFactory.activatePanel("journal", in: controller)
+        #expect(rail()["editor-rail-journal"] == true)
+        #expect(rail()["editor-rail-intent-input"] == false)
+    } }
+
     @Test("Scoped palette opens with its prefix, and closing removes the card and its modal scope")
     func paletteScopeAndClose() throws { try WorkbenchUITestSupport.withEnvironment { _, focus in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

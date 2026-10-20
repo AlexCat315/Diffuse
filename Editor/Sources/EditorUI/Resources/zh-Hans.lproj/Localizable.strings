@@ -834,7 +834,7 @@
 "Expand code at line %d" = "展开第 %d 行代码块";
 "%d folded lines" = "已折叠 %d 行";
 "%d breakpoints in folded code" = "折叠代码中有 %d 个断点";
-"Files" = "文件列表";
+"Files" = "文件";
 "Document" = "文档";
 
 "Write" = "写作";
@@ -896,3 +896,26 @@
 "Guava is working" = "Guava 正在执行";
 "Agent ready" = "Agent 就绪";
 "Agent offline" = "Agent 未连接";
+"Select" = "选择";
+"Select All" = "全选";
+"Deselect" = "取消选择";
+"Invert Selection" = "反选";
+"Add Entity" = "添加实体";
+"Toggle Visibility" = "显示 / 隐藏";
+"Toggle Lock" = "锁定 / 解锁";
+"Discard Changes" = "放弃修改";
+"Branch" = "分支";
+"Plain Text" = "纯文本";
+"Refresh" = "刷新";
+"No text files" = "没有文本文件";
+"Add files to the project folder, then refresh." = "把文件放进项目文件夹后刷新。";
+"files" = "个文件";
+"unsaved" = "个未保存";
+"Close" = "关闭";
+"Save changes before closing?" = "关闭前保存修改？";
+"Don't Save" = "不保存";
+"More" = "更多";
+"Open a file to start editing" = "打开一个文件开始编辑";
+"Choose a file in the Files panel, or search the project." = "在左侧文件列表中选择，或搜索项目文件。";
+"Open File..." = "打开文件…";
+"Run Target" = "运行目标";

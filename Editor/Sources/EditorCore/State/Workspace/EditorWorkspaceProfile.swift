@@ -26,7 +26,7 @@ public struct EditorWorkspaceProfile: Sendable {
 
     public static let builtInPanelIDs: Set<String> = [
         "viewport", "hierarchy", "inspector", "assets", "console", "intent-input",
-        "journal", "documents", "media", "scripts", "developer-tools", "animation", "render-pipeline",
+        "journal", "files", "documents", "media", "scripts", "developer-tools", "animation", "render-pipeline",
     ]
 
     public static func profile(for mode: EditorWorkspaceMode) -> Self {
@@ -34,9 +34,9 @@ public struct EditorWorkspaceProfile: Sendable {
                                    "intent-input", "journal", "render-pipeline"]
         switch mode {
         case .documents:
-            return Self(domain: .documents, features: [.documents], panelIDs: ["documents", "console", "intent-input", "journal"])
+            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "intent-input", "journal"])
         case .video:
-            return Self(domain: .media, features: [.media, .documents], panelIDs: ["media", "documents", "console", "intent-input", "journal"])
+            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "intent-input", "journal"])
         case .level, .scripting:
             return Self(domain: .game,
                         features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],

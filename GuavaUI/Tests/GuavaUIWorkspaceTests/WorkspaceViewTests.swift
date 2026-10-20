@@ -557,6 +557,22 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNil(rig.optionalFrame(named: "workspace-tab-close-assets"))
     }
 
+    func testPanelWithOwnTabsHidesGroupTabBarOnlyWhileAlone() {
+        var document = Self.makeMultiTabDocument()
+        document.panels["viewport"]?.hidesTabBarWhenAlone = true
+        document.panels["console"]?.hidesTabBarWhenAlone = true
+        let controller = WorkspaceController(document: document)
+        let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 640,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+
+        XCTAssertNil(rig.optionalFrame(named: "workspace-tab-viewport"))
+        XCTAssertEqual(rig.frame(named: "workspace-panel-viewport").minY,
+                       rig.frame(named: "workspace-group-center").minY)
+        // Sharing a group brings the tab strip back so either panel stays reachable.
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-tab-console"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-tab-assets"))
+    }
+
     func testDraggingWorkspaceSplitDividersUpdatesFractions() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 

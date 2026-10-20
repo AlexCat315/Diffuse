@@ -68,6 +68,15 @@ enum EditorCommandDispatcher {
             EditorSceneFileCoordinator.requestOpen(app: app)
         case .saveScene:
             _ = app.saveSceneManifest()
+        case .saveDocument:
+            let documents = app.workstation.documents
+            if let path = documents.selectedPath { documents.save(path) }
+        case .revertDocument:
+            let documents = app.workstation.documents
+            if let path = documents.selectedPath { documents.reload(path, discard: true) }
+        case .closeDocument:
+            let documents = app.workstation.documents
+            if let path = documents.selectedPath { documents.close(path) }
         case .importAssets:
             EditorRootViewFactory.activatePanel("assets", in: controller)
             EditorAssetImportCoordinator.requestImport(app: app)
@@ -112,6 +121,38 @@ enum EditorCommandDispatcher {
             } else {
                 app.logConsole("Could not delete selection", severity: .error)
             }
+        case .selectAll:
+            store.dispatch(.setSelectedEntities(Set(HierarchyPanelModel.allEntityIDs(in: app.scene.roots))))
+        case .clearSelection:
+            store.dispatch(.setSelectedEntity(nil))
+        case .invertSelection:
+            let selected = store.state.selection.selectedEntityIDs
+            let all = Set(HierarchyPanelModel.allEntityIDs(in: app.scene.roots))
+            store.dispatch(.setSelectedEntities(all.subtracting(selected)))
+        case .selectDescendants:
+            let descendants = HierarchyPanelModel.descendantIDs(of: store.state.selection.selectedEntityIDs,
+                                                                in: app.scene.roots, includesSelection: true)
+            if !descendants.isEmpty { store.dispatch(.setSelectedEntities(descendants)) }
+        case let .spawnEntity(template):
+            guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.timing.playbackState) else {
+                app.logConsole("Stop simulation before adding entities", severity: .warning)
+                return
+            }
+            if let id = app.scene.spawnEntity(template: template) { store.dispatch(.setSelectedEntity(id)) }
+        case .frameSelection:
+            let selected = store.state.selection.selectedEntityIDs
+            if !selected.isEmpty { app.scene.frameEntities(selected) }
+        case .toggleSelectionVisibility:
+            let selected = store.state.selection.selectedEntityIDs
+            guard !selected.isEmpty else { return }
+            let allHidden = selected.allSatisfy { !app.scene.isHierarchyVisible($0) }
+            if !app.scene.setHierarchyVisibility(allHidden, for: selected) {
+                app.logConsole("Could not change hierarchy visibility", severity: .warning)
+            }
+        case .toggleSelectionLock:
+            let selected = store.state.selection.selectedEntityIDs
+            guard !selected.isEmpty else { return }
+            app.scene.setEntityLocked(!selected.allSatisfy { app.scene.isEntityLocked($0) }, entityIDs: selected)
         case let .setWorkspaceMode(next):
             guard store.state.workspace.mode != next else { return }
             if !next.isGameWorkspace {

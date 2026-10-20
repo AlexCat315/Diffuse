@@ -286,10 +286,14 @@ let opened = try? FileHandle(forWritingTo: openedFile)
 var buffer: [UInt8] = []
 
 func readByte() -> UInt8? {
+    // FileHandle.read(upToCount:) may wait for the full count or EOF; read(2)
+    // returns whatever the client has written so far.
+    var chunk = [UInt8](repeating: 0, count: 4096)
     while buffer.isEmpty {
-        let chunk = (try? FileHandle.standardInput.read(upToCount: 4096)) ?? nil
-        guard let chunk, !chunk.isEmpty else { return nil }
-        buffer.append(contentsOf: chunk)
+        let count = read(STDIN_FILENO, &chunk, chunk.count)
+        if count < 0 && errno == EINTR { continue }
+        guard count > 0 else { return nil }
+        buffer.append(contentsOf: chunk[..<count])
     }
     return buffer.removeFirst()
 }

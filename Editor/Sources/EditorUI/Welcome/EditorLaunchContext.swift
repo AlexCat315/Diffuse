@@ -13,6 +13,9 @@ final class EditorLaunchContext: @unchecked Sendable {
     private(set) var bundle: EditorLaunchBundle?
     private var shellPreferenceToken: EditorStore.SubscriptionToken?
     private var nativeMenuToken: EditorStore.SubscriptionToken?
+    /// Document edits do not pass through the store, but Save and Close File
+    /// availability depends on them.
+    private var documentMenuToken: AnyHashable?
     private var workspaceSubscriptionToken: WorkspaceController.SubscriptionToken?
     private var workspacePersistenceTask: Task<Void, Never>?
     private(set) var display: AppDisplayHandle?
@@ -163,6 +166,10 @@ final class EditorLaunchContext: @unchecked Sendable {
         if let token = nativeMenuToken {
             app.store.unsubscribe(token)
         }
+        if let token = documentMenuToken {
+            app.workstation.documents._unregisterObserver(token)
+        }
+        documentMenuToken = nil
         if let token = workspaceSubscriptionToken {
             bundle.controller.unsubscribe(token)
         }
@@ -261,6 +268,13 @@ final class EditorLaunchContext: @unchecked Sendable {
                                        controller: controller,
                                        registry: registry,
                                        display: display)
+            }
+        }
+        documentMenuToken = app.workstation.documents._registerObserver { [weak self, weak app, weak controller, weak registry] in
+            MainActor.assumeIsolated {
+                guard let self, let app, let controller, let registry,
+                      let display = self.display else { return }
+                self.refreshNativeMenu(app: app, controller: controller, registry: registry, display: display)
             }
         }
     }

@@ -55,7 +55,37 @@ struct CommandCatalogTests {
         #expect(!ids.contains("assets.import"))
         #expect(!ids.contains("assets.show"))
         #expect(ids.contains("panel.documents"))
+        #expect(ids.contains("panel.files"))
         #expect(ids.contains("agent.show"))
+        // ⌘S saves the open file here; scene, selection and world commands are absent.
+        for absent in ["scene.save", "scene.new", "scene.open", "edit.duplicate", "edit.delete", "select.all", "world.frame"] {
+            #expect(!ids.contains(absent), "\(absent) leaked into the Write Space")
+        }
+        let catalog = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .documents,
+                                                                     document: EditorCommandDocument(isDirty: true)))
+        let save = catalog.entries.first { $0.id == "document.save" }
+        #expect(save?.shortcut?.key.equivalent == "s")
+        #expect(save?.isEnabled == true)
+        #expect(catalog.entries.first { $0.id == "document.close" }?.isEnabled == false)
+        #expect(!catalog.menus.contains { $0.id == "select" || $0.id == "world" })
+        let clean = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .documents,
+                                                                   document: EditorCommandDocument(isDirty: false)))
+        #expect(clean.entries.first { $0.id == "document.save" }?.isEnabled == false)
+        #expect(clean.entries.first { $0.id == "document.close" }?.isEnabled == true)
+    }
+
+    @Test("scene Spaces expose Select and World menus backed by scene commands")
+    func selectAndWorld() throws {
+        let catalog = full()
+        let ids = Set(catalog.entries.map(\.id))
+        for id in ["select.all", "select.none", "select.invert", "select.descendants", "world.frame", "world.visibility",
+                   "world.lock", "world.add.cube", "world.add.camera"] {
+            #expect(ids.contains(id), "missing \(id)")
+        }
+        // Text fields own ⌘A; Select All must not claim it from the native menu.
+        #expect(catalog.entries.first { $0.id == "select.all" }?.shortcut == nil)
+        #expect(!ids.contains("document.save"))
+        #expect(catalog.menus.map(\.id) == ["file", "edit", "select", "world", "view", "agent", "run", "window", "help"])
     }
 
     @Test("exposes the core file / edit / build commands")

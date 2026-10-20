@@ -83,7 +83,8 @@ struct TreeBehaviorTests: GuavaUIComposeSerializedSuite {
             #expect(surface.absoluteFrame.minX < row.absoluteFrame.minX)
             #expect(surface.absoluteFrame.maxX >= row.absoluteFrame.maxX)
             let disclosure = try #require(all(surface).first { $0.accessibility?.role == .button })
-            let point = disclosure.absoluteFrame.center
+            let frame = disclosure.absoluteFrame
+            let point = CGPoint(x: frame.midX, y: frame.midY)
             input.dispatch(.mouseButtonDown(.init(button: .left, x: Float(point.x), y: Float(point.y), clicks: 1)))
             input.dispatch(.mouseButtonUp(.init(button: .left, x: Float(point.x), y: Float(point.y), clicks: 1)))
             settle(graph)

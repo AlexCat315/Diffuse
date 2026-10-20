@@ -223,6 +223,9 @@ public struct WorkspacePanel: Sendable, Codable, Equatable {
     public var isDraggable: Bool
     public var isCollapsible: Bool
     public var iconAssetKey: String?
+    /// A panel that draws its own tabs, such as a code editor with file tabs,
+    /// hides the group tab bar while it is the only panel in its group.
+    public var hidesTabBarWhenAlone = false
     public var sizing = WorkspacePanelSizing()
 
     public init(id: WorkspacePanelID,
@@ -242,7 +245,7 @@ public struct WorkspacePanel: Sendable, Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isClosable, isDraggable, isCollapsible, iconAssetKey, sizing
+        case id, title, isClosable, isDraggable, isCollapsible, iconAssetKey, hidesTabBarWhenAlone, sizing
     }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -253,6 +256,7 @@ public struct WorkspacePanel: Sendable, Codable, Equatable {
                   isCollapsible: try values.decodeIfPresent(Bool.self, forKey: .isCollapsible) ?? true,
                   iconAssetKey: try values.decodeIfPresent(String.self, forKey: .iconAssetKey),
                   sizing: try values.decodeIfPresent(WorkspacePanelSizing.self, forKey: .sizing) ?? .init())
+        hidesTabBarWhenAlone = try values.decodeIfPresent(Bool.self, forKey: .hidesTabBarWhenAlone) ?? false
     }
 }
 

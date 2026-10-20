@@ -17,14 +17,12 @@ struct CommandPalettePresentation: View {
     let availableHeight: Float
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            if app.store.commandPaletteVisible {
-                AnimatedVisibility(isVisible: true,
-                                   transition: .opacity.combined(with: .move(edge: .top, distance: 12)),
-                                   animateOnMount: true) {
-                    CommandPaletteOverlay(app: app, controller: controller, registry: registry,
-                                          availableHeight: availableHeight)
-                }.frame(width: .percent(100), height: .percent(100))
+        let visible = app.store.commandPaletteVisible
+        AnimatedVisibility(isVisible: visible,
+                           transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
+            if visible {
+                CommandPaletteOverlay(app: app, controller: controller, registry: registry,
+                                      availableHeight: availableHeight)
             }
         }.frame(width: .percent(100), height: .percent(100))
     }
@@ -143,6 +141,18 @@ struct CommandPaletteOverlay: View {
             }
         }
         if !commandsOnly && !entitiesOnly {
+            if app.store.workspaceMode.profile.features.contains(.documents) {
+                let documents = app.workstation.documents
+                entries += documents.files().map { path in
+                    let parts = path.split(separator: "/")
+                    return ResultItem(id: "file/" + path, title: parts.last.map(String.init) ?? path,
+                        detail: parts.dropLast().joined(separator: "/"), shortcut: "", enabled: true, searchText: path,
+                        perform: {
+                            documents.open(path)
+                            EditorRootViewFactory.activatePanel("documents", in: controller)
+                        })
+                }
+            }
             entries += app.workstation.scripts.snapshot.documents.map { document in
                 ResultItem(id: "script/" + document.file.identifier, title: document.file.displayName + ".swift",
                     detail: "Scripts/", shortcut: "", enabled: true,

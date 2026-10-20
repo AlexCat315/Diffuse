@@ -183,8 +183,14 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "developer-tools", title: localizedPanelTitle(for: "developer-tools"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.developer-tools" }) {
                 DeveloperToolsPanel(app: app)
             },
-            WorkspacePanelDescriptor(id: "documents", title: localizedPanelTitle(for: "documents"), defaultSlot: .center) {
-                DocumentsPanel(model: app.workstation.documents)
+            WorkspacePanelDescriptor(id: "files", title: localizedPanelTitle(for: "files"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.files" }) {
+                DocumentFilesPanel(model: app.workstation.documents)
+            },
+            WorkspacePanelDescriptor(id: "documents", title: localizedPanelTitle(for: "documents"), defaultSlot: .center, configure: { $0.iconAssetKey = "panel.documents"; $0.hidesTabBarWhenAlone = true }) {
+                DocumentsPanel(model: app.workstation.documents, onOpenFile: {
+                    app.store.dispatch(.setCommandPaletteQuery(TextBuffer(EditorPaletteScope.resources.prefix)))
+                    app.store.dispatch(.setCommandPaletteVisible(true))
+                })
             },
             WorkspacePanelDescriptor(id: "media", title: localizedPanelTitle(for: "media"), defaultSlot: .center) {
                 MediaTimelinePanel(model: app.workstation.media, projectRoot: URL(fileURLWithPath: app.projectDirectory))
@@ -213,6 +219,8 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.profiler", panelIcon("profiler"))
         WorkspacePanelIconCatalog.register("panel.scripts", panelIcon("script"))
         WorkspacePanelIconCatalog.register("panel.journal", UIIcons.Editor.gitCommit)
+        WorkspacePanelIconCatalog.register("panel.files", UIIcons.File.folder)
+        WorkspacePanelIconCatalog.register("panel.documents", UIIcons.File.fileCode)
     }
 
     static func saveWorkspaceLayout(_ controller: WorkspaceController,
@@ -304,8 +312,10 @@ enum EditorRootViewFactory {
             return L("Scripts")
         case "animation":
             return L("Animation")
+        case "files":
+            return L("Files")
         case "documents":
-            return L("Text and Code")
+            return L("Editor")
         case "media":
             return L("Video Editing")
         default:
