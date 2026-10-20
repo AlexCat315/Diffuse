@@ -310,7 +310,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 report(node)
             }
         }
-        node.attachments[ScrollReveal.handlerKey] = { [weak node] (target: CGRect) in
+        node.scrollReveal = { [weak node] (target: CGRect) in
             guard let node else { return }
             let previousOffset = node.contentOffset
             // A descendant can reveal itself during layout write-back, before
@@ -331,7 +331,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 offset.y += ScrollReveal.delta(start: target.minY, end: target.maxY, viewportStart: viewport.minY, viewportEnd: viewport.maxY)
             }
             motion.adopt(offset)
-        } as (CGRect) -> Void
+        }
 
         if node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] == nil {
             node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] = Float(0)

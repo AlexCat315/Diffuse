@@ -5,7 +5,7 @@ internal import ToolSupport
 /// It needs no visible geometry, so offscreen or virtualized items can be
 /// reached; query the result afterwards like any other input.
 enum ActivateUI {
-  static let usage = "guava-dev devtools activate-ui PORT|@SESSION_FILE NODE_ID [activate|increment|decrement]"
+  static let usage = "guava-dev devtools activate-ui PORT|@SESSION_FILE NODE_ID [activate|increment|decrement|reveal] (reveal scrolls the node into view without activating it)"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -14,7 +14,7 @@ enum ActivateUI {
     }
     guard (2...3).contains(arguments.count) else { throw ToolError.message("Usage: \(usage)") }
     let action = arguments.count == 3 ? arguments[2] : "activate"
-    guard ["activate", "increment", "decrement"].contains(action) else { throw ToolError.message("Usage: \(usage)") }
+    guard ["activate", "increment", "decrement", "reveal"].contains(action) else { throw ToolError.message("Usage: \(usage)") }
     let endpoint = try DevToolsEndpoint.resolve(arguments[0])
     let node = arguments[1]
 

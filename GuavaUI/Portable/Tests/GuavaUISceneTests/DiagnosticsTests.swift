@@ -98,6 +98,20 @@ struct DiagnosticsTests {
         #expect(decoded.nodeID == "7" && decoded.action == .activate)
     }
 
+    @Test func revealScrollsEveryScrollAncestorEvenForADisabledNode() {
+        let tree = NodeTree(), root = Node(), outer = Node(), inner = Node(), target = Node()
+        tree.root = root; root.addChild(outer); outer.addChild(inner); inner.addChild(target)
+        target.accessibility = AccessibilitySemantics(.button) { $0.state.isEnabled = false }
+        var revealed: [String] = []
+        outer.scrollReveal = { _ in revealed.append("outer") }
+        inner.scrollReveal = { _ in revealed.append("inner") }
+        let actions = UIAccessibilityActions(tree: tree)
+        #expect(actions.perform(.init(nodeID: String(target.id.rawValue), action: .reveal)) == nil)
+        #expect(revealed == ["inner", "outer"])
+        target.revealInScrollAncestors(nearestOnly: true)
+        #expect(revealed == ["inner", "outer", "inner"])
+    }
+
     @Test func overviewReportsInvalidGeometryWithoutLosingJSONAndQueriesIdentifyTheNode() throws {
         let tree = NodeTree(), root = Node(), broken = Node(), negative = Node(), valid = Node()
         tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 300, height: 200)

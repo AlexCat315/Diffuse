@@ -153,7 +153,7 @@ private struct SidebarSelectionRevealHost<Content: View>: _PrimitiveView {
             while let candidate = pending.popLast() {
                 if candidate.attachments[ButtonHost.markerKey] != nil {
                     var ancestor = candidate.parent
-                    while let current = ancestor, current.attachments[ScrollReveal.handlerKey] == nil {
+                    while let current = ancestor, current.scrollReveal == nil {
                         ancestor = current.parent
                     }
                     guard let scroll = ancestor, scroll.frame.height > 0, candidate.frame.height > 0 else { return }

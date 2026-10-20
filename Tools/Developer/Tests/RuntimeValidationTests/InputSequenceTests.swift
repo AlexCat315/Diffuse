@@ -76,4 +76,16 @@ final class InputSequenceTests: XCTestCase {
       XCTAssertThrowsError(try CaptureUI.options(args))
     }
   }
+
+  func testCaptureCropsToANodeOrALogicalRegion() throws {
+    XCTAssertEqual(try CaptureUI.options(["9231", "out.jpg", "--node", "128", "--scale", "2"]),
+                   .init(scale: 2, crop: .node("128")))
+    XCTAssertEqual(try CaptureUI.options(["9231", "out.jpg", "--region", "100,40.5,320,80"]).crop,
+                   .region(x: 100, y: 40.5, width: 320, height: 80))
+    for args in [["9231", "out.jpg", "--node", ""], ["9231", "out.jpg", "--node", "abc"],
+                 ["9231", "out.jpg", "--region", "1,2,3"], ["9231", "out.jpg", "--region", "0,0,0,10"],
+                 ["9231", "out.jpg", "--node", "1", "--region", "0,0,10,10"]] {
+      XCTAssertThrowsError(try CaptureUI.options(args))
+    }
+  }
 }

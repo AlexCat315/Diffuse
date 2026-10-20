@@ -88,10 +88,27 @@ enum InputUI {
   }
 
   /// Pointer events centred on the node's visible, input-enabled hit region.
+  /// An offscreen node is first revealed in its scroll containers, so an agent
+  /// can click what it found with query without guessing wheel distances.
   private static func clickEvents(
     node: String,
     request: (String, [String: Any]) async throws -> [String: Any]
   ) async throws -> [[String: Any]] {
+    if let events = try await visibleClick(node: node, request: request) { return events }
+    _ = try await request("mirror.start", ["fps": 1, "quality": 0.5])
+    _ = try await request("mirror.activate", ["node_id": node, "action": "reveal"])
+    // Let the host lay out and render the scrolled content before measuring.
+    try await Task.sleep(for: .milliseconds(200))
+    _ = try await request("mirror.stop", [:])
+    if let events = try await visibleClick(node: node, request: request) { return events }
+    throw ToolError.message(
+      "Node has no visible input-enabled hit region; query the current window again")
+  }
+
+  private static func visibleClick(
+    node: String,
+    request: (String, [String: Any]) async throws -> [String: Any]
+  ) async throws -> [[String: Any]]? {
     let result = try await request(
       "diagnostics.call",
       [
@@ -106,10 +123,7 @@ enum InputUI {
       let frame = presentation["visibleFrame"] as? [String: Double],
       let x = frame["x"], let y = frame["y"], let width = frame["w"], let height = frame["h"],
       [x, y, width, height].allSatisfy(\.isFinite), width > 0, height > 0
-    else {
-      throw ToolError.message(
-        "Node has no visible input-enabled hit region; query the current window again")
-    }
+    else { return nil }
     return ["pointerMove", "pointerDown", "pointerUp"].map {
       ["kind": $0, "x": x + width / 2, "y": y + height / 2, "button": 0, "clickCount": 1]
     }

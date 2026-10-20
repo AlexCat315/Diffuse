@@ -317,7 +317,11 @@ public struct MirrorStartPayload: Codable, Sendable {
 
 /// Run one accessibility action on a node found by `query_ui_nodes`.
 public struct MirrorActivatePayload: Codable, Sendable {
-    public enum Action: String, Codable, Sendable { case activate, increment, decrement }
+    public enum Action: String, Codable, Sendable {
+        case activate, increment, decrement
+        /// Scrolls every scroll ancestor so the node is visible, without activating it.
+        case reveal
+    }
     public var nodeID: String
     public var action: Action
 

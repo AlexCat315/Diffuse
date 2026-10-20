@@ -221,6 +221,10 @@ struct DevToolsClient: Equatable {
             guard (1...2).contains(arguments.count) else { throw ToolError.invalid("Use guava devtools activate NODE_ID [activate|increment|decrement]") }
             try Self.requireNodeID(arguments[0])
             (operation, self.arguments) = ("activate-ui", arguments)
+        case "reveal":
+            guard arguments.count == 1 else { throw ToolError.invalid("Use guava devtools reveal NODE_ID") }
+            try Self.requireNodeID(arguments[0])
+            (operation, self.arguments) = ("activate-ui", [arguments[0], "reveal"])
         case "capture": (operation, self.arguments) = ("capture-ui", arguments)
         case "timings": (operation, self.arguments) = ("record-timings", arguments)
         default: return nil

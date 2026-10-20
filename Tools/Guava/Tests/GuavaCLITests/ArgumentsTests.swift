@@ -85,4 +85,8 @@ import Testing
     #expect(try Arguments(["devtools", "activate", "566"]).client?.arguments == ["566"])
     #expect(try Arguments(["devtools", "activate", "566", "increment"]).client?.operation == "activate-ui")
     #expect(throws: (any Error).self) { try Arguments(["devtools", "activate"]) }
+    #expect(try Arguments(["devtools", "reveal", "284"]).client?.arguments == ["284", "reveal"])
+    #expect(try Arguments(["devtools", "reveal", "284"]).client?.operation == "activate-ui")
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "reveal", "x"]) }
+    #expect(throws: (any Error).self) { try Arguments(["devtools", "reveal", "1", "2"]) }
 }
