@@ -11,6 +11,36 @@ import Testing
 @Suite("Unified authoring workbench", .serialized)
 @MainActor
 struct AuthoringWorkspaceTests {
+    private final class ResizingTitle: View {
+        let app: EditorApplication
+        @State private var width: Float = 1280
+        init(app: EditorApplication) { self.app = app }
+        var body: some View { EditorTitleBar(app: app, width: width, onCommand: { _ in }) }
+        func resize(to width: Float) { self.width = width }
+    }
+
+    @Test("Title controls retain their order when switching between menu, icon and labeled navigation")
+    func titleResizeOrder() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let app = try EditorApplication(projectDirectory: directory.path)
+        defer { app.shutdown() }
+        let harness = ResizingTitle(app: app)
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: harness)
+        for width: Float in [1280, 390, 720, 1280] {
+            harness.resize(to: width)
+            for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 40) }
+            let frames = graph.layoutSnapshot()
+            let intent = try #require(frames.first { $0.debugName == "editor-intent-bar" })
+            let spaces = try #require(frames.first { $0.debugName == (width < 680 ? "editor-spaces-menu" : "editor-spaces") })
+            let playback = try #require(frames.first { $0.debugName == "editor-playback-toolbar" })
+            #expect(intent.absoluteFrame.maxX <= spaces.absoluteFrame.minX)
+            #expect(spaces.absoluteFrame.maxX <= playback.absoluteFrame.minX)
+        }
+    } }
+
     @Test("Shell persistence round-trips authoring groups and defaults without interaction modes")
     func shellPersistence() throws {
         let workspace = EditorWorkspaceState {

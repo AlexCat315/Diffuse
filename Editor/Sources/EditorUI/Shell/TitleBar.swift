@@ -13,20 +13,20 @@ struct EditorTitleBar: View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             ImmersiveWindowTitleBar(height: 40) {
                 Row(alignment: .center, spacing: 10) {
-                    project
-                    if width >= 1180 { selection.flex().frame(minWidth: 0).clipped() }
-                    WindowDragRegion().frame(minWidth: 12)
-                    intent.frame(width: width >= 1380 ? 300 : width >= 1100 ? 240 : 32)
+                    project.id("title-project")
+                    if width >= 1180 { selection.flex().frame(minWidth: 0).clipped().id("title-selection") }
+                    WindowDragRegion().frame(minWidth: 12).id("title-drag")
+                    intent.frame(width: width >= 1380 ? 300 : width >= 1100 ? 240 : 32).id("title-intent")
                     EditorSpaceSwitcher(mode: store.workspaceMode,
                                         presentation: width < 680 ? .menu : width < 1260 ? .icons : .labels,
-                                        onCommand: onCommand)
+                                        onCommand: onCommand).id("title-spaces")
                     if width >= 1100 {
                         Icon(UIIcons.Status.sparkles, size: 13, color: EditorChromeTokens.agentColor)
                             .frame(width: 24, height: 24)
-                            .background(EditorChromeTokens.agentColor.opacity(0.12)).cornerRadius(12)
+                            .background(EditorChromeTokens.agentColor.opacity(0.12)).cornerRadius(12).id("title-presence")
                     }
                     if store.workspaceMode.isGameWorkspace {
-                        EditorPlaybackToolbar(state: store.playbackState, onCommand: onCommand)
+                        EditorPlaybackToolbar(state: store.playbackState, onCommand: onCommand).id("title-playback")
                     }
                 }.flex().frame(minWidth: 0)
             }

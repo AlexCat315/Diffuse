@@ -57,39 +57,42 @@ struct EditorSpaceSwitcher: View {
 
     @ViewBuilder
     var body: some View {
-        if presentation == .menu {
-            let current = EditorSpace(mode: mode)
-            Popover(isPresented: $isPresented, width: 200, surface: .content, overflow: .flip) {
-                Row(alignment: .center, spacing: 5) {
-                    Icon(current.icon, size: 14)
-                    Icon(UIIcons.Navigation.chevronDown, size: 9)
-                }.padding(horizontal: 8, vertical: 6).background(.surfaceVariant).cornerRadius(6)
-                    .accessibility { $0.label = L(current.title) + " Space" }
-            } content: {
-                Menu(EditorSpace.allCases.map { space in
-                    .item(MenuItem(id: space.rawValue, title: L(space.title), isSelected: current == space, action: {
-                        isPresented = false
-                        onCommand(.setWorkspaceMode(space.mode))
-                    }))
-                }, width: 200)
-            }.debugName("editor-spaces-menu")
-        } else {
-            Row(alignment: .center, spacing: 1) {
-                for space in EditorSpace.allCases {
-                    AnyView(Button(isSelected: EditorSpace(mode: mode) == space,
-                                   tooltip: L(space.title)) {
-                        onCommand(.setWorkspaceMode(space.mode))
-                    } label: {
-                        Row(alignment: .center, spacing: 5) {
-                            Icon(space.icon, size: 13)
-                            if presentation == .labels { Text(L(space.title)) }
-                        }
-                    }.buttonStyle(EditorChromeButtonStyle(height: 24))
-                        .accessibility { $0.label = L(space.title); $0.state.isSelected = EditorSpace(mode: mode) == space }
-                        .debugName("editor-space-" + space.rawValue))
-                }
-            }.padding(2).background(.surfaceSunken).cornerRadius(8)
-                .border(.divider, width: 1).debugName("editor-spaces")
+        // Keep one layout slot while the navigation changes presentation.
+        Box(direction: .row, alignItems: .center, spacing: 0) {
+            if presentation == .menu {
+                let current = EditorSpace(mode: mode)
+                Popover(isPresented: $isPresented, width: 200, surface: .content, overflow: .flip) {
+                    Row(alignment: .center, spacing: 5) {
+                        Icon(current.icon, size: 14)
+                        Icon(UIIcons.Navigation.chevronDown, size: 9)
+                    }.padding(horizontal: 8, vertical: 6).background(.surfaceVariant).cornerRadius(6)
+                        .accessibility { $0.label = L(current.title) + " Space" }
+                } content: {
+                    Menu(EditorSpace.allCases.map { space in
+                        .item(MenuItem(id: space.rawValue, title: L(space.title), isSelected: current == space, action: {
+                            isPresented = false
+                            onCommand(.setWorkspaceMode(space.mode))
+                        }))
+                    }, width: 200)
+                }.debugName("editor-spaces-menu")
+            } else {
+                Row(alignment: .center, spacing: 1) {
+                    for space in EditorSpace.allCases {
+                        AnyView(Button(isSelected: EditorSpace(mode: mode) == space,
+                                       tooltip: L(space.title)) {
+                            onCommand(.setWorkspaceMode(space.mode))
+                        } label: {
+                            Row(alignment: .center, spacing: 5) {
+                                Icon(space.icon, size: 13)
+                                if presentation == .labels { Text(L(space.title)) }
+                            }
+                        }.buttonStyle(EditorChromeButtonStyle(height: 24))
+                            .accessibility { $0.label = L(space.title); $0.state.isSelected = EditorSpace(mode: mode) == space }
+                            .debugName("editor-space-" + space.rawValue))
+                    }
+                }.padding(2).background(.surfaceSunken).cornerRadius(8)
+                    .border(.divider, width: 1).debugName("editor-spaces")
+            }
         }
     }
 }
