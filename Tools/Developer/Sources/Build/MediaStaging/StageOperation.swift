@@ -98,11 +98,25 @@ enum StageOperation {
     let prefix = build.appendingPathComponent("install")
     let options =
       configureOptions(prefix: prefix) + (try Targets.options(for: name, environment: environment))
+    // configure links the host programs it needs for the build itself
+    // (ffbuild/bin2c, …) with `$(HOSTLD)`, the plain `clang` from PATH, and
+    // offers no --host-ldflags to hand that link a library search path. When
+    // PATH resolves `clang` to a raw toolchain binary — which the CI
+    // toolchain setup does — the driver locates neither headers nor
+    // libraries, and the host link dies on its first `-lm` with
+    // "library 'm' not found". SDKROOT is the environment variable the driver
+    // itself reads as the default sysroot, so exporting it covers the host
+    // link; the target compile already carries an explicit `--sysroot`, and
+    // for the iOS cross targets the host programs still belong to macOS.
+    var childEnvironment = environment
+    if name.hasPrefix("macos-") || name.hasPrefix("ios-") {
+      childEnvironment["SDKROOT"] = try Targets.hostSysroot(environment: environment)
+    }
     try Shell.inherit(
       ["sh", source.appendingPathComponent("configure").path] + options,
-      at: build, environment: environment)
-    try Shell.inherit(["make", "-j4"], at: build, environment: environment)
-    try Shell.inherit(["make", "install"], at: build, environment: environment)
+      at: build, environment: childEnvironment)
+    try Shell.inherit(["make", "-j4"], at: build, environment: childEnvironment)
+    try Shell.inherit(["make", "install"], at: build, environment: childEnvironment)
 
     try Fs.directory(variant)
     try merge(

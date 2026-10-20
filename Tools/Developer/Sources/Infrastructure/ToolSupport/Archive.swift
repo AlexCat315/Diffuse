@@ -9,7 +9,15 @@ package enum Archive {
       throw ToolError.message("Archive not found: \(archive.path)")
     }
     try Fs.directory(destination)
-    var arguments = ["tar", "-xf", archive.path, "-C", destination.path]
+    var arguments: [String]
+    #if os(Windows)
+      // MSYS2's GNU tar treats a `-f` path of the form `C:/…` as a remote
+      // host (`C:`) and dies with "Cannot connect to C: resolve failed".
+      // `--force-local` tells it to read the archive as a local file.
+      arguments = ["tar", "--force-local", "-xf", archive.path, "-C", destination.path]
+    #else
+      arguments = ["tar", "-xf", archive.path, "-C", destination.path]
+    #endif
     if stripComponents > 0 { arguments += ["--strip-components", String(stripComponents)] }
     try Shell.inherit(arguments)
   }

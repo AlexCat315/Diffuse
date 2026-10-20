@@ -163,7 +163,7 @@ enum Chromium {
   /// Matches Playwright's launching defaults closely enough that rendering and
   /// input behave the same, then keeps the animation frame pump unthrottled.
   static func baseArguments(port: Int, userData: URL) -> [String] {
-    [
+    var arguments = [
       "--headless=new",
       "--remote-debugging-port=\(port)",
       "--remote-debugging-address=127.0.0.1",
@@ -179,6 +179,15 @@ enum Chromium {
       "--hide-scrollbars",
       "--mute-audio",
     ]
+    #if canImport(Glibc)
+      // Distributions that disable unprivileged user namespaces (Ubuntu
+      // 23.10+ AppArmor, most CI containers) leave Chromium's zygote
+      // sandbox unusable, and it aborts at startup with "No usable
+      // sandbox!". This browser only ever drives headless automation, so
+      // the documented --no-sandbox workaround is the right default here.
+      arguments.append("--no-sandbox")
+    #endif
+    return arguments
   }
 
   static func locate() throws -> URL {

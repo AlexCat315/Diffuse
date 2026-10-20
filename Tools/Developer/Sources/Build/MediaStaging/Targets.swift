@@ -77,6 +77,12 @@ enum Targets {
         "--ranlib=\(tools.appendingPathComponent("llvm-ranlib").path)",
         "--disable-programs",
       ]
+      if arch == "x86_64" {
+        // Same PIC/inline-asm relocation fix as the x86_64 Linux target: when
+        // this static archive is linked into a shared object, the CABAC PC32
+        // relocation against a preemptible symbol would otherwise fail.
+        options += ["--extra-cflags=-fvisibility=protected"]
+      }
     } else if name.hasPrefix("windows-") {
       options += [
         "--target-os=win32", "--toolchain=msvc", "--cc=cl", "--ar=lib", "--disable-x86asm",
@@ -95,6 +101,19 @@ enum Targets {
       ]
     } else {
       options += ["--target-os=linux", "--disable-x86asm"]
+      // `--enable-pic` makes the x86 CABAC decode (libavcodec/x86/h264_cabac.c,
+      // cabac.h) emit `lea ff_h264_cabac_tables(%rip)` — an R_X86_64_PC32
+      // relocation against a global symbol. When this static archive is later
+      // linked into a shared object (the SwiftPM test bundle) GNU ld refuses a
+      // dynamic PC32 against a preemptible symbol: "relocation R_X86_64_PC32
+      // against symbol … can not be used when making a shared object". Marking
+      // every FFmpeg symbol protected makes them non-preemptible so the
+      // relocation resolves statically — without disabling the inline asm the
+      // CABAC hot path depends on for speed. aarch64 uses ADRP/ADD relocations
+      // that the loader supports natively, so only x86_64 needs this.
+      if arch == "x86_64" {
+        options += ["--extra-cflags=-fvisibility=protected"]
+      }
       if name != host() {
         guard let compiler = environment["GUAVA_FFMPEG_CC"], !compiler.isEmpty else {
           throw ToolError.message(
@@ -110,8 +129,9 @@ enum Targets {
   /// checks. The host compiler is the plain `clang` from PATH; when that is a
   /// toolchain binary rather than the `/usr/bin/clang` shim it does not locate
   /// the SDK by itself, and every host check (C11 support, builtins, …) would
-  /// fail with "'ctype.h' file not found".
-  private static func hostSysroot(environment: [String: String]) throws -> String {
+  /// fail with "'ctype.h' file not found". The staging operation also exports
+  /// it as `SDKROOT` so the host *link* finds `libm` and friends.
+  static func hostSysroot(environment: [String: String]) throws -> String {
     try Shell.output(
       ["xcrun", "--sdk", "macosx", "--show-sdk-path"], environment: environment)
   }
