@@ -11,7 +11,12 @@ private import ToolSupport
 /// progress immediately, matching the reference scripts' `print(..., flush=True)`
 /// that `verify-dev` relies on.
 func flushOutput() {
-  fflush(stdout)
+  // `fflush(NULL)` flushes every open output stream, which includes the
+  // `stdout` FILE* that the standard library's `print` writes through.
+  // Passing nil avoids referencing the `stdout` global directly: on Glibc it
+  // is a mutable global that Swift 6 strict concurrency rejects, while on
+  // Darwin `stdout` is a function-like macro and compiles either way.
+  fflush(nil)
 }
 
 /// The combined standard output and exit status of one finished child process.

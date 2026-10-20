@@ -81,14 +81,18 @@ jobs:
           cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
           cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
 
+      - name: Build pinned FFmpeg
+        shell: bash
+        run: swift run --package-path Tools/Developer guava-dev media
+
+      # The Engine package depends on the local Media package, whose FFmpeg
+      # binaryTarget needs the bundle that `guava-dev media` just staged into
+      # Engine/Media/vendor. Resolving before that build reports
+      # "does not contain a binary artifact", so resolve only after staging.
       - name: Resolve packages
         shell: bash
         working-directory: Engine
         run: swift package resolve
-
-      - name: Build pinned FFmpeg
-        shell: bash
-        run: swift run --package-path Tools/Developer guava-dev media
 
       - name: Build pure-Swift targets
         shell: bash
