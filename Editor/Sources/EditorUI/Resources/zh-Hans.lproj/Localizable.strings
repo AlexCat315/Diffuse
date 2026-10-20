@@ -834,3 +834,5 @@
 "Expand code at line %d" = "展开第 %d 行代码块";
 "%d folded lines" = "已折叠 %d 行";
 "%d breakpoints in folded code" = "折叠代码中有 %d 个断点";
+"Files" = "文件列表";
+"Document" = "文档";

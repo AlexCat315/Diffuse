@@ -779,3 +779,5 @@
 "Expand code at line %d" = "Expand code at line %d";
 "%d folded lines" = "%d folded lines";
 "%d breakpoints in folded code" = "%d breakpoints in folded code";
+"Files" = "Files";
+"Document" = "Document";
