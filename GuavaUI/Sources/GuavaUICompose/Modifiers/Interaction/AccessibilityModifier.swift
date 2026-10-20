@@ -13,7 +13,7 @@ public struct AccessibilityModifier: ViewModifier {
         var target = targets.count == 1 ? targets[0] : node
         var semantics = target.accessibility ?? AccessibilitySemantics(.group)
         configure(&semantics)
-        if target !== node && [.group, .dialog, .table, .tree, .list, .row, .cell, .status].contains(semantics.role) {
+        if target !== node && [.group, .dialog, .tabPanel, .table, .tree, .list, .row, .cell, .status].contains(semantics.role) {
             target = node; semantics = AccessibilitySemantics(.group); configure(&semantics)
         }
         target.accessibility = semantics
