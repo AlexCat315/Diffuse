@@ -39,6 +39,14 @@ public struct Scrollbar: View {
     }
 }
 
+private enum _ScrollbarAttachmentKeys {
+    static let chromeOpacity = "__scrollbar_chrome_opacity"
+    static let isHovered = "__scrollbar_is_hovered"
+    static let isDragging = "__scrollbar_is_dragging"
+    static let desiredVisible = "__scrollbar_desired_visible"
+    static let lastOffset = "__scrollbar_last_offset"
+}
+
 private struct ScrollbarPaint: Equatable {
     let axis: Scrollbar.Axis
     let offset: CGFloat
@@ -76,6 +84,16 @@ private struct ScrollbarHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        // Hover-capable surfaces auto-hide the companion until hover, focus,
+        // drag, or a scroll flash reveals it. Touch-only surfaces have no
+        // hover to reveal chrome, so the bar stays visible there.
+        if node.attachments[_ScrollbarAttachmentKeys.chromeOpacity] == nil {
+            node.attachments[_ScrollbarAttachmentKeys.chromeOpacity] = node.supportsControlHover ? Float(0) : Float(1)
+            node.attachments[_ScrollbarAttachmentKeys.isHovered] = false
+            node.attachments[_ScrollbarAttachmentKeys.isDragging] = false
+            node.attachments[_ScrollbarAttachmentKeys.desiredVisible] = false
+            node.attachments[_ScrollbarAttachmentKeys.lastOffset] = value
+        }
         let percent = maxOffset > 0 ? Int((value / maxOffset * 100).rounded()) : 0
         node.accessibility = AccessibilitySemantics(.slider) {
             $0.label = label
@@ -97,22 +115,44 @@ private struct ScrollbarHost: _PrimitiveView {
             offset.wrappedValue = maxOffset * CGFloat(min(100, max(0, pct))) / 100
         }
         guard let registry = InteractionRegistryHolder.current else { return }
+        // Focus changes don't re-run view updates; the shared focus sink is
+        // how controls react (Button, MenuItemRow, resize handles use it too).
+        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] (_: Bool) in
+            guard let node else { return }
+            applyDesiredVisibility(node)
+        }
+        registry.setHover(node) { phase in
+            switch phase {
+            case .enter:
+                node.attachments[_ScrollbarAttachmentKeys.isHovered] = true
+            case .leave:
+                node.attachments[_ScrollbarAttachmentKeys.isHovered] = false
+            }
+            applyDesiredVisibility(node)
+        }
         registry.setPointer(node) { event, phase, _ in
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
                 FocusChainHolder.current?.focus(node)
                 PointerCaptureHolder.current?.acquire(node)
+                node.attachments[_ScrollbarAttachmentKeys.isDragging] = true
+                applyDesiredVisibility(node)
                 update(node, to: CGPoint(x: CGFloat(event.x), y: CGFloat(event.y)))
                 return .handled
             case .up:
                 if PointerCaptureHolder.current?.target === node {
                     PointerCaptureHolder.current?.release()
                 }
+                node.attachments[_ScrollbarAttachmentKeys.isDragging] = false
+                applyDesiredVisibility(node)
                 return .handled
             }
         }
         registry.setMotion(node) { event, _ in
+            // Scrub only while dragging; plain hover motion over the bar must
+            // not move the thumb.
+            guard PointerCaptureHolder.current?.target === node else { return .ignored }
             update(node, to: CGPoint(x: CGFloat(event.x), y: CGFloat(event.y)))
             return .handled
         }
@@ -141,6 +181,63 @@ private struct ScrollbarHost: _PrimitiveView {
             guard let node else { return }
             draw(node: node, list: list, origin: origin)
         }
+
+        let last = node.attachments[_ScrollbarAttachmentKeys.lastOffset] as? CGFloat ?? value
+        if last != value {
+            node.attachments[_ScrollbarAttachmentKeys.lastOffset] = value
+            flashIfUnheld(on: node)
+        }
+        applyDesiredVisibility(node)
+    }
+
+    /// Hover, focus, and drag each hold the bar visible. Only transitions of
+    /// the combined state drive the fade, so per-frame updates don't fight an
+    /// in-flight scroll flash.
+    private func applyDesiredVisibility(_ node: Node) {
+        guard node.supportsControlHover else { return }
+        let hovered = node.attachments[_ScrollbarAttachmentKeys.isHovered] as? Bool ?? false
+        let dragging = node.attachments[_ScrollbarAttachmentKeys.isDragging] as? Bool ?? false
+        let focused = FocusChainHolder.current?.focused === node
+        let desired = hovered || dragging || focused
+        let previous = node.attachments[_ScrollbarAttachmentKeys.desiredVisible] as? Bool ?? false
+        guard desired != previous else { return }
+        node.attachments[_ScrollbarAttachmentKeys.desiredVisible] = desired
+        setChromeVisible(desired, on: node)
+    }
+
+    private func setChromeVisible(_ visible: Bool, on node: Node) {
+        let current = node.attachments[_ScrollbarAttachmentKeys.chromeOpacity] as? Float ?? 0
+        withAnimation(.semantic(.fast, in: node.theme)) {
+            node.animatableSet(propertyKey: _ScrollbarAttachmentKeys.chromeOpacity,
+                               current: current, to: visible ? Float(1) : Float(0)) { [weak node] opacity in
+                guard let node else { return }
+                node.attachments[_ScrollbarAttachmentKeys.chromeOpacity] = opacity
+                node.markRenderDirty(reason: .styleSet(field: "scrollbarChromeOpacity"))
+            }
+        }
+    }
+
+    /// Scrolling reveals the bar even when nothing holds it: it appears at
+    /// once and fades 0.3s after the content rests for 0.7s — the same
+    /// numbers as ScrollView's touch indicator. Reduced motion keeps it
+    /// visible instead of animating it out; any held state cancels the fade
+    /// because the same property key retargets the in-flight controller.
+    private func flashIfUnheld(on node: Node) {
+        guard node.supportsControlHover else { return }
+        guard node.attachments[_ScrollbarAttachmentKeys.desiredVisible] as? Bool != true else { return }
+        let apply: (Float) -> Void = { [weak node] opacity in
+            guard let node else { return }
+            node.attachments[_ScrollbarAttachmentKeys.chromeOpacity] = opacity
+            node.markRenderDirty(reason: .styleSet(field: "scrollbarChromeOpacity"))
+        }
+        node.animatableSet(propertyKey: _ScrollbarAttachmentKeys.chromeOpacity,
+                           current: node.attachments[_ScrollbarAttachmentKeys.chromeOpacity] as? Float ?? 0,
+                           to: Float(1), apply: apply)
+        guard !node.prefersReducedMotion else { return }
+        withAnimation(Animation(duration: 0.3, curve: .easeOut, delay: 0.7)) {
+            node.animatableSet(propertyKey: _ScrollbarAttachmentKeys.chromeOpacity,
+                               current: Float(1), to: Float(0), apply: apply)
+        }
     }
 
     private func update(_ node: Node, to point: CGPoint) {
@@ -166,13 +263,15 @@ private struct ScrollbarHost: _PrimitiveView {
     private func draw(node: Node, list: DrawList, origin: CGPoint) {
         let track = CGFloat(axis == .vertical ? node.frame.height : node.frame.width)
         guard track > 0 else { return }
+        let opacity = node.attachments[_ScrollbarAttachmentKeys.chromeOpacity] as? Float ?? 1
+        guard opacity > 0.01 else { return }
         let width = CGFloat(thickness)
         let thumb = thumbExtent(track: track)
         let travel = max(0, track - thumb)
         let fraction = maxOffset > 0 ? value / maxOffset : 0
         let position = fraction * travel
-        let trackColor = node.theme.colors.surfaceVariant.multipliedAlpha(0.7)
-        let thumbColor = node.theme.colors.onSurfaceMuted.multipliedAlpha(0.85)
+        let trackColor = node.theme.colors.surfaceVariant.multipliedAlpha(0.7 * opacity)
+        let thumbColor = node.theme.colors.onSurfaceMuted.multipliedAlpha(0.85 * opacity)
         if axis == .vertical {
             list.addRoundedRect(UIRect(x: Float(origin.x + (width - 4) / 2), y: Float(origin.y),
                                        width: 4, height: Float(track)), radius: 2, color: trackColor)
