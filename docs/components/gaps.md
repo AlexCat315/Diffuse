@@ -19,7 +19,7 @@
 | 导航与外壳 | TabView（adaptive/closable、溢出菜单与标题省略）、Sidebar / AdaptiveSidebar、NavigationDrawer、NavigationRail、NavigationStack（平台返回由宿主）、Breadcrumb、Pagination、Accordion/DisclosureGroup、Toolbar、AppBar、StatusBar、Workspace（compact）、Carousel、CommandPalette | Workspace 其余深化按需（见第 3 节）、BottomNavigationBar P3（TabView 底部栏已可覆盖）；Sidebar 行内 View 插槽、垂直 Toolbar 与 Workspace 标签条 a11y/RTL 已实现 |
 | 浮层 | Modal/Dialog/AlertDialog、Sheet（四边）、BottomSheet（detent/拖拽/自适应）、Menu/ContextMenu、Popover/HoverCard/Tooltip、Popconfirm、ActionSheet、Toast/Notification（队列/时长/暂停/替换/操作/位置） | 按标题自动定宽或省略 P2（Menu 富内容行、图标槽、链接语义与 submenu 指针三角区意图已实现） |
 | 反馈与状态 | Alert、Badge、Progress/ProgressCircle、Spinner、Skeleton、EmptyState、Toast、StatusTone | 基本完整；Alert 窄宽操作堆叠、关闭与大字号、Badge 长文本已补齐，Banner 由 Alert 覆盖 |
-| 展示与媒体 | Text/Typography、RichText/Markdown（行内样式、链接、代码块、列表、表格、跨块选择复制）、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | Wasm RGBA 字形与 PNG 位图彩色字体、非 Apple 平台渐进解码、其他平台 WebView 后端、视频播放组件（应用层按需）；Image 缓存淘汰/在途合并/GIF·WebP 动画/EXIF/macOS 渐进解码、Avatar 状态角标与成员弹层、Linux/Windows COLR 彩色字形与 RTL 双向段落已实现 |
+| 展示与媒体 | Text/Typography、RichText/Markdown（行内样式、链接、代码块、列表、表格、跨块选择复制）、Icon、Image/AsyncImage/Thumbnail、Avatar/AvatarGroup、Badge/Tag/KeyCap/FieldLabel、ViewportHost、ScriptCanvasView、WebView（宿主注入，macOS 已接入） | Wasm RGBA 字形与 PNG 位图彩色字体、非 Apple 平台渐进解码、其他平台 WebView 后端、视频播放组件（应用层按需）；Image 缓存淘汰/在途合并/GIF·WebP 动画/EXIF/macOS·iOS 渐进解码、Avatar 状态角标与成员弹层、Linux/Windows COLR 彩色字形与 RTL 双向段落已实现 |
 | 拖放与交互 | AssetDropTarget、Tree DnD、Workspace 拖拽、PointerCapture、DragScope/Draggable/DropTarget | 通用 payload 协议已实现；`Draggable` 无自动滚动与键盘等价路径（集合重排用 ReorderableList，已具备二者） |
 
 ## 2. 缺失组件规范

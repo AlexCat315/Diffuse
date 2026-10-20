@@ -32,9 +32,17 @@ fit 在容器内等比居中；fill 将 UV 裁为中央区域，绘制矩形始�
 - **在途合并**：同一服务与缓存键（含重试身份）的并发请求共享一次下载与解码；每个等待者各自取消，最后一个等待者离开才取消共享任务，完成后条目移出，后续请求命中缓存或重新开始。
 - **动画**：GIF（stb_image）与带动画标志的 WebP 解码为合成后的整帧序列（WebP 未依赖 libwebpdemux，桥接层自行解析 RIFF 的 ANMF 块并按混合/处置标志合成）。帧按缩略图尺寸缩放，总帧数受同一源像素预算约束（最多 300 帧）；≤10ms 的帧按浏览器惯例显示 100ms。`AsyncImage` 在共享动画调度器上播放，循环次数用尽后停在最后一帧，减少动态效果时停在首帧；已解码的动画按缓存键记忆，重新挂载不必重新下载。
 - **EXIF 方向**：JPEG 的 APP1 Exif Orientation（1–8）在可移植解码路径上读取并旋转/镜像像素；缩略图边界按直立后的尺寸计算。
-- **渐进预览**：下载每累积 64 KiB，macOS/iOS 共用 CoreGraphics + ImageIO 增量源，尝试解码当前前缀（渐进 JPEG、交错 PNG）。先读取源尺寸并执行 `maximumSourcePixels` 预算，再创建有尺寸上限的缩略图，应用 EXIF 方向并保持比例、不放大；不完整或尚不可解码的前缀返回 nil，继续等待下载。预览资产不写缓存，最终结果替换预览；取消/切换来源仍受请求 generation 校验。Linux/Windows 等无 ImageIO 的平台只显示最终图片。
+- **渐进预览**：下载每累积 64 KiB，macOS/iOS 共用 CoreGraphics + ImageIO 增量源，尝试解码当前前缀（渐进 JPEG、交错 PNG）。先读取源尺寸并执行 `maximumSourcePixels` 预算，再创建有尺寸上限的缩略图，应用 EXIF 方向并保持比例、不放大；头信息不足或尚不可解码的前缀返回 nil，继续等待下载。预览资产不写缓存，最终结果替换预览；取消/切换来源仍受请求 generation 校验。Linux/Windows 等无 ImageIO 的平台只显示最终图片。
 - `ImagePipelineTests` 覆盖 LRU 淘汰、共享解码与取消、EXIF 读取与变换、两帧 GIF 解码与播放计时；`AsyncImageTests` 继续覆盖生命周期。
 
 本轮回归：`AsyncImageTests.remoteVector` 通过本机 HTTP 和生产图片服务验证无扩展名 SVG、误导扩展名、通用 MIME 回退及重定向；`formatFallbacks` 覆盖 MIME 大小写/参数。`ProgressiveImageTests` 使用真实渐进 JPEG 的第一个扫描前缀验证预览像素、EXIF 旋转、比例、不放大、源像素预算和非法尺寸。Gallery Image 的 Remote 模式可编辑 URL，便于用自己的图片服务验证。对比图按可用宽度换列，加载图与操作区按宽度/字号切换纵横布局；`ImageLayoutTests.matrix` 覆盖 390/720/1280、100%/200% 与 LTR/RTL 的图片、URL 字段和 Retry 边界。
 
 剩余限制：非 Apple 平台没有渐进解码；动画帧一次性解码到内存（受像素预算约束），不做流式帧解码。PNG/JPEG 等常规位图及 WebP 继续通过内容识别。底层常规位图解码可能先分配完整源图再缩小，源像素上限限制峰值，不能宣称已支持任意大图的低内存解码。动画自动化覆盖 GIF 与播放计时，WebP 动画合成仍需独立像素验收；渐进 JPEG 已有上述像素回归，交错 PNG 与真实 iOS 设备仍需取样。
+
+## 本轮验收（2026-10-20）
+
+- `swift test --package-path GuavaUI --no-parallel --filter Image`：32 项 Swift Testing 与 3 项 XCTest 通过，覆盖解码、资产、异步请求、缓存、动画与本轮预览。Gallery 既有 `GalleryTests|AdaptiveShellTests` 8 项通过；新增 `ImageLayoutTests` 通过 12 组宽度/字号/方向组合。
+- DevTools 在 390×820 touch/200%、720×820 mixed/dark/100%、1280×820 pointer/RTL/200% 输入本机无扩展名 SVG URL，显式查询输入值并确认四个 `Loaded image` 语义（含异步来源）。Retry、Missing → Retry → Remote 均得到预期加载/失败/恢复状态。镜像确认 200×140 加载图、换列后的对比图及 URL/操作边界，窄屏操作纵排，宽屏与 RTL 正确并排。
+- 渐进 JPEG 原生取样先发送 202,040 / 366,385 字节，在未结束的 HTTP 响应中已显示红/绿预览；释放剩余数据后更新为最终图片。原生输入使用 `guava-dev devtools query-ui/input-ui/capture-ui`，没有使用系统 UI 自动化。
+- `GuavaUIRuntime` / `GuavaUICompose` 使用本机模拟器依赖、iPhoneSimulator 27.1 SDK，以 `arm64-apple-ios16.0-simulator` 完成 SwiftPM 构建，覆盖预览平台分支与生产下载调用。
+- 以上窗口与像素回归在 macOS 执行；iOS 实机读屏、网络与画面仍需设备验收。
