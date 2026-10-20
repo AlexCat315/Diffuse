@@ -16,3 +16,6 @@
 [submodule "Engine/third-party/jolt"]
 	path = Engine/third-party/jolt
 	url = https://github.com/jrouwe/JoltPhysics.git
+[submodule "GuavaUI/third-party/ghostty"]
+	path = GuavaUI/third-party/ghostty
+	url = https://github.com/ghostty-org/ghostty.git

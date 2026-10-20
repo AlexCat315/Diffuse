@@ -42,3 +42,8 @@ endfunction()
 
 include(${CMAKE_SOURCE_DIR}/cmake/BuildFreeType.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/BuildHarfBuzz.cmake)
+# GuavaUITerminal is desktop-only (pseudo terminals); mobile staging reuses
+# this graph without needing Zig.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
+    include(${CMAKE_SOURCE_DIR}/cmake/BuildGhosttyVt.cmake)
+endif()

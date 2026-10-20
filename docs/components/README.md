@@ -75,6 +75,7 @@
 | Avatar / AvatarGroup | 状态角标、成员弹层与图片会话 | [avatar.md](avatar.md) |
 | Image / AsyncImage | LRU/合并、动画/EXIF、渐进预览的平台边界 | [image.md](image.md) |
 | WebView | 宿主注入的原生网页视图、裁剪与生命周期；macOS WKWebView | [webview.md](webview.md) |
+| Terminal | 基于 libghostty-vt 的 PTY 终端：键盘/IME/粘贴、回滚、主题配色；桌面独立包 | [terminal.md](terminal.md) |
 | Tree / TreeRow | 文档已写 | [tree.md](tree.md) |
 | Panel | 文档已写 | [panel.md](panel.md) |
 | SplitView | 比例/最小尺寸、compact 单面板与交互 | [splitview.md](splitview.md) |

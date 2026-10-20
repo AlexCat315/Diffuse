@@ -40,6 +40,12 @@ runs:
       # `guava-dev media` step can drive `cl` for the Windows FFmpeg build.
       if: runner.os == 'Windows'
       uses: ilammy/msvc-dev-cmd@v1
+    - name: Install Zig
+      # libghostty-vt (GuavaUITerminal) is built with Zig; Ghostty pins the
+      # exact compiler release it supports.
+      uses: mlugg/setup-zig@v2
+      with:
+        version: 0.16.0
     - name: Verify toolchains
       shell: bash
       run: |
@@ -51,6 +57,7 @@ runs:
         esac
         cmake --version
         ninja --version
+        zig version
 
     - name: Install native Vulkan headers and loader on Linux
       if: runner.os == 'Linux'

@@ -1,0 +1,4 @@
+module GhosttyVt {
+    header "GhosttyVt.h"
+    export *
+}

@@ -30,6 +30,7 @@ enum Bootstrap {
 
     let engineDone = root.appendingPathComponent("Engine/vendor/SDL3.artifactbundle")
     let guavaUIDone = root.appendingPathComponent("GuavaUI/vendor/CFreeType.artifactbundle")
+    let terminalDone = root.appendingPathComponent("GuavaUI/vendor/GhosttyVt.artifactbundle")
     var wasmtimeReady = true
     do { try PluginStaging.run(["stage", "--check"]) } catch { wasmtimeReady = false }
     if !wasmtimeReady {
@@ -40,6 +41,7 @@ enum Bootstrap {
     if !force,
       FileManager.default.fileExists(atPath: engineDone.path),
       FileManager.default.fileExists(atPath: guavaUIDone.path),
+      FileManager.default.fileExists(atPath: terminalDone.path),
       wasmtimeReady
     {
       print("Native deps already built. Run `guava-dev native-bootstrap --force` to rebuild.")

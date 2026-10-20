@@ -80,6 +80,7 @@ jobs:
         run: |
           swift test --package-path ../Engine/Logging
           swift test --no-parallel
+          swift test --package-path Terminal --no-parallel
           swift test --package-path Examples --no-parallel
           swift test --package-path ../Tools/Guava
           swift run --package-path ../Tools/Developer guava-dev boundaries
