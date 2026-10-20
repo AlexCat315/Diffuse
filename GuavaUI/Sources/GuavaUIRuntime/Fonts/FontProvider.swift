@@ -462,8 +462,19 @@ public final class FontProvider {
                                            CFRange(location: range.location, length: range.length))
 
         var candidates: [CTFont] = [direct, primary]
-        candidates.append(contentsOf: SystemFontDefaults.fontStack.map {
-            CTFontCreateWithName($0 as CFString, logicalSize, nil)
+        // Stack families carry the primary's weight and slant, so bold or
+        // italic text that falls back (CJK through PingFang) keeps its style.
+        let traits = CTFontCopyTraits(primary) as? [CFString: Any] ?? [:]
+        var styled: [CFString: Any] = [:]
+        if let weight = traits[kCTFontWeightTrait] { styled[kCTFontWeightTrait] = weight }
+        if let symbolic = traits[kCTFontSymbolicTrait] as? UInt32 {
+            styled[kCTFontSymbolicTrait] = symbolic & CTFontSymbolicTraits.traitItalic.rawValue
+        }
+        candidates.append(contentsOf: SystemFontDefaults.fontStack.map { family in
+            let descriptor = CTFontDescriptorCreateWithAttributes([
+                kCTFontFamilyNameAttribute: family, kCTFontTraitsAttribute: styled,
+            ] as CFDictionary)
+            return CTFontCreateWithFontDescriptor(descriptor, logicalSize, nil)
         })
 
         var seenPostScriptNames: Set<String> = []
