@@ -238,9 +238,11 @@ final class NativeUIBackdropPass {
         // `blurRadius` is a CSS-style gaussian radius: one standard deviation
         // in points, so a tap has to reach about two of them.
         let sigma = max(backdrop.blurRadius * min(scaleX, scaleY) / Float(factor), 0.5)
-        // Spaced taps ride on bilinear filtering: 13 samples covering two sigma
-        // instead of one sample per pixel inside it.
-        let tapStep = max(1, sigma / 3)
+        // Spaced taps ride on bilinear filtering: 25 samples covering two sigma
+        // instead of one sample per pixel inside it. The shader weighs taps by
+        // index, so sigma goes over in tap units.
+        let tapStep = max(1, sigma / 6)
+        let tapSigma = sigma / tapStep
         let captureUV = SIMD4(Float(capture.width) / Float(frame.x),
                               Float(capture.height) / Float(frame.y),
                               Float(capture.x) / Float(frame.x),
@@ -258,14 +260,14 @@ final class NativeUIBackdropPass {
         try draw(target: b, pipeline: offscreen, binding: try bindingSet(for: a.resource.texture),
                  quad: try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1),
                  params: NativeUIBackdropParams(uvTransform: SIMD4(1, 1, 0, 0),
-                                blur: SIMD4(Mode.blur.rawValue, tapStep / Float(width), 0, sigma),
+                                blur: SIMD4(Mode.blur.rawValue, tapStep / Float(width), 0, tapSigma),
                                 shape: .zero),
                  label: "backdrop-blur-h",
                  into: commands)
         try draw(target: a, pipeline: offscreen, binding: try bindingSet(for: b.resource.texture),
                  quad: try uploadQuad(x0: -1, y0: 1, x1: 1, y1: -1),
                  params: NativeUIBackdropParams(uvTransform: SIMD4(1, 1, 0, 0),
-                                blur: SIMD4(Mode.blur.rawValue, 0, tapStep / Float(height), sigma),
+                                blur: SIMD4(Mode.blur.rawValue, 0, tapStep / Float(height), tapSigma),
                                 shape: .zero),
                  label: "backdrop-blur-v",
                  into: commands)

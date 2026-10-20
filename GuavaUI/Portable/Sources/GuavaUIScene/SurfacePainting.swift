@@ -45,7 +45,15 @@ extension DrawList {
         let frost = frostedRect.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
         // A frosted panel samples what is behind it, so its shadow has to stay
         // outside even when nothing opaque covers it — that clip wins.
-        let occluded = frost == nil ? occludedRect.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil } : nil
+        // A rounded surface does not cover its own box's corners: skipping the
+        // whole box left a notch in the shadow there. Only the part inside the
+        // corner arcs is certainly covered.
+        let arcInset = max(0, cornerRadius) * (1 - Float(0.5).squareRoot())
+        let occluded = frost == nil ? occludedRect.flatMap { box -> UIRect? in
+            let covered = UIRect(x: box.minX + arcInset, y: box.minY + arcInset,
+                                 width: box.width - arcInset * 2, height: box.height - arcInset * 2)
+            return covered.width > 0 && covered.height > 0 ? covered : nil
+        } : nil
         paintSteps(layer, rect: rect, cornerRadius: cornerRadius, opacity: opacity,
                    count: Self.stepCount(for: layer), frost: frost, occluded: occluded)
     }

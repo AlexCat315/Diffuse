@@ -57,6 +57,38 @@ struct NodeRendererTests {
             rect: UIRect(x: 20, y: 20, width: 80, height: 40), cornerRadius: 6, blurRadius: 12))
     }
 
+    @Test("A frosted panel's border is drawn in the backdrop batch, after the fill")
+    func frostedBorderStaysOnTop() {
+        for layered in [false, true] {
+            let root = Node()
+            root.frame = CGRect(x: 0, y: 0, width: 120, height: 80)
+            root.backgroundColor = Color(r: 0.2, g: 0.2, b: 0.2)
+            let panel = Node()
+            panel.frame = CGRect(x: 20, y: 20, width: 80, height: 40)
+            panel.cornerRadius = 6
+            panel.backdropBlur = 12
+            panel.backgroundColor = Color(r: 1, g: 1, b: 1, a: 0.5)
+            panel.borderColor = Color(r: 0, g: 0, b: 0, a: 0.1)
+            panel.borderWidth = 1
+            root.addChild(panel)
+            let list = DrawList()
+            if layered {
+                let tree = RenderTree()
+                tree.install(rootNode: root)
+                LayerAwareNodeRenderer().render(tree: tree, into: list)
+            }
+            else { NodeRenderer().render(root: root, into: list) }
+            let frosted = list.batches.firstIndex { $0.backdrop != nil }
+            #expect(frosted != nil)
+            // The ring's translucent black lands in the composited batch, so it
+            // is painted over the frost rather than under it.
+            let ring = list.vertices.indices.filter { list.vertices[$0].color == Color(r: 0, g: 0, b: 0, a: 0.1).rgba8 }
+            let start = Int(list.batches[frosted!].indexOffset)
+            let firstRingIndex = list.indices.firstIndex { ring.contains(Int($0)) }
+            #expect(firstRingIndex.map { $0 >= start } == true)
+        }
+    }
+
     @Test("A backdrop with no fill leaves nothing behind")
     func backdropWithoutFillIsDropped() {
         let root = Node()

@@ -70,13 +70,17 @@ public struct NodeRenderer {
                        frostedRect: node.backdropBlur > 0 ? rect : nil,
                        occludedRect: occluded)
 
-        // 3. Border ring, including when the background is transparent.
-        if let bc = node.borderColor, borderWidth > 0,
-           width > 0, height > 0 {
-            let color = applyOpacity(bc, node.opacity)
-            list.addRoundedRectStroke(rect, radius: radius,
-                                      width: borderWidth, color: color)
+        // 3. Border ring, including when the background is transparent. A
+        //    frosted node draws it after the fill: the backdrop composite is
+        //    attached to the fill's batch and would otherwise cover the ring.
+        let drawBorder = {
+            if let bc = node.borderColor, borderWidth > 0, width > 0, height > 0 {
+                list.addRoundedRectStroke(rect, radius: radius, width: borderWidth,
+                                          color: self.applyOpacity(bc, node.opacity))
+            }
         }
+        let frosted = node.backdropBlur > 0 && node.backgroundColor != nil
+        if !frosted { drawBorder() }
 
         // 4. Background fill (inset by border width so it does not overdraw
         //    the border ring).
@@ -104,6 +108,7 @@ public struct NodeRenderer {
                 }
             }
         }
+        if frosted { drawBorder() }
 
         // 5. Custom content (Text/Image/etc). A rounded clipping container
         //    keeps it and its children inside the inner rounded edge.

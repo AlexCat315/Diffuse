@@ -46,7 +46,10 @@ struct BackdropParams {
 [[vk::binding(1, 0)]] Texture2D<float4> source : register(t1, space0);
 [[vk::binding(2, 0)]] SamplerState sourceSampler : register(s2, space0);
 
-static const int TapCount = 6;
+// 25 taps reach two sigma with at most one and a half texels between them,
+// so bilinear filtering covers the gap; sparser taps alias detail behind the
+// panel into a visible dot grid.
+static const int TapCount = 12;
 
 float2 sourceUV(BackdropVertex input) {
     return input.uv * params.uvTransform.xy + params.uvTransform.zw;
@@ -67,6 +70,7 @@ float4 downsample(BackdropVertex input) {
 float4 blur(BackdropVertex input) {
     float2 uv = sourceUV(input);
     float2 step = params.blur.yz;
+    // Sigma arrives in tap units, so the weights follow real distance.
     float sigma = max(params.blur.w, 0.0001);
     float3 sum = float3(0, 0, 0);
     float total = 0;

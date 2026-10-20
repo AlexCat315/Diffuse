@@ -205,10 +205,19 @@ public final class LayerAwareNodeRenderer {
         // Painters (mirror NodeRenderer order):
         emitShadow(node, into: list, x: originX, y: originY, w: width, h: height,
                    radius: radius, scale: own.shadowScale)
-        emitBorder(node, into: list, x: originX, y: originY, w: width, h: height,
-                   radius: radius, borderWidth: borderWidth)
+        // A frosted node rings its fill afterwards: the backdrop composite is
+        // attached to the fill's batch and would otherwise cover the border.
+        let frosted = node.backdropBlur > 0 && node.backgroundColor != nil
+        if !frosted {
+            emitBorder(node, into: list, x: originX, y: originY, w: width, h: height,
+                       radius: radius, borderWidth: borderWidth)
+        }
         emitBackground(node, into: list, x: originX, y: originY, w: width, h: height,
                        radius: radius, borderWidth: borderWidth)
+        if frosted {
+            emitBorder(node, into: list, x: originX, y: originY, w: width, h: height,
+                       radius: radius, borderWidth: borderWidth)
+        }
         let mask = contentMask(node, x: originX, y: originY, width: width, height: height,
                                radius: radius, borderWidth: borderWidth)
         if let mask { list.pushMask(mask) }
