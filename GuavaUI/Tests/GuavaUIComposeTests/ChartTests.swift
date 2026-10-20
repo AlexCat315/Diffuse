@@ -29,29 +29,33 @@ struct ChartTests {
 
     private func draw(_ content: ChartContent, style: ChartStyle, selection: ChartPoint? = nil,
                       size: CGSize = CGSize(width: 120, height: 40)) -> (DrawList, Node) {
-        let plot = ChartPlot(content: content, visible: Array(repeating: true, count: content.count), style: style,
-                             selection: selection, summary: ("Chart", ""), callout: nil,
-                             input: ChartPlotInput(isEnabled: false, select: { _ in }))
-        let node = plot._makeNode()
-        node.frame = CGRect(origin: .zero, size: size)
-        plot._updateNode(node)
-        let list = DrawList()
-        node.draw?(list, .zero)
-        return (list, node)
+        GlobalTestLock.locked {
+            let plot = ChartPlot(content: content, visible: Array(repeating: true, count: content.count), style: style,
+                                 selection: selection, summary: ("Chart", ""), callout: nil,
+                                 input: ChartPlotInput(isEnabled: false, select: { _ in }))
+            let node = plot._makeNode()
+            node.frame = CGRect(origin: .zero, size: size)
+            plot._updateNode(node)
+            let list = DrawList()
+            node.draw?(list, .zero)
+            return (list, node)
+        }
     }
 
     private func flat(_ style: ChartStyle = ChartStyle(gridLineCount: 0, contentInset: 0)) -> ChartStyle { style }
 
     @Test("A chart without a selection binding is a passive image with a 64pt default height")
     func passive() {
-        let plot = ChartPlot(content: .cartesian(series: [.line([1, 2, 3])], thresholds: [], markers: []), visible: [true],
-                             style: ChartStyle(), selection: nil, summary: ("Sales", "1 to 3"), callout: nil,
-                             input: ChartPlotInput(isEnabled: false, select: { _ in }))
-        let node = plot._makeNode(), layout = plot._makeLayoutNode()!
-        plot._updateLayout(layout); plot._updateNode(node)
-        #expect(node.isHitTestable == false && node.isFocusable == false)
-        #expect(layout.height == 64)
-        #expect(node.accessibility?.role == .image && node.accessibility?.label == "Sales")
+        GlobalTestLock.locked {
+            let plot = ChartPlot(content: .cartesian(series: [.line([1, 2, 3])], thresholds: [], markers: []), visible: [true],
+                                 style: ChartStyle(), selection: nil, summary: ("Sales", "1 to 3"), callout: nil,
+                                 input: ChartPlotInput(isEnabled: false, select: { _ in }))
+            let node = plot._makeNode(), layout = plot._makeLayoutNode()!
+            plot._updateLayout(layout); plot._updateNode(node)
+            #expect(node.isHitTestable == false && node.isFocusable == false)
+            #expect(layout.height == 64)
+            #expect(node.accessibility?.role == .image && node.accessibility?.label == "Sales")
+        }
     }
 
     @Test("Lines stroke between values; areas fill down to the baseline")

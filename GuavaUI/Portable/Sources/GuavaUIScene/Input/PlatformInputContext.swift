@@ -7,29 +7,34 @@ import GuavaPlatformCore
 // duration of `PlatformInputContext.withCurrent` (compose / materialise /
 // dispatch) and restored on exit. They are not process-global state: each
 // window owns its own registries (规则 3); the holder is just the ambient
-// pointer the call sites read. `nonisolated(unsafe)` is sound because the UI
-// tree is single-threaded — the pointer is only ever read/swapped on the main
-// thread inside `withCurrent`.
+// pointer the call sites read. The UI tree is single-threaded,
+// but the pointer lives in an `AmbientSlot` so a swap on one thread cannot
+// free the value another thread (e.g. a parallel test) is reading.
 
 /// Holds the active window's interaction registry.
 public enum InteractionRegistryHolder {
-    nonisolated(unsafe) public static var current: InteractionRegistry?
+    private static let slot = AmbientSlot<InteractionRegistry?>(nil)
+    public static var current: InteractionRegistry? { get { slot.current } set { slot.current = newValue } }
 }
 
 /// Holds the active window's focus chain (focus-aware primitives read it).
 public enum FocusChainHolder {
-    nonisolated(unsafe) public static var current: FocusChain?
+    private static let slot = AmbientSlot<FocusChain?>(nil)
+    public static var current: FocusChain? { get { slot.current } set { slot.current = newValue } }
 }
 
 /// Process-wide clipboard bridge (genuinely global: one system pasteboard).
 public enum ClipboardHolder {
-    nonisolated(unsafe) public static var read: (() -> String?)?
-    nonisolated(unsafe) public static var write: ((String) -> Void)?
+    private static let reader = AmbientSlot<(() -> String?)?>(nil)
+    private static let writer = AmbientSlot<((String) -> Void)?>(nil)
+    public static var read: (() -> String?)? { get { reader.current } set { reader.current = newValue } }
+    public static var write: ((String) -> Void)? { get { writer.current } set { writer.current = newValue } }
 }
 
 /// Holds the active window's pointer-capture target (drag-driven primitives).
 public enum PointerCaptureHolder {
-    nonisolated(unsafe) public static var current: PointerCapture?
+    private static let slot = AmbientSlot<PointerCapture?>(nil)
+    public static var current: PointerCapture? { get { slot.current } set { slot.current = newValue } }
 }
 
 /// A per-window ambient owned by a higher layer (e.g. GuavaUICompose's portal

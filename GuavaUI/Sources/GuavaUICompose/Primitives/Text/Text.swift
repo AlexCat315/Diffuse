@@ -198,7 +198,14 @@ final class SharedTextLayoutCache {
 /// builder. Set by `SDL3PlatformHost` (or any other shell) before the first
 /// `materialise` call.
 public enum TextEnvironmentHolder {
-    nonisolated(unsafe) public static var current: TextEnvironment?
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var value: TextEnvironment?
+    /// Reads retain under the lock swaps release under, so replacing the
+    /// environment never frees one another thread is still loading.
+    public static var current: TextEnvironment? {
+        get { lock.withLock { value } }
+        set { lock.withLock { value = newValue } }
+    }
 }
 
 /// Static text primitive. Participates in flexbox layout via Yoga's measure

@@ -110,10 +110,10 @@ struct ZStackTests: GuavaUIComposeSerializedSuite {
 extension ZStackTests {
     @Test("Card content stays inside its own Box instead of a padded sibling")
     func cardContentStaysInsideItsBox() throws {
-        let prior = TextEnvironmentHolder.current
-        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
-        defer { TextEnvironmentHolder.current = prior }
         try GlobalTestLock.locked {
+            let prior = TextEnvironmentHolder.current
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+            defer { TextEnvironmentHolder.current = prior }
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: ZStack(alignment: .topLeading) {
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {

@@ -228,19 +228,21 @@ struct GutterTests: GuavaUIComposeSerializedSuite {
 
     @Test("A 200K-line collapsed range is skipped by the row index rather than shaped or copied")
     func largeFold() throws {
-        let previous = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
-        defer { TextEnvironmentHolder.current = previous }
-        let env = try #require(TextEnvironmentHolder.current)
-        let buffer = TextBuffer((0..<200_000).map { "let value\($0) = \($0)" }.joined(separator: "\n"))
-        let geometry = TextLineGeometry(font: .monospaced(size: 15), lineHeight: 24, letterSpacing: 0,
-                                        atlas: ObjectIdentifier(env.atlas), width: .infinity, secure: false)
-        let document = TextDocumentLayout(buffer: buffer, geometry: geometry)
-        document.setHiddenLines([1..<199_999])
-        let layout = document.visibleLayout(firstRow: 0, rowCount: 20, environment: env)
-        #expect(document.index.rowCount == 2 && layout.lines.count == 2 && document.shapedLineCount == 2)
-        #expect(document.index.location(atRow: 1).line == 199_999)
-        document.setHiddenLines([])
-        #expect(document.index.rowCount == 200_000)
+        try GlobalTestLock.locked {
+            let previous = TextEnvironmentHolder.current; TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+            defer { TextEnvironmentHolder.current = previous }
+            let env = try #require(TextEnvironmentHolder.current)
+            let buffer = TextBuffer((0..<200_000).map { "let value\($0) = \($0)" }.joined(separator: "\n"))
+            let geometry = TextLineGeometry(font: .monospaced(size: 15), lineHeight: 24, letterSpacing: 0,
+                                            atlas: ObjectIdentifier(env.atlas), width: .infinity, secure: false)
+            let document = TextDocumentLayout(buffer: buffer, geometry: geometry)
+            document.setHiddenLines([1..<199_999])
+            let layout = document.visibleLayout(firstRow: 0, rowCount: 20, environment: env)
+            #expect(document.index.rowCount == 2 && layout.lines.count == 2 && document.shapedLineCount == 2)
+            #expect(document.index.location(atRow: 1).line == 199_999)
+            document.setHiddenLines([])
+            #expect(document.index.rowCount == 200_000)
+        }
     }
 
     @Test("Copy includes folded source; deleting a hidden boundary reveals it before editing, and undo restores the edit")

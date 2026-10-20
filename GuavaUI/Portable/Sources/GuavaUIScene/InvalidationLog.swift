@@ -111,7 +111,8 @@ public final class InvalidationLog: @unchecked Sendable {
 /// being plumbed an explicit log reference. Set by `PlatformWindowSession`'s
 /// `withCurrent { ... }` scope.
 public enum InvalidationLogHolder {
-    nonisolated(unsafe) public static var current: InvalidationLog?
+    private static let slot = AmbientSlot<InvalidationLog?>(nil)
+    public static var current: InvalidationLog? { get { slot.current } set { slot.current = newValue } }
 
     /// Run `body` with `log` installed as the current log. Restores the
     /// previous binding on exit.
