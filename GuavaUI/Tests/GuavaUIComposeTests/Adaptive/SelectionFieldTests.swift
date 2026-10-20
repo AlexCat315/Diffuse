@@ -155,7 +155,7 @@ struct SelectionFieldTests: GuavaUIComposeSerializedSuite {
             let rows = nodes(graph.tree.root).filter { $0.accessibility?.role == .listItem }
             #expect(!rows.isEmpty)
             for row in rows { #expect(abs(row.frame.height - 64) < 1) }
-            #expect(nodes(graph.tree.root).contains { $0.clipsToBounds && $0.attachments[ScrollReveal.handlerKey] != nil && abs($0.frame.height - 192) < 1 })
+            #expect(nodes(graph.tree.root).contains { $0.clipsToBounds && $0.scrollReveal != nil && abs($0.frame.height - 192) < 1 })
             h.width = 720; h.fieldWidth = 400; settle(graph, h)
             #expect(context.focusChain.focused === search)
             input.dispatch(.textInput("Option 11")); settle(graph, h)

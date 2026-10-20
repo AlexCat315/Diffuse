@@ -151,7 +151,7 @@ struct SidebarContentTests: GuavaUIComposeSerializedSuite {
             #expect(all(graph.tree.root!).filter { $0.attachments["__roving.item"] != nil && $0.isTabStop }.count == 1)
             key(Scancode.end)
             let target = try named("sidebar-item-long", graph)
-            let scroll = try #require(all(graph.tree.root!).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let scroll = try #require(all(graph.tree.root!).first { $0.scrollReveal != nil })
             #expect(scene.selected == "long" && scroll.contentOffset.y > 0, "Selection \(String(describing: scene.selected)), offset \(scroll.contentOffset)")
             #expect(target.absoluteFrame.maxY <= scroll.absoluteFrame.maxY + 0.5, "Target \(target.absoluteFrame), viewport \(scroll.absoluteFrame)")
             key(Scancode.home)
@@ -173,7 +173,7 @@ struct SidebarContentTests: GuavaUIComposeSerializedSuite {
             let before = try named("sidebar-slot-header", graph).frame.height
             scene.$scale.wrappedValue = 2; settle(graph, height: 420)
             let header = try named("sidebar-slot-header", graph), footer = try named("sidebar-slot-footer", graph)
-            let scroll = try #require(all(graph.tree.root!).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let scroll = try #require(all(graph.tree.root!).first { $0.scrollReveal != nil })
             #expect(header.frame.height > before)
             #expect(scroll.absoluteFrame.minY >= header.absoluteFrame.maxY)
             #expect(scroll.absoluteFrame.maxY <= footer.absoluteFrame.minY)
@@ -193,7 +193,7 @@ struct SidebarContentTests: GuavaUIComposeSerializedSuite {
             let scene = SidebarScene(viewport: 130)
             graph.install(root: scene.theme(.defaultLight)); settle(graph, height: 130)
             scene.$selected.wrappedValue = "settings"; settle(graph, height: 130)
-            let scroll = try #require(all(graph.tree.root!).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let scroll = try #require(all(graph.tree.root!).first { $0.scrollReveal != nil })
             #expect(scroll.contentOffset.y > 0)
             #expect(try named("sidebar-item-settings", graph).absoluteFrame.maxY <= scroll.absoluteFrame.maxY)
             // An explicit user scroll must remain available after the reveal.
@@ -204,7 +204,7 @@ struct SidebarContentTests: GuavaUIComposeSerializedSuite {
                 SidebarSection("many", items: (0..<10).map { SidebarItem("\($0)", "Destination \($0)") } + [SidebarItem("last", "Last")])
             ]).frame(width: 260, height: 130).theme(.defaultLight))
             settle(graph, height: 130)
-            let initial = try #require(all(graph.tree.root!).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let initial = try #require(all(graph.tree.root!).first { $0.scrollReveal != nil })
             #expect(initial.contentOffset.y > 0)
             #expect(try named("sidebar-item-last", graph).absoluteFrame.maxY <= initial.absoluteFrame.maxY)
         }

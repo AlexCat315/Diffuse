@@ -76,7 +76,7 @@ struct RefreshTests: GuavaUIComposeSerializedSuite {
     @Test("A nested touch list refreshes without its parent stealing the drag")
     func nestedPull() throws {
         try scene(nested: true) { graph, _, dispatcher, harness in
-            let scrolls = nodes(graph.tree.root!).filter { $0.attachments[ScrollReveal.handlerKey] != nil }
+            let scrolls = nodes(graph.tree.root!).filter { $0.scrollReveal != nil }
             #expect(scrolls.count == 2)
             let inner = try #require(scrolls.last)
             let point = inner.absoluteFrame.origin
@@ -111,7 +111,7 @@ struct RefreshTests: GuavaUIComposeSerializedSuite {
     func pull() throws {
         try scene { graph, _, dispatcher, harness in
             let scroll = try #require(nodes(graph.tree.root!).first {
-                $0.attachments[ScrollReveal.handlerKey] != nil
+                $0.scrollReveal != nil
             })
             let x: Float = 160, y: Float = 30
             dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(
@@ -137,7 +137,7 @@ struct RefreshTests: GuavaUIComposeSerializedSuite {
     func keyboard() throws {
         try scene { graph, context, dispatcher, harness in
             let scroll = try #require(nodes(graph.tree.root!).first {
-                $0.attachments[ScrollReveal.handlerKey] != nil
+                $0.scrollReveal != nil
             })
             context.focusChain.focus(scroll)
             dispatcher.dispatch(.keyDown(KeyEvent(scancode: Scancode.r, keycode: 0,

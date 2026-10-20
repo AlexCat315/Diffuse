@@ -204,7 +204,7 @@ struct NavigationRailTests: GuavaUIComposeSerializedSuite {
                 #expect((reported.presentation.visibleFrame?.h ?? 0) >= Double(selected.frame.height) - 1)
                 #expect(harness.selected == 29 && harness.activations == 0)
             }
-            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let scroll = try #require(nodes(graph.tree.root).first { $0.scrollReveal != nil })
             scroll.contentOffset = .zero
             settle(graph, harness)
             #expect(scroll.contentOffset.y == 0, "Ordinary scrolling must not be pulled back to selection")

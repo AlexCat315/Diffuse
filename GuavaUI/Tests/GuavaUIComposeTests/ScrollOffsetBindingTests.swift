@@ -60,7 +60,7 @@ struct ScrollOffsetBindingTests: GuavaUIComposeSerializedSuite {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: harness)
             settle(graph)
-            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let scroll = try #require(nodes(graph.tree.root).first { $0.scrollReveal != nil })
             harness.$offset.wrappedValue = CGPoint(x: 0, y: 250)
             settle(graph)
             #expect(scroll.contentOffset.y == 250)
@@ -97,7 +97,7 @@ struct ScrollOffsetBindingTests: GuavaUIComposeSerializedSuite {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: harness)
             settle(graph)
-            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let scroll = try #require(nodes(graph.tree.root).first { $0.scrollReveal != nil })
 
             harness.$request.wrappedValue = ScrollRequest(offset: CGPoint(x: 0, y: 600), duration: 0.2)
             settle(graph)
@@ -125,7 +125,7 @@ struct ScrollOffsetBindingTests: GuavaUIComposeSerializedSuite {
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: reduced)
         settle(graph)
-        let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+        let scroll = try #require(nodes(graph.tree.root).first { $0.scrollReveal != nil })
         #expect(scroll.contentOffset.y == 700)
     } }
 
@@ -137,7 +137,7 @@ struct ScrollOffsetBindingTests: GuavaUIComposeSerializedSuite {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: harness)
             settle(graph)
-            let scroll = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil })
+            let scroll = try #require(nodes(graph.tree.root).first { $0.scrollReveal != nil })
             harness.$offset.wrappedValue = CGPoint(x: 0, y: 400)
             settle(graph)
             #expect(scroll.contentOffset.y == 400)

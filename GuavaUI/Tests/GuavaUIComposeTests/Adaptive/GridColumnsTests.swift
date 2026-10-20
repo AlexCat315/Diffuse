@@ -192,7 +192,7 @@ struct GridColumnsTests: GuavaUIComposeSerializedSuite {
             context.focusChain.focus(last); ScrollReveal.reveal(last); settle(graph, h)
             let q = try UIDiagnostics(tree: graph.tree).queryNodes(text: "Quantity one 0", role: "button", visibleOnly: true)
             #expect(q.total == 1 && (q.items.first?.presentation.visibleFrame?.w ?? 0) > 0)
-            let scroller = try #require(nodes(graph.tree.root).first { $0.attachments[ScrollReveal.handlerKey] != nil && $0.clipsToBounds })
+            let scroller = try #require(nodes(graph.tree.root).first { $0.scrollReveal != nil && $0.clipsToBounds })
             #expect(scroller.contentOffset.x > 0)
             h.overrides = [:]; h.width = 100; settle(graph, h)
             #expect(try target("Open one", graph).frame.width >= 44)

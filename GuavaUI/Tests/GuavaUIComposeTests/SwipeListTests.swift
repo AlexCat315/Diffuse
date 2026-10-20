@@ -178,7 +178,7 @@ struct SwipeListTests: GuavaUIComposeSerializedSuite {
         try withScene { graph, _, dispatcher, _ in
             let first = try row("Item 4", graph)
             let scroll = try #require(nodes(graph.tree.root!).first {
-                $0.attachments[ScrollReveal.handlerKey] != nil
+                $0.scrollReveal != nil
             })
             let start = first.absoluteFrame
             dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(

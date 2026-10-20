@@ -75,7 +75,7 @@ struct SectionedListTests: GuavaUIComposeSerializedSuite {
     /// state, so the test exercises the same report path as a drag or wheel.
     private func scroll(_ graph: ViewGraph, to y: CGFloat) throws {
         let scroll = try #require(nodes(graph.tree.root).first {
-            $0.attachments[ScrollReveal.handlerKey] != nil
+            $0.scrollReveal != nil
         })
         scroll.contentOffset = CGPoint(x: 0, y: y)
         scroll.layoutDidUpdate?(scroll)
