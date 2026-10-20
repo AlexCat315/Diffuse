@@ -96,10 +96,17 @@ package enum Fs {
   /// Atomically publishes a staged file, matching "write temp then replace" semantics.
   package static func replace(_ staged: URL, at destination: URL) throws {
     try directory(destination.deletingLastPathComponent())
-    if FileManager.default.fileExists(atPath: destination.path) {
-      _ = try FileManager.default.replaceItemAt(destination, withItemAt: staged)
-    } else {
+    // `FileManager.replaceItemAt` traps on Windows ("not yet implemented" in
+    // corelibs-foundation), so publish with an explicit remove + move there.
+    #if os(Windows)
+      try remove(destination)
       try FileManager.default.moveItem(at: staged, to: destination)
-    }
+    #else
+      if FileManager.default.fileExists(atPath: destination.path) {
+        _ = try FileManager.default.replaceItemAt(destination, withItemAt: staged)
+      } else {
+        try FileManager.default.moveItem(at: staged, to: destination)
+      }
+    #endif
   }
 }

@@ -49,9 +49,11 @@ enum Targets {
       let triple =
         (arch == "aarch64" ? "arm64" : arch) + "-apple-ios16.0"
         + (sdk.hasSuffix("simulator") ? "-simulator" : "")
+      let hostRoot = try hostSysroot(environment: environment)
       options += [
         "--target-os=darwin", "--enable-cross-compile", "--cc=clang",
-        "--sysroot=\(sysroot)", "--extra-cflags=-target \(triple)",
+        "--sysroot=\(sysroot)", "--host-cflags=--sysroot \(hostRoot)",
+        "--extra-cflags=-target \(triple)",
         "--extra-ldflags=-target \(triple)", "--disable-programs",
       ]
     } else if name.hasPrefix("android-") {
@@ -80,9 +82,15 @@ enum Targets {
         "--target-os=win32", "--toolchain=msvc", "--cc=cl", "--ar=lib", "--disable-x86asm",
       ]
     } else if name.hasPrefix("macos-") {
+      // A raw toolchain `clang` — which a PATH entry can resolve ahead of the
+      // SDK-aware /usr/bin/clang shim, as the CI toolchain setup does — finds
+      // neither headers nor libraries on its own, so the SDK is passed
+      // explicitly to both the target compile and the host compiler checks.
+      let sysroot = try hostSysroot(environment: environment)
       let flags = "\(arch == "aarch64" ? "arm64" : arch) -mmacosx-version-min=13.0"
       options += [
-        "--target-os=darwin", "--cc=clang",
+        "--target-os=darwin", "--cc=clang", "--sysroot=\(sysroot)",
+        "--host-cflags=--sysroot \(sysroot)",
         "--extra-cflags=-arch \(flags)", "--extra-ldflags=-arch \(flags)",
       ]
     } else {
@@ -96,6 +104,16 @@ enum Targets {
       }
     }
     return options
+  }
+
+  /// The macOS SDK of the build machine, used for configure's host compiler
+  /// checks. The host compiler is the plain `clang` from PATH; when that is a
+  /// toolchain binary rather than the `/usr/bin/clang` shim it does not locate
+  /// the SDK by itself, and every host check (C11 support, builtins, …) would
+  /// fail with "'ctype.h' file not found".
+  private static func hostSysroot(environment: [String: String]) throws -> String {
+    try Shell.output(
+      ["xcrun", "--sdk", "macosx", "--show-sdk-path"], environment: environment)
   }
 
   /// The SwiftPM-supported triple for `name`.

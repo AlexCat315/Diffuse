@@ -1,6 +1,17 @@
 import GuavaLogging
 import Foundation
 
+/// Whether `path` names a file this platform could actually execute.
+///
+/// `FileManager.isExecutableFile` only classifies by extension on Windows
+/// (`SHGetFileInfoW` with `SHGFI_EXETYPE` never touches the disk), so a
+/// candidate that merely ends in `.exe` passes even when nothing is there.
+/// Pairing it with `fileExists` keeps PATH search honest on every platform;
+/// on POSIX the extra check is implied and free.
+private func isRunnable(_ path: String) -> Bool {
+    FileManager.default.fileExists(atPath: path) && FileManager.default.isExecutableFile(atPath: path)
+}
+
 enum ToolError: Error, LocalizedError {
     case invalid(String)
     case failed(String, Int32)
@@ -17,7 +28,7 @@ enum Shell {
     static func executable(_ name: String, environment: [String: String] = ProcessInfo.processInfo.environment) throws -> URL {
         if name.contains("/") || name.contains("\\") {
             let file = URL(fileURLWithPath: name)
-            guard FileManager.default.isExecutableFile(atPath: file.path) else { throw ToolError.invalid("Executable not found: \(name)") }
+            guard isRunnable(file.path) else { throw ToolError.invalid("Executable not found: \(name)") }
             return file
         }
         #if os(Windows)
@@ -30,7 +41,7 @@ enum Shell {
         for directory in (environment["PATH"] ?? "").split(separator: separator) {
             for suffix in extensions {
                 let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent(name + suffix)
-                if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+                if isRunnable(candidate.path) { return candidate }
             }
         }
         throw ToolError.invalid("Executable not found on PATH: \(name)")

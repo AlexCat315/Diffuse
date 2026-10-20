@@ -50,6 +50,13 @@ jobs:
           cmake --build GuavaUI/build/native --parallel
           cmake --install GuavaUI/build/native --prefix "$RUNNER_TEMP/guava-native-install"
 
+      # GuavaUI depends on the Engine package, which depends on the local
+      # Media package; its FFmpeg binaryTarget only exists after this build
+      # stages the bundle into Engine/Media/vendor. Resolving before that
+      # fails with "does not contain a binary artifact".
+      - name: Build pinned FFmpeg
+        run: swift run --package-path Tools/Developer guava-dev media
+
       - name: Resolve packages
         working-directory: GuavaUI
         run: swift package resolve
