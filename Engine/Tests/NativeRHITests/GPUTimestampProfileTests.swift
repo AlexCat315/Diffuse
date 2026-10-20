@@ -6,7 +6,7 @@ import XCTest
 @testable import NativeRHI
 
 final class GPUTimestampProfileTests: XCTestCase {
-    private func marker(_ label: String, _ nanoseconds: UInt64) -> GPUTimestampProfile.Marker {
+    private static func marker(_ label: String, _ nanoseconds: UInt64) -> GPUTimestampProfile.Marker {
         GPUTimestampProfile.Marker(label: label, nanoseconds: nanoseconds)
     }
 

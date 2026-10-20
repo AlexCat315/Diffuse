@@ -31,7 +31,15 @@ runs:
     - name: Expose MSYS build utilities
       if: runner.os == 'Windows'
       shell: pwsh
-      run: '"${{ steps.msys2.outputs.msys2-location }}/usr/bin" >> $env:GITHUB_PATH'
+      run: '"${{ steps.mys2.outputs.msys2-location }}/usr/bin" >> $env:GITHUB_PATH'
+    - name: Load MSVC developer environment
+      # FFmpeg is configured with `--toolchain=msvc --cc=cl`; `cl` can only
+      # compile and link once INCLUDE/LIB/PATH point at the MSVC toolchain, which
+      # only happens inside a Developer Command Prompt. This action scripts
+      # vcvarsall and persists the environment to GITHUB_ENV so the later
+      # `guava-dev media` step can drive `cl` for the Windows FFmpeg build.
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
     - name: Verify toolchains
       shell: bash
       run: |
