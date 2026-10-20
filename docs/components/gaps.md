@@ -138,7 +138,7 @@
 | Select / Combobox | 触发器宽度下限与窗口夹紧已实现；Combobox 远程结果契约（`ComboboxSearch`：防抖、取消、加载/失败/重试/最小长度状态）已实现，见 [Combobox](combobox.md) | 完成 |
 | DatePicker / TimeField | Calendar 配置可指定 timeZone，时区选择入口仍缺；TimeOfDay 是不含时区的墙钟值，转换由调用方负责；TimeField 继续作为文本入口，12/24 小时与滚轮由 TimePicker 提供；DatePicker 键盘月份跳转已有 | P2 |
 | Calendar | 区间选择、Home/End/PageUp/Down、整板窄宽滚动、触摸弹层预算，以及日/周/月/年粒度与标题上钻的月份/年份网格已完成，见 [日历导航](calendar.md) | 完成 |
-| List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动仍待补 | P1 已完成；边缘自动滚动 P2 |
+| List | 多选、平面区段、sticky 区段、重排、SwipeList、下拉刷新及 ListRow 标题/尾槽已实现（见 2.9）；重排边缘自动滚动已实现（见 [List](list.md#reorderablelist)） | 已完成；重排仍为非虚拟列表 |
 | Tree | 同步延迟子节点、全部展开/折叠快捷、多选、搜索、禁用与触摸行高已完成；异步请求与加载状态由调用方数据层管理，见 [tree.md](tree.md) | 已完成 |
 | Table / DataTable | 列重排、分组表头、分页/远端加载、单元格/矩形区间、可变行高、CSV 导出、表级撤销；列优先级、显隐菜单与文本缩放行高已实现，见 [数据表](data-table.md) | P2 |
 | Chart | pie/donut、area、scatter、分组与堆叠 bar、图例切换与数据点选择（指针/触摸/键盘/辅助功能）已在单一 `Chart` 中实现，见 [Chart](chart.md)；坐标轴刻度标签、时间轴、缩放平移仍缺 | 已完成；轴标签/缩放 P3 |
