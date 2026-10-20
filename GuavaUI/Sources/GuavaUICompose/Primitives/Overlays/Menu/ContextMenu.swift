@@ -27,7 +27,7 @@ public struct ContextMenu<Content: View>: View {
     }
 }
 
-private struct _ContextMenuHost<Content: View>: _PrimitiveView {
+struct _ContextMenuHost<Content: View>: _PrimitiveView {
     let content: Content; let entries: [MenuEntry]; let width: Float; let point: CGPoint?
     let onOpen: (CGPoint) -> Void; let onDismiss: () -> Void
     func _makeNode() -> Node {

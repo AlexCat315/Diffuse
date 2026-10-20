@@ -22,7 +22,10 @@ public struct MarkdownView: View {
     }
 
     public var body: some View {
-        MarkdownBlocks(blocks: MarkdownParser.blocks(source), depth: 0, onOpenLink: onOpenLink)
+        // One selection spans the document, so a drag can cross blocks.
+        TextSelectionRoot {
+            MarkdownBlocks(blocks: MarkdownParser.blocks(source), depth: 0, onOpenLink: onOpenLink)
+        }
     }
 }
 

@@ -144,12 +144,15 @@ private struct RichTextReader: _PrimitiveView {
 
     func _children(for node: Node) -> [any View] {
         let source = RichTextStyleSource(runs: runs, alignment: alignment, role: role)
-        return [LayoutContainer(RichTextFlowLayout(source: source)) {
+        let paragraph = LayoutContainer(RichTextFlowLayout(source: source)) {
             RichTextSurface(source: source, onOpenLink: onOpenLink)
             for index in source.destinations.indices {
                 RichTextLinkAnchor(source: source, index: index, onOpenLink: onOpenLink)
             }
-        }]
+        }
+        // Inside a document the paragraph joins its selection; alone it owns one.
+        if node.compositionValue(of: TextSelectionScope.key) != nil { return [paragraph] }
+        return [TextSelectionRoot { paragraph }]
     }
 }
 

@@ -33,6 +33,17 @@ struct RichTextSurface: _PrimitiveView {
             if case .heading(let level) = role { $0.value = "level \(level)" }
         }
         let source = source
+        let scope = node.compositionValue(of: TextSelectionScope.key)
+        // Selectable paragraphs take focus on click for copy shortcuts, but are
+        // not Tab stops: links are the keyboard targets inside text.
+        node.isFocusable = scope != nil
+        node.isTabStop = false
+        scope?.register(node, text: { source.plainText }, offsetAt: { [weak node] point in
+            guard let node, let env = TextEnvironmentHolder.current else { return 0 }
+            let frame = node.absoluteFrame
+            return RichTextFlow.layout(source.paragraph, maxWidth: Float(frame.width), env: env)
+                .offset(at: Float(point.x - frame.minX), Float(point.y - frame.minY))
+        })
         node.updateDraw(identity: PaintIdentity(paragraph: source.paragraph, palette: source.palette)) { [weak node] list, origin in
             guard let node, let env = TextEnvironmentHolder.current else { return }
             let paragraph = source.paragraph, palette = source.palette
@@ -41,48 +52,107 @@ struct RichTextSurface: _PrimitiveView {
                             hoveredLink: node.attachments[Self.hoveredLinkKey] as? Int,
                             focusedLink: FocusChainHolder.current?.isFocusVisible == true
                                 ? node.attachments[Self.focusedLinkKey] as? Int : nil,
+                            selection: scope?.range(for: node),
                             opacity: node.opacity)
                 .paint(into: list, x: Float(origin.x), y: Float(origin.y), env: env)
         }
-        installPointer(on: node)
+        installPointer(on: node, scope: scope)
     }
 
-    private func installPointer(on node: Node) {
+    private func installPointer(on node: Node, scope: TextSelectionScope?) {
         guard let registry = InteractionRegistryHolder.current else { return }
         let destinations = source.destinations, open = onOpenLink, source = source
+        let flowFor = { (node: Node) -> RichTextFlow? in
+            guard let env = TextEnvironmentHolder.current else { return nil }
+            return RichTextFlow.layout(source.paragraph, maxWidth: Float(node.absoluteFrame.width), env: env)
+        }
         let linkAt = { [weak node] (x: Float, y: Float) -> Int? in
-            guard let node, open != nil, let env = TextEnvironmentHolder.current else { return nil }
+            guard let node, open != nil, let flow = flowFor(node) else { return nil }
             let frame = node.absoluteFrame
-            let paragraph = source.paragraph
-            let flow = RichTextFlow.layout(paragraph, maxWidth: Float(frame.width), env: env)
             guard let fragment = flow.fragment(at: x - Float(frame.minX), y - Float(frame.minY)) else { return nil }
-            return paragraph.spans[fragment.span].link
+            return source.paragraph.spans[fragment.span].link
         }
         let setHovered = { [weak node] (link: Int?) in
-            guard let node, node.attachments[Self.hoveredLinkKey] as? Int != link else { return }
+            guard let node else { return }
+            node.cursor = link != nil ? .pointer : scope != nil && node.supportsControlHover ? .ibeam : nil
+            guard node.attachments[Self.hoveredLinkKey] as? Int != link else { return }
             node.attachments[Self.hoveredLinkKey] = link
-            node.cursor = link == nil ? nil : .pointer
             node.markRenderDirty(reason: .styleSet(field: Self.hoveredLinkKey))
         }
+        let point = { (x: Float, y: Float) in CGPoint(x: CGFloat(x), y: CGFloat(y)) }
         registry.setHover(node) { phase in if phase == .leave { setHovered(nil) } }
-        registry.setMotion(node) { event, phase in
+        registry.setMotion(node) { [weak node] event, phase in
             guard phase != .capture else { return .ignored }
             setHovered(linkAt(event.x, event.y))
-            return .ignored
+            guard let node, node.attachments[Self.selectingKey] as? Bool == true, let scope,
+                  let position = scope.position(at: point(event.x, event.y)) else { return .ignored }
+            scope.extend(to: position)
+            return .handled
         }
         registry.setPointer(node) { [weak node] event, phase, eventPhase in
             guard let node, eventPhase != .capture, event.button == .left else { return .ignored }
             switch phase {
             case .down:
-                guard let link = linkAt(event.x, event.y) else { return .ignored }
-                node.attachments[Self.pressedLinkKey] = link
-                PointerCaptureHolder.current?.acquire(node, allowsGestureTransfer: true)
+                if let link = linkAt(event.x, event.y) {
+                    node.attachments[Self.pressedLinkKey] = link
+                    PointerCaptureHolder.current?.acquire(node, allowsGestureTransfer: true)
+                    return .handled
+                }
+                guard let scope else { return .ignored }
+                guard node.supportsControlHover else {
+                    // Touch keeps drags for scrolling; a long press selects instead.
+                    node.attachments[Self.touchPressKey] = (Date(), point(event.x, event.y))
+                    return .ignored
+                }
+                let here = point(event.x, event.y)
+                if event.clicks >= 3 { scope.selectParagraph(node) }
+                else if event.clicks == 2 { scope.selectWord(at: here) }
+                else if let position = scope.position(at: here) {
+                    if event.modifiers.isDisjoint(with: .shift) { scope.select(from: position, to: position) }
+                    else { scope.extend(to: position) }
+                }
+                node.attachments[Self.selectingKey] = event.clicks < 2
+                PointerCaptureHolder.current?.acquire(node)
+                // Focus without a ring, so copy and select-all shortcuts reach the paragraph.
+                FocusChainHolder.current?.focus(node, visible: false)
                 return .handled
             case .up:
+                if let (start, origin) = node.attachments.removeValue(forKey: Self.touchPressKey) as? (Date, CGPoint) {
+                    let here = point(event.x, event.y)
+                    guard let scope, Date().timeIntervalSince(start) >= 0.45,
+                          hypot(here.x - origin.x, here.y - origin.y) < 10 else { return .ignored }
+                    scope.selectWord(at: here)
+                    scope.requestMenu?(here)
+                    return .handled
+                }
+                if node.attachments.removeValue(forKey: Self.selectingKey) != nil {
+                    if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
+                    return .handled
+                }
                 guard let pressed = node.attachments.removeValue(forKey: Self.pressedLinkKey) as? Int else { return .ignored }
                 if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
                 if linkAt(event.x, event.y) == pressed, pressed < destinations.count { open?(destinations[pressed]) }
                 return .handled
+            }
+        }
+        guard let scope else { registry.setKey(node) { _, _ in .ignored }; return }
+        registry.setKey(node) { event, phase in
+            guard phase != .capture else { return .ignored }
+            let primary = !event.modifiers.isDisjoint(with: .gui) || !event.modifiers.isDisjoint(with: .ctrl)
+            switch event.scancode {
+            case Scancode.c where primary:
+                guard scope.hasSelection else { return .ignored }
+                scope.copy()
+                return .handled
+            case Scancode.a where primary:
+                scope.selectAll()
+                return .handled
+            case Scancode.escape:
+                guard scope.hasSelection else { return .ignored }
+                scope.clear()
+                return .handled
+            default:
+                return .ignored
             }
         }
     }
@@ -90,6 +160,8 @@ struct RichTextSurface: _PrimitiveView {
     static let hoveredLinkKey = "__rich_text_hovered_link"
     static let pressedLinkKey = "__rich_text_pressed_link"
     static let focusedLinkKey = "__rich_text_focused_link"
+    static let selectingKey = "__rich_text_selecting"
+    static let touchPressKey = "__rich_text_touch_press"
 }
 
 private extension RichTextRole {
@@ -107,6 +179,7 @@ struct RichTextPainter {
     let palette: RichTextPalette
     let hoveredLink: Int?
     let focusedLink: Int?
+    var selection: Range<Int>? = nil
     let opacity: Float
 
     func paint(into list: DrawList, x: Float, y: Float, env: TextEnvironment) {
@@ -117,6 +190,11 @@ struct RichTextPainter {
                               width: fragment.maxX - fragment.minX,
                               height: fragment.ascent + fragment.descent + inset * 2)
             list.addRoundedRect(rect, radius: 4, color: palette.codeBackground.multipliedAlpha(opacity))
+        }
+        if let selection {
+            for (sx, sy, sw, sh) in flow.selectionRects(selection) {
+                list.addRect(UIRect(x: x + sx, y: y + sy, width: sw, height: sh), color: palette.selection.multipliedAlpha(opacity))
+            }
         }
         list.addText(flow.glyphs, origin: (x, y), color: palette.text.multipliedAlpha(opacity),
                      textureID: env.atlasTextureID, atlas: env.atlas) { glyph in

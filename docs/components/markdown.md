@@ -14,7 +14,7 @@ ScrollView {
 | `MarkdownView(source, onOpenLink:)` | 渲染一个 Markdown 字符串；相同源文本复用解析结果 |
 | `onOpenLink` | 链接与图片目标的激活回调；组件不自行打开 URL |
 
-视图继承外层文字样式与宽度、按内容增高；长文档放进 `ScrollView`。
+视图继承外层文字样式与宽度、按内容增高；长文档放进 `ScrollView`。整个文档共享一个文本选区：拖动可跨标题、段落、列表、代码与表格，⌘/Ctrl+C 复制、右键菜单 Copy / Select All，触摸长按选词，细节见 [RichText 选择与复制](richtext.md#选择与复制)。
 
 ## 块
 

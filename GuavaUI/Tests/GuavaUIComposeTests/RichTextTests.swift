@@ -124,13 +124,15 @@ struct RichTextTests: GuavaUIComposeSerializedSuite {
                 RichTextRun("Read the "), RichTextRun("style guide", link: "guide://style"), RichTextRun(" today."),
             ]) { opened.append($0) })
             graph.computeLayout(width: 400, height: 200)
-            let surface = nodes(graph.tree.root!).first { registry.handlers(for: $0).pointer != nil }!
+            let surface = nodes(graph.tree.root!).first { $0.accessibility?.role == .staticText }!
             let frame = surface.absoluteFrame
             let pointer = registry.handlers(for: surface).pointer!
             let motion = registry.handlers(for: surface).motion!
             let y = Float(frame.minY) + 8
-            // Plain words are not links.
-            #expect(pointer(MouseButtonEvent(button: .left, x: Float(frame.minX) + 4, y: y, clicks: 1), .down, .target) == .ignored)
+            // Plain words are not links: a press there starts a selection instead.
+            _ = pointer(MouseButtonEvent(button: .left, x: Float(frame.minX) + 4, y: y, clicks: 1), .down, .target)
+            _ = pointer(MouseButtonEvent(button: .left, x: Float(frame.minX) + 4, y: y, clicks: 1), .up, .target)
+            #expect(opened.isEmpty)
             // Find the link by sweeping the line, as a pointer would.
             let linkX = stride(from: Float(frame.minX), to: Float(frame.maxX), by: 2).first { x in
                 _ = motion(MouseMotionEvent(x: x, y: y, deltaX: 0, deltaY: 0), .target)
@@ -146,7 +148,7 @@ struct RichTextTests: GuavaUIComposeSerializedSuite {
             _ = pointer(MouseButtonEvent(button: .left, x: Float(frame.minX) + 2, y: y, clicks: 1), .up, .target)
             #expect(opened.count == 1)
             registry.handlers(for: surface).hover?(.leave)
-            #expect(surface.cursor == nil)
+            #expect(surface.cursor == .ibeam)
             graph.install(root: EmptyView())
         }
     }
