@@ -1,3 +1,14 @@
+---
+path: /zh/docs/architecture/agent-framework
+title: 'GuavaUI 通用 AI 底层'
+description: 'GuavaUI 通用 AI 底层 — GuavaStudio documentation'
+locale: zh
+translationKey: architecture/agent-framework
+category: architecture
+order: 100
+kind: doc
+---
+
 # GuavaUI 通用 AI 底层
 
 GuavaUI 拥有工具契约与校验、provider 工具描述、模型工具循环、MCP JSON-RPC 端点、skills，以及 UI 诊断查询。Editor 拥有场景、项目文件、播放、授权与事务业务。现有 Engine AIRuntime 的场景规划、场景会话和供应商 HTTP 请求适配仍属于领域集成；它使用同一份 GuavaUI 工具契约和 Schema。

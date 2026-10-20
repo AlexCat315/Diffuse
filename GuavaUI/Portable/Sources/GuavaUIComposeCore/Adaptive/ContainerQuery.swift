@@ -1,7 +1,5 @@
+import Foundation
 import GuavaUIScene
-#if canImport(CoreGraphics)
-import CoreGraphics
-#endif
 
 /// Reports the content-box size of its own subtree after every layout pass,
 /// so content can adapt to the space actually available to it — a container

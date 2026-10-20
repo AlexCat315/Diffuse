@@ -55,6 +55,8 @@ zig-out/
 **/build/
 **/cmake-build-*/
 **/CMakeUserPresets.json
+# ...but Tools/Developer/Sources/Build is first-party SwiftPM source code
+!Tools/Developer/Sources/Build/
 
 # Qt/compiled artifacts
 **/moc_*.cpp
