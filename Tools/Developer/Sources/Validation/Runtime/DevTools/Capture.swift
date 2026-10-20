@@ -115,7 +115,10 @@ enum CaptureUI {
       guard image.width > 0, image.height > 0, distinctValues > 32 else {
         throw ToolError.message("Blank mirror image")
       }
-      let output = try region.map { try cropped(image, to: $0, scale: scale) } ?? (jpeg, image.width, image.height)
+      // The host may cap the requested scale, so crop with the one it delivered.
+      let logicalWidth = (capture["logicalWidth"] as? NSNumber)?.doubleValue ?? 0
+      let delivered = logicalWidth > 0 ? Double(image.width) / logicalWidth : scale
+      let output = try region.map { try cropped(image, to: $0, scale: delivered) } ?? (jpeg, image.width, image.height)
       try output.0.write(to: destination)
       if let region { capture["cropPoints"] = ["x": region.minX, "y": region.minY, "w": region.width, "h": region.height] }
       capture["distinctByteValues"] = distinctValues
