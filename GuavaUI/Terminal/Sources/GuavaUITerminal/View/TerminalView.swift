@@ -1,64 +1,80 @@
+public import Foundation
 public import GuavaUICompose
 internal import GuavaUIRuntime
 
-/// Shows a `TerminalSession`, starting it if it is still idle, and forwards
-/// keyboard, IME, paste and wheel input to it. The grid fills the space the
-/// view is given; the program is told the new size whenever layout changes.
+/// Shows a `TerminalSession`, starting it if it is still idle. The grid fills
+/// the space the view is given; the program is told the new size whenever
+/// layout changes.
+///
+/// - Keyboard and IME text go to the program; ⌘C copies the selection and ⌘V
+///   pastes. Other ⌘ shortcuts stay with the host.
+/// - Drag selects (double-click a word, triple-click a line). Programs that
+///   ask for mouse reports receive the pointer instead; hold Shift to select.
+/// - ⌘-click opens OSC 8 hyperlinks with `onOpenLink`, by default the system.
+/// - Kitty graphics images are drawn in place; the cursor blinks while focused.
 ///
 /// Default colors follow the theme's surface colors; programs can still set
-/// their own palette. Click to focus. ⌘V pastes; other ⌘ shortcuts stay with
-/// the host.
+/// their own palette.
 public struct TerminalView: View {
     let session: TerminalSession
     let fontSize: Float
+    let onOpenLink: ((URL) -> Void)?
 
-    public init(session: TerminalSession, fontSize: Float = 13) {
+    public init(session: TerminalSession, fontSize: Float = 13, onOpenLink: ((URL) -> Void)? = nil) {
         self.session = session
         self.fontSize = fontSize.isFinite ? min(72, max(6, fontSize)) : 13
+        self.onOpenLink = onOpenLink
     }
 
     public var body: some View {
-        TerminalSurface(session: session, font: .monospaced(size: fontSize))
+        TerminalSurface(session: session, font: .monospaced(size: fontSize), onOpenLink: onOpenLink)
     }
 }
 
 private struct TerminalSurface: _PrimitiveView {
     let session: TerminalSession
     let font: Font
+    let onOpenLink: ((URL) -> Void)?
 
     func _makeNode() -> Node {
         let node = Node()
         node.isFocusable = true
         node.clipsToBounds = true
-        node.addResource(TerminalLink())
+        node.cursor = .ibeam
+        node.addResource(SurfaceState())
         return node
     }
 
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
+        // Fill both axes of any stack: grow along it, stretch across it.
         layout.flexGrow = 1
         layout.flexShrink = 1
+        layout.alignSelf = .stretch
+        // Without a sized container the terminal still shows a few rows.
         layout.minWidth = 0
-        layout.minHeight = 0
+        layout.minHeight = (font.size * 1.3 * 4).rounded(.up)
         return layout
     }
 
     var _children: [any View] { [] }
 
     func _updateNode(_ node: Node) {
-        let link = node.firstResource(TerminalLink.self)!
-        link.bind(session)
+        let state = node.firstResource(SurfaceState.self)!
+        state.bind(session)
+        state.openLink = onOpenLink ?? LinkOpener.open
         let colors = node.theme.colors
         session.setDefaultColors(foreground: TerminalRGB(colors.onSurface), background: TerminalRGB(colors.surface))
-        installInput(on: node, link: link)
+        installInput(on: node, state: state)
 
-        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node, weak link] focused in
-            if !focused { link?.preedit = "" }
-            node?.markRenderDirty(reason: .focusChange)
+        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak state] focused in
+            if !focused { state?.preedit = "" }
+            state?.blink.restart()
+            state?.redraw()
         }
-        let resolveArea: TextInputAreaResolver = { [weak link] _, origin in
-            guard let link, let metrics = link.metrics else { return nil }
-            let cursor = link.session?.frame.cursor ?? TerminalCursor()
+        let resolveArea: TextInputAreaResolver = { [weak state] _, origin in
+            guard let state, let metrics = state.metrics else { return nil }
+            let cursor = state.session?.frame.cursor ?? TerminalCursor()
             let x = Float(origin.x) + Float(cursor.column) * metrics.width
             let y = Float(origin.y) + Float(cursor.row) * metrics.height
             return TextInputArea(x: x, y: y, width: metrics.width, height: metrics.height, cursorX: x)
@@ -66,111 +82,77 @@ private struct TerminalSurface: _PrimitiveView {
         node.attachments[TextInputAttachmentKey.areaResolver] = resolveArea
 
         let font = font
-        node.draw = { [weak node, weak link] list, origin in
-            guard let node, let link, let session = link.session,
+        node.draw = { [weak node, weak state] list, origin in
+            guard let node, let state, let session = state.session,
                   let environment = TextEnvironmentHolder.current else { return }
             let metrics = CellMetrics(font: font, environment: environment)
-            link.metrics = metrics
+            state.metrics = metrics
             let grid = metrics.grid(width: Float(node.frame.width), height: Float(node.frame.height))
             session.fit(columns: grid.columns, rows: grid.rows,
                         cellWidth: Int(metrics.width.rounded()), cellHeight: Int(metrics.height))
-            let painter = TerminalPainter(frame: session.frame, metrics: metrics, environment: environment,
-                                          isFocused: FocusChainHolder.current?.focused === node,
-                                          opacity: node.opacity, preedit: link.preedit)
+            let frame = session.frame
+            let isFocused = FocusChainHolder.current?.focused === node
+            state.blink.update(active: isFocused && frame.cursor.isBlinking && !node.prefersReducedMotion)
+            let images = state.textures.resolve(frame.images) { session.engine.imagePixels($0) }
+            for (_, asset) in images { list.retainResource(asset) }
+            let painter = TerminalPainter(frame: frame, metrics: metrics, environment: environment,
+                                          isFocused: isFocused, opacity: node.opacity, preedit: state.preedit,
+                                          isCursorShown: state.blink.isVisible,
+                                          images: images.map { ($0.0, $0.1.textureID) },
+                                          cellPixels: session.engine.cellSize)
             painter.paint(into: list, bounds: UIRect(x: Float(origin.x), y: Float(origin.y),
                                                      width: Float(node.frame.width), height: Float(node.frame.height)))
         }
     }
 
-    private func installInput(on node: Node, link: TerminalLink) {
+    private func installInput(on node: Node, state: SurfaceState) {
         guard let registry = InteractionRegistryHolder.current else { return }
-        registry.setPointer(node) { [weak node] event, phase, _ in
-            guard phase == .down, event.button == .left, let node else { return .ignored }
-            FocusChainHolder.current?.focus(node)
-            return .handled
+        registry.setPointer(node) { [weak node, weak state] event, phase, _ in
+            guard let node, let state else { return .ignored }
+            let handled = phase == .down ? state.pointer.down(event, node: node, state: state)
+                                         : state.pointer.up(event, node: node, state: state)
+            return handled ? .handled : .ignored
         }
-        registry.setKey(node, route: .textInput) { [weak link] event, phase in
-            guard phase != .capture, let session = link?.session else { return .ignored }
+        registry.setMotion(node) { [weak node, weak state] event, _ in
+            guard let node, let state else { return .ignored }
+            return state.pointer.motion(event, node: node, state: state) ? .handled : .ignored
+        }
+        registry.setWheel(node) { [weak state] event, _ in
+            guard let state else { return .ignored }
+            return state.pointer.wheel(event, state: state) ? .handled : .ignored
+        }
+        registry.setKey(node, route: .textInput) { [weak state] event, phase in
+            guard phase != .capture, let state, let session = state.session else { return .ignored }
+            // While an input method composes, Return, Backspace and arrows
+            // edit the composition; the program must not see them.
+            guard state.preedit.isEmpty else { return .handled }
+            state.blink.restart()
             switch KeyRouting(event) {
             case .text: return .handled
             case .host: return .ignored
             case .paste:
                 if let text = ClipboardHolder.read?(), !text.isEmpty { session.paste(text) }
                 return .handled
+            case .copy:
+                guard let text = session.engine.selectedText, !text.isEmpty else { return .ignored }
+                ClipboardHolder.write?(text)
+                return .handled
             case .encode(let key):
                 return session.press(key) ? .handled : .ignored
             }
         }
-        registry.setText(node, route: .textInput) { [weak node, weak link] text, _ in
-            guard let link, let session = link.session else { return .ignored }
-            link.preedit = ""
+        registry.setText(node, route: .textInput) { [weak state] text, _ in
+            guard let state, let session = state.session else { return .ignored }
+            state.preedit = ""
+            state.blink.restart()
             session.send(text)
-            node?.markRenderDirty(reason: .styleSet(field: "terminal.preedit"))
             return .handled
         }
-        registry.setEditing(node, route: .textInput) { [weak node, weak link] event, _ in
-            guard let link else { return .ignored }
-            link.preedit = event.text
-            node?.markRenderDirty(reason: .styleSet(field: "terminal.preedit"))
+        registry.setEditing(node, route: .textInput) { [weak state] event, _ in
+            guard let state else { return .ignored }
+            state.preedit = event.text
             return .handled
         }
-        registry.setWheel(node) { [weak link] event, _ in
-            guard let link else { return .ignored }
-            return link.scroll(event) ? .handled : .ignored
-        }
-    }
-}
-
-/// Node-owned glue: observes the session while mounted and keeps per-view
-/// input state (IME preedit, fractional wheel travel).
-private final class TerminalLink: NodeResource {
-    private(set) var session: TerminalSession?
-    private weak var node: Node?
-    var metrics: CellMetrics?
-    var preedit = ""
-    private var wheelRows: Float = 0
-
-    func mount(node: Node) {
-        self.node = node
-        observe()
-    }
-
-    func unmount(node: Node) {
-        session?.removeObserver(self)
-        self.node = nil
-    }
-
-    func bind(_ session: TerminalSession) {
-        guard self.session !== session else { return }
-        self.session?.removeObserver(self)
-        self.session = session
-        preedit = ""
-        wheelRows = 0
-        observe()
-    }
-
-    /// Scrollback on the normal screen; arrow keys for full-screen programs.
-    func scroll(_ event: MouseWheelEvent) -> Bool {
-        guard let session, let metrics else { return false }
-        wheelRows += event.displacement(lineStep: metrics.height).y / metrics.height
-        let rows = Int(wheelRows.rounded(.towardZero))
-        guard rows != 0 else { return true }
-        wheelRows -= Float(rows)
-        if session.isAlternateScreen {
-            let key = TerminalKey(scancode: rows > 0 ? 82 : 81)
-            for _ in 0..<min(abs(rows), 50) { session.press(key) }
-        } else {
-            session.scroll(rows: -rows)
-        }
-        return true
-    }
-
-    private func observe() {
-        guard let node, let session else { return }
-        // Failures land in `status` and on screen; nothing to rethrow here.
-        if session.status == .idle { try? session.start() }
-        session.observe(self) { [weak node] in node?.markRenderDirty(reason: .styleSet(field: "terminal.frame")) }
-        node.markRenderDirty(reason: .styleSet(field: "terminal.session"))
     }
 }
 

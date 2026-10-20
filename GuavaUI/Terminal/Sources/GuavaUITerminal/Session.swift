@@ -119,13 +119,18 @@ public final class TerminalSession {
         invalidate()
     }
 
-    /// Writes user input; any input returns the viewport to the live screen.
+    /// Writes user input. Like typing in any terminal, input returns the
+    /// viewport to the live screen and drops the selection.
     func write(_ bytes: [UInt8]) {
         guard !bytes.isEmpty else { return }
-        if !frame.scroll.isAtBottom {
-            engine.scrollToBottom()
-            invalidate()
-        }
+        let scrolled = !frame.scroll.isAtBottom
+        if scrolled { engine.scrollToBottom() }
+        if engine.clearSelection() || scrolled { invalidate() }
+        process?.write(bytes)
+    }
+
+    /// Bytes the program asked for (mouse reports) that are not user typing.
+    func report(_ bytes: [UInt8]) {
         process?.write(bytes)
     }
 
@@ -145,8 +150,9 @@ public final class TerminalSession {
     var isAlternateScreen: Bool { engine.isAlternateScreen }
 
     func fit(columns: Int, rows: Int, cellWidth: Int, cellHeight: Int) {
+        guard columns != engine.columns || rows != engine.rows
+              || cellWidth != cellSize.width || cellHeight != cellSize.height else { return }
         cellSize = (cellWidth, cellHeight)
-        guard columns != engine.columns || rows != engine.rows else { return }
         engine.resize(columns: columns, rows: rows, cellWidth: cellWidth, cellHeight: cellHeight)
         process?.resize(.init(columns: engine.columns, rows: engine.rows,
                               cellWidth: cellWidth, cellHeight: cellHeight))
@@ -173,7 +179,7 @@ public final class TerminalSession {
         onEvent?(.exited(code: code))
     }
 
-    private func invalidate() {
+    func invalidate() {
         cachedFrame = nil
         for observer in observers.values { observer() }
     }

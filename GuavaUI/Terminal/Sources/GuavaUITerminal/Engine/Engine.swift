@@ -15,8 +15,13 @@ final class TerminalEngine {
 
     private(set) var columns: Int
     private(set) var rows: Int
+    /// Cell size in points, as last reported to Ghostty (image and mouse geometry).
+    private(set) var cellSize = (width: 8, height: 16)
 
-    private let terminal: GhosttyTerminal
+    /// Shared with the `TerminalEngine` extensions in this directory.
+    let terminal: GhosttyTerminal
+    let selection: SelectionGesture
+    let mouse = MouseEncoder()
     private let renderState: GhosttyRenderState
     private let rowIterator: GhosttyRenderStateRowIterator
     private let rowCells: GhosttyRenderStateRowCells
@@ -38,13 +43,18 @@ final class TerminalEngine {
         self.rowIterator = rowIterator!
         self.rowCells = rowCells!
         keys = KeyEncoder()
+        selection = SelectionGesture()
 
         var lines = max(0, scrollbackLines)
         ghostty_terminal_set(self.terminal, GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_LINES, &lines)
+        var blink = true
+        ghostty_terminal_set(self.terminal, GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_BLINK, &blink)
+        enableImages()
         installCallbacks()
     }
 
     deinit {
+        selection.free(terminal: terminal)
         ghostty_render_state_row_cells_free(rowCells)
         ghostty_render_state_row_iterator_free(rowIterator)
         ghostty_render_state_free(renderState)
@@ -65,11 +75,12 @@ final class TerminalEngine {
 
     func resize(columns: Int, rows: Int, cellWidth: Int, cellHeight: Int) {
         let columns = Self.clampDimension(columns), rows = Self.clampDimension(rows)
-        guard columns != self.columns || rows != self.rows else { return }
+        let cell = (width: max(1, cellWidth), height: max(1, cellHeight))
+        guard columns != self.columns || rows != self.rows || cell != cellSize else { return }
         self.columns = columns
         self.rows = rows
-        ghostty_terminal_resize(terminal, UInt16(columns), UInt16(rows),
-                                UInt32(max(1, cellWidth)), UInt32(max(1, cellHeight)))
+        cellSize = cell
+        ghostty_terminal_resize(terminal, UInt16(columns), UInt16(rows), UInt32(cell.width), UInt32(cell.height))
     }
 
     /// Bytes for a key press in the terminal's current keyboard modes.
@@ -136,6 +147,7 @@ final class TerminalEngine {
         let reader = FrameReader(renderState: renderState, rowIterator: rowIterator, rowCells: rowCells)
         var frame = reader.read(columns: columns, rows: rows)
         frame.scroll = scrollPosition()
+        frame.images = imagePlacements()
         var clean = GHOSTTY_RENDER_STATE_DIRTY_FALSE
         ghostty_render_state_set(renderState, GHOSTTY_RENDER_STATE_OPTION_DIRTY, &clean)
         return frame
@@ -151,7 +163,7 @@ final class TerminalEngine {
 
     // MARK: Private
 
-    private func isModeSet(_ number: UInt16, ansi: Bool = false) -> Bool {
+    func isModeSet(_ number: UInt16, ansi: Bool = false) -> Bool {
         var config = GhosttyTerminalModeConfig(mode: ghostty_mode_new(number, ansi), value: false)
         guard ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_MODE, &config) == GHOSTTY_SUCCESS else { return false }
         return config.value

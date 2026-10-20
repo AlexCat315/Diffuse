@@ -40,16 +40,20 @@ final class Console: View {
 | `send(_:)` / `paste(_:)` | 以键入方式发送文本；按程序的 bracketed-paste 模式粘贴 |
 | `terminate()` | 挂断（SIGHUP），等同关闭终端窗口 |
 | `status` / `title` / `onEvent` | `.idle/.running/.exited(code:)/.failed`；OSC 0/2 标题；标题变化、响铃与退出事件（UI 线程） |
-| `TerminalView(session:fontSize:)` | 填满给定空间；布局变化时把新的行列数通知程序 |
+| `TerminalView(session:fontSize:onOpenLink:)` | 填满给定空间，布局变化时把新的行列数通知程序；`onOpenLink` 处理 ⌘-点击的超链接 |
 
 子进程环境设置 `TERM=xterm-256color`、`COLORTERM=truecolor`、`TERM_PROGRAM=GuavaUI`，缺少 locale 时补 `LANG=en_US.UTF-8`。
 
 ## 交互
 
-- 点击获得焦点；失焦时光标显示为空心框。
-- 可打印字符走平台文字输入（支持 IME 预编辑、macOS Option 组合字符）；方向键、功能键、Ctrl 组合等交给 Ghostty 编码器，自动遵循程序的应用光标键、keypad、Kitty 键盘协议等模式。
-- ⌘V 粘贴剪贴板；其余 ⌘ 快捷键留给宿主。
-- 滚轮在主屏滚动回滚缓冲；全屏程序（vim、less、htop，使用备用屏）收到上下方向键。任何输入都会回到实时屏幕。
+- 点击获得焦点；聚焦时光标按程序设定闪烁（DECSCUSR，默认闪烁；减弱动态效果时常亮），失焦时显示为空心框。
+- 可打印字符走平台文字输入（支持 IME 预编辑、macOS Option 组合字符）；输入法组合期间回车、退格、方向键留给输入法，不发给程序。方向键、功能键、Ctrl 组合等交给 Ghostty 编码器，自动遵循程序的应用光标键、keypad、Kitty 键盘协议等模式。
+- 拖动选择文本，双击选词、三击选行；拖出上下边缘时滚动回滚。⌘C 复制选区（无选区时交给宿主），⌘V 粘贴；其余 ⌘ 快捷键留给宿主。键入会清除选区。
+- 程序开启鼠标上报（vim `mouse=a`、htop、tmux 等）时，点击、拖动、滚轮按程序请求的格式（X10/UTF-8/SGR/urxvt/SGR-pixels）上报；按住 Shift 仍可选择文本。
+- OSC 8 超链接带下划线，悬停显示手形指针，⌘-点击打开：传入 `onOpenLink` 时交给调用方，否则交给系统（仅 http/https/mailto/file）。
+- Kitty 图形协议：内联传输的 RGB/RGBA/灰度/PNG 图像按放置位置绘制，`z<0` 画在文字下方。出于安全，不接受文件与共享内存传输。
+- 滚轮在主屏滚动回滚缓冲；全屏程序收到上下方向键（或鼠标滚轮上报）。任何输入都会回到实时屏幕。
+- 视图填满所在容器（在 `Column`/`Row` 中沿主轴伸展并横向拉伸）；容器未给尺寸时至少显示约 4 行。
 - 默认前景/背景色跟随主题的 `onSurface` / `surface`；程序设置的调色板与真彩色照常生效。
 
 ## 线程
@@ -66,8 +70,14 @@ final class Console: View {
 swift run --package-path GuavaUI/Terminal TerminalDemo
 ```
 
+或带开发者工具运行（`GuavaUI/Terminal/guava.json`）：
+
+```bash
+./guava run GuavaUI/Terminal --devtools
+```
+
 ## 限制
 
 - 仅 macOS / Linux（`forkpty`）；Windows（ConPTY）尚未实现，`start()` 抛出 `.unsupportedPlatform`。
-- 尚未实现：鼠标选择与复制、程序的鼠标上报（mouse tracking）、超链接、Kitty 图形协议、光标闪烁。
+- 尚未实现：普通文本中 URL 的自动识别（只支持 OSC 8）、矩形选择、Kitty 图像动画之外的 Unicode 占位符（virtual placement）、文字 SGR 闪烁。
 - 方框绘制字符使用字体字形，回退字体下线条可能不衔接（Ghostty 自身用程序化绘制）。

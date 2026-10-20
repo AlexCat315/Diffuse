@@ -52,6 +52,9 @@ struct FrameReader {
         if ghostty_render_state_row_cells_get(rowCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW, &raw) == GHOSTTY_SUCCESS {
             var wide = GHOSTTY_CELL_WIDE_NARROW
             ghostty_cell_get(raw, GHOSTTY_CELL_DATA_WIDE, &wide)
+            var link = false
+            ghostty_cell_get(raw, GHOSTTY_CELL_DATA_HAS_HYPERLINK, &link)
+            cell.isHyperlink = link
             switch wide {
             case GHOSTTY_CELL_WIDE_WIDE: cell.width = .wide
             case GHOSTTY_CELL_WIDE_SPACER_TAIL, GHOSTTY_CELL_WIDE_SPACER_HEAD: cell.width = .spacer
@@ -118,11 +121,4 @@ struct FrameReader {
     private func rgb(_ color: GhosttyColorRgb) -> TerminalRGB {
         TerminalRGB(r: color.r, g: color.g, b: color.b)
     }
-}
-
-/// Sets a Ghostty sized struct's leading `size` field.
-private func sized<T>(_ value: T) -> T {
-    var value = value
-    withUnsafeMutableBytes(of: &value) { $0.storeBytes(of: MemoryLayout<T>.size, as: Int.self) }
-    return value
 }

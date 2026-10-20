@@ -14,6 +14,12 @@ struct TerminalPainter {
     let opacity: Float
     /// IME composition shown at the cursor until committed.
     var preedit = ""
+    /// False during the off phase of a blinking cursor.
+    var isCursorShown = true
+    /// Kitty graphics placements with their uploaded textures, in z order.
+    var images: [(TerminalImagePlacement, TextureID)] = []
+    /// Cell size Ghostty measures image pixels in.
+    var cellPixels = (width: 1, height: 1)
 
     /// `bounds` is the whole view: the partial cell left over at the right and
     /// bottom edges still takes the terminal background.
@@ -21,10 +27,13 @@ struct TerminalPainter {
         let originX = bounds.x, originY = bounds.y
         list.addRect(bounds, color: color(frame.background))
         for row in 0..<frame.rows {
-            let top = originY + Float(row) * metrics.height
-            paintBackgrounds(row: row, top: top, x: originX, into: list)
-            paintGlyphs(row: row, top: top, x: originX, into: list)
+            paintBackgrounds(row: row, top: originY + Float(row) * metrics.height, x: originX, into: list)
         }
+        paintImages(belowText: true, x: originX, y: originY, into: list)
+        for row in 0..<frame.rows {
+            paintGlyphs(row: row, top: originY + Float(row) * metrics.height, x: originX, into: list)
+        }
+        paintImages(belowText: false, x: originX, y: originY, into: list)
         paintCursor(x: originX, y: originY, into: list)
     }
 
@@ -59,13 +68,31 @@ struct TerminalPainter {
                 list.addText(layout, origin: (left, top), color: foreground,
                              textureID: environment.atlasTextureID, atlas: environment.atlas)
             }
-            if cell.attributes.contains(.underline) {
+            if cell.attributes.contains(.underline) || cell.isHyperlink {
                 list.addRect(UIRect(x: left, y: top + metrics.height - 2, width: span, height: 1), color: foreground)
             }
             if cell.attributes.contains(.strikethrough) {
                 list.addRect(UIRect(x: left, y: top + (metrics.height / 2).rounded(), width: span, height: 1),
                              color: foreground)
             }
+        }
+    }
+
+    /// Kitty placements: `z < 0` sits between cell backgrounds and text.
+    private func paintImages(belowText: Bool, x originX: Float, y originY: Float, into list: DrawList) {
+        let scaleX = metrics.width / Float(max(1, cellPixels.width))
+        let scaleY = metrics.height / Float(max(1, cellPixels.height))
+        for (placement, texture) in images where placement.isBelowText == belowText {
+            let size = placement.imageSize
+            guard size.width > 0, size.height > 0 else { continue }
+            let rect = UIRect(x: originX + Float(placement.column) * metrics.width,
+                              y: originY + Float(placement.row) * metrics.height,
+                              width: Float(placement.width) * scaleX, height: Float(placement.height) * scaleY)
+            let source = placement.source
+            list.addImageQuad(rect: rect, textureID: texture, tint: Color(r: 1, g: 1, b: 1, a: opacity),
+                              uvMin: (Float(source.x) / Float(size.width), Float(source.y) / Float(size.height)),
+                              uvMax: (Float(source.x + source.width) / Float(size.width),
+                                      Float(source.y + source.height) / Float(size.height)))
         }
     }
 
@@ -92,6 +119,7 @@ struct TerminalPainter {
                                       radius: 0, width: 1, color: ink)
             return
         }
+        guard isCursorShown else { return }
         switch cursor.shape {
         case .block:
             // The block covers the glyph painted earlier; repaint it inverted.

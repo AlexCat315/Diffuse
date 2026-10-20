@@ -15,11 +15,18 @@ enum KeyRouting: Equatable {
     /// Leave it to the host (Command shortcuts).
     case host
     case paste
+    /// ⌘C: copies the selection, or falls through to the host without one.
+    case copy
 
     init(_ event: KeyEvent) {
         let modifiers = event.modifiers
         if modifiers.hasGui {
-            self = event.scancode == 25 && !modifiers.hasShift && !modifiers.hasCtrl ? .paste : .host
+            let plain = !modifiers.hasShift && !modifiers.hasCtrl && !modifiers.hasAlt
+            switch event.scancode {
+            case 25 where plain: self = .paste
+            case 6 where plain: self = .copy
+            default: self = .host
+            }
             return
         }
         var terminalModifiers: TerminalKey.Modifiers = []

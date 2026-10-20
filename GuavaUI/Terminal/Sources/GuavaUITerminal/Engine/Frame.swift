@@ -30,6 +30,8 @@ struct TerminalCell: Equatable, Sendable {
     var background: TerminalRGB?
     var attributes: TerminalCellAttributes = []
     var isSelected = false
+    /// Part of an OSC 8 hyperlink.
+    var isHyperlink = false
 
     static let blank = TerminalCell()
 }
@@ -65,6 +67,8 @@ struct TerminalFrame: Equatable, Sendable {
     var foreground = TerminalRGB(r: 0xFF, g: 0xFF, b: 0xFF)
     var background = TerminalRGB(r: 0, g: 0, b: 0)
     var scroll = TerminalScrollPosition()
+    /// Kitty graphics placements in draw order.
+    var images: [TerminalImagePlacement] = []
 
     init(columns: Int, rows: Int) {
         self.columns = columns

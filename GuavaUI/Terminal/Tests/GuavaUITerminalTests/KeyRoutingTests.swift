@@ -24,10 +24,12 @@ struct KeyRoutingTests {
         #expect(route(43, .lshift) == .encode(TerminalKey(scancode: 43, modifiers: .shift)))
     }
 
-    @Test("Command shortcuts belong to the host except paste")
+    @Test("Command shortcuts belong to the host except copy and paste")
     func command() {
         #expect(route(25, .lgui) == .paste)
-        #expect(route(6, .lgui) == .host)
+        #expect(route(6, .lgui) == .copy)
+        #expect(route(6, [.lgui, .lalt]) == .host)
+        #expect(route(17, .lgui) == .host)
         #expect(route(25, [.lgui, .lshift]) == .host)
     }
 
