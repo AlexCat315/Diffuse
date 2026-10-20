@@ -89,13 +89,31 @@ enum StageOperation {
     try Download.file(from: remote, to: archive, sha256: MediaStaging.sourceSHA256)
 
     let source = cache.appendingPathComponent("ffmpeg-\(MediaStaging.version)")
-    if !FileManager.default.fileExists(atPath: source.path) {
+    // A partial or interrupted extraction can leave `source` present but
+    // missing key files (e.g. Makefile) — which would otherwise be reused on a
+    // later run because the directory already exists. Verify the essential
+    // entry points are present and re-extract from scratch when they are not.
+    let sourceReady =
+      FileManager.default.fileExists(atPath: source.appendingPathComponent("configure").path)
+      && FileManager.default.fileExists(atPath: source.appendingPathComponent("Makefile").path)
+    if !sourceReady {
+      if FileManager.default.fileExists(atPath: source.path) { try Fs.remove(source) }
       try Archive.extract(archive, to: cache)
     }
 
     let build = Repository.path("Engine/Media/build/\(name)")
     try Fs.directory(build)
-    let prefix = build.appendingPathComponent("install")
+
+    // FFmpeg's out-of-tree layout writes a wrapper Makefile in `build` whose
+    // first line is `include $(SRC_PATH)/Makefile` with an *absolute* source
+    // path. The MSVC/MSYS2 `make` on Windows cannot resolve that MSYS2-style
+    // absolute path (e.g. /d/a/…), so the build aborts with
+    // "No such file or directory" for the source Makefile. Building in-tree
+    // (configure + make + make install run inside the source tree) removes that
+    // cross-directory absolute include entirely. macOS and Linux keep the
+    // out-of-tree layout, whose native `make` resolves it without trouble.
+    let buildDir = name.hasPrefix("windows-") ? source : build
+    let prefix = buildDir.appendingPathComponent("install")
     let options =
       configureOptions(prefix: prefix) + (try Targets.options(for: name, environment: environment))
     // configure links the host programs it needs for the build itself
@@ -114,9 +132,9 @@ enum StageOperation {
     }
     try Shell.inherit(
       ["sh", source.appendingPathComponent("configure").path] + options,
-      at: build, environment: childEnvironment)
-    try Shell.inherit(["make", "-j4"], at: build, environment: childEnvironment)
-    try Shell.inherit(["make", "install"], at: build, environment: childEnvironment)
+      at: buildDir, environment: childEnvironment)
+    try Shell.inherit(["make", "-j4"], at: buildDir, environment: childEnvironment)
+    try Shell.inherit(["make", "install"], at: buildDir, environment: childEnvironment)
 
     try Fs.directory(variant)
     try merge(

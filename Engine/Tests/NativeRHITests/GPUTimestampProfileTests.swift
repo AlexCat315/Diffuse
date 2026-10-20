@@ -5,11 +5,14 @@
 import XCTest
 @testable import NativeRHI
 
-final class GPUTimestampProfileTests: XCTestCase {
-    private static func marker(_ label: String, _ nanoseconds: UInt64) -> GPUTimestampProfile.Marker {
-        GPUTimestampProfile.Marker(label: label, nanoseconds: nanoseconds)
-    }
+// A small pure helper (not a method) so it can be called freely inside the
+// @Sendable concurrentPerform closure in testConcurrentAppendsAreSerialised
+// without capturing `self`, which would trip Swift 6 strict concurrency.
+private func marker(_ label: String, _ nanoseconds: UInt64) -> GPUTimestampProfile.Marker {
+    GPUTimestampProfile.Marker(label: label, nanoseconds: nanoseconds)
+}
 
+final class GPUTimestampProfileTests: XCTestCase {
     func testMarkersKeepCompletionOrderAndCount() {
         let profile = GPUTimestampProfile()
         profile.append(marker("ui-segment", 1_000))
