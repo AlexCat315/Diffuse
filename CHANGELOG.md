@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 布局：工作区面板区域改为 CSS `overflow: auto` 语义：面板按区域高度布局并放入纵向 ScrollView，放不下的刚性内容可以滚动查看，自带滚动的面板（控制台等）仍只滚动自己；开发者工具“概览”不再被截掉底部（概览保持自然高度）。修复控制台与构建输出在输出面板中不收缩的问题：它们原来按完整内容高度布局，日志末尾约 300pt 被区域裁掉、无法滚到。Tree、List 与菜单行的宿主统一用 `LayoutNode.rowSlot`（纵向居中），修复比行矮的内容贴在行顶部、悬停和选中底色与文字不居中的问题；`RowSlotTests` 覆盖。`get_diagnostics.layoutIssues` 分为 `invalidGeometry` 与新增的 `clippedOverflow`（被非滚动裁切截掉的纵向内容，含 `hiddenHeight` 与源码位置），`Node.isScrollViewport` 标记纵向 ScrollView；`DiagnosticsTests`、`WorkspaceViewTests` 覆盖。
+
 - 写作 Space 细节对照原型修正：`WorkspacePanel.hidesTabBarWhenAlone` 让自带标签的面板（编辑器的文件标签）在独占分组时不再叠一行“编辑器”面板标签，与其他面板合组时标签条恢复；`WorkspaceViewTests` 覆盖两种情况。`MarkdownEditor` 新增 `sourceFont` / `sourceLineHeight`，编辑器的 Markdown 源码与 Swift 一致使用 13/20 等宽字体。标题栏意图框的上下文芯片改为末尾省略号截断并显示完整提示。GuavaUICore 新增 `LineBreaks`（由富文本的 `RichTextBreaks` 移入），`TextLayout` 也按它在汉字之间换行，并遵守避头尾规则，“。”“，”等不再单独落到行首；`TextLayoutRegressionTests` 覆盖。SourceKit-LSP 生命周期测试的假服务器改用 `read(2)` 读取标准输入：`FileHandle.read(upToCount:)` 会等满整个缓冲区或 EOF，导致 initialize 一直无回复。
 
 - 写作 Space 重做：左侧新增“文件”面板（文件夹树、打开与未保存标记、右键操作），中间“编辑器”改为文件标签、路径栏和编辑区，关闭未保存的标签先询问是否保存，Swift 文件使用脚本编辑器的着色与折叠，空状态居中并提供“打开文件 ⌘P”；去掉原来的路径输入框与按钮行。文本 Space 中 ⌘S 保存当前文件，新增“放弃修改”和 ⌘W“关闭文件”，场景命令不再出现；⌘P 可搜索项目文件。系统菜单新增“选择”“世界”。标题栏按原型重做：项目首字母（真实的叶绿到番石榴粉渐变）、git 分支、随 Space 变化的面包屑（文件路径或场景 › 实体）、带上下文芯片的意图框、你与 Guava 的在线头像，以及运行目标、实心构建图标和按状态显示的试玩控制组成的运行区。修复活动栏和状态栏在切换 Space、切换面板后不刷新，以及切换到已打开文件时编辑器和标题栏停在旧文件的问题。`DocumentEditingTests`、`CommandCatalogTests` 与工作台测试覆盖文件树、标签关闭、文本 Space 命令和活动栏刷新。

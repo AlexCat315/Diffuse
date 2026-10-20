@@ -253,15 +253,9 @@ struct _ListRowHost: _PrimitiveView {
         }
     }
 
-    func _makeLayoutNode() -> LayoutNode? {
-        let l = LayoutNode()
-        l.flexDirection = .column
-        l.alignItems = .stretch
-        l.height = rowHeight
-        return l
-    }
+    func _makeLayoutNode() -> LayoutNode? { .rowSlot(height: rowHeight) }
 
-    func _updateLayout(_ layout: LayoutNode) { layout.height = rowHeight }
+    func _updateLayout(_ layout: LayoutNode) { layout.updateRowSlot(height: rowHeight) }
 
     func _children(for node: Node) -> [any View] {
         let style = node.compositionValue(of: ListRowStyleEnvironment.key)

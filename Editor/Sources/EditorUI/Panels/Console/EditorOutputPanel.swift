@@ -22,6 +22,7 @@ struct EditorOutputPanel: View {
             case .logs:
                 ConsolePanel(store: app.store, onNavigate: app.navigateToIssue,
                              outputSelector: AnyView(OutputModeSelector(store: app.store, problemCount: count)))
+                    .flex()
             case .problems:
                 EditorPanelToolbar {
                     OutputModeSelector(store: app.store, problemCount: count)
@@ -30,7 +31,7 @@ struct EditorOutputPanel: View {
                 Divider()
                 problems(snapshot.documents, failures: failures).flex()
             case .build:
-                buildOutput(snapshot.selectedDocument, problemCount: count)
+                buildOutput(snapshot.selectedDocument, problemCount: count).flex()
             }
         }
         .frame(minWidth: 0, minHeight: 0)

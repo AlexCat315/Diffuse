@@ -573,6 +573,30 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-tab-assets"))
     }
 
+    func testPanelRegionsScrollOnlyContentThatOverflows() {
+        let controller = WorkspaceController(document: Self.makeDocument())
+        let root = AnyView(WorkspaceView(controller: controller) { panelID in
+            if panelID == "inspector" {
+                // Rigid rows taller than any region: they must scroll, not clip.
+                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    for index in 0..<30 { AnyView(Text("Row \(index)").frame(height: 40)) }
+                })
+            }
+            return AnyView(Box { Text(panelID.rawValue) }.flex().debugName("content-\(panelID.rawValue)"))
+        })
+        let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 640, root: root)
+
+        let inspector = rig.frame(named: "workspace-panel-scroll-inspector")
+        rig.wheel(at: CGPoint(x: inspector.midX, y: inspector.midY), deltaY: -120)
+        XCTAssertGreaterThan(rig.node(named: "workspace-panel-scroll-inspector").contentOffset.y, 0)
+
+        // Flexible content fills its region exactly and never scrolls.
+        let viewport = rig.frame(named: "workspace-panel-scroll-viewport")
+        XCTAssertEqual(rig.frame(named: "content-viewport").height, viewport.height)
+        rig.wheel(at: CGPoint(x: viewport.midX, y: viewport.midY), deltaY: -120)
+        XCTAssertEqual(rig.node(named: "workspace-panel-scroll-viewport").contentOffset.y, 0)
+    }
+
     func testDraggingWorkspaceSplitDividersUpdatesFractions() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 
@@ -932,6 +956,13 @@ private final class WorkspaceViewRig {
                                                           deltaY: Float(end.y - mid.y))))
         pump()
         endDrag(at: end)
+    }
+
+    func wheel(at point: CGPoint, deltaY: Float) {
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(point.x), y: Float(point.y), deltaX: 0, deltaY: 0)))
+        dispatcher.dispatch(.mouseWheel(.init(x: 0, y: deltaY, mouseX: Float(point.x), mouseY: Float(point.y),
+                                              input: .init(unit: .points, device: .continuous, phase: .none, momentumPhase: .none))))
+        pump()
     }
 
     func beginDrag(from start: CGPoint) {

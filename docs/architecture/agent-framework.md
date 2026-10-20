@@ -74,7 +74,7 @@ let result = try await agent.run(messages: [AgentMessage(role: .user, text: "当
 
 每页最多 100 项。Node 与 scope IDs 属于节点存活期，卸载后失效；单节点查询对过期 ID 报错。State 默认私有，只有显式注册的摘要可读。secure 控件的 value 被替换为 redacted；节点查询不求值 lazy accessibility providers。
 
-普通 GuavaUI 的 `get_diagnostics.layoutIssues` 返回无效几何的 `total` 和至多 `limit`（上限 100）个 `items`：节点 ID、字符串形式的 `invalidValues`、可用的源码位置。NaN、无穷值及负尺寸不会使概览 JSON 编码失败；可见节点查询排除无效几何子树，按 ID 查询异常节点则明确报告节点 ID 并指向该诊断入口。隐藏布局保留状态但不暴露可交互节点。`DiagnosticsTests` 覆盖异常值、来源、样本上限和即时 wire 错误信息。
+普通 GuavaUI 的 `get_diagnostics.layoutIssues` 分两组报告布局问题，`total` 为两组合计，每组至多 `limit`（上限 100）项。`invalidGeometry` 是无效几何：节点 ID、字符串形式的 `invalidValues`、可用的源码位置。`clippedOverflow` 是被非滚动裁剪容器截掉的纵向内容：节点 ID、`debugName`、被截掉的高度 `hiddenHeight` 和最近的源码位置；后代边界在嵌套裁剪处停止，与 ScrollView 的滚动范围一致，`Node.isScrollViewport` 为真的滚动视口不报告。NaN、无穷值及负尺寸不会使概览 JSON 编码失败；可见节点查询排除无效几何子树，按 ID 查询异常节点则明确报告节点 ID 并指向该诊断入口。隐藏布局保留状态但不暴露可交互节点。`DiagnosticsTests` 覆盖异常值、来源、样本上限和即时 wire 错误信息。
 
 `presentation.inputEnabled` 包含祖先状态、可见几何和所属场景的模态输入许可。打开 dialog 后，仍绘制的背景可保持 `isVisible = true`，但 `inputEnabled = false`；使用 `input_enabled_only: true` 排除它们。模态权限从本场景已绑定的焦点资源读取，不依赖查询发生时的全局 current window，支持嵌套模态及附属浮层。作用域发现采用一次线性扫描，深层组合节点不会反复扫描子树。
 

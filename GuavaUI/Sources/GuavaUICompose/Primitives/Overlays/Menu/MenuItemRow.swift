@@ -140,19 +140,9 @@ struct MenuItemRowHost: _PrimitiveView {
         }
     }
 
-    func _makeLayoutNode() -> LayoutNode? {
-        let layout = LayoutNode()
-        layout.flexDirection = .column
-        layout.alignItems = .stretch
-        layout.minHeight = 32
-        return layout
-    }
+    func _makeLayoutNode() -> LayoutNode? { .rowSlot(minHeight: 32) }
 
-    func _updateLayout(_ layout: LayoutNode) {
-        layout.flexDirection = .column
-        layout.alignItems = .stretch
-        layout.minHeight = 32
-    }
+    func _updateLayout(_ layout: LayoutNode) { layout.updateRowSlot(minHeight: 32) }
 
     func _children(for node: Node) -> [any View] {
         let theme = node.theme

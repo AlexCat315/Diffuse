@@ -126,6 +126,11 @@ public final class Node: @unchecked Sendable {
         }
     }
 
+    /// A clipping node that scrolls its content, so content past its edges
+    /// stays reachable. Layout diagnostics report overflow cut off by any
+    /// other clipping node.
+    public var isScrollViewport = false
+
     // MARK: - Visual (Phase 6.3)
 
     /// Frame-level compositing request raised for the current frame, or nil.

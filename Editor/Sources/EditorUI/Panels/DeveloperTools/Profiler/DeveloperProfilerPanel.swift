@@ -317,7 +317,9 @@ struct DeveloperProfilerWorkbenchView: View {
             }
             if !showsFrameDetails {
                 DeveloperProfilerOverview(samples: samples, stats: frameStats)
-                    .flex(1, shrink: 1, basis: 0)
+                    // Natural height: when the panel is shorter, the workspace
+                    // region scrolls instead of clipping the health column.
+                    .flex(1, shrink: 0)
             } else {
             DeveloperProfilerToolbar(sampleCount: samples.count,
                                      selectedSample: selectedSample,

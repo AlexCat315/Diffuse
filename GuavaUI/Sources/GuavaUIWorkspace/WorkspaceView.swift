@@ -754,10 +754,20 @@ struct _WorkspaceTabGroupView: View {
                                  controller: controller)
             }
             if let activeID {
+                // Every region behaves like CSS `overflow: auto`: the panel is
+                // laid out at the region's height, and only content that
+                // spills past it (rigid rows a panel cannot shrink) becomes
+                // scrollable. A panel with its own scroller clips, so it
+                // fits exactly and keeps scrolling itself.
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                    content(activeID)
-                        .flex()
-                        .frame(minWidth: 0, minHeight: 0)
+                    ScrollView(.vertical) {
+                        content(activeID)
+                            .flex(1, shrink: 1, basis: 0)
+                            .frame(minWidth: 0, minHeight: 0)
+                    }
+                    .flex(1, shrink: 1, basis: 0)
+                    .frame(minWidth: 0, minHeight: 0)
+                    .debugName("workspace-panel-scroll-\(activeID.rawValue)")
                 }
                     .flex()
                     .frame(minWidth: 0, minHeight: 0)

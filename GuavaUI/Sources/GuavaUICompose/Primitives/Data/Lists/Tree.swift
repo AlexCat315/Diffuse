@@ -1181,17 +1181,9 @@ private struct _TreeRowHost: _PrimitiveView {
         }
     }
 
-    func _makeLayoutNode() -> LayoutNode? {
-        let l = LayoutNode()
-        l.flexDirection = .column
-        l.alignItems = .stretch
-        l.height = geometry.rowHeight
-        return l
-    }
+    func _makeLayoutNode() -> LayoutNode? { .rowSlot(height: geometry.rowHeight) }
 
-    func _updateLayout(_ layout: LayoutNode) {
-        layout.height = geometry.rowHeight
-    }
+    func _updateLayout(_ layout: LayoutNode) { layout.updateRowSlot(height: geometry.rowHeight) }
 
     func _children(for node: Node) -> [any View] {
         let style = node.compositionValue(of: TreeRowStyleEnvironment.key)

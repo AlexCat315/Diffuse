@@ -9,7 +9,7 @@ import GuavaUIScene
 /// stale ids are ignored by the host.
 public final class SceneInspector: @unchecked Sendable {
 
-    private enum DebugAttachmentKey {
+    enum DebugAttachmentKey {
         static let debugName = "GuavaUI.debug.name"
         static let layoutRole = "GuavaUI.layout.role"
         static let semanticRole = "GuavaUI.semantic.role"

@@ -130,7 +130,7 @@ struct DiagnosticsTests {
         #expect(overview.type == "diagnostics.call.ok")
         let issues = try #require(overview.payload?.objectValue?["data"]?.objectValue?["layoutIssues"]?.objectValue)
         #expect(issues["total"]?.diagnosticNumber == 2)
-        let first = try #require(issues["items"]?.diagnosticArray?.first?.objectValue)
+        let first = try #require(issues["invalidGeometry"]?.diagnosticArray?.first?.objectValue)
         #expect(first["nodeID"]?.stringValue == String(broken.id.rawValue))
         #expect(first["invalidValues"]?.objectValue?["width"]?.stringValue?.lowercased().contains("nan") == true)
         #expect(first["source"]?.objectValue?["line"]?.diagnosticNumber == 47)
@@ -145,6 +145,38 @@ struct DiagnosticsTests {
         #expect(invalid.type == "diagnostics.call.err")
         #expect(invalid.payload?.objectValue?["message"]?.stringValue?.contains(String(broken.id.rawValue)) == true)
         #expect(invalid.payload?.objectValue?["message"]?.stringValue?.contains("get_diagnostics") == true)
+    }
+
+    @Test func overviewReportsContentClippedByNonScrollingContainers() throws {
+        let tree = NodeTree(), root = Node()
+        tree.root = root; root.frame = CGRect(x: 0, y: 0, width: 300, height: 400)
+        func add(_ frame: CGRect, to parent: Node, clips: Bool = false) -> Node {
+            let node = Node(); node.frame = frame; node.clipsToBounds = clips; parent.addChild(node); return node
+        }
+        // A squeezed panel hides 60pt of rigid content.
+        let panel = add(CGRect(x: 0, y: 0, width: 300, height: 100), to: root, clips: true)
+        panel.sourceLocation = .init(fileID: "App/Panel.swift", filePath: "/project/Panel.swift", line: 12, column: 4)
+        _ = add(CGRect(x: 0, y: 0, width: 300, height: 160), to: panel)
+        // A scroll viewport keeps its overflow reachable.
+        let scroller = add(CGRect(x: 0, y: 120, width: 300, height: 100), to: root, clips: true)
+        scroller.isScrollViewport = true
+        _ = add(CGRect(x: 0, y: 0, width: 300, height: 500), to: scroller)
+        // Rounded clipping around content that fits, and overflow already
+        // cut off by a nested clip, are not reported twice.
+        let rounded = add(CGRect(x: 0, y: 240, width: 300, height: 40), to: root, clips: true)
+        let nested = add(CGRect(x: 0, y: 0, width: 300, height: 40), to: rounded, clips: true)
+        _ = add(CGRect(x: 0, y: 0, width: 300, height: 90), to: nested)
+
+        let overview = UIDiagnostics(tree: tree).handleReadRequest(DevToolsEnvelope(type: "diagnostics.call", payload: .object([
+            "name": .string("get_diagnostics"), "arguments": .object([:])
+        ])))
+        let issues = try #require(overview.payload?.objectValue?["data"]?.objectValue?["layoutIssues"]?.objectValue)
+        let overflow = try #require(issues["clippedOverflow"]?.diagnosticArray)
+        #expect(issues["total"]?.diagnosticNumber == 2)
+        #expect(overflow.compactMap { $0.objectValue?["nodeID"]?.stringValue } == [String(panel.id.rawValue), String(nested.id.rawValue)])
+        let first = try #require(overflow.first?.objectValue)
+        #expect(first["hiddenHeight"]?.diagnosticNumber == 60)
+        #expect(first["source"]?.objectValue?["line"]?.diagnosticNumber == 12)
     }
 
     @Test func diagnosticRegistryIsTheSingleDefinitionSource() {

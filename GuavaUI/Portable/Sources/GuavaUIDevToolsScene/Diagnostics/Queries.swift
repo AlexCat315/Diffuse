@@ -143,8 +143,12 @@ public final class UIDiagnostics {
     public func resetCaptures() { traces.reset() }
     public var stateObservationAvailable: Bool { state != nil }
     func layoutIssues(limit: Int) -> UIDiagnosticLayoutSummary {
-        let issues = nodes().compactMap(\.geometryIssue)
-        return UIDiagnosticLayoutSummary(total: issues.count, items: Array(issues.prefix(min(100, max(1, limit)))))
+        let count = min(100, max(1, limit))
+        let geometry = nodes().compactMap(\.geometryIssue)
+        let overflow = tree.root.map(UIDiagnosticOverflowIssue.collect(in:)) ?? []
+        return UIDiagnosticLayoutSummary(total: geometry.count + overflow.count,
+                                         invalidGeometry: Array(geometry.prefix(count)),
+                                         clippedOverflow: Array(overflow.prefix(count)))
     }
 }
 

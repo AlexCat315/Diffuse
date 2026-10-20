@@ -47,6 +47,8 @@ WorkspacePanel(id: "inspector", title: "Inspector", sizing: .init(
 
 标签条采用水平滚动，长标题限制为单行，独立保留全部面板菜单、最大化和折叠按钮。活动标签切换或 viewport 改变时滚入可见区域，普通滚动不重置位置；一个 tab group 只有活动标签进入 Tab 顺序，Left/Right/Home/End 切换选择。菜单通过 portal 展开，不受面板 clipping 限制。标签高度与操作按钮消费文字缩放，200% 字体仍可操作。pin 当前继续使用图标标识。
 
+每个面板区域相当于 CSS 的 `overflow: auto`：活动面板按区域高度布局，放在一个纵向 ScrollView 中。面板内容能收缩时正好填满区域，不出现外层滚动；自带滚动的面板（日志、列表）由内层 ScrollView 裁切，只滚动自己；放不下的刚性内容（固定高度的卡片、表单行）超出区域的部分可以滚动查看，而不是被裁掉。外层滚动范围取后代边界并在嵌套裁切处停止，因此面板内部再加 `.clipped()` 会截断这部分内容；需要裁切的容器应让内容保持自然高度或自带滚动。`get_diagnostics.layoutIssues.clippedOverflow` 报告被非滚动裁切截掉的内容。`WorkspacePanel.hidesTabBarWhenAlone` 供自带标签的面板（如代码编辑器的文件标签）使用：独占分组时不画分组标签条，与其他面板合组时恢复。
+
 内部 docking 拆分使用原生 SplitView，支持 pointer、箭头和辅助功能 increment/decrement；`resizeLayoutSplit(WorkspaceLayoutSplit, fraction:)` 写回所属 slot 的实际树，触发订阅并标记 persistenceDirty。
 
 拆分地址用 slot 与两侧代表 group ID 定位其共同祖先，不依赖压缩后视图的数组下标；折叠隐藏分支仍保留在作者布局中。失效地址、非有限比例和相同比例不产生变化。测试覆盖嵌套树、隐藏分支、真实事件拖动/键盘及 JSON 恢复。

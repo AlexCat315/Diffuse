@@ -230,10 +230,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let n = Node()
         n.isHitTestable = true
         n.clipsToBounds = true
+        n.isScrollViewport = axes != .horizontal
         return n
     }
 
     public func _updateNode(_ node: Node) {
+        node.isScrollViewport = axes != .horizontal
         let theme = node.theme
         let report: (Node) -> Void = { node in
             let size = Self.visibleViewportRect(for: node).size
