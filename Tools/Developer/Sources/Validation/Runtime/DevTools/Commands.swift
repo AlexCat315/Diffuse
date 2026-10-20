@@ -15,6 +15,7 @@ package enum DevToolsCommands {
     case "input-ui": try InputUI.run(flags)
     case "activate-ui": try ActivateUI.run(flags)
     case "capture-ui": try CaptureUI.run(flags)
+    case "resize-window": try ResizeWindow.run(flags)
     case "record-timings": try RecordTimings.run(flags)
     case "session": try DevelopmentSession.run(flags)
     case "-h", "--help": Terminal.info(usage)
@@ -26,7 +27,7 @@ package enum DevToolsCommands {
   }
 
   static let operations = [
-    "query-ui", "input-ui", "activate-ui", "capture-ui", "record-timings", "session",
+    "query-ui", "input-ui", "activate-ui", "capture-ui", "resize-window", "record-timings", "session",
   ]
 
   static let usage = """
@@ -36,6 +37,7 @@ package enum DevToolsCommands {
       input-ui PORT …               Deliver input events through DevTools
       activate-ui PORT NODE [ACTION] Activate, increment or decrement a node by id
       capture-ui PORT OUTPUT.jpg    Capture the window draw list through the mirror
+      resize-window PORT W H        Resize the main window (logical points)
       record-timings PORT OUT.json FRAMES WARMUP
                                     Record presented window frame timings
       session PROJECT mac|android   Verify a running CLI session's DevTools endpoint

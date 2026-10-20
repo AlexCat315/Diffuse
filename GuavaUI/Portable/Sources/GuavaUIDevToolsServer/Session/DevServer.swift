@@ -250,6 +250,7 @@ public final class DevServer: @unchecked Sendable {
         case "state.list", "state.subscribe", "state.unsubscribe", "timeline.subscribe", "timeline.unsubscribe": dispatchObservation(env, on: conn)
         case "hello.ack", "tree.subscribe", "tree.unsubscribe", "select.node", "select.clear", "bye", "log.subscribe", "log.unsubscribe", "timing.subscribe", "timing.unsubscribe": dispatchScene(env, on: conn)
         case "mirror.start", "mirror.stop", "mirror.input", "mirror.activate": dispatchMirror(env, on: conn)
+        case "window.resize": dispatchWindow(env, on: conn)
         case "state.checkpoint", "state.restore", "state.diff": dispatchCheckpoint(env, on: conn)
         case "input.record.start", "input.record.stop", "input.replay": dispatchRecording(env, on: conn)
         default:

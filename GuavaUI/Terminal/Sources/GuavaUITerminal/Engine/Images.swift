@@ -17,11 +17,14 @@ struct TerminalImagePlacement: Equatable, Sendable {
     var imageSize: (width: Int, height: Int)
     /// Negative z draws under text (`z<0` in the protocol).
     var isBelowText: Bool
+    /// Pixel offset inside the top-left cell (Unicode placeholders centre images).
+    var offset: (x: Int, y: Int) = (0, 0)
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.imageID == rhs.imageID && lhs.generation == rhs.generation && lhs.column == rhs.column
             && lhs.row == rhs.row && lhs.width == rhs.width && lhs.height == rhs.height
             && lhs.source == rhs.source && lhs.imageSize == rhs.imageSize && lhs.isBelowText == rhs.isBelowText
+            && lhs.offset == rhs.offset
     }
 }
 
@@ -104,7 +107,7 @@ extension TerminalEngine {
         return DecodedImage(pixels: rgba, width: Int(width), height: Int(height))
     }
 
-    private var kittyGraphics: GhosttyKittyGraphics? {
+    var kittyGraphics: GhosttyKittyGraphics? {
         var graphics: GhosttyKittyGraphics?
         guard ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &graphics) == GHOSTTY_SUCCESS else { return nil }
         return graphics

@@ -17,10 +17,15 @@ public struct TerminalCommand: Sendable, Equatable {
         self.workingDirectory = workingDirectory
     }
 
-    /// The user's login shell (`$SHELL -l`), falling back to `/bin/sh`.
+    /// The user's login shell (`$SHELL -l`, falling back to `/bin/sh`); Windows
+    /// PowerShell on Windows.
     public static var loginShell: TerminalCommand {
+        #if os(Windows)
+        return TerminalCommand(executable: "powershell.exe", arguments: ["-NoLogo"])
+        #else
         let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/sh"
         return TerminalCommand(executable: shell, arguments: ["-l"])
+        #endif
     }
 }
 
@@ -38,15 +43,28 @@ extension TerminalCommand {
         return result
     }
 
-    /// Absolute executable path; names without a slash are looked up in `PATH`.
-    func resolvedExecutable(path: String?) -> String? {
+    /// Absolute executable path; bare names are looked up in `PATH` (and, on
+    /// Windows, completed with the `PATHEXT` extensions).
+    func resolvedExecutable(path: String?, pathExtensions: String? = ProcessInfo.processInfo.environment["PATHEXT"]) -> String? {
         let manager = FileManager.default
-        if executable.contains("/") {
-            return manager.isExecutableFile(atPath: executable) ? executable : nil
+        #if os(Windows)
+        let separator: Character = ";", slashes: Set<Character> = ["/", "\\"]
+        let extensions = executable.contains(".") ? [""]
+            : [""] + (pathExtensions ?? ".COM;.EXE;.BAT;.CMD").split(separator: ";").map(String.init)
+        func runnable(_ candidate: String) -> Bool { manager.fileExists(atPath: candidate) }
+        #else
+        let separator: Character = ":", slashes: Set<Character> = ["/"]
+        let extensions = [""]
+        func runnable(_ candidate: String) -> Bool { manager.isExecutableFile(atPath: candidate) }
+        #endif
+        if executable.contains(where: slashes.contains) {
+            return runnable(executable) ? executable : nil
         }
-        for directory in (path ?? "/usr/bin:/bin").split(separator: ":") {
-            let candidate = "\(directory)/\(executable)"
-            if manager.isExecutableFile(atPath: candidate) { return candidate }
+        for directory in (path ?? "/usr/bin:/bin").split(separator: separator) {
+            for suffix in extensions {
+                let candidate = "\(directory)/\(executable)\(suffix)"
+                if runnable(candidate) { return candidate }
+            }
         }
         return nil
     }

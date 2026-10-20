@@ -114,6 +114,7 @@ guava devtools [directory] click NODE_ID
 guava devtools [directory] activate NODE_ID [increment|decrement]   # 按辅助功能动作触发，可达屏外/虚拟化节点
 guava devtools [directory] input @events.json --capture after.jpg   # 投递后立即取样瞬态
 guava devtools [directory] capture out.jpg --settle-ms 400 --scale 2   # 2x 取样细线与圆角
+guava devtools [directory] resize 640 400 --capture small.jpg   # 改变主窗口内容尺寸（逻辑点），验证布局与缩放
 guava devtools [directory] timings out.json FRAMES WARMUP
 ```
 

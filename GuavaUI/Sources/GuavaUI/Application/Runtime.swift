@@ -150,6 +150,12 @@ public final class Application {
             dev.onMirrorStart = { [weak self] in
                 self?.host.requestDisplay()
             }
+            dev.server.host.window.resize = { [weak self] size in
+                guard let host = self?.host, let window = host.mainWindow else { return "No main window" }
+                host.setWindowSize(window, width: Float(size.width), height: Float(size.height))
+                host.requestDisplay()
+                return nil
+            }
             dev.onSelectionChanged = { [weak self] in
                 self?.host.requestDisplay()
             }

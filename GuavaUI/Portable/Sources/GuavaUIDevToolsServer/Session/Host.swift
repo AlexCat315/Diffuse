@@ -42,6 +42,12 @@ public struct DevToolsHost {
         public init() {}
     }
     public var mirror = Mirror()
+    public struct Window {
+        /// Returns nil on success, or the reason the window could not be resized.
+        public var resize: (@MainActor (WindowResizePayload) -> String?)? = nil
+        public init() {}
+    }
+    public var window = Window()
     public var execute: HostMainExecutor? = nil
     public init() {}
 }

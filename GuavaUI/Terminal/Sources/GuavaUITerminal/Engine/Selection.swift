@@ -46,7 +46,7 @@ final class SelectionGesture {
 
     /// Feeds one pointer phase; returns the selection to install, `.clear`
     /// when the gesture removes it, or `nil` when nothing changes.
-    func apply(_ phase: Phase, at pointer: TerminalPointer, columns: Int, rows: Int,
+    func apply(_ phase: Phase, at pointer: TerminalPointer, rectangle: Bool, columns: Int, rows: Int,
                cellWidth: Int, cellHeight: Int, terminal: GhosttyTerminal) -> Outcome? {
         var ref = sized(GhosttyGridRef())
         let point = GhosttyPoint(tag: GHOSTTY_POINT_TAG_VIEWPORT,
@@ -68,6 +68,8 @@ final class SelectionGesture {
             var geometry = GhosttySelectionGestureGeometry(columns: UInt32(columns), cell_width: UInt32(cellWidth),
                                                            padding_left: 0, screen_height: UInt32(rows * cellHeight))
             ghostty_selection_gesture_event_set(event, GHOSTTY_SELECTION_GESTURE_EVENT_OPT_GEOMETRY, &geometry)
+            var block = rectangle
+            ghostty_selection_gesture_event_set(event, GHOSTTY_SELECTION_GESTURE_EVENT_OPT_RECTANGLE, &block)
         case .release:
             event = release
         }
@@ -93,9 +95,10 @@ final class SelectionGesture {
 
 extension TerminalEngine {
     /// Applies a pointer phase to the selection; returns whether it changed.
+    /// `rectangle` selects a block of columns instead of running text.
     @discardableResult
-    func select(_ phase: SelectionGesture.Phase, at pointer: TerminalPointer) -> Bool {
-        guard let outcome = selection.apply(phase, at: pointer, columns: columns, rows: rows,
+    func select(_ phase: SelectionGesture.Phase, at pointer: TerminalPointer, rectangle: Bool = false) -> Bool {
+        guard let outcome = selection.apply(phase, at: pointer, rectangle: rectangle, columns: columns, rows: rows,
                                             cellWidth: cellSize.width, cellHeight: cellSize.height,
                                             terminal: terminal) else { return false }
         switch outcome {

@@ -132,6 +132,27 @@ struct ViewTests {
         }
     }
 
+    /// The host only turns on OS text input (and so typed characters) for a
+    /// focused node that publishes a text-input area during layout.
+    @Test("Layout alone publishes the text-input area that enables typing")
+    func textInputArea() {
+        withHarness(TerminalCommand(executable: "/bin/sleep", arguments: ["30"])) { harness in
+            harness.context.withCurrent {
+                harness.graph.install(root: TerminalView(session: harness.session).frame(width: 400, height: 200))
+                harness.graph.recomposer.commitAll()
+                harness.graph.computeLayout(width: 400, height: 200)
+            }
+            let area = harness.surface.attachments[TextInputAttachmentKey.area] as? TextInputArea
+            #expect(area != nil)
+            #expect((area?.height ?? 0) > 0)
+            // Output moves the cursor; the next paint moves the IME anchor with it.
+            harness.session.feed(Array("abc".utf8))
+            harness.surface.draw?(DrawList(), .zero)
+            let moved = harness.surface.attachments[TextInputAttachmentKey.area] as? TextInputArea
+            #expect((moved?.x ?? 0) > (area?.x ?? 0))
+        }
+    }
+
     @Test("Inside a stack without a frame the grid fills the width and follows resizes")
     func fillsAndResizes() {
         withHarness(TerminalCommand(executable: "/bin/sh", arguments: ["-c", "stty size; read _; stty size; sleep 30"])) { harness in

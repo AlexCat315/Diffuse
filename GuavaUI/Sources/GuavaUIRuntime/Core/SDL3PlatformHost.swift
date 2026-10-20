@@ -296,6 +296,14 @@ public final class SDL3PlatformHost: PlatformHost {
         shell?.setWindowPosition(windowID, x: x, y: y)
     }
 
+    /// Resize `windowID`'s content area, in logical points.
+    public func setWindowSize(_ windowID: WindowID, width: Float, height: Float) {
+        shell?.setWindowSize(windowID, width: width, height: height)
+    }
+
+    /// The main window, when one is open.
+    public var mainWindow: WindowID? { mainWindowID }
+
     public func minimizeWindow(_ windowID: WindowID) {
         shell?.minimizeWindow(windowID)
     }

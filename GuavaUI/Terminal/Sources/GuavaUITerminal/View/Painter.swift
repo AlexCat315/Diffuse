@@ -16,6 +16,10 @@ struct TerminalPainter {
     var preedit = ""
     /// False during the off phase of a blinking cursor.
     var isCursorShown = true
+    /// False during the off phase of SGR 5/6 blinking text.
+    var isBlinkingTextShown = true
+    /// A detected plain-text URL under the pointer, underlined like a link.
+    var hoveredLink: URLDetector.Match?
     /// Kitty graphics placements with their uploaded textures, in z order.
     var images: [(TerminalImagePlacement, TextureID)] = []
     /// Cell size Ghostty measures image pixels in.
@@ -58,17 +62,25 @@ struct TerminalPainter {
     private func paintGlyphs(row: Int, top: Float, x originX: Float, into list: DrawList) {
         for column in 0..<frame.columns {
             let cell = frame[row, column]
-            guard cell.width != .spacer, !cell.attributes.contains(.invisible) else { continue }
+            guard cell.width != .spacer, !cell.attributes.contains(.invisible),
+                  isBlinkingTextShown || !cell.attributes.contains(.blink) else { continue }
+            let scalar = cell.text.unicodeScalars.first?.value ?? 0
+            // Kitty placeholders stand in for image strips drawn separately.
+            guard scalar != PlaceholderCell.codepoint else { continue }
             let left = originX + Float(column) * metrics.width
             let span = Float(cell.width == .wide ? 2 : 1) * metrics.width
             var foreground = color(colors(of: cell).foreground)
             if cell.attributes.contains(.faint) { foreground = foreground.multipliedAlpha(0.6) }
-            if !cell.text.isEmpty, cell.text != " " {
+            if BoxDrawing.handles(scalar), cell.text.unicodeScalars.count == 1 {
+                BoxDrawing.draw(scalar, in: UIRect(x: left, y: top, width: span, height: metrics.height),
+                                color: foreground, into: list)
+            } else if !cell.text.isEmpty, cell.text != " " {
                 let layout = environment.cachedLayout(text: cell.text, font: font(for: cell), lineHeight: metrics.height)
                 list.addText(layout, origin: (left, top), color: foreground,
                              textureID: environment.atlasTextureID, atlas: environment.atlas)
             }
-            if cell.attributes.contains(.underline) || cell.isHyperlink {
+            let isHoveredLink = hoveredLink.map { $0.row == row && $0.columns.contains(column) } ?? false
+            if cell.attributes.contains(.underline) || cell.isHyperlink || isHoveredLink {
                 list.addRect(UIRect(x: left, y: top + metrics.height - 2, width: span, height: 1), color: foreground)
             }
             if cell.attributes.contains(.strikethrough) {
@@ -85,8 +97,8 @@ struct TerminalPainter {
         for (placement, texture) in images where placement.isBelowText == belowText {
             let size = placement.imageSize
             guard size.width > 0, size.height > 0 else { continue }
-            let rect = UIRect(x: originX + Float(placement.column) * metrics.width,
-                              y: originY + Float(placement.row) * metrics.height,
+            let rect = UIRect(x: originX + Float(placement.column) * metrics.width + Float(placement.offset.x) * scaleX,
+                              y: originY + Float(placement.row) * metrics.height + Float(placement.offset.y) * scaleY,
                               width: Float(placement.width) * scaleX, height: Float(placement.height) * scaleY)
             let source = placement.source
             list.addImageQuad(rect: rect, textureID: texture, tint: Color(r: 1, g: 1, b: 1, a: opacity),

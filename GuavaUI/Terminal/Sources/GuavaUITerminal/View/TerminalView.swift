@@ -72,16 +72,15 @@ private struct TerminalSurface: _PrimitiveView {
             state?.blink.restart()
             state?.redraw()
         }
+        // The host enables OS text input (and places the IME window) from this
+        // area, read during layout. It must not wait for a paint to exist.
+        let font = font
         let resolveArea: TextInputAreaResolver = { [weak state] _, origin in
-            guard let state, let metrics = state.metrics else { return nil }
-            let cursor = state.session?.frame.cursor ?? TerminalCursor()
-            let x = Float(origin.x) + Float(cursor.column) * metrics.width
-            let y = Float(origin.y) + Float(cursor.row) * metrics.height
-            return TextInputArea(x: x, y: y, width: metrics.width, height: metrics.height, cursorX: x)
+            guard let state, let environment = TextEnvironmentHolder.current else { return nil }
+            return state.textInputArea(origin: origin, metrics: state.metrics ?? CellMetrics(font: font, environment: environment))
         }
         node.attachments[TextInputAttachmentKey.areaResolver] = resolveArea
 
-        let font = font
         node.draw = { [weak node, weak state] list, origin in
             guard let node, let state, let session = state.session,
                   let environment = TextEnvironmentHolder.current else { return }
@@ -93,15 +92,23 @@ private struct TerminalSurface: _PrimitiveView {
             let frame = session.frame
             let isFocused = FocusChainHolder.current?.focused === node
             state.blink.update(active: isFocused && frame.cursor.isBlinking && !node.prefersReducedMotion)
+            state.textBlink.update(active: !node.prefersReducedMotion
+                                   && frame.cells.contains { $0.attributes.contains(.blink) })
             let images = state.textures.resolve(frame.images) { session.engine.imagePixels($0) }
             for (_, asset) in images { list.retainResource(asset) }
             let painter = TerminalPainter(frame: frame, metrics: metrics, environment: environment,
                                           isFocused: isFocused, opacity: node.opacity, preedit: state.preedit,
                                           isCursorShown: state.blink.isVisible,
+                                          isBlinkingTextShown: state.textBlink.isVisible,
+                                          hoveredLink: state.hoveredLink,
                                           images: images.map { ($0.0, $0.1.textureID) },
                                           cellPixels: session.engine.cellSize)
             painter.paint(into: list, bounds: UIRect(x: Float(origin.x), y: Float(origin.y),
                                                      width: Float(node.frame.width), height: Float(node.frame.height)))
+            // Output moves the cursor without a layout pass; keep the IME anchor on it.
+            if let area = state.textInputArea(origin: node.absoluteOrigin, metrics: metrics) {
+                node.attachments[TextInputAttachmentKey.area] = area
+            }
         }
     }
 

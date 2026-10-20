@@ -1,13 +1,13 @@
 internal import Foundation
 internal import GuavaUIRuntime
 
-/// Blinks the cursor while the terminal is focused and the program wants a
-/// blinking cursor (DECSCUSR / mode 12; on by default).
+/// Drives a blink phase: the cursor while focused (DECSCUSR / mode 12, on by
+/// default) and SGR 5/6 blinking text while any is on screen.
 ///
-/// A coarse timer toggles visibility twice per period, so an idle terminal
-/// costs two repaints a second instead of a frame-rate animation. Input and
-/// output keep the cursor solid, as in other terminals.
-final class CursorBlink {
+/// A coarse timer toggles visibility, so an idle terminal costs two repaints
+/// a second instead of a frame-rate animation. Input and output restart the
+/// cursor phase so it stays solid while typing, as in other terminals.
+final class BlinkTimer {
     static let interval: DispatchTimeInterval = .milliseconds(600)
 
     var onToggle: (() -> Void)?

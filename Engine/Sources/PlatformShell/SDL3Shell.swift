@@ -883,6 +883,11 @@ public final class SDL3Shell: Shell {
         _ = SDL_SetWindowPosition(handle.window, Int32(x), Int32(y))
     }
 
+    public func setWindowSize(_ windowID: WindowID, width: Float, height: Float) {
+        guard let handle = windows[windowID], width.isFinite, height.isFinite else { return }
+        _ = SDL_SetWindowSize(handle.window, Int32(max(1, width.rounded())), Int32(max(1, height.rounded())))
+    }
+
     public func raiseWindow(_ windowID: WindowID) {
         guard let handle = windows[windowID] else { return }
         _ = SDL_RaiseWindow(handle.window)

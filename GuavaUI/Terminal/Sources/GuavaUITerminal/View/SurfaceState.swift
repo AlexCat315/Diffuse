@@ -11,20 +11,25 @@ final class SurfaceState: NodeResource {
     var metrics: CellMetrics?
     /// IME composition shown at the cursor until committed.
     var preedit = "" { didSet { if preedit != oldValue { redraw() } } }
+    /// Plain-text URL under the pointer (OSC 8 links are marked by the program).
+    var hoveredLink: URLDetector.Match? { didSet { if hoveredLink != oldValue { redraw() } } }
     var openLink: (URL) -> Void = LinkOpener.open
     let pointer = PointerRouter()
-    let blink = CursorBlink()
+    let blink = BlinkTimer()
+    let textBlink = BlinkTimer()
     let textures = ImageTextures()
 
     func mount(node: Node) {
         self.node = node
         blink.onToggle = { [weak self] in self?.redraw() }
+        textBlink.onToggle = { [weak self] in self?.redraw() }
         observe()
     }
 
     func unmount(node: Node) {
         session?.removeObserver(self)
         blink.stop()
+        textBlink.stop()
         textures.removeAll()
         self.node = nil
     }
@@ -63,9 +68,22 @@ final class SurfaceState: NodeResource {
         // Failures land in `status` and on screen; nothing to rethrow here.
         if session.status == .idle { try? session.start() }
         session.observe(self) { [weak self] in
+            // New output may have moved or replaced the hovered text.
+            self?.hoveredLink = nil
             self?.blink.restart()
             self?.redraw()
         }
         redraw()
+    }
+}
+
+extension SurfaceState {
+    /// The cursor cell in window coordinates, where the IME composes.
+    func textInputArea(origin: CGPoint, metrics: CellMetrics) -> TextInputArea? {
+        guard let session else { return nil }
+        let cursor = session.frame.cursor
+        let x = Float(origin.x) + Float(cursor.column) * metrics.width
+        let y = Float(origin.y) + Float(cursor.row) * metrics.height
+        return TextInputArea(x: x, y: y, width: metrics.width, height: metrics.height, cursorX: x)
     }
 }

@@ -147,7 +147,7 @@ final class TerminalEngine {
         let reader = FrameReader(renderState: renderState, rowIterator: rowIterator, rowCells: rowCells)
         var frame = reader.read(columns: columns, rows: rows)
         frame.scroll = scrollPosition()
-        frame.images = imagePlacements()
+        frame.images = imagePlacements() + placeholderPlacements(frame.placeholders)
         var clean = GHOSTTY_RENDER_STATE_DIRTY_FALSE
         ghostty_render_state_set(renderState, GHOSTTY_RENDER_STATE_OPTION_DIRTY, &clean)
         return frame

@@ -226,6 +226,12 @@ struct DevToolsClient: Equatable {
             try Self.requireNodeID(arguments[0])
             (operation, self.arguments) = ("activate-ui", [arguments[0], "reveal"])
         case "capture": (operation, self.arguments) = ("capture-ui", arguments)
+        case "resize":
+            guard arguments.count == 2 || (arguments.count == 4 && arguments[2] == "--capture"),
+                  arguments.prefix(2).allSatisfy({ Double($0).map { (1...16_384).contains($0) } ?? false }) else {
+                throw ToolError.invalid("Use guava devtools resize WIDTH HEIGHT [--capture OUT.jpg]")
+            }
+            (operation, self.arguments) = ("resize-window", arguments)
         case "timings": (operation, self.arguments) = ("record-timings", arguments)
         default: return nil
         }

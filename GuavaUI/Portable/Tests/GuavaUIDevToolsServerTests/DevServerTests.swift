@@ -497,3 +497,29 @@ func logsReplayBeforeConnectionFilterAndReportSlowConsumerLoss() async throws {
     logger.warning("after unsubscribe"); LogSystem.flush(); server.onQueueSync {}
     #expect(connection.take().isEmpty)
 }
+
+@Test @MainActor
+func windowResizeValidatesAndReachesTheHost() async throws {
+    let transport = TestTransport()
+    let server = DevServer(config: DevToolsConfig(), transport: transport)
+    try server.start()
+    defer { server.stop() }
+    let connection = TestConnection()
+    transport.onEvent?(.connected(connection))
+    _ = try await receive("hello", from: connection)
+
+    // Without a host hook the request is refused rather than silently dropped.
+    try transport.request("window.resize", payload: .object(["width": .number(640), "height": .number(400)]),
+                          connection: connection)
+    _ = try await receive("window.resize.err", from: connection)
+
+    var sizes: [WindowResizePayload] = []
+    server.host.window.resize = { sizes.append($0); return nil }
+    try transport.request("window.resize", payload: .object(["width": .number(0), "height": .number(400)]),
+                          connection: connection)
+    _ = try await receive("window.resize.err", from: connection)
+    try transport.request("window.resize", payload: .object(["width": .number(640), "height": .number(400)]),
+                          connection: connection)
+    _ = try await receive("window.resize.ok", from: connection)
+    #expect(sizes == [WindowResizePayload(width: 640, height: 400)])
+}

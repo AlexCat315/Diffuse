@@ -99,6 +99,7 @@ public final class DevTools {
         capabilities.append("diagnostics")
         if stateRegistry != nil { capabilities.append("state.observe") }
         if frameTap != nil { capabilities.append("mirror") }
+        if server.host.window.resize != nil { capabilities.append("window") }
         if checkpoint.capture != nil, checkpoint.restore != nil {
             capabilities.append("state")
         }

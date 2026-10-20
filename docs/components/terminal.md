@@ -48,10 +48,12 @@ final class Console: View {
 
 - 点击获得焦点；聚焦时光标按程序设定闪烁（DECSCUSR，默认闪烁；减弱动态效果时常亮），失焦时显示为空心框。
 - 可打印字符走平台文字输入（支持 IME 预编辑、macOS Option 组合字符）；输入法组合期间回车、退格、方向键留给输入法，不发给程序。方向键、功能键、Ctrl 组合等交给 Ghostty 编码器，自动遵循程序的应用光标键、keypad、Kitty 键盘协议等模式。
-- 拖动选择文本，双击选词、三击选行；拖出上下边缘时滚动回滚。⌘C 复制选区（无选区时交给宿主），⌘V 粘贴；其余 ⌘ 快捷键留给宿主。键入会清除选区。
+- 拖动选择文本，双击选词、三击选行，按住 Option 拖动选择矩形块；拖出上下边缘时滚动回滚。⌘C 复制选区（无选区时交给宿主），⌘V 粘贴；其余 ⌘ 快捷键留给宿主。键入会清除选区。
 - 程序开启鼠标上报（vim `mouse=a`、htop、tmux 等）时，点击、拖动、滚轮按程序请求的格式（X10/UTF-8/SGR/urxvt/SGR-pixels）上报；按住 Shift 仍可选择文本。
-- OSC 8 超链接带下划线，悬停显示手形指针，⌘-点击打开：传入 `onOpenLink` 时交给调用方，否则交给系统（仅 http/https/mailto/file）。
-- Kitty 图形协议：内联传输的 RGB/RGBA/灰度/PNG 图像按放置位置绘制，`z<0` 画在文字下方。出于安全，不接受文件与共享内存传输。
+- 超链接：OSC 8 链接始终带下划线；普通文本里的 URL（`https://`、`www.`、`mailto:` 等，去掉句末标点）在悬停时加下划线。两者悬停都显示手形指针，⌘-点击打开：传入 `onOpenLink` 时交给调用方，否则交给系统（仅 http/https/mailto/file）。
+- Kitty 图形协议：内联传输的 RGB/RGBA/灰度/PNG 图像按放置位置绘制，`z<0` 画在文字下方；Unicode 占位符（`U=1` 虚拟放置 + U+10EEEE 单元格，tmux 等场景使用）按 Kitty 规则在占位格内等比居中绘制。出于安全，不接受文件与共享内存传输。
+- 文字 SGR 5/6 闪烁（只闪文字，背景保持）；减弱动态效果时常亮。
+- 方框绘制（U+2500–257F，含粗线、双线、虚线、圆角、斜线）、块元素（U+2580–259F）与 Powerline 分隔符（U+E0B0–E0B3）按几何绘制，跨单元格严丝合缝，不依赖字体。
 - 滚轮在主屏滚动回滚缓冲；全屏程序收到上下方向键（或鼠标滚轮上报）。任何输入都会回到实时屏幕。
 - 视图填满所在容器（在 `Column`/`Row` 中沿主轴伸展并横向拉伸）；容器未给尺寸时至少显示约 4 行。
 - 默认前景/背景色跟随主题的 `onSurface` / `surface`；程序设置的调色板与真彩色照常生效。
@@ -76,8 +78,9 @@ swift run --package-path GuavaUI/Terminal TerminalDemo
 ./guava run GuavaUI/Terminal --devtools
 ```
 
+开发者工具可调整窗口尺寸来验证缩放：`guava devtools resize 640 400 --capture small.jpg`（在 `GuavaUI/Terminal` 目录下运行）。
+
 ## 限制
 
-- 仅 macOS / Linux（`forkpty`）；Windows（ConPTY）尚未实现，`start()` 抛出 `.unsupportedPlatform`。
-- 尚未实现：普通文本中 URL 的自动识别（只支持 OSC 8）、矩形选择、Kitty 图像动画之外的 Unicode 占位符（virtual placement）、文字 SGR 闪烁。
-- 方框绘制字符使用字体字形，回退字体下线条可能不衔接（Ghostty 自身用程序化绘制）。
+- 进程后端：macOS / Linux 用 `forkpty`；Windows 用 ConPTY（Windows 10 1809+，默认 shell 为 PowerShell）。Windows 后端与 Windows 上的 libghostty-vt 构建尚未在 Windows 机器上验证。
+- 跨行折返的普通文本 URL 只识别当前行的部分。

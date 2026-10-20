@@ -90,7 +90,7 @@ enum GuavaCLI {
           guava devtools [directory] [--session ID] list | query [TOOL] [JSON|@FILE]
                                  | click NODE_ID [--capture OUT.jpg] | activate NODE_ID [increment|decrement] | reveal NODE_ID
                                  | input JSON|@FILE [--capture OUT.jpg]
-                                 | capture OUT.jpg [--settle-ms N] [--scale 1-3] [--node NODE_ID | --region X,Y,W,H] | timings OUT.json FRAMES WARMUP
+                                 | capture OUT.jpg [--settle-ms N] [--scale 1-3] [--node NODE_ID | --region X,Y,W,H] | resize W H [--capture OUT.jpg] | timings OUT.json FRAMES WARMUP
 
         Directory defaults to the current project; platform defaults to the host; configuration defaults to debug.
         One guava.json owns application identity, SDK location and targets; UI lives in Sources/AppContent.

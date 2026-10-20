@@ -3,13 +3,14 @@ internal import GuavaUIRuntime
 /// Decides what a pointer gesture means on the terminal:
 ///
 /// - The program asked for mouse reports → report it (hold Shift to select instead).
-/// - ⌘-click on an OSC 8 hyperlink → open the link.
-/// - Otherwise → select text (drag, double-click word, triple-click line).
+/// - ⌘-click on an OSC 8 hyperlink or a plain-text URL → open the link.
+/// - Otherwise → select text (drag, double-click word, triple-click line;
+///   hold Option to select a rectangular block).
 ///
 /// The wheel scrolls the scrollback, or is reported/turned into arrow keys
 /// for full-screen programs.
 final class PointerRouter {
-    private enum Gesture { case none, selecting, reporting(TerminalMouseEvent.Button) }
+    private enum Gesture { case none, selecting(rectangle: Bool), reporting(TerminalMouseEvent.Button) }
     private var gesture = Gesture.none
     private var wheelRows: Float = 0
 
@@ -30,12 +31,11 @@ final class PointerRouter {
             return true
         }
         guard event.button == .left else { return true }
-        if event.modifiers.hasGui, let link = session.engine.hyperlink(column: pointer.column, row: pointer.row),
-           let url = LinkOpener.url(link) {
+        if event.modifiers.hasGui, let url = link(at: pointer, session: session) {
             state.openLink(url)
             return true
         }
-        gesture = .selecting
+        gesture = .selecting(rectangle: event.modifiers.hasAlt)
         if session.engine.select(.press, at: pointer) { session.invalidate() }
         PointerCaptureHolder.current?.acquire(node)
         return true
@@ -44,11 +44,11 @@ final class PointerRouter {
     func motion(_ event: MouseMotionEvent, node: Node, state: SurfaceState) -> Bool {
         guard let session = state.session, let pointer = state.gridPointer(x: event.x, y: event.y) else { return false }
         switch gesture {
-        case .selecting:
+        case .selecting(let rectangle):
             // Dragging past the top or bottom edge scrolls the history.
             let edge = Float(event.y) - Float(node.absoluteOrigin.y)
             if edge < 0 { session.scroll(rows: -1) } else if edge > Float(node.frame.height) { session.scroll(rows: 1) }
-            if session.engine.select(.drag, at: pointer) { session.invalidate() }
+            if session.engine.select(.drag, at: pointer, rectangle: rectangle) { session.invalidate() }
             return true
         case .reporting(let button):
             report(.motion, button: button, pointer: pointer, session: session)
@@ -58,7 +58,10 @@ final class PointerRouter {
                 report(.motion, button: nil, pointer: pointer, session: session)
                 node.cursor = .arrow
             } else {
-                node.cursor = session.frame[pointer.row, pointer.column].isHyperlink ? .pointer : .ibeam
+                let marked = session.frame[pointer.row, pointer.column].isHyperlink
+                state.hoveredLink = marked ? nil
+                    : URLDetector.match(in: session.frame, row: pointer.row, column: pointer.column)
+                node.cursor = marked || state.hoveredLink != nil ? .pointer : .ibeam
             }
             return false
         }
@@ -71,8 +74,8 @@ final class PointerRouter {
         }
         guard let session = state.session, let pointer = state.gridPointer(x: event.x, y: event.y) else { return false }
         switch gesture {
-        case .selecting:
-            session.engine.select(.release, at: pointer)
+        case .selecting(let rectangle):
+            session.engine.select(.release, at: pointer, rectangle: rectangle)
         case .reporting(let button):
             report(.release, button: button, pointer: pointer, session: session)
         case .none:
@@ -100,6 +103,12 @@ final class PointerRouter {
             session.scroll(rows: -rows)
         }
         return true
+    }
+
+    /// OSC 8 target of the cell, else a plain-text URL printed there.
+    private func link(at pointer: TerminalPointer, session: TerminalSession) -> URL? {
+        if let marked = session.engine.hyperlink(column: pointer.column, row: pointer.row) { return LinkOpener.url(marked) }
+        return URLDetector.match(in: session.frame, row: pointer.row, column: pointer.column)?.url
     }
 
     private func report(_ action: TerminalMouseEvent.Action, button: TerminalMouseEvent.Button?,

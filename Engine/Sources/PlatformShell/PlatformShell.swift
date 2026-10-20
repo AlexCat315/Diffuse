@@ -204,6 +204,10 @@ public protocol Shell: AnyObject {
     /// Move `windowID` to the supplied desktop position (logical / DIP).
     func setWindowPosition(_ windowID: WindowID, x: Float, y: Float)
 
+    /// Resize `windowID`'s content area (logical / DIP). The platform may
+    /// clamp it to the screen or the window's minimum size.
+    func setWindowSize(_ windowID: WindowID, width: Float, height: Float)
+
     /// Bring `windowID` to the front and request focus. No-op when the
     /// window is unknown.
     func raiseWindow(_ windowID: WindowID)
@@ -321,6 +325,7 @@ public extension Shell {
     func globalPointerPosition() -> (x: Float, y: Float)? { nil }
     func windowPosition(_ windowID: WindowID) -> (x: Float, y: Float)? { nil }
     func setWindowPosition(_ windowID: WindowID, x: Float, y: Float) {}
+    func setWindowSize(_ windowID: WindowID, width: Float, height: Float) {}
     func raiseWindow(_ windowID: WindowID) {}
     func minimizeWindow(_ windowID: WindowID) {}
     func maximizeWindow(_ windowID: WindowID) {}

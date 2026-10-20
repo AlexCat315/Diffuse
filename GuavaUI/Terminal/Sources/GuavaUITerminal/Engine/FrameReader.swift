@@ -39,14 +39,20 @@ struct FrameReader {
             ? Int(selection.start_x)...Int(selection.end_x) : nil
         var x = 0
         while x < frame.columns, ghostty_render_state_row_cells_next(rowCells) {
-            var cell = readCell()
+            var (cell, style) = readCell()
             cell.isSelected = selected?.contains(x) ?? false
+            if let style, cell.text.unicodeScalars.first?.value == PlaceholderCell.codepoint,
+               let placeholder = PlaceholderCell(text: cell.text, column: x, row: y,
+                                                 foreground: id(style.fg_color), underline: id(style.underline_color)) {
+                frame.placeholders.append(placeholder)
+            }
             frame.cells[y * frame.columns + x] = cell
             x += 1
         }
     }
 
-    private func readCell() -> TerminalCell {
+    /// The cell and, when it has explicit styling, its raw style.
+    private func readCell() -> (TerminalCell, GhosttyStyle?) {
         var cell = TerminalCell()
         var raw: GhosttyCell = 0
         if ghostty_render_state_row_cells_get(rowCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW, &raw) == GHOSTTY_SUCCESS {
@@ -73,10 +79,10 @@ struct FrameReader {
 
         var styled = false
         ghostty_render_state_row_cells_get(rowCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_HAS_STYLING, &styled)
-        guard styled else { return cell }
+        guard styled else { return (cell, nil) }
         var style = sized(GhosttyStyle())
         guard ghostty_render_state_row_cells_get(rowCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE, &style) == GHOSTTY_SUCCESS
-        else { return cell }
+        else { return (cell, nil) }
         if style.bold { cell.attributes.insert(.bold) }
         if style.italic { cell.attributes.insert(.italic) }
         if style.faint { cell.attributes.insert(.faint) }
@@ -84,7 +90,8 @@ struct FrameReader {
         if style.strikethrough { cell.attributes.insert(.strikethrough) }
         if style.inverse { cell.attributes.insert(.inverse) }
         if style.invisible { cell.attributes.insert(.invisible) }
-        return cell
+        if style.blink { cell.attributes.insert(.blink) }
+        return (cell, style)
     }
 
     private func graphemes() -> String {
@@ -116,6 +123,15 @@ struct FrameReader {
         return TerminalCursor(isVisible: state.visible && state.viewport_has_value,
                               column: Int(state.viewport_x), row: Int(state.viewport_y),
                               shape: shape, isBlinking: state.blinking)
+    }
+
+    /// Kitty placeholder ids: a palette index, or 24-bit RGB read as an integer.
+    private func id(_ color: GhosttyStyleColor) -> UInt32 {
+        switch color.tag {
+        case GHOSTTY_STYLE_COLOR_PALETTE: UInt32(color.value.palette)
+        case GHOSTTY_STYLE_COLOR_RGB: UInt32(color.value.rgb.r) << 16 | UInt32(color.value.rgb.g) << 8 | UInt32(color.value.rgb.b)
+        default: 0
+        }
     }
 
     private func rgb(_ color: GhosttyColorRgb) -> TerminalRGB {

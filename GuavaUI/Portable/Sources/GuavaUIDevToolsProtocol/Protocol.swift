@@ -316,6 +316,19 @@ public struct MirrorStartPayload: Codable, Sendable {
 }
 
 /// Run one accessibility action on a node found by `query_ui_nodes`.
+/// `window.resize`: sets the main window's content size in logical points.
+public struct WindowResizePayload: Codable, Sendable, Equatable {
+    public var width: Double
+    public var height: Double
+
+    public init(width: Double, height: Double) {
+        self.width = width
+        self.height = height
+    }
+
+    public var isValid: Bool { (1...16_384).contains(width) && (1...16_384).contains(height) }
+}
+
 public struct MirrorActivatePayload: Codable, Sendable {
     public enum Action: String, Codable, Sendable {
         case activate, increment, decrement

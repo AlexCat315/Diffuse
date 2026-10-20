@@ -15,6 +15,8 @@ struct TerminalCellAttributes: OptionSet, Equatable, Sendable {
     static let strikethrough = TerminalCellAttributes(rawValue: 1 << 4)
     static let inverse = TerminalCellAttributes(rawValue: 1 << 5)
     static let invisible = TerminalCellAttributes(rawValue: 1 << 6)
+    /// SGR 5/6: the text blinks (the cell background does not).
+    static let blink = TerminalCellAttributes(rawValue: 1 << 7)
 }
 
 /// One grid column. A wide glyph occupies its own cell plus a following
@@ -69,6 +71,8 @@ struct TerminalFrame: Equatable, Sendable {
     var scroll = TerminalScrollPosition()
     /// Kitty graphics placements in draw order.
     var images: [TerminalImagePlacement] = []
+    /// Kitty Unicode placeholder cells; their images are part of `images`.
+    var placeholders: [PlaceholderCell] = []
 
     init(columns: Int, rows: Int) {
         self.columns = columns

@@ -51,6 +51,8 @@ public final class DevToolsSession {
                 return Self.error(request, code: "invalid_state", message: "mirror.activate requires an active mirror subscription")
             }
             message = DevToolsCodec.decode(MirrorActivatePayload.self, request.payload) == nil ? "mirror.activate requires payload.node_id" : nil
+        case "window.resize":
+            message = DevToolsCodec.decode(WindowResizePayload.self, request.payload)?.isValid == true ? nil : "window.resize requires payload.width and payload.height in 1...16384"
         case "mirror.start":
             message = request.payload != nil && DevToolsCodec.decode(MirrorStartPayload.self, request.payload) == nil ? "mirror.start payload is malformed" : nil
         case "input.replay":
