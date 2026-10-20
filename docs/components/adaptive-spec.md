@@ -288,7 +288,7 @@
 - Tree 指示线只保留低对比度竖线（1pt、`onSurfaceMuted` 的 24% alpha），移除横向连接；禁用、同步延迟子节点、Home / End 与 Option / Alt + Left / Right 全部折叠 / 展开已完成，具体边界见 [Tree](tree.md)。
 - 手机：行高 `max(TextScaler.scale(rowHeight), 44)`；`ListRow` 标题单行省略，完整文本保留辅助功能/tooltip；前后槽保留徽标/状态，极窄时横向滚动。RTL 与条件空槽共用同一布局；自定义 rowContent 由作者选择该行契约。`[已实现]`，见 [ListRow](list.md#listrow标题与前后槽位)。
 - 平板 / 桌面：移除触摸下限，List/Tree 行高与行间距均跟随 `TextScaler`；hover 行高亮。`[已实现]`
-- 重排：`ReorderableList` 提供 44pt 拖拽 handle、2pt 放置线、Escape 取消与一次 `onMove`；聚焦 handle 后 Up/Down 和辅助功能 increment/decrement 移动同一行，行身份与焦点跟随原行。当前为全量挂载的非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
+- 重排：`ReorderableList` 提供 44pt 拖拽 handle、2pt 放置线、Escape 取消与一次 `onMove`；聚焦 handle 后 Up/Down 和辅助功能 increment/decrement 移动同一行，行身份与焦点跟随原行。拖到视口上下边缘时按深度加速自动滚动，放置线按内容坐标跟随。当前为全量挂载的非虚拟列表。`[已实现]`
 - 滑动操作：`SwipeList` 只在触摸面启用向 leading 滑动（LTR 左滑 / RTL 右滑），横向阈值 8pt，纵向手势交给 `ScrollView`；最多露出两个 74pt 宽、行高 ≥44 的 trailing 操作。行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。当前为全量挂载。`[已实现]`，API 见 [SwipeList](swipelist.md)。
 - 下拉刷新：`List`/`VirtualStack` 接受 `RefreshOptions(isRefreshing:threshold:action:)`；触摸下拉越过阈值（默认 64pt，含 ScrollView 阻尼）只触发一次，指示器在 `isRefreshing` 清除前保持并在顶部预留 36pt inset，完成后回弹；`Spinner` 在 reducedMotion 下冻结。Cmd+R/Ctrl+R 为键盘/命令入口，调用方也可提供显式按钮。`[已实现]`，API 与边界见 [RefreshableList](refresh.md)。
 - 交互与验收：List 方向键/Home/End/Enter + listItem 语义；多选 List（`Set` binding）支持 Shift/Cmd 点选、Shift+Arrow、Space、Cmd/Ctrl+A；Tree 方向键、Left/Right 折叠、treeItem + selected/expanded。验收：`ListMultipleSelectionTests`、`ReorderableListTests`、`RefreshTests`、`TouchDensityTests` list、`RowDensityTests.collectionRows`、`TextScaleRowTests.collectionGeometry`、`NavigationStateTests` tree 200%。
@@ -576,7 +576,7 @@ Calendar 键盘导航验收：`CalendarKeyboardNavigationTests` 在 macOS 宿主
 | --- | --- | --- |
 | SafeArea / TextField / CommandPalette | 宿主软键盘 inset 通过 `safeArea.bottom` 传播；`SafeArea` 与消费该 inset 的容器/控件在同一帧重排；`CommandPalette` 面板高度与结果区随 inset 收缩；`TextField` 获得焦点时宿主滚动显露光标，组件内 caret 水平/垂直跟随滚动已实现，不预留占位 | 模拟器/真机的真实 IME；桌面 touch surface 不能替代 |
 | Workspace | 标签条完整键盘/辅助功能、RTL 与其余深化能力 | 见 [Workspace](workspace.md) 与 [功能缺口](gaps.md#3-既有组件功能缺口与完成边界) |
-| ReorderableList | 视口边缘自动滚动 | 通用行标题与尾槽布局已由 ListRow 提供；重排仍为非虚拟列表 |
+| ReorderableList | 视口边缘自动滚动已实现（见 [List](list.md#reorderablelist)） | 通用行标题与尾槽布局已由 ListRow 提供；重排仍为非虚拟列表 |
 | Tooltip / HoverCard | 无 hover 时的信息等效入口 | 由内容作者提供点击入口或可见信息，逐页检查 |
 
 新项关闭时须更新对应契约、组件文档和下方证据，并单独提交；物理设备限制保持明示，不把未执行的设备测试记为通过。
@@ -626,7 +626,7 @@ Select 弹层宽度与行高已完成：触发器继续单行截断并保留完�
 
 第 13 项焦点环已统一：Toggle 的开关/复选框自绘路径与 Slider/RangeSlider 的 `SliderStyleConfiguration` 都改为 `focused && isFocusVisible`，与 Button-based 样式、Rating 和表格头共用同一键盘可见性来源。`FocusRingTests.customDrawnControlsFollowFocusVisibility` 直接渲染 Toggle/Slider/RangeSlider 的 DrawList，断言指针焦点时没有 `focusRing` 顶点、键盘焦点时存在；既有 Button ring 测试继续覆盖样式路径。DevTools 在 720×820 Gallery `toggle` 点击 Notifications 后数值翻转、焦点目标移动，但 `capture-ui` 与点击前像素一致（无环）；键盘环由渲染顶点断言覆盖。
 
-列表重排已完成：`ReorderableList` 在行尾提供 44pt handle，指针拖动期间以 2pt accent 放置线标记目标边界，释放后只调用一次 `onMove(from, to)`；Escape 取消、聚焦 handle 后 Up/Down 以及辅助功能 increment/decrement 走同一移动路径。根节点提供 flex 布局节点并从实际 ScrollView viewport 读取内容宽度，避免内容按 handle 的固有宽度收缩。`ReorderableListTests` 覆盖指针放置线与单次移动、键盘/辅助功能移动并保持焦点、Escape 取消、触摸 44pt handle。Gallery `reorderableList` 页与自适应预览已接入；DevTools 在 720×820 上从 Main Camera 的 handle（x=618）下拖 72pt，截图确认 “Moving” 行与 2pt 放置线，释放后顺序查询为 `Key Light → Main Camera → Player → Ground → Trigger → Audio Source`。当前为非虚拟列表，视口边缘自动滚动仍待补。
+列表重排已完成：`ReorderableList` 在行尾提供 44pt handle，指针拖动期间以 2pt accent 放置线标记目标边界，释放后只调用一次 `onMove(from, to)`；Escape 取消、聚焦 handle 后 Up/Down 以及辅助功能 increment/decrement 走同一移动路径。根节点提供 flex 布局节点并从实际 ScrollView viewport 读取内容宽度，避免内容按 handle 的固有宽度收缩。`ReorderableListTests` 覆盖指针放置线与单次移动、键盘/辅助功能移动并保持焦点、Escape 取消、触摸 44pt handle。Gallery `reorderableList` 页与自适应预览已接入；DevTools 在 720×820 上从 Main Camera 的 handle（x=618）下拖 72pt，截图确认 “Moving” 行与 2pt 放置线，释放后顺序查询为 `Key Light → Main Camera → Player → Ground → Trigger → Audio Source`。当前为非虚拟列表；视口边缘自动滚动已在后续补齐，见 [List](list.md#reorderablelist)。
 
 NavigationStack 已完成：`NavigationStack(path:root:destination:)` 以 caller-owned `[Route]` 为栈，root 与 path 页面通过 `AnimatedVisibility(retainsContent:)` 保持挂载，隐藏页不进入命中/焦点/辅助功能树；push 时新页从 trailing 滑入并淡入、旧页向 leading 滑出，pop 时新顶页反向显露。非空初始 path 首帧恢复深链；`ContainerSizeReader` 把页面固定到实际容器尺寸。页面标题加 `.navigationTitle` 后，新顶页布局完成即把焦点移到 heading（`visible:false`，无键盘环）；过渡 settle 前的第二次 path 变化被拒绝并写回上一次接受的栈。`NavigationStackTests` 覆盖 push/pop 后 root 草稿保留、深链、多页仅顶层可见、标题焦点与过渡去重。Gallery `navigationStack` 页与自适应预览已接入；DevTools 在 720×820 点击 `Open details` 后查询到 Details（`role=heading`）与 `Path: details`，点击 Back 后 root 草稿仍为 “Draft kept across push and pop”。平台返回手势由宿主删除最后一个 route；该边界已记录在 [NavigationStack](navigationstack.md)。
 

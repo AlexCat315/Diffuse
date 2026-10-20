@@ -91,7 +91,7 @@
 - **通用行标题与尾槽**：`ListRow` 为 List/SectionedList 提供可组合 leading/title/trailing；标题单行省略，徽标/状态保持自然宽度，极窄时横滚，完整值保留语义与 tooltip。条件空槽、RTL、字号切换与窗口化已覆盖，Gallery 通过选中状态文本提供无 hover 全文入口。`[已实现]`，见 [ListRow](list.md#listrow标题与前后槽位)。
 - **多选与区间选择**：Checkbox 列或 Cmd/Shift 点选；Shift 区间以锚点延伸；辅助功能 selected 态。`List(selection: Set)` 已实现 Cmd/Ctrl 切换、Shift 区间、Shift+Arrow、Cmd/Ctrl+A；Checkbox 列仍由调用方组合。`[已实现]`，见 [List](list.md#multiselectlist)。
 - **区段（sections）**：区段头/尾、可选 sticky；DataTable 之外的表状列表先支持平面区段。`SectionedList` 已实现平面 header/footer、sticky 固定标题（下一标题上推）与跨区段键盘选择；`stickyHeaders` 默认关闭，固定副本不进入焦点/命中/语义。`[已实现]`，见 [List](list.md#sectionedlist)。
-- **重排（reorder）**：`ReorderableList` 已实现 44pt 拖拽把手、2pt 放置线、Escape 取消、Up/Down 与辅助功能 increment/decrement；行身份与焦点跟随原行。当前为非虚拟列表，视口边缘自动滚动未实现。`[已实现]`
+- **重排（reorder）**：`ReorderableList` 已实现 44pt 拖拽把手、2pt 放置线、Escape 取消、Up/Down 与辅助功能 increment/decrement；行身份与焦点跟随原行；拖到视口边缘自动滚动，放置线随内容移动（见 [List](list.md#reorderablelist)）。当前为非虚拟列表。`[已实现]`
 - **滑动操作（swipe actions）**：`SwipeList` 仅在触摸面启用向 leading 滑动（LTR 左滑 / RTL 右滑），露出最多两个 74pt 宽、行高 ≥44 的 trailing 操作；指针、键盘与读屏通过行尾 44pt Actions 按钮展开同一组操作，右键上下文菜单为指针等价入口，滑动不是唯一路径。全量挂载。`[已实现]`
 - **下拉刷新**：`List`/`VirtualStack` 接受 `RefreshOptions`；触摸下拉越过 64pt 阈值（可配置）触发一次，指示器在 `isRefreshing` 清除前保持，完成后回弹；`Spinner` 在 reducedMotion 下冻结。Cmd+R/Ctrl+R 为键盘/命令入口，调用方也可提供显式按钮。`[已实现]`，API 见 [RefreshableList](refresh.md)。
 - 验收：以上各能力分别提供触摸/键盘/辅助功能断言与 390/720 取样；重排与滑动的状态属 session。参考：SwiftUI `List(selection:)`/`onMove`/`swipeActions`/`refreshable`；Flutter `RefreshIndicator`/`ReorderableListView`/`Dismissible`。

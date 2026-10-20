@@ -11,13 +11,15 @@ struct ReorderableListTests: GuavaUIComposeSerializedSuite {
     }
 
     private final class Model {
-        var items: [Item] = (0..<4).map(Item.init(id:))
+        var items: [Item]
         var moves: [(Int, Int)] = []
+        init(count: Int = 4) { items = (0..<count).map(Item.init(id:)) }
     }
 
     private struct Harness: View {
         @State var items: [Item]
         let model: Model
+        var height: Float = 500
         var body: some View {
             ReorderableList(items, id: \.id, rowHeight: 36,
                             rowLabel: { $0.title },
@@ -32,7 +34,7 @@ struct ReorderableListTests: GuavaUIComposeSerializedSuite {
                     .foregroundColor(dragging ? .accent : .onSurface)
                     .debugName("reorder-row-\(item.id)")
             }
-            .frame(width: 280, height: 500)
+            .frame(width: 280, height: height)
         }
     }
 
@@ -41,7 +43,7 @@ struct ReorderableListTests: GuavaUIComposeSerializedSuite {
         return [root] + root.children.flatMap { nodes($0) }
     }
 
-    private func withScene(_ input: UIEnvironment.Input = [.pointer, .keyboard],
+    private func withScene(_ input: UIEnvironment.Input = [.pointer, .keyboard], count: Int = 4, height: Float = 500,
                            _ body: (ViewGraph, PlatformInputContext, EventDispatcher, Harness) throws -> Void) rethrows {
         try GlobalTestLock.locked {
             let context = PlatformInputContext()
@@ -52,8 +54,8 @@ struct ReorderableListTests: GuavaUIComposeSerializedSuite {
                 var environment = UIEnvironment()
                 environment.viewport.width = 320
                 environment.input = input
-                let model = Model()
-                let harness = Harness(items: model.items, model: model)
+                let model = Model(count: count)
+                let harness = Harness(items: model.items, model: model, height: height)
                 let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
                 let dispatcher = EventDispatcher(tree: graph.tree, interactions: context.interactions,
                                                  capture: context.pointerCapture,
@@ -172,5 +174,48 @@ struct ReorderableListTests: GuavaUIComposeSerializedSuite {
             #expect(handle.frame.height >= 44)
             #expect(nodes(handle).contains { $0.frame.width > 0 })
         }
+    }
+    @Test("Holding a dragged row at the bottom edge scrolls the list and drops below the fold")
+    func edgeAutoScroll() throws {
+        try withScene(count: 30, height: 200) { graph, _, dispatcher, harness in
+            let source = try handle(0, graph)
+            let start = source.absoluteFrame
+            let scroll = try #require(EnclosingScroll.container(of: source))
+            let viewport = EnclosingScroll.viewport(of: scroll)
+            dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left, x: Float(start.midX),
+                                                                  y: Float(start.midY), clicks: 1)))
+            settle(graph)
+            // Mid-viewport: no automatic scroll.
+            let middle = Float(viewport.midY)
+            dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(start.midX), y: middle, deltaX: 0, deltaY: 0)))
+            for _ in 0..<5 { AnimatorScheduler.current.tick(deltaTime: 0.1); settle(graph) }
+            #expect(scroll.contentOffset.y == 0)
+            // Resting at the bottom edge keeps scrolling without pointer motion.
+            let edge = Float(viewport.maxY) - 2
+            dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(start.midX), y: edge, deltaX: 0, deltaY: 0)))
+            for _ in 0..<5 { AnimatorScheduler.current.tick(deltaTime: 0.1); settle(graph) }
+            let scrolled = scroll.contentOffset.y
+            #expect(scrolled > 200, "scrolled \(scrolled)")
+            dispatcher.dispatch(.mouseButtonUp(MouseButtonEvent(button: .left, x: Float(start.midX), y: edge, clicks: 1)))
+            settle(graph)
+            let destination = try #require(harness.model.moves.first?.1)
+            // The drop lands where the pointer is in content coordinates.
+            let expected = Int(((CGFloat(edge) - start.midY + scrolled) / 36).rounded()) - 1
+            #expect(abs(destination - expected) <= 1, "dropped at \(destination), expected about \(expected)")
+            #expect(destination > 6, "below the initially visible rows")
+            AnimatorScheduler.current.tick(deltaTime: 0.1)
+            #expect(scroll.contentOffset.y == scrolled, "released drags stop scrolling")
+        }
+    }
+
+    @Test("Edge speed is zero mid-viewport and rises to the maximum at and beyond the edge")
+    func edgeVelocity() {
+        let viewport = CGRect(x: 0, y: 100, width: 300, height: 400)
+        #expect(EdgeAutoScroll.velocity(pointerY: 300, viewport: viewport) == 0)
+        #expect(EdgeAutoScroll.velocity(pointerY: 100, viewport: viewport) == -EdgeAutoScroll.maximumSpeed)
+        #expect(EdgeAutoScroll.velocity(pointerY: 520, viewport: viewport) == EdgeAutoScroll.maximumSpeed)
+        let shallow = EdgeAutoScroll.velocity(pointerY: 470, viewport: viewport)
+        let deep = EdgeAutoScroll.velocity(pointerY: 490, viewport: viewport)
+        #expect(shallow > 0 && deep > shallow)
     }
 }

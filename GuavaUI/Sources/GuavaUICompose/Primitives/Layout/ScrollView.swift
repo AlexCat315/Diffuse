@@ -800,7 +800,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             nodeID: ObjectIdentifier(selected), relative: baseline, contentSize: content)
     }
 
-    private static func visibleViewportRect(for node: Node) -> CGRect {
+    static func visibleViewportRect(for node: Node) -> CGRect {
         let nodeOrigin = node.absoluteOrigin
         var visible = CGRect(origin: nodeOrigin, size: node.frame.size)
         var current = node.parent
@@ -816,7 +816,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         return visible.offsetBy(dx: -nodeOrigin.x, dy: -nodeOrigin.y)
     }
 
-    private static func cachedScrollableContentSize(for node: Node) -> CGSize {
+    static func cachedScrollableContentSize(for node: Node) -> CGSize {
         if let cached = node.attachments[_ScrollViewAttachmentKeys.contentSize]
             as? _ScrollViewContentSizeCache,
            cached.structureVersion == node.subtreeStructureVersion {
@@ -1061,5 +1061,39 @@ public extension View {
 private struct ScrollAnchorModifier: ViewModifier {
     func apply(node: Node) {
         node.attachments[_ScrollViewAttachmentKeys.anchorMarker] = true
+    }
+}
+
+/// Programmatic scrolling of the scroll view that contains a node, for drags
+/// that reach a viewport edge. Callers never see the scroll view's storage.
+enum EnclosingScroll {
+    /// The nearest ancestor ScrollView node.
+    static func container(of node: Node) -> Node? {
+        var current = node.parent
+        while let candidate = current {
+            if candidate.attachments[_ScrollViewAttachmentKeys.report] != nil { return candidate }
+            current = candidate.parent
+        }
+        return nil
+    }
+
+    /// The scroll view's visible viewport in window coordinates.
+    static func viewport(of scroll: Node) -> CGRect {
+        ScrollView<EmptyView>.visibleViewportRect(for: scroll)
+    }
+
+    /// Scrolls vertically by up to `delta`, clamped to the content, and
+    /// reports the new offset to the scroll view's observers.
+    @discardableResult
+    static func scroll(_ scroll: Node, byY delta: CGFloat) -> CGFloat {
+        let content = ScrollView<EmptyView>.cachedScrollableContentSize(for: scroll)
+        let maxY = max(0, content.height - viewport(of: scroll).height)
+        let current = scroll.contentOffset
+        let nextY = min(maxY, max(0, current.y + delta))
+        guard nextY != current.y else { return 0 }
+        scroll.contentOffset = CGPoint(x: current.x, y: nextY)
+        (scroll.attachments[_ScrollViewAttachmentKeys.motion] as? ScrollAnimator)?.adopt(scroll.contentOffset)
+        (scroll.attachments[_ScrollViewAttachmentKeys.report] as? (Node) -> Void)?(scroll)
+        return nextY - current.y
     }
 }

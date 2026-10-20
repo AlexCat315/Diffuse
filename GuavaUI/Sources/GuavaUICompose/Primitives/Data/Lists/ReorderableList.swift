@@ -184,6 +184,8 @@ private enum _ReorderHandleKeys {
     static let active = "__reorder.active"
     static let startY = "__reorder.startY"
     static let hovered = "__reorder.hovered"
+    static let lastY = "__reorder.lastY"
+    static let report = "__reorder.report"
 }
 
 /// Drag/focus handle behind one reorderable row. Interaction state lives on
@@ -204,6 +206,7 @@ private struct _ReorderHandle: _PrimitiveView {
     func _makeNode() -> Node {
         let node = Node()
         node.isHitTestable = true
+        node.addResource(EdgeAutoScroll())
         return node
     }
 
@@ -238,6 +241,15 @@ private struct _ReorderHandle: _PrimitiveView {
             node.backgroundColor = active ? node.theme.colors.stateLayerPressed
                 : (hovered && isEnabled ? node.theme.colors.stateLayerHover : .clear)
         }
+        // The drag position is pointer travel plus any automatic scroll, so the
+        // drop boundary stays in content coordinates while the list scrolls.
+        let autoScroll = node.firstResource(EdgeAutoScroll.self)
+        node.attachments[_ReorderHandleKeys.report] = { [weak node] in
+            guard let node, let start = node.attachments[_ReorderHandleKeys.startY] as? Float,
+                  let last = node.attachments[_ReorderHandleKeys.lastY] as? Float else { return }
+            onDelta(CGFloat(last - start) + (autoScroll?.scrolledDistance ?? 0))
+        }
+        let report: () -> Void = { [weak node] in (node?.attachments[_ReorderHandleKeys.report] as? () -> Void)?() }
         applyBackground(node.attachments[_ReorderHandleKeys.hovered] as? Bool == true)
         guard let registry = InteractionRegistryHolder.current else { return }
         registry.setHover(node) { phase in
@@ -251,6 +263,8 @@ private struct _ReorderHandle: _PrimitiveView {
             case .down:
                 node.attachments[_ReorderHandleKeys.active] = true
                 node.attachments[_ReorderHandleKeys.startY] = event.y
+                node.attachments[_ReorderHandleKeys.lastY] = event.y
+                autoScroll?.begin(pointerY: event.y, onScroll: report)
                 PointerCaptureHolder.current?.acquire(node)
                 applyBackground(true)
                 onStart()
@@ -261,6 +275,7 @@ private struct _ReorderHandle: _PrimitiveView {
                 }
                 node.attachments[_ReorderHandleKeys.active] = false
                 node.attachments.removeValue(forKey: _ReorderHandleKeys.startY)
+                autoScroll?.end()
                 if PointerCaptureHolder.current?.target === node {
                     PointerCaptureHolder.current?.release()
                 }
@@ -270,9 +285,10 @@ private struct _ReorderHandle: _PrimitiveView {
             }
         }
         registry.setMotion(node) { event, _ in
-            guard node.attachments[_ReorderHandleKeys.active] as? Bool == true,
-                  let start = node.attachments[_ReorderHandleKeys.startY] as? Float else { return .ignored }
-            onDelta(CGFloat(event.y - start))
+            guard node.attachments[_ReorderHandleKeys.active] as? Bool == true else { return .ignored }
+            node.attachments[_ReorderHandleKeys.lastY] = event.y
+            autoScroll?.update(pointerY: event.y)
+            report()
             return .handled
         }
         registry.setKey(node) { event, phase in
@@ -290,6 +306,7 @@ private struct _ReorderHandle: _PrimitiveView {
                 }
                 node.attachments[_ReorderHandleKeys.active] = false
                 node.attachments.removeValue(forKey: _ReorderHandleKeys.startY)
+                autoScroll?.end()
                 if PointerCaptureHolder.current?.target === node {
                     PointerCaptureHolder.current?.release()
                 }

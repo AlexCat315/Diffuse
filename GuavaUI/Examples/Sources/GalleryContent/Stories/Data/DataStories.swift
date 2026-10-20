@@ -378,8 +378,10 @@ struct ReorderableListStory: View {
         Item(id: 4, title: "Trigger"),
         Item(id: 5, title: "Audio Source")
     ]
+    @State private var layers = (1...40).map { Item(id: $0, title: "Layer \($0)") }
 
     var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 24) {
         StorySection("Reorderable list", "Drag the 44pt grip to move a row: a 2pt accent line marks the insertion point, Escape cancels, and Up/Down (or the assistive increment/decrement actions) move the focused row without a pointer.") {
             ReorderableList(items, id: \.id, rowHeight: 36,
                             rowLabel: { $0.title },
@@ -396,6 +398,22 @@ struct ReorderableListStory: View {
             }.frame(height: 300)
             Text("Order: \(items.map(\.title).joined(separator: " → "))")
                 .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
+        StorySection("Long list", "Hold a dragged row near the top or bottom edge: the list scrolls, faster the closer the pointer is to the edge, and keeps scrolling while the pointer rests there. The drop line follows the content.") {
+            ReorderableList(layers, id: \.id, rowHeight: 36, rowLabel: { $0.title }, onMove: { from, to in
+                guard layers.indices.contains(from), (0..<layers.count).contains(to) else { return }
+                let moved = layers.remove(at: from)
+                layers.insert(moved, at: to)
+            }) { item, isDragging in
+                Row(alignment: .center, spacing: 10) {
+                    Text(item.title).font(.body)
+                    Spacer()
+                    if isDragging { Badge("Moving", tone: .info) }
+                }
+            }.frame(height: 220).debugName("reorder-long")
+            Text("First five: \(layers.prefix(5).map(\.title).joined(separator: ", "))")
+                .font(.caption).foregroundColor(.onSurfaceMuted)
+        }
         }
     }
 }
