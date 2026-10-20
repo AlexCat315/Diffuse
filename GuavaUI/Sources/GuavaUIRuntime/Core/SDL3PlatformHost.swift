@@ -18,6 +18,18 @@ public final class PlatformWindowSession {
     fileprivate var lastTextInputArea: TextInputArea?
     fileprivate var lastTextCursorAnimationTick: Double = 0
     fileprivate var needsDisplay = true
+    /// While an injected press is held, the real cursor is not the pointer:
+    /// its motion would drag the injected gesture to wherever the mouse rests.
+    /// A real button press or release takes the pointer back.
+    private var injectedPressHeld = false
+
+    fileprivate func acceptsNative(_ event: InputEvent) -> Bool {
+        switch event {
+        case .mouseMotion, .mouseWheel: return !injectedPressHeld
+        case .mouseButtonDown, .mouseButtonUp: injectedPressHeld = false; return true
+        default: return true
+        }
+    }
     fileprivate var nextRenderAttemptTime: Double = 0
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32)
@@ -79,6 +91,11 @@ public final class PlatformWindowSession {
     /// polled from the native shell. Used by `GuavaUIDevTools` to forward
     /// pointer / keyboard events from the mirror viewport.
     public func injectEvent(_ event: InputEvent) {
+        switch event {
+        case .mouseButtonDown: injectedPressHeld = true
+        case .mouseButtonUp: injectedPressHeld = false
+        default: break
+        }
         withCurrent {
             if dispatcher.dispatch(event) { onEvent?(event) }
         }
@@ -464,6 +481,7 @@ public final class SDL3PlatformHost: PlatformHost {
 
         for routed in shell.pollWindowEvents() {
             guard let session = sessions[routed.windowID] else { continue }
+            guard session.acceptsNative(routed.event) else { continue }
             session.withCurrent {
                 if session.dispatcher.dispatch(routed.event) {
                     session.onEvent?(routed.event)
