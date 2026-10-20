@@ -12,7 +12,7 @@ public enum GalleryPage: String, CaseIterable, Sendable, Hashable {
     case table, dataTable, calendar, datePicker, dateRangePicker, timeField, timePicker, wheelPicker
     case accordion, breadcrumb, pagination, buttonGroup, splitButton, tag, keyCap, label, dialog, alertDialog, sheet, bottomSheet
     case commandPalette, hoverCard, timeline, toolbar, appBar, navigationStack, dragAndDrop
-    case link, statusBar, carousel, skeleton, stepper, viewportTraits, viewThatFits
+    case link, statusBar, carousel, skeleton, stepper, viewportTraits, viewThatFits, richText
 
     public var entry: GalleryEntry { GalleryCatalog.entries.first { $0.page == self }! }
 }
@@ -58,6 +58,7 @@ public enum GalleryCatalog {
         .init(.icon, "Icon", "Data", "Bundled SVG resources tinted by the current semantic theme."),
         .init(.avatar, "Avatar", "Data", "Asynchronous images, Unicode initials, stable theme colors and overlapping member groups."),
         .init(.image, "Image", "Data", "Fit/fill/stretch, asynchronous loading, explicit errors and retry."),
+        .init(.richText, "RichText", "Data", "Styled runs in one wrapping paragraph: weight, slant, inline code, strike lines and links."),
         .init(.web, "WebView", "Data", "A native browser view hosted above the composed surface, with navigation, clipping and lifecycle."),
         .init(.menu, "Menu", "Overlays", "Nested commands, keyboard navigation, checked states and scrollable menus."),
         .init(.menuButton, "MenuButton", "Controls", "A button-triggered menu with regular trigger chrome, keyboard dismissal and action callbacks."),

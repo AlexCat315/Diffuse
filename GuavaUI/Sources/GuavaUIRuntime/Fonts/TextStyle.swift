@@ -138,7 +138,7 @@ public final class TextFontResolver: @unchecked Sendable {
         nextProviderIDBase += providerIDBlockSize
         _ = provider.loadPrimaryFont(name: font.family ?? (font.design == .monospaced
                                     ? SystemFontDefaults.monospacedFontName : primaryFontName),
-                                     weight: font.weight)
+                                     weight: font.weight, isItalic: font.isItalic)
         provider.registerAllFonts(in: atlas)
         providers[font] = provider
         return provider

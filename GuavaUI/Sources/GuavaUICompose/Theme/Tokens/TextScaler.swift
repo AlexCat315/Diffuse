@@ -9,7 +9,7 @@ public struct TextScaler: Hashable, Sendable {
     public static let identity = TextScaler()
     public func scale(_ value: Float) -> Float { value * factor }
     public func scale(_ font: Font) -> Font {
-        Font(size: scale(font.size), weight: font.weight, design: font.design, family: font.family)
+        Font(size: scale(font.size), weight: font.weight, design: font.design, family: font.family, isItalic: font.isItalic)
     }
 }
 

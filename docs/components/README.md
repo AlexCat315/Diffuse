@@ -31,6 +31,7 @@
 | SearchField | 搜索输入、联想与键盘选择 | [searchfield.md](searchfield.md) |
 | Combobox | 可搜索单选、本地过滤与远程结果契约 | [combobox.md](combobox.md) |
 | Text / Typography / Color glyphs | 实现与验证边界 | [typography.md](typography.md) |
+| RichText | 多样式段落、CJK 断行、链接 | [richtext.md](richtext.md) |
 | Viewport Traits | width/height class、orientation reader 与 600/1000 阈值 | [viewport-traits.md](viewport-traits.md) |
 | Accessibility | 语义树、describedBy、scrollArea 与 comboBox | [accessibility.md](accessibility.md) |
 | Scrollbar | 可聚焦 thumb、拖动/键盘/辅助功能与 ScrollView offset 绑定 | [scrollbar.md](scrollbar.md) |

@@ -34,7 +34,7 @@ public struct TextStyleToken: Equatable, Sendable {
 extension Font {
     func resolvingFamily(_ family: String?) -> Self {
         guard self.family == nil, design == .standard, let family else { return self }
-        return .named(family, size: size, weight: weight)
+        return Font(size: size, weight: weight, family: family, isItalic: isItalic)
     }
 }
 

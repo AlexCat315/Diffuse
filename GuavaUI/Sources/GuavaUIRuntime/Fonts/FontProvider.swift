@@ -118,9 +118,10 @@ public final class FontProvider {
 
     @discardableResult
     public func loadPrimaryFont(name: String,
-                                weight: FontWeight = .regular) -> ManagedFont? {
+                                weight: FontWeight = .regular,
+                                isItalic: Bool = false) -> ManagedFont? {
 #if canImport(CoreText)
-        let ctFont = configuredCTFont(named: name, weight: weight)
+        let ctFont = configuredCTFont(named: name, weight: weight, isItalic: isItalic)
         let font = loadFont(ctFont)
         if let font {
             primaryPSName = font.postScriptName
@@ -576,7 +577,8 @@ public final class FontProvider {
     }
 
     private func configuredCTFont(named name: String,
-                                  weight: FontWeight) -> CTFont {
+                                  weight: FontWeight,
+                                  isItalic: Bool) -> CTFont {
         let logicalSize = CGFloat(size)
         let base: CTFont
         if name == ".AppleSystemUIFont" {
@@ -585,8 +587,13 @@ public final class FontProvider {
         } else {
             base = CTFontCreateWithName(name as CFString, logicalSize, nil)
         }
-        guard weight != .regular else { return base }
+        let weighted = weight == .regular ? base : weightedCTFont(base, weight: weight, size: logicalSize)
+        guard isItalic else { return weighted }
+        // Faces without an italic style keep the upright face rather than failing.
+        return CTFontCreateCopyWithSymbolicTraits(weighted, logicalSize, nil, .traitItalic, .traitItalic) ?? weighted
+    }
 
+    private func weightedCTFont(_ base: CTFont, weight: FontWeight, size logicalSize: CGFloat) -> CTFont {
         let attrs: [CFString: Any] = [
             kCTFontTraitsAttribute: [kCTFontWeightTrait: weight.coreTextWeight]
         ]

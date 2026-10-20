@@ -44,6 +44,7 @@ extension GalleryPage {
         case .image: UIIcons.Media.image
         case .carousel: UIIcons.Editor.skipForward
         case .web: UIIcons.Shape.globe
+        case .richText: UIIcons.Text.pilcrow
         case .avatar: UIIcons.User.user
         case .menu: UIIcons.Action.moreHorizontal
         case .menuButton: UIIcons.Action.moreVertical

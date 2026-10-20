@@ -53,6 +53,29 @@ struct EventDispatcherCursorTests {
         #expect(received == [.pointer])
     }
 
+    @Test("A node that changes its cursor during motion updates it without leaving")
+    func cursorWithinNode() {
+        let tree = NodeTree()
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        tree.root = root
+        let interactions = InteractionRegistry()
+        let dispatcher = EventDispatcher(tree: tree, interactions: interactions,
+                                         capture: PointerCapture(), focusChain: FocusChain())
+        root.isHitTestable = true
+        // A paragraph shows the pointer only over its link region.
+        interactions.setMotion(root) { event, _ in
+            root.cursor = event.x > 50 ? .pointer : nil
+            return .ignored
+        }
+        var received: [SystemCursor] = []
+        dispatcher.cursorSink = { received.append($0) }
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 20, y: 20, deltaX: 0, deltaY: 0)))
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 70, y: 20, deltaX: 0, deltaY: 0)))
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 20, y: 20, deltaX: 0, deltaY: 0)))
+        #expect(received == [.pointer, .arrow])
+    }
+
     private func makeTwoNodeTree() -> (NodeTree, Node, Node, EventDispatcher) {
         let tree = NodeTree()
         let root = Node()

@@ -158,6 +158,9 @@ public final class EventDispatcher {
         updateHoverPath(to: hit.path)
         if deliverScrollGesture(path: hit.path, event: event) == .handled { return }
         _ = deliver(path: hit.path, kind: .motion(event))
+        // A node may vary its cursor within its own bounds (a link inside a
+        // paragraph), so motion re-resolves it even when the path is unchanged.
+        updateCursor(for: hoveredPath)
     }
 
     /// The deepest scroll container gets the first gesture attempt, before a
