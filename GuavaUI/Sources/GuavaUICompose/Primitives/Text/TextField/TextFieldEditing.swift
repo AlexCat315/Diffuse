@@ -48,6 +48,7 @@ extension TextField {
     }
 
     struct ScrollState {
+        var committedSize: CGSize?
         var horizontal = HorizontalScrollState()
         var offsetY: Float = 0
         var maxY: Float = 0

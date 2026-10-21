@@ -195,6 +195,42 @@ struct LayerAwareNodeRendererTests {
         #expect(rootObject.cachedLayerList === stableCache)
     }
 
+    @Test("Flattening a stable layer does not duplicate nested container caches")
+    func nestedContainerCacheStorage() {
+        let tree = NodeTree(), render = RenderTree(), root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        tree.root = root
+        var containers = [root]
+        for _ in 0..<24 {
+            let child = Node()
+            child.frame = CGRect(x: 1, y: 1, width: 150, height: 150)
+            child.clipsToBounds = true
+            child.backgroundColor = Color(r: 0.2, g: 0.3, b: 0.4, a: 1)
+            containers.last!.addChild(child)
+            containers.append(child)
+        }
+        render.install(rootNode: root)
+        let renderer = LayerAwareNodeRenderer()
+        for opacity: Float in [1, 0.5, 1] {
+            containers[12].subtreeOpacity = opacity
+            for _ in 0..<3 {
+                let reference = DrawList(), actual = DrawList()
+                NodeRenderer().render(root: root, into: reference)
+                renderer.render(tree: render, into: actual)
+                #expect(actual.vertices.map { [$0.posX, $0.posY] } == reference.vertices.map { [$0.posX, $0.posY] })
+                #expect(actual.vertices.map(\.color) == reference.vertices.map(\.color))
+                #expect(actual.indices == reference.indices)
+            }
+            #expect(render.root?.cachedLayerList != nil)
+            let cachedContainers = containers.dropFirst().dropLast().filter {
+                render.renderObject(for: $0)?.cachedLayerList != nil
+            }
+            // A stable branch may retain a prior cache after an ancestor edit,
+            // but rebuilding the root must not allocate one at every depth.
+            #expect(cachedContainers.count <= 1)
+        }
+    }
+
     @Test("markRenderDirty on a non-layer descendant invalidates the enclosing layer")
     func dirtyBubblesToEnclosingLayer() {
         // Root is its own layer; child A is non-layer; leaf B is its own layer.

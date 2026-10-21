@@ -31,21 +31,24 @@ final class MacAccessibilityBridge: NodeResource {
     private let originalChildren: [Any]?
     private let originalIsElement: Bool
     private var elements: [ElementID: MacSceneAccessibilityElement] = [:]
-    private var rootIDs: [ElementID] = []
+    private var rootIDs: [ElementID]?
+    private(set) var updatedElementCount = 0
     init(view: NSView) { self.view = view; originalChildren = view.accessibilityChildren(); originalIsElement = view.isAccessibilityElement() }
     nonisolated func mount(node: Node) {}
     nonisolated func unmount(node: Node) {
         MainActor.assumeIsolated {
             view?.setAccessibilityChildren(originalChildren)
             view?.setAccessibilityElement(originalIsElement)
-            elements.values.forEach { $0.invalidate() }; elements.removeAll(); rootIDs.removeAll(); view = nil
+            elements.values.forEach { $0.invalidate() }; elements.removeAll(); rootIDs = nil; view = nil
         }
     }
     func update(root: Node, focus: FocusChain, perform: @escaping (() -> Void) -> Void) {
         guard let view, let window = view.window else { return }
         let roots = focus.modalRoot.map { [$0] + focus.accessoryRoots } ?? [root]
+        let inputAvailability = inputAvailability(in: roots)
         let snapshot = roots.flatMap { AccessibilityTree.snapshot(root: $0, viewport: root.absoluteFrame, resolveValues: false) }
         var next: [ElementID: MacSceneAccessibilityElement] = [:]
+        updatedElementCount = 0
         func materialize(_ item: AccessibilityElement, parent: Any) -> MacSceneAccessibilityElement {
             let element = elements[item.id] ?? MacSceneAccessibilityElement()
             next[item.id] = element
@@ -53,19 +56,35 @@ final class MacAccessibilityBridge: NodeResource {
             let local = NSRect(x: bounds.minX, y: view.isFlipped ? bounds.minY : view.bounds.height - bounds.maxY,
                                width: bounds.width, height: bounds.height)
             let screen = window.convertToScreen(view.convert(local, to: nil))
-            element.update(item: item, parent: parent, frame: screen, focused: focus.focused === item.node, perform: perform, permitted: { focus.permitsInput(item.node) },
-                           focus: { [weak node = item.node] in if let node { focus.focus(node, visible: true) } })
-            element.setAccessibilityChildren(item.children.map { materialize($0, parent: element) })
+            if element.update(item: item, parent: parent, frame: screen, focused: focus.focused === item.node, acceptsInput: inputAvailability[item.id] == true, perform: perform, permitted: { focus.permitsInput(item.node) },
+                           focus: { [weak node = item.node] in if let node { focus.focus(node, visible: true) } }) { updatedElementCount += 1 }
+            element.synchronizeChildren(item.children.map { materialize($0, parent: element) }, ids: item.children.map(\.id))
             return element
         }
         let children = snapshot.map { materialize($0, parent: view) }
         let changed = rootIDs != snapshot.map(\.id)
-        view.setAccessibilityElement(false)
-        view.setAccessibilityChildren(children)
+        if changed {
+            view.setAccessibilityElement(false)
+            view.setAccessibilityChildren(children)
+        }
         for (id, element) in elements where next[id] == nil { element.invalidate() }
         elements = next; rootIDs = snapshot.map(\.id)
         if changed { NSAccessibility.post(element: view, notification: .layoutChanged) }
     }
+    /// Semantic snapshots omit layout-only ancestors. Resolve their input
+    /// gates in one walk rather than walking the ancestor chain per control.
+    private func inputAvailability(in roots: [Node]) -> [ElementID: Bool] {
+        var result: [ElementID: Bool] = [:]
+        var pending = roots.map { ($0, $0.parent?.acceptsSubtreeInput ?? true) }
+        while let (node, parentAcceptsInput) = pending.popLast() {
+            let acceptsInput = parentAcceptsInput && node.isLayoutVisible
+                && node.allowsHitTesting && node.isInteractionEnabled
+            if node.accessibility != nil { result[node.id] = acceptsInput }
+            for child in node.children { pending.append((child, acceptsInput)) }
+        }
+        return result
+    }
+
 }
 
 // AppKit invokes accessibility callbacks on the main thread, matching the scene ownership contract.
@@ -74,44 +93,66 @@ private final class MacSceneAccessibilityElement: NSAccessibilityElement, @unche
     private var perform: ((() -> Void) -> Void)?
     private var focusAction: (() -> Void)?
     private var updating = false
-    private var previousValueIdentity: AnyHashable?
+    private struct Presentation: Equatable {
+        let semantics: AccessibilitySemantics
+        let frame: NSRect
+        let focused: Bool
+        let enabled: Bool
+        let parent: ObjectIdentifier
+        let valueIdentity: AnyHashable
+    }
+    private var presentation: Presentation?
+    private var childIDs: [ElementID]?
     private var permitted: (() -> Bool)?
-    func update(item: AccessibilityElement, parent: Any, frame: NSRect, focused: Bool,
-                perform: @escaping (() -> Void) -> Void, permitted: @escaping () -> Bool, focus: @escaping () -> Void) {
-        updating = true
-        defer { updating = false }
+    func update(item: AccessibilityElement, parent: Any, frame: NSRect, focused: Bool, acceptsInput: Bool,
+                perform: @escaping (() -> Void) -> Void, permitted: @escaping () -> Bool, focus: @escaping () -> Void) -> Bool {
+        // Actions and their host context stay live even when native properties
+        // are unchanged. No closure identity participates in presentation.
         node = item.node; self.perform = perform; self.permitted = permitted; focusAction = focus
         let semantics = item.semantics
+        let staticText = semantics.role == .staticText || semantics.role == .status
+        let actions = item.node.accessibilityActions
+        let interactive = item.node.isFocusable || actions.activate != nil || actions.setValue != nil
+            || actions.increment != nil || actions.decrement != nil
+        let enabled = semantics.state.isEnabled && (!interactive || acceptsInput)
+        let displayedValue = staticText && semantics.value.isEmpty ? semantics.label : semantics.value
+        let identity = item.node.accessibilityValueProvider?.revision ?? AnyHashable(displayedValue)
+        let next = Presentation(semantics: semantics, frame: frame, focused: focused, enabled: enabled,
+                                parent: ObjectIdentifier(parent as AnyObject), valueIdentity: identity)
+        guard presentation != next else { return false }
+        let previous = presentation?.valueIdentity
+        presentation = next
+        updating = true
+        defer { updating = false }
         setAccessibilityElement(true)
         setAccessibilityParent(parent); setAccessibilityRole(semantics.role.nativeRole)
         setAccessibilitySubrole(semantics.state.isSecure ? .secureTextField : nil)
-        let staticText = semantics.role == .staticText || semantics.role == .status
         // AppKit reads static text from AXValue. The portable label stores its
         // displayed text; repeating it in AXDescription makes VoiceOver read it twice.
         setAccessibilityLabel(staticText && semantics.value.isEmpty ? nil : semantics.label)
         setAccessibilityHelp(semantics.help)
         setAccessibilityIdentifier(semantics.identifier.isEmpty ? item.id.description : semantics.identifier)
-        let actions = item.node.accessibilityActions
-        let interactive = item.node.isFocusable || actions.activate != nil || actions.setValue != nil
-            || actions.increment != nil || actions.decrement != nil
         setAccessibilityFrame(frame)
         // Pointer-transparent descriptions remain readable. Their lack of an
         // input target does not make the text disabled; actions still consult
         // acceptsSubtreeInput and the current focus scope in invoke().
-        setAccessibilityEnabled(semantics.state.isEnabled && (!interactive || item.node.acceptsSubtreeInput))
+        setAccessibilityEnabled(enabled)
         setAccessibilitySelected(semantics.state.isSelected); setAccessibilityFocused(focused)
         setAccessibilityExpanded(semantics.state.isExpanded ?? false)
-        let displayedValue = staticText && semantics.value.isEmpty ? semantics.label : semantics.value
-        let identity = item.node.accessibilityValueProvider?.revision ?? AnyHashable(displayedValue)
-        let previous = previousValueIdentity; previousValueIdentity = identity
         let nativeValue: Any
         if semantics.role == .checkbox || semantics.role == .toggle { nativeValue = NSNumber(value: semantics.value == "mixed" ? 2 : semantics.value == "1" ? 1 : 0) }
         else if semantics.role == .slider || semantics.role == .progress { nativeValue = NSNumber(value: Double(semantics.value) ?? 0) }
         else { nativeValue = displayedValue }
         super.setAccessibilityValue(nativeValue)
         if previous != nil && previous != identity { NSAccessibility.post(element: self, notification: .valueChanged) }
+        return true
     }
-    func invalidate() { node = nil; perform = nil; permitted = nil; focusAction = nil; setAccessibilityChildren(nil) }
+    func synchronizeChildren(_ children: [MacSceneAccessibilityElement], ids: [ElementID]) {
+        guard childIDs != ids else { return }
+        childIDs = ids
+        setAccessibilityChildren(children)
+    }
+    func invalidate() { presentation = nil; childIDs = nil; node = nil; perform = nil; permitted = nil; focusAction = nil; setAccessibilityChildren(nil) }
     private func invoke(_ action: (() -> Void)?) -> Bool {
         precondition(Thread.isMainThread)
         guard permitted?() == true, let node, node.acceptsSubtreeInput, node.accessibility?.state.isEnabled == true,

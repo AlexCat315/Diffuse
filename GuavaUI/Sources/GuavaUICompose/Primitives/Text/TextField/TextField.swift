@@ -283,7 +283,8 @@ public struct TextField: View {
             snapshot.committedTextInputArea(node: committedNode,
                                             state: state,
                                             absoluteOrigin: absoluteOrigin,
-                                            isFocused: interactionState.isFocused)
+                                            isFocused: FocusChainHolder.current.map { $0.focused === committedNode }
+                                                ?? interactionState.isFocused)
         }
 
         if let focusRequestID = navigation.focusRequestID,
@@ -913,6 +914,10 @@ public struct TextField: View {
                                 isFocused: Bool) -> TextInputArea? {
         state.pointer.lastDrawOrigin = absoluteOrigin
         guard let env = TextEnvironmentHolder.current else { return nil }
+        // The first commit establishes scroll geometry even for an inactive
+        // field. Once drawn, unchanged inactive fields need no caret layout;
+        // geometry/style/content invalidations still refresh their metrics.
+        if !isFocused, !node.renderDirty, state.scroll.committedSize == node.frame.size { return nil }
 
         let current = text.wrappedValue
         state.buffer = current
@@ -956,6 +961,7 @@ public struct TextField: View {
                                                    addonLeading: addonLeading,
                                                    addonTrailing: addonTrailing)
         let caret = viewport.rawCaret
+        state.scroll.committedSize = node.frame.size
         return TextInputArea(
             x: viewport.textOriginX + caret.x,
             y: viewport.textOriginY + caret.topY,

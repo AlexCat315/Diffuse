@@ -39,7 +39,7 @@ public final class LayerAwareNodeRenderer {
                                            height: Float(node.frame.height)))
         }
         compose(root, into: frame, placed: .identity,
-               parentClipStack: [])
+               parentClipStack: [], allowsContainerCache: true)
     }
 
     /// `placed` is where the parent's content sits; the node composes its own
@@ -49,7 +49,8 @@ public final class LayerAwareNodeRenderer {
     private func compose(_ obj: RenderObject,
                          into frame: DrawList,
                          placed: Affine2D,
-                         parentClipStack: [UIClip]) {
+                         parentClipStack: [UIClip],
+                         allowsContainerCache: Bool) {
         guard let node = obj.node, node.isLayoutVisible else { return }
         let f = node.frame
         let own = node.placementStep(scrolling: .zero).followed(by: placed)
@@ -109,13 +110,16 @@ public final class LayerAwareNodeRenderer {
                 // caches during scrolling or live chart updates. If another
                 // frame arrives without invalidation, cache it then; stable
                 // continuous frames subsequently become one bulk append.
-                if obj.cacheInvalid || !placementUnchanged || !clipUnchanged {
+                // While building an ancestor cache, do not also build a
+                // flattened copy at every nested container on the same path.
+                if !allowsContainerCache || obj.cacheInvalid || !placementUnchanged || !clipUnchanged {
                     recordSelfAndDescendants(
                         obj,
                         node: node,
                         into: frame,
                         placed: placed,
-                        clipStack: parentClipStack
+                        clipStack: parentClipStack,
+                        allowsContainerCache: allowsContainerCache
                     )
                     obj.cachedLayerList = nil
                     obj.lastPlacement = own
@@ -137,7 +141,8 @@ public final class LayerAwareNodeRenderer {
                 node: node,
                 into: layerList,
                 placed: placed,
-                clipStack: parentClipStack
+                clipStack: parentClipStack,
+                allowsContainerCache: false
             )
             for clip in parentClipStack.reversed() { layerList.popClip(clip) }
             obj.cachedLayerList = layerList
@@ -161,7 +166,8 @@ public final class LayerAwareNodeRenderer {
             node: node,
             into: frame,
             placed: placed,
-            clipStack: parentClipStack
+            clipStack: parentClipStack,
+            allowsContainerCache: allowsContainerCache
         )
     }
 
@@ -172,7 +178,8 @@ public final class LayerAwareNodeRenderer {
                                           node: Node,
                                           into list: DrawList,
                                           placed: Affine2D,
-                                          clipStack: [UIClip]) {
+                                          clipStack: [UIClip],
+                                          allowsContainerCache: Bool) {
         guard node.isLayoutVisible else { return }
         let firstVertex = list.vertices.count
         let own = node.placementStep(scrolling: .zero).followed(by: placed)
@@ -239,7 +246,8 @@ public final class LayerAwareNodeRenderer {
                 compose(child,
                         into: list,
                         placed: content,
-                        parentClipStack: childClipStack)
+                        parentClipStack: childClipStack,
+                        allowsContainerCache: allowsContainerCache)
             } else {
                 guard let childNode = child.node else { continue }
                 recordSelfAndDescendants(
@@ -247,7 +255,8 @@ public final class LayerAwareNodeRenderer {
                     node: childNode,
                     into: list,
                     placed: content,
-                    clipStack: childClipStack
+                    clipStack: childClipStack,
+                    allowsContainerCache: allowsContainerCache
                 )
             }
         }

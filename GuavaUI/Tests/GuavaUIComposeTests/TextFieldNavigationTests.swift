@@ -12,6 +12,37 @@ struct TextFieldNavigationTests: GuavaUIComposeSerializedSuite {
         KeyEvent(scancode: code, keycode: 0, modifiers: modifiers, isRepeat: false)
     }
 
+    @Test("Stable inactive fields reuse committed scroll geometry")
+    func inactiveIMEAnchor() throws { try GlobalTestLock.locked {
+        let prior = TextEnvironmentHolder.current
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        defer { TextEnvironmentHolder.current = prior }
+        try PlatformInputContext().withCurrent {
+            var reads = 0
+            let field = TextField(text: Binding<TextBuffer>(get: {
+                reads += 1
+                return "Inactive inspector field"
+            }, set: { _ in }))
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root: field.frame(width: 200, height: 30))
+            graph.computeLayout(width: 200, height: 30)
+            let node = try #require(nodes(graph.tree.root).first { $0.attachments[TextField.surfaceMarkerKey] != nil })
+            let state = try #require(node.attachments["__textfield_state"] as? TextField.FieldState)
+            tree.flush()
+            reads = 0
+            let origin = CGPoint(x: 12, y: 24)
+            #expect(field.committedTextInputArea(node: node, state: state,
+                                                absoluteOrigin: origin, isFocused: false) == nil)
+            #expect(reads == 0 && state.pointer.lastDrawOrigin == origin)
+            #expect(field.committedTextInputArea(node: node, state: state,
+                                                absoluteOrigin: origin, isFocused: true) != nil)
+            node.markRenderDirty()
+            #expect(field.committedTextInputArea(node: node, state: state,
+                                                absoluteOrigin: origin, isFocused: false) != nil)
+        }
+    } }
+
     #if canImport(CoreText)
     @Test("a joined color emoji renders, advances the caret and deletes as one character")
     func colorEmojiCaret() throws { try GlobalTestLock.locked {

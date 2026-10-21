@@ -6,6 +6,46 @@ import Testing
 @Suite("Native accessibility", .serialized)
 @MainActor
 struct NativeAccessibilityTests {
+    @Test("Stable native properties are reused while actions, focus and geometry stay live")
+    func incrementalPresentation() {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 200), styleMask: .titled, backing: .buffered, defer: false)
+        let root = Node(); root.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
+        let button = Node(); button.frame = CGRect(x: 10, y: 10, width: 100, height: 30)
+        button.isFocusable = true
+        button.accessibility = AccessibilitySemantics(.button) { $0.label = "Run" }
+        var first = 0, second = 0, deliveries = 0
+        button.accessibilityActions.activate = { first += 1 }
+        root.addChild(button)
+        let bridge = MacAccessibilityBridge(view: window.contentView!)
+        let focus = FocusChain()
+        bridge.update(root: root, focus: focus, perform: { $0() })
+        #expect(bridge.updatedElementCount == 1)
+        let native = window.contentView!.accessibilityChildren()!.first as! NSAccessibilityElement
+        bridge.update(root: root, focus: focus, perform: { deliveries += 1; $0() })
+        #expect(bridge.updatedElementCount == 0)
+        button.accessibilityActions.activate = { second += 1 }
+        #expect(native.accessibilityPerformPress())
+        #expect(first == 0 && second == 1 && deliveries == 1)
+        let oldFrame = native.accessibilityFrame()
+        button.frame.origin.x += 5
+        bridge.update(root: root, focus: focus, perform: { $0() })
+        #expect(bridge.updatedElementCount == 1)
+        #expect(native.accessibilityFrame().minX == oldFrame.minX + 5)
+        focus.focus(button, visible: true)
+        bridge.update(root: root, focus: focus, perform: { $0() })
+        #expect(native.isAccessibilityFocused())
+        button.accessibility?.label = "Stop"
+        button.accessibility?.state.isEnabled = false
+        bridge.update(root: root, focus: focus, perform: { $0() })
+        #expect(native.accessibilityLabel() == "Stop")
+        #expect(!native.isAccessibilityEnabled() && !native.accessibilityPerformPress())
+        root.removeChild(button)
+        bridge.update(root: root, focus: focus, perform: { $0() })
+        #expect(window.contentView!.accessibilityChildren()?.isEmpty == true)
+        bridge.unmount(node: root)
+    }
+
     @Test("Heading semantics preserve the complete title and use the platform heading role when available")
     func heading() {
         _ = NSApplication.shared
