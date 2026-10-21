@@ -20,12 +20,10 @@ struct AboutSettings: View {
                     Text(version).font(.caption).foregroundColor(.onSurfaceMuted)
                 }
             }
-            Divider()
             information(L("Project"), value: URL(fileURLWithPath: app.projectDirectory).lastPathComponent)
             information(L("Project directory"), value: app.projectDirectory)
             information(L("Operating system"), value: ProcessInfo.processInfo.operatingSystemVersionString)
             information(L("Current Space"), value: L(EditorSpace(mode: app.store.workspaceMode).title))
-            Divider()
             Text(L("Copy application and workspace information for a support request. Credentials are excluded."))
                 .font(.body).foregroundColor(.onSurfaceMuted)
             Button(copied ? L("Copied") : L("Copy diagnostics"), isEnabled: ClipboardHolder.write != nil) {

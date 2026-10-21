@@ -24,7 +24,7 @@ enum WorkspaceRegionSizing {
     func extent(in theme: WorkspaceTheme) -> Float {
         switch self {
         case .fraction(let value), .points(let value): max(0, value)
-        case .divider: max(1, theme.splitDividerThickness)
+        case .divider: max(1, theme.gutter)
         }
     }
 }

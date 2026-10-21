@@ -17,7 +17,8 @@ struct SessionJournal: View {
                     EditorPanelBadge("r\(store.sceneRevision)")
                 }
                 ScrollView(.vertical, scrollbarGutter: .stable) {
-                    Column(alignment: .leading, spacing: 0) {
+                    // Every journal entry is a card; spacing, not rules, separates them.
+                    Column(alignment: .leading, spacing: 6) {
                         if store.agentTasks.isEmpty && store.operations.isEmpty && store.consoleEntries.isEmpty {
                             EditorPanelEmptyState(L("A fresh start"), detail: L("Tasks and activity appear here as you work."))
                         }
@@ -38,7 +39,7 @@ struct SessionJournal: View {
                                       color: item.severity == .error ? .error : item.severity == .warning ? .warning : .onSurfaceMuted)
                             }.buttonStyle(.plain).frame(width: .percent(100)))
                         }
-                    }.padding(horizontal: 10).frame(width: .percent(100), minWidth: 0)
+                    }.padding(8).frame(width: .percent(100), minWidth: 0)
                 }.flex().frame(minWidth: 0, minHeight: 0)
             }.flex().frame(minWidth: 0, minHeight: 0).debugName("editor-session-journal")
         }
@@ -56,7 +57,8 @@ struct SessionJournal: View {
             if !task.summary.isEmpty {
                 Text(task.summary, lineLimit: 4).font(.caption).foregroundColor(.onSurfaceVariant)
             }
-        }.padding(vertical: 10).frame(width: .percent(100), minWidth: 0)
+        }.padding(horizontal: 12, vertical: 10).frame(width: .percent(100), minWidth: 0)
+            .background(.surfaceRaised).cornerRadius(10)
     }
 
     private func entry(icon: BundleImageResource, title: String, detail: String,
@@ -68,7 +70,8 @@ struct SessionJournal: View {
                     Text(title, lineLimit: 3).font(.body).foregroundColor(.onSurfaceVariant)
                     if !detail.isEmpty { Text(detail, lineLimit: 2).font(.caption).foregroundColor(.onSurfaceMuted) }
                 }.flex().frame(minWidth: 0)
-            }.padding(vertical: 9)
+            }.padding(horizontal: 12, vertical: 9)
         }.frame(width: .percent(100), minWidth: 0)
+            .background(.surfaceRaised).cornerRadius(10)
     }
 }

@@ -12,7 +12,7 @@
       "command": "sourcekit-lsp",
       "argumentPrefix": [],
       "allowsAdditionalArguments": true,
-      "environmentKeys": ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SystemRoot", "USERPROFILE", "DEVELOPER_DIR", "SDKROOT", "TOOLCHAINS", "SWIFTLY_BIN_DIR", "SWIFTLY_HOME_DIR", "SWIFTLY_TOOLCHAINS_DIR", "GUAVA_LOG_RUN_ID"],
+      "environmentKeys": ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SystemRoot", "USERPROFILE", "DEVELOPER_DIR", "SDKROOT", "TOOLCHAINS", "SOURCEKIT_TOOLCHAIN_PATH", "SWIFT_EXEC", "SWIFTLY_BIN_DIR", "SWIFTLY_HOME_DIR", "SWIFTLY_TOOLCHAINS_DIR", "GUAVA_LOG_RUN_ID"],
       "entryPoints": ["language-server"],
       "lifetimeMilliseconds": null
     }]

@@ -124,7 +124,6 @@ struct ConsolePanel: View {
                     }
                     .padding(horizontal: 10, vertical: 6)
                 }
-                .background(.surfaceSunken)
                 .flex(1, shrink: 1)
             }
         }

@@ -32,12 +32,10 @@ struct SettingsPanel: View {
                 Box(direction: .row, alignItems: .stretch, spacing: 0) {
                     if wide {
                         SettingsSidebar(app: app, category: navigation.category, isSearching: isSearching, onSelect: select)
-                        Box {}.frame(width: 1).background(.divider)
                     }
                 }.frame(width: wide ? 213 : 0).clipped()
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     searchBar(wide: wide)
-                    Divider()
                     ScrollView(.vertical, scrollbarGutter: .stable) {
                         Box(direction: .row, alignItems: .stretch, justifyContent: .center) {
                             Box(direction: .column, alignItems: .stretch, spacing: 16) {
@@ -57,7 +55,6 @@ struct SettingsPanel: View {
                             }.frame(width: .percent(100), minWidth: 0, maxWidth: 760)
                         }.padding(wide ? 28 : 18).frame(width: .percent(100), minWidth: 0)
                     }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0).debugName("settings-content-scroll")
-                    Divider()
                     footer(editor: editor, showsAgent: sections.contains { $0.category == .agent }, compact: !wide)
                 }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
             }.frame(width: .percent(100), height: .percent(100), minWidth: 0, minHeight: 0).background(.background)
@@ -73,20 +70,28 @@ struct SettingsPanel: View {
     private func searchBar(wide: Bool) -> some View {
         TextScalerReader { scaler in
             SurfaceReader { surface in
-                Row(alignment: .center, spacing: 10) {
-                    if !wide { SettingsCategoryMenu(category: navigation.category, onSelect: select) }
-                    Icon(UIIcons.Action.search, size: 15, color: .onSurfaceMuted)
-                    TextField(L("Search all settings…"), text: Binding(get: { navigation.query }, set: {
-                        navigation.query = $0; session.navigation = navigation
-                    })) { input in
-                        input.behavior.clearable = true
-                        input.navigation.focusRequestID = "settings-search-\(searchFocus)"
-                        input.events.onCancel = { navigation.query = ""; session.navigation = navigation }
-                    }.textFieldStyle(SettingsSearchStyle()).font(.body).flex().frame(minWidth: 0)
-                        .debugName("settings-search")
-                    if wide { Text(KeyboardShortcut.primary("F").displayString).font(.caption).foregroundColor(.onSurfaceMuted) }
-                }.padding(horizontal: wide ? 28 : 18, vertical: 12)
-                    .frame(height: max(56, max(scaler.scale(32), surface.minimumControlExtent) + 24)).background(.surface)
+                // A rounded field on the canvas, aligned with the content column;
+                // the wrapper owns the outer margin because padding and background
+                // share a node.
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    Row(alignment: .center, spacing: 10) {
+                        if !wide { SettingsCategoryMenu(category: navigation.category, onSelect: select) }
+                        Row(alignment: .center, spacing: 10) {
+                            Icon(UIIcons.Action.search, size: 15, color: .onSurfaceMuted)
+                            TextField(L("Search all settings…"), text: Binding(get: { navigation.query }, set: {
+                                navigation.query = $0; session.navigation = navigation
+                            })) { input in
+                                input.behavior.clearable = true
+                                input.navigation.focusRequestID = "settings-search-\(searchFocus)"
+                                input.events.onCancel = { navigation.query = ""; session.navigation = navigation }
+                            }.textFieldStyle(SettingsSearchStyle()).font(.body).flex().frame(minWidth: 0)
+                                .debugName("settings-search")
+                            if wide { Text(KeyboardShortcut.primary("F").displayString).font(.caption).foregroundColor(.onSurfaceMuted) }
+                        }.padding(horizontal: 14)
+                            .frame(height: max(40, max(scaler.scale(32), surface.minimumControlExtent) + 8))
+                            .background(.surface).cornerRadius(10).flex().frame(minWidth: 0)
+                    }.frame(width: .percent(100), minWidth: 0, maxWidth: 760)
+                }.padding(EdgeInsets(top: 14, leading: wide ? 28 : 18, bottom: 2, trailing: wide ? 28 : 18))
             }
         }
     }
@@ -140,7 +145,7 @@ struct SettingsPanel: View {
                         .buttonStyle(.primary).debugName("settings-agent-apply")
                 }.frame(minWidth: 0)
             }
-        }.padding(horizontal: compact ? 18 : 28, vertical: 12).background(.surface).debugName("settings-footer")
+        }.padding(horizontal: compact ? 18 : 28, vertical: 12).debugName("settings-footer")
     }
 }
 

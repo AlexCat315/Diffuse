@@ -14,6 +14,7 @@ struct ScriptLanguageWorkspace {
     let engineModulePaths: [String]
     let clangModuleMapPaths: [String]
     let clangIncludePaths: [String]
+    var sdkURL: URL? = nil
 
     var rootURL: URL {
         scriptsDirectoryURL
@@ -80,6 +81,7 @@ struct ScriptLanguageWorkspace {
     /// package (which pulls graphics/SDL3/Jolt and never finishes).
     private var includeFlags: [String] {
         var flags: [String] = []
+        if let sdkURL { flags.append(contentsOf: ["-sdk", sdkURL.path]) }
         for path in engineModulePaths { flags.append(contentsOf: ["-I", path]) }
         for path in clangIncludePaths { flags.append(contentsOf: ["-Xcc", "-I\(path)"]) }
         for path in clangModuleMapPaths { flags.append(contentsOf: ["-Xcc", "-fmodule-map-file=\(path)"]) }

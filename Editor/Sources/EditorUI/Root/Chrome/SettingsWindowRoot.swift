@@ -19,14 +19,12 @@ struct EditorSettingsWindowRoot: View {
                 // minimize / maximize / close) and a PortalHost for any popovers.
                 LayerRoot {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                        EditorCanvasChrome {
                             ImmersiveWindowTitleBar(height: 40) {
                                 Text(L("Settings")).font(.label).foregroundColor(.onSurfaceVariant)
                                     .padding(EdgeInsets(leading: 6))
                             }
                         }.frame(height: 40)
-
-                        Divider()
 
                         SettingsPanel(app: app, session: session)
                             .flex()

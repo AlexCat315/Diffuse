@@ -8,32 +8,13 @@ private enum _WorkspaceMetrics {
     static let railThickness: Float = 40
 }
 
-/// Card chrome shared by docked groups and floating windows.
-///
-/// A workspace is a set of cards resting on the window canvas, not a grid of
-/// outlined rectangles: the group carries the design system's panel radius, a
-/// single soft hairline and one shallow shadow, and the gutters between groups
-/// stay narrow enough that the cards dominate. Callers that already own a
-/// stronger elevation (a floating window) can apply their own shadow after this
-/// and win.
+/// Pane chrome shared by docked groups and floating windows: a borderless
+/// rounded block. Panes are separated by the canvas gutter, not by a rule or
+/// a shadow; a floating window adds its own elevation after this.
 private extension View {
-    func workspaceCardSurface(_ fill: SemanticColorRef) -> some View {
-        WorkspacePanelStyleReader { style in
-            ThemeReader { theme in
-                switch style {
-                case .continuous:
-                    self.background(fill).clipped()
-                case .soft:
-                    self.background(fill).cornerRadius(theme.radius.lg).clipped()
-                case .card:
-                    self
-                        .background(fill)
-                        .cornerRadius(theme.radius.xl)
-                        .border(theme.colors.border.multipliedAlpha(0.55), width: 1)
-                        .shadow(color: theme.elevation.low.color ?? .clear, offsetY: 2, blur: 8)
-                        .clipped()
-                }
-            }
+    func workspacePane(_ fill: SemanticColorRef) -> some View {
+        ThemeReader { theme in
+            self.background(fill).cornerRadius(theme.radius.lg).clipped()
         }
     }
 }
@@ -443,7 +424,7 @@ private struct _WorkspaceFloatingWindowView: View {
                                    content: content)
                 .flex()
         }
-        .workspaceCardSurface(.surfaceFloating)
+        .workspacePane(.surfaceFloating)
         .shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x96),
                 offsetY: 12,
                 blur: 32)
@@ -783,7 +764,7 @@ struct _WorkspaceTabGroupView: View {
                     .flex()
             }
         }
-        .workspaceCardSurface(.surfaceRaised)
+        .workspacePane(.surface)
         .frame(minWidth: 0, minHeight: 0)
         .layoutRole("workspace-tab-group")
         .semanticRole("workspace.group")
@@ -802,14 +783,12 @@ private struct _WorkspaceTabBar: View {
     @State private var overflowPresented = false
 
     var body: some View {
-        WorkspacePanelStyleReader { style in
-            TextScalerReader { scaler in tabBar(scaler: scaler, style: style) }
-        }
+        TextScalerReader { scaler in tabBar(scaler: scaler) }
     }
 
-    private func tabBar(scaler: TextScaler, style: WorkspacePanelStyle) -> some View {
+    /// Tabs, then one trailing menu with panel choice, maximize and collapse.
+    private func tabBar(scaler: TextScaler) -> some View {
         let slotID = document.slotContaining(groupID: group.id)
-        let compactControls = style.usesCompactControls
         let canCollapse = slotID != nil && slotID != .center && group.panels.contains {
             document.panels[$0]?.isCollapsible == true
         }
@@ -826,51 +805,33 @@ private struct _WorkspaceTabBar: View {
         return Row(alignment: .center, spacing: 0) {
             ScrollView(.horizontal) {
                 Row(alignment: .center, spacing: 0) { tabButtons }
-                    .padding(vertical: compactControls && slotID != .center ? 4 : 0)
+                    .padding(vertical: 4)
                     .flex(0, shrink: 0)
                     .accessibility { $0.role = .tabList; $0.label = "Panel tabs"; $0.value = activeTitle }
             }
             .flex(1, shrink: 1, basis: 0)
             .frame(height: .percent(100), minWidth: 0)
             .debugName("workspace-tabs-scroll-\(group.id.rawValue)")
-            if group.panels.count > 1 || compactControls {
-                Popover(isPresented: $overflowPresented, width: max(240, scaler.scale(200)), placement: .bottomTrailing, surface: .content, overflow: .flip) {
-                    Icon(UIIcons.Action.moreHorizontal, size: 12)
-                        .frame(width: control, height: control)
-                        .accessibility { $0.label = "All panels" }
-                } content: {
-                    Menu(group.panels.compactMap { panelID in
-                        guard let panel = document.panels[panelID] else { return nil }
-                        return .item(MenuItem(id: panelID, title: panel.title,
-                            isSelected: panelID == group.activePanelID, action: {
-                                _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: panelID))
-                                overflowPresented = false
-                            }))
-                    } + (compactControls ? groupActions(canCollapse: canCollapse) : []),
-                    width: max(240, scaler.scale(200)), onDismiss: { overflowPresented = false })
-                }
-                .flex(0, shrink: 0)
-                .semanticRole("workspace.tabs.overflow")
-                .debugName("workspace-tabs-overflow-\(group.id.rawValue)")
+            Popover(isPresented: $overflowPresented, width: max(240, scaler.scale(200)), placement: .bottomTrailing, surface: .content, overflow: .flip) {
+                Icon(UIIcons.Action.moreHorizontal, size: 12)
+                    .frame(width: control, height: control)
+                    .accessibility { $0.label = "All panels" }
+            } content: {
+                Menu(group.panels.compactMap { panelID in
+                    guard let panel = document.panels[panelID] else { return nil }
+                    return .item(MenuItem(id: panelID, title: panel.title,
+                        isSelected: panelID == group.activePanelID, action: {
+                            _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: panelID))
+                            overflowPresented = false
+                        }))
+                } + groupActions(canCollapse: canCollapse),
+                width: max(240, scaler.scale(200)), onDismiss: { overflowPresented = false })
             }
-            if !compactControls, let panelID = group.activePanelID {
-                Button(icon: .resource(UIIcons.Navigation.expand), size: 12, tooltip: "Maximize") {
-                    _ = controller.dispatch(.toggleMaximize(panelID))
-                }
-                .buttonStyle(.ghost).frame(width: control, height: control).flex(0, shrink: 0)
-                .debugName("workspace-maximize-\(group.id.rawValue)")
-            }
-            if canCollapse && !compactControls {
-                Button(icon: .resource(WorkspaceIcons.collapse(for: slotID)), size: 12, tooltip: "Collapse") {
-                    _ = controller.dispatch(.collapse(group.id))
-                }
-                .buttonStyle(.ghost).frame(width: control, height: control).flex(0, shrink: 0)
-                .semanticRole("workspace.group.collapse")
-                .debugName("workspace-collapse-\(group.id.rawValue)")
-            }
+            .flex(0, shrink: 0)
+            .semanticRole("workspace.tabs.overflow")
+            .debugName("workspace-tabs-overflow-\(group.id.rawValue)")
         }
         .padding(horizontal: 4, vertical: 0)
-        .background(.surface)
         .modifier(_WorkspaceTabBarHeight())
         .layoutRole("workspace-tab-bar")
         .accessibility { $0.role = .group; $0.label = "Panel tab bar" }
@@ -1160,11 +1121,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let workspace = resolveWorkspaceTheme(on: node)
         let height = max(26, node.compositionValue(of: TextScalerEnvironment.key).scale(workspace.tabBarHeight))
-        // Soft panes use selection blocks everywhere; a top rule would cut the rounded corner.
-        let style = workspace.panelStyle.usesCompactControls
-            ? AnyButtonStyle(WorkspaceContinuousTabStyle(height: height,
-                isStage: workspace.panelStyle == .continuous && document.slotContaining(groupID: groupID) == .center))
-            : AnyButtonStyle(TabButtonStyle(height: height))
+        let style = WorkspaceTabStyle(height: height)
         // Resolve the title color eagerly from this (parented) host node's theme
         // and pass it to `Text` directly. The button style's deferred
         // `.foregroundColor(.onSurface)` resolves against the *label* node's
@@ -1191,7 +1148,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                                               isEnabled: true,
                                               isSelected: isActive,
                                               theme: node.theme)
-        return [style.makeBody(config)]
+        return [AnyView(style.makeBody(configuration: config))]
     }
 
     static let pressKey = "__workspace_tab_press"
@@ -1400,7 +1357,7 @@ private struct _WorkspaceSplitDivider: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let theme = resolveWorkspaceTheme(on: node)
-        let hitSize = max(1, theme.splitDividerThickness + theme.splitDividerHitSlop * 2)
+        let hitSize = max(1, theme.gutter + theme.splitDividerHitSlop * 2)
         node.cursor = axis == .vertical ? .resizeHorizontal : .resizeVertical
         node.isFocusable = true
         node.isTabStop = true
@@ -1537,10 +1494,9 @@ private struct _WorkspaceSplitDividerLine: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let theme = resolveWorkspaceTheme(on: node)
-        // The hairline between two cards. The parent keeps the invisible grab
-        // area around it, so this node contributes only the visible rule.
-        node.animatableSet(\.backgroundColor, to: theme.panelStyle == .soft ? .clear : node.theme.colors.divider)
-        let thickness = max(1, theme.splitDividerThickness)
+        // The empty gutter between two panes. The parent keeps the invisible
+        // grab area around it; nothing is drawn, the canvas shows through.
+        let thickness = max(1, theme.gutter)
         switch axis {
         case .vertical:
             node.layoutNode?.width = thickness

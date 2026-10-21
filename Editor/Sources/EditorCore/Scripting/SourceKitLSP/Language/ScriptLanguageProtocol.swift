@@ -236,6 +236,8 @@ public enum ScriptLanguageReplies {
               let startCharacter = start["character"] as? Int,
               let endLine = end["line"] as? Int,
               let endCharacter = end["character"] as? Int else { return nil }
+        guard startLine >= 0, startCharacter >= 0, endLine >= startLine, endCharacter >= 0,
+              endLine != startLine || endCharacter >= startCharacter else { return nil }
         return ScriptLanguageSpan(startLine: startLine,
                                   startCharacter: startCharacter,
                                   endLine: endLine,

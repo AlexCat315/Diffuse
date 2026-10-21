@@ -144,7 +144,8 @@ public actor LSPClient {
     private static var clientCapabilities: [String: Any] {
         [
             "workspace": [
-                "applyEdit": true,
+                "applyEdit": false,
+                "workspaceEdit": ["documentChanges": true, "resourceOperations": [String](), "failureHandling": "abort"],
                 "workspaceFolders": true,
                 "configuration": true,
                 "didChangeWatchedFiles": ["dynamicRegistration": false],
@@ -153,20 +154,26 @@ public actor LSPClient {
                 "synchronization": ["dynamicRegistration": false, "willSave": false, "didSave": true],
                 "completion": [
                     "completionItem": [
-                        "snippetSupport": false,
+                        "snippetSupport": true,
                         "documentationFormat": ["markdown", "plaintext"],
                     ],
                 ],
                 "hover": ["contentFormat": ["markdown", "plaintext"]],
                 "definition": ["dynamicRegistration": false],
+                "references": ["dynamicRegistration": false],
+                "rename": ["dynamicRegistration": false, "prepareSupport": true],
+                "codeAction": ["dynamicRegistration": false, "dataSupport": true,
+                               "disabledSupport": true, "isPreferredSupport": true,
+                               "resolveSupport": ["properties": ["edit"]],
+                               "codeActionLiteralSupport": ["codeActionKind": ["valueSet": ["quickfix", "refactor", "source"]]]],
+                "signatureHelp": ["signatureInformation": ["documentationFormat": ["markdown", "plaintext"],
+                                                            "parameterInformation": ["labelOffsetSupport": true],
+                                                            "activeParameterSupport": true]],
+                "documentSymbol": ["hierarchicalDocumentSymbolSupport": true],
+                "formatting": ["dynamicRegistration": false],
                 "publishDiagnostics": ["relatedInformation": true],
-                "semanticTokens": [
-                    "requests": ["full": true],
-                    "tokenTypes": [],
-                    "tokenModifiers": [],
-                    "formats": ["relative"],
-                ],
             ],
+            "window": ["workDoneProgress": true],
         ]
     }
 
@@ -293,6 +300,9 @@ public actor LSPClient {
     }
 
     private func consumeStderr(_ data: Data) {
+        if let params = try? LSPJSON.data(["message": String(decoding: data, as: UTF8.self), "type": 4] as [String: Any]) {
+            notificationHandler?(LSPNotification(method: "guava/stderr", params: params))
+        }
         LogSystem.logger("com.guava.editor.lsp").debug("\(String(decoding: data, as: UTF8.self))", source: "sourcekit.stderr")
         stderrTail.append(data)
         if stderrTail.count > Self.stderrTailCapacity {

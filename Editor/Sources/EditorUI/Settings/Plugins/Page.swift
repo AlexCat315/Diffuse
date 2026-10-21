@@ -32,7 +32,6 @@ struct PluginSettings: View {
                         Task { @MainActor in await app.authorizeAndEnableInspectedPlugin() }
                     }, onCancel: { Task { @MainActor in app.cancelPluginApproval() } })
             }
-            Divider()
             Row(alignment: .center, spacing: 8) {
                 Text(L("Enabled Plugins")).font(.label).foregroundColor(.onSurface)
                 Text("\(management.enabled.count)").font(.caption).foregroundColor(.onSurfaceMuted)

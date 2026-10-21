@@ -129,6 +129,8 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     /// automatically via ``scanExportedSymbols(in:)``.
     public var exportedSymbols: [String]
 
+    public var environment: [String: String]
+
     /// Scans a directory of Swift source files for `@_cdecl("symbol")`
     /// declarations and returns the symbol names.
     ///
@@ -176,7 +178,8 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         libraryPaths: [String] = [],
         outputDirectory: URL,
         hostModuleName: String = "GuavaStudioEditor",
-        exportedSymbols: [String] = []
+        exportedSymbols: [String] = [],
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.swiftcPath = swiftcPath
         self.dlltoolPath = dlltoolPath
@@ -187,6 +190,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         self.outputDirectory = outputDirectory
         self.hostModuleName = hostModuleName
         self.exportedSymbols = exportedSymbols
+        self.environment = environment
     }
 
     // MARK: - Compilation
@@ -229,8 +233,9 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         let args = try buildArguments(sourcePaths: sourcePaths, outputPath: outputPath)
 
         let process = Process()
-        process.executableURL = try Self.resolveExecutableURL(for: swiftcPath)
+        process.executableURL = try Self.resolveExecutableURL(for: swiftcPath, environment: environment)
         process.arguments = args
+        process.environment = environment
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -418,7 +423,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         // Standalone Swift toolchains do not discover Xcode's SDK like the
         // Apple compiler does. SwiftPM sets it for its own builds, but scripts
         // are compiled by a separate swiftc process.
-        args.append(contentsOf: ["-sdk", try Self.macOSSDKPath()])
+        args.append(contentsOf: ["-sdk", try Self.macOSSDKPath(environment: environment)])
         args.append(contentsOf: ["-Xlinker", "-undefined", "-Xlinker", "dynamic_lookup"])
         #elseif os(Linux)
         args.append(contentsOf: ["-Xlinker", "--allow-shlib-undefined"])
@@ -501,8 +506,8 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     // MARK: - Platform helpers
 
     #if os(macOS)
-    private static func macOSSDKPath() throws -> String {
-        if let sdk = ProcessInfo.processInfo.environment["SDKROOT"],
+    private static func macOSSDKPath(environment: [String: String]) throws -> String {
+        if let sdk = environment["SDKROOT"],
            !sdk.isEmpty, FileManager.default.fileExists(atPath: sdk) {
             return sdk
         }
@@ -510,6 +515,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = ["--sdk", "macosx", "--show-sdk-path"]
+        process.environment = environment
         let output = Pipe()
         process.standardOutput = output
         process.standardError = output

@@ -32,8 +32,7 @@ struct EditorRootView: View {
                                 .flex()
                                 .frame(minWidth: 0, minHeight: 0)
                                 .padding(EdgeInsets(trailing: 6))
-                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 6,
-                                                              animatesLayout: true, panelStyle: .soft))
+                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, animatesLayout: true))
                                 .layoutRole("editor-workspace")
                                 .debugName("editor-workspace")
                         }.flex().frame(minWidth: 0, minHeight: 0)
@@ -97,19 +96,6 @@ private struct EditorCallbacks {
                 guard EditorCommandCatalog.isBlockedOnlyByPlayback(entry, in: context) else { return }
                 EditorNotifications.of(app).postBlockedByPlayback(L("Stop the game to edit the scene"), app: app)
             })
-        }
-    }
-}
-
-/// Paints chrome that hosts its own `.surface` background on the window canvas.
-private struct EditorCanvasChrome<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        ThemeReader { theme in
-            var canvas = theme
-            canvas.colors.surface = theme.colors.background
-            return content().theme(canvas)
         }
     }
 }

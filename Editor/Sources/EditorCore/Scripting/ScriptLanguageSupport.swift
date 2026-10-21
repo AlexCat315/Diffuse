@@ -16,6 +16,7 @@ import GuavaUICompose
 public actor ScriptLanguageSupport {
     public typealias DiagnosticsHandler = @Sendable (ScriptLanguageDiagnosticUpdate) -> Void
     public typealias StateHandler = @Sendable (ScriptLanguageServiceUpdate) -> Void
+    public typealias DetailsHandler = @Sendable (ScriptLanguageServiceDetails) -> Void
 
     /// Grace period before an unsolicited edit is pushed to the server. Typing
     /// produces dozens of changes per second; only settled text is worth
@@ -38,11 +39,14 @@ public actor ScriptLanguageSupport {
         var revision: UInt64 = 0
         var protocolVersion = 1
         var changeTask: Task<Void, Never>?
+        var diagnostics: [Data] = []
     }
     private var sessions: [String: DocumentSession] = [:]
     private var diagnosticsHandler: DiagnosticsHandler?
     private var lifecycle = ScriptLanguageLifecycle()
     private var stateRevision: UInt64 = 0
+    private var details = ScriptLanguageServiceDetails(executablePath: "")
+    private var detailsHandler: DetailsHandler?
 
     public init(scriptsDirectoryURL: URL,
                 engineModulePaths: [String],
@@ -54,7 +58,8 @@ public actor ScriptLanguageSupport {
         self.workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: scriptsDirectoryURL,
                                                  engineModulePaths: engineModulePaths,
                                                  clangModuleMapPaths: clangModuleMapPaths,
-                                                 clangIncludePaths: clangIncludePaths)
+                                                 clangIncludePaths: clangIncludePaths,
+                                                 sdkURL: environment["SDKROOT"].map { URL(fileURLWithPath: $0) })
         self.executableURL = executableURL
         self.environment = environment
         self.connectTransport = connect
@@ -64,11 +69,14 @@ public actor ScriptLanguageSupport {
 
     public func start(sources: [ScriptLanguageSource],
                       onDiagnostics: @escaping DiagnosticsHandler,
-                      onStateChange: StateHandler? = nil) async throws {
+                      onStateChange: StateHandler? = nil,
+                      onDetailsChange: DetailsHandler? = nil) async throws {
         await stop()
         lifecycle = ScriptLanguageLifecycle()
         lifecycle.onStateChange = onStateChange
         diagnosticsHandler = onDiagnostics
+        detailsHandler = onDetailsChange
+        details = ScriptLanguageServiceDetails(executablePath: executableURL.path)
         let generation = lifecycle.generation
         setState(.starting)
         do {
@@ -92,7 +100,8 @@ public actor ScriptLanguageSupport {
     public func restart(sources: [ScriptLanguageSource]) async throws {
         let handler = diagnosticsHandler ?? { _ in }
         let stateHandler = lifecycle.onStateChange
-        try await start(sources: sources, onDiagnostics: handler, onStateChange: stateHandler)
+        let detailsHandler = detailsHandler
+        try await start(sources: sources, onDiagnostics: handler, onStateChange: stateHandler, onDetailsChange: detailsHandler)
     }
 
     public func stop() async {
@@ -166,6 +175,13 @@ public actor ScriptLanguageSupport {
         case .ready: logger.info("Swift language server ready")
         case let .unavailable(message): logger.warning("Swift language server unavailable: \(message)")
         }
+        if case let .unavailable(message) = state {
+            details.health = .degraded(message)
+            recordLanguageLog(message, level: .error)
+        } else {
+            if state != .ready { details.health = .checking; details.indexing = nil }
+            recordLanguageLog(String(describing: state))
+        }
         stateRevision &+= 1
         lifecycle.onStateChange?(ScriptLanguageServiceUpdate(revision: stateRevision, state: state))
     }
@@ -212,6 +228,7 @@ public actor ScriptLanguageSupport {
     public func update(scriptID: String, text: TextBuffer, revision: UInt64) async throws {
         guard var session = sessions[scriptID], revision > session.revision else { return }
         session.current = text; session.revision = revision
+        session.diagnostics = []
         session.changeTask?.cancel()
         session.changeTask = isReady ? Task { [weak self] in
             try? await Task.sleep(for: Self.changeDebounce)
@@ -260,6 +277,53 @@ public actor ScriptLanguageSupport {
     }
 
     // MARK: - Internals
+
+    public func languageServiceDetails() -> ScriptLanguageServiceDetails { details }
+
+    func diagnosticPayloads(scriptID: String) -> [Data] { sessions[scriptID]?.diagnostics ?? [] }
+
+    func semanticRequest(_ method: String, scriptID: String,
+                         parameters: (String) throws -> Data) async throws -> ScriptSemanticResponse {
+        guard isReady, let client, let session = sessions[scriptID] else { throw LSPClientError.notRunning }
+        for (identifier, document) in sessions { await sendChange(scriptID: identifier, revision: document.revision) }
+        let context = semanticContext()
+        let connectionID = lifecycle.connectionID
+        let payload = try await client.request(method, params: parameters(session.document.analysisURL.standardizedFileURL.absoluteString),
+                                               timeout: Self.queryTimeout)
+        guard connectionID == lifecycle.connectionID else { throw LSPClientError.notRunning }
+        try validateContext(context)
+        if details.health == .checking, payload != nil { details.health = .healthy; publishDetails() }
+        return ScriptSemanticResponse(payload: payload, context: context)
+    }
+
+    func resolveSemanticRequest(_ method: String, params: Data, context: ScriptSemanticContext) async throws -> Data? {
+        guard isReady, let client else { throw LSPClientError.notRunning }
+        try validateContext(context)
+        let connectionID = lifecycle.connectionID
+        let payload = try await client.request(method, params: params, timeout: Self.queryTimeout)
+        guard connectionID == lifecycle.connectionID else { throw LSPClientError.notRunning }
+        try validateContext(context)
+        return payload
+    }
+
+    private func semanticContext() -> ScriptSemanticContext {
+        var documents: [String: ScriptSemanticContext.Document] = [:]
+        for (identifier, session) in sessions {
+            let document = ScriptSemanticContext.Document(scriptID: identifier, revision: session.revision, version: session.protocolVersion)
+            documents[session.document.analysisURL.standardizedFileURL.absoluteString] = document
+            documents[session.document.sourceURL.standardizedFileURL.absoluteString] = document
+        }
+        return ScriptSemanticContext(documents: documents, generation: lifecycle.generation)
+    }
+
+    private func validateContext(_ context: ScriptSemanticContext) throws {
+        guard context.generation == lifecycle.generation else { throw LSPClientError.notRunning }
+        for document in context.documents.values {
+            guard let session = sessions[document.scriptID], session.revision == document.revision else {
+                throw ScriptLanguageEditError.staleDocument(document.scriptID)
+            }
+        }
+    }
 
     private enum Query {
         case hover
@@ -333,7 +397,9 @@ public actor ScriptLanguageSupport {
     }
 
     private func handle(_ notification: LSPNotification, connectionID: UUID) {
-        guard lifecycle.connectionID == connectionID, let published = ScriptLanguageReplies.parseDiagnostics(notification),
+        guard lifecycle.connectionID == connectionID else { return }
+        handleServiceNotification(notification)
+        guard let published = ScriptLanguageReplies.parseDiagnostics(notification),
               let entry = sessions.first(where: {
                   $0.value.document.analysisURL.standardizedFileURL.absoluteString == published.uri
               }) else { return }
@@ -345,6 +411,17 @@ public actor ScriptLanguageSupport {
            publishedVersion < entry.value.protocolVersion {
             return
         }
+        if let object = try? JSONSerialization.jsonObject(with: notification.params) as? [String: Any],
+           let diagnostics = object["diagnostics"] as? [[String: Any]] {
+            sessions[entry.key]?.diagnostics = diagnostics.compactMap { try? JSONSerialization.data(withJSONObject: $0) }
+        }
+        if let failure = published.diagnostics.first(where: { Self.isEnvironmentFailure($0.message) }) {
+            details.health = .degraded(failure.message)
+            recordLanguageLog(failure.message, level: .error)
+        } else {
+            details.health = .healthy
+            publishDetails()
+        }
         diagnosticsHandler?(ScriptLanguageDiagnosticUpdate(scriptID: entry.key,
                                                            sourceRevision: entry.value.revision,
                                                            version: published.version,
@@ -353,5 +430,48 @@ public actor ScriptLanguageSupport {
 
     private func scriptIdentifier(forDocumentURI uri: String) -> String? {
         sessions.first { $0.value.document.analysisURL.standardizedFileURL.absoluteString == uri }?.key
+    }
+
+    private func handleServiceNotification(_ notification: LSPNotification) {
+        guard let object = try? JSONSerialization.jsonObject(with: notification.params) as? [String: Any] else { return }
+        switch notification.method {
+        case "window/logMessage", "window/showMessage", "guava/stderr":
+            guard let message = object["message"] as? String, !message.isEmpty else { return }
+            let level: ScriptLanguageLogEntry.Level
+            switch object["type"] as? Int {
+            case 1: level = .error
+            case 2: level = .warning
+            case 4: level = .debug
+            default: level = .info
+            }
+            if Self.isEnvironmentFailure(message) { details.health = .degraded(message) }
+            recordLanguageLog(message, level: level)
+        case "$/progress":
+            guard let value = object["value"] as? [String: Any], let kind = value["kind"] as? String else { return }
+            if kind == "end" { details.indexing = nil }
+            else {
+                details.indexing = ScriptIndexProgress(title: value["title"] as? String ?? details.indexing?.title ?? "Indexing",
+                                                       message: value["message"] as? String,
+                                                       percentage: (value["percentage"] as? Int).map { max(0, min(100, $0)) })
+            }
+            publishDetails()
+        default: break
+        }
+    }
+
+    private static func isEnvironmentFailure(_ message: String) -> Bool {
+        let text = message.lowercased()
+        return ["loading the standard library failed", "unable to load standard library", "could not find module",
+                "internal sourcekit error", "failed to load module", "sdk not found"].contains { text.contains($0) }
+    }
+
+    private func recordLanguageLog(_ message: String, level: ScriptLanguageLogEntry.Level = .info) {
+        details.record(message, level: level)
+        detailsHandler?(details)
+    }
+
+    private func publishDetails() {
+        details.revision &+= 1
+        detailsHandler?(details)
     }
 }

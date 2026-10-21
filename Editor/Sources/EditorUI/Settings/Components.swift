@@ -28,7 +28,7 @@ struct SettingsCard<Content: View>: View {
             }
             content
         }.padding(18).frame(width: .percent(100), minWidth: 0)
-            .background(.surface).cornerRadius(10).border(.divider, width: 1)
+            .background(.surface).cornerRadius(10)
     }
 }
 

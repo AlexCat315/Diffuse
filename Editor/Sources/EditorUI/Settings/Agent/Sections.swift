@@ -15,7 +15,6 @@ struct AgentProviderSettings: View {
                 }
             }
             if editor.draft.provider != .none {
-                Divider()
                 Column(alignment: .leading, spacing: 7) {
                     Text(L("Model")).font(.label).foregroundColor(.onSurface)
                     TextField(L("Model"), text: Binding(get: { editor.draft.model }, set: { value in
@@ -44,7 +43,6 @@ struct AgentProviderSettings: View {
             if editor.draft.provider == editor.app.store.aiSettings.provider,
                editor.app.store.aiSettings.provider != .none,
                editor.app.aiCredentialSource(for: editor.app.store.aiSettings.provider) == .operatingSystemStore {
-                Divider()
                 if editor.state.wrappedValue.confirmsKeyRemoval {
                     Alert(L("Remove Stored Key"), message: L("Removing the stored key disables this provider until you add a credential again."), tone: .warning) { _ in } actions: {
                         Button(L("Confirm Remove Key"), role: .destructive, action: editor.removeKey).buttonStyle(.destructive)

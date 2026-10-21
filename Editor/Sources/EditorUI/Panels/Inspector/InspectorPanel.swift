@@ -124,11 +124,10 @@ struct InspectorPanel: View {
                                  minValueWidth: 132,
                                  rowHeight: 24,
                                  rowSpacing: 3,
-                                 sectionSpacing: 0,
-                                 contentPadding: 0,
+                                 sectionSpacing: 8,
+                                 contentPadding: 8,
                                  scrollAxes: .vertical,
                                  emptyText: L("No properties"),
-                                 sectionStyle: .plain,
                                  collapsedSectionIDs: trimmedSearchText.isEmpty ? collapsedIDs : [],
                                  onSectionCollapseChanged: { id, isCollapsed in
                         store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))

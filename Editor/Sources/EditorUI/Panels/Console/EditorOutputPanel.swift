@@ -59,7 +59,6 @@ struct EditorOutputPanel: View {
                 .padding(8)
             }
         }
-        .background(.surfaceSunken)
     }
 
     private func documentProblems(_ document: ScriptWorkspaceDocument) -> AnyView {
@@ -104,7 +103,6 @@ struct EditorOutputPanel: View {
                     .flex(1, shrink: 1)
             }
         }
-        .background(.surfaceSunken)
     }
 }
 

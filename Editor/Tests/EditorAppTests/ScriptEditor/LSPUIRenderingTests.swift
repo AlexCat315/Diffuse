@@ -55,17 +55,17 @@ struct LSPUIRenderingTests {
         #expect(cache.synchronize(buffer: buffer, diagnostics: [diagnostic]) == mapped)
         #expect(cache.synchronize(buffer: buffer, diagnostics: []).overlapping(0..<100).isEmpty)
     }
-    @Test("Completion preserves both edit endpoints, additional import edits and fallback snippet text")
+    @Test("Completion preserves both edit endpoints, additional import edits and snippet tab stops")
     func completionEdits() throws {
         let buffer: TextBuffer = "let 中文 = priTail"
         let request = TextCompletionRequest(buffer: buffer, caretIndex: 12)
         let data = Data(#"{"items":[{"label":"print","kind":3,"insertTextFormat":2,"filterText":"print","textEdit":{"replace":{"start":{"line":0,"character":9},"end":{"line":0,"character":16}},"insert":{"start":{"line":0,"character":9},"end":{"line":0,"character":12}},"newText":"print(${1:value})$0"},"additionalTextEdits":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"newText":"import Foundation\n"}]}]}"#.utf8)
         let source = ScriptLanguageReplies.parseCompletion(data)
         let item = try #require(ScriptCompletionConversion.items(source, for: request).first)
-        #expect(item.insertText == "print(value)" && item.filterText == "print")
+        #expect(item.insertText == "print(${1:value})$0" && item.filterText == "print")
+        #expect(item.insertTextFormat == .snippet)
         #expect(item.replacement == 9..<16)
         #expect(item.additionalEdits == [.init(range: 0..<0, text: "import Foundation\n")])
-        #expect(ScriptCompletionConversion.plainSnippet("call(${1|first,second|}, ${2:arg})$0") == "call(first, arg)")
     }
     @Test("A 200K-line syntax worker leaves the caller free and drops superseded roots")
     @MainActor

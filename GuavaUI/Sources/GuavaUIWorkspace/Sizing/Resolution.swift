@@ -9,7 +9,7 @@ struct WorkspaceLayoutMetrics {
 
     init(theme: WorkspaceTheme = .init(), scaler: TextScaler = .identity) {
         tabHeight = max(26, scaler.scale(theme.tabBarHeight))
-        divider = max(1, theme.splitDividerThickness)
+        divider = max(1, theme.gutter)
     }
 }
 

@@ -10,6 +10,8 @@ struct ScriptPanel: View {
     let app: EditorApplication
 
     private var _workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
+    private let semantic: ScriptSemanticSession
+    private var semanticRevision: Observed<ScriptSemanticSession, UInt64>
     @State private var searchText: TextBuffer = ""
     @State private var hoverPresentation: ScriptEditorHoverPresentation = .hidden
     @State private var hoverSequence = ScriptEditorHoverSequence()
@@ -21,10 +23,14 @@ struct ScriptPanel: View {
     init(app: EditorApplication) {
         self.app = app
         self._workspace = Observed(\.snapshot, on: app.workstation.scripts)
+        let semantic = ScriptSemanticSession(app: app)
+        self.semantic = semantic
+        self.semanticRevision = Observed(\.revision, on: semantic)
     }
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+        let _ = semanticRevision.wrappedValue
+        return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             toolbar
             trustBanner
             Box(direction: .row, alignItems: .stretch, spacing: 0) {
@@ -35,6 +41,7 @@ struct ScriptPanel: View {
                 editorPane.flex(1, shrink: 1, basis: 0)
             }
             .flex(1, shrink: 1)
+            ScriptSemanticResults(session: semantic)
         }
     }
 
@@ -53,6 +60,8 @@ struct ScriptPanel: View {
             }
             .buttonStyle(ToggleButtonStyle(minWidth: 24, height: 24))
             Text("Swift").font(.label).foregroundColor(.onSurfaceVariant)
+            Button("←", isEnabled: semantic.canPerform(.back), tooltip: L("Go Back")) { semantic.perform(.back) }
+                .buttonStyle(.ghost).debugName("script-navigation-back")
             Spacer(minLength: 0)
             languageServiceIndicator
             statusIndicator
@@ -89,6 +98,8 @@ struct ScriptPanel: View {
 
     private var actionEntries: [MenuEntry] {
         [
+            .submenu(MenuSubmenu(id: "script-language-actions", title: L("Language"), entries: semanticEntries)),
+            .separator("language-actions"),
             .item(MenuItem(id: "new", title: L("New Script"), action: newScript)),
             .item(MenuItem(id: "external", title: L("Open External"), isEnabled: selectedScript != nil, action: editInExternalEditor)),
             .item(MenuItem(id: "reveal", title: L("Reveal"), isEnabled: selectedScript != nil, action: revealInFinder)),
@@ -99,6 +110,13 @@ struct ScriptPanel: View {
             .item(MenuItem(id: "delete", title: L("Delete"), isEnabled: selectedScript != nil,
                            role: .destructive, action: deleteSelectedScript)),
         ]
+    }
+
+    private var semanticEntries: [MenuEntry] {
+        ScriptSemanticCommand.allCases.map { command in
+            .item(MenuItem(id: "script-language-\(command)", title: L(command.title),
+                           isEnabled: semantic.canPerform(command), action: { semantic.perform(command) }))
+        }
     }
 
     private var trustBanner: some View {
@@ -219,7 +237,19 @@ struct ScriptPanel: View {
 
     private var editorPane: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            if let selectedScript {
+            if let external = semantic.externalDocument {
+                Row(alignment: .center, spacing: 8) {
+                    Text(external.url.path, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceVariant)
+                    Spacer(minLength: 0)
+                    Text(L("Read Only")).font(.caption).foregroundColor(.onSurfaceMuted)
+                    Button(L("Close"), action: semantic.selectedProjectDocument).buttonStyle(.ghost)
+                }.padding(horizontal: 10, vertical: 5).background(.surface)
+                ScriptCodeEditor(source: .constant(external.source), annotations: .constant(.init()), hover: .constant(.hidden),
+                                 caretLabel: .constant(""), onChange: { _ in }, navigation: external.navigation,
+                                 onHover: { _ in }, onHoverEnd: {}, onCaret: semantic.updateCaret,
+                                 onKey: semantic.handleKey, languageEntries: semanticEntries, isReadOnly: true)
+                    .id(external.url.absoluteString).flex(1, shrink: 1)
+            } else if let selectedScript {
                 editorHeader(selectedScript)
                 externalChangeBanner
                 ScriptCodeEditor(source: sourceText,
@@ -231,6 +261,7 @@ struct ScriptPanel: View {
                                                      set: { app.store.setScriptCaretLabel($0, for: selectedScript.identifier) }),
                                  onChange: { text in
                                      cancelHover()
+                                     semantic.sourceChanged()
                                      app.workstation.scripts.updateSelectedSource(text)
                                  },
                                  diagnostics: workspace.selectedDocument?.diagnostics ?? [],
@@ -240,7 +271,10 @@ struct ScriptPanel: View {
                                      $0.scriptID == selectedScript.identifier ? $0 : nil
                                  },
                                  onHover: requestHover,
-                                 onHoverEnd: cancelHover)
+                                 onHoverEnd: cancelHover,
+                                 onCaret: semantic.updateCaret,
+                                 onKey: semantic.handleKey,
+                                 languageEntries: semanticEntries)
                     .id(selectedScript.identifier)
                     .flex(1, shrink: 1)
                 if let languageServiceMessage {
@@ -391,6 +425,7 @@ struct ScriptPanel: View {
     }
 
     private func select(_ file: DynamicScriptManager.ScriptFile) {
+        semantic.selectedProjectDocument()
         guard file.identifier != workspace.selectedScriptID else { return }
         if app.workstation.scripts.select(scriptID: file.identifier) {
             cancelHover()

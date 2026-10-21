@@ -61,6 +61,7 @@ public struct ScriptWorkspaceSnapshot: Sendable, Equatable {
     public var selectedScriptID: String?
     public var languageServiceState: ScriptLanguageServiceState
     public var isLanguageServiceMessageDismissed = false
+    public var languageServiceDetails: ScriptLanguageServiceDetails? = nil
     public var trustState: ScriptProjectTrustState
     public var trustWarning: String?
 
@@ -92,6 +93,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     private var languageServiceRevision: UInt64 = 0
     private var languageServiceTask: Task<Void, Never>?
     private var languageServiceSuspended = false
+    private var languageEditHistory = ScriptLanguageEditHistory()
 
     public private(set) var snapshot: ScriptWorkspaceSnapshot
 
@@ -168,6 +170,12 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                         guard model.languageServiceGeneration == generation else { return }
                         model.applyLanguageServiceState(update)
                     }
+                }, onDetailsChange: { details in
+                    Task { @MainActor in
+                        guard model.languageServiceGeneration == generation else { return }
+                        model.snapshot.languageServiceDetails = details
+                        model.publish()
+                    }
                 })
                 let current = await MainActor.run {
                     guard model.languageServiceGeneration == generation else { return [] as [ScriptLanguageSource] }
@@ -208,6 +216,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         snapshot.documents[index].source = source
         snapshot.documents[index].diagnostics = []
         snapshot.documents[index].editRevision &+= 1
+        languageEditHistory.redo.removeAll()
         let scriptID = snapshot.documents[index].file.identifier
         publish()
         let revision = snapshot.documents[index].editRevision
@@ -221,6 +230,95 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         guard let index = snapshot.documents.firstIndex(where: { $0.file.identifier == scriptID }),
               snapshot.documents[index].annotations != annotations else { return }
         snapshot.documents[index].annotations = annotations; publish()
+    }
+
+    public var canUndoLanguageEdit: Bool {
+        guard let changes = languageEditHistory.undo.last else { return false }
+        return (try? validateLanguageChanges(changes, undoing: true)) != nil
+    }
+    public var canRedoLanguageEdit: Bool {
+        guard let changes = languageEditHistory.redo.last else { return false }
+        return (try? validateLanguageChanges(changes, undoing: false)) != nil
+    }
+
+    public func applyLanguageEdit(_ edit: ScriptWorkspaceEdit) throws {
+        var seen = Set<String>()
+        var changes: [ScriptLanguageEditHistory.Change] = []
+        for documentEdit in edit.documents {
+            guard seen.insert(documentEdit.scriptID).inserted else { throw ScriptLanguageEditError.duplicateDocument }
+            guard let index = documentIndex(scriptID: documentEdit.scriptID) else {
+                throw ScriptLanguageEditError.staleDocument(documentEdit.scriptID)
+            }
+            let document = snapshot.documents[index]
+            guard document.editRevision == documentEdit.sourceRevision, document.externalChange == .none else {
+                throw ScriptLanguageEditError.staleDocument(document.file.displayName)
+            }
+            let replacements = try documentEdit.edits.map { edit in
+                (range: try ScriptLanguageEditValidation.range(edit.range, in: document.source), text: edit.text)
+            }.sorted { $0.range.lowerBound < $1.range.lowerBound }
+            for offset in replacements.indices.dropFirst() {
+                let previous = replacements[offset - 1].range
+                let current = replacements[offset].range
+                guard previous.upperBound <= current.lowerBound,
+                      previous.lowerBound != current.lowerBound else { throw ScriptLanguageEditError.overlappingEdits }
+            }
+            var after = document.source
+            for replacement in replacements.reversed() {
+                after = after.replace(characterRange: replacement.range, with: replacement.text)
+            }
+            if !document.source.hasSameContents(as: after) {
+                changes.append(.init(scriptID: documentEdit.scriptID, before: document.source, after: after))
+            }
+        }
+        applyLanguageChanges(changes, undoing: false)
+        languageEditHistory.record(changes)
+        publish()
+    }
+
+    public func undoLanguageEdit() throws {
+        guard let changes = languageEditHistory.undo.last else { throw ScriptLanguageEditError.noHistory }
+        try validateLanguageChanges(changes, undoing: true)
+        applyLanguageChanges(changes, undoing: true)
+        languageEditHistory.undo.removeLast()
+        languageEditHistory.redo.append(changes)
+        publish()
+    }
+
+    public func redoLanguageEdit() throws {
+        guard let changes = languageEditHistory.redo.last else { throw ScriptLanguageEditError.noHistory }
+        try validateLanguageChanges(changes, undoing: false)
+        applyLanguageChanges(changes, undoing: false)
+        languageEditHistory.redo.removeLast()
+        languageEditHistory.undo.append(changes)
+        publish()
+    }
+
+    private func validateLanguageChanges(_ changes: [ScriptLanguageEditHistory.Change], undoing: Bool) throws {
+        for change in changes {
+            guard let document = snapshot.documents.first(where: { $0.file.identifier == change.scriptID }),
+                  document.externalChange == .none,
+                  document.source.hasSameContents(as: undoing ? change.after : change.before) else {
+                throw ScriptLanguageEditError.staleDocument(change.scriptID)
+            }
+        }
+    }
+
+    private func applyLanguageChanges(_ changes: [ScriptLanguageEditHistory.Change], undoing: Bool) {
+        var sources: [ScriptLanguageSource] = []
+        for change in changes {
+            guard let index = documentIndex(scriptID: change.scriptID) else { continue }
+            snapshot.documents[index].source = undoing ? change.before : change.after
+            snapshot.documents[index].editRevision &+= 1
+            snapshot.documents[index].diagnostics = []
+            var source = ScriptLanguageSource(file: snapshot.documents[index].file, text: snapshot.documents[index].source)
+            source.revision = snapshot.documents[index].editRevision
+            sources.append(source)
+        }
+        Task { [manager, sources] in
+            for source in sources {
+                try? await manager.updateLanguageSource(scriptID: source.file.identifier, text: source.text, revision: source.revision)
+            }
+        }
     }
 
     @discardableResult

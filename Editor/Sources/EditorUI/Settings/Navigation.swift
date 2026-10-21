@@ -26,13 +26,12 @@ struct SettingsSidebar: View {
             for item in [SettingsCategory.agent, .plugins, .shortcuts] { AnyView(destination(item)) }
             Spacer(minLength: 24)
             destination(.about)
-            Box { Divider() }.padding(horizontal: 16, vertical: 12)
             Row(alignment: .center, spacing: 6) {
                 Box {}.frame(width: 5, height: 5).background(.accent).cornerRadius(3)
                 Text(URL(fileURLWithPath: app.projectDirectory).lastPathComponent, lineLimit: 1)
                     .font(.caption).foregroundColor(.onSurfaceVariant).flex().frame(minWidth: 0)
             }.padding(horizontal: 20, vertical: 12)
-        }.frame(width: 212).background(.surfaceRaised).debugName("settings-sidebar")
+        }.frame(width: 212).debugName("settings-sidebar")
     }
 
     private func destination(_ item: SettingsCategory) -> some View {

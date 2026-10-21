@@ -193,12 +193,14 @@ public final class DynamicScriptManager: @unchecked Sendable {
     public func startLanguageService(
         sources: [ScriptLanguageSource],
         onDiagnostics: @escaping ScriptLanguageSupport.DiagnosticsHandler,
-        onStateChange: ScriptLanguageSupport.StateHandler? = nil
+        onStateChange: ScriptLanguageSupport.StateHandler? = nil,
+        onDetailsChange: ScriptLanguageSupport.DetailsHandler? = nil
     ) async throws {
         guard let languageSupport else {
             throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
         }
-        try await languageSupport.start(sources: sources, onDiagnostics: onDiagnostics, onStateChange: onStateChange)
+        try await languageSupport.start(sources: sources, onDiagnostics: onDiagnostics, onStateChange: onStateChange,
+                                        onDetailsChange: onDetailsChange)
     }
 
     public func updateLanguageSource(scriptID: String, text: TextBuffer, revision: UInt64) async throws {
@@ -255,6 +257,42 @@ public final class DynamicScriptManager: @unchecked Sendable {
     public func definition(scriptID: String,
                            at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
         try await performOnLanguageService { try await $0.definition(scriptID: scriptID, at: position) }
+    }
+
+    public func references(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        try await performOnLanguageService { try await $0.references(scriptID: scriptID, at: position) }
+    }
+
+    public func prepareRename(scriptID: String, at position: ScriptLanguagePosition) async throws -> ScriptRenamePreparation? {
+        try await performOnLanguageService { try await $0.prepareRename(scriptID: scriptID, at: position) }
+    }
+
+    public func rename(scriptID: String, at position: ScriptLanguagePosition, newName: String) async throws -> ScriptWorkspaceEdit {
+        try await performOnLanguageService { try await $0.rename(scriptID: scriptID, at: position, newName: newName) }
+    }
+
+    public func codeActions(scriptID: String, range: ScriptLanguageSpan) async throws -> [ScriptCodeAction] {
+        try await performOnLanguageService { try await $0.codeActions(scriptID: scriptID, range: range) }
+    }
+
+    public func resolveCodeAction(_ action: ScriptCodeAction) async throws -> ScriptCodeAction {
+        try await performOnLanguageService { try await $0.resolveCodeAction(action) }
+    }
+
+    public func signatureHelp(scriptID: String, at position: ScriptLanguagePosition) async throws -> ScriptSignatureHelp? {
+        try await performOnLanguageService { try await $0.signatureHelp(scriptID: scriptID, at: position) }
+    }
+
+    public func documentSymbols(scriptID: String) async throws -> [ScriptDocumentSymbol] {
+        try await performOnLanguageService { try await $0.documentSymbols(scriptID: scriptID) }
+    }
+
+    public func formatting(scriptID: String, tabSize: Int = 4, insertSpaces: Bool = true) async throws -> ScriptWorkspaceEdit {
+        try await performOnLanguageService { try await $0.formatting(scriptID: scriptID, tabSize: tabSize, insertSpaces: insertSpaces) }
+    }
+
+    public func languageServiceDetails() async -> ScriptLanguageServiceDetails? {
+        await languageSupport?.languageServiceDetails()
     }
 
     private func performOnLanguageService<T: Sendable>(

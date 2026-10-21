@@ -94,7 +94,7 @@ struct IntentInputPanel: View {
                 Text(text, lineLimit: 2).font(.body).foregroundColor(.onSurfaceVariant).flex()
                 Icon(UIIcons.Navigation.arrowUpRight, size: 12, color: .onSurfaceMuted)
             }.padding(horizontal: 10, vertical: 10).frame(width: .percent(100), minWidth: 0)
-                .background(.surfaceRaised).cornerRadius(7).border(.divider, width: 1)
+                .background(.surfaceRaised).cornerRadius(10)
         }.buttonStyle(.plain).frame(width: .percent(100))
     }
 

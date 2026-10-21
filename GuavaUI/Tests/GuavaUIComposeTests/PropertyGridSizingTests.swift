@@ -7,7 +7,6 @@ import EngineKernel
 @Suite("Property grid sizing", .serialized)
 struct PropertyGridSizingTests {
     private struct Harness: View {
-        let style: PropertyGridSectionStyle
         @State var isExpanded = false
         var body: some View {
             PropertyGrid([
@@ -21,7 +20,7 @@ struct PropertyGridSizingTests {
                         Box { EmptyView() }.frame(height: 24).debugName("next-value")
                     },
                 ])
-            ], labelWidth: 72, minValueWidth: 80, scrollAxes: .vertical, sectionStyle: style)
+            ], labelWidth: 72, minValueWidth: 80, scrollAxes: .vertical)
         }
     }
 
@@ -76,13 +75,13 @@ struct PropertyGridSizingTests {
     }
 
     @Test("disclosure content grows and shrinks without overlapping following rows",
-          arguments: [Float(200), Float(320)], [PropertyGridSectionStyle.card, .plain])
-    func intrinsicRowsReflow(width: Float, style: PropertyGridSectionStyle) throws { try GlobalTestLock.locked {
+          arguments: [Float(200), Float(320)])
+    func intrinsicRowsReflow(width: Float) throws { try GlobalTestLock.locked {
         let previous = TextEnvironmentHolder.current
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 12, lineHeight: 16)
         defer { TextEnvironmentHolder.current = previous }
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        let harness = Harness(style: style)
+        let harness = Harness()
         graph.install(root: harness)
         for expanded in [false, true, false] {
             harness.$isExpanded.wrappedValue = expanded

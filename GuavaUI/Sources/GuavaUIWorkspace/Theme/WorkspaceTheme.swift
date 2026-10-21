@@ -1,49 +1,32 @@
 import GuavaUICompose
 import GuavaUIRuntime
 
-/// Card surfaces suit dashboards; continuous panes suit dense workbenches.
-public enum WorkspacePanelStyle: Sendable {
-    case card
-    case continuous
-    /// Dense-workbench controls on borderless rounded panes. The split
-    /// thickness becomes an empty gutter, so the window canvas separates
-    /// panes instead of a drawn rule.
-    case soft
-
-    /// Continuous and soft panes share compact tabs and one trailing menu.
-    var usesCompactControls: Bool { self != .card }
-}
-
-/// Workspace metrics. Panels are cards, so the geometry stays compact: two
-/// cards sit *adjacent* across a hairline, and the grab area around that
-/// hairline is drawn on top of the cards instead of reserving canvas between
-/// them. A gutter that reserves margin is what made the panels look detached.
+/// Workspace metrics. Panes are borderless rounded blocks resting on the
+/// window canvas; the gutter between two panes is what separates them, so no
+/// rule is drawn. The grab area of a split overhangs both panes and reserves
+/// no layout space beyond the gutter.
 public struct WorkspaceTheme: Sendable {
     public var sideRailWidth: Float
     public var bottomRailHeight: Float
     public var tabBarHeight: Float
-    /// The hairline drawn between two cards.
-    public var splitDividerThickness: Float
-    /// Extra grab area on each side of the hairline. It overhangs the cards and
-    /// therefore reserves no layout space.
+    /// Empty canvas between two panes.
+    public var gutter: Float
+    /// Extra grab area on each side of a gutter. It overhangs the panes.
     public var splitDividerHitSlop: Float
     public var animatesLayout: Bool
-    public var panelStyle: WorkspacePanelStyle
 
     public init(sideRailWidth: Float = 40,
                 bottomRailHeight: Float = 40,
                 tabBarHeight: Float = 34,
-                splitDividerThickness: Float = 1,
+                gutter: Float = 6,
                 splitDividerHitSlop: Float = 6,
-                animatesLayout: Bool = false,
-                panelStyle: WorkspacePanelStyle = .card) {
+                animatesLayout: Bool = false) {
         self.sideRailWidth = sideRailWidth
         self.bottomRailHeight = bottomRailHeight
         self.tabBarHeight = tabBarHeight
-        self.splitDividerThickness = splitDividerThickness
+        self.gutter = gutter
         self.splitDividerHitSlop = splitDividerHitSlop
         self.animatesLayout = animatesLayout
-        self.panelStyle = panelStyle
     }
 }
 

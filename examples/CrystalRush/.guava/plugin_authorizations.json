@@ -3,7 +3,7 @@
   "records" : [
     {
       "access" : "read",
-      "authorisedAt" : 814249542.837196,
+      "authorisedAt" : 814256439.726428,
       "capabilitySchemaHashes" : {
         "studio.swift-support.language-server" : "9486d1596af88a0ca7af4decb6503f4fc97a0944dbb6b92a7931b587aab0b378"
       },

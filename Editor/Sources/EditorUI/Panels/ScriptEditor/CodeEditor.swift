@@ -26,6 +26,10 @@ struct ScriptCodeEditor: View {
     let onHover: (TextFieldHoverAnchor) -> Void
     /// Pointer left the field; any pending popup must go away.
     let onHoverEnd: () -> Void
+    var onCaret: ((TextFieldCaretState) -> Void)?
+    var onKey: ((KeyEvent) -> Bool)?
+    var languageEntries: [MenuEntry] = []
+    var isReadOnly = false
 
     var body: some View {
         let text = source.wrappedValue
@@ -36,6 +40,7 @@ struct ScriptCodeEditor: View {
             let _ = syntaxSession.request(text)
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 TextField("", text: source) { input in
+                    input.behavior.readOnly = isReadOnly
                     input.layout.axis = .vertical
                     input.layout.wrapsLines = false
                     input.layout.maxVisibleLines = 48
@@ -85,6 +90,7 @@ struct ScriptCodeEditor: View {
                     input.events.onHoverChange = { anchor in handleHover(anchor) }
                     input.events.onCaretChange = { state in handleCaret(state, in: source.wrappedValue) }
                     input.events.onKeyDown = { event in
+                        if onKey?(event) == true { return true }
                         guard event.scancode == ComposeScancode.escape,
                               diagnosticHover != nil || hover.wrappedValue != .hidden else { return false }
                         handleHover(nil); return true
@@ -94,6 +100,7 @@ struct ScriptCodeEditor: View {
                     input.decoration.selectionColor = theme.colors.selection
                 }
                 .textFieldStyle(.editor)
+                .contextMenu(entries: { languageEntries })
                 .font(.mono).font(.monospaced(size: 15)).lineHeight(24)
                 .accessibilityLabel(L("Source code"))
                 .frame(minHeight: 0)
@@ -137,6 +144,7 @@ struct ScriptCodeEditor: View {
         if diagnosticHover != nil || hover.wrappedValue != .hidden { handleHover(nil) }
         let position = ScriptSourceCoordinates.position(in: text, atCharacterIndex: state.caretIndex)
         caretLabel.wrappedValue = "Ln \(position.line + 1), Col \(position.character + 1)"
+        onCaret?(state)
     }
 
     static func countLines(in text: TextBuffer) -> Int { text.lineCount }

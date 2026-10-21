@@ -145,12 +145,10 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(content.minY - group.minY, 38, accuracy: 0.5)
     }
 
-    func testClickingCollapseButtonCollapsesTrailingWithoutLeavingCenterGap() {
+    func testCollapsingTrailingLeavesNoCenterGap() {
         let rig = makeRig(width: 1000, height: 600)
         let beforeCenter = rig.frame(named: "workspace-region-center")
-        let collapseButton = rig.frame(named: "workspace-collapse-trailing")
-
-        rig.click(collapseButton.center)
+        rig.collapse("trailing")
 
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.isCollapsed, true)
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
@@ -250,11 +248,9 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertLessThanOrEqual(bottomRestore.maxX, bottomRail.maxX)
     }
 
-    func testClickingBottomCollapseKeepsRailOnBottomEdge() {
+    func testCollapsingBottomKeepsRailOnBottomEdge() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
-        let collapseButton = rig.frame(named: "workspace-collapse-bottom")
-
-        rig.click(collapseButton.center)
+        rig.collapse("bottom")
 
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.isCollapsed, true)
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
@@ -278,7 +274,7 @@ final class WorkspaceViewTests: XCTestCase {
     func testBottomRailRemainsAllocatedWhenBottomCollapsesBeforeSideRails() {
         let rig = makeRigWithStatusBar(width: 1998, height: 1246)
 
-        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+        rig.collapse("bottom")
 
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
         let chrome = rig.frame(named: "workspace-chrome-chrome.bottom.rail")
@@ -294,7 +290,7 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-trailing"))
 
         let beforeSideCollapseRail = bottomRail
-        rig.click(rig.frame(named: "workspace-collapse-leading").center)
+        rig.collapse("leading")
 
         let afterSideCollapseRail = rig.frame(named: "workspace-rail-bottom")
         XCTAssertEqual(afterSideCollapseRail.height, beforeSideCollapseRail.height, accuracy: 0.5)
@@ -327,7 +323,7 @@ final class WorkspaceViewTests: XCTestCase {
                                    height: 720,
                                    root: root)
 
-        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+        rig.collapse("bottom")
 
         let workspace = rig.frame(named: "workspace")
         let statusBar = rig.frame(named: "editor-status-bar")
@@ -357,7 +353,7 @@ final class WorkspaceViewTests: XCTestCase {
                                                                              width: 1000,
                                                                              height: 640))
 
-        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+        rig.collapse("bottom")
 
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
         let chrome = rig.frame(named: "workspace-chrome-\(WorkspaceSlotID.chromeBottomRail.rawValue)")
@@ -452,12 +448,12 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNotNil(clippedBatch)
     }
 
-    func testClickingLeftRightThenBottomCanCollapseAndRestoreInPlace() {
+    func testCollapsingLeftRightThenBottomRestoresInPlace() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 
-        rig.click(rig.frame(named: "workspace-collapse-leading").center)
-        rig.click(rig.frame(named: "workspace-collapse-trailing").center)
-        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+        rig.collapse("leading")
+        rig.collapse("trailing")
+        rig.collapse("bottom")
 
         XCTAssertEqual(rig.controller.document.groups["leading"]?.isCollapsed, true)
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.isCollapsed, true)
@@ -493,13 +489,13 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-trailing"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-bottom"))
         XCTAssertEqual(leadingSlot.minX, 0, accuracy: 0.5)
-        // Two cards sit adjacent across a single hairline; the splitter's grab
-        // area overhangs both of them, so it straddles that seam rather than
-        // sitting between them.
-        XCTAssertEqual(centerSlot.minX - leadingSlot.maxX, 1, accuracy: 0.5)
-        XCTAssertEqual(trailingSlot.minX - centerSlot.maxX, 1, accuracy: 0.5)
-        XCTAssertEqual(leadingSlot.maxX, leadingSplit.midX, accuracy: 1.0)
-        XCTAssertEqual(centerSlot.maxX, trailingSplit.midX, accuracy: 1.0)
+        // Panes are separated by one gutter; the splitter's grab area is centred
+        // on it and overhangs both panes.
+        let gutter = CGFloat(WorkspaceTheme().gutter)
+        XCTAssertEqual(centerSlot.minX - leadingSlot.maxX, gutter, accuracy: 0.5)
+        XCTAssertEqual(trailingSlot.minX - centerSlot.maxX, gutter, accuracy: 0.5)
+        XCTAssertEqual(leadingSlot.maxX + gutter / 2, leadingSplit.midX, accuracy: 1.0)
+        XCTAssertEqual(centerSlot.maxX + gutter / 2, trailingSplit.midX, accuracy: 1.0)
         XCTAssertEqual(bottomSlot.minX, centerSlot.minX, accuracy: 1.0)
         XCTAssertEqual(bottomSlot.maxX, centerSlot.maxX, accuracy: 1.0)
         XCTAssertEqual(restoredStatusBar.maxY, 640, accuracy: 0.5)
@@ -747,10 +743,9 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNotNil(secondRig.optionalFrame(named: "workspace-rail-bottom"))
     }
 
-    func testCenterGroupDoesNotExposeCollapseAffordance() {
+    func testCenterGroupCannotCollapse() {
         let rig = makeRig(width: 1000, height: 600)
 
-        XCTAssertNil(rig.optionalFrame(named: "workspace-collapse-center"))
         let result = rig.controller.dispatch(.collapse("center"))
 
         XCTAssertFalse(result.didChange)
@@ -762,7 +757,7 @@ final class WorkspaceViewTests: XCTestCase {
                                                                    placement: .tabGroup)))
         rig.pump()
 
-        XCTAssertNil(rig.optionalFrame(named: "workspace-collapse-center"))
+        XCTAssertFalse(rig.controller.dispatch(.collapse("center")).didChange)
     }
 
     func testTabStripExposesTabListPanelAndPositionAndMirrorsArrowsInRTL() {
@@ -927,6 +922,12 @@ private final class WorkspaceViewRig {
         if FocusChainHolder.current === focus {
             FocusChainHolder.current = nil
         }
+    }
+
+    /// What the group menu's Collapse item does.
+    func collapse(_ group: WorkspaceTabGroupID) {
+        _ = controller.dispatch(.collapse(group))
+        pump()
     }
 
     func click(_ point: CGPoint) {
@@ -1133,9 +1134,9 @@ extension WorkspaceViewTests {
         let content = rig.frame(named: "workspace-panel-tab-0")
         XCTAssertEqual(content.minY - group.minY, 68, accuracy: 0.5)
         let overflow = rig.frame(named: "workspace-tabs-overflow-center")
-        let maximize = rig.frame(named: "workspace-maximize-center")
+        // Maximize and Collapse live in this menu, which must stay inside the pane.
         XCTAssertGreaterThan(overflow.width, 0)
-        XCTAssertLessThanOrEqual(maximize.maxX, group.maxX)
+        XCTAssertLessThanOrEqual(overflow.maxX, group.maxX)
         let first = rig.node(named: "workspace-tab-tab-0")
         XCTAssertTrue(first.isTabStop)
         XCTAssertFalse(rig.node(named: "workspace-tab-tab-1").isTabStop)

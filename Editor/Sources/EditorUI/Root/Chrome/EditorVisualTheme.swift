@@ -7,13 +7,14 @@ enum EditorVisualTheme {
     static func make(dark: Bool) -> Theme {
         var theme = dark ? Theme.defaultDark : Theme.defaultLight
         if dark {
-            // Panes are rounded cards on a darker canvas: the gap between two
-            // cards separates them, so the chrome needs no drawn rules.
+            // Three layers, never separated by rules: the canvas, rounded panes
+            // (surface) resting on it, and cards (surfaceRaised) inside panes.
             theme.colors.background = Color(red: 0x0B, green: 0x0E, blue: 0x0D)
             theme.colors.surface = Color(red: 0x16, green: 0x1B, blue: 0x1A)
             theme.colors.surfaceVariant = EditorCodePalette.selectedTab
             theme.colors.surfaceSunken = Color(red: 0x10, green: 0x14, blue: 0x13)
-            theme.colors.surfaceRaised = theme.colors.surface
+            // Cards inside a pane: one step above the pane, never outlined.
+            theme.colors.surfaceRaised = Color(red: 0x1E, green: 0x24, blue: 0x22)
             theme.colors.onSurface = EditorCodePalette.foreground
             theme.colors.onSurfaceVariant = Color(red: 0xA6, green: 0xAE, blue: 0xAA)
             theme.colors.onSurfaceMuted = EditorCodePalette.muted
@@ -26,8 +27,8 @@ enum EditorVisualTheme {
             theme.colors.background = Color(red: 0xE3, green: 0xE8, blue: 0xE5)
             theme.colors.surface = Color(red: 0xFB, green: 0xFC, blue: 0xFB)
             theme.colors.surfaceVariant = Color(red: 0xE9, green: 0xED, blue: 0xEA)
-            theme.colors.surfaceSunken = Color(red: 0xF2, green: 0xF4, blue: 0xF2)
-            theme.colors.surfaceRaised = theme.colors.surface
+            theme.colors.surfaceSunken = .white
+            theme.colors.surfaceRaised = Color(red: 0xF1, green: 0xF4, blue: 0xF2)
             theme.colors.onSurface = Color(red: 0x25, green: 0x30, blue: 0x2B)
             theme.colors.onSurfaceVariant = Color(red: 0x57, green: 0x65, blue: 0x5E)
             theme.colors.onSurfaceMuted = Color(red: 0x6B, green: 0x7A, blue: 0x71)
