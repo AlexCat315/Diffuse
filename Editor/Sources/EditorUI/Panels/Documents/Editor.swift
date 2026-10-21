@@ -66,7 +66,7 @@ struct DocumentsPanel: View {
                 model.open(document.path)
             } label: {
                 Row(alignment: .center, spacing: 6) {
-                    Icon(DocumentKind(path: document.path).icon, size: 12, color: isSelected ? .accent : .onSurfaceMuted)
+                    FileIcon(path: document.path, size: 13)
                     Text(name, lineLimit: 1).font(.label)
                         .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(maxWidth: 180)
@@ -131,13 +131,12 @@ struct DocumentsPanel: View {
 
     private func pathBar(_ document: TextDocument) -> some View {
         let parts = document.path.split(separator: "/").map(String.init)
-        let kind = DocumentKind(path: document.path)
         return Row(alignment: .center, spacing: 6) {
             for (index, part) in parts.enumerated() {
                 if index > 0 { AnyView(Icon(UIIcons.Navigation.chevronRight, size: 9, color: .onSurfaceMuted)) }
                 let isFile = index == parts.count - 1
                 AnyView(Row(alignment: .center, spacing: 4) {
-                    if isFile { Icon(kind.icon, size: 11, color: .onSurfaceVariant) }
+                    if isFile { FileIcon(path: document.path, size: 12) }
                     Text(part, lineLimit: 1).font(.caption).foregroundColor(isFile ? .onSurface : .onSurfaceMuted)
                 })
             }

@@ -171,6 +171,29 @@ struct WorkspacePresetRegressionTests {
         #expect(controller.document.groups["center"]?.isCollapsed == false)
     } }
 
+    @Test("A panel missing from an older saved layout opens and shows from the rail, even with its edge collapsed")
+    func railOpensPanelMissingFromSavedLayout() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-rail-new-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
+        defer { app.shutdown() }
+        let registry = EditorRootViewFactory.makeRegistry(app: app)
+        var saved = EditorWorkspaceDefaults.makeDocument(mode: .documents, preset: .documentsDefault, registry: registry)
+        // A layout saved before the terminal existed: no panel, no tab.
+        saved.panels.removeValue(forKey: "terminal")
+        for id in Array(saved.groups.keys) { saved.groups[id]?.panels.removeAll { $0 == "terminal" } }
+        saved.groups["bottom"]?.activePanelID = "console"
+        let controller = WorkspaceController(document: EditorRootViewFactory.reconciledWorkspaceDocument(
+            saved, registry: EditorWorkspacePanelPolicy.registry(for: .documents, from: registry)))
+        _ = controller.dispatch(.collapse("bottom"))
+        EditorCommandDispatcher.handle(.togglePanel("terminal"), app: app, controller: controller, registry: registry,
+                                       fromCommandPalette: true)
+        let group = try #require(controller.document.groupContaining(panelID: "terminal"))
+        #expect(group.activePanelID == "terminal")
+        #expect(group.isCollapsed == false)
+    } }
+
     @Test("Clicking the rail entry of the showing panel collapses its group; clicking again restores it")
     func railToggle() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-rail-\(UUID())")

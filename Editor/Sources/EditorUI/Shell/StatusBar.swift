@@ -56,7 +56,7 @@ struct EditorStatusBar: View {
             Spacer(minLength: 0)
 
             if !hasScene, let document {
-                Text(DocumentKind(path: document.path).name + " · UTF-8 · " + (document.text.contains("\r\n") ? "CRLF" : "LF"))
+                Text(L(DocumentKind(path: document.path).name) + " · UTF-8 · " + (document.text.contains("\r\n") ? "CRLF" : "LF"))
                     .font(.caption).foregroundColor(.onSurfaceMuted)
                 Divider(axis: .vertical).frame(height: 12)
             }

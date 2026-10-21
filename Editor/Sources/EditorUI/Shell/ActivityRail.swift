@@ -35,6 +35,7 @@ struct EditorActivityRail: View {
             }
             Spacer(minLength: 0)
             panel(UIIcons.Layout.panelBottom, title: L("Console"), id: "console")
+            panel(UIIcons.Editor.terminal, title: L("Terminal"), id: "terminal")
             action(UIIcons.Action.settings, title: L("Settings")) { onCommand(.openSettings) }
                 .debugName("editor-rail-settings")
         }.padding(vertical: 8).frame(width: 44)

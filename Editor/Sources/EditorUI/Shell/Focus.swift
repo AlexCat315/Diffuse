@@ -11,6 +11,8 @@ struct EditorWorkFocus {
     var trail: [String]
     var leaf: String?
     var leafIcon: BundleImageResource?
+    /// Set for a document leaf: its file icon replaces `leafIcon`.
+    var leafPath: String?
     var isDirty = false
 
     init(app: EditorApplication, documents snapshot: EditorDocumentSnapshot) {
@@ -23,7 +25,7 @@ struct EditorWorkFocus {
             let parts = path.split(separator: "/").map(String.init)
             trail = Array(parts.dropLast())
             leaf = parts.last
-            leafIcon = DocumentKind(path: path).icon
+            leafPath = path
             isDirty = snapshot.selected?.isDirty == true
             return
         }
@@ -43,7 +45,8 @@ struct EditorFocusChip: View {
     var body: some View {
         let leaf = focus.leaf ?? ""
         return Row(alignment: .center, spacing: 5) {
-            if let icon = focus.leafIcon { Icon(icon, size: 11, color: .accent) }
+            if let path = focus.leafPath { FileIcon(path: path, size: 12) }
+            else if let icon = focus.leafIcon { Icon(icon, size: 11, color: .accent) }
             Text(leaf, lineLimit: 1).truncated().font(.caption).foregroundColor(.onSurfaceVariant)
                 .flex(0, shrink: 1).frame(minWidth: 0)
         }.padding(horizontal: 6, vertical: 3).background(.surfaceVariant).cornerRadius(4)

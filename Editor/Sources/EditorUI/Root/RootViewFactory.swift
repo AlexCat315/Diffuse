@@ -145,6 +145,7 @@ enum EditorRootViewFactory {
     static func makeRegistry(app: EditorApplication) -> WorkspacePanelRegistry {
         registerPanelIcons()
         let agentDraft = AgentDraft()
+        let terminal = EditorTerminal(projectDirectory: app.projectDirectory)
         return WorkspacePanelRegistry([
             WorkspacePanelDescriptor(id: "hierarchy", title: localizedPanelTitle(for: "hierarchy"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.hierarchy" }) {
                 HierarchyPanel(store: app.store, scene: app.scene)
@@ -162,6 +163,9 @@ enum EditorRootViewFactory {
             },
             WorkspacePanelDescriptor(id: "console", title: localizedPanelTitle(for: "console"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.console" }) {
                 EditorOutputPanel(app: app)
+            },
+            WorkspacePanelDescriptor(id: "terminal", title: localizedPanelTitle(for: "terminal"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.terminal" }) {
+                EditorTerminalPanel(terminal: terminal)
             },
             WorkspacePanelDescriptor(id: "assets", title: localizedPanelTitle(for: "assets"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.assets" }) {
                 AssetBrowserPanel(app: app)
@@ -220,6 +224,7 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.scripts", panelIcon("script"))
         WorkspacePanelIconCatalog.register("panel.journal", UIIcons.Editor.gitCommit)
         WorkspacePanelIconCatalog.register("panel.files", UIIcons.File.folder)
+        WorkspacePanelIconCatalog.register("panel.terminal", UIIcons.Editor.terminal)
         WorkspacePanelIconCatalog.register("panel.documents", UIIcons.File.fileCode)
     }
 
@@ -296,6 +301,8 @@ enum EditorRootViewFactory {
             return L("Scene")
         case "console":
             return L("Console")
+        case "terminal":
+            return L("Terminal")
         case "assets":
             return L("Assets")
         case "intent-input":

@@ -1010,3 +1010,6 @@
 "Amber" = "Amber";
 "Orange" = "Orange";
 "Green" = "Green";
+"Terminal" = "Terminal";
+"The shell has exited." = "The shell has exited.";
+"Restart" = "Restart";

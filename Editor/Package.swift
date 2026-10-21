@@ -53,6 +53,7 @@ let package = Package(
         .package(path: "../Engine/Media"),
         .package(path: "Documents"),
         .package(path: "../GuavaUI"),
+        .package(path: "../GuavaUI/Terminal"),
     ],
     targets: [
         // MARK: - Editor Domain
@@ -111,6 +112,7 @@ let package = Package(
                 .product(name: "GuavaUI", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
+                .product(name: "GuavaUITerminal", package: "Terminal"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "NativeRHI", package: "Engine"),

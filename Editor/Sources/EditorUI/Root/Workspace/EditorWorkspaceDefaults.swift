@@ -65,7 +65,7 @@ enum EditorWorkspaceDefaults {
             ("leading", ["hierarchy", "assets", "files"], preset.mode == .scripting || preset.mode == .modeling ? "assets" : "hierarchy"),
             ("center", ["viewport", "scripts"], "viewport"),
             ("trailing", ["inspector", "intent-input", "journal"], "inspector"),
-            ("bottom", ["console", "animation", "render-pipeline", "developer-tools"],
+            ("bottom", ["console", "terminal", "animation", "render-pipeline", "developer-tools"],
              defaultBottomPanelID(for: preset)),
         ]
         for (id, panelIDs, active) in definitions {

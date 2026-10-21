@@ -134,7 +134,8 @@ struct EditorTitleBar: View {
             }
             if let leaf = focus.leaf {
                 if !focus.trail.isEmpty { Icon(UIIcons.Navigation.chevronRight, size: 9, color: .onSurfaceMuted) }
-                if let icon = focus.leafIcon { Icon(icon, size: 12, color: .onSurfaceVariant) }
+                if let path = focus.leafPath { FileIcon(path: path, size: 13) }
+                else if let icon = focus.leafIcon { Icon(icon, size: 12, color: .onSurfaceVariant) }
                 Text(leaf, lineLimit: 1).font(.caption).foregroundColor(.onSurface)
                 if focus.isDirty {
                     Box {}.frame(width: 6, height: 6).background(.warning).cornerRadius(3)

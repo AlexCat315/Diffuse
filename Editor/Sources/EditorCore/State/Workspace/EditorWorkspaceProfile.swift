@@ -26,17 +26,17 @@ public struct EditorWorkspaceProfile: Sendable {
 
     public static let builtInPanelIDs: Set<String> = [
         "viewport", "hierarchy", "inspector", "assets", "console", "intent-input",
-        "journal", "files", "documents", "media", "scripts", "developer-tools", "animation", "render-pipeline",
+        "journal", "files", "documents", "media", "scripts", "developer-tools", "animation", "render-pipeline", "terminal",
     ]
 
     public static func profile(for mode: EditorWorkspaceMode) -> Self {
-        let shared: Set<String> = ["viewport", "hierarchy", "inspector", "assets", "console",
+        let shared: Set<String> = ["viewport", "hierarchy", "inspector", "assets", "console", "terminal",
                                    "intent-input", "journal", "render-pipeline"]
         switch mode {
         case .documents:
-            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "intent-input", "journal"])
+            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "intent-input", "journal"])
         case .video:
-            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "intent-input", "journal"])
+            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "terminal", "intent-input", "journal"])
         case .level, .scripting:
             return Self(domain: .game,
                         features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],

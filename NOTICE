@@ -8,3 +8,8 @@ license (see README.md for the dependency list and their upstream sources):
 
   - Yoga, FreeType, HarfBuzz, SDL3, Imath, OpenEXR, OpenColorIO, JoltPhysics,
     Wasmtime, FFmpeg (LGPL configuration; see Engine/Media/README.md), lunasvg, plutovg, libwebp, sharpyuv.
+
+File-type icons in Editor/Sources/EditorUI/Resources/FileIcons are taken from
+Catppuccin Icons for VS Code (https://github.com/catppuccin/vscode-icons),
+Copyright (c) 2023 Catppuccin, licensed under the MIT License (see
+LICENSE-catppuccin-vscode-icons.txt in that directory).

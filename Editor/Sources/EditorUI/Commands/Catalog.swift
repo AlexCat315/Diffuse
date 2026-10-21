@@ -355,6 +355,7 @@ private struct Builder {
             entry("assets.show", "Content Browser", "assets 资源浏览器", command: .showAssets),
             .separator,
             panel("console", keywords: "console log 控制台 日志"),
+            panel("terminal", keywords: "terminal shell command line 终端 命令行"),
             entry("problems.show", "Problems", "errors diagnostics 问题诊断错误", command: .showProblems),
             panel("animation", keywords: "animation 动画"),
             panel("render-pipeline", keywords: "render 渲染"),

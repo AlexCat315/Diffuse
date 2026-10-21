@@ -85,8 +85,7 @@ struct DocumentFilesPanel: View {
     private func row(_ node: DocumentFileNode, isSelected: Bool, isExpanded: Bool,
                      isOpen: Bool, isDirty: Bool) -> some View {
         Row(alignment: .center, spacing: 6) {
-            Icon(node.isFolder ? (isExpanded ? UIIcons.File.folderOpen : UIIcons.File.folder) : DocumentKind(path: node.path).icon,
-                 size: 13, color: node.isFolder ? .onSurfaceMuted : isSelected ? .accent : .onSurfaceVariant)
+            FileIcon(path: node.path, isFolder: node.isFolder, isOpen: isExpanded, size: 14)
             Text(node.name, lineLimit: 1).font(.body)
                 .foregroundColor(isSelected || isOpen ? .onSurface : .onSurfaceVariant)
                 .flex(1, shrink: 1).frame(minWidth: 0)

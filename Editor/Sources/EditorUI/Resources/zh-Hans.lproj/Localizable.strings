@@ -1064,3 +1064,6 @@
 "Amber" = "琥珀色";
 "Orange" = "橙色";
 "Green" = "绿色";
+"Terminal" = "终端";
+"The shell has exited." = "终端进程已退出。";
+"Restart" = "重新启动";
