@@ -322,7 +322,6 @@ public final class EditorApplication: @unchecked Sendable {
         let wantsContinuousFrames = EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: state.viewport.realtimeEnabled,
             playbackState: state.timing.playbackState,
-            sceneHasActiveParticles: state.viewport.realtimeEnabled && scene.hasActiveParticles(),
             continuousViewportInteractionActive: continuousViewportInteractionActive
         )
         let renderViewport = renderGate.shouldRender(

@@ -702,21 +702,35 @@ public final class DrawList {
     private func applyMasks(from baseIndex: UInt32, count: UInt32) -> UInt32 {
         let start = Int(baseIndex), end = start + Int(count)
         let active = masks.indices.filter { masks[$0].radius > 0 }
+        var minX = Float.infinity, minY = Float.infinity
+        var maxX = -Float.infinity, maxY = -Float.infinity
+        for index in indices[start..<end] {
+            let vertex = vertices[Int(index)]
+            minX = min(minX, vertex.posX)
+            minY = min(minY, vertex.posY)
+            maxX = max(maxX, vertex.posX)
+            maxY = max(maxY, vertex.posY)
+        }
+        let bounds = UIRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        if active.allSatisfy({ masks[$0].contains(bounds) }) { return count }
+        let outlines = active.map { maskOutlines[$0] }
         let emitted = Array(indices[start..<end])
         var kept: [UInt32] = []
         kept.reserveCapacity(emitted.count)
         var changed = false
         for triangle in stride(from: 0, to: emitted.count - 2, by: 3) {
-            let ids = [emitted[triangle], emitted[triangle + 1], emitted[triangle + 2]]
-            let corners = ids.map { vertices[Int($0)] }
-            let xs = corners.map(\.posX), ys = corners.map(\.posY)
-            let bounds = UIRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+            let a = vertices[Int(emitted[triangle])]
+            let b = vertices[Int(emitted[triangle + 1])]
+            let c = vertices[Int(emitted[triangle + 2])]
+            let minX = min(a.posX, min(b.posX, c.posX)), minY = min(a.posY, min(b.posY, c.posY))
+            let maxX = max(a.posX, max(b.posX, c.posX)), maxY = max(a.posY, max(b.posY, c.posY))
+            let bounds = UIRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
             if active.allSatisfy({ masks[$0].contains(bounds) }) {
-                kept.append(contentsOf: ids)
+                kept.append(contentsOf: emitted[triangle..<(triangle + 3)])
                 continue
             }
             changed = true
-            let polygon = RoundedClipper.clip(corners, against: active.map { maskOutlines[$0] })
+            let polygon = RoundedClipper.clip([a, b, c], against: outlines)
             guard polygon.count >= 3 else { continue }
             let first = UInt32(vertices.count)
             vertices.append(contentsOf: polygon)

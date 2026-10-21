@@ -83,10 +83,13 @@ public struct AccessibilityElement {
 
 public enum AccessibilityTree {
     public static func snapshot(root: Node, viewport: CGRect? = nil, resolveValues: Bool = true) -> [AccessibilityElement] {
-        let elements = collect(root, transform: root.absoluteTransform, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues)
+        var elements: [AccessibilityElement] = []
+        collect(root, transform: root.absoluteTransform, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues, into: &elements)
         var byIdentifier: [String: AccessibilityElement] = [:]
+        var hasDescriptions = false
         func index(_ list: [AccessibilityElement]) {
             for element in list {
+                hasDescriptions = hasDescriptions || element.semantics.describedBy != nil
                 if !element.semantics.identifier.isEmpty {
                     byIdentifier[element.semantics.identifier] = byIdentifier[element.semantics.identifier] ?? element
                 }
@@ -94,6 +97,7 @@ public enum AccessibilityTree {
             }
         }
         index(elements)
+        guard hasDescriptions else { return elements }
         func resolve(_ list: [AccessibilityElement]) -> [AccessibilityElement] {
             list.map { element in
                 var semantics = element.semantics
@@ -113,29 +117,36 @@ public enum AccessibilityTree {
         }
         return resolve(elements)
     }
-    private static func collect(_ node: Node, transform: Affine2D, clip: CGRect, combinesText: Bool, resolveValues: Bool) -> [AccessibilityElement] {
+    private static func collect(_ node: Node, transform: Affine2D, clip: CGRect, combinesText: Bool, resolveValues: Bool, into output: inout [AccessibilityElement]) {
         guard node.isLayoutVisible, node.isInteractionEnabled, node.opacity > 0, node.subtreeOpacity > 0,
-              node.accessibility?.isHidden != true else { return [] }
+              node.accessibility?.isHidden != true else { return }
         // Carry window placement down the traversal instead of walking every
         // node's ancestor chain again. Scroll offsets affect children only.
         let bounds = CGRect(x: CGFloat(transform.e), y: CGFloat(transform.f),
                             width: node.frame.width * CGFloat(abs(transform.a)),
                             height: node.frame.height * CGFloat(abs(transform.d)))
         let childClip = node.clipsToBounds ? clip.intersection(bounds) : clip
-        guard !childClip.isNull else { return [] }
+        guard !childClip.isNull else { return }
         let semantic = node.accessibility
         var content = transform
         content.e -= Float(node.contentOffset.x) * transform.a
         content.f -= Float(node.contentOffset.y) * transform.d
-        let children = node.children.flatMap {
-            collect($0, transform: $0.placementStep(scrolling: .zero).followed(by: content),
-                    clip: childClip, combinesText: combinesText || semantic?.combinesChildren == true,
-                    resolveValues: resolveValues)
+        func appendChildren(into destination: inout [AccessibilityElement]) {
+            for child in node.children {
+                collect(child, transform: child.placementStep(scrolling: .zero).followed(by: content),
+                        clip: childClip, combinesText: combinesText || semantic?.combinesChildren == true,
+                        resolveValues: resolveValues, into: &destination)
+            }
         }
-        guard var semantic else { return children }
-        if combinesText && semantic.role == .staticText { return children }
         let frame = bounds.intersection(clip)
-        guard !frame.isNull, frame.width > 0, frame.height > 0 else { return children }
+        guard var semantic,
+              !(combinesText && semantic.role == .staticText),
+              !frame.isNull, frame.width > 0, frame.height > 0 else {
+            appendChildren(into: &output)
+            return
+        }
+        var children: [AccessibilityElement] = []
+        appendChildren(into: &children)
         if semantic.label.isEmpty && semantic.combinesChildren {
             semantic.label = resolvedLabel(for: node)
         }
@@ -145,7 +156,7 @@ public enum AccessibilityTree {
         }
         if resolveValues, node.accessibilityValueProvider != nil { semantic.value = node.resolvedAccessibilityValue }
         else if semantic.state.isSecure { semantic.value = String(repeating: "•", count: semantic.value.count) }
-        return [AccessibilityElement(node: node, semantics: semantic, frame: frame, children: children)]
+        output.append(AccessibilityElement(node: node, semantics: semantic, frame: frame, children: children))
     }
     /// Resolves `describedBy` links for clients that read semantics directly
     /// instead of walking `snapshot` (for example DevTools node queries).

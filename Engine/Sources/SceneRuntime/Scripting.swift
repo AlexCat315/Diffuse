@@ -79,14 +79,16 @@ public struct RuntimeScriptPhaseContext {
         _ type: Component.Type,
         for entity: EntityID
     ) -> Component? {
-        worldPointer.pointee.component(type, for: entity)
+        if type == WorldTransform.self { refreshTransformsIfNeeded() }
+        return worldPointer.pointee.component(type, for: entity)
     }
 
     public func hasComponent<Component: RuntimeComponent>(
         _ type: Component.Type,
         for entity: EntityID
     ) -> Bool {
-        worldPointer.pointee.hasComponent(type, for: entity)
+        if type == WorldTransform.self { refreshTransformsIfNeeded() }
+        return worldPointer.pointee.hasComponent(type, for: entity)
     }
 
     @discardableResult
@@ -103,7 +105,8 @@ public struct RuntimeScriptPhaseContext {
         for entity: EntityID,
         _ body: (inout Component) -> Void
     ) -> Bool {
-        worldPointer.pointee.updateComponent(type, for: entity, body)
+        if type == WorldTransform.self { refreshTransformsIfNeeded() }
+        return worldPointer.pointee.updateComponent(type, for: entity, body)
     }
 
     @discardableResult
@@ -111,7 +114,8 @@ public struct RuntimeScriptPhaseContext {
         _ type: Component.Type,
         from entity: EntityID
     ) -> Component? {
-        worldPointer.pointee.removeComponent(type, from: entity)
+        if type == WorldTransform.self { refreshTransformsIfNeeded() }
+        return worldPointer.pointee.removeComponent(type, from: entity)
     }
 
     public func localTransform(for entity: EntityID) -> LocalTransform? {
@@ -125,9 +129,9 @@ public struct RuntimeScriptPhaseContext {
 
     @discardableResult
     public func setLocalTransform(_ transform: LocalTransform, for entity: EntityID) -> Bool {
-        let updated = worldPointer.pointee.setLocalTransform(transform, for: entity)
-        refreshTransformsIfNeeded()
-        return updated
+        // World-space readers flush pending writes; the schedule also flushes
+        // at phase boundaries so multiple local edits share one propagation.
+        worldPointer.pointee.setLocalTransform(transform, for: entity)
     }
 
     @discardableResult
@@ -138,9 +142,7 @@ public struct RuntimeScriptPhaseContext {
         transform.matrix.columns.3.x += delta.x
         transform.matrix.columns.3.y += delta.y
         transform.matrix.columns.3.z += delta.z
-        let updated = worldPointer.pointee.setLocalTransform(transform, for: entity)
-        refreshTransformsIfNeeded()
-        return updated
+        return worldPointer.pointee.setLocalTransform(transform, for: entity)
     }
 
     public func parent(of entity: EntityID) -> EntityID? {

@@ -28,6 +28,46 @@ struct ScriptSpawningTests {
         #expect(destination.snapshot.entityCount == 4)
     }
 
+    @Test("Batched script transforms reach descendants at the phase boundary")
+    func flushesTransformBatch() {
+        let scripts = ScriptRuntime()
+        let handle = scripts.register(Script().onUpdate { context in
+            for x in 1...32 {
+                _ = context.setLocalTransform(LocalTransform(translation: SIMD3(Float(x), 0, 0)))
+            }
+        })
+        var scene = SceneRuntime()
+        scene.setScriptDriver(scripts)
+        let parent = scene.createEntity()
+        let child = scene.createEntity()
+        _ = scene.setParent(parent, for: child)
+        _ = scene.setLocalTransform(LocalTransform(translation: SIMD3(0, 2, 0)), for: child)
+        _ = scene.setComponent(Collider(shape: .sphere(radius: 0.25, center: .zero)), for: child)
+        _ = scene.setComponent(ScriptComponent(handle), for: parent)
+        _ = scene.tick()
+        #expect(scene.worldTransform(for: child)?.translation == SIMD3(32, 2, 0))
+        #expect(scene.spatialIndex.entries.contains { $0.entity == child })
+    }
+
+    @Test("Physics queries see pending local transform writes inside a callback")
+    func queriesPendingTransforms() {
+        let scripts = ScriptRuntime()
+        let handle = scripts.register(Script().onStart { context in
+            let target = context.createEntity()
+            _ = context.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: target)
+            _ = context.setLocalTransform(LocalTransform(translation: SIMD3(5, 0, 0)), for: target)
+            let query = PhysicsRaycastQuery(origin: SIMD3(3, 0, 0), direction: SIMD3(1, 0, 0), maxDistance: 4)
+            #expect(context.physicsRaycast(query)?.entity == target)
+            _ = context.translate(SIMD3(10, 0, 0), for: target)
+            #expect(context.physicsRaycast(query) == nil)
+        })
+        var scene = SceneRuntime()
+        scene.setScriptDriver(scripts)
+        let owner = scene.createEntity()
+        _ = scene.setComponent(ScriptComponent(handle), for: owner)
+        _ = scene.tick()
+    }
+
     @Test("a script creates and configures an entity visible to the same frame")
     func createsEntity() {
         let scripts = ScriptRuntime()

@@ -125,31 +125,26 @@ struct EditorViewportRenderGateTests {
         #expect(EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: false,
             playbackState: .stopped,
-            sceneHasActiveParticles: false,
             continuousViewportInteractionActive: true
         ))
         #expect(!EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: false,
             playbackState: .stopped,
-            sceneHasActiveParticles: false,
             continuousViewportInteractionActive: false
         ))
         #expect(EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: true,
             playbackState: .stopped,
-            sceneHasActiveParticles: false,
             continuousViewportInteractionActive: false
         ))
         #expect(EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: false,
             playbackState: .playing,
-            sceneHasActiveParticles: false,
             continuousViewportInteractionActive: false
         ))
         #expect(!EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: false,
-            playbackState: .stopped,
-            sceneHasActiveParticles: true,
+            playbackState: .paused,
             continuousViewportInteractionActive: false
         ))
     }

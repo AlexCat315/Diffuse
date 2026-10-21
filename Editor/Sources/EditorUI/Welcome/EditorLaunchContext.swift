@@ -139,11 +139,8 @@ final class EditorLaunchContext: @unchecked Sendable {
             EditorViewportFrameDrive.wantsContinuousFrames(
                 viewportRealtimeEnabled: state.viewport.realtimeEnabled,
                 playbackState: state.timing.playbackState,
-                sceneHasActiveParticles: false,
                 continuousViewportInteractionActive: EditorViewportInputController.shared.isContinuousSceneInteractionActive)
         } ?? false
-        // Particles are driven only during realtime preview or playback,
-        // both of which already request continuous frames above.
         if let mode = frameCadence.update(continuous: continuous, vsyncEnabled: state?.vsyncMode.isEnabled ?? true) {
             display.setFrameRateMode(mode)
         }

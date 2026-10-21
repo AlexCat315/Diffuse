@@ -47,6 +47,10 @@ extension RuntimeWorldSchedule {
                 }
             }
         }
+        if world.hierarchyNeedsPropagation() {
+            let report = world.propagateTransforms(using: jobSystem)
+            frame.jobs.record(report, for: .inputAndPrePhysicsScripts)
+        }
         advanceDestructionPrePhysics(
             in: &world,
             deltaTimeSeconds: deltaTimeSeconds,
@@ -479,11 +483,11 @@ extension RuntimeWorldSchedule {
                 }
             }
         }
-        writeRagdollPhysicsToAnimation(in: &world)
         if world.hierarchyNeedsPropagation() {
             let report = world.propagateTransforms(using: jobSystem)
             frame.jobs.record(report, for: .postPhysicsScripts)
         }
+        writeRagdollPhysicsToAnimation(in: &world)
         advanceParticleEmitters(world: &world, deltaTimeSeconds: deltaTimeSeconds)
     }
 
