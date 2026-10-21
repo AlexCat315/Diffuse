@@ -149,13 +149,14 @@ RootView().theme(palette, transition: .circular(), value: themeMode)
 | --- | --- |
 | Button 内置 chrome | `theme.motion.pressScale`（默认 0.97）与几何弹簧；外层激活区域保持稳定 |
 | Toggle | 拇指使用可继承速度的几何弹簧，填色保持有界语义动画；Checkbox 的勾选进度保持有界 |
+| 其他按钮与行样式 | Segment、Tab、侧栏、表格行 / 表头、命令面板行、建议行、单选、步进、日历、链接、手风琴标题、代码行号栏按钮和工作区面板标签，都在 hover / 按下 / 选中 / 焦点变化时以 `.fast` 过渡 |
 | Popover / ContextMenu | `theme.motion.surface` 的进入 / 退出时长与 revealScale；默认 200ms / 90ms / 0.94，配合 6pt 位移与淡入淡出 |
 | Spinner / Progress / Skeleton / loading Button | 节点拥有的通用 repeat 控制器，停止和卸载立即清理 |
 | Gallery Progress | NumericText 百分比过渡 |
 | Gallery 主题切换 | 从主题按钮中心向外扩散的 GPU 圆形揭示，默认 1s |
 | Gallery Animation | 曲线、双向尺寸、关键帧、普通域相位、循环、共享几何、带速度拖拽和完成回调 |
 
-主题还提供 `.semantic(.fast/.medium/.slow/.snappy/.bouncy/.smooth/.entering/.exiting, in: theme)`。fast / medium / slow 默认 80 / 180 / 320ms，entering 与 exiting 使用 decelerate / accelerate 曲线。Popover 按 leading / trailing 选择左上 / 右上锚点，右键菜单以指针处左上为锚点；靠窗口边缘仍由 Portal 限位，子菜单保持即时展开。
+主题还提供 `.semantic(.fast/.medium/.slow/.snappy/.bouncy/.smooth/.entering/.exiting, in: theme)`。没有样式配置可读主题的普通视图用 `.animation(motion: .fast, value:)`，在触发时按节点所在主题解析时长与曲线。fast / medium / slow 默认 80 / 180 / 320ms，entering 与 exiting 使用 decelerate / accelerate 曲线。Popover 按 leading / trailing 选择左上 / 右上锚点，右键菜单以指针处左上为锚点；靠窗口边缘仍由 Portal 限位，子菜单保持即时展开。
 
 事件驱动宿主在提交或布局创建首个动画后立即进入下一轮，开启原生刷新或帧率回退，不先等待 250ms 空闲超时。毛玻璃合成透明度与表面、父节点和 subtreeOpacity 一起相乘，包含缓存与自定义缩放绘制；全透明时跳过模糊采样，避免“先出现空毛玻璃板，再突然出现文字”的开合表现。
 
