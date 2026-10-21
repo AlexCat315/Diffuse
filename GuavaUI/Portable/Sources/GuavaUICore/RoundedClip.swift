@@ -78,6 +78,16 @@ enum RoundedClipper {
                 let a = outline[index], b = outline[(index + 1) % outline.count]
                 // Clockwise in y-down screen space: inside is to the right.
                 func side(_ v: UIVertex) -> Float { (b.x - a.x) * (v.posY - a.y) - (b.y - a.y) * (v.posX - a.x) }
+                // Most outline edges do not intersect this polygon. Preserve
+                // its storage instead of copying it once per straight edge.
+                var minimumSide = Float.infinity, maximumSide = -Float.infinity
+                for vertex in polygon {
+                    let distance = side(vertex)
+                    minimumSide = min(minimumSide, distance)
+                    maximumSide = max(maximumSide, distance)
+                }
+                if minimumSide >= 0 { continue }
+                if maximumSide < 0 { return [] }
                 var next: [UIVertex] = []
                 next.reserveCapacity(polygon.count + 2)
                 for (position, current) in polygon.enumerated() {

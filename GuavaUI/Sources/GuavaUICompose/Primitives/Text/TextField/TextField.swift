@@ -1168,26 +1168,16 @@ public struct TextField: View {
                                     env: TextEnvironment,
                                     font: Font,
                                     list: DrawList) {
-        let caret = source.utf8Offset(forCharacterIndex: min(source.characterCount, max(0, caretIndex)))
-        let windowStart = max(0, caret - 65_536)
-        let windowEnd = min(source.utf8Length, caret + 65_536)
-        guard windowEnd > windowStart else { return }
-        let bytes = source.utf8Bytes(inUTF8Range: windowStart..<windowEnd)
-        let code = Self.codeMask(bytes)
-        let localCaret = caret - windowStart
-        var target: Int?
-        if localCaret < bytes.count, code[localCaret], Self.isBracket(bytes[localCaret]) {
-            target = localCaret
-        } else if localCaret > 0, code[localCaret - 1], Self.isBracket(bytes[localCaret - 1]) {
-            target = localCaret - 1
-        }
-        guard let target, let localMatch = Self.matchingBracket(in: bytes, code: code, at: target) else { return }
-        let pair = [windowStart + target, windowStart + localMatch]
+        let matcher: TextBracketMatching
+        if let existing = node.firstResource(TextBracketMatching.self) { matcher = existing }
+        else { matcher = TextBracketMatching(); node.addResource(matcher) }
+        let pair = matcher.pair(in: source, caretIndex: caretIndex)
+        guard !pair.isEmpty else { return }
         let color = node.theme.colors.accent.multipliedAlpha(node.opacity * 0.18)
-        for (offset, localOffset) in zip(pair, [target, localMatch]) {
+        for offset in pair {
             let glyph = layout.lines.lazy.flatMap(\.glyphs).first { Int($0.cluster) == offset }
             guard let glyph else { continue }
-            let bracket = String(decoding: bytes[localOffset..<localOffset + 1], as: UTF8.self)
+            let bracket = String(decoding: source.utf8Bytes(inUTF8Range: offset..<(offset + 1)), as: UTF8.self)
             let width = env.cachedLayout(text: bracket, font: font, lineHeight: lineHeight,
                                          maxWidth: .infinity, alignment: .leading).totalWidth
             guard width > 0 else { continue }
@@ -1197,98 +1187,6 @@ public struct TextField: View {
                        width: width + 2, height: max(0, lineHeight - 2)),
                 radius: 3, color: color)
         }
-    }
-
-    private static func isBracket(_ byte: UInt8) -> Bool {
-        byte == 40 || byte == 41 || byte == 91 || byte == 93 || byte == 123 || byte == 125
-    }
-
-    private static func codeMask(_ bytes: [UInt8]) -> [Bool] {
-        var mask = Array(repeating: true, count: bytes.count)
-        var index = 0
-        while index < bytes.count {
-            let byte = bytes[index]
-            if byte == 47, index + 1 < bytes.count, bytes[index + 1] == 47 {
-                while index < bytes.count, bytes[index] != 10 {
-                    mask[index] = false
-                    index += 1
-                }
-                continue
-            }
-            if byte == 47, index + 1 < bytes.count, bytes[index + 1] == 42 {
-                mask[index] = false; mask[index + 1] = false
-                index += 2
-                while index < bytes.count {
-                    mask[index] = false
-                    if bytes[index] == 42, index + 1 < bytes.count, bytes[index + 1] == 47 {
-                        index += 1
-                        mask[index] = false
-                        index += 1
-                        break
-                    }
-                    index += 1
-                }
-                continue
-            }
-            if byte == 34 {
-                mask[index] = false
-                index += 1
-                while index < bytes.count {
-                    mask[index] = false
-                    if bytes[index] == 92 {
-                        index += 1
-                        if index < bytes.count { mask[index] = false }
-                    } else if bytes[index] == 34 {
-                        index += 1
-                        break
-                    }
-                    index += 1
-                }
-                continue
-            }
-            index += 1
-        }
-        return mask
-    }
-
-    private static func matchingBracket(in bytes: [UInt8], code: [Bool], at index: Int) -> Int? {
-        let openers: [UInt8: UInt8] = [40: 41, 91: 93, 123: 125]
-        let closers: [UInt8: UInt8] = [41: 40, 93: 91, 125: 123]
-        let byte = bytes[index]
-        if let close = openers[byte] {
-            var stack: [UInt8] = [close]
-            var cursor = index + 1
-            while cursor < bytes.count {
-                guard code[cursor] else { cursor += 1; continue }
-                let next = bytes[cursor]
-                if openers[next] != nil {
-                    stack.append(openers[next]!)
-                } else if closers[next] != nil {
-                    guard stack.last == next else { return nil }
-                    stack.removeLast()
-                    if stack.isEmpty { return cursor }
-                }
-                cursor += 1
-            }
-            return nil
-        }
-        if let open = closers[byte] {
-            var stack: [UInt8] = [open]
-            var cursor = index - 1
-            while cursor >= 0 {
-                guard code[cursor] else { cursor -= 1; continue }
-                let next = bytes[cursor]
-                if closers[next] != nil {
-                    stack.append(closers[next]!)
-                } else if openers[next] != nil {
-                    guard stack.last == next else { return nil }
-                    stack.removeLast()
-                    if stack.isEmpty { return cursor }
-                }
-                cursor -= 1
-            }
-        }
-        return nil
     }
 
     private func drawLineNumbers(_ layout: TextLayoutResult,

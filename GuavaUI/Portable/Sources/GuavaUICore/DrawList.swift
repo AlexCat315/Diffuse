@@ -713,7 +713,6 @@ public final class DrawList {
         }
         let bounds = UIRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
         if active.allSatisfy({ masks[$0].contains(bounds) }) { return count }
-        let outlines = active.map { maskOutlines[$0] }
         let emitted = Array(indices[start..<end])
         var kept: [UInt32] = []
         kept.reserveCapacity(emitted.count)
@@ -725,12 +724,13 @@ public final class DrawList {
             let minX = min(a.posX, min(b.posX, c.posX)), minY = min(a.posY, min(b.posY, c.posY))
             let maxX = max(a.posX, max(b.posX, c.posX)), maxY = max(a.posY, max(b.posY, c.posY))
             let bounds = UIRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-            if active.allSatisfy({ masks[$0].contains(bounds) }) {
+            let intersecting = active.filter { !masks[$0].contains(bounds) }
+            if intersecting.isEmpty {
                 kept.append(contentsOf: emitted[triangle..<(triangle + 3)])
                 continue
             }
             changed = true
-            let polygon = RoundedClipper.clip([a, b, c], against: outlines)
+            let polygon = RoundedClipper.clip([a, b, c], against: intersecting.map { maskOutlines[$0] })
             guard polygon.count >= 3 else { continue }
             let first = UInt32(vertices.count)
             vertices.append(contentsOf: polygon)
