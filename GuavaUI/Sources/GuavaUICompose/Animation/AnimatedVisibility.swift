@@ -175,9 +175,19 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
         // `Effect()` hands back `identity`, so this resets itself.
         node.transform = state.visual.scale
         if collapses {
-            node.layoutNode?.maxHeight = state.progress >= 1 ? nil
-                : (state.expandedHeight > 0 ? state.expandedHeight * max(0, state.progress) : nil)
-            if state.target == false, state.progress == 0 { node.layoutNode?.maxHeight = 0 }
+            let maximumHeight: Float?
+            if state.target == false, state.progress == 0 {
+                maximumHeight = 0
+            } else if state.progress >= 1 {
+                maximumHeight = nil
+            } else {
+                maximumHeight = state.expandedHeight > 0
+                    ? state.expandedHeight * max(0, state.progress) : nil
+            }
+            // A fully collapsed host has no child height to measure. Writing
+            // nil then zero here invalidates Yoga after every layout commit,
+            // keeping even an idle or playing editor in a full-layout loop.
+            node.layoutNode?.maxHeight = maximumHeight
         }
     }
 

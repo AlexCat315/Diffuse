@@ -5,6 +5,24 @@ import GuavaUIRuntime
 
 @Suite("Animated visibility", .serialized)
 struct AnimatedVisibilityTests: GuavaUIComposeSerializedSuite {
+    @Test("An initially collapsed host leaves layout stable without mounting content")
+    func initiallyCollapsedLayoutSettles() { GlobalTestLock.locked {
+        PlatformInputContext().withCurrent {
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: AnimatedVisibility(isVisible: false) {
+                Button("Hidden") {}.debugName("unmounted-content")
+            })
+            #expect(graph.computeLayoutIfNeeded(width: 240, height: 180))
+            for _ in 0..<10 {
+                #expect(!graph.layoutNeedsUpdate(width: 240, height: 180))
+                #expect(!graph.computeLayoutIfNeeded(width: 240, height: 180))
+            }
+            #expect(find(graph.tree.root, named: "unmounted-content") == nil)
+            graph.computeLayout(width: 320, height: 200)
+            #expect(!graph.layoutNeedsUpdate(width: 320, height: 200))
+        }
+    } }
+
     private struct Harness: View {
         @State var visible = true
         @State var reduceMotion = false

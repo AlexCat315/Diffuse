@@ -23,6 +23,7 @@ final class EditorLaunchContext: @unchecked Sendable {
     private var shouldExpandEditorWindow = false
     private var settingsWindowID: WindowID?
     private var nativeMenuState: NativeMenuState?
+    private var frameCadence = EditorFrameCadence()
 
     let renderDevice: Device
     let events: PlatformEventBridge
@@ -110,6 +111,7 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     @MainActor func wireDisplay(_ display: AppDisplayHandle) {
         self.display = display
+        frameCadence = EditorFrameCadence()
         expandEditorWindowIfReady()
         if let bundle {
             wireDisplayHandlers(app: bundle.app,
@@ -126,7 +128,25 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     @MainActor func tick(deltaTime: Double) {
         expandEditorWindowIfReady()
+        synchronizeFrameCadence()
         bundle?.app.tick(deltaTime: deltaTime)
+    }
+
+    @MainActor private func synchronizeFrameCadence() {
+        guard let display else { return }
+        let state = bundle?.app.store.state
+        let continuous = state.map { state in
+            EditorViewportFrameDrive.wantsContinuousFrames(
+                viewportRealtimeEnabled: state.viewport.realtimeEnabled,
+                playbackState: state.timing.playbackState,
+                sceneHasActiveParticles: false,
+                continuousViewportInteractionActive: EditorViewportInputController.shared.isContinuousSceneInteractionActive)
+        } ?? false
+        // Particles are driven only during realtime preview or playback,
+        // both of which already request continuous frames above.
+        if let mode = frameCadence.update(continuous: continuous, vsyncEnabled: state?.vsyncMode.isEnabled ?? true) {
+            display.setFrameRateMode(mode)
+        }
     }
 
     @MainActor private func expandEditorWindowIfReady() {
