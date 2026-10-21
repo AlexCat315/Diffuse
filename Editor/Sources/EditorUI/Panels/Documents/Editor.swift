@@ -11,8 +11,8 @@ struct DocumentsPanel: View {
     var onOpenFile: () -> Void = {}
     private var observed: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     @State private var confirmingClose: String?
-    @State private var isMorePresented = false
     @State private var hoveredClose: String?
+    @State private var hoveredTab: String?
 
     init(model: EditorDocumentWorkspace, onOpenFile: @escaping () -> Void = {}) {
         self.model = model
@@ -72,10 +72,11 @@ struct DocumentsPanel: View {
                         .frame(maxWidth: 180)
                 }.padding(EdgeInsets(leading: 10, trailing: 4))
             }.buttonStyle(.plain).frame(height: 26)
-            closeControl(document)
+            closeControl(document, isSelected: isSelected)
         }
         .padding(EdgeInsets(trailing: 4))
         .frame(height: 26)
+        .onHover { hoveredTab = $0 ? document.path : (hoveredTab == document.path ? nil : hoveredTab) }
         // A selection pill, like the workbench tabs: no rules between or above tabs.
         .background(isSelected ? .surfaceVariant : .clear)
         .cornerRadius(6)
@@ -83,10 +84,11 @@ struct DocumentsPanel: View {
         .debugName("document-tab-" + document.path)
     }
 
-    /// A clean document closes at once. A modified one shows a dot that asks
-    /// whether to save before closing.
+    /// Like VS Code: a modified tab always shows a dot, which turns into the
+    /// close mark under the pointer and asks before closing; a clean tab shows
+    /// its close mark only while selected or hovered, keeping its width.
     @ViewBuilder
-    private func closeControl(_ document: TextDocument) -> some View {
+    private func closeControl(_ document: TextDocument, isSelected: Bool) -> some View {
         if document.isDirty {
             Popover(isPresented: Binding(get: { confirmingClose == document.path },
                                          set: { confirmingClose = $0 ? document.path : nil }),
@@ -96,7 +98,7 @@ struct DocumentsPanel: View {
                     if hoveredClose == document.path {
                         Icon(UIIcons.Action.x, size: 10, color: .onSurfaceVariant)
                     } else {
-                        Box {}.frame(width: 7, height: 7).background(.warning).cornerRadius(4)
+                        Box {}.frame(width: 7, height: 7).background(.onSurfaceVariant).cornerRadius(4)
                     }
                 }.frame(width: 18, height: 18)
                     .background(hoveredClose == document.path ? .stateLayerHover : .clear).cornerRadius(4)
@@ -120,10 +122,12 @@ struct DocumentsPanel: View {
                     }
                 }.padding(12)
             }
-        } else {
+        } else if isSelected || hoveredTab == document.path {
             Button(icon: .resource(UIIcons.Action.x), size: 10, tooltip: L("Close")) {
                 model.close(document.path)
             }.buttonStyle(EditorChromeButtonStyle(height: 18))
+        } else {
+            Box {}.frame(width: 18, height: 18)
         }
     }
 
@@ -140,33 +144,10 @@ struct DocumentsPanel: View {
                     Text(part, lineLimit: 1).font(.caption).foregroundColor(isFile ? .onSurface : .onSurfaceMuted)
                 })
             }
-            Spacer(minLength: 8)
-            if document.isDirty {
-                Text(L("Unsaved")).font(.caption).foregroundColor(.warning)
-            }
-            Button(isEnabled: document.isDirty, tooltip: L("Save") + " " + EditorShortcut(.letter("s")).label) {
-                model.save(document.path)
-            } label: {
-                Row(alignment: .center, spacing: 5) {
-                    Icon(UIIcons.File.save, size: 11)
-                    Text(L("Save"))
-                }
-            }.buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("document-save")
-            Popover(isPresented: $isMorePresented, width: 220, surface: .content, overflow: .flip) {
-                Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                    Icon(UIIcons.Action.moreHorizontal, size: 13, color: .onSurfaceVariant)
-                }.frame(width: 24, height: 22).accessibility { $0.label = L("More") }
-            } content: {
-                Menu([
-                    .item(MenuItem(id: "revert", title: L("Discard Changes"), isEnabled: document.isDirty,
-                                   role: .destructive) { model.reload(document.path, discard: true) }),
-                    .separator("close"),
-                    .item(MenuItem(id: "close", title: L("Close"), isEnabled: !document.isDirty) {
-                        model.close(document.path)
-                    }),
-                ], width: 220, onItemActivated: { isMorePresented = false })
-            }
+            Spacer(minLength: 0)
         }
+        // Only where the file lives: unsaved state is the tab's dot, saving is
+        // ⌘S, discard and close live in the File menu and the Files tree.
         .padding(horizontal: 12)
         .frame(height: 28)
         .debugName("document-path-bar")

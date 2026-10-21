@@ -47,9 +47,14 @@ struct ScriptSemanticResults: View {
                     let rows = symbolRows(presentation.symbols)
                     VirtualStack(Array(rows.enumerated()), id: \.offset, rowHeight: 28) { entry in
                         Button(action: { session.open(entry.element.symbol) }) {
-                            Text(String(repeating: "    ", count: entry.element.depth) + entry.element.symbol.name, lineLimit: 1)
-                                .font(.mono).foregroundColor(.onSurface)
+                            Row(alignment: .center, spacing: 6) {
+                                Icon(ScriptSymbolIcon(kind: entry.element.symbol.kind).resource, size: 12, color: .onSurfaceVariant)
+                                    .debugName("script-symbol-icon-\(entry.element.symbol.kind)")
+                                Text(entry.element.symbol.name, lineLimit: 1)
+                                    .font(.mono).foregroundColor(.onSurface)
+                            }.padding(EdgeInsets(leading: Float(entry.element.depth) * 16))
                         }.buttonStyle(.ghost)
+                            .accessibility { $0.label = entry.element.symbol.name }
                     }.frame(height: min(180, Float(rows.count) * 28)).debugName("script-language-outline")
                 }
             }

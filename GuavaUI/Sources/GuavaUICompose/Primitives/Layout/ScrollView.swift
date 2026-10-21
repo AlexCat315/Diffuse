@@ -127,6 +127,10 @@ public struct ScrollGeometry: Equatable, Sendable {
     public let contentSize: CGSize
 }
 
+/// The full-width box that normalizes a horizontal origin. It positions
+/// content; its own (percent-resolved) width is not content to scroll to.
+private let scrollHorizontalOriginRole = "scroll-horizontal-origin"
+
 /// Clipped scrolling with optional offset binding and viewport observations.
 /// Content must retain its natural extent on the scrolling axis, e.g. a
 /// no-shrink column. Use a virtualized collection for large datasets.
@@ -707,7 +711,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // Yoga right-aligns an oversized RTL child at a negative x. Scrolling
         // uses physical offsets starting at zero, so normalize that origin
         // while retaining the content's inherited logical direction.
-        return [HorizontalScrollOrigin { content }.frame(width: .percent(100))]
+        return [HorizontalScrollOrigin { content }.frame(width: .percent(100))
+            .layoutRole(scrollHorizontalOriginRole)]
     }
 
     /// Push the scrollable range measured right now into `animator`.
@@ -892,7 +897,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     private static func contentBounds(for node: Node, origin: CGPoint) -> CGRect {
         guard node.isLayoutVisible else { return .null }
         let frame = node.frame.offsetBy(dx: origin.x, dy: origin.y)
-        var bounds = frame
+        let isOrigin = node.attachments[LayoutDebugAttachmentKey.layoutRole] as? String == scrollHorizontalOriginRole
+        var bounds = isOrigin ? CGRect.null : frame
 
         guard !node.clipsToBounds else {
             return bounds

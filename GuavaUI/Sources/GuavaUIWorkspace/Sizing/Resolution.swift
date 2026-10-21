@@ -6,10 +6,12 @@ struct WorkspaceLayoutMetrics {
     /// Canvas two cards share between them: the divider hairline and nothing
     /// else. The grab area around it overhangs, so it costs no extra space.
     var divider: Float = 1
+    var showsCollapsedRails = true
 
     init(theme: WorkspaceTheme = .init(), scaler: TextScaler = .identity) {
         tabHeight = max(26, scaler.scale(theme.tabBarHeight))
         divider = max(1, theme.gutter)
+        showsCollapsedRails = theme.showsCollapsedRails
     }
 }
 

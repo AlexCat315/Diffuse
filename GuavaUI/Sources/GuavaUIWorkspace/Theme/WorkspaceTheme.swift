@@ -14,19 +14,25 @@ public struct WorkspaceTheme: Sendable {
     /// Extra grab area on each side of a gutter. It overhangs the panes.
     public var splitDividerHitSlop: Float
     public var animatesLayout: Bool
+    /// A collapsed group leaves a strip of its tab icons on its edge. Hosts
+    /// with their own panel launcher (an activity bar) turn the strips off;
+    /// a collapsed group then takes no space until it is expanded again.
+    public var showsCollapsedRails: Bool
 
     public init(sideRailWidth: Float = 40,
                 bottomRailHeight: Float = 40,
                 tabBarHeight: Float = 34,
                 gutter: Float = 6,
                 splitDividerHitSlop: Float = 6,
-                animatesLayout: Bool = false) {
+                animatesLayout: Bool = false,
+                showsCollapsedRails: Bool = true) {
         self.sideRailWidth = sideRailWidth
         self.bottomRailHeight = bottomRailHeight
         self.tabBarHeight = tabBarHeight
         self.gutter = gutter
         self.splitDividerHitSlop = splitDividerHitSlop
         self.animatesLayout = animatesLayout
+        self.showsCollapsedRails = showsCollapsedRails
     }
 }
 

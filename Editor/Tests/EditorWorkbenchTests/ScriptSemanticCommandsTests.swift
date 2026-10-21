@@ -24,6 +24,42 @@ struct ScriptSemanticCommandsTests {
         #expect(ScriptSemanticCommand.matching(key(ComposeScancode.z, modifiers: [.gui, .shift])) == .redo)
     }
 
+    @Test("symbol icons distinguish Swift types, protocols, functions and properties")
+    func symbolIcons() {
+        #expect(ScriptSymbolIcon(kind: 5) == .type)
+        #expect(ScriptSymbolIcon(kind: 23) == .type)
+        #expect(ScriptSymbolIcon(kind: 11) == .interface)
+        for kind in [6, 9, 12] { #expect(ScriptSymbolIcon(kind: kind) == .function) }
+        for kind in [7, 8] { #expect(ScriptSymbolIcon(kind: kind) == .property) }
+        #expect(ScriptSymbolIcon(kind: 10) == .enumeration)
+        #expect(ScriptSymbolIcon(kind: 13) == .variable)
+        #expect(ScriptSymbolIcon(kind: 999) == .symbol)
+        #expect(Set([5, 11, 12, 7].map { ScriptSymbolIcon(kind: $0).resource }).count == 4)
+    }
+
+    @Test("navigation icons dispatch their commands and respect disabled back navigation", arguments: [true, false])
+    @MainActor
+    func navigationIcons(canGoBack: Bool) throws {
+        try WorkbenchUITestSupport.withEnvironment { registry, focus in
+            var commands: [ScriptSemanticCommand] = []
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: ScriptNavigationButtons(canPerform: { $0 != .back || canGoBack }, perform: { commands.append($0) })
+                .theme(EditorVisualTheme.make(dark: true)))
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: 200, height: 40)
+            let dispatcher = EventDispatcher(tree: graph.tree, interactions: registry, capture: PointerCapture(), focusChain: focus)
+            for name in ["back", "definition", "references"] {
+                let node = try WorkbenchUITestSupport.named("script-navigation-\(name)", in: graph.tree.root)
+                let frame = node.absoluteFrame
+                #expect(frame.size.width >= 24 && frame.size.height >= 24)
+                let click = MouseButtonEvent(button: .left, x: Float(frame.midX), y: Float(frame.midY), clicks: 1)
+                dispatcher.dispatch(.mouseButtonDown(click))
+                dispatcher.dispatch(.mouseButtonUp(click))
+            }
+            #expect(commands == (canGoBack ? [.back, .definition, .references] : [.definition, .references]))
+        }
+    }
+
     @Test("navigation back stack retains file identity and exact UTF-16 position")
     func navigationStack() {
         var history = ScriptSemanticNavigation()

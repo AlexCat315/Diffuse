@@ -127,7 +127,12 @@ private struct _WorkspaceCompactView: View {
 private final class WorkspaceSubscriptionIdentity {}
 
 private struct _WorkspaceDragOverlayModifier: ViewModifier {
+    /// Marks the node that paints drag previews. Hosts may rename the
+    /// workspace's debug name, so the lookup must not depend on it.
+    static let rootKey = "__workspace_drag_overlay_root"
+
     func apply(node: Node) {
+        node.attachments[Self.rootKey] = true
         node.updateOverlayDraw(identity: true) { [weak node] list, _ in
             guard let node,
                   let state = node.attachments[_WorkspaceTabDragOverlayState.key] as? _WorkspaceTabDragOverlayState else {
@@ -199,7 +204,7 @@ private struct _WorkspaceShell: View {
     var body: some View {
         let topVisible = !visibleGroups(in: .top, document: document).isEmpty
         let topCollapsed = !collapsedGroups(in: .top, document: document).isEmpty
-        let topChrome = chromeRailSlots(edge: .top, document: document)
+        let topChrome = chromeRailSlots(edge: .top, document: document, showsRails: metrics.showsCollapsedRails)
         let bottomChrome = visibleChromeRailSlots(edge: .bottom, document: document)
         let reserve = topChrome.reduce(0) { $0 + $1.thickness }
             + bottomChrome.reduce(0) { $0 + $1.thickness } + (topCollapsed ? 40 : 0)
@@ -230,7 +235,7 @@ private struct _WorkspaceShell: View {
                     controller: controller).frame(width: .percent(100), height: .percent(100))
                     .debugName("workspace-split-top")))
                 .id("workspace-split-top")
-            if topCollapsed {
+            if topCollapsed && metrics.showsCollapsedRails {
                 _WorkspaceRail(slotID: .top, document: document, controller: controller)
                     .id("workspace-rail-top")
             }
@@ -263,9 +268,9 @@ private struct _WorkspaceMainRow: View {
 
     var body: some View {
         let leadingVisible = !visibleGroups(in: .leading, document: document).isEmpty
-        let leadingRail = railPlan(edge: .leading, document: document)
+        let leadingRail = railPlan(edge: .leading, document: document, showsRails: metrics.showsCollapsedRails)
         let trailingVisible = !visibleGroups(in: .trailing, document: document).isEmpty
-        let trailingRail = railPlan(edge: .trailing, document: document)
+        let trailingRail = railPlan(edge: .trailing, document: document, showsRails: metrics.showsCollapsedRails)
         let resolver = WorkspaceSizingResolver(document: document, metrics: metrics)
         let centerSize = resolver.combine(resolver.slot(.center, axis: .horizontal),
                                           resolver.slot(.bottom, axis: .horizontal), stacked: false)
@@ -572,7 +577,7 @@ private struct _WorkspaceCenterColumn: View {
 
     var body: some View {
         let bottomVisible = !visibleGroups(in: .bottom, document: document).isEmpty
-        let bottomRail = bottomVisible ? nil : railPlan(edge: .bottom, document: document)
+        let bottomRail = bottomVisible ? nil : railPlan(edge: .bottom, document: document, showsRails: metrics.showsCollapsedRails)
         let resolver = WorkspaceSizingResolver(document: document, metrics: metrics)
         let split = WorkspaceResolvedSplit(fraction: document.splitFractions.topBottom,
             fallback: 0.74, available: height - (bottomVisible ? metrics.divider : 0),
@@ -1791,7 +1796,9 @@ private func railItems(group: WorkspaceTabGroup,
 }
 
 private func railPlan(edge: WorkspaceEdge,
-                      document: WorkspaceDocument) -> _WorkspaceRailPlan? {
+                      document: WorkspaceDocument,
+                      showsRails: Bool) -> _WorkspaceRailPlan? {
+    guard showsRails else { return nil }
     let groups = collapsedGroups(on: edge, document: document)
     guard !groups.isEmpty else { return nil }
     let slot = collapsedChromeRailSlot(edge: edge, document: document)
@@ -1800,8 +1807,9 @@ private func railPlan(edge: WorkspaceEdge,
 }
 
 private func chromeRailSlots(edge: WorkspaceEdge,
-                             document: WorkspaceDocument) -> [_WorkspaceRailSlot] {
-    let collapsedOnEdge = !collapsedGroups(on: edge, document: document).isEmpty
+                             document: WorkspaceDocument,
+                             showsRails: Bool = true) -> [_WorkspaceRailSlot] {
+    let collapsedOnEdge = showsRails && !collapsedGroups(on: edge, document: document).isEmpty
     let slots = document.slots.values
         .filter { slot in
             guard case .chrome(let slotEdge, _) = slot.kind,
@@ -2081,7 +2089,7 @@ private func workspaceRoot(from node: Node) -> Node? {
     var cursor: Node? = node
     var fallback: Node?
     while let current = cursor {
-        if (current.attachments[LayoutDebugAttachmentKey.debugName] as? String) == "workspace" {
+        if current.attachments[_WorkspaceDragOverlayModifier.rootKey] as? Bool == true {
             return current
         }
         fallback = current

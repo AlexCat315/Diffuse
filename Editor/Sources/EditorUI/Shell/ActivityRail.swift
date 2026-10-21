@@ -28,6 +28,11 @@ struct EditorActivityRail: View {
             action(UIIcons.Action.search, title: L("Search")) {
                 onCommand(.showCommandPalette(.resources))
             }.debugName("editor-rail-search")
+            // Collapsed areas leave no icon strip, so every collapsible panel has
+            // its entry here.
+            if controller.document.panels["inspector"] != nil {
+                panel(UIIcons.Action.sliders, title: L("Properties"), id: "inspector")
+            }
             panel(UIIcons.Status.sparkles, title: L("Agent"), id: "intent-input", agent: true)
             panel(UIIcons.Editor.gitCommit, title: L("Session Journal"), id: "journal")
             if controller.document.panels["assets"] != nil {

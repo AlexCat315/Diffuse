@@ -710,6 +710,24 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(clearedOverlay.vertices.count, 0)
     }
 
+    func testDragPreviewSurvivesAHostRenamingTheWorkspace() {
+        let controller = WorkspaceController(document: Self.makeDocument())
+        // Hosts tag the workspace with their own debug name; the preview must not depend on ours.
+        let root = AnyView(WorkspaceView(controller: controller) { panelID in
+            AnyView(Box { Text(panelID.rawValue) }.debugName("content-\(panelID.rawValue)"))
+        }.debugName("host-workspace"))
+        let rig = WorkspaceViewRig(controller: controller, width: 1000, height: 600, root: root)
+        for _ in 0..<3 { rig.pump() }
+
+        rig.beginDrag(from: rig.frame(named: "workspace-tab-hierarchy").center)
+        rig.moveDrag(to: rig.frame(named: "workspace-group-trailing").center)
+
+        let overlay = DrawList()
+        rig.node(named: "host-workspace").overlayDraw?(overlay, .zero)
+        XCTAssertGreaterThan(overlay.vertices.count, 0)
+        rig.endDrag(at: rig.frame(named: "workspace-group-trailing").center)
+    }
+
     func testSmallDragInsideSourceTabStripDoesNotSplitPanel() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 

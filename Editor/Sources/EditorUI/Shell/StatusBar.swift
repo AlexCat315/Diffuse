@@ -33,12 +33,16 @@ struct EditorStatusBar: View {
         let showsScriptInfo = controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed }
         let document = documents.wrappedValue.selected
         Row(alignment: .center, spacing: 10) {
-            Box { EmptyView() }
-                .frame(width: 6, height: 6)
-                .background(store.connected ? SemanticColorRef.success : .warning)
-                .cornerRadius(3)
-                .accessibility { $0.label = store.connected ? L("Connected") : L("Offline") }
-                .debugName("editor-status-connection")
+            // Being connected is the normal state and needs no mark; only
+            // losing the connection is worth a signal.
+            if !store.connected {
+                Box { EmptyView() }
+                    .frame(width: 6, height: 6)
+                    .background(.warning)
+                    .cornerRadius(3)
+                    .accessibility { $0.label = L("Offline") }
+                    .debugName("editor-status-connection")
+            }
             problems(EditorProblemSummary(documents: snapshot.documents, consoleEntries: store.consoleEntries))
             Divider(axis: .vertical).frame(height: 12)
             space(EditorSpace(mode: store.workspaceMode))

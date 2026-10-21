@@ -71,8 +71,7 @@ private struct ScriptPanelContent: View {
             }
             .buttonStyle(ToggleButtonStyle(minWidth: 24, height: 24))
             Text("Swift").font(.label).foregroundColor(.onSurfaceVariant)
-            Button("←", isEnabled: semantic.canPerform(.back), tooltip: L("Go Back")) { semantic.perform(.back) }
-                .buttonStyle(.ghost).debugName("script-navigation-back")
+            ScriptNavigationButtons(canPerform: semantic.canPerform, perform: semantic.perform)
             Spacer(minLength: 0)
             languageServiceIndicator
             statusIndicator

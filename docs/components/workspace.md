@@ -4,7 +4,7 @@ GuavaUI 的 docking 系统公开名称是 `GuavaUIWorkspace` 模块和 `Workspac
 
 ## 模型与操作
 
-工作区只有一种外观，没有可选的面板风格：面板是无边框、无阴影的圆角块（`surface` 填充、`radius.lg` 圆角；面板里的卡片用更高一层的 `surfaceRaised`），面板之间留 `WorkspaceTheme.gutter`（默认 6pt）的空隙而不画分隔线，由窗口底色把它们分开。所有分组的标签都是圆角选中块；每组只有一个尾部菜单，包含面板选择、最大化及允许时的收起，单面板组也能访问这些操作。`WorkspaceTheme` 只描述尺寸：侧边和底部收起条、标签栏高度、间隙、拖拽热区和是否动画。Editor 使用 32pt 标签栏。
+工作区只有一种外观，没有可选的面板风格：面板是无边框、无阴影的圆角块（`surface` 填充、`radius.lg` 圆角；面板里的卡片用更高一层的 `surfaceRaised`），面板之间留 `WorkspaceTheme.gutter`（默认 6pt）的空隙而不画分隔线，由窗口底色把它们分开。所有分组的标签都是圆角选中块；每组只有一个尾部菜单，包含面板选择、最大化及允许时的收起，单面板组也能访问这些操作。`WorkspaceTheme` 只描述尺寸与收起条：侧边和底部收起条、标签栏高度、间隙、拖拽热区、是否动画，以及收起后是否留标签图标条（`showsCollapsedRails`；有自己活动栏的宿主关掉它）。Editor 使用 32pt 标签栏。
 
 - `WorkspacePanel`：软件定义的稳定面板 ID、标题、图标键、关闭/拖拽/折叠能力与 `WorkspacePanelSizing` 内容尺寸契约。
 - `WorkspaceTabGroup`：面板顺序、activePanelID、折叠状态与 pinnedPanelIDs。

@@ -32,7 +32,7 @@ struct EditorRootView: View {
                                 .flex()
                                 .frame(minWidth: 0, minHeight: 0)
                                 .padding(EdgeInsets(trailing: 6))
-                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, animatesLayout: true))
+                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, animatesLayout: true, showsCollapsedRails: false))
                                 .layoutRole("editor-workspace")
                                 .debugName("editor-workspace")
                         }.flex().frame(minWidth: 0, minHeight: 0)

@@ -32,6 +32,9 @@ public final class SDL3Shell: Shell {
         private var cursorCache: [SystemCursor: OpaquePointer] = [:]
         private var activeCursor: SystemCursor = .arrow
         private var chromeHitTestState: SDL3ChromeHitTestState?
+#if os(macOS)
+        private var trafficLightObservers: [NSObjectProtocol] = []
+#endif
 
         var isFocused: Bool = true
         var isMinimized: Bool = false
@@ -213,6 +216,10 @@ public final class SDL3Shell: Shell {
 
         func shutdown() {
             setChromeHitTest(nil)
+#if os(macOS)
+            trafficLightObservers.forEach(NotificationCenter.default.removeObserver)
+            trafficLightObservers.removeAll()
+#endif
 
 #if canImport(Metal)
             metalLayer = nil
@@ -243,9 +250,48 @@ public final class SDL3Shell: Shell {
             chromeHitTestState = state
             let raw = Unmanaged.passUnretained(state).toOpaque()
             _ = SDL_SetWindowHitTest(window, _sdl3ChromeHitTest, raw)
+#if os(macOS)
+            alignTrafficLights()
+            observeTrafficLightLayout()
+#endif
         }
 
 #if os(macOS)
+        /// The app draws a taller title bar than AppKit's, so the native window
+        /// buttons are centred in the app's bar: the titlebar container takes
+        /// the bar's height and each button sits halfway down it.
+        private func alignTrafficLights() {
+            guard let window = cocoaWindow,
+                  let height = chromeHitTestState?.config.titleBarHeight, height > 0,
+                  let close = window.standardWindowButton(.closeButton),
+                  let container = close.superview?.superview,
+                  !window.styleMask.contains(.fullScreen) else { return }
+            let barHeight = CGFloat(height)
+            var frame = container.frame
+            frame.size.height = barHeight
+            frame.origin.y = window.frame.height - barHeight
+            container.frame = frame
+            for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                guard let button = window.standardWindowButton(kind) else { continue }
+                let y = ((button.superview?.frame.height ?? barHeight) - button.frame.height) / 2
+                button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: y.rounded()))
+            }
+        }
+
+        /// AppKit lays the buttons out again on resize, full-screen exit and
+        /// focus changes; each of those re-centres them.
+        private func observeTrafficLightLayout() {
+            guard trafficLightObservers.isEmpty, let window = cocoaWindow else { return }
+            let names: [Notification.Name] = [NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
+                                              NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification,
+                                              NSWindow.didBecomeMainNotification]
+            trafficLightObservers = names.map { name in
+                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.alignTrafficLights() }
+                }
+            }
+        }
+
         func applyTitleBarStyle(_ style: WindowTitleBarStyle) {
             guard let window = cocoaWindow else { return }
             switch style {
