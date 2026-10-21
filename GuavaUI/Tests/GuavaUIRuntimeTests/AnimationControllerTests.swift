@@ -153,6 +153,34 @@ struct AnimationControllerTests {
         #expect(v2 == 50)
     }
 
+    @Test("Duplicate registration ticks once and removed callbacks stay removed")
+    func schedulerRegistrationDuringTick() {
+        let scheduler = AnimatorScheduler()
+        var removedValue: Float = 0
+        let removed = AnimationController(from: Float(0), to: Float(1),
+            animation: Animation(duration: 1, curve: .linear)) { removedValue = $0 }
+        var addedValue: Float = 0
+        let added = AnimationController(from: Float(0), to: Float(1),
+            animation: Animation(duration: 1, curve: .linear)) { addedValue = $0 }
+        let first = AnimationController(from: Float(0), to: Float(1),
+            animation: Animation(duration: 1, curve: .linear)) { _ in
+                scheduler.unregister(removed)
+                scheduler.register(added)
+            }
+        scheduler.register(first)
+        scheduler.register(removed)
+        scheduler.register(first)
+        #expect(scheduler.activeCount == 2)
+        scheduler.tick(deltaTime: 0.25)
+        #expect(removedValue == 0)
+        #expect(addedValue == 0)
+        scheduler.tick(deltaTime: 0.25)
+        #expect(addedValue == 0.25)
+        scheduler.reset()
+        scheduler.register(removed)
+        #expect(scheduler.activeCount == 1)
+    }
+
     @Test("Finished controllers are evicted on subsequent tick")
     func schedulerEvicts() {
         let s = AnimatorScheduler()

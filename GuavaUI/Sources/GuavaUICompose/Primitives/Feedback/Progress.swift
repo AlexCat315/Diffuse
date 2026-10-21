@@ -43,6 +43,7 @@ public struct ProgressView: _PrimitiveView {
         let node = Node()
         node.isHitTestable = false
         node.addResource(LoadingAnimationClock())
+        node.addResource(ProgressValue())
         return node
     }
 
@@ -66,6 +67,9 @@ public struct ProgressView: _PrimitiveView {
 
         let clock = node.firstResource(LoadingAnimationClock.self)!
         clock.configure(duration: 1.4, isActive: indeterminate && !node.prefersReducedMotion)
+
+        let presentation = node.firstResource(ProgressValue.self)!
+        presentation.update(node: node, target: resolved, determinate: !indeterminate)
 
         let identity = DrawIdentity(value: indeterminate ? nil : resolved,
                                      tone: tone,
@@ -95,7 +99,7 @@ public struct ProgressView: _PrimitiveView {
                 let segment = UIRect(x: x, y: rect.y, width: segmentWidth, height: rect.height)
                 list.addRoundedRect(segment, radius: radius, color: base.multipliedAlpha(alpha))
             } else {
-                let filled = rect.width * Float(resolved)
+                let filled = rect.width * Float(presentation.value)
                 guard filled > 0 else { return }
                 let fill = UIRect(x: rect.x, y: rect.y, width: filled, height: rect.height)
                 list.addRoundedRect(fill, radius: min(radius, filled / 2), color: base.multipliedAlpha(alpha))

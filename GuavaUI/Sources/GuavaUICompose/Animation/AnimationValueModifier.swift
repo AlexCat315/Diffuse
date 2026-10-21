@@ -18,11 +18,17 @@ public struct _AnimationValueModifier<Value: Equatable>: ViewModifier, _AroundAp
 
     private static var cacheKey: String { "guava.ui.animation.lastValue" }
 
-    let animation: Animation?
+    private let animation: (Node) -> Animation?
     let value: Value
 
     public init(animation: Animation?, value: Value) {
-        self.animation = animation
+        self.animation = { _ in animation }
+        self.value = value
+    }
+
+    /// Resolves a theme motion token against the node's theme when it fires.
+    init(motion: SemanticMotionRef, value: Value) {
+        self.animation = { motion.resolve($0.theme) }
         self.value = value
     }
 
@@ -33,7 +39,7 @@ public struct _AnimationValueModifier<Value: Equatable>: ViewModifier, _AroundAp
         node.attachments[key] = value
 
         if changed {
-            ActiveAnimationContext.with(animation, perform)
+            ActiveAnimationContext.with(animation(node), perform)
         } else {
             perform()
         }
@@ -50,5 +56,17 @@ public extension View {
     /// different state (each call carries an independent cache).
     func animation<V: Equatable>(_ animation: Animation?, value: V) -> some View {
         modifier(_AnimationValueModifier(animation: animation, value: value))
+    }
+
+    /// Theme-driven implicit animation: the duration and curve come from the
+    /// node's theme (`.fast` for hover and press, `.medium` for state, …), so
+    /// views without a style configuration still follow theme motion.
+    ///
+    /// ```swift
+    /// row.background(isHovered ? .stateLayerHover : .clear)
+    ///     .animation(motion: .fast, value: isHovered)
+    /// ```
+    func animation<V: Equatable>(motion: SemanticMotionRef, value: V) -> some View {
+        modifier(_AnimationValueModifier(motion: motion, value: value))
     }
 }

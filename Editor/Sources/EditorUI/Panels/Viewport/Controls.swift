@@ -18,6 +18,7 @@ struct ViewportIconButtonStyle: ButtonStyle {
             : configuration.isHovered ? colors.stateLayerHover : .clear)
         .cornerRadius(7)
         .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
+        .animation(motion: .fast, value: configuration.interactionKey)
     }
 }
 
@@ -43,6 +44,7 @@ struct ViewportMenuTrigger: View {
         .background(isActive ? SemanticColorRef.accentMuted : isHovered ? .stateLayerHover : .clear)
         .cornerRadius(7)
         .onHover { isHovered = $0 }
+        .animation(motion: .fast, value: isHovered)
     }
 }
 
@@ -60,5 +62,6 @@ struct ViewportSegmentStyle: ButtonStyle {
             : configuration.isHovered ? colors.stateLayerHover : .clear)
         .cornerRadius(6)
         .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
+        .animation(motion: .fast, value: configuration.interactionKey)
     }
 }

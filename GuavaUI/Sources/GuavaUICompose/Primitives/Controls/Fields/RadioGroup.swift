@@ -51,6 +51,7 @@ private struct RadioItemStyle: ButtonStyle {
             .foregroundColor(c.isEnabled ? .onSurface : .onSurfaceDisabled)
             .background(c.isHovered ? c.theme.colors.stateLayerHover : .clear)
             .cornerRadius(c.theme.radius.sm).border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }
 

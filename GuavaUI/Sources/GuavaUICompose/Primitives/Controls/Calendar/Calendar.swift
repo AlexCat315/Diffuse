@@ -386,5 +386,6 @@ struct CalendarCellStyle: ButtonStyle {
             .foregroundColor(c.isSelected ? c.theme.colors.onAccent : c.isEnabled ? c.theme.colors.onSurface : c.theme.colors.onSurfaceMuted)
             .opacity(isCurrentMonth ? 1 : 0.35).cornerRadius(height / 2)
             .border(c.isFocused ? c.theme.colors.focusRing : isToday ? c.theme.colors.accent : .clear, width: c.isFocused ? 2 : isToday ? 1 : 0)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }

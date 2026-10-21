@@ -147,5 +147,6 @@ private struct SuggestionRowStyle: ButtonStyle {
         .background(c.isSelected ? c.theme.colors.stateLayerSelected
                     : c.isHovered ? c.theme.colors.stateLayerHover
                     : .clear)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }

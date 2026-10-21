@@ -173,5 +173,6 @@ private struct GutterButtonStyle: ButtonStyle {
             .background(configuration.isHovered || configuration.isPressed ? SemanticColorRef.stateLayerHover : .clear)
             .border(configuration.isFocused ? .focusRing : .clear, width: 1)
             .cornerRadius(4)
+            .animation(motion: .fast, value: configuration.interactionKey)
     }
 }

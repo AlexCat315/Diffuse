@@ -195,5 +195,7 @@ struct EditorTreeRowStyle: TreeRowStyle {
         }
         .padding(horizontal: 6, vertical: 1)
         .opacity(configuration.isEnabled ? 1 : 0.55)
+        .animation(motion: .fast, value: [configuration.isSelected, configuration.isSearchHit,
+                                          configuration.isHovered, configuration.isEnabled])
     }
 }

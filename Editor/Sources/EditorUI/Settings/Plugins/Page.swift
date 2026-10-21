@@ -16,14 +16,17 @@ struct PluginSettings: View {
             if !available {
                 Alert(L("Plugin host unavailable"), message: L("PluginHost is unavailable. Rebuild or reinstall the Editor."), tone: .warning)
             }
-            if let message = management.message {
-                Alert(message, tone: management.phase == .failed ? .warning : .info)
+            AnimatedVisibility(isVisible: management.message != nil) {
+                Alert(management.message ?? "", tone: management.phase == .failed ? .warning : .info)
             }
-            if let candidate = management.candidate {
-                PluginReviewCard(summary: candidate, isBusy: management.phase == .enabling,
-                    isAlreadyEnabled: management.enabled.contains { $0.id == candidate.id }, onEnable: {
-                        Task { @MainActor in await app.authorizeAndEnableInspectedPlugin() }
-                    }, onCancel: { Task { @MainActor in app.cancelPluginApproval() } })
+            // The review card eases in above the list, where the decision is made.
+            AnimatedVisibility(isVisible: management.candidate != nil) {
+                if let candidate = management.candidate {
+                    PluginReviewCard(summary: candidate, isBusy: management.phase == .enabling,
+                        isAlreadyEnabled: management.enabled.contains { $0.id == candidate.id }, onEnable: {
+                            Task { @MainActor in await app.authorizeAndEnableInspectedPlugin() }
+                        }, onCancel: { Task { @MainActor in app.cancelPluginApproval() } })
+                }
             }
             SettingsCard(L("Installed"), subtitle: L("Plugins run isolated and only get the access you approve.")) {
                 Box(direction: .column, alignItems: .stretch, spacing: 8) {

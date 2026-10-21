@@ -27,6 +27,7 @@ public final class AnimatorScheduler: @unchecked Sendable {
     @TaskLocal public static var current: AnimatorScheduler = AnimatorScheduler.shared
 
     private var active: [AnyAnimationController] = []
+    private var registered = Set<ObjectIdentifier>()
     private var completions: [AnimationCompletionGroup] = []
 
     public init() {}
@@ -41,14 +42,14 @@ public final class AnimatorScheduler: @unchecked Sendable {
     /// strong reference until the controller becomes finished, after which
     /// it is dropped on the next `tick`.
     public func register(_ controller: AnyAnimationController) {
-        active.removeAll { $0.isFinished || $0 === controller }
-        guard !controller.isFinished else { return }
+        guard !controller.isFinished, registered.insert(ObjectIdentifier(controller)).inserted else { return }
         active.append(controller)
     }
 
     /// Release a repeating controller immediately when its view is paused or
     /// removed. Registering it again later resumes with one scheduler entry.
     public func unregister(_ controller: AnyAnimationController) {
+        guard registered.remove(ObjectIdentifier(controller)) != nil else { return }
         active.removeAll { $0 === controller }
     }
 
@@ -67,9 +68,15 @@ public final class AnimatorScheduler: @unchecked Sendable {
     /// remove any that finished during the sweep.
     public func tick(deltaTime: Double) {
         guard deltaTime.isFinite, deltaTime >= 0 else { return }
-        for c in active { c.tick(deltaTime: deltaTime) }
+        // Snapshot iteration permits callbacks to register/unregister controllers.
+        // A controller removed by an earlier callback must not tick this frame.
+        for c in active where registered.contains(ObjectIdentifier(c)) { c.tick(deltaTime: deltaTime) }
         if active.contains(where: \.isFinished) {
-            active.removeAll(where: \.isFinished)
+            active.removeAll { controller in
+                guard controller.isFinished else { return false }
+                registered.remove(ObjectIdentifier(controller))
+                return true
+            }
         }
         if !completions.isEmpty {
             for group in completions { group.settleIfIdle() }
@@ -83,6 +90,7 @@ public final class AnimatorScheduler: @unchecked Sendable {
     public func reset() {
         for controller in active { controller.cancel() }
         active.removeAll()
+        registered.removeAll()
         completions.removeAll()
     }
 }

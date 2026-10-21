@@ -9,7 +9,7 @@ struct ScriptTrustBanner: View {
     let snapshot: ScriptWorkspaceSnapshot
 
     var body: some View {
-        if !snapshot.trustState.allowsExecution {
+        AnimatedVisibility(isVisible: !snapshot.trustState.allowsExecution) {
             Row(alignment: .center, spacing: 10) {
                 Icon(UIIcons.Status.shield, size: 14, color: .warning)
                 Column(alignment: .leading, spacing: 2) {
@@ -23,8 +23,9 @@ struct ScriptTrustBanner: View {
             .padding(horizontal: 12, vertical: 8)
             .background(.warning.opacity(0.10))
             .debugName("script-trust-banner")
-        } else if let warning = snapshot.trustWarning {
-            Text(warning, lineLimit: 2).font(.caption).foregroundColor(.warning)
+        }
+        AnimatedVisibility(isVisible: snapshot.trustState.allowsExecution && snapshot.trustWarning != nil) {
+            Text(snapshot.trustWarning ?? "", lineLimit: 2).font(.caption).foregroundColor(.warning)
                 .padding(horizontal: 12, vertical: 6)
                 .frame(width: .percent(100), minWidth: 0)
                 .background(.warning.opacity(0.08))
@@ -38,15 +39,14 @@ struct ScriptExternalChangeBanner: View {
     let document: ScriptWorkspaceDocument
 
     var body: some View {
-        switch document.externalChange {
-        case .none:
-            EmptyView()
-        case .modifiedOnDisk:
-            row(L("This file changed on disk while you have unsaved edits."),
-                disk: L("Reload from Disk"), editor: L("Keep Editor Version"))
-        case .deletedOnDisk:
-            row(L("This file was deleted outside the Editor."),
-                disk: L("Close File"), editor: L("Recreate File"))
+        AnimatedVisibility(isVisible: document.externalChange != .none) {
+            if document.externalChange == .deletedOnDisk {
+                row(L("This file was deleted outside the Editor."),
+                    disk: L("Close File"), editor: L("Recreate File"))
+            } else {
+                row(L("This file changed on disk while you have unsaved edits."),
+                    disk: L("Reload from Disk"), editor: L("Keep Editor Version"))
+            }
         }
     }
 

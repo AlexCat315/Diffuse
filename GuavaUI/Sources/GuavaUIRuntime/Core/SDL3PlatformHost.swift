@@ -579,6 +579,17 @@ public final class SDL3PlatformHost: PlatformHost {
         }
         timing.mark("prepare")
 
+        // Tick before committing so state-driven animations are composed and
+        // drawn for this display callback, rather than one refresh later.
+        // Input can wake SDL and redraw immediately, without advancing the
+        // animation between native refresh callbacks. Missed callbacks are
+        // coalesced, so a blocked present never causes catch-up frames.
+        if frameDue || (shouldRunFramePreparation && !animationsWereActive) {
+            AnimatorScheduler.current.tick(deltaTime: max(0, animationTickTime - state.lastAnimationTickTime))
+            state.lastAnimationTickTime = max(state.lastAnimationTickTime, animationTickTime)
+        }
+        timing.mark("animations")
+
         for id in sessionOrder where shouldRunFramePreparation {
             guard let session = sessions[id] else { continue }
             let didCommit = session.withCurrent {
@@ -591,17 +602,11 @@ public final class SDL3PlatformHost: PlatformHost {
         }
         timing.mark("commit")
 
-        // Input can wake SDL and redraw immediately, without advancing the
-        // animation between native refresh callbacks. Missed callbacks are
-        // coalesced, so a blocked present never causes catch-up frames.
-        if frameDue || (shouldRunFramePreparation && !animationsWereActive) {
-            AnimatorScheduler.current.tick(deltaTime: max(0, animationTickTime - state.lastAnimationTickTime))
-            state.lastAnimationTickTime = max(state.lastAnimationTickTime, animationTickTime)
-        }
         let animationsActive = AnimatorScheduler.current.hasActiveAnimations
         state.animationsPreviouslyActive = animationsActive
-        timing.mark("animations")
 
+        let logsFrameTiming = Self.frameTimingLogStride > 0
+            && (frameTimingLogCounter &+ 1) % Self.frameTimingLogStride == 0
         var renderedAnyFrame = false
         var renderSummaries: [String] = []
 
@@ -641,11 +646,11 @@ public final class SDL3PlatformHost: PlatformHost {
 
             if shouldRender, let surface = handle.renderSurface {
                 var reasons: [String] = []
-                if session.needsDisplay { reasons.append("needsDisplay") }
-                if hasRenderInvalidation { reasons.append("renderDirty") }
+                if logsFrameTiming && session.needsDisplay { reasons.append("needsDisplay") }
+                if logsFrameTiming && hasRenderInvalidation { reasons.append("renderDirty") }
 
                 session.needsDisplay = false
-                let renderStart = TimingTrace.now()
+                let renderStart = logsFrameTiming ? TimingTrace.now() : 0
                 let hasFrameHandler = session.onFrame != nil
                     || (id == mainWindowID && onFrame != nil)
                 var didRender = !hasFrameHandler
@@ -675,14 +680,14 @@ public final class SDL3PlatformHost: PlatformHost {
                         )
                     }
                 }
-                let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
-                if didRender {
+                if didRender { renderedAnyFrame = true }
+                if didRender && logsFrameTiming {
+                    let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
                     let reasonText = reasons.isEmpty ? "unknown" : reasons.joined(separator: "+")
                     let renderText = String(format: "%.2fms", renderMilliseconds)
                     renderSummaries.append(
                         "window=\(id) reason=\(reasonText) render=\(renderText)"
                     )
-                    renderedAnyFrame = true
                 }
             }
 
@@ -692,14 +697,10 @@ public final class SDL3PlatformHost: PlatformHost {
         timing.mark("windows")
 
         if renderedAnyFrame {
-            let deltaText = String(format: "%.2fms", framePreparationDelta * 1000)
-            let extra = [
-                "delta=\(deltaText)",
-                "animationsActive=\(animationsActive)",
-            ] + renderSummaries
             frameTimingLogCounter &+= 1
-            if Self.frameTimingLogStride > 0,
-               frameTimingLogCounter % Self.frameTimingLogStride == 0 {
+            if logsFrameTiming {
+                let deltaText = String(format: "%.2fms", framePreparationDelta * 1000)
+                let extra = ["delta=\(deltaText)", "animationsActive=\(animationsActive)"] + renderSummaries
                 Logger.runtime.debug("\(timing.summary(extra: extra))")
             }
         }

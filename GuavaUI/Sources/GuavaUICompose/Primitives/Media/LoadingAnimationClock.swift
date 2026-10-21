@@ -23,6 +23,7 @@ final class LoadingAnimationClock: NodeResource {
         self.controller = controller; scheduler?.register(controller)
     }
     private func stop() {
+        guard controller != nil || phase != 0 else { return }
         if let controller { controller.cancel(); scheduler?.unregister(controller) }
         controller = nil; phase = 0
         node?.markRenderDirty(reason: .styleSet(field: "loading.phase"))

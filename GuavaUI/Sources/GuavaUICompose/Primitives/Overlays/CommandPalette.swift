@@ -394,6 +394,7 @@ private struct CommandRowStyle: ButtonStyle {
             .background(fill)
             .cornerRadius(theme.radius.sm)
             .opacity(c.isEnabled ? 1 : 0.45)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }
 

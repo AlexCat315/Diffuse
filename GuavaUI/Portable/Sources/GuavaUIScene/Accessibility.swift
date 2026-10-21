@@ -83,7 +83,7 @@ public struct AccessibilityElement {
 
 public enum AccessibilityTree {
     public static func snapshot(root: Node, viewport: CGRect? = nil, resolveValues: Bool = true) -> [AccessibilityElement] {
-        let elements = collect(root, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues)
+        let elements = collect(root, transform: root.absoluteTransform, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues)
         var byIdentifier: [String: AccessibilityElement] = [:]
         func index(_ list: [AccessibilityElement]) {
             for element in list {
@@ -113,14 +113,25 @@ public enum AccessibilityTree {
         }
         return resolve(elements)
     }
-    private static func collect(_ node: Node, clip: CGRect, combinesText: Bool, resolveValues: Bool) -> [AccessibilityElement] {
+    private static func collect(_ node: Node, transform: Affine2D, clip: CGRect, combinesText: Bool, resolveValues: Bool) -> [AccessibilityElement] {
         guard node.isLayoutVisible, node.isInteractionEnabled, node.opacity > 0, node.subtreeOpacity > 0,
               node.accessibility?.isHidden != true else { return [] }
-        let bounds = node.absoluteFrame
+        // Carry window placement down the traversal instead of walking every
+        // node's ancestor chain again. Scroll offsets affect children only.
+        let bounds = CGRect(x: CGFloat(transform.e), y: CGFloat(transform.f),
+                            width: node.frame.width * CGFloat(abs(transform.a)),
+                            height: node.frame.height * CGFloat(abs(transform.d)))
         let childClip = node.clipsToBounds ? clip.intersection(bounds) : clip
         guard !childClip.isNull else { return [] }
         let semantic = node.accessibility
-        let children = node.children.flatMap { collect($0, clip: childClip, combinesText: combinesText || semantic?.combinesChildren == true, resolveValues: resolveValues) }
+        var content = transform
+        content.e -= Float(node.contentOffset.x) * transform.a
+        content.f -= Float(node.contentOffset.y) * transform.d
+        let children = node.children.flatMap {
+            collect($0, transform: $0.placementStep(scrolling: .zero).followed(by: content),
+                    clip: childClip, combinesText: combinesText || semantic?.combinesChildren == true,
+                    resolveValues: resolveValues)
+        }
         guard var semantic else { return children }
         if combinesText && semantic.role == .staticText { return children }
         let frame = bounds.intersection(clip)

@@ -226,6 +226,7 @@ private struct TabBarItemStyle: ButtonStyle {
             AnyView(surface(c))
             if indicator == .bottom { AnyView(indicatorView(c)) }
         }
+        .animation(motion: .fast, value: c.interactionKey)
     }
 
     private func surface(_ c: ButtonStyleConfiguration) -> some View {

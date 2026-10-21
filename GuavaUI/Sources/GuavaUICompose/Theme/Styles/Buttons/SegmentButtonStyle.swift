@@ -16,5 +16,6 @@ struct SegmentButtonStyle: ButtonStyle {
             .background(fill).cornerRadius(max(3, c.theme.radius.md - 3))
             .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
             .shadow(color: c.isSelected ? (shadow.color ?? .clear) : .clear, offsetY: shadow.offsetY, blur: shadow.blur)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }

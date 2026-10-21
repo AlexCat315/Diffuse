@@ -65,5 +65,6 @@ struct SettingsChoiceStyle: ButtonStyle {
             .background(configuration.isSelected ? colors.accentMuted
                 : configuration.isHovered ? colors.stateLayerHover : colors.surfaceSunken)
             .cornerRadius(6).border(configuration.isSelected ? colors.accent : colors.border, width: 1)
+            .animation(motion: .fast, value: configuration.interactionKey)
     }
 }

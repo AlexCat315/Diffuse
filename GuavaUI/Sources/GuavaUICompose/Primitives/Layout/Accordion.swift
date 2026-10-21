@@ -66,5 +66,6 @@ private struct AccordionHeaderStyle: ButtonStyle {
             .background(c.isPressed ? c.theme.colors.stateLayerPressed : c.isHovered ? c.theme.colors.stateLayerHover : .clear)
             .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: 2)
             .opacity(c.isEnabled ? 1 : 0.55)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }

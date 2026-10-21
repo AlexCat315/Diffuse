@@ -107,6 +107,7 @@ private struct StepperButtonStyle: ButtonStyle {
             .foregroundColor(c.isEnabled ? colors.onSurface : colors.onSurfaceMuted)
             .border(c.isFocused ? colors.focusRing : .clear, width: 1)
             .opacity(c.isEnabled ? 1 : 0.5)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }
 

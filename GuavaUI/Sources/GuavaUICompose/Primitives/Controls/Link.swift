@@ -106,5 +106,6 @@ private struct LinkStyle: ButtonStyle {
         .foregroundColor(ink)
         .cornerRadius(c.theme.radius.sm)
         .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }

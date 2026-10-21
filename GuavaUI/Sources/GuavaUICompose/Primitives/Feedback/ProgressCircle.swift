@@ -46,6 +46,7 @@ public struct ProgressCircle: _PrimitiveView {
         let node = Node()
         node.isHitTestable = false
         node.addResource(LoadingAnimationClock())
+        node.addResource(ProgressValue())
         return node
     }
 
@@ -73,6 +74,9 @@ public struct ProgressCircle: _PrimitiveView {
 
         let clock = node.firstResource(LoadingAnimationClock.self)!
         clock.configure(duration: 1.1, isActive: indeterminate && !node.prefersReducedMotion)
+
+        let presentation = node.firstResource(ProgressValue.self)!
+        presentation.update(node: node, target: resolved, determinate: !indeterminate)
 
         let identity = DrawIdentity(value: indeterminate ? nil : resolved,
                                      tone: tone,
@@ -102,7 +106,7 @@ public struct ProgressCircle: _PrimitiveView {
                 paintRing(list: list, cx: cx, cy: cy, inner: inner, outer: outer,
                           from: start, sweep: .pi * 0.7, color: base.multipliedAlpha(alpha))
             } else {
-                let value = Float(resolved)
+                let value = Float(presentation.value)
                 guard value > 0 else { return }
                 paintRing(list: list, cx: cx, cy: cy, inner: inner, outer: outer,
                           from: -.pi / 2, sweep: 2 * .pi * value, color: base.multipliedAlpha(alpha))

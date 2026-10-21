@@ -284,5 +284,6 @@ private struct NumberStepButtonStyle: ButtonStyle {
             .cornerRadius(c.theme.radius.sm)
             .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: 1)
             .opacity(c.isEnabled ? 1 : 0.45)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }

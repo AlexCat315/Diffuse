@@ -75,5 +75,6 @@ private struct SettingsNavigationStyle: ButtonStyle {
             .background(configuration.isSelected ? .surfaceVariant
                 : configuration.isHovered ? .stateLayerHover : .clear)
             .cornerRadius(7).border(configuration.isFocused ? .focusRing : .clear, width: 1)
+            .animation(motion: .fast, value: configuration.interactionKey)
     }
 }

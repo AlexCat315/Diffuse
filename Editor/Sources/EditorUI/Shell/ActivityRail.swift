@@ -83,6 +83,7 @@ private struct ActivityButtonStyle: ButtonStyle {
                 .cornerRadius(8)
                 .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
         }.padding(EdgeInsets(trailing: 6)).frame(width: 44, height: 36)
+            .animation(motion: .fast, value: configuration.interactionKey)
     }
 }
 

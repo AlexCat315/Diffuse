@@ -57,12 +57,11 @@ struct DocumentsPanel: View {
         .debugName("document-editor")
     }
 
-    @ViewBuilder
     private func errorBanner(_ error: String?) -> some View {
-        if let error {
+        AnimatedVisibility(isVisible: error != nil) {
             Row(alignment: .center, spacing: 8) {
                 Icon(UIIcons.Status.alertTriangle, size: 12, color: .error)
-                Text(L(error), lineLimit: 2).font(.caption).foregroundColor(.error).flex().frame(minWidth: 0)
+                Text(L(error ?? ""), lineLimit: 2).font(.caption).foregroundColor(.error).flex().frame(minWidth: 0)
             }.padding(horizontal: 12, vertical: 6).background(SemanticColorRef.error.opacity(0.10))
                 .debugName("document-error")
         }
@@ -119,6 +118,7 @@ struct DocumentsPanel: View {
         // A selection pill, like the workbench tabs: no rules between or above tabs.
         .background(isSelected ? .surfaceVariant : .clear)
         .cornerRadius(6)
+        .animation(motion: .fast, value: [isSelected, hoveredTab == document.path])
         .accessibility { $0.label = name; $0.state.isSelected = isSelected }
         .debugName("document-tab-" + document.path)
     }
@@ -141,6 +141,7 @@ struct DocumentsPanel: View {
                     }
                 }.frame(width: 18, height: 18)
                     .background(hoveredClose == document.path ? .stateLayerHover : .clear).cornerRadius(4)
+                    .animation(motion: .fast, value: hoveredClose == document.path)
                     .onHover { hoveredClose = $0 ? document.path : (hoveredClose == document.path ? nil : hoveredClose) }
                     .accessibility { $0.label = L("Close") + " " + document.path }
             } content: {

@@ -83,5 +83,6 @@ private struct PlaybackButtonStyle: ButtonStyle {
                 : configuration.isHovered ? colors.stateLayerHover : .clear)
             .cornerRadius(5)
             .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
+            .animation(motion: .fast, value: configuration.interactionKey)
     }
 }

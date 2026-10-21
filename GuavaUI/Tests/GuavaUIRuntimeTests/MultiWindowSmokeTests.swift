@@ -414,6 +414,47 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("State invalidated by an animation commits on the same display tick",
+          arguments: [false, true])
+    func animationStateCommitsBeforeDrawing(nativeRefresh: Bool) throws {
+        let shell = MockShell(eventBatches: Array(repeating: [], count: 8))
+        shell.nativeRefresh.supported = nativeRefresh
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        var time = 100.0
+        host.frameClock = { time }
+        let tree = NodeTree(), root = Node()
+        tree.root = root
+        let session = try host.openWindow(title: "Animation state", tree: tree)
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        shell.onWait = { timeout in
+            time += min(timeout, 1.0 / 60)
+            if nativeRefresh {
+                shell.nativeRefresh.pending[session.id] = DisplayRefreshTick(
+                    timestamp: time, targetTimestamp: time + 1.0 / 60)
+            }
+            return nativeRefresh
+        }
+        let scheduler = AnimatorScheduler()
+        let scope = ObjectIdentifier(root)
+        var latest = Float(0)
+        root.opacity = latest
+        var drawn: [Float] = []
+        scheduler.register(AnimationController(from: Float(0), to: Float(1),
+            animation: Animation(duration: 0.1, curve: .linear)) { value in
+                latest = value
+                session.recomposer.invalidate(scopeID: scope) { root.opacity = value }
+            })
+        session.onFrame = { _ in
+            #expect(root.opacity == latest)
+            #expect(!session.recomposer.hasPending)
+            drawn.append(root.opacity)
+            return true
+        }
+        AnimatorScheduler.$current.withValue(scheduler) { host.run() }
+        #expect(drawn.contains { $0 > 0 && $0 < 1 })
+    }
+
+    @MainActor
     @Test("Event-driven host waits for events when no frame is pending")
     func eventDrivenHostWaitsWhenIdle() throws {
         let shell = MockShell(eventBatches: [[], [], []])

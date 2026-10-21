@@ -286,6 +286,7 @@ struct TableHeaderStyle: ButtonStyle {
         Box(direction: .row, alignItems: .center, justifyContent: .flexStart) { AnyView(c.label) }
             .flex(1, shrink: 1).background(c.isHovered ? c.theme.colors.stateLayerHover : .clear)
             .foregroundColor(c.theme.colors.onSurface).border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
+            .animation(motion: .fast, value: c.interactionKey)
     }
 }
 
@@ -296,5 +297,6 @@ private struct TableRowStyle: ListRowStyle {
         Box(direction: .column, alignItems: .stretch) { c.content }
             .flex(1, shrink: 1)
             .selectionHighlight(.dataRow, isSelected: c.isSelected)
+            .animation(motion: .fast, value: c.isSelected)
     }
 }

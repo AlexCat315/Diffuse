@@ -48,9 +48,9 @@ struct ScriptSourceEditor: View {
                     .id(external.url.absoluteString).flex(1, shrink: 1)
             } else if let document = workspace.selectedDocument {
                 editor(document)
-                if let message = languageServiceMessage {
+                AnimatedVisibility(isVisible: languageServiceMessage != nil) {
                     Row(alignment: .center, spacing: 8) {
-                        Text(message, lineLimit: 1).font(.caption).foregroundColor(.warning)
+                        Text(languageServiceMessage ?? "", lineLimit: 1).font(.caption).foregroundColor(.warning)
                         Spacer(minLength: 0)
                         if case .unavailable = workspace.languageServiceState {
                             Button(L("Retry"), action: app.workstation.scripts.retryLanguageService).buttonStyle(.secondary)
