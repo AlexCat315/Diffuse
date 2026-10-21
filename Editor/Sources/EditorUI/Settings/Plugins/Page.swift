@@ -3,54 +3,78 @@ internal import GuavaUI
 internal import GuavaUIRuntime
 private import Foundation
 
+/// Installed plugins as one list of rows, a switch each; adding a package
+/// opens a review card above the list before anything is loaded.
 struct PluginSettings: View {
     let app: EditorApplication
 
     var body: some View {
         let management = app.store.pluginManagement
         let busy = management.phase == .inspecting || management.phase == .enabling
-        SettingsCard(L("AI Plugins"), subtitle: L("Review a package and its capabilities before enabling it.")) {
-            if !app.isPluginHostAvailable {
+        let available = app.isPluginHostAvailable
+        Box(direction: .column, alignItems: .stretch, spacing: 16) {
+            if !available {
                 Alert(L("Plugin host unavailable"), message: L("PluginHost is unavailable. Rebuild or reinstall the Editor."), tone: .warning)
-            }
-            Button(L("Choose .guavaplugin Folder"), isEnabled: app.isPluginHostAvailable && !busy, action: choosePackage)
-                .buttonStyle(.primary).debugName("settings-plugin-choose")
-            if !management.enabled.contains(where: { $0.id == "studio.swift-support" }) {
-                Button(L("Enable Swift Support"), isEnabled: app.isPluginHostAvailable && !busy) {
-                    Task { @MainActor in await app.inspectBundledSwiftSupport() }
-                }.debugName("settings-plugin-swift-support")
-            }
-            if management.phase == .inspecting {
-                Text(L("Inspecting plugin without loading it…")).font(.body).foregroundColor(.onSurfaceMuted)
             }
             if let message = management.message {
                 Alert(message, tone: management.phase == .failed ? .warning : .info)
             }
             if let candidate = management.candidate {
-                PluginInspectionCard(summary: candidate, isBusy: management.phase == .enabling,
+                PluginReviewCard(summary: candidate, isBusy: management.phase == .enabling,
                     isAlreadyEnabled: management.enabled.contains { $0.id == candidate.id }, onEnable: {
                         Task { @MainActor in await app.authorizeAndEnableInspectedPlugin() }
                     }, onCancel: { Task { @MainActor in app.cancelPluginApproval() } })
             }
-            Row(alignment: .center, spacing: 8) {
-                Text(L("Enabled Plugins")).font(.label).foregroundColor(.onSurface)
-                Text("\(management.enabled.count)").font(.caption).foregroundColor(.onSurfaceMuted)
-                    .padding(horizontal: 6, vertical: 2).background(.surfaceVariant).cornerRadius(5)
-            }
-            if management.enabled.isEmpty {
-                Column(alignment: .leading, spacing: 6) {
-                    Text(L("A focused workspace, ready to extend.")).font(.bodyStrong).foregroundColor(.onSurfaceVariant)
-                    Text(L("No extensions are enabled. Choose a package to inspect its access and capabilities."))
-                        .font(.body).foregroundColor(.onSurfaceMuted)
-                }.padding(16).frame(width: .percent(100), minWidth: 0).background(.surfaceSunken).cornerRadius(7)
-            }
-            for plugin in management.enabled {
-                EnabledPluginRow(plugin: plugin, isBusy: busy,
-                    onReload: { Task { @MainActor in await app.reloadPluginFromManagement(id: plugin.id) } },
-                    onDisable: { Task { @MainActor in await app.disablePluginFromManagement(id: plugin.id) } },
-                    onRevoke: { Task { @MainActor in await app.revokePluginFromManagement(id: plugin.id) } })
+            SettingsCard(L("Installed"), subtitle: L("Plugins run isolated and only get the access you approve.")) {
+                Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    swiftSupportRow(management: management, isBusy: busy || !available)
+                    for plugin in management.enabled where plugin.id != PluginRow.swiftSupportID {
+                        PluginRow(listing: PluginListing(plugin), isEnabled: true, isBusy: busy,
+                                  onToggle: { _ in Task { @MainActor in await app.disablePluginFromManagement(id: plugin.id) } },
+                                  actions: actions(for: plugin, isBusy: busy))
+                    }
+                    if management.phase == .inspecting {
+                        Row(alignment: .center, spacing: 8) {
+                            Spinner(size: 12)
+                            Text(L("Inspecting plugin without loading it…")).font(.caption).foregroundColor(.onSurfaceMuted)
+                        }.padding(horizontal: 4, vertical: 6)
+                    }
+                    Button(isEnabled: available && !busy, action: choosePackage) {
+                        Row(alignment: .center, spacing: 8) {
+                            Icon(UIIcons.File.folderPlus, size: 13, color: .onSurfaceVariant)
+                            Text(L("Add from Folder…")).font(.label)
+                        }
+                    }.buttonStyle(.secondary).debugName("settings-plugin-choose")
+                }
             }
         }
+    }
+
+    /// The bundled plugin stays listed while disabled, so it can be switched
+    /// back on without hunting for its package.
+    private func swiftSupportRow(management: EditorPluginManagementState, isBusy: Bool) -> some View {
+        let enabled = management.enabled.first { $0.id == PluginRow.swiftSupportID }
+        return PluginRow(listing: enabled.map(PluginListing.init) ?? .swiftSupport, isEnabled: enabled != nil, isBusy: isBusy,
+            onToggle: { on in
+                Task { @MainActor in
+                    if on { await app.inspectBundledSwiftSupport() }
+                    else { await app.disablePluginFromManagement(id: PluginRow.swiftSupportID) }
+                }
+            },
+            actions: enabled.map { actions(for: $0, isBusy: isBusy) } ?? [])
+            .debugName("settings-plugin-swift-support")
+    }
+
+    private func actions(for plugin: EditorPluginInspectionSummary, isBusy: Bool) -> [MenuEntry] {
+        [
+            .item(MenuItem(id: "reload", title: L("Reload"), isEnabled: !isBusy) {
+                Task { @MainActor in await app.reloadPluginFromManagement(id: plugin.id) }
+            }),
+            .separator("plugin-authorization"),
+            .item(MenuItem(id: "revoke", title: L("Revoke Authorization"), isEnabled: !isBusy, role: .destructive) {
+                Task { @MainActor in await app.revokePluginFromManagement(id: plugin.id) }
+            }),
+        ]
     }
 
     private func choosePackage() {

@@ -8,6 +8,9 @@ public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendab
     public private(set) var documents: [TextDocument] = []
     public private(set) var selectedPath: String?
     public private(set) var error: String?
+    /// Tells the workstation which tab is in front; script tabs bring their
+    /// language session along.
+    var didSelect: ((String?) -> Void)?
     public init(root: URL) { workspace = DocumentWorkspace(root: root) }
     public var hasUnsavedChanges: Bool { documents.contains(where: \.isDirty) }
     /// Everything a view shows about the workspace, compared as one value so a
@@ -18,6 +21,9 @@ public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendab
     public func files() -> [String] { workspace.files() }
     public func open(_ path: String) {
         perform { _ = try workspace.open(path); selectedPath = path }
+        // Re-announce even when unchanged: another view may have moved the
+        // script selection while this tab stayed in front.
+        if error == nil { didSelect?(path) }
     }
     /// Closing the selected document selects its neighbour in tab order, so
     /// the editor never shows an empty pane while other documents stay open.
@@ -47,9 +53,12 @@ public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendab
         refresh()
     }
     private func perform(_ action: () throws -> Void) {
+        let previous = selectedPath
         do { try action(); error = nil } catch { self.error = error.localizedDescription }
         refresh()
+        if selectedPath != previous { didSelect?(selectedPath) }
     }
+    func report(_ failure: Error) { error = failure.localizedDescription; refresh() }
     private func refresh() { documents = workspace.documents; publisher.send() }
     public func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable { publisher.register(on: self, handler: handler) }
     public func _unregisterObserver(_ token: AnyHashable) { publisher.unregister(token) }

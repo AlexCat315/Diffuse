@@ -4,30 +4,50 @@ internal import GuavaUI
 internal import GuavaUIRuntime
 
 /// The project's text files as a folder tree. Opening a file here selects it
-/// in the editor; open and modified files are marked in place.
+/// in the editor; open and modified files are marked in place. Given the
+/// application, project scripts can also be created and deleted here.
 struct DocumentFilesPanel: View {
     let model: EditorDocumentWorkspace
+    let app: EditorApplication?
     private var observed: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     @State private var filter: TextBuffer = ""
     @State private var index = DocumentFileIndex()
     @State private var expanded: Set<String>?
     @State private var focusedFolder: String?
 
-    init(model: EditorDocumentWorkspace) {
+    init(model: EditorDocumentWorkspace, app: EditorApplication? = nil) {
         self.model = model
+        self.app = app
         observed = Observed(\.snapshot, on: model)
     }
 
     var body: some View {
+        if let app {
+            // Script edits live in the script workspace; observing it keeps
+            // their modified marks current.
+            ScriptWorkspaceReader(app.workstation.scripts) { _ in content }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         let snapshot = observed.wrappedValue
         let documents = snapshot.documents
-        let tree = index.tree(model, documents: documents)
+        let scriptPaths = app.map { app in app.workstation.scripts.snapshot.documents.map(\.file.url.path) } ?? []
+        let tree = index.tree(model, documents: documents, scripts: scriptPaths)
         let keys = DocumentFileNode.keys(in: tree)
-        let dirty = Set(documents.filter(\.isDirty).map(\.path))
+        let dirty = Set(documents.filter(\.isDirty).map(\.path)).union(dirtyScripts)
         let open = Set(documents.map(\.path))
         let expandedFolders = expanded ?? DocumentFileNode.defaultExpansion(tree, selected: snapshot.selectedPath)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             EditorPanelSearchBar(L("Filter files"), text: $filter, summary: "\(index.count)") {
+                if let app, allowsScripts {
+                    EditorPanelIconButton(UIIcons.File.filePlus, tooltip: L("New Script")) {
+                        ScriptFileActions.newScript(app: app)
+                        index.invalidate()
+                    }.debugName("document-files-new-script")
+                }
                 EditorPanelIconButton(UIIcons.Navigation.refresh, tooltip: L("Refresh")) {
                     index.invalidate()
                     expanded = expandedFolders
@@ -99,20 +119,48 @@ struct DocumentFilesPanel: View {
         }
     }
 
+    private var allowsScripts: Bool { app?.store.workspaceMode.profile.features.contains(.scripting) == true }
+
+    /// Scripts edited without a tab (a rename that touched several files).
+    private var dirtyScripts: Set<String> {
+        guard let workstation = app?.workstation else { return [] }
+        return Set(workstation.scripts.snapshot.documents.filter(\.isDirty)
+            .compactMap { workstation.documentPath(forScript: $0.file.identifier) })
+    }
+
     private func entries(_ node: DocumentFileNode, isOpen: Bool, isDirty: Bool) -> [MenuEntry] {
-        guard !node.isFolder else { return [] }
+        if node.isFolder {
+            guard let app, allowsScripts,
+                  node.path == app.workstation.documentPath(for: app.dynamicScriptManager.scriptsDirectoryURL) else { return [] }
+            return [.item(MenuItem(id: "new-script", title: L("New Script")) {
+                ScriptFileActions.newScript(app: app); index.invalidate()
+            })]
+        }
+        let isScript = app?.workstation.scriptID(forDocument: node.path) != nil
         var items: [MenuEntry] = [.item(MenuItem(id: "open", title: L("Open")) { model.open(node.path) })]
         if isDirty {
-            items.append(.item(MenuItem(id: "save", title: L("Save")) { model.save(node.path) }))
-            items.append(.item(MenuItem(id: "revert", title: L("Discard Changes"), role: .destructive) {
-                model.reload(node.path, discard: true)
-            }))
+            items.append(.item(MenuItem(id: "save", title: L("Save")) { save(node.path) }))
+            items.append(.item(MenuItem(id: "revert", title: L("Discard Changes"), role: .destructive) { revert(node.path) }))
         }
         if isOpen {
             items.append(.separator("close-separator"))
             items.append(.item(MenuItem(id: "close", title: L("Close"), isEnabled: !isDirty) { model.close(node.path) }))
         }
+        if let app, isScript {
+            items.append(.separator("script-separator"))
+            items.append(.item(MenuItem(id: "delete-script", title: L("Delete Script"), role: .destructive) {
+                ScriptFileActions.confirmDelete(app: app, path: node.path)
+            }))
+        }
         return items
+    }
+
+    private func save(_ path: String) {
+        if let app { app.workstation.saveDocument(path) } else { model.save(path) }
+    }
+
+    private func revert(_ path: String) {
+        if let app { app.workstation.revertDocument(path) } else { model.reload(path, discard: true) }
     }
 }
 
@@ -172,15 +220,18 @@ struct DocumentFileNode {
     }
 }
 
-/// Listing the project walks the disk, so the tree is cached until refreshed
-/// or until a document appears that the listing does not know yet.
+/// Listing the project walks the disk, so the tree is cached until refreshed,
+/// until a document appears that the listing does not know yet, or until the
+/// project's scripts are created or deleted.
 final class DocumentFileIndex {
     private var paths: Set<String>?
     private var cached: [DocumentFileNode] = []
     private var folders: Set<String> = []
     private(set) var count = 0
+    private var scripts: [String] = []
 
-    func tree(_ model: EditorDocumentWorkspace, documents: [TextDocument]) -> [DocumentFileNode] {
+    func tree(_ model: EditorDocumentWorkspace, documents: [TextDocument], scripts: [String] = []) -> [DocumentFileNode] {
+        if scripts != self.scripts { self.scripts = scripts; paths = nil }
         let known = paths ?? []
         if paths == nil || documents.contains(where: { !known.contains($0.path) && $0.existsOnDisk }) {
             let listed = Set(model.files()).union(documents.filter(\.existsOnDisk).map(\.path))

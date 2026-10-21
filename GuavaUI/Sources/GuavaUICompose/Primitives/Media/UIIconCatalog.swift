@@ -38,6 +38,8 @@ public enum UIIcons {
         public static let chevronsLeft = asset("chevrons-left")
         public static let chevronsRight = asset("chevrons-right")
         public static let chevronsUpDown = asset("chevrons-up-down")
+        public static let circleArrowDown = asset("circle-arrow-down")
+        public static let circleArrowUp = asset("circle-arrow-up")
         public static let cornerDownRight = asset("corner-down-right")
         public static let expand = asset("expand")
         public static let fullscreen = asset("fullscreen")
@@ -319,6 +321,10 @@ public extension UIIcons {
                      resource: Navigation.chevronsRight),
         UIIconEntry(id: "chevrons-up-down", name: "chevrons-up-down", category: "Navigation",
                      resource: Navigation.chevronsUpDown),
+        UIIconEntry(id: "circle-arrow-down", name: "circle-arrow-down", category: "Navigation",
+                     resource: Navigation.circleArrowDown),
+        UIIconEntry(id: "circle-arrow-up", name: "circle-arrow-up", category: "Navigation",
+                     resource: Navigation.circleArrowUp),
         UIIconEntry(id: "corner-down-right", name: "corner-down-right", category: "Navigation",
                      resource: Navigation.cornerDownRight),
         UIIconEntry(id: "expand", name: "expand", category: "Navigation",

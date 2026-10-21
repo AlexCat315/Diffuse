@@ -18,11 +18,11 @@ enum EditorWorkspaceDefaults {
 
         if mode == .documents { move("documents", to: "center", groups: &groups, panels: panels) }
         if mode == .video { move("media", to: "center", groups: &groups, panels: panels) }
-        if mode == .scripting { move("scripts", to: "center", groups: &groups, panels: panels) }
+        if mode == .scripting { move("documents", to: "center", groups: &groups, panels: panels) }
 
         switch preset {
-        case .levelWorkbench where panels["scripts"] != nil:
-            move("scripts", to: "script-editor", groups: &groups, panels: panels)
+        case .levelWorkbench where panels["documents"] != nil:
+            move("documents", to: "script-editor", groups: &groups, panels: panels)
             center = .split(axis: .horizontal, fraction: 0.54,
                             first: .group("center"), second: .group("script-editor"))
         case .levelCinematics where panels["animation"] != nil && panels["render-pipeline"] != nil:
@@ -63,7 +63,7 @@ enum EditorWorkspaceDefaults {
         var groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [:]
         let definitions: [(WorkspaceTabGroupID, [WorkspacePanelID], WorkspacePanelID)] = [
             ("leading", ["hierarchy", "assets", "files"], preset.mode == .scripting || preset.mode == .modeling ? "assets" : "hierarchy"),
-            ("center", ["viewport", "scripts"], "viewport"),
+            ("center", ["viewport", "documents"], "viewport"),
             ("trailing", ["inspector", "intent-input", "journal"], "inspector"),
             ("bottom", ["console", "terminal", "animation", "render-pipeline", "developer-tools"],
              defaultBottomPanelID(for: preset)),

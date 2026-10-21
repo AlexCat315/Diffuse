@@ -491,9 +491,11 @@ public final class FontProvider {
                                            fullText as CFString,
                                            CFRange(location: range.location, length: range.length))
 
-        var candidates: [CTFont] = [direct, primary]
         // Stack families carry the primary's weight and slant, so bold or
         // italic text that falls back (CJK through PingFang) keeps its style.
+        // They come before CoreText's own pick, which would switch bold CJK
+        // to another family (Hiragino) than regular text uses.
+        var candidates: [CTFont] = [primary]
         let traits = CTFontCopyTraits(primary) as? [CFString: Any] ?? [:]
         var styled: [CFString: Any] = [:]
         if let weight = traits[kCTFontWeightTrait] { styled[kCTFontWeightTrait] = weight }
@@ -506,6 +508,8 @@ public final class FontProvider {
             ] as CFDictionary)
             return CTFontCreateWithFontDescriptor(descriptor, logicalSize, nil)
         })
+        // Emoji and scripts outside the stack keep the system cascade.
+        candidates.append(direct)
 
         var seenPostScriptNames: Set<String> = []
         for candidate in candidates {

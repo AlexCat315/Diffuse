@@ -28,6 +28,8 @@ struct _WorkspaceLayoutNodeView: View {
                           fraction: Binding(get: { fraction }, set: {
                               _ = controller.dispatch(.resizeLayoutSplit(address, fraction: $0))
                           }), dividerThickness: metrics.divider,
+                          // Like region splits: the gutter is canvas, not a rule.
+                          dividerColor: .clear,
                           constraints: .init(fraction: 0...1,
                               minimumFirst: firstSize.minimum, minimumSecond: secondSize.minimum,
                               maximumFirst: firstSize.maximum, maximumSecond: secondSize.maximum)) {

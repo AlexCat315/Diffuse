@@ -51,8 +51,8 @@ struct AgentSettingsEditor {
         onChange()
     }
 
-    var credentialStatus: String {
-        switch app.aiCredentialSource(for: draft.provider) {
+    func credentialStatus(_ source: AICredentialSource?) -> String {
+        switch source {
         case .operatingSystemStore: L("A credential is stored securely.")
         case .environment(let variable): String(format: L("Using credential from environment variable %@."), variable)
         case nil: L("No credential is available for this provider.")

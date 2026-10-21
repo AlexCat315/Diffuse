@@ -12,6 +12,55 @@ extension ScriptLanguageSupport {
         }
     }
 
+    /// Conformers of a protocol requirement and overrides of a member.
+    public func implementations(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        let response = try await semanticRequest("textDocument/implementation", scriptID: scriptID) { uri in
+            try Self.locationParameters(uri: uri, position: position)
+        }
+        return ScriptLanguageReplies.parseDefinition(response.payload).map { location in
+            ScriptDefinitionLocation(documentURI: location.documentURI,
+                                     scriptID: response.context.document(for: location.documentURI)?.scriptID, span: location.span)
+        }
+    }
+
+    /// Types the type declared at `position` inherits from or conforms to.
+    /// Falls back to the declaration's inheritance clause, resolved name by
+    /// name, when the index has no hierarchy for types from binary modules.
+    public func supertypes(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        let hierarchy = try await typeHierarchy("typeHierarchy/supertypes", scriptID: scriptID, at: position)
+        guard hierarchy.isEmpty, let text = currentText(scriptID: scriptID) else { return hierarchy }
+        var found: [ScriptDefinitionLocation] = []
+        for name in ScriptInheritanceClause.typePositions(in: text, declarationAt: position) {
+            if let location = try await definition(scriptID: scriptID, at: name).first { found.append(location) }
+        }
+        return found
+    }
+
+    /// Subclasses of a class and conformers of a protocol.
+    public func subtypes(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        try await typeHierarchy("typeHierarchy/subtypes", scriptID: scriptID, at: position)
+    }
+
+    /// The protocol is two steps: prepare names the item, then a second request
+    /// walks one level from it. Each item's selection range is its name.
+    private func typeHierarchy(_ method: String, scriptID: String,
+                               at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        let prepared = try await semanticRequest("textDocument/prepareTypeHierarchy", scriptID: scriptID) { uri in
+            try Self.locationParameters(uri: uri, position: position)
+        }
+        guard let data = prepared.payload,
+              let items = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [[String: Any]],
+              let item = items.first else { return [] }
+        let payload = try await resolveSemanticRequest(method, params: LSPJSON.data(["item": item]), context: prepared.context)
+        guard let payload,
+              let related = try JSONSerialization.jsonObject(with: payload, options: [.fragmentsAllowed]) as? [[String: Any]] else { return [] }
+        return related.compactMap { item in
+            guard let uri = item["uri"] as? String,
+                  let span = ScriptLanguageReplies.parseSpan(item["selectionRange"] ?? item["range"]) else { return nil }
+            return ScriptDefinitionLocation(documentURI: uri, scriptID: prepared.context.document(for: uri)?.scriptID, span: span)
+        }
+    }
+
     public func prepareRename(scriptID: String, at position: ScriptLanguagePosition) async throws -> ScriptRenamePreparation? {
         let response = try await semanticRequest("textDocument/prepareRename", scriptID: scriptID) { uri in
             try Self.locationParameters(uri: uri, position: position)

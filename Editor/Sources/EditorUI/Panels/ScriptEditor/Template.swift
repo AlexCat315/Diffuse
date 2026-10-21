@@ -1,4 +1,4 @@
-/// Source emitted for scripts created from the panel.
+/// Source emitted for scripts created from the Files tree or a Swift tab.
 ///
 /// Mirrors the documented `GameScript: ScriptBehavior` contract
 /// (`docs/project-scripting.md`): one type per file, discovered by the runtime

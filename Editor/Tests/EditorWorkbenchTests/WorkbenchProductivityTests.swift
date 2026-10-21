@@ -88,9 +88,9 @@ struct WorkbenchProductivityTests {
     func compactWorkspace() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let document = WorkspaceDocument(
             panels: ["viewport": WorkspacePanel(id: "viewport", title: "Viewport"),
-                     "scripts": WorkspacePanel(id: "scripts", title: "Scripts")],
+                     "documents": WorkspacePanel(id: "documents", title: "Editor")],
             groups: ["center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
-                     "bottom": WorkspaceTabGroup(id: "bottom", panels: ["scripts"], activePanelID: "scripts")],
+                     "bottom": WorkspaceTabGroup(id: "bottom", panels: ["documents"], activePanelID: "documents")],
             slots: WorkspaceSlot.standardEditorSlots(center: .group("center"), bottom: .group("bottom")))
         let controller = WorkspaceController(document: document)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
@@ -100,12 +100,12 @@ struct WorkbenchProductivityTests {
         graph.computeLayout(width: 560, height: 640)
         var snapshot = graph.layoutSnapshot()
         #expect(snapshot.contains { $0.debugName == "test-viewport" && $0.absoluteFrame.width >= 550 })
-        #expect(!snapshot.contains { $0.debugName == "test-scripts" })
-        _ = controller.dispatch(.setActivePanel(groupID: "bottom", panelID: "scripts"))
+        #expect(!snapshot.contains { $0.debugName == "test-documents" })
+        _ = controller.dispatch(.setActivePanel(groupID: "bottom", panelID: "documents"))
         graph.recomposer.commitAll()
         graph.computeLayout(width: 560, height: 640)
         snapshot = graph.layoutSnapshot()
-        #expect(snapshot.contains { $0.debugName == "test-scripts" && $0.absoluteFrame.width >= 550 })
+        #expect(snapshot.contains { $0.debugName == "test-documents" && $0.absoluteFrame.width >= 550 })
         #expect(!snapshot.contains { $0.debugName == "test-viewport" })
         #expect(controller.document == document)
     } }

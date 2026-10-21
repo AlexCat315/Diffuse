@@ -5,36 +5,50 @@ internal import GuavaUIRuntime
 
 /// The text and code editor: one tab per open document, a path bar with the
 /// document's facts and actions, then the editing surface. Choosing files
-/// belongs to the Files panel and the ⌘P palette.
+/// belongs to the Files panel and the ⌘P palette. Given the application,
+/// project scripts get the Swift language tools; without it every file is
+/// plain text.
 struct DocumentsPanel: View {
     let model: EditorDocumentWorkspace
+    let app: EditorApplication?
     var onOpenFile: () -> Void = {}
     private var observed: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
+    @State private var swift: ScriptDocumentSessions?
     @State private var confirmingClose: String?
     @State private var hoveredClose: String?
     @State private var hoveredTab: String?
 
-    init(model: EditorDocumentWorkspace, onOpenFile: @escaping () -> Void = {}) {
+    init(model: EditorDocumentWorkspace, app: EditorApplication? = nil, onOpenFile: @escaping () -> Void = {}) {
         self.model = model
+        self.app = app
         self.onOpenFile = onOpenFile
         observed = Observed(\.snapshot, on: model)
+        _swift = State(wrappedValue: app.map(ScriptDocumentSessions.init))
     }
 
     var body: some View {
         let snapshot = observed.wrappedValue
-        let documents = snapshot.documents
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if let document = snapshot.selected {
-                tabs(documents, selected: document.path)
-                pathBar(document)
-                if let error = snapshot.error {
-                    Row(alignment: .center, spacing: 8) {
-                        Icon(UIIcons.Status.alertTriangle, size: 12, color: .error)
-                        Text(L(error), lineLimit: 2).font(.caption).foregroundColor(.error).flex().frame(minWidth: 0)
-                    }.padding(horizontal: 12, vertical: 6).background(SemanticColorRef.error.opacity(0.10))
-                        .debugName("document-error")
+                if let app {
+                    // Script edits live in the script workspace; observing it
+                    // keeps the tab dots in step with typing.
+                    ScriptWorkspaceReader(app.workstation.scripts) { _ in
+                        tabs(snapshot.documents, selected: document.path)
+                    }
+                } else {
+                    tabs(snapshot.documents, selected: document.path)
                 }
-                DocumentEditingSurface(model: model, path: document.path).id(document.path).flex()
+                if let app, let swift, let scriptID = app.workstation.scriptID(forDocument: document.path) {
+                    ScriptDocumentBar(app: app, sessions: swift, path: document.path)
+                    errorBanner(snapshot.error)
+                    ScriptDocumentSurface(app: app, sessions: swift, scriptID: scriptID, path: document.path)
+                        .id(document.path).flex()
+                } else {
+                    pathBar(document)
+                    errorBanner(snapshot.error)
+                    DocumentEditingSurface(model: model, path: document.path).id(document.path).flex()
+                }
             } else {
                 emptyState
             }
@@ -43,7 +57,32 @@ struct DocumentsPanel: View {
         .debugName("document-editor")
     }
 
+    @ViewBuilder
+    private func errorBanner(_ error: String?) -> some View {
+        if let error {
+            Row(alignment: .center, spacing: 8) {
+                Icon(UIIcons.Status.alertTriangle, size: 12, color: .error)
+                Text(L(error), lineLimit: 2).font(.caption).foregroundColor(.error).flex().frame(minWidth: 0)
+            }.padding(horizontal: 12, vertical: 6).background(SemanticColorRef.error.opacity(0.10))
+                .debugName("document-error")
+        }
+    }
+
     // MARK: Tabs
+
+    private func isDirty(_ document: TextDocument) -> Bool {
+        app?.workstation.isDocumentDirty(document) ?? document.isDirty
+    }
+
+    private func save(_ path: String) -> Bool {
+        if let app { return app.workstation.saveDocument(path) }
+        model.save(path)
+        return model.error == nil
+    }
+
+    private func close(_ path: String, discard: Bool = false) {
+        if let app { app.workstation.closeDocument(path, discard: discard) } else { model.close(path, discard: discard) }
+    }
 
     private func tabs(_ documents: [TextDocument], selected: String) -> some View {
         Box(direction: .row, alignItems: .center, spacing: 0) {
@@ -89,7 +128,7 @@ struct DocumentsPanel: View {
     /// its close mark only while selected or hovered, keeping its width.
     @ViewBuilder
     private func closeControl(_ document: TextDocument, isSelected: Bool) -> some View {
-        if document.isDirty {
+        if isDirty(document) {
             Popover(isPresented: Binding(get: { confirmingClose == document.path },
                                          set: { confirmingClose = $0 ? document.path : nil }),
                     width: 260, placement: .bottom, surface: .bubble, overflow: .constrain) {
@@ -112,19 +151,18 @@ struct DocumentsPanel: View {
                         Spacer(minLength: 0)
                         Button(L("Don't Save")) {
                             confirmingClose = nil
-                            model.close(document.path, discard: true)
+                            close(document.path, discard: true)
                         }.buttonStyle(.ghost)
                         Button(L("Save")) {
                             confirmingClose = nil
-                            model.save(document.path)
-                            if model.error == nil { model.close(document.path) }
+                            if save(document.path) { close(document.path) }
                         }.buttonStyle(.primary)
                     }
                 }.padding(12)
             }
         } else if isSelected || hoveredTab == document.path {
             Button(icon: .resource(UIIcons.Action.x), size: 10, tooltip: L("Close")) {
-                model.close(document.path)
+                close(document.path)
             }.buttonStyle(EditorChromeButtonStyle(height: 18))
         } else {
             Box {}.frame(width: 18, height: 18)
@@ -134,16 +172,8 @@ struct DocumentsPanel: View {
     // MARK: Path bar
 
     private func pathBar(_ document: TextDocument) -> some View {
-        let parts = document.path.split(separator: "/").map(String.init)
-        return Row(alignment: .center, spacing: 6) {
-            for (index, part) in parts.enumerated() {
-                if index > 0 { AnyView(Icon(UIIcons.Navigation.chevronRight, size: 9, color: .onSurfaceMuted)) }
-                let isFile = index == parts.count - 1
-                AnyView(Row(alignment: .center, spacing: 4) {
-                    if isFile { FileIcon(path: document.path, size: 12) }
-                    Text(part, lineLimit: 1).font(.caption).foregroundColor(isFile ? .onSurface : .onSurfaceMuted)
-                })
-            }
+        Row(alignment: .center, spacing: 6) {
+            DocumentPathCrumbs(path: document.path)
             Spacer(minLength: 0)
         }
         // Only where the file lives: unsaved state is the tab's dot, saving is
@@ -174,4 +204,36 @@ struct DocumentsPanel: View {
         .frame(width: .percent(100), minWidth: 0, minHeight: 0)
         .debugName("document-empty")
     }
+}
+
+/// Folder › folder › file, with the file's icon; shared by plain and Swift bars.
+struct DocumentPathCrumbs: View {
+    let path: String
+
+    var body: some View {
+        let parts = path.split(separator: "/").map(String.init)
+        Row(alignment: .center, spacing: 6) {
+            for (index, part) in parts.enumerated() {
+                if index > 0 { AnyView(Icon(UIIcons.Navigation.chevronRight, size: 9, color: .onSurfaceMuted)) }
+                let isFile = index == parts.count - 1
+                AnyView(Row(alignment: .center, spacing: 4) {
+                    if isFile { FileIcon(path: path, size: 12) }
+                    Text(part, lineLimit: 1).font(.caption).foregroundColor(isFile ? .onSurface : .onSurfaceMuted)
+                })
+            }
+        }
+    }
+}
+
+/// Re-renders its content whenever the script workspace publishes.
+struct ScriptWorkspaceReader<Content: View>: View {
+    private let observed: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
+    private let content: (ScriptWorkspaceSnapshot) -> Content
+
+    init(_ model: ScriptWorkspaceModel, @ViewBuilder content: @escaping (ScriptWorkspaceSnapshot) -> Content) {
+        observed = Observed(\.snapshot, on: model)
+        self.content = content
+    }
+
+    var body: some View { content(observed.wrappedValue) }
 }

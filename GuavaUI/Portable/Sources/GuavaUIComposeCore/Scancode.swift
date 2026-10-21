@@ -16,6 +16,7 @@ public enum Scancode {
     public static let r: UInt32 = 21
     public static let s: UInt32 = 22
     public static let t: UInt32 = 23
+    public static let u: UInt32 = 24
     public static let v: UInt32 = 25
     public static let w: UInt32 = 26
     public static let x: UInt32 = 27
@@ -29,6 +30,8 @@ public enum Scancode {
     public static let digit5: UInt32 = 34
     public static let comma: UInt32 = 54
     public static let period: UInt32 = 55
+    public static let leftBracket: UInt32 = 47
+    public static let rightBracket: UInt32 = 48
     public static let `return`: UInt32 = 40
     public static let escape: UInt32 = 41
     public static let backspace: UInt32 = 42

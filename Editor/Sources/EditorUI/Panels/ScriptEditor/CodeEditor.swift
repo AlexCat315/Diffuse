@@ -30,6 +30,9 @@ struct ScriptCodeEditor: View {
     var onKey: ((KeyEvent) -> Bool)?
     var languageEntries: [MenuEntry] = []
     var isReadOnly = false
+    /// Language markers (hierarchy arrows, the bulb). Each takes its line
+    /// from a diagnostic marker, whose message stays on the underline.
+    var markers: [TextGutterMarker] = []
 
     var body: some View {
         let text = source.wrappedValue
@@ -58,7 +61,8 @@ struct ScriptCodeEditor: View {
                     }
                     input.codeEditing.folding.collapsedLines = Binding(get: { annotations.wrappedValue.collapsedLines },
                         set: { annotations.wrappedValue.collapsedLines = $0 })
-                    input.codeEditing.gutter.markers = mappedDiagnostics.overlapping(0..<max(1, text.utf8Length)).enumerated().map { index, diagnostic in
+                    let markedLines = Set(markers.map(\.line))
+                    input.codeEditing.gutter.markers = markers + mappedDiagnostics.overlapping(0..<max(1, text.utf8Length)).enumerated().map { index, diagnostic in
                         TextGutterMarker("diagnostic-\(index)-\(diagnostic.utf8Range.lowerBound)-\(diagnostic.utf8Range.upperBound)-\(diagnostic.severity)-\(diagnostic.message)",
                             line: text.lineIndex(forCharacterIndex: text.characterIndex(forUTF8Offset: diagnostic.utf8Range.lowerBound)),
                             label: L("Go to diagnostic") + ": " + diagnostic.message,
@@ -67,7 +71,7 @@ struct ScriptCodeEditor: View {
                                 gutterNavigation = ScriptGutterNavigation(externalID: navigation?.id,
                                     characterIndex: text.characterIndex(forUTF8Offset: diagnostic.utf8Range.lowerBound))
                             }
-                    }
+                    }.filter { !markedLines.contains($0.line) }
                     input.codeEditing.folding.regions = syntaxSession.foldRegions
                     input.codeEditing.folding.isReady = syntaxSession.parsedBuffer == text
                     input.codeEditing.diagnostics = mappedDiagnostics
@@ -102,10 +106,9 @@ struct ScriptCodeEditor: View {
                 .textFieldStyle(.editor)
                 .flex(1, shrink: 1, basis: 0)
                 .contextMenu(entries: { languageEntries })
-                .font(.mono).font(.monospaced(size: 15)).lineHeight(24)
+                .font(.monospaced(size: 13)).lineHeight(20)
                 .accessibilityLabel(L("Source code"))
                 .frame(minHeight: 0)
-                .background(.surfaceSunken)
                 .flex(1, shrink: 1)
 
                 // Contributes no layout; the popup is painted through the tooltip

@@ -188,19 +188,16 @@ enum EditorRootViewFactory {
                 DeveloperToolsPanel(app: app)
             },
             WorkspacePanelDescriptor(id: "files", title: localizedPanelTitle(for: "files"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.files" }) {
-                DocumentFilesPanel(model: app.workstation.documents)
+                DocumentFilesPanel(model: app.workstation.documents, app: app)
             },
             WorkspacePanelDescriptor(id: "documents", title: localizedPanelTitle(for: "documents"), defaultSlot: .center, configure: { $0.iconAssetKey = "panel.documents"; $0.hidesTabBarWhenAlone = true }) {
-                DocumentsPanel(model: app.workstation.documents, onOpenFile: {
+                DocumentsPanel(model: app.workstation.documents, app: app, onOpenFile: {
                     app.store.dispatch(.setCommandPaletteQuery(TextBuffer(EditorPaletteScope.resources.prefix)))
                     app.store.dispatch(.setCommandPaletteVisible(true))
                 })
             },
             WorkspacePanelDescriptor(id: "media", title: localizedPanelTitle(for: "media"), defaultSlot: .center) {
                 MediaTimelinePanel(model: app.workstation.media, projectRoot: URL(fileURLWithPath: app.projectDirectory))
-            },
-            WorkspacePanelDescriptor(id: "scripts", title: localizedPanelTitle(for: "scripts"), defaultSlot: .center, configure: { $0.isCollapsible = false; $0.iconAssetKey = "panel.scripts" }) {
-                ScriptPanel(app: app)
             },
         ])
     }
@@ -221,7 +218,6 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.animation", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
         WorkspacePanelIconCatalog.register("panel.profiler", panelIcon("profiler"))
-        WorkspacePanelIconCatalog.register("panel.scripts", panelIcon("script"))
         WorkspacePanelIconCatalog.register("panel.journal", UIIcons.Editor.gitCommit)
         WorkspacePanelIconCatalog.register("panel.files", UIIcons.File.folder)
         WorkspacePanelIconCatalog.register("panel.terminal", UIIcons.Editor.terminal)
@@ -315,8 +311,6 @@ enum EditorRootViewFactory {
             return L("Developer Tools")
         case "profiler":
             return L("Profiler")
-        case "scripts":
-            return L("Scripts")
         case "animation":
             return L("Animation")
         case "files":

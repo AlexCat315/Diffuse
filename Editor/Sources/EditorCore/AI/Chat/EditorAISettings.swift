@@ -124,7 +124,16 @@ public enum AIKeychainError: Error, Sendable, Equatable, LocalizedError {
         case .unavailable:
             return "The operating-system credential store is unavailable."
         case let .operationFailed(status):
-            return "The credential store operation failed with status \(status)."
+            switch status {
+            case -25293, -25308:
+                return "The credential store refused access. Allow GuavaStudio in the Keychain prompt, or remove the old \"com.guava.editor.ai-provider\" item in Keychain Access and enter the key again."
+            case -128:
+                return "Access to the credential store was cancelled."
+            case -25291, -25307:
+                return "The login keychain is locked or unavailable."
+            default:
+                return "The credential store operation failed with status \(status)."
+            }
         }
     }
 }
@@ -145,6 +154,9 @@ public enum AIKeychain {
             .appendingPathComponent("Guava", isDirectory: true)
             .appendingPathComponent("ai_keys.json")
     }
+
+    /// Runs the legacy migration at most once per process.
+    private static let legacyMigration: Void = migrateLegacyPlaintextStoreIfNeeded()
 
     /// One-time migration from older development builds. The plaintext file is
     /// removed only after every non-empty value is present in Keychain; a
@@ -181,7 +193,7 @@ public enum AIKeychain {
     }
 
     public static func save(key: String, provider: EditorAIProvider) throws {
-        migrateLegacyPlaintextStoreIfNeeded()
+        _ = legacyMigration
         guard !key.isEmpty else {
             try delete(provider: provider)
             return
@@ -192,17 +204,13 @@ public enum AIKeychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: provider.rawValue,
         ]
-        let values: [String: Any] = [
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            kSecValueData as String: Data(key.utf8),
-        ]
-        let updateStatus = SecItemUpdate(identity as CFDictionary, values as CFDictionary)
-        if updateStatus == errSecSuccess { return }
-        guard updateStatus == errSecItemNotFound else {
-            throw AIKeychainError.operationFailed(updateStatus)
-        }
+        // Replace rather than update. An item only trusts the build that wrote
+        // it, so on development-signed builds an in-place update fails (or
+        // prompts) after every rebuild; a fresh item trusts the running app.
+        try delete(provider: provider)
         var insertion = identity
-        for (key, value) in values { insertion[key] = value }
+        insertion[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        insertion[kSecValueData as String] = Data(key.utf8)
         let addStatus = SecItemAdd(insertion as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw AIKeychainError.operationFailed(addStatus)
@@ -213,7 +221,7 @@ public enum AIKeychain {
     }
 
     public static func load(provider: EditorAIProvider) -> String? {
-        migrateLegacyPlaintextStoreIfNeeded()
+        _ = legacyMigration
         if let stored = loadFromOperatingSystemStore(provider: provider) {
             return stored
         }
@@ -223,9 +231,11 @@ public enum AIKeychain {
         )?.key
     }
 
+    /// Answers from item attributes alone, so status checks never read the
+    /// secret and never trigger a Keychain access prompt.
     public static func credentialSource(for provider: EditorAIProvider) -> AICredentialSource? {
-        migrateLegacyPlaintextStoreIfNeeded()
-        if loadFromOperatingSystemStore(provider: provider) != nil {
+        _ = legacyMigration
+        if storedItemExists(provider: provider) {
             return .operatingSystemStore
         }
         guard let environment = environmentCredential(
@@ -259,6 +269,21 @@ public enum AIKeychain {
         return nil
     }
 
+    private static func storedItemExists(provider: EditorAIProvider) -> Bool {
+#if canImport(Security)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: provider.rawValue,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+#else
+        return false
+#endif
+    }
+
     private static func loadFromOperatingSystemStore(provider: EditorAIProvider) -> String? {
 #if canImport(Security)
         let query: [String: Any] = [
@@ -280,7 +305,7 @@ public enum AIKeychain {
     }
 
     public static func delete(provider: EditorAIProvider) throws {
-        migrateLegacyPlaintextStoreIfNeeded()
+        _ = legacyMigration
 #if canImport(Security)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

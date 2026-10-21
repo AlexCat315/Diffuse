@@ -90,19 +90,18 @@ enum EditorCommandDispatcher {
         case .saveDocument:
             let documents = app.workstation.documents
             if let path = documents.selectedPath {
-                documents.save(path)
                 // A failure stays in the editor's error banner, next to the text.
-                if documents.error == nil {
+                if app.workstation.saveDocument(path) {
                     let name = path.split(separator: "/").last.map(String.init) ?? path
                     EditorNotifications.of(app).post(L("Saved") + " " + name, id: "save", tone: .success)
                 }
             }
         case .revertDocument:
             let documents = app.workstation.documents
-            if let path = documents.selectedPath { documents.reload(path, discard: true) }
+            if let path = documents.selectedPath { app.workstation.revertDocument(path) }
         case .closeDocument:
             let documents = app.workstation.documents
-            if let path = documents.selectedPath { documents.close(path) }
+            if let path = documents.selectedPath { app.workstation.closeDocument(path) }
         case .importAssets:
             EditorRootViewFactory.activatePanel("assets", in: controller)
             EditorAssetImportCoordinator.requestImport(app: app)
@@ -232,8 +231,6 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.saveWorkspaceLayout(controller,
                                                        for: store.state.workspace.mode,
                                                        preset: store.state.workspace.layoutPreset)
-        case .showScripts:
-            EditorRootViewFactory.activatePanel("scripts", in: controller)
         case let .setPlaybackState(next):
             guard EditorPlaybackCommandPolicy.canTransition(from: store.state.timing.playbackState,
                                                             to: next) else { return }

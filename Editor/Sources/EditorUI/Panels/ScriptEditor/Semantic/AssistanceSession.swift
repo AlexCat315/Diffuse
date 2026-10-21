@@ -4,11 +4,14 @@ internal import GuavaUI
 internal import GuavaUIRuntime
 
 enum ScriptSemanticCommand: CaseIterable, Equatable {
-    case definition, references, rename, codeActions, signature, symbols, format, back, undo, redo
+    case definition, implementations, supertypes, references, rename, codeActions, signature, symbols, format,
+         back, forward, undo, redo
 
     var title: String {
         switch self {
         case .definition: "Go to Definition"
+        case .implementations: "Go to Implementations"
+        case .supertypes: "Go to Super Type"
         case .references: "Find References"
         case .rename: "Rename Symbol"
         case .codeActions: "Quick Fix / Code Actions"
@@ -16,25 +19,37 @@ enum ScriptSemanticCommand: CaseIterable, Equatable {
         case .symbols: "Document Outline"
         case .format: "Format Document"
         case .back: "Go Back"
+        case .forward: "Go Forward"
         case .undo: "Undo Workspace Edit"
         case .redo: "Redo Workspace Edit"
         }
     }
 
+    /// One chord per command feeds both key handling and every tooltip.
+    /// Back/forward and the hierarchy jumps follow JetBrains on macOS.
+    var shortcut: EditorShortcut {
+        switch self {
+        case .definition: EditorShortcut(.f12, [])
+        case .implementations: EditorShortcut(.letter("b"), [.primary, .option])
+        case .supertypes: EditorShortcut(.letter("u"))
+        case .references: EditorShortcut(.f12, [.shift])
+        case .rename: EditorShortcut(.f2, [])
+        case .codeActions: EditorShortcut(.period)
+        case .signature: EditorShortcut(.space, [.primary, .shift])
+        case .symbols: EditorShortcut(.letter("o"), [.primary, .shift])
+        case .format: EditorShortcut(.letter("f"), [.option, .shift])
+        case .back: EditorShortcut(.leftBracket)
+        case .forward: EditorShortcut(.rightBracket)
+        case .undo: EditorShortcut(.letter("z"))
+        case .redo: EditorShortcut(.letter("z"), [.primary, .shift])
+        }
+    }
+
+    /// Localized title with its chord, for tooltips and menus.
+    var help: String { "\(L(title)) (\(shortcut.label))" }
+
     static func matching(_ event: KeyEvent) -> Self? {
-        let modifiers = event.modifiers
-        let primary = !modifiers.isDisjoint(with: [.gui, .ctrl])
-        let shift = modifiers.contains(.shift)
-        let alt = modifiers.contains(.alt)
-        if event.scancode == Scancode.f12, modifiers.isDisjoint(with: [.gui, .ctrl, .alt]) { return shift ? .references : .definition }
-        if event.scancode == Scancode.f2, modifiers.isEmpty { return .rename }
-        if primary, event.scancode == Scancode.period, !alt { return .codeActions }
-        if primary, shift, event.scancode == Scancode.space { return .signature }
-        if primary, shift, event.scancode == Scancode.o { return .symbols }
-        if alt, shift, event.scancode == Scancode.f { return .format }
-        if alt, !primary, event.scancode == Scancode.arrowLeft { return .back }
-        if primary, event.scancode == Scancode.z { return shift ? .redo : .undo }
-        return nil
+        allCases.first { $0.shortcut.matches(event) }
     }
 }
 
@@ -44,16 +59,30 @@ struct ScriptSemanticLocation: Equatable {
     let position: ScriptLanguagePosition
 }
 
+/// Browser-style history: a jump records where it left from and clears the
+/// forward stack; back and forward trade the current place between stacks.
 struct ScriptSemanticNavigation {
     private(set) var previous: [ScriptSemanticLocation] = []
+    private(set) var next: [ScriptSemanticLocation] = []
 
     mutating func record(_ location: ScriptSemanticLocation) {
+        next.removeAll()
         guard previous.last != location else { return }
         previous.append(location)
         if previous.count > 100 { previous.removeFirst() }
     }
 
-    mutating func back() -> ScriptSemanticLocation? { previous.popLast() }
+    mutating func back(from current: ScriptSemanticLocation?) -> ScriptSemanticLocation? {
+        guard let target = previous.popLast() else { return nil }
+        if let current { next.append(current) }
+        return target
+    }
+
+    mutating func forward(from current: ScriptSemanticLocation?) -> ScriptSemanticLocation? {
+        guard let target = next.popLast() else { return nil }
+        if let current { previous.append(current) }
+        return target
+    }
 }
 
 struct ScriptSemanticExternalDocument {
@@ -97,6 +126,7 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
     func canPerform(_ command: ScriptSemanticCommand) -> Bool {
         switch command {
         case .back: return !navigation.previous.isEmpty || externalDocument != nil
+        case .forward: return !navigation.next.isEmpty
         case .undo: return app.workstation.scripts.canUndoLanguageEdit
         case .redo: return app.workstation.scripts.canRedoLanguageEdit
         default: return canQuery
@@ -152,6 +182,7 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
 
     func perform(_ command: ScriptSemanticCommand) {
         if command == .back { goBack(); return }
+        if command == .forward { goForward(); return }
         if command == .undo || command == .redo {
             do {
                 if command == .undo { try app.workstation.scripts.undoLanguageEdit() }
@@ -173,13 +204,17 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
             do {
                 let manager = self.app.dynamicScriptManager
                 switch command {
-                case .definition, .references:
-                    let locations = command == .definition
-                        ? try await manager.definition(scriptID: document.file.identifier, at: position)
-                        : try await manager.references(scriptID: document.file.identifier, at: position)
+                case .definition, .implementations, .supertypes, .references:
+                    let id = document.file.identifier
+                    let locations = switch command {
+                    case .definition: try await manager.definition(scriptID: id, at: position)
+                    case .implementations: try await manager.implementations(scriptID: id, at: position)
+                    case .supertypes: try await manager.supertypes(scriptID: id, at: position)
+                    default: try await manager.references(scriptID: id, at: position)
+                    }
                     guard self.isCurrent(token, document: document) else { return }
                     self.presentation.locations = locations
-                    if command == .definition, locations.count == 1 { self.open(locations[0]) }
+                    if command != .references, locations.count == 1 { self.open(locations[0]) }
                     else if locations.isEmpty { self.presentation.message = L("No results") }
                 case .rename:
                     let preparation = try await manager.prepareRename(scriptID: document.file.identifier, at: position)
@@ -208,7 +243,7 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
                     guard self.isCurrent(token, document: document) else { return }
                     try self.app.workstation.scripts.applyLanguageEdit(edit)
                     self.presentation.message = L("Document formatted")
-                case .back, .undo, .redo: break
+                case .back, .forward, .undo, .redo: break
                 }
                 guard self.requestID == token else { return }
                 self.presentation.isBusy = false; self.publish()
@@ -281,6 +316,16 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Results found elsewhere (a gutter marker): one target opens at once,
+    /// several are listed like Find References.
+    func show(_ locations: [ScriptDefinitionLocation], title: String) {
+        if locations.count == 1 { open(locations[0]); return }
+        requestTask?.cancel(); requestID = UUID()
+        presentation = ScriptSemanticPresentation(title: title, locations: locations)
+        if locations.isEmpty { presentation.message = L("No results") }
+        publish()
+    }
+
     func open(_ symbol: ScriptDocumentSymbol) {
         guard let id = app.workstation.scripts.snapshot.selectedScriptID else { return }
         open(ScriptDefinitionLocation(documentURI: "", scriptID: id, span: symbol.selectionRange))
@@ -323,7 +368,16 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
     }
 
     private func goBack() {
-        guard let previous = navigation.back() else { externalDocument = nil; dismiss(); return }
+        guard let previous = navigation.back(from: currentLocation) else { externalDocument = nil; dismiss(); return }
+        travel(to: previous)
+    }
+
+    private func goForward() {
+        guard let next = navigation.forward(from: currentLocation) else { return }
+        travel(to: next)
+    }
+
+    private func travel(to previous: ScriptSemanticLocation) {
         requestTask?.cancel()
         let token = UUID(); requestID = token
         requestTask = Task { @MainActor [weak self] in

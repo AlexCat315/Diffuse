@@ -66,6 +66,12 @@ struct EditorShortcutKey: Equatable {
     }
 
     static let comma = Self(equivalent: ",", symbol: ",", name: ",", scancodes: [Scancode.comma])
+    static let period = Self(equivalent: ".", symbol: ".", name: ".", scancodes: [Scancode.period])
+    static let space = Self(equivalent: " ", symbol: "Space", name: "Space", scancodes: [Scancode.space])
+    static let leftBracket = Self(equivalent: "[", symbol: "[", name: "[", scancodes: [Scancode.leftBracket])
+    static let rightBracket = Self(equivalent: "]", symbol: "]", name: "]", scancodes: [Scancode.rightBracket])
+    static let f2 = Self(equivalent: "\u{F705}", symbol: "F2", name: "F2", scancodes: [Scancode.f2])
+    static let f12 = Self(equivalent: "\u{F70F}", symbol: "F12", name: "F12", scancodes: [Scancode.f12])
     static let delete = Self(equivalent: "\u{8}", symbol: "⌫", name: "Delete",
                              scancodes: [Scancode.backspace, Scancode.delete])
     static let enter = Self(equivalent: "\r", symbol: "↩", name: "Enter",

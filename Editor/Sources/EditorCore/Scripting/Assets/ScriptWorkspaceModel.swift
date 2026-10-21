@@ -229,7 +229,6 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     @discardableResult
     public func select(scriptID: String) -> Bool {
         guard scriptID != snapshot.selectedScriptID else { return true }
-        guard persistSelected() else { return false }
         guard snapshot.documents.contains(where: { $0.file.identifier == scriptID }) else {
             return false
         }
@@ -239,8 +238,26 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     }
 
     public func updateSelectedSource(_ source: TextBuffer) {
-        guard let index = selectedDocumentIndex,
-              snapshot.documents[index].source != source else { return }
+        guard let index = selectedDocumentIndex else { return }
+        replaceSource(at: index, with: source)
+    }
+
+    /// Saves one script whether or not it is selected; unsaved edits in other
+    /// scripts stay unsaved, like document tabs.
+    @discardableResult
+    public func persist(scriptID: String) -> Bool {
+        guard let index = documentIndex(scriptID: scriptID) else { return false }
+        return persist(scriptAt: index)
+    }
+
+    /// Drops unsaved edits and returns to the saved text.
+    public func revert(scriptID: String) {
+        guard let index = documentIndex(scriptID: scriptID), snapshot.documents[index].isDirty else { return }
+        replaceSource(at: index, with: snapshot.documents[index].savedSource)
+    }
+
+    private func replaceSource(at index: Int, with source: TextBuffer) {
+        guard snapshot.documents[index].source != source else { return }
         snapshot.documents[index].source = source
         snapshot.documents[index].diagnostics = []
         snapshot.documents[index].editRevision &+= 1
@@ -379,7 +396,6 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
 
     @discardableResult
     public func createScript(name: String, source: String) -> Bool {
-        guard persistSelected() else { return false }
         do {
             let url = try manager.createScript(name: name, source: source)
             guard let file = try manager.scriptFile(at: url) else {

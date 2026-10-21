@@ -19,7 +19,13 @@ struct ScriptSemanticCommandsTests {
         #expect(ScriptSemanticCommand.matching(key(ComposeScancode.period, modifiers: [.gui])) == .codeActions)
         #expect(ScriptSemanticCommand.matching(key(ComposeScancode.space, modifiers: [.ctrl, .shift])) == .signature)
         #expect(ScriptSemanticCommand.matching(key(ComposeScancode.space, modifiers: [.ctrl])) == nil)
-        #expect(ScriptSemanticCommand.matching(key(ComposeScancode.arrowLeft, modifiers: [.alt])) == .back)
+        #expect(ScriptSemanticCommand.matching(key(ComposeScancode.leftBracket, modifiers: [.gui])) == .back)
+        #expect(ScriptSemanticCommand.matching(key(ComposeScancode.rightBracket, modifiers: [.gui])) == .forward)
+        // Option-arrows stay word movement in the text.
+        #expect(ScriptSemanticCommand.matching(key(ComposeScancode.arrowLeft, modifiers: [.alt])) == nil)
+        #expect(ScriptSemanticCommand.matching(key(ComposeScancode.b, modifiers: [.gui, .alt])) == .implementations)
+        #expect(ScriptSemanticCommand.matching(key(ComposeScancode.b, modifiers: [.gui])) == nil)
+        #expect(ScriptSemanticCommand.matching(key(ComposeScancode.u, modifiers: [.gui])) == .supertypes)
         #expect(ScriptSemanticCommand.matching(key(ComposeScancode.z, modifiers: [.gui])) == .undo)
         #expect(ScriptSemanticCommand.matching(key(ComposeScancode.z, modifiers: [.gui, .shift])) == .redo)
     }
@@ -43,7 +49,7 @@ struct ScriptSemanticCommandsTests {
         try WorkbenchUITestSupport.withEnvironment { registry, focus in
             var commands: [ScriptSemanticCommand] = []
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-            graph.install(root: ScriptNavigationButtons(canPerform: { $0 != .back || canGoBack }, perform: { commands.append($0) })
+            graph.install(root: ScriptNavigationButtons(commands: [.back, .definition, .references], canPerform: { $0 != .back || canGoBack }, perform: { commands.append($0) })
                 .theme(EditorVisualTheme.make(dark: true)))
             graph.recomposer.commitAll()
             graph.computeLayout(width: 200, height: 40)
@@ -60,16 +66,24 @@ struct ScriptSemanticCommandsTests {
         }
     }
 
-    @Test("navigation back stack retains file identity and exact UTF-16 position")
+    @Test("navigation history keeps file identity, exact UTF-16 positions and a forward stack")
     func navigationStack() {
         var history = ScriptSemanticNavigation()
         let first = ScriptSemanticLocation(scriptID: "one", fileURL: nil, position: .init(line: 2, character: 8))
         let second = ScriptSemanticLocation(scriptID: nil, fileURL: URL(fileURLWithPath: "/SDK/Runtime.swift"), position: .init(line: 10, character: 4))
+        let here = ScriptSemanticLocation(scriptID: "two", fileURL: nil, position: .init(line: 0, character: 0))
         history.record(first); history.record(first); history.record(second)
         #expect(history.previous.count == 2)
-        #expect(history.back() == second)
-        #expect(history.back() == first)
-        #expect(history.back() == nil)
+        #expect(history.back(from: here) == second)
+        #expect(history.back(from: second) == first)
+        #expect(history.back(from: first) == nil)
+        #expect(history.forward(from: first) == second)
+        #expect(history.forward(from: second) == here)
+        #expect(history.forward(from: here) == nil)
+        // A new jump abandons the forward path, like a browser.
+        _ = history.back(from: here)
+        history.record(first)
+        #expect(history.next.isEmpty)
     }
 
     @Test("resolved actions with disabled reasons cannot apply their returned edits")

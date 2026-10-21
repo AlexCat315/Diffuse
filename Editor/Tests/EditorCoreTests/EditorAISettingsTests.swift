@@ -39,4 +39,13 @@ final class EditorAISettingsTests: XCTestCase {
             environment: ["OPENAI_API_KEY": "ignored"]
         ))
     }
+
+    func testKeychainFailuresExplainTheNextStep() {
+        let denied = AIKeychainError.operationFailed(-25293).errorDescription ?? ""
+        XCTAssertTrue(denied.contains("refused access"))
+        XCTAssertTrue(denied.contains("com.guava.editor.ai-provider"))
+        XCTAssertEqual(AIKeychainError.operationFailed(-25308).errorDescription, denied)
+        XCTAssertTrue((AIKeychainError.operationFailed(-128).errorDescription ?? "").contains("cancelled"))
+        XCTAssertTrue((AIKeychainError.operationFailed(-1).errorDescription ?? "").contains("-1"))
+    }
 }

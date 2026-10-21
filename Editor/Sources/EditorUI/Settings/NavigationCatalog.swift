@@ -22,7 +22,7 @@ enum SettingsCategory: String, CaseIterable, Sendable {
         case .general: "Make this workspace feel like yours."
         case .editor: "Fine-tune how you work with the scene."
         case .agent: "Connect your assistant and choose how it works with you."
-        case .plugins: "Inspect, authorize, and manage your AI extensions."
+        case .plugins: "Manage built-in and added plugins and the access they get."
         case .shortcuts: "The shortcuts available in your current Space."
         case .about: "Your workspace, application, and support information."
         }
@@ -34,7 +34,7 @@ enum SettingsCategory: String, CaseIterable, Sendable {
         case .general: UIIcons.Action.settings
         case .editor: UIIcons.Editor.box
         case .agent: UIIcons.Status.sparkles
-        case .plugins: UIIcons.File.folder
+        case .plugins: UIIcons.File.package
         case .shortcuts: UIIcons.Editor.code
         case .about: UIIcons.Status.info
         }
@@ -64,7 +64,7 @@ enum SettingsSectionID: String, CaseIterable, Sendable {
         case .provider: "Provider & Credentials"
         case .execution: "Execution & Review"
         case .capabilities: "Capability Gate"
-        case .plugins: "AI Plugins"
+        case .plugins: "Plugins"
         case .shortcuts: "Keyboard Shortcuts"
         case .about: "Workspace Information"
         }

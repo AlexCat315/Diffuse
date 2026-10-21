@@ -303,6 +303,18 @@ public final class DynamicScriptManager: @unchecked Sendable {
         try await performOnLanguageService { try await $0.references(scriptID: scriptID, at: position) }
     }
 
+    public func implementations(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        try await performOnLanguageService { try await $0.implementations(scriptID: scriptID, at: position) }
+    }
+
+    public func supertypes(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        try await performOnLanguageService { try await $0.supertypes(scriptID: scriptID, at: position) }
+    }
+
+    public func subtypes(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        try await performOnLanguageService { try await $0.subtypes(scriptID: scriptID, at: position) }
+    }
+
     public func prepareRename(scriptID: String, at position: ScriptLanguagePosition) async throws -> ScriptRenamePreparation? {
         try await performOnLanguageService { try await $0.prepareRename(scriptID: scriptID, at: position) }
     }

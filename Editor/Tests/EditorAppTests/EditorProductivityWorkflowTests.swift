@@ -13,8 +13,8 @@ struct EditorProductivityWorkflowTests {
     private func document() -> WorkspaceDocument {
         WorkspaceDocument(
             panels: ["viewport": WorkspacePanel(id: "viewport", title: "Viewport"),
-                     "scripts": WorkspacePanel(id: "scripts", title: "Scripts")],
-            groups: ["center": WorkspaceTabGroup(id: "center", panels: ["viewport", "scripts"], activePanelID: "viewport")],
+                     "documents": WorkspacePanel(id: "documents", title: "Editor")],
+            groups: ["center": WorkspaceTabGroup(id: "center", panels: ["viewport", "documents"], activePanelID: "viewport")],
             slots: WorkspaceSlot.standardEditorSlots(center: .group("center")))
     }
 
@@ -22,19 +22,19 @@ struct EditorProductivityWorkflowTests {
     func maximizeRestore() {
         let original = document()
         let controller = WorkspaceController(document: original)
-        let result = controller.dispatch(.toggleMaximize("scripts"))
+        let result = controller.dispatch(.toggleMaximize("documents"))
         #expect(result.didChange)
         #expect(!result.persistenceDirty)
-        #expect(controller.maximizedPanelID == "scripts")
+        #expect(controller.maximizedPanelID == "documents")
         #expect(controller.document == original)
         _ = controller.dispatch(.restoreMaximized)
         #expect(controller.maximizedPanelID == nil)
         #expect(controller.document == original)
-        _ = controller.dispatch(.toggleMaximize("scripts"))
-        _ = controller.dispatch(.closePanel("scripts"))
+        _ = controller.dispatch(.toggleMaximize("documents"))
+        _ = controller.dispatch(.closePanel("documents"))
         #expect(controller.maximizedPanelID == nil)
-        _ = controller.dispatch(.reopenPanel("scripts"))
-        #expect(controller.document.groupContaining(panelID: "scripts") != nil)
+        _ = controller.dispatch(.reopenPanel("documents"))
+        #expect(controller.document.groupContaining(panelID: "documents") != nil)
     }
 
     @Test("commands are searchable by localized words, multiple tokens and abbreviations")
@@ -49,14 +49,14 @@ struct EditorProductivityWorkflowTests {
 
     @Test("script and film workspaces have distinct defaults")
     func workspaceDefaults() {
-        let ids: [WorkspacePanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console", "render-pipeline", "animation", "developer-tools", "intent-input"]
+        let ids: [WorkspacePanelID] = ["viewport", "documents", "hierarchy", "inspector", "assets", "console", "render-pipeline", "animation", "developer-tools", "intent-input"]
         let registry = WorkspacePanelRegistry(ids.map { id in WorkspacePanelDescriptor(id: id, title: id.rawValue, defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() } })
         let level = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelDefault, registry: registry)
         let script = EditorWorkspaceDefaults.makeDocument(mode: .scripting, preset: .scriptingDefault, registry: registry)
         let film = EditorWorkspaceDefaults.makeDocument(mode: .animation, preset: .animationDefault, registry: registry)
         #expect(level.group("center")?.activePanelID == "viewport")
-        #expect(script.group("center")?.activePanelID == "scripts")
-        #expect(WorkspaceController(document: script).focusedPanelID == "scripts")
+        #expect(script.group("center")?.activePanelID == "documents")
+        #expect(WorkspaceController(document: script).focusedPanelID == "documents")
         #expect(script.group("bottom")?.activePanelID == "console")
         #expect(film.group("bottom")?.activePanelID == "animation")
         #expect(EditorWorkspaceMode.scripting.isGameWorkspace)

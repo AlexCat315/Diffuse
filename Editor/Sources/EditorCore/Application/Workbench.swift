@@ -14,7 +14,9 @@ extension EditorApplication {
                 return
             }
             store.dispatch(.navigateToScript(.init(scriptID: id, line: line, column: column)))
-            activatePanelHandler?("scripts")
+            // Scripts open where every other file does; the tab follows the caret.
+            if let path = workstation.documentPath(forScript: id) { workstation.documents.open(path) }
+            activatePanelHandler?("documents")
         case let .entity(id):
             guard scene.entitySummary(id: id) != nil else { return }
             store.dispatch(.setSelectedEntity(id))

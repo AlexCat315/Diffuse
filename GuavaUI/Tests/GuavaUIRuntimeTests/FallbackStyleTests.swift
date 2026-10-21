@@ -1,4 +1,5 @@
 #if canImport(CoreText)
+import CoreText
 import Testing
 @testable import GuavaUIRuntime
 
@@ -10,13 +11,23 @@ struct FallbackStyleTests {
         return provider.resolveRuns(text: "ab粗体").last?.font.postScriptName
     }
 
-    @Test("Bold Latin text falls back to a heavier CJK face, regular to a regular one")
+    /// Faces name weights differently (PingFang "Semibold", Hiragino "W6"),
+    /// so compare the weight CoreText reports instead of the name.
+    private func weight(of postScriptName: String) -> Double {
+        let font = CTFontCreateWithName(postScriptName as CFString, 14, nil)
+        let traits = CTFontCopyTraits(font) as? [CFString: Any] ?? [:]
+        return (traits[kCTFontWeightTrait] as? NSNumber)?.doubleValue ?? 0
+    }
+
+    @Test("Bold Latin text falls back to a heavier CJK face of the same family, regular to a regular one")
     func boldFallback() throws {
         let regular = try #require(fallbackName(weight: .regular))
         let bold = try #require(fallbackName(weight: .bold))
-        #expect(regular != bold)
-        #expect(!regular.contains("Bold") && !regular.contains("Semibold"))
-        #expect(bold.contains("Bold") || bold.contains("Semibold") || bold.contains("Heavy"))
+        #expect(regular != bold, "regular \(regular), bold \(bold)")
+        #expect(weight(of: regular) <= 0.05, "regular fell back to \(regular)")
+        #expect(weight(of: bold) > weight(of: regular), "regular \(regular), bold \(bold)")
+        // Weight changes, the family does not.
+        #expect(regular.split(separator: "-").first == bold.split(separator: "-").first, "regular \(regular), bold \(bold)")
     }
 }
 #endif

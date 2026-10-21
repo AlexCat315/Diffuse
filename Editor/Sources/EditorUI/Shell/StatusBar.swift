@@ -30,8 +30,12 @@ struct EditorStatusBar: View {
         let snapshot = workspace.wrappedValue
         let hasScene = store.workspaceMode.profile.features.contains(.scene)
         let _ = layout.wrappedValue
-        let showsScriptInfo = controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed }
         let document = documents.wrappedValue.selected
+        // Scene modes show file facts only while the editor tab is in front.
+        let showsDocumentInfo = !hasScene || controller.document.groups.values.contains {
+            $0.activePanelID == "documents" && !$0.isCollapsed
+        }
+        let scriptID = document.flatMap { app.workstation.scriptID(forDocument: $0.path) }
         Row(alignment: .center, spacing: 10) {
             // Being connected is the normal state and needs no mark; only
             // losing the connection is worth a signal.
@@ -59,15 +63,12 @@ struct EditorStatusBar: View {
 
             Spacer(minLength: 0)
 
-            if !hasScene, let document {
+            if showsDocumentInfo, let document {
+                if let scriptID {
+                    Text(store.scriptCaretLabel(for: scriptID)).font(.caption).foregroundColor(.onSurfaceVariant)
+                }
                 Text(L(DocumentKind(path: document.path).name) + " · UTF-8 · " + (document.text.contains("\r\n") ? "CRLF" : "LF"))
                     .font(.caption).foregroundColor(.onSurfaceMuted)
-                Divider(axis: .vertical).frame(height: 12)
-            }
-            if showsScriptInfo, let document = snapshot.selectedDocument {
-                Text("Swift · UTF-8").font(.caption).foregroundColor(.onSurfaceMuted)
-                Text(store.scriptCaretLabel(for: document.file.identifier))
-                    .font(.caption).foregroundColor(.onSurfaceVariant)
                 Divider(axis: .vertical).frame(height: 12)
             }
             activity(snapshot)

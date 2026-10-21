@@ -30,12 +30,12 @@ struct WorkspacePresetRegressionTests {
     } }
 
     private func registry() -> WorkspacePanelRegistry {
-        let ids: [WorkspacePanelID] = ["viewport", "scripts", "hierarchy", "inspector", "assets", "console",
+        let ids: [WorkspacePanelID] = ["viewport", "documents", "hierarchy", "inspector", "assets", "console",
                               "animation", "render-pipeline", "developer-tools", "intent-input"]
         return WorkspacePanelRegistry(ids.map { id in
             let slot: WorkspaceSlotID
             switch id.rawValue {
-            case "viewport", "scripts": slot = .center
+            case "viewport", "documents": slot = .center
             case "hierarchy": slot = .leading
             case "inspector", "intent-input": slot = .trailing
             default: slot = .bottom
@@ -51,9 +51,9 @@ struct WorkspacePresetRegressionTests {
         let registry = registry()
         let expected: [(EditorLayoutPreset, Set<String>)] = [
             (.levelDefault, ["viewport", "hierarchy", "inspector", "console"]),
-            (.levelWorkbench, ["viewport", "scripts", "hierarchy", "inspector", "developer-tools"]),
+            (.levelWorkbench, ["viewport", "documents", "hierarchy", "inspector", "developer-tools"]),
             (.levelCinematics, ["viewport", "hierarchy", "inspector", "animation", "render-pipeline"]),
-            (.scriptingDefault, ["scripts", "assets", "inspector", "console"]),
+            (.scriptingDefault, ["documents", "assets", "inspector", "console"]),
             (.modelingDefault, ["viewport", "assets", "inspector"]),
             (.modelingSculpt, ["viewport"]),
             (.animationDefault, ["viewport", "hierarchy", "inspector", "animation"]),

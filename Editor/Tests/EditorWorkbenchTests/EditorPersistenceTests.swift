@@ -101,13 +101,13 @@ struct EditorPersistenceTests {
         #expect(reconciled.groupContaining(panelID: "new-tool")?.panels.contains("new-tool") == true)
     }
 
-    @Test("workspace reconciliation preserves the user's Scripts docking position")
-    func scriptsPanelPlacementIsPreserved() {
+    @Test("workspace reconciliation preserves the user's editor docking position")
+    func editorPanelPlacementIsPreserved() {
         let registry = WorkspacePanelRegistry([
             WorkspacePanelDescriptor(id: "viewport", title: "Viewport", defaultSlot: .center, configure: { $0.isCollapsible = false }) {
                 EmptyView()
             },
-            WorkspacePanelDescriptor(id: "scripts", title: "Scripts", defaultSlot: .center, configure: { $0.isCollapsible = false }) {
+            WorkspacePanelDescriptor(id: "documents", title: "Editor", defaultSlot: .center, configure: { $0.isCollapsible = false }) {
                 EmptyView()
             },
             WorkspacePanelDescriptor(id: "assets", title: "Assets", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) {
@@ -116,14 +116,14 @@ struct EditorPersistenceTests {
         ])
         let panels: [WorkspacePanelID: WorkspacePanel] = [
             "viewport": WorkspacePanel(id: "viewport", title: "Viewport"),
-            "scripts": WorkspacePanel(id: "scripts", title: "Scripts"),
+            "documents": WorkspacePanel(id: "documents", title: "Editor"),
             "assets": WorkspacePanel(id: "assets", title: "Assets"),
         ]
         let document = WorkspaceDocument(
             panels: panels,
             groups: [
                 "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
-                "bottom": WorkspaceTabGroup(id: "bottom", panels: ["assets", "scripts"], activePanelID: "scripts"),
+                "bottom": WorkspaceTabGroup(id: "bottom", panels: ["assets", "documents"], activePanelID: "documents"),
             ],
             slots: WorkspaceSlot.standardEditorSlots(center: .group("center"), bottom: .group("bottom")))
 
@@ -131,16 +131,16 @@ struct EditorPersistenceTests {
 
         #expect(reconciled.group("center")?.panels == ["viewport"])
         #expect(reconciled.group("center")?.activePanelID == "viewport")
-        #expect(reconciled.group("bottom")?.panels == ["assets", "scripts"])
-        #expect(reconciled.group("bottom")?.activePanelID == "scripts")
+        #expect(reconciled.group("bottom")?.panels == ["assets", "documents"])
+        #expect(reconciled.group("bottom")?.activePanelID == "documents")
         #expect(reconciled.slotContaining(groupID: "center") == .center)
     }
 
-    @Test("the workbench's side-by-side scene and script survive save/reload reconciliation")
+    @Test("the workbench's side-by-side scene and code editor survive save/reload reconciliation")
     func workbenchSplitSurvivesReload() throws {
         let registry = WorkspacePanelRegistry([
             WorkspacePanelDescriptor(id: "viewport", title: "Viewport", defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() },
-            WorkspacePanelDescriptor(id: "scripts", title: "Scripts", defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() },
+            WorkspacePanelDescriptor(id: "documents", title: "Editor", defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() },
             WorkspacePanelDescriptor(id: "hierarchy", title: "Hierarchy", defaultSlot: .leading, configure: { $0.isCollapsible = true }) { EmptyView() },
             WorkspacePanelDescriptor(id: "inspector", title: "Inspector", defaultSlot: .trailing, configure: { $0.isCollapsible = true }) { EmptyView() },
             WorkspacePanelDescriptor(id: "profiler", title: "Profiler", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) { EmptyView() },
@@ -154,7 +154,7 @@ struct EditorPersistenceTests {
                                                   first: .group("center"), second: .group("script-editor"))
         #expect(reconciled.slot(.center).layout == expected)
         #expect(reconciled.group("center")?.panels == ["viewport"])
-        #expect(reconciled.group("script-editor")?.panels == ["scripts"])
+        #expect(reconciled.group("script-editor")?.panels == ["documents"])
         #expect(reconciled.group("bottom")?.activePanelID == "profiler")
         #expect(reconciled.hasValidLayoutReferences)
     }

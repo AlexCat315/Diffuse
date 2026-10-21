@@ -6,6 +6,10 @@ struct AgentProviderSettings: View {
     let editor: AgentSettingsEditor
 
     var body: some View {
+        // One credential lookup per render; each is a Keychain round trip.
+        let draftSource = editor.app.aiCredentialSource(for: editor.draft.provider)
+        let active = editor.app.store.aiSettings.provider
+        let activeSource = editor.draft.provider == active ? draftSource : editor.app.aiCredentialSource(for: active)
         SettingsCard(L("Provider & Credentials"), subtitle: L("Bring your provider. Keep control of your credentials.")) {
             TextScalerReader { scaler in
                 ContainerSizeReader { size in
@@ -25,7 +29,7 @@ struct AgentProviderSettings: View {
                 }.frame(width: .percent(100))
                 Column(alignment: .leading, spacing: 7) {
                     Text(L("API key")).font(.label).foregroundColor(.onSurface)
-                    TextField(editor.app.aiCredentialSource(for: editor.draft.provider) == nil ? L("API key")
+                    TextField(draftSource == nil ? L("API key")
                         : L("API key (leave blank to use the available credential)"), text: Binding(get: { editor.draft.apiKey }, set: { value in
                         editor.update { $0.draft.apiKey = value; $0.feedback = nil }
                     })) { input in
@@ -33,16 +37,14 @@ struct AgentProviderSettings: View {
                     }.frame(width: .percent(100), minWidth: 0).debugName("settings-agent-key")
                     Row(alignment: .center, spacing: 6) {
                         Icon(UIIcons.Status.shieldCheck, size: 12, color: .onSurfaceMuted)
-                        Text(editor.credentialStatus).font(.caption).foregroundColor(.onSurfaceMuted).flex().frame(minWidth: 0)
+                        Text(editor.credentialStatus(draftSource)).font(.caption).foregroundColor(.onSurfaceMuted).flex().frame(minWidth: 0)
                     }
                 }.frame(width: .percent(100))
             } else {
                 Text(L("Agent is disabled. Choose a provider to configure your assistant."))
                     .font(.body).foregroundColor(.onSurfaceMuted)
             }
-            if editor.draft.provider == editor.app.store.aiSettings.provider,
-               editor.app.store.aiSettings.provider != .none,
-               editor.app.aiCredentialSource(for: editor.app.store.aiSettings.provider) == .operatingSystemStore {
+            if editor.draft.provider == active, active != .none, activeSource == .operatingSystemStore {
                 if editor.state.wrappedValue.confirmsKeyRemoval {
                     Alert(L("Remove Stored Key"), message: L("Removing the stored key disables this provider until you add a credential again."), tone: .warning) { _ in } actions: {
                         Button(L("Confirm Remove Key"), role: .destructive, action: editor.removeKey).buttonStyle(.destructive)

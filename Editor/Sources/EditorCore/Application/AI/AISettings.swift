@@ -29,10 +29,14 @@ extension EditorApplication {
             if settings.provider != .none, !apiKey.isEmpty {
                 try AIKeychain.save(key: apiKey, provider: settings.provider)
             }
-            guard settings.provider == .none || AIKeychain.hasKey(for: settings.provider) else {
+            // Read the secret once here, on the user's Apply, so a key the
+            // session cannot use fails now instead of leaving AI silently off.
+            guard settings.provider == .none || AIKeychain.load(provider: settings.provider) != nil else {
                 logConsole("AI settings were not applied",
                            severity: .error,
-                           detail: "Enter an API key for \(settings.provider.displayName).")
+                           detail: AIKeychain.hasKey(for: settings.provider)
+                               ? "The stored key for \(settings.provider.displayName) could not be read. Allow access in the Keychain prompt, or enter the key again."
+                               : "Enter an API key for \(settings.provider.displayName).")
                 return false
             }
         } catch {

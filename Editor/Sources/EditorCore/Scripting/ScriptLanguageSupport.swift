@@ -44,6 +44,8 @@ public actor ScriptLanguageSupport {
         var environmentFailure: String?
     }
     private var sessions: [String: DocumentSession] = [:]
+    /// The editor's latest text for a script, as the server will see it.
+    func currentText(scriptID: String) -> TextBuffer? { sessions[scriptID]?.current }
     private var diagnosticsHandler: DiagnosticsHandler?
     private var lifecycle = ScriptLanguageLifecycle()
     private var stateRevision: UInt64 = 0
