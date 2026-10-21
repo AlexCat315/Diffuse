@@ -274,7 +274,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                       as: UTF8.self)
     }
 
-    static func compileComponentWAT(_ source: String) throws -> Data {
+    public static func compileComponentWAT(_ source: String) throws -> Data {
         var output = guava_wasmtime_buffer_t(data: nil, size: 0)
         var error = guava_wasmtime_buffer_t(data: nil, size: 0)
         let sourceData = Data(source.utf8)

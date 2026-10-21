@@ -45,7 +45,7 @@ public enum EditorPluginHostLocator {
         // location data, never a project or plugin-supplied path.
         var repositoryRoot = URL(fileURLWithPath: #filePath, isDirectory: false)
             .deletingLastPathComponent()
-        for _ in 0..<4 {
+        for _ in 0..<5 {
             repositoryRoot.deleteLastPathComponent()
         }
         candidates.append(repositoryRoot

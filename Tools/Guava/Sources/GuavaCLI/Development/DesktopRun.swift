@@ -2,14 +2,18 @@ import Foundation
 import GuavaUIDevToolsProtocol
 
 enum DesktopRun {
-    static func run(_ executable: URL, project: AppProject, root: URL, arguments: Arguments) throws {
+    static func run(_ executable: URL, products: URL, project: AppProject, root: URL, arguments: Arguments) throws {
+        var environment = ProcessInfo.processInfo.environment
+        environment["GUAVA_BUILD_PRODUCTS_PATH"] = products.path
         guard let development = try DevelopmentSession.make(project: project, arguments: arguments) else {
-            try Shell.run([executable.path] + arguments.applicationArguments, at: project.directory)
+            try Shell.run([executable.path] + arguments.applicationArguments, at: project.directory, environment: environment)
             return
         }
         defer { development.remove() }
         let cancellation = RunCancellation()
-        let process = try Shell.start([executable.path] + arguments.applicationArguments, at: project.directory, environment: development.environment())
+        environment.merge(development.environment()) { _, value in value }
+        environment["GUAVA_BUILD_PRODUCTS_PATH"] = products.path
+        let process = try Shell.start([executable.path] + arguments.applicationArguments, at: project.directory, environment: environment)
         defer { if process.isRunning { process.terminate(); process.waitUntilExit() } }
         let deadline = Date().addingTimeInterval(20)
         var runtime: DevToolsDiscovery?

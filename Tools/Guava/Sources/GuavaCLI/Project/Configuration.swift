@@ -8,17 +8,24 @@ struct ProjectConfiguration: Codable, Equatable {
     struct Targets: Codable, Equatable {
         var platforms: [AppPlatform] = [.mac, .win, .linux, .android, .ios]
         var desktopExecutable: String? = nil
+        var desktopHelpers: [String] = []
 
-        enum CodingKeys: CodingKey { case platforms, desktopExecutable }
+        enum CodingKeys: CodingKey { case platforms, desktopExecutable, desktopHelpers }
         init() {}
         init(from decoder: Decoder) throws {
             self.init()
             let values = try decoder.container(keyedBy: CodingKeys.self)
             platforms = try values.decodeIfPresent([AppPlatform].self, forKey: .platforms) ?? platforms
             desktopExecutable = try values.decodeIfPresent(String.self, forKey: .desktopExecutable)
+            desktopHelpers = try values.decodeIfPresent([String].self, forKey: .desktopHelpers) ?? []
         }
 
         func validate() throws {
+            guard Set(desktopHelpers).count == desktopHelpers.count,
+                  !desktopHelpers.contains(desktopExecutable ?? "Application"),
+                  desktopHelpers.allSatisfy({ $0.range(of: #"^[A-Za-z][A-Za-z0-9_-]*$"#, options: .regularExpression) != nil }) else {
+                throw ToolError.invalid("targets.desktopHelpers must contain unique executable product names")
+            }
             guard !platforms.isEmpty, Set(platforms).count == platforms.count else {
                 throw ToolError.invalid("targets.platforms must contain unique platform names")
             }

@@ -39,7 +39,7 @@ public actor LSPClient {
         guard connection?.isRunning != true else { return }
         stop()
         let connection: LSPConnection
-        do { connection = try LSPConnection(command: configuration.command) }
+        do { connection = try LSPConnection(configuration: configuration) }
         catch { throw LSPClientError.launchFailed(String(describing: error)) }
         self.connection = connection
         decoder = LSPMessageFramer.Decoder()
@@ -186,7 +186,7 @@ public actor LSPClient {
 
     private func write(_ body: Data) throws {
         guard let connection else { throw LSPClientError.notRunning }
-        try connection.session.write(LSPMessageFramer.frame(body))
+        try connection.transport.write(LSPMessageFramer.frame(body))
     }
 
     // MARK: - Decoding

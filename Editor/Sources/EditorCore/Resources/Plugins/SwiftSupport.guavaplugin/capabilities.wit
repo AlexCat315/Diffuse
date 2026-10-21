@@ -1,0 +1,11 @@
+package studio:swift-support;
+
+interface capabilities {
+  record language-server-input { request: string }
+  language-server: func(input: language-server-input) -> string;
+}
+
+world plugin {
+  import guava:process/host;
+  export capabilities;
+}

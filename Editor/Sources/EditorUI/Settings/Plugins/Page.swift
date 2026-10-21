@@ -15,6 +15,11 @@ struct PluginSettings: View {
             }
             Button(L("Choose .guavaplugin Folder"), isEnabled: app.isPluginHostAvailable && !busy, action: choosePackage)
                 .buttonStyle(.primary).debugName("settings-plugin-choose")
+            if !management.enabled.contains(where: { $0.id == "studio.swift-support" }) {
+                Button(L("Enable Swift Support"), isEnabled: app.isPluginHostAvailable && !busy) {
+                    Task { @MainActor in await app.inspectBundledSwiftSupport() }
+                }.debugName("settings-plugin-swift-support")
+            }
             if management.phase == .inspecting {
                 Text(L("Inspecting plugin without loading it…")).font(.body).foregroundColor(.onSurfaceMuted)
             }

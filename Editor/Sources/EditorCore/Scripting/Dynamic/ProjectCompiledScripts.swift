@@ -30,7 +30,8 @@ public struct ProjectScriptBuildConfiguration: Sendable {
             guard let value = environment[key], !value.isEmpty else { return nil }
             return value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
         }
-        let buildDirectory = executableURL.deletingLastPathComponent()
+        let buildDirectory = environment["GUAVA_BUILD_PRODUCTS_PATH"].map { URL(fileURLWithPath: $0) }
+            ?? executableURL.deletingLastPathComponent()
         let modulePaths = configuredPaths("GUAVA_ENGINE_MODULE_PATHS") ??
             [buildDirectory, buildDirectory.appendingPathComponent("Modules", isDirectory: true)]
                 .filter { directory in

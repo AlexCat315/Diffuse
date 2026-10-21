@@ -13,6 +13,24 @@ kind: doc
 
 Guava 插件保持同一套三文件契约：`plugin.json` 声明身份和权限，`capabilities.wit` 声明输入类型，`component.wasm` 承载 Component Model 代码。权限和 schema 不由插件运行结果动态决定。
 
+## Swift Support 捆绑插件
+
+编辑器随资源包分发 `Plugins/SwiftSupport.guavaplugin`（`studio.swift-support`）。工作站启动时，仅从构建资源中的固定位置检查和授权该插件；项目目录、插件搜索路径和环境变量不能替换捆绑包。第三方插件仍走显式检查和授权流程。
+
+`language-server` 导出通过 `guava:process/host` 转发有界的进程请求。宿主解析 `sourcekit-lsp`（显式工具链覆盖、PATH、macOS xcrun），拒绝项目目录内的可执行文件，再按已授权 manifest 校验参数和环境。SourceKit-LSP 运行在 PluginHost 管理的进程中，文档镜像、版本和语义查询由编辑器维护。语言服务入口不会暴露给 AI 能力规划器。
+
+LSP 传输将大文档按 8 KiB 分块写入并轮询排空输出，保持原始 UTF-8 字节和 Content-Length 帧。停用、重载、宿主失效及项目关闭会停止语言服务并撤销旧句柄。`.guava/disabled_bundled_plugins.json` 只记录用户停用选择，临时进程句柄、LSP 状态和传输任务不持久化；设置页可以重新检查并启用 Swift Support。
+
+Component 源码位于 `Editor/Plugins/SwiftSupport/component.wat`，生成的 `component.wasm` 随资源提交。修改后使用已构建的 `GuavaPluginHost --compile-component <source.wat> <component.wasm>` 重新生成；`BundledSwiftSupportTests` 验证源码与二进制一致、真实 Component 契约、AI 隐藏、偏好往返，以及隔离宿主中的大文档传输与卸载。
+
+本机安装 SourceKit-LSP 后，可运行 `GUAVA_TEST_REAL_SOURCEKIT=1 ./guava test Editor --filter BundledSwiftSupportTests`，额外验证通过真实插件和隔离宿主获得 String 成员补全及类型悬浮提示。
+
+`guava build/run Editor` 根据 `targets.desktopHelpers` 构建和捆绑 GuavaPluginHost；macOS 放在 `Contents/Helpers` 并单独签名，Windows/Linux 放在 `Tools`。Swift 工具链需要单独安装，插件不携带编译器或 SourceKit-LSP 二进制。
+
+`guava run` 通过宿主环境 `GUAVA_BUILD_PRODUCTS_PATH` 传递本次构建产物位置，让打包后的编辑器仍能发现脚本分析所需的 Swift 模块和 Clang module map。显式 `GUAVA_ENGINE_*` 覆盖仍优先；安装后的 SDK 需要提供对应模块路径，项目文件不能配置这些宿主路径。
+
+## 跨平台宿主
+
 | 宿主 | 运行库 / 执行方式 | 生命周期与隔离 |
 | --- | --- | --- |
 | macOS、Windows、Linux 桌面 Editor | 静态链接 Wasmtime 49.0.2 | `GuavaPluginHost` 独立进程、带长度帧 RPC |

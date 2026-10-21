@@ -12,7 +12,8 @@
       "win",
       "linux"
     ],
-    "desktopExecutable": "EditorApp"
+    "desktopExecutable": "EditorApp",
+    "desktopHelpers": ["GuavaPluginHost"]
   },
   "version": {
     "name": "0.1.0",

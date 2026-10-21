@@ -75,6 +75,8 @@ guava clean
 
 桌面平台的 Sources（如果存在）编译成 PlatformSupport 模块，供 AppContent 按平台条件导入。macOS Resources/AppIcon.icns 自动作为图标，其他资源复制到应用包；entitlements 用于本地 ad-hoc 签名，Debug/Profile 自动允许调试器附加。Windows 使用 SDK 的 mt.exe 嵌入 Application.manifest；Linux 生成含 Name / Exec 的 .desktop 文件。Windows、Linux 的应用目录仍需对应主机验证和后续分发安装流程。
 
+桌面应用可以在 `targets.desktopHelpers` 声明同一包图中的辅助可执行产品，例如编辑器的 `GuavaPluginHost`。CLI 构建每个产品，在 macOS 复制到 `Contents/Helpers` 并先于外层应用签名，在 Windows/Linux 复制到可执行文件旁的 `Tools`。
+
 ## Android 原生工程
 
 打开 Platforms/Android 即可进入 Android Studio。应用模块依赖 SDK 中的 guavaRuntime library：框架 Activity / 输入 / SDL Java 代码由 SDK 持有，应用 Manifest 通过标准合并流程加入框架需求。

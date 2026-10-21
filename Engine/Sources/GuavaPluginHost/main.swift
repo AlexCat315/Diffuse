@@ -32,6 +32,12 @@ let capabilityRegistry = CapabilityRegistry.aiDefault
 let loader = PluginPackageLoader(registry: capabilityRegistry)
 let limits = PluginResourceLimits.secureDefault
 if CommandLine.arguments.count > 1 {
+    if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--compile-component" {
+        let source = try String(contentsOfFile: CommandLine.arguments[2], encoding: .utf8)
+        try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(source)
+            .write(to: URL(fileURLWithPath: CommandLine.arguments[3]), options: .atomic)
+        exit(0)
+    }
     guard CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-web" else {
         throw WebPackageExportError.usage
     }

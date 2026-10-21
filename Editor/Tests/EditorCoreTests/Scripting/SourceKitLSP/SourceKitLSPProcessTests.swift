@@ -160,7 +160,7 @@ private final class LSPEventLog<Value: Sendable>: @unchecked Sendable {
     var values: [Value] { lock.withLock { entries } }
 }
 
-private struct LSPProcessFixture {
+struct LSPProcessFixture {
     let root: URL
     let executable: URL
     let mode: String

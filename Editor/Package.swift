@@ -88,7 +88,10 @@ let package = Package(
                 .product(name: "GuavaUIAgent", package: "GuavaUI"),
             ],
             resources: [
-                .process("Resources")
+                .process("Resources/ProjectTemplates"),
+                .process("Resources/en.lproj"),
+                .process("Resources/zh-Hans.lproj"),
+                .copy("Resources/Plugins")
             ],
             linkerSettings: [
                 .linkedFramework("Security", .when(platforms: [.macOS])),

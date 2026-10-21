@@ -12,7 +12,7 @@ struct DesktopBuild {
         try NativeDesktopResources(project: project, platform: arguments.platform).sign(artifact, configuration: arguments.configuration)
         print("Built \(arguments.platform.rawValue) application: \(artifact.directory.path)")
         if arguments.operation == .run {
-            try DesktopRun.run(artifact.executable, project: project, root: root, arguments: arguments)
+            try DesktopRun.run(artifact.executable, products: binaries, project: project, root: root, arguments: arguments)
         }
     }
 
@@ -21,6 +21,9 @@ struct DesktopBuild {
         let command = SwiftPackage.command(directory: package, configuration: arguments.configuration,
             scratchPath: project.buildDirectory.appendingPathComponent("swift"))
         try Shell.run(command + ["--product", project.desktopProduct], environment: SwiftPackage.environment(root: root))
+        for helper in project.configuration.targets.desktopHelpers {
+            try Shell.run(command + ["--product", helper], environment: SwiftPackage.environment(root: root))
+        }
         return URL(fileURLWithPath: try Shell.run(command + ["--show-bin-path"], environment: SwiftPackage.environment(root: root), capture: true))
     }
 }

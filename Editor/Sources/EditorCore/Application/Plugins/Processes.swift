@@ -17,14 +17,26 @@ extension EditorApplication {
             return url
         }
         for rule in permissions.processes {
+            if rule.command == "sourcekit-lsp" {
+                let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
+                let resolved = executable.resolvingSymlinksInPath()
+                guard resolved.path != root.path, !resolved.path.hasPrefix(root.path + "/") else {
+                    throw PluginProcessError.commandNotBound(rule.command)
+                }
+                context.executables[rule.command] = executable
+                continue
+            }
             #if os(Windows)
             let names = [rule.command + ".exe", rule.command]
             #else
             let names = [rule.command]
             #endif
             let executable = directories.lazy.flatMap { directory in names.map { directory.appendingPathComponent($0) } }
-                .map { $0.resolvingSymlinksInPath() }
-                .first { FileManager.default.isExecutableFile(atPath: $0.path) && !$0.path.hasPrefix(root.path + "/") }
+                .first {
+                    let resolved = $0.resolvingSymlinksInPath()
+                    return FileManager.default.isExecutableFile(atPath: $0.path)
+                        && resolved.path != root.path && !resolved.path.hasPrefix(root.path + "/")
+                }
             guard let executable else { throw PluginProcessError.commandNotBound(rule.command) }
             context.executables[rule.command] = executable
         }

@@ -28,6 +28,7 @@ public actor ScriptLanguageSupport {
     private let workspace: ScriptLanguageWorkspace
     private let executableURL: URL
     private let environment: [String: String]
+    private let connectTransport: (@Sendable (ProcessCommand) throws -> LanguageServerTransport)?
 
     private var client: LSPClient?
     private struct DocumentSession {
@@ -48,13 +49,15 @@ public actor ScriptLanguageSupport {
                 clangModuleMapPaths: [String] = [],
                 clangIncludePaths: [String] = [],
                 executableURL: URL,
-                environment: [String: String] = [:]) {
+                environment: [String: String] = [:],
+                connect: (@Sendable (ProcessCommand) throws -> LanguageServerTransport)? = nil) {
         self.workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: scriptsDirectoryURL,
                                                  engineModulePaths: engineModulePaths,
                                                  clangModuleMapPaths: clangModuleMapPaths,
                                                  clangIncludePaths: clangIncludePaths)
         self.executableURL = executableURL
         self.environment = environment
+        self.connectTransport = connect
     }
 
     // MARK: - Session lifecycle
@@ -121,7 +124,9 @@ public actor ScriptLanguageSupport {
             capabilities: SourceKitLSPExecutableLocator.probeCapabilities(executableURL: executableURL))
         command.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
-        let client = LSPClient(configuration: LanguageServerConfiguration(command: command, workspace: workspace.rootURL))
+        var configuration = LanguageServerConfiguration(command: command, workspace: workspace.rootURL)
+        configuration.connect = connectTransport
+        let client = LSPClient(configuration: configuration)
         let connectionID = UUID()
         self.client = client
         lifecycle.connectionID = connectionID

@@ -6,7 +6,7 @@ public import Foundation
 public final class ProcessSession: @unchecked Sendable {
     public let id = UUID()
     public let events: AsyncThrowingStream<ProcessEvent, Error>
-    private let continuation: AsyncThrowingStream<ProcessEvent, Error>.Continuation
+    private let eventBuffer: ProcessEventBuffer
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
@@ -28,7 +28,9 @@ public final class ProcessSession: @unchecked Sendable {
             throw ProcessRuntimeError.invalidBudget
         }
         self.budget = budget
-        (events, continuation) = AsyncThrowingStream.makeStream(bufferingPolicy: .bufferingOldest(64))
+        let eventBuffer = ProcessEventBuffer(maximumBytes: budget.outputBytes)
+        self.eventBuffer = eventBuffer
+        events = AsyncThrowingStream(unfolding: { try await eventBuffer.next() })
         process.executableURL = command.executable
         process.arguments = command.arguments
         process.currentDirectoryURL = command.directory
@@ -76,16 +78,11 @@ public final class ProcessSession: @unchecked Sendable {
             let data = handle.availableData
             if data.isEmpty {
                 handle.readabilityHandler = nil
-                continuation.yield(isError ? .stderrClosed : .stdoutClosed)
+                _ = eventBuffer.append(isError ? .stderrClosed : .stdoutClosed)
                 if let status = state.closedPipe() { finish(status) }
             } else {
                 guard data.count <= budget.outputBytes else { fail(ProcessRuntimeError.outputLimit); return }
-                switch continuation.yield(isError ? .stderr(data) : .stdout(data)) {
-                case .dropped: fail(ProcessRuntimeError.outputLimit)
-                case .terminated: break
-                case .enqueued: break
-                @unknown default: fail(ProcessRuntimeError.outputLimit)
-                }
+                if !eventBuffer.append(isError ? .stderr(data) : .stdout(data)) { fail(ProcessRuntimeError.outputLimit) }
             }
         }
     }
@@ -96,13 +93,13 @@ public final class ProcessSession: @unchecked Sendable {
     }
 
     private func finish(_ status: Int32) {
-        continuation.yield(.exited(status))
-        continuation.finish()
+        _ = eventBuffer.append(.exited(status))
+        eventBuffer.finish()
     }
 
     private func fail(_ error: Error) {
         guard state.stop() else { return }
-        continuation.finish(throwing: error)
+        eventBuffer.finish(throwing: error)
         state.cancelTimer()
         ProcessPlatform.terminate(process, force: false)
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + .milliseconds(300)) { [process] in
@@ -113,7 +110,7 @@ public final class ProcessSession: @unchecked Sendable {
     private func close() {
         state.cancelTimer()
         _ = state.stop()
-        continuation.finish()
+        eventBuffer.finish()
         output.fileHandleForReading.readabilityHandler = nil
         errors.fileHandleForReading.readabilityHandler = nil
         process.terminationHandler = nil

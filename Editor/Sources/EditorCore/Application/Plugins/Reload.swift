@@ -28,6 +28,10 @@ extension EditorApplication {
         }
         let reloaded: PluginExecutionBinding
         let processContext = try pluginProcessContext(for: binding.authorization.host)
+        if pluginID == PluginLanguageService.pluginID {
+            dynamicScriptManager.languagePlugin.bind(nil)
+            workstation.scripts.stopLanguageService()
+        }
         do {
             try await Task.detached(priority: .userInitiated) {
                 try client.unloadPlugin(at: pluginURL)

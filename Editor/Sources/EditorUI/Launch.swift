@@ -48,6 +48,7 @@ private func runEditor() throws {
             throw EditorProjectToolError("--mcp-headless requires --project-dir <directory>.")
         }
         let app = try EditorApplication(projectDirectory: directory)
+        app.enableBundledPlugins()
         _ = app.openSceneManifest()
         if CommandLine.arguments.contains("--trust-project-scripts") {
             app.workstation.scripts.setProjectTrusted(true)

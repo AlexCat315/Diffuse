@@ -45,6 +45,10 @@ struct NativeDesktopResources {
         #if os(macOS)
         if platform == .mac {
             let file = project.buildDirectory.appendingPathComponent("mac/\(configuration.rawValue)/Entitlements.plist")
+            for helper in project.configuration.targets.desktopHelpers {
+                let executable = artifact.directory.appendingPathComponent("Contents/Helpers/\(helper)")
+                try Shell.run(["codesign", "--force", "--sign", "-", executable.path])
+            }
             try Shell.run(["codesign", "--force", "--sign", "-", "--entitlements", file.path, artifact.directory.path])
         }
         #endif

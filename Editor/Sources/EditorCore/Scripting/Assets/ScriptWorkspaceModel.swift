@@ -125,6 +125,10 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     public func shutdown() {
         directoryMonitor.stop()
         for document in snapshot.documents { manager.cancelBuild(scriptID: document.file.identifier) }
+        stopLanguageService()
+    }
+
+    func stopLanguageService() {
         languageServiceGeneration = UUID()
         didStartLanguageService = false
         snapshot.languageServiceState = .inactive

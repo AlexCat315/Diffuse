@@ -27,6 +27,11 @@ struct DesktopPackage {
         let filename = product + (platform == .win ? ".exe" : "")
         let executable = executableDirectory.appendingPathComponent(filename)
         try Files.copy(binaries.appendingPathComponent(filename), to: executable)
+        let helperDirectory = isMac ? destination.appendingPathComponent("Contents/Helpers") : executableDirectory.appendingPathComponent("Tools")
+        for helper in project.configuration.targets.desktopHelpers {
+            let name = helper + (platform == .win ? ".exe" : "")
+            try Files.copy(binaries.appendingPathComponent(name), to: helperDirectory.appendingPathComponent(name))
+        }
         for child in try Files.children(binaries) {
             if ["bundle", "resources"].contains(child.pathExtension) {
                 try Files.copy(child, to: resourceDirectory.appendingPathComponent(child.lastPathComponent))

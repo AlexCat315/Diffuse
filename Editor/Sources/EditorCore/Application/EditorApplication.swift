@@ -239,7 +239,6 @@ public final class EditorApplication: @unchecked Sendable {
         }
         reloadProjectScripts(force: true, reportUnresolvedBindings: false)
         reloadDynamicScripts()
-        workstation.scripts.startLanguageService()
 
         installCommitPolicies()
         startMCPBridge()
@@ -273,6 +272,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func bootstrap() {
+        enableBundledPlugins()
         subscriptions.events = events.subscribe { [weak self] event in
             self?.handlePlatformEvent(event)
         }

@@ -3,17 +3,23 @@ import ProcessRuntime
 
 final class LSPConnection: @unchecked Sendable {
     let id = UUID()
-    let session: ProcessSession
+    let transport: LanguageServerTransport
     var consumer: Task<Void, Never>?
-    var isRunning: Bool { session.isRunning }
-    var events: AsyncThrowingStream<ProcessEvent, Error> { session.events }
-    init(command: ProcessCommand) throws {
-        var budget = ProcessBudget()
-        budget.lifetimeMilliseconds = nil
-        budget.outputBytes = LSPMessageFramer.maximumBodyBytes
-        session = try ProcessSession(command: command, budget: budget)
+    private(set) var isRunning = true
+    var events: AsyncThrowingStream<ProcessEvent, Error> { transport.events }
+    init(configuration: LanguageServerConfiguration) throws {
+        if let connect = configuration.connect {
+            transport = try connect(configuration.command)
+        } else {
+            var budget = ProcessBudget()
+            budget.lifetimeMilliseconds = nil
+            budget.outputBytes = LSPMessageFramer.maximumBodyBytes
+            let session = try ProcessSession(command: configuration.command, budget: budget)
+            transport = LanguageServerTransport(events: session.events,
+                write: { try session.write($0) }, stop: { session.cancel() })
+        }
     }
-    func close() { consumer?.cancel(); consumer = nil; session.cancel() }
+    func close() { isRunning = false; consumer?.cancel(); consumer = nil; transport.stop() }
 }
 
 public struct LSPFailure: Sendable, Equatable {

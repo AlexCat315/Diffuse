@@ -8,10 +8,12 @@ import Testing
     var configuration = ProjectConfiguration(application: .init(id: "com.example.package", name: "Package Test"),
                                              toolchain: .init(enginePath: "/SDK"))
     configuration.version.name = "1.2.3"; configuration.version.build = 7
+    configuration.targets.desktopHelpers = ["GuavaPluginHost"]
     try Files.json(configuration, to: directory.appendingPathComponent("guava.json"))
     try Files.text("// Package", to: directory.appendingPathComponent("Package.swift"))
     let binaries = directory.appendingPathComponent("binaries")
     try Files.text("executable", to: binaries.appendingPathComponent("Application"))
+    try Files.text("helper", to: binaries.appendingPathComponent("GuavaPluginHost"))
     try Files.text("welcome", to: binaries.appendingPathComponent("Content.bundle/Assets/welcome.txt"))
     try Files.text("<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>NSCameraUsageDescription</key><string>App permission</string></dict></plist>", to: directory.appendingPathComponent("Platforms/macOS/Info.plist"))
     try Files.text("<?xml version=\"1.0\"?><plist version=\"1.0\"><dict/></plist>", to: directory.appendingPathComponent("Platforms/macOS/Entitlements.plist"))
@@ -19,6 +21,7 @@ import Testing
     let package = DesktopPackage(project: project, platform: .mac)
     let artifact = try package.assemble(binaries: binaries, configuration: .debug, output: nil)
     #expect(FileManager.default.fileExists(atPath: artifact.executable.path))
+    #expect(try String(contentsOf: artifact.directory.appendingPathComponent("Contents/Helpers/GuavaPluginHost"), encoding: .utf8) == "helper")
     #expect(FileManager.default.fileExists(atPath: artifact.directory.appendingPathComponent("Contents/Resources/Content.bundle/Assets/welcome.txt").path))
     let data = try Data(contentsOf: artifact.directory.appendingPathComponent("Contents/Info.plist"))
     let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as! [String: Any]

@@ -93,6 +93,9 @@ extension EditorApplication {
                 invoker: client
             )
             try pluginSession.authorizationStore.record(authorization)
+            if binding.pluginID == PluginLanguageService.pluginID {
+                try BundledPlugins.setEnabled(true, id: binding.pluginID, in: projectDirectory)
+            }
         } catch {
             _ = try? await Task.detached(priority: .userInitiated) {
                 try client.unloadPlugin(at: pluginURL)
@@ -149,6 +152,9 @@ extension EditorApplication {
         )
         guard dependents.isEmpty else {
             throw RequiredPluginStillNeeded(pluginID: pluginID, dependents: dependents)
+        }
+        if pluginID == PluginLanguageService.pluginID {
+            try BundledPlugins.setEnabled(false, id: pluginID, in: projectDirectory)
         }
         var unloadError: Error?
         do {
@@ -420,6 +426,12 @@ extension EditorApplication {
 
     @MainActor
     func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
+        let languageBinding = pluginSession.bindings[PluginLanguageService.pluginID]
+        if dynamicScriptManager.languagePlugin.bind(languageBinding,
+            client: languageBinding == nil ? nil : pluginSession.hostClient) {
+            workstation.scripts.stopLanguageService()
+            if languageBinding != nil { workstation.scripts.startLanguageService() }
+        }
         await pendingAISetupTask?.value
         pendingAISetupTask = nil
         pluginCapabilityExecutor = executor

@@ -18,6 +18,7 @@ private func temporaryProject() throws -> URL {
     try configuration.validate()
     #expect(configuration.targets.platforms == [.mac, .win, .linux, .android, .ios])
     #expect(configuration.targets.desktopExecutable == nil)
+    #expect(configuration.targets.desktopHelpers.isEmpty)
     let encoded = try JSONEncoder().encode(configuration)
     #expect(try JSONDecoder().decode(ProjectConfiguration.self, from: encoded) == configuration)
     #expect(!String(decoding: encoded, as: UTF8.self).contains("device"))

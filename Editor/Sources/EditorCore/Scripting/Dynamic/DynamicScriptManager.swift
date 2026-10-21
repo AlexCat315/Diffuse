@@ -61,6 +61,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
     private let buildCoordinator: DynamicScriptBuildCoordinator
     private let languageSupport: ScriptLanguageSupport?
     private let languageSupportUnavailableMessage: String?
+    let languagePlugin: PluginLanguageService
 
     @MainActor private var statusByScriptID: [String: CompilationStatus] = [:]
 
@@ -83,6 +84,8 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 scriptTrustStorageURL: URL? = nil,
                 swiftCompilerPath: String? = nil) {
         self.projectDirectory = projectDirectory
+        let languagePlugin = PluginLanguageService()
+        self.languagePlugin = languagePlugin
         self.assetRegistry = ScriptAssetRegistry(projectDirectory: projectDirectory)
         self.trustStore = ScriptProjectTrustStore(storageURL: scriptTrustStorageURL)
         let compiler = SwiftScriptCompiler(
@@ -106,7 +109,8 @@ public final class DynamicScriptManager: @unchecked Sendable {
                     engineModulePaths: engineModulePaths,
                     clangModuleMapPaths: clangModuleMapPaths,
                     clangIncludePaths: clangIncludePaths,
-                    executableURL: executable
+                    executableURL: executable,
+                    connect: { [languagePlugin] in try languagePlugin.connect($0) }
                 )
                 self.languageSupportUnavailableMessage = nil
             } catch {

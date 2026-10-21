@@ -18,12 +18,15 @@ final class PluginSession: @unchecked Sendable {
     let components = PluginComponentStore()
     var isUpdating = false
     var packageMonitor: PluginPackageMonitor?
+    var bundledStartup: Task<Void, Never>?
 
     init(projectDirectory: String) {
         authorizationStore = EditorPluginAuthorizationStore(projectDirectory: projectDirectory)
     }
 
     func stop() {
+        bundledStartup?.cancel()
+        bundledStartup = nil
         packageMonitor?.stop()
         packageMonitor = nil
         hostClient?.stop()
